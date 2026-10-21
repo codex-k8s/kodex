@@ -2704,6 +2704,462 @@
       "fragmentSHA256": "fec481d6831ccd0757cd820a083dc3fa09e01298f0855f68d8434c4667953c3a",
       "count": 1,
       "reason": "Короткое окно Go-модулей и сборки совпадает по форме, но secret-broker добавляет отдельную Node/Codex CLI стадию, а backup-controller использует PostgreSQL runtime image. Общий Dockerfile смешал бы разные системные зависимости и роли образов."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mockups/12_live_run_desktop.dc.html",
+      "secondPath": "docs/design/mockups/VariantAdark.dc.html",
+      "fragmentSHA256": "b2c155f09a913d80659fc936c4675bb7b1d90a9822a53c0a442f5e12cd93172b",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (12_live_run_desktop.dc.html и VariantAdark.dc.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/access-effective-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/access-groups-desktop.html",
+      "fragmentSHA256": "ad9959e0fd30200f827216de8f41f73c59e2af0b2c59ea7fc20fe2e18337f49e",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (access-effective-desktop.html и access-groups-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/access-effective-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/access-groups-desktop.html",
+      "fragmentSHA256": "d867af4e6907f75e599936a7a1c81034d2bdecf374a7afdd7be42333c4b84547",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (access-effective-desktop.html и access-groups-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/access-effective-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/access-members-desktop.html",
+      "fragmentSHA256": "f772c6db479ae6f05810149b3eb9191070027923053f81cb361bef6313459868",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (access-effective-desktop.html и access-members-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/access-groups-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/access-roles-desktop.html",
+      "fragmentSHA256": "887148c28d1a76a81a3a8e6675bea926137762766fb1e5b1e6b9e30b3060a7d4",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (access-groups-desktop.html и access-roles-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/access-groups-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/access-members-desktop.html",
+      "fragmentSHA256": "21cf06854a151ed8e1da8ffd0382ec9cc5558ae84b5e10a804c99a5b8ef8964a",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (access-groups-desktop.html и access-members-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/access-members-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/access-roles-desktop.html",
+      "fragmentSHA256": "446b9cfb811dc36f7be4de965c146298e479087169f9fe7b4b3e37e24db5a35a",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (access-members-desktop.html и access-roles-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/agent-environment-picker-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/agent-runtime-desktop.html",
+      "fragmentSHA256": "426dca129a54bdb5ce42892c5472182e0e9901b79506a4d5a088063d4a30bc29",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (agent-environment-picker-desktop.html и agent-runtime-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/agent-environment-picker-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/agent-profile-desktop.html",
+      "fragmentSHA256": "2d362584a4ca30009a1c8451cd72c20785d8119da43f861ce34dddf6f9019832",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (agent-environment-picker-desktop.html и agent-profile-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/agent-instructions-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/agent-profile-desktop.html",
+      "fragmentSHA256": "db4acd9c82e53053de29b5f4c2cf4000b989b50a28e1afdf316bd8c252921a0c",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (agent-instructions-desktop.html и agent-profile-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/agent-instructions-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/agent-runtime-desktop.html",
+      "fragmentSHA256": "058aae16059b36f57c871049efc5e6f89bf87f953b37c4b07258cf678f652791",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (agent-instructions-desktop.html и agent-runtime-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/agents-grid-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/agents-table-desktop.html",
+      "fragmentSHA256": "0b2647e9dfa57bb9d866dbd506c21d6e666dfefbb085d99edb273586cccc12a4",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (agents-grid-desktop.html и agents-table-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/agents-grid-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/agents-table-desktop.html",
+      "fragmentSHA256": "5c21b0fc80d463045c26c0fec6070eea66809e58ebc1d716012770ed65fb356c",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (agents-grid-desktop.html и agents-table-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/agents-grid-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/agents-table-desktop.html",
+      "fragmentSHA256": "6e7c84f9cd5ff8f877d9755df4df93638ba852b8586f80284d7e74cb7b87a405",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (agents-grid-desktop.html и agents-table-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/automations-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/environments-desktop.html",
+      "fragmentSHA256": "daa173cbeffd1c726cf9311e394dc423fba298406c74cb431138d43f7104561c",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (automations-desktop.html и environments-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/automations-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/files-grid-desktop.html",
+      "fragmentSHA256": "af11a4f4e914e74b454f2ac21e277d230c62c753432cf3d3b36d2a2b89c0d8c0",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (automations-desktop.html и files-grid-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/files-automations-mobile.html",
+      "secondPath": "docs/design/mvp-redesign/files-automations-mobile.html",
+      "fragmentSHA256": "f7f196fe4fcb7be98574d9f12f6f56a339147e6b889566138b128f97da18a70c",
+      "count": 1,
+      "reason": "Два фрагмента одного автономного HTML-макета (files-automations-mobile.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/files-grid-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/files-list-desktop.html",
+      "fragmentSHA256": "212fc285eadef041520a4ceb7c6e75009a9708d39f5a378ebf0d96dff7290e08",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (files-grid-desktop.html и files-list-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/files-grid-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/files-list-desktop.html",
+      "fragmentSHA256": "de1602e4a3abff53f76a4e9bd23db203959c7122a587f885d09595311ecaeb00",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (files-grid-desktop.html и files-list-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/files-grid-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/files-list-desktop.html",
+      "fragmentSHA256": "2742ecc3971cec04a0cbc9aa0c09cc0b2307a22b568e0d7231ef0ff1c8e06704",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (files-grid-desktop.html и files-list-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/home-a-attention-center-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/home-b-project-portfolio-desktop.html",
+      "fragmentSHA256": "dee0fe85224599a902176e1d250b2fc8e7d39b937c65f6ef84d0f7f836e99cb3",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (home-a-attention-center-desktop.html и home-b-project-portfolio-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/home-a-attention-center-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/home-c-activity-workbench-desktop.html",
+      "fragmentSHA256": "4ba4225eedf1c1b2f064ffc12e58a3c182a2e27d372355cff5245d3722a53f44",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (home-a-attention-center-desktop.html и home-c-activity-workbench-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/home-a-attention-center-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/home-b-project-portfolio-desktop.html",
+      "fragmentSHA256": "b47944101cbc3c2dba409307598bed9afc835a67026f30384ae27452d8a5ba1a",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (home-a-attention-center-desktop.html и home-b-project-portfolio-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-drawer-agent-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-drawer-project-desktop.html",
+      "fragmentSHA256": "fd7f9e95668d175a2484f789a3c923cce2c6895ad6236c524a5e8875d17eda2d",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-drawer-agent-desktop.html и kodex-drawer-project-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-drawer-project-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "fragmentSHA256": "784516ea039aaac9a9617146eee8998df17ba9a7b24647a803064b71ce250911",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-drawer-project-desktop.html и kodex-plan-conflict-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-drawer-project-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "fragmentSHA256": "3370c422027a3c7723fb3d95aef1ac5cd3f4004e0fcf0649bc43030ece388100",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-drawer-project-desktop.html и kodex-plan-conflict-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "ae6189b3b529908c3081c94b521706fe59a07437a6b2e217352f253618fabdc2",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "46a76afd78f559a632e68a5fa7957842b3c98a87fc9e01acbd99e0ff45d74560",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "9ec37d269f5ce017fcfa17366f1de6ea540341f50ed20317e39eeb237e8239ba",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "ce8ac1517808622a5028f3b84acf0812f1658c1f8f16f30d4fdc789e920280a9",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "a998aa857e679e4c7fdf8834aa32bb0107f394347a3c2690f11190b092fa008c",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "0092c356a8983325757cbcfd062740b2d5a0ece3b9503b06cd7827aedcf7c61c",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "e9329837dae0e81f49afc2f7304c94cd10d1bef110da5d49180963a27aeef4ce",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "0610dce18319a6c9c233782b1eec65ca94b0a11fa8ceb20388250f3c237df347",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "9931b8e582ae25b4ac6b208f8d911442d03bd008dfdae7349aa602e8a019fbdc",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "7041d5da08977ca152cf1e28bfaf503690521070d4497ab5a627738172eafe8c",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/kodex-plan-conflict-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/kodex-plan-editor-desktop.html",
+      "fragmentSHA256": "56deb9fc80fad8cda47d2fef900fdebd591ce26fb5ccc3c1c13c105ac5cc103c",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (kodex-plan-conflict-desktop.html и kodex-plan-editor-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/live-run-activity-drawer-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/live-run-desktop.html",
+      "fragmentSHA256": "d730aea1d6fced807be92e6dadbbeaa4e6a39b7928e9c04a635d41b4fdb75393",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (live-run-activity-drawer-desktop.html и live-run-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/live-run-activity-drawer-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/live-run-desktop.html",
+      "fragmentSHA256": "fd4162414f6241d313d65f146ab71018fbd3fb4b83835c3cdf74ba48111900e8",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (live-run-activity-drawer-desktop.html и live-run-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/live-run-activity-drawer-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/live-run-desktop.html",
+      "fragmentSHA256": "053343cc0ab107bfb81d7d1b76d781b753c2c89bbc9cfef30aa9242d3a4b86f2",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (live-run-activity-drawer-desktop.html и live-run-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/live-run-activity-drawer-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/live-run-tool-details-desktop.html",
+      "fragmentSHA256": "053343cc0ab107bfb81d7d1b76d781b753c2c89bbc9cfef30aa9242d3a4b86f2",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (live-run-activity-drawer-desktop.html и live-run-tool-details-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/live-run-activity-drawer-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/live-run-mobile.html",
+      "fragmentSHA256": "ff4af90fdb5fc6de3d1bcffa11755b67c963d52c52744683de1dbb63461bb87d",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (live-run-activity-drawer-desktop.html и live-run-mobile.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/live-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/live-run-tool-details-desktop.html",
+      "fragmentSHA256": "bbe05c7cba74815afac2529af55085855b6a97570cae5ed83707123c719a84ff",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (live-run-desktop.html и live-run-tool-details-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/live-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/live-run-tool-details-desktop.html",
+      "fragmentSHA256": "9ad26eb44d9387fb41176ca6665550657e133ff3edf5bbffcddf62033a21e592",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (live-run-desktop.html и live-run-tool-details-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-file-picker-desktop.html",
+      "fragmentSHA256": "2d4a386fbc3d5ddf43a3be42aeee83082b9e257c73212bd16e8cf632d5724ab8",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-desktop.html и new-run-file-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-file-picker-desktop.html",
+      "fragmentSHA256": "8a21efddad6c420b86e6c4573ff741a3fcb6e9d0a8646c8ddf6be5249caa58ca",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-desktop.html и new-run-file-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-session-picker-desktop.html",
+      "fragmentSHA256": "8a21efddad6c420b86e6c4573ff741a3fcb6e9d0a8646c8ddf6be5249caa58ca",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-desktop.html и new-run-session-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-file-picker-desktop.html",
+      "fragmentSHA256": "69efc576b56c7034eac74bb01b472b85881f94a9f76065dd30a2b9c3f4c366d5",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-desktop.html и new-run-file-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-session-picker-desktop.html",
+      "fragmentSHA256": "138014f9a9e5ad8e1969bbebbf82f8040b9096a05de5c7c8d7d30a510f974bd8",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-desktop.html и new-run-session-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-file-picker-desktop.html",
+      "fragmentSHA256": "e10160edfe0dba11465c8883cb18e36fd7e0cbcec3190e7e063b523e73354b3d",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-desktop.html и new-run-file-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-file-picker-desktop.html",
+      "fragmentSHA256": "3037ff80dfa2a84420638a20e51c97b31a48a62ca377f5b013dfa7f914d922e0",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-desktop.html и new-run-file-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-session-picker-desktop.html",
+      "fragmentSHA256": "3037ff80dfa2a84420638a20e51c97b31a48a62ca377f5b013dfa7f914d922e0",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-desktop.html и new-run-session-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-file-picker-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-session-picker-desktop.html",
+      "fragmentSHA256": "4e68686862bbf349b3b8729d8272921f8e0bbdd87ef873c2eef08610b93c11d8",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-file-picker-desktop.html и new-run-session-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-file-picker-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-session-picker-desktop.html",
+      "fragmentSHA256": "f6b9a8447e7617be22f977894b3b4fc25965e6ee3ddf36edaba6a7ae0e91ab99",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-file-picker-desktop.html и new-run-session-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/new-run-file-picker-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/new-run-session-picker-desktop.html",
+      "fragmentSHA256": "e042dfca9801cb879320c367dd74f7685d27bc313a67e9e943111767513fb99b",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (new-run-file-picker-desktop.html и new-run-session-picker-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/project-a-workboard-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/project-b-operational-dashboard-desktop.html",
+      "fragmentSHA256": "5322e0edb09519d4e69923bfd26f21c2a3c0ba2ad4980c6666372217439089cb",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (project-a-workboard-desktop.html и project-b-operational-dashboard-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "markup",
+      "firstPath": "docs/design/mvp-redesign/project-a-workboard-desktop.html",
+      "secondPath": "docs/design/mvp-redesign/project-c-run-kanban-desktop.html",
+      "fragmentSHA256": "0526a666d8c64fa6a5df65f3e7494b233d45d2e91900d9dbce5e242bea49711a",
+      "count": 1,
+      "reason": "Эти два автономных HTML-макета (project-a-workboard-desktop.html и project-c-run-kanban-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
     }
   ]
 }
