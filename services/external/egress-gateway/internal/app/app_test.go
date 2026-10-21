@@ -18,6 +18,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// TestStateAndSharedTechnicalServerPublishEffectiveReadinessAndReadback checks the active lifecycle and public view.
+// TestStateAndSharedTechnicalServerPublishEffectiveReadinessAndReadback проверяет цикл активной политики и публичное состояние.
 func TestStateAndSharedTechnicalServerPublishEffectiveReadinessAndReadback(t *testing.T) {
 	active := loadRepositoryPolicy(t)
 	readiness := serviceruntime.NewReadiness()
@@ -48,6 +50,8 @@ func TestStateAndSharedTechnicalServerPublishEffectiveReadinessAndReadback(t *te
 	}
 }
 
+// TestInvalidPolicyUsesSharedReadinessAndSafeReadback keeps invalid policy details out of readback.
+// TestInvalidPolicyUsesSharedReadinessAndSafeReadback не выдаёт детали недопустимой политики.
 func TestInvalidPolicyUsesSharedReadinessAndSafeReadback(t *testing.T) {
 	readiness := serviceruntime.NewReadiness()
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, "test", map[string]string{})
@@ -67,6 +71,8 @@ func TestInvalidPolicyUsesSharedReadinessAndSafeReadback(t *testing.T) {
 	}
 }
 
+// TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest checks port bindings and digest syntax.
+// TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest проверяет порты и формат дайджеста.
 func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 	values := map[string]string{
 		"EGRESS_GATEWAY_POLICY_FILE":                       "/var/run/config/kodex/egress-gateway/policy.json",
@@ -104,6 +110,8 @@ func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 	}
 }
 
+// TestClamavModeRequiresOnlyExactSingleDestinationListener rejects unregistered modes.
+// TestClamavModeRequiresOnlyExactSingleDestinationListener отклоняет незарегистрированные режимы.
 func TestClamavModeRequiresOnlyExactSingleDestinationListener(t *testing.T) {
 	for key, value := range map[string]string{
 		"EGRESS_GATEWAY_MODE":                     "clamav",
@@ -126,6 +134,8 @@ func TestClamavModeRequiresOnlyExactSingleDestinationListener(t *testing.T) {
 	}
 }
 
+// TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener checks bounded shutdown on degraded startup.
+// TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener проверяет остановку при деградации запуска.
 func TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener(t *testing.T) {
 	readiness := serviceruntime.NewReadiness()
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, "test", map[string]string{})
@@ -154,12 +164,16 @@ func TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener(t *testing.T)
 	}
 }
 
+// TestShutdownBudgetMatchesDeploymentContract pins the grace period used by deployment.
+// TestShutdownBudgetMatchesDeploymentContract закрепляет запас времени установки.
 func TestShutdownBudgetMatchesDeploymentContract(t *testing.T) {
 	if MinimumTerminationGrace != 45*time.Second {
 		t.Fatalf("unexpected minimum termination grace: %s", MinimumTerminationGrace)
 	}
 }
 
+// TestReadinessWorkerResultDistinguishesShutdownFromFailure separates cancellation and worker failure.
+// TestReadinessWorkerResultDistinguishesShutdownFromFailure различает отмену и сбой worker.
 func TestReadinessWorkerResultDistinguishesShutdownFromFailure(t *testing.T) {
 	lifecycle, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -177,6 +191,8 @@ func TestReadinessWorkerResultDistinguishesShutdownFromFailure(t *testing.T) {
 	}
 }
 
+// loadRepositoryPolicy loads the checked-in policy fixture for app lifecycle tests.
+// loadRepositoryPolicy загружает закреплённую policy-fixture для проверок жизненного цикла.
 func loadRepositoryPolicy(t *testing.T) *policy.Active {
 	t.Helper()
 	root := filepath.Join("..", "..", "..", "..", "..")

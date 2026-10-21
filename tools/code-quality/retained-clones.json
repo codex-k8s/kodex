@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "format": "go",
+      "firstPath": "services/external/egress-gateway/internal/app/app.go",
+      "secondPath": "services/external/egress-gateway/internal/app/app.go",
+      "fragmentSHA256": "d96a22b4f6cb15a008a52e6efd774dc30b52aa3181800b57457aba5556ad52d4",
+      "count": 1,
+      "reason": "Точное окно сопоставляет оболочки runSingleDestination и runActive после вынесения общих операций запуска policy, DNS, HTTP и CONNECT в локальные helpers. Первая ветвь допускает только подписанный адрес баз антивируса, вторая запускает дополнительные listeners, их политики и workers; единый callback для остатка скрыл бы различие полномочий и порядка завершения. Сохраняется только это окно, не весь файл."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/egress-gateway/internal/app/app.go",
+      "secondPath": "services/external/egress-gateway/internal/app/app.go",
+      "fragmentSHA256": "9a7bc2230ce0b19008fe0cf471aa2fcae0c7ade7c7bda81fece294abe9350af6",
+      "count": 1,
+      "reason": "Точное окно сравнивает загрузку двух типизированных политик mail и integration с отдельными проверками дайджеста, readiness и метриками. Общий наблюдаемый DNS-resolver уже вынесен; объединение остатка потребовало бы передавать политики и обработчики ошибок через универсальные callbacks, скрыв раздельный fail-closed путь каждой интеграции. Сохраняется только проверенная пара, не весь файл."
+    },
+    {
       "format": "protobuf",
       "firstPath": "contracts/proto/controlplane/v1/access.proto",
       "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
