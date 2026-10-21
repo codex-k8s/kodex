@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.140.0
+version: 1.141.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,28 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок первая волна — границы повторов STT
+
+На базе опубликованного SHA `bfbf4c6436ddc199492dd75c011ca4ce395f0b41`
+вручную разобраны ещё шесть точных групп. Пять совпадений NetworkPolicy
+сохраняют самостоятельные source/destination selector, порты и deploy
+ownership STT, provider smoke, artifact retention и authority dependencies.
+Объединение ресурсов или расширение selector не является допустимым
+устранением дублирования. Шестое совпадение — wiring startup/telemetry
+в STT и interaction gateway: сами runtime primitives уже общие;
+env-reading wrapper противоречил бы GO-DOC-006, а timeout/cleanup
+остаются ответственностью конкретного composition root.
+
+В реестр добавлены ровно шесть точных path/fragment/count решений
+с отдельными причинами. Kubernetes manifests и исполняемый Go-код
+не изменялись, broad ignore не добавлялся. На полном отчёте предыдущей
+волны проверка устаревания исключений подтвердила 1874 raw-группы,
+561 разобранную и 1313 оставшихся. Покрытие Go прежнее — 4659/21065,
+весь STT — 438/438. 16 unit-тестов анализатора, unit Go-checker,
+пять ignore-boundaries и diff-check — PASS LOCAL. Итоговый повтор
+detector на точном опубликованном SHA будет указан в текущем PR.
+Полный go-docs-check, browser/deploy/live — NOT RUN; цель активна.
 
 ## Сто сороковая волна — полный собственный Go-код STT
 

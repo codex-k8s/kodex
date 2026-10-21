@@ -2,6 +2,54 @@
   "version": 1,
   "entries": [
     {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/artifact-retention/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/stt-tts-service/networkpolicy.yaml",
+      "fragmentSHA256": "c388245d59fb881e5bf542b53c184e248f01538c69c69ce84bb9d167a68bf46f",
+      "count": 1,
+      "reason": "Совпало окно ingress Prometheus и начала DNS egress двух самостоятельных NetworkPolicy. Artifact retention и STT имеют разные podSelector и deploy ownership; одинаковые peer/port объявления не дают права объединять workload policy. Общий шаблон потребовал бы связывать жизненный цикл job и сервиса; сохраняется только это точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/artifact-retention/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/stt-tts-service/networkpolicy.yaml",
+      "fragmentSHA256": "2812c2bf4e3bac7c09b6fc25bc4227d9253a72c9900062fc642c9e7552a1d082",
+      "count": 1,
+      "reason": "Совпали два ограниченных egress назначения telemetry: OTLP collector и Sentry relay с точными namespaceSelector/podSelector и портами. Эти разрешения принадлежат разным исходным workload, а не общей политике, применимой к любым pod. Дедупликация через более широкий selector расширила бы authority; самостоятельные декларации оставлены по точным путям и фрагменту."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/stt-tts-service-provider-smoke/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/stt-tts-service/networkpolicy.yaml",
+      "fragmentSHA256": "1a57a60f3fe56ed6a25c5955ddc99df15e0ddaa96f60db5e3c9ed3f705f3c454",
+      "count": 1,
+      "reason": "Provider smoke и основной STT независимо объявляют доверенный DNS, но имеют разные исходные podSelector и дальнейшие egress маршруты: smoke использует отдельный gateway port, рабочий сервис — свой. Один общий NetworkPolicy или объединённая policyTypes изменили бы множество разрешённых связей. Сохранено только совпадение DNS-декларации, не файлы целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/stt-tts-service/dependency-ingress.yaml",
+      "secondPath": "deploy/k8s/base/stt-tts-service/dependency-ingress.yaml",
+      "fragmentSHA256": "24671f22bed75872bc027ab43d3bf7ae01415fb3c63322ee7679e56888ba8e23",
+      "count": 1,
+      "reason": "В одном dependency-ingress файле совпали источник STT и TCP 8443 у control-plane projection и authority attestor. Получатели имеют разные selector, имена ресурсов и владельцев readiness. Один общий ingress с union selector смешал бы две независимые границы; совпавшая форма from/ports не является дублированием исполняемой логики."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/stt-tts-service/dependency-ingress.yaml",
+      "secondPath": "deploy/k8s/base/stt-tts-service/dependency-ingress.yaml",
+      "fragmentSHA256": "3cc9792aae4342f36243a471e2e1072a25340e951a38a47fa854421861966005",
+      "count": 1,
+      "reason": "Совпала форма ingress от STT к authority attestor и restore controller на TCP 8443. Эти политики разрешают разные destination workload и самостоятельные control paths; источники одинаковы, но их доступ не должен зависеть от общей объединённой policy. Оставлено точное окно без расширения selector или изменения cluster manifests."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/interaction-gateway/internal/app/app.go",
+      "secondPath": "services/internal/stt-tts-service/internal/app/app.go",
+      "fragmentSHA256": "a7e29e06fc491086f03aba9f2f19c51a437f845904edfcb85dfd8229c6c66e06",
+      "count": 1,
+      "reason": "Окно охватывает композицию loadConfig, caller-owned startup context и последовательные RuntimeConfigFromEnv/NewRuntime в двух процессах. Сами telemetry primitives уже находятся в observability; общий env-reading wrapper нарушил бы GO-DOC-006, а startup timeout и cleanup принадлежат разным composition roots. Сохраняется wiring этого точного окна, а не локальная копия exporter/runtime реализации."
+    },
+    {
       "format": "protobuf",
       "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
       "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
