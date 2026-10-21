@@ -3384,6 +3384,102 @@
       "fragmentSHA256": "b49eeeacb73ba0c738d344a22fdc6f6a145aeecbc5a34f7e62edfadb001c5fd6",
       "count": 1,
       "reason": "Actions run.rerun и run.cancel имеют одинаковые run_id/accepted/EFFECT_KEY поля, но rerun — SENSITIVE повтор, cancel — DESTRUCTIVE остановка; оба требуют отдельное подтверждение эффекта. Общий метод скрывал бы разную семантику и audit; сохранено только точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "ec2eb3b30078a27898eac29ad74f701863b0a3b7385f989554b0996d12ae78fd",
+      "count": 1,
+      "reason": "message.read возвращает тело конкретного письма, attachment.list — только список вложений того же UID. Поля mailbox и read-only envelope похожи, но разные operation key и форма результата обязаны оставаться явными; схема пакета требует inline-поля и не материализует ссылочный шаблон."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "1f7a18845d2cfa7c73e5b25865c4bae3bf961896be6d1f9db78489d243c229e4",
+      "count": 2,
+      "reason": "Два окна сравнивают read конкретного сообщения с delete и mark_read по UID/folder/UIDVALIDITY. Чтение не меняет письмо, delete удаляет его, mark_read меняет флаг; их risk, idempotency и ответы различаются. Inline-поля нужны каждому operation, общий CRUD стер бы границу эффекта."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "c98fbbfdeeffb1af5174b1300cf41749436b0ea839d6a5fe9ab85126a8aaf16c",
+      "count": 3,
+      "reason": "Три окна показывают общие адресные и текстовые поля send относительно reply, reply_all и forward. Эти действия по-разному связывают исходное письмо и адресатов; отдельные operation key нужны для dispatch, audit и точного подтверждаемого эффекта. Схема package принимает конкретные inline-поля, не field references."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "2a5b324a35332131387bd1a37da0adef63a3c8c7da44da510e4559577a7b0257",
+      "count": 1,
+      "reason": "send и draft.create имеют общие поля адресатов/тела и effect envelope, но первый создаёт внешнюю доставку, второй только управляемый черновик. Общая операция скрыла бы границу отправки; JSON-schema требует самостоятельные concrete capabilities с inline input/output и effect policy."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "6ebd15417705a560116f83e854673d1899536cd33e47f3cff64e0ae23572f2e5",
+      "count": 1,
+      "reason": "Хвост send и move совпадает по folder и общему ответу EFFECT_KEY, но send доставляет письмо адресату, move меняет его расположение в mailbox. Эти эффекты имеют независимые operation keys и аудит; вынесение общего action сделало бы контроль отправки непрозрачным."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "503813f72a56f0cbadfb98ea3f6ecbb5b717eeb5452ecdae95512be4e95824a7",
+      "count": 2,
+      "reason": "Два окна сравнивают reply с reply_all и forward: текст/получатели и source UID имеют общую форму, но reply_all выбирает всех допустимых адресатов, forward передаёт содержание иному получателю. Отдельные операции и серверные проверки адресатов нельзя сводить к одному generic send."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "fe2fdb145753a95440856f35acc501d9759b8ab2d54c071e6d5ff7dd791fa8b5",
+      "count": 1,
+      "reason": "reply использует source_uid_validity для привязки ответа к исходному письму, delete использует uid_validity для удаления выбранного письма. Совпадение числового ограничения и effect envelope не делает эти идентификаторы и последствия эквивалентными; inline-поля сохраняют точную форму операции."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "fd89cce1127f16d8cd65c3bd8c128ad8f900e4fa9b16aef293de73726d2aa9eb",
+      "count": 1,
+      "reason": "Перекрывающееся окно reply/draft.delete совпадает по форме UIDVALIDITY, result_json и EFFECT_KEY, но reply создаёт отправленное письмо, draft.delete удаляет черновик. Вынесение общего executable действия смешало бы внешнюю отправку и удаление; registry сохраняет точный fragment."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "83ee8c77eef55efcfa40c03bb3d0de198a714455ece872198122960fb88c02e1",
+      "count": 1,
+      "reason": "message.delete и mark_read используют один UID/folder/UIDVALIDITY и сходный ответ, но delete является DESTRUCTIVE удалением, mark_read — SENSITIVE изменением флага. Раздельные risk и operation key обязательны для server gate и audit; общий метод скрыл бы более опасный эффект."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "6d7c72ee1013b3bf23aaca7201fd987079dcc7dd498e9e91802c1ff3e73b3e14",
+      "count": 2,
+      "reason": "Два окна сравнивают mark_read с mark_unread и archive: все используют UID/folder/UIDVALIDITY и EFFECT_KEY, но одно ставит флаг, другое снимает его, третье перемещает письмо в архив. Общий update скрывал бы разные эффекты и мешал бы точному аудиту."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "8037c1dd7d8e86b353ee05d3b5779ddbf0f371e5ee69c27bf088997d2d817947",
+      "count": 1,
+      "reason": "mark_read и move имеют общие UID/folder/UIDVALIDITY поля и SENSITIVE envelope, но move дополнительно требует destination_folder и изменяет расположение письма, а mark_read только флаг прочтения. Поля каждой capability остаются inline для точной валидации и gate."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/email.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/email.yaml",
+      "fragmentSHA256": "eee04d20e64b72be7799237f486d9a770b1ae72759890f120f1c78dc49122a32",
+      "count": 1,
+      "reason": "draft.create и draft.update разделяют адресные и текстовые поля, но update привязан к uid/uid_validity/expected_digest существующего черновика, а create назначает новый ID. Общий write метод убрал бы проверку версии и различие lifecycle; schema требует конкретные inline-поля."
     }
   ]
 }
