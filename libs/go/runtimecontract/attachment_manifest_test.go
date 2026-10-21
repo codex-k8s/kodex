@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+// manifestArtifact supplies valid synthetic immutable metadata with caller-selected catalog identity.
+// manifestArtifact создаёт корректные синтетические неизменяемые метаданные с заданной идентичностью каталога.
 func manifestArtifact(ref, name, mediaType, scope string, position int64, source string) RunnerInputArtifact {
 	return RunnerInputArtifact{
 		Ref: ref, FileName: name, MediaType: mediaType,
@@ -17,6 +19,10 @@ func manifestArtifact(ref, name, mediaType, scope string, position int64, source
 	}
 }
 
+// TestBuildAttachmentManifestIsCanonical verifies input-order independence, normalized paths,
+// preserved metadata, and a payload digest that excludes the digest field itself.
+// TestBuildAttachmentManifestIsCanonical проверяет независимость от порядка входа, нормализованные
+// пути, сохранность метаданных и дайджест payload без самого поля дайджеста.
 func TestBuildAttachmentManifestIsCanonical(t *testing.T) {
 	artifacts := []RunnerInputArtifact{
 		manifestArtifact("artifact_ijklmnop", "requirements.md", "text/markdown", AttachmentScopeInput, 2, "CONTROL_CENTER"),
@@ -72,6 +78,8 @@ func TestBuildAttachmentManifestIsCanonical(t *testing.T) {
 	}
 }
 
+// TestBuildAttachmentManifestRejectsTraversalAndDuplicates rejects unsafe names and repeated references or positions.
+// TestBuildAttachmentManifestRejectsTraversalAndDuplicates отклоняет опасные имена и повторные ссылки или позиции.
 func TestBuildAttachmentManifestRejectsTraversalAndDuplicates(t *testing.T) {
 	valid := manifestArtifact("artifact_abcdefgh", "brief.txt", "text/plain", AttachmentScopeInput, 1, "CONTROL_CENTER")
 	cases := map[string][]RunnerInputArtifact{
@@ -88,6 +96,10 @@ func TestBuildAttachmentManifestRejectsTraversalAndDuplicates(t *testing.T) {
 	}
 }
 
+// TestBuildWorkspaceAttachmentManifestCoversCurrentSessionAndKnowledge checks exact provenance
+// bindings and deterministic read-only paths across current input, session history, and project knowledge.
+// TestBuildWorkspaceAttachmentManifestCoversCurrentSessionAndKnowledge проверяет точное происхождение
+// и детерминированные пути чтения текущего входа, истории сессии и знаний проекта.
 func TestBuildWorkspaceAttachmentManifestCoversCurrentSessionAndKnowledge(t *testing.T) {
 	sets := []RunnerAttachmentSet{
 		{Ref: "aset_abcdefgh", ManifestDigest: strings.Repeat("b", 64), Purpose: "RUN_INPUT", Scope: AttachmentScopeInput, Provenance: "CURRENT_TURN", TurnRef: "turn_abcdefgh"},

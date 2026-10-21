@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestAssistantScopeHasOneStrictWireSource round-trips every supported scope/profile binding
+// and rejects an additional obsolete discriminator instead of allowing a second authority source.
+// TestAssistantScopeHasOneStrictWireSource проверяет передачу всех поддерживаемых областей и профилей
+// и отклоняет дополнительный устаревший признак как второй источник полномочий.
 func TestAssistantScopeHasOneStrictWireSource(t *testing.T) {
 	for _, scope := range []AssistantScope{AssistantScopeNone, AssistantScopeSystem, AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -35,6 +39,10 @@ func TestAssistantScopeHasOneStrictWireSource(t *testing.T) {
 	}
 }
 
+// TestAssistantScopeRejectsDetachedOrUnknownAuthority rejects unknown scope, missing project/profile,
+// incompatible bindings, and a system assistant without an admitted image.
+// TestAssistantScopeRejectsDetachedOrUnknownAuthority отклоняет неизвестную область, отсутствие проекта
+// или профиля, несовместимые привязки и системного помощника без допущенного образа.
 func TestAssistantScopeRejectsDetachedOrUnknownAuthority(t *testing.T) {
 	tests := map[string]func(*RunnerInput){
 		"missing scope":                   func(input *RunnerInput) { input.AssistantScope = "" },
@@ -67,6 +75,10 @@ func TestAssistantScopeRejectsDetachedOrUnknownAuthority(t *testing.T) {
 	}
 }
 
+// TestProjectAssistantHasToolkitButCannotUseSystemWarmAuthority preserves project tools while
+// rejecting system warm reuse and pinning the assistant profile into execution and MCP digests.
+// TestProjectAssistantHasToolkitButCannotUseSystemWarmAuthority сохраняет проектные инструменты,
+// запрещая системный warm reuse и закрепляя профиль в дайджестах исполнения и MCP.
 func TestProjectAssistantHasToolkitButCannotUseSystemWarmAuthority(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.AssistantScope, input.AssistantProfileRef = AssistantScopeProject, "asstprof_abcdefgh"
@@ -88,6 +100,8 @@ func TestProjectAssistantHasToolkitButCannotUseSystemWarmAuthority(t *testing.T)
 	}
 }
 
+// sealScopeFixture recomputes both authority digests after an intentional scope change in a test.
+// sealScopeFixture пересчитывает оба дайджеста полномочий после намеренной смены области в тесте.
 func sealScopeFixture(t *testing.T, input *RunnerInput) {
 	t.Helper()
 	execution, mcp, err := RuntimeExecutionBindingDigests(*input)
@@ -97,6 +111,10 @@ func sealScopeFixture(t *testing.T, input *RunnerInput) {
 	input.ExecutionBindingDigest, input.MCPBindingDigest = execution, mcp
 }
 
+// TestRuntimeRevisionDigestPinsAssistantScopeAndProfile proves ordinary, system, and distinct
+// project assistant profiles cannot share one owner revision digest.
+// TestRuntimeRevisionDigestPinsAssistantScopeAndProfile проверяет разные дайджесты версии владельца
+// для обычного агента, системного помощника и различных проектных профилей.
 func TestRuntimeRevisionDigestPinsAssistantScopeAndProfile(t *testing.T) {
 	input := validRunnerInputFixture()
 	source := RuntimeRevisionCredentialSource{SecretName: "runtime-provider-fixture-r1", SecretUID: "uid", SecretResourceVersion: "1"}

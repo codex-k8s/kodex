@@ -8,10 +8,16 @@ import (
 	"testing"
 )
 
+// validWorkspacePolicy returns a fresh canonical default for isolated policy mutations in tests.
+// validWorkspacePolicy возвращает новую каноническую политику для изолированных изменений в тестах.
 func validWorkspacePolicy() RuntimeWorkspacePolicy {
 	return RuntimeWorkspacePolicyV1()
 }
 
+// TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix checks relative paths, protected
+// subtrees, writable results, and rejection of absolute or traversal-based workspace escapes.
+// TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix проверяет относительные пути,
+// защищённые папки, запись результатов и отказ при абсолютном пути вне workspace или traversal.
 func TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix(t *testing.T) {
 	policy := validWorkspacePolicy()
 	for _, test := range []struct{ candidate, access, denial string }{
@@ -34,6 +40,8 @@ func TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix(t *testing.T) {
 	}
 }
 
+// TestRuntimeWorkspacePolicyRejectsDigestAndUnsafePath rejects a changed digest and a noncanonical rule path.
+// TestRuntimeWorkspacePolicyRejectsDigestAndUnsafePath отклоняет изменённый дайджест и неканонический путь правила.
 func TestRuntimeWorkspacePolicyRejectsDigestAndUnsafePath(t *testing.T) {
 	p := validWorkspacePolicy()
 	if err := p.Validate(); err != nil {
@@ -53,6 +61,10 @@ func TestRuntimeWorkspacePolicyRejectsDigestAndUnsafePath(t *testing.T) {
 	}
 }
 
+// TestRuntimeWorkspacePolicyAcceptsBoundedResourceQuotaWithoutChangingPaths permits lower quotas
+// after recomputing the digest while retaining the exact protected path rules.
+// TestRuntimeWorkspacePolicyAcceptsBoundedResourceQuotaWithoutChangingPaths допускает меньшие квоты
+// после пересчёта дайджеста при сохранении точных правил защищённых путей.
 func TestRuntimeWorkspacePolicyAcceptsBoundedResourceQuotaWithoutChangingPaths(t *testing.T) {
 	base := RuntimeWorkspacePolicyV1()
 	limited := base
@@ -67,6 +79,10 @@ func TestRuntimeWorkspacePolicyAcceptsBoundedResourceQuotaWithoutChangingPaths(t
 	}
 }
 
+// TestRuntimeWorkspaceLimitsBoundsAndNilPreserveCanonicalPolicy checks nil/default equivalence,
+// closed quota bounds, and a new digest for valid narrower limits without path changes.
+// TestRuntimeWorkspaceLimitsBoundsAndNilPreserveCanonicalPolicy проверяет соответствие nil и default,
+// пределы квот и новый дайджест допустимых меньших лимитов без изменения путей.
 func TestRuntimeWorkspaceLimitsBoundsAndNilPreserveCanonicalPolicy(t *testing.T) {
 	base := RuntimeWorkspacePolicyV1()
 	nilPolicy, err := RuntimeWorkspacePolicyWithLimits(nil)
