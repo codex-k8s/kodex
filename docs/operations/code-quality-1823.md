@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.136.0
+version: 1.137.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,86 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто тридцать седьмая волна — композиция STT и общая тестовая заглушка
+
+На опубликованном SHA `bc802e1f5452b3b0efca0f767f2a1dbdbb6e3608`
+исходный полный Go-набор STT упал до изменений: в host PATH нет FFmpeg,
+поэтому не прошли зависимые domain/audio/synthetic RPC проверки. Это не
+успешный baseline и не регресс новой заглушки. Сборка Go сама по себе и
+адресные app/projection unit-тесты затем прошли локально.
+
+Одинаковые семь объявлений `readinessService`/`fakeService` заменены
+одним узким `internal/transcriptiontest.Service`, импортируемым только
+двумя тестовыми файлами. Возвращаемые catalog, empty transcription,
+unavailable/pending errors и локальная готовность сохранены без изменений.
+Старые определения удалены атомарно, alias/второго источника нет.
+Runtime production-код не импортирует новую оснастку. Исчезла точная
+158-token группа; новых exact path/fragment групп нет.
+
+Полностью EN→RU описаны `app` 53/53, два entrypoint 5/5,
+`clients/projection` 38/38 и новый test helper 7/7 — 103 объявления.
+Пояснения различают локальную готовность и protected diagnostic,
+bounded join и гарантированное завершение, authority echo и выдачу
+полномочий, проверку формы/числовых границ и последующую доменную
+проверку account/generation/digest/expiry. Исполняемые RPC, порядок
+проверок, сроки и lifecycle/authority не менялись. Весь STT пока покрыт
+лишь 258/438: ещё 180 объявлений требуют обработки.
+
+Для воспроизводимого локального unit-набора добавлен отдельный
+`unit-test` target в существующий `Dockerfile.local-stt`, до финального
+`runtime` stage. Он использует закреплённые Go1.26.6, Alpine3.23 и
+FFmpeg8.0.1-r1. Финальные runtime instructions/default target не изменены.
+Публичная точка входа — `tools/code-quality/test-stt-unit.sh`:
+
+```bash
+tools/code-quality/test-stt-unit.sh
+# Необязательно: повторно использовать свой private task cache.
+KODEX_CQ_STT_CACHE=/tmp/kodex-cq1823-stt-cache-XXXXXX \
+  tools/code-quality/test-stt-unit.sh
+```
+
+Нужны Docker/BuildKit и заранее заполненный Go module cache. Build context
+пустой; исходники libs/STT и ровно два проверяемых manifest/policy файла
+монтируются read-only. Контейнер не получает env хоста, корневые `.env`/`.git`,
+остальные сервисы или внешнюю сеть; loopback сохраняется для synthetic RPC.
+Он работает с UID/GID пользователя, без capabilities, с read-only root,
+4 CPU/4GiB/512pids и ограниченным временным tmpfs. Исполняемый tmpfs
+нужен Go test binaries и локальной audio-оснастке, не реальным агентам.
+Повторное использование cache допускается только для собственного private
+каталога этой задачи непосредственно в `/tmp`; широкий `/tmp` отвергнут
+проверкой до запуска контейнера.
+
+Реальный запуск скрипта выполнил `go test -count=1 ./...` и
+`go build ./...` всего STT — PASS LOCAL CONTAINER. Проверенный image ID:
+`sha256:f7a9a68847a84326465cd33d2d44239628d70fc3cc8d2f819a628492aad4bb91`.
+Отдельный verbose readback подтвердил SKIP/NOT RUN для live provider
+без dedicated credential и real MediaRecorder без browser captures.
+Синтетический protected integration выполнен внутри обычного Go-набора;
+это не live/полная приёмка платформы. Host FFmpeg не устанавливался,
+кластер и развёрнутые образы не менялись.
+
+Промежуточные FAIL не скрыты: старый полный hot-reload Docker target
+не собрался из-за отсутствующего в актуальном APK index прежнего
+`ca-certificates=20260909-r0`; это существующий отдельный runtime-build
+долг, новый unit target его не чинит и не объявляет PASS. Первое построение
+unit из Go Alpine не подошло по версии FFmpeg; исправлено выбором той же
+закреплённой Alpine3.23, что у runtime. Также исправлены дублированная при
+вставке строка объявления, два оставшихся неиспользуемых импорта,
+noexec tmpfs и недостающие read-only contract mounts тестового контейнера.
+После исправлений полный указанный unit/build прогон успешен.
+Context7 `/docker/docs`: сверены named stages, COPY --from и --target;
+BuildKit не исполняет неиспользуемый финальный runtime при unit-сборке.
+
+Полный detector рабочего дерева: 6542 собственных файла, 222 исключения,
+1874 raw-группы, 555 адресных решений и 1319 неразобранных; сырой SHA-256 —
+`137af0aed8b080689261f034e6a95232a3b0be415f95b9d3dd39efd58937139a`,
+отпечаток набора —
+`af3e1c6116c5ce8d7149c0864d141081a4bfb6ac1df31fc3242f98e8f05ebc69`.
+Go-реестр: 4479/21065, непокрыты 16586. 16 unit-тестов анализатора,
+unit Go-checker, `bash -n`, `gofmt` и `git diff --check` — PASS LOCAL;
+точные ignore-boundaries проверяются по итоговому inventory. Полный
+`go-docs -check`, browser/deploy/live — NOT RUN. Цель не завершена.
 
 ## Сто тридцать шестая волна — завершение комментариев interaction-gateway
 

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	"google.golang.org/protobuf/proto"
 	"io"
 	"os"
@@ -18,31 +17,13 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
-	transcriptionservice "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/transcriptiontest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
-
-type fakeService struct{}
-
-func (fakeService) Catalog() modelprofile.Catalog { return modelprofile.OpenAICatalog() }
-
-func (fakeService) GetModelCatalog(context.Context, value.Principal) (modelprofile.Catalog, error) {
-	return modelprofile.OpenAICatalog(), nil
-}
-
-func (fakeService) CheckAvailability(context.Context, value.Principal, string) (transcriptionservice.Availability, error) {
-	return transcriptionservice.Availability{}, errors.New("unavailable")
-}
-
-func (fakeService) Transcribe(context.Context, transcriptionservice.Input) (value.TranscriptionResult, error) {
-	return value.TranscriptionResult{}, nil
-}
-func (fakeService) CheckLocal(context.Context) error         { return nil }
-func (fakeService) CheckProtectedPath(context.Context) error { return errors.New("pending") }
 
 type fakeStream struct {
 	ctx      context.Context
@@ -322,7 +303,7 @@ func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(true, "ready")
-	server, err := New(fakeService{}, t.TempDir(), readiness, time.Second)
+	server, err := New(transcriptiontest.Service{}, t.TempDir(), readiness, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

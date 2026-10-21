@@ -16,12 +16,14 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Отсутствие authority connection допустимо только для явного trusted профиля.
-// Обёртка сохраняет единый cleanup-контракт всех ошибок запуска и shutdown.
+// profileAuthority keeps a uniform partial-startup cleanup contract; an absent local authority connection is allowed only for explicit trusted-cluster composition.
+// RU: profileAuthority сохраняет единый контракт очистки частичного startup; отсутствие локального authority соединения допустимо только в явной trusted-cluster композиции.
 type profileAuthority struct {
 	connection *authorityclient.LocalConnection
 }
 
+// dialProfileAuthority returns an empty trusted-profile wrapper or dials the exact local authority socket for the protected profile, rejecting unknown profiles.
+// RU: dialProfileAuthority возвращает пустую обёртку trusted-профиля либо открывает точный локальный authority сокет защищённого профиля, отклоняя неизвестные профили.
 func dialProfileAuthority(ctx context.Context, profile string, config authorityclient.LocalConfig) (*profileAuthority, error) {
 	if profile == transportprofile.TrustedCluster {
 		return &profileAuthority{}, nil
@@ -36,6 +38,8 @@ func dialProfileAuthority(ctx context.Context, profile string, config authorityc
 	return &profileAuthority{connection: connection}, nil
 }
 
+// Close releases an existing local authority connection and safely accepts nil or trusted-profile wrappers during cleanup.
+// RU: Close освобождает существующее локальное authority соединение и безопасно принимает nil или trusted-обёртку при очистке.
 func (connection *profileAuthority) Close() error {
 	if connection == nil || connection.connection == nil {
 		return nil
@@ -43,6 +47,8 @@ func (connection *profileAuthority) Close() error {
 	return connection.connection.Close()
 }
 
+// Issuer returns the protected profile's issuer client or nil when no local connection exists; nil does not grant authority.
+// RU: Issuer возвращает issuer клиент защищённого профиля либо nil при отсутствии локального соединения; nil не выдаёт полномочий.
 func (connection *profileAuthority) Issuer() internalrpcauthorityv1.AuthorizationIssuerServiceClient {
 	if connection == nil || connection.connection == nil {
 		return nil
@@ -50,6 +56,8 @@ func (connection *profileAuthority) Issuer() internalrpcauthorityv1.Authorizatio
 	return connection.connection.Issuer()
 }
 
+// Verifier returns the local verifier client when connected, leaving trusted-profile owner resolution to its separate adapter.
+// RU: Verifier возвращает локальный verifier клиент при наличии соединения; разрешение владельца trusted-профиля остаётся отдельному адаптеру.
 func (connection *profileAuthority) Verifier() internalrpcauthorityv1.AuthorizationVerifierServiceClient {
 	if connection == nil || connection.connection == nil {
 		return nil
@@ -57,12 +65,18 @@ func (connection *profileAuthority) Verifier() internalrpcauthorityv1.Authorizat
 	return connection.connection.Verifier()
 }
 
+// rpcSecurity carries the composed unary/stream authorization interceptors and profile-specific server transport options.
+// RU: rpcSecurity содержит собранные unary/stream перехватчики авторизации и профильные транспортные параметры сервера.
 type rpcSecurity struct {
 	unary   grpc.UnaryServerInterceptor
 	stream  grpc.StreamServerInterceptor
 	options []grpc.ServerOption
 }
 
+// newRPCSecurity selects mTLS plus local verification for protected RPC or closed gateway bindings followed by owner principal resolution for trusted-cluster.
+// RU: newRPCSecurity выбирает mTLS с локальной проверкой для защищённого RPC либо закрытые привязки gateway с последующим разрешением субъекта владельцем для trusted-cluster.
+// The trusted branch still requires dependencies and admits only transcribe/catalog methods with user actor mode; missing verifier or unknown profiles fail closed.
+// RU: Trusted-ветвь требует зависимости и допускает лишь transcribe/catalog с user actor mode; отсутствие verifier или неизвестный профиль приводят к отказу.
 func newRPCSecurity(config Config, verifier *profileAuthority, dependencies *protectedrpc.Client) (rpcSecurity, error) {
 	if config.RPCProfile != transportprofile.TrustedCluster {
 		if config.RPCProfile != "" || verifier.Verifier() == nil {
