@@ -8,8 +8,12 @@ import (
 	"reflect"
 )
 
+// errExecutableRevision rejects a managed package that expands its shipped executable adapter contract.
+// errExecutableRevision отклоняет управляемый пакет, расширяющий поставленный исполняемый контракт адаптера.
 var errExecutableRevision = errors.New("integration package exceeds executable adapter contract")
 
+// NormalizeManagedRevision assigns origin from owner lineage, validates the narrowed shipped contract,
+// and returns canonical bytes rather than trusting the origin embedded in the submitted package.
 // NormalizeManagedRevision назначает origin из owner lineage и возвращает
 // канонические bytes. Исходный origin не используется как источник полномочий.
 func NormalizeManagedRevision(raw []byte, managedBy string, shipped map[string]Package) (Package, []byte, error) {
@@ -36,6 +40,8 @@ func NormalizeManagedRevision(raw []byte, managedBy string, shipped map[string]P
 	return candidate, canonical, nil
 }
 
+// ValidateExecutableRevision permits a managed revision only when it narrows the shipped adapter contract;
+// each worker checks its request-local package without mutating the global registry.
 // ValidateExecutableRevision разрешает сужение поставленного adapter contract.
 // Каждый worker проверяет request-local package; глобальный registry неизменяем.
 func ValidateExecutableRevision(candidate, shipped Package) error {
@@ -76,6 +82,8 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 	return nil
 }
 
+// validateOpenAPIManagedRevision allows new operations only within the shipped typed HTTP adapter,
+// while preserving its destination, execution route, readiness and bounded retry contract.
 // В отличие от поставленных adapters, OpenAPI-managed revision может задавать
 // новые операции. Расширяется только проверенный типизированный HTTP-контракт,
 // а не право исполнять произвольный код или выбирать destination из вызова.
@@ -99,6 +107,8 @@ func validateOpenAPIManagedRevision(candidate, baseline Package) error {
 	return nil
 }
 
+// canonicalPackage verifies that a valid, size-bounded package hashes to its declared canonical digest.
+// canonicalPackage проверяет, что допустимый пакет ограниченного размера имеет заявленный канонический дайджест.
 func canonicalPackage(value Package) bool {
 	if validate(&value) != nil {
 		return false
@@ -111,6 +121,8 @@ func canonicalPackage(value Package) bool {
 	return hex.EncodeToString(digest[:]) == value.Digest
 }
 
+// narrowNetworkDestinations permits removing shipped destinations but never changing or duplicating a tuple.
+// narrowNetworkDestinations допускает удаление поставленных назначений, но не изменение или повтор полного tuple.
 // Каждый destination сохраняет полный поставленный tuple; допускается только удаление.
 func narrowNetworkDestinations(candidate, baseline []NetworkDestination) bool {
 	allowed := make(map[NetworkDestination]bool, len(baseline))
@@ -127,6 +139,7 @@ func narrowNetworkDestinations(candidate, baseline []NetworkDestination) bool {
 	return true
 }
 
+// HasNetworkDestination checks the effective request-local package rather than the shipped registry.
 // HasNetworkDestination проверяет фактический request-local package, а не shipped registry.
 func (value Package) HasNetworkDestination(expected NetworkDestination) bool {
 	for _, destination := range value.Spec.NetworkDestinations {
@@ -137,6 +150,9 @@ func (value Package) HasNetworkDestination(expected NetworkDestination) bool {
 	return false
 }
 
+// narrowFields preserves every shipped field and permits only tighter validation constraints;
+// an adapter can read optional fields, so removing or retyping one is not a safe narrowing.
+// narrowFields сохраняет каждое поставленное поле и допускает лишь усиление ограничений;
 // Набор полей сохраняется: adapter может читать даже необязательное поле.
 // Ограничения разрешено только усиливать, без изменения формата или типов.
 func narrowFields(candidate, baseline []Field) bool {
