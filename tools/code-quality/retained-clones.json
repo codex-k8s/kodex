@@ -3,6 +3,38 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/delivery.go",
+      "secondPath": "libs/go/eventing/postgresinbox/recovery.go",
+      "fragmentSHA256": "e0d9f30060400bd34f638044e5f7d2462e5a23fc208537a5d8ad3568bea17fbe",
+      "count": 1,
+      "reason": "Совпадает только входная оболочка processor: admission, trace, валидация и наблюдение исхода. ReadDeliveryOutcome после authorizer выполняет неизменяющее чтение точного digest и не требует мутационного owner gate; Recover требует подтверждённого полномочия, CAS и устойчивой квитанции. Общие enter/leave и observeOperator уже существуют; дополнительная обёртка смешала бы read и write authority. Сохранено одно точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/maintenance.go",
+      "secondPath": "libs/go/eventing/postgresinbox/recovery.go",
+      "fragmentSHA256": "29cbc147cefc3e6f9c74ebffbdc598eb48dc339d3ca3feea1153befb38ae047c",
+      "count": 1,
+      "reason": "Repair и Recover имеют сходную входную оболочку, но разные request.validate, OperatorAction и digest-domain; их owner authority проверяется уже общим authorizeOperator. Repair допускает только DEAD_LETTER-предшественника, Recover выбирает директиву по состоянию. Параметризованная оболочка скрыла бы границу разных команд. Сохранено только точное начальное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/maintenance.go",
+      "secondPath": "libs/go/eventing/postgresinbox/recovery.go",
+      "fragmentSHA256": "c8eb639eb2ee74ceff9c16f6d9a5c786483e5c5ad8c1ac493db0383c14f58cf3",
+      "count": 1,
+      "reason": "Совпадает каркас чтения operator receipt и cursor→inbox, но проверка повторного receipt различна: Repair требует точные requeue/action/directive, Recover сверяет digest и возвращает свою директиву. Общие readOperatorReceipt и lockCursorThenInbox уже вынесены. Унификация оставшихся ветвей ослабила бы action-specific идемпотентность. Сохранено одно точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/maintenance.go",
+      "secondPath": "libs/go/eventing/postgresinbox/recovery.go",
+      "fragmentSHA256": "9ca2b2affcd1bada6e8982144d7401fc826d5780063493aa8f05ebf3f6271514",
+      "count": 1,
+      "reason": "Оба метода атомарно пишут операторскую квитанцию, но Repair перед этим выполняет единственный requeue с собственным CAS, а Recover выбирает rejoin, terminalize либо WAIT и сохраняет выбранную директиву. Общий insertOperatorReceipt уже реализует повторяемый примитив. Объединение завершающих ветвей потребовало бы action callbacks и спрятало бы разные terminal-условия; сохранено только точное окно."
+    },
+    {
+      "format": "go",
       "firstPath": "libs/go/eventing/postgresinbox/errors.go",
       "secondPath": "libs/go/eventing/postgresinbox/errors.go",
       "fragmentSHA256": "223c44cd28dba59a904fca7abb9f0d6e09fab616dc2acaa4cd7e0a562a4dc7a1",
