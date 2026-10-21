@@ -226,8 +226,7 @@ func (processor *Processor) getInbox(
 	consumer Consumer,
 	eventID string,
 ) (inboxRow, error) {
-	row := inboxRow{}
-	err := tx.QueryRow(
+	return scanInboxRow(tx.QueryRow(
 		ctx,
 		query,
 		pgx.StrictNamedArgs{
@@ -235,7 +234,14 @@ func (processor *Processor) getInbox(
 			"consumer_scope": consumer.Scope,
 			"event_id":       eventID,
 		},
-	).Scan(
+	))
+}
+
+// scanInboxRow decodes the canonical inbox projection in SQL column order without changing QueryRow's error semantics.
+// scanInboxRow разбирает каноническую проекцию inbox в порядке SQL-столбцов, сохраняя семантику ошибок QueryRow.
+func scanInboxRow(source pgx.Row) (inboxRow, error) {
+	row := inboxRow{}
+	err := source.Scan(
 		&row.EventID,
 		&row.EventDigest,
 		&row.OrderingKey,
@@ -268,8 +274,7 @@ func (processor *Processor) getInboxBySequence(
 	orderingKey string,
 	sequence uint64,
 ) (inboxRow, error) {
-	row := inboxRow{}
-	err := tx.QueryRow(
+	return scanInboxRow(tx.QueryRow(
 		ctx,
 		processor.queries.inboxGetBySequenceForUpdate,
 		pgx.StrictNamedArgs{
@@ -278,30 +283,7 @@ func (processor *Processor) getInboxBySequence(
 			"ordering_key":   orderingKey,
 			"event_sequence": sequence,
 		},
-	).Scan(
-		&row.EventID,
-		&row.EventDigest,
-		&row.OrderingKey,
-		&row.EventSequence,
-		&row.State,
-		&row.Attempts,
-		&row.MaxAttempts,
-		&row.RepairCount,
-		&row.MaxRepairs,
-		&row.LeaseOwner,
-		&row.LeaseToken,
-		&row.LeaseGeneration,
-		&row.LeaseFence,
-		&row.LeaseExpiresAt,
-		&row.AvailableAt,
-		&row.LastErrorCode,
-		&row.ProcessedAt,
-		&row.CleanupAfter,
-		&row.TerminalAt,
-		&row.AvailableNow,
-		&row.LeaseActive,
-	)
-	return row, err
+	))
 }
 
 func isRetryableTransactionError(err error) bool {
