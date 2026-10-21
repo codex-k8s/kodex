@@ -7,10 +7,18 @@ import (
 	"strconv"
 )
 
+// NetworkPolicyName fixes the dedicated integration-egress policy identity.
+// RU: NetworkPolicyName закрепляет имя отдельной сетевой политики интеграций.
 const NetworkPolicyName = "egress-gateway-integration-destinations"
 
-// RenderFiles материализует только metadata о разрешённых HTTPS endpoints.
-// Вызов Kubernetes API и проверка готовности принадлежат publisher.
+// RenderFiles validates an exact projection and renders an immutable ConfigMap,
+// public-IP HTTPS NetworkPolicy and deployment switch as JSON files. It makes
+// no Kubernetes API call; publication and served-state readiness belong to the
+// separate publisher.
+// RU: RenderFiles проверяет точную проекцию и формирует JSON-файлы immutable
+// ConfigMap, NetworkPolicy для HTTPS к публичным IP и переключения Deployment.
+// Kubernetes API не вызывается; публикация и проверка обслуживаемого состояния
+// принадлежат отдельному publisher.
 func RenderFiles(document Document) (map[string][]byte, error) {
 	if err := document.Validate(); err != nil {
 		return nil, err

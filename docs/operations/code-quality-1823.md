@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.8.0
+version: 1.9.0
 updated: 2026-10-21
 ---
 
@@ -334,3 +334,23 @@ protobuf компилируются без тестовых файлов. `gofmt
 PASS LOCAL. Go-реестр на текущем дереве:370/21000 EN→RU,20630 остаются.
 Повтор clone detector после этих комментариев и итоговый `-check` ещё не
 выполнены; весь PR по-прежнему в работе.
+
+## Десятая волна — политика сетевой проекции интеграций
+
+В `libs/go/integrationegresspolicy` подробно двуязычно описаны28/28
+собственных объявлений, включая package docs, интерфейс DNS resolver и
+тестовые fixture/CEL-проверки. Комментарии различают проверку синтаксиса
+`GatewayPolicyDigest` и внешнего состояния политики: `Document.Validate`
+не превращает digest в подтверждение полномочий. `SourceDigest` хэширует
+отсортированную последовательность имён, а уникальность подтверждают
+вызывающие `Produce`/`Validate`; адреса входят в отдельный digest документа.
+Публикация в Kubernetes и readiness принадлежат другому компоненту.
+Семантика `failurePolicy: Fail` и `validationActions: [Deny]` сверена через
+Context7 `/kubernetes/website` с документацией ValidatingAdmissionPolicy;
+это не live-проверка применённой политики в кластере.
+
+Изменены только комментарии. `go test ./...` и `go build ./...` модуля с
+Go1.26.6 — PASS LOCAL, включая существующий тест CEL expressions;
+`gofmt` и `git diff --check` — PASS LOCAL. Go-реестр текущего дерева:
+398/21000 EN→RU,20602 ещё не покрыты. Повтор detector после комментариев
+и полный Go checker ещё не выполнены; PR остаётся Draft.

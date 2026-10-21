@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+// TestRenderPinsAndImmutableDeploymentSwitch verifies the rendered immutable
+// ConfigMap, exact /32 HTTPS egress pin and changed deployment projection
+// after a new generation, without applying any Kubernetes resource.
+// RU: TestRenderPinsAndImmutableDeploymentSwitch проверяет immutable ConfigMap,
+// точный /32 HTTPS pin и смену проекции Deployment при новом поколении,
+// не применяя ресурсы Kubernetes.
 func TestRenderPinsAndImmutableDeploymentSwitch(t *testing.T) {
 	document, err := Produce(t.Context(), []string{"api.example.test"}, 1, strings.Repeat("a", 64),
 		resolverFixture{addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}})

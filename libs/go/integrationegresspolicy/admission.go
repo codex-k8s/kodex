@@ -1,10 +1,23 @@
 package integrationegresspolicy
 
+// PublicationAdmissionName identifies the integration-specific fail-closed
+// Kubernetes admission policy and binding for immutable projection ConfigMaps.
+// RU: PublicationAdmissionName обозначает закрытую при отказе политику допуска
+// Kubernetes и её binding для immutable ConfigMap проекции интеграций.
 const PublicationAdmissionName = "egress-integration-configmap-publication"
+
+// CreationBoundaryName identifies the broader control-plane CREATE fence;
+// the kind-specific policies still validate payload shape and labels.
+// RU: CreationBoundaryName обозначает общий барьер CREATE для control-plane;
+// видовые политики дополнительно проверяют форму данных и labels.
 const CreationBoundaryName = "control-plane-egress-configmap-boundary"
 
-// PublicationAdmissionResources ограничивает право control-plane создать
-// immutable ConfigMap точной формы. Содержимое строго проверяет consumer.
+// PublicationAdmissionResources renders a fail-closed VAP and binding for
+// one exact immutable integration projection shape. The consumer must still
+// validate the complete document and DNS pins before using the payload.
+// RU: PublicationAdmissionResources создаёт закрытые при отказе VAP и binding
+// для точной формы immutable-проекции интеграции. Получатель всё равно обязан
+// проверить полный документ и DNS pins до использования данных.
 func PublicationAdmissionResources() (map[string]any, map[string]any) {
 	policy := map[string]any{
 		"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicy",
@@ -34,9 +47,12 @@ func PublicationAdmissionResources() (map[string]any, map[string]any) {
 	return policy, binding
 }
 
-// CreationBoundaryResources запрещает CP пользоваться широким RBAC CREATE
-// для любых ConfigMap вне двух закрытых видов projection. Дополнительные
-// видовые VAP проверяют schema, labels и bounded payload.
+// CreationBoundaryResources confines the control-plane service account's
+// broad ConfigMap CREATE permission to two registered projection name forms.
+// Kind-specific admission separately validates schema, labels and payload.
+// RU: CreationBoundaryResources ограничивает широкое право CREATE учётной
+// записи control-plane двумя зарегистрированными формами имён ConfigMap.
+// Видовые политики отдельно проверяют schema, labels и размер содержимого.
 func CreationBoundaryResources() (map[string]any, map[string]any) {
 	policy := map[string]any{
 		"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicy",

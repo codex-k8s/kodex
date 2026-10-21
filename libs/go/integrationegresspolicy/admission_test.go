@@ -11,6 +11,12 @@ import (
 	"github.com/google/cel-go/common/types"
 )
 
+// TestPublicationAdmissionAndCreationBoundary compares the generated policies
+// with their checked-in artifact, evaluates actual CEL expressions, and
+// rejects a foreign name, mutable object, extra data and wrong schema.
+// RU: TestPublicationAdmissionAndCreationBoundary сравнивает политики с
+// сохранённым артефактом, выполняет выражения CEL и отклоняет чужое имя,
+// изменяемый объект, лишние данные и неверную schema.
 func TestPublicationAdmissionAndCreationBoundary(t *testing.T) {
 	policy, binding := PublicationAdmissionResources()
 	boundary, boundaryBinding := CreationBoundaryResources()
