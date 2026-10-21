@@ -14,10 +14,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
+// doerFunc injects a request assertion and synthetic response without making an external HTTP call.
+// doerFunc внедряет проверку запроса и синтетический ответ без внешнего HTTP-вызова.
 type doerFunc func(*http.Request) (*http.Response, error)
 
+// Do forwards the original request to the test callback without transport policy or response rewriting.
+// Do передаёт исходный запрос тестовому callback без транспортной политики или преобразования ответа.
 func (function doerFunc) Do(request *http.Request) (*http.Response, error) { return function(request) }
 
+// TestTranscribeStreamsExactPinnedMultipart parses a one-MiB synthetic request and verifies the boundary and exact catalog fields.
+// Its fake HTTP executor checks adapter serialization, not provider recognition or live TLS connectivity.
+// TestTranscribeStreamsExactPinnedMultipart разбирает синтетический запрос в один МиБ и проверяет границу и точные поля каталога.
+// Подставной HTTP-исполнитель проверяет сериализацию адаптера, не распознавание провайдером или живое TLS-соединение.
 func TestTranscribeStreamsExactPinnedMultipart(t *testing.T) {
 	audio := bytes.Repeat([]byte{0x5a}, 1<<20)
 	client, err := NewWithHTTPClient(doerFunc(func(request *http.Request) (*http.Response, error) {
@@ -63,6 +71,10 @@ func TestTranscribeStreamsExactPinnedMultipart(t *testing.T) {
 	}
 }
 
+// TestModelProbeIsExactNonBillableAndFailClosed requires one metadata-only GET and rejects wrong IDs, objects, statuses, and oversized bodies.
+// Unsupported local model IDs must fail without increasing the fake HTTP call count.
+// TestModelProbeIsExactNonBillableAndFailClosed требует один GET метаданных и отвергает неверные ID, типы, статусы и чрезмерные тела.
+// Неподдержанный локальный ID модели должен отклоняться без увеличения числа подставных HTTP-вызовов.
 func TestModelProbeIsExactNonBillableAndFailClosed(t *testing.T) {
 	for _, tc := range []struct {
 		status int
@@ -93,6 +105,8 @@ func TestModelProbeIsExactNonBillableAndFailClosed(t *testing.T) {
 	}
 }
 
+// TestProductionTransportPinsTLSAndEgress inspects the configured proxy, TLS 1.3 bounds, certificate checks, and redirect rejection without dialing.
+// TestProductionTransportPinsTLSAndEgress проверяет настройки прокси, границы TLS 1.3, проверку сертификата и запрет redirect без соединения.
 func TestProductionTransportPinsTLSAndEgress(t *testing.T) {
 	client, err := New(testEgressConfig())
 	if err != nil {
@@ -110,6 +124,8 @@ func TestProductionTransportPinsTLSAndEgress(t *testing.T) {
 	}
 }
 
+// TestTranscribeClassifiesNetworkFailureAsEgress maps an injected HTTP transport failure to the egress sentinel.
+// TestTranscribeClassifiesNetworkFailureAsEgress сопоставляет внедрённую ошибку HTTP-транспорта с признаком отказа egress.
 func TestTranscribeClassifiesNetworkFailureAsEgress(t *testing.T) {
 	client, _ := NewWithHTTPClient(doerFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("network detail") }))
 	_, err := client.Transcribe(t.Context(), value.ProviderRequest{
@@ -121,6 +137,8 @@ func TestTranscribeClassifiesNetworkFailureAsEgress(t *testing.T) {
 	}
 }
 
+// TestReadinessIsLocalAndEgressIsDiagnostic proves local readiness performs no HTTP call and explicit proxy diagnostics perform exactly one.
+// TestReadinessIsLocalAndEgressIsDiagnostic доказывает отсутствие HTTP в локальной готовности и ровно один вызов явной диагностики прокси.
 func TestReadinessIsLocalAndEgressIsDiagnostic(t *testing.T) {
 	calls := 0
 	client, _ := NewWithHTTPClient(doerFunc(func(*http.Request) (*http.Response, error) {

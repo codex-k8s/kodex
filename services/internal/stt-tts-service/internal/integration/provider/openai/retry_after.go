@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/sttapi/errorprofile"
 )
 
+// boundedRetryAfter accepts one short delta-seconds or HTTP-date hint within the shared retry budget.
+// Future dates round up to seconds; invalid, repeated, expired, or excessive hints yield zero, never a retry action.
+// boundedRetryAfter принимает одну короткую подсказку в секундах либо HTTP-дате в пределах общего бюджета повтора.
+// Будущая дата округляется вверх; неверная, повторная, прошедшая или чрезмерная подсказка даёт ноль, не действие повтора.
 func boundedRetryAfter(header http.Header, now time.Time) time.Duration {
 	values := header.Values("Retry-After")
 	if len(values) != 1 || len(values[0]) > 128 {

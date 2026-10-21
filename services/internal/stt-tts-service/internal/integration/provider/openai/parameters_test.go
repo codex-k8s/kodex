@@ -12,6 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
+// TestCatalogModelMultipartParameters checks each local catalog model's exact language, keyword, prompt, and chunking form fields.
+// An unsupported streaming parameter must fail before a second fake provider call; live model capability is not tested here.
+// TestCatalogModelMultipartParameters проверяет точные поля языков, терминов, контекста и разбиения для каждой модели локального каталога.
+// Неподдержанный streaming должен отклоняться до второго подставного вызова; живые возможности модели здесь не проверяются.
 func TestCatalogModelMultipartParameters(t *testing.T) {
 	for _, profile := range modelprofile.OpenAICatalog().Models {
 		t.Run(profile.Model, func(t *testing.T) {

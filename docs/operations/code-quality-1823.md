@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.139.0
+version: 1.140.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,41 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сороковая волна — полный собственный Go-код STT
+
+На базе опубликованного SHA `e04be00f6757a819310b6a4ff0384ac8324483e5`
+описаны оставшиеся 37 объявлений: OpenAI adapter, egress generation
+readback, Retry-After, их тесты и встроенная аудиофикстура. Теперь весь
+собственный Go-код STT, включая тесты, имеет EN→RU комментарии:
+438/438. Сгенерированные файлы и bytes MP3 не редактировались.
+
+Пояснения различают локальную готовность, diagnostic proxy readback,
+metadata GET и реальное распознавание; фиксируют один POST без retry,
+ограничение JSON, строгий decoder, приватность error body, сохранение
+context cancellation и проверку CONNECT до первого TLS byte. Readback
+заголовков не называется подписью. Тест RetryAfter явно не инструментирует
+чтение тела, поэтому его название не подменяет более сильное доказательство.
+
+Навык OpenAI Docs использован для сверки multipart и контекста модели:
+[официальная документация](https://developers.openai.com/api/docs/guides/speech-to-text),
+Context7 `/websites/developers_openai_api`. Имена моделей, параметры,
+endpoint, TLS, authority и исполняемые условия не менялись; ключи API
+для проверок не передавались и внешний provider не вызывался.
+
+Полный detector рабочего дерева: 6542 собственных файла, 222 исключения,
+1874 raw-группы, 555 точных решений, 1319 неразобранных. Сырой SHA-256:
+`0c03d85dedf2874336516f3c68e4e9dba227bd2361e065b414abf5e79a099ad7`;
+отпечаток набора не изменился:
+`af3e1c6116c5ce8d7149c0864d141081a4bfb6ac1df31fc3242f98e8f05ebc69`.
+Go-реестр: 4659/21065, непокрыты 16406.
+
+Полный STT Go build/unit через `test-stt-unit.sh` — PASS LOCAL CONTAINER;
+image ID `sha256:26f040a9d24f13be5caff1be5dde1ce5dd1cedc33bab30cee7327ea9a124dbdc`.
+Пять ignore-boundaries, gofmt и diff-check — PASS LOCAL. Реальный provider
+и MediaRecorder — SKIP/NOT RUN. Прежний отдельный runtime CA package pin
+не исправлялся. Полный go-docs-check, browser/deploy/live — NOT RUN;
+покрытие одного сервиса не означает завершение всего Issue.
 
 ## Сто тридцать девятая волна — потоковый транспорт STT
 
