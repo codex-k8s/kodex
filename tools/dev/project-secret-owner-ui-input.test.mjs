@@ -11,6 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import vm from "node:vm";
 import {
+  projectSecretInputProfile,
+  projectSecretOwnerProof,
+} from "./test-support/owner-ui-fixtures.mjs";
+import {
   validateInputProfile,
   readInputProfile,
   assertInputEnvironment,
@@ -24,72 +28,9 @@ import {
   secretInputKey,
 } from "./project-secret-owner-ui-input.mjs";
 
-const profile = {
-  cdpEndpoint: "http://127.0.0.1:9222",
-  chromePID: 1234,
-  chromeStartTicks: "4321",
-  pageURL: "https://kodex.127.0.0.2.nip.io/projects/prj_synthetic/secrets",
-  organizationRef: "org_synthetic",
-  ownerRef: "usr_synthetic",
-  projectRef: "prj_synthetic",
-  environmentRef: "renv_synthetic",
-  environmentVersion: 2,
-  versionRef: "renvv_synthetic",
-  environmentDigest: "a".repeat(64),
-  agentRef: "agt_synthetic",
-  agentVersion: 5,
-  bindingRef: "aenv_synthetic",
-  bindingVersion: 3,
-  bindingDigest: "b".repeat(64),
-};
+const profile = projectSecretInputProfile();
 function proof() {
-  return {
-    ownerRef: profile.ownerRef,
-    organizationRef: profile.organizationRef,
-    platformRole: "OWNER",
-    environment: {
-      ref: profile.environmentRef,
-      organizationRef: profile.organizationRef,
-      projectRef: profile.projectRef,
-      scopeKind: "PROJECT",
-      name: "selfdev-write",
-      state: "ACTIVE",
-      version: profile.environmentVersion,
-      ready: true,
-      revisionRef: profile.versionRef,
-      digest: profile.environmentDigest,
-    },
-    agentVersion: profile.agentVersion,
-    binding: {
-      ref: profile.bindingRef,
-      version: profile.bindingVersion,
-      agentRef: profile.agentRef,
-      environmentRef: profile.environmentRef,
-      versionRef: profile.versionRef,
-      digest: profile.bindingDigest,
-    },
-    assignedAgents: {
-      items: [
-        {
-          ref: profile.agentRef,
-          version: profile.agentVersion,
-          projectRef: profile.projectRef,
-          system: false,
-        },
-      ],
-      nextPageToken: "",
-    },
-    impact: {
-      environmentRef: profile.environmentRef,
-      environmentVersion: profile.environmentVersion,
-      targetVersionRef: profile.versionRef,
-      targetDigest: profile.environmentDigest,
-      total: 0,
-      nextPageToken: "",
-      consumers: [],
-    },
-    secretAbsent: true,
-  };
+  return projectSecretOwnerProof(profile);
 }
 const sentinel = "synthetic-private-Git-token-never-log";
 function fixture(options = {}) {
