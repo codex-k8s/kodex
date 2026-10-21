@@ -18,6 +18,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
 
+// TestSeaweedFSOperationLockE2E proves a stale lock holder cannot release its live replacement in local S3.
+// RU: TestSeaweedFSOperationLockE2E доказывает, что прежний держатель не освобождает заменившую его блокировку в локальном S3.
 func TestSeaweedFSOperationLockE2E(t *testing.T) {
 	if os.Getenv("BACKUP_RESTORE_E2E") != "1" {
 		t.Skip("local backup restore E2E is disabled")
@@ -54,6 +56,8 @@ func TestSeaweedFSOperationLockE2E(t *testing.T) {
 	}
 }
 
+// TestSeaweedFSBackupRestoreDrillReadbackE2E checks exact receipts and optional object bytes of a disposable restore.
+// RU: TestSeaweedFSBackupRestoreDrillReadbackE2E сверяет точные квитанции и при наличии файлы одноразового восстановления.
 func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	if os.Getenv("BACKUP_RESTORE_E2E") != "1" {
 		t.Skip("local backup restore E2E is disabled")
