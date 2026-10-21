@@ -2,6 +2,8 @@ package usertext
 
 import "testing"
 
+// TestCatalogUsesConnectionLocale checks that both supported connection locales resolve a real catalog key rather than echoing it.
+// RU: TestCatalogUsesConnectionLocale проверяет, что обе поддерживаемые локали подключения разрешают реальный ключ каталога, а не возвращают его имя.
 func TestCatalogUsesConnectionLocale(t *testing.T) {
 	t.Parallel()
 	catalog, err := New()

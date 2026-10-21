@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"strconv"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -11,21 +10,30 @@ import (
 )
 
 var (
-	errDeliveryLease    = errors.New("interaction delivery lease is invalid or expired")
+	// errDeliveryLease rejects missing, malformed or too-short leased work before dispatching an external effect.
+	// RU: errDeliveryLease отклоняет отсутствующую, неверную или слишком короткую аренду до внешнего эффекта.
+	errDeliveryLease = errors.New("interaction delivery lease is invalid or expired")
+	// errDeliveryResponse reports a malformed claim, result or owner readback without accepting it as a successful delivery.
+	// RU: errDeliveryResponse обозначает неверную заявку, результат или ответ владельца, не принимая их за успешную доставку.
 	errDeliveryResponse = errors.New("interaction delivery response is invalid")
 )
 
+// deliverySender exposes only leased delivery dispatch; the owner RPC client still controls claim and completion.
+// RU: deliverySender открывает только отправку по арендованной доставке; claim и завершением по-прежнему управляет owner RPC клиент.
 type deliverySender interface {
+	// Deliver attempts the exact claimed delivery and returns observed external coordinates or an effect-classified error.
+	// RU: Deliver выполняет точную арендованную доставку и возвращает наблюдаемые внешние координаты либо ошибку с классификацией эффекта.
 	Deliver(context.Context, *controlplanev1.InteractionDeliveryClaim) (mattermost.DeliveryResult, error)
 }
 
+// processDeliveries claims one delivery at a time, bounds dispatch by its lease and completes it before claiming another.
+// RU: processDeliveries арендует по одной доставке, ограничивает отправку сроком аренды и завершает её до получения следующей.
+// It reserves completion time and returns adapter errors only after reporting the observed outcome to the owner.
+// RU: Функция оставляет время для завершения и возвращает ошибку адаптера лишь после передачи наблюдаемого исхода владельцу.
 func processDeliveries(ctx context.Context, control controlplanev1.InteractionWorkServiceClient, adapter deliverySender, config Config) error {
 	for index := int32(0); index < config.ClaimLimit; index++ {
-		if err := ctx.Err(); err != nil {
+		if available, err := claimBudgetAvailable(ctx, config.RequestTimeout); err != nil || !available {
 			return err
-		}
-		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= 2*config.RequestTimeout+time.Second {
-			return nil
 		}
 		claimContext, cancelClaim := context.WithTimeout(ctx, config.RequestTimeout)
 		// Не арендуем очередь, которая состарится до начала последовательной отправки.
@@ -60,6 +68,8 @@ func processDeliveries(ctx context.Context, control controlplanev1.InteractionWo
 	return nil
 }
 
+// deliveryContext requires a delivery locator and delegates lease validation and completion reserve to the common work helper.
+// RU: deliveryContext требует ссылку доставки и передаёт проверку аренды и запаса завершения общему helper работы.
 func deliveryContext(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim, completionBudget time.Duration) (context.Context, context.CancelFunc, error) {
 	if claim.GetDeliveryRef() == "" {
 		return nil, nil, errDeliveryLease
@@ -68,22 +78,10 @@ func deliveryContext(ctx context.Context, claim *controlplanev1.InteractionDeliv
 	return leaseContext(ctx, lease, completionBudget)
 }
 
-func leaseContext(ctx context.Context, lease *controlplanev1.WorkLease, completionBudget time.Duration) (context.Context, context.CancelFunc, error) {
-	if lease == nil || lease.GetRef() == "" || lease.GetFence() == "" || lease.GetGeneration() < 1 || lease.GetExpiresAt() == nil || lease.GetExpiresAt().CheckValid() != nil {
-		return nil, nil, errDeliveryLease
-	}
-	deadline := lease.GetExpiresAt().AsTime()
-	if parent, ok := ctx.Deadline(); ok && parent.Before(deadline) {
-		deadline = parent
-	}
-	deadline = deadline.Add(-completionBudget - time.Second)
-	if !deadline.After(time.Now()) {
-		return nil, nil, errDeliveryLease
-	}
-	child, cancel := context.WithDeadline(ctx, deadline)
-	return child, cancel, nil
-}
-
+// completeDelivery classifies success, confirmed no-effect or unknown outcome, binds completion to the exact lease and verifies owner readback.
+// RU: completeDelivery различает успех, подтверждённое отсутствие эффекта и неизвестный исход, привязывает завершение к точной аренде и проверяет ответ владельца.
+// A mismatched external destination is reported as unknown, never successful, and this path must not affect the core run.
+// RU: Несовпадающий внешний адрес передаётся как неизвестный исход, а не успех; этот путь не должен затрагивать основной запуск.
 func completeDelivery(ctx context.Context, control controlplanev1.InteractionWorkServiceClient, claim *controlplanev1.InteractionDeliveryClaim, result mattermost.DeliveryResult, deliveryErr error) error {
 	lease := claim.GetLease()
 	if lease == nil {
@@ -107,7 +105,7 @@ func completeDelivery(ctx context.Context, control controlplanev1.InteractionWor
 		state, code = "UNKNOWN_OUTCOME", "INTERACTION_OUTCOME_UNKNOWN"
 	}
 	response, err := control.CompleteInteractionDelivery(ctx, &controlplanev1.CompleteInteractionDeliveryRequest{
-		Mutation:    &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetDeliveryRef(), lease.GetRef()+":"+strconv.FormatInt(lease.GetGeneration(), 10)+":complete")},
+		Mutation:    &controlplanev1.MutationContext{IdempotencyKey: workCompletionKey(claim.GetDeliveryRef(), lease)},
 		DeliveryRef: claim.GetDeliveryRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(),
 		Success: success, SafeErrorCode: code,
 		ExternalPostRef: result.PostRef, ExternalThreadRef: result.ThreadRef,

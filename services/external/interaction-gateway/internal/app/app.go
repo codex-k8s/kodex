@@ -1,4 +1,5 @@
-// Package app содержит composition root необязательного interaction adapter.
+// Package app composes the optional interaction gateway, its owner RPC client, adapter and managed worker lifecycle.
+// RU: Пакет app собирает необязательный interaction gateway, его owner RPC клиент, адаптер и управляемый жизненный цикл worker.
 package app
 
 import (
@@ -18,10 +19,18 @@ import (
 )
 
 const (
+	// issuerUID pins the workload grant issuer's expected file owner, not the identity of an external chat user.
+	// RU: issuerUID закрепляет ожидаемого владельца файла издателя workload grant, а не идентичность внешнего пользователя чата.
 	issuerUID = 29001
+	// issuerGID pins the projected application grant's expected issuer group for the protected RPC client.
+	// RU: issuerGID закрепляет ожидаемую группу издателя спроецированного application grant для защищённого RPC клиента.
 	issuerGID = 29000
 )
 
+// Run initializes telemetry, protected owner RPC, the adapter and technical HTTP before starting delivery, invocation and source workers.
+// RU: Run создаёт telemetry, защищённый owner RPC, адаптер и технический HTTP до запуска worker доставки, вызовов и источников.
+// It marks readiness around the worker lifetime and uses the independent shutdown base for bounded joins and telemetry cleanup.
+// RU: Функция меняет readiness на границах жизни worker и использует независимую базу shutdown для ограниченного ожидания и очистки telemetry.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
@@ -96,6 +105,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	return errors.Join(err, shutdownErr)
 }
 
+// serveTechnical adapts HTTP serving to worker cancellation; the composition root separately owns Server.Shutdown.
+// RU: serveTechnical связывает HTTP Serve с отменой worker; отдельный Server.Shutdown остаётся обязанностью композиции.
 func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -109,6 +120,8 @@ func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	}
 }
 
+// runDeliveryLoop polls sequential delivery work within an operation deadline and logs only transitions into or out of degradation.
+// RU: runDeliveryLoop опрашивает последовательную доставку в пределах срока операции и журналирует только переходы деградации и восстановления.
 func runDeliveryLoop(control *controlplaneclient.Client, adapter *mattermost.Adapter, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.PollInterval)
@@ -134,6 +147,8 @@ func runDeliveryLoop(control *controlplaneclient.Client, adapter *mattermost.Ada
 	}
 }
 
+// stableKey derives a deterministic UUID from two NUL-separated components; it supplies idempotency identity, not authorization.
+// RU: stableKey выводит детерминированный UUID из двух компонентов с разделителем NUL; это идентичность идемпотентности, а не полномочие.
 func stableKey(left, right string) string {
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(left+"\x00"+right)).String()
 }

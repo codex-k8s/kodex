@@ -17,21 +17,31 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// listenFunc adapts a fixture callback to a source subscription without opening a remote stream.
+// RU: listenFunc превращает обработчик оснастки в подписку источника без открытия удалённого потока.
 type listenFunc func(context.Context, *controlplanev1.InteractionSource, mattermost.MessageHandler) error
 
+// Listen passes source identity, lifecycle context and the real acceptance handler to the test's subscription callback.
+// RU: Listen передаёт идентичность источника, контекст жизни и настоящий обработчик приёма тестовой подписке.
 func (fn listenFunc) Listen(ctx context.Context, source *controlplanev1.InteractionSource, handler mattermost.MessageHandler) error {
 	return fn(ctx, source, handler)
 }
 
+// testSource creates a synthetic inbound-enabled connection snapshot with a caller-selected credential materialization revision.
+// RU: testSource создаёт синтетический снимок подключения с входящей capability и выбранной тестом ревизией материализации реквизитов.
 func testSource(revision string) *controlplanev1.InteractionSource {
 	return &controlplanev1.InteractionSource{ConnectionRef: "connection", CredentialMaterializationRef: revision, EnabledCapabilities: []string{"mattermost.inbound"}}
 }
 
+// discoveryControl delays a synthetic discovery outage until an existing listener has started, making cancellation observable.
+// RU: discoveryControl задерживает синтетический отказ обнаружения до запуска существующего listener, делая отмену наблюдаемой.
 type discoveryControl struct {
 	controlplanev1.InteractionWorkServiceClient
 	started <-chan struct{}
 }
 
+// ListInteractionSources returns context cancellation or a controlled owner outage after the subscription-start barrier.
+// RU: ListInteractionSources возвращает отмену контекста либо управляемый отказ владельца после барьера начала подписки.
 func (control discoveryControl) ListInteractionSources(ctx context.Context, _ *controlplanev1.ListInteractionSourcesRequest, _ ...grpc.CallOption) (*controlplanev1.ListInteractionSourcesResponse, error) {
 	select {
 	case <-ctx.Done():
@@ -41,6 +51,8 @@ func (control discoveryControl) ListInteractionSources(ctx context.Context, _ *c
 	}
 }
 
+// TestSourceDiscoveryFailureCancelsPreviousSubscription proves an unconfirmed owner snapshot revokes the old listener and that refresh and close join cleanly.
+// RU: TestSourceDiscoveryFailureCancelsPreviousSubscription доказывает отзыв старого listener при неподтверждённом снимке владельца и завершение refresh и close.
 func TestSourceDiscoveryFailureCancelsPreviousSubscription(t *testing.T) {
 	started, stopped := make(chan struct{}), make(chan struct{})
 	listener := listenFunc(func(ctx context.Context, _ *controlplanev1.InteractionSource, _ mattermost.MessageHandler) error {
@@ -78,6 +90,8 @@ func TestSourceDiscoveryFailureCancelsPreviousSubscription(t *testing.T) {
 	}
 }
 
+// TestSourceFingerprintIncludesImmutableConnectionAndCredential distinguishes every tested connection/credential pin while ignoring capability order.
+// RU: TestSourceFingerprintIncludesImmutableConnectionAndCredential различает все проверяемые координаты подключения и реквизитов, игнорируя порядок capabilities.
 func TestSourceFingerprintIncludesImmutableConnectionAndCredential(t *testing.T) {
 	source := testSource("same")
 	source.ConnectionVersion = 1
@@ -106,6 +120,8 @@ func TestSourceFingerprintIncludesImmutableConnectionAndCredential(t *testing.T)
 	}
 }
 
+// TestRejectedSenderDoesNotDisconnectChannel keeps defined per-message rejections local but propagates authentication and availability failures.
+// RU: TestRejectedSenderDoesNotDisconnectChannel оставляет заданные отказы отдельному сообщению локальными, но передаёт ошибки аутентификации и доступности.
 func TestRejectedSenderDoesNotDisconnectChannel(t *testing.T) {
 	for _, code := range []codes.Code{codes.InvalidArgument, codes.PermissionDenied, codes.NotFound, codes.FailedPrecondition, codes.Unauthenticated, codes.Unavailable} {
 		t.Run(code.String(), func(t *testing.T) {
@@ -147,6 +163,8 @@ func TestRejectedSenderDoesNotDisconnectChannel(t *testing.T) {
 	}
 }
 
+// TestSourceReplacementJoinsAllPredecessors exercises rapid replacement and remove/readd, proving no overlapping listeners or starts after closure.
+// RU: TestSourceReplacementJoinsAllPredecessors проверяет быструю замену и удаление с повторным добавлением, доказывая отсутствие перекрытия listener и запусков после закрытия.
 func TestSourceReplacementJoinsAllPredecessors(t *testing.T) {
 	for _, removeBetween := range []bool{false, true} {
 		t.Run(map[bool]string{false: "rapid_revisions", true: "remove_and_readd"}[removeBetween], func(t *testing.T) {
@@ -202,6 +220,8 @@ func TestSourceReplacementJoinsAllPredecessors(t *testing.T) {
 	}
 }
 
+// TestSourceUnchangedConfigurationDoesNotRestart preserves the existing listener completion signal when the exact source snapshot is unchanged.
+// RU: TestSourceUnchangedConfigurationDoesNotRestart сохраняет сигнал завершения существующего listener при неизменном точном снимке источника.
 func TestSourceUnchangedConfigurationDoesNotRestart(t *testing.T) {
 	started := make(chan struct{}, 4)
 	listener := listenFunc(func(ctx context.Context, _ *controlplanev1.InteractionSource, _ mattermost.MessageHandler) error {
@@ -228,15 +248,21 @@ func TestSourceUnchangedConfigurationDoesNotRestart(t *testing.T) {
 	}
 }
 
+// messageControl captures only source message acceptance so tests can inspect trusted identity and exact gate coordinates.
+// RU: messageControl перехватывает только приём сообщения источника для проверки доверенной идентичности и точных координат gate.
 type messageControl struct {
 	controlplanev1.InteractionWorkServiceClient
 	accept func(context.Context, *controlplanev1.AcceptInteractionMessageRequest) (*controlplanev1.AcceptInteractionMessageResponse, error)
 }
 
+// AcceptInteractionMessage forwards the unchanged acceptance request to the synthetic owner callback without resolving a real gate.
+// RU: AcceptInteractionMessage передаёт неизменный запрос приёма синтетическому обработчику владельца без разрешения реального gate.
 func (control messageControl) AcceptInteractionMessage(ctx context.Context, request *controlplanev1.AcceptInteractionMessageRequest, _ ...grpc.CallOption) (*controlplanev1.AcceptInteractionMessageResponse, error) {
 	return control.accept(ctx, request)
 }
 
+// TestSourcePassesVerifiedIdentityAndExactGateTuple checks bounded forwarding of adapter identity, gate/version/run pins and a connection-scoped event key.
+// RU: TestSourcePassesVerifiedIdentityAndExactGateTuple проверяет ограниченную передачу идентичности адаптера, координат gate/version/run и ключа события в области подключения.
 func TestSourcePassesVerifiedIdentityAndExactGateTuple(t *testing.T) {
 	accepted := make(chan struct{})
 	control := messageControl{accept: func(ctx context.Context, request *controlplanev1.AcceptInteractionMessageRequest) (*controlplanev1.AcceptInteractionMessageResponse, error) {

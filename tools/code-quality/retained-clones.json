@@ -3616,6 +3616,30 @@
       "fragmentSHA256": "ec6c2a9499b470b79c3fb757f163b2a08f86392a72491cfd2498505f9f30ae9a",
       "count": 1,
       "reason": "Окно сопоставляет только одинаковый хвост обхода квитанций и начало следующей функции. inventory отклоняет множественные версии и delete markers, currentInventory выбирает последнюю живую версию с учётом маркеров; общий цикл скрыл бы противоположные правила допустимости. Сохранено точное окно, не файл."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/interaction-gateway/internal/app/deliveries.go",
+      "secondPath": "services/external/interaction-gateway/internal/app/invocations.go",
+      "fragmentSHA256": "6d56b7840d96a48261eade50e70f12361ff896ca7b93217afe990c3e0dd9f581",
+      "count": 1,
+      "reason": "Общий предохранитель времени перед claim вынесен в claimBudgetAvailable. Оставшееся окно — начало отдельных последовательных циклов и typed RPC ClaimInteractionDeliveries против ClaimIntegrationConnectionTests: разные сервисные порты, типы claim и completion. Обобщённый callback-dispatcher скрыл бы различие очереди доставки и цикла test+invocation; сохранено только точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/interaction-gateway/internal/app/deliveries_test.go",
+      "secondPath": "services/internal/email-bridge/internal/clients/authority/receipt_test.go",
+      "fragmentSHA256": "aa7008e8ef90602e7d8222057de1ceb6532542e299d6e54a893a810320d7cb21",
+      "count": 1,
+      "reason": "Совпадают только объявление typed RPC-заглушки и передача request/context в callback. Delivery fixture обслуживает claim/complete доставки, email authority fixture — report/reconciliation receipt. Это разные generated интерфейсы и nominal request/response типы; общая нетипизированная заглушка скрыла бы проверяемое mapping, а обёртка над одним callback лишь добавила бы косвенность."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/interaction-gateway/internal/app/invocations_test.go",
+      "secondPath": "services/external/interaction-gateway/internal/app/invocations_test.go",
+      "fragmentSHA256": "122a1119ef2ff41624341d45f7ebb73ad42eda88f602a310a337a4dc76311143",
+      "count": 1,
+      "reason": "Два перекрывающихся окна состоят из typed overrides четырёх разных generated RPC: claim и completion для connection test и invocation. Каждый метод сохраняет свою request/response сигнатуру и callback, проверяемые тестами lease identity и effect receipt. Исполняемая общая операция отсутствует; generic dispatcher сделал бы границу менее явной. Исключён точный self-clone, не файл или тестовый пакет."
     }
   ]
 }

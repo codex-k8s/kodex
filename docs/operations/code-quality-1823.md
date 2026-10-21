@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.134.0
+version: 1.135.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,63 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто тридцать пятая волна — аренды и композиция interaction-gateway
+
+На опубликованном SHA `fc877995ddcac4142940ee33fbfc77255125c7f7`
+build/unit objectstorage, control-plane и session-archive повторены —
+PASS LOCAL. Полный detector рабочего дерева этой волны: 6540 собственных
+файлов, 222 исключения, 1875 raw-групп, 555 адресных решений,
+1320 неразобранных. Сырой SHA-256 —
+`a705c3648b6556e3758d8ae8120b71f26e514f65f7082f5c615239dd1d52aa22`,
+отпечаток набора —
+`3cc67f38f4cfe9cd51fbe6bb00583222380bd78e858c9976b0aa30633c699535`.
+Go-реестр: 4233/21072, непокрыты 16839.
+
+Все 89 собственных объявлений entrypoint, `app` и `usertext`
+interaction-gateway описаны EN→RU по реальному поведению: bounded startup,
+раздельный shutdown, последовательные claim, резерв завершения, точная
+классификация внешнего эффекта, owner readback, замена и join поколений
+подписок, fingerprints реквизитов и локализация. Пакет Mattermost этой
+волной ещё не покрыт целиком.
+
+Одинаковая проверка отмены/запаса двух RPC-бюджетов и секунды перед claim
+вынесена в package-private `claimBudgetAvailable`. `leaseContext` и
+`workCompletionKey` собраны в локальном `work.go`; доставка теперь использует
+тот же прежний формат ключа завершения, что connection test и invocation.
+RPC, порядок обработки, workload instance, lease/fence/generation, immutable
+input и эффект не менялись; helpers не выдают и не продлевают полномочия.
+
+| Путь | Сохранённая граница |
+| --- | --- |
+| InteractionDelivery claim/start | Прежний operation context → budget preflight → одиночный typed owner claim → проверка аренды → dispatch |
+| IntegrationConnectionTest claim/start | Тот же preflight в начале итерации → собственный typed test claim → definition/ref/lease checks → probe |
+| IntegrationInvocation claim/start | После прежней обработки test — собственный typed invocation claim и проверка его lease; generic dispatcher не добавлен |
+| Delivery complete | Прежний outcome и exact destination → прежний stable key/reference/generation → отдельный owner completion RPC и readback |
+| ConnectionTest complete | Прежние test/connection pins и stable key → отдельный owner RPC → проверка connection ref |
+| Invocation complete | Прежняя receipt binding/unknown-write классификация → отдельный owner RPC и run readback |
+| Cancel/expiry/retry/renew/delete | Новых команд/переходов нет; отмена контекста и deadline остаются локальным отказом, а owner-граф/leases/events управляются прежними командами владельца |
+
+Новые unit-тесты проверяют no-deadline/sufficient/short/cancel/expiry,
+отсутствие RPC обоих циклов при отмене и недостаточном бюджете,
+более ранний parent/lease deadline с точным резервом, прежнее кодирование
+ключа, replay и разделение reference/lease/generation. Существующие
+отрицательные тесты dispatch и completion также прошли.
+
+Оставшееся 154-token окно typed циклов (ранее181) сохранено точным решением:
+общий budget уже вынесен, а очереди доставки и test+invocation имеют разные
+RPC/claim/completion. Ещё два точных решения сохраняют nominal RPC-заглушки:
+interaction против email authority и четыре разных typed overrides внутри
+invocation fixture. Целые пакеты и тесты не исключены. Пять других
+изменившихся fragment SHA относятся к добавлению комментариев внутрь
+прежних окон; сырой счётчик не объявляется числом удалённых повторов.
+
+Build и `go test -count=1 ./...` всего interaction-gateway с Go1.26.6,
+16 unit-тестов анализатора, пять ignore-boundaries, `gofmt` и
+`git diff --check` — PASS LOCAL. Первая команда форматирования использовала
+путь от корня при cwd модуля и не дошла до тестов; после исправления cwd
+весь указанный локальный набор выполнен успешно. Mattermost component/live,
+browser/deploy и полный `go-docs -check` — NOT RUN. Цель не завершена.
 
 ## Сто тридцать четвёртая волна — общая проверка адреса хранилища
 
