@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.141.0
+version: 1.142.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,49 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок вторая волна — домен почтового моста
+
+На точном опубликованном SHA `9099ea129c2129587a421098f446d8b1d2875fa6`
+повторный полный detector подтвердил 6542 собственных файла, 222 исключения,
+1874 raw-группы, 561 точное решение и 1313 неразобранных. Raw SHA-256:
+`dd68f369f955369f211627006ad6b423fec27eebe5f33f06767e558133c05c3c`;
+набор `af3e1c6116c5ce8d7149c0864d141081a4bfb6ac1df31fc3242f98e8f05ebc69`.
+Полный STT build/unit на этом SHA — PASS LOCAL CONTAINER,
+image ID `sha256:6af48e707d200ce91a5c4ea049b289fe22bcd22b00b6055cd4e3a437593c1774`.
+Live provider и MediaRecorder — SKIP/NOT RUN.
+
+Все собственные объявления `email-bridge/internal/domain`, включая тесты,
+полностью описаны предметными EN→RU комментариями: 104/104, из них 97
+добавлены этой волной. Описаны scoped receipt и неизменяемый digest,
+отдельные private execution source/report version, резервирование до
+протокола, онлайн-пересечение owner decision и четырёх scope, HumanGate,
+фиксированный sender/recipient, UIDVALIDITY и независимый bounded completion.
+SMTP acceptance прямо не называется доставкой, MIME/base64 validation —
+антивирусом, а deterministic digest — подписью или полномочиями.
+
+Reconciliation и report recovery описаны раздельно: точный original lineage,
+lease/grace, claim, повторная свежая проверка decision до commit,
+сохранение частичного прогресса и отсутствие mail-resend capability.
+Тестовые always-true claim не объявлены доказательством PostgreSQL fencing;
+cancel/join fixtures требуют cooperative context-aware dependencies.
+Исполняемые predicates, API, wire, SQL, сроки и миграции не менялись.
+
+До и после комментариев полный `go test -count=1 ./...` и `go build ./...`
+email-bridge — PASS LOCAL, с явно unset EMAIL_BRIDGE_TEST_DSN и
+EMAIL_BRIDGE_TEST_ADMIN_DSN. Synthetic loopback component_test.go входят
+в этот unit-прогон; это не external/component acceptance. Отдельный verbose
+`go test -v ./internal/component -run '^TestPostgres'` подтвердил, что все
+PostgreSQL cases SKIP без disposable fixture; верхнеуровневые PASS обёрток
+со skipped subtests не считаются PostgreSQL PASS. Живая почта не читалась
+и не отправлялась, реальные credentials не использовались.
+
+Финальный detector рабочего дерева: те же 1874/561/1313; raw SHA-256
+`796a40851151ff70992d43a76e0123c974c0e5303d54c00ebbc9822af39b2669`,
+отпечаток набора прежний. Go-реестр: 4756/21065, непокрыты 16309;
+весь email-bridge — 120/481. Gofmt, diff-check и пять ignore-boundaries —
+PASS LOCAL. Полный go-docs-check, PostgreSQL, browser/deploy/live — NOT RUN;
+цель остаётся незавершённой. Точный повторный scan нового SHA — в PR.
 
 ## Сто сорок первая волна — границы повторов STT
 

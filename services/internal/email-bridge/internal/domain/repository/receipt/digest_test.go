@@ -7,6 +7,8 @@ import (
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 )
 
+// TestExternalReceiptDigestCanonical pins the digest encoding, excludes mutable outcome fields and checks each immutable audit/input and tenant/mailbox pin.
+// TestExternalReceiptDigestCanonical закрепляет кодирование дайджеста, исключает изменяемый исход и проверяет каждый неизменяемый audit/input и tenant/ящик.
 func TestExternalReceiptDigestCanonical(t *testing.T) {
 	r := Record{ID: strings.Repeat("a", 32), Key: "effect:1", Digest: strings.Repeat("b", 64), Status: "unknown", Audit: Audit{Actor: "actor", Agent: "agent", Grant: "grant", Operation: api.OperationSend, ConfigurationRevision: 1, CredentialGeneration: 2, GateApproved: true}}
 	scope := Scope{Tenant: "tenant", Mailbox: "mailbox"}

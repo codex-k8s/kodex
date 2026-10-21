@@ -12,35 +12,55 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/repository/receipt"
 )
 
+// storeFixture overrides pending/claim/commit for isolated worker tests; other embedded repository methods are not implemented.
+// storeFixture подставляет pending/claim/commit для изолированных тестов worker; остальные встроенные методы не реализованы.
 type storeFixture struct {
 	receipt.ReconciliationRepository
 	pending func(context.Context, int) ([]receipt.Pending, error)
 	commit  func(context.Context, receipt.Pending, receipt.Decision) (bool, error)
 }
 
+// Pending forwards the cycle context and batch bound to the case-specific callback.
+// Pending передаёт контекст цикла и размер пачки callback конкретного сценария.
 func (f storeFixture) Pending(ctx context.Context, b int) ([]receipt.Pending, error) {
 	return f.pending(ctx, b)
 }
+
+// ClaimReconciliation always grants the synthetic claim; tests using it do not prove concurrent storage fencing.
+// ClaimReconciliation всегда выдаёт синтетический claim; использующие его тесты не доказывают конкурентное ограничение в хранилище.
 func (f storeFixture) ClaimReconciliation(context.Context, receipt.Pending, time.Duration) (bool, error) {
 	return true, nil
 }
+
+// CommitReconciliation delegates exact pending/decision values and cancellation to the assertion callback.
+// CommitReconciliation передаёт точные pending/decision и отмену проверяющему callback.
 func (f storeFixture) CommitReconciliation(ctx context.Context, p receipt.Pending, d receipt.Decision) (bool, error) {
 	return f.commit(ctx, p, d)
 }
 
+// ownerFixture substitutes decision resolution only, without a real owner RPC or report implementation.
+// ownerFixture подставляет только разрешение решения, без реального owner RPC или реализации отчёта.
 type ownerFixture struct {
 	receipt.EffectAuthority
 	resolve func(context.Context, receipt.OwnerReceipt, string) (receipt.Decision, error)
 }
 
+// Reconcile exposes the exact receipt, selected decision reference and context to the synthetic owner callback.
+// Reconcile передаёт точную квитанцию, ссылку выбранного решения и контекст синтетическому callback владельца.
 func (f ownerFixture) Reconcile(ctx context.Context, p receipt.OwnerReceipt, d string) (receipt.Decision, error) {
 	return f.resolve(ctx, p, d)
 }
 
+// observer counts worker outcomes synchronously; callers inspect it after the worker has joined.
+// observer синхронно считает исходы worker; вызывающий читает его после завершения worker.
 type observer map[string]int
 
+// Reconciliation increments the selected test outcome count without performing I/O or collecting payloads.
+// Reconciliation увеличивает счётчик выбранного тестового исхода без I/O или сбора содержимого.
 func (o observer) Reconciliation(v string) { o[v]++ }
 
+// fixture constructs a correlated unknown receipt and an unexpired synthetic conclusive decision for worker assertions.
+// fixture создаёт связную неопределённую квитанцию и неистёкшее синтетическое определённое решение для проверок worker.
 func fixture() (receipt.Pending, receipt.Decision) {
 	r := receipt.Record{ID: "receipt", Key: "key", Digest: api.Digest("input"), Status: "unknown", Audit: receipt.Audit{Actor: "actor", Agent: "agent", Grant: "grant", Operation: api.OperationMarkRead, ConfigurationRevision: 1, CredentialGeneration: 1}}
 	scope := receipt.Scope{Tenant: "tenant", Mailbox: "mailbox"}
@@ -50,6 +70,10 @@ func fixture() (receipt.Pending, receipt.Decision) {
 	return p, d
 }
 
+// TestWorkerStartupBarrierAndCancelJoin cancels at barrier, read, owner RPC and commit checkpoints and waits for cooperative worker completion.
+// It verifies no early commit and no dependency outliving shutdown when each injected dependency observes context cancellation.
+// TestWorkerStartupBarrierAndCancelJoin отменяет barrier, чтение, owner RPC и commit и ожидает совместного завершения worker.
+// Проверяются отсутствие раннего commit и завершение до закрытия зависимостей, когда каждая заглушка соблюдает отмену контекста.
 func TestWorkerStartupBarrierAndCancelJoin(t *testing.T) {
 	for _, phase := range []string{"barrier", "pending", "rpc", "commit"} {
 		t.Run(phase, func(t *testing.T) {
@@ -104,6 +128,8 @@ func TestWorkerStartupBarrierAndCancelJoin(t *testing.T) {
 	}
 }
 
+// TestWorkerPartialProgressAndFreshAuthorization requires an explicit fresh decision recheck and retains the first commit when the next item fails.
+// TestWorkerPartialProgressAndFreshAuthorization требует явную свежую проверку решения и сохраняет первый commit при отказе следующего элемента.
 func TestWorkerPartialProgressAndFreshAuthorization(t *testing.T) {
 	p, d := fixture()
 	second := p
@@ -128,6 +154,8 @@ func TestWorkerPartialProgressAndFreshAuthorization(t *testing.T) {
 	}
 }
 
+// TestWorkerBoundsAndNoDecision rejects invalid batch/interval limits and treats a missing owner decision as an observed no-op, never a commit.
+// TestWorkerBoundsAndNoDecision отвергает неверные пределы пачки и интервала и учитывает отсутствие решения без действия, никогда не делая commit.
 func TestWorkerBoundsAndNoDecision(t *testing.T) {
 	p, _ := fixture()
 	for _, limits := range []struct {
