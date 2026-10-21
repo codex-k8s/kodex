@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.58.0
+version: 1.59.0
 updated: 2026-10-21
 ---
 
@@ -1699,6 +1699,34 @@ cross-test clone с provider SSE сохранён точным решением:
 Сравнение fragment SHA-256 и путей: новых либо исчезнувших групп нет,
 различается только расположение после комментариев. Go-реестр: 1967/21030,
 непокрыты 19063. `go test -count=1 ./...` и `go build ./...` всего
+egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
+PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
+по прежним границам. Точный scan нового коммита будет опубликован в
+текущем PR.
+
+## Шестьдесят первая волна — lifecycle CONNECT-сервера
+
+На точном запушенном SHA `b80f05a4dee35e6dae4881a3b1528c420b0fa103`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1881 raw-группу,
+302 точных решения и 1579 неразобранных; сырой SHA-256 —
+`0f8d1451ca4b3ef4bd121076639bf5f47d222029efa97fe3ce3a16f465b72625`,
+отпечаток набора —
+`9912d1cce5f597a97ebe5014fdd748c7524ea667c2c89a1d2a1186060a43c6ac`.
+Go-реестр: 1986/21030, непокрыты 19044; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+Все 57 собственных объявлений `gateway/server.go`, включая методы узких
+интерфейсов, constants и внутренние helpers, имеют предметные EN→RU
+комментарии. Пояснены границы signed runtime credential, literal-only dial,
+повторная проверка readiness, полный DNS pinning для почты, раздельные
+authenticated/readiness listeners, drain и bounded join туннелей. Поведение,
+порядок отказов, лимиты и метрики не менялись; detector-групп не добавлено.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1881 raw-группа,
+302 точных решения и 1579 неразобранных; сырой SHA-256 —
+`b81d77856254cea2988187ccdd8384aa44f5bbb9e2e8bfe3f17bbef76f923ffc`,
+отпечаток набора не изменился. Go-реестр: 2043/21030,
+непокрыты 18987. `go test -count=1 ./...` и `go build ./...` всего
 egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
