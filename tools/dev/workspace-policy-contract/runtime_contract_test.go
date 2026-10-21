@@ -16,6 +16,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// runtimePolicy holds only admission fields needed to type-check and execute runtime CEL rules.
+// RU: runtimePolicy хранит только поля admission, нужные для проверки типов и исполнения runtime CEL-правил.
 type runtimePolicy struct {
 	Kind     string `json:"kind"`
 	Metadata struct {
@@ -38,6 +40,8 @@ type runtimePolicy struct {
 	} `json:"spec"`
 }
 
+// readRuntimePolicy selects the named fail-closed, create-only admission policy from deployed YAML.
+// RU: readRuntimePolicy выбирает из deploy YAML именованную admission-policy с закрытым отказом и только CREATE.
 func readRuntimePolicy(t *testing.T, name string) runtimePolicy {
 	t.Helper()
 	content, err := os.ReadFile(filepath.Join("..", "..", "..", "deploy", "k8s", "base", "runtime-controller", "runtime-materialization-admission.yaml"))
@@ -63,12 +67,16 @@ func readRuntimePolicy(t *testing.T, name string) runtimePolicy {
 	return runtimePolicy{}
 }
 
+// runtimeObjectSchema wraps exact properties as a typed Kubernetes object schema.
+// RU: runtimeObjectSchema оборачивает точные поля в типизированную объектную схему Kubernetes.
 func runtimeObjectSchema(properties map[string]spec.Schema) spec.Schema {
 	return spec.Schema{SchemaProps: spec.SchemaProps{Type: []string{"object"}, Properties: properties}}
 }
 
-// Фрагменты схем сохраняют реальные различия Role/RoleBinding и уникальные
-// CEL-типы main/init контейнеров; adapter принадлежит Kubernetes 1.35.5.
+// runtimeTypedEnvironment builds the Kubernetes 1.35.5 CEL environment while preserving
+// Role/RoleBinding and main/init container type differences at their actual boundaries.
+// RU: runtimeTypedEnvironment создаёт CEL-окружение Kubernetes 1.35.5, сохраняя
+// различия типов Role/RoleBinding и main/init контейнеров на фактических границах.
 func runtimeTypedEnvironment(t *testing.T, schema spec.Schema, name string, pod bool) *cel.Env {
 	t.Helper()
 	declaration := common.SchemaDeclType(&openapi.Schema{Schema: &schema}, true).MaybeAssignTypeName(name)
@@ -93,10 +101,14 @@ func runtimeTypedEnvironment(t *testing.T, schema spec.Schema, name string, pod 
 	return environment
 }
 
+// runtimeMetadataSchema describes the metadata fields referenced by runtime admission rules.
+// RU: runtimeMetadataSchema описывает поля metadata, на которые ссылаются runtime admission-правила.
 func runtimeMetadataSchema() spec.Schema {
 	return runtimeObjectSchema(map[string]spec.Schema{"name": *spec.StringProperty(), "generateName": *spec.StringProperty(), "namespace": *spec.StringProperty(), "labels": *spec.MapProperty(spec.StringProperty())})
 }
 
+// runtimeRBACSchema selects distinct typed Role or RoleBinding fields for CEL compilation.
+// RU: runtimeRBACSchema выбирает разные типизированные поля Role либо RoleBinding для компиляции CEL.
 func runtimeRBACSchema(kind string) spec.Schema {
 	fields := map[string]spec.Schema{"apiVersion": *spec.StringProperty(), "kind": *spec.StringProperty(), "metadata": runtimeMetadataSchema()}
 	if kind == "Role" {
@@ -112,6 +124,8 @@ func runtimeRBACSchema(kind string) spec.Schema {
 	return runtimeObjectSchema(fields)
 }
 
+// runtimeCompile fails the fixture on CEL type errors before constructing the executable program.
+// RU: runtimeCompile останавливает оснастку при ошибке типа CEL до создания исполняемой программы.
 func runtimeCompile(t *testing.T, environment *cel.Env, expression string) cel.Program {
 	t.Helper()
 	ast, issues := environment.Compile(expression)
@@ -125,11 +139,15 @@ func runtimeCompile(t *testing.T, environment *cel.Env, expression string) cel.P
 	return program
 }
 
+// runtimeAccepted accepts only a successful CEL evaluation returning the exact boolean true.
+// RU: runtimeAccepted допускает только успешное вычисление CEL с точным булевым значением true.
 func runtimeAccepted(program cel.Program, input map[string]any) bool {
 	result, _, err := program.Eval(input)
 	return err == nil && result.Value() == true
 }
 
+// runtimeClone deep-copies one JSON-shaped fixture before applying a rejection mutation.
+// RU: runtimeClone глубоко копирует JSON-образную оснастку перед проверкой отклоняемой мутации.
 func runtimeClone(t *testing.T, value map[string]any) map[string]any {
 	t.Helper()
 	encoded, err := json.Marshal(value)
@@ -143,8 +161,12 @@ func runtimeClone(t *testing.T, value map[string]any) map[string]any {
 	return clone
 }
 
+// runtimeExecutionHash is the fixed synthetic execution lineage shared by RBAC fixtures.
+// RU: runtimeExecutionHash — фиксированная синтетическая линия execution в RBAC-оснастках.
 const runtimeExecutionHash = "0123456789abcdef"
 
+// runtimeRBACFixture builds the exact Role or RoleBinding and trusted controller actor input.
+// RU: runtimeRBACFixture создаёт точный Role либо RoleBinding и вход с доверенным actor контроллера.
 func runtimeRBACFixture(kind string) map[string]any {
 	object := map[string]any{"kind": kind, "metadata": map[string]any{"namespace": "kodex-runtime", "labels": map[string]any{"runtime.kodex.dev/managed": "true", "runtime.kodex.dev/mode": "turn", "runtime.kodex.dev/execution-hash": runtimeExecutionHash}}}
 	metadata := object["metadata"].(map[string]any)
@@ -162,6 +184,10 @@ func runtimeRBACFixture(kind string) map[string]any {
 	return map[string]any{"object": object, "request": map[string]any{"userInfo": map[string]any{"username": "system:serviceaccount:kodex-system:runtime-controller"}}}
 }
 
+// TestRuntimeRBACUnionKubernetes135TypeCheckingAndEvaluation checks typed union boundaries,
+// exact execution-scoped RBAC and rejection of foreign identities, fields and resources.
+// RU: TestRuntimeRBACUnionKubernetes135TypeCheckingAndEvaluation проверяет границы union-типов,
+// точные права одного execution и отказ для чужих identity, полей и ресурсов.
 func TestRuntimeRBACUnionKubernetes135TypeCheckingAndEvaluation(t *testing.T) {
 	policy := readRuntimePolicy(t, "runtime-execution-rbac")
 	for _, kind := range []string{"Role", "RoleBinding"} {
@@ -260,6 +286,8 @@ func TestRuntimeRBACUnionKubernetes135TypeCheckingAndEvaluation(t *testing.T) {
 	}
 }
 
+// runtimePodSchema supplies the typed Pod subset used to compile container admission rules.
+// RU: runtimePodSchema задаёт типизированное подмножество Pod для компиляции admission-правил контейнеров.
 func runtimePodSchema() spec.Schema {
 	quantity := spec.Schema{SchemaProps: spec.SchemaProps{OneOf: []spec.Schema{*spec.StringProperty(), *spec.Float64Property()}}}
 	resources := runtimeObjectSchema(map[string]spec.Schema{"requests": *spec.MapProperty(&quantity), "limits": *spec.MapProperty(&quantity)})
@@ -268,6 +296,8 @@ func runtimePodSchema() spec.Schema {
 	return runtimeObjectSchema(map[string]spec.Schema{"apiVersion": *spec.StringProperty(), "kind": *spec.StringProperty(), "metadata": runtimeMetadataSchema(), "spec": podSpec})
 }
 
+// runtimePodFixture builds a digest-pinned turn or warm Pod with exact container and image roles.
+// RU: runtimePodFixture создаёт turn- или warm-Pod с закреплёнными дайджестами и точными ролями контейнеров.
 func runtimePodFixture(mode string) map[string]any {
 	image := "example.invalid/runtime@sha256:" + strings.Repeat("a", 64)
 	relayImage := "example.invalid/relay@sha256:" + strings.Repeat("b", 64)
@@ -285,6 +315,8 @@ func runtimePodFixture(mode string) map[string]any {
 	return map[string]any{"object": map[string]any{"metadata": map[string]any{"labels": map[string]any{"runtime.kodex.dev/mode": mode}}, "spec": map[string]any{"containers": []any{role, provider, relay}, "initContainers": []any{container("workspace-prepare", image, "runtime-prepare-workspace"), init}}}, "variables": map[string]any{"roleContainers": []any{role}, "providerContainers": []any{provider}, "relayContainers": []any{relay}}, "params": map[string]any{"data": map[string]any{"nodeReadbackImage": relayImage}}}
 }
 
+// runtimePodContainer resolves the named fixture container, including the separately typed init entry.
+// RU: runtimePodContainer находит именованный контейнер оснастки, включая отдельно типизированный init-элемент.
 func runtimePodContainer(input map[string]any, name string) map[string]any {
 	if name == "workspace-init" {
 		return input["object"].(map[string]any)["spec"].(map[string]any)["initContainers"].([]any)[1].(map[string]any)
@@ -292,6 +324,10 @@ func runtimePodContainer(input map[string]any, name string) map[string]any {
 	return input["variables"].(map[string]any)[name].([]any)[0].(map[string]any)
 }
 
+// TestRuntimePodMixedContainerKubernetes135TypeCheckingAndEvaluation checks narrow dynamic
+// init-list typing and rejects mutable images, altered commands and out-of-bounds resources.
+// RU: TestRuntimePodMixedContainerKubernetes135TypeCheckingAndEvaluation проверяет узкую
+// динамическую типизацию init-списка и отклоняет изменяемые образы, команды и ресурсы вне лимитов.
 func TestRuntimePodMixedContainerKubernetes135TypeCheckingAndEvaluation(t *testing.T) {
 	policy := readRuntimePolicy(t, "runtime-role-pod-exact-secret-projection")
 	environment := runtimeTypedEnvironment(t, runtimePodSchema(), "Pod", true)

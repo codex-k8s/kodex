@@ -16,8 +16,10 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// Проверяется реальный schema-to-CEL adapter Kubernetes 1.35.5, а не dyn-only
-// окружение. Quantity сохраняет опубликованный oneOf без поля type.
+// TestWorkspaceStoragePolicyKubernetes135TypeChecking checks the real Kubernetes 1.35.5
+// schema-to-CEL adapter: only Quantity may become dynamic, while sibling fields stay typed.
+// RU: TestWorkspaceStoragePolicyKubernetes135TypeChecking проверяет реальный adapter
+// Kubernetes 1.35.5: только Quantity может стать динамическим, соседние поля остаются типизированными.
 func TestWorkspaceStoragePolicyKubernetes135TypeChecking(t *testing.T) {
 	quantity := spec.Schema{SchemaProps: spec.SchemaProps{OneOf: []spec.Schema{*spec.StringProperty(), *spec.Float64Property()}}}
 	resources := spec.Schema{SchemaProps: spec.SchemaProps{Type: []string{"object"}, Properties: map[string]spec.Schema{
@@ -93,6 +95,10 @@ func TestWorkspaceStoragePolicyKubernetes135TypeChecking(t *testing.T) {
 	}
 }
 
+// TestRuntimeEmptyDirQuantityTypeCheckingAndExactBounds checks the five published
+// emptyDir sizes against the Kubernetes Quantity adapter and rejects every nearby value.
+// RU: TestRuntimeEmptyDirQuantityTypeCheckingAndExactBounds проверяет пять опубликованных
+// размеров emptyDir через adapter Quantity Kubernetes и отклоняет соседние значения.
 func TestRuntimeEmptyDirQuantityTypeCheckingAndExactBounds(t *testing.T) {
 	quantity := spec.Schema{SchemaProps: spec.SchemaProps{OneOf: []spec.Schema{*spec.StringProperty(), *spec.Float64Property()}}}
 	emptyDir := spec.Schema{SchemaProps: spec.SchemaProps{Type: []string{"object"}, Properties: map[string]spec.Schema{
