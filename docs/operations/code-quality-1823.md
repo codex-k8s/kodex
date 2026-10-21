@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.143.0
+version: 1.144.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,45 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок четвёртая волна — CLI почты и общий SQLSTATE classifier
+
+На базе опубликованного SHA `3f0e8df9f101f2b0f8483bd1ef7cbfe530c41b26`
+полностью EN→RU описаны все 32 объявления migration CLI; вместе с ранее
+описанным service entrypoint весь `email-bridge/cmd` — 34/34.
+Описаны protected DSN read, один общий минутный бюджет, только transient
+Ping retry, отсутствие повторного SQL и безопасные stage/class/wait labels.
+Context7 `/pressly/goose` и исходник закреплённого v3.26.0 подтвердили:
+`StatusContext` может создавать таблицу версий через EnsureDBVersionContext;
+комментарии не обещают read-only поведение status. Сами SQL/миграции
+не редактировались и ни к одной настоящей БД CLI не запускался.
+
+Одинаковая SQLSTATE-таблица сервера и CLI вынесена в чистый
+`libs/go/observability/errorclass.Postgres`. Существуют два исполняемых
+потребителя; оба прежних switch удалены, alias/дублирующего источника нет.
+Typed errors.As, порядок cancellation/domain/TLS/network классификации,
+retry policy и сообщения остались у вызывающих без изменений.
+Новый подпакет не импортирует parent telemetry SDK либо драйвер БД:
+`go list -deps ./errorclass` содержит только сам пакет. Его unit проверяет
+все известные коды и единый fallback для пустого, произвольного,
+неверного регистра и длинного входа. Вынос найден при чтении кода;
+самостоятельной detector-группы этой пары не было, raw-счётчик не снизился.
+
+Полный build/unit observability и email-bridge — PASS LOCAL; 16 unit
+анализатора, unit Go-checker, пять ignore-boundaries, gofmt и diff-check —
+PASS LOCAL. Первый форматирующий вызов с неверным cwd завершился до тестов;
+повтор из корня worktree и оба модульных прогона успешны. PostgreSQL DSN
+явно unset; внешняя почта, component/live, browser/deploy — NOT RUN.
+
+Detector рабочего дерева: 6544 собственных файла, 222 исключения,
+1874 raw-группы, 561 точное решение и 1313 неразобранных. Raw SHA-256:
+`18f58d058ae03f15536b002a0186878f836bcd2326a8e3a7d13543f7dae7ce9b`;
+отпечаток с координатами:
+`875c3a628034d35ced267cfcce9774123676d1ea9f4d11aedde6792d4efc21e9`.
+Go-реестр: 4905/21067, непокрыты 16162; libs/go — 2492/2492,
+весь email-bridge — 267/481. Новые два объявления уже полностью описаны.
+Полный go-docs-check — NOT RUN при известном неполном покрытии;
+цель активна, окончательная передача PR владельцу ещё не выполнена.
 
 ## Сто сорок третья волна — конфигурация и owner-клиенты почты
 

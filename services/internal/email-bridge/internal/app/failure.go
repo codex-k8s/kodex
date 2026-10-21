@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/codex-k8s/kodex/libs/go/observability/errorclass"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
 	"github.com/jackc/pgx/v5/pgconn"
 	"google.golang.org/grpc/codes"
@@ -160,18 +161,7 @@ func failureClass(err error) string {
 	}
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) {
-		switch pg.Code {
-		case "28P01", "28000":
-			return "database_authentication"
-		case "42501":
-			return "database_permission"
-		case "3D000":
-			return "database_missing"
-		case "53300", "57P03":
-			return "database_unavailable"
-		default:
-			return "database"
-		}
+		return errorclass.Postgres(pg.Code)
 	}
 	var parse *pgconn.ParseConfigError
 	if errors.As(err, &parse) {
