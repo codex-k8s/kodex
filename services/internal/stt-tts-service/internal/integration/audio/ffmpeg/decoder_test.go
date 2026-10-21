@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/testdata"
 )
 
+// TestAudioContainersDecodedSamplesAndBounds transcodes the pinned sample into supported formats,
+// then verifies decoded duration, size/duration limits, rejection of truncation and spool cleanup.
+// RU: TestAudioContainersDecodedSamplesAndBounds перекодирует эталон в допустимые форматы,
+// затем проверяет длительность, лимиты, отказ на усечении и удаление временных файлов.
 func TestAudioContainersDecodedSamplesAndBounds(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "source.mp3")
@@ -73,6 +77,10 @@ func TestAudioContainersDecodedSamplesAndBounds(t *testing.T) {
 	}
 }
 
+// TestAudioCancellationAndFalseFLACDuration preserves caller cancellation and rejects FLAC metadata
+// that claims samples without containing any decodable audio frames.
+// RU: TestAudioCancellationAndFalseFLACDuration сохраняет отмену вызывающего и отклоняет FLAC,
+// где метаданные заявляют сэмплы при отсутствии декодируемых аудиофреймов.
 func TestAudioCancellationAndFalseFLACDuration(t *testing.T) {
 	dir := t.TempDir()
 	decoder := ffmpeg.New(dir)
@@ -104,6 +112,10 @@ func TestAudioCancellationAndFalseFLACDuration(t *testing.T) {
 	}
 }
 
+// TestRunningDecoderIsKilledAndJoinedOnDeadline replaces FFmpeg with a long-lived process and
+// verifies deadline propagation, process termination and deletion of its temporary spool.
+// RU: TestRunningDecoderIsKilledAndJoinedOnDeadline подменяет FFmpeg долгим процессом и
+// проверяет передачу срока, завершение процесса и удаление его временной записи.
 func TestRunningDecoderIsKilledAndJoinedOnDeadline(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "ffmpeg"), []byte("#!/bin/sh\nexec /bin/sleep 10\n"), 0700); err != nil {

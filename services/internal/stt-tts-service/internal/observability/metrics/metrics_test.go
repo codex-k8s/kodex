@@ -7,6 +7,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
+// TestLabelsUseClosedSets checks that unknown stage/class values collapse to fixed fallbacks
+// while approved labels retain their distinct values.
+// RU: TestLabelsUseClosedSets проверяет сведение неизвестных меток к фиксированным значениям
+// при сохранении отдельных значений для утверждённых этапов и классов.
 func TestLabelsUseClosedSets(t *testing.T) {
 	observer := New()
 	observer.Observe(value.Stage("audio-content"), value.ErrorClass("provider-detail"))

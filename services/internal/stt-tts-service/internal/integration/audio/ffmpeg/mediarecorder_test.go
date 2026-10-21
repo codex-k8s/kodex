@@ -11,6 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/audio/ffmpeg"
 )
 
+// TestRealMediaRecorderContainers validates three explicitly supplied browser captures and
+// reports an unavailable capture as skipped instead of treating synthetic data as browser proof.
+// RU: TestRealMediaRecorderContainers проверяет три явно предоставленные записи браузеров и
+// пропускает недоступную запись, не выдавая синтетические данные за браузерное доказательство.
 func TestRealMediaRecorderContainers(t *testing.T) {
 	directory := os.Getenv("KODEX_STT_MEDIARECORDER_FIXTURES")
 	if directory == "" {
