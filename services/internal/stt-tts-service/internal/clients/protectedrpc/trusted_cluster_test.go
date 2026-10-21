@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// TestTrustedDialRequiresExplicitProfileAndExactServices checks explicit trusted construction, exact dependency roles, closed-channel readiness failure and rejection of configuration drift.
+// RU: TestTrustedDialRequiresExplicitProfileAndExactServices проверяет явное trusted-создание, точные роли зависимостей, отказ готовности закрытых каналов и отклонение drift настроек.
 func TestTrustedDialRequiresExplicitProfileAndExactServices(t *testing.T) {
 	config := Config{RPCProfile: transportprofile.TrustedCluster, DialTimeout: time.Second,
 		Policy:     TargetConfig{Target: "dns:///control-plane.kodex-system.svc:8443"},
@@ -46,6 +48,8 @@ func TestTrustedDialRequiresExplicitProfileAndExactServices(t *testing.T) {
 	}
 }
 
+// TestTrustedClientRoutesAndMetadataAreClosed covers each destination/method combination, strips forged identity metadata and rejects malformed bearer or caller-built principal.
+// RU: TestTrustedClientRoutesAndMetadataAreClosed проверяет каждую пару зависимости/метода, удаляет поддельные identity metadata и отклоняет неверный bearer или созданного клиентом субъекта.
 func TestTrustedClientRoutesAndMetadataAreClosed(t *testing.T) {
 	for _, credential := range []bool{false, true} {
 		for _, method := range []string{

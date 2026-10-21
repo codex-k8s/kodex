@@ -19,8 +19,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// trustedCaller fixes this service's outgoing trusted-cluster workload identity, independently of user-supplied identity fields.
+// RU: trustedCaller фиксирует исходящую workload-идентичность сервиса в trusted-cluster независимо от пользовательских полей идентичности.
 const trustedCaller = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
 
+// dialTrustedCluster requires the explicit profile, live construction context and exact policy/credential endpoints before creating separate lazy channels.
+// RU: dialTrustedCluster требует явный профиль, живой context создания и точные адреса политики/реквизитов до создания отдельных ленивых каналов.
+// It forbids a protected issuer in this profile and closes partial setup on failure; successful construction is not a connectivity check.
+// RU: Функция запрещает protected issuer в этом профиле и закрывает частичную подготовку при отказе; успешное создание не проверяет связь.
 func dialTrustedCluster(ctx context.Context, config Config) (*Client, error) {
 	if ctx == nil || ctx.Err() != nil || config.RPCProfile != transportprofile.TrustedCluster ||
 		config.Policy.Target != "dns:///control-plane.kodex-system.svc:8443" ||
@@ -45,12 +51,20 @@ func dialTrustedCluster(ctx context.Context, config Config) (*Client, error) {
 	}, nil
 }
 
+// newTrustedConnection creates a plaintext channel only for the separately validated trusted-cluster route with closed unary method/metadata checks.
+// RU: newTrustedConnection создаёт открытый канал только для отдельно проверенного trusted-cluster маршрута с закрытыми проверками unary методов/metadata.
+// This profile does not provide mTLS; owner authorization remains mandatory and cannot be inferred from connection creation.
+// RU: Этот профиль не предоставляет mTLS; авторизация владельцем остаётся обязательной и не выводится из создания соединения.
 func newTrustedConnection(target string, credential bool) (*grpc.ClientConn, error) {
 	return grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(trustedUnary(credential)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1<<20), grpc.MaxCallSendMsgSize(1<<20)))
 }
 
+// trustedUnary enforces the destination-specific method set and exactly one fixed profile/caller plus a bounded bearer before invoking transport.
+// RU: trustedUnary проверяет набор методов конкретной зависимости и единственные фиксированные profile/caller с ограниченным bearer до вызова транспорта.
+// It rebuilds outgoing metadata from those three fields, dropping arbitrary inherited actor or project values.
+// RU: Функция заново собирает исходящие metadata из этих трёх полей, отбрасывая произвольные унаследованные actor или project значения.
 func trustedUnary(credential bool) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, request, response any, connection *grpc.ClientConn, next grpc.UnaryInvoker, options ...grpc.CallOption) error {
 		allowed := method == sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName
@@ -71,11 +85,17 @@ func trustedUnary(credential bool) grpc.UnaryClientInterceptor {
 	}
 }
 
+// validTrustedCredential checks only the bounded two-field Bearer header shape; token authenticity belongs to the receiving owner.
+// RU: validTrustedCredential проверяет только ограниченную форму Bearer-заголовка из двух полей; подлинность токена проверяет принимающий владелец.
 func validTrustedCredential(credential string) bool {
 	return len(credential) <= 16<<10 && strings.HasPrefix(credential, "Bearer ") &&
 		len(strings.Fields(credential)) == 2 && strings.TrimSpace(credential) == credential
 }
 
+// bindTrustedDelegated matches the complete private transcription principal, request identity and child operation before forwarding the original single incoming bearer.
+// RU: bindTrustedDelegated сверяет полного приватного субъекта распознавания, идентичность запроса и дочернюю операцию до передачи исходного единственного входящего bearer.
+// It produces only fixed-profile outgoing metadata, not a protected continuation proof or caller-assigned principal.
+// RU: Функция создаёт только исходящие metadata фиксированного профиля, а не защищённый continuation proof или назначенного клиентом субъекта.
 func bindTrustedDelegated(ctx context.Context, principal value.Principal, requestID, correlationID, method, operation string) (context.Context, error) {
 	if ctx == nil || principal.RPCProfile != transportprofile.TrustedCluster || requestID == "" || requestID != principal.RequestID ||
 		correlationID == "" || operation == "" || operationFor(method) != operation {
@@ -94,8 +114,10 @@ func bindTrustedDelegated(ctx context.Context, principal value.Principal, reques
 		serviceidentity.CallerMetadataKey, trustedCaller, "authorization", credentials[0])), nil
 }
 
-// Это только доступность внутренних соединений. User ACL, policy и credential
-// проверяются отдельным CheckAvailability; readiness не доказывает STT outcome.
+// checkTrustedConnections waits at most five seconds for both internal channels to reach Ready and rejects closed or unavailable channels.
+// RU: checkTrustedConnections ждёт не более пяти секунд перехода обоих внутренних каналов в Ready и отклоняет закрытые или недоступные каналы.
+// User ACL, policy and credentials are checked separately; connectivity readiness neither proves a transcription outcome nor extends authority.
+// RU: User ACL, policy и реквизиты проверяются отдельно; готовность связи не доказывает исход распознавания и не продлевает полномочия.
 func (client *Client) checkTrustedConnections(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("trusted STT readiness context required")

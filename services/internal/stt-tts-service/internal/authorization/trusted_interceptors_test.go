@@ -16,15 +16,24 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// trustedStreamFixture counts audio reads while exposing the test's live cancellable stream context.
+// RU: trustedStreamFixture считает чтения аудио, предоставляя живой отменяемый context тестового потока.
 type trustedStreamFixture struct {
 	grpc.ServerStream
 	ctx   context.Context
 	reads int
 }
 
+// Context returns the original context so wrappers must preserve its deadline and cancellation rather than replacing the stream lifetime.
+// RU: Context возвращает исходный контекст, поэтому обёртки обязаны сохранять deadline и отмену, а не заменять жизнь потока.
 func (stream *trustedStreamFixture) Context() context.Context { return stream.ctx }
-func (stream *trustedStreamFixture) RecvMsg(any) error        { stream.reads++; return nil }
 
+// RecvMsg records a synthetic audio receive without decoding or accessing a provider.
+// RU: RecvMsg фиксирует синтетический приём аудио без декодирования или доступа к провайдеру.
+func (stream *trustedStreamFixture) RecvMsg(any) error { stream.reads++; return nil }
+
+// TestTrustedStreamResolvesBeforeAudioAndPreservesCancellation verifies admission/owner resolution precedes all reads and that wrapping never widens deadline or loses cancellation.
+// RU: TestTrustedStreamResolvesBeforeAudioAndPreservesCancellation проверяет предшествование admission/owner разрешения всем чтениям и сохранение deadline и отмены обёрткой.
 func TestTrustedStreamResolvesBeforeAudioAndPreservesCancellation(t *testing.T) {
 	const caller = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
 	method := sttv1.SpeechToTextService_Transcribe_FullMethodName

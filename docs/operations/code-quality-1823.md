@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.137.0
+version: 1.138.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,47 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто тридцать восьмая волна — авторизация и dependency RPC STT
+
+На опубликованном SHA `ad68c0eb445b70ba2ddb44e1adb9f60c4556054c`
+повторный `test-stt-unit.sh` подтвердил полный Go build/unit STT —
+PASS LOCAL CONTAINER. Все 72 собственных объявления `authorization`
+и `clients/protectedrpc`, включая тесты, получили предметные EN→RU
+пояснения. Исполняемые условия, metadata, методы, authorities, TTL,
+RPC маршруты и порядок проверок не менялись.
+
+Описаны различия protected verified context и приватного trusted owner
+principal, точные method/workload/permission/empty-request pins каталога,
+source revision отдельно от policy revision, полный identity provenance,
+неприменимость bare actor/project ID как полномочий и ограничения
+детерминированного snapshot digest. Отдельно зафиксированы раннее разрешение
+субъекта до audio Recv, сохранение live stream cancellation и deadline,
+закрытая передача ровно трёх metadata полей и запрет caller-built principal.
+
+`grpc.NewClient` документирован как ленивое создание канала, не проверка
+живого RPC. `Check` различает protected issuer ABI/readiness и trusted
+connectivity; ни один из них не доказывает outcome распознавания. Транспорт
+trusted-cluster прямо описан как plaintext внутреннего профиля, не mTLS
+и не источник пользовательских прав. Context7 `/grpc/grpc-go`:
+сверены NewClient, Connect/GetState/WaitForStateChange и семантика
+client creation/readiness; прикладные гарантии не приписываются транспорту.
+
+Полный detector рабочего дерева: 6542 собственных файла, 222 исключения,
+1874 raw-группы, 555 точных решений и 1319 неразобранных; сырой SHA-256 —
+`60ece1191a0e02c58068acfabb9cfcad32ed63f4e661599327c0ae3b8fa7a285`,
+отпечаток набора прежний —
+`af3e1c6116c5ce8d7149c0864d141081a4bfb6ac1df31fc3242f98e8f05ebc69`.
+Новых/исчезнувших exact path/fragment групп нет. Go-реестр:
+4551/21065, непокрыты 16514; весь STT — 330/438, ещё 108 пропусков.
+
+Host build и адресные authorization/protectedrpc unit, полный
+`test-stt-unit.sh`, `gofmt` и `git diff --check` — PASS LOCAL.
+Image ID текущего container-прогона:
+`sha256:c1a6d4be2624ebc5da4638794351274d6e8da712f1bea820a48fdaf4f7d806a5`.
+Реальный provider и MediaRecorder явно SKIP/NOT RUN; прежний отдельный
+runtime CA package pin не исправлялся. Полный `go-docs -check`,
+browser/deploy/live — NOT RUN, цель остаётся незавершённой.
 
 ## Сто тридцать седьмая волна — композиция STT и общая тестовая заглушка
 
