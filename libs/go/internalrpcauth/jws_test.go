@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+// TestSignAndVerifyCanonicalJSON verifies that signing sorts input JSON into
+// JCS form and verification returns those exact canonical payload bytes.
+// RU: TestSignAndVerifyCanonicalJSON проверяет JCS-упорядочивание входного
+// JSON при подписи и возврат точных канонических байтов после проверки.
 func TestSignAndVerifyCanonicalJSON(t *testing.T) {
 	key := testJWK(t, "signer-g1")
 	expect := ProtectedHeaderExpectation{
@@ -36,6 +40,10 @@ func TestSignAndVerifyCanonicalJSON(t *testing.T) {
 	}
 }
 
+// TestVerifyRejectsHeaderAndPayloadMutation checks that a changed protected
+// typ is rejected before it can select a different authority contract.
+// RU: TestVerifyRejectsHeaderAndPayloadMutation проверяет отказ при замене
+// защищённого typ до выбора другого контракта полномочий.
 func TestVerifyRejectsHeaderAndPayloadMutation(t *testing.T) {
 	key := testJWK(t, "signer-g1")
 	expect := ProtectedHeaderExpectation{Type: "expected+jws", KeyID: key.KeyID}
@@ -52,6 +60,10 @@ func TestVerifyRejectsHeaderAndPayloadMutation(t *testing.T) {
 	}
 }
 
+// TestStrictJSONRejectsDuplicateFields prevents ambiguous object keys from
+// silently overriding a claim in Go's ordinary JSON decoder.
+// RU: TestStrictJSONRejectsDuplicateFields запрещает неоднозначным ключам
+// объекта незаметно перезаписать claim в обычном Go JSON-декодере.
 func TestStrictJSONRejectsDuplicateFields(t *testing.T) {
 	var value struct {
 		A int `json:"a"`
@@ -61,6 +73,10 @@ func TestStrictJSONRejectsDuplicateFields(t *testing.T) {
 	}
 }
 
+// TestDecodeStrictJSONAllowsNonCanonicalConfiguration distinguishes accepted
+// unsigned configuration formatting from the stricter canonical JWS payload.
+// RU: TestDecodeStrictJSONAllowsNonCanonicalConfiguration разделяет
+// допускаемое форматирование неподписанной конфигурации и строгий JWS payload.
 func TestDecodeStrictJSONAllowsNonCanonicalConfiguration(t *testing.T) {
 	var value struct {
 		Name    string `json:"name"`
@@ -78,6 +94,10 @@ func TestDecodeStrictJSONAllowsNonCanonicalConfiguration(t *testing.T) {
 	}
 }
 
+// TestExplicitCompactLimitDoesNotExpandDefaultBoundary verifies that a larger
+// document requires an explicit limit at both signing and verification.
+// RU: TestExplicitCompactLimitDoesNotExpandDefaultBoundary проверяет, что
+// крупный документ требует явного лимита и при подписи, и при проверке.
 func TestExplicitCompactLimitDoesNotExpandDefaultBoundary(t *testing.T) {
 	key := testJWK(t, "large-signer-g1")
 	expect := ProtectedHeaderExpectation{Type: "large-document+jws", KeyID: key.KeyID}
@@ -97,6 +117,10 @@ func TestExplicitCompactLimitDoesNotExpandDefaultBoundary(t *testing.T) {
 	}
 }
 
+// TestValidateTimes covers exact TTL, matching issued/not-before, future
+// issuance and the expiry edge of the bounded clock-skew window.
+// RU: TestValidateTimes покрывает точный TTL, совпадение issued/not-before,
+// будущую выдачу и границу истечения с учётом расхождения часов.
 func TestValidateTimes(t *testing.T) {
 	now := time.Unix(100, 0)
 	if err := ValidateTimes(now, now, now, now.Add(30*time.Second), 30*time.Second, 5*time.Second); err != nil {
@@ -159,6 +183,10 @@ func TestValidateTimes(t *testing.T) {
 	}
 }
 
+// TestParsePrivateJWKValidatesDerivedPublicKey rejects a private scalar whose
+// derived public point differs from the declared JWK coordinates.
+// RU: TestParsePrivateJWKValidatesDerivedPublicKey отклоняет приватный скаляр,
+// дающий публичную точку не из заявленных координат JWK.
 func TestParsePrivateJWKValidatesDerivedPublicKey(t *testing.T) {
 	key := testJWK(t, "signer-g1")
 	encoded := encodePrivateJWK(t, key)
@@ -186,6 +214,10 @@ func TestParsePrivateJWKValidatesDerivedPublicKey(t *testing.T) {
 	}
 }
 
+// TestGenerateMarshalAndParseES256Key round-trips signer and verifier JWKs
+// and compares the public thumbprint after private material is removed.
+// RU: TestGenerateMarshalAndParseES256Key проверяет круговую сериализацию
+// signer/verifier JWK и совпадение публичного thumbprint без приватного ключа.
 func TestGenerateMarshalAndParseES256Key(t *testing.T) {
 	t.Parallel()
 	generated, err := GenerateES256Key("generated-g1")
@@ -221,6 +253,10 @@ func TestGenerateMarshalAndParseES256Key(t *testing.T) {
 	}
 }
 
+// TestKeyGeneration accepts bounded canonical kid suffixes and rejects
+// missing, zero, padded, negative or overflowing generations.
+// RU: TestKeyGeneration допускает ограниченный канонический суффикс kid и
+// отклоняет отсутствие, ноль, ведущий ноль, знак и переполнение поколения.
 func TestKeyGeneration(t *testing.T) {
 	t.Parallel()
 	for keyID, expected := range map[string]uint64{
@@ -244,6 +280,10 @@ func TestKeyGeneration(t *testing.T) {
 	}
 }
 
+// testJWK creates a fresh P-256 signer fixture under the requested kid so
+// tests do not rely on shared key material across cases.
+// RU: testJWK создаёт новую fixture подписанта P-256 с заданным kid, чтобы
+// тесты не разделяли ключевой материал между сценариями.
 func testJWK(t *testing.T, keyID string) ES256Key {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -253,6 +293,10 @@ func testJWK(t *testing.T, keyID string) ES256Key {
 	return ES256Key{KeyID: keyID, Public: &key.PublicKey, Private: key}
 }
 
+// encodePrivateJWK serializes explicit matching or mismatching coordinates
+// for parser tests without applying the production marshal validation first.
+// RU: encodePrivateJWK сериализует согласованные либо расходящиеся части
+// ключа для тестов parser без предварительной production-проверки marshal.
 func encodePrivateJWK(t *testing.T, key ES256Key) []byte {
 	t.Helper()
 	publicBytes, err := key.Public.Bytes()

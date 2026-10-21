@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.94.0
+version: 1.95.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,33 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Девяносто седьмая волна — контракт JWS/JWK
+
+На точном запушенном SHA `7d24e62510f436d2a365619157a8003442ad6972`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1873 raw-группы,
+407 точных решений и 1466 неразобранных; сырой SHA-256 —
+`3caf8283d414dcb79190061a1fa16cc3784e519419811c5a96c74c6934686d67`,
+отпечаток набора —
+`d13131e958ffdae3fa40cd4cb8e784f40a1813a09a448a5094c026122d91830e`.
+Go-реестр: 3068/21048, непокрыты 17980.
+
+Все 54 объявления `jws.go` и `jws_test.go` получили предметные EN→RU
+комментарии. Отдельно описаны критический protected header, ожидание typ/kid
+до доверия подписи, строгие JCS/JSON границы, размер compact token, поколения
+ключей, раздельные public/private JWK, проверка derived public point и
+фиксированный TTL. Уточнено, что `PublicOnly` разделяет указатель на публичный
+ключ, а `ParseProtectedHeader` не аутентифицирует токен. Исполняемый код не
+менялся; новые detector-группы не появились.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1873 raw-группы,
+407 точных решений и 1466 неразобранных; сырой SHA-256 —
+`4037bbf650f3ca5011759b05556c06c71caba08b52c96b6cde7c821a7c9b6472`,
+отпечаток набора не изменился. Go-реестр: 3122/21048,
+непокрыты 17926; два файла — 54/54. `gofmt`, `go test -count=1 ./...` и
+`go build ./...` всего internalrpcauth, `git diff --check` — PASS LOCAL.
+Полный `go-docs -check` и browser/deploy/live — NOT RUN. Точный scan нового
+коммита будет опубликован в текущем PR.
 
 ## Девяносто шестая волна — строгий JSON и trust provenance
 
