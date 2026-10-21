@@ -11,32 +11,34 @@ import (
 	"strings"
 )
 
+// maxApprovalScopePaths limits the number of owner-selected fields bound into one approval digest.
+// maxApprovalScopePaths ограничивает число выбранных владельцем полей в одном дайджесте подтверждения.
 const maxApprovalScopePaths = 16
 
-// ApprovalScopeValue сохраняет тип и значение выбранного параметра. Этот
-// объект нельзя помещать в логи: значение может содержать личные данные.
+// ApprovalScopeValue preserves a selected parameter's path, type, and value; its value may contain private data.
+// ApprovalScopeValue сохраняет путь, тип и значение выбранного параметра; значение может содержать личные данные.
 type ApprovalScopeValue struct {
 	Path  string `json:"path"`
 	Type  string `json:"type"`
 	Value any    `json:"value"`
 }
 
-// ApprovalScope является только отпечатком параметров. Авторитетные agent,
-// run, connection, grant и definition связывает владелец состояния отдельно.
+// ApprovalScope binds selected typed values to a digest, not the authoritative run, grant, or connection identity.
+// ApprovalScope связывает выбранные типизированные значения с дайджестом, но не удостоверяет run, grant или connection.
 type ApprovalScope struct {
 	Values []ApprovalScopeValue `json:"values"`
 	Digest string               `json:"digest"`
 }
 
-// ValidateApprovalScopePaths проверяет owner-configured JSON Pointer пути к
-// явно типизированным полям входной схемы возможности. Модель не выбирает их.
+// ValidateApprovalScopePaths accepts only owner-configured JSON Pointers to declared typed input fields.
+// ValidateApprovalScopePaths принимает только настроенные владельцем JSON Pointer к объявленным типизированным полям ввода.
 func (capability Capability) ValidateApprovalScopePaths(paths []string) error {
 	_, err := capability.approvalScopeDescriptors(paths)
 	return err
 }
 
-// ResolveApprovalScope сначала проверяет полный input, затем вычисляет
-// устойчивый отпечаток выбранных параметров, включая их JSON-типы.
+// ResolveApprovalScope validates complete input before hashing canonical selected values with their declared types.
+// ResolveApprovalScope проверяет полный ввод до хеширования канонических выбранных значений с объявленными типами.
 func (capability Capability) ResolveApprovalScope(paths []string, raw []byte) (ApprovalScope, error) {
 	descriptors, err := capability.approvalScopeDescriptors(paths)
 	if err != nil {
@@ -75,12 +77,16 @@ func (capability Capability) ResolveApprovalScope(paths []string, raw []byte) (A
 	return ApprovalScope{Values: values, Digest: hex.EncodeToString(digest[:])}, nil
 }
 
+// approvalScopeDescriptor stores one validated pointer's decoded segments and schema type for input resolution.
+// approvalScopeDescriptor хранит декодированные сегменты и тип схемы одного проверенного пути для разбора ввода.
 type approvalScopeDescriptor struct {
 	path      string
 	segments  []string
 	fieldType string
 }
 
+// approvalScopeDescriptors sorts and validates bounded unique pointers against exact declared object properties.
+// approvalScopeDescriptors сортирует и проверяет ограниченный набор уникальных путей по точным объявленным полям объекта.
 func (capability Capability) approvalScopeDescriptors(paths []string) ([]approvalScopeDescriptor, error) {
 	if len(paths) == 0 || len(paths) > maxApprovalScopePaths {
 		return nil, errors.New("approval scope path count is invalid")
@@ -128,6 +134,8 @@ func (capability Capability) approvalScopeDescriptors(paths []string) ([]approva
 	return descriptors, nil
 }
 
+// approvalScopeType admits only closed JSON value kinds that can be bound to a human approval.
+// approvalScopeType допускает только закрытый набор видов JSON-значений для привязки к подтверждению человека.
 func approvalScopeType(value string) bool {
 	switch value {
 	case "string", "integer", "number", "boolean", "object", "array":
@@ -137,6 +145,8 @@ func approvalScopeType(value string) bool {
 	}
 }
 
+// approvalPointerSegments decodes bounded JSON Pointer segments and rejects malformed escapes or empty components.
+// approvalPointerSegments декодирует ограниченные сегменты JSON Pointer и отклоняет ошибочное экранирование и пустые части.
 func approvalPointerSegments(path string) ([]string, error) {
 	if len(path) < 2 || len(path) > 256 || path[0] != '/' {
 		return nil, errors.New("approval scope JSON pointer is invalid")

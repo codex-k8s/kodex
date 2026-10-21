@@ -2,6 +2,8 @@ package integrationpackage
 
 import "testing"
 
+// approvalScopeFixture builds a closed nested schema for exact pointer and value-binding tests.
+// approvalScopeFixture создаёт закрытую вложенную схему для проверки точных путей и привязки значений.
 func approvalScopeFixture() Capability {
 	return Capability{OpenAPI: &OpenAPIHTTP{InputSchema: map[string]any{
 		"type": "object", "additionalProperties": false,
@@ -16,6 +18,8 @@ func approvalScopeFixture() Capability {
 	}}}
 }
 
+// TestApprovalScopeMatchesSelectedTypedParameters keeps digest stable across order and unrelated fields but not selected values.
+// TestApprovalScopeMatchesSelectedTypedParameters сохраняет дайджест при смене порядка и посторонних полей, но не выбранных значений.
 func TestApprovalScopeMatchesSelectedTypedParameters(t *testing.T) {
 	capability := approvalScopeFixture()
 	paths := []string{"/ticket/id", "/action"}
@@ -33,6 +37,8 @@ func TestApprovalScopeMatchesSelectedTypedParameters(t *testing.T) {
 	}
 }
 
+// TestApprovalScopeRejectsUnknownMissingAndMalformedPaths rejects undeclared, duplicate, malformed, and absent selected fields.
+// TestApprovalScopeRejectsUnknownMissingAndMalformedPaths отклоняет необъявленные, повторные, неверные и отсутствующие выбранные поля.
 func TestApprovalScopeRejectsUnknownMissingAndMalformedPaths(t *testing.T) {
 	capability := approvalScopeFixture()
 	for _, paths := range [][]string{{}, {"/unknown"}, {"/ticket/id", "/ticket/id"}, {"ticket/id"}, {"/ticket/~2id"}, {"/ticket/id/part"}} {
