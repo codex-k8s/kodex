@@ -3480,6 +3480,134 @@
       "fragmentSHA256": "eee04d20e64b72be7799237f486d9a770b1ae72759890f120f1c78dc49122a32",
       "count": 1,
       "reason": "draft.create и draft.update разделяют адресные и текстовые поля, но update привязан к uid/uid_validity/expected_digest существующего черновика, а create назначает новый ID. Общий write метод убрал бы проверку версии и различие lifecycle; schema требует конкретные inline-поля."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "66749b24d1c7b83fb1e0a44e7045882b588b552e9ccf1ad7091e8c9eeecb1d8f",
+      "count": 1,
+      "reason": "confluence.page.comment.delete и gitlab.issue.note.delete имеют общий envelope DESTRUCTIVE/Human Gate/EFFECT_KEY, но удаляют разные ресурсы разных подключений и используют разные идентификаторы. Межпакетная общая capability стерла бы область владения и adapter; оставлено только точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "454c070858ab32441d9b8a0556b017cbaee97f9b65bb2f7f2d05ff2a3dfc9bb0",
+      "count": 1,
+      "reason": "gitlab.issue.read и merge_request.read оба читают объект по IID, но возвращают разные безопасные проекции, а их идентификаторы относятся к разным видам. Совпадающий READ_ONLY каркас не заменяет отдельные operation key и inline-поля результата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "0deaae53d4cf80eb6df5ecef8a2e929e452a0459ecaa29550d4bf564376e79e9",
+      "count": 1,
+      "reason": "gitlab.issue.create создаёт issue с risk WRITE, а merge_request.create создаёт MR между exact branches с risk SENSITIVE. Совпадают лишь поля title/description и часть effect envelope; объединение скрывало бы различный ресурс и более строгий класс эффекта."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "b382d73e91bb09274f66ac8cf019326e6ce146acbf853637a4851f564f87bab8",
+      "count": 1,
+      "reason": "gitlab.pipeline.read является READ_ONLY, а pipeline.retry запускает новый эффект SENSITIVE после Human Gate. Общие project scope и pipeline_id не переносят право чтения на повторный запуск; отдельные операции и подтверждения сохранены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "a6b3418031b725765c75f0d6f51f4db923626f98f043fb4fd6046643d8d18e17",
+      "count": 2,
+      "reason": "Два окна branch.list относительно commit.list и merge_request.discussion.list совпадают по ограниченной странице READ_ONLY. Ветки выбираются на уровне проекта, коммиты по ref/path, обсуждения по точному MR; каждый список имеет свой operation и проверяемый scope. YAML anchors запрещены decoder пакета, а схема требует поля inline."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "bc4806f7c5c70696c3871821d519c0187917b159facd23ad9c7e751ac403e667",
+      "count": 1,
+      "reason": "branch.list и branch.read имеют общий READ_ONLY project scope, но список возвращает bounded страницу, а чтение требует exact branch и выдаёт её protected/default/commit_id. Совпадение envelope не заменяет независимую входную и выходную схему."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "e8a8f26e01b509c4267897bc843248352ea57a2b048825e1edeec18bba0bb790",
+      "count": 1,
+      "reason": "commit.list и repository.tree.list используют одну форму bounded страницы, но первый выбирает коммиты по ref/path, второй перечисляет дерево репозитория по ref/path. Разный вид items и operation key должны оставаться явными, несмотря на совпадение служебных полей."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "7671d884642fb9a8a8365015c5efb32685e91a2dd85a1a12257cc253d5d5793e",
+      "count": 1,
+      "reason": "commit.list и merge_request.discussion.list совпадают по форме items/count/next_cursor, но обсуждения принадлежат exact merge_request_iid, а коммиты выбираются по ref/path. Общая generic list capability скрыла бы обязательную привязку обсуждения к MR."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "aecc00398e18cfa0fe98cb950657a39a266f6593b7ef409eda0427dd5a8ca804",
+      "count": 2,
+      "reason": "Два окна repository.tree.list относительно issue.note.list/read имеют лишь общий READ_ONLY project scope и часть ID/результатных полей. Дерево связано с ref/path, заметки с issue_iid и note_id; перенос одной формы на другую исказил бы границу ресурса. Сохранены только два точных вхождения."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "71fb858cf6b1bcbf8993dab8d1c3ce6962d3aec46d71e6609ca32100641670e5",
+      "count": 1,
+      "reason": "issue.note.list читает страницу заметок без подтверждения, а issue.note.create публикует заметку через WRITE/Human Gate/EFFECT_KEY. Общие issue_iid и ограничение страницы не разрешают использовать право чтения для создания эффекта."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "20ba7a419e814ea8ae4f539b1624c2592838c8868d0390b6a48bb0c2d37093d5",
+      "count": 1,
+      "reason": "issue.note.read безопасно читает exact note_id, а issue.note.delete удаляет заметку после DESTRUCTIVE Human Gate. Общая форма issue_iid/note_id не является общим действием и не должна скрывать отказ без решения владельца."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "2988c43dad789322f06917c66604164ea9fcc6bfcbe06b02dafdec31984a0868",
+      "count": 1,
+      "reason": "issue.note.create и issue.note.update имеют одинаковую проекцию результата и WRITE/EFFECT_KEY, но create назначает новый note_id, update требует existing note_id. Раздельные команды сохраняют проверку владения существующей заметкой до изменения и отдельный audit effect."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "72e5f4bef1997d23322afca8a43c1e1b7d143bdf567c4717d7801fe881e28b1e",
+      "count": 1,
+      "reason": "gitlab.merge_request.list и jira.attachment.list повторяют только bounded READ_ONLY page envelope. MR принадлежит GitLab project и выбирается по state, вложения — Jira issue по issue key; общий adapter/resourceScope недопустим."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "02167b1907be6f88acd8e8c9b6f2203742421c618a1bea256e360a02c8467b91",
+      "count": 1,
+      "reason": "merge_request.update меняет ограниченные поля MR как WRITE, merge_request.merge выполняет DESTRUCTIVE слияние с exact sha/squash. Похожие результатные поля не делают эти эффекты взаимозаменяемыми; отдельный Human Gate и operation key необходимы."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "902b7b3d292693434437ac6d9067c21026d52e651d0b7ca1ee5d8f734a1f1b49",
+      "count": 1,
+      "reason": "job.list читает bounded страницу jobs, а job.retry повторяет exact job_id с risk SENSITIVE и Human Gate. Совпадение project scope и поля pipeline_id не даёт оснований объединять чтение с исполняемым повтором."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/gitlab.yaml",
+      "fragmentSHA256": "1f27fda9c33812a9700e47a213b0b3639352ccd15f87d0895c635dbebc9ecb95",
+      "count": 1,
+      "reason": "job.read выдаёт проекцию одного job по job_id, а job.retry выполняет новый эффект для того же ID. Равенство outputFields не переносит READ_ONLY в SENSITIVE/EFFECT_KEY; операции и approval остаются самостоятельными."
     }
   ]
 }

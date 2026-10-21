@@ -23,17 +23,29 @@ import (
 )
 
 const (
+	// DefaultFixturePath selects the embedded audio when no external fixture path is supplied.
+	// RU: DefaultFixturePath выбирает встроенную запись, если внешний путь не задан.
 	DefaultFixturePath = ""
-	FixtureSHA256      = "56a17fd3675e5913e912c404a203bc1062daf3c3c1ec79d5210d20fe28539e8e"
+	// FixtureSHA256 pins the exact 46,364-byte audio accepted for the live provider check.
+	// RU: FixtureSHA256 закрепляет точные байты записи размером 46 364 для проверки провайдера.
+	FixtureSHA256 = "56a17fd3675e5913e912c404a203bc1062daf3c3c1ec79d5210d20fe28539e8e"
 )
 
+// ErrFixtureUnavailable means that an explicitly requested external file cannot be opened as a regular file.
+// RU: ErrFixtureUnavailable означает, что запрошенный внешний файл нельзя открыть как обычный файл.
 var ErrFixtureUnavailable = errors.New("external STT fixture is unavailable")
 
+// Fixture owns an optional external audio file and its already validated, rewindable audio descriptor.
+// RU: Fixture владеет необязательным внешним файлом и уже проверенным описанием записи с возможностью перемотки.
 type Fixture struct {
 	file  *os.File
 	audio value.Audio
 }
 
+// VerifyFixture checks exact length and digest before decoding the entire audio stream; on failure
+// it closes an external file, and on success the caller owns the returned fixture until Close.
+// RU: VerifyFixture проверяет точный размер и дайджест до декодирования всей записи; при ошибке
+// внешний файл закрывается, а при успехе вызывающий владеет фикстурой до Close.
 func VerifyFixture(ctx context.Context, path string) (*Fixture, error) {
 	var file *os.File
 	var reader io.ReadSeeker = bytes.NewReader(testdata.RussianNumbers)
@@ -81,6 +93,8 @@ func VerifyFixture(ctx context.Context, path string) (*Fixture, error) {
 	return &Fixture{file: file, audio: audio}, nil
 }
 
+// Close releases only the external file owned by the fixture; embedded audio has no file handle.
+// RU: Close освобождает только принадлежащий фикстуре внешний файл; у встроенной записи нет дескриптора.
 func (fixture *Fixture) Close() error {
 	if fixture == nil || fixture.file == nil {
 		return nil
@@ -88,6 +102,10 @@ func (fixture *Fixture) Close() error {
 	return fixture.file.Close()
 }
 
+// Run creates the configured egress client, sends the validated audio to the live provider and
+// accepts only the five expected Russian number words after limited punctuation normalization.
+// RU: Run создаёт клиент с заданным сетевым выходом, отправляет проверенную запись провайдеру
+// и принимает только пять ожидаемых русских числительных после ограниченной нормализации пунктуации.
 func (fixture *Fixture) Run(ctx context.Context, apiKey []byte) error {
 	if fixture == nil || fixture.audio.Reader == nil || len(apiKey) == 0 {
 		return errors.New("STT provider smoke configuration is incomplete")
@@ -110,6 +128,10 @@ func (fixture *Fixture) Run(ctx context.Context, apiKey []byte) error {
 	return nil
 }
 
+// normalizeRussian folds case and separates Unicode whitespace or punctuation while preserving
+// every letter, digit and other symbol, so changed or omitted transcript content still fails.
+// RU: normalizeRussian приводит регистр и разделяет слова пробелами и пунктуацией Unicode,
+// сохраняя каждую букву, цифру и прочий символ, чтобы изменение или пропуск содержания выявлялись.
 func normalizeRussian(input string) string {
 	// Совпадает с защищённой HTTP-приёмкой: провайдер может расставить
 	// пунктуацию между словами, но символы и сами слова не отбрасываются.

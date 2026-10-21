@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+// TestNormalizeRussianAllowedDifferences accepts case, whitespace and punctuation variants
+// without changing the expected sequence of the five spoken words.
+// RU: TestNormalizeRussianAllowedDifferences допускает варианты регистра, пробелов и пунктуации
+// без изменения ожидаемого порядка пяти произнесённых слов.
 func TestNormalizeRussianAllowedDifferences(t *testing.T) {
 	for name, input := range map[string]string{
 		"exact":                "раз два три четыре пять",
@@ -25,6 +29,10 @@ func TestNormalizeRussianAllowedDifferences(t *testing.T) {
 	}
 }
 
+// TestNormalizeRussianPreservesSignificantDifferences rejects inserted symbols, invisible
+// characters, missing or reordered words and distinct Cyrillic letters.
+// RU: TestNormalizeRussianPreservesSignificantDifferences отклоняет вставленные символы,
+// невидимые знаки, пропуски и перестановки слов, а также разные кириллические буквы.
 func TestNormalizeRussianPreservesSignificantDifferences(t *testing.T) {
 	for name, input := range map[string]string{
 		"internal_punctuation": "р@аз два три четыре пять",
@@ -47,6 +55,10 @@ func TestNormalizeRussianPreservesSignificantDifferences(t *testing.T) {
 	}
 }
 
+// TestLiveProviderRussianNumberFixture verifies the pinned audio first and calls the external
+// model only when the dedicated smoke credential is explicitly present.
+// RU: TestLiveProviderRussianNumberFixture сначала проверяет закреплённую запись и вызывает
+// внешнюю модель только при явном наличии отдельного реквизита для smoke-проверки.
 func TestLiveProviderRussianNumberFixture(t *testing.T) {
 	path := os.Getenv("KODEX_STT_ACCEPTANCE_FIXTURE")
 	fixture, err := VerifyFixture(t.Context(), path)
@@ -66,6 +78,10 @@ func TestLiveProviderRussianNumberFixture(t *testing.T) {
 	}
 }
 
+// TestFixturePreflight checks that the embedded fixture passes integrity and duration validation
+// without contacting the model provider.
+// RU: TestFixturePreflight проверяет целостность и длительность встроенной записи без обращения
+// к провайдеру модели.
 func TestFixturePreflight(t *testing.T) {
 	fixture, err := VerifyFixture(t.Context(), "")
 	if err != nil {
