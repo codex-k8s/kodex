@@ -1,6 +1,9 @@
 package query
 
-// PromptPreviewContext не несёт полномочий: ссылки и версии проверяет owner.
+// PromptPreviewContext supplies optional scope, version and input hints for a
+// preview; the owner resolves references and checks expected versions.
+// PromptPreviewContext передаёт необязательные подсказки области, версии и
+// входа для предпросмотра; владелец разрешает ссылки и проверяет версии.
 type PromptPreviewContext struct {
 	ScopeOnly                                       bool
 	AgentRef, WorkflowRevisionRef, WorkflowStageKey string

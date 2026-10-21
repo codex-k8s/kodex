@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-// Principal выводится только из проверенного internal authorization context.
+// Principal carries the verified actor and credential context supplied by the
+// internal authorization boundary; caller payload cannot construct authority.
+// Principal переносит проверенный actor и контекст реквизита из внутренней
+// границы авторизации; payload вызывающего не создаёт полномочия.
 type Principal struct {
 	ActorID                   string
 	AuthorityTenant           string
@@ -21,6 +24,10 @@ type Principal struct {
 	CredentialAMR             []string
 }
 
+// Validate rejects a principal missing its actor, tenant, permission, trace,
+// workload or nonzero credential revision before domain use.
+// Validate отклоняет principal без actor, арендатора, разрешения, корреляции,
+// workload или ненулевой ревизии реквизита до использования в домене.
 func (principal Principal) Validate() error {
 	if strings.TrimSpace(principal.ActorID) == "" ||
 		strings.TrimSpace(principal.AuthorityTenant) == "" ||
@@ -33,8 +40,10 @@ func (principal Principal) Validate() error {
 	return nil
 }
 
-// AuthenticationIsFresh проверяет возраст аутентификации в проверенном
-// credential context.
+// AuthenticationIsFresh bounds credential age and rejects zero timestamps,
+// nonpositive limits and authentication more than 30 seconds in the future.
+// AuthenticationIsFresh ограничивает возраст реквизита и отклоняет нулевые
+// метки времени, неположительный предел и вход более чем на 30 секунд в будущем.
 func (principal Principal) AuthenticationIsFresh(now time.Time, maximumAge time.Duration) bool {
 	if principal.CredentialAuthenticatedAt.IsZero() || now.IsZero() || maximumAge <= 0 {
 		return false
@@ -44,8 +53,10 @@ func (principal Principal) AuthenticationIsFresh(now time.Time, maximumAge time.
 	return !authenticatedAt.After(now.Add(30*time.Second)) && now.Sub(authenticatedAt) <= maximumAge
 }
 
-// InteractiveAuthenticationIsFresh дополнительно требует подтверждённые ACR и
-// хотя бы один AMR из того же credential context.
+// InteractiveAuthenticationIsFresh additionally requires a nonblank ACR and
+// at least one nonblank AMR from the same verified credential context.
+// InteractiveAuthenticationIsFresh дополнительно требует непустой ACR и
+// хотя бы один непустой AMR из того же проверенного контекста реквизита.
 func (principal Principal) InteractiveAuthenticationIsFresh(now time.Time, maximumAge time.Duration) bool {
 	if !principal.AuthenticationIsFresh(now, maximumAge) || strings.TrimSpace(principal.CredentialACR) == "" {
 		return false
@@ -58,7 +69,10 @@ func (principal Principal) InteractiveAuthenticationIsFresh(now time.Time, maxim
 	return false
 }
 
-// Mutation связывает semantic idempotency и OCC с одной командой.
+// Mutation carries semantic idempotency and optimistic concurrency inputs for
+// one command; validating its shape does not grant access to a resource.
+// Mutation переносит семантическую идемпотентность и оптимистическую проверку
+// версии одной команды; проверка формы не даёт доступ к ресурсу.
 type Mutation struct {
 	Operation       string
 	IdempotencyKey  string
@@ -66,6 +80,10 @@ type Mutation struct {
 	IntentDigest    string
 }
 
+// Validate checks the command name, bounded idempotency key, digest length and
+// positive optional version without deciding ownership or intent semantics.
+// Validate проверяет имя команды, длину ключа идемпотентности и дайджеста,
+// положительную необязательную версию, не решая вопрос владения и смысла intent.
 func (mutation Mutation) Validate() error {
 	if strings.TrimSpace(mutation.Operation) == "" ||
 		len(mutation.IdempotencyKey) < 8 || len(mutation.IdempotencyKey) > 128 ||

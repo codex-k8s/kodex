@@ -240,6 +240,206 @@
       "fragmentSHA256": "8111b44202e0ac2920ecbe7fb80a1d3b4ce273e338201e9324493a81deb21791",
       "count": 1,
       "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "93df25c546eecb6be57195614cc16b2a337815d31c939f29801e8622fefb563d",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "383cd26220a6b393dcb2772f27ad01f79afd3af4e14c8fdc2058df3fbd1d46ef",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "51f872a36fa0099a834a2f9d02c7bcfc0b6a369a748886775e2314dde6f3630e",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "309557e26c4ee52e2a542283cc5ec29f78d9f215e1ec161ed01b73b638ec3240",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "c7cd04bff06ad1727ed005cc76a6025836272141af92035ff14b0091e3f73aed",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "577080dd619a25f1be1580f11893721cb923a8006c2a5288714fa35a2d72f1bc",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "9649608bd7bf947cd722d080195b7e03725a2c5302e6e697d94238a1692a3372",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "ea56c6578b468c0d84bfa36ccf87e6d3fe6123f66d35dcb6265f63465f9c3258",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "93335f5b4add687c50169a3ce455bafd413979c9407080ea6b9da73c64f98e5d",
+      "count": 2,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "141bc109e7ba0df154408b5d3b4e267e9e8d7a9c8f6bb7cdef029eea2a464454",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "04339b02c1cecdd2ca101801fe7f0ef3fb18f50551e8ed0b8f9174981cc42bcf",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "771b76432b9855b993fb182799cb4d85b677a6286f2173a2d569be44614574a9",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "76afee24939e24d45eacf92a7a5c84c2ce5fe8807121b5a10334948d994cc476",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "913b068f59fe82ae86ae14340d9dea808e403d4027c7a0ea857e6018d772a504",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "4d70e2b9158ff178d05a3fdda0a52291620e90506cfc7f1efb4e89d2f34005a3",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "da77448c56678f155528f76de30d4578caf9c8dea5b22a057dc6290fc6a20170",
+      "count": 2,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "01acbbdaed0744a0ac4683b2194f720e852b68fea03894c61cee6c8a17ff9b95",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "ada4a0722832f164c94829266a27a59dcfaa27e6baf45c5c6851ad830b252b81",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "7083ec4540ca9c086e48f8ba519feb7ce1e7375c5c1ee1fc58710c7f1c7d6046",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "e9798329ada9a60ae4a70f6ac6e829ea260e574ee3b971e92183451ba6acca75",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "c66db167c76619af884817372474ca59d378c0e24a83a3db2f4aa3cf0fb49951",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "4c1ee7b52f089b53f08390505c9dcf4df2fc4f0b0b0adf329ed5ee00f5726ac6",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "8743766ff8002bff0cb66c2b8db1748030179e8ac999942fe904e50ddef44f3c",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "8e16bd96a3d131b82b65e2ba3a617e7fce0ddaef06783ea7810dbd08851ed51d",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "fragmentSHA256": "763599048e523d4c5b2f5a4a9f1f56d8cae928ca680acb0a4273a2f4750cb804",
+      "count": 1,
+      "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
     }
   ]
 }
