@@ -13,7 +13,10 @@ import (
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 )
 
-// Оракул проверяет decoded PURPOSE, а не случайное совпадение внутри JSON.
+// validateSchedulePreviewTask decodes the PURPOSE section and verifies the
+// exact task/session pin, rather than trusting a coincidental JSON substring.
+// validateSchedulePreviewTask разбирает секцию PURPOSE и проверяет точную
+// привязку задачи к сессии, а не случайное совпадение подстроки JSON.
 func validateSchedulePreviewTask(raw, task string, continued bool, sessionRef string) error {
 	var envelope runtimecontract.PromptServiceEnvelope
 	decoder := json.NewDecoder(strings.NewReader(raw))
@@ -54,7 +57,7 @@ func validateSchedulePreviewTask(raw, task string, continued bool, sessionRef st
 		return fmt.Errorf("prospective task projection is invalid")
 	}
 	digest := sha256.Sum256([]byte(task))
-	want := continuationTaskProjectionPin{Revision: "continuation-task-projection-v1", Mode: "PROSPECTIVE", SessionRef: sessionRef,
+	want := continuationTaskProjectionPin{Revision: continuationTaskProjectionRevision, Mode: "PROSPECTIVE", SessionRef: sessionRef,
 		TaskSHA256: hex.EncodeToString(digest[:]), TaskBytes: len(task)}
 	if sessionRef == "" || pin != want {
 		return fmt.Errorf("prospective task projection does not match exact task and session")
@@ -62,6 +65,10 @@ func validateSchedulePreviewTask(raw, task string, continued bool, sessionRef st
 	return nil
 }
 
+// TestSchedulePreviewTaskProjection proves the prospective pin contains the
+// exact task/session and rejects altered fields before a continuation runs.
+// TestSchedulePreviewTaskProjection доказывает точность привязки задачи к
+// сессии и отклонение изменённых полей до продолжения выполнения.
 func TestSchedulePreviewTaskProjection(t *testing.T) {
 	task, session := "Точный task {{literal}}\nбез усечения.", "ses_preview"
 	snapshot := workflowPromptFixture()

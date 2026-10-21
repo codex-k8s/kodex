@@ -16,6 +16,230 @@
       "fragmentSHA256": "1babefcb97bf46039f206e523aae24ded9a83d08911bf56e38d030c9ce292c73",
       "count": 1,
       "reason": "Восемь специализированных RPC-методов черновиков сохраняют явное соответствие полного метода, закрытого command.Kind и типизированного generated ответа. Общие разбор ссылок и исполнение уже вынесены в managedRevisionInput и managedMutation. Дальнейшее объединение потребовало бы нетипизированного диспетчера и размыло бы независимые команды публикации, сохранения и отказа."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "81e1654c8d005ec193e89a76436134c58b82906a73c8283e3dc20bd6c300245d",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "c49b2f9cfbd73696debfa16a8c8381cb30329d946beb40954566bc2aa6497f29",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "a3511b22a2209671868a5d3168d738ae750cad09c273852c473c0947a01ded3e",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "3ba13be4a531cdfa3fc300e14dbe3e1e463724b8d585417965633ce6494d6d79",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "19e8023c7400a597545cc4875d9c1538dfcb9ca299473f46bd3d1884428da085",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "8fe59cc3c450d3cd23eb15d96fb5274a7b9ab8b2b48422bf6475ca896e9dda0e",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "db46a65398167857534c3f3960c9e0f1245e2c3039fbc2a6df6a93e7c8ef8986",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "7b4bf4e2acaf217f282d58b917ee9aa1f9de9bbcb6937994350ff458d232f590",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "f836d73682b65479d8264494f6ca589f21355833b6320866d014848bc162532a",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "3292ca0750cdab25efe07b8373d0fede424e9ced2b4246bee2f518f7f6de02f7",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "0c272a6dd255af0bbd62e3527ff0fa09f3ee834d57992f7b02c9c91f3ee86ca4",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "ff64487add8c1cebffedfc7dd402845a1e10163f92e1ac970c1d6391c50cac49",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "4ed1cb538faf4f9754306372e93e6b437b94d965dd0c7353bdb83783e45cd372",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "5de01fc661cf7d6d480fdae1c0cfe1396c4c8c339dd221cbb814d6ec0779919a",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "3a06b38ad9f774b7a9b261595d0fc5b26647012fdeb0e49201078902c1a9b830",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "e3aad5e2c199fd25472501919c940b8c9f43411c5e9c5f88b022ae06ca0b286c",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "3a71ac51a1c8a48f5f59b907f252c6fa061c5d7d9adc77f3ebfc5d114bf83166",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "5047147cdc5fd7b4d9612f71425479668b85570ceaa0e7767c7c307d55b39628",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "a51408f0bd6dd346a23849ff474a48899e564259f1b8695f5ebc77c9c735d6b9",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "ea74f5b5e474a7db5ea4c7cf706083842968ab35eec0bfb54e083bf76ac42f8b",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "37ac48e0b862f55b89c8663d97fba52adf93635874af3976e9734595fd5ac503",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "69e5b3bb629728db0d58771f115f6ae21ed1681cea0f65e418934af321e29d55",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "989c4f06f2d05a2ed18217034b93beae2f01b188a9e6d4d5760a4c70b0dbbcb7",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "88f1eda8478d7507feadfaffc2ed8384cd3bfb4e6f8ddaf436001a59cedff4e5",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "c83a02e43aedb0a974a670bd173400a08c38a2a8ef5453914dc677d87507812a",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "60be58286a9d00551804a9337efaa81a58ebd321f135aeae8cd4e0aee79b4b2d",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "8683e5d1dcb219fe21574487b83997e887294aaf23c056dacf3a286304216ad8",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
+    },
+    {
+      "format": "json",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",
+      "secondPath": "tools/release/fixtures/authority-policy-revision77.json",
+      "fragmentSHA256": "8111b44202e0ac2920ecbe7fb80a1d3b4ce273e338201e9324493a81deb21791",
+      "count": 1,
+      "reason": "Тестовый снимок authority-policy ревизии 77 намеренно хранится отдельно от действующей политики ревизии 97: тесты воспроизводят переход и проверяют прежние bytes, digest и несовместимые изменения. Замена снимка ссылкой на текущий источник уничтожила бы независимый предыдущий вход и ослабила проверку ротации; совпадение ограничено точным фрагментом и хешем."
     }
   ]
 }
