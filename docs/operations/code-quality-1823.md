@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.156.0
+version: 1.157.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,54 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят седьмая волна — общая искусственная risk-fixture
+
+На базе опубликованного SHA `c05945fa476772831b2a280f75157df0e31d750e`
+две копии конструктора искусственного ImageRiskAcceptance в bridge/client
+tests заменены одним `internal/testsupport/admissionfixture.RiskAcceptance`.
+Helper зависит только от runtimecontract, не импортирует imageowner,
+не сериализует/валидирует вход и не выдаёт approval/grant. Отдельные
+claim/evidence fixtures оставлены у потребителей: клиент проверяет полный
+RPC snapshot с build/provenance/spec/platform и receipt, мост — локальное
+сохранение и чтение state/report. Production-код не менялся.
+
+До выноса зафиксирован SHA-256 канонической synthetic risk JSON исходной
+fixture: `e19a890edb9c4ca28a1c0830cd6238c2e6ca57ba7cabadfd648757bd32355f50`.
+Новый постоянный unit закрепляет эти байты и отсутствие risk decision
+у обычного варианта. Два unit helper проверяют все копируемые привязки,
+фиксированные искусственные метаданные и отказ canonical validator для
+пустого входа. Отдельная временная проверка подставила точные старые функции
+из родительского Git SHA: reflect.DeepEqual полного claim и evidence
+до/после прошёл у обоих потребителей для risk=false/true. Временные копии
+после проверки удалены, в итоговом дереве их нет.
+
+Предварительный и итоговый полный unit двух consumer packages — PASS LOCAL;
+новый helper unit и сборка трёх затронутых packages — PASS LOCAL.
+Imageowner tests используют stubs и disposable loopback gRPC для существующих
+terminal connection сценариев; trusted profile constructor не вызывает
+owner RPC (CheckLocalAuthority возвращает локальный результат). Настоящие
+owner/registry/cluster/admission/provider не запускались. 16 unit анализатора,
+unit Go-checker, пять ignore-boundaries, gofmt и diff-check — PASS LOCAL.
+Все Go-команды: `GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`.
+
+Исходное detector-окно 226 tokens заменилось остаточным 110-token окном:
+вызов общего конструктора, caller-owned canonicalization/присваивания
+и начало независимых тестов. Ещё один промежуточный тип/setter только ради
+нескольких присваиваний скрыл бы mapping; полный helper с imageowner создал
+бы цикл с package tests клиента. Остаток сохранён точным path/fragment/count
+решением. Удаление двух конструкторов не объявляется уменьшением raw-счётчика:
+новых пар совпадений нет, raw остаётся 1865, решений теперь 567,
+неразобранных 1298. Остальной multiset format/path/fragment/count не менялся.
+
+Рабочий detector: 6555 source-файлов, 222 исключения; raw SHA-256
+`ed9e3a412b9711eda79833fec2e8ef83e3ba4a21fca9bf4fdfc04d5097c8e126`,
+отпечаток `72f8c8fc4fc66622b3c2438d4c5119e53c5e7b85046a846a344058a337699cf7`.
+Go-реестр — 5242/21077, непокрыты 15835; role-image-builder — 117/552.
+Все новые объявления helper/tests и изменённая factory имеют предметные
+EN→RU комментарии. Полный go-docs-check, полный role-image-builder unit,
+PostgreSQL, browser/deploy/live — NOT RUN. Известный diagnostics FAIL не
+закрывается этой волной. Точный scan/build/unit нового SHA — в том же PR.
 
 ## Сто пятьдесят шестая волна — мост допуска и точки входа образов
 

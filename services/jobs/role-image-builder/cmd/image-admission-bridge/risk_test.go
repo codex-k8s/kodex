@@ -15,6 +15,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/clients/imageowner"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/testsupport/admissionfixture"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -56,12 +57,7 @@ func bridgeRiskFixture(t *testing.T, risk bool) (imageowner.Claim, imageowner.Ad
 	evidence := imageowner.AdmissionEvidence{SBOMSHA256: report.SBOMSHA256, VulnerabilityEvidenceSHA256: report.ReportSHA256, Accepted: true,
 		VulnerabilityReportJSON: string(raw), VulnerabilityReportProjectionSHA256: runtimecontract.ImageVulnerabilitySHA256(raw)}
 	if risk {
-		decision := runtimecontract.ImageRiskAcceptance{Schema: runtimecontract.ImageRiskAcceptanceSchema, DecisionRef: "imgrisk_abcdefgh", DecisionVersion: 1, Action: "ACCEPT_RISK",
-			ScopeKind: binding.ScopeKind, OrganizationRef: binding.OrganizationRef, ArtifactRef: binding.ArtifactRef, ImageDigest: binding.ImageDigest,
-			ReportSHA256: report.ReportSHA256, ProjectionSHA256: evidence.VulnerabilityReportProjectionSHA256, SourceAdmissionRevision: 1,
-			SourceAdmissionReceiptSHA256: hex, SourceEvidenceManifestDigest: "sha256:" + hex, RecipeRef: binding.RecipeRef, RecipeVersion: binding.RecipeVersion, RecipeGeneration: binding.RecipeGeneration,
-			BuildRef: binding.BuildRef, BuildVersion: binding.BuildVersion, BuildAttempt: binding.BuildAttempt, PolicyRevision: binding.PolicyRevision, PolicySHA256: binding.PolicySHA256,
-			Reason: "Риск принят для точного образа", DecidedByActorRef: "act_abcdefgh", DecidedAt: "2026-10-05T05:00:00Z"}
+		decision := admissionfixture.RiskAcceptance(binding, report.ReportSHA256, evidence.VulnerabilityReportProjectionSHA256, hex)
 		riskRaw, err := runtimecontract.CanonicalImageRiskAcceptance(decision)
 		if err != nil {
 			t.Fatal(err)

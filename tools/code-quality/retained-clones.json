@@ -2,6 +2,14 @@
   "version": 1,
   "entries": [
     {
+      "format": "go",
+      "firstPath": "services/jobs/role-image-builder/cmd/image-admission-bridge/risk_test.go",
+      "secondPath": "services/jobs/role-image-builder/internal/clients/imageowner/admission_risk_test.go",
+      "fragmentSHA256": "2069a37928ef767380892c4710987ad6ef7a6309635f38a147277eaff91a1970",
+      "count": 1,
+      "reason": "Конструктор общего искусственного risk decision вынесен в internal/testsupport/admissionfixture; две исходные копии удалены. Осталось короткое окно caller-owned canonicalization, копирования полей в разные по полноте claim/evidence fixtures и начала самостоятельных тестов file recovery против RPC bytes. Общий helper не импортирует imageowner во избежание цикла с его package tests; новый промежуточный тип или setter ради нескольких присваиваний скрыл бы проверяемое mapping. Сохранено только точное остаточное окно, не весь fixture или пакет."
+    },
+    {
       "format": "protobuf",
       "firstPath": "contracts/proto/controlplane/v1/access.proto",
       "secondPath": "contracts/proto/controlplane/v1/role_images.proto",
