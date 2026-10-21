@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.145.0
+version: 1.146.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,44 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок шестая волна — почтовые транспорты
+
+На базе опубликованного SHA `3b51365b8c9677c02ae47160ed0d9507b5322699`
+все 60 собственных объявлений `email-bridge/internal/clients/mailtransport`,
+включая тесты и методы интерфейсов, получили предметные EN→RU комментарии.
+Описаны границы descriptor reads, CONNECT readback до provider bytes,
+лимиты сетевого чтения и deadline reset, TLS до credentials, POP fixedDial
+без прямого внешнего соединения и раздельные безопасные health reasons.
+
+IMAP-пояснения фиксируют UIDVALIDITY/UIDNEXT, канонический UID, bounded
+BODY.PEEK, ограничения UID-диапазонов до Nums и проверку exact thread
+references. Mutations требуют caller-owned разрешение и durable receipt;
+COPY/APPEND destination проверяется до удаления, UID EXPUNGE не заменяется
+общим EXPUNGE. SMTP accepted не называется доставкой, source reply recipients
+проверяются на обязательное присутствие, а не выдуманное равенство списков.
+Неопределённый DATA/QUIT outcome не выдаётся за отсутствие эффекта.
+MIME/base64/size validation прямо не называется антивирусом или quarantine
+admission; возвращённые данные вложения остаются недоверенными.
+
+Context7 `/emersion/go-imap` и `/emersion/go-smtp`: проверены STARTTLS,
+client operations и завершение SMTP DATA. Для `/knadh/go-pop3` подходящего
+каталога не найдено; чужой Node POP-клиент не использовался. Порядок NewConn,
+fixed dial и Cmd/ReadOne дополнительно прочитан в закреплённом Go v1.0.2,
+SMTP NewClientStartTLS/Data.Close — в закреплённом v0.25.0.
+Wire, TLS, credentials, параметры, команды и исполняемые условия не менялись.
+
+Полный Go build/unit email-bridge до и после комментариев — PASS LOCAL,
+с явно unset PostgreSQL test DSN. Synthetic loopback fixtures входят в
+unit-прогон; PostgreSQL, настоящая почта, browser/deploy/live — NOT RUN.
+Gofmt и diff-check — PASS LOCAL. Полный detector рабочего дерева:
+6544 source-файла, 222 исключения, 1874 raw-группы, 566 точных решений,
+1308 неразобранных; raw SHA-256
+`84286da4fa8b023633645024495452041c92bac591ccf71e1e7736a9480daeb4`,
+отпечаток `875c3a628034d35ced267cfcce9774123676d1ea9f4d11aedde6792d4efc21e9`.
+Новых/исчезнувших групп нет. Go-реестр: 4965/21067, непокрыты 16102;
+весь email-bridge — 327/481. Полный go-docs-check — NOT RUN при неполном
+покрытии; цель и PR остаются незавершёнными.
 
 ## Сто сорок пятая волна — оставшиеся совпадения Proto
 

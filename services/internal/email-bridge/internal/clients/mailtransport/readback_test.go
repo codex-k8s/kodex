@@ -14,6 +14,8 @@ import (
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 )
 
+// readbackFixture returns a synthetic pinned mail tunnel and one complete matching generation/configuration header set.
+// readbackFixture возвращает синтетический почтовый туннель с привязками и полный совпадающий набор заголовков поколения и конфигурации.
 func readbackFixture() (Tunnel, http.Header) {
 	tunnel := Tunnel{ConfigurationRevision: 7, ConfigurationDigest: strings.Repeat("b", 64), PolicyDigest: strings.Repeat("a", 64)}
 	headers := http.Header{}
@@ -31,6 +33,10 @@ func readbackFixture() (Tunnel, http.Header) {
 	return tunnel, headers
 }
 
+// TestMailReadbackRejectsBeforeProviderBytes removes, changes or duplicates every readback pin for both TLS modes using a loopback proxy.
+// The proxy must observe EOF without even a provider handshake byte; no external mailbox or egress service is contacted.
+// TestMailReadbackRejectsBeforeProviderBytes удаляет, меняет или дублирует каждую привязку для обоих TLS-режимов через локальный proxy.
+// Proxy должен получить EOF без единого байта handshake провайдера; настоящий ящик или egress-сервис не вызываются.
 func TestMailReadbackRejectsBeforeProviderBytes(t *testing.T) {
 	_, expected := readbackFixture()
 	for key := range expected {
@@ -99,6 +105,8 @@ func TestMailReadbackRejectsBeforeProviderBytes(t *testing.T) {
 	}
 }
 
+// TestMailReadbackPreservesOpaqueGreetingAndBounds preserves a valid buffered greeting and rejects oversized/malformed/body-bearing responses or stale generation pins.
+// TestMailReadbackPreservesOpaqueGreetingAndBounds сохраняет допустимое буферизированное приветствие и отвергает чрезмерные, неверные, содержащие тело ответы и устаревшие привязки.
 func TestMailReadbackPreservesOpaqueGreetingAndBounds(t *testing.T) {
 	for _, scenario := range []string{"greeting", "oversize", "malformed", "body", "old-source", "old-policy"} {
 		t.Run(scenario, func(t *testing.T) {

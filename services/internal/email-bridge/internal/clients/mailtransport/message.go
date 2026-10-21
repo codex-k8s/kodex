@@ -21,6 +21,10 @@ import (
 	"github.com/emersion/go-smtp"
 )
 
+// smtp prepares the validated mailbox's bounded TLS connection, performs configured STARTTLS before credentials and authenticates with password or OAuth bearer.
+// It returns explicit connection cleanup and maps authentication rejection separately from network or malformed-response failures.
+// smtp готовит ограниченное TLS-соединение проверенного ящика, выполняет настроенный STARTTLS до реквизитов и входит по password либо OAuth bearer.
+// Возвращается явная очистка соединения; отказ входа отделяется от сетевых ошибок и неверных ответов.
 func (p *Provider) smtp(ctx context.Context, m api.Mailbox) (*smtp.Client, func(), error) {
 	t, u, pw, e := p.material(ctx, m.Smtp)
 	if e != nil {
@@ -58,12 +62,20 @@ func (p *Provider) smtp(ctx context.Context, m api.Mailbox) (*smtp.Client, func(
 	}
 	return client, cleanup, nil
 }
+
+// Ready reduces the structured protocol probe to the domain unavailable sentinel unless SMTP and the selected receive protocol are ready.
+// Ready сводит структурированную проверку протоколов к доменному unavailable, если SMTP и выбранный протокол получения не готовы.
 func (p *Provider) Ready(ctx context.Context, m api.Mailbox) error {
 	if p.Probe(ctx, m).Status != "ready" {
 		return errs.Unavailable
 	}
 	return nil
 }
+
+// Probe checks SMTP authentication/NOOP and configured IMAP folder selection or POP authentication/NOOP, returning separate safe reasons.
+// It sends no email, does not enumerate the POP maildrop and does not prove future provider availability or recipient delivery.
+// Probe проверяет SMTP-вход и NOOP, выбор настроенных IMAP-папок либо POP-вход и NOOP, возвращая отдельные безопасные причины.
+// Письмо не отправляется, POP maildrop не перечисляется; будущая доступность провайдера и доставка получателю не доказываются.
 func (p *Provider) Probe(ctx context.Context, m api.Mailbox) api.Result {
 	report := &api.ProtocolReadiness{Smtp: api.ProtocolReadinessSmtpNotReady, Imap: api.ProtocolReadinessImapNotConfigured, Pop3: api.ProtocolReadinessPop3NotConfigured, ImapReason: healthReason(nil), Pop3Reason: healthReason(nil)}
 	c, done, err := p.smtp(ctx, m)
@@ -110,6 +122,11 @@ func (p *Provider) Probe(ctx context.Context, m api.Mailbox) api.Result {
 	}
 	return api.Result{Status: status, ProtocolReadiness: report}
 }
+
+// Send handles an already-approved send/reply/forward command, requiring source-derived reply recipients to be present and composing Bcc-free MIME headers.
+// It attempts SMTP once: pre-DATA rejections yield failed, uncertain data write/acknowledgement yields unknown, and accepted means SMTP acceptance only.
+// Send обрабатывает уже одобренную send/reply/forward-команду, требуя наличия получателей из источника ответа и собирая MIME-заголовки без Bcc.
+// SMTP выполняется один раз: отказ до DATA даёт failed, неопределённая запись или подтверждение данных — unknown, а accepted означает лишь приём SMTP.
 func (p *Provider) Send(ctx context.Context, m api.Mailbox, cmd api.Command, id string) (string, error) {
 	v := cmd.Message
 	inReplyTo := ""
@@ -194,6 +211,11 @@ func (p *Provider) Send(ctx context.Context, m api.Mailbox, cmd api.Command, id 
 	}
 	return "accepted", nil
 }
+
+// compose encodes domain-validated message fields as multipart MIME with quoted-printable text, folded base64 attachments and a receipt-derived Message-ID.
+// It enforces attachment/message byte limits and omits Bcc headers; authorization, sender policy and filename/header eligibility are caller prerequisites.
+// compose кодирует проверенные доменом поля в multipart MIME с quoted-printable текстом, переносами base64-вложений и Message-ID из квитанции.
+// Проверяются пределы вложений и сообщения, Bcc-заголовки не пишутся; полномочия, политика отправителя и допуск имён и заголовков — предпосылки вызывающего.
 func compose(m api.Mailbox, v api.MessageInput, id, inReplyTo string) ([]byte, error) {
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
@@ -253,6 +275,10 @@ func compose(m api.Mailbox, v api.MessageInput, id, inReplyTo string) ([]byte, e
 	return out.Bytes(), nil
 }
 
+// parseMessage walks MIME to depth 12, bounds decoded aggregate/attachment bytes and count, and accepts only supported text charsets and encodings.
+// It returns plain text plus base64 attachment data; syntax/size checks are not antivirus, semantic analysis or quarantine admission.
+// parseMessage обходит MIME до глубины 12, ограничивает декодированные общие байты, вложения и их число, допуская только поддержанные кодировки текста.
+// Возвращаются plain text и base64-вложения; проверки синтаксиса и размера не являются антивирусом, смысловым анализом или допуском из карантина.
 func parseMessage(raw []byte, m api.Mailbox) (api.Result, error) {
 	msg, e := mail.ReadMessage(bytes.NewReader(raw))
 	if e != nil {

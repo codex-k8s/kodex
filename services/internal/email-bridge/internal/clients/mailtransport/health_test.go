@@ -7,12 +7,19 @@ import (
 	"testing"
 )
 
+// healthReadConn supplies a synthetic byte reader behind net.Conn for status-prefix tests, without opening a socket.
+// healthReadConn задаёт синтетический reader за net.Conn для проверки префикса статуса без открытия сокета.
 type healthReadConn struct {
 	net.Conn
 	reader io.Reader
 }
 
+// Read delegates only the read operation needed by the observer test; other embedded connection methods remain unused.
+// Read передаёт только нужное тесту observer чтение; прочие встроенные методы соединения не используются.
 func (c healthReadConn) Read(p []byte) (int, error) { return c.reader.Read(p) }
+
+// TestPOPRejectionUsesOnlyExactStatusPrefix reads one byte at a time and distinguishes -ERR from -ERROR while requiring prefix cleanup after newline.
+// TestPOPRejectionUsesOnlyExactStatusPrefix читает по одному байту и различает -ERR и -ERROR, требуя очистки префикса после перевода строки.
 func TestPOPRejectionUsesOnlyExactStatusPrefix(t *testing.T) {
 	for _, tc := range []struct {
 		line     string
