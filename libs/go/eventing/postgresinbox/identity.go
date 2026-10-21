@@ -11,12 +11,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// eventRecord pins a copied envelope to its canonical digest and database ordering key.
+// eventRecord связывает копию конверта с каноническим дайджестом и ключом порядка в базе.
 type eventRecord struct {
 	Envelope    eventing.Envelope
 	Digest      [sha256.Size]byte
 	OrderingKey string
 }
 
+// newEventRecord validates bounded wire fields before deriving immutable delivery identity.
+// newEventRecord проверяет ограниченные поля wire до вычисления неизменной идентичности доставки.
 func newEventRecord(envelope eventing.Envelope) (eventRecord, error) {
 	envelope = cloneEnvelope(envelope)
 	encoded, err := envelope.Marshal()
@@ -45,16 +49,22 @@ func newEventRecord(envelope eventing.Envelope) (eventRecord, error) {
 	}, nil
 }
 
+// cloneEnvelope detaches mutable JSON data so caller edits cannot change a received record.
+// cloneEnvelope отделяет изменяемый JSON, чтобы правки вызывающего не меняли принятое событие.
 func cloneEnvelope(envelope eventing.Envelope) eventing.Envelope {
 	envelope.Data = append(json.RawMessage(nil), envelope.Data...)
 	return envelope
 }
 
+// canonicalUUID accepts only nonzero UUIDs in their exact canonical lowercase representation.
+// canonicalUUID допускает только ненулевые UUID в точном каноническом написании строчными буквами.
 func canonicalUUID(value string) bool {
 	parsed, err := uuid.Parse(value)
 	return err == nil && parsed != uuid.Nil && parsed.String() == value
 }
 
+// buildOrderingKey encodes the optional organization and aggregate identity as a bounded JSON array.
+// buildOrderingKey кодирует необязательную организацию и агрегат ограниченным JSON-массивом.
 func buildOrderingKey(envelope eventing.Envelope) (string, error) {
 	parts := []string{
 		envelope.EventName,
@@ -128,6 +138,8 @@ func operatorRequestDigest(authority OperatorAuthority, input operatorDigestInpu
 	return result
 }
 
+// writeAuthorityDigest binds server-established actor, scope, operation, and key hash in fixed order.
+// writeAuthorityDigest связывает назначенные сервером actor, область, операцию и хеш ключа в фиксированном порядке.
 func writeAuthorityDigest(hash interface{ Write([]byte) (int, error) }, authority OperatorAuthority) {
 	writeDigestPart(hash, authority.Actor)
 	writeDigestPart(hash, authority.Organization)
@@ -136,6 +148,8 @@ func writeAuthorityDigest(hash interface{ Write([]byte) (int, error) }, authorit
 	_, _ = hash.Write(authority.KeyHash[:])
 }
 
+// writeDigestPart length-prefixes each string to prevent ambiguous digest concatenation.
+// writeDigestPart добавляет длину перед строкой, исключая неоднозначное склеивание дайджеста.
 func writeDigestPart(buffer interface{ Write([]byte) (int, error) }, value string) {
 	var size [8]byte
 	binary.BigEndian.PutUint64(size[:], uint64(len(value)))
@@ -143,11 +157,15 @@ func writeDigestPart(buffer interface{ Write([]byte) (int, error) }, value strin
 	_, _ = buffer.Write([]byte(value))
 }
 
+// sameDigest compares two complete SHA-256 digests and rejects truncated evidence.
+// sameDigest сравнивает два полных SHA-256 дайджеста и отклоняет усечённые данные.
 func sameDigest(left, right []byte) bool {
 	return len(left) == sha256.Size && len(right) == sha256.Size &&
 		bytes.Equal(left, right)
 }
 
+// sameOrderingKey compares decoded JSON components rather than their textual whitespace.
+// sameOrderingKey сравнивает разобранные компоненты JSON, а не текстовые пробелы.
 func sameOrderingKey(left, right string) bool {
 	var leftParts []string
 	var rightParts []string
@@ -168,6 +186,8 @@ func sameOrderingKey(left, right string) bool {
 	return true
 }
 
+// validOrderingKey rejects malformed, empty, or oversized three- and four-part keys.
+// validOrderingKey отклоняет неверные, пустые или слишком длинные ключи из трёх или четырёх частей.
 func validOrderingKey(value string) bool {
 	var parts []string
 	if err := json.Unmarshal([]byte(value), &parts); err != nil ||
