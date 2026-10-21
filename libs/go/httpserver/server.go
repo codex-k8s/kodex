@@ -29,6 +29,18 @@ type Config struct {
 	MaximumConnections int
 }
 
+// StandardProcessConfig returns the identical bounded technical-listener budgets shared by
+// small gateway and worker processes; callers still choose the address and own Listen/Serve/Shutdown.
+// RU: StandardProcessConfig возвращает одинаковые ограниченные бюджеты технического listener для
+// небольших gateway и workers; адрес и жизненный цикл Listen/Serve/Shutdown остаются у вызывающего.
+func StandardProcessConfig(address string) Config {
+	return Config{
+		Address: address, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
+		WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second,
+		MaximumHeaderBytes: 32 << 10, MaximumConnections: 128,
+	}
+}
+
 // Readiness exposes a precomputed local snapshot; a Kubernetes probe must not
 // trigger external I/O or recompute dependency health through this interface.
 // Readiness предоставляет готовый локальный снимок; Kubernetes probe не должен

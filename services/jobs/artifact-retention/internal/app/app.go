@@ -66,10 +66,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
-	technical, err := httpserver.New(httpserver.Config{
-		Address: config.TechnicalListen, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
-		WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 32 << 10, MaximumConnections: 128,
-	}, readiness, metrics.PrometheusHandler())
+	technical, err := httpserver.New(httpserver.StandardProcessConfig(config.TechnicalListen), readiness, metrics.PrometheusHandler())
 	if err != nil {
 		pool.Close()
 		return err

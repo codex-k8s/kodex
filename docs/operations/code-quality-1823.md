@@ -1704,6 +1704,37 @@ PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
 
+## Сто пятнадцатая волна — единый технический HTTP-профиль
+
+На опубликованном SHA `6540f5120496998762b92c19679079d64c26657c`
+анализ насчитал 6532 собственных файла, 222 исключения, 1883 raw-группы,
+551 адресное решение и 1332 неразобранных; Go-реестр: 3500/21051,
+непокрыты 17551. Четыре независимых deployable использовали одинаковый
+ограниченный `httpserver.Config`. Теперь `libs/go/httpserver` предоставляет
+`StandardProcessConfig`: он задаёт только те же тайм-ауты и лимиты, а адрес,
+готовность и владение lifecycle по-прежнему остаются у каждого процесса.
+Тест закрепляет значения каждого поля и совместимость с `New`. Это не общий
+composition root и не перенос authority либо порядка запуска/остановки.
+
+На рабочем дереве detector: 6532 собственных файла, 222 исключения, 1882
+raw-группы, 551 адресное решение, 1331 неразобранная; сырой SHA-256 —
+`181375009ecbef674986c5cf0b18fdc07474e77630492d4242f7a8b2139ad2ca`,
+отпечаток набора —
+`440668b299cf74f91813e9d548ca1f698524209bbc55d54dc79866ceac02e5d0`.
+Go-реестр: 3502/21053, непокрыты 17551; оба новых объявления получили
+предметные EN→RU комментарии. `go test -count=1 ./...` и `go build ./...`
+модулей `libs/go/httpserver`, `services/jobs/automation-scheduler`,
+`services/jobs/artifact-retention`, `services/external/integration-gateway` —
+PASS LOCAL. Для `services/external/interaction-gateway` `go build ./...` и
+`go test -count=1 ./internal/app` — PASS LOCAL; полный `go test -count=1
+./...` — FAIL: два теста `internal/mattermost` отвергают fixture как
+`managed fixture exceeded executable baseline` и `integration package
+capability is invalid`. Изменён только `internal/app/app.go`; эти отказы
+не выданы за результат HTTP-рефакторинга или за PASS. `gofmt` и
+`git diff --check` — PASS LOCAL. Полный `go-docs -check`, component,
+browser/deploy/live — NOT RUN по границе задачи. После коммита потребуется
+точный scan нового SHA.
+
 ## Сто четырнадцатая волна — документация automation scheduler
 
 На точном опубликованном SHA `87a1b44156dc2db41452800635b1d7025b1d0a7a`

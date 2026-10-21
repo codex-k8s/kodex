@@ -4,8 +4,8 @@ title: Технический HTTP server
 type: component
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-10-21
 ---
 
 # `httpserver`
@@ -18,8 +18,12 @@ updated: 2026-08-23
 скрывает goroutine. Владелец процесса передаёт handler метрик, предикат
 готовности и отдельно вызывает ограниченный `Shutdown`.
 
-Публичный API состоит из `New`, `ExactGETRoute`, `Listen`, блокирующего `Serve`
-и `Shutdown`.
+Публичный API состоит из `New`, `StandardProcessConfig`, `ExactGETRoute`,
+`Listen`, блокирующего `Serve` и `Shutdown`. `StandardProcessConfig` возвращает
+одинаковые лимиты для небольших gateway/job: 2 с на заголовки, 5 с на чтение
+и запись, 30 с простоя, 32 КиБ заголовков и 128 соединений. Он не открывает
+socket и не выбирает адрес за вызывающего; другие компоненты могут передать
+собственный `Config`.
 `Listen` резервирует socket после startup barrier, а goroutine и порядок
 cancel/join принадлежат composition root. Конфигурация закрыто ограничивает
 read-header/read/write/idle timeouts и размер headers; маршруты принимают

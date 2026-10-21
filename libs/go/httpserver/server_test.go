@@ -11,6 +11,23 @@ import (
 // readyStub предоставляет неизменную готовность без I/O к зависимостям.
 type readyStub struct{}
 
+// TestStandardProcessConfigPinsBudgets checks the shared preset field by field and verifies
+// that New accepts it without opening a listener or contacting a dependency.
+// RU: TestStandardProcessConfigPinsBudgets по полям проверяет общий профиль и подтверждает,
+// что New принимает его без открытия listener и обращения к зависимости.
+func TestStandardProcessConfigPinsBudgets(t *testing.T) {
+	config := StandardProcessConfig("127.0.0.1:0")
+	if config.Address != "127.0.0.1:0" || config.ReadHeaderTimeout != 2*time.Second ||
+		config.ReadTimeout != 5*time.Second || config.WriteTimeout != 5*time.Second ||
+		config.IdleTimeout != 30*time.Second || config.MaximumHeaderBytes != 32<<10 ||
+		config.MaximumConnections != 128 {
+		t.Fatalf("standard process budgets changed: %+v", config)
+	}
+	if _, err := New(config, readyStub{}, http.NotFoundHandler()); err != nil {
+		t.Fatalf("standard process config rejected: %v", err)
+	}
+}
+
 // Ready returns deterministic synthetic readiness for handler registration tests.
 // Ready возвращает устойчивую синтетическую готовность для тестов регистрации.
 func (readyStub) Ready() (bool, string) { return true, "ready" }
