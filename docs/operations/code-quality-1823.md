@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.235.0
+version: 1.236.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,63 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцать шестая волна — owner adapter и recovery cursor
+
+Опубликованный SHA235 — `20707c1250317a170c8b57b71ee1995e41192e73`.
+Точный 2KoBDA:6587 sources,222 excluded,1823 raw,597 retained,
+1226 unresolved; Go9440/21196, missing11756. Raw SHA256:
+`6f559d52dde69b022b5276b19cad67b4913584d0ea556fe8b8deec3cc0df704f`.
+Clone-set:
+`b413e1434acf4250c9dab613c71f7e28af7fd560cbab827898600203221af9e1`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA235 guard/crypto16/52,
+app composition1/9 и полная сборка secret-broker PASS,0 FAIL/SKIP.
+
+Полностью прочитаны4 файла internal/controlplane485 строк и recoverycursor/
+cycle.go.39/39 declarations и package comment получили EN→RU пояснения.
+AST5 идентичен SHA235 без comments/token.Pos. Только comments/gofmt:
+RPC statements, page budget/cursor algorithm, authority и lifecycle не менялись.
+GO-DOC-001/003 и GUIDE-DOC-003/006 остаются неизменными с прочитанного состояния.
+
+Owner — adapter защищённого клиента, не новый authority. Consume/Complete/
+Fail используют прежний stable configured claimant; FailExpiredClaim сохраняет
+original expired claimant/fence, а не identity нового Pod. Complete требует
+nonnull Secret, не объявлен полной metadata verification. Failure receipt
+сверяется лишь по существующим operation/state/code. Projection validation
+сохраняет три denial codes как false/nil, остальные errors не очищает.
+Renewal wrappers требуют authorized/eligible response без unknown fields;
+optional route readiness не приписана конструктору.
+
+ListRecoveryWork сериализует только reader path;100 items×10 pages и10s
+включают ожидание slot. После получения slot ошибка отбрасывает partial result
+и сбрасывает cursor/cycle; отмена до получения slot не меняет их.
+Эта тонкость отражена в финальном комментарии, не исправлена runtime-патчем.
+Уникальность ref и page/token shape не выданы за full item eligibility.
+Cursor — hint обхода: batch budget сохраняет progress, wrap возвращает
+незавершённые authoritative claims. Cycle хранит один anchor/window/distance,
+caller сериализует и проверяет token; lexical order/authority/terminal
+он не назначает. Reset освобождает string reference, не стирает память token.
+
+Unit `./internal/controlplane ./internal/recoverycursor ./internal/integration/draftowner`:
+15 верхних/38 всех PASS,0 FAIL/SKIP. Go1.26.6, GOENV/GOWORK off,
+GOMAXPROCS=4, `go test -mod=readonly -count=1 -timeout 120s -json`.
+Полная сборка secret-broker `go build -mod=readonly ./...` PASS LOCAL.
+Существующие tests действительно проверяют forwarded claimant/fences,
+страницы2101→1000/1000/101→wrap, malformed/cyclic pagination и bounded waiting
+cancellation; fake RPC не доказывает живую authentication/claims.
+17 Node units и Go checker unit повторно PASS LOCAL.
+
+Scope39/39, AST identity5, gofmt/diff-check, assessment и5 addressed ignores
+PASS LOCAL. Финальный рабочий v4Ft47:6587 sources,222 excluded,1823 raw,
+597 retained,1226 unresolved; Go9479/21196, missing11717. Raw SHA256:
+`7265d2e6aeae6f798301592426dc4ab3b8c1d644f3cd8461617ab59190c10df5`.
+Clone-set b413e143...; multiset fragment/path/count и registry неизменны.
+Первый T6KPfa scan до уточнения comment о reader slot не используется
+как финальный source snapshot. Точный post-commit scan/unit/build
+публикуются в том же Draft PR. Основной clone main остаётся чистым.
+Задача не завершена:11717 declarations/1226 групп ещё учитываются.
+Исторические FAIL/SKIP/NOT RUN сохранены; full acceptance/browser/live/
+deploy/ИИ/STT/почта NOT RUN согласно scoped решению.
 
 ## Двести тридцать пятая волна — устойчивый key-use guard
 

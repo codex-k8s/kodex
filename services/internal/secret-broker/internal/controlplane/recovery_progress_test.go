@@ -13,6 +13,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// runtimeRecoveryPages supplies ordered synthetic recovery items or a forced reply and records first
+// cursor/call count for budget/continuation tests.
+// runtimeRecoveryPages предоставляет ordered synthetic recovery items либо forced reply и записывает first
+// cursor/call count для budget/continuation tests.
 type runtimeRecoveryPages struct {
 	fakeRuntimeSecretClient
 	operations []*cp.RuntimeSecretRecoveryWork
@@ -21,6 +25,10 @@ type runtimeRecoveryPages struct {
 	calls      int
 }
 
+// ListRuntimeSecretRecoveryWork checks cancellation and serves items lexically after the request cursor,
+// emitting a continuation at page capacity or the configured forced response.
+// ListRuntimeSecretRecoveryWork проверяет cancellation и выдаёт items лексикографически после request
+// cursor, формируя continuation при page capacity либо настроенный forced response.
 func (client *runtimeRecoveryPages) ListRuntimeSecretRecoveryWork(ctx context.Context, request *cp.ListRuntimeSecretRecoveryWorkRequest, _ ...grpc.CallOption) (*cp.ListRuntimeSecretRecoveryWorkResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -46,6 +54,10 @@ func (client *runtimeRecoveryPages) ListRuntimeSecretRecoveryWork(ctx context.Co
 	return response, nil
 }
 
+// TestRuntimeSecretRecoveryAdvancesPastBudgetWithoutLosingClaims traverses 2101 retained synthetic items
+// as 1000/1000/101, then verifies wraparound revisits unfinished claims rather than dropping them.
+// TestRuntimeSecretRecoveryAdvancesPastBudgetWithoutLosingClaims обходит 2101 retained synthetic items как
+// 1000/1000/101 и проверяет wraparound с повторным посещением unfinished claims, не их потерей.
 func TestRuntimeSecretRecoveryAdvancesPastBudgetWithoutLosingClaims(t *testing.T) {
 	client := &runtimeRecoveryPages{}
 	for index := range 2101 {
@@ -78,6 +90,10 @@ func TestRuntimeSecretRecoveryAdvancesPastBudgetWithoutLosingClaims(t *testing.T
 	}
 }
 
+// TestRuntimeSecretRecoveryRejectsInvalidCursorAndCancelsWaitingReader rejects unchanged/NUL/oversized
+// cursors without partial work and requires deadline cancellation while another reader holds the slot.
+// TestRuntimeSecretRecoveryRejectsInvalidCursorAndCancelsWaitingReader отклоняет unchanged/NUL/oversized
+// cursors без partial work и требует deadline cancellation при занятом reader slot.
 func TestRuntimeSecretRecoveryRejectsInvalidCursorAndCancelsWaitingReader(t *testing.T) {
 	for _, token := range []string{"same", "bad\x00cursor", strings.Repeat("x", 513)} {
 		client := &runtimeRecoveryPages{response: &cp.ListRuntimeSecretRecoveryWorkResponse{
