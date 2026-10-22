@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.262.0
+version: 1.263.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,44 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят третья волна — закрытый словарь типизированных команд
+
+Опубликованный SHA262 — `3603a99c3643c997a27c28731acd67a275c54cf1`.
+Точный OXq6b3:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go11297/21233, missing9936. Raw SHA256:
+`d18a6598b0cc2797c32d28087dcf72a24995d5d8bfcd0c11ac119a6890c20f96`.
+Clone-set:
+`0f8f3355ad011e09c95b2680d610405762da26f27418368bdcb1a17f7cb323f2`.
+Unit/build на этом SHA, push/readback и Draft PR PATCH/GET262 подтверждены.
+
+Полностью прочитан656-строчный domain/types/command/command.go и связанные
+окна service Execute/executeResolved, gRPC Execute и repository replay.
+Все284 объявления (206 command constants и78 types), package comment и
+внутреннее пояснение ExecutionDeadlineExpired описаны EN→RU. Комментарии
+различают command intent, version/digest/lease pins, проверенные полномочия
+и owner-side переходы. Объединённый Result не объявлен exclusive union либо
+безопасным публичным JSON; SafeParameters не назван механизмом redaction.
+Worker success/retryable/unknown outcome не выдают права terminal/retry,
+запись tool-call не разрешает его исполнение, title не является user prompt.
+Prepared artifact receipt требует проверки, имя файла не задаёт путь на узле.
+Отдельные mail configuration, send approval и reconciliation не смешаны.
+
+AST без комментариев идентичен SHA262: один файл, поля, значения constants,
+JSON tags, imports и исполняемые выражения неизменны. Scope checker284/284.
+В рабочем nqYx6k:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go11581/21233, missing9652. Raw SHA256:
+`2f912d1e7771ebce88c209904708ba6338bafc28504506c2e07378f731874425`.
+Clone-set прежний; ни одна группа или запись retained registry не изменена.
+
+Выбранные unit repository/...+types/...+grpc+roleimage —102 верхних/278 всех
+PASS,0 FAIL; три существующих disposable/fixture SKIP остаются SKIP.
+Полный CP build -p=2,17 Node units, Go checker unit,284/284 docs, AST1,
+canonical scan,5 ignore boundaries, gofmt и diff-check — PASS LOCAL.
+После коммита эти команды повторяются на точном SHA с readback в том же PR.
+Полный docs-check остаётся FAIL по9652 непокрытым объявлениям; общая задача
+не завершена. Browser/live/deploy/component/full acceptance — NOT RUN
+согласно границам задачи; предыдущие FAIL не переобозначены как PASS.
 
 ## Двести шестьдесят вторая волна — transport-neutral repository port
 
