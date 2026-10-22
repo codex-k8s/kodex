@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.280.0
+version: 1.281.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,68 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят первая волна — общий upload digest и closed lists
+
+Опубликованный SHA280 — `63b2e1ecae263b0528299934ea7d9bbfa2ce4e27`.
+Точный yrFvA7:6609 sources,222 excluded,1821 raw/666 retained/
+1155 unresolved; Go12271/21244,missing8973. Raw SHA256:
+`0515961415642ede5cda9f729b106adb63dfa0e30be270bc889bdf0ef1a3d404`;
+clone-set95e2ca1a… . Exact platform service22/43, CP build -p=2,
+docs138/138, AST1/tooling/scan PASS LOCAL,0 FAIL/SKIP; push/readback и
+Draft PR PATCH/GET280 подтверждены. Comment-only delta:21 keys→26,
+1795 остальных прежние, не5 новых algorithms.
+
+Из UploadArtifact и UploadAgentAvatar вынесен одинаковый algorithm
+seek(0)→bounded hash→exact length→optional exact digest в private
+platform/hashUploadContent. Caller-owned authorization/input limits,
+разные maximum bytes, artifactpolicy inspect и avatar MIME/CLEAN/AVAILABLE,
+финальный rewind и mutation intent/persistence остались на прежних местах.
+Helper не проверяет authority, не закрывает reader, не выполняет AV/model
+scan и не делает нового rewind после hash; nonnil/size/maximum preconditions
+сохраняются у callers. Ошибки seek/read/length/digest — прежний ErrInvalid,
+actual digest — прежний sha256:lowercase-hex. Новых dependencies нет.
+
+Inverse AST3 восстанавливает весь service.go SHA280 и сравнивает helper
+с обоими прежними blocks после подстановки exact caller limits/types.
+Новые5/5 declarations helper/probe/unit описаны EN→RU, плюс2 local golden
+constants, не входящих в checker denominator. Combined3 files143/143.
+16 unit cases проверяют empty/ASCII/binary literal vectors, length bounds,
+exact ceiling/one extra byte, supplied digest/prefix/case, initial rewind,
+seek refusal before Read, partial-data read error и отсутствие final rewind.
+Probe in-memory, binary vector независимо сверён Node crypto; это не real
+file-store/ClamAV/transport acceptance. Весь platform service23 верхних/
+60 всех unit и полный CP build -p=2 PASS LOCAL,0 FAIL/SKIP.
+Context7/golang/go и pinned1.26.6 io.Copy/LimitReader semantics сверены.
+
+Отдельно прочитаны все18 окон service knownCommand versus gateway authority
+test FullMethodName array и PostgreSQL managed-config dispatch subset.
+Это разные typed lists/предикаты:exact RPC profile и project flags,
+вхождение в полный поддерживаемый command.Kind набор и выбор effect adapter
+в owner transaction. Сам список констант не общий algorithm; новый generic
+registry/router для пересекаемых detector slices не вводится.4 exact
+path/fragment/count reasons покрывают15+1+1+1 occurrences, не функции или
+файлы целиком. Два других source files byte-identical.31 residual service
+window всё ещё unresolved и не скрыто этим решением.
+
+Первый builder остановился до изменения registry:один fragment hash также
+встречается в другой gateway self-pair. Выбор уточнён полными target paths,
+а не hash-only; прежние562 entries неизменны. Теперь566/684 occurrences.
+Выбранные2 существующих gateway authority-profile units PASS,0 FAIL/SKIP;
+это synthetic operation-map checks, не real signed RPC или SSO proof.
+17 Node/Go checker units, docs/AST/clone proof,5 ignores и diff-check PASS.
+
+Рабочий tyt1Kb:6611 sources,222 excluded,1820 raw/684 retained/
+1136 unresolved; Go12276/21249,missing8973. Удалена ровно1 raw119-token
+hash copy,1820 остальных keys/counts неизменны, новых нет. Raw SHA256:
+`6781abd91b33c8c6850b2d8d86a7a9aa09c8422e240e37b18c62ad67b2c67fff`;
+clone-set:
+`0fde05d27d4600926209223d239f6a67d620a8844e17641b7e894507973b6a83`.
+Assessment rerun после registry updates подтверждён. После коммита exact
+scan/unit/build и PR readback повторяются. Contracts, applied migrations,
+generated и live state не менялись. Общая задача не завершена; прежние
+diagnostics/STT FAIL остаются, full baseline/component/browser/live/deploy
+NOT RUN по scoped границам.
 
 ## Двести восьмидесятая волна — основной сервис control-plane
 

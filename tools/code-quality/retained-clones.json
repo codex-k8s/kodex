@@ -4496,6 +4496,38 @@
       "fragmentSHA256": "eab2ff7ed64e78071877c9737978b6c8998d54c96e234e1fd378e944989b366b",
       "count": 1,
       "reason": "Точное1489-token окно сохраняет общий конец STT issuer, STT verifier и email-bridge в обоих profiles; extended snapshot после него содержит перенесённый session-archive и отдельный interaction target раньше. Все16 common records проверены структурно идентичными, но весь набор и raw byte digest различаются. Это намеренный повтор closed deployment data для самостоятельных flat snapshots, а не два runtime implementation. Без изменения loader/schema или введения нового byte generator нельзя подключить внешний chunk стандартным YAML include. Сохранён лишь этот exact hash/count1; schema, manifests и runtime policy не изменены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/app/context_authority_operations_test.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "7d04afd108b5186ad0029d08121a05f86052efa1d75b9875a53b111f84e6fc2f",
+      "count": 15,
+      "reason": "Прочитаны все15 окон knownCommand и полный массив gateway test FullMethodName. Detector type-2 сравнивает последовательности разных констант: тест проверяет exact RPC→operation profile и project scope, а service registry распознаёт command.Kind перед отдельной payload/owner проверкой. Наборы имеют разные типы, состав и назначение; общий список связал бы gateway proof fixture с поддержкой доменных команд без общего алгоритма. Сохранены только эти15 exact fragment/path occurrences, не функция/файл целиком и не проверка полномочий."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/app/context_authority_operations_test.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "ca36b877f957f46c8cdeb6c787595318053b10d87520929a3196f07a6292d6e0",
+      "count": 1,
+      "reason": "Это отдельное хвостовое окно того же явно прочитанного gateway FullMethodName fixture и knownCommand case list, без последней строки первого fragment. Повтор формы typed constants после переименования не является общей operation mapping: fixture утверждает RPC authority/project profile, service принимает собственный закрытый command.Kind набор. Вынос в одну таблицу не сохранял бы самостоятельные типы/наборы этих слоёв без новой метамодели. Исключена только одна точная пара/fragment, остальные окна остаются видимыми."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "fragmentSHA256": "2e6c986515eca81e5ae193c03d2c56b4bf6df8051af8ffef14e13a826a7c125b",
+      "count": 1,
+      "reason": "Окно service knownCommand и PostgreSQL command dispatch содержит похожие списки command.Kind, но разные предикаты: принадлежность всему поддерживаемому API против выбора changeManagedConfiguration внутри уже открытой owner transaction. Dispatch subset включает отдельную PreparePromptTemplateImpact и передаёт tx/scope/input; boolean registry этого не исполняет. Общий dispatcher/список для произвольного detector slice смешал бы разные группы и слои без выноса алгоритма. Сохранена только данная exact пара constant-list fragment, не разрешение generic command execution."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "fragmentSHA256": "f737c88ed13ae20541f31c6d362d3aff8d06beabf812bb9696a993c0d11a7d0d",
+      "count": 1,
+      "reason": "Прочитано хвостовое совпадение knownCommand с managed-configuration dispatch: service case продолжается mailbox bind/unbind и возвращает true, repository case завершает иной subset вызовом changeManagedConfiguration(ctx,tx,scope,input). Это явная typed маршрутизация двух уровней, а не общий effect implementation. Новая таблица маршрутов ради пересекающихся имён потребовала бы отдельного контракта групп; здесь нецелесообразна. Исключена ровно одна exact fragment/path пара, guards/default отказ и другие dispatch ветви не скрыты."
     }
   ]
 }

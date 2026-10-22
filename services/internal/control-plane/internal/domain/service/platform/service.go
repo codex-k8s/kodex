@@ -1065,17 +1065,9 @@ func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, m
 		(strings.TrimSpace(input.ProjectRef) == "" && strings.TrimSpace(input.RunRef) != "") {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
-	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
-		return entity.Artifact{}, errs.ErrInvalid
-	}
-	contentDigest := sha256.New()
-	written, err := io.Copy(contentDigest, io.LimitReader(input.Reader, repository.MaximumArtifactBytes+1))
-	if err != nil || written != input.SizeBytes {
-		return entity.Artifact{}, errs.ErrInvalid
-	}
-	actualDigest := "sha256:" + hex.EncodeToString(contentDigest.Sum(nil))
-	if input.Digest != "" && input.Digest != actualDigest {
-		return entity.Artifact{}, errs.ErrInvalid
+	actualDigest, err := hashUploadContent(input.Reader, input.SizeBytes, repository.MaximumArtifactBytes, input.Digest)
+	if err != nil {
+		return entity.Artifact{}, err
 	}
 	input.Digest = actualDigest
 	verdict, err := artifactpolicy.InspectReader(input.FileName, input.MediaType, input.Reader, input.SizeBytes)
@@ -1110,17 +1102,9 @@ func (service *Service) UploadAgentAvatar(ctx context.Context, p value.Principal
 		input.ExpectedVersion < 1 || input.SizeBytes < 1 || input.SizeBytes > 5<<20 || input.Reader == nil {
 		return entity.Agent{}, errs.ErrInvalid
 	}
-	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
-		return entity.Agent{}, errs.ErrInvalid
-	}
-	contentDigest := sha256.New()
-	written, err := io.Copy(contentDigest, io.LimitReader(input.Reader, 5<<20+1))
-	if err != nil || written != input.SizeBytes {
-		return entity.Agent{}, errs.ErrInvalid
-	}
-	actualDigest := "sha256:" + hex.EncodeToString(contentDigest.Sum(nil))
-	if input.Digest != "" && input.Digest != actualDigest {
-		return entity.Agent{}, errs.ErrInvalid
+	actualDigest, err := hashUploadContent(input.Reader, input.SizeBytes, 5<<20, input.Digest)
+	if err != nil {
+		return entity.Agent{}, err
 	}
 	input.Digest = actualDigest
 	verdict, err := artifactpolicy.InspectReader(input.FileName, input.MediaType, input.Reader, input.SizeBytes)
