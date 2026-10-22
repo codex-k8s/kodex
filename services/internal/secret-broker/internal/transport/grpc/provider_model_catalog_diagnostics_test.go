@@ -10,6 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
 )
 
+// TestCatalogDiagnosticLogHasClosedFieldsOnly accepts logs only for known failure enums with fixed
+// message/normalized stage, requiring one five-field JSON record and no synthetic model/source payload.
+// TestCatalogDiagnosticLogHasClosedFieldsOnly допускает logs лишь для known failure enums с fixed
+// message/normalized stage, требуя один пятикомпонентный JSON record без synthetic model/source payload.
 func TestCatalogDiagnosticLogHasClosedFieldsOnly(t *testing.T) {
 	for _, failure := range []providercredential.ModelCatalogFailure{
 		providercredential.CatalogFailureNone, providercredential.CatalogFailureUnavailable,

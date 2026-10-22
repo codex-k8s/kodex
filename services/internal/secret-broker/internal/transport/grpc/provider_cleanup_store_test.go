@@ -19,8 +19,18 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// unusedCleanupAppServer embeds an unconfigured AppServer so cleanup tests cannot silently start device
+// login or provider-model operations.
+// unusedCleanupAppServer содержит ненастроенный AppServer, чтобы cleanup tests не могли незаметно
+// запустить device login и provider-model operations.
 type unusedCleanupAppServer struct{ providercredential.AppServer }
 
+// TestProviderCleanupStoreServiceTransportDistinguishesLostWriteACK runs real store/service/transport over
+// a fake tracker, separating pre-write CAS refusal from a committed update with lost ACK and checking
+// exact retry recovers without fabricating no-effect details.
+// TestProviderCleanupStoreServiceTransportDistinguishesLostWriteACK выполняет реальные
+// store/service/transport над fake tracker, различая pre-write CAS refusal и committed update с lost ACK,
+// и проверяет exact retry recovery без выдуманных no-effect details.
 func TestProviderCleanupStoreServiceTransportDistinguishesLostWriteACK(t *testing.T) {
 	for _, lostACK := range []bool{false, true} {
 		client := fake.NewSimpleClientset()

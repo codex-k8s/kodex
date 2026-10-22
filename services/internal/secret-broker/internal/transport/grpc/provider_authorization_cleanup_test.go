@@ -11,6 +11,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// authorizationCleanupMaterializer is a programmable metadata/cleanup stub recording typed target,
+// recovery identity and call counts; it does not fence or delete real objects.
+// authorizationCleanupMaterializer — programmable metadata/cleanup подмена, записывающая typed target,
+// recovery identity и счётчики; реальные объекты не ограждает и не удаляет.
 type authorizationCleanupMaterializer struct {
 	cleanupProviderCredentialMaterializerStub
 	target            kubernetesstore.ProviderAuthorizationCleanupTarget
@@ -19,17 +23,31 @@ type authorizationCleanupMaterializer struct {
 	observed, cleaned int
 }
 
+// ObserveAuthorizationCleanup records the target and returns configured metadata without polling device
+// authorization or executing storage work.
+// ObserveAuthorizationCleanup записывает target и возвращает настроенные metadata без device authorization
+// polling и storage work.
 func (stub *authorizationCleanupMaterializer) ObserveAuthorizationCleanup(_ context.Context, target kubernetesstore.ProviderAuthorizationCleanupTarget) (kubernetesstore.ProviderAuthorizationCleanupObservation, error) {
 	stub.target, stub.observed = target, stub.observed+1
 	return stub.observation, nil
 }
 
+// CleanupAuthorizationWithRecovery records the exact target/origin and returns a programmed receipt
+// without enforcing real CAS or owner authority.
+// CleanupAuthorizationWithRecovery записывает exact target/origin и возвращает настроенный receipt без
+// реальных CAS и owner authority checks.
 func (stub *authorizationCleanupMaterializer) CleanupAuthorizationWithRecovery(_ context.Context, target kubernetesstore.ProviderAuthorizationCleanupTarget, recovery kubernetesstore.ProviderCleanupRecoveryIdentity) (kubernetesstore.ProviderCredentialCleanupResult, error) {
 	stub.target, stub.cleaned = target, stub.cleaned+1
 	stub.recovery = recovery
 	return stub.result, nil
 }
 
+// TestAuthorizationCleanupHandlerStrictTargetAndProducedReceipt checks pending/absence target forwarding,
+// recovery-origin fields and produced descriptors, then rejects mixed/unknown/foreign targets before a
+// second materializer call.
+// TestAuthorizationCleanupHandlerStrictTargetAndProducedReceipt проверяет pending/absence target
+// forwarding, recovery-origin fields и produced descriptors, затем отклоняет mixed/unknown/foreign targets
+// до повторного materializer call.
 func TestAuthorizationCleanupHandlerStrictTargetAndProducedReceipt(t *testing.T) {
 	t.Parallel()
 	pending := &cp.ProviderAuthorizationObjectDescriptor{AccountRef: "pacc_cleanup123456", AuthorizationAttemptRef: "pauth_cleanup123456",
@@ -95,6 +113,12 @@ func TestAuthorizationCleanupHandlerStrictTargetAndProducedReceipt(t *testing.T)
 	}
 }
 
+// TestAuthorizationCleanupMetadataHandlerNeverReturnsPollingState exercises present/absent/fenced metadata
+// and requires exclusive object descriptors without poll state, account diagnostics or caller UID,
+// rejecting mixed/unknown poll modes.
+// TestAuthorizationCleanupMetadataHandlerNeverReturnsPollingState проверяет present/absent/fenced metadata
+// и exclusive object descriptors без poll state, account diagnostics и caller UID, отклоняя mixed/unknown
+// poll modes.
 func TestAuthorizationCleanupMetadataHandlerNeverReturnsPollingState(t *testing.T) {
 	t.Parallel()
 	target := kubernetesstore.ProviderAuthorizationCleanupTarget{TaskRef: "pcct_cleanup123456", AccountRef: "pacc_cleanup123456",

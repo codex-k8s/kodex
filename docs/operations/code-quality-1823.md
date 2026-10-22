@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.240.0
+version: 1.241.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,86 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок первая волна — provider RPC и общий transport diagnostic
+
+Опубликованный SHA240 — `239b6e8ebb963ca65ffaa20872e2041f82078765`.
+Точный aeGGmT:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9704/21196, missing11492. Raw SHA256:
+`d2e6d09ae513f440722e919723efc5dbe90a62130eaa040390926bb043d22990`.
+Clone-set:
+`7436f30828050d32b9f9fb5f929d26c884c27dba169e1da00b6cd6c4ebf85204`.
+Push/readback и Draft PR PATCH/GET подтверждены; на SHA240 полный
+grpc/caster36/165 и сборка secret-broker PASS,0 FAIL/SKIP.
+
+Все11 оставшихся provider/cleanup/catalog/renewal/scoped-operation файлов
+transport полностью прочитаны1373 строки.61 прежнее declaration и одна
+новая diagnostic constant описаны EN→RU; также описан local receipt fixture.
+Теперь весь transport/caster —239/239 declarations в22 файлах.
+Generated, contracts, dependencies и предыдущие retained entries не менялись.
+
+Семь одинаковых public diagnostic literals в provider_credentials.go
+вынесены в приватную providerMaterializerUnavailableMessage. Это минимальная
+общая область для missing capability и прежнего fallback, не новая библиотека/
+generic error mapper. Значение и codes.Unavailable всех7 callsites прежние.
+Inverse удаляет только новое constant declaration и разворачивает7 refs:
+AST11 файлов совпал с SHA240 без comments/token.Pos.
+Остальные10 файлов имеют прямую AST identity. Скрипт отдельно проверяет
+ровно7 ожидаемых status.Error uses. Число raw clone groups не уменьшилось:
+повтор короткой строки ниже detector threshold не выдаётся за закрытую группу.
+
+Описаны раздельные metadata-only/POLL mode и credential/pending/absence
+cleanup targets с original recovery identity. Wrapper не назначает
+task authority и не доказывает receipt provenance сам; это responsibility
+materializer/owner. API-key wrapper очищает свою private copy, не исходный
+request slice. CAS-snapshot-changed sentinel даёт один fixed ErrorInfo,
+generic conflict/unknown outcome/совпавший untrusted text — нет.
+Lost committed write не назван no-effect receipt.
+
+Catalog требует exact admission либо ABI/unary/request-digest proof,
+known request/descriptor shape, bounded task/proof/15s deadline и
+valid response time/source/encoded size. Это не per-model semantic validator.
+Diagnostic stage проверен по закрытому DiagnosticStage switch, payload/model
+и unknown failure не логируются. Renewal identity хеширует normalized Renew
+envelope, authority связывает concrete request: это разные digests.
+Renew перед seed read вызывает fresh owner authorization с earliest
+proof/task/35s deadline; observation отдельно проверяет owner read eligibility
+и ограничивается proof/10s, не старым immutable task expiry.
+UNKNOWN_OUTCOME сохраняется отдельным состоянием без автоматического retry.
+
+Context7 /grpc/grpc-go и pinned implementation go doc сверены для
+Status.WithDetails/ErrorInfo. Public alias method lookup go doc не разрешил
+метод, поэтому прочитан pinned internal alias target; imports/runtime SDK
+не менялись. Предыдущие protobuf deterministic caveats сохраняются.
+
+Полный unit `./internal/transport/grpc/...` после выноса:
+36 верхних/165 всех PASS,0 FAIL/SKIP; полная сборка
+`go build -mod=readonly ./...` PASS LOCAL.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4,
+`go test -mod=readonly -count=1 -timeout 120s -json`.
+Первый comment-only прогон был тоже36/165, не подменяет повтор после constant.
+
+Units реально проверяют strict target/origin, metadata-vs-poll refusal,
+request binding/peer/authority gate, fixed errors/closed log fields,
+scoped immediate operations и CAS rejection против committed lost write ACK
+на fake tracker с настоящими store/service/transport.
+Catalog peer использует synthetic TLSInfo, не настоящий handshake/signature.
+Отдельный real renewal/provider/device-code не запускался; отсутствие
+новых direct renewal tests не выдано за runtime coverage owner-before-seed.
+Renewal code сохранён AST/compilation, не live-проверкой.
+
+Package docs239/239, inverse AST11, gofmt/diff-check, assessment и5 addressed
+ignores PASS LOCAL. Финальный рабочий on5vX9:6587 sources,222 excluded,
+1824 raw,598 retained,1226 unresolved; Go9766/21197, missing11431.
+Raw SHA256:
+`dae22b37161fd14d8aaeda6d316320d217a00abcb53773f2c5eb5e0070095031`.
+Clone-set прежний7436f308...; multiset fragment/path/count и registry
+неизменны. jnJaTv — промежуточный comment-only scan до constant, не финальный.
+Точный post-commit scan/unit/build публикуются в том же Draft PR.
+Secret-broker:756/1277, missing521 — Kubernetes242/providercredential279.
+Общая задача не завершена:11431 declarations/1226 групп впереди.
+Исторические FAIL/SKIP/NOT RUN сохранены; full acceptance/browser/live/
+deploy/ИИ/STT/почта NOT RUN по scoped решению.
 
 ## Двести сороковая волна — credential projections и STT boundary
 

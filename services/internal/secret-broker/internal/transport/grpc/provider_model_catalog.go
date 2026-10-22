@@ -20,14 +20,30 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// providerCatalogOperation is the exact operation/permission bound to a control-plane model-catalog
+// observation task.
+// providerCatalogOperation — exact operation/permission, связанная с control-plane model-catalog
+// observation task.
 const providerCatalogOperation = "platform.provider-accounts.model-catalog.observe"
 
+// providerCatalogDiagnosticMessage is the fixed warning message used with bounded catalog stage/failure
+// fields, not raw provider output.
+// providerCatalogDiagnosticMessage — фиксированный warning message с bounded catalog stage/failure fields,
+// не raw provider output.
 const providerCatalogDiagnosticMessage = "provider model catalog observation rejected"
 
+// WithCatalogLogger installs an optional logger, including nil, during trusted server composition without
+// probing or starting catalog observation.
+// WithCatalogLogger устанавливает optional logger, включая nil, при доверенной server composition без
+// probe и запуска catalog observation.
 func WithCatalogLogger(logger *slog.Logger) Option {
 	return func(server *Server) { server.catalogLogger = logger }
 }
 
+// logCatalogFailure emits only recognized unavailable/unverified/authorization failures and the catalog's
+// normalized diagnostic stage; success/unknown outcomes and model/source contents are not logged.
+// logCatalogFailure выводит лишь recognized unavailable/unverified/authorization failures и
+// нормализованный diagnostic stage каталога; success/unknown outcomes и model/source contents не логирует.
 func (server *Server) logCatalogFailure(ctx context.Context, result providercredential.ModelCatalog) {
 	if server.catalogLogger == nil {
 		return
@@ -40,6 +56,14 @@ func (server *Server) logCatalogFailure(ctx context.Context, result providercred
 	}
 }
 
+// ObserveProviderModelCatalog verifies profile/request binding and bounded task/descriptor shape, limits
+// the call by task/proof/fifteen-second deadlines and maps known observer outcomes. It validates
+// observation time/source and 128 KiB encoded response size, not every model's semantic capabilities or a
+// fresh owner task itself.
+// ObserveProviderModelCatalog проверяет profile/request binding и bounded task/descriptor shape,
+// ограничивает вызов task/proof/пятнадцатисекундным deadlines и отображает known observer outcomes.
+// Проверяет observation time/source и 128 КиБ encoded response size, не все semantic capabilities моделей
+// и не fresh owner task самостоятельно.
 func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *cp.ObserveProviderModelCatalogRequest) (*cp.ObserveProviderModelCatalogResponse, error) {
 	verified, trusted, err := providerCatalogAuthority(ctx)
 	if err != nil {
@@ -118,6 +142,12 @@ func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *
 	return response, nil
 }
 
+// providerCatalogAuthority accepts exact control-plane trusted admission with service
+// actor/non-project-required mode or the verified proof path; raw request metadata cannot substitute that
+// server context.
+// providerCatalogAuthority принимает exact control-plane trusted admission с service
+// actor/non-project-required mode либо verified proof path; raw request metadata не заменяют server
+// context.
 func providerCatalogAuthority(ctx context.Context) (*internalrpcauthorityv1.VerifiedAuthorizationContext, bool, error) {
 	method := cp.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName
 	if admission, ok := serviceidentity.FromContext(ctx); ok && admission.RPCProfile == transportprofile.TrustedCluster {
@@ -134,6 +164,12 @@ func providerCatalogAuthority(ctx context.Context) (*internalrpcauthorityv1.Veri
 	return verified, false, err
 }
 
+// validCatalogRequest checks bounded references/positive versions, explicit authorization method, nonempty
+// credential pins/digest and a valid expiry timestamp; freshness is checked later and this is not a live
+// account lookup.
+// validCatalogRequest проверяет bounded references/positive versions, explicit authorization method,
+// непустые credential pins/digest и valid expiry timestamp; freshness проверяется позже, live account
+// lookup здесь нет.
 func validCatalogRequest(request *cp.ObserveProviderModelCatalogRequest) bool {
 	for _, ref := range []string{request.GetTaskRef(), request.GetAccountRef(), request.GetCredentialRevisionRef(), request.GetClaimantId(), request.GetFence()} {
 		if !validCorrelation(ref) {
@@ -151,6 +187,10 @@ func validCatalogRequest(request *cp.ObserveProviderModelCatalogRequest) bool {
 		(request.GetAuthorizationMethod() == cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_API_KEY || request.GetAuthorizationMethod() == cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_DEVICE_CODE)
 }
 
+// minCatalogDeadline returns the earliest supplied time without consulting the clock; callers must pass at
+// least one value and honor an already-expired result.
+// minCatalogDeadline возвращает самое раннее переданное время без проверки часов; caller передаёт минимум
+// одно значение и учитывает уже истёкший результат.
 func minCatalogDeadline(values ...time.Time) time.Time {
 	result := values[0]
 	for _, value := range values[1:] {
