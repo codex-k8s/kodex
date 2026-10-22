@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.295.0
+version: 1.296.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,82 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто шестая волна — общий каталог полей Secret
+
+Опубликованный SHA295 — `05dbc767613d7159b181ca26e5752ca55ba114f1`.
+Точный DVdD7t:6621 sources,222 excluded,1812 raw/720 retained/
+1092 unresolved; Go12712/21261,missing8549. Raw SHA256:
+`125e096b858160e40819043e466bfc1fe51f3906324caf36c5aa5fd5f39b6e77`;
+clone-setee12a7b9… . Exact33/82 unit/full authority build, AST8,
+tooling/scan PASS LOCAL,0 FAIL/SKIP; push и Draft PR PATCH/GET295 есть.
+
+Полностью прочитаны Kubernetes/projected delivery и publisher client,
+531 lines, package doc и используемый exact Secret map adapter.
+Четыре повторённые application schemas централизованы в unit-owned
+internal/client/secretschema:readback credential6 fields, possession4,
+restore credential6 и ACK8. Это только имена, НЕ секретные значения.
+Четыре literal-only providers возвращают свежие slices; общий изменяемый
+global slice между providers/constructors не появился.
+
+Матрица:Kubernetes delivery сохраняет4 собственных schema variables и
+пользуется общими definitions при их инициализации. Projected constructor
+получает4 core плюс2 optional resolver списков отдельно. Все10 consumers
+сохраняют bytes/order, имена ресурсов, фиксированные mount paths и
+отдельный provider-managed _generation. Остальные key/trust schemas
+не вынесены:второго потребителя у них нет. Registry validation, generation/
+resourceVersion CAS, retry/Close/readonly semantics не менялись.
+Schema catalog не знает env/files/clients, не даёт authority и не выполняет
+validation значений. REPO-DOC-001/GO-DOC-006 размещение соответствует
+локальному общему helper одного unit, не новому deployable или SDK module.
+
+Inverse AST4 разворачивает ACTUAL helper literals в4 API globals и6
+projected bindings, удаляя только новый import. Весь прежний AST двух
+delivery files, publisher client и package doc равен SHA295. У methods
+и constructors тела прежние; directives preserved. Четыре новых
+table subcases pin точные24 ordered names и проверяют независимость двух
+полученных slices и следующего вызова после мутации первого.
+
+33 прежних+5 новых declarations EN→RU, scope38/38, и двуязычные package
+docs. Comments исправляют именно описание, НЕ поведение:runtime delivery
+имеет4 core плюс2 optional ресурса, не только4; current generation не
+равен Kubernetes resourceVersion; CreateVersioned существующего материала
+возвращает readback без сравнения input data; Close закрывает idle connections,
+не отменяет и не join-ит workers. Projected read игнорирует ctx, сравнивает
+generation дважды, но не pin-ит inode. Stat/ReadFile guard не выдаётся за
+ownership/mode check либо bounded streaming allocation. Publisher constructor
+не выполняет explicit SPIFFE URI check; Connect не доказывает readiness.
+Receipt digest length/presence checks не объявлены signature/hex validation.
+Context7/grpc-go и pinned Connect/Stat docs сверены; security rules прежние.
+
+34 верхних/87 всех selected unit и full authority build -p=2 PASS LOCAL,
+0 FAIL/SKIP. Четыре schema subcases без реальных credentials/files/network;
+три delivery/publisher packages скомпилированы без своих runtime tests.
+Component compiled NOT RUN, explicit regex/env-u DSN прежние.17 Node/
+Go checker units, inverse AST4, docs38/38,5 ignores и diff-check PASS LOCAL.
+Живые Secret/CAS/rotation/SSO/TLS/controller/mount пути НЕ проверялись.
+
+Выполненная команда unit/build (из модуля internal-rpc-authority):
+```bash
+set -e
+set -o pipefail
+env -u KODEX_AUTHORITY_POSTGRES_TEST_DSN GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/client/readback ./internal/client/restoreagent ./internal/domain/types/value ./internal/domain/service ./internal/repository/postgres/authority ./internal/repository/postgres/publisher ./internal/repository/postgres/readback ./internal/repository/postgres/session ./internal/repository/postgres/restore ./internal/client/kubernetessecret ./internal/client/projectedsecret ./internal/client/publisher ./internal/client/secretschema -run '^(TestSecretSchemasPreserveKeysAndIndependentStorage|TestPromoteSnapshotUsesExactRequiredTargets|TestLoadSnapshotHistoryIncludesCurrentRevisionForRestart|TestLoadSnapshotPredecessorUsesPersistedCrossDomainProvenance|TestReadbackTrustReadinessArgsMatchQuery|TestSerializationFailureClassificationIsExact|TestReadbackConsumeUsesReadCommittedIsolation|TestReadbackRPCRetryPreservesErrorBoundaries|TestNewRequestUUIDReturnsDistinctVersionFourIdentifiers|TestSecretAttestorReusesTransportAcrossRefreshes|TestPollНеЗакрываетAdmissionВоВремяШтатнойПроверки|TestVerifySafeNoDirectiveFailClosedДоПервогоВнешнегоPoll|TestVerifySafeNoDirectiveПринимаетТолькоOpenИСозревшийCompleted|TestJoinedAuthorityUUIDPreservesEncoding|TestTerminatedAuthorityUUIDPreservesEncoding|TestReadbackTTLWindowsCoverProjectedSecretDelivery|TestReadbackIntentIdentityIncludesSourceRevision|TestValidCredentialAuthentication|TestMatchesObservedCaller|TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration|TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding|TestAuthorizationExpiryDoesNotExceedMetadataWindow|TestDurableFreshnessClockAndOutageBoundaries|TestDurableFreshnessConsumesNetworkTimeAndFailsOnDatabaseLoss|TestDurableFreshnessRejectsCorruptionAndSlidingSameReceipt|TestFreshnessAdoptsExactReplicaReceiptForWorkingAccept|TestIssueContinuationInheritsVerifiedRootAndReservesChild|TestSnapshotActivationAllowsFreshReceiptForExactSnapshot|TestContextAcceptanceUsesExactSnapshotReceiptArguments|TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor|TestProofReservationAllowsConcurrentOutOfOrderProofs|TestContinuationReservationAtomicallyRequiresAcceptedParent|TestReadinessReservationUsesModeSpecificWritePath|TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt)$' | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Рабочий PVsuVr:6623 sources,222 excluded,1812 raw/720 retained/
+1092 unresolved; Go12750/21266,missing8516. Все1812 clone keys/counts/
+clone-set и registry602/720 прежние; новых exclusions нет. Повторённые
+короткие schemas не были detector windows выше порога:вынос не выдаётся
+за уменьшение raw либо unresolved. Source of truth для их имён теперь один.
+Raw SHA256:
+`a8e9927288a0ff3ddcd1546d50042bbfc5b1a444ebddecf1c4c6541d6d921721`;
+clone-set:
+`ee12a7b9aedb8e8b0351a046699b7b9490c1e8b44742c771b347db582dee8c77`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, dependencies, contracts, applied migrations и live state прежние.
+Finding verifyDirective из293 НЕ исправлен; historical FAIL/scoped NOT RUN
+сохраняются. Общая задача открыта.
 
 ## Двести девяносто пятая волна — комментарии SQL-каталогов authority
 
