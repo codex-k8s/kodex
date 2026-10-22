@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.227.0
+version: 1.228.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,76 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать восьмая волна — полный охват codex и полный package unit
+
+Опубликованный SHA227 — `d2315570d47b5b2e557bd431cc15341479e4b3d8`.
+Точный WyzdD1: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 8968/21177, missing 12209. Raw SHA256:
+`99ee6fd5ac42a568b4abe096589f12a3e207bdc0ea02fd5293f4b4249b792aef`.
+Clone-set:
+`66627e4addb1139b4ee7bf0d1cd2c682e8c8d783e0618e7221b82f88caca2e4d`.
+Push/readback и PATCH/GET PR227 подтверждены. На SHA227 выбранный unit:
+12 верхних/41 всех PASS, 0 FAIL, 1 explicit SKIP; полная сборка runner PASS.
+
+Полностью прочитаны resume_rollout.go150/test377,
+resume_history_frame_test.go184, restored_rollout_test.go103,
+file_bridge_test.go186 и workspace_heavy_kernel_test.go152.
+Все 38 объявлений EN→RU; дополнительно описаны локальные size/frameCount/
+newHistory. AST всех шести файлов идентичны SHA227 без comments/token.Pos.
+Весь пакет internal/codex: 54 файла, 728/728 declarations EN→RU.
+Это полнота комментариев, не завершение рефакторинга всего репозитория.
+
+Описаны stable thread instruction binding и свежие turn chunks, pre-read
+источника до cold resume, excludeTurns без удаления сохранённой истории,
+различия confirmed locator/held inode и execution/usage authority.
+verifyIdentity допускает append и не означает прежний digest; capture
+требует captureReady и заново сверяет источник до/после. Private detail
+строкового типа не назван allowlist, публичный Error фиксирован.
+Metadata mode описан как permission bits, а не проверка всех special bits.
+
+Frame tests действительно используют bounded stdout reader с synthetic
+RPC replies. Малый metadata frame не означает урезание архива; общий
+размер потока не равен per-frame budget. TestFileBridgeNonRootProtocol
+запускает собственный test ELF через bwrap UID10002/GID29000 и проверяет
+synthetic loopback TLS13/MCP/file path, streaming более33 МиБ, digest,
+binding, Cookie omission и недопуск token/lease/selector к upstream.
+Это не реальный provider, внешний API или кластер. Native restore/heavy
+fixtures требуют отдельного opt-in; их неактивный прямой PASS не доказательство
+kernel/UID/restore boundary. Тесты, budgets и production поведение не менялись.
+
+Полный `go test -mod=readonly -count=1 -timeout 120s -json ./internal/codex`:
+203 верхних/718 всех PASS, 0 FAIL, 4 explicit SKIP:
+TestBrokerCaptureNativeUIDBoundary, TestProviderWorkspaceAccessKernel,
+TestProviderHeavyWorkspaceKernel, TestWorkingDirectoryTwoUIDFixture.
+Настоящие synthetic children для pipe/process, skill RPC и resume RPC
+проверяются родительскими тестами. Семь прямых fixture entrypoints без mode
+возвращаются без исполнения: AppServerPipeProcess, BrokerCaptureNativeUID,
+ContextDiscoveryProcess, ProviderOutboxPublicationContainer,
+RestoredRolloutCapture, RestoredWorkspaceGuardKernel и ResumeRolloutRPCProcess.
+Их PASS не посчитан самостоятельным доказательством child/UID boundary.
+
+Перед полным unit удалены opt-in переменные:
+`KODEX_APP_SERVER_PIPE_FIXTURE`, `KODEX_APP_SERVER_ROLLOUT_PATH`, `KODEX_APP_SERVER_PIPE_PID_PATH`, `KODEX_TEST_RESTORE_MODE`, `KODEX_TEST_RESTORE_WORKSPACE`, `KODEX_TEST_FULL_RESTORE_ABI`, `KODEX_SKILL_DISCOVERY_FIXTURE`, `KODEX_OUTBOX_PUBLICATION_TEST`, `KODEX_RESUME_RPC_FIXTURE`, `KODEX_RESUME_RPC_PATH`, `KODEX_RESUME_RPC_CALLS`, `KODEX_RESUME_RPC_WORKSPACE`, `KODEX_NATIVE_CAPTURE_FIXTURE`, `KODEX_NATIVE_CAPTURE_WORKSPACE`, `KODEX_NATIVE_CAPTURE_OUTCOME`, `KODEX_FILE_BRIDGE_TEST`, `KODEX_WORKING_UID_FIXTURE`, `KODEX_WORKSPACE_ACCESS_KERNEL_CHILD`, `KODEX_WORKSPACE_ACCESS_KERNEL_TEST`, `KODEX_HEAVY_FIXTURE_STAGE`, `KODEX_HEAVY_FIXTURE_ROOT`, `KODEX_HEAVY_FIXTURE_KIND`.
+GOENV/GOWORK off, Go1.26.6, GOMAXPROCS=4. Полная сборка runner
+`go build -mod=readonly ./...` PASS LOCAL. Scope38/38 и весь codex728/728
+`go-docs -check`, AST6, 17 Node units, unit Go checker, 5 addressed ignore
+boundaries, gofmt/diff-check PASS LOCAL. Новых libraries/SDK/dependencies нет;
+прежние Context7/local Go документы и pinned fixture source не выданы за
+свежую live проверку provider API.
+
+Рабочий 6vOhNj: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 9006/21177, missing 12171. Raw SHA256:
+`7c8fa03ed3931f9ab68d54c845830cc619cbc591f2f4deca92afaa7527fbe639`.
+Clone-set прежний:
+`66627e4addb1139b4ee7bf0d1cd2c682e8c8d783e0618e7221b82f88caca2e4d`.
+Multiset пар/fragment/count неизменен. В этих шести файлах detector groups
+нет; исключения или искусственные выносы не добавлены. Точный post-commit
+scan и полный codex unit/build публикуются в том же Draft PR.
+Все остальные модули/непокрытые declarations и unresolved группы остаются
+в общей задаче; финальные runner/repo unit и общий Go-docs check впереди.
+Исторические FAIL/SKIP/NOT RUN сохранены. Live/browser/deploy/ИИ/STT/почта
+NOT RUN; задача активна, merge/ready не выполняются.
 
 ## Двести двадцать седьмая волна — input receipt, outbox и working copies
 

@@ -27,6 +27,10 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/readiness"
 )
 
+// TestFileBridgeNonRootProtocol launches its own test binary in a disposable bwrap user namespace
+// as UID10002/GID29000 with a tmpfs root, then exercises only synthetic loopback services.
+// TestFileBridgeNonRootProtocol запускает свой test binary в disposable bwrap user namespace
+// с UID10002/GID29000 и tmpfs root, затем проверяет лишь synthetic loopback services.
 func TestFileBridgeNonRootProtocol(t *testing.T) {
 	if os.Getenv("KODEX_FILE_BRIDGE_TEST") == "1" {
 		runFileBridgeFixture(t)
@@ -46,10 +50,18 @@ func TestFileBridgeNonRootProtocol(t *testing.T) {
 	}
 }
 
+// runFileBridgeFixture requires the mapped writer identity, starts a pinned synthetic TLS13 peer,
+// MCP proxy and provider bridge, then streams a 33-MiB-plus payload with exact digest/binding and no Cookie.
+// Invalid token/lease/selector requests must return 404 without another upstream download.
+// runFileBridgeFixture требует mapped writer identity, запускает закреплённый synthetic TLS13 peer,
+// MCP proxy и provider bridge, передавая более 33 МиБ с точными digest/binding и без Cookie.
+// Неверные token/lease/selector должны вернуть 404 без новой upstream загрузки.
 func runFileBridgeFixture(t *testing.T) {
 	if os.Geteuid() != 10002 || os.Getegid() != 29000 {
 		t.Fatal("fixture identity is invalid")
 	}
+	// size crosses small-buffer thresholds with a non-aligned payload for full-stream digest verification.
+	// size превышает малые буферы и задаёт невыровненный payload для проверки digest всего потока.
 	const size = 33<<20 + 7
 	chunk := bytes.Repeat([]byte("f"), 64<<10)
 	hash := sha256.New()

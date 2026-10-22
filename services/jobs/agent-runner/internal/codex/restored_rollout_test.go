@@ -14,8 +14,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
 )
 
-// Этот процесс запускается отдельной archive kernel-fixture с UID native writer.
-// Он не обращается к Codex, Kubernetes либо постоянным каталогам платформы.
+// TestRestoredRolloutCaptureFixture is an opt-in UID10002 restore helper on a guarded temporary
+// root or explicit full ABI /workspace. It checks foreign-owner EACCES/EPERM or exact append/fsync/capture
+// ownership and hash. With no mode it returns without proving the kernel or restore boundary.
+// TestRestoredRolloutCaptureFixture — opt-in UID10002 restore helper на защищённом временном
+// root либо явном full ABI /workspace. Она проверяет foreign-owner EACCES/EPERM или точные append/fsync/
+// capture owner и hash. Без mode она возвращается, не доказывая kernel или restore boundary.
 func TestRestoredRolloutCaptureFixture(t *testing.T) {
 	mode := os.Getenv("KODEX_TEST_RESTORE_MODE")
 	if mode == "" {
@@ -54,8 +58,8 @@ func TestRestoredRolloutCaptureFixture(t *testing.T) {
 		}
 		return
 	}
-	// Моделируем новый durable history frame от фактического app-server UID,
-	// а не только возможность прочитать ранее восстановленный архив.
+	// newHistory models a durable frame appended by the mapped native writer, not just a read of old bytes.
+	// newHistory моделирует устойчивый кадр от mapped native writer, не только чтение прежних байтов.
 	const newHistory = "{\"type\":\"event_msg\",\"payload\":{\"type\":\"task_complete\"}}\n"
 	writer, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
@@ -83,6 +87,10 @@ func TestRestoredRolloutCaptureFixture(t *testing.T) {
 	}
 }
 
+// TestRestoredWorkspaceGuardKernelFixture is opt-in for UID10001 at canonical /workspace, preparing
+// the shared parent or applying the unchanged home guard; inactive invocation performs no check.
+// TestRestoredWorkspaceGuardKernelFixture — opt-in для UID10001 на каноническом /workspace, готовящий
+// shared parent либо применяющий неизменённый home guard; неактивный вызов проверку не выполняет.
 func TestRestoredWorkspaceGuardKernelFixture(t *testing.T) {
 	if os.Getenv("KODEX_TEST_FULL_RESTORE_ABI") != "1" {
 		return

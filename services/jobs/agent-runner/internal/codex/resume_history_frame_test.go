@@ -12,8 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
-// Fixture использует настоящий stdout reader, но не запускает Codex, сеть
-// или модель. JSONL-история и thread identity исключительно синтетические.
+// resumeHistoryFixture synthesizes thread RPC replies through the actual JSONL reader while keeping
+// a larger retained archive unchanged. It owns no live Codex process, model or remote service.
+// resumeHistoryFixture строит synthetic thread RPC replies через настоящий JSONL reader, сохраняя
+// более крупный архив неизменным. Живого процесса Codex, модели или удалённого сервиса у неё нет.
 type resumeHistoryFixture struct {
 	t            *testing.T
 	input        model.Input
@@ -24,7 +26,14 @@ type resumeHistoryFixture struct {
 	frameBytes   int
 }
 
+// Close satisfies the synthetic stream interface without closing a channel owned by the fixture.
+// Close реализует synthetic stream interface, не закрывая канал, принадлежащий fixture.
 func (fixture *resumeHistoryFixture) Close() error { return nil }
+
+// Write validates the synthetic request method, returns pinned thread metadata and includes history
+// only when resume omits excludeTurns; replies pass through the real bounded frame reader into events.
+// Write проверяет synthetic request method, возвращает закреплённые thread metadata и включает history
+// лишь при resume без excludeTurns; ответы проходят настоящий bounded frame reader в events.
 func (fixture *resumeHistoryFixture) Write(raw []byte) (int, error) {
 	var request struct {
 		ID     int64          `json:"id"`
@@ -58,6 +67,10 @@ func (fixture *resumeHistoryFixture) Write(raw []byte) (int, error) {
 	return len(raw), nil
 }
 
+// syntheticResumeHistory creates independent in-memory turns and an oversized-on-disk synthetic
+// archive, returning its digest so metadata-only resume tests can prove the file was not rewritten.
+// syntheticResumeHistory создаёт отдельные in-memory turns и крупный synthetic архив на диске,
+// возвращая digest для проверки, что metadata-only resume не переписал файл.
 func syntheticResumeHistory(t *testing.T) (*resumeHistoryFixture, *protocolState, [sha256.Size]byte) {
 	t.Helper()
 	input, before, _ := resumeSourceFixture(t)
@@ -74,6 +87,10 @@ func syntheticResumeHistory(t *testing.T) (*resumeHistoryFixture, *protocolState
 	return fixture, newProtocolState(input.CodexSessionID), sha256.Sum256(archive)
 }
 
+// TestResumeLongHistoryMetadataDoesNotOverflowFrame requests excludeTurns, retains model/cwd/approval
+// and source identity without usage, and proves the large archive's digest survives the small metadata reply.
+// TestResumeLongHistoryMetadataDoesNotOverflowFrame запрашивает excludeTurns, сохраняет model/cwd/approval
+// и source identity без usage, проверяя digest большого архива после малого metadata reply.
 func TestResumeLongHistoryMetadataDoesNotOverflowFrame(t *testing.T) {
 	fixture, state, sourceSHA := syntheticResumeHistory(t)
 	server := &appServer{stdin: fixture, messages: fixture.events}
@@ -113,6 +130,10 @@ func TestResumeLongHistoryMetadataDoesNotOverflowFrame(t *testing.T) {
 	t.Logf("synthetic metadata-only resume: frame_bytes=%d retained_history_bytes=%d", fixture.frameBytes, len(archive))
 }
 
+// TestThreadBindingDoesNotRetainAttemptInstructionsForStartAndResume keeps only stable developer
+// guidance at thread scope despite large current instructions, preserving config pins and archive bytes.
+// TestThreadBindingDoesNotRetainAttemptInstructionsForStartAndResume оставляет лишь стабильный developer
+// guidance на thread scope при больших current instructions, сохраняя config pins и archive bytes.
 func TestThreadBindingDoesNotRetainAttemptInstructionsForStartAndResume(t *testing.T) {
 	for _, resumed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "start", true: "resume"}[resumed], func(t *testing.T) {
@@ -147,6 +168,10 @@ func TestThreadBindingDoesNotRetainAttemptInstructionsForStartAndResume(t *testi
 	}
 }
 
+// TestResumeHistoryFrameOverflowIsClosed intentionally returns full synthetic history above the
+// transport-frame limit and requires STREAM_INVALID with the closed FRAME_TOO_LARGE reason.
+// TestResumeHistoryFrameOverflowIsClosed намеренно возвращает полную synthetic history сверх
+// transport-frame limit и требует STREAM_INVALID с закрытой причиной FRAME_TOO_LARGE.
 func TestResumeHistoryFrameOverflowIsClosed(t *testing.T) {
 	fixture, state, _ := syntheticResumeHistory(t)
 	// Полная история превышает именно транспортный, а не смысловой предел.
@@ -162,8 +187,14 @@ func TestResumeHistoryFrameOverflowIsClosed(t *testing.T) {
 	t.Logf("synthetic overflow: detail=%s frame_bytes=%d frame_bound=%d", failure.detail, fixture.frameBytes, maximumAppServerFrameBytes)
 }
 
+// TestResumeHistoryTransportBudgetIsPerFrame accepts all 84 bounded frames even when their total
+// stream size exceeds one frame budget, guarding against an accidental whole-stream size limit.
+// TestResumeHistoryTransportBudgetIsPerFrame принимает все 84 bounded frames, даже когда суммарный
+// stream size превышает бюджет одного кадра, не позволяя применить его ко всему потоку.
 func TestResumeHistoryTransportBudgetIsPerFrame(t *testing.T) {
 	frame := marshalProtocolFixture(t, map[string]any{"id": 1, "result": map[string]any{"padding": strings.Repeat("x", 100<<10)}})
+	// frameCount crosses the aggregate transport budget while each individual frame stays bounded.
+	// frameCount превышает суммарный transport budget при допустимом размере каждого кадра.
 	const frameCount = 84
 	stream := bytes.Repeat(append(frame, '\n'), frameCount)
 	if len(stream) <= maximumAppServerFrameBytes {
