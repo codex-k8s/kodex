@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.244.0
+version: 1.245.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,64 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок пятая волна — проверенный каталог возможностей модели
+
+Опубликованный SHA244 — `59686f3c1e0e0def9e79e6197c70e9ca7afb1eb2`.
+Точный s9JhGC:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go10048/21197, missing11149. Raw SHA256:
+`1f18bc40486f5a895f72a128c9a16a2e5b76a43aeacde22bd70b183c0310be13`.
+Clone-set:
+`2a826d9629d0a79c8055dc8d87f7b653ec1bf6d85503532e16a77aa51da2972a`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA244 все127 верхних/
+445 unit, full build,17 Node/Go checker units, docs40/40 и scan PASS LOCAL,
+0 FAIL/SKIP.
+
+Полностью прочитаны1469 строк12 catalog source/test файлов;
+все105 declarations теперь предметно описаны EN→RU. AST12 идентичен SHA244,
+go:embed отдельно побайтно сверен и сохранён перед apiCatalogSource.
+Embedded JSON, runtime pin, wire, dependencies и generated не менялись.
+Пояснения разделяют датированный reviewed API capability source,
+account-specific model list и Codex protocol/cache observation. Pinned digest
+не назван подписью, --version output — проверкой подлинности executable,
+source default — текущим live правом аккаунта. Source valid-window
+перепроверяется после HTTP; это не live обновление documentation snapshot.
+
+API path использует fixed proxy/CONNECT target, TLS1.3-only, bounded
+transport/total timeouts и запрет redirects. HTTP ответ не сообщает reasoning
+defaults: они принадлежат отдельному pinned source с explicit provenance.
+Device observation передаёт только access token/account, не refresh token;
+обновление остаётся отдельным owner WRITE. Protocol-only fallback описан
+как существующий явный режим, не новый скрытый запасной путь. Cache reader
+проверяет regular file/effective UID/single link/no-follow/size, но не mode0600;
+обычный JSON parser не назван duplicate-field guard. Кэш должен соответствовать
+версии и интервалу текущего наблюдения, defaults/порядок efforts — протоколу.
+
+Закрытые diagnostic stages принадлежат observer, не payload/error text;
+внешний wrapper сохраняет более точную внутреннюю причину. Cleanup не
+сохраняет успешный результат при потере process/home cleanup, но не скрывает
+уже классифицированный первичный отказ. Эти алгоритмы не менялись.
+Context7 /golang/go и pinned go doc сверены для CheckRedirect и
+Transport.OnProxyConnectResponse. Версии/модели в fixture — датированная
+каноника существующего исходника, не заявление о текущем внешнем каталоге.
+
+Те же Kubernetes/transport/providercredential:127 верхних/445 всех PASS,
+0 FAIL/SKIP; full secret-broker build PASS LOCAL. Команды/Go flags те же,
+что в волнах243–244. Fake HTTP и текущий test executable проверяют source
+intersection, safe diagnostics, refresh refusal, cancellation/join, private
+state cleanup и реальные local symlink/hardlink/FIFO negative fixtures.
+Ни provider/model/device-code login, ни staging/live не запускались;
+TestStagingModelCatalog... — local synthetic unit, не staging acceptance.
+
+Scope105/105, AST12+embed directive, gofmt/diff-check, assessment и5 addressed
+ignores PASS LOCAL. Рабочий Fcx5rB:6587 sources,222 excluded,
+1824 raw/598 retained/1226 unresolved; Go10153/21197, missing11044.
+Raw SHA256:
+`e8c3c7fbafb3310ef175ef9a9222a9c44470f1c9c6f184a614e8825dcf9691e3`.
+Clone-set и registry неизменны. Точный post-commit scan/unit/build
+публикуется в том же Draft PR. Secret-broker1143/1277, missing134:
+service63 и appserver/authorization fixtures71. Общая задача ещё не готова;
+прежние FAIL/SKIP/NOT RUN сохранены, полный Go `-check` впереди.
 
 ## Двести сорок четвёртая волна — восстановление cleanup и managed renewal
 
