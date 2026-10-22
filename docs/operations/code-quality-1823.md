@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.307.0
+version: 1.308.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,85 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста восьмая волна — общий HTTP problem body
+
+Предыдущий опубликованный SHA — `96293635679ca117b7945f59c7edc63640a340d7`.
+Exact Wv6GiY:6634 sources,222 excluded,1805 raw/725 retained/
+1080 unresolved; Go13398/21280,missing7882. Source SHA, push и Draft PR
+PATCH/GET307 подтверждены. Это не готовность всего PR.
+
+Прочитаны8 HTTP problem files657 lines, связанные diagnostic projection
+и прежний boundary writer. Все28 прежних объявлений описаны EN→RU;
+новые10 declarations пакета problemresponse тоже полностью описаны.
+Пояснены exact ErrorInfo domain/reason, статус против сырого сообщения,
+типизированная local-authority cancellation, закрытые коды и ограниченные
+STT RetryInfo. Локальная const method и inline пояснение STT тоже EN→RU.
+Domain string в ErrorInfo не объявлен самостоятельным источником authority.
+
+В internal/transport/problemresponse находится узкий unit-owned Write,
+общий для boundary.writeProblem и httptransport.writeLocalProblem.
+Он только отправляет прежний status, optional writer.Localize title,
+шесть прежних JSON fields и новый uuid.NewString correlation ID, сохраняя
+json.Encoder newline/escaping и игнорирование ошибки записи. Он не выбирает
+HTTP/gRPC status, authority, origin/CSRF, локаль, Retry-After и safe codes.
+Все header writes остаются перед helper у callers в прежнем порядке.
+Особенно сохранено различие: boundary429 → Retry-After1; HTTP обычный429 →
+1, а TRANSCRIPTION_RATE_LIMITED сохраняет ранее проверенный hint либо
+его отсутствие. Не добавлены зависимости, env, goroutines, RPC или retries.
+Этот приватный для gateway пакет не новый общий module libs/go.
+
+Inverse AST9 разворачивает ФАКТИЧЕСКОЕ тело Write в обоих местах и проверяет
+точное изменение import sets, затем восстанавливает прежние imports.
+Полные AST всех9 прежних файлов равны307, //go: directives прежние.
+Удалена ровно одна116-token clone group
+`724e69ec0d5b1a86aca3f51f9b8d4eaf61f70331495333bf49b3ffa5dcf47e11`;
+все остальные1804 keys/counts прежние, новых групп/exclusions нет.
+Registry607 entries/725 occurrences не менялся.
+
+Три новых верхнеуровневых unit проверяют пять body/header вариантов,
+строгие шесть полей и EOF/newline, canonical fresh UUIDv4, обычный и
+STT hint/no-hint, неизвестный status text, отсутствие новых header policies,
+точный один Localize после WriteHeader и единственную попытку записи при
+synthetic I/O failure. Не используются реальные провайдеры или сеть.
+Context7 /golang/go и pinned Go1.26.6 Encoder.Encode/StatusText docs
+подтверждены; прежние APIs сериализации и настройки не заменялись.
+Первичная проверка карты документации ожидала27 вместо фактических28
+объявлений и остановилась ДО edits; число исправлено по полному реестру.
+Mandatory build/unit ошибок не было.
+
+Матрица сценариев: инициатор middleware или HTTP handler → прежняя
+классификация ошибки caller → его header policy → общий Write →
+локализованный code-only JSON потребителю. Helper не создаёт состояние,
+idempotency receipt, audit, event, grant либо owner transition. Выбор
+доменной ошибки и проверки caller прежние; запись может завершиться после
+commit HTTP status с ошибкой, без скрытого повторного ответа/внешнего effect.
+Серверный путь чтения состояния и authority не менялись.
+
+477 верхних/2311 всех gateway app/client/usertext/session/boundary/HTTP/
+problemresponse unit и полный gateway build -p=2 — PASS LOCAL,
+0 FAIL/SKIP. 17 Node unit, Go checker unit, inverse AST9, scope28+10,
+5 addressed ignores, gofmt и git diff --check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+STT использует только synthetic multipart/fake stream; ни аудиозапись,
+ни device-code, ни реальная модель, browser/SSO, component/deploy/full
+acceptance не запускались. Их статус NOT RUN. Исторические FAIL/finding293
+не исправлены и не скрыты.
+
+Рабочий uicroh:6636 sources,222 excluded,1804 raw/725 retained/
+1079 unresolved; Go13436/21290,missing7854. Raw SHA256:
+`fcb113c4387f6c6e241abb70b5339f01b0b28b637c747da8d8ca96df4260a9bf`;
+clone-set:
+`ea12ceeddfbabb51644e042cffdad199c8d7f8c9f2e1ad34b75d6162d89633fd`.
+Exact scan/unit/build и remote readback повторяются после коммита.
+Generated/contracts/dependencies/SQL/migrations/live state прежние.
+Остаток Go:gateway1622,CP6232; общий -check ещё не пройден.
 
 ## Триста седьмая волна — браузерная граница и оснастка ключей
 

@@ -10,8 +10,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// promptTemplateInvalid is the stable public code for validated typed template diagnostics, not the raw upstream message.
+// promptTemplateInvalid — стабильный публичный код проверенной типизированной диагностики шаблона, а не сырой текст внешней ошибки.
 const promptTemplateInvalid = "PROMPT_TEMPLATE_INVALID"
 
+// writePromptProblem accepts exactly one typed prompt detail on InvalidArgument, validates bounded diagnostics with at least one ERROR and replaces raw diagnostic text with explicit localization references. Malformed typed details become 502; unrelated details use ordinary RPC mapping.
+// writePromptProblem принимает ровно один типизированный prompt detail при InvalidArgument, проверяет ограниченную диагностику хотя бы с одним ERROR и заменяет сырой текст явными ссылками локализации. Некорректные типизированные details дают 502; посторонние идут в обычное RPC-отображение.
 func writePromptProblem(writer http.ResponseWriter, err error) {
 	upstream := status.Convert(err)
 	if upstream.Code() != codes.InvalidArgument {
@@ -61,6 +65,8 @@ func writePromptProblem(writer http.ResponseWriter, err error) {
 	_ = json.NewEncoder(writer).Encode(value)
 }
 
+// promptDiagnosticsContainError detects an exact ERROR severity using nil-safe protobuf accessors; shape and size validation belongs to promptDiagnosticViews.
+// promptDiagnosticsContainError ищет точную severity ERROR безопасными для nil protobuf-методами; формат и размер проверяет promptDiagnosticViews.
 func promptDiagnosticsContainError(values []*cp.PromptTemplateDiagnostic) bool {
 	for _, value := range values {
 		if value.GetSeverity() == "ERROR" {

@@ -5,7 +5,6 @@ package boundary
 import (
 	"context"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -18,7 +17,7 @@ import (
 	oidcauth "github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
-	"github.com/google/uuid"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/problemresponse"
 )
 
 const (
@@ -873,13 +872,5 @@ func writeProblem(writer http.ResponseWriter, statusCode int, code string, retry
 	if statusCode == http.StatusTooManyRequests {
 		writer.Header().Set("Retry-After", "1")
 	}
-	writer.WriteHeader(statusCode)
-	title := http.StatusText(statusCode)
-	if localizer, ok := writer.(interface{ Localize(string) string }); ok {
-		title = localizer.Localize(code)
-	}
-	_ = json.NewEncoder(writer).Encode(map[string]any{
-		"type": "urn:kodex:problem:" + strings.ToLower(code), "title": title,
-		"status": statusCode, "code": code, "correlationId": uuid.NewString(), "retryable": retryable,
-	})
+	problemresponse.Write(writer, statusCode, code, retryable)
 }
