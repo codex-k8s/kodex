@@ -7,6 +7,12 @@ import (
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
 
+// CleanupProviderCredentialWithRecovery derives current and origin receipt identities for the same exact
+// credential descriptor, then delegates bounded recovery and any necessary effect to the original
+// task/generation. Authority for both identities must already be established by the transport owner.
+// CleanupProviderCredentialWithRecovery выводит текущую и исходную receipt identity для одного точного
+// credential descriptor, затем передаёт ограниченное recovery и необходимый эффект исходным
+// task/generation. Полномочия обеих identity заранее устанавливает transport owner.
 func (service *Service) CleanupProviderCredentialWithRecovery(ctx context.Context, taskRef, accountRef string, generation int64, descriptor kubernetesstore.ProviderCredentialDescriptor, recovery kubernetesstore.ProviderCleanupRecoveryIdentity) (kubernetesstore.ProviderCredentialCleanupResult, error) {
 	identity := func(task string, generation int64) (kubernetesstore.ProviderCleanupReceiptIdentity, error) {
 		return kubernetesstore.CredentialCleanupReceiptIdentity(task, accountRef, generation, descriptor)
@@ -16,6 +22,12 @@ func (service *Service) CleanupProviderCredentialWithRecovery(ctx context.Contex
 	})
 }
 
+// CleanupAuthorizationWithRecovery rebuilds receipt identities with current or origin task/generation
+// while preserving every authorization target pin; the effect, if needed, uses the origin identity
+// rather than silently changing the target.
+// CleanupAuthorizationWithRecovery перестраивает receipt identity с текущими либо исходными
+// task/generation, сохраняя все привязки authorization цели; необходимый эффект использует исходную
+// identity без неявной смены цели.
 func (service *Service) CleanupAuthorizationWithRecovery(ctx context.Context, target kubernetesstore.ProviderAuthorizationCleanupTarget, recovery kubernetesstore.ProviderCleanupRecoveryIdentity) (kubernetesstore.ProviderCredentialCleanupResult, error) {
 	identity := func(task string, generation int64) (kubernetesstore.ProviderCleanupReceiptIdentity, error) {
 		copy := target
@@ -28,8 +40,14 @@ func (service *Service) CleanupAuthorizationWithRecovery(ctx context.Context, ta
 	})
 }
 
-// Старый digest включает task/generation: legacy identity строится прежним
-// алгоритмом для каждого ограниченного поколения и того же exact target.
+// recoverProviderCleanup validates the bounded origin, reads current/origin and allowed historical
+// receipts and rejects conflicting replacement outcomes. Only absence of every result invokes the
+// effect; origin is durably completed before current so lost acknowledgements preserve recovery
+// provenance.
+// recoverProviderCleanup проверяет ограниченную исходную identity, читает текущую, исходную и
+// разрешённые исторические квитанции и отклоняет противоречивые replacement исходы. Только отсутствие
+// всех результатов вызывает эффект; origin сохраняется до current, сохраняя происхождение recovery при
+// потере ответа.
 func (service *Service) recoverProviderCleanup(ctx context.Context, task string, generation int64, recovery kubernetesstore.ProviderCleanupRecoveryIdentity,
 	identity func(string, int64) (kubernetesstore.ProviderCleanupReceiptIdentity, error), effect func(context.Context) (kubernetesstore.ProviderCredentialCleanupResult, error),
 ) (kubernetesstore.ProviderCredentialCleanupResult, error) {

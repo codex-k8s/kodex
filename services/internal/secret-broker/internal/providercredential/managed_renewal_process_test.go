@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// renewalFixture encodes synthetic managed credentials with the selected fixture account and a
+// one-hour-old refresh time; no real provider tokens or account files are read.
+// renewalFixture кодирует синтетические managed credentials с выбранным fixture account и временем
+// refresh час назад; реальные provider tokens и account файлы не читаются.
 func renewalFixture(account string) []byte {
 	raw, _ := json.Marshal(map[string]any{"auth_mode": "chatgpt", "tokens": map[string]string{
 		"account_id": account, "access_token": "synthetic-old-access", "refresh_token": "synthetic-old-refresh",
@@ -19,6 +23,12 @@ func renewalFixture(account string) []byte {
 	return raw
 }
 
+// runManagedRenewalFixture implements only initialize, initialized and refresh-enabled account/read over
+// test stdio, mutating a synthetic private auth file for success, unchanged-token and foreign-account
+// cases; it makes no network request.
+// runManagedRenewalFixture реализует только initialize, initialized и account/read с refresh через test
+// stdio, изменяя синтетический приватный auth-файл для успеха, неизменного token и чужого account;
+// сетевые запросы отсутствуют.
 func runManagedRenewalFixture(home string, raw []byte) int {
 	auth, err := parseManagedRenewalAuth(raw)
 	if err != nil {
@@ -77,6 +87,12 @@ func runManagedRenewalFixture(home string, raw []byte) int {
 	return 0
 }
 
+// TestManagedRenewalProcessStableAuthAndDurableSink runs the current test executable as a fake
+// app-server and checks one successful persistence, rejection of unchanged/foreign credentials, unknown
+// outcome on sink failure and private-home cleanup.
+// TestManagedRenewalProcessStableAuthAndDurableSink запускает текущий test executable как fake
+// app-server и проверяет одно успешное сохранение, отказ неизменным/чужим credentials, неопределённый
+// исход при ошибке sink и cleanup приватного home.
 func TestManagedRenewalProcessStableAuthAndDurableSink(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
@@ -125,6 +141,10 @@ func TestManagedRenewalProcessStableAuthAndDurableSink(t *testing.T) {
 	}
 }
 
+// TestManagedRenewalRejectsExternalOrIncompleteAuth rejects incomplete, external-token and API-key auth
+// input with the fixed invalid-input error, without returning the synthetic key in diagnostics.
+// TestManagedRenewalRejectsExternalOrIncompleteAuth отклоняет неполный, external-token и API-key auth
+// вход фиксированной invalid-input ошибкой без возврата синтетического ключа в диагностике.
 func TestManagedRenewalRejectsExternalOrIncompleteAuth(t *testing.T) {
 	for _, raw := range []string{`{}`, `{"auth_mode":"chatgptAuthTokens"}`, `{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic"}`} {
 		if _, err := parseManagedRenewalAuth([]byte(raw)); !errors.Is(err, ErrInvalidInput) || strings.Contains(err.Error(), "synthetic") {

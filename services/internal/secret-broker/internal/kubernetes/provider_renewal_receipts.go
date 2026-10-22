@@ -154,8 +154,8 @@ func (store *Store) parseProviderRenewalReceipt(secret *corev1.Secret, identity 
 }
 
 // BeginProviderCredentialRenewal creates the durable RUNNING reservation only for a fresh valid
-// identity. created=true requires an acknowledged Create plus validated readback; AlreadyExists or an
-// unknown write outcome never authorizes another OAuth effect.
+// identity. created=true requires an acknowledged Create plus a validated API response; AlreadyExists
+// or an unknown write outcome never authorizes another OAuth effect.
 // BeginProviderCredentialRenewal создаёт durable RUNNING резервирование только для действующей
 // корректной identity. created=true требует подтверждённый Create и проверенный ответ; AlreadyExists или
 // неопределённый исход записи не разрешает ещё один OAuth эффект.

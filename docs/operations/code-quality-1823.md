@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.243.0
+version: 1.244.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,63 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок четвёртая волна — восстановление cleanup и managed renewal
+
+Опубликованный SHA243 — `3c7fa89473847f469b6320a4a36e3b93ad88c810`.
+Точный yC2D45:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go10008/21197, missing11189. Raw SHA256:
+`b191c0c33991c034e7c96f26ae7ffe8fd1e0fd1fab64578801efa7e857b95985`.
+Clone-set:
+`2a826d9629d0a79c8055dc8d87f7b653ec1bf6d85503532e16a77aa51da2972a`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA243 все127 верхних/
+445 unit, full build и scan/assessment/пять ignore-boundaries PASS LOCAL,
+0 FAIL/SKIP.
+
+Полностью прочитаны776 строк шести providercredential recovery/renewal
+source/test файлов; все40 declarations теперь предметно описаны EN→RU.
+В предыдущем Begin comment слово readback уточнено до validated API response:
+после успешного Create отдельный GET не исполняется, проверяется его ответ.
+Обратной совместимости или новых lifecycle ветвей не добавлено; описано
+существующее bounded историческое чтение квитанций по exact target digest.
+AST всех7 изменённых Go-файлов идентичен SHA243; runtime не менялся.
+
+Cleanup проверяет current/origin и допустимые исторические receipts,
+отклоняет расхождение replacement outcomes до мутаций, выполняет эффект
+только без найденного результата и сохраняет origin перед current.
+Это не общая authority проверка ссылок: свежие полномочия transport/task owner
+обязательны до входа. Lost origin ACK не назван no-effect marker.
+
+Managed renewal отдельно описывает durable reservation и private native
+процесс: no-follow/exclusive0600 seed, experimentalApi=false, остановку writer
+до чтения результата, непрерывность account, новый access token и временные
+границы last_refresh до persist. Обычный JSON parser не выдан за canonical/
+unknown-field/duplicate guard. Deferred private-home/process cleanup может
+сделать итог UNKNOWN даже после сохранения; неопределённость не разрешает
+повтор старого OAuth эффекта. READ observation может сообщить SUCCEEDED
+по immutable publication без записи receipt; активация и свежая допустимость
+принадлежат owner. context.AfterFunc stop не назван ожиданием завершения
+callback: pinned go doc и Context7 /golang/go сверены вместе с OpenFile.
+
+Те же три пакета Kubernetes/transport/providercredential:127 верхних/445 всех
+PASS,0 FAIL/SKIP; full secret-broker build PASS LOCAL. Go1.26.6,
+GOENV/GOWORK off, GOMAXPROCS=4, команды те же, что в волне243.
+Fixture subprocess — текущий test executable со synthetic stdio/auth JSON;
+normal/lost reservation ACK/lost publication ACK, unchanged token, foreign
+account, persist error, lifecycle cancel и private-home cleanup проверены
+unit-тестами без настоящего provider/model/account или OAuth запроса.
+Fake service ports не выданы за real Kubernetes CAS/authority checks.
+
+Scope docs40/40, AST7, gofmt/diff-check, scan/assessment и5 addressed ignores
+PASS LOCAL. Рабочий Z6LYQU:6587 sources,222 excluded,1824 raw/
+598 retained/1226 unresolved; Go10048/21197, missing11149.
+Raw SHA256:
+`66cb7f1495dde8650ac0e14406373671ad7dc4bd855fff9262605e0706d736f1`.
+Clone-set и registry неизменны; точный post-commit run публикуется в PR.
+Secret-broker1038/1277:239 declarations providercredential ещё впереди.
+Generated/contracts/dependencies/migrations не менялись; общий `-check`
+и весь объём задачи не объявлены завершёнными. Прежние FAIL/SKIP/NOT RUN
+сохраняются, full acceptance/browser/live/deploy/реальные модели NOT RUN.
 
 ## Двести сорок третья волна — provider storage, cleanup и renewal receipts
 
