@@ -4109,7 +4109,7 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/organization_role_images.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "f5a26578cf566347bbb2e5584c3d487fb34eac0c1c1816e571b8100178b9639b",
+      "fragmentSHA256": "291e642167bc5884c9bbd4ccc6b4bed0d84100f96a34dc63699f4c72877d82ba",
       "count": 2,
       "reason": "Два перекрывающихся окна117/112 tokens одной пары paths проходят через завершение RequestOrganizationRoleImagePromotion и начала ListOrganizationRoleImageRecipeRevisions, ClaimImageAdmission и FailImageAdmission. Mutation receipt, scoped revision query и exact attempt claim/failure — разные специализированные доменные операции. Общие principal/error casters уже используются; перенос этих typed bindings в generic mutation dispatcher скрыл бы обязательные method/attempt pins. Сохранены только exact paths/fragment/count2."
     },

@@ -9,6 +9,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// PrepareRoleImageImpactPlan dispatches the specialized plan-preparation command through the shared
+// execute boundary using exact configuration/revision and mutation inputs; it maps the returned
+// optional plan rather than applying it.
+// PrepareRoleImageImpactPlan направляет специализированную команду подготовки плана через общую
+// execute-границу с точными конфигурацией, ревизией и вводом изменения; переносит полученный
+// необязательный план, не применяя его.
 func (server *Server) PrepareRoleImageImpactPlan(ctx context.Context, request *cp.PrepareRoleImageImpactPlanRequest) (*cp.PrepareRoleImageImpactPlanResponse, error) {
 	result, err := execute(ctx, server.service, cp.PlatformCommandService_PrepareRoleImageImpactPlan_FullMethodName, command.PrepareRoleImageImpactPlan, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RevisionRef: request.GetRevisionRef()})
 	if err != nil {
@@ -17,6 +23,10 @@ func (server *Server) PrepareRoleImageImpactPlan(ctx context.Context, request *c
 	return &cp.PrepareRoleImageImpactPlanResponse{Plan: castRoleImageImpactPlan(result.RoleImageImpactPlan)}, nil
 }
 
+// GetRoleImageImpactPlan resolves the exact query principal, requests a plan page from the domain and
+// maps consumer/outcome/version pins in the returned order without applying environment rebinding.
+// GetRoleImageImpactPlan разрешает principal точного запроса, получает страницу плана из домена и
+// переносит привязки потребителя, результата и версии по порядку, не выполняя перепривязку окружений.
 func (server *Server) GetRoleImageImpactPlan(ctx context.Context, request *cp.GetRoleImageImpactPlanRequest) (*cp.GetRoleImageImpactPlanResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_GetRoleImageImpactPlan_FullMethodName)
 	if err != nil {
@@ -36,6 +46,12 @@ func (server *Server) GetRoleImageImpactPlan(ctx context.Context, request *cp.Ge
 	return response, nil
 }
 
+// castRoleImageImpactPlan preserves nil or projects plan identity/version, configuration/revision,
+// image/policy/digest pins, total, enum state and timestamps; it does not validate freshness or
+// approve the plan.
+// castRoleImageImpactPlan сохраняет nil либо переносит личность и версию плана, конфигурацию, ревизию,
+// привязки образа, политики и хешей, количество, enum состояния и сроки; свежесть не проверяет и план
+// не одобряет.
 func castRoleImageImpactPlan(item *entity.RoleImageImpactPlan) *cp.RoleImageImpactPlan {
 	if item == nil {
 		return nil

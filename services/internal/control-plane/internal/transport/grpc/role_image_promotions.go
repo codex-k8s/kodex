@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// PromoteRoleImage resolves the exact principal and delegates promotion pins to the domain. If the
+// mutation key is absent it preserves the existing rpc-correlation fallback capped at 128 bytes; this
+// does not promise stable caller-selected retry identity.
+// PromoteRoleImage разрешает точный principal и передаёт привязки продвижения домену. При отсутствии
+// ключа изменения сохраняет прежний rpc-correlation fallback до 128 байт; устойчивый выбранный
+// клиентом идентификатор повторов этим не обещается.
 func (server *Server) PromoteRoleImage(ctx context.Context, request *controlplanev1.PromoteRoleImageRequest) (*controlplanev1.PromoteRoleImageResponse, error) {
 	principal, err := principal(ctx, controlplanev1.PlatformCommandService_PromoteRoleImage_FullMethodName)
 	if err != nil {
@@ -30,6 +36,11 @@ func (server *Server) PromoteRoleImage(ctx context.Context, request *controlplan
 	return &controlplanev1.PromoteRoleImageResponse{Receipt: castRoleImagePromotionReceipt(receipt)}, nil
 }
 
+// castRoleImagePromotionReceipt projects the domain receipt's recipe/artifact,
+// provenance/manifest/receipt hashes, state and creation time without creating or verifying a
+// promotion receipt.
+// castRoleImagePromotionReceipt переносит рецепт, артефакт, хеши происхождения, manifest и receipt,
+// состояние и время доменного результата, не создавая и не проверяя receipt продвижения.
 func castRoleImagePromotionReceipt(input entity.RoleImagePromotionReceipt) *controlplanev1.RoleImagePromotionReceipt {
 	return &controlplanev1.RoleImagePromotionReceipt{
 		Ref: input.Ref, RecipeRef: input.RecipeRef, ImageArtifactRef: input.ImageArtifactRef,

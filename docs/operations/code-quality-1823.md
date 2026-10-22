@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.259.0
+version: 1.260.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,76 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестидесятая волна — risk, impact и terminal transport
+
+Опубликованный SHA259 — `c4279f7f2767af654a8be444b576b612641670d9`.
+Точный ZkuFAN:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go10949/21233, missing10284. Raw SHA256:
+`259f56c4b1f4aba6ef6fd69668a835e27bdbff3467d9db186204dab8914e1c86`.
+Clone-set:
+`5eca165084ef7b7911a5bc22716c82fc76877d4a70e546aea1da0508a3359715`.
+Точные scoped unit/build, push/readback и Draft PR PATCH/GET259 подтверждены.
+
+Прочитаны целиком6 остальных выбранных role-image transport/test файлов,
+372 прежних строки: impact plan, promotion receipt, risk report/decision,
+organization revisions и terminal proof/recovery. Все40 declarations,
+включая18 методов handwritten imageRiskRequest, получили EN→RU комментарии.
+AST6 без комментариев/координат совпадает с SHA259; тела, inputs, constants,
+enum maps, imports, typed commands, полевые привязки и тесты не менялись.
+Combined scope с259:9 файлов,80/80 declarations; это выбранная область,
+не полнота всего control-plane или всех смежных runtime/image компонентов.
+
+Комментарии различают risk-request expected pins и проверенный principal,
+назначаемые wrapper ScopeKind/ProjectRef и ownership домена, UNAVAILABLE
+против READY, passthrough NextActions и copied fixed-version slices. Не
+обещаны scan, advisory URL fetch, automatic risk acceptance либо deep copy
+там, где выполняется только projection. castImageRiskDecision сохраняет
+wire Version1 и прежнее зеркалирование source admission revision; это не
+новая независимая версия. castImageAdmissionAttempt допускает live state,
+тогда как terminal caster принимает лишь4 конечных состояния и закрыто
+отклоняет остальные до ответа. Новый protocol/compatibility fallback нет.
+
+Существующий PromoteRoleImage при пустом mutation key использует bounded
+rpc-correlation fallback; комментарий явно не называет его устойчивым
+caller-selected retry identity. Этот путь в рамках comment-only этапа не
+исправлялся и не выдаётся за новую гарантию идемпотентности.
+
+Матрица неизменного пути:
+
+| Операция | Привязки/владелец | Что комментарий не утверждает |
+| --- | --- | --- |
+| Impact prepare/get | Exact execute/query principal, configuration/revision и domain plan | Не применение плана и не проверка свежести caster |
+| Vulnerability get | Разные exact project/organization methods и report digest/filter | Не выполнение scan либо принятие риска |
+| Risk decide | Common getter projection; wrapper principal/scope; specialized domain decision | Поля запроса не дают authority или owner approval |
+| Terminal/recovery get | Полный expected tuple либо domain run-bound proof и closed4-state caster | Не переход live attempt в terminal силами транспорта |
+| Promotion request/receipt | Прежний domain Promote и точные provenance pins | Не независимая проверка registry доставки |
+
+Первый canonical assessment после комментариев — FAIL на stale retained
+hash. Повторно прочитаны organization22–42 и обе role_images стороны
+528–546/602–621. Обновлён только один fragment hash записи с count2,
+причина, paths и кратность неизменны; остальные527 entries неизменны.
+Итого528 entries/631 occurrences,1818 raw и1187 unresolved — прежние
+счётчики; комментарии не выдаются за новый вынос или устранение дубликатов.
+
+Повторные101 верхний/277 всех unit PASS grpc и domain/service/roleimage,
+0 FAIL,3 SKIP: TestAssistantWarmRuntimeOwnerSnapshotTransport,
+TestLegacyEmailClaimCasterFixture, TestSecretOwnerLoopbackHarness — те же
+отключённые disposable контуры, перечисленные в259. Full control-plane
+build -p=2 PASS LOCAL.17 Node/Go checker units, scope40/40 и combined80/80,
+AST6, canonical scan/assessment,5 addressed ignores, gofmt/diff-check
+PASS LOCAL. Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4, -mod=readonly/
+-count=1/-timeout120s. Full unit других packages, component/review/browser/
+live/deploy, модели/STT/почта NOT RUN по scope; прежние FAIL сохранены.
+
+Рабочий4vlTJp:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go10989/21233, missing10244. Raw SHA256:
+`c20375a42a0716ced3881ac222c22368987fa5eae1701f894381d807f4a48e48`.
+Clone-set:
+`0f8f3355ad011e09c95b2680d610405762da26f27418368bdcb1a17f7cb323f2`.
+Exact post-commit отчёт публикуется в том же Draft PR. Generated outputs,
+контракты, зависимости, policy values, runtime strings и миграции не менялись.
+Полная задача остаётся активной, не завершена по этой промежуточной области.
 
 ## Двести пятьдесят девятая волна — проекция подробностей образа
 

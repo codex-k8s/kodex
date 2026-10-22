@@ -7,6 +7,12 @@ import (
 	roleimagerepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 )
 
+// RequestOrganizationRoleImagePromotion resolves its exact organization-operation principal, forwards
+// mutation and artifact/provenance pins to the domain and returns only the resulting promotion
+// receipt.
+// RequestOrganizationRoleImagePromotion разрешает principal точной организационной операции, передаёт
+// домену изменение и привязки артефакта и происхождения и возвращает лишь полученный receipt
+// продвижения.
 func (server *RoleImageServer) RequestOrganizationRoleImagePromotion(ctx context.Context, request *controlplanev1.RequestOrganizationRoleImagePromotionRequest) (*controlplanev1.RequestOrganizationRoleImagePromotionResponse, error) {
 	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_RequestOrganizationRoleImagePromotion_FullMethodName)
 	if err != nil {
@@ -22,6 +28,12 @@ func (server *RoleImageServer) RequestOrganizationRoleImagePromotion(ctx context
 	return &controlplanev1.RequestOrganizationRoleImagePromotionResponse{Receipt: castRoleImagePromotionReceipt(result)}, nil
 }
 
+// ListOrganizationRoleImageRecipeRevisions keeps exact organization-read authority and forwards
+// recipe/page selection to the domain, projecting ordered revision provenance and cursor without
+// resolving ownership from request fields.
+// ListOrganizationRoleImageRecipeRevisions сохраняет полномочия точного организационного чтения и
+// передаёт домену выбор рецепта и страницы, перенося порядок ревизий, происхождение и курсор без
+// назначения владения из полей запроса.
 func (server *RoleImageServer) ListOrganizationRoleImageRecipeRevisions(ctx context.Context, request *controlplanev1.ListOrganizationRoleImageRecipeRevisionsRequest) (*controlplanev1.ListOrganizationRoleImageRecipeRevisionsResponse, error) {
 	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ListOrganizationRoleImageRecipeRevisions_FullMethodName)
 	if err != nil {
