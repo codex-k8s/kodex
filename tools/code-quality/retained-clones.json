@@ -3,6 +3,54 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/transport/grpc/authority.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/transport/grpc/authority.go",
+      "fragmentSHA256": "fc2b4bff8bb94f70565590d11a64d0013d1ee9502fa9356951767b212553e2e3",
+      "count": 1,
+      "reason": "Окно104 tokens объединяет struct, typed constructor и начало двух разных generated RPC: issuer выпускает context по proof, verifier принимает compact context и observed peer. Общего связного алгоритма во всём окне нет; повтор constructor — одно присваивание. Общая базовая структура или generic handler скрыли бы разные Unimplemented service interfaces и request contracts без выноса бизнесовой копии. Оставлено только это точное внутрефайловое окно/hash/count1, не серверы и методы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/transport/grpc/authority.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/transport/grpc/authority.go",
+      "fragmentSHA256": "539dcffba6cf25f3797637b95d0e00e49f6044b5ca5fbbf6b9f0984e4330f00b",
+      "count": 1,
+      "reason": "Окно135 tokens пересекает конец application call, fixed error mapping, разные nominal Proto response literals и начало следующего RPC. Issue и continuation уже делят mapError, claims casters и доменные проверки; совпадающие response поля принадлежат разным generated message types, общих setters у них нет. Reflection/map либо generic dispatcher ради DTO разрушил бы явный wire mapping и смешал исходный proof с parent lineage. Сохранена только точная пара/hash/count1, не весь response/handler."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/transport/grpc/authority.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/transport/grpc/readback.go",
+      "fragmentSHA256": "0f7ee19726d0a8dd613850c5805876fa94605a34cd60cadfe525bfcdefdc4dd7",
+      "count": 1,
+      "reason": "Совпало108-token окно через границы методов: хвост issuer response против хвоста readback challenge response, затем сигнатура/первичная форма разных RPC. Parent context continuation и attestation challenge имеют разные authority, nominal requests и обязательные поля; общего алгоритма всего окна нет. HasMalformedProto и validCorrelation уже общие; универсальный валидатор с callback fields ухудшит видимость независимых gates. Исключены лишь эта точная пара файлов/fragment/count1, не validators или authority paths."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/transport/grpc/authority.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/transport/grpc/restore.go",
+      "fragmentSHA256": "375d032fc6ad9b83d15ec1a554fb2a2976dbe09526185763e062d4d49360ac7b",
+      "count": 1,
+      "reason": "Окно101 tokens смешивает хвост предыдущего reply и начало разных typed handlers: continuation issuer и quiescence ACK. Различаются parent/request binding и role/directive/ACK proofs, peer admission и доменные переходы; совпадают лишь generated signature, nil/malformed guard и чтение diagnostic correlation. Эти примитивы уже общие, а общий command handler скрыл бы разные security contracts без выделения единого алгоритма. Оставлены только данные два пути/hash/count1, не ACK/continuation целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/transport/grpc/publisher.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/transport/grpc/readback.go",
+      "fragmentSHA256": "592fcc02369d1d8e10e9d832f373621fcafe30e2236f6441097e02088a16e3d6",
+      "count": 1,
+      "reason": "Окно118 tokens начинается с конца import, затем сравнивает разные service structs, typed constructors и первые guards. Publisher хранит конкретный application.Publisher и controller generation, attestor — application.ReadbackAttestor и verifier generation; дальше admission/durability принципиально разные. Повторены только два присваивания и generated scaffolding; общий container/dispatcher заменил бы строгие поля type assertions, не устранив бизнесовый алгоритм. Сохранены точные пути/fragment/count1, не файлы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/transport/grpc/restore.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/transport/grpc/restore.go",
+      "fragmentSHA256": "634aa08548c75d10d92de5bce1904680926be4cfc7dd5317c4d6474b7aa01509",
+      "count": 1,
+      "reason": "Реальный общий operator-peer→semantic digest→bearer/domain admission уже вынесен в authorizeRestoreCommand: исходное337-token окно сократилось до252 tokens. Остались два самостоятельных typed RPC, envelope/time checks, точные разные FullMethod constants, разные model.PrepareRestoreCommand/CompleteRestoreCommand и nominal Proto replies. Полный generic executor или reflection ради одинакового расположения полей скрыл бы специализированные переходы и их method-bound reservation. Сохранён лишь остаточный exact fragment/count1 этого файла, не общий helper, domain authority или остальные restore методы."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/secret-broker/internal/integration/draftowner/owner_test.go",
       "secondPath": "services/internal/secret-broker/internal/integration/draftowner/owner_test.go",
       "fragmentSHA256": "d27652638e6f2967dbd9e908e0331361f7a55d6ac4fb152157f6a1e69a304240",

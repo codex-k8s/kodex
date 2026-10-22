@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.247.0
+version: 1.248.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,91 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок восьмая волна — authority gRPC и общий restore admission
+
+Опубликованный SHA247 — `c88168e00426afa1abdb3e8f7f89b26d0bb12c67`.
+Точный G0xyV5:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go10292/21202, missing10910. Raw SHA256:
+`449db7bea26139d0965c5493a65bb1ba88722ffbe8367c492ce5f1f77df06172`.
+Clone-set:
+`2a826d9629d0a79c8055dc8d87f7b653ec1bf6d85503532e16a77aa51da2972a`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA247 full
+secret-broker205/658, full build,17 Node/Go checker units, docs1282/1282
+и scan PASS LOCAL;0 FAIL,1 SKIP — TestSecretOwnerCompositionConsumer.
+
+Прочитаны все1480 строк исходных transport/grpc файлов authority и профильная
+карта README issuer/verifier/continuation/restore. Ранее полностью прочитанные
+GO-DOC-001/003/006, GUIDE-DOC-003/006 не изменились относительно прежних волн.
+84 прежних declarations, новый typed request interface с5 getters, helper,
+private message constant и6 test declarations описаны EN→RU:98/98 в7 файлах.
+Package docs также двуязычные. Generated Proto, contracts, migration и policy
+не менялись. Отсутствующий transport/caster не выдумывался: после rg проверен
+реальный layout, casts находятся непосредственно в authority.go.
+
+Вынесен только общий authorizeRestoreCommand для PrepareRestore и
+CompleteRestore: exact operator mTLS → canonical semantic digest → bearer
+review → domain method/idempotency reservation. Readonly request interface
+передаёт payload intent, не authority. Две specialized domain commands,
+разные FullMethod constants и nominal Proto replies остаются явными.
+Две identical public diagnostic строки стали одной private constant без
+изменения message/code. Inverse AST6 разворачивает только2 helper calls,
+удаляет новый interface/helper/constant и возвращает2 literals: SHA247 identity.
+Остальные изменения исходных6 Go-файлов — comments/gofmt; новый test file
+содержит только synthetic fixtures и regression tests.
+
+Матрица сохранённого lifecycle/authority пути:
+
+| Actor/endpoint | До общего участка | Authority и владелец состояния | После admission |
+| --- | --- | --- | --- |
+| Operator / PrepareRestore | Typed Proto/timestamp/correlation shape | Verified exact operator peer; projected bearer TokenReview с fixed audience; domain сверяет subject/SA/token digest, method allowlist, UUID idempotency и semantic digest, затем coordination store резервирует запись | Только application.Prepare и typed Prepare reply |
+| Operator / CompleteRestore | Те же независимые typed guards | Тот же владелец reservation, но exact CompleteRestore method; request fields не дают роль/доступ | Только application.Complete, доменные barrier/terminal checks и typed Complete reply |
+| Invalid envelope/time | Отказ до peer/credential | Ни TokenReview, ни domain command не вызываются | Прежний InvalidArgument detail |
+| Missing/wrong operator peer | Отказ до bearer review | mTLS не заменяет application token | Прежний PermissionDenied detail |
+| Missing/unverified bearer | После peer, до domain command | Private verifier error не становится public cause | Прежний Unauthenticated restore detail |
+
+Все grant/lease/claim/retry/cancel/terminal/restore epochs, PostgreSQL
+transactions и события остаются у прежних владельцев без новых переходов.
+Общий участок не даёт нового endpoint/authority и не превращает safe digest
+в credential. Semantic time по-прежнему UTC с усечением до секунды.
+
+Два новых tests покрывают14 negative cases обоих публичных RPC: envelope/time
+до admission, missing/wrong peer до review, отсутствие verifier/bearer и
+отклонённый bearer до domain. Проверяются review count, exact synthetic
+token/audience и один typed detail с correlation. TLSInfo/VerifiedChains —
+контекстная fixture, не реальный handshake/TokenReview. Positive successful
+operator reservation через новые transport tests не заявлен: сохранённый
+путь подтверждён inverse AST, сборкой и existing application/domain units.
+Context7 /grpc/grpc-go и pinned peer.FromContext/credentials.TLSInfo сверены;
+WithDetails не назван механизмом выдачи response вместе с non-OK статусом.
+
+Полностью прочитаны обе стороны6 текущих detector windows. Реальный общий
+restore admission уменьшил большое окно337→252 tokens. Остаток — typed
+handlers/command/reply mappings; остальные5 пересекают constructors и method
+boundaries либо nominal Proto replies разных security contracts. Точные
+fragment/path/count1 decisions добавлены без целых файлов/широких ignore.
+Raw1824 не выдаётся за уменьшение числа групп: retained604, unresolved1220.
+Все прежние598 сохранённых групп (497 registry entries) неизменны;
+после добавления6 адресных решений503 entries покрывают604 группы.
+Working pre-doc pghHiZ —
+промежуточный снимок, не final measurement.
+
+`go test -mod=readonly -count=1 -timeout 120s -json
+./internal/transport/grpc ./internal/application ./internal/domain/service`:
+20 верхних/49 всех PASS,0 FAIL/SKIP; полный authority build PASS LOCAL.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4.17 Node/Go checker units,
+scope98/98, inverse AST6, gofmt/diff-check и5 addressed ignores PASS LOCAL.
+Полный authority unit/component и real TLS/cluster/restore execution NOT RUN.
+
+Рабочий ddG8rP:6588 sources,222 excluded,1824 raw/604 retained/
+1220 unresolved; Go10390/21216, missing10826. Raw SHA256:
+`b92e74ae9bf9f57bff1ba7bf728afeaf17004b48ea8e5a007b6b90e205273f64`.
+Clone-set:
+`7fca2ec03d0a764724b1887733907b845d0d60fe9f37a4b1f6e572d3c8a40715`.
+Точный post-commit run публикуется в PR. Commit preflight теперь сравнивает
+точное объединение modified tracked и явно ожидаемых untracked files:
+новая synthetic test оснастка не скрыта и stage включает только её и scope.
+Прежние FAIL/SKIP/NOT RUN сохранены; вся задача ещё не завершена.
 
 ## Двести сорок седьмая волна — завершение комментариев secret-broker
 
