@@ -18,10 +18,18 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// errWorkingDirectory is the fixed unsafe-workspace sentinel, intentionally excluding raw paths/errors.
+// errWorkingDirectory — фиксированный unsafe-workspace sentinel без сырых paths/errors.
 var errWorkingDirectory = errors.New("runtime working directory is unsafe")
 
+// workspaceGuideName names the platform-recreated navigation document inside the writable work tree.
+// workspaceGuideName задаёт имя заново создаваемого платформой справочника в writable work tree.
 const workspaceGuideName = "WORKSPACE.md"
 
+// workspaceGuide explains the canonical runtime tree, editable copies, read-only originals,
+// lookup/publication boundaries and ephemeral lifetime; prose does not enforce filesystem permissions.
+// workspaceGuide объясняет каноническое runtime tree, изменяемые копии, read-only originals,
+// границы поиска/публикации и временный lifecycle; текст не обеспечивает filesystem permissions.
 const workspaceGuide = `# Рабочие файлы агента
 
 Текущий каталог: /workspace/work. Осмотри доступное дерево каталогов и найди
@@ -91,7 +99,10 @@ Workspace изолирован и временный: перед следующ�
 локальный файл и финальное сообщение сами по себе не подтверждают публикацию.
 `
 
-// Это описание выданной immutable policy, не настройка роли или новые права.
+// materializedWorkspaceGuide appends the issued writable budgets and fixed artifact size limit
+// to navigation prose without validating or changing the immutable runtime policy.
+// materializedWorkspaceGuide добавляет выданные writable budgets и фиксированный artifact size limit
+// к справочнику без проверки или изменения immutable runtime policy.
 func materializedWorkspaceGuide(input model.Input) string {
 	return workspaceGuide + fmt.Sprintf(`
 ## Выданные ограничения файловой системы
@@ -113,16 +124,30 @@ result.md и workspace-write-result.json: их назначает платфор
 `, input.WorkspacePolicy.MaximumWritableBytes, input.WorkspacePolicy.MaximumFileCount, maximumPublishedArtifactBytes)
 }
 
+// workingDirectory joins the supplied root with the canonical working-root basename;
+// it computes a path only and does not validate, create or authorize that directory.
+// workingDirectory соединяет переданный root с basename канонического working root;
+// она лишь вычисляет путь, не проверяя, не создавая и не разрешая доступ к каталогу.
 func workingDirectory(input model.Input) string {
 	return filepath.Join(input.WorkspaceRoot, filepath.Base(runtimecontract.RuntimeWorkspaceWorkingRoot))
 }
 
-// Broker очищает собственные рабочие файлы после join предыдущего provider.
-// Оригиналы и их manifest не изменяются; копии не являются publication authority.
+// prepareWorkingDirectory uses fixed source UID 10001 to reset the broker's working tree after the
+// caller has joined the previous provider. Originals remain read-only sources; copies are not publication grants.
+// prepareWorkingDirectory использует фиксированный source UID 10001 для сброса рабочего дерева broker
+// после выполненного caller join прежнего provider. Оригиналы остаются read-only; копии не дают publication grant.
 func prepareWorkingDirectory(ctx context.Context, input model.Input) error {
 	return prepareWorkingDirectoryOwned(ctx, input, 10001)
 }
 
+// prepareWorkingDirectoryOwned checks attachment/policy metadata and guide/input preflight quotas,
+// locks and opens the expected owned work directory, rebuilds it, releases the lock, then runs the canary.
+// sourceUID is a trusted internal/test parameter. Full writable accounting belongs to the canary;
+// failures can leave a partially reset tree and do not roll back earlier filesystem effects.
+// prepareWorkingDirectoryOwned проверяет attachment/policy metadata и preflight квоты guide/input,
+// блокирует и открывает work ожидаемого owner, пересоздаёт его, снимает lock и запускает canary.
+// sourceUID — доверенный internal/test parameter. Полный writable accounting принадлежит canary;
+// при отказе дерево может быть сброшено частично, без отката прежних filesystem effects.
 func prepareWorkingDirectoryOwned(ctx context.Context, input model.Input, sourceUID uint32) error {
 	if _, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts); err != nil {
 		return errWorkingDirectory
@@ -168,6 +193,14 @@ func prepareWorkingDirectoryOwned(ctx context.Context, input model.Input, source
 	return workspacepolicy.RunCanary(ctx, input.WorkspaceRoot, input.WorkspacePolicy)
 }
 
+// prepareWorkingTree requires a held workspace lock and an expected directory descriptor. It compares
+// an os.Root with that inode, clears its children, fsyncs a fresh guide and copies only INPUT artifacts.
+// Root-relative operations constrain path traversal, not mounts; cancellation checks occur between
+// steps and failures are not transactional. Session history/knowledge are never copied as editable input.
+// prepareWorkingTree требует workspace lock и descriptor ожидаемого каталога. Она сравнивает
+// os.Root с этим inode, удаляет дочерние записи, синхронизирует новый guide и копирует только INPUT artifacts.
+// Root-relative operations ограничивают path traversal, не mounts; отмена проверяется между
+// шагами, отказ не транзакционен. История сессии и знания не копируются как изменяемый input.
 func prepareWorkingTree(ctx context.Context, input model.Input, directory *os.File, sourceUID uint32) error {
 	// os.Root привязывает удаление к открытому inode и не выпускает traversal
 	// наружу даже при повреждённых остатках предыдущей попытки.
@@ -226,6 +259,14 @@ func prepareWorkingTree(ctx context.Context, input model.Input, directory *os.Fi
 	return nil
 }
 
+// copyWorkingInput expects a validated regular source opened at offset zero and a trusted INPUT
+// descriptor/path. It checks owner/link/mode/size, exclusively creates a root-relative writable copy,
+// hashes at most size+1 bytes, rechecks source identity/times and syncs/closes the target. Failure may
+// leave a partial target; matching bytes do not create an artifact publication or new capability.
+// copyWorkingInput требует проверенный regular source со смещением ноль и доверенные INPUT
+// descriptor/path. Она проверяет owner/link/mode/size, исключительным образом создаёт root-relative
+// writable copy, хеширует не более size+1 байтов, сверяет source identity/times и sync/close target.
+// При отказе target может остаться частичным; совпадение байтов не создаёт публикацию или capability.
 func copyWorkingInput(root *os.Root, relative string, source *os.File, before os.FileInfo, artifact runtimecontract.RunnerInputArtifact, sourceUID uint32) error {
 	stat, ok := before.Sys().(*syscall.Stat_t)
 	if !ok || stat.Uid != sourceUID || stat.Nlink != 1 || before.Mode().Perm() != 0o440 || before.Size() != artifact.SizeBytes {

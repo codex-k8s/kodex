@@ -14,12 +14,18 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// proofRequestWriter captures a synthetic request after a required pre-write hook, optionally
+// failing the write to test that no acknowledgement projection appears early.
+// proofRequestWriter сохраняет synthetic request после обязательного pre-write hook, при необходимости
+// имитируя отказ записи для проверки отсутствия преждевременной acknowledgement projection.
 type proofRequestWriter struct {
 	bytes.Buffer
 	beforeWrite func()
 	failure     error
 }
 
+// Write invokes the nonnil hook before either returning the injected failure or buffering all bytes.
+// Write вызывает ненулевой hook перед возвратом подставленного отказа либо буферизацией всех байтов.
 func (writer *proofRequestWriter) Write(raw []byte) (int, error) {
 	writer.beforeWrite()
 	if writer.failure != nil {
@@ -27,8 +33,15 @@ func (writer *proofRequestWriter) Write(raw []byte) (int, error) {
 	}
 	return writer.Buffer.Write(raw)
 }
+
+// Close satisfies the request-stream interface without owning a descriptor or clearing captured bytes.
+// Close реализует request-stream interface, не владея descriptor и не очищая сохранённые байты.
 func (*proofRequestWriter) Close() error { return nil }
 
+// proofFixture creates current synthetic TURN metadata, private sentinels and matching guide/prompt
+// files alongside deliberately stale WARM state; it contains no real credential or provider execution.
+// proofFixture создаёт текущие synthetic TURN metadata, private sentinels и совпадающие guide/prompt
+// files рядом с намеренно устаревшим WARM state; реальных credential и provider execution здесь нет.
 func proofFixture(t *testing.T) (model.Input, []byte) {
 	t.Helper()
 	root := t.TempDir()
@@ -66,6 +79,10 @@ func proofFixture(t *testing.T) (model.Input, []byte) {
 	return input, prompt
 }
 
+// TestProviderInputProofActualAcknowledgedPayloadAndPrivacy injects an in-progress ACK and compares
+// the captured request with privileged hashes/bindings, byte-equal files and omission of private sentinels.
+// TestProviderInputProofActualAcknowledgedPayloadAndPrivacy подставляет in-progress ACK и сопоставляет
+// сохранённый request с приватными hashes/bindings, точными байтами файлов и отсутствием private sentinels.
 func TestProviderInputProofActualAcknowledgedPayloadAndPrivacy(t *testing.T) {
 	input, prompt := proofFixture(t)
 	var logs bytes.Buffer
@@ -123,6 +140,10 @@ func TestProviderInputProofActualAcknowledgedPayloadAndPrivacy(t *testing.T) {
 	}
 }
 
+// TestProviderInputProofNoReceiptBeforeSuccessfulProviderAck injects write, RPC, invalid-status and
+// missing-ACK failures, requiring no projection log on any path; a real provider is not started.
+// TestProviderInputProofNoReceiptBeforeSuccessfulProviderAck подставляет write, RPC, invalid-status и
+// missing-ACK failures, требуя отсутствия projection log; реальный provider не запускается.
 func TestProviderInputProofNoReceiptBeforeSuccessfulProviderAck(t *testing.T) {
 	for _, failure := range []string{"write", "rejected", "invalid ACK", "missing ACK"} {
 		t.Run(failure, func(t *testing.T) {
@@ -154,6 +175,10 @@ func TestProviderInputProofNoReceiptBeforeSuccessfulProviderAck(t *testing.T) {
 	}
 }
 
+// TestProviderInputProofClosedComparisonsAndPayloadShape distinguishes changed/unavailable files,
+// rejects a leaf alias, arbitrary credential path and representative invalid first-item/model/effort shapes.
+// TestProviderInputProofClosedComparisonsAndPayloadShape отличает changed/unavailable files,
+// отвергает leaf alias, произвольный credential path и неверные first-item/model/effort shapes.
 func TestProviderInputProofClosedComparisonsAndPayloadShape(t *testing.T) {
 	input, prompt := proofFixture(t)
 	params := map[string]any{"model": input.Model, "effort": input.EffectiveReasoningEffort, "input": []map[string]any{{"type": "text", "text": string(prompt)}}}

@@ -13,12 +13,22 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// maximumPublishedArtifactBytes caps each nonempty published regular file at one MiB.
+// maximumPublishedArtifactBytes ограничивает каждый непустой публикуемый regular file одним МиБ.
 const maximumPublishedArtifactBytes = 1 << 20
 
+// errProviderOutboxPublication is the fixed sentinel wrapped with a closed filesystem reason;
+// it does not contain the artifact path or underlying operating-system diagnostic.
+// errProviderOutboxPublication — фиксированный sentinel с закрытой filesystem reason;
+// путь артефакта и исходная диагностика ОС в него не входят.
 var errProviderOutboxPublication = errors.New("provider outbox publication is invalid")
 
-// Публикация выполняется самим writer UID после join provider-процессов.
-// Runner не получает CAP_CHOWN или доступ к приватному provider home.
+// publishProviderOutbox requires writer UID 10002, validates policy and takes the workspace lock
+// before granting shared read on eligible outbox files. The caller must already have joined provider
+// processes; this function neither stops them nor uploads artifacts or grants access to private home.
+// publishProviderOutbox требует writer UID 10002, проверяет policy и берёт workspace lock
+// перед выдачей shared read допустимым файлам outbox. Caller обязан заранее выполнить join provider
+// processes; функция их не останавливает, не загружает артефакты и не открывает приватный home.
 func publishProviderOutbox(ctx context.Context, input model.Input) error {
 	if ctx.Err() != nil {
 		return providerFilesystemDenied(errProviderOutboxPublication, filesystemContext)
@@ -42,8 +52,14 @@ func publishProviderOutbox(ctx context.Context, input model.Input) error {
 	return publishOutboxDirectory(ctx, directory, input.WorkspacePolicy.MaximumFileCount, 10001, 10002, 29000)
 }
 
-// UID/GID здесь задаёт только закрытый production callsite, не runtime input.
-// Отдельная fd-bound операция позволяет проверять отказ без root fixtures.
+// publishOutboxDirectory consumes an open directory at its current read offset, checks its exact
+// owner/group/setgid mode and entry budget, skips directories/result.md and publishes remaining files.
+// Trusted production code supplies identities and a fresh descriptor. Failure can follow earlier
+// chmod/chown effects: this flat permission publication is neither transactional nor an artifact upload.
+// publishOutboxDirectory читает открытый каталог с текущего смещения, проверяет точные
+// owner/group/setgid mode и бюджет записей, пропускает каталоги/result.md, публикуя остальные файлы.
+// Identities и свежий descriptor задаёт доверенный production code. До ошибки уже могли пройти
+// chmod/chown: эта плоская публикация прав не транзакционна и не является загрузкой артефакта.
 func publishOutboxDirectory(ctx context.Context, directory *os.File, maximumFiles int64, runnerUID, providerUID, group uint32) error {
 	if ctx.Err() != nil {
 		return providerFilesystemDenied(errProviderOutboxPublication, filesystemContext)
@@ -81,6 +97,14 @@ func publishOutboxDirectory(ctx context.Context, directory *os.File, maximumFile
 	return nil
 }
 
+// publishOutboxFile expects a validated single-component name beneath the supplied directory fd.
+// It opens without following a leaf symlink, requires a provider-owned single-link bounded regular
+// file, adjusts that inode's group/mode, then compares fd/path metadata. It does not parse contents,
+// freeze later writes or roll back permission changes if a subsequent check fails.
+// publishOutboxFile требует уже проверенное однокомпонентное имя под переданным directory fd.
+// Она открывает leaf без следования symlink, требует provider-owned single-link bounded regular
+// file, меняет group/mode этого inode и сравнивает fd/path metadata. Содержимое не разбирается,
+// последующие записи не замораживаются, изменения прав при поздней ошибке не откатываются.
 func publishOutboxFile(directory int, name string, providerUID, group uint32) error {
 	descriptor, err := unix.Openat(directory, name, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {

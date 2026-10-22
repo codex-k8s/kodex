@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.226.0
+version: 1.227.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,74 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать седьмая волна — input receipt, outbox и working copies
+
+Опубликованный SHA226 — `3930c46b35da2288717d4d54d584be389e2b5086`.
+Точный UcPDR4: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 8916/21177, missing 12261. Raw SHA256:
+`9ccc0b546bffbe4c9e657df64a6a5070c8405eb1ca3105cb91c8fdc3282eb1ab`.
+Clone-set:
+`d380f057dd437b7c0bd92de75d08cf3c9a83917d0101a47313400a72e3c7d934`.
+Push/readback и PATCH/GET PR226 подтверждены. На SHA226 parser59/185
+unit и полная сборка runner PASS, 0 FAIL/SKIP.
+
+Полностью прочитаны provider_input_proof.go242/test187,
+outbox_publication.go121/test194/container_test61,
+workspace_work.go258/test298. Все 52 объявления EN→RU.
+Исполняемые AST всех семи файлов идентичны SHA226 без comments/token.Pos.
+Фактические условия и callbacks, права, grants, JSON-поля, budgets и
+переходы не менялись. Прежние русские doc blocks заменены предметными
+двуязычными, runtime errors/logs остались английскими.
+
+Input receipt описан как privileged projection первого text/model/effort
+и подготовленного verified TURN после успешного start ACK/bind, не как
+full wire serialization, cryptographic provider attestation или completion.
+Сравнения двух фиксированных файлов не проверяют все root ancestors,
+owner/link count, mounts или будущие изменения. У observer нет error/
+retry/durable delivery contract; logger не является общим redactor.
+
+Outbox publication — выдача group/mode на eligible regular files, не upload
+или content scan. Caller заранее делает join. Directory reader требует
+свежий fd; директории/result.md пропускаются. File helper получает уже
+проверенное single-component name. Ошибка после chmod/chown либо после
+публикации предыдущего файла не откатывает эффекты. Файлы не замораживаются
+от будущих записей. Все эти границы явно отражены без новых гарантий.
+
+Working copies: preflight guide/input quota отдельно от полного canary
+accounting. Reset идёт под lock в inode-сверенном os.Root, не становится
+mount sandbox и не транзакционен. INPUT копируется с owner/link/mode/size/
+hash/times проверками; SESSION/KNOWLEDGE не становятся editable inputs.
+Guide лишь объясняет выданные ограничения и не выдаёт capabilities.
+Canary делает реальные локальные fsync/rename/readback/delete, не внешний
+запуск агента или Kubernetes. Внешние originals/sentinels не изменяются.
+
+Выбраны точные 13 Test-функций:
+12 верхних/41 всех PASS, 0 FAIL, 1 SKIP TestWorkingDirectoryTwoUIDFixture.
+TestProviderOutboxPublicationContainer без opt-in mode вернулся без
+исполнения и не объявлен доказательством UID/container boundary.
+Оба opt-in env удалены из дочернего процесса. Root/two-UID/container
+сценарии NOT RUN, реальные provider/model/agent credentials не использованы.
+Команда с GOENV/GOWORK off, Go1.26.6, GOMAXPROCS=4 из runner:
+`env -u KODEX_WORKING_UID_FIXTURE -u KODEX_OUTBOX_PUBLICATION_TEST go test -mod=readonly -count=1 -timeout 120s -json ./internal/codex -run '^(TestProviderOutboxPublicationContainer|TestProviderOutboxPublicationPrivateAndAtomicFiles|TestProviderOutboxPublicationRejectsUnsafeEntries|TestExecuteProviderTurnDoesNotPublishAssistantOrFailedOutbox|TestExecuteProviderTurnRejectsArtifactPublicationPreservingUsage|TestProviderInputProofActualAcknowledgedPayloadAndPrivacy|TestProviderInputProofNoReceiptBeforeSuccessfulProviderAck|TestProviderInputProofClosedComparisonsAndPayloadShape|TestWorkingDirectoryTwoUIDFixture|TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs|TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota|TestWorkspaceGuideDescribesIssuedLimitsWithoutChangingPolicy|TestWorkingDirectoryRejectsSourceTamperingAndUnsafeRoot)$'`.
+Полная сборка runner `go build -mod=readonly ./...`, scope52/52,
+AST7, 17 Node units, unit Go checker, 5 ignore boundaries, gofmt/diff-check
+PASS LOCAL. Context7 /websites/pkg_go_dev_go1_25_3 os.Root/OpenRoot и
+io.LimitReader/ReadAll дополнены официальными local Go1.26.6
+`go doc os.Root`, `go doc io.LimitReader`. Новых SDK/API/dependencies нет.
+
+Рабочий CcsJ75: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 8968/21177, missing 12209. Raw SHA256:
+`de3dbfdb9c844fcf2843258137a269c7b44f118e691c5c30049e0cbb435022d5`.
+Clone-set:
+`66627e4addb1139b4ee7bf0d1cd2c682e8c8d783e0618e7221b82f88caca2e4d`.
+Multiset пар/fragment/count прежний. В scope только ранее retained
+nominal-literal overlap provider_input_proof/role_images; после комментариев
+сдвинулись координаты, новое исключение/вынос не добавлены. Точный
+post-commit scan и unit/build публикуются в том же Draft PR.
+Общий Go-docs check, оставшиеся группы и финальные module units впереди.
+Исторические FAIL/SKIP/NOT RUN сохранены. Live/browser/deploy/ИИ/STT/почта
+NOT RUN; задача активна, merge/ready не выполняются.
 
 ## Двести двадцать шестая волна — parser tests и границы доказательств
 
