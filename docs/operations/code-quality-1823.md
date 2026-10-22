@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.309.0
+version: 1.310.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,82 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста десятая волна — платформенные и организационные снимки
+
+Предыдущий опубликованный SHA — `600415438873984e822b68e4cc220a24f919665c`.
+Exact H2MwAq:6639 sources,222 excluded,1803 raw/725 retained/
+1078 unresolved; Go13518/21293,missing7775. Source SHA, push и Draft PR
+body/head309 подтверждены GET. Общий объём не завершён.
+
+Прочитаны полностью6 файлов platform/platform_snapshot/organization_snapshot
+и их typed/catalog-batch tests:1433 исходных строки. Все54 declarations
+описаны EN→RU; существующее inline пояснение authority rejoin тоже
+двуязычно. Новых declarations, helpers или изменений исполняемого кода нет.
+Полные AST6 и //go: directives совпадают с309. Профильные GO-DOC-004
+(version1.4.0,472 lines) и GO-DOC-005 (version1.2.1,381 lines) прочитаны
+полностью; stateless wake exception не объявлен durable inbox/effect.
+
+Comments фиксируют реальные границы:
+- platformBusEnvelope/Signal — bounded wake shape, не grant или бизнесовый
+  effect; expected organization приходит из owner cursor, но decoder сам
+  не проверяет sender/signature или все поля metadata;
+- DisallowUnknownFields+EOF не названы защитой от duplicate JSON keys.
+  Context7 /golang/go и pinned Go1.26.6 encoding/json security considerations
+  и Decoder.DisallowUnknownFields подтверждены. Новый negative runtime
+  contour для этого parser НЕ запускался; поведение parser не менялось;
+- typedPlatformSnapshot проверяет generated shape и набор разделов по kind,
+  а не всю доменную семантику или права;
+- explicit project selector не authority; owner RPC решает доступ, а
+  организационные recipes/secrets проверяют согласованность scope/ref/page.
+  Одна согласованная organization в response не названа доказательством
+  членства caller. Project/org catalogs и pagination остаются раздельными;
+- assistant hint хранит только размер для exact socket/org/project, без
+  owner payload. Bounded reads заново получают owner data и меряют полный
+  envelope; только допустимые виды уменьшают whole page без усечения;
+- sendPlatformBootstrap публикует виды последовательно: поздний failure не
+  откатывает ранее queued frames. Атомарность общего набора не заявляется;
+- provider financial fallback требует прежний точный ErrorInfo domain/reason
+  с пустой metadata; обычный network/auth error не становится успехом.
+
+Матрица неизменённых сценариев:
+
+| Источник → consumer | Прежний authority/read path | Прежний failure/effect |
+| --- | --- | --- |
+| owner cursor → NATS wake → decodePlatformSignal | expected organization и известная event/kind пара | invalid shape игнорируется; payload сам не выдаёт права |
+| kind → projectPlatformSnapshotPage → owner RPCs | typed clients и прежний application context; exact project selector | явно optional denied/missing части только в своих ветвях, прочие ошибки наружу |
+| organizational listing → typed catalog | отдельные owner endpoints, page50, согласованный org-only scope | NotFound/PermissionDenied очищают только org part; dependency error не пустой успех |
+| owner projection → bounded full envelope | generated shape, optional page hint, неизменный byte cap | без partial kind/truncation/cursor write внутри bounded method |
+| sequential bootstrap → outbound queue | фиксированный порядок допустимых kinds | denied kind skip; иной read failure unavailable; queue overflow немедленно, без отката предыдущих frames |
+| heartbeat RUN reuse → fresh/read/resync policy | прежние границы kind/project/authority/gap/denial | существующие tests проверяют count/cancel/overflow/full-envelope cap; политика не менялась |
+
+Ни один event/subject/schema, owner write, grant, timeout, retry, page limit,
+cursor или projection behavior не менялся. Это документация текущего кода,
+не устранение parser/security backlog и не полный live proof.
+
+584 верхних/2677 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP.17 Node unit, Go checker unit, AST6, scope54/54,
+5 addressed ignores, gofmt и git diff --check — PASS LOCAL.
+Выполненная команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+Browser/NATS/owner service/IdP/provider live, credentials, component/deploy/
+full acceptance NOT RUN. Generated/contracts/dependencies/SQL/migrations/
+live state прежние. Исторические FAIL/finding293 не исправлены.
+
+Рабочий uA8UyB:6639 sources,222 excluded,1803 raw/725 retained/
+1078 unresolved; Go13572/21293,missing7721. Raw SHA256:
+`d44bbe212ba05c4f10001c2f074b1a27b18c89415d9f9ea6ac3432208994376e`.
+Все1803 clone keys/counts и clone-set
+`39441cde4926945f8ab65f604929475462754411f3772c4519a71673f3bc677f`
+совпадают309. Registry607 entries/725 occurrences прежний, новых
+exclusions нет; в этой волне устранение новых clone groups не заявляется.
+После коммита exact scan/unit/build и remote readback повторяются.
+Остаток Go:gateway1489,CP6232. Полный -check ещё не пройден.
 
 ## Триста девятая волна — WebSocket диагностика и byte-boundary оснастка
 

@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestHeartbeatRunCatalogDoesNotRepeatOwnerBundle injects a slow synthetic catalog read and checks four contiguous RUN deltas share one fresh owner bundle/run read within a heartbeat, preserving exact cursor order.
+// TestHeartbeatRunCatalogDoesNotRepeatOwnerBundle замедляет тестовое чтение каталога и проверяет один свежий owner bundle и чтение запуска для четырёх непрерывных RUN delta за heartbeat с точным порядком курсора.
 func TestHeartbeatRunCatalogDoesNotRepeatOwnerBundle(t *testing.T) {
 	m, c := heartbeatRunBatchFixture(t)
 	c.beforeInvoke = func(ctx context.Context, response any) error {
@@ -49,6 +51,8 @@ func TestHeartbeatRunCatalogDoesNotRepeatOwnerBundle(t *testing.T) {
 	}
 }
 
+// TestHeartbeatRunCatalogReuseBoundaries independently checks reuse stops at kind/authority/project/gap/denial boundaries, duplicate handling and exact resync counts; it never treats cached data as renewed permission.
+// TestHeartbeatRunCatalogReuseBoundaries независимо проверяет прекращение переиспользования на границах вида, полномочий, проекта, разрыва и отказа, дубликаты и точное число resync; кэшированные данные не становятся новым разрешением.
 func TestHeartbeatRunCatalogReuseBoundaries(t *testing.T) {
 	for _, boundary := range []string{"other-kind", "authority-kind", "foreign-project", "gap", "denied", "duplicate"} {
 		t.Run(boundary, func(t *testing.T) {
@@ -97,8 +101,8 @@ func TestHeartbeatRunCatalogReuseBoundaries(t *testing.T) {
 					resyncs++
 				}
 			}
-			// Смена полномочий теперь очищает и финансовую проекцию через
-			// authoritative rejoin, даже если последующие wakes уже стоят в FIFO.
+			// An authority change also clears the financial projection through authoritative rejoin, even when later wakes are already queued in FIFO order.
+			// Смена полномочий очищает и финансовую проекцию через authoritative rejoin, даже если последующие wakes уже стоят в FIFO.
 			wantResync := boundary == "gap" || boundary == "authority-kind"
 			if (wantResync && resyncs != 1) || (!wantResync && resyncs != 0) {
 				t.Fatal("catalog reuse lost a gap or authority resync boundary")
@@ -107,6 +111,8 @@ func TestHeartbeatRunCatalogReuseBoundaries(t *testing.T) {
 	}
 }
 
+// TestHeartbeatRunCatalogCancellationAndOverflow cancels an owner overview or fills the outbound queue and verifies no later run read or additional cached frame is published beyond the already-admitted cursor.
+// TestHeartbeatRunCatalogCancellationAndOverflow отменяет owner overview либо заполняет очередь и проверяет отсутствие следующего чтения запуска и дополнительных кэшированных кадров сверх уже допущенного курсора.
 func TestHeartbeatRunCatalogCancellationAndOverflow(t *testing.T) {
 	for _, condition := range []string{"cancel", "overflow"} {
 		t.Run(condition, func(t *testing.T) {
@@ -138,6 +144,8 @@ func TestHeartbeatRunCatalogCancellationAndOverflow(t *testing.T) {
 	}
 }
 
+// TestHeartbeatRunCatalogRechecksCompleteEnvelopeByteCap measures a full synthetic RUN delta at the exact byte cap and proves the next longer cursor envelope closes with one problem instead of bypassing size validation via reuse.
+// TestHeartbeatRunCatalogRechecksCompleteEnvelopeByteCap измеряет полный тестовый RUN delta на точной байтовой границе и доказывает, что следующий конверт с более длинным курсором завершается одной ошибкой, а не обходит проверку через переиспользование.
 func TestHeartbeatRunCatalogRechecksCompleteEnvelopeByteCap(t *testing.T) {
 	m, c := heartbeatRunBatchFixture(t)
 	payloadSize := 1

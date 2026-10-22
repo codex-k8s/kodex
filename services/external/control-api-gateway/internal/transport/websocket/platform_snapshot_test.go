@@ -2,6 +2,8 @@ package websockettransport
 
 import "testing"
 
+// TestTypedPlatformSnapshotRejectsUnknownFields rejects an undeclared nested catalog field rather than silently discarding it during generated payload conversion.
+// TestTypedPlatformSnapshotRejectsUnknownFields отклоняет необъявленное вложенное поле каталога вместо его молчаливого удаления при преобразовании в generated payload.
 func TestTypedPlatformSnapshotRejectsUnknownFields(t *testing.T) {
 	t.Parallel()
 	_, err := typedPlatformSnapshot("WORKFLOW", map[string]any{
@@ -12,6 +14,8 @@ func TestTypedPlatformSnapshotRejectsUnknownFields(t *testing.T) {
 	}
 }
 
+// TestTypedPlatformSnapshotBindsPayloadToResourceKind rejects catalog-only data when the requested assistant kind requires assistant, conversations and bootstrap sections.
+// TestTypedPlatformSnapshotBindsPayloadToResourceKind отклоняет один catalog для вида помощника, которому нужны разделы assistant, conversations и bootstrap.
 func TestTypedPlatformSnapshotBindsPayloadToResourceKind(t *testing.T) {
 	t.Parallel()
 	_, err := typedPlatformSnapshot("SYSTEM_ASSISTANT", map[string]any{
@@ -22,6 +26,8 @@ func TestTypedPlatformSnapshotBindsPayloadToResourceKind(t *testing.T) {
 	}
 }
 
+// TestTypedPlatformSnapshotAcceptsClosedWorkflowCatalog preserves a declared empty workflow list and exact owner pagination cursor through typed decoding.
+// TestTypedPlatformSnapshotAcceptsClosedWorkflowCatalog сохраняет объявленный пустой список процессов и точный курсор страницы владельца при типизированном разборе.
 func TestTypedPlatformSnapshotAcceptsClosedWorkflowCatalog(t *testing.T) {
 	t.Parallel()
 	snapshot, err := typedPlatformSnapshot("WORKFLOW", map[string]any{
@@ -38,6 +44,8 @@ func TestTypedPlatformSnapshotAcceptsClosedWorkflowCatalog(t *testing.T) {
 	}
 }
 
+// TestTypedPlatformSnapshotAcceptsRuntimeSecretCatalog accepts declared secret-metadata catalog/page sections without supplying any secret value.
+// TestTypedPlatformSnapshotAcceptsRuntimeSecretCatalog принимает объявленные разделы metadata секретов и страницы без передачи значения секрета.
 func TestTypedPlatformSnapshotAcceptsRuntimeSecretCatalog(t *testing.T) {
 	t.Parallel()
 	snapshot, err := typedPlatformSnapshot("RUNTIME_SECRET", map[string]any{
@@ -48,6 +56,8 @@ func TestTypedPlatformSnapshotAcceptsRuntimeSecretCatalog(t *testing.T) {
 	}
 }
 
+// TestTypedPlatformSnapshotAcceptsSeparateOrganizationCatalogs checks organization recipe/secret page cursors remain in their dedicated generated fields instead of merging with a project cursor.
+// TestTypedPlatformSnapshotAcceptsSeparateOrganizationCatalogs проверяет сохранение курсоров организационных рецептов и секретов в отдельных generated fields без слияния с проектным курсором.
 func TestTypedPlatformSnapshotAcceptsSeparateOrganizationCatalogs(t *testing.T) {
 	for _, tc := range []struct{ kind, resources, cursor string }{
 		{"ROLE_IMAGE_RECIPE", "organizationRecipes", "organizationRecipesPage"},
@@ -63,6 +73,8 @@ func TestTypedPlatformSnapshotAcceptsSeparateOrganizationCatalogs(t *testing.T) 
 	}
 }
 
+// TestTypedPlatformSnapshotRejectsPrivateFieldsInsideOrganizationCatalog rejects undeclared plaintext/build-input fields inside organization items before a typed snapshot can escape.
+// TestTypedPlatformSnapshotRejectsPrivateFieldsInsideOrganizationCatalog отклоняет необъявленные поля открытого значения или входа сборки в организационных элементах до выдачи типизированного снимка.
 func TestTypedPlatformSnapshotRejectsPrivateFieldsInsideOrganizationCatalog(t *testing.T) {
 	for _, fields := range []map[string]any{
 		{"organizationSecrets": []any{map[string]any{"ref": "sec_fixture01", "scopeKind": "ORGANIZATION", "organizationRef": "org_fixture01", "value": "private-plaintext"}}},
@@ -74,6 +86,8 @@ func TestTypedPlatformSnapshotRejectsPrivateFieldsInsideOrganizationCatalog(t *t
 	}
 }
 
+// TestTypedPlatformSnapshotAcceptsManagedConfigurationCatalog preserves a synthetic managed configuration and its separate kind-specific page record without invoking persistence or publication.
+// TestTypedPlatformSnapshotAcceptsManagedConfigurationCatalog сохраняет тестовую управляемую конфигурацию и её отдельную запись страницы по виду без сохранения или публикации.
 func TestTypedPlatformSnapshotAcceptsManagedConfigurationCatalog(t *testing.T) {
 	t.Parallel()
 	snapshot, err := typedPlatformSnapshot("MANAGED_CONFIGURATION", map[string]any{
@@ -103,6 +117,8 @@ func TestTypedPlatformSnapshotAcceptsManagedConfigurationCatalog(t *testing.T) {
 	}
 }
 
+// TestTypedPlatformSnapshotAcceptsProviderBootstrapCatalog preserves declared provider account/definition/runtime sections, including the definitions cursor, through the closed generated schema.
+// TestTypedPlatformSnapshotAcceptsProviderBootstrapCatalog сохраняет объявленные разделы аккаунтов, определений провайдера и runtime, включая курсор определений, через закрытую generated-схему.
 func TestTypedPlatformSnapshotAcceptsProviderBootstrapCatalog(t *testing.T) {
 	t.Parallel()
 	snapshot, err := typedPlatformSnapshot("PROVIDER_ACCOUNT", map[string]any{
@@ -120,6 +136,8 @@ func TestTypedPlatformSnapshotAcceptsProviderBootstrapCatalog(t *testing.T) {
 	}
 }
 
+// TestTypedPlatformSnapshotAcceptsRuntimeEnvironmentBootstrapCatalog accepts the declared environment, role-environment and runtime collections without inferring a runtime grant.
+// TestTypedPlatformSnapshotAcceptsRuntimeEnvironmentBootstrapCatalog принимает объявленные коллекции окружений, role-environments и runtime без вывода runtime grant.
 func TestTypedPlatformSnapshotAcceptsRuntimeEnvironmentBootstrapCatalog(t *testing.T) {
 	t.Parallel()
 	snapshot, err := typedPlatformSnapshot("RUNTIME_ENVIRONMENT", map[string]any{
@@ -135,6 +153,8 @@ func TestTypedPlatformSnapshotAcceptsRuntimeEnvironmentBootstrapCatalog(t *testi
 	}
 }
 
+// TestTypedPlatformSnapshotAcceptsAccessBootstrapCatalog preserves the declared membership, permission, subject, group, role and binding collections; schema acceptance is not an access decision.
+// TestTypedPlatformSnapshotAcceptsAccessBootstrapCatalog сохраняет объявленные коллекции членства, разрешений, субъектов, групп, ролей и привязок; принятие схемы не является решением о доступе.
 func TestTypedPlatformSnapshotAcceptsAccessBootstrapCatalog(t *testing.T) {
 	t.Parallel()
 	snapshot, err := typedPlatformSnapshot("MEMBERSHIP", map[string]any{
