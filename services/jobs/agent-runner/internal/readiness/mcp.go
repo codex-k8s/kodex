@@ -1,4 +1,5 @@
-// Package readiness поднимает рабочий required MCP path до запуска Codex.
+// Package readiness prepares and checks the required MCP path before provider startup.
+// Пакет readiness готовит и проверяет обязательный MCP-путь до запуска провайдера.
 package readiness
 
 import (
@@ -6,8 +7,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -31,13 +30,21 @@ import (
 )
 
 const (
-	maximumMCPBodyBytes  = 1 << 20
-	mcpAuthoritySocket   = "/run/kodex/provider/mcp-authority.sock"
+	// maximumMCPBodyBytes caps each buffered readiness response at one MiB, using one extra byte to detect overflow.
+	// maximumMCPBodyBytes ограничивает каждый буферизуемый ответ проверки готовности одним МиБ с дополнительным байтом для обнаружения переполнения.
+	maximumMCPBodyBytes = 1 << 20
+	// mcpAuthoritySocket fixes the local provider UDS endpoint protected by group permissions, peer credentials and a separate random local capability.
+	// mcpAuthoritySocket задаёт фиксированный локальный UDS-endpoint провайдера, защищённый групповыми правами, идентичностью peer и отдельным случайным локальным билетом.
+	mcpAuthoritySocket = "/run/kodex/provider/mcp-authority.sock"
+	// mcpAuthorityHostName provides the synthetic HTTP host used over the local UDS transport, not a DNS-resolved upstream destination.
+	// mcpAuthorityHostName задаёт синтетический HTTP-host локального UDS-транспорта, а не разрешаемое через DNS направление upstream.
 	mcpAuthorityHostName = "kodex-mcp-authority"
 )
 
-// MCPProxy — trusted UDS adapter, который проверяет SO_PEERCRED и применяет к
-// каждому рабочему запросу тот же exact TLS 1.3/mTLS/bearer path, что и readiness.
+// MCPProxy owns the local peer-checked UDS server, local capability, callback/file clients and upstream transport through the startup/close lifecycle.
+// Upstream uses the selected callback profile; default mTLS and explicitly trusted-cluster transport remain distinct.
+// MCPProxy владеет локальным UDS-сервером с проверкой peer, локальным билетом, клиентами callback и файлов, транспортом upstream в жизненном цикле подготовки и закрытия.
+// Upstream использует выбранный callback-профиль; стандартный mTLS и явно доверенный кластерный транспорт остаются различными.
 type MCPProxy struct {
 	server     *http.Server
 	transport  *http.Transport
@@ -48,6 +55,12 @@ type MCPProxy struct {
 	files      *callback.Client
 }
 
+// StartMCPProxy validates managed readiness proof and tool bounds, prepares the selected upstream transport, then creates a group-protected peer-checked UDS and fresh local bearer.
+// Forwards only the local MCP route or pinned file reads, replacing upstream identity/binding headers, and verifies the required initialize/catalog path before returning.
+// Uses the caller lifecycle context and cleans partial startup resources on errors; successful ownership transfers to MCPProxy.Close.
+// StartMCPProxy проверяет управляемое доказательство готовности и предел инструментов, готовит выбранный upstream-транспорт, затем создаёт защищённый группой UDS с проверкой peer и новый локальный bearer.
+// Передаёт только локальный маршрут MCP либо закреплённое чтение файлов, заменяя заголовки идентичности и привязок upstream, проверяет обязательный путь initialize и каталога до возврата.
+// Использует контекст жизненного цикла вызывающего, очищает частично созданные ресурсы при ошибке; после успеха владение передаётся MCPProxy.Close.
 func StartMCPProxy(ctx context.Context, input model.Input, token string, requiredTools []string) (_ *MCPProxy, resultErr error) {
 	stage := mcpStageConfiguration
 	defer func() { resultErr = withMCPStage(resultErr, stage) }()
@@ -67,7 +80,7 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 	stage = mcpStageTLSIdentity
 	var transport *http.Transport
 	if input.CallbackTLS.Profile == "" {
-		transport, err = exactMCPTransport(input.CallbackTLS)
+		transport, err = callback.MCPTransport(input.CallbackTLS)
 	} else {
 		transport, err = callback.TransportForInput(input)
 		if err == nil {
@@ -178,9 +191,18 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 	return proxy, nil
 }
 
-func (proxy *MCPProxy) SocketPath() string       { return proxy.socketPath }
+// SocketPath returns the owned local UDS pathname for the provider adapter, without opening a socket or authorizing a caller.
+// SocketPath возвращает собственный локальный путь UDS для адаптера провайдера без открытия сокета и авторизации вызывающего.
+func (proxy *MCPProxy) SocketPath() string { return proxy.socketPath }
+
+// LocalBearerToken returns the secret local capability for the authorized provider adapter; it is not the owner execution ticket and must not enter logs/history.
+// LocalBearerToken возвращает секретный локальный билет авторизованному адаптеру провайдера; это не билет выполнения владельца, он не должен попадать в логи и историю.
 func (proxy *MCPProxy) LocalBearerToken() string { return proxy.localToken }
 
+// Close closes file-client resources, shuts down or forces the local server, closes idle transports and removes its socket, then joins the Serve result within ctx.
+// Returns fixed shutdown/serve failures rather than transport details; callers own the bounded shutdown context.
+// Close закрывает ресурсы файлового клиента, штатно либо принудительно завершает локальный сервер, закрывает простаивающие транспорты и удаляет сокет, затем ожидает результат Serve в пределах ctx.
+// Возвращает фиксированные ошибки завершения или Serve вместо подробностей транспорта; ограниченный контекст завершения задаёт вызывающий.
 func (proxy *MCPProxy) Close(ctx context.Context) error {
 	proxy.files.Close()
 	err := proxy.server.Shutdown(ctx)
@@ -205,10 +227,14 @@ func (proxy *MCPProxy) Close(ctx context.Context) error {
 	return nil
 }
 
+// peerCredentialListener wraps a UDS listener so only accepted runtime peer UIDs reach the HTTP handler; local bearer validation remains separate.
+// peerCredentialListener оборачивает UDS-слушатель, пропуская в HTTP-обработчик только допустимые UID выполнения; проверка локального bearer остаётся отдельной.
 type peerCredentialListener struct {
 	net.Listener
 }
 
+// Accept closes non-Unix or disallowed-peer connections and continues accepting until an eligible connection or listener error.
+// Accept закрывает не-Unix соединения и соединения недопустимых peer, продолжая приём до подходящего соединения либо ошибки слушателя.
 func (listener *peerCredentialListener) Accept() (net.Conn, error) {
 	for {
 		connection, err := listener.Listener.Accept()
@@ -224,6 +250,10 @@ func (listener *peerCredentialListener) Accept() (net.Conn, error) {
 	}
 }
 
+// allowedMCPPeer reads SO_PEERCRED from the accepted Unix connection and accepts only UID 10001 or 10002; errors reject the peer.
+// This checks operating-system identity, not application grants or the local bearer.
+// allowedMCPPeer читает SO_PEERCRED принятого Unix-соединения и принимает только UID 10001 либо 10002; ошибка отклоняет peer.
+// Проверяется идентичность операционной системы, а не прикладные доступы или локальный bearer.
 func allowedMCPPeer(connection *net.UnixConn) bool {
 	raw, err := connection.SyscallConn()
 	if err != nil {
@@ -239,27 +269,12 @@ func allowedMCPPeer(connection *net.UnixConn) bool {
 	return credential.Uid == 10001 || credential.Uid == 10002
 }
 
-func exactMCPTransport(binding model.TLSBinding) (*http.Transport, error) {
-	ca, err := os.ReadFile(binding.CAFile)
-	if err != nil || len(ca) == 0 || len(ca) > 1<<20 {
-		return nil, errors.New("read MCP CA")
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(ca) {
-		return nil, errors.New("parse MCP CA")
-	}
-	certificate, err := tls.LoadX509KeyPair(binding.CertificateFile, binding.PrivateKeyFile)
-	if err != nil {
-		return nil, errors.New("load MCP client identity")
-	}
-	return &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13,
-		MaxVersion: tls.VersionTLS13, ServerName: binding.ServerName, RootCAs: roots,
-		Certificates: []tls.Certificate{certificate}}, DisableCompression: true,
-		MaxIdleConns: 2, MaxIdleConnsPerHost: 2, TLSHandshakeTimeout: 5 * time.Second,
-		ResponseHeaderTimeout:  time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+5) * time.Second,
-		MaxResponseHeaderBytes: 16 << 10}, nil
-}
-
+// checkMCP runs initialize, empty accepted initialized notification and tools/list with closed JSON-RPC envelopes and bounded catalog descriptors.
+// Optionally verifies current managed proofs, exact tool names and canonical managed input-schema digests against one immutable runner input, then rechecks freshness.
+// Non-null initialization result is required but not a full protocol-capability negotiation; catalog availability grants no execution authority.
+// checkMCP выполняет initialize, пустое принятое уведомление initialized и tools/list с закрытыми JSON-RPC-оболочками и ограниченными описаниями каталога.
+// Необязательно сверяет текущие управляемые доказательства, точные имена и канонические дайджесты управляемых входных схем с одним неизменяемым входом runner, затем повторяет проверку свежести.
+// Требуется непустой результат инициализации, но не полное согласование возможностей протокола; доступность каталога не выдаёт полномочий выполнения.
 func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string, requiredTools []string, inputs ...runtimecontract.RunnerInput) (resultErr error) {
 	stage := mcpStageInitialize
 	defer func() { resultErr = withMCPStage(resultErr, stage) }()
@@ -375,6 +390,10 @@ func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token
 	return nil
 }
 
+// postMCP posts JSON with the supplied bearer and caller context, buffers one bounded response and returns parsed media type/status for the stage validator.
+// Transport, redirect and timeout policy come from the supplied HTTP client; upstream error bodies are not copied into returned errors.
+// postMCP отправляет JSON с переданным bearer и контекстом вызывающего, ограниченно буферизует ответ, возвращает разобранные media type и статус для проверки стадии.
+// Политика транспорта, перенаправлений и таймаутов наследуется от HTTP-клиента; тела ошибок upstream не копируются в возвращаемую ошибку.
 func postMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string, payload []byte) ([]byte, string, int, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(payload))
 	if err != nil {
@@ -403,8 +422,10 @@ func postMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token 
 	return raw, mediaType, response.StatusCode, nil
 }
 
-// outputSchema — optional JSON Schema объекта из MCP 2025-06-18. Поля самой
-// JSON Schema открыты для keywords, но descriptor сохраняет закрытый decoder.
+// validMCPOutputSchema accepts an omitted outputSchema or a bounded non-null JSON object declaring type object, while leaving schema keywords open.
+// Does not resolve schema references or perform full JSON Schema validation; the surrounding tool descriptor stays closed.
+// validMCPOutputSchema принимает отсутствующий outputSchema либо ограниченный непустой JSON-объект с type object, оставляя ключевые слова схемы открытыми.
+// Не разрешает ссылки схемы и не выполняет полную проверку JSON Schema; внешнее описание инструмента остаётся закрытым.
 func validMCPOutputSchema(raw json.RawMessage) bool {
 	if len(raw) == 0 {
 		return true

@@ -6,8 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -305,20 +303,10 @@ func retryableCallbackStatus(code int) bool {
 	}
 }
 
+// exactTransport creates the ordinary callback TLS transport with its original thirty-second header budget and fixed safe diagnostics.
+// exactTransport создаёт обычный TLS-транспорт callback с прежним тридцатисекундным бюджетом заголовков и фиксированной безопасной диагностикой.
 func exactTransport(binding model.TLSBinding) (*http.Transport, error) {
-	ca, err := os.ReadFile(binding.CAFile)
-	if err != nil || len(ca) == 0 || len(ca) > 1<<20 {
-		return nil, errors.New("read runtime callback CA")
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(ca) {
-		return nil, errors.New("parse runtime callback CA")
-	}
-	certificate, err := tls.LoadX509KeyPair(binding.CertificateFile, binding.PrivateKeyFile)
-	if err != nil {
-		return nil, errors.New("load runtime callback client identity")
-	}
-	return &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, ServerName: binding.ServerName, RootCAs: roots, Certificates: []tls.Certificate{certificate}}, DisableCompression: true, MaxIdleConns: 2, MaxIdleConnsPerHost: 2, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 30 * time.Second, MaxResponseHeaderBytes: 16 << 10}, nil
+	return newExactTransport(binding, 30*time.Second, "runtime callback")
 }
 
 func readCredential(path string) (string, error) {

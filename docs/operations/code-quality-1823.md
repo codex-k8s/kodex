@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.210.0
+version: 1.211.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,67 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести одиннадцатая волна — общий exact TLS transport и MCP readiness
+
+Точный опубликованный SHA210 — `41e567b03afe99a5cbd28203549aef5d60e8dbd4`.
+Exact G1aBv6:6580 sources,222 excluded,1837 raw,590 retained,1247 unresolved;
+Go7921/21151,missing13230;raw SHA256
+`3e2656a1eb8a6f05f72281c5283a468e8526c877651f71800ba042833fd21ad7`;
+clone-set `a5e82ec374bc30d7c1b932d7843117f07e4cd565ad0e3d52f6df0c1595a51fd0`.
+Imageinventory6 PASS,0 FAIL,2 direct child-only SKIP,parent kernel scenario PASS;
+полный runner build PASS;remote head и PATCH/GET Draft PR210 подтверждены.
+
+Шесть файлов readiness прочитаны целиком;удалён только дублирующий private
+exactMCPTransport. Все оставшиеся42 declarations readiness — EN→RU,
+плюс5 declarations в двух новых transport/helper test файлах и прежняя
+callback exactTransport wrapper. Callback module в целом пока не покрыт.
+Пояснены managed proof/startup stages,SO_PEERCRED отдельно от bearer,
+selected trusted-cluster transport отдельно от default mTLS,UDS ownership,
+ограниченные response/envelope/schema проверки и exact managed aliases.
+Непустой initialize result не назван full protocol negotiation,открытые
+JSON Schema keywords не названы произвольными tool descriptor fields.
+Typed error wrapper сохраняет cause,закрытый stage не копирует private text.
+
+Полезный повтор CA/keypair/TLS transport вынесен в private
+callback.newExactTransport внутри того же deployable с двумя реальными
+потребителями. Ordinary wrapper сохраняет30s header budget и прежние
+runtime callback errors;callback.MCPTransport — прежний MCP budget/diagnostics.
+Readiness по-прежнему выбирает profile до этого вызова. TLS1.3/SNI/custom
+roots/client cert,pool sizes,handshake/header limits,compression/proxy policy
+не изменены. Header/bearer/lease/endpoint authority не перенесены в factory.
+Не добавлен общий модуль,reflection dispatcher или TLS bypass.
+CA len guard остаётся после os.ReadFile,что явно отражено в комментарии.
+
+Два новых unit проверяют оба constructors на generated disposable identity:
+точные TLS/pool/timeout fields,независимость mutable state и7 файловых
+отказов с исходными safe errors для каждой обёртки. Network/listeners и живые
+credentials эти тесты не используют. После обратного раскрытия shared
+factory Go AST всех7 прежних файлов и2 constructors совпадают с SHA210
+(9 comparisons);исключены только token.Pos,comments не разбираются.
+Таким образом line wrapping/alignment не скрывает executable изменения.
+
+Callback+readiness35 верхних/83 всех unit PASS,0 FAIL,1 direct SKIP
+RuntimeMCPCatalogWireConsumer без fixture. Затем публичный unit harness
+`scripts/tests/runtime-mcp-catalog-test.sh` реально выполнил controller
+producer и readiness consumer всех16 synthetic wire variants — PASS LOCAL,
+не live/ИИ/QA. Исходный direct SKIP не выдаётся за запуск,его отдельный
+producer-dependent path проверен именно harness. Полный runner build,
+scoped8 файлов47/47,old exactTransport doc,17 Node units,Go-checker unit,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL;Go1.26.6,GOENV/GOWORK off.
+Первый gofmt вызов имел неверный cwd и исправлен до полного прогона.
+Context7 `/golang/go`:crypto/tls identity/SNI иnet/http transport;
+новых SDK/dependencies нет.
+
+Рабочий OlEG6y:6582 sources,222 excluded,1837 raw,590 retained,1247 unresolved;
+Go7969/21155,missing13186;raw SHA256
+`94221ecd2bff833f2c8ca34e46a5b44833944ecdf2b9a7c5589e7a9b17c44e0a`;
+clone-set `160a21fdaa9ba26b4f3710f53b0631e7630ef3c6d5adc06484f18d7c5f861e13`.
+Пары/fragment/count неизменны,координаты сдвинулись;новых exceptions нет.
+Реальный вынос не объявлен снижением raw count:данный короткий TLS повтор
+до выноса не пересекал line/token matching границы detector.
+Полный runner unit,общий repo-check,component/live,browser/deploy,агенты/STT/
+почта NOT RUN. Цель не завершена,post-commit scan публикуется в Draft PR.
 
 ## Двести десятая волна — инструментальный инвентарь и private probe sandbox
 

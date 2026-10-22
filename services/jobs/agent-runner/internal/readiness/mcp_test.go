@@ -10,6 +10,8 @@ import (
 	"testing"
 )
 
+// TestCheckMCPRejectsRevokedGrantBeforeToolDiscovery checks a synthetic HTTP 403 on initialize stops readiness after exactly one request, without later catalog discovery.
+// TestCheckMCPRejectsRevokedGrantBeforeToolDiscovery проверяет остановку readiness после ровно одного запроса при синтетическом HTTP 403 на initialize без последующего поиска каталога.
 func TestCheckMCPRejectsRevokedGrantBeforeToolDiscovery(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -26,6 +28,8 @@ func TestCheckMCPRejectsRevokedGrantBeforeToolDiscovery(t *testing.T) {
 	}
 }
 
+// TestCheckMCPVerifiesTheCompleteInitializationLifecycle checks local bearer delivery and exact initialize/initialized/tools-list order for an accepted synthetic catalog.
+// TestCheckMCPVerifiesTheCompleteInitializationLifecycle проверяет передачу локального bearer и точный порядок initialize, initialized, tools-list для принятого синтетического каталога.
 func TestCheckMCPVerifiesTheCompleteInitializationLifecycle(t *testing.T) {
 	t.Parallel()
 	var methods []string
@@ -67,6 +71,8 @@ func TestCheckMCPVerifiesTheCompleteInitializationLifecycle(t *testing.T) {
 	}
 }
 
+// TestCheckMCPRejectsAProtocolThatDoesNotAcceptInitialized checks a server refusing the initialized notification fails readiness rather than accepting an incomplete lifecycle.
+// TestCheckMCPRejectsAProtocolThatDoesNotAcceptInitialized проверяет отказ readiness при сервере, отклоняющем уведомление initialized, вместо принятия неполного жизненного цикла.
 func TestCheckMCPRejectsAProtocolThatDoesNotAcceptInitialized(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -89,6 +95,8 @@ func TestCheckMCPRejectsAProtocolThatDoesNotAcceptInitialized(t *testing.T) {
 	}
 }
 
+// TestCheckMCPRejectsUnknownMissingAndDuplicateToolsBeforeProviderStart checks unknown, missing and duplicate tool names fail the exact required-name catalog comparison through local HTTP fixtures.
+// TestCheckMCPRejectsUnknownMissingAndDuplicateToolsBeforeProviderStart проверяет отказ точного сопоставления имён каталога для неизвестных, отсутствующих и повторных инструментов через локальные HTTP-образцы.
 func TestCheckMCPRejectsUnknownMissingAndDuplicateToolsBeforeProviderStart(t *testing.T) {
 	t.Parallel()
 	for name, tools := range map[string]string{

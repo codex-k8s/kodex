@@ -11,6 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// managedMCPReadinessFixture builds two synthetic managed grants, a fresh pinned health proof and a closed catalog using the canonical schema derivation.
+// No live Context7 endpoint, credential or connection test is used.
+// managedMCPReadinessFixture создаёт два синтетических управляемых доступа, свежий закреплённый health proof и закрытый каталог через каноническое получение схем.
+// Живой endpoint Context7, учётные данные и проверка подключения не используются.
 func managedMCPReadinessFixture(t *testing.T) (runtimecontract.RunnerInput, []byte) {
 	t.Helper()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeNone, AgentRef: "agt_agent001", ProjectRef: "prj_project01"}
@@ -50,6 +54,8 @@ func managedMCPReadinessFixture(t *testing.T) (runtimecontract.RunnerInput, []by
 	return input, catalog
 }
 
+// TestManagedMCPRequiredCatalogSchemaAndHealth checks exact managed schema/name binding and rejects widened or duplicate-key schemas, missing aliases and stale/future health proofs through local HTTP fixtures.
+// TestManagedMCPRequiredCatalogSchemaAndHealth проверяет точные привязки управляемых схем и имён, отказ для расширенных схем и повторных ключей, отсутствующих псевдонимов и устаревших либо будущих health proofs через локальные HTTP-образцы.
 func TestManagedMCPRequiredCatalogSchemaAndHealth(t *testing.T) {
 	input, catalog := managedMCPReadinessFixture(t)
 	names := runtimecontract.RuntimeMCPToolNames(input)
@@ -85,6 +91,8 @@ func TestManagedMCPRequiredCatalogSchemaAndHealth(t *testing.T) {
 	}
 }
 
+// TestManagedMCPMissingOwnerProofFailsBeforeNetworkOrSocket checks an absent owner-managed proof rejects startup at CONFIGURATION before any UDS listener or upstream discovery is created.
+// TestManagedMCPMissingOwnerProofFailsBeforeNetworkOrSocket проверяет отказ начальной подготовки при отсутствии управляемого владельцем доказательства на CONFIGURATION до создания UDS-слушателя и поиска у upstream.
 func TestManagedMCPMissingOwnerProofFailsBeforeNetworkOrSocket(t *testing.T) {
 	input, _ := managedMCPReadinessFixture(t)
 	input.ManagedMCPProfiles = nil
