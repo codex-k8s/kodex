@@ -17,6 +17,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// assistantWorkflowCatalogFixture derives a synthetic own-current input with a
+// WORKFLOW screen allowed only UPDATE_WORKFLOW for exact index-recovery tests.
+// assistantWorkflowCatalogFixture создаёт synthetic own-current input с WORKFLOW
+// screen и лишь UPDATE_WORKFLOW для exact index-recovery tests.
 func assistantWorkflowCatalogFixture(scope runtimecontract.AssistantScope) runtimecontract.RunnerInput {
 	input, _, _ := assistantOwnCurrentFixture(scope)
 	input.AssistantContext = &runtimecontract.RunnerAssistantContext{EntityKind: "WORKFLOW", EntityRef: "wfl_owned123",
@@ -24,6 +28,12 @@ func assistantWorkflowCatalogFixture(scope runtimecontract.AssistantScope) runti
 	return input
 }
 
+// TestAssistantCatalogSelectionPreservesCurrentScreenDiscovery checks disallowed
+// image-recipe selection stays rejected, empty/omitted type selection returns the
+// same unexpanded current-screen index and allowed workflow selection succeeds.
+// TestAssistantCatalogSelectionPreservesCurrentScreenDiscovery проверяет отказ disallowed
+// image-recipe selection,тот же unexpanded current-screen index empty/omitted type
+// selection и успех разрешённого workflow selection.
 func TestAssistantCatalogSelectionPreservesCurrentScreenDiscovery(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input := assistantWorkflowCatalogFixture(scope)
@@ -57,6 +67,14 @@ func TestAssistantCatalogSelectionPreservesCurrentScreenDiscovery(t *testing.T) 
 	}
 }
 
+// TestAssistantCatalogSelectionMCPRecoveryIsPrivateAndProjectionBound checks six invalid
+// selection shapes across both assistant scopes receive fixed current-screen guidance
+// with failed safe activity and no private reflection; failed terminal projection
+// suppresses corrective retry even when the original error was local input.
+// TestAssistantCatalogSelectionMCPRecoveryIsPrivateAndProjectionBound проверяет fixed
+// current-screen guidance шести invalid selection shapes обоих assistant scopes с failed
+// safe activity без private reflection; failed terminal projection запрещает corrective
+// retry даже при исходной local input error.
 func TestAssistantCatalogSelectionMCPRecoveryIsPrivateAndProjectionBound(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, selected := range []any{"PRIVATE_SELECTION", []any{42}, []any{"PRIVATE_SELECTION"},
@@ -100,6 +118,12 @@ func TestAssistantCatalogSelectionMCPRecoveryIsPrivateAndProjectionBound(t *test
 	}
 }
 
+// TestAssistantCatalogSelectionDoesNotClassifyTextOrOwnerFailures checks raw matching
+// text and remote failures never become local selection classification, corrective
+// guidance or repeated owner calls, and no private remote message reaches wire output.
+// TestAssistantCatalogSelectionDoesNotClassifyTextOrOwnerFailures проверяет отсутствие
+// local selection classification,corrective guidance/repeated owner calls у raw matching
+// text/remote failures и отсутствие private remote message в wire output.
 func TestAssistantCatalogSelectionDoesNotClassifyTextOrOwnerFailures(t *testing.T) {
 	for _, err := range []error{errors.New("configuration catalog selection is invalid"),
 		status.Error(codes.Unknown, "configuration catalog selection is invalid"), status.Error(codes.PermissionDenied, "PRIVATE_OWNER_ERROR")} {

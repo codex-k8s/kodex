@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.201.0
+version: 1.202.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,49 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести вторая волна — task session read и безопасные diagnostics
+
+Точный опубликованный SHA201 — `dad99b5b6501cd73a82007b87d726da3dde72655`.
+Callback253 верхних/1361 всех PASS,0 FAIL,2 прежних SKIP; полный RC build PASS.
+Exact duWPL6:6578 sources,222 excluded,1838 raw,587 retained,1251 unresolved;
+Go7555/21149,missing13594; raw SHA256
+`588697c1dfd231c20a3f42e57d32be765e8e78b6b948f10bf107aae2a036b959`,
+clone-set `74eea41e292d06d4c9c09ad8a5cc7eb999040eea7624fe708e1f5581d4cc20f6`.
+История прежнего PR body проверена byte-exact перед сокращением описания:
+после PATCH/GET200→201 новое краткое body5076 characters,старый снимок сохранён
+в versioned docs без утраты exact SHA/FAIL/SKIP/NOT RUN.
+
+Все64 declarations восьми целиком прочитанных task_session,task_session_diagnostics,
+plan_invalid_diagnostics,catalog_diagnostics и их test файлов — EN→RU,scoped64/64.
+Указаны typed lease-bound selected-session read,public message coverage отдельно
+от provider archives/child sessions и запрет превращать read в resume/launch.
+Owner response/cursor source/progress/binding проверки не приписаны caller refs.
+PURGED storage в fixture не отменяет отдельно опубликованную public history.
+
+Diagnostic code сохраняется только OWNER_RPC,local stages остаются Unknown;
+remote text/details/cause не копируются. Log attributes берутся лишь из уже
+authenticated input после syntax guards,которые сами не устанавливают authority.
+Plan invalid metadata ограничены exact internal ErrorInfo domain/reason/keys,
+canonical operation index и закрытыми labels; raw text не выдаётся за provenance.
+Catalog local-input guidance отделено от owner refusal/terminal audit failure;
+новых retry rules,permissions,labels или lifecycle transitions не добавлено.
+
+Полная non-comment/gofmt сверка всех8 файлов с SHA201 — PASS после отдельного
+учёта gofmt alignment только one-line taskSessionReadError.Error signature.
+Первый strict compare обнаружил именно семь лишних форматных spaces исходной
+подписи после разнесения соседних методов doc blocks; conditions/bodies идентичны,
+раннее несовпадение не объявлено успешной проверкой. Исполняемых изменений нет.
+Рабочий CxyyTR:6578 sources,222 excluded,1838 raw,587 retained,1251 unresolved;
+Go7619/21149,missing13530; raw SHA256
+`e112ebc0c262210e22357f12a79091a96b8a553ff1bc13369bedbc4b66377e78`,
+clone-set неизменен,новых/исчезнувших групп и exceptions нет.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly,17 Node units,Go-checker unit,scoped64/64,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+Общий repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+post-commit результат публикуется в Draft PR,общая цель не завершена.
 
 ## Двести первая волна — весь file catalog/read и общий test transport
 

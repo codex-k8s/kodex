@@ -9,12 +9,28 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// errAssistantTaskSessionRead is the fixed comparable sentinel for unavailable
+// public task-session reads, without selected run/cursor or remote error text.
+// errAssistantTaskSessionRead — fixed comparable sentinel недоступного public task-session
+// read без selected run/cursor и remote error text.
 var errAssistantTaskSessionRead = errors.New(taskSessionReadFailureMessage)
 
+// taskSessionToolResult wraps the validated public projection in a package-private
+// type used by safe activity mapping; arbitrary caller maps do not gain that type.
+// taskSessionToolResult оборачивает validated public projection package-private type
+// для safe activity mapping; произвольная caller map не получает этот type.
 type taskSessionToolResult struct {
 	controlplaneapi.TaskSessionProjection
 }
 
+// assistantTaskSessionTool describes assistant-only exact-run public messages and
+// bounded newest-first paging, with decimal-string versions and explicit storage/
+// coverage states. Read discovery grants neither resume/launch authority nor access
+// to child sessions, reasoning, provider archives or tool payloads.
+// assistantTaskSessionTool описывает assistant-only exact-run public messages/bounded
+// newest-first paging с decimal-string versions и явными storage/coverage states.
+// Read discovery не даёт resume/launch authority и доступ к child sessions,reasoning,
+// provider archives и tool payloads.
 func assistantTaskSessionTool() map[string]any {
 	decimal := map[string]any{"type": "string", "pattern": "^[1-9][0-9]*$"}
 	text := map[string]any{"type": "string"}
@@ -33,6 +49,16 @@ func assistantTaskSessionTool() map[string]any {
 		})}
 }
 
+// readTaskSession requires assistant execution binding and closed run/cursor input,
+// then performs a bounded owner search command with a typed session selector. It
+// rejects mixed replies, validates the shared public projection and exact run/project,
+// then checks source-pinned cursor shape/progress/binding. The owner resolves actual
+// session eligibility; this read neither resumes work nor invents absent messages.
+// readTaskSession требует assistant execution binding и closed run/cursor input,
+// выполняя bounded owner search с typed session selector. Отвергает mixed reply,
+// проверяет shared public projection/exact run/project,затем source-pinned cursor
+// shape/progress/binding. Actual session eligibility определяет owner; этот read
+// не возобновляет работу и не придумывает отсутствующие messages.
 func (server *Server) readTaskSession(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
 	if !input.IsAssistant() || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
 		return nil, taskSessionReadFailure(taskSessionContext)
