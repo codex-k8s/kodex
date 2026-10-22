@@ -18,16 +18,42 @@ import (
 )
 
 const (
-	providerCleanupTaskRef    = "pcct_cleanup1234"
+	// providerCleanupTaskRef is a typed synthetic task identifier shared by exact cleanup fixture tests, not
+	// an owner-issued live task.
+	// providerCleanupTaskRef задаёт типизированный синтетический task идентификатор для exact cleanup
+	// fixtures, а не выданную владельцем живую task.
+	providerCleanupTaskRef = "pcct_cleanup1234"
+	// providerCleanupAccountRef binds synthetic credential fixtures to one account so changed-account tests
+	// can prove exact rejection.
+	// providerCleanupAccountRef привязывает синтетические credential fixtures к одному account для проверки
+	// точного отказа другому account.
 	providerCleanupAccountRef = "pacc_cleanup_Account9Z"
+	// providerCleanupGeneration is the positive fixture claim generation included in deterministic terminal
+	// cleanup receipts.
+	// providerCleanupGeneration задаёт положительное поколение fixture claim, включаемое в детерминированные
+	// terminal cleanup квитанции.
 	providerCleanupGeneration = int64(7)
-	providerCleanupContent    = `{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic-cleanup-value"}`
+	// providerCleanupContent supplies synthetic JSON credential bytes for hashing and negative tests; it
+	// contains no real account or provider credential.
+	// providerCleanupContent задаёт синтетические JSON credential байты для хеширования и негативных тестов;
+	// реальных account или provider credentials нет.
+	providerCleanupContent = `{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic-cleanup-value"}`
 )
 
+// TestDiscardProviderCredentialRequiresExactDescriptorAndIsIdempotent rejects changed UID,
+// resourceVersion and digest without deleting the current credential, then checks exact precondition
+// options, a material-free fence and idempotent replay.
+// TestDiscardProviderCredentialRequiresExactDescriptorAndIsIdempotent отклоняет другие UID,
+// resourceVersion и digest без удаления текущего credential, затем проверяет точные precondition
+// options, fence без material и идемпотентный повтор.
 func TestDiscardProviderCredentialRequiresExactDescriptorAndIsIdempotent(t *testing.T) {
 	t.Parallel()
 	store, client := newAuthorizationCleanupStore(t)
+	// attemptRef pins the synthetic source attempt for both exact discard and its deterministic name.
+	// attemptRef закрепляет синтетическую исходную attempt для точного discard и детерминированного имени.
 	const attemptRef = "pauth_test12345"
+	// accountRef keeps create and compensation in the same synthetic account boundary.
+	// accountRef сохраняет создание и компенсацию в границе одного синтетического account.
 	const accountRef = "pacc_test12345"
 	descriptor, err := store.CreateProviderCredential(context.Background(), attemptRef, accountRef,
 		[]byte(`{"OPENAI_API_KEY":"synthetic-test-value","auth_mode":"apikey"}`))
@@ -68,6 +94,12 @@ func TestDiscardProviderCredentialRequiresExactDescriptorAndIsIdempotent(t *test
 	}
 }
 
+// TestCleanupProviderCredentialDeletesOnlyExactServerOwnedSecret exercises broker/runtime publishers,
+// validates bounded metadata receipts and delete options, and requires fence readback with no credential
+// payload in the fake tracker.
+// TestCleanupProviderCredentialDeletesOnlyExactServerOwnedSecret проверяет издателей broker/runtime,
+// ограниченные metadata квитанции и delete options, затем требует чтения fence без credential payload в
+// fake tracker.
 func TestCleanupProviderCredentialDeletesOnlyExactServerOwnedSecret(t *testing.T) {
 	t.Parallel()
 	for _, manager := range []string{providerSecretBrokerManager, providerRuntimeManager} {
@@ -113,6 +145,12 @@ func TestCleanupProviderCredentialDeletesOnlyExactServerOwnedSecret(t *testing.T
 	}
 }
 
+// TestCleanupProviderCredentialNotFoundIsDeterministicWithoutDelete starts without the target, verifies
+// deterministic terminal replay and proves no Delete call occurred; creating the durable fence and
+// receipt is still allowed.
+// TestCleanupProviderCredentialNotFoundIsDeterministicWithoutDelete начинает без цели, проверяет
+// детерминированный terminal повтор и отсутствие Delete вызова; создание durable fence и квитанции при
+// этом допускается.
 func TestCleanupProviderCredentialNotFoundIsDeterministicWithoutDelete(t *testing.T) {
 	t.Parallel()
 	_, descriptor := providerCleanupFixture(providerSecretBrokerManager)
@@ -134,6 +172,12 @@ func TestCleanupProviderCredentialNotFoundIsDeterministicWithoutDelete(t *testin
 	}
 }
 
+// TestCleanupProviderCredentialValidatesFencedExactInputBeforeKubernetes covers malformed typed
+// references, generation, name, UID, resourceVersion and digest and requires an empty fake action log
+// for every rejected input.
+// TestCleanupProviderCredentialValidatesFencedExactInputBeforeKubernetes проверяет повреждённые
+// типизированные ссылки, generation, имя, UID, resourceVersion и digest и требует пустой fake action log
+// для каждого отклонённого входа.
 func TestCleanupProviderCredentialValidatesFencedExactInputBeforeKubernetes(t *testing.T) {
 	t.Parallel()
 	_, valid := providerCleanupFixture(providerSecretBrokerManager)
@@ -180,6 +224,12 @@ func TestCleanupProviderCredentialValidatesFencedExactInputBeforeKubernetes(t *t
 	}
 }
 
+// TestProviderCredentialCleanupReceiptBindsEveryExactCoordinate varies task, account, generation and
+// each descriptor coordinate to ensure eight fixture inputs produce distinct terminal receipt digests
+// without storage calls.
+// TestProviderCredentialCleanupReceiptBindsEveryExactCoordinate меняет task, account, generation и
+// каждую координату descriptor, проверяя восемь разных terminal receipt digest без обращений к
+// хранилищу.
 func TestProviderCredentialCleanupReceiptBindsEveryExactCoordinate(t *testing.T) {
 	t.Parallel()
 	_, descriptor := providerCleanupFixture(providerSecretBrokerManager)
@@ -208,6 +258,10 @@ func TestProviderCredentialCleanupReceiptBindsEveryExactCoordinate(t *testing.T)
 	}
 }
 
+// TestCleanupProviderCredentialReportsReplacementWithoutDelete substitutes another valid UID and payload
+// at the same name and verifies the replacement is returned separately without any Delete action.
+// TestCleanupProviderCredentialReportsReplacementWithoutDelete подставляет другой корректный UID и
+// payload по тому же имени и проверяет отдельный возврат замены без Delete действий.
 func TestCleanupProviderCredentialReportsReplacementWithoutDelete(t *testing.T) {
 	t.Parallel()
 	secret, descriptor := providerCleanupFixture(providerRuntimeManager)
@@ -232,6 +286,10 @@ func TestCleanupProviderCredentialReportsReplacementWithoutDelete(t *testing.T) 
 	}
 }
 
+// TestCleanupProviderCredentialRejectsBindingMetadataAndContentMismatch changes account, publisher,
+// version, declared digest or actual bytes and verifies cleanup conflict before any credential deletion.
+// TestCleanupProviderCredentialRejectsBindingMetadataAndContentMismatch меняет account, издателя,
+// версию, заявленный digest или фактические байты и проверяет cleanup conflict до удаления credential.
 func TestCleanupProviderCredentialRejectsBindingMetadataAndContentMismatch(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -274,6 +332,12 @@ func TestCleanupProviderCredentialRejectsBindingMetadataAndContentMismatch(t *te
 	}
 }
 
+// TestCleanupProviderCredentialRequiresFencedTerminalReadback makes the post-delete GET return the old
+// UID instead of a valid fence and verifies that a completed deletion request alone cannot produce
+// terminal success.
+// TestCleanupProviderCredentialRequiresFencedTerminalReadback подменяет post-delete GET старым UID
+// вместо корректного fence и проверяет, что одного завершённого запроса удаления недостаточно для
+// terminal успеха.
 func TestCleanupProviderCredentialRequiresFencedTerminalReadback(t *testing.T) {
 	t.Parallel()
 	secret, descriptor := providerCleanupFixture(providerRuntimeManager)
@@ -298,6 +362,12 @@ func TestCleanupProviderCredentialRequiresFencedTerminalReadback(t *testing.T) {
 	}
 }
 
+// TestCleanupProviderCredentialPreconditionConflictFailsClosed injects an API delete conflict and
+// verifies conflict classification while the fake credential remains present; it simulates rejection,
+// not real server-side CAS.
+// TestCleanupProviderCredentialPreconditionConflictFailsClosed внедряет API delete conflict и проверяет
+// классификацию конфликта при сохранении fake credential; моделируется отказ, а не реальный серверный
+// CAS.
 func TestCleanupProviderCredentialPreconditionConflictFailsClosed(t *testing.T) {
 	t.Parallel()
 	secret, descriptor := providerCleanupFixture(providerRuntimeManager)
@@ -318,6 +388,12 @@ func TestCleanupProviderCredentialPreconditionConflictFailsClosed(t *testing.T) 
 	}
 }
 
+// TestCleanupProviderCredentialTemporaryAPIErrorsRemainRetryable injects service-unavailable errors at
+// initial read, delete and a subsequent GET, then checks they are not collapsed to permanent
+// invalid/conflict sentinels. It does not execute an automatic retry.
+// TestCleanupProviderCredentialTemporaryAPIErrorsRemainRetryable внедряет service-unavailable на
+// исходном чтении, delete и следующем GET, проверяя отсутствие преобразования в постоянные
+// invalid/conflict ошибки. Автоматический повтор не выполняется.
 func TestCleanupProviderCredentialTemporaryAPIErrorsRemainRetryable(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -363,6 +439,11 @@ func TestCleanupProviderCredentialTemporaryAPIErrorsRemainRetryable(t *testing.T
 	}
 }
 
+// TestDiscardProviderAuthorizationAttemptRequiresExactLineage rejects wrong API pins, then verifies one
+// in-place fence Update instead of Delete and idempotent compensation replay on synthetic attempt state.
+// TestDiscardProviderAuthorizationAttemptRequiresExactLineage отклоняет неверные API-привязки, затем
+// проверяет один Update fence на месте вместо Delete и идемпотентный compensation повтор на
+// синтетическом attempt состоянии.
 func TestDiscardProviderAuthorizationAttemptRequiresExactLineage(t *testing.T) {
 	t.Parallel()
 	store, client := newAuthorizationCleanupStore(t)
@@ -396,6 +477,10 @@ func TestDiscardProviderAuthorizationAttemptRequiresExactLineage(t *testing.T) {
 	}
 }
 
+// assertProviderSecretDeletePreconditions checks recorded delete options for the named fake Secret
+// against exact UID/resourceVersion; it does not validate actual API-server enforcement.
+// assertProviderSecretDeletePreconditions сверяет записанные delete options именованного fake Secret с
+// точными UID/resourceVersion; фактическое применение реальным API server не проверяется.
 func assertProviderSecretDeletePreconditions(
 	t *testing.T,
 	client *fake.Clientset,
@@ -417,6 +502,12 @@ func assertProviderSecretDeletePreconditions(
 	t.Fatal("provider Secret delete action was not recorded")
 }
 
+// providerCleanupFixture constructs an immutable synthetic credential and matching descriptor with
+// broker or runtime provenance; non-broker manager inputs take the runtime annotation branch for
+// negative publisher tests.
+// providerCleanupFixture строит immutable синтетический credential и соответствующий descriptor с broker
+// либо runtime происхождением; manager не из broker выбирает runtime annotations для негативных тестов
+// издателя.
 func providerCleanupFixture(manager string) (*corev1.Secret, ProviderCredentialDescriptor) {
 	content := []byte(providerCleanupContent)
 	digest := sha256.Sum256(content)
@@ -456,6 +547,10 @@ func providerCleanupFixture(manager string) (*corev1.Secret, ProviderCredentialD
 	}
 }
 
+// providerSecretActionCount counts recorded Secret actions matching verb and name, handling named
+// read/delete actions and object-bearing create/update actions without contacting Kubernetes.
+// providerSecretActionCount считает записанные Secret действия по verb и имени, обрабатывая именованные
+// read/delete и несущие объект create/update без обращения к Kubernetes.
 func providerSecretActionCount(client *fake.Clientset, verb, name string) int {
 	count := 0
 	for _, action := range client.Actions() {
@@ -472,6 +567,10 @@ func providerSecretActionCount(client *fake.Clientset, verb, name string) int {
 	return count
 }
 
+// visibleASCII accepts only nonempty visible ASCII fixture metadata, rejecting spaces and controls when
+// checking terminal receipt safety.
+// visibleASCII допускает только непустые видимые ASCII metadata fixture, отклоняя пробелы и управляющие
+// символы при проверке безопасности terminal квитанции.
 func visibleASCII(value string) bool {
 	if value == "" {
 		return false
@@ -484,6 +583,10 @@ func visibleASCII(value string) bool {
 	return true
 }
 
+// changedCleanupDescriptor mutates a value copy of the supplied descriptor for negative test cases and
+// leaves the original descriptor unchanged.
+// changedCleanupDescriptor изменяет копию значения переданного descriptor для негативного теста,
+// оставляя исходный descriptor неизменным.
 func changedCleanupDescriptor(
 	value ProviderCredentialDescriptor,
 	change func(*ProviderCredentialDescriptor),

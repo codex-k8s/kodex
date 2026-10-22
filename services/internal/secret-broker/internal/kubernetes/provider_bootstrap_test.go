@@ -19,8 +19,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// Оснастка использует настоящий producer, а не копию его labels и encoding.
-// UID/RV назначает только fake Kubernetes: Python не имитирует их выдачу.
+// bootstrapProviderFixture invokes the real repository bootstrap manifest producer with synthetic JSON
+// on stdin under a ten-second deadline and a minimal environment. Only the fixture assigns synthetic
+// UID/resourceVersion; no cluster or installer action runs.
+// bootstrapProviderFixture вызывает реальный репозиторный bootstrap manifest producer с синтетическим
+// JSON через stdin, дедлайном десять секунд и минимальным окружением. Синтетические UID/resourceVersion
+// назначает только fixture; кластер и installer не запускаются.
 func bootstrapProviderFixture(t *testing.T) (*corev1.Secret, ProviderCredentialDescriptor) {
 	t.Helper()
 	producer, err := filepath.Abs("../../../../../tools/install/provider-bootstrap.py")
@@ -59,6 +63,12 @@ print(json.dumps(module.manifest("pacc_cleanup_Account9Z", "qa-bootstrap", sys.s
 	}
 }
 
+// TestBootstrapProviderCredentialExactProducerReadback reads the actual producer's synthetic manifest
+// twice through the fake store, clears each returned copy and proves both read-only actions and
+// unchanged stored payload.
+// TestBootstrapProviderCredentialExactProducerReadback дважды читает синтетический manifest фактического
+// producer через fake store, обнуляет каждую возвращённую копию и проверяет read-only действия с
+// неизменным сохранённым payload.
 func TestBootstrapProviderCredentialExactProducerReadback(t *testing.T) {
 	t.Parallel()
 	secret, descriptor := bootstrapProviderFixture(t)
@@ -86,6 +96,12 @@ func TestBootstrapProviderCredentialExactProducerReadback(t *testing.T) {
 	clearSecretData(stored)
 }
 
+// TestBootstrapProviderCredentialExactRejectsInvalidMaterialization mutates producer output across
+// provenance, account/digest, API pins, data shape, type and immutability and requires refusal with no
+// returned bytes or mutation.
+// TestBootstrapProviderCredentialExactRejectsInvalidMaterialization изменяет результат producer по
+// происхождению, account/digest, API-привязкам, форме Data, типу и immutability и требует отказа без
+// возврата байтов и изменения объекта.
 func TestBootstrapProviderCredentialExactRejectsInvalidMaterialization(t *testing.T) {
 	t.Parallel()
 	canonical, descriptor := bootstrapProviderFixture(t)
@@ -140,6 +156,12 @@ func TestBootstrapProviderCredentialExactRejectsInvalidMaterialization(t *testin
 	}
 }
 
+// TestBootstrapProviderCredentialExactRejectsWrongRequestedPins leaves the actual bootstrap object
+// intact while changing requested account, UID, resourceVersion, digest or name and verifies every exact
+// read fails closed.
+// TestBootstrapProviderCredentialExactRejectsWrongRequestedPins сохраняет фактический bootstrap объект,
+// меняя запрошенные account, UID, resourceVersion, digest или имя, и проверяет закрытый отказ каждого
+// точного чтения.
 func TestBootstrapProviderCredentialExactRejectsWrongRequestedPins(t *testing.T) {
 	t.Parallel()
 	secret, descriptor := bootstrapProviderFixture(t)
@@ -170,6 +192,11 @@ func TestBootstrapProviderCredentialExactRejectsWrongRequestedPins(t *testing.T)
 	}
 }
 
+// TestBootstrapProviderCredentialCleanupExactTarget verifies exact bootstrap deletion and durable fence,
+// stale-version refusal, and reporting another UID as a separate replacement while retaining its
+// readable payload.
+// TestBootstrapProviderCredentialCleanupExactTarget проверяет точное удаление bootstrap с durable fence,
+// отказ устаревшей версии и сообщение другого UID как отдельной замены с сохранением читаемого payload.
 func TestBootstrapProviderCredentialCleanupExactTarget(t *testing.T) {
 	t.Parallel()
 	canonical, descriptor := bootstrapProviderFixture(t)
@@ -225,6 +252,10 @@ func TestBootstrapProviderCredentialCleanupExactTarget(t *testing.T) {
 	}
 }
 
+// TestBootstrapProviderCredentialExactPreservesCanonicalPublishers ensures support for bootstrap does
+// not break exact broker/runtime reads or allow either publisher to bypass resourceVersion matching.
+// TestBootstrapProviderCredentialExactPreservesCanonicalPublishers проверяет, что поддержка bootstrap не
+// ломает точное чтение broker/runtime и не позволяет издателям обходить совпадение resourceVersion.
 func TestBootstrapProviderCredentialExactPreservesCanonicalPublishers(t *testing.T) {
 	t.Parallel()
 	for _, manager := range []string{providerSecretBrokerManager, providerRuntimeManager} {

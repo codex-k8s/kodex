@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.242.0
+version: 1.243.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,72 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок третья волна — provider storage, cleanup и renewal receipts
+
+Опубликованный SHA242 — `9fa0254319b6f969ded75989bc8304fd7eb134f9`.
+Точный Uotcir:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9865/21197, missing11332. Raw SHA256:
+`753f9bdb7a53d4e89afa976173d6c5583927ab3527913e2262498eaa3b1cd258`.
+Clone-set:
+`2a826d9629d0a79c8055dc8d87f7b653ec1bf6d85503532e16a77aa51da2972a`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA242 Kubernetes47/154
+и полная сборка secret-broker PASS,0 FAIL/SKIP. Первая локальная push-обёртка
+не подключила auth header и остановилась до GitHub/git-write; исправленная
+обёртка выполнена с тем же ожидаемым SHA, remote readback точен.
+
+Полностью прочитаны2160 строк семи оставшихся provider Kubernetes файлов.
+143 declarations и две локальные fixture constants описаны EN→RU.
+AST7 идентичен SHA242; только comments/gofmt, без runtime изменений.
+Весь Kubernetes package теперь256/256 в16 файлах;242/242 из14 файлов —
+только совокупный scope волн242–243, не полный denominator пакета.
+В secret-broker998/1277: остаются279 providercredential declarations.
+
+Пояснения разделяют структурный descriptor от authority и фактических байтов,
+pending/terminal replay equality, точные publisher provenance predicates,
+copy/clear ownership и отсутствие URI trust policy в shape validator.
+Общий descriptor validator намеренно слабее cleanup descriptor validator;
+комментарии не обещают UUID/name/expiry checks там, где их нет.
+Cleanup не удаляет валидную замену под другим UID: возвращает новый exact
+target. Отсутствие credential не завершает путь без durable fence/receipt.
+SnapshotChanged означает доказанный отказ записи текущего вызова, а не
+общий Conflict или потерю committed write ACK.
+
+Immutable cleanup receipts и mutable renewal reservations не объединены:
+различаются схемы, state graph, produced-result verification и CAS.
+CompleteProviderCleanupReceipt проверяет descriptor shape и точную запись,
+но не доказывает самостоятельно существование produced credential;
+CompleteProviderCredentialRenewal сначала читает фактически опубликованный
+immutable результат. Begin разрешает effect только после подтверждённого
+Create и проверки ответа; unknown ACK и AlreadyExists не дают нового effect.
+READ recovery не вызывает OAuth или Create, прошедший исходный expiry
+не препятствует наблюдению. JSON canonical roundtrip закрепляет именно
+локальные bytes encoding, не универсальный межъязыковой стандарт.
+Историческое bounded generation поле описано как существующий input,
+новая compatibility ветка/legacy API не добавлены.
+
+Полный unit трёх пакетов Kubernetes, transport/grpc и providercredential:
+127 верхних/445 всех PASS,0 FAIL/SKIP; полная сборка secret-broker PASS LOCAL.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4,
+`go test -mod=readonly -count=1 -timeout 120s -json
+./internal/kubernetes ./internal/transport/grpc/... ./internal/providercredential`
+и `go build -mod=readonly ./...`. Собственные provider tests используют
+fake ports, текущий test executable, synthetic shell/pipes и fixture JSON,
+не настоящий Codex/provider account. Bootstrap fixture вызывает реальный
+repository manifest producer Python только на synthetic stdin с bounded
+deadline/minimal env, без installer/apply/кластера. LostCreateACK fixture
+реально пишет tracker до возврата ошибки; sequential single-winner test
+не выдан за настоящую concurrent multi-replica проверку.
+
+Scope docs256/256, AST7, gofmt/diff-check и пять addressed ignores PASS.
+Рабочий anUkSz:6587 sources,222 excluded,1824 raw/598 retained/
+1226 unresolved; Go10008/21197, missing11189. Raw SHA256:
+`1d21943135df3c0cd08cc833d4a752825e0391f059e2be3bbffdff14ee1d590b`.
+Clone-set прежний2a826d96...; все fragment/path/count и registry неизменны.
+Точный post-commit scan/unit/build публикуются в том же Draft PR.
+Generated/contracts/dependencies/migrations не менялись. Остальные modules,
+неразобранные группы и прежние FAIL/SKIP/NOT RUN остаются открытыми;
+полная приёмка/browser/live/deploy/реальные модели не выполнялись.
 
 ## Двести сорок вторая волна — exact Kubernetes storage и проекции
 
