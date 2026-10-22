@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.265.0
+version: 1.266.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,45 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят шестая волна — public runtime metadata и secret lifecycle views
+
+Опубликованный SHA265 — `af2058a85afceaa6a715c3d7ed49632bfa1406af`.
+Точный esHW38:6602 sources,222 excluded,1817 raw/631 retained/
+1186 unresolved; Go11665/21238, missing9573. Raw SHA256:
+`8c98f4290dee3ddd07e8e50ff9ffedc4ee89b9be86b4d8b4767496bac1c94623`.
+Clone-set:
+`f147f3eb0a7cfb00c9dd0dffcd29b1204e963e9be36541086fcc968cef9c3a62`.
+Точные unit/build, push/readback и Draft PR PATCH/GET265 подтверждены.
+
+Полностью прочитаны семь entity files: runtime_files, runtime_revision_diff,
+runtime_secret, runtime_secret_draft, оба secret impact и run_session_readiness.
+Все28 declarations описаны EN→RU. Дополнительно прочитаны реализации public
+revision comparison, exact-object bounded preview и draft recovery cleanup.
+Preview prefix digest прямо отделён от full artifact digest при Truncated;
+filename не объявлен путём узла. Public revision diff не является sealed
+continuation diff из265 и не разделяет приватный worker snapshot.
+
+Secret metadata, exact object descriptors и encrypted readback отделены от
+байтов значений; display hint и opaque operation grant не объявлены безопасными
+для произвольных логов. DraftResult.Completed может завершать cleanup, не
+только publication. Impact page и NextActions не заменяют owner-side checks;
+отсутствие session-gates не обещает readiness всей runtime claim цепочки.
+Это документирование прочитанного кода, не новый live/security proof.
+
+AST7 без комментариев идентичен SHA265: поля, pointers, tags, imports и тела
+не менялись. Scope checker28/28; raw groups с этими paths нет. В рабочем
+M3F1pa:6602 sources,222 excluded,1817 raw/631 retained/1186 unresolved;
+Go11693/21238, missing9545. Raw SHA256:
+`eba86029c9e7fe5fe652ba09e09a28940e321c1a33f9a55e1301686b22679314`.
+Clone-set и528 retained entries/631 occurrences неизменны; исключений нет.
+
+Выбранные CP repository/...+types/...+grpc+roleimage unit102 верхних/278 всех
+PASS,0 FAIL,те же3 explicit SKIP; полный CP module build -p=2 PASS LOCAL.
+Docs28/28, AST7, canonical scan/5 ignore boundaries, gofmt/diff-check PASS LOCAL.
+Tooling units и scoped проверки повторяются на точном commit перед readback
+в том же PR. General9545 missing/1186 unresolved ещё предстоят; полный
+docs-check/приёмка/browser/live/component/deploy не объявлены PASS.
 
 ## Двести шестьдесят пятая волна — общая форма context diff
 
