@@ -4304,6 +4304,110 @@
       "fragmentSHA256": "924fb98ab5b72f4a175c4e089465c5b7995c1114c5096f30cd7041f2976036dc",
       "count": 1,
       "reason": "Окно118 tokens пересекает конец RuntimeWork GetIntegrationConnectionDefinitionConfiguration и начало query GetSystemSTTConfiguration против GetOverview и начала ListPlatformCapabilities. Различаются fixed runtime binding kinds, owner query, method authority и typed ответ; общий principal/transportError/casters уже существует. Единого связного алгоритма чтения нет; generic callback reader усложнит короткие guards и скроет RuntimeWork/query границу. Сохранены только точные два пути/fragment/count1, не query/read handlers целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "3a3d12468cc5a3dc38a1473c6d6a616505cb31fbaffb003d858f74cb8eea8f9a",
+      "count": 1,
+      "reason": "Окно139 tokens сравнивает UpdateAssistantConversationTitle с хвостом Git detach и CopyGitManagedConfiguration. Различаются generated JSON body, точный Assistant/Command RPC, ConversationRef против ConfigurationRef, writeMessage против checked writeManagedResult и HTTP200/201. Decode/mutation/error/result primitives уже общие; полного связного алгоритма на всём окне нет. Generic callback mutation wrapper ради коротких typed guards скроет маршрутизацию и разную проверку ответа. Сохранены только exact paths/hash/count1, не HTTP mutation endpoints целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "8d485596d0ada4dc0a0e952dda6732bdf16db8d46c110830c66b140d3ddc84eb",
+      "count": 1,
+      "reason": "Окно103 tokens пересекает RestoreProject и начало PurgeProject против хвоста RebindSystemSTTConsumers и начала DetachGitManagedConfiguration. Это разные project lifecycle и managed-ownership commands, с разными номинальными запросами и строгой проверкой detachment reply далее. requireMutation и writeRPCProblem уже вынесены; на границе методов повторены лишь короткие guards/typed calls. Универсальная command/response фабрика не выделит общий бизнесовый алгоритм и ухудшит видимость переходов. Только exact fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/interaction_identity_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "7fa158a967c18eb41c07ebdd17c4179c8943040632ae86a72624bbdc90076c25",
+      "count": 1,
+      "reason": "Окно122 tokens — начальные guards и query вызов ListInteractionIdentities против ListManagedConfigurationHistory. Совпадают syntactic ref/page checks и error plumbing, а owner query, eligibility, shape/row limits и revision/identity readback далее различны. validHTTPPage/page/writeRPCProblem уже общие; общий list-any callback API ради одного короткого skeleton добавит параметры, не удалив содержательного повторного алгоритма. Сохранена точная пара/hash/count1, не все списки или route bodies."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "aa8f62734a52ca088b9af77d8c3fdb0fc28ab3b428bb46b992f8853a0ea1367b",
+      "count": 1,
+      "reason": "Окно122 tokens содержит requireManagedDraftMutation→withProjectReference и начало typed create request у prompt и role-image draft. Эти два примитива уже общие; prompt scope проверяется до них и сверяется после RPC, image этого поля не имеет. Ещё один helper потребует возвращать request/context, mutation и успех ради двух уже общих calls и скроет staged prompt validation order. Оставлены явные kind/typed RPC mappings; исключён только exact файл/hash/count1, не create endpoints целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "1469c1a720eabe051c9010f3fcbed40192931c9cb5f240f90259b507c6c61fcb",
+      "count": 1,
+      "reason": "Окно170 tokens пересекает конец CreatePromptTemplateDraft, ValidatePromptTemplateDraft и вход PublishPromptTemplateDraft против конца CreateRoleImageRevisionDraft, ValidateRoleImageRevisionDraft и входа PublishRoleImageRevisionDraft. Prompt имеет scope receipt и applied impact validation, а nominal RPC types и command routes различаются. Общие requireMutation/writeRPCProblem/writeManagedResult уже выделены; связного нового алгоритма через эти границы нет. Generic typed callback registry ради этой формы усложнит mappings. Только exact fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "0a6c03e17a16bea7173aaf3fcc7c11968d8df48251e5e8d52e87b58d91ea5d81",
+      "count": 1,
+      "reason": "Окно168 tokens начинается после prompt scope receipt и проходит через validate до начала publish; вторая сторона — конец OPENAPI_IMPORT canonical/digest verification, integration validate и начало publish. Разные upstream consistency guards и nominal commands нельзя заменить общим mutation-any handler без optional branches. Parsing/error/result helpers уже общие, а остаток состоит из коротких typed wrappers и их границ. Сохранены только точный fragment/count1; OpenAPI import и prompt publication целиком не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "15c9beba6527ac8059b56b45431c4b531aded7c1492f75a2a91311c276f25bee",
+      "count": 1,
+      "reason": "Окно119 tokens сравнивает конец ValidatePromptTemplateDraft и начало plan-based PublishPromptTemplateDraft с концом PublishRoleImageRevisionDraft и началом RebindRoleImageConsumers. Generated bodies следующего метода разные: RevisionImpactPublicationInput и RoleImageRebindInput, проверки plan/version/digest и ответы тоже разные. Общие requireMutation/writeRPCProblem/writeManagedResult уже существуют; целостного одинакового алгоритма нет. Универсальный input/command dispatcher ради guards нецелесообразен. Только exact hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "8f350f89fccd13584624887ede9bad238586aa8cbb6c39dd5b56ae07242b6c96",
+      "count": 1,
+      "reason": "Окно194 tokens идёт от проверенного prompt-publication response через RebindPromptTemplateConsumers к CreateRoleImageRevisionDraft; второе — от integration publication через RebindIntegrationDefinitionConsumers к CreateSystemSTTDraft. Реальная общая decode→consumer validation→mutation parsing цепочка уже вынесена в readManagedRebindRequest и проверена inverse AST/всеми тремя route unit. Остались exact typed RPC, path selectors и checked response wrappers на границах иных commands. Сохранён только residual fragment/count1, не прежняя копия preflight и не файл."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "448b438f9b0ade22fa7a823d2c6c58b2511a428de720f5429fc406e4a3b1f3db",
+      "count": 1,
+      "reason": "Крупное окно после реального выноса common rebind preflight сократилось400→378 tokens. Оно охватывает project-scoped image create→validate→publish→начало plan-based rebind против organization-scoped STT create→validate→publish→consumer rebind. Project context, kinds, typed RPC и дальнейшие plan result guards различаются; requireManagedDraftProject/Mutation, error/result helpers и новый rebind parser уже общие. Дальнейшая универсальная handler/response factory скроет явные scope/command mappings без нового общего алгоритма. Сохранён только этот residual hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "570e5a21d599435f907fa8386f9b0d967867388ce38e08b656b5a8b5622cb543",
+      "count": 1,
+      "reason": "Окно144 tokens перекрывает конец image create и validate с концом image validate и publish. Сходны typed mutation/error/result plumbing, но create имеет project context и draft input, validate/publish — разные exact RPC и lifecycle transitions. Общие guards и checked writer уже вынесены; всё окно пересекает разные методы, а не повторяет самостоятельный algorithm. Generic callback helper ради ещё одного call/return добавит косвенность typed routing. Сохранены exact путь/fragment/count1, не весь image transport."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "a39a50c1636c06d7e8ed58f9a384c787e3ddcc6d140d87ce750ca5b9187d4f5b",
+      "count": 1,
+      "reason": "Окно220 tokens сравнивает image validate→publish→начало image rebind с integration validate→publish→начало integration rebind. Image rebind далее имеет отдельные plan/item/digest/readback guards и иной DTO, integration использует теперь общий readManagedRebindRequest и consumer pins. Простые validation/publication wrappers уже разделяют requireMutation, RPC error и checked managed result; обобщение whole handler сделает обязательные differences optional. Сохранён только residual fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "295f65aab0f51a8e97f6f113c2bfb65da3b7bfa13c75c73f8282332dae139a23",
+      "count": 1,
+      "reason": "Окно177 tokens пересекает конец image plan rebind и integration definition create против конца integration rebind и system-STT create. Оба organization-scoped creates уже используют общие project/draft guards, но integration имеет последующую canonical OPENAPI_IMPORT/digest проверку, которой у STT нет. Новый общий rebind preflight отдельно выделен; остаток — typed create/rebind calls и границы методов. Generic factory размоет разные request/receipt schemas ради короткого plumbing. Только exact hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "4aa84301a1f57b3c3fbc327ecbc6f711da73f81a12990a151a031957a40ad1b3",
+      "count": 1,
+      "reason": "Окно214 tokens идёт от integration publication через integration rebind к STT create против STT publication→STT rebind→Git detach. Общая decode/consumer/mutation цепочка обоих rebind уже реально вынесена с сохранением порядка и exact RPC; остаток пересекает несвязанные create/detach lifecycle boundaries. requireMutation/writeRPCProblem/writeManagedResult также общие. Полный generic dispatcher или callback response factory не уберёт нового связного алгоритма, но скроет команды и специальные detach checks. Только residual hash/count1, не файлы/семейства."
     }
   ]
 }

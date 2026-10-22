@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.270.0
+version: 1.271.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,70 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят первая волна — HTTP rebind input preparation
+
+Опубликованный SHA270 — `687acae21c77ff965c345600164836e5527ad998`.
+Точный GVI7A3:6604 sources,222 excluded,1822 raw/642 retained/
+1180 unresolved; Go11849/21241, missing9392. Raw SHA256:
+`b933d3ec4da9dc0b6538d74b446e9d3aa682d7726758879c2b2fc3eb9127d1e1`.
+Clone-set:
+`547c0c737ee66d3fbef023629aa0c8de23168b8ca8acbfaa71c9f20e27a4a79a`.
+Точные unit/build, push/readback и Draft PR PATCH/GET270 подтверждены.
+
+Целиком прочитан495-строчный gateway managed_configuration_endpoints.go,
+весь managed_consumer_selection_test.go, реальные managed input/mutation/
+result helpers и обе стороны cross-file residual windows. Реальная общая
+цепочка decodeJSON→managedConsumerInput→requireMutation трёх prompt,
+integration-definition и STT rebind вынесена в private readManagedRebindRequest.
+Private transport record содержит только mapped mutation, impact digest и
+ordered consumer selectors; actor, выбор command и owner authority в helper
+не попали. Typed RPC/path/request/response/error/readback каждой ветви прежние.
+Plan-based role-image rebind с другим DTO и обязательными plan guards не
+обобщён этим helper. Другие create/validate/publish RPC также остались явными.
+
+Сохранено фактическое поведение requireMutation: parsing optional ETag,
+копирование idempotency key, но не проверка его наличия внутри helper.
+Новой локальной политики headers не введено; route и owner checks на прежних
+местах. Комментарии не приписывают преобразованию полномочия, публикации —
+image admission/transcription, а view — redaction. Для create раздельно
+описаны required project context и organization scope без project field,
+prompt-scope receipt, canonical OpenAPI import и exact digest/result checks.
+Для history/impact — safe counts, cursor/page/identity consistency.
+
+Все25 declarations EN→RU в трёх selected files:21 endpoint,2 существующих
+unit и2 новых helper declarations. Inverse AST6 восстанавливает полный
+endpoints file SHA270, сравнивает прежний test без комментариев, проверяет
+private record shape и отдельно все три исходных preflight prefixes после
+точной нормализации параметров и failure return. Проверена точная success
+projection helper; условный порядок и request fields не менялись.
+
+Existing synthetic consumer-selection unit выполняет20 cases на каждом из
+трёх typed routes плюс owner-conflict case для каждого: exact impact/OCC,
+absent/match и предыдущие revision/version pins, malformed/null/unsafe input
+rejection до RPC, conflict→412. Отдельный unit сохраняет ExpectedAbsent только
+во входном, не read DTO. Новая копия тестового oracle не добавлена.
+Весь gateway HTTP package422 верхних/1780 всех unit и full gateway build
+-p=2 — PASS LOCAL,0 FAIL/SKIP. Это synthetic tests, не live owner acceptance.
+
+Крупное400-token окно уменьшилось до378. Raw1822→1821:10 keys заменены9
+occurrences,1812 остальных path/hash/count неизменны. Новых clones у helper
+или selected test нет. Все13 residual target windows прочитаны; реальная
+общая logic уже вынесена, в остатке exact typed mappings и разные lifecycle/
+scope/result guards. Добавлены13 exact reasons/count1 без broad exclusions;
+прежние538 registry entries неизменны, теперь551 entries/655 occurrences.
+Это не заявление об устранении10 алгоритмов по изменённым comment hashes.
+
+Рабочий pjq0Ox:6605 sources,222 excluded,1821 raw/655 retained/
+1166 unresolved; Go11874/21243, missing9369. Raw SHA256:
+`39e65423379aa3daa148466deec3b65626cf8b9e9066207a2d2c6ead6082f273`.
+Clone-set:
+`ae72897170dcb0ee007a67f8abf04a2bca24b6b076459db4736e0788d0fa3e86`.
+25/25 docs, inverse AST6,17 Node/Go checker units, assessment/registry-prefix/
+multiset proof,5 ignore boundaries и diff-check PASS LOCAL. Точные повторные
+checks и readback публикуются на новом SHA в том же Draft PR. General9369
+missing/1166 unresolved остаются; full acceptance/browser/live/component/
+deploy NOT RUN согласно scope владельца.
 
 ## Двести семидесятая волна — managed configuration gRPC boundary
 
