@@ -19,6 +19,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -530,18 +531,14 @@ func compactDigest(compact string) string {
 	return hex.EncodeToString(digest[:])
 }
 
+// deterministicUUID delegates restore ACK and request identities to the shared
+// NUL-terminated encoding without changing namespaces or tuple bytes. The ID
+// is deterministic SHA-256 truncation, not randomness or proof of authority.
+// deterministicUUID передаёт идентичности restore ACK и запросов общему
+// кодированию с завершающим NUL, не меняя пространства имён и байты кортежа.
+// ID — детерминированное усечение SHA-256, а не случайность или полномочие.
 func deterministicUUID(parts ...string) string {
-	digest := sha256.New()
-	for _, part := range parts {
-		_, _ = digest.Write([]byte(part))
-		_, _ = digest.Write([]byte{0})
-	}
-	value := digest.Sum(nil)[:16]
-	value[6] = (value[6] & 0x0f) | 0x50
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value)
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32]
+	return value.TerminatedAuthorityUUID(parts...)
 }
 
 func readMountedValue(path string, maximum int) (string, error) {

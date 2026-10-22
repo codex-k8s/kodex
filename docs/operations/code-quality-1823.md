@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.290.0
+version: 1.291.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,66 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто первая волна — общий UUID readback и restore
+
+Опубликованный SHA290 — `46421e599a34615143ee7d2b9d067dcc421e8033`.
+Точный 0eGW4O:6616 sources,222 excluded,1817 raw/720 retained/
+1097 unresolved; Go12555/21256,missing8701. Raw SHA256:
+`826575376b4a357ef8573bfc35d04063d3d2816b4692fe92f6b7b67202f0c4a5`.
+Clone-set99900001…; exact app31/123 и full authority build,
+tooling/AST/scan PASS LOCAL, push и Draft PR PATCH/GET290 подтверждены.
+
+Прочитаны полностью readback client540 lines и его197-line unit file,
+оба прежних тела deterministicUUID, их вызовы и существующий
+JoinedAuthorityUUID с тестами. Это два РАЗНЫХ формата: Joined соединяет
+части NUL без конца, клиентский формат пишет NUL после каждой части.
+Для readback/restore выделен отдельный leaf value.TerminatedAuthorityUUID
+с буквально прежним телом; оба private wrapper вызывают только его.
+JoinedAuthorityUUID и все пространства/входы вызывающих неизменны.
+
+Матрица:readback evidence JTI, submission idempotency/correlation;
+restore ACK JTI, request idempotency, poll correlation — те же аргументы,
+порядок и завершающие NUL, никакой новой authority/credential/session
+или persistence. Ноль частей хеширует пустой поток; одна пустая часть
+хеширует NUL. Сохранена неоднозначность произвольных NUL-содержащих
+кортежей; helper не выдаётся за SHA-1 UUIDv5 или случайность.
+10 независимо рассчитанных Node crypto SHA256 vectors проверяют пустые
+значения, UTF8/NUL и client namespaces, плюс неизменность spare capacity.
+Inverse AST3 разворачивает ACTUAL helper в обоих полных прежних callers
+и сравнивает прежний unit file; тела helper/старых UUID буквально равны.
+Остальные объявления, calls, directives и retry loops прежние.
+
+Readback41/41 EN→RU; restore wrapper1 и новые helper/test2 тоже покрыты:
+44 новых bilingual declarations. Остальной restore file НЕ объявляется
+полностью документированным. Comments точно отличают wrapper config
+presence от client TLS checks, delivery material от authority, transport
+reuse от readiness и signing fixture от проверки сервером. Attest
+сохраняет свежий random challenge key, server-time evidence и три попытки
+каждого RPC только при Unavailable с100/250ms; отмена ожидания возвращает
+ctx.Err напрямую. Квитанция проверяет присутствие/срок, но не пересчитывает
+evidence digest; comments не обещают дополнительных проверок.
+Context7/golang/go hash/rand docs сверены; ошибки rand API не изменены.
+
+Readback+restoreagent+domain/value7 верхних/24 всех unit и полный authority
+build -p=2 PASS LOCAL,0 FAIL/SKIP.17 Node и Go checker units,
+inverse AST3, docs44/44 целевых declarations,5 ignores и diff-check PASS.
+Реальные gRPC/TLS, Secrets, Kubernetes, readback/restore протоколы и БД
+не запускались; live acceptance и полный baseline NOT RUN.
+
+Рабочий I3k31O:6618 sources,222 excluded,1816 raw/720 retained/
+1096 unresolved; Go12599/21258,missing8659. Удалено одно настоящее
+UUID clone-window163tokens; три прежних boundary windows заменены тремя
+новыми из-за комментариев/соседства wrapper,1813 остальных keys/counts
+прежние. Retry и random UUID residuals остаются unresolved, не скрыты.
+Registry602/720 буквально прежний, новых exclusions нет.
+Raw SHA256:
+`8aeb03ee7727be4ffec4459aa03e267a7f8d044b586bd8d50d65c7ea2e2e1674`;
+clone-set:
+`0a6e9ecd554a842f3c362632a1123f7768321946ca640f101d4d69d86cbfc3ad`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, contracts, applied migrations и live state прежние.
+Задача открыта; historical FAIL и scoped NOT RUN сохраняются.
 
 ## Двести девяностая волна — завершение комментариев authority app
 

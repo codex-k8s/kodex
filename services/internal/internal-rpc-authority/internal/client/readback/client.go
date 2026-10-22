@@ -16,6 +16,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -23,12 +24,19 @@ import (
 )
 
 const (
+	// attestationProtectedType pins the protected JWS type for signed readback evidence; it does not identify the credential or restore-ACK protocol.
+	// attestationProtectedType закрепляет защищённый тип JWS подписанного доказательства readback, не обозначая протокол credential или restore ACK.
 	attestationProtectedType = "kodex-internal-rpc-readback-attestation+jws"
-	attestorAudience         = "urn:kodex:internal-rpc-authority-readback-attestor"
-	attestationTTL           = 30 * time.Second
+	// attestorAudience is the fixed audience of evidence submitted to the readback attestor, not authority derived from a caller-supplied address.
+	// attestorAudience — фиксированная аудитория доказательств readback attestor, а не полномочие, полученное из адреса вызывающего.
+	attestorAudience = "urn:kodex:internal-rpc-authority-readback-attestor"
+	// attestationTTL bounds evidence expiry to thirty seconds after the server-issued challenge time; receipt expiry is validated independently.
+	// attestationTTL ограничивает срок доказательства тридцатью секундами от серверного времени challenge; срок квитанции проверяется независимо.
+	attestationTTL = 30 * time.Second
 )
 
-// Config задаёт один проход проверки обслуживаемого состояния.
+// Config binds one readback exchange to its workload, intent, credential, possession key and generations. TLS and the application interceptor remain separate required transport layers; carrying these values does not authenticate them by itself.
+// Config связывает один обмен readback с workload, намерением, credential, ключом владения и поколениями. TLS и прикладной interceptor остаются отдельными обязательными слоями; наличие значений само не подтверждает их подлинность.
 type Config struct {
 	Address                 string
 	TLS                     *tls.Config
@@ -45,18 +53,25 @@ type Config struct {
 	UnaryInterceptor        grpc.UnaryClientInterceptor
 }
 
-// Client выполняет протокол одноразового запроса и подтверждения.
+// Client signs readback evidence and exchanges it through one configured transport. Direct clients own that transport, while refresh wrappers reuse it and must close it only after their workers stop.
+// Client подписывает доказательство readback и обменивается им через настроенный транспорт. Прямой клиент владеет транспортом; refresh-обёртки переиспользуют его и закрывают только после остановки своих workers.
 type Client struct {
 	config    Config
 	transport *transport
 }
 
+// attestorAPI restricts the transport seam to challenge issuance and evidence submission; server-side ownership, signature and replay checks are not implemented by this interface.
+// attestorAPI ограничивает транспортный интерфейс выдачей challenge и передачей доказательства; серверные проверки владения, подписи и повтора здесь не реализуются.
 type attestorAPI interface {
+	// IssueAttestationChallenge requests a challenge with the pinned intent and credential, reusing the same request identity only within one exchange's retries.
+	// IssueAttestationChallenge запрашивает challenge с закреплёнными намерением и credential, повторяя идентичность запроса только при повторах одного обмена.
 	IssueAttestationChallenge(
 		context.Context,
 		*internalrpcauthorityv1.IssueAttestationChallengeRequest,
 		...grpc.CallOption,
 	) (*internalrpcauthorityv1.IssueAttestationChallengeResponse, error)
+	// AttestServedState submits the signed evidence and challenge binding and returns a receipt; the caller must validate the returned receipt fields before accepting it.
+	// AttestServedState передаёт подписанное доказательство и привязку challenge и возвращает квитанцию; перед принятием вызывающий проверяет возвращённые поля.
 	AttestServedState(
 		context.Context,
 		*internalrpcauthorityv1.AttestServedStateRequest,
@@ -64,14 +79,19 @@ type attestorAPI interface {
 	) (*internalrpcauthorityv1.AttestServedStateResponse, error)
 }
 
+// transport couples the narrow attestor API with its owning connection's close function, allowing refreshes and unit fakes to share one connection lifecycle.
+// transport объединяет узкий API attestor с функцией закрытия принадлежащего ему соединения, позволяя refresh и юнит-заменам использовать один жизненный цикл.
 type transport struct {
 	api   attestorAPI
 	close func() error
 }
 
+// transportFactory injects connection creation from an address, TLS profile and unary interceptor. Opening a transport does not prove remote readiness or successful attestation.
+// transportFactory внедряет создание соединения по адресу, TLS-профилю и unary interceptor. Открытие транспорта не доказывает удалённую готовность или успешную аттестацию.
 type transportFactory func(string, *tls.Config, grpc.UnaryClientInterceptor) (*transport, error)
 
-// FileConfig задаёт материал проверки, доставленный через файлы.
+// FileConfig pins four mounted-material paths plus transport and workload bindings. Material is reread on every refresh, and full client validation occurs after the private key is parsed.
+// FileConfig закрепляет четыре пути смонтированного материала, транспорт и привязки workload. Материал перечитывается при каждом refresh, полная проверка клиента выполняется после разбора закрытого ключа.
 type FileConfig struct {
 	Address                  string
 	TLS                      *tls.Config
@@ -88,13 +108,15 @@ type FileConfig struct {
 	UnaryInterceptor         grpc.UnaryClientInterceptor
 }
 
-// FileAttestor читает материал из закреплённых файлов перед проверкой.
+// FileAttestor refreshes credentials from bounded mounted-file reads while retaining one transport. It does not own the worker that schedules refreshes.
+// FileAttestor обновляет credentials ограниченным чтением смонтированных файлов, сохраняя один транспорт. Планирующим refresh worker он не владеет.
 type FileAttestor struct {
 	config    FileConfig
 	transport *transport
 }
 
-// SecretConfig задаёт материал проверки, доставленный через Kubernetes Secret.
+// SecretConfig binds named credential and possession-key deliveries to one workload and three generations. The injected reader owns delivery access; these paths are not shell commands or authority grants.
+// SecretConfig связывает именованные доставки credential и ключа владения с workload и тремя поколениями. Доступом к доставке владеет внедрённый reader; пути не являются shell-командами или выдачей полномочий.
 type SecretConfig struct {
 	Address                 string
 	TLS                     *tls.Config
@@ -110,22 +132,29 @@ type SecretConfig struct {
 	UnaryInterceptor        grpc.UnaryClientInterceptor
 }
 
-// SecretReader читает версионированный материал из Kubernetes Secret.
+// SecretReader supplies versioned material through the delivery boundary without exposing a Kubernetes client here. Its implementation owns transport and version provenance.
+// SecretReader предоставляет версионированный материал через границу доставки без Kubernetes-клиента здесь. Транспортом и происхождением версии владеет реализация.
 type SecretReader interface {
+	// ReadVersioned returns material, a distinct presence flag and an error for one exact delivery path; absence must not be interpreted as usable empty credentials.
+	// ReadVersioned возвращает материал, отдельный признак присутствия и ошибку для точного пути доставки; отсутствие нельзя трактовать как пригодные пустые credentials.
 	ReadVersioned(context.Context, string) (repository.SecretMaterial, bool, error)
 }
 
-// SecretAttestor получает материал из Kubernetes Secret перед каждой проверкой.
+// SecretAttestor rereads the credential and possession material for each exchange while reusing an owned transport; it does not itself poll Kubernetes or schedule refreshes.
+// SecretAttestor перечитывает credential и материал владения для каждого обмена, переиспользуя свой транспорт; опрос Kubernetes и планирование refresh здесь не выполняются.
 type SecretAttestor struct {
 	config    SecretConfig
 	transport *transport
 }
 
-// NewSecretAttestor создаёт клиент только из полной конфигурации доверия.
+// NewSecretAttestor constructs the Secret-backed wrapper using the production gRPC factory. It opens one transport but neither reads material nor performs the attestation yet.
+// NewSecretAttestor создаёт Secret-обёртку с production-фабрикой gRPC. Один транспорт открывается, но материал ещё не читается и аттестация не выполняется.
 func NewSecretAttestor(config SecretConfig) (*SecretAttestor, error) {
 	return newSecretAttestor(config, newTransport)
 }
 
+// newSecretAttestor rejects missing delivery, workload, generation and transport configuration before calling the factory once. It checks TLS presence here; exact SNI and verification flags are checked by the client after material loading.
+// newSecretAttestor отклоняет неполную конфигурацию доставки, workload, поколений и транспорта до однократного вызова фабрики. Здесь проверяется наличие TLS; точные SNI и флаги проверки проверяет клиент после загрузки материала.
 func newSecretAttestor(config SecretConfig, factory transportFactory) (*SecretAttestor, error) {
 	if config.Address == "" ||
 		config.TLS == nil ||
@@ -148,12 +177,14 @@ func newSecretAttestor(config SecretConfig, factory transportFactory) (*SecretAt
 	return &SecretAttestor{config: config, transport: opened}, nil
 }
 
-// Close освобождает общий transport после остановки refresh worker.
+// Close delegates to the shared transport's close function without a once guard. The owner must first stop refresh work; closing an individual exchange would close the shared connection.
+// Close передаёт закрытие общему транспорту без защиты once. Владелец сначала останавливает refresh; закрытие отдельного обмена закрыло бы общее соединение.
 func (attestor *SecretAttestor) Close() error {
 	return attestor.transport.close()
 }
 
-// Attest читает актуальный материал и выполняет независимую проверку.
+// Attest reads credential material then possession material, rejects errors or absence, parses the private JWK and validates a client over the existing transport before exchanging evidence. It consumes the named data keys without independently verifying delivery versions or the credential signature here.
+// Attest читает сначала credential, затем материал владения, отклоняет ошибки или отсутствие, разбирает закрытый JWK и проверяет клиента на существующем транспорте перед обменом. Используются именованные ключи данных без независимой проверки версий доставки или подписи credential здесь.
 func (attestor *SecretAttestor) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -204,11 +235,14 @@ func (attestor *SecretAttestor) Attest(
 	return client.Attest(ctx, state)
 }
 
-// NewFileAttestor создаёт клиент для закреплённых файлов материала.
+// NewFileAttestor constructs a mounted-file wrapper with one production gRPC transport. Credential reads and the attestation exchange are deferred until Attest.
+// NewFileAttestor создаёт обёртку смонтированных файлов с одним production-транспортом gRPC. Чтение credentials и обмен аттестацией отложены до Attest.
 func NewFileAttestor(config FileConfig) (*FileAttestor, error) {
 	return newFileAttestor(config, newTransport)
 }
 
+// newFileAttestor separately rejects missing material paths and incomplete transport/workload bindings, then opens one transport through the injected factory. File safety and complete TLS/client checks are deferred until material is loaded.
+// newFileAttestor отдельно отклоняет отсутствие путей материала и неполные привязки транспорта или workload, затем открывает один транспорт внедрённой фабрикой. Безопасность файлов и полные проверки TLS/клиента выполняются при загрузке материала.
 func newFileAttestor(config FileConfig, factory transportFactory) (*FileAttestor, error) {
 	if config.IntentIDFile == "" ||
 		config.CredentialCompactFile == "" ||
@@ -234,12 +268,14 @@ func newFileAttestor(config FileConfig, factory transportFactory) (*FileAttestor
 	return &FileAttestor{config: config, transport: opened}, nil
 }
 
-// Close освобождает общий transport после остановки refresh worker.
+// Close delegates to the shared connection without coordinating workers or guarding repeated closes; the lifecycle owner must stop refreshes first.
+// Close закрывает общее соединение без координации workers и защиты от повторных закрытий; владелец жизненного цикла сначала останавливает refresh.
 func (attestor *FileAttestor) Close() error {
 	return attestor.transport.close()
 }
 
-// Attest читает файлы и выполняет независимую проверку.
+// Attest rereads intent and JTI within 128-byte bounds, the credential within the JWS bound and the private JWK within sixty-four KiB. It parses the key and runs a validated exchange over the existing connection; it does not establish a new transport per refresh.
+// Attest перечитывает намерение и JTI с пределами 128 байтов, credential с пределом JWS и закрытый JWK с пределом шестьдесят четыре КиБ. После разбора ключа выполняется проверенный обмен на существующем соединении; новый транспорт на каждый refresh не создаётся.
 func (attestor *FileAttestor) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -286,6 +322,8 @@ func (attestor *FileAttestor) Attest(
 	return client.Attest(ctx, state)
 }
 
+// readMountedValue uses the secure bounded file reader, trims surrounding whitespace and rejects empty results with fixed diagnostics. It returns a string and does not explicitly erase the buffer or returned material.
+// readMountedValue использует безопасное ограниченное чтение файла, обрезает окружающие пробелы и отклоняет пустой результат фиксированной диагностикой. Возвращается строка; буфер и возвращённый материал явно не стираются.
 func readMountedValue(path string, maximum int) (string, error) {
 	raw, err := securefile.Read(path, int64(maximum))
 	if err != nil {
@@ -298,7 +336,8 @@ func readMountedValue(path string, maximum int) (string, error) {
 	return value, nil
 }
 
-// New создаёт клиент протокола проверки обслуживаемого состояния.
+// New validates complete in-memory bindings before opening a standalone gRPC transport. Its returned client owns Close, but creation alone does not establish peer readiness.
+// New проверяет полные привязки в памяти до открытия отдельного транспорта gRPC. Возвращённый клиент владеет Close, но создание само не подтверждает готовность удалённой стороны.
 func New(config Config) (*Client, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
@@ -310,6 +349,8 @@ func New(config Config) (*Client, error) {
 	return &Client{config: config, transport: opened}, nil
 }
 
+// newClient validates the full configuration and requires a nonnil existing API and close function, then wraps that transport without opening or closing it. Refresh wrappers retain connection ownership.
+// newClient проверяет полную конфигурацию и наличие существующего API с функцией закрытия, затем оборачивает транспорт без открытия или закрытия. Владение соединением остаётся у refresh-обёрток.
 func newClient(config Config, opened *transport) (*Client, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
@@ -320,6 +361,8 @@ func newClient(config Config, opened *transport) (*Client, error) {
 	return &Client{config: config, transport: opened}, nil
 }
 
+// validateConfig requires named identity/credential bindings, nonzero generations, a private possession key, an interceptor and TLS with a server name and verification enabled. It does not verify credential signatures, UUID grammar or all TLS trust settings.
+// validateConfig требует именованные привязки идентичности и credential, ненулевые поколения, закрытый ключ владения, interceptor и TLS с именем сервера и включённой проверкой. Подписи credential, грамматика UUID и все настройки доверия TLS здесь не проверяются.
 func validateConfig(config Config) error {
 	if config.Address == "" ||
 		config.TLS == nil ||
@@ -341,6 +384,8 @@ func validateConfig(config Config) error {
 	return nil
 }
 
+// newTransport creates the gRPC client with cloned TLS settings and the supplied unary interceptor, then couples the generated API to connection Close. gRPC client creation is not a successful network handshake or readiness probe.
+// newTransport создаёт клиент gRPC с копией настроек TLS и переданным unary interceptor, связывая generated API с Close соединения. Создание клиента gRPC не является успешным сетевым рукопожатием или проверкой готовности.
 func newTransport(
 	address string,
 	tlsConfig *tls.Config,
@@ -360,12 +405,14 @@ func newTransport(
 	}, nil
 }
 
-// Close освобождает transport standalone-клиента.
+// Close delegates to this client's transport and does not wait for in-flight exchanges; callers must respect standalone versus shared refresh ownership.
+// Close передаёт закрытие транспорту клиента без ожидания текущих обменов; вызывающий соблюдает различие владения отдельного клиента и общего refresh-транспорта.
 func (client *Client) Close() error {
 	return client.transport.close()
 }
 
-// Attest запрашивает одноразовый challenge и отправляет доказательство владения.
+// Attest obtains a fresh random challenge request identity, checks challenge bindings, signs evidence using server-issued time and submits the same signed bytes on Unavailable-only retries. Each RPC has at most three attempts with 100/250 ms waits; cancellation during a wait returns the context error directly. It rejects incomplete or expired receipts but does not recompute their evidence digest or authenticate credentials locally.
+// Attest создаёт свежую случайную идентичность запроса challenge, проверяет его привязки, подписывает доказательство по серверному времени и повторяет те же подписанные байты только при Unavailable. Каждый RPC имеет не более трёх попыток с ожиданием 100/250 мс; отмена во время ожидания возвращает ошибку контекста напрямую. Неполные или просроченные квитанции отклоняются, но их дайджест доказательства не пересчитывается и credentials локально не аутентифицируются.
 func (client *Client) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -513,20 +560,14 @@ func (client *Client) Attest(
 	}, nil
 }
 
+// deterministicUUID preserves the client protocol's SHA-256 identifier encoding with a NUL after every part and version-5/variant bits. This differs from joining parts without a trailing NUL and supplies neither randomness nor authority.
+// deterministicUUID сохраняет клиентское кодирование идентификатора SHA-256 с NUL после каждой части и битами версии 5 и варианта. Это отличается от соединения без завершающего NUL и не даёт случайности или полномочий.
 func deterministicUUID(parts ...string) string {
-	digest := sha256.New()
-	for _, part := range parts {
-		_, _ = digest.Write([]byte(part))
-		_, _ = digest.Write([]byte{0})
-	}
-	value := digest.Sum(nil)[:16]
-	value[6] = (value[6] & 0x0f) | 0x50
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value)
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32]
+	return value.TerminatedAuthorityUUID(parts...)
 }
 
+// newRequestUUID fills sixteen bytes through crypto/rand and formats a version-4 RFC-variant UUID for a new exchange. It preserves the error-returning call shape; uniqueness is probabilistic, not a stored deduplication guarantee.
+// newRequestUUID получает шестнадцать байтов через crypto/rand и форматирует UUID версии 4 с вариантом RFC для нового обмена. Сохраняется форма возврата ошибки; уникальность вероятностная, а не гарантия сохранённой дедупликации.
 func newRequestUUID() (string, error) {
 	var value [16]byte
 	if _, err := rand.Read(value[:]); err != nil {
