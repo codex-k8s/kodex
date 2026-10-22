@@ -10,8 +10,13 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// Закрытые aliases используют уже выданную пару owner grants, не принимают
-// connection/ref/credential/URL от агента и не создают вторую MCP transport boundary.
+// managedMCPTools advertises the two supported aliases using schemas derived
+// from pinned owner grants, returning no aliases on schema failure. It exposes
+// no caller-configurable connection, credential or second MCP transport;
+// advertisement alone does not prove fresh owner health.
+// managedMCPTools публикует два alias со схемами из pinned owner grants,
+// не выдавая aliases при ошибке схемы. Caller не получает настройку connection,
+// credential и второго MCP transport; каталог сам не доказывает свежесть health.
 func managedMCPTools(input runtimecontract.RunnerInput) []map[string]any {
 	schemas, err := runtimecontract.ManagedMCPToolSchemas(input)
 	if err != nil {
@@ -33,6 +38,14 @@ func managedMCPTools(input runtimecontract.RunnerInput) []map[string]any {
 	return result
 }
 
+// managedMCPArguments checks one bound profile, rejects a future health timestamp
+// and exact-name/UTF-8/rune-bound input violations, then selects its pinned grant.
+// It preserves the original argument map and historical receipt, leaving current
+// health freshness to owner invocation rather than extending receipt lifetime.
+// managedMCPArguments проверяет один bound profile, отвергает future health time
+// и нарушения имён/UTF-8/rune limits, затем выбирает pinned grant. Исходная map
+// arguments и историческая receipt сохраняются; текущую свежесть health проверяет
+// owner invocation, срок receipt локально не продлевается.
 func managedMCPArguments(input runtimecontract.RunnerInput, tool string, arguments map[string]any) (map[string]any, error) {
 	// Freshness проверяет CP при каждом ResolveIntegrationInvocation по текущему
 	// owner ledger. Исторический immutable receipt не получает новый срок.

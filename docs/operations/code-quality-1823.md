@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.195.0
+version: 1.196.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,42 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто шестая волна — context artifact и managed MCP
+
+Точный опубликованный SHA195 — `57a77dd7300d8de678e8423a22f998f519d1b0a3`.
+Callback250 верхних/1349 всех PASS,0 FAIL,2 прежних SKIP;
+runtimecontract115/535 PASS без SKIP/FAIL, полные builds обоих модулей PASS.
+Exact9ii16L:6576 sources,222 excluded,1839 raw,582 retained,1257 unresolved;
+Go7142/21143,missing14001. Raw SHA256
+`bcb2d064b0d6f294a73d23c55ef93bc4ae1c051d42848ef736744cecff25739f`,
+clone-set `58041a831f89eeae6a2221fd52bc1ff213d255721c8f49313d48c767a1595061`.
+
+Прочитаны целиком context.go,managed_mcp.go и оба соответствующих test файла;
+все13 declarations получили предметные EN→RU комментарии,scoped13/13.
+Query artifact — только locator внутри актуального immutable context snapshot:
+пять точных single-valued keys,canonical positive revision,safe skill path
+и membership проверяются до transfer; authority/owner bytes остаются отдельно.
+Описаны reject-тесты без RPC/выдачи bytes и synthetic происхождение fixtures.
+
+Managed MCP catalog не объявлен свежим health proof: aliases используют pinned
+schema/grant,не открывают caller transport или credentials. Argument helper
+оставляет исходную map и историческую receipt,не продлевая её срок; свежесть
+при invocation проверяет owner. Тест старой receipt доказывает только локальное
+принятие guard,а не реальный owner freshness verdict. Документированы закрытые
+keys,UTF-8/rune limits и отказ до fake owner effects; live MCP не вызывался.
+
+Полная non-comment/gofmt сверка всех4 файлов с SHA195 — PASS,исполняемый код
+не менялся. Локально callback250/1349 PASS,0 FAIL,2 прежних SKIP
+TestArtifactSpoolContainerStartup/TestRuntimeMCPCatalogWireProducer;
+соответствующие suites NOT RUN. Полный RC build,17 Node units,Go-checker unit,
+scoped13/13 и diff-check PASS LOCAL; Go1.26.6,GOENV=off/GOWORK=off.
+Рабочий LS2oYP:6576 sources,222 excluded,1839 raw,582 retained,1257 unresolved;
+Go7155/21143,missing13988; raw SHA256
+`4170f749d05c79a5c43ff528b6f7a0354a502229125e55b6192f0a445a7fc682`,
+clone-set неизменен. Новых exceptions/выносов нет.
+Полный repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN.
+Единый PR Draft,цель не завершена; точные post-commit проверки публикуются в PR.
 
 ## Сто девяносто пятая волна — весь основной callback server
 
