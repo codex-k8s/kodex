@@ -7,6 +7,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// TestValidCredentialAuthentication covers absent metadata, valid HUMAN authentication, forbidden SERVICE metadata, excessive future time and duplicate AMR values. It checks claim shape, not an OIDC login or all possible validation limits.
+// TestValidCredentialAuthentication охватывает отсутствие метаданных, допустимую HUMAN-аутентификацию, запрет метаданных SERVICE, чрезмерное будущее время и повтор AMR. Проверяется форма claims, а не вход OIDC и все пределы валидации.
 func TestValidCredentialAuthentication(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	tests := []struct {

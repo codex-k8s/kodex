@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.298.0
+version: 1.299.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,68 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто девятая волна — freshness fixtures и Kubernetes delivery
+
+Опубликованный SHA298 — `4f8774d1ed1c7ec19f7ec98258643e42217975c9`.
+Exact j77MG5:6627 sources,222 excluded,1809 raw/723 retained/
+1086 unresolved; Go12939/21273,missing8334. Exact38/106 и45/166 unit,
+full authority build, inverse AST5,tooling PASS LOCAL; push и Draft PR
+PATCH/GET298 подтверждены. Общий объём не объявлен завершённым.
+
+Полностью прочитаны7 файлов1047 lines: четыре domain unit, credentialrollout
+и snapshot delivery/test.50 прежних объявлений и новый helper получили EN→RU;
+scope51/51,missing0. Дополнительно описаны14 local constant pins и
+package header credentialrollout. Прежнее описание snapshot Read как
+cryptographically bound исправлено: адаптер проверяет envelope/размер/Base64/
+digest shape, а не signature JWS; Publish сверяет exact expected bytes/pins.
+Это исправление комментария, не новая криптографическая гарантия. Publish
+использует served PUT response без отдельного GET и не проверяет подпись;
+readEnvelope допускает unmodeled JSON fields. Rollout sequential, без общей
+транзакции, ожидания Pod readiness и отката уже сохранённых annotations.
+
+newFreshnessTestAuthority объединяет реально одинаковое создание controlled
+store и Authority в4 units: база времени, exact receipt,30second sample и
+ссылка на изменяемые caller-owned local clock. Activation остаётся у каждого
+caller с прежними ошибками и порядком; нет БД, сетевого fallback и нового TTL.
+Inverse AST7 разворачивает ACTUAL helper в4 callers, раскрывая только прямую
+переданную clock pointer, убирает лишь новый helper и сравнивает полные AST
+семи файлов с298. Остальные edits — комментарии, directives прежние.
+Один raw duplicate132tokens фактически удалён;1808 остальных keys/counts
+сохранены, новых fragments нет. Промежуточный comments-only oRR7lQ менял
+одну границу того же окна; это не заявлялось устранённым повтором.
+
+Полные unit app/domain/value/snapshot/credentialrollout:47 верхних/168 всех
+PASS LOCAL,0 FAIL/SKIP; credentialrollout собственного unit пока не имеет
+и его компиляция не называется поведением PATCH в Kubernetes.
+Full authority build -p=2,17 Node и Go checker unit, inverse AST7,scope51/51,
+5 exact ignores и diff-check — PASS LOCAL. Команды:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 \
+  go test -mod=readonly -count=1 -timeout 120s \
+  ./internal/app ./internal/domain/service ./internal/domain/types/value \
+  ./internal/repository/kubernetes/snapshot \
+  ./internal/repository/kubernetes/credentialrollout
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 \
+  go build -mod=readonly -p=2 ./...
+```
+JSON unit runner считает все исходы без подавления failures. Fake transport
+snapshot не открывает сеть; синтетический token file принадлежит t.TempDir.
+Реальные rollout/Secret CAS/TLS/Kubernetes, БД и component/live NOT RUN.
+TestAuthorityStore возвращает synthetic success, не доказывает replay/ACID.
+Context7 libraries не менялись, новые внешние API не добавлены.
+
+Рабочий FZKgAh:6627 sources,222 excluded,1808 raw/723 retained/
+1085 unresolved; Go12990/21274,missing8284. Registry605/723 буквально
+прежний, новых exclusions нет. Raw SHA256:
+`a1c968c52792c6def8f2e44c708db05fa602c73257d2827813a273dbc357749b`;
+clone-set:
+`fc7f0f822ff99fe838712add76de685ea92ebcad2258f46d3926f9b14bb8c609`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Generated, contracts, dependencies и SQL/migrations неизменны.
+Historical FAIL и finding293 не исправлены. Общая задача остаётся открытой.
 
 ## Двести девяносто восьмая волна — domain authority, publisher и restore
 

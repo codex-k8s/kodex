@@ -1,4 +1,7 @@
-// Package credentialrollout управляет ограниченным перезапуском потребителей.
+// Package credentialrollout patches fixed credential consumers with rollout
+// intent annotations without waiting for or owning their Pod replacement.
+// Пакет credentialrollout меняет annotations фиксированных потребителей credentials
+// с rollout intent без ожидания и владения заменой их Pods.
 package credentialrollout
 
 import (
@@ -16,14 +19,21 @@ import (
 	"time"
 )
 
+// maxResponseBytes caps the amount discarded from each deployment PATCH response at one MiB; truncation is not treated as an oversized-response error because no response JSON is consumed.
+// maxResponseBytes ограничивает отбрасываемый ответ PATCH deployment одним МиБ; усечение не считается ошибкой превышения размера, поскольку JSON ответа не используется.
 const maxResponseBytes = 1 << 20
 
 var (
-	uuidPattern   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	// uuidPattern accepts lowercase RFC-variant UUID-shaped request IDs with version digits one through eight; this syntax check does not prove an existing authorized rollout intent.
+	// uuidPattern допускает строчные UUID-подобные request ID с вариантом RFC и цифрами версии от одного до восьми; синтаксис не доказывает существующий разрешённый rollout intent.
+	uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	// digestPattern requires sixty-four lowercase hexadecimal characters for the supplied intent digest without computing it or authenticating its source.
+	// digestPattern требует шестьдесят четыре строчных hex-символа переданного дайджеста intent без его вычисления и аутентификации источника.
 	digestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 )
 
-// Config задаёт exact Kubernetes API boundary controlled rollout.
+// Config pins the Kubernetes API address, TLS identity, CA/token files, namespace, exactly two ordered consumer deployments and a bounded request timeout. Callers own the integrity of mounted credentials and configuration.
+// Config закрепляет адрес Kubernetes API, TLS identity, файлы CA и токена, namespace, ровно два упорядоченных consumer deployment и ограниченный timeout. Целостность смонтированных credentials и конфигурации обеспечивает вызывающий.
 type Config struct {
 	Address       string
 	TLSServerName string
@@ -34,13 +44,15 @@ type Config struct {
 	Timeout       time.Duration
 }
 
-// Rollout атомарно привязывает pod template consumers к immutable intent.
+// Rollout owns a configured HTTP client for sequential annotation patches of credential consumers. It does not provide a transaction across deployments or wait for replacement Pods to become ready.
+// Rollout владеет настроенным HTTP-клиентом последовательных annotation patches потребителей credentials. Транзакция между deployments и ожидание готовности новых Pods не обеспечиваются.
 type Rollout struct {
 	config Config
 	client *http.Client
 }
 
-// New создаёт клиент Kubernetes API с exact server name и CA.
+// New permits only the fixed in-cluster API, TLS name, namespace and ordered publisher/attestor deployments with a one-to-ten-second timeout; it loads the CA and configures TLS 1.3 and redirect refusal without contacting Kubernetes.
+// New допускает только фиксированные внутрикластерные API, TLS-имя, namespace и порядок publisher/attestor deployments с timeout от одной до десяти секунд; загружает CA и настраивает TLS 1.3 и запрет redirect без обращения к Kubernetes.
 func New(config Config) (*Rollout, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
@@ -79,12 +91,14 @@ func New(config Config) (*Rollout, error) {
 	}, nil
 }
 
-// Close освобождает простаивающие connections.
+// Close closes idle HTTP connections; it neither cancels in-flight patches nor reverses annotations already persisted on deployments.
+// Close закрывает простаивающие HTTP-соединения, не отменяя текущие patches и сохранённые annotations deployments.
 func (rollout *Rollout) Close() {
 	rollout.client.CloseIdleConnections()
 }
 
-// RolloutCurrent изменяет только pod-template annotations двух consumers.
+// RolloutCurrent patches both configured consumers with CURRENT_PROMOTED and the supplied request/digest pins; it does not promote credentials itself or verify resulting Pod readback.
+// RolloutCurrent меняет annotations обоих настроенных consumers на CURRENT_PROMOTED с переданными request и digest; credentials самостоятельно не продвигаются и readback Pods не проверяется.
 func (rollout *Rollout) RolloutCurrent(
 	ctx context.Context,
 	requestID string,
@@ -93,7 +107,8 @@ func (rollout *Rollout) RolloutCurrent(
 	return rollout.apply(ctx, "CURRENT_PROMOTED", requestID, canonicalDigest)
 }
 
-// RolloutNext перезапускает consumers для CSI readback staged NEXT до promotion.
+// RolloutNext patches both configured consumers with NEXT_STAGED to request their staged-credential reload; it does not itself stage, activate or validate credentials.
+// RolloutNext меняет annotations обоих настроенных consumers на NEXT_STAGED для запроса перечитывания staged credentials; их размещение, активация и проверка здесь не выполняются.
 func (rollout *Rollout) RolloutNext(
 	ctx context.Context,
 	requestID string,
@@ -102,6 +117,8 @@ func (rollout *Rollout) RolloutNext(
 	return rollout.apply(ctx, "NEXT_STAGED", requestID, canonicalDigest)
 }
 
+// apply validates request/digest syntax, reads one bounded token and sequentially merge-patches metadata and Pod-template annotations. Only HTTP 200 succeeds; a later error leaves earlier writes intact, with no rollback, retry or Pod readiness wait.
+// apply проверяет синтаксис request и digest, читает один ограниченный токен и последовательно merge-patch-ит annotations metadata и шаблона Pod. Успех требует HTTP 200; поздняя ошибка оставляет прежние записи без отката, повтора и ожидания готовности Pod.
 func (rollout *Rollout) apply(
 	ctx context.Context,
 	phase string,

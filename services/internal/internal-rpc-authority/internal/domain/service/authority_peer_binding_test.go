@@ -11,9 +11,15 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// TestMatchesObservedCaller requires exact matching against signed caller SPIFFE identity and rejects using the token target as the observed peer; no certificate or transport authentication is performed.
+// TestMatchesObservedCaller требует точного совпадения с подписанной SPIFFE-идентичностью caller и отклоняет target токена как наблюдённого peer; сертификат и транспортная аутентификация не проверяются.
 func TestMatchesObservedCaller(t *testing.T) {
 	const (
+		// callerSPIFFEID pins the signed caller identity that the observed transport peer must match.
+		// callerSPIFFEID закрепляет подписанную идентичность caller для совпадения с наблюдённым transport peer.
 		callerSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+		// targetSPIFFEID is a different token destination used to prove target identity cannot stand in for caller.
+		// targetSPIFFEID — отдельный адресат токена, доказывающий невозможность подмены caller идентичностью target.
 		targetSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	)
 	claims := model.AuthorizationClaims{
@@ -29,6 +35,8 @@ func TestMatchesObservedCaller(t *testing.T) {
 	}
 }
 
+// TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration signs synthetic contexts with real local ES256 keys, accepts the caller's own trusted generation, rejects its mismatch and enforces the non-sliding receipt deadline. The no-op store does not prove durable replay protection.
+// TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration подписывает синтетические контексты настоящими локальными ES256-ключами, принимает доверенное поколение caller, отклоняет несовпадение и соблюдает непродлеваемый срок квитанции. Фиктивный store не доказывает устойчивую replay protection.
 func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *testing.T) {
 	t.Parallel()
 
@@ -42,13 +50,27 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	}
 	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
 	const (
-		callerIssuer   = "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler"
+		// callerIssuer binds the synthetic caller key to its own trusted signing generation.
+		// callerIssuer связывает синтетический ключ caller с его собственным доверенным поколением подписи.
+		callerIssuer = "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler"
+		// verifierIssuer identifies the separate policy signer whose generation must not replace the caller's generation.
+		// verifierIssuer обозначает отдельного подписанта политики, чьё поколение не должно заменять поколение caller.
 		verifierIssuer = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
-		audience       = "urn:kodex:internal-rpc:control-plane"
-		method         = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
-		operation      = "platform.runtime.schedules.claim"
-		callerSPIFFE   = "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler"
-		targetSPIFFE   = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+		// audience fixes the exact target audience shared by this fixture's policy and context.
+		// audience фиксирует точную целевую аудиторию политики и контекста эталона.
+		audience = "urn:kodex:internal-rpc:control-plane"
+		// method pins the registered stream method without invoking the scheduling service.
+		// method закрепляет зарегистрированный stream method без вызова сервиса планировщика.
+		method = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
+		// operation binds the synthetic context to the fixture's single policy operation and permission.
+		// operation связывает синтетический контекст с единственной операцией и permission политики эталона.
+		operation = "platform.runtime.schedules.claim"
+		// callerSPIFFE fixes the observed peer and signed caller for local token validation.
+		// callerSPIFFE фиксирует наблюдённого peer и подписанного caller для локальной проверки токена.
+		callerSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler"
+		// targetSPIFFE pins the separate destination workload rather than the observed caller identity.
+		// targetSPIFFE закрепляет отдельный workload назначения, а не наблюдённую идентичность caller.
+		targetSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	)
 	policy := model.PolicySnapshot{
 		Version: 1, DefaultDecision: "DENY", TokenTTLSeconds: 30,
@@ -157,6 +179,8 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	}
 }
 
+// TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding advances only Authority's fake clock to check Ready fails at the original thirty-second deadline despite repeated synthetic freshness reads; it does not permit offline database fallback.
+// TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding продвигает лишь фиктивные часы Authority и проверяет отказ Ready на исходном тридцатисекундном сроке несмотря на повторные синтетические чтения свежести; автономный запасной путь при отказе БД не разрешается.
 func TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
@@ -179,6 +203,8 @@ func TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding(t *testing.T) {
 	}
 }
 
+// TestAuthorizationExpiryDoesNotExceedMetadataWindow checks that expiry chooses the earlier of the metadata deadline and binding TTL for fixed UTC timestamps, without issuing or signing a token.
+// TestAuthorizationExpiryDoesNotExceedMetadataWindow на фиксированных UTC-метках проверяет выбор более раннего срока метаданных либо TTL привязки без выдачи и подписи токена.
 func TestAuthorizationExpiryDoesNotExceedMetadataWindow(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
@@ -192,9 +218,16 @@ func TestAuthorizationExpiryDoesNotExceedMetadataWindow(t *testing.T) {
 	}
 }
 
+// testAuthorityStore implements the authority persistence port with synthetic success and wall-clock freshness for local token units. It stores no reservations, receipts or contexts and cannot establish replay or transactional behavior.
+// testAuthorityStore реализует порт хранения authority синтетическим успехом и свежестью настенных часов для локальных token unit. Reservations, квитанции и контексты не хранятся, replay и транзакционность не доказываются.
 type testAuthorityStore struct{}
 
+// Reserve accepts every reservation without retaining identity or rejecting reuse; production proof replay enforcement is outside this fixture.
+// Reserve принимает каждую reservation без сохранения идентичности и отклонения повторов; промышленная одноразовость proof за пределами эталона.
 func (testAuthorityStore) Reserve(context.Context, repository.Reservation) error { return nil }
+
+// ReserveContinuation accepts the supplied pair without checking an accepted parent, reserving child identity or enforcing atomicity; continuation store behavior is tested separately.
+// ReserveContinuation принимает переданную пару без проверки принятого родителя, резервирования child identity и атомарности; поведение continuation store проверяется отдельно.
 func (testAuthorityStore) ReserveContinuation(
 	context.Context,
 	repository.Reservation,
@@ -202,9 +235,15 @@ func (testAuthorityStore) ReserveContinuation(
 ) error {
 	return nil
 }
+
+// ActivateSnapshot returns success without persisting a watermark, validating readback evidence or changing shared store state.
+// ActivateSnapshot возвращает успех без сохранения отметки, проверки readback evidence и изменения общего состояния store.
 func (testAuthorityStore) ActivateSnapshot(context.Context, repository.SnapshotState) error {
 	return nil
 }
+
+// AcceptVerification accepts every snapshot and reservation without durable one-use enforcement; the caller unit isolates local context validation instead of database authorization lifecycle.
+// AcceptVerification принимает каждый снимок и reservation без устойчивой одноразовости; основной unit изолирует локальную проверку контекста вместо жизненного цикла авторизации БД.
 func (testAuthorityStore) AcceptVerification(
 	context.Context,
 	repository.SnapshotState,
@@ -212,14 +251,24 @@ func (testAuthorityStore) AcceptVerification(
 ) error {
 	return nil
 }
-func (testAuthorityStore) Ready(context.Context, repository.SnapshotState) error { return nil }
-func (testAuthorityStore) Close()                                                {}
 
+// Ready always succeeds and does not probe a database connection, RLS, freshness receipt or replay write path.
+// Ready всегда успешен и не проверяет соединение с БД, RLS, квитанцию свежести и путь записи replay.
+func (testAuthorityStore) Ready(context.Context, repository.SnapshotState) error { return nil }
+
+// Close is a no-op because this stateless fixture owns no connection, worker or external resource to release.
+// Close ничего не делает: этот эталон без состояния не владеет соединением, worker и внешним ресурсом для освобождения.
+func (testAuthorityStore) Close() {}
+
+// Freshness echoes the supplied receipt ID with a thirty-second interval from real wall-clock time on every call. Authority's own cached deadline prevents renewal; the sample has no database-clock provenance.
+// Freshness при каждом вызове возвращает переданный ID квитанции с тридцатисекундным интервалом реальных настенных часов. Продление ограничивает кэшированный срок самого Authority; образец не имеет происхождения часов БД.
 func (testAuthorityStore) Freshness(_ context.Context, state repository.SnapshotState) (repository.SnapshotFreshness, error) {
 	now := time.Now()
 	return repository.SnapshotFreshness{ReceiptID: state.AttestationReceiptID, ObservedAt: now, ValidUntil: now.Add(30 * time.Second)}, nil
 }
 
+// RegisterIssuedContext returns success without recording the context, its immutable bindings or parent digest; it is not evidence of durable registration.
+// RegisterIssuedContext возвращает успех без записи контекста, его неизменяемых привязок и дайджеста родителя; устойчивая регистрация не доказывается.
 func (testAuthorityStore) RegisterIssuedContext(context.Context, repository.SnapshotState, repository.IssuedContextBinding) error {
 	return nil
 }
