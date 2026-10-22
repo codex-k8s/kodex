@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.224.0
+version: 1.225.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,85 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать пятая волна — полный JSONL parser runner
+
+Опубликованный SHA224 — `5cb737729801df93b6bf54ae068b1c7eb5d2f770`.
+Точный отчёт U9rioq: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 8728/21177, missing 12449. Raw SHA256:
+`2226469bf0c1f745536f872e3a7f9839f846e7d6d61481d671e60006a3a80966`.
+Clone-set:
+`d380f057dd437b7c0bd92de75d08cf3c9a83917d0101a47313400a72e3c7d934`.
+Push/readback и PATCH/GET Draft PR224 подтверждены. На SHA224:
+process unit 24 верхних/85 всех PASS, 0 FAIL/SKIP; полная сборка runner PASS.
+
+Полностью прочитан parser.go (2090 исходных строк). Все 117 объявлений
+получили предметные EN→RU комментарии. Исполняемый Go AST идентичен SHA224
+без комментариев и token.Pos. Схемы, limits, error strings, JSON tags,
+permissions и переходы состояния не менялись. Три выбранных тестовых файла
+в этой волне не объявляются полностью документированными.
+
+Описаны immediate-key проверки JSON отдельно от глубокой проверки payload,
+закрытые wire kinds и method/tag registries отдельно от полномочий. Наличие
+ключа не названо проверкой non-null; DisallowUnknownFields не назван защитой
+от duplicate keys, null или неизвестных ключей map. Для decodeObject явно
+указаны ошибки, способные содержать неизвестное имя ключа: приватный
+технический error не стал автоматически безопасным публичным сообщением.
+
+Разделены display token estimates и измеренные response receipts, replay
+с digest, конфликт повторов, overflow, missing usage и UNKNOWN/PARTIAL/
+COMPLETE. Последняя оценка не означает полный биллинг или успешный outcome.
+captureUsageBaseline не копирует и не вычитает display total. Совпадение
+terminal-фазы сообщения не означает завершения turn. Неполное measuredResult
+не создаёт outcome, final text или session/archive proof.
+
+Thread/turn/model/cwd/MCP bindings, sealed diagnostic/capture provenance,
+порядок native start/completion, callback failure и публикация финального
+текста описаны с реальными предусловиями. Изменяемый parser state требует
+последовательного caller и не даёт rollback после частичной ошибки.
+safeWorkspacePath — лексическая проекция, не разрешение доступа к файлам,
+mount или symlink. Safe label pattern ограничивает алфавит, но не задаёт
+capability registry и не гарантирует семантическое удаление секретов.
+sameStringSet требует уникальности actual от вызывающего key decoder:
+сама функция не доказывает общую теоретико-множественную эквивалентность.
+
+Безопасные native summaries не исполняют shell/web/dynamic calls и не
+выдают им authority. Raw arguments, command/diff/query text не публикуются
+этой проекцией. MCP user interface item валидируется, но его аудит остаётся
+у контроллера. Статус, timestamp, duration и fallback описаны отдельно;
+record в памяти не выдан за подтверждённую доставку callback.
+
+Все 59 Test-функций из parser_test.go, parser_response_usage_test.go и
+parser_usage_compaction_test.go выбраны точным anchored regexp:
+59 верхних/185 всех PASS, 0 FAIL/SKIP. Команда из runner с GOENV/GOWORK off,
+GOTOOLCHAIN=go1.26.6, GOMAXPROCS=4:
+`go test -mod=readonly -count=1 -timeout 120s -json ./internal/codex -run '^(TestResponseUsageNotCompactionDisplayIsMeasured|TestResponseUsageDeduplicatesAndRejectsChangedReceipt|TestResponseUsageOverflowPreservesPriorMeasurements|TestResponseUsageNullIsUnknownOrPartialWithoutFailingLifecycle|TestResponseUsageCompleteRequiresNumericObservationAndTerminal|TestResponseUsageClosedNumericValidationAndTupleIsolation|TestResponseUsageMetadataIsRedactedButPinnedForDeduplication|TestResponseUsageReceiptsHaveABoundedBudget|TestResponseUsageAggregatesEachNumericResponseExactlyOnce|TestResponseUsageResponseIDIsBoundedOpaqueString|TestResponseUsageFailureReasonStaysClosedAtNotificationBoundary|TestUsageCompletenessIsClosedAndDefaultsToUnknown|TestProtocolAcceptsStructuredSuccess|TestCurrentRawResponseNotificationsAreAcceptedWithoutReadingPayload|TestTurnStartedNotificationMayPrecedeTurnResponse|TestTurnStartOrderingRejectsIdentityMismatch|TestNativeToolItemsProduceBoundedRedactedTimelineWithoutMCPDuplicates|TestWorkspaceScopeAcceptsExactRootAndUnifiedExecStartup|TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID|TestCodex160WebSearchLifecycleAcceptsEmptyStartedQuery|TestCodex160WebSearchRejectsInvalidMetadataAndTuple|TestThreadBindingAcceptsCurrentAppServerOptionalFields|TestThreadResumeAcceptsCodex160CollaborationModeMetadata|TestThreadResumeRejectsInvalidCollaborationModeMetadata|TestCodex160ThreadMetadataIsTypedAndDiscarded|TestCodex160ThreadMetadataRejectsWrongTypesBoundsAndUnknownFields|TestRequiredMCPStatusBindsThreadCatalogBeforeTurn|TestRequiredMCPStatusWaitsOnlyForStartupStates|TestRequiredMCPStatusRejectsCatalogDrift|TestCodex160MCPStatusMetadataIsBoundedAndNonAuthoritative|TestCodex160MCPStatusMetadataFailsClosed|TestCodex160MCPAppUiIsTypedDiscardedAndTupleBound|TestCodex160MCPAppUiRejectsUnknownTypesAndBounds|TestMCPStartupNotificationValidatesStructuredFailure|TestTokenUsageNotificationDoesNotChargeRestoredThread|TestTokenUsageDisplayResetDoesNotInventMeasurement|TestTokenUsageNotificationRejectsInconsistentBreakdown|TestTokenUsageAllowsUnknownContextWindow|TestOnlyServerOverloadedIsCapacity|TestFailedTurnWithoutTypedErrorRemainsOwnerVisible|TestUnknownTypedErrorNotificationWaitsForSafeTerminal|TestCodex160ErrorNotificationAllowsDiscardedMisalignment|TestCodex160ErrorMisalignmentRejectsTypesBoundsAndUnknownFields|TestCodex160ErrorNotificationKeepsBindingAndBooleanClosed|TestWireParserRejectsUnknownAndDuplicateFields|TestWireParserAcceptsCurrentNotificationTimestampEnvelope|TestWireParserRejectsNotificationTimestampOutsideEnvelopeContract|TestServerRequestSetIsClosed|TestNotificationSchemasCoverExactClosedMethodSet|TestTerminalPresentationKeepsCapacityQuotaAndPolicySeparate|TestTerminalPresentationCoversEveryParsedProviderFailure|TestTokenUsageClosedFailureReasons|TestCodex160UsageCacheWriteDefaultsOnlyWhenMissing|TestCodex160UsageCacheWriteInvalidPresentValuesFailClosed|TestCodex160UsageOtherRequiredFieldsAndInvariantsRemainClosed|TestCodex160UsageEveryPresentCounterRejectsNull|TestCodex160UsageOptionalCacheWriteInTotalAndLast|TestCodex160CompactionAndOptionalUsageReachOrdinaryTerminal|TestCodex160CompactionRejectsWrongTupleAndUnknownItemFields)$'`.
+Список воспроизводимо берётся из AST-реестра имён Test этих трёх файлов,
+не из произвольного prefix. Полная сборка runner:
+`go build -mod=readonly ./...` — PASS LOCAL. Fixtures разбирают JSON в
+памяти; реальный Codex, аккаунты, сеть провайдера, агенты и почта не запускались.
+Полнота scope 117/117, AST одного файла, 17 Node units, unit Go checker,
+5 addressed ignore boundaries, gofmt и diff-check — PASS LOCAL.
+
+Context7: /websites/pkg_go_dev_go1_25_3, encoding/json
+DisallowUnknownFields/UseNumber и documented duplicate/null/UTF-8 semantics.
+Дополнительно прочитаны официальные local `go doc` двух методов для точного
+Go1.26.6. Поиск каталога /websites/pkg_go_dev_std вернул нерелевантный
+stdchat; он не использован как доказательство свойств encoding/json.
+Новых библиотек, SDK, API или dependencies нет.
+
+Рабочий отчёт MUTCjG: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 8845/21177, missing 12332. Raw SHA256:
+`7b285cc7420d19573fdffe3d1176808fe73f15b0b200d4b0c6e0397a1db419fd`.
+Clone-set прежний:
+`d380f057dd437b7c0bd92de75d08cf3c9a83917d0101a47313400a72e3c7d934`.
+Multiset пар/fragment/count неизменен; в parser.go нет detector groups,
+поэтому искусственный вынос или исключение не добавлялись. Точный
+post-commit scan и unit/build публикуются в том же Draft PR.
+Полные runner/codex/repo unit, общий Go-docs check и завершение всех
+unresolved групп впереди. Исторические FAIL/SKIP/NOT RUN сохранены.
+Live/browser/deploy/ИИ/STT/почта NOT RUN. Merge/ready не выполняются;
+общая задача остаётся активной.
 
 ## Двести двадцать четвёртая волна — полный process lifecycle runner
 
