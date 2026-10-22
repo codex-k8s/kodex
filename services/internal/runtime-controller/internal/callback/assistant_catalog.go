@@ -2,7 +2,6 @@ package callback
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -561,9 +560,12 @@ func validAssistantCatalogProvider(provider string) bool {
 	return provider != "" && len(provider) <= 64 && utf8.ValidString(provider) && strings.TrimSpace(provider) == provider
 }
 
+// validAssistantCatalogDigest applies the shared canonical SHA-256 text grammar to catalog metadata.
+// Matching the grammar does not establish content identity, image admission or the caller's resource eligibility.
+// validAssistantCatalogDigest применяет общую каноническую грамматику текста SHA-256 к метаданным каталога.
+// Совпадение с грамматикой не доказывает идентичность содержимого, допуск образа или доступность ресурса потребителю.
 func validAssistantCatalogDigest(digest string) bool {
-	raw, err := hex.DecodeString(digest)
-	return err == nil && len(raw) == 32 && hex.EncodeToString(raw) == digest
+	return runtimecontract.ValidSHA256Text(digest)
 }
 
 func validAssistantCatalogReasoning(efforts []string, defaultEffort string) bool {

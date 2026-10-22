@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.186.0
+version: 1.187.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,65 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят седьмая волна — единая грамматика SHA-256 text
+
+На базе опубликованного SHA `8196bda95b7b572e32b9afe04d05f83f456d31d3`
+четыре повторных лексических валидатора CP config/provider credentials,
+RC credentialprojection и assistant catalog делегируют общему
+runtimecontract.ValidSHA256Text. Функция использует уже существующий
+sha256Pattern runtime bindings, а не новую regex/вторую грамматику.
+Удалены три самостоятельных цикла и decode/re-encode каталога; лишний
+encoding/hex import удалён только там. Все потребители уже используют
+runtimecontract, поэтому новые module/dependencies не понадобились.
+
+Сохранены ровно 64 строчных ASCII hex-байта без префикса и нормализации,
+включая допустимость нулевого дайджеста. Uppercase, whitespace, controls,
+NUL, separators, Unicode и malformed UTF-8 остаются недопустимыми.
+Это не вычисление/сравнение содержимого и не provenance/signature/admission
+либо owner eligibility; exact pin/version/UID/authority checks остались
+у прежних владельцев. Service-private predicates — тонкие адаптеры своих
+потребителей, без старых алгоритмов или compatibility API. Wire/schema,
+диагностика, transaction/lifecycle и applied migrations не менялись.
+
+Полные четыре consumer-файла механически восстановлены старыми predicate
+bodies и одним удалённым import: non-comment строки после gofmt точно
+совпадают с parent. Отдельная временная приватная оснастка компилирует
+четыре фактических старых функции и четыре новые версии: 148235 входов,
+592940 сравнений — PASS LOCAL, различий нет. Проверены каждый байт в
+каждой позиции длин 0/1/2/62/63/64/65/66, все пары крайних байтов и
+дополнительные граничные строки. Это ограниченное сравнение, не заявление
+полного формального доказательства. Старые алгоритмы не сохранены в repo.
+
+Два новых постоянных unit используют явные boundary cases и независимый
+буквальный hex-алфавит для всех байтов/позиций около длины и крайних пар.
+Новые три объявления, ранее недокументированный catalog predicate и README
+получили предметные EN→RU/русские пояснения. Scoped docs всех libs/go и
+трёх полностью документированных consumer-файлов — 2586/2586; отдельный
+catalog predicate также проверен, остальные объявления большого callback
+файла этим не объявлены завершёнными.
+
+PASS LOCAL: runtimecontract `go test -mod=readonly -count=1 -json ./...` —
+115 верхних PASS, 535 PASS с подтестами, 0 SKIP/FAIL. RC app/projection/
+callback — 315 верхних PASS, 1545 PASS с подтестами, 0 FAIL; два прежних
+SKIP TestArtifactSpoolContainerStartup и TestRuntimeMCPCatalogWireProducer
+не выдаются за выполненный container/wire контур. CP app/providerclient —
+36 верхних PASS, 121 PASS с подтестами, 0 SKIP/FAIL. Полные builds трёх
+module с -mod=readonly, 16 unit анализатора, Go-checker, пять ignore-boundaries
+и diff-check — PASS LOCAL. Go1.26.6, GOENV=off/GOWORK=off. Повтор на точном
+опубликованном SHA фиксируется в PR. Component/live/browser/deploy,
+реальные агенты и полный repository Go-docs-check — NOT RUN; прежний
+diagnostics FAIL не скрыт и не менялся под видом рефакторинга.
+
+Detector: 6573 source, 222 generated/lock исключения, 1842 raw,
+580 точных решений, 1262 неразобранных; clone-set и реестр исключений
+не изменились. Короткие повторные валидаторы не были самостоятельными
+группами выше порога; их вынос не назван уменьшением raw-счётчика.
+Рабочий raw SHA-256
+`6e357c95f5d710bce346ee996343f72d446c95cde2d3e07bf28f090564713faf`,
+clone-set fingerprint
+`7771b8d6e3e7ef597399e53f0fa22556fe5dc250176b7a16c9a98d9b60f645c0`.
+Go-реестр 6838/21137, непокрыты 14299. Единый Draft PR и цель не завершены.
 
 ## Сто восемьдесят шестая волна — завершены комментарии всего runtime-controller app
 

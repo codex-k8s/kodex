@@ -297,15 +297,7 @@ func transportCredentials(config Config) (credentials.TransportCredentials, erro
 // validSHA256 принимает только 64-байтовую строчную шестнадцатеричную запись дайджеста.
 // Лексическая проверка не хеширует байты Secret и не доказывает соответствие метаданных сохранённому содержимому.
 func validSHA256(value string) bool {
-	if len(value) != 64 {
-		return false
-	}
-	for _, character := range value {
-		if character < '0' || character > '9' && character < 'a' || character > 'f' {
-			return false
-		}
-	}
-	return true
+	return runtimecontract.ValidSHA256Text(value)
 }
 
 // validDNSLabel preserves this projection client's existing letter-first restriction in addition

@@ -404,15 +404,7 @@ func validUUID(value string) bool {
 // validSHA256 recognizes exactly 64 lowercase hexadecimal bytes; it checks representation, not file content.
 // validSHA256 распознаёт ровно 64 строчных шестнадцатеричных байта; проверяется запись, а не содержимое файла.
 func validSHA256(value string) bool {
-	if len(value) != 64 {
-		return false
-	}
-	for _, character := range value {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
+	return runtimecontract.ValidSHA256Text(value)
 }
 
 // validManifestDigest requires the sha256 prefix followed by the exact lowercase digest grammar.

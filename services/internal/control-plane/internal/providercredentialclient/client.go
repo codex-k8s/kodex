@@ -279,15 +279,7 @@ func validDNSLabel(value string) bool {
 // validLowerHexSHA256 accepts exactly 64 lowercase hexadecimal bytes without reading or hashing any resource.
 // validLowerHexSHA256 принимает ровно 64 строчных шестнадцатеричных байта без чтения или хеширования ресурса.
 func validLowerHexSHA256(value string) bool {
-	if len(value) != 64 {
-		return false
-	}
-	for _, character := range value {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
+	return runtimecontract.ValidSHA256Text(value)
 }
 
 // validBoundedSafeText requires nonempty, trimmed, valid UTF-8 within the byte limit and rejects Unicode control characters.
