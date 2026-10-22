@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
@@ -620,26 +621,21 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 	return startAppServerCommand(command, nil)
 }
 
+// startAppServerCommand allocates caller-owned stdio through the shared constructor, starts once,
+// and keeps the existing reader-gate, diagnostic budget and process wait ownership. Child ends
+// close after Start while parent ends remain live until the caller's drain/stop/join path.
+// startAppServerCommand выделяет собственные stdio через общий конструктор, запускает один раз
+// и сохраняет прежние reader-gate, бюджет диагностики и владение Wait. Child ends закрываются
+// после Start, а parent ends остаются до drain/stop/join, принадлежащих вызывающему коду.
 func startAppServerCommand(command *exec.Cmd, readerGate <-chan struct{}) (*appServer, error) {
-	stdinChild, stdin, err := os.Pipe()
+	pipes, err := serviceruntime.NewCommandPipes(command, "Codex app-server")
 	if err != nil {
-		return nil, errors.New("create Codex app-server request stream")
+		return nil, err
 	}
+	stdinChild, stdin := pipes.StdinChild, pipes.Stdin
+	stdout, stdoutChild := pipes.Stdout, pipes.StdoutChild
+	stderr, stderrChild := pipes.Stderr, pipes.StderrChild
 	defer stdinChild.Close()
-	command.Stdin = stdinChild
-	stdout, stdoutChild, err := os.Pipe()
-	if err != nil {
-		_ = stdin.Close()
-		return nil, errors.New("create Codex app-server response stream")
-	}
-	stderr, stderrChild, err := os.Pipe()
-	if err != nil {
-		_ = stdin.Close()
-		_ = stdout.Close()
-		_ = stdoutChild.Close()
-		return nil, errors.New("create Codex app-server diagnostic stream")
-	}
-	command.Stdout, command.Stderr = stdoutChild, stderrChild
 	if err := command.Start(); err != nil {
 		_ = stdin.Close()
 		_ = stdout.Close()

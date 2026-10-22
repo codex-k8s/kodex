@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/jobs/agent-runner/internal/codex/provider_input_proof.go",
+      "fragmentSHA256": "b10b3aeb82d5206aab67fdb3dc2ad7f60125f6cb2bcc4cf8e64a97b3b38a2f39",
+      "count": 1,
+      "reason": "Совпало 125-token окно формы двух литералов совершенно разных nominal структур, а не общего алгоритма: control-plane переводит ImageBuild в generated Proto с image stage/progress/diagnostics/timestamps, runner строит приватное provider input proof с execution/session/lease/config/environment provenance. Consistent-identifier normalization скрыла различия имён и назначения полей; общей части данных или операции отображения между этими моделями нет. Вынос в общий reflect/map mapper связал бы независимые типы и скрыл бы явные source-to-field привязки, не убрав копию поведения. Сохранено только одно точное окно по двум путям и fragment SHA/count, а не литералы или функции целиком."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/runtime-controller/internal/testfixture/turn_input.go",
       "secondPath": "services/jobs/agent-runner/internal/credentialrelay/relay_test.go",
       "fragmentSHA256": "3f9956da145785b6bbfa579df95355882e4a62b6ac6f04dae73434b45c703498",

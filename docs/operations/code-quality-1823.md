@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.222.0
+version: 1.223.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,96 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать третья волна — общие owned stdio pipes двух процессов
+
+Опубликованный SHA222 — `cca79276b29c7575a1a1a32484ac7d6c4beb3c53`.
+Exact CRtAyp:6584 sources,222 excluded,1831 raw,594 retained,1237 unresolved;
+Go8596/21168,missing12572;raw SHA256
+`3bfc08f8be6623b78265245a31df57c503380c24be5fe579a4cc661c8abc3c8e`;
+clone-set `085d7dc48aa5419c1f29b33dc5eb68cd745683018db377e8c06e9cc299921528`.
+Push/readback иPATCH/GET Draft PR222 подтверждены;workspace7/24 unit
+PASS,0 FAIL,1 explicit root SKIP;full runner build PASS.
+
+Разобраны обе оставшиеся unresolved группы сrunner. Реальный повтор
+трёх os.Pipe,назначения command streams иallocation-failure cleanup
+вrunner/secret-broker вынесен вконструктор
+`serviceruntime.NewCommandPipes` существующего модуля. Два независимых
+production consumers теперь используют один код. Новых modules/SDK нет.
+Runner получил явные require/replace этого уже существующего module;
+secret-broker уже зависел отнего. Оба Dockerfile уже копируют нужный
+module:runner черезвесь libs/go,secret-broker отдельным COPY.
+Новыйconstructor не запускает process,goroutine,reader,не читаетenv,
+не создаёт root context ине выбирает protocol/deadline/authority.
+Trusted label задают оба callsite литералом;ошибки ОС не включаются.
+
+Ownership/lifecycle остаётся прежним:
+
+| Состояние | Авторитетный владелец и закрытие |
+| --- | --- |
+| Ошибка первой/второй/третьей пары | Constructor закрывает все полученные ends,возвращает прежний точный request/response/diagnostic error |
+| Полное выделение доStart | Constructor назначает прямые *os.File;command ещё не запущена,handles принадлежат caller |
+| Ошибка Start | Оба прежних consumer cleanup paths закрывают свои ends;никакого retry constructor не делает |
+| Успешный Start/read | Прежние child-end close/defer остаются уcaller;parent ends не переданы Cmd.Wait |
+| Exit/cancel/terminate | Reader queue,diagnostic budget,process-group signals,Wait,drain/join остаются впрежнем consumer коде |
+
+Только приошибке allocation закрытие stdin-child теперь завершает
+constructor дотого,каквозвращается caller,вместо прежнего deferred close
+приreturn caller. Науспешном пути точки закрытия не перенесены.
+Никакие доменные state,grants,events,leases илиtask lineage не менялись.
+После обратного раскрытия только allocation блока ивозврата imports/
+assignments Go AST обоих прежних файлов совпадает с SHA222 безcomments/
+token.Pos. Это не заявление оsyntax identity нового helper:его реальные
+failure paths иdirections отдельно проверены. Для обоих изменённых
+consumer functions добавлены EN→RU;остальные непокрытые declarations
+больших process/appserver файлов не объявлены готовыми.
+
+Новые command_pipes.go/test.go:9/9 EN→RU;вместе с2 прежними functions
+прирост11 covered. Всеlibs/go сейчас2543/2543 пофактическому реестру.
+Новый unit проверяет все3 направления real anonymous pipes безchild,
+поочерёдный отказ каждой allocation сзакрытием всехранее полученных fd,
+порядок command assignments,точные safe errors,закрытие всех6 ends,
+повторную/nil cleanup. Конструктор иClose не выданы за stop/join процесса.
+
+Raw группа `2d265e52bf0d036d8839bbfc12749363bf40fe200902ba0115fc66da51b78e4b`
+реально удалена;новых raw групп нет. Другая125-token группа
+`b10b3aeb82d5206aab67fdb3dc2ad7f60125f6cb2bcc4cf8e64a97b3b38a2f39`
+сохранена exact решением:normalization скрыла различия nominal полей
+ImageBuild→Proto caster иprivate execution input proof. Там нет общего
+алгоритма/общего набора данных;generic reflect mapper скрыл быsource
+bindings. Исключено только одно окно двух точных путей иhash/count,
+нефункции/файлы. После оценки unresolved runner groups больше нет;
+это не общая готовность runner иливсего репозитория.
+
+Фактические units:
+serviceruntime8 верхних/11 всех PASS,runner8/13 PASS,
+secret-broker providercredential5/9 PASS;везде0 FAIL/SKIP.
+Проверены реальные synthetic test-ELF/shell children,parent-owned buffered
+stdout/stderr послеWait,ошибка Start безfd leak,real read/diagnostic
+failures,TERM-resistant leader,descriptor-holding descendant,kill/join,
+reader deadline идоставка сохранённого результата. Это не real Codex,
+device-code,аккаунт илиmodel calls. Ненужные pipe-fixture parent env
+удалены,дети получают толькосвои closed synthetic modes.
+
+Команды сGOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4:
+- serviceruntime:`go test -mod=readonly -count=1 -timeout 60s -json ./...`;
+- runner:`go test -mod=readonly -count=1 -timeout 120s -json ./internal/codex -run '^(TestAppServerOwnsPipes|TestAppServerStopPreserves|TestAppServerTerminateKills|TestAppServerStartFailure|TestFailedProcessCanCapture|TestAppServerAbortPreserves|TestAppServerTermResistant|TestAppServerStopCloseFailure)'`;
+- secret-broker:`go test -mod=readonly -count=1 -timeout 120s -json ./internal/providercredential -run '^(TestAppServerOwnedPipes|TestAppServerDiagnosticJoin|TestAppServerExitBeforeDiagnostic|TestAppServerStartFailureClosesDescriptors)'`.
+Full `go build -mod=readonly ./...` всехтрёх modules PASS LOCAL.
+17 Node units,Go-checker unit,new scope9/9+two consumers covered,
+5 ignore boundaries,gofmt/diff-check PASS LOCAL. Context7 ос/exec/Pipe
+проверен;владение *os.File дополнительно уточнено официальным local
+`go doc os.Pipe`/`go doc os/exec.Cmd` именно Go1.26.6.
+README serviceruntime объясняет purpose/non-goals/failure/ownership.
+
+Рабочий lVe6nK:6586 sources,222 excluded,1830 raw,595 retained,1235 unresolved;
+Go8607/21177,missing12570;raw SHA256
+`7a90a15a65a02eaf25456bff8636b313d5685af30f1ffd633a16c0832e5ea168`;
+clone-set `d380f057dd437b7c0bd92de75d08cf3c9a83917d0101a47313400a72e3c7d934`.
+Точное post-commit измерение публикуется втомже Draft PR.
+Полный runner/codex/repo unit иобщий Go-docs check ещё не выполнены;
+исторические FAIL/SKIP/NOT RUN сохраняются. Live/browser/deploy/ИИ/STT/
+почта NOT RUN. Общая задача остаётся активной,merge/ready не выполняются.
 
 ## Двести двадцать вторая волна — post-join нормализация workspace
 

@@ -14,6 +14,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 )
 
 const (
@@ -182,27 +184,22 @@ func startAppServerCommand(command *exec.Cmd) (*appServer, error) {
 	return startAppServerWithDiagnosticReader(command, readAppServerDiagnostics)
 }
 
+// startAppServerWithDiagnosticReader allocates explicit caller-owned stdio through the shared
+// constructor but retains its own diagnostic reader, message queue, Wait and shutdown budget.
+// Deferred child-end closure and parent-reader lifetime remain independent of Cmd.Wait.
+// startAppServerWithDiagnosticReader выделяет явные stdio через общий конструктор, сохраняя свои
+// diagnostic reader, очередь, Wait и shutdown budget. Отложенное закрытие child ends и срок
+// parent readers остаются независимыми от Cmd.Wait.
 func startAppServerWithDiagnosticReader(command *exec.Cmd, readDiagnostics func(io.Reader) error) (*appServer, error) {
-	stdinChild, stdin, err := os.Pipe()
+	pipes, err := serviceruntime.NewCommandPipes(command, "Codex app-server")
 	if err != nil {
-		return nil, errors.New("create Codex app-server request stream")
+		return nil, err
 	}
+	stdinChild, stdin := pipes.StdinChild, pipes.Stdin
+	stdout, stdoutChild := pipes.Stdout, pipes.StdoutChild
+	stderr, stderrChild := pipes.Stderr, pipes.StderrChild
 	defer stdinChild.Close()
-	command.Stdin = stdinChild
-	stdout, stdoutChild, err := os.Pipe()
-	if err != nil {
-		_ = stdin.Close()
-		return nil, errors.New("create Codex app-server response stream")
-	}
-	stderr, stderrChild, err := os.Pipe()
-	if err != nil {
-		_ = stdin.Close()
-		_ = stdout.Close()
-		_ = stdoutChild.Close()
-		return nil, errors.New("create Codex app-server diagnostic stream")
-	}
 	// Родитель владеет read ends: Cmd.Wait не должен закрывать их под readers.
-	command.Stdout, command.Stderr = stdoutChild, stderrChild
 	defer stdoutChild.Close()
 	defer stderrChild.Close()
 	if err := command.Start(); err != nil {
