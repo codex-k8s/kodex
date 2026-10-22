@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.196.0
+version: 1.197.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,55 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто седьмая волна — все tool schemas и integration outcome fixtures
+
+Точный опубликованный SHA196 — `70a1aa75a48fdfdb095bea0a4eb930a83d89cd6f`.
+Callback250/1349 PASS,0 FAIL,2 прежних SKIP; полный RC build PASS.
+Exact DiTzQV:6576 sources,222 excluded,1839 raw,582 retained,1257 unresolved;
+Go7155/21143,missing13988; raw SHA256
+`0173aa031befb78198bcc08db383c05604d01bb3031e359d567827ada4ad85a5`,
+clone-set `58041a831f89eeae6a2221fd52bc1ff213d255721c8f49313d48c767a1595061`.
+
+Полностью прочитаны tools.go (935 исходных строк),tools_test.go (1125)
+и integration_result_test.go. Все108 текущих declarations предметно EN→RU,
+scoped108/108. Описаны compact discovery,context/self exceptions,sorted/filtered
+twenty-entry pages,four selected schemas,closed input и открытые вложенные
+public objects. Ref enums,описание сети,план/шаблон/инвентарь не названы
+owner eligibility,фактическим исполнением,допуском образа или выдачей grant.
+Зафиксированы shared map/slice ownership,nil required,anyOf presence semantics,
+доверенная внутренняя форма assistantSchemaType и возможность panic на чужой map.
+Workflow guidance не объявлен исполнителем DAG normalization/сохранения edges.
+
+Единственный executable refactor — локальные test fixtures: одинаковые timeout,
+client,input/grant setup трёх invoke outcome tests вынесены в
+integrationInvocationFixture. Все original conditions,assertions,stub types,
+input pins и t.Parallel сохранены. Идентичный integrationRefArguments удалён,
+его три callers используют существующий integrationArguments; второго decoder
+или legacy path не добавлено. Новый unit проверяет исходные значения,identity
+stub и независимость mutable fixtures/argument maps при отдельных вызовах.
+После обратного раскрытия helper и восстановления трёх alias calls весь
+non-comment/gofmt код всех3 файлов совпал с SHA196. Production executable
+полностью неизменен. Context7 /golang/go:reference/map assignment и testing helpers;
+новых зависимостей нет.
+
+Detector больше не находит прежнюю self-clone группу tools_test.go
+`df30b142fd65432a9070c73a0b4e99162363040fbdc8f2b7077519553e5afc16`.
+Сверка всех ключей выявила также замену fragment digest одного прежнего
+integration_result_test.go окна после новых комментариев; это оставшаяся
+неразобранная группа,а не ещё один устранённый повтор. Первое предположение
+о единственном изменившемся ключе отвергнуто проверкой,не объявлено PASS.
+582 retained decisions не менялись. Рабочий6Z90KW:
+6576 sources,222 excluded,1838 raw,582 retained,1256 unresolved;
+Go7263/21144,missing13881. Raw SHA256
+`42b04926dbae43684377676293c6a5f0541c01ec88e87bd2160622d4882c3101`,
+clone-set `af4c804fa7300fd9d0aeb04c9d1288852b8708e4cd245af8811b51e0afb9bcf7`.
+Callback251 верхних/1350 всех PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly,17 Node units,Go-checker unit,scoped108/108,
+5 ignore-boundaries,gofmt и diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+Точный post-commit результат публикуется в едином Draft PR; общий repo-check,
+component/live,browser/deploy,агенты/STT/почта NOT RUN,цель не завершена.
 
 ## Сто девяносто шестая волна — context artifact и managed MCP
 

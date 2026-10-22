@@ -20,6 +20,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// integrationResultClient records synthetic resolve/read/projection calls, consumes
+// queued resolve errors and returns a configured state; it is not a live owner ledger
+// and deliberately does not authenticate transport or persist approval decisions.
+// integrationResultClient записывает synthetic resolve/read/projection calls, расходует
+// очередь resolve errors и возвращает заданный state; это не live owner ledger,
+// transport не аутентифицируется и approval decisions не сохраняются.
 type integrationResultClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	state, invocation string
@@ -29,6 +35,12 @@ type integrationResultClient struct {
 	resolveErrors     []error
 }
 
+// ResolveIntegrationInvocation records the original request pointer, consumes one
+// queued error if present, otherwise returns the fixed locator. No defensive copy,
+// idempotency enforcement or integration effect is provided by this fake.
+// ResolveIntegrationInvocation записывает исходный request pointer, расходует одну
+// queued error при наличии, иначе выдаёт фиксированный locator. Этот fake
+// не копирует request, не исполняет idempotency и integration effect.
 func (c *integrationResultClient) ResolveIntegrationInvocation(_ context.Context, r *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
 	c.resolves = append(c.resolves, r)
 	if len(c.resolveErrors) > 0 {
@@ -38,11 +50,24 @@ func (c *integrationResultClient) ResolveIntegrationInvocation(_ context.Context
 	}
 	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: c.invocation}, nil
 }
+
+// GetIntegrationInvocation records the requested ref and returns configured state
+// with deliberately private result text, enabling wire/redaction assertions without
+// reading an actual provider or checking invocation ownership.
+// GetIntegrationInvocation записывает ref и возвращает заданный state с намеренно
+// private result text для wire/redaction assertions без чтения реального provider
+// и проверки владения invocation.
 func (c *integrationResultClient) GetIntegrationInvocation(_ context.Context, r *controlplanev1.GetIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.GetIntegrationInvocationResponse, error) {
 	c.reads = append(c.reads, r.InvocationRef)
 	return &controlplanev1.GetIntegrationInvocationResponse{State: c.state, ResultSummary: "private provider result", SafeErrorCode: "INTEGRATION_REJECTED_BY_OWNER"}, nil
 }
 
+// TestIntegrationResolveRetriesSameIntentOnce injects one Unavailable and verifies
+// the two resolve requests retain the same idempotency key; it proves retry intent
+// stability, not durable deduplication by an owner or external provider.
+// TestIntegrationResolveRetriesSameIntentOnce подставляет один Unavailable и проверяет
+// одинаковый idempotency key двух resolve requests; доказана стабильность retry intent,
+// а не durable deduplication owner или внешнего provider.
 func TestIntegrationResolveRetriesSameIntentOnce(t *testing.T) {
 	client := &integrationResultClient{
 		state: "SUCCEEDED", invocation: "inv_fixture",
@@ -58,10 +83,24 @@ func TestIntegrationResolveRetriesSameIntentOnce(t *testing.T) {
 		t.Fatalf("resolve retry changed intent: %#v", client.resolves)
 	}
 }
+
+// RecordRunToolCall retains the latest projection request and returns a synthetic
+// event locator; accepting it does not prove a real durable audit commit.
+// RecordRunToolCall сохраняет последний projection request и возвращает synthetic
+// event locator; его принятие не доказывает реальный durable audit commit.
 func (c *integrationResultClient) RecordRunToolCall(_ context.Context, r *controlplanev1.RecordRunToolCallRequest, _ ...grpc.CallOption) (*controlplanev1.RecordRunToolCallResponse, error) {
 	c.projection = r
 	return &controlplanev1.RecordRunToolCallResponse{Event: &controlplanev1.RunEvent{Ref: "evt_fixture"}}, nil
 }
+
+// TestIntegrationTerminalWireAndOwnerProjection checks structured/text MCP results
+// for five configured owner states, including UNKNOWN_OUTCOME needing a decision,
+// while internal state/digest remain only in a lease-fenced safe projection.
+// Input digests are computed from actual fixture JSON; no external effect occurs.
+// TestIntegrationTerminalWireAndOwnerProjection проверяет structured/text MCP results
+// пяти заданных owner states, включая UNKNOWN_OUTCOME с необходимым решением;
+// internal state/digest остаются лишь в lease-fenced safe projection. Input digests
+// считаются по реальному fixture JSON; внешних эффектов нет.
 func TestIntegrationTerminalWireAndOwnerProjection(t *testing.T) {
 	for _, state := range []string{"SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "UNKNOWN_OUTCOME"} {
 		t.Run(state, func(t *testing.T) {
@@ -69,7 +108,7 @@ func TestIntegrationTerminalWireAndOwnerProjection(t *testing.T) {
 			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 			grant := integrationGrantFixture()
 			input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2, IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
-			arguments := integrationRefArguments(grant, "private <input> & Пример")
+			arguments := integrationArguments(grant, "private <input> & Пример")
 			params, _ := json.Marshal(map[string]any{"name": "invoke_integration", "arguments": arguments})
 			writer := httptest.NewRecorder()
 			server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
@@ -128,6 +167,12 @@ func TestIntegrationTerminalWireAndOwnerProjection(t *testing.T) {
 	}
 }
 
+// TestIntegrationCatalogInvalidInputReturnsRetryableMCPError checks mixed catalog
+// selectors yield closed retryable guidance and a failed safe owner projection,
+// rather than treating invalid input as a successful catalog read.
+// TestIntegrationCatalogInvalidInputReturnsRetryableMCPError проверяет closed retryable
+// guidance и failed safe owner projection смешанных catalog selectors
+// вместо признания неверного input успешным catalog read.
 func TestIntegrationCatalogInvalidInputReturnsRetryableMCPError(t *testing.T) {
 	client := &integrationResultClient{}
 	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
@@ -154,6 +199,12 @@ func TestIntegrationCatalogInvalidInputReturnsRetryableMCPError(t *testing.T) {
 	}
 }
 
+// TestIntegrationCatalogMissingSelectionPointsToBoundIndex checks a guessed operation
+// name produces guidance back to the bound grant index and a failed projection;
+// it neither discovers arbitrary remote operations nor executes them.
+// TestIntegrationCatalogMissingSelectionPointsToBoundIndex проверяет guidance к bound
+// grant index и failed projection при выдуманном operation name; произвольные
+// remote operations не обнаруживаются и не выполняются.
 func TestIntegrationCatalogMissingSelectionPointsToBoundIndex(t *testing.T) {
 	client := &integrationResultClient{}
 	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
@@ -184,6 +235,11 @@ func TestIntegrationCatalogMissingSelectionPointsToBoundIndex(t *testing.T) {
 		t.Fatal("missing integration selection lost its owner projection")
 	}
 }
+
+// TestIntegrationInvalidGrantReturnsBoundedRetryGuidance checks a foreign grant yields
+// a closed retryable error with no reflected private input, owner resolve or projection.
+// TestIntegrationInvalidGrantReturnsBoundedRetryGuidance проверяет closed retryable
+// ошибку чужого grant без отражения private input, owner resolve и projection.
 func TestIntegrationInvalidGrantReturnsBoundedRetryGuidance(t *testing.T) {
 	client := &integrationResultClient{}
 	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
@@ -210,6 +266,12 @@ func TestIntegrationInvalidGrantReturnsBoundedRetryGuidance(t *testing.T) {
 	}
 }
 
+// TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt checks malformed owner locators
+// prevent subsequent reads, extra/missing/foreign grant selectors prevent resolve,
+// and an untyped fabricated result cannot become an authoritative safe projection.
+// TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt проверяет запрет subsequent reads
+// для malformed owner locators, запрет resolve для лишних/missing/foreign selectors
+// и невозможность authoritative safe projection из untyped fabricated result.
 func TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt(t *testing.T) {
 	for _, invalid := range []string{"", "short", "inv/foreign", "inv\nprivate", strings.Repeat("x", 129)} {
 		t.Run("invalid-ref", func(t *testing.T) {
@@ -237,7 +299,7 @@ func TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt(t *testing.T) {
 		t.Fatal("foreign scope reached owner mutation")
 	}
 	for _, ref := range []string{"", "igr_foreign"} {
-		args := integrationRefArguments(grant, "x")
+		args := integrationArguments(grant, "x")
 		args["grant_ref"] = ref
 		if _, err := s.invoke(t.Context(), input, args, json.RawMessage(`1`)); err == nil {
 			t.Fatal("foreign grant reference accepted")
@@ -251,6 +313,12 @@ func TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt(t *testing.T) {
 	}
 }
 
+// TestIntegrationLegacyLocatorIsRejectedBeforeOwnerMutation exercises obsolete and
+// mixed selector shapes as negative fixtures only: both must fail before owner RPC
+// or projection and must not reflect private input; no legacy decoder is restored.
+// TestIntegrationLegacyLocatorIsRejectedBeforeOwnerMutation использует старую и mixed
+// selector shapes только как negative fixtures: обе отвергаются до owner RPC/projection
+// без отражения private input; legacy decoder не восстанавливается.
 func TestIntegrationLegacyLocatorIsRejectedBeforeOwnerMutation(t *testing.T) {
 	grant := integrationGrantFixture()
 	legacy := map[string]any{

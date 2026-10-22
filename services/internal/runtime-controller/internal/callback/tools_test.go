@@ -20,38 +20,76 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// rejectedIntegrationClient is a local owner-RPC stub whose invocation transitions
+// from pending resolution to rejection; embedded unused methods must not be called.
+// rejectedIntegrationClient — локальный owner-RPC stub с переходом invocation
+// от pending resolution к rejection; embedded unused methods не вызываются.
 type rejectedIntegrationClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 }
 
+// unavailableIntegrationClient injects a transient resolve error without invoking
+// a real owner, provider or mail transport.
+// unavailableIntegrationClient подставляет transient resolve error без обращения
+// к реальному owner, провайдеру или почтовому transport.
 type unavailableIntegrationClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 }
 
+// pendingIntegrationClient keeps a synthetic invocation waiting for approval
+// so tool-return behavior can be tested without a human decision or external effect.
+// pendingIntegrationClient удерживает synthetic invocation в ожидании approval
+// для проверки возврата tool без human decision и внешнего эффекта.
 type pendingIntegrationClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 }
 
+// ResolveIntegrationInvocation returns one fixed pending locator; it does not
+// validate request authority, persist an intent or perform an integration operation.
+// ResolveIntegrationInvocation возвращает фиксированный pending locator, не проверяя
+// request authority, не сохраняя intent и не исполняя integration operation.
 func (*pendingIntegrationClient) ResolveIntegrationInvocation(_ context.Context, _ *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
 	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: "inv_pending1", State: "WAITING_APPROVAL"}, nil
 }
 
+// GetIntegrationInvocation always returns WAITING_APPROVAL, allowing the test
+// to detect any attempt to wait for a terminal result inside the tool request.
+// GetIntegrationInvocation всегда возвращает WAITING_APPROVAL, позволяя тесту
+// обнаружить ожидание terminal result внутри tool request.
 func (*pendingIntegrationClient) GetIntegrationInvocation(_ context.Context, _ *controlplanev1.GetIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.GetIntegrationInvocationResponse, error) {
 	return &controlplanev1.GetIntegrationInvocationResponse{State: "WAITING_APPROVAL"}, nil
 }
 
+// ResolveIntegrationInvocation supplies a fixed initially pending locator for
+// the rejection scenario, without creating a server-owned approval decision.
+// ResolveIntegrationInvocation выдаёт фиксированный initially pending locator
+// сценария отказа, не создавая server-owned approval decision.
 func (*rejectedIntegrationClient) ResolveIntegrationInvocation(_ context.Context, _ *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
 	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: "inv_rejected1", State: "WAITING_APPROVAL"}, nil
 }
 
+// GetIntegrationInvocation returns synthetic REJECTED with its safe owner error
+// code; no real invitation is denied or sent by this stub.
+// GetIntegrationInvocation возвращает synthetic REJECTED и safe owner error code;
+// этот stub не отклоняет и не отправляет реальное приглашение.
 func (*rejectedIntegrationClient) GetIntegrationInvocation(_ context.Context, _ *controlplanev1.GetIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.GetIntegrationInvocationResponse, error) {
 	return &controlplanev1.GetIntegrationInvocationResponse{State: "REJECTED", SafeErrorCode: "INTEGRATION_REJECTED_BY_OWNER"}, nil
 }
 
+// ResolveIntegrationInvocation always returns gRPC Unavailable to verify that
+// the caller preserves transient status rather than inventing a terminal business result.
+// ResolveIntegrationInvocation всегда возвращает gRPC Unavailable для проверки
+// сохранения transient status вместо выдуманного terminal business result.
 func (*unavailableIntegrationClient) ResolveIntegrationInvocation(_ context.Context, _ *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
 	return nil, status.Error(codes.Unavailable, "transient control-plane failure")
 }
 
+// integrationGrantFixture builds one synthetic reviewed-write grant with the exact
+// digest of its closed value schema. Fixed revisions/digests are fixture data,
+// not owner-issued credentials, a live connection or an approval decision.
+// integrationGrantFixture создаёт synthetic reviewed-write grant с точным digest
+// закрытой value schema. Фиксированные revisions/digests — fixture data,
+// не owner-issued credentials, live connection и не approval decision.
 func integrationGrantFixture() runtimecontract.RunnerIntegrationGrant {
 	inputSchema := `{"additionalProperties":false,"properties":{"value":{"maxLength":4096,"minLength":1,"type":"string"}},"required":["value"],"type":"object"}`
 	digest := sha256.Sum256([]byte(inputSchema))
@@ -64,25 +102,77 @@ func integrationGrantFixture() runtimecontract.RunnerIntegrationGrant {
 	}
 }
 
+// integrationArguments builds the single supported grant_ref/input shape with
+// one value; all callers use fresh maps, and no owner/connection selector is injected.
+// integrationArguments создаёт единственную поддерживаемую форму grant_ref/input
+// с одним value; maps новые, owner/connection selector не подставляется.
 func integrationArguments(grant runtimecontract.RunnerIntegrationGrant, value string) map[string]any {
 	return map[string]any{"grant_ref": grant.Ref, "input": map[string]any{"value": value}}
 }
 
-func integrationRefArguments(grant runtimecontract.RunnerIntegrationGrant, value string) map[string]any {
-	return map[string]any{"grant_ref": grant.Ref, "input": map[string]any{"value": value}}
-}
-
-func TestInvokeReturnsRejectedIntegrationAsTerminalResult(t *testing.T) {
-	t.Parallel()
+// integrationInvocationFixture creates fresh timeout/client/input/grant state for
+// the three local invocation outcome tests. It shares no mutable fixture between
+// parallel tests and performs no owner RPC, external effect or approval decision.
+// integrationInvocationFixture создаёт новые timeout/client/input/grant fixtures
+// для трёх локальных outcome tests. Между parallel tests нет общей изменяемой
+// fixture; owner RPC, внешние эффекты и approval decision не выполняются.
+func integrationInvocationFixture(client controlplanev1.RuntimeWorkServiceClient) (*Server, runtimecontract.RunnerInput, runtimecontract.RunnerIntegrationGrant) {
 	server := &Server{
 		config:  Config{RequestTimeout: time.Second},
-		control: &controlplaneclient.Client{Runtime: &rejectedIntegrationClient{}},
+		control: &controlplaneclient.Client{Runtime: client},
 	}
 	grant := integrationGrantFixture()
 	input := runtimecontract.RunnerInput{
 		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
 		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant},
 	}
+	return server, input, grant
+}
+
+// TestIntegrationInvocationFixtureKeepsScenarioStateIsolated checks fixed timeout,
+// input pins and supplied stub identity, then mutates one returned fixture and
+// argument map to prove a second call retains independent mutable state.
+// TestIntegrationInvocationFixtureKeepsScenarioStateIsolated проверяет timeout,
+// input pins и identity переданного stub, затем изменяет одну fixture и argument
+// map, доказывая независимость изменяемого состояния второго вызова.
+func TestIntegrationInvocationFixtureKeepsScenarioStateIsolated(t *testing.T) {
+	t.Parallel()
+	firstClient, secondClient := &rejectedIntegrationClient{}, &pendingIntegrationClient{}
+	firstServer, firstInput, firstGrant := integrationInvocationFixture(firstClient)
+	secondServer, secondInput, secondGrant := integrationInvocationFixture(secondClient)
+	if firstServer == secondServer || firstServer.control == secondServer.control ||
+		firstServer.control.Runtime != firstClient || secondServer.control.Runtime != secondClient ||
+		firstServer.config.RequestTimeout != time.Second || secondServer.config.RequestTimeout != time.Second {
+		t.Fatal("invocation fixture lost independent server, timeout or client identity")
+	}
+	expected := runtimecontract.RunnerInput{
+		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{integrationGrantFixture()},
+	}
+	if !reflect.DeepEqual(firstInput, expected) || !reflect.DeepEqual(secondInput, expected) ||
+		!reflect.DeepEqual(firstGrant, expected.IntegrationGrants[0]) || !reflect.DeepEqual(secondGrant, firstGrant) {
+		t.Fatal("invocation fixture changed original input or grant")
+	}
+	firstInput.IntegrationGrants[0].Ref = "igr_changed"
+	firstServer.config.RequestTimeout = 0
+	firstArguments, secondArguments := integrationArguments(firstGrant, "first"), integrationArguments(secondGrant, "second")
+	firstArguments["grant_ref"] = "igr_changed"
+	firstArguments["input"].(map[string]any)["value"] = "changed"
+	if !reflect.DeepEqual(secondInput, expected) || secondServer.config.RequestTimeout != time.Second ||
+		secondArguments["grant_ref"] != secondGrant.Ref || secondArguments["input"].(map[string]any)["value"] != "second" {
+		t.Fatal("parallel invocation fixtures or argument maps share mutable state")
+	}
+}
+
+// TestInvokeReturnsRejectedIntegrationAsTerminalResult verifies rejection is a typed
+// negative tool result with the original invocation ref and owner error code, not a
+// transport failure. It uses only a synthetic owner stub and performs no external effect.
+// TestInvokeReturnsRejectedIntegrationAsTerminalResult проверяет typed negative tool
+// result с исходными invocation ref и owner error code, а не transport failure.
+// Используется только synthetic owner stub, внешних эффектов нет.
+func TestInvokeReturnsRejectedIntegrationAsTerminalResult(t *testing.T) {
+	t.Parallel()
+	server, input, grant := integrationInvocationFixture(&rejectedIntegrationClient{})
 	result, err := server.invoke(t.Context(), input, integrationArguments(grant, "rejected"), json.RawMessage(`"call-1"`))
 	if err != nil {
 		t.Fatalf("invoke rejected integration: %v", err)
@@ -93,18 +183,16 @@ func TestInvokeReturnsRejectedIntegrationAsTerminalResult(t *testing.T) {
 	}
 }
 
+// TestInvokeReturnsPendingApprovalWithoutHoldingToolRequest verifies pending approval
+// returns immediately as a typed owner-decision-required result with a safe activity
+// projection, rather than blocking the request or fabricating completed approval.
+// TestInvokeReturnsPendingApprovalWithoutHoldingToolRequest проверяет немедленный
+// typed owner-decision-required result и safe activity projection при pending approval
+// вместо блокировки request или выдуманного завершённого approval.
 func TestInvokeReturnsPendingApprovalWithoutHoldingToolRequest(t *testing.T) {
 	t.Parallel()
-	server := &Server{
-		config:  Config{RequestTimeout: time.Second},
-		control: &controlplaneclient.Client{Runtime: &pendingIntegrationClient{}},
-	}
-	grant := integrationGrantFixture()
-	input := runtimecontract.RunnerInput{
-		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
-		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant},
-	}
-	result, err := server.invoke(t.Context(), input, integrationRefArguments(grant, "pending"), json.RawMessage(`"call-1"`))
+	server, input, grant := integrationInvocationFixture(&pendingIntegrationClient{})
+	result, err := server.invoke(t.Context(), input, integrationArguments(grant, "pending"), json.RawMessage(`"call-1"`))
 	if err != nil {
 		t.Fatalf("invoke pending integration: %v", err)
 	}
@@ -117,23 +205,27 @@ func TestInvokeReturnsPendingApprovalWithoutHoldingToolRequest(t *testing.T) {
 	}
 }
 
+// TestInvokePreservesIntegrationResolutionStatus verifies a fake owner's transient
+// Unavailable survives invocation error propagation; it does not test real owner availability.
+// TestInvokePreservesIntegrationResolutionStatus проверяет сохранение transient Unavailable
+// fake owner при возврате ошибки invocation, а не доступность реального owner.
 func TestInvokePreservesIntegrationResolutionStatus(t *testing.T) {
 	t.Parallel()
-	server := &Server{
-		config:  Config{RequestTimeout: time.Second},
-		control: &controlplaneclient.Client{Runtime: &unavailableIntegrationClient{}},
-	}
-	grant := integrationGrantFixture()
-	input := runtimecontract.RunnerInput{
-		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
-		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant},
-	}
+	server, input, grant := integrationInvocationFixture(&unavailableIntegrationClient{})
 	_, err := server.invoke(t.Context(), input, integrationArguments(grant, "unavailable"), json.RawMessage(`"call-1"`))
 	if status.Code(err) != codes.Unavailable {
 		t.Fatalf("integration resolution status was lost: %v", err)
 	}
 }
 
+// TestAssistantPlanToolIsSystemOnlyAndBounded checks ordinary-runtime exclusion,
+// compact assistant tools/list and the specialized create/update/launch/grant schema
+// shapes, limits, target branches and absence of credential fields. The historical
+// name does not claim PROJECT assistants are excluded; this fixture uses SYSTEM.
+// TestAssistantPlanToolIsSystemOnlyAndBounded проверяет отсутствие tool у обычного
+// runtime, компактность assistant tools/list и формы специализированных create/update/
+// launch/grant schemas, limits, target branches и отсутствие credential fields.
+// Историческое имя не доказывает запрет PROJECT: fixture использует SYSTEM.
 func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	t.Parallel()
 	if encoded, _ := json.Marshal(tools(runtimecontract.RunnerInput{})); strings.Contains(string(encoded), "propose_configuration_plan") {
@@ -293,6 +385,12 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	}
 }
 
+// TestConfigurationCatalogReturnsOnlyServerOwnedBindings checks sorted snapshot
+// agent refs, compact type-only discovery, selected schema expansion and rejection of
+// unknown, duplicate, excessive or context-disallowed kinds; no live eligibility read occurs.
+// TestConfigurationCatalogReturnsOnlyServerOwnedBindings проверяет sorted snapshot
+// agent refs, compact type-only discovery, выбор схем и отказ unknown, duplicate,
+// excessive и context-disallowed kinds; live eligibility read не выполняется.
 func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{
@@ -358,6 +456,12 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 }
 
+// TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph checks the exact workflow
+// locator, editable graph identity fields and capability-ceiling guidance for both
+// create/update shapes; it does not publish or execute a workflow DAG.
+// TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph проверяет exact workflow
+// locator, изменяемые graph identity fields и capability-ceiling guidance create/update
+// форм; публикация и выполнение workflow DAG не проверяются.
 func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678",
@@ -395,6 +499,12 @@ func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 	}
 }
 
+// TestEnvironmentRevisionSchemaIsExactAndSecretValueFree checks pinned environment
+// proposal fields, sparse value edits, closed policy and bounded nonempty method subsets
+// without secret values, hostPath or service-account selectors; no policy is deployed.
+// TestEnvironmentRevisionSchemaIsExactAndSecretValueFree проверяет pinned environment
+// proposal fields, sparse value edits, closed policy и bounded nonempty method subsets
+// без secret values,hostPath/service-account selectors; policy не развёртывается.
 func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678",
@@ -430,6 +540,12 @@ func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 	}
 }
 
+// TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContext checks
+// self environment/system-assistant pins remain discoverable from an unrelated project
+// screen; schema presence is not permission to apply the proposal.
+// TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContext проверяет
+// discovery собственных environment/system-assistant pins с другого project screen;
+// наличие схемы не даёт разрешения применить предложение.
 func TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{
@@ -456,6 +572,12 @@ func TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContex
 	}
 }
 
+// TestSystemAssistantCanProposeOwnInstructionsFromAnyContext checks self instruction
+// UPDATE shape, bound assistant ref, text limit and local SYSTEM_ASSISTANT target
+// outside its own screen; it does not change persisted instructions.
+// TestSystemAssistantCanProposeOwnInstructionsFromAnyContext проверяет self instruction
+// UPDATE shape, bound assistant ref, text limit и локальный SYSTEM_ASSISTANT target
+// вне собственного экрана, не меняя сохранённые instructions.
 func TestSystemAssistantCanProposeOwnInstructionsFromAnyContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{
@@ -492,6 +614,10 @@ func TestSystemAssistantCanProposeOwnInstructionsFromAnyContext(t *testing.T) {
 	}
 }
 
+// TestAgentEnvironmentBindingSchemaIsExact checks the current agent locator and
+// environment-binding UPDATE shape, excluding caller versions and plaintext secrets.
+// TestAgentEnvironmentBindingSchemaIsExact проверяет locator текущего agent
+// и environment-binding UPDATE shape без caller versions и plaintext secrets.
 func TestAgentEnvironmentBindingSchemaIsExact(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678",
@@ -514,6 +640,12 @@ func TestAgentEnvironmentBindingSchemaIsExact(t *testing.T) {
 	}
 }
 
+// TestIntegrationGrantSchemaBindsRecipientToCurrentContext checks an AGENT screen
+// pins only that recipient, while the generic form retains exclusive agent/workflow
+// branches and approval-scope fields; it creates neither grant nor approval.
+// TestIntegrationGrantSchemaBindsRecipientToCurrentContext проверяет pin только recipient
+// AGENT screen, а для generic формы — exclusive agent/workflow branches и approval-scope
+// fields; grant и approval не создаются.
 func TestIntegrationGrantSchemaBindsRecipientToCurrentContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678",
@@ -537,6 +669,12 @@ func TestIntegrationGrantSchemaBindsRecipientToCurrentContext(t *testing.T) {
 	}
 }
 
+// TestConfigurationCatalogPagesAgentsWithoutExhaustingContext checks twenty-entry
+// pages, final-page termination, Unicode preview truncation, case-folded search and
+// invalid pagination rejection over forty-five local fixture targets.
+// TestConfigurationCatalogPagesAgentsWithoutExhaustingContext проверяет страницы
+// по двадцать, конец последней, Unicode preview truncation, поиск без учёта регистра
+// и отказ неверной pagination на сорока пяти локальных fixture targets.
 func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_current"}
@@ -588,6 +726,12 @@ func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
 	}
 }
 
+// TestConfigurationCatalogPinsAgentUpdateToExactContext checks full descriptions
+// only for the current agent, sparse server-hydrated UPDATE_AGENT and local target
+// rejection for a different ref; empty allowed operations hide screen mutations.
+// TestConfigurationCatalogPinsAgentUpdateToExactContext проверяет полные описания
+// лишь текущего agent, sparse server-hydrated UPDATE_AGENT и локальный отказ target
+// с другим ref; пустые allowed operations скрывают screen mutations.
 func TestConfigurationCatalogPinsAgentUpdateToExactContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
@@ -632,6 +776,12 @@ func TestConfigurationCatalogPinsAgentUpdateToExactContext(t *testing.T) {
 	}
 }
 
+// TestConfigurationCatalogPinsConnectionUpdateToExactContext checks the exact
+// connection locator, name/public-only edits and local mismatched-target rejection,
+// without credentials or definition changes in discovery.
+// TestConfigurationCatalogPinsConnectionUpdateToExactContext проверяет exact connection
+// locator, name/public-only edits и локальный отказ чужого target, без credentials
+// и definition changes в discovery.
 func TestConfigurationCatalogPinsConnectionUpdateToExactContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, AssistantContext: &runtimecontract.RunnerAssistantContext{
@@ -659,6 +809,12 @@ func TestConfigurationCatalogPinsConnectionUpdateToExactContext(t *testing.T) {
 	}
 }
 
+// TestConfigurationCatalogPinsScheduleUpdateToExactContext checks a twelve-field
+// sparse schedule UPDATE bound to its screen ref, excluding project/input-default
+// fields, and rejects a different target in local server-target construction.
+// TestConfigurationCatalogPinsScheduleUpdateToExactContext проверяет двенадцать sparse
+// schedule UPDATE fields с screen ref, исключение project/input-default fields
+// и отказ другого target при локальном построении server target.
 func TestConfigurationCatalogPinsScheduleUpdateToExactContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
@@ -686,6 +842,10 @@ func TestConfigurationCatalogPinsScheduleUpdateToExactContext(t *testing.T) {
 	}
 }
 
+// containsString performs exact membership search for schema assertions without
+// normalizing case or modifying the supplied slice.
+// containsString ищет точное совпадение для schema assertions без изменения
+// регистра и переданного slice.
 func containsString(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {
@@ -695,6 +855,12 @@ func containsString(values []string, expected string) bool {
 	return false
 }
 
+// TestDelegationToolPinsWorkflowTargetsAndStepKeys checks a closed delegation shape
+// with required workflow step and ordered server-snapshot target/step enums; it
+// does not prove pair eligibility or launch a child run.
+// TestDelegationToolPinsWorkflowTargetsAndStepKeys проверяет closed delegation shape
+// с обязательным workflow step и ordered snapshot target/step enums, не доказывая
+// eligibility пары и не запуская дочерний run.
 func TestDelegationToolPinsWorkflowTargetsAndStepKeys(t *testing.T) {
 	t.Parallel()
 	targets := []runtimecontract.RunnerDelegationTarget{
@@ -718,6 +884,12 @@ func TestDelegationToolPinsWorkflowTargetsAndStepKeys(t *testing.T) {
 	}
 }
 
+// TestDelegationToolExposesNamedServerOwnedTargets checks escaped named metadata,
+// bounded role previews, exact enums and optional workflow labels while ensuring
+// private instructions/expected results are absent from the description projection.
+// TestDelegationToolExposesNamedServerOwnedTargets проверяет escaped named metadata,
+// bounded role previews, exact enums и optional workflow labels; private instructions
+// и expected results должны отсутствовать в description projection.
 func TestDelegationToolExposesNamedServerOwnedTargets(t *testing.T) {
 	t.Parallel()
 	for _, workflow := range []bool{false, true} {
@@ -757,6 +929,12 @@ func TestDelegationToolExposesNamedServerOwnedTargets(t *testing.T) {
 	}
 }
 
+// TestDelegationToolDescriptionStaysBoundedForManyTargets checks the top-level
+// description budget independently of complete per-target metadata/enums for 128
+// synthetic targets; it does not assert a bound on the whole encoded catalog.
+// TestDelegationToolDescriptionStaysBoundedForManyTargets проверяет top-level description
+// budget отдельно от полных per-target metadata/enums для 128 synthetic targets,
+// не утверждая предел всего encoded catalog.
 func TestDelegationToolDescriptionStaysBoundedForManyTargets(t *testing.T) {
 	t.Parallel()
 	targets := make([]runtimecontract.RunnerDelegationTarget, 128)
@@ -780,6 +958,12 @@ func TestDelegationToolDescriptionStaysBoundedForManyTargets(t *testing.T) {
 	}
 }
 
+// TestDelegationToolExplainsCatalogLocalFileHandoff checks immutable-file-pin and
+// child-local-resolution guidance for ordinary/workflow delegation without adding
+// caller catalog/entry/artifact selectors to its closed input shape.
+// TestDelegationToolExplainsCatalogLocalFileHandoff проверяет immutable-file-pin
+// и child-local-resolution guidance обычного/workflow delegation без добавления
+// caller catalog/entry/artifact selectors в closed input shape.
 func TestDelegationToolExplainsCatalogLocalFileHandoff(t *testing.T) {
 	t.Parallel()
 	for _, workflow := range []bool{false, true} {
@@ -817,6 +1001,10 @@ func TestDelegationToolExplainsCatalogLocalFileHandoff(t *testing.T) {
 	}
 }
 
+// TestDecodeMCPToolCallParamsAcceptsStandardMetadata verifies standard _meta does
+// not alter the decoded tool name/arguments; it does not interpret progressToken authority.
+// TestDecodeMCPToolCallParamsAcceptsStandardMetadata проверяет, что стандартная _meta
+// не меняет decoded name/arguments; progressToken не интерпретируется как authority.
 func TestDecodeMCPToolCallParamsAcceptsStandardMetadata(t *testing.T) {
 	t.Parallel()
 	params, err := decodeMCPToolCallParams(json.RawMessage(`{
@@ -832,6 +1020,10 @@ func TestDecodeMCPToolCallParamsAcceptsStandardMetadata(t *testing.T) {
 	}
 }
 
+// TestDecodeMCPToolCallParamsRejectsUnknownAuthorityFields verifies an extra top-level
+// actor key is rejected rather than accepted as caller-supplied owner authority.
+// TestDecodeMCPToolCallParamsRejectsUnknownAuthorityFields проверяет отказ лишнего
+// top-level actor key вместо его принятия за caller-supplied owner authority.
 func TestDecodeMCPToolCallParamsRejectsUnknownAuthorityFields(t *testing.T) {
 	t.Parallel()
 	_, err := decodeMCPToolCallParams(json.RawMessage(`{
@@ -844,6 +1036,10 @@ func TestDecodeMCPToolCallParamsRejectsUnknownAuthorityFields(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanInputErrorsKeepAClosedFailureClass checks unsupported DELETE_PROJECT
+// shorthand returns the typed safe operation_type input failure before any owner RPC.
+// TestAssistantPlanInputErrorsKeepAClosedFailureClass проверяет typed safe operation_type
+// ошибку неподдерживаемого DELETE_PROJECT shorthand до любого owner RPC.
 func TestAssistantPlanInputErrorsKeepAClosedFailureClass(t *testing.T) {
 	t.Parallel()
 	server := &Server{}
@@ -862,6 +1058,12 @@ func TestAssistantPlanInputErrorsKeepAClosedFailureClass(t *testing.T) {
 	}
 }
 
+// TestAssistantEnvironmentVariableNamesRejectReservedPrefixes checks reserved names
+// in full/sparse/secret/removal inputs and normalizer rejection, while allowing an
+// ordinary APP_ name. It does not claim every possible secret value is detected.
+// TestAssistantEnvironmentVariableNamesRejectReservedPrefixes проверяет reserved names
+// в full/sparse/secret/removal inputs и отказ normalizer, допуская обычное APP_ имя.
+// Обнаружение любого возможного secret value этим не доказывается.
 func TestAssistantEnvironmentVariableNamesRejectReservedPrefixes(t *testing.T) {
 	t.Parallel()
 	for _, field := range []string{"publicValues", "publicValueUpdates", "secretBindings"} {
@@ -886,6 +1088,12 @@ func TestAssistantEnvironmentVariableNamesRejectReservedPrefixes(t *testing.T) {
 	}
 }
 
+// TestAssistantOperationSchemaAndParserUseSameServerHydrationRegistry checks compact
+// instruction/binding/capability discovery matches UPDATE hydration and exact local
+// AGENT target construction; schemas do not assign caller authority.
+// TestAssistantOperationSchemaAndParserUseSameServerHydrationRegistry проверяет согласие
+// compact instruction/binding/capability discovery с UPDATE hydration и exact local
+// AGENT target; schemas не назначают caller authority.
 func TestAssistantOperationSchemaAndParserUseSameServerHydrationRegistry(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{
@@ -911,6 +1119,12 @@ func TestAssistantOperationSchemaAndParserUseSameServerHydrationRegistry(t *test
 	}
 }
 
+// TestAssistantPlanControlValidationRemainsRetryableInputError checks owner InvalidArgument
+// becomes the closed retryable server_validation class while Unavailable retains
+// its transport code instead of becoming a model-input verdict.
+// TestAssistantPlanControlValidationRemainsRetryableInputError проверяет преобразование
+// owner InvalidArgument в closed retryable server_validation, сохраняя transport code
+// Unavailable вместо его превращения в model-input verdict.
 func TestAssistantPlanControlValidationRemainsRetryableInputError(t *testing.T) {
 	t.Parallel()
 	err := assistantPlanControlError(status.Error(codes.InvalidArgument, "request is invalid"))
@@ -923,6 +1137,12 @@ func TestAssistantPlanControlValidationRemainsRetryableInputError(t *testing.T) 
 	}
 }
 
+// TestNormalizeServerHydratedAssistantOperationAcceptsBoundedModelShorthand checks
+// CREATE_AGENT action shorthand, generated title/summary and snake_case alias removal
+// without executing a create or resolving an employee.
+// TestNormalizeServerHydratedAssistantOperationAcceptsBoundedModelShorthand проверяет
+// CREATE_AGENT action shorthand, generated title/summary и удаление snake_case alias,
+// не исполняя create и не разрешая employee.
 func TestNormalizeServerHydratedAssistantOperationAcceptsBoundedModelShorthand(t *testing.T) {
 	t.Parallel()
 	parameters := map[string]any{
@@ -950,6 +1170,12 @@ func TestNormalizeServerHydratedAssistantOperationAcceptsBoundedModelShorthand(t
 	}
 }
 
+// TestNormalizeServerHydratedAssistantOperationKeepsBoundedUnicodeSummary checks
+// five hundred Cyrillic runes survive normalization and the character limit rejects
+// one more, rather than treating multibyte text as an overlong byte sequence.
+// TestNormalizeServerHydratedAssistantOperationKeepsBoundedUnicodeSummary проверяет
+// сохранение пятисот кириллических runes и отказ ещё одного character,
+// не считая multibyte text слишком длинным по byte count.
 func TestNormalizeServerHydratedAssistantOperationKeepsBoundedUnicodeSummary(t *testing.T) {
 	t.Parallel()
 	planSummary := strings.Repeat("я", 500)
@@ -969,6 +1195,12 @@ func TestNormalizeServerHydratedAssistantOperationKeepsBoundedUnicodeSummary(t *
 	}
 }
 
+// TestNormalizeServerHydratedAssistantOperationRejectsAliasCollision checks mixed
+// canonical/snake_case project selectors return the closed alias-collision class
+// instead of silently choosing one caller value.
+// TestNormalizeServerHydratedAssistantOperationRejectsAliasCollision проверяет closed
+// alias-collision class при canonical/snake_case project selectors вместо
+// неявного выбора одного caller value.
 func TestNormalizeServerHydratedAssistantOperationRejectsAliasCollision(t *testing.T) {
 	t.Parallel()
 	_, err := normalizeServerHydratedAssistantOperation(map[string]any{
@@ -984,6 +1216,12 @@ func TestNormalizeServerHydratedAssistantOperationRejectsAliasCollision(t *testi
 	}
 }
 
+// TestNormalizeServerHydratedAssistantOperationPinsCurrentProject checks omitted
+// project ref is filled from the current server context and the resulting Russian
+// title/summary explicitly describes the purpose edit; it does not persist an update.
+// TestNormalizeServerHydratedAssistantOperationPinsCurrentProject проверяет заполнение
+// пропущенного project ref текущим server context и явное русское описание purpose
+// edit в title/summary, не сохраняя update.
 func TestNormalizeServerHydratedAssistantOperationPinsCurrentProject(t *testing.T) {
 	t.Parallel()
 	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
@@ -1002,6 +1240,12 @@ func TestNormalizeServerHydratedAssistantOperationPinsCurrentProject(t *testing.
 	}
 }
 
+// TestNormalizeEnvironmentDraftPinsCurrentProjectAndKeepsOnlyMetadata checks a foreign
+// project locator is replaced by current context, preserves the selected image alias
+// and describes an environment draft target without creating a runnable environment.
+// TestNormalizeEnvironmentDraftPinsCurrentProjectAndKeepsOnlyMetadata проверяет замену
+// чужого project locator текущим context, сохранение image alias и описание environment
+// draft target без создания исполняемой среды.
 func TestNormalizeEnvironmentDraftPinsCurrentProjectAndKeepsOnlyMetadata(t *testing.T) {
 	t.Parallel()
 	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
@@ -1022,6 +1266,12 @@ func TestNormalizeEnvironmentDraftPinsCurrentProjectAndKeepsOnlyMetadata(t *test
 	}
 }
 
+// TestNormalizeRoleImageRecipePinsCurrentProjectAndAgentReference checks current
+// project pinning and agent/environment-key alias preservation in a local recipe
+// proposal; no image is built, admitted or published.
+// TestNormalizeRoleImageRecipePinsCurrentProjectAndAgentReference проверяет current
+// project pinning и сохранение agent/environment-key alias в локальном recipe
+// proposal; образ не собирается, не допускается и не публикуется.
 func TestNormalizeRoleImageRecipePinsCurrentProjectAndAgentReference(t *testing.T) {
 	t.Parallel()
 	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
@@ -1040,6 +1290,12 @@ func TestNormalizeRoleImageRecipePinsCurrentProjectAndAgentReference(t *testing.
 	}
 }
 
+// TestNormalizeRoleImageUpdatePinsCurrentProjectAndRecipe checks current project
+// pinning and exact recipe locator in local UPDATE normalization; it does not
+// establish recipe ownership or change a persisted revision.
+// TestNormalizeRoleImageUpdatePinsCurrentProjectAndRecipe проверяет current project
+// pinning и exact recipe locator локального UPDATE normalizer, не устанавливая
+// владение рецептом и не меняя сохранённую revision.
 func TestNormalizeRoleImageUpdatePinsCurrentProjectAndRecipe(t *testing.T) {
 	t.Parallel()
 	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
@@ -1056,6 +1312,12 @@ func TestNormalizeRoleImageUpdatePinsCurrentProjectAndRecipe(t *testing.T) {
 	}
 }
 
+// TestRoleImageUpdateCatalogUsesCanonicalServerAction checks SYSTEM/PROJECT create
+// and update descriptors use the normalizer action and compact required envelope,
+// while optional update metadata retains a complete versioned target description.
+// TestRoleImageUpdateCatalogUsesCanonicalServerAction проверяет action normalizer
+// и compact required envelope create/update descriptors SYSTEM/PROJECT; optional
+// update metadata сохраняет полное описание versioned target.
 func TestRoleImageUpdateCatalogUsesCanonicalServerAction(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -1095,6 +1357,12 @@ func TestRoleImageUpdateCatalogUsesCanonicalServerAction(t *testing.T) {
 	}
 }
 
+// TestServerHydratedCatalogActionsMatchClosedRegistry checks all hydrated catalog
+// descriptors share compact required fields and registered actions for both assistant
+// scopes; an unknown UPDATE_ prefix does not acquire an UPDATE action.
+// TestServerHydratedCatalogActionsMatchClosedRegistry проверяет общие compact required
+// fields и registered actions hydrated descriptors обоих assistant scopes;
+// неизвестный UPDATE_ prefix не получает UPDATE action.
 func TestServerHydratedCatalogActionsMatchClosedRegistry(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input := assistantConfigurationFixture(scope)
