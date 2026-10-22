@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/secret-broker/internal/integration/draftowner/owner_test.go",
+      "secondPath": "services/internal/secret-broker/internal/integration/draftowner/owner_test.go",
+      "fragmentSHA256": "d27652638e6f2967dbd9e908e0331361f7a55d6ac4fb152157f6a1e69a304240",
+      "count": 1,
+      "reason": "Окно 112 токенов пересекает хвост ownerStub struct и границы трёх разных typed RPC-подмен: readiness, consume и complete. Содержательные комментарии увеличили число строк и сделали прежний неизменённый AST видимым detector; общего связного алгоритма на всём окне нет. Сигнатуры и nominal response types обязательны для generated client interface, а разные Ready/Work/Draft/Secret поля являются независимыми programmable fixtures. Реально повторяется только одно присваивание last request и возврат typed reply с failure; отдельный record helper либо generic/closure reply builder ради этих операторов усложнит fixture и скроет различия ответов без удаления бизнесовой копии. Сохранено лишь это окно по точному пути/fragment/count1, не файл, RPC methods или остальные test fixtures."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/secret-broker/internal/kubernetes/credential_projections.go",
       "secondPath": "services/internal/secret-broker/internal/kubernetes/store.go",
       "fragmentSHA256": "b3d07e23c20b620e988973cbb8d4fe24a550c6bfc6feb2bd661f4f488b3c15fe",

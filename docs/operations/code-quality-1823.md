@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.236.0
+version: 1.237.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,80 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцать седьмая волна — scoped draft-owner adapter
+
+Опубликованный SHA236 — `8a88bcfff84af8766864153f15e86c17a3368522`.
+Точный GIaDtb:6587 sources,222 excluded,1823 raw,597 retained,
+1226 unresolved; Go9479/21196, missing11717. Raw SHA256:
+`23283d73fa7e9ced513a685611c6e57635a2fd5678cc41bd25cc6be57656ce5c`.
+Clone-set:
+`b413e1434acf4250c9dab613c71f7e28af7fd560cbab827898600203221af9e1`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA236 owner adapters/
+cursor15/38 и полная сборка secret-broker PASS,0 FAIL/SKIP.
+
+Все5 файлов integration/draftowner полностью прочитаны1069 строк.
+63/63 declarations описаны EN→RU: casters, validators, owner operations,
+bounded RPC error mapping, programmable client/queue и все tests.
+AST5 идентичен SHA236 без comments/token.Pos; никаких RPC statements,
+криптографии, claims, lifecycle или contract изменений.
+
+castWork/validNativeWork проверяют scoped bindings, canonical staging,
+kind/revision/claim tuple и recovery-only descriptors, но не текущее время.
+Active freshness остаётся в domain service. castDraft проверяет metadata/
+timestamp order без требования будущего expiry; sameDraft допускает
+nondecreasing version, не объявлен полным сравнением каждого поля.
+requestDescriptors проверяет каждый переданный descriptor, не назначает
+authority. castResult отдельно связывает command-final state и опубликованный
+Secret с exact scoped/version/revision metadata без plaintext.
+
+Consume связывает returned claimant с configured identity; остальные команды
+передают оригинальный work tuple, включая recovery zero tuple. Это не право
+caller назначать claimant. Fail/Recover/CompleteCleanup сверяют прежние
+response fields, terminal/actions/Completed; error stages ограничены и не
+несут raw diagnostics. rpcError — mapping failure path, не nil-success helper.
+ListRecovery сбрасывает hint при ошибке после slot acquisition, не при
+ранней отмене ожидания; cursor не хранит durable work и не завершает intent.
+
+Комментарии test fixtures явно отделяют реальные adapter/domain операции
+от fake owner persistence/encryption/authority. Fixed historical timestamps
+в workFixture не названы fresh lease. Тест Unknown/Lost ACK описан по
+фактическим negative response и retained descriptors, не обещает network proof.
+Queue tests используют synthetic state, а restart — новый adapter instance.
+
+После комментариев detector увидел ещё одно112-token overlap:
+`d27652638e6f2967dbd9e908e0331361f7a55d6ac4fb152157f6a1e69a304240`
+в owner_test.go. Проверено окно через struct tail/границы readiness,
+consume и complete mocks. Прежний AST неизменен; min-lines10/min-tokens100/
+weak/consistent параметры detector неизменны. Typed signatures/response
+fields различны; одно присваивание request и typed reply не требуют generic
+dispatcher или record helper. Добавлено только exact path/hash/count1
+решение с причиной; никаких file-level ignores. Прежние entries не менялись.
+Raw multiset +1 ровно это окно, removed0; secret-broker unresolved снова0.
+Рост raw не объявлен новым бизнесовым дублем либо извлечённым helper.
+
+Unit draftowner+controlplane:15 верхних/38 всех PASS,0 FAIL/SKIP.
+Отдельная app encrypted lifecycle/readiness composition:1 верхний/9 всех
+PASS,0 FAIL/SKIP. Флаги
+`go test -mod=readonly -count=1 -timeout 120s -json`, GOENV/GOWORK off,
+Go1.26.6, GOMAXPROCS=4. Полная сборка secret-broker
+`go build -mod=readonly ./...` PASS LOCAL.
+Выполнены malformed/scoped descriptor denial, fixed errors, no RPC после
+cancellation,2101-item draining, retained-prefix fairness, wrap/restart,
+reader cancellation, duplicate cursor и13-page cross-batch cycle cases.
+API-server/real CP и живые claims здесь не проверялись.
+
+Scope63/63, AST identity5, gofmt/diff-check, assessment и5 addressed ignores
+PASS LOCAL. Рабочий QV66Mn:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9542/21196, missing11654. Raw SHA256:
+`82604a44e5575c7bc7e3d385ec90d29e852f539bddbd9de7460c1b5f7eebf900`.
+Clone-set:
+`a7a72a74ee4c811e35edfe8fce9fa3e3f196bdb7d81af8d3d3d8679cf316f26c`.
+Aeaiux — первый scan до exact решения, не финальный assessment.
+Точный post-commit scan/unit/build публикуются в том же Draft PR.
+Общая задача не завершена:11654 declarations/1226 групп ещё остаются.
+Прежние FAIL/SKIP/NOT RUN сохранены; полный review/приёмка, live/browser/
+deploy/ИИ/STT/почта NOT RUN по решению владельца.
 
 ## Двести тридцать шестая волна — owner adapter и recovery cursor
 

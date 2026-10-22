@@ -20,6 +20,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// ownerStub embeds unused RPC methods and supplies programmable metadata/errors while recording the last
+// request; it performs no real grant validation or owner persistence.
+// ownerStub встраивает неиспользуемые RPC methods и предоставляет настраиваемые metadata/errors, записывая
+// last request; реальной grant validation и owner persistence нет.
 type ownerStub struct {
 	cp.RuntimeSecretDraftWorkServiceClient
 	work             *cp.RuntimeSecretDraftWork
@@ -33,22 +37,46 @@ type ownerStub struct {
 	action           cp.RuntimeSecretRecoveryAction
 }
 
+// CheckRuntimeSecretDraftWorkReadiness records the request and returns configured Ready/failure without
+// checking context.
+// CheckRuntimeSecretDraftWorkReadiness записывает request и возвращает настроенные Ready/failure без
+// проверки context.
 func (s *ownerStub) CheckRuntimeSecretDraftWorkReadiness(_ context.Context, r *cp.CheckRuntimeSecretDraftWorkReadinessRequest, _ ...grpc.CallOption) (*cp.CheckRuntimeSecretDraftWorkReadinessResponse, error) {
 	s.request = r
 	return &cp.CheckRuntimeSecretDraftWorkReadinessResponse{Ready: s.ready}, s.failure
 }
+
+// ConsumeRuntimeSecretDraftOperation records the grant request and returns configured work/failure without
+// consuming authority.
+// ConsumeRuntimeSecretDraftOperation записывает grant request и возвращает настроенные work/failure без
+// потребления authority.
 func (s *ownerStub) ConsumeRuntimeSecretDraftOperation(_ context.Context, r *cp.ConsumeRuntimeSecretDraftOperationRequest, _ ...grpc.CallOption) (*cp.ConsumeRuntimeSecretDraftOperationResponse, error) {
 	s.request = r
 	return &cp.ConsumeRuntimeSecretDraftOperationResponse{Work: s.work}, s.failure
 }
+
+// CompleteRuntimeSecretDraftOperation records the supplied exact descriptors and returns configured
+// draft/Secret/failure without committing a transition.
+// CompleteRuntimeSecretDraftOperation записывает supplied exact descriptors и возвращает настроенные
+// draft/Secret/failure без фиксации transition.
 func (s *ownerStub) CompleteRuntimeSecretDraftOperation(_ context.Context, r *cp.CompleteRuntimeSecretDraftOperationRequest, _ ...grpc.CallOption) (*cp.CompleteRuntimeSecretDraftOperationResponse, error) {
 	s.request = r
 	return &cp.CompleteRuntimeSecretDraftOperationResponse{Draft: s.draft, Secret: s.secret}, s.failure
 }
+
+// FailRuntimeSecretDraftOperation records the request and returns configured draft with FAILED operation
+// state, without validating the claim.
+// FailRuntimeSecretDraftOperation записывает request и возвращает настроенный draft с FAILED operation
+// state без проверки claim.
 func (s *ownerStub) FailRuntimeSecretDraftOperation(_ context.Context, r *cp.FailRuntimeSecretDraftOperationRequest, _ ...grpc.CallOption) (*cp.FailRuntimeSecretDraftOperationResponse, error) {
 	s.request = r
 	return &cp.FailRuntimeSecretDraftOperationResponse{Draft: s.draft, State: cp.RuntimeSecretOperationState_RUNTIME_SECRET_OPERATION_STATE_FAILED}, s.failure
 }
+
+// ListRuntimeSecretDraftRecoveryWork records each request and serves configured pages, repeating the last
+// when exhausted; configured errors or absent pages return no valid page.
+// ListRuntimeSecretDraftRecoveryWork записывает каждый request и выдаёт настроенные pages, повторяя
+// последнюю после исчерпания; настроенная ошибка либо отсутствие pages не дают valid page.
 func (s *ownerStub) ListRuntimeSecretDraftRecoveryWork(_ context.Context, r *cp.ListRuntimeSecretDraftRecoveryWorkRequest, _ ...grpc.CallOption) (*cp.ListRuntimeSecretDraftRecoveryWorkResponse, error) {
 	s.request = r
 	if s.failure != nil {
@@ -61,21 +89,40 @@ func (s *ownerStub) ListRuntimeSecretDraftRecoveryWork(_ context.Context, r *cp.
 	s.page++
 	return p, nil
 }
+
+// RecoverRuntimeSecretDraftMaterialization records the request and returns configured draft with FAILED
+// state and the same configured action for both effects.
+// RecoverRuntimeSecretDraftMaterialization записывает request и возвращает настроенный draft с FAILED
+// state и одним настроенным action для обоих effects.
 func (s *ownerStub) RecoverRuntimeSecretDraftMaterialization(_ context.Context, r *cp.RecoverRuntimeSecretDraftMaterializationRequest, _ ...grpc.CallOption) (*cp.RecoverRuntimeSecretDraftMaterializationResponse, error) {
 	s.request = r
 	return &cp.RecoverRuntimeSecretDraftMaterializationResponse{Draft: s.draft, OperationState: cp.RuntimeSecretOperationState_RUNTIME_SECRET_OPERATION_STATE_FAILED, EncryptedAction: s.action, MaterializationAction: s.action}, s.failure
 }
+
+// CompleteRuntimeSecretDraftCleanup records acknowledgement input and returns configured Completed/failure
+// without deleting objects.
+// CompleteRuntimeSecretDraftCleanup записывает acknowledgement input и возвращает настроенные
+// Completed/failure без удаления объектов.
 func (s *ownerStub) CompleteRuntimeSecretDraftCleanup(_ context.Context, r *cp.CompleteRuntimeSecretDraftCleanupRequest, _ ...grpc.CallOption) (*cp.CompleteRuntimeSecretDraftCleanupResponse, error) {
 	s.request = r
 	return &cp.CompleteRuntimeSecretDraftCleanupResponse{Completed: s.completed}, s.failure
 }
 
+// workFixture builds fixed historical scoped SAVE metadata and canonical staging name; timestamps are
+// structurally valid, not a promise of an active current lease.
+// workFixture создаёт fixed historical scoped SAVE metadata и canonical staging name; timestamps корректны
+// по форме, не гарантируют active current lease.
 func workFixture() *cp.RuntimeSecretDraftWork {
 	tm := time.Date(2026, 9, 5, 1, 0, 0, 0, time.UTC)
 	ref := "draft_fixture"
 	sum := sha256.Sum256([]byte(ref))
 	return &cp.RuntimeSecretDraftWork{OperationRef: "operation_fixture", Kind: cp.RuntimeSecretDraftOperationKind_RUNTIME_SECRET_DRAFT_OPERATION_KIND_SAVE, Draft: &cp.RuntimeSecretDraft{Ref: ref, Version: 1, Generation: 1, SecretVersion: 1, ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture", ProjectRef: "project_fixture", SecretRef: "sec_fixture01", Name: "SYNTHETIC_KEY", ValueType: cp.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_PREPARING, CreatedAt: timestamppb.New(tm), UpdatedAt: timestamppb.New(tm), ExpiresAt: timestamppb.New(tm.Add(time.Hour))}, ExpectedContentSha256: strings.Repeat("a", 64), Namespace: "kodex-runtime", StagedNamespace: "kodex-system", StagedSecretName: "runtime-secret-draft-" + hex.EncodeToString(sum[:16]), StagedSecretKey: "ciphertext", ClaimantId: "pod_fixture", ClaimGeneration: 3, LeaseDeadline: timestamppb.New(tm.Add(time.Minute)), ExpiresAt: timestamppb.New(tm.Add(time.Minute))}
 }
+
+// nativeFixture consumes synthetic work through the real adapter, then clears the last-request recorder
+// for assertions without connecting to a server.
+// nativeFixture потребляет synthetic work через реальный adapter и сбрасывает last-request recorder для
+// assertions без подключения к серверу.
 func nativeFixture(t *testing.T) (value.DraftWork, *ownerStub, *Owner) {
 	t.Helper()
 	stub := &ownerStub{work: workFixture(), ready: true, completed: true, action: cp.RuntimeSecretRecoveryAction_RUNTIME_SECRET_RECOVERY_ACTION_KEEP}
@@ -90,9 +137,19 @@ func nativeFixture(t *testing.T) (value.DraftWork, *ownerStub, *Owner) {
 	stub.request = nil
 	return work, stub, owner
 }
+
+// encryptedFixture returns matching staging identity/digest/key-shape pins without storing or encrypting
+// bytes.
+// encryptedFixture возвращает matching staging identity/digest/key-shape pins без сохранения и шифрования
+// байтов.
 func encryptedFixture(w value.DraftWork) value.DraftEncryptedDescriptor {
 	return value.DraftEncryptedDescriptor{Namespace: w.StagedNamespace, Name: w.StagedName, DataKey: w.StagedKey, UID: "encrypted-uid", ResourceVersion: "123", CiphertextSHA256: strings.Repeat("b", 64), EncryptionKey: value.DraftEncryptionKey{ID: strings.Repeat("c", 64), Generation: 1}}
 }
+
+// draftResult clones the fixture draft, increments its version and selects a response state without
+// mutating the source work.
+// draftResult копирует fixture draft, увеличивает version и задаёт response state без изменения source
+// work.
 func draftResult(s *ownerStub, state cp.RuntimeSecretDraftState) *cp.RuntimeSecretDraft {
 	d := proto.Clone(s.work.Draft).(*cp.RuntimeSecretDraft)
 	d.Version++
@@ -100,6 +157,11 @@ func draftResult(s *ownerStub, state cp.RuntimeSecretDraftState) *cp.RuntimeSecr
 	return d
 }
 
+// TestOwnerConsumesExactClaimAndCompletesWithoutPrivateFields checks readiness, configured claimant/grant
+// forwarding, native metadata, SAVE completion descriptors and fixed failure-code/fence forwarding.
+// TestOwnerConsumesExactClaimAndCompletesWithoutPrivateFields проверяет readiness, configured
+// claimant/grant forwarding, native metadata, SAVE completion descriptors и передачу fixed
+// failure-code/fence.
 func TestOwnerConsumesExactClaimAndCompletesWithoutPrivateFields(t *testing.T) {
 	w, s, o := nativeFixture(t)
 	if err := o.Check(context.Background()); err != nil {
@@ -132,6 +194,12 @@ func TestOwnerConsumesExactClaimAndCompletesWithoutPrivateFields(t *testing.T) {
 	}
 }
 
+// TestOwnerPublishReadbackAndFencedMaterialization validates published metadata/exact descriptors without
+// a display hint and rejects mismatched secret version or stale revision using stub replies, not storage
+// readback.
+// TestOwnerPublishReadbackAndFencedMaterialization проверяет published metadata/exact descriptors без
+// display hint и отклоняет mismatched secret version либо stale revision по stub replies, не storage
+// readback.
 func TestOwnerPublishReadbackAndFencedMaterialization(t *testing.T) {
 	w, s, o := nativeFixture(t)
 	w.Kind = value.DraftPublish
@@ -162,6 +230,10 @@ func TestOwnerPublishReadbackAndFencedMaterialization(t *testing.T) {
 	}
 }
 
+// TestOwnerRecoveryZeroTupleAndLostCleanupACK accepts prepared zero-claim recovery, rejects negative ACK,
+// preserves exact recovery descriptors and refuses a runtime effect attached to unclaimed work.
+// TestOwnerRecoveryZeroTupleAndLostCleanupACK допускает prepared zero-claim recovery, отклоняет negative
+// ACK, сохраняет exact recovery descriptors и запрещает runtime effect в unclaimed work.
 func TestOwnerRecoveryZeroTupleAndLostCleanupACK(t *testing.T) {
 	w, s, o := nativeFixture(t)
 	s.work.ClaimantId = ""
@@ -213,6 +285,10 @@ func TestOwnerRecoveryZeroTupleAndLostCleanupACK(t *testing.T) {
 	}
 }
 
+// TestOwnerRejectsMalformedOwnerResponses mutates work enums/identity/claims/metadata, invalidates
+// outgoing descriptor pins and checks foreign completion/false readiness refusal.
+// TestOwnerRejectsMalformedOwnerResponses меняет work enums/identity/claims/metadata, повреждает outgoing
+// descriptor pins и проверяет отказ foreign completion/false readiness.
 func TestOwnerRejectsMalformedOwnerResponses(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.RuntimeSecretDraftWork){"nil draft": func(w *cp.RuntimeSecretDraftWork) { w.Draft = nil }, "unknown kind": func(w *cp.RuntimeSecretDraftWork) { w.Kind = 99 }, "unknown state": func(w *cp.RuntimeSecretDraftWork) { w.Draft.State = 99 }, "unknown type": func(w *cp.RuntimeSecretDraftWork) { w.Draft.ValueType = 99 }, "wrong claimant": func(w *cp.RuntimeSecretDraftWork) { w.ClaimantId = "foreign" }, "zero claim": func(w *cp.RuntimeSecretDraftWork) { w.ClaimGeneration = 0 }, "no lease": func(w *cp.RuntimeSecretDraftWork) { w.LeaseDeadline = nil }, "digest": func(w *cp.RuntimeSecretDraftWork) { w.ExpectedContentSha256 = "private" }, "stage name": func(w *cp.RuntimeSecretDraftWork) { w.StagedSecretName = "foreign" }, "stage key": func(w *cp.RuntimeSecretDraftWork) { w.StagedSecretKey = "value" }, "stage namespace": func(w *cp.RuntimeSecretDraftWork) { w.StagedNamespace = "../foreign" }, "published mismatch": func(w *cp.RuntimeSecretDraftWork) {
 		w.Draft.State = cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_PUBLISHED
@@ -248,6 +324,10 @@ func TestOwnerRejectsMalformedOwnerResponses(t *testing.T) {
 	}
 }
 
+// TestOwnerPaginationAndErrors checks two-page traversal, repeated cursor/work refusal and fixed sentinel
+// mappings that omit arbitrary upstream error text.
+// TestOwnerPaginationAndErrors проверяет two-page traversal, отказ repeated cursor/work и fixed sentinel
+// mappings без arbitrary upstream error text.
 func TestOwnerPaginationAndErrors(t *testing.T) {
 	_, s, o := nativeFixture(t)
 	second := proto.Clone(s.work).(*cp.RuntimeSecretDraftWork)
@@ -270,6 +350,10 @@ func TestOwnerPaginationAndErrors(t *testing.T) {
 	}
 }
 
+// TestOwnerCancellationAndRecoveryBudget requires every cancelled operation to avoid RPC calls and a
+// ten-page batch to preserve its continuation hint.
+// TestOwnerCancellationAndRecoveryBudget требует отсутствия RPC calls для каждой cancelled operation и
+// сохранения continuation hint после ten-page batch.
 func TestOwnerCancellationAndRecoveryBudget(t *testing.T) {
 	w, s, o := nativeFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
