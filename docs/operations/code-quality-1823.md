@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.292.0
+version: 1.293.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто третья волна — полный комментарий restore-agent
+
+Опубликованный SHA292 — `1cedfa3e1a09ba6b74d0e533db280cc47550ffb6`.
+Точный SV5HwM:6619 sources,222 excluded,1813 raw/720 retained/
+1093 unresolved; Go12602/21259,missing8657. Raw SHA256:
+`3a4b2263bff036364ef4b79840c42e9d18f29a2b076786ae311e72451baa2eff`;
+clone-set9e614ba4… . Exact26/55 unit/full authority build, inverse AST3,
+tooling/scan PASS LOCAL,0 FAIL/SKIP; push и Draft PR PATCH/GET292 есть.
+
+Полностью прочитаны restore-agent554 lines, его135-line unit file
+и package doc. Оставшиеся43 declarations получили предметные EN→RU;
+весь package44/44,missing0. Package comment также двуязычный. Для трёх
+существующих test names с кириллицей английские предложения не повторяют
+смешанное имя, а прямо описывают проверку; русский перевод следует сразу.
+Checker не ослаблялся. AST3 без comments/positions и directives прежние.
+
+Comments различают general availability/restore fence/local quiescing,
+неоткрывающий admission startup barrier и safe working poll; delivered
+material/signature/authority, per-call connection и реальную readiness,
+signed ACK и durable receipt, exact credential/directive binding и digest
+length-only predicate. Ошибки после fencing не обещают rollback или
+автоматическое открытие. Unit fixtures прямо названы неподписанными
+in-memory ответами; fake drain и zero counters не являются реальным
+concurrency/restart/certificate/controller proof. Тела, flags и protocol
+не менялись, это не попытка незаметно усилить существующую валидацию.
+
+Отдельный статически замеченный существующий дефект, НЕ исправлен:
+Agent.verifyDirective в agent.go после x509.ParseCertificate обращается
+к certificate.PublicKey до проверки err. Некорректный DER внутри внешне
+допустимого PEM может привести к nil dereference вместо возвращаемой ошибки.
+Вторая граница:этот метод сам не проверяет certificate chain/SAN — это
+не новая regression и не утверждение, что вся цепь доверия отсутствует.
+В comments и журнале дефект не скрыт, safety PASS не заявляется.
+Негативный malformed-DER runtime case не запускался. Исправление и regression
+unit нужны отдельным явным шагом до заявления об устранении; текущий
+comments-only scope сохраняет прежнее поведение и AST.
+
+Те же выбранные26 верхних/55 всех unit и полный authority build -p=2
+PASS LOCAL,0 FAIL/SKIP. Explicit regex и env-u DSN сохраняют opt-in
+PostgreSQL concurrency component compiled NOT RUN.17 Node/Go checker
+units, AST3/directives, package docs44/44,5 ignores и diff-check PASS.
+Реальные restore/controller/certificate/TLS/Secret/Kubernetes/DB пути
+не запускались; общий baseline и приёмка NOT RUN.
+
+Рабочий dF42pu:6619 sources,222 excluded,1813 raw/720 retained/
+1093 unresolved; Go12645/21259,missing8614. Все1813 clone keys/counts
+и registry602/720 прежние; меняются source positions/clone-set, не
+алгоритм и не число устранённых повторов. Новых exclusions нет.
+Raw SHA256:
+`60af69aa9da23fb9b3cd4d0b5243497316e361b5b8244228381e57ec5f6bff12`;
+clone-set:
+`06011a2d09398151c69ad3f77bb27a441c90304bb89706934cdefa8decb30cc6`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, contracts, applied migrations и live state прежние.
+Общая задача открыта; historical FAIL и scoped NOT RUN сохраняются.
 
 ## Двести девяносто вторая волна — общий случайный UUID authority
 
