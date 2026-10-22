@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.263.0
+version: 1.264.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,45 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят четвёртая волна — access и managed configuration views
+
+Опубликованный SHA263 — `ebf94a4fa8e565e51b9049324513d3ec4ccf63f9`.
+Точный pHn5w3:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go11581/21233, missing9652. Raw SHA256:
+`e973e33e04e7f0016a7027a169443f67059011b566511a9fa682eb2b736e0f8a`.
+Clone-set:
+`0f8f3355ad011e09c95b2680d610405762da26f27418368bdcb1a17f7cb323f2`.
+Точные unit/build, push/readback и Draft PR PATCH/GET263 подтверждены.
+Исправлена привязка исторического описания authority grpc в PR: оно теперь
+прямо обозначено волной248, а не текущим SHA последующей волны комментариев.
+
+Полностью прочитаны девять файлов типов: command access, configuration
+write-back, email, workflow launch и entity access, assistant configuration
+catalogue, configuration source, configuration write-back, workflow catalogue.
+Все69 declarations описаны EN→RU. Сопоставлены service SimulateAccess,
+QueryEffectiveAccess, catalogue validation и owner source-failure handling.
+Simulation не сохраняет grants, current catalogue projection не является
+новым runtime grant; public views отделены от private gateway work envelopes.
+Source READY не обещает build/admission/promotion. Отдельно описаны proposal
+approval, branch effect, PR effect и UNKNOWN_OUTCOME без blind retry либо
+утверждения об отмене уже совершённого внешнего эффекта.
+
+AST9 без комментариев идентичен SHA263; поля, типы, tags, значения constants,
+imports и тела не менялись. Checker выбранных девяти файлов69/69. Raw groups
+с их участием отсутствуют; никакое новое retained/ignore решение не добавлено.
+В рабочем q9fWkw:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go11650/21233, missing9583. Raw SHA256:
+`3447f56c771d0326097910790ddb7a498b7268201c54b8620741548ead39d11a`.
+Clone-set и528 registry entries/631 occurrences неизменны.
+
+Выбранные unit repository/...+types/...+grpc+roleimage102 верхних/278 всех
+PASS,0 FAIL,те же3 explicit SKIP; full CP build -p=2 — PASS LOCAL.
+Docs69/69, AST9, canonical scan и5 ignore boundaries, gofmt/diff-check —
+PASS LOCAL. Tooling units и эти scoped проверки повторяются на точном
+коммите перед публикацией результатов в том же Draft PR. Общие9583 missing
+и1187 unresolved остаются работой этой цели, не готовым результатом.
+Live/component/browser/deploy/full acceptance — NOT RUN по scoped решению.
 
 ## Двести шестьдесят третья волна — закрытый словарь типизированных команд
 
