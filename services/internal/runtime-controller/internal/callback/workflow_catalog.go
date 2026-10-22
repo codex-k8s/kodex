@@ -12,12 +12,30 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// workflowCatalogDigestPattern accepts exactly sixty-four lowercase hexadecimal
+// characters for catalog commitments; matching text alone supplies no owner authority.
+// workflowCatalogDigestPattern допускает ровно шестьдесят четыре lowercase hex characters
+// catalog commitments; совпадение text само не даёт owner authority.
 var workflowCatalogDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+// workflowCatalogTool exposes the single discovery/publication/active-run tool schema
+// rather than maintaining a second independent workflow discovery contract.
+// workflowCatalogTool выдаёт единую discovery/publication/active-run tool schema
+// вместо второго независимого workflow discovery contract.
 func workflowCatalogTool() map[string]any {
 	return workflowCatalogReadTool()
 }
 
+// workflowCatalog routes read selectors to the specialized handler; otherwise it
+// checks ordinary launch eligibility and bounded discovery query/token before a
+// lease-fenced owner RPC. It validates distinct result refs, input types and readiness
+// then seals a bounded public projection. Readiness remains owner-observed/advisory;
+// the catalog neither reserves a launch nor rechecks every domain permission locally.
+// workflowCatalog направляет read selectors специализированному handler; иначе проверяет
+// ordinary launch eligibility и bounded discovery query/token до lease-fenced owner RPC.
+// После проверки refs,input types/readiness формирует bounded public projection
+// с локальным evidence. Readiness — owner observation/advisory, не резервирование
+// запуска и не повтор всех domain permissions локально.
 func (server *Server) workflowCatalog(ctx context.Context, input runtimecontract.RunnerInput, args map[string]any) (any, error) {
 	if _, ok := args["publication_read"]; ok {
 		return server.workflowCatalogRead(ctx, input, args)
@@ -80,6 +98,10 @@ func (server *Server) workflowCatalog(ctx context.Context, input runtimecontract
 	return newWorkflowCatalogResult(ctx, input, args, projection, workflowCatalogReceipt{Version: 1, Kind: workflowReceiptKind, Mode: workflowModeDiscovery, List: &workflowListReceipt{ItemsCount: len(items), HasNext: result.NextPageToken != ""}})
 }
 
+// workflowCatalogInputType accepts the six published workflow input value types;
+// it validates the type label only, not a supplied value or field options.
+// workflowCatalogInputType допускает шесть published workflow input value types,
+// проверяя лишь type label, не конкретное value и field options.
 func workflowCatalogInputType(value string) bool {
 	switch value {
 	case "TEXT", "LONG_TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT":
@@ -87,6 +109,13 @@ func workflowCatalogInputType(value string) bool {
 	}
 	return false
 }
+
+// onlyWorkflowReadiness checks closed reason/operational-state labels and context
+// digest syntax, requiring READY reason for allowed submission. UNKNOWN operational
+// state is preserved; this local shape check is not a live readiness probe.
+// onlyWorkflowReadiness проверяет closed reason/operational-state labels и context digest,
+// требуя READY reason при allowed submission. UNKNOWN operational state сохраняется;
+// local shape check не является live readiness probe.
 func onlyWorkflowReadiness(value *cp.WorkflowLaunchReadiness) bool {
 	switch value.Reason {
 	case "READY", "PERMISSION_REQUIRED", "UNPUBLISHED", "DEPENDENCY_UNAVAILABLE":

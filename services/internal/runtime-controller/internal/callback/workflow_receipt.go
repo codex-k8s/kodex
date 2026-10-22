@@ -14,15 +14,43 @@ import (
 )
 
 const (
-	workflowReceiptKind         = "workflow_catalog_page"
-	workflowModeDiscovery       = "DISCOVERY"
-	workflowModePublication     = "PUBLICATION"
-	workflowModeActiveRuns      = "ACTIVE_RUNS"
+	// workflowReceiptKind fixes the public safe metadata kind for all workflow catalog
+	// read modes, not a reusable bearer or signed owner credential.
+	// workflowReceiptKind фиксирует public safe metadata kind всех workflow catalog
+	// read modes, не reusable bearer и не signed owner credential.
+	workflowReceiptKind = "workflow_catalog_page"
+	// workflowModeDiscovery identifies list discovery receipts with cardinality and
+	// cursor presence only, excluding raw query/token or workflow names.
+	// workflowModeDiscovery обозначает list discovery receipts лишь с cardinality/cursor
+	// presence без raw query/token и workflow names.
+	workflowModeDiscovery = "DISCOVERY"
+	// workflowModePublication identifies exact published-source byte-page receipts,
+	// including digests and coordinates without the source text itself.
+	// workflowModePublication обозначает exact published-source byte-page receipts
+	// с digests/coordinates без самого source text.
+	workflowModePublication = "PUBLICATION"
+	// workflowModeActiveRuns identifies actor-visible active-root list receipts,
+	// whose duplicate check is explicitly advisory rather than a uniqueness reservation.
+	// workflowModeActiveRuns обозначает actor-visible active-root list receipts
+	// с явно advisory duplicate check, не uniqueness reservation.
+	workflowModeActiveRuns = "ACTIVE_RUNS"
+	// maximumWorkflowReceiptBytes caps serialized safe receipt metadata at two thousand
+	// bytes separately from the public wire/source page budgets.
+	// maximumWorkflowReceiptBytes ограничивает serialized safe receipt metadata двумя
+	// тысячами bytes отдельно от public wire/source page budgets.
 	maximumWorkflowReceiptBytes = 2000
 )
 
+// errWorkflowReceipt rejects missing, malformed or mismatched local evidence with
+// fixed text and no raw wire, request, input, fence or receipt content.
+// errWorkflowReceipt отвергает missing,malformed,mismatched local evidence с fixed
+// text без raw wire,request,input,fence и receipt content.
 var errWorkflowReceipt = errors.New("workflow catalog receipt invalid")
 
+// workflowPageReceipt carries source/page digests, byte interval, total size and
+// EOF for one validated publication page, never its text or resource locators.
+// workflowPageReceipt хранит source/page digests,byte interval,total size и EOF
+// одной validated publication page без text и resource locators.
 type workflowPageReceipt struct {
 	OffsetBytes         int64  `json:"offset_bytes"`
 	NextOffsetBytes     int64  `json:"next_offset_bytes"`
@@ -32,11 +60,21 @@ type workflowPageReceipt struct {
 	PageSHA256          string `json:"page_sha256"`
 	SpecDigest          string `json:"spec_digest"`
 }
+
+// workflowListReceipt carries only bounded item count, cursor presence and the
+// active-list advisory flag, not names, refs or the actual continuation token.
+// workflowListReceipt хранит лишь bounded item count,cursor presence и active-list
+// advisory flag, не names,refs и actual continuation token.
 type workflowListReceipt struct {
 	ItemsCount int  `json:"items_count"`
 	HasNext    bool `json:"has_next"`
 	Advisory   bool `json:"advisory"`
 }
+
+// workflowCatalogReceipt is the versioned closed safe activity projection with
+// exactly the mode-appropriate page or list payload, validated before persistence.
+// workflowCatalogReceipt — versioned closed safe activity projection с соответствующим
+// mode page/list payload, проверяемая перед persistence.
 type workflowCatalogReceipt struct {
 	Version     int                  `json:"version"`
 	Kind        string               `json:"kind"`
@@ -44,26 +82,52 @@ type workflowCatalogReceipt struct {
 	Publication *workflowPageReceipt `json:"publication,omitempty"`
 	List        *workflowListReceipt `json:"list,omitempty"`
 }
+
+// workflowCatalogEvidence privately binds validated result to input, exact request,
+// wire and safe-receipt hashes. This process-local provenance is not serialized,
+// signed, durable or independently sufficient to authorize an owner operation.
+// workflowCatalogEvidence privately связывает validated result с input,exact request,
+// wire и safe-receipt hashes. Эта process-local provenance не сериализуется,
+// не подписана,не durable и сама не авторизует owner operation.
 type workflowCatalogEvidence struct {
 	inputSHA256, requestSHA256, wireSHA256, receiptSHA256 string
 	receipt                                               workflowCatalogReceipt
 }
+
+// workflowCatalogToolResult pairs public MCP wire with private local evidence;
+// exporting/unmarshaling JSON cannot reconstruct that evidence. The wire map remains
+// shared, and later safe-receipt checks detect mutation rather than preventing it.
+// workflowCatalogToolResult связывает public MCP wire с private local evidence;
+// export/unmarshal JSON не восстанавливает evidence. Wire map общая, последующая
+// safe-receipt проверка обнаруживает mutation, а не предотвращает её.
 type workflowCatalogToolResult struct {
 	wire     map[string]any
 	evidence *workflowCatalogEvidence
 }
 
-// Закрытое доказательство не сериализуется; JSON-байты для агента остаются прежними.
+// MarshalJSON serializes only the original public wire map, retaining agent-visible
+// bytes while excluding private evidence; serialization errors propagate unchanged.
+// MarshalJSON сериализует лишь исходную public wire map, сохраняя agent-visible
+// bytes без private evidence; ошибки сериализации возвращаются без замены.
 func (result workflowCatalogToolResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal(result.wire)
 }
 
+// workflowReceiptDigest returns lowercase SHA-256 of exact bytes, including an empty
+// slice; it is a content commitment, not a signature or permission check.
+// workflowReceiptDigest возвращает lowercase SHA-256 exact bytes,включая пустой slice;
+// это content commitment, не signature и не permission check.
 func workflowReceiptDigest(raw []byte) string {
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }
 
-// Только execution binding, без prompt/configuration/credential values.
+// workflowReceiptInputDigest hashes exact execution identity/revision/lease binding
+// including private fence without serializing prompt/configuration/credential values.
+// The hash stays in local evidence and does not establish binding authority itself.
+// workflowReceiptInputDigest хеширует exact execution identity/revision/lease binding,
+// включая private fence, без prompt/configuration/credential values. Hash остаётся
+// local evidence и сам не устанавливает authority binding.
 func workflowReceiptInputDigest(input runtimecontract.RunnerInput) string {
 	raw, _ := json.Marshal(struct {
 		Organization, Project, Run, Node, Session, Turn, Agent, Revision, RevisionDigest, InputDigest, Lease, Fence string
@@ -73,7 +137,12 @@ func workflowReceiptInputDigest(input runtimecontract.RunnerInput) string {
 	return workflowReceiptDigest(raw)
 }
 
-// Проекция координат запроса не назначает authority. Invalid shape не выдаётся за mode.
+// workflowCatalogRequestMetadata recognizes one closed request mode and validates
+// its local pins/coordinates, returning no mode on malformed input. It neither checks
+// owner eligibility nor assigns authority; continuation requires a source digest.
+// workflowCatalogRequestMetadata распознаёт один closed request mode и проверяет
+// local pins/coordinates, не выдавая mode при ошибке. Owner eligibility/authority
+// не назначаются; continuation требует source digest.
 func workflowCatalogRequestMetadata(arguments map[string]any) (string, int64, int64, bool) {
 	_, publication := arguments["publication_read"]
 	_, active := arguments["active_runs_read"]
@@ -133,6 +202,10 @@ func workflowCatalogRequestMetadata(arguments map[string]any) (string, int64, in
 	return workflowModePublication, offset, maximum, true
 }
 
+// workflowCatalogSafeParameters emits mode and publication byte coordinates only
+// after metadata validation; invalid input yields an empty map, never query/token/refs.
+// workflowCatalogSafeParameters выдаёт лишь mode/publication byte coordinates после
+// metadata validation; invalid input даёт пустую map без query/token/refs.
 func workflowCatalogSafeParameters(arguments map[string]any) map[string]any {
 	result := map[string]any{}
 	if mode, offset, maximum, ok := workflowCatalogRequestMetadata(arguments); ok {
@@ -144,6 +217,12 @@ func workflowCatalogSafeParameters(arguments map[string]any) map[string]any {
 	return result
 }
 
+// workflowReceiptValid checks version/kind/mode, mutually exclusive page/list shape,
+// publication progress/EOF/digest bounds or list cardinality/advisory semantics.
+// It validates commitment shape and coordinates, not actual source bytes or ownership.
+// workflowReceiptValid проверяет version/kind/mode,exclusive page/list shape,publication
+// progress/EOF/digest bounds либо list cardinality/advisory semantics. Проверяются
+// commitment shape/coordinates, не actual source bytes и не владение.
 func workflowReceiptValid(receipt workflowCatalogReceipt, mode string, offset, maximum int64) bool {
 	if receipt.Version != 1 || receipt.Kind != workflowReceiptKind || receipt.Mode != mode {
 		return false
@@ -163,7 +242,14 @@ func workflowReceiptValid(receipt workflowCatalogReceipt, mode string, offset, m
 	return receipt.Publication == nil && p != nil && p.ItemsCount >= 0 && p.ItemsCount <= 10 && p.Advisory == (mode == workflowModeActiveRuns)
 }
 
-// Единственные production call sites находятся после полного owner-response validation.
+// newWorkflowCatalogResult is called after owner-response validation and binds a
+// bounded wire/receipt to the current request/input. It rejects canceled context or
+// invalid mode/eligibility/shape, retaining the original mutable wire map; it issues
+// no grants, owner decisions or persistent signature.
+// newWorkflowCatalogResult вызывается после owner-response validation и связывает
+// bounded wire/receipt с current request/input. Canceled context и invalid mode/
+// eligibility/shape отвергаются; исходная mutable wire map сохраняется. Grants,
+// owner decisions и persistent signature не выдаются.
 func newWorkflowCatalogResult(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, wire map[string]any, receipt workflowCatalogReceipt) (any, error) {
 	mode, offset, maximum, ok := workflowCatalogRequestMetadata(arguments)
 	if ctx.Err() != nil || !workflowLaunchAvailable(input) || !ok || !workflowReceiptValid(receipt, mode, offset, maximum) {
@@ -178,6 +264,14 @@ func newWorkflowCatalogResult(ctx context.Context, input runtimecontract.RunnerI
 	return workflowCatalogToolResult{wire: wire, evidence: &workflowCatalogEvidence{inputSHA256: workflowReceiptInputDigest(input), requestSHA256: workflowReceiptDigest(request), wireSHA256: workflowReceiptDigest(raw), receiptSHA256: workflowReceiptDigest(safe), receipt: receipt}}, nil
 }
 
+// safeWorkflowCatalogReceipt requires the private typed result and rechecks current
+// input/request/wire/receipt commitments and mode bounds before returning bounded
+// safe JSON. A reconstructed map or mutated result cannot reuse evidence; successful
+// local validation alone does not prove the subsequent owner audit write committed.
+// safeWorkflowCatalogReceipt требует private typed result и перепроверяет current
+// input/request/wire/receipt commitments и mode bounds до bounded safe JSON.
+// Восстановленная map или изменённый result не переиспользуют evidence; local success
+// сам не доказывает commit последующего owner audit write.
 func safeWorkflowCatalogReceipt(input runtimecontract.RunnerInput, arguments map[string]any, result any) (string, error) {
 	value, ok := result.(workflowCatalogToolResult)
 	mode, offset, maximum, valid := workflowCatalogRequestMetadata(arguments)

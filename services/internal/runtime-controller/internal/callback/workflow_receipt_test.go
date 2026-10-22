@@ -19,16 +19,30 @@ import (
 	"google.golang.org/grpc"
 )
 
+// workflowReceiptClient adds recording of local activity writes to the catalog fake,
+// allowing tests to observe attempts without claiming durable persistence.
+// workflowReceiptClient добавляет запись local activity write attempts к catalog fake
+// для проверки вызовов без утверждения durable persistence.
 type workflowReceiptClient struct {
 	*workflowCatalogClient
 	activities []*cp.RecordRunToolCallRequest
 }
 
+// RecordRunToolCall appends the original activity pointer and returns a synthetic
+// event ref; it enforces no real lease claim or transactional audit boundary.
+// RecordRunToolCall добавляет исходный activity pointer и возвращает synthetic event
+// ref, не обеспечивая реальный lease claim и transactional audit boundary.
 func (client *workflowReceiptClient) RecordRunToolCall(_ context.Context, request *cp.RecordRunToolCallRequest, _ ...grpc.CallOption) (*cp.RecordRunToolCallResponse, error) {
 	client.activities = append(client.activities, request)
 	return &cp.RecordRunToolCallResponse{Event: &cp.RunEvent{Ref: "evt_receipt001"}}, nil
 }
 
+// actualWorkflowReceipt obtains a genuine local handler-produced typed receipt
+// for one of three synthetic owner response modes, with complete execution pins and
+// a discard logger. It does not fabricate evidence by unmarshaling public JSON.
+// actualWorkflowReceipt получает настоящий local handler-produced typed receipt
+// одного из трёх synthetic owner response modes с execution pins/discard logger,
+// не создавая evidence через unmarshal public JSON.
 func actualWorkflowReceipt(t *testing.T, mode string) (*Server, runtimecontract.RunnerInput, *workflowReceiptClient, map[string]any, workflowCatalogToolResult) {
 	t.Helper()
 	server, input, owner, _, _ := publicationReadFixture(t)
@@ -57,6 +71,12 @@ func actualWorkflowReceipt(t *testing.T, mode string) (*Server, runtimecontract.
 	return server, input, client, args, value
 }
 
+// TestWorkflowCatalogReceiptPreservesWireAndClosedMetadata checks public JSON remains
+// exactly the wire map while bounded versioned safe receipts exclude refs/text/tokens,
+// preserve actual page digests and list/advisory metadata, and reject unbound fallback.
+// TestWorkflowCatalogReceiptPreservesWireAndClosedMetadata проверяет неизменный public
+// JSON wire map и bounded versioned safe receipts без refs/text/tokens,с actual page
+// digests/list/advisory metadata и отказом unbound fallback.
 func TestWorkflowCatalogReceiptPreservesWireAndClosedMetadata(t *testing.T) {
 	for _, mode := range []string{workflowModeDiscovery, workflowModePublication, workflowModeActiveRuns} {
 		t.Run(mode, func(t *testing.T) {
@@ -94,6 +114,12 @@ func TestWorkflowCatalogReceiptPreservesWireAndClosedMetadata(t *testing.T) {
 	}
 }
 
+// TestWorkflowCatalogReceiptRejectsForgedResultBeforeTerminalWrite checks nil, maps,
+// JSON reconstructions and evidence-free typed values cannot yield success history
+// or trigger a terminal owner activity write.
+// TestWorkflowCatalogReceiptRejectsForgedResultBeforeTerminalWrite проверяет запрет success
+// history/terminal owner activity write для nil,maps,JSON reconstructions
+// и typed values без evidence.
 func TestWorkflowCatalogReceiptRejectsForgedResultBeforeTerminalWrite(t *testing.T) {
 	server, input, client, args, value := actualWorkflowReceipt(t, workflowModePublication)
 	wire, _ := json.Marshal(value)
@@ -112,6 +138,12 @@ func TestWorkflowCatalogReceiptRejectsForgedResultBeforeTerminalWrite(t *testing
 	}
 }
 
+// TestWorkflowCatalogReceiptBindingAndMalformedClosedFailures mutates execution/request/
+// wire/receipt commitments and eligibility, checking every mismatch fails before
+// terminal activity. Changed discovery query and canceled reads cannot reuse evidence.
+// TestWorkflowCatalogReceiptBindingAndMalformedClosedFailures меняет execution/request/
+// wire/receipt commitments и eligibility,проверяя отказ до terminal activity.
+// Изменённый discovery query и canceled reads не переиспользуют evidence.
 func TestWorkflowCatalogReceiptBindingAndMalformedClosedFailures(t *testing.T) {
 	mutations := map[string]func(*runtimecontract.RunnerInput, map[string]any, *workflowCatalogToolResult){
 		"lease": func(i *runtimecontract.RunnerInput, _ map[string]any, _ *workflowCatalogToolResult) {
@@ -194,6 +226,12 @@ func TestWorkflowCatalogReceiptBindingAndMalformedClosedFailures(t *testing.T) {
 	}
 }
 
+// TestWorkflowCatalogReceiptNativePhasesAndUTF8EOF checks local MCP RUNNING/SUCCEEDED
+// activity revisions, lease binding and safe parameters for all modes, traversing
+// publication pages with exact page commitments through true EOF.
+// TestWorkflowCatalogReceiptNativePhasesAndUTF8EOF проверяет local MCP RUNNING/SUCCEEDED
+// activity revisions,lease binding/safe parameters всех modes и publication pages
+// с exact page commitments до истинного EOF.
 func TestWorkflowCatalogReceiptNativePhasesAndUTF8EOF(t *testing.T) {
 	for _, mode := range []string{workflowModeDiscovery, workflowModePublication, workflowModeActiveRuns} {
 		server, input, client, args, _ := actualWorkflowReceipt(t, mode)
@@ -252,6 +290,12 @@ func TestWorkflowCatalogReceiptNativePhasesAndUTF8EOF(t *testing.T) {
 	}
 }
 
+// TestWorkflowCatalogReceiptInvalidInputAndHandlerFailureRemainFailed checks local
+// input and owner-integrity failures retain RUNNING/FAILED history without success
+// metadata or reflected error details; invalid modes expose no validated parameters.
+// TestWorkflowCatalogReceiptInvalidInputAndHandlerFailureRemainFailed проверяет прежнюю
+// RUNNING/FAILED history local input/owner-integrity failures без success metadata
+// и reflected error details; invalid modes не дают validated parameters.
 func TestWorkflowCatalogReceiptInvalidInputAndHandlerFailureRemainFailed(t *testing.T) {
 	for _, invalidInput := range []bool{true, false} {
 		server, input, client, args, value := actualWorkflowReceipt(t, workflowModePublication)
@@ -275,6 +319,10 @@ func TestWorkflowCatalogReceiptInvalidInputAndHandlerFailureRemainFailed(t *test
 	}
 }
 
+// TestWorkflowCatalogReceiptEmptyExactEOF checks final offset equals source size,
+// EOF is true and the empty page digest is bound into the safe receipt.
+// TestWorkflowCatalogReceiptEmptyExactEOF проверяет final offset равный source size,
+// истинный EOF и empty page digest в safe receipt.
 func TestWorkflowCatalogReceiptEmptyExactEOF(t *testing.T) {
 	server, input, _, args, initial := actualWorkflowReceipt(t, workflowModePublication)
 	page := initial.wire["configuration_page"].(map[string]any)
@@ -294,6 +342,12 @@ func TestWorkflowCatalogReceiptEmptyExactEOF(t *testing.T) {
 	}
 }
 
+// TestWorkflowCatalogRequestParametersRejectUnvalidatedModes checks malformed mode/
+// page/pin selectors produce empty safe parameters, while valid publication input
+// exposes only normalized mode/offset/maximum, not private query/token/refs.
+// TestWorkflowCatalogRequestParametersRejectUnvalidatedModes проверяет пустые safe
+// parameters malformed mode/page/pin selectors и выдачу лишь normalized mode/offset/
+// maximum valid publication input без private query/token/refs.
 func TestWorkflowCatalogRequestParametersRejectUnvalidatedModes(t *testing.T) {
 	invalid := []map[string]any{
 		{"publication_read": nil},

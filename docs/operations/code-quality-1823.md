@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.198.0
+version: 1.199.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,46 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто девятая волна — delegation и все workflow callback helpers
+
+Точный опубликованный SHA198 — `36f9143f834702b0502a17e5fe9540d208ba7829`.
+Callback253 верхних/1361 всех PASS,0 FAIL,2 прежних SKIP; полный RC build PASS.
+Exact Wp5CI6:6578 sources,222 excluded,1837 raw,586 retained,1251 unresolved;
+Go7342/21148,missing13806; raw SHA256
+`c80c59ca412692ab9b0956633752a3bcb4d81c33d5b24388b24f33133c9c7b2f`,
+clone-set `3180c549f6bcf70f2ab8fe0645d968aa2896107f2f263c8372778c0ebd02c06d`.
+
+Все88 declarations двенадцати полностью прочитанных файлов delegation_input,
+workflow_catalog,catalog_input,catalog_read,launch,receipt и их tests — EN→RU,
+scoped88/88. Описаны snapshot target/step pairs,pre-owner local validation
+отдельно от owner refusal/audit failure и правила однократной корректировки,
+которые не разрешают replay принятого delegation или uncertain outcome.
+Сохранено отличие absent structured input от explicit null и byte task limit.
+
+Workflow discovery/publication/active roots описаны как разные closed modes;
+lease-fenced owner query,exact published pins,Unicode pages/continuation digest,
+historical actual run publication и advisory duplicate check не смешаны.
+Launch helper передаёт stable lease/call idempotency key и exact OCC pins,
+но child creation/durable dedup/current authority/callback lifecycle принадлежат CP.
+Local evidence отдельно связывает input/request/wire/safe receipt hashes;
+это не signed credential,не durable owner grant и не доказательство audit commit.
+JSON serialization выдаёт лишь public wire; mutable map сохраняется,mutation
+обнаруживается повторной receipt проверкой. Unknown owner operational state
+не назван live readiness успехом. Test fixtures не выданы за реальные запуски.
+
+Полная non-comment/gofmt сверка всех12 файлов с SHA198 — PASS: только комментарии,
+ни одна executable branch,condition,assertion,import или dependency не менялась.
+Рабочий2E3Sna:6578 sources,222 excluded,1837 raw,586 retained,1251 unresolved;
+Go7430/21148,missing13718; raw SHA256
+`87376731ad646af8c61cac7a853faf51b4015ca88c460741c967556133195f87`,
+clone-set неизменен. Новых/исчезнувших detector groups и exceptions нет.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly,17 Node units,Go-checker unit,scoped88/88,
+5 ignore-boundaries,gofmt и diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+Полный repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+точный post-commit результат публикуется в едином Draft PR,цель не завершена.
 
 ## Сто девяносто восьмая волна — полные configuration reads и общий decode
 
