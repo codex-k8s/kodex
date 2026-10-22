@@ -6,7 +6,12 @@ import (
 	"time"
 )
 
-// DeliveryTarget задаёт один зарегистрированный workload и его пути доставки.
+// DeliveryTarget declares one registry-owned workload/role generation and exact secret, mount, TLS,
+// network-policy and readback/restore routes. These are permitted delivery locators and pins, not
+// private credential values or caller-chosen destinations.
+// DeliveryTarget объявляет один registry-owned workload/role generation и exact secret, mount, TLS,
+// network-policy и readback/restore маршруты. Это разрешённые delivery locators и привязки, не private
+// credential значения и не выбранные caller destinations.
 type DeliveryTarget struct {
 	TargetID                   string
 	WorkloadID                 string
@@ -63,7 +68,10 @@ type DeliveryTarget struct {
 	ReadbackNetworkPolicy      string
 }
 
-// DeliveryTargetRegistry содержит versioned закрытый набор целей доставки.
+// DeliveryTargetRegistry binds a closed target map to one reviewed version and source revision/digest;
+// map entries must be validated before publication or readback uses their locations.
+// DeliveryTargetRegistry связывает закрытую target map с проверенными version и source revision/digest;
+// entries проверяются до использования их locators публикацией и readback.
 type DeliveryTargetRegistry struct {
 	Version        int
 	SourceRevision uint64
@@ -71,14 +79,22 @@ type DeliveryTargetRegistry struct {
 	Targets        map[string]DeliveryTarget
 }
 
-// SnapshotReadbackTarget задаёт точную обязательную цель startup readback.
+// SnapshotReadbackTarget identifies one mandatory workload/role/generation tuple for startup admission,
+// without secret paths or mutable latest-version aliases.
+// SnapshotReadbackTarget обозначает один обязательный workload/role/generation tuple для startup
+// admission без secret путей и изменяемых latest-version aliases.
 type SnapshotReadbackTarget struct {
 	WorkloadID         string
 	Role               string
 	WorkloadGeneration uint64
 }
 
-// StartupReadbackTargets возвращает детерминированный обязательный набор.
+// StartupReadbackTargets selects entries with StartupReadbackRequired and returns fresh metadata sorted
+// by workload, role and generation. It neither validates nor deduplicates registry entries and does not
+// mutate the source map.
+// StartupReadbackTargets выбирает entries с StartupReadbackRequired и возвращает новые metadata,
+// отсортированные по workload, role и generation. Entries не проверяются и не дедуплицируются, source
+// map не меняется.
 func (registry DeliveryTargetRegistry) StartupReadbackTargets() []SnapshotReadbackTarget {
 	targets := make([]SnapshotReadbackTarget, 0, len(registry.Targets))
 	for _, target := range registry.Targets {
@@ -103,13 +119,20 @@ func (registry DeliveryTargetRegistry) StartupReadbackTargets() []SnapshotReadba
 	return targets
 }
 
-// StartupReadbackTargetCount возвращает число долгоживущих workload,
-// подтверждение которых обязательно до первой активации authority snapshot.
+// StartupReadbackTargetCount returns the length of the sorted required-target projection, counting
+// role/generation entries rather than distinct workload IDs or successful receipts.
+// StartupReadbackTargetCount возвращает длину sorted required-target проекции, считая role/generation
+// entries, а не уникальные workload ID и успешные receipts.
 func (registry DeliveryTargetRegistry) StartupReadbackTargetCount() int {
 	return len(registry.StartupReadbackTargets())
 }
 
-// CredentialIssuanceDirective связывает выпуск с restore coordination.
+// CredentialIssuanceDirective binds a signed issuance request to exact restore epoch,
+// coordination/registry pins, delivery target and workload/credential/ACK generations with one-time
+// identity and expiry.
+// CredentialIssuanceDirective связывает signed issuance запрос с exact restore epoch,
+// coordination/registry привязками, delivery target и workload/credential/ACK поколениями с одноразовой
+// identity и expiry.
 type CredentialIssuanceDirective struct {
 	Version                int    `json:"v"`
 	Issuer                 string `json:"iss"`
@@ -133,7 +156,12 @@ type CredentialIssuanceDirective struct {
 	ExpiresAt              int64  `json:"exp"`
 }
 
-// RestoreRoleCredentialClaims задаёт role-bound credential восстановления.
+// RestoreRoleCredentialClaims carries role-bound restore authorization, signer provenance and the public
+// ACK key/thumbprint binding; signature and exact workload/restore eligibility are verified separately,
+// and no ACK private key belongs here.
+// RestoreRoleCredentialClaims несёт role-bound restore авторизацию, signer происхождение и привязку
+// public ACK key/thumbprint; подпись и exact workload/restore допустимость проверяются отдельно, private
+// ACK key сюда не входит.
 type RestoreRoleCredentialClaims struct {
 	Version                  int             `json:"v"`
 	Issuer                   string          `json:"iss"`
@@ -162,7 +190,12 @@ type RestoreRoleCredentialClaims struct {
 	ExpiresAt                int64           `json:"exp"`
 }
 
-// CredentialDeliveryReceiptClaims подтверждает точную доставку credential.
+// CredentialDeliveryReceiptClaims signs the exact issuance/restore/target/generation and readback-digest
+// relationship so delivery can be verified independently of a publisher's success flag; the claims alone
+// are not verified evidence.
+// CredentialDeliveryReceiptClaims подписывает точную связь issuance/restore/target/generation и readback
+// digest для проверки доставки независимо от publisher success flag; сами claims не являются уже
+// проверенным evidence.
 type CredentialDeliveryReceiptClaims struct {
 	Version                    int    `json:"v"`
 	Issuer                     string `json:"iss"`
@@ -189,7 +222,10 @@ type CredentialDeliveryReceiptClaims struct {
 	ExpiresAt                  int64  `json:"exp"`
 }
 
-// PublishedCredential хранит устойчивый результат идемпотентного выпуска.
+// PublishedCredential records the durable idempotent issuance result, accepted directive identity,
+// receipt and generations without retaining raw role private-key material.
+// PublishedCredential фиксирует durable idempotent issuance результат, принятую directive identity,
+// receipt и поколения без сырых role private-key данных.
 type PublishedCredential struct {
 	IdempotencyKey       string
 	DirectiveJTI         string
@@ -201,7 +237,12 @@ type PublishedCredential struct {
 	AcceptedAt           time.Time
 }
 
-// PublishedReadbackMaterial содержит credential и possession key проверки.
+// PublishedReadbackMaterial carries both the signed readback credential and private possession JWK with
+// exact intent/secret generations for trusted delivery; unlike safe metadata projections it must never
+// be logged or exposed as an ordinary API reply.
+// PublishedReadbackMaterial несёт signed readback credential и private possession JWK с exact
+// intent/secret поколениями для доверенной доставки; в отличие от safe metadata проекций его нельзя
+// логировать и выдавать обычным API ответом.
 type PublishedReadbackMaterial struct {
 	Intent                     ReadbackIntent
 	ReadbackCredentialJWS      string
@@ -210,7 +251,12 @@ type PublishedReadbackMaterial struct {
 	PossessionSecretGeneration uint64
 }
 
-// AuthoritySnapshotPublication описывает атомарно опубликованный полный граф.
+// AuthoritySnapshotPublication records one publication intent/input digest, complete
+// source/predecessor/key/policy pins, signed snapshot bytes and exact resourceVersion readback;
+// consumers must still establish publication/readiness, not infer it from a filled structure.
+// AuthoritySnapshotPublication фиксирует publication intent/input digest, полные
+// source/predecessor/key/policy привязки, signed snapshot байты и exact resourceVersion readback;
+// consumer подтверждает publication/readiness, не выводя их из заполненной структуры.
 type AuthoritySnapshotPublication struct {
 	IntentID                string
 	InputDigestSHA256       string
@@ -226,16 +272,21 @@ type AuthoritySnapshotPublication struct {
 	PublishedAt             time.Time
 }
 
-// AuthoritySnapshotPredecessor связывает immutable snapshot с фактическим
-// registry digest и сохранённой фазой публикации.
+// AuthoritySnapshotPredecessor links a stored predecessor publication to the actual registry digest and
+// recorded rotation phase so retries do not reconstruct history from a mutable current snapshot.
+// AuthoritySnapshotPredecessor связывает сохранённую predecessor публикацию с фактическим registry
+// digest и записанной rotation phase, исключая восстановление истории повтором из изменяемого current
+// snapshot.
 type AuthoritySnapshotPredecessor struct {
 	Publication          AuthoritySnapshotPublication
 	RegistryDigestSHA256 string
 	RotationPhase        string
 }
 
-// AuthorityRotationIntent закрепляет один forward-only переход key set до
-// первой внешней CAS-доставки. Private key material в намерение не входит.
+// AuthorityRotationIntent pins one forward-only transition and its expected readback cardinality before
+// external delivery, including a publication-input digest but no private key bytes.
+// AuthorityRotationIntent закрепляет один forward-only переход и ожидаемую readback cardinality до
+// внешней доставки, включая publication-input digest без private key байтов.
 type AuthorityRotationIntent struct {
 	IntentID                     string
 	SourceRevision               uint64
@@ -246,9 +297,11 @@ type AuthorityRotationIntent struct {
 	PublicationInputDigestSHA256 string
 }
 
-// AuthorityRotationOperation связывает три неизменяемые публикации одной
-// нормальной ротации. Дедлайны назначает PostgreSQL и повторный запуск их не
-// продлевает.
+// AuthorityRotationOperation coordinates one registry/base-pinned multi-phase rotation with
+// PostgreSQL-assigned switch/expiry/completion times; retry must not invent a new base or extend those
+// deadlines.
+// AuthorityRotationOperation координирует одну registry/base-pinned многофазную ротацию с назначенными
+// PostgreSQL switch/expiry/completion сроками; retry не выдумывает новый base и не продлевает дедлайны.
 type AuthorityRotationOperation struct {
 	OperationID           string
 	RegistryRevision      uint64
@@ -262,7 +315,10 @@ type AuthorityRotationOperation struct {
 	CompletedAt           *time.Time
 }
 
-// AuthoritySnapshotHistory содержит ограниченную forward-only цепочку.
+// AuthoritySnapshotHistory holds the current forward-only revision/digest chain used to check
+// predecessor continuity; the slice itself does not validate monotonicity or signatures.
+// AuthoritySnapshotHistory хранит текущую forward-only revision/digest цепочку для проверки predecessor
+// непрерывности; сам slice не проверяет монотонность и подписи.
 type AuthoritySnapshotHistory struct {
 	Current []RevisionDigest
 }

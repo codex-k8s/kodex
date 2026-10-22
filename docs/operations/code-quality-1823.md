@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.248.0
+version: 1.249.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок девятая волна — типы и порты authority
+
+Опубликованный SHA248 — `945a047ad9b4dba39ade20af5d8652ab6a4f7795`.
+Точный RBNVtb:6588 sources,222 excluded,1824 raw/604 retained/
+1220 unresolved; Go10390/21216, missing10826. Raw SHA256:
+`a6cf18aacdf27d52bb3fbea6fae8ce3f9de2c3b4322e5ade964a5008590a9304`.
+Clone-set:
+`7fca2ec03d0a764724b1887733907b845d0d60fe9f37a4b1f6e572d3c8a40715`.
+Точный unit/build, push/readback и Draft PR PATCH/GET248 подтверждены.
+
+Прочитаны1236 строк всех10 файлов domain/types и domain/repository authority,
+а также уточняющие реализации publisher/restore/Secret delivery. Предметные
+EN→RU комментарии покрывают147/147 declarations, включая85 declarations
+портов и62 declarations типов; package docs также двуязычные. Сигнатуры,
+структуры, JSON/YAML tags, literals и исполняемые тела не менялись.
+AST10 идентичен SHA248. Новых helpers, API, транзакций, событий или переходов нет.
+
+Описаны отдельные границы proof/context replay, accepted-parent continuation,
+issued context и persistent snapshot high-watermark; receipt/freshness имеют
+время владельца, а не caller TTL. Delivery, role ACK и promotion не названы
+одним эффектом. SecretMaterial.Data и possession private JWK явно не являются
+безопасными данными для логов. Одноимённые SnapshotState/RevisionDigest
+в model и repository оставлены разными типами, storage receipt не приписан
+доменной форме. Startup target projection фильтрует и сортирует, но не
+валидирует и не удаляет повторы; count не назван числом уникальных workloads.
+
+Исправлены неточные прежние пояснения без изменения поведения: time.Unix
+не делает явный UTC location conversion; JSONDocument = json.RawMessage
+сам по себе не проверяет JSON; Authority содержит actor/tenant/project,
+а permission находится во внешнем контексте и policy binding. Context7
+/golang/go подтверждает RawMessage copy/unmarshal path, pinned go doc
+time.Unix — local Time; проверка JSON относится к вызывающему decoder.
+GO-DOC-001/003/006, GUIDE-DOC-003/006 и AGENTS не изменились с прежних волн;
+GOV-DOC-003 перечитан перед фиксацией результатов.
+
+`go test -mod=readonly -count=1 -timeout 120s -json ./internal/domain/...
+./internal/application ./internal/publisher ./internal/snapshot
+./internal/transport/grpc`:47 верхних/84 всех PASS,0 FAIL/SKIP.
+Полный authority `go build -mod=readonly ./...` PASS LOCAL.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4.17 Node units и Go checker units,
+scope147/147, AST10, gofmt/diff-check и5 addressed ignores PASS LOCAL.
+Отдельных тестов непосредственно types/port declarations нет; перечисленные
+юниты проверяют их существующих потребителей с локальными fixtures. Это не
+доказательство live TokenReview, PostgreSQL/Secret CAS или restore completion.
+Component, browser, deploy, реальные ИИ/почта/STT NOT RUN по границам задачи.
+
+Рабочий L2l6k1:6588 sources,222 excluded,1824 raw/604 retained/
+1220 unresolved; Go10537/21216, missing10679. Raw SHA256:
+`f00d964077585d2652c48dec6b76c8ebf627a2e4f60d2740b7dcf8eda402f0bf`.
+Clone-set:
+`1ebcf8101887964a309decd4b0f3464043230f15e3f3afc622677726baa81555`.
+Прежние503 registry entries/604 occurrences прошли без новых исключений;
+изменения комментариев и координат не объявлены устранением дубликатов.
+Точный post-commit run публикуется в том же Draft PR. Прежние FAIL/SKIP/
+NOT RUN сохранены; вся задача ещё не завершена.
 
 ## Двести сорок восьмая волна — authority gRPC и общий restore admission
 

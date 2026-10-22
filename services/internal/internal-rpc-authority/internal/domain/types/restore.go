@@ -5,7 +5,12 @@ import (
 	"time"
 )
 
-// RestoreState содержит каноническое устойчивое состояние восстановления.
+// RestoreState is the canonical durable restore aggregate: pinned backup/time/epoch/coordination and
+// evidence anchors plus exact expected targets, issuance/delivery/directive/ACK maps and consumed
+// operator authorizations. Mutation and phase eligibility belong to the coordination owner.
+// RestoreState задаёт canonical durable restore агрегат: закреплённые backup/time/epoch/coordination и
+// evidence anchors с exact expected targets, issuance/delivery/directive/ACK maps и потреблёнными
+// operator authorizations. Изменения и phase eligibility принадлежат coordination владельцу.
 type RestoreState struct {
 	Version                int                                           `json:"v"`
 	RestoreID              string                                        `json:"restore_id"`
@@ -36,8 +41,12 @@ type RestoreState struct {
 	UpdatedAt              int64                                         `json:"updated_at"`
 }
 
-// RestoreOperatorCredential — результат server-side TokenReview projected
-// ServiceAccount token; само значение bearer token в модель не попадает.
+// RestoreOperatorCredential represents the server-reviewed projected ServiceAccount subject, namespace,
+// account, audience and token digest; the bearer bytes are intentionally absent and a request cannot
+// self-assert a valid review.
+// RestoreOperatorCredential представляет проверенные сервером projected ServiceAccount subject,
+// namespace, account, audience и token digest; bearer байты намеренно отсутствуют, request не может сам
+// заявить корректный review.
 type RestoreOperatorCredential struct {
 	Subject           string
 	Namespace         string
@@ -46,8 +55,12 @@ type RestoreOperatorCredential struct {
 	TokenDigestSHA256 string
 }
 
-// RestoreOperatorAuthorizationRecord связывает одноразовый application
-// credential с exact RPC, idempotency и canonical semantic digest.
+// RestoreOperatorAuthorizationRecord binds one reviewed application-token digest to exact RPC,
+// idempotency key and canonical semantic digest at an assigned authorization time for durable replay
+// control.
+// RestoreOperatorAuthorizationRecord связывает один reviewed application-token digest с exact RPC,
+// idempotency key и canonical semantic digest в назначенное authorization время для durable replay
+// контроля.
 type RestoreOperatorAuthorizationRecord struct {
 	TokenDigestSHA256    string `json:"token_digest_sha256"`
 	Subject              string `json:"subject"`
@@ -57,7 +70,11 @@ type RestoreOperatorAuthorizationRecord struct {
 	AuthorizedAt         int64  `json:"authorized_at"`
 }
 
-// RestoreExpectedTarget задаёт точную ожидаемую роль восстановления.
+// RestoreExpectedTarget freezes one target's workload/SPIFFE/role and workload/credential/ACK
+// generations for the restore aggregate rather than looking up mutable latest delivery settings during
+// ACK acceptance.
+// RestoreExpectedTarget закрепляет workload/SPIFFE/role и workload/credential/ACK поколения одной цели
+// restore агрегата вместо поиска изменяемых latest delivery настроек при ACK принятии.
 type RestoreExpectedTarget struct {
 	TargetID             string `json:"target_id"`
 	WorkloadID           string `json:"workload_id"`
@@ -68,7 +85,10 @@ type RestoreExpectedTarget struct {
 	ACKKeyGeneration     uint64 `json:"ack_key_generation"`
 }
 
-// RestoreIssuanceRecord фиксирует идемпотентный выпуск для одной цели.
+// RestoreIssuanceRecord stores the server-issued directive JTI and idempotency for one exact target with
+// issuance time, allowing retries to reuse the same issuance identity.
+// RestoreIssuanceRecord хранит server-issued directive JTI и idempotency одной exact цели со временем
+// выпуска, позволяя повтору использовать ту же issuance identity.
 type RestoreIssuanceRecord struct {
 	TargetID       string `json:"target_id"`
 	JTI            string `json:"jti"`
@@ -76,7 +96,11 @@ type RestoreIssuanceRecord struct {
 	IssuedAt       int64  `json:"issued_at"`
 }
 
-// RestoreDeliveryRecord фиксирует криптографический readback доставки.
+// RestoreDeliveryRecord links a signed delivery receipt and role-credential digest to exact
+// credential/ACK generations for one target; acceptance requires independent receipt/readback
+// verification.
+// RestoreDeliveryRecord связывает signed delivery receipt и role-credential digest с exact
+// credential/ACK поколениями одной цели; принятие требует независимой receipt/readback проверки.
 type RestoreDeliveryRecord struct {
 	TargetID                   string `json:"target_id"`
 	DeliveryReceiptCompactJWS  string `json:"delivery_receipt_compact_jws"`
@@ -85,7 +109,10 @@ type RestoreDeliveryRecord struct {
 	ACKKeyGeneration           uint64 `json:"ack_key_generation"`
 }
 
-// RestoreDirectiveRecord фиксирует точную директиву остановки и drain.
+// RestoreDirectiveRecord persists one exact stop/drain directive's JTI, compact bytes, digest and expiry
+// for a target so later ACKs cannot be rebound to a different directive.
+// RestoreDirectiveRecord сохраняет JTI, compact байты, digest и expiry одной exact stop/drain directive
+// для цели, исключая перепривязку последующих ACK к другой directive.
 type RestoreDirectiveRecord struct {
 	TargetID     string `json:"target_id"`
 	JTI          string `json:"jti"`
@@ -94,7 +121,11 @@ type RestoreDirectiveRecord struct {
 	ExpiresAt    int64  `json:"expires_at"`
 }
 
-// RestoreACKRecord фиксирует одноразовый подтверждённый ACK.
+// RestoreACKRecord stores one accepted ACK's target, receipt/JTI, idempotency and semantic/evidence
+// digests with acceptance time and resulting phase; it is the durable result, not raw unverified ACK
+// input.
+// RestoreACKRecord хранит target, receipt/JTI, idempotency и semantic/evidence digests одного принятого
+// ACK со временем и resulting phase; это durable результат, не сырой непроверенный ACK вход.
 type RestoreACKRecord struct {
 	TargetID              string `json:"target_id"`
 	ReceiptID             string `json:"receipt_id"`
@@ -106,7 +137,12 @@ type RestoreACKRecord struct {
 	ResultingPhase        string `json:"resulting_phase"`
 }
 
-// PrepareRestoreCommand задаёт pinned intent подготовки восстановления.
+// PrepareRestoreCommand combines caller intent with owner-derived expected targets, controller/workload
+// revisions and current time for one idempotent prepare transition; fields are not standalone proof of
+// operator authority.
+// PrepareRestoreCommand объединяет caller intent с owner-derived expected targets, controller/workload
+// ревизиями и текущим временем для одного idempotent prepare перехода; поля не являются самостоятельным
+// proof operator полномочий.
 type PrepareRestoreCommand struct {
 	RestoreID            string
 	DatabaseClusterID    string
@@ -120,7 +156,12 @@ type PrepareRestoreCommand struct {
 	Now                  time.Time
 }
 
-// CompleteRestoreCommand задаёт завершение и открытие безопасного окна.
+// CompleteRestoreCommand binds exact original intent and idempotency to independently verified
+// evidence/epoch/cluster/timeline/completion time before the owner can finish restore and open its safe
+// window.
+// CompleteRestoreCommand связывает exact исходный intent и idempotency с независимо проверенными
+// evidence/epoch/cluster/timeline/completion time до завершения restore владельцем и открытия safe
+// window.
 type CompleteRestoreCommand struct {
 	RestoreID            string
 	DatabaseClusterID    string
@@ -137,8 +178,12 @@ type CompleteRestoreCommand struct {
 	Now                  time.Time
 }
 
-// RestoreCompletionEvidence — проверенное независимое доказательство
-// фактического PITR, сформированное отдельным executor workload.
+// RestoreCompletionEvidence is the verifier's compact metadata result for independently signed physical
+// recovery evidence, including anchor/epoch and actual restored cluster/timeline/time; it carries no raw
+// executor credentials.
+// RestoreCompletionEvidence задаёт compact metadata результат verifier для independently signed physical
+// recovery evidence с anchor/epoch и фактическими restored cluster/timeline/time без сырых executor
+// credentials.
 type RestoreCompletionEvidence struct {
 	CompactJWSDigestSHA256 string
 	AnchorRevision         uint64
@@ -148,7 +193,12 @@ type RestoreCompletionEvidence struct {
 	RestoreCompletedAt     time.Time
 }
 
-// RestoreFenceEvidenceClaims — канонический payload внешнего evidence.
+// RestoreFenceEvidenceClaims carries the canonical signed external restore/fence evidence, tying
+// backup/provider/source-cluster pins, expected/accepted ACK sets, semantic predecessor and physical
+// recovery observations to one epoch/anchor. Filling this payload is not proof that PITR occurred.
+// RestoreFenceEvidenceClaims несёт canonical signed external restore/fence evidence, связывая
+// backup/provider/source-cluster привязки, expected/accepted ACK sets, semantic predecessor и physical
+// recovery наблюдения с одним epoch/anchor. Заполнение payload не доказывает PITR.
 type RestoreFenceEvidenceClaims struct {
 	Version                               int                    `json:"v"`
 	Issuer                                string                 `json:"iss"`
@@ -190,13 +240,21 @@ type RestoreFenceEvidenceClaims struct {
 	ProviderObservedGeneration            uint64                 `json:"provider_observed_generation"`
 }
 
-// RestoreEvidencePointer связывает evidence с точным predecessor.
+// RestoreEvidencePointer pins a predecessor evidence revision and digest so recovery history cannot be
+// redirected by an unversioned current-state reference.
+// RestoreEvidencePointer закрепляет predecessor evidence revision и digest, исключая перенаправление
+// recovery истории неверсионированной current-state ссылкой.
 type RestoreEvidencePointer struct {
 	Revision     uint64 `json:"revision"`
 	DigestSHA256 string `json:"digest_sha256"`
 }
 
-// RoleBoundRestoreDirectiveClaims связывает directive с ролью и поколением.
+// RoleBoundRestoreDirectiveClaims signs one restore phase/epoch/coordination and exact
+// workload/credential binding with explicit stop-accepting/drain requirements and expiry; interpretation
+// remains role-specific.
+// RoleBoundRestoreDirectiveClaims подписывает restore phase/epoch/coordination и exact
+// workload/credential привязку с явными stop-accepting/drain требованиями и expiry; интерпретация
+// остаётся role-specific.
 type RoleBoundRestoreDirectiveClaims struct {
 	Version                    int    `json:"v"`
 	Issuer                     string `json:"iss"`
@@ -220,7 +278,12 @@ type RoleBoundRestoreDirectiveClaims struct {
 	ExpiresAt                  int64  `json:"exp"`
 }
 
-// QuiescenceACKClaims доказывает остановку и дренирование workload.
+// QuiescenceACKClaims binds a signed drain acknowledgement to its directive, restore epoch, exact
+// role/credential/ACK key, served snapshot and observed inflight state with one-time identity/lifetime;
+// boolean flags alone do not establish quiescence.
+// QuiescenceACKClaims связывает signed drain подтверждение с directive, restore epoch, exact
+// role/credential/ACK key, served snapshot и наблюдённым inflight состоянием с одноразовыми
+// identity/сроком; одних boolean признаков недостаточно для quiescence.
 type QuiescenceACKClaims struct {
 	Version                    int    `json:"v"`
 	Issuer                     string `json:"iss"`
@@ -249,7 +312,10 @@ type QuiescenceACKClaims struct {
 	ExpiresAt                  int64  `json:"exp"`
 }
 
-// RestoreRoleTrustMetadata закрепляет доверие к ключу роли восстановления.
+// RestoreRoleTrustMetadata summarizes the actually served role-verification source, key-set and signer
+// generations for readiness/readback without exposing key material.
+// RestoreRoleTrustMetadata описывает фактически served role-verification source, key-set и signer
+// поколения для readiness/readback без key material.
 type RestoreRoleTrustMetadata struct {
 	SourceRevision   uint64
 	SourceDigest     string
@@ -257,5 +323,8 @@ type RestoreRoleTrustMetadata struct {
 	SignerGeneration uint64
 }
 
-// JSONDocument хранит строго проверенный исходный документ JSON.
+// JSONDocument aliases json.RawMessage to retain exact JSON bytes for domain consumers; the alias
+// performs no parsing, normalization or validation by itself.
+// JSONDocument задаёт alias json.RawMessage для сохранения exact JSON байтов domain consumer; сам alias
+// не выполняет разбор, нормализацию и проверку.
 type JSONDocument = json.RawMessage
