@@ -9,6 +9,10 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 )
 
+// TestMetricsSubsystemProducesValidPrometheusNames scrapes an in-memory HTTP recorder and checks
+// build/readiness names use the intended subsystem without starting a listener.
+// TestMetricsSubsystemProducesValidPrometheusNames получает metrics через in-memory HTTP recorder и
+// проверяет build/readiness names нужного subsystem без запуска listener.
 func TestMetricsSubsystemProducesValidPrometheusNames(t *testing.T) {
 	t.Parallel()
 
@@ -29,6 +33,10 @@ func TestMetricsSubsystemProducesValidPrometheusNames(t *testing.T) {
 	}
 }
 
+// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery checks the closed 20-entry owner registry and
+// exact renewal/secret/projection/draft RPC mappings, not live authorization effectiveness.
+// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery проверяет закрытый 20-entry owner registry и
+// exact renewal/secret/projection/draft RPC mappings, не live authorization effectiveness.
 func TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery(t *testing.T) {
 	t.Parallel()
 	operations := secretBrokerOperations()

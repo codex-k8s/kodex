@@ -11,6 +11,12 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// TestTrustedBrokerExactCallerMethods checks exact synthetic trusted-profile caller/method allow/deny
+// cases and server admission context, rejecting an implicit profile; it does not prove deployment
+// isolation or end-user grants.
+// TestTrustedBrokerExactCallerMethods проверяет exact synthetic trusted-profile caller/method allow/deny и
+// server admission context, отклоняя implicit profile; deployment isolation и end-user grants не
+// доказывает.
 func TestTrustedBrokerExactCallerMethods(t *testing.T) {
 	interceptor, err := trustedClusterAdmission("trusted-cluster")
 	if err != nil {

@@ -12,15 +12,47 @@ import (
 )
 
 const (
-	defaultControlPlaneTarget         = "dns:///control-plane.kodex-system.svc:8443"
-	defaultControlPlaneTLSServerName  = "control-plane.kodex-system.svc.cluster.local"
-	defaultControlAPIClientSPIFFEID   = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+	// defaultControlPlaneTarget fixes the owner service DNS resolver target accepted by configuration
+	// validation, not an arbitrary caller-selected endpoint.
+	// defaultControlPlaneTarget фиксирует DNS resolver target owner service, принимаемый configuration
+	// validation, не произвольный endpoint по выбору caller.
+	defaultControlPlaneTarget = "dns:///control-plane.kodex-system.svc:8443"
+	// defaultControlPlaneTLSServerName pins the expected owner TLS server name independently of its resolver
+	// target.
+	// defaultControlPlaneTLSServerName закрепляет ожидаемый owner TLS server name независимо от resolver
+	// target.
+	defaultControlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
+	// defaultControlAPIClientSPIFFEID identifies the gateway certificate URI in the fixed client-identity set;
+	// membership alone does not grant every RPC.
+	// defaultControlAPIClientSPIFFEID обозначает certificate URI шлюза в фиксированном client-identity set;
+	// наличие в нём не разрешает каждый RPC.
+	defaultControlAPIClientSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+	// defaultControlPlaneClientSPIFFEID identifies the control-plane client workload for the broker's exact
+	// TLS identity allowlist.
+	// defaultControlPlaneClientSPIFFEID обозначает control-plane client workload в exact TLS identity
+	// allowlist broker.
 	defaultControlPlaneClientSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
-	defaultRuntimeClientSPIFFEID      = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
-	defaultSTTClientSPIFFEID          = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
-	defaultProviderEgressProxy        = "http://egress-gateway.kodex-system.svc.cluster.local:8080"
+	// defaultRuntimeClientSPIFFEID identifies the runtime-controller workload allowed at the certificate
+	// boundary, with operation authorization enforced separately.
+	// defaultRuntimeClientSPIFFEID обозначает runtime-controller workload, допустимый на certificate boundary;
+	// operation authorization проверяется отдельно.
+	defaultRuntimeClientSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
+	// defaultSTTClientSPIFFEID identifies the STT workload for the shared certificate boundary without
+	// conferring arbitrary credential-read rights.
+	// defaultSTTClientSPIFFEID обозначает STT workload на общей certificate boundary без выдачи произвольных
+	// credential-read rights.
+	defaultSTTClientSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
+	// defaultProviderEgressProxy pins the provider transport's internal managed proxy for both HTTP_PROXY and
+	// HTTPS_PROXY; the HTTP scheme describes the proxy hop, not a plaintext provider fallback.
+	// defaultProviderEgressProxy закрепляет внутренний управляемый proxy provider transport для HTTP_PROXY и
+	// HTTPS_PROXY; HTTP scheme относится к proxy hop, не к plaintext provider fallback.
+	defaultProviderEgressProxy = "http://egress-gateway.kodex-system.svc.cluster.local:8080"
 )
 
+// Config holds typed environment-derived runtime/identity paths, exact service boundaries and time/size
+// budgets; parsing these fields does not prove file safety, network reachability or caller authority.
+// Config хранит typed environment-derived runtime/identity paths, exact service boundaries и time/size
+// budgets; разбор полей не доказывает file safety, network reachability и caller authority.
 type Config struct {
 	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
@@ -56,6 +88,11 @@ type Config struct {
 	AuthorityVerifierGID        uint32        `env:"SECRET_BROKER_AUTHORITY_VERIFIER_GID"`
 }
 
+// loadConfig starts from explicit deployment defaults, overlays tagged environment values and validates
+// the result; parse failure returns zero Config, while validation failure returns the parsed Config with
+// its error.
+// loadConfig начинает с явных deployment defaults, применяет tagged environment values и проверяет
+// результат; parse failure возвращает zero Config, validation failure — разобранный Config с ошибкой.
 func loadConfig() (Config, error) {
 	config := Config{
 		RuntimeNamespace: "kodex-runtime", GRPCListen: ":8443", TechnicalListen: ":9090",
@@ -87,6 +124,12 @@ func loadConfig() (Config, error) {
 	return config, config.validate()
 }
 
+// validate restricts deployment/profile, exact namespaces/owner route/proxy/identity set, claimant syntax,
+// durations and sizes, then checks listen/path/URI shapes. Absolute paths are not opened or
+// permission-checked and SplitHostPort alone is not port-range validation.
+// validate ограничивает deployment/profile, exact namespaces/owner route/proxy/identity set, claimant
+// syntax, durations и sizes, затем проверяет listen/path/URI shapes. Absolute paths не открываются и их
+// права не проверяются, один SplitHostPort не проверяет port range.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
 		return errors.New("secret broker RPC profile is invalid")

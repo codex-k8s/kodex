@@ -13,9 +13,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-// Authority здесь синтетическая; PostgreSQL eligibility доказывается отдельной
-// component suite CP. Этот путь проверяет реальные AEAD/Kubernetes adapters и
-// передачу точных опубликованных pins в runtime consumer без исполнения модели.
+// testScopedPublishedRuntimeConsumer builds a real runtime projection from published scoped pins plus a
+// synthetic provider credential, verifies copied bytes/exact recovery metadata and cleans only the
+// projection while preserving source. Authority and Kubernetes are fake; no model executes.
+// testScopedPublishedRuntimeConsumer строит реальную runtime projection из published scoped pins и
+// synthetic provider credential, проверяет copied bytes/exact recovery metadata и удаляет лишь projection
+// с сохранением source. Authority и Kubernetes подменены; модель не запускается.
 func testScopedPublishedRuntimeConsumer(t *testing.T, runtimeStore *store.Store, client *fake.Clientset, scope cp.RuntimeResourceScopeKind, source *cp.RuntimeSecretMaterialization, raw []byte) {
 	t.Helper()
 	providerRaw := []byte(`{"OPENAI_API_KEY":"synthetic-scope-consumer","auth_mode":"apikey"}`)

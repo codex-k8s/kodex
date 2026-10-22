@@ -13,8 +13,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// errCommand is the fixed administrative-CLI failure used instead of echoing private paths, arguments or
+// parser diagnostics.
+// errCommand — фиксированная ошибка административного CLI вместо вывода private paths, arguments и parser
+// diagnostics.
 var errCommand = errors.New("secret draft key command failed")
 
+// main runs the administrative command and prints only the fixed command error before exiting 1; detailed
+// internal errors never become CLI output here.
+// main выполняет административную команду и перед выходом с кодом 1 выводит лишь фиксированную command
+// error; подробные внутренние ошибки здесь не выводятся.
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, errCommand.Error())
@@ -22,6 +30,12 @@ func main() {
 	}
 }
 
+// run accepts only named generate/rotate/check/copy/guard-check commands with exact flag sets and no
+// positional remainder, discards parser output and maps failures to errCommand; only safe check summaries
+// are emitted.
+// run принимает лишь generate/rotate/check/copy/guard-check с явными наборами flags и без оставшихся
+// positional arguments, скрывает parser output и отображает failures в errCommand; выводит лишь safe check
+// summaries.
 func run(args []string, output io.Writer) error {
 	if len(args) == 0 {
 		return errCommand
@@ -77,6 +91,12 @@ func run(args []string, output io.Writer) error {
 	return nil
 }
 
+// checkGuard reads at most 1MiB plus an overflow byte from the supplied stream, decodes a ConfigMap and
+// applies the runtime guard parser; it emits null for genesis or revision/digest only, never modifies
+// guard state.
+// checkGuard читает из переданного потока до 1МиБ с дополнительным overflow byte, декодирует ConfigMap и
+// применяет runtime guard parser; выводит null для genesis либо лишь revision/digest, guard state не
+// меняет.
 func checkGuard(input io.Reader, output io.Writer) error {
 	var object corev1.ConfigMap
 	raw, err := io.ReadAll(io.LimitReader(input, 1<<20+1))

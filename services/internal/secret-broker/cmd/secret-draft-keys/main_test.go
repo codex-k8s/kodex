@@ -12,6 +12,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// TestPrivateMaterialCommandsAndSafeCheck generates/rotates/checks/copies disposable keyrings, verifies
+// safe revision/digest output without IDs/material, forbids overwrite and canonicalizes a formatted input.
+// TestPrivateMaterialCommandsAndSafeCheck создаёт/ротирует/проверяет/копирует одноразовые keyrings,
+// проверяет safe revision/digest output без IDs/material, запрещает overwrite и канонизирует
+// форматированный input.
 func TestPrivateMaterialCommandsAndSafeCheck(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0o700); err != nil {
@@ -85,6 +90,10 @@ func TestPrivateMaterialCommandsAndSafeCheck(t *testing.T) {
 	}
 }
 
+// TestGuardCheckUsesRuntimeParserAndSafeSummary accepts strict genesis as null and rejects unexpected
+// counters/unknown state fields without emitting their synthetic private marker.
+// TestGuardCheckUsesRuntimeParserAndSafeSummary принимает strict genesis как null и отклоняет неожиданные
+// counters/unknown state fields без вывода synthetic private marker.
 func TestGuardCheckUsesRuntimeParserAndSafeSummary(t *testing.T) {
 	object := corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "secret-broker-draft-key-guard", Namespace: "kodex-secret-drafts", UID: "fixture", ResourceVersion: "1", Labels: map[string]string{"app.kubernetes.io/managed-by": "kodex-secret-broker-bootstrap", "kodex.dev/purpose": "secret-draft-key-guard"}}, Data: map[string]string{"state.json": `{"v":1,"manifest":null,"uses":[]}`}}
 	for _, state := range []string{`{"v":1,"manifest":null,"uses":[]}`, `{"v":1,"manifest":null,"uses":[{"id":"private-marker","generation":1,"encryptions":0}]}`, `{"v":1,"manifest":null,"uses":[],"unknown":"private-marker"}`} {
@@ -102,6 +111,10 @@ func TestGuardCheckUsesRuntimeParserAndSafeSummary(t *testing.T) {
 	}
 }
 
+// TestCommandsRejectInvalidArgumentsWithoutEcho rejects missing/unknown commands, unsupported flags,
+// invalid paths and positional remainders with no output or echoed private marker.
+// TestCommandsRejectInvalidArgumentsWithoutEcho отклоняет missing/unknown commands, неподдерживаемые
+// flags, неверные paths и positional remainders без output и вывода private marker.
 func TestCommandsRejectInvalidArgumentsWithoutEcho(t *testing.T) {
 	for _, args := range [][]string{nil, {"unknown-private-marker"}, {"generate", "--value=private-marker"}, {"generate"}, {"rotate", "--input-file=private-marker", "--output-file=/tmp/no-output"}, {"check", "--input-file=private-marker"}, {"check", "--input-file=private-marker", "extra-private-marker"}} {
 		var output bytes.Buffer

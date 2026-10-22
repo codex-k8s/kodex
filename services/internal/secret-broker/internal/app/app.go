@@ -1,4 +1,5 @@
-// Package app содержит единственный composition root secret-broker.
+// Package app owns the secret-broker composition root and its explicit runtime/security wiring.
+// Package app владеет composition root secret-broker и его явными runtime/security связями.
 package app
 
 import (
@@ -35,12 +36,34 @@ import (
 )
 
 const (
-	serviceName      = "secret-broker"
+	// serviceName fixes the component identity used for telemetry/runtime configuration, not caller
+	// authorization.
+	// serviceName фиксирует component identity для telemetry/runtime configuration, не caller authorization.
+	serviceName = "secret-broker"
+	// metricsSubsystem is the underscore-separated Prometheus subsystem, distinct from the hyphenated service
+	// name.
+	// metricsSubsystem — Prometheus subsystem с разделителем underscore, отдельно от имени сервиса с дефисом.
 	metricsSubsystem = "secret_broker"
-	issuerUID        = 29001
-	issuerGID        = 29000
+	// issuerUID pins the expected application-grant issuer's Unix UID for the control-plane client, not the
+	// requesting end user's identity.
+	// issuerUID закрепляет ожидаемый Unix UID издателя application grant для control-plane client, не identity
+	// конечного пользователя.
+	issuerUID = 29001
+	// issuerGID pins the expected grant issuer group for local file/identity checks during protected-client
+	// composition.
+	// issuerGID закрепляет ожидаемую группу издателя grant для локальных file/identity checks при сборке
+	// защищённого клиента.
+	issuerGID = 29000
 )
 
+// Run composes telemetry, protected owner clients, local stores and provider/draft services, then starts
+// the worker group after its explicit local startup barrier. It passes caller-owned lifecycle/shutdown
+// contexts and joins errors; readiness does not claim remote owner or completed draft recovery, and
+// context budgets cannot preempt callbacks that ignore them.
+// Run собирает telemetry, защищённые owner clients, локальные stores и provider/draft services, затем
+// запускает worker group после явного local startup barrier. Передаёт caller-owned lifecycle/shutdown
+// contexts и объединяет ошибки; readiness не доказывает готовность remote owner и завершение draft
+// recovery, а context budgets не прерывают игнорирующие их callbacks.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
@@ -245,10 +268,18 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	return errors.Join(err, shutdownErr)
 }
 
+// providerVerifierReadiness adapts verifier readiness to the local checker interface without issuing or
+// verifying an application authorization context.
+// providerVerifierReadiness адаптирует verifier readiness к local checker interface без выдачи и проверки
+// application authorization context.
 type providerVerifierReadiness struct {
 	client internalrpcauthorityv1.AuthorizationVerifierServiceClient
 }
 
+// Check requires a successful Ready reply from the configured verifier and returns a fixed error for
+// transport failure or false readiness.
+// Check требует успешный Ready reply настроенного verifier и возвращает фиксированную ошибку при transport
+// failure либо false readiness.
 func (checker providerVerifierReadiness) Check(ctx context.Context) error {
 	response, err := checker.client.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest{})
 	if err != nil || !response.GetReady() {
@@ -257,6 +288,12 @@ func (checker providerVerifierReadiness) Check(ctx context.Context) error {
 	return nil
 }
 
+// routeProtectedUnary applies the supplied verifier interceptor only to the enumerated
+// provider/draft/projection methods, forwarding all others directly; it is not a universal default-deny
+// policy or a replacement for domain grants.
+// routeProtectedUnary применяет переданный verifier interceptor лишь к перечисленным
+// provider/draft/projection methods, остальные передаёт напрямую; это не универсальная default-deny policy
+// и не замена domain grants.
 func routeProtectedUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		switch info.FullMethod {
@@ -285,6 +322,10 @@ func routeProtectedUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServer
 	}
 }
 
+// normalizeMethod maps a method through the caller's registered operation map and returns one fixed
+// unknown value otherwise; callers keep that map bounded.
+// normalizeMethod отображает method через зарегистрированную operation map caller, иначе возвращает
+// фиксированное unknown; ограниченность map обеспечивает caller.
 func normalizeMethod(methods map[string]string, method string) string {
 	if operation, ok := methods[method]; ok {
 		return operation
@@ -292,8 +333,24 @@ func normalizeMethod(methods map[string]string, method string) string {
 	return "unknown"
 }
 
-type checker interface{ Check(context.Context) error }
+// checker is a context-aware dependency health port, not an authority issuer or background worker
+// lifecycle.
+// checker — context-aware port проверки dependency health, не источник authority и не lifecycle фонового
+// worker.
+type checker interface {
+	// Check probes the configured dependency and must honor the shared caller deadline; a successful probe
+	// does not authorize later commands.
+	// Check проверяет настроенную dependency и должен соблюдать общий caller deadline; успешная проверка не
+	// разрешает последующие команды.
+	Check(context.Context) error
+}
 
+// monitorReadiness returns a caller-owned worker that immediately checks every dependency under one shared
+// timeout, then repeats on ten-second ticks. It updates readiness/metrics and logs only transitions,
+// returning context error on cancellation; dependencies must honor context themselves.
+// monitorReadiness возвращает caller-owned worker, сразу проверяющий все dependencies под общим timeout,
+// затем по десятисекундным ticks. Обновляет readiness/metrics и логирует лишь transitions, возвращая
+// context error при отмене; dependencies сами должны соблюдать context.
 func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, timeout time.Duration, checkers ...checker) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(10 * time.Second)
@@ -325,10 +382,18 @@ func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobserv
 	}
 }
 
+// secretBrokerOperations delegates to the shared closed operation-to-method registry rather than
+// maintaining a second local source of authority mappings.
+// secretBrokerOperations использует общий закрытый operation-to-method registry вместо второго локального
+// источника authority mappings.
 func secretBrokerOperations() map[string]string {
 	return controlplaneclient.SecretBrokerOperations()
 }
 
+// technicalServer constructs but does not start the health/readiness/metrics HTTP server with fixed
+// request/header limits and the supplied lifecycle base; these probes are not business RPC authorization.
+// technicalServer создаёт, но не запускает health/readiness/metrics HTTP server с фиксированными
+// request/header limits и переданной lifecycle base; эти probes не заменяют business RPC authorization.
 func technicalServer(lifecycle context.Context, config Config, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusNoContent) })
@@ -345,6 +410,10 @@ func technicalServer(lifecycle context.Context, config Config, readiness *servic
 		ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 }
 
+// serveGRPC wraps Serve in a caller-owned worker and waits for its result; on cancellation it calls
+// GracefulStop and joins Serve, so a nonreturning graceful stop is not forcibly bounded here.
+// serveGRPC оборачивает Serve в caller-owned worker и ждёт результата; при отмене вызывает GracefulStop и
+// присоединяет Serve, поэтому зависший graceful stop здесь принудительно не ограничивается.
 func serveGRPC(server *grpc.Server, listener net.Listener) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -359,6 +428,10 @@ func serveGRPC(server *grpc.Server, listener net.Listener) serviceruntime.Worker
 	}
 }
 
+// serveHTTP starts ListenAndServe, treats ErrServerClosed as success and closes the server on
+// cancellation; that cancellation branch returns without explicitly waiting on its Serve-result channel.
+// serveHTTP запускает ListenAndServe, считает ErrServerClosed успехом и закрывает сервер при отмене; ветка
+// отмены возвращается без явного ожидания Serve-result channel.
 func serveHTTP(server *http.Server) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -376,6 +449,12 @@ func serveHTTP(server *http.Server) serviceruntime.Worker {
 	}
 }
 
+// serverTLS loads server keypair and client CA, requires TLS 1.3 mutual certificate verification and an
+// exact allowed SPIFFE URI in the verified leaf. CA size is checked after reading; it does not provide
+// bearer/domain-grant checks or live certificate reload.
+// serverTLS загружает server keypair и client CA, требует TLS 1.3 mutual certificate verification и точный
+// разрешённый SPIFFE URI в verified leaf. Размер CA проверяет после чтения; bearer/domain-grant checks и
+// live certificate reload не обеспечивает.
 func serverTLS(config Config) (*tls.Config, error) {
 	certificate, err := tls.LoadX509KeyPair(config.ServerCertificateFile, config.ServerPrivateKeyFile)
 	if err != nil {

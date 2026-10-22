@@ -12,6 +12,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// TestRouteProtectedUnaryProtectsExactServices records interceptor/handler calls for enumerated protected
+// methods and direct native readiness, verifying routing without executing an authorization verifier.
+// TestRouteProtectedUnaryProtectsExactServices записывает interceptor/handler calls для перечисленных
+// protected methods и прямой native readiness, проверяя routing без исполнения authorization verifier.
 func TestRouteProtectedUnaryProtectsExactServices(t *testing.T) {
 	protectedCalls := 0
 	handlerCalls := 0
@@ -61,11 +65,19 @@ func TestRouteProtectedUnaryProtectsExactServices(t *testing.T) {
 	}
 }
 
+// verifierReadinessClient is a programmable readiness-only RPC stub; its authorization method deliberately
+// refuses unexpected use.
+// verifierReadinessClient — programmable readiness-only RPC подмена; authorization method намеренно
+// отклоняет неожиданный вызов.
 type verifierReadinessClient struct {
 	ready bool
 	err   error
 }
 
+// VerifyAuthorizationContext returns an unexpected-call error rather than minting or approving any
+// authorization context.
+// VerifyAuthorizationContext возвращает unexpected-call error вместо создания и одобрения authorization
+// context.
 func (client verifierReadinessClient) VerifyAuthorizationContext(
 	context.Context,
 	*internalrpcauthorityv1.VerifyAuthorizationContextRequest,
@@ -74,6 +86,8 @@ func (client verifierReadinessClient) VerifyAuthorizationContext(
 	return nil, errors.New("unexpected authorization verification")
 }
 
+// CheckReadiness returns configured Ready/error without contacting a local authority process.
+// CheckReadiness возвращает настроенные Ready/error без обращения к local authority process.
 func (client verifierReadinessClient) CheckReadiness(
 	context.Context,
 	*internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest,
@@ -82,6 +96,10 @@ func (client verifierReadinessClient) CheckReadiness(
 	return &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse{Ready: client.ready}, client.err
 }
 
+// TestProviderVerifierReadinessFailsClosed accepts a true ready reply and rejects false readiness or a
+// transport error even when Ready is true.
+// TestProviderVerifierReadinessFailsClosed принимает true ready reply и отклоняет false readiness либо
+// transport error даже при Ready=true.
 func TestProviderVerifierReadinessFailsClosed(t *testing.T) {
 	t.Parallel()
 	if err := (providerVerifierReadiness{client: verifierReadinessClient{ready: true}}).Check(context.Background()); err != nil {

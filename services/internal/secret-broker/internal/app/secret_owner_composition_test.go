@@ -28,9 +28,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Этот consumer запускается только публичной disposable-оснасткой. CP работает
-// отдельным процессом с настоящими PostgreSQL owner-транзакциями и casters;
-// Kubernetes здесь fake, транспорт loopback без production mTLS/SSO acceptance.
+// TestSecretOwnerCompositionConsumer is an opt-in public disposable-fixture consumer: it validates a
+// private loopback rendezvous and can exercise real CP/PostgreSQL ownership with fake Kubernetes,
+// including exact retirement after a suppressed cleanup RPC. Without the fixture it skips; insecure
+// loopback is not production mTLS/SSO acceptance.
+// TestSecretOwnerCompositionConsumer — opt-in consumer публичной disposable-оснастки: проверяет private
+// loopback rendezvous и может проверить реальное CP/PostgreSQL ownership с fake Kubernetes, включая exact
+// retirement после подавленного cleanup RPC. Без оснастки пропускается; insecure loopback не доказывает
+// production mTLS/SSO.
 func TestSecretOwnerCompositionConsumer(t *testing.T) {
 	path := os.Getenv("KODEX_SECRET_COMPOSITION_READY_FILE")
 	if path == "" {
@@ -69,6 +74,8 @@ func TestSecretOwnerCompositionConsumer(t *testing.T) {
 	commands := cp.NewPlatformCommandServiceClient(connection)
 	workClient := cp.NewRuntimeSecretDraftWorkServiceClient(connection)
 	native := cp.NewRuntimeSecretWorkServiceClient(connection)
+	// stagedNamespace, runtimeNamespace and guardName select isolated fake storage and guard resources, not the live cluster.
+	// stagedNamespace, runtimeNamespace и guardName выбирают изолированные fake storage и guard resources, не живой кластер.
 	const stagedNamespace, runtimeNamespace, guardName = "kodex-secret-drafts", "kodex-runtime", "secret-broker-draft-key-guard"
 	client := composedDraftKubernetes(t, stagedNamespace, guardName)
 	runtimeStore, err := store.New(client, runtimeNamespace)

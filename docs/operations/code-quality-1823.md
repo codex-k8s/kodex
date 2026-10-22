@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.237.0
+version: 1.238.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,84 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцать восьмая волна — composition, config, CLI и метрики
+
+Предыдущий goal-turn — progress: семь commits231–237 опубликованы с
+сборкой/unit и exact readback, не только планом или статусом.
+Опубликованный SHA237 — `54e92a2fa782326609c98a60a3ccfd6d0344c22e`.
+Точный 3DdK16:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9542/21196, missing11654. Raw SHA256:
+`cc1393b71cecd97cd571bc99698ea547dcb9ebbd293ab78a48ee63f2a0fb5ac5`.
+Clone-set:
+`a7a72a74ee4c811e35edfe8fce9fa3e3f196bdb7d81af8d3d3d8679cf316f26c`.
+Push/readback и Draft PR PATCH/GET подтверждены; на SHA237
+draftowner/controlplane15/38, app composition1/9, full build,17 Node
+units и Go checker unit PASS,0 FAIL/SKIP.
+
+Полностью прочитаны15 файлов app,cmd,observability1787 строк.
+67/67 declarations получили предметные EN→RU пояснения; также переведён
+package app comment и описаны две локальные тройки namespace/guard constants,
+не входящие в package-declaration счётчик. AST15 идентичен SHA237 без
+comments/token.Pos, включая развёрнутый checker interface.
+Ни конфигурационные defaults, ни runtime statements, logs/HELP, registration,
+grants, TLS/profile/lifecycle, fixtures или registry не изменены.
+
+Описаны real environment parser/validator, fixed owner target/SNI/proxy/
+client identity set, claimant/time/size constraints и раздельность
+absolute-path shape от file mode/readability. SplitHostPort не назван полной
+проверкой port range. Context7 /caarlos0/env: Parse/tagged fields/
+envSeparator, дополнительно pinned local go doc и реальные config units.
+Парольные/.env данные не загружались; перед тестами подтверждено отсутствие
+опциональных composition/database переменных и HTTP_PROXY/HTTPS_PROXY
+в унаследованном test process. Никакие host values не печатались.
+
+Run передаёт lifecycle/shutdown contexts и запускает worker group после
+прежнего local barrier, не объявляя readiness полным proof remote owner/
+draft recovery. Ошибки объединяются прежним способом. Контекстный budget
+не выдан за preemption GracefulStop callback, игнорирующего context.
+serveHTTP cancellation Close/return не назван явным join serve goroutine.
+Эти ограничения описаны, а не исправлены за рамками comment-only изменения.
+
+routeProtectedUnary имеет прежний exact registry и passthrough default,
+не выдан за universal default-deny/domain authorization. serverTLS описан
+как TLS1.3/mutual CA/exact verified-leaf SPIFFE boundary, не bearer/grant
+checker или live reload; размер CA проверяется после чтения. Admin key CLI
+скрывает parse/path errors за errCommand, тогда как обычный main выводит
+returned error unchanged; этому не приписана redaction.
+Bounded metric labels, registration ownership, independent deletion counts
+и latest recovery gauge описаны без изменения observability поведения.
+
+Unit `./cmd/... ./internal/app ./internal/observability`:
+11 верхних/19 всех PASS,0 FAIL,1 SKIP — TestSecretOwnerCompositionConsumer.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4,
+`go test -mod=readonly -count=1 -timeout 120s -json`.
+Полная сборка secret-broker `go build -mod=readonly ./...` PASS LOCAL.
+Command tests используют disposable keyrings, metrics — in-memory HTTP,
+route tests — synthetic interceptors; app composition выполняет AEAD/
+Kubernetes adapters на fake owner/store, не живой кластер/модель.
+
+Opt-in CP/PostgreSQL loopback consumer полностью прочитан/описан, но
+не запущен: его fixture не настроена. Он имеет plaintext loopback transport
+в isolated harness, не production mTLS/SSO proof. Его synthetic suppression
+возвращает ошибку до invoker cleanup RPC, а не доказывает потерю ответа
+после фактического owner commit. Нельзя выдавать этот SKIP за PASS реальной БД.
+
+Scope67/67, AST identity15, gofmt/diff-check, assessment и5 addressed ignores
+PASS LOCAL. Рабочий VHzyHh:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9609/21196, missing11587. Raw SHA256:
+`69a6e80c7067ae850eb0f5fc9f8f79995fda62206d66017e3cb979ba3b914dca`.
+Clone-set:
+`7436f30828050d32b9f9fb5f929d26c884c27dba169e1da00b6cd6c4ebf85204`.
+Fragment/path/count multiset полностью идентичен и registry неизменен.
+Clone-set hash включает coordinates/line counts, поэтому сдвиг после
+comments его меняет: это отдельно подтверждено source и unit
+clone-fingerprint, не новый/устранённый algorithm clone.
+Secret-broker:599/1276 declarations, missing677; unresolved0 не означает
+полной готовности этого модуля. Точный post-commit scan/unit/build
+публикуются в том же Draft PR. Общая задача не завершена:
+11587 declarations и1226 групп впереди. Исторические FAIL/SKIP/NOT RUN
+сохранены; полная приёмка,live/browser/deploy/ИИ/STT/почта NOT RUN.
 
 ## Двести тридцать седьмая волна — scoped draft-owner adapter
 

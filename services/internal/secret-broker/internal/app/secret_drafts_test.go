@@ -35,8 +35,10 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-// Owner fixture заменяет PostgreSQL/authority CP, сохраняя настоящий generated
-// client port. AEAD, keyring, оба Kubernetes adapter и RPC caster здесь реальные.
+// composedDraftOwner replaces PostgreSQL/authority with a programmable generated-client port while real
+// AEAD/keyring/Kubernetes adapters/casters execute against synthetic storage; it is not a durable owner.
+// composedDraftOwner заменяет PostgreSQL/authority programmable generated-client port, пока реальные
+// AEAD/keyring/Kubernetes adapters/casters работают с synthetic storage; durable owner не является.
 type composedDraftOwner struct {
 	cp.RuntimeSecretDraftWorkServiceClient
 	t            *testing.T
@@ -47,9 +49,18 @@ type composedDraftOwner struct {
 	recovered    int
 }
 
+// CheckRuntimeSecretDraftWorkReadiness returns fixed synthetic readiness without checking a database or
+// transport identity.
+// CheckRuntimeSecretDraftWorkReadiness возвращает fixed synthetic readiness без проверки database и
+// transport identity.
 func (owner *composedDraftOwner) CheckRuntimeSecretDraftWorkReadiness(context.Context, *cp.CheckRuntimeSecretDraftWorkReadinessRequest, ...grpc.CallOption) (*cp.CheckRuntimeSecretDraftWorkReadinessResponse, error) {
 	return &cp.CheckRuntimeSecretDraftWorkReadinessResponse{Ready: true}, nil
 }
+
+// ListRuntimeSecretDraftRecoveryWork returns a cloned configured recovery item or empty page with the
+// configured error; no authoritative pagination is implemented.
+// ListRuntimeSecretDraftRecoveryWork возвращает копию настроенного recovery item либо пустую страницу с
+// настроенной ошибкой; authoritative pagination не реализует.
 func (owner *composedDraftOwner) ListRuntimeSecretDraftRecoveryWork(context.Context, *cp.ListRuntimeSecretDraftRecoveryWorkRequest, ...grpc.CallOption) (*cp.ListRuntimeSecretDraftRecoveryWorkResponse, error) {
 	if owner.recoveryWork != nil {
 		return &cp.ListRuntimeSecretDraftRecoveryWorkResponse{Operations: []*cp.RuntimeSecretDraftWork{proto.Clone(owner.recoveryWork).(*cp.RuntimeSecretDraftWork)}}, owner.recoveryErr
@@ -57,6 +68,10 @@ func (owner *composedDraftOwner) ListRuntimeSecretDraftRecoveryWork(context.Cont
 	return &cp.ListRuntimeSecretDraftRecoveryWorkResponse{}, owner.recoveryErr
 }
 
+// RecoverRuntimeSecretDraftMaterialization asserts exact operation/claim/encrypted/runtime inputs, counts
+// the call and returns KEEP/COMPLETED without performing a real owner transaction.
+// RecoverRuntimeSecretDraftMaterialization проверяет exact operation/claim/encrypted/runtime inputs,
+// учитывает вызов и возвращает KEEP/COMPLETED без реальной owner transaction.
 func (owner *composedDraftOwner) RecoverRuntimeSecretDraftMaterialization(_ context.Context, request *cp.RecoverRuntimeSecretDraftMaterializationRequest, _ ...grpc.CallOption) (*cp.RecoverRuntimeSecretDraftMaterializationResponse, error) {
 	w := owner.recoveryWork
 	if w == nil || request.GetOperationRef() != w.GetOperationRef() || request.GetClaimGeneration() != w.GetClaimGeneration() || request.GetClaimantId() != w.GetClaimantId() ||
@@ -69,12 +84,24 @@ func (owner *composedDraftOwner) RecoverRuntimeSecretDraftMaterialization(_ cont
 		EncryptedAction:       cp.RuntimeSecretRecoveryAction_RUNTIME_SECRET_RECOVERY_ACTION_KEEP,
 		MaterializationAction: cp.RuntimeSecretRecoveryAction_RUNTIME_SECRET_RECOVERY_ACTION_KEEP}, nil
 }
+
+// ConsumeRuntimeSecretDraftOperation asserts the configured claimant and synthetic grant, then returns
+// cloned work rather than consuming durable authority.
+// ConsumeRuntimeSecretDraftOperation сверяет настроенный claimant и synthetic grant, затем возвращает
+// копию work вместо потребления durable authority.
 func (owner *composedDraftOwner) ConsumeRuntimeSecretDraftOperation(_ context.Context, request *cp.ConsumeRuntimeSecretDraftOperationRequest, _ ...grpc.CallOption) (*cp.ConsumeRuntimeSecretDraftOperationResponse, error) {
 	if request.GetClaimantId() != owner.work.ClaimantId || request.GetOperationGrant() != "synthetic-grant" {
 		owner.t.Fatal("composition lost operation grant or claimant")
 	}
 	return &cp.ConsumeRuntimeSecretDraftOperationResponse{Work: proto.Clone(owner.work).(*cp.RuntimeSecretDraftWork)}, nil
 }
+
+// CompleteRuntimeSecretDraftOperation verifies claim/effect pins, clones and advances synthetic draft
+// state for each kind and captures publication metadata without a display hint; this mutation models owner
+// replies, not actual persistence.
+// CompleteRuntimeSecretDraftOperation проверяет claim/effect pins, копирует и переводит synthetic draft
+// state по kind, сохраняет publication metadata без display hint; mutation моделирует owner replies, не
+// реальное persistence.
 func (owner *composedDraftOwner) CompleteRuntimeSecretDraftOperation(_ context.Context, request *cp.CompleteRuntimeSecretDraftOperationRequest, _ ...grpc.CallOption) (*cp.CompleteRuntimeSecretDraftOperationResponse, error) {
 	w := owner.work
 	if request.GetOperationRef() != w.OperationRef || request.GetClaimantId() != w.ClaimantId || request.GetClaimGeneration() != w.ClaimGeneration {
@@ -111,6 +138,10 @@ func (owner *composedDraftOwner) CompleteRuntimeSecretDraftOperation(_ context.C
 	return result, nil
 }
 
+// composedDraftKubernetes creates a fake genesis guard and reactors assigning Secret UID/RV and
+// CAS-checking guard updates; it mimics selected API semantics without claiming a full Kubernetes server.
+// composedDraftKubernetes создаёт fake genesis guard и reactors для Secret UID/RV и CAS-проверки guard
+// updates; моделирует отдельные API semantics, не полный Kubernetes server.
 func composedDraftKubernetes(t *testing.T, namespace, guardName string) *fake.Clientset {
 	t.Helper()
 	client := fake.NewSimpleClientset(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: guardName, Namespace: namespace,
@@ -143,14 +174,27 @@ func composedDraftKubernetes(t *testing.T, namespace, guardName string) *fake.Cl
 	return client
 }
 
+// TestSecretDraftCompositionEncryptedLifecycleAndReadiness runs the same real adapter/domain/transport
+// composition for PROJECT and ORGANIZATION with synthetic owner/storage and no external model.
+// TestSecretDraftCompositionEncryptedLifecycleAndReadiness запускает одинаковую реальную
+// adapter/domain/transport composition для PROJECT и ORGANIZATION с synthetic owner/storage без внешней
+// модели.
 func TestSecretDraftCompositionEncryptedLifecycleAndReadiness(t *testing.T) {
 	for _, scope := range []cp.RuntimeResourceScopeKind{cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION} {
 		t.Run(scope.String(), func(t *testing.T) { testScopedSecretDraftComposition(t, scope) })
 	}
 }
 
+// testScopedSecretDraftComposition exercises recovery readiness, SAVE clearing/encrypted staging,
+// VALIDATE/PUBLISH, foreign recovery refusal, exact KEEP projection consumption and a later discarded
+// draft without changing the published source; owner authority remains stubbed.
+// testScopedSecretDraftComposition проверяет recovery readiness, SAVE clearing/encrypted staging,
+// VALIDATE/PUBLISH, foreign recovery refusal, exact KEEP projection consumption и последующий discarded
+// draft без изменения published source; owner authority остаётся подменённой.
 func testScopedSecretDraftComposition(t *testing.T, scope cp.RuntimeResourceScopeKind) {
 	ctx := context.Background()
+	// stagedNamespace, runtimeNamespace and guardName pin separate fake storage scopes and the exact durable-guard name.
+	// stagedNamespace, runtimeNamespace и guardName закрепляют разные fake storage scopes и exact durable-guard name.
 	const stagedNamespace, runtimeNamespace, guardName = "kodex-secret-drafts", "kodex-runtime", "secret-broker-draft-key-guard"
 	directory := t.TempDir()
 	if err := os.Chmod(directory, 0o700); err != nil {

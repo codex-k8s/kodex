@@ -7,8 +7,12 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Реестр остаётся закрытым. Domain operation grants в запросах Secrets и
-// owner-resolved runtime projection проверяются обработчиками отдельно.
+// trustedClusterAdmission builds the explicit trusted-profile caller/method registry for provider, draft,
+// native-secret and projection routes; domain operation grants and exact owner-resolved projections remain
+// separate handler checks.
+// trustedClusterAdmission создаёт явный trusted-profile caller/method registry для provider, draft,
+// native-secret и projection routes; domain operation grants и exact owner-resolved projections остаются
+// отдельными handler checks.
 func trustedClusterAdmission(profile string) (grpc.UnaryServerInterceptor, error) {
 	bindings := []serviceidentity.Binding{}
 	add := func(caller string, operations map[string]string) {
