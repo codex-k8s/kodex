@@ -17,6 +17,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestProtocolStreamsPublishedActivitiesImmediatelyAndExactlyOnce verifies immediate completed-message
+// and two-revision tool projection, snapshot replay suppression and exclusion of raw commands/reasoning.
+// Exactly-once here concerns the local projection, not a distributed delivery guarantee.
+// TestProtocolStreamsPublishedActivitiesImmediatelyAndExactlyOnce проверяет немедленную публикацию готовых
+// сообщений и двух ревизий инструмента, подавление повторного снимка и сокрытие команд/рассуждений.
+// Однократность относится к локальной проекции, а не распределённой гарантии доставки.
 func TestProtocolStreamsPublishedActivitiesImmediatelyAndExactlyOnce(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID, state.turnID, state.workspaceRoot = testThreadID, testTurnID, "/workspace"
@@ -70,6 +76,10 @@ func TestProtocolStreamsPublishedActivitiesImmediatelyAndExactlyOnce(t *testing.
 	}
 }
 
+// TestProtocolKeepsMultipleFinalItemsUntilTurnCompletion keeps distinct final-phase messages in history
+// without treating them as turn completion; only the authoritative terminal selects or discards the final text.
+// TestProtocolKeepsMultipleFinalItemsUntilTurnCompletion сохраняет разные сообщения финальной фазы в истории
+// без завершения хода; только авторитетный итог выбирает либо отбрасывает окончательный текст.
 func TestProtocolKeepsMultipleFinalItemsUntilTurnCompletion(t *testing.T) {
 	for _, status := range []string{"completed", "failed", "interrupted"} {
 		t.Run(status, func(t *testing.T) {
@@ -120,6 +130,10 @@ func TestProtocolKeepsMultipleFinalItemsUntilTurnCompletion(t *testing.T) {
 	}
 }
 
+// TestProtocolActivityBoundaryAndStickyDeliveryFailure checks callback-error redaction and sticky failure,
+// oversize rejection and omission of messages with an absent phase rather than guessing one.
+// TestProtocolActivityBoundaryAndStickyDeliveryFailure проверяет сокрытие и сохранение отказа callback,
+// отказ слишком большому сообщению и пропуск отсутствующей фазы без её угадывания.
 func TestProtocolActivityBoundaryAndStickyDeliveryFailure(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	calls := 0
@@ -145,6 +159,10 @@ func TestProtocolActivityBoundaryAndStickyDeliveryFailure(t *testing.T) {
 	}
 }
 
+// TestBrokerStreamDeliversActivityBeforeExactTerminal uses a gated pipe to prove activity arrives before
+// completion and cannot invent it; the later failure must preserve the measured token usage.
+// TestBrokerStreamDeliversActivityBeforeExactTerminal через управляемый pipe проверяет доставку события
+// до завершения без выдуманного итога; последующий отказ должен сохранить измеренный расход токенов.
 func TestBrokerStreamDeliversActivityBeforeExactTerminal(t *testing.T) {
 	reader, writer := io.Pipe()
 	defer reader.Close()
@@ -162,6 +180,10 @@ func TestBrokerStreamDeliversActivityBeforeExactTerminal(t *testing.T) {
 		_ = writer.CloseWithError(err)
 		written <- err
 	}()
+	// outcome transfers the reader's result and error together so the test can distinguish early activity
+	// from premature completion without consulting shared mutable state.
+	// outcome передаёт результат читателя вместе с ошибкой, чтобы отличать раннее событие
+	// от преждевременного завершения без чтения общей изменяемой переменной.
 	type outcome struct {
 		result Result
 		err    error
@@ -195,6 +217,12 @@ func TestBrokerStreamDeliversActivityBeforeExactTerminal(t *testing.T) {
 	}
 }
 
+// TestBrokerStreamRejectsLegacyMalformedAndReorderedFrames rejects malformed version-1 fixtures and
+// unframed input. Because their version already differs from the current protocol, this table alone
+// does not independently prove each named replay, ordering or terminal-validation branch.
+// TestBrokerStreamRejectsLegacyMalformedAndReorderedFrames отклоняет повреждённые конверты версии1
+// и ввод без кадров. Их версия уже отличается от текущего протокола, поэтому одна эта таблица
+// не доказывает независимо каждую указанную ветвь повторов, порядка или проверки итога.
 func TestBrokerStreamRejectsLegacyMalformedAndReorderedFrames(t *testing.T) {
 	message := `{"message":{"item_id":"message-one","phase":"COMMENTARY","revision":1,"text":"safe"}}`
 	activity := `{"version":1,"sequence":1,"kind":"ACTIVITY","activity":` + message + `}\n`
@@ -223,29 +251,49 @@ func TestBrokerStreamRejectsLegacyMalformedAndReorderedFrames(t *testing.T) {
 	}
 }
 
+// TestExecuteViaBrokerRequiresLiveActivityConsumer proves a missing callback is rejected before any
+// broker connection can be attempted; it does not start an isolated provider.
+// TestExecuteViaBrokerRequiresLiveActivityConsumer проверяет отказ отсутствующему callback до попытки
+// соединения с broker; изолированный провайдер здесь не запускается.
 func TestExecuteViaBrokerRequiresLiveActivityConsumer(t *testing.T) {
 	if _, err := ExecuteViaBroker(context.Background(), model.Input{}, nil, "", "", nil); err == nil {
 		t.Fatal("missing activity consumer accepted")
 	}
 }
 
-func TestBrokerUDSCancelInterruptsPeerAndPreservesReadGrace(t *testing.T) {
+// brokerUDSPair opens an independent Unix socket pair beneath t.TempDir and registers each resource
+// for reverse-order cleanup, including partially constructed fixtures. It supplies transport only;
+// peer cancellation, deadlines and lifecycle assertions remain the responsibility of each test.
+// brokerUDSPair открывает независимую Unix-пару внутри t.TempDir и регистрирует обратную очистку
+// каждого ресурса, в том числе при неполной подготовке. Helper предоставляет только транспорт;
+// отмена peer, сроки и проверки жизненного цикла остаются в конкретном тесте.
+func brokerUDSPair(t *testing.T) (*net.UnixConn, *net.UnixConn) {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "provider.sock")
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() { _ = listener.Close() })
 	client, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	t.Cleanup(func() { _ = client.Close() })
 	server, err := listener.AcceptUnix()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer server.Close()
+	t.Cleanup(func() { _ = server.Close() })
+	return client, server
+}
+
+// TestBrokerUDSCancelInterruptsPeerAndPreservesReadGrace cancels a real temporary Unix connection's
+// provider context while keeping the terminal read path open to receive measured failure usage.
+// TestBrokerUDSCancelInterruptsPeerAndPreservesReadGrace отменяет контекст провайдера через временное
+// Unix-соединение, сохраняя путь чтения итога для получения расхода токенов при отказе.
+func TestBrokerUDSCancelInterruptsPeerAndPreservesReadGrace(t *testing.T) {
+	client, server := brokerUDSPair(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	stop := bindBrokerConnectionContext(ctx, client)
@@ -279,6 +327,10 @@ func TestBrokerUDSCancelInterruptsPeerAndPreservesReadGrace(t *testing.T) {
 	}
 }
 
+// TestAppServerWaitTerminalStreamsNotificationBeforeTerminal drives the in-process event channel and
+// requires notification delivery before turn/completed, without launching an external app server.
+// TestAppServerWaitTerminalStreamsNotificationBeforeTerminal подаёт события через канал внутри процесса
+// и требует доставки сообщения до turn/completed без запуска внешнего app server.
 func TestAppServerWaitTerminalStreamsNotificationBeforeTerminal(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID, state.turnID, state.turnStarted = testThreadID, testTurnID, 1
@@ -307,6 +359,10 @@ func TestAppServerWaitTerminalStreamsNotificationBeforeTerminal(t *testing.T) {
 	}
 }
 
+// TestBrokerTerminalDropsPublishedCallsAndPreservesUsageOnOverflow proves terminal never batches already
+// published calls and an escaped-text size overflow becomes failure without losing measured usage.
+// TestBrokerTerminalDropsPublishedCallsAndPreservesUsageOnOverflow проверяет отсутствие уже переданных
+// вызовов в итоге и превращение переполнения текста в отказ без потери измеренного расхода.
 func TestBrokerTerminalDropsPublishedCallsAndPreservesUsageOnOverflow(t *testing.T) {
 	usage := runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}
 	for _, overflow := range []bool{false, true} {
@@ -329,6 +385,10 @@ func TestBrokerTerminalDropsPublishedCallsAndPreservesUsageOnOverflow(t *testing
 	}
 }
 
+// TestBrokerActivityReservesTerminalBudget exhausts byte and frame activity budgets independently,
+// then verifies the reserved terminal can still be written without first emitting a rejected activity.
+// TestBrokerActivityReservesTerminalBudget отдельно исчерпывает байтовый и кадровый лимиты событий
+// и проверяет запись зарезервированного итога без записи отклонённого события.
 func TestBrokerActivityReservesTerminalBudget(t *testing.T) {
 	for _, frameLimit := range []bool{false, true} {
 		var output bytes.Buffer
@@ -348,23 +408,14 @@ func TestBrokerActivityReservesTerminalBudget(t *testing.T) {
 	}
 }
 
+// TestBrokerUDSCallbackFailureCancelsPeerAndRetainsTerminalUsage uses a real local socket to require
+// peer interruption on callback failure, suppression of later callbacks and private error redaction,
+// while the subsequent failed terminal still delivers the exact measurements.
+// TestBrokerUDSCallbackFailureCancelsPeerAndRetainsTerminalUsage через локальный сокет требует прерывания
+// peer при отказе callback, подавления дальнейших callback и сокрытия приватной ошибки,
+// сохраняя точные измерения в последующем итоговом отказе.
 func TestBrokerUDSCallbackFailureCancelsPeerAndRetainsTerminalUsage(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "provider.sock")
-	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	client, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-	server, err := listener.AcceptUnix()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer server.Close()
+	client, server := brokerUDSPair(t)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	peerCtx, join := bindBrokerPeerContext(ctx, server, bufio.NewScanner(server))

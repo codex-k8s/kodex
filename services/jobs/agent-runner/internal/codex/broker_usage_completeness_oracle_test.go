@@ -11,7 +11,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
-// Настоящий writer и закрытый consumer сохраняют измерения и проверенный архив.
+// TestBrokerUsageCompletenessActualWireOracle crosses real writer/strict-reader code for every closed
+// usage quality and success/failure/overflow mode, retaining measured values and verified capture without
+// mutating the original result. Temporary captured files are synthetic, not a live provider transcript.
+// TestBrokerUsageCompletenessActualWireOracle проходит настоящий writer и строгий reader для каждого
+// значения полноты расхода и режима успеха, отказа или переполнения, сохраняя измерения и проверенный
+// захват без изменения исходного результата. Файлы синтетические, а не запись живого провайдера.
 func TestBrokerUsageCompletenessActualWireOracle(t *testing.T) {
 	for _, fixture := range []struct {
 		name    string
@@ -56,6 +61,10 @@ func TestBrokerUsageCompletenessActualWireOracle(t *testing.T) {
 	}
 }
 
+// TestBrokerUsageCompletenessExplicitUnknownWire verifies omitted zero quality and explicit UNKNOWN
+// both retain the existing optional-wire contract, measured usage and input-bound archive proof.
+// TestBrokerUsageCompletenessExplicitUnknownWire проверяет сохранение необязательного wire-контракта,
+// измерений и привязанного доказательства архива как без нулевого поля, так и с явным UNKNOWN.
 func TestBrokerUsageCompletenessExplicitUnknownWire(t *testing.T) {
 	input, captured := capturedRolloutFixture(t, model.Input{})
 	var wire bytes.Buffer
@@ -72,6 +81,10 @@ func TestBrokerUsageCompletenessExplicitUnknownWire(t *testing.T) {
 	}
 }
 
+// TestBrokerUsageCompletenessRejectsMalformedWire mutates the actual terminal field into malformed,
+// wrong-type, unknown, empty or duplicate values and requires a redacted error with an entirely empty result.
+// TestBrokerUsageCompletenessRejectsMalformedWire подменяет настоящее поле итога повреждёнными,
+// неверно типизированными, неизвестными, пустыми или повторными значениями и требует безопасную ошибку без результата.
 func TestBrokerUsageCompletenessRejectsMalformedWire(t *testing.T) {
 	for _, fixture := range []struct {
 		name  string

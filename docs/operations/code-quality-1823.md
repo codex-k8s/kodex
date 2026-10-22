@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.218.0
+version: 1.219.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,74 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девятнадцатая волна — поток broker activity и измерения
+
+Опубликованный SHA218 — `4205bd8554d6996d90a4ef4aa60fa9e36d0a63e7`.
+Exact BxKh4D:6584 sources,222 excluded,1832 raw,594 retained,1238 unresolved;
+Go8368/21165,missing12797;raw SHA256
+`0c4c51fcd84f31f78a5786bafc789ce5328af246ae8bcc95e31e6aa06a963d3d`;
+clone-set `a2c4517d1be785325d788f8d34d62aa3b2dd1c1378ed8557909402bb78442726`.
+Push/readback иPATCH/GET Draft PR218 подтверждены;diagnostics11/55 unit
+иfull runner build PASS на этом SHA.
+
+Прочитаны целиком broker_activity.go,activity_test.go,
+activity_array_roundtrip_test.go,broker_usage_test.go,
+broker_usage_completeness_oracle_test.go.43/43 declarations EN→RU:
+42 прежних плюс private fixture helper. Описаны закрытый wire version,
+кадровые/байтовые пределы ирезерв итога,отсутствие concurrent writer guarantee,
+счётчики только после успешной записи инеопределённость частичного I/O.
+Событие сообщения не названо завершением хода; локальное подавление replay
+не названо распределённым exactly-once. Явно описаны bound process/diagnostic/
+capture,строгая схема,sticky callback failure,interrupt ипродолжение чтения
+ради usage. Рекурсивный duplicate-key walker не назван объектным/байтовым
+валидатором:этими ограничениями владеет окружающий reader.
+
+Повтор ListenUnix/DialUnix/AcceptUnix сраздельной очисткой вынесен в
+brokerUDSPair тогоже test unit,два потребителя. Cleanup регистрируется после
+каждого успешно созданного ресурса,выполняется вобратном порядке через
+testing.Cleanup после test defers;ctx cancel/join остаются локальными.
+Значения usage,сигналы callback,отмена peer исроки не перенесены вfixture.
+Более привилегированный native UID socket fixture не объединён сэтой парой.
+Удалена ровно одна raw self-clone группа
+`42ad730995d651c9728c2d8033ceb692a798a108c440eef53d255927b12e59b0`;
+новых групп илиисключений нет. Это настоящий вынос,не blanket ignore.
+
+Go AST4 comment-only файлов идентичен SHA218 без comments/token.Pos.
+Для activity_test отдельно проверены actual helper body идва consumers:
+после обратной подстановки прежнего setup AST остального теста также
+совпадает. Cleanup через testing.Cleanup вместо прежних defers — явное
+изменение fixture,не выданное за syntax-identical исполнение самого helper.
+Production executable AST неизменен;API,grants,lifecycle иSDK не менялись.
+Устаревшая malformed таблица использует version1 ипроверяет отказ,но
+не изолирует каждую именованную ветвь текущего version3 protocol;это явно
+объяснено вкомментарии,её PASS не выдан за отдельное доказательство всех
+replay/terminal guards. Separate diagnostics units предыдущего этапа
+проверяли категории на своих synthetic envelopes.
+
+Выбранные codex units:20 верхних/86 всех PASS,0 FAIL/SKIP.
+Фактически выполнены in-process notifications,replay/message phases,
+empty-array projection/null rejection,оба real temp UDS cancellation paths,
+net.Pipe read grace,terminal reserve/overflow,refresh-failure usage,
+validated deltas иреальный writer/reader completeness archive roundtrip.
+Нет настоящего model execution/remote network. Команда из runner,
+GOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4:
+`go test -mod=readonly -count=1 -json ./internal/codex -run '^(TestProtocolStreamsPublished|TestProtocolKeepsMultipleFinal|TestProtocolActivityBoundary|TestBrokerStream|TestExecuteViaBrokerRequiresLiveActivityConsumer|TestBrokerUDS|TestAppServerWaitTerminalStreams|TestBrokerTerminalDrops|TestBrokerActivityReserves|TestProtocolEmpty|TestProviderRefreshFailurePreserves|TestBrokerRejectsMalformedPartial|TestMeasuredResultUsesOnly|TestCancelledBrokerConnection|TestBrokerUsageCompleteness)'`.
+Full runner `go build -mod=readonly ./...`,scope43/43,17 Node units,
+Go-checker unit,5 ignore boundaries,gofmt/diff-check PASS LOCAL.
+
+Рабочий jtJmks:6584 sources,222 excluded,1831 raw,594 retained,1237 unresolved;
+Go8411/21166,missing12755;raw SHA256
+`aef4c341e9645271efe1a3f0540576cc8924d394b7bf2e4abcd3d82166d3521d`;
+clone-set `085d7dc48aa5419c1f29b33dc5eb68cd745683018db377e8c06e9cc299921528`.
+Pair/fragment/count multiset:одна удалённая группа,ноль новых.
+Уточнение комментария оversion1 сделано после этого рабочего scan;
+точное post-commit измерение публикуется втомже Draft PR.
+Новых dependency/API нет;testing.Cleanup/net.Conn проверялись вContext7
+предыдущих блоков,новых семантик библиотек не добавлено.
+Полный runner/codex/repo unit иобщий Go-docs check ещё не выполнены;
+прежние FAIL/SKIP/NOT RUN остаются вжурнале. Live/browser/deploy/ИИ/STT/
+почта NOT RUN. Цель остаётся активной,PR не передаётся как готовый.
 
 ## Двести восемнадцатая волна — закрытая диагностика account RPC и broker
 

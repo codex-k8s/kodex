@@ -15,16 +15,36 @@ import (
 )
 
 const (
-	providerBrokerVersion    = 3
+	// providerBrokerVersion pins the closed frame format; readers reject every other version.
+	// providerBrokerVersion закрепляет закрытый формат кадров; читатель отклоняет любую другую версию.
+	providerBrokerVersion = 3
+	// maximumPublishedMessages caps distinct message IDs per stream independently of tool activity.
+	// maximumPublishedMessages ограничивает число разных сообщений потока отдельно от вызовов инструментов.
 	maximumPublishedMessages = 1024
-	maximumBrokerFrameBytes  = 1 << 20
+	// maximumBrokerFrameBytes bounds one encoded frame including its newline and reserves terminal space.
+	// maximumBrokerFrameBytes ограничивает кадр вместе с переводом строки и задаёт резерв для итога.
+	maximumBrokerFrameBytes = 1 << 20
+	// maximumBrokerStreamBytes caps the total encoded response, not each individual activity payload.
+	// maximumBrokerStreamBytes ограничивает весь кодированный ответ, а не каждое отдельное событие.
 	maximumBrokerStreamBytes = 64 << 20
-	maximumBrokerFrames      = 2*runtimecontract.MaximumNativeToolCalls + maximumPublishedMessages + 2
-	brokerFrameActivity      = "ACTIVITY"
-	brokerFrameTerminal      = "TERMINAL"
-	brokerFrameWriteTimeout  = 5 * time.Second
+	// maximumBrokerFrames budgets two revisions per tool, messages, process observation and terminal.
+	// maximumBrokerFrames отводит место двум ревизиям инструмента, сообщениям, наблюдению процесса и итогу.
+	maximumBrokerFrames = 2*runtimecontract.MaximumNativeToolCalls + maximumPublishedMessages + 2
+	// brokerFrameActivity identifies a live fact that cannot itself confirm completion of the turn.
+	// brokerFrameActivity обозначает текущее событие, которое само по себе не завершает ход.
+	brokerFrameActivity = "ACTIVITY"
+	// brokerFrameTerminal identifies the single final envelope after which no frame is accepted.
+	// brokerFrameTerminal обозначает единственный итоговый конверт, после которого кадры не принимаются.
+	brokerFrameTerminal = "TERMINAL"
+	// brokerFrameWriteTimeout bounds each net.Conn write; generic writers must provide their own bounds.
+	// brokerFrameWriteTimeout ограничивает запись в net.Conn; обычный writer обеспечивает свои ограничения.
+	brokerFrameWriteTimeout = 5 * time.Second
 )
 
+// brokerFrame carries a versioned sequence and exactly one payload as checked by the reader.
+// The Go shape alone does not enforce payload exclusivity, provenance or lifecycle.
+// brokerFrame переносит версию, последовательность и одну нагрузку, проверяемую читателем.
+// Сама Go-структура не обеспечивает взаимоисключение нагрузок, происхождение или жизненный цикл.
 type brokerFrame struct {
 	Version  int                              `json:"version"`
 	Sequence uint64                           `json:"sequence"`
@@ -33,6 +53,10 @@ type brokerFrame struct {
 	Terminal *brokerResponse                  `json:"terminal,omitempty"`
 }
 
+// brokerFrameWriter tracks one serialized response, advancing counters only after a successful copy.
+// Callers serialize access; input supplies optional binding for producer paths, not a new authority.
+// brokerFrameWriter отслеживает один последовательный ответ и меняет счётчики только после успешной записи.
+// Доступ упорядочивает вызывающий код; input задаёт привязку путям производителя, но не новые полномочия.
 type brokerFrameWriter struct {
 	writer   io.Writer
 	sequence uint64
@@ -41,10 +65,16 @@ type brokerFrameWriter struct {
 	input    *model.Input
 }
 
+// Write rejects unframed io.Writer use so callers cannot bypass the explicit activity/terminal methods.
+// Write запрещает запись через io.Writer в обход явных методов кадров событий и итога.
 func (writer *brokerFrameWriter) Write([]byte) (int, error) {
 	return 0, errProviderBrokerResponseInvalid
 }
 
+// activity validates the public event shape before emitting it within the reserved stream budget.
+// Cross-event ordering and trusted process identity are checked separately by the consumer.
+// activity проверяет публичную структуру события перед записью с сохранением резерва потока.
+// Порядок между событиями и доверенную идентичность процесса отдельно проверяет потребитель.
 func (writer *brokerFrameWriter) activity(activity runtimecontract.RuntimeActivity) error {
 	if activity.Validate() != nil {
 		return errProviderBrokerResponseInvalid
@@ -52,6 +82,12 @@ func (writer *brokerFrameWriter) activity(activity runtimecontract.RuntimeActivi
 	return writer.frame(brokerFrame{Kind: brokerFrameActivity, Activity: &activity})
 }
 
+// finish omits already-streamed calls and forwards only a sealed capture matching the result.
+// An oversized/invalid frame gets one bounded failure envelope preserving measurements and proof;
+// transport errors and an already-written terminal are not retried here.
+// finish исключает уже переданные вызовы и переносит только закрытый захват, совпадающий с результатом.
+// Слишком большой или некодируемый кадр заменяется одним ограниченным отказом с измерениями и доказательством;
+// транспортная ошибка и уже записанный итог здесь не повторяются.
 func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 	// Факты tool call уже доставлены в ACTIVITY; terminal переносит только итог.
 	response.Result.ToolCalls = nil
@@ -68,6 +104,12 @@ func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 	return writer.frame(brokerFrame{Kind: brokerFrameTerminal, Terminal: &failure})
 }
 
+// frame assigns sequence/version, enforces encoded limits and reserves one frame plus byte budget
+// for completion. It sets a net.Conn deadline and commits counters only after copying all bytes;
+// a failed partial write is not evidence that the peer received nothing.
+// frame назначает последовательность и версию, проверяет размер и оставляет кадр с байтовым резервом
+// для завершения. Он задаёт deadline net.Conn и меняет счётчики лишь после полной записи;
+// ошибка частичной записи не доказывает, что другая сторона ничего не получила.
 func (writer *brokerFrameWriter) frame(frame brokerFrame) error {
 	if writer.terminal || writer.sequence >= maximumBrokerFrames {
 		return errProviderBrokerResponseInvalid
@@ -99,6 +141,8 @@ func (writer *brokerFrameWriter) frame(frame brokerFrame) error {
 	return nil
 }
 
+// writeBrokerTerminal preserves an existing frame writer's sequence, or starts a terminal-only stream.
+// writeBrokerTerminal сохраняет последовательность существующего writer либо создаёт поток только с итогом.
 func writeBrokerTerminal(writer io.Writer, response brokerResponse) error {
 	if stream, ok := writer.(*brokerFrameWriter); ok {
 		return stream.finish(response)
@@ -106,6 +150,10 @@ func writeBrokerTerminal(writer io.Writer, response brokerResponse) error {
 	return (&brokerFrameWriter{writer: writer}).finish(response)
 }
 
+// bindBrokerPeerContext cancels on the next scanned input or EOF without interpreting its content.
+// The returned cleanup cancels, closes the connection to unblock Scan, and joins the reader goroutine.
+// bindBrokerPeerContext отменяет контекст при следующем вводе или EOF без разбора содержимого.
+// Возвращённая очистка отменяет контекст, закрывает соединение для выхода из Scan и ждёт goroutine.
 func bindBrokerPeerContext(ctx context.Context, connection net.Conn, scanner *bufio.Scanner) (context.Context, func()) {
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -113,10 +161,24 @@ func bindBrokerPeerContext(ctx context.Context, connection net.Conn, scanner *bu
 	return ctx, func() { cancel(); _ = connection.Close(); <-done }
 }
 
+// readProviderBrokerResponse reads an unbound stream with at most one consumer; bound process,
+// diagnostic and rollout evidence still require the explicit input/peer-aware reader.
+// readProviderBrokerResponse читает непривязанный поток максимум с одним потребителем; доказательства
+// процесса, диагностики и архива требуют отдельного читателя с точным input и идентичностью peer.
 func readProviderBrokerResponse(reader io.Reader, callbacks ...func(runtimecontract.RuntimeActivity) error) (Result, error) {
 	return readBoundProviderBrokerResponse(reader, nil, 0, callbacks...)
 }
 
+// readBoundProviderBrokerResponse rejects duplicate keys, unknown fields, bad sequence/version,
+// replayed messages, invalid tool revisions and frames following the sole terminal. Trusted process,
+// diagnostic and capture claims additionally require their exact input/peer bindings. Callback failure
+// suppresses later delivery and interrupts a connection but continues validation through terminal so
+// measured usage can survive; schema failure never exposes a partially trusted result.
+// readBoundProviderBrokerResponse отвергает дубли ключей, лишние поля, неверную последовательность/версию,
+// повтор сообщений, неверные ревизии инструментов и кадры после единственного итога. Заявления о процессе,
+// диагностике и архиве требуют точной привязки к input и peer. Отказ callback прекращает дальнейшую
+// доставку и прерывает соединение, но разбор продолжается до итога ради сохранения usage;
+// ошибка схемы не выдаёт частично доверенный результат.
 func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, writerUID uint32, callbacks ...func(runtimecontract.RuntimeActivity) error) (Result, error) {
 	if len(callbacks) > 1 {
 		return Result{}, brokerResponseError(brokerResponseCallbacks, errProviderBrokerResponseInvalid)
@@ -264,7 +326,12 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 	return result, err
 }
 
-// Проверяем дубли рекурсивно до typed decode, не принимая восстановленную модель.
+// rejectDuplicateJSONKeys walks decoded keys before typed decoding, including nested objects/arrays,
+// with depth and token-visit limits and a final EOF check. It does not require an object root or
+// impose its own byte limit; those constraints belong to the surrounding frame reader.
+// rejectDuplicateJSONKeys обходит декодированные ключи до типизированного разбора, включая вложенные
+// объекты и массивы, с пределами глубины и посещений и проверкой EOF. Корневой объект и байтовый
+// лимит проверяет окружающий читатель кадров, а не эта функция.
 func rejectDuplicateJSONKeys(raw []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
