@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.255.0
+version: 1.256.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,79 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятьдесят шестая волна — общая форма worker credential
+
+Опубликованный SHA255 — `7ee626b085dcfd1a405a2e4d0e30c57d3c776e2d`.
+Точный Av0Sap:6596 sources,222 excluded,1819 raw/610 retained/
+1209 unresolved; Go10827/21228, missing10401. Raw SHA256:
+`4ead4fe1b52422975adcdbd3e362ef927ac2371db4e69cba9744613a57a50e4c`.
+Clone-set:
+`6fe544e41e09823678665ee9d65f5b245b76c50adbae357c9bbec62ca7916560`.
+Точные unit/build, push/readback и Draft PR PATCH/GET255 подтверждены.
+
+Полностью прочитаны оба17-field определения credential и их emit/verify
+пути, а также весь issuer package platformworkergrant с тестами. Одинаковая
+форма вынесена в internalrpcauth.PlatformWorkerGrantClaims; issuer claims и
+resolver workerGrantClaims остаются разными named defined types, не aliases.
+Все поля, порядок, integer widths и единственный InstanceID omitempty
+сохранены. Общий record не проверяет подпись, producer, instance, сроки,
+permission или durable acceptance и не создаёт defaults/compat decoder.
+README явно ограничивает его назначение; оба потребителя уже импортировали
+этот root package, новых module dependencies нет.
+
+Inverse AST5 разворачивает2 local definitions, сравнивает новый production
+file с прежней точной формой и проверяет отсутствие executable изменений
+в2 test files. Все прежние тела, literals, imports и nominal types сохранены.
+Дополнительно вручную описаны27 прежних missing declarations issuer package;
+вместе с claims scope28/28 в3 файлах. Новые common type/test —2/2 EN→RU.
+Комментарии не обещают stream-limited os.ReadFile, очистку буфера на ветке
+ошибки размера, fsync каталога либо race-free ancestor traversal. Различены
+same-second readback, действительность между ticks и server-owned acceptance.
+
+Новый unit закрепляет3 exact ordinary JSON fixtures, строгий ordinary и
+canonical roundtrip, omitempty и9 malformed shapes. Maximum uint64 отдельно
+проверяется обычным JSON. Первый рабочий unit — FAIL: ожидание без потерь
+после JCS для uint64 maximum неверно для существующего IEEE754 пути.
+Уточнены только fixtures: canonical case использует точное53-bit значение,
+полная ширина uint64 остаётся ordinary test. Production canonicalizer и его
+поведение не менялись. Повторный unit и полный build PASS LOCAL.
+Context7 /golang/go: encoding/json uintEncoder, omitempty, struct tags;
+сверены существующие CanonicalJSON/DecodeCanonicalJSON на pinned Go1.26.6.
+
+Матрица неизменных границ:
+
+| Путь | Владелец проверки/эффекта | Общий record |
+| --- | --- | --- |
+| Issuer rotate/readGrant | Closed workload/key binding, version/instance, signature, lifetime, exact readback и atomic local output | Только17 прежних полей |
+| Resolver verifyWorkerGrant/Resolve | Registered trust, observed caller/policy, crypto/time и durable domain owner | Не назначает root actor/tenant |
+| Refresh/readiness/shutdown | Прежние ticker, actual-file readiness и stop/join | Нет I/O, workers или lifecycle |
+
+Raw1819→1818: удалена ровно одна прежняя worker-claims pair, без новых
+groups; остальные1818 multiset keys/counts неизменны. Все509 exact reasons/
+610 retained occurrences неизменны; исключение вместо реального выноса не
+добавлялось. Оставшаяся пара proof/authority views пока unresolved.
+
+| Unit scope | Верхние / все PASS | Build |
+| --- | --- | --- |
+| internalrpcauth root |12 /26 | Полный module PASS LOCAL |
+| authority platformworkergrant |10 /24 | Полный module PASS LOCAL |
+| control-plane authorityproof |10 /38 | Полный module PASS LOCAL с -p=2 |
+
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4, -mod=readonly/-count=1/
+-timeout120s;0 FAIL/SKIP после исправления нового теста.17 Node units,
+Go checker units, docs28/28+2/2, inverse AST5, scan/assessment,5 ignores,
+gofmt/diff-check PASS LOCAL. Generated, manifests, contracts, migrations и
+go.mod/go.sum не менялись. Full units иных packages, review, component,
+browser/live/deploy/модели/STT/почта NOT RUN по scope; старые FAIL сохранены.
+
+Рабочий lqmAlx:6598 sources,222 excluded,1818 raw/610 retained/
+1208 unresolved; Go10857/21230, missing10373. Raw SHA256:
+`2a9495be84c90a3d96d5778d2e07171d53f9b319ec962405bcadb016ee91c2c1`.
+Clone-set:
+`dfd12f7f57f53ad28407d6fe607498a62ec6b34d9a1fd89a68ffa06d9c3ae4e7`.
+Точный post-commit report публикуется в текущем Draft PR. Общая задача
+продолжается; частичное покрытие не является готовностью к приёмке.
 
 ## Двести пятьдесят пятая волна — доменный resolver полномочий
 

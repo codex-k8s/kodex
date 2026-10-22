@@ -1,5 +1,12 @@
 # Авторизация внутренних RPC
 
+`PlatformWorkerGrantClaims` хранит общую JSON-форму worker credential для
+выпуска и доменного resolver. Оба потребителя сохраняют отдельные nominal
+типы; подписи, instance/version binding, сроки, поля производителя и durable
+owner acceptance не перенесены в библиотечный record. Это данные, не
+проверенный principal или разрешение. Порядок, ширина полей и единственный
+`omitempty` для InstanceID сохранены; нового декодера или defaults нет.
+
 `policydeclaration.ProofProducer` задаёт единственную форму полей JSON декларации
 производителя доказательств для существующих writer/reader машинной политики.
 Это техническая форма данных, не проверенная личность, credential или grant.

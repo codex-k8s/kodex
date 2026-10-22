@@ -305,25 +305,7 @@ type proofClaims struct {
 // workerGrantClaims — непроверенный декодированный конверт нагрузки до успешных проверок подписи, срока,
 // экземпляра, поколения и точного производителя; похожие на исполнителя и организацию поля не
 // используются как корневые полномочия.
-type workerGrantClaims struct {
-	Version              int    `json:"v"`
-	InstanceID           string `json:"instance_id,omitempty"`
-	Issuer               string `json:"iss"`
-	Audience             string `json:"aud"`
-	Subject              string `json:"sub"`
-	CallerSPIFFEID       string `json:"caller_spiffe_id"`
-	WorkloadID           string `json:"workload_id"`
-	OrganizationID       string `json:"organization_id"`
-	ProjectID            string `json:"project_id"`
-	TenantOwner          bool   `json:"tenant_owner"`
-	Revision             uint64 `json:"revision"`
-	CredentialGeneration uint64 `json:"credential_generation"`
-	AuthorityABIVersion  uint32 `json:"authority_abi_version"`
-	JTI                  string `json:"jti"`
-	IssuedAt             int64  `json:"iat"`
-	NotBefore            int64  `json:"nbf"`
-	ExpiresAt            int64  `json:"exp"`
-}
+type workerGrantClaims internalrpcauth.PlatformWorkerGrantClaims
 
 // New validates dependencies, reads policy and signing/trust inputs, creates an OIDC verifier and
 // indexes the closed policy before returning. It closes the newly created verifier if indexing fails; no
