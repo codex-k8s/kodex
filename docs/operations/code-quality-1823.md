@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.260.0
+version: 1.261.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,74 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят первая волна — базовые доменные сущности
+
+Опубликованный SHA260 — `24b20c53867cfa12cd1e42c518edce7c9b65c41b`.
+Точный7s6avC:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go10989/21233, missing10244. Raw SHA256:
+`5863b6e4ee454b2b4849d2a86061abee1da07d96cda11e895755a48db962c8af`.
+Clone-set:
+`0f8f3355ad011e09c95b2680d610405762da26f27418368bdcb1a17f7cb323f2`.
+Точные scoped unit/build, push/readback и Draft PR PATCH/GET260 подтверждены.
+Текущие Issue/PR/head/body и clean branch сверены перед продолжением.
+
+Полностью прочитан entities.go939 строк. Все108 declarations описаны
+предметно EN→RU: project/VFS/search/identity, runtime/account/catalog,
+workspace/prompt/configuration, agent/workflow, run/graph/message/tool,
+gate/artifact/attachment, schedule/integration и assistant plan/history.
+Package и прежнее inline пояснение internal plan fields тоже двуязычны.
+AST1 без комментариев/координат совпадает с SHA260: поля, JSON tags,
+pointer/omitempty semantics, maps/slices, imports и TokenUsage.Valid неизменны.
+Новые API/dependencies/SDK не добавлялись; ранее прочитанные профильные
+guides/AGENTS не изменились. Одноимённые views не выносились в общий
+runtime только ради похожих business fields.
+
+Комментарии не превращают data shape в источник полномочий или валидатор.
+Различены exact secret object descriptors и байты credentials, capability
+catalog/preview и per-effect grant, reported readiness и реальный claim,
+context/version pins и ownership, expected absence и доказанное отсутствие.
+Наличие SourceAvailable/Permitted/Ready/SafeParameters не названо механизмом
+проверки или redaction. Maps/slices не объявлены автоматически frozen/deep
+copies. Prompt platform/core ownership и owner overlay/template/rendered
+digests остаются отдельными. Existing JSON-excluded internal plan Input/flat
+target fields не удалялись и не публиковались; старое пояснение намерения
+перехода заменено описанием их фактической internal adapter роли.
+
+Матрица неизменных границ:
+
+| Группа | Что хранит запись | Что не выполняет форма |
+| --- | --- | --- |
+| Runtime/provider/secret | Revision/generation/object UID/resource version/digest и readiness views | Не загрузка secret, не execution reservation и не финансовый допуск |
+| Prompt/workspace | Exact dependencies, template/core inputs, path rules и limits | Не проверка provenance, не доступ к host paths и не выдача capabilities |
+| Run/event/gate | Version/sequence/session/attempt links, content и consequences | Не публикация события, не server-owned approval и не terminal commit |
+| Artifact/attachment | Exact file revision/digest, scan/lifecycle и manifest | Не чтение карантина, не upload path и не admission по одному статусу |
+| Schedule/plan | Pinned definitions, proposal/receipt/conflicts и occurrence lineage | Не запуск, не применение и не повтор частичного эффекта |
+
+TokenUsage.Valid подробно описан по неизменному выражению: все значения
+неотрицательны, total=input+output, cached/cache-write ограничены input
+каждый отдельно, reasoning ограничен output. Проверки суммы двух cache
+видов, сравнения с context window и решений о квоте/кредитах здесь нет;
+комментарием они не добавлялись и не объявлены реализованными.
+
+102 верхних/278 всех unit PASS выбранных domain/types/... + grpc +
+domain/service/roleimage,0 FAIL,те же3 SKIP disposable grpc contours,
+поимённо перечисленные в260. Полный control-plane build -p=2 PASS LOCAL.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4, -mod=readonly/-count=1/
+-timeout120s.17 Node units, Go checker units, docs108/108, AST1,
+canonical scan/assessment,5 addressed ignores и gofmt/diff-check PASS LOCAL.
+Full unit прочих packages/modules, component/review/browser/live/deploy/
+модели/STT/почта NOT RUN по scope; старые FAIL не объявлены исправленными.
+
+Raw count, clone-set fingerprint и registry528 entries/631 occurrences
+не изменились. Комментарии не выдаются за устранение новых дубликатов.
+Рабочий j3m8fK:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go11097/21233, missing10136. Raw SHA256:
+`9ff9f85bf42327fff7c3846e292d69353305434679e85034d0ac43d42f8eb3f5`.
+Clone-set прежний:
+`0f8f3355ad011e09c95b2680d610405762da26f27418368bdcb1a17f7cb323f2`.
+Exact post-commit отчёт публикуется в текущем Draft PR; общий scope
+остаётся незавершённым до полного разбора и документации репозитория.
 
 ## Двести шестидесятая волна — risk, impact и terminal transport
 
