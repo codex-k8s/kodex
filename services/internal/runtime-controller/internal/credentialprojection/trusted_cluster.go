@@ -12,8 +12,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// Транспорт не создаёт proof и не изменяет lease/attempt/input в запросе.
-// Владельческая проверка materialization остаётся обязанностью принимающей стороны.
+// dialTrustedCluster accepts only the explicit trusted-cluster profile, exact internal broker target and bounded timeout.
+// It constructs a plaintext, size-bounded gRPC channel with the trusted operation interceptor and no local issuer or new proof.
+// Construction performs no network I/O; lease/attempt/input pins remain unchanged and materialization authorization belongs to the receiver.
+// dialTrustedCluster принимает только явный профиль доверенного кластера, точный внутренний адрес брокера и ограниченный таймаут.
+// Создаётся незашифрованный ограниченный по размеру канал gRPC с перехватчиком доверенных операций, без локального издателя и нового доказательства.
+// Создание не обращается к сети; привязки аренды/попытки/входа неизменны, а авторизация размещения остаётся у принимающей стороны.
 func dialTrustedCluster(ctx context.Context, config Config) (*Client, error) {
 	if ctx == nil || ctx.Err() != nil || config.RPCProfile != transportprofile.TrustedCluster ||
 		config.Target != "dns:///secret-broker.kodex-system.svc:8443" ||

@@ -10,6 +10,10 @@ import (
 	"testing"
 )
 
+// scopeCredentialAPI records system and project materialization requests and builds descriptors from synthetic input.
+// It replaces only the exercised RPC methods and does not grant access to a real broker or Secret.
+// scopeCredentialAPI записывает запросы системного и проектного размещения и создаёт дескрипторы по синтетическому входу.
+// Заменяются только вызываемые методы RPC; доступ к настоящему брокеру или Secret не предоставляется.
 type scopeCredentialAPI struct {
 	secretbrokerv1.RuntimeCredentialProjectionServiceClient
 	input           runtimecontract.RunnerInput
@@ -17,18 +21,32 @@ type scopeCredentialAPI struct {
 	projectRequests []*secretbrokerv1.MaterializeRuntimeCredentialsRequest
 }
 
+// MaterializeSystemAssistantCredentials records the system envelope and returns matching synthetic metadata without runtime keys.
+// It does not contact a provider, validate authority or persist credentials.
+// MaterializeSystemAssistantCredentials записывает системную оболочку и возвращает совпадающие синтетические метаданные без ключей выполнения.
+// Обращения к провайдеру, проверки полномочий и сохранения учётных данных нет.
 func (api *scopeCredentialAPI) MaterializeSystemAssistantCredentials(_ context.Context, request *secretbrokerv1.MaterializeSystemAssistantCredentialsRequest, _ ...grpc.CallOption) (*secretbrokerv1.MaterializeSystemAssistantCredentialsResponse, error) {
 	api.systemRequests = append(api.systemRequests, request)
 	descriptor := projectionTestDescriptor(api.input)
 	descriptor.RuntimeSecretKeys = nil
 	return &secretbrokerv1.MaterializeSystemAssistantCredentialsResponse{Projection: descriptor}, nil
 }
+
+// MaterializeRuntimeCredentials records the project execution request and returns matching synthetic metadata without runtime keys.
+// The stub captures route selection rather than implementing server-side materialization.
+// MaterializeRuntimeCredentials записывает проектный запрос выполнения и возвращает совпадающие синтетические метаданные без ключей выполнения.
+// Подставной клиент фиксирует выбор маршрута, а не реализует серверное размещение.
 func (api *scopeCredentialAPI) MaterializeRuntimeCredentials(_ context.Context, request *secretbrokerv1.MaterializeRuntimeCredentialsRequest, _ ...grpc.CallOption) (*secretbrokerv1.MaterializeRuntimeCredentialsResponse, error) {
 	api.projectRequests = append(api.projectRequests, request)
 	descriptor := projectionTestDescriptor(api.input)
 	descriptor.RuntimeSecretKeys = nil
 	return &secretbrokerv1.MaterializeRuntimeCredentialsResponse{Projection: descriptor}, nil
 }
+
+// TestCredentialMaterializationRoutesByScopeNotScreenContext checks the system scope chooses only the system RPC,
+// while ordinary and configured project scopes choose only the project RPC despite a project screen reference.
+// TestCredentialMaterializationRoutesByScopeNotScreenContext проверяет выбор только системного RPC для системной области,
+// а обычного проектного RPC — для обычной и настроенной проектной областей, несмотря на ссылку проектного экрана.
 func TestCredentialMaterializationRoutesByScopeNotScreenContext(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeNone, runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -53,6 +71,11 @@ func TestCredentialMaterializationRoutesByScopeNotScreenContext(t *testing.T) {
 		})
 	}
 }
+
+// TestCredentialMaterializationRejectsUnknownAndDetachedScopeBeforeRPC rejects empty/unknown scope
+// and project scope without its profile, requiring that neither stub RPC has been called.
+// TestCredentialMaterializationRejectsUnknownAndDetachedScopeBeforeRPC отклоняет пустую/неизвестную область
+// и проектную область без профиля, требуя отсутствия вызовов обоих подставных RPC.
 func TestCredentialMaterializationRejectsUnknownAndDetachedScopeBeforeRPC(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{"", "ADMIN", runtimecontract.AssistantScopeProject} {
 		input := scopeCredentialInput()
@@ -63,6 +86,11 @@ func TestCredentialMaterializationRejectsUnknownAndDetachedScopeBeforeRPC(t *tes
 		}
 	}
 }
+
+// scopeCredentialInput builds a synthetic turn input with environment, workspace and exact binding digests for scope-routing tests.
+// Paths, identities and image pins are fixtures only; no files, leases, workloads or provider sessions are created.
+// scopeCredentialInput создаёт синтетический вход хода с окружением, рабочей областью и точными дайджестами привязок для тестов маршрутизации.
+// Пути, идентичности и привязки образа — только образцы; файлы, аренды, нагрузки и сессии провайдера не создаются.
 func scopeCredentialInput() runtimecontract.RunnerInput {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	image := runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh", RecipeGeneration: 1, Reference: "registry.example/runner@" + digest, Digest: digest}

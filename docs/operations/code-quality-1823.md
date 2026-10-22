@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.180.0
+version: 1.181.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,47 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят первая волна — завершён клиент проекции и общая test-конфигурация
+
+На базе опубликованного SHA `dd1b77288e09e4fbe99c493731f446f46876fedf`
+все оставшиеся восемь объявлений credentialprojection получили предметные
+EN→RU комментарии: scope-routing fake API/fixture/tests, trusted-cluster
+constructor и его test. Весь пакет — 36/36; вместе с конфигурационными
+тестами — scoped Go-docs-check 40/40, PASS LOCAL. Отдельно пояснено,
+что создание gRPC channel не является соединением или readiness;
+существовавший trusted-cluster транспорт plaintext и не создаёт issuer/proof,
+а server-owned materialization authorization остаётся у принимающей стороны.
+Профиль, interceptors, bounds, targets и порядок проверок не менялись.
+Context7 `/grpc/grpc-go` и pinned local `go doc` NewClient/insecure credentials
+проверены; SDK, wire, credentials и развёрнутая среда неизменны.
+
+В трёх тестах app/config_test.go одинаковые семь t.Setenv вынесены в
+package-private configureRuntimeControllerTestEnvironment. Единственный
+различавшийся параметр — runtime namespace — передаётся явно; порядок
+установки, значения, дополнительные мутации и проверки каждого теста
+сохранены, cleanup по-прежнему принадлежит t.Setenv. Helper также EN→RU.
+Полные четыре файла механически сравнены с parent: после раскрытия трёх
+helper calls и удаления только t.Helper/comments исполняемые строки после
+gofmt совпадают. Этот короткий повтор не был отдельной detector-группой;
+его вынос не объявляется уменьшением raw-счётчика.
+
+PASS LOCAL: RC `go test -count=1 -json ./internal/app
+./internal/credentialprojection` — 65 верхних PASS, 196 PASS с подтестами,
+0 SKIP/FAIL; полный module `go build ./...`, 16 unit анализатора,
+Go-checker, пять ignore-boundaries, scoped Go-docs-check и diff-check.
+Go1.26.6, GOENV=off/GOWORK=off. Повтор на точном опубликованном SHA
+фиксируется в том же PR. Component/live/browser/deploy, реальные агенты
+и полный repository Go-docs-check — NOT RUN; прежний diagnostics FAIL
+не объявлен исправленным.
+
+Detector: 6569 source, 222 generated/lock исключения, 1844 raw,
+578 точных решений, 1266 неразобранных. Реестр исключений не менялся.
+Рабочий raw SHA-256
+`00d5c8f022bf14eaf787471ee7d7559133f7cd8bd7f4ae4a81f088e76102a7cb`,
+clone-set fingerprint
+`a104508af8dbbbc75f548346808570220de554d95a87d8f4a878d830894a59c1`.
+Go-реестр 6637/21130, непокрыты 14493. Единый Draft PR и цель не завершены.
 
 ## Сто восьмидесятая волна — конфигурация и адаптеры учётных данных
 
