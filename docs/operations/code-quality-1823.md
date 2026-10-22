@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.277.0
+version: 1.278.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,53 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят восьмая волна — оставшиеся порты control-plane
+
+Опубликованный SHA277 — `fcc91c307b34528f0d7fd873c6771387bbfe8f0f`.
+Точный YTvO3J:6609 sources,222 excluded,1818 raw/666 retained/
+1152 unresolved; Go12081/21243,missing9162. Raw SHA256:
+`4f842fc9cd55a1e4cc5c2377e6a37167fa2523205ab5bbb928279ea1c3298d6f`;
+clone-set e1699ebc… . На exact SHA277 reader6/6, tooling17/17, Go checker,
+inverse byte proof и syntax4 PASS LOCAL. Полный существующий diagnostics
+контур19/21, те же2 FAIL до/после extraction; это не общий PASS.
+Push/readback и Draft PR PATCH/GET277 подтверждены.
+
+Последние7 файлов domain/repository/platform прочитаны полностью(200 lines):
+configuration source/writeback, model catalog, provider renewal, runtime
+execution proof, secret draft и trusted STT. Все47 declarations, включая
+методы интерфейсов и operation constants, описаны предметно EN→RU.
+Теперь весь CP domain/repository:9 files,294/294 declarations,missing0.
+Это завершение комментариев портов, не всей domain/service/repository
+реализации и не runtime acceptance.
+
+Comments разделяют claim/renew/source completion/failure, writeback begin
+и external completion, replay receipt и право на повтор действия. Source
+URL и DTO поля не объявлены authority. Catalog task pins/descriptor/request
+digest и observation freshness раздельны; запись model shape не выдаёт
+provenance или право запуска. Renewal claim/readback/authorize/validate/
+complete — разные contracts, unknown outcome не подменяется blind retry.
+Recovered назначается read adapter и исключён из JSON; descriptor не равен
+plaintext credential. RuntimeExecutionProof — owner metadata, не signature
+или worker-selected actor. STT helper описан как закрытое сопоставление
+точных workload/operation, а не полная transport/principal authorization.
+Ни один контракт, input field, signature или алгоритм не менялся.
+
+AST7 без comments/positions идентичен SHA277; весь clone multiset1818
+keys/counts и562 retained entries/666 occurrences неизменны. Ни один
+target path не встречается в raw groups; новых исключений нет.
+Рабочий4XS3RW:6609/222,1818/666/1152; Go12128/21243,missing9115.
+Raw SHA256:
+`90b4ecdd9241b6bd88baa425ccb3a31be75f09c0ad6bc447a3a3b9917116921a`;
+clone-set прежний e1699ebc… . Docs selected47/47 и whole ports294/294,
+AST7,17 Node/Go checker units,5 ignore boundaries и gofmt/diff-check
+PASS LOCAL. CP errs/repository/types/grpc/roleimage106 верхних/302 всех
+units и полный CP build -p=2 PASS LOCAL,0 FAIL;3 прежних explicit SKIP:
+TestAssistantWarmRuntimeOwnerSnapshotTransport,TestLegacyEmailClaimCasterFixture,
+TestSecretOwnerLoopbackHarness. После коммита exact проверки и PR readback
+повторяются. Generated, SQL/migrations, manifests и runtime authority/
+lifecycle не менялись. Общая задача открыта; исторические FAIL остаются,
+full baseline/component/browser/live/deploy NOT RUN по scoped границам.
 
 ## Двести семьдесят седьмая волна — общий metadata reader диагностики
 
