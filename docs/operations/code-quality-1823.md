@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.293.0
+version: 1.294.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,72 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто четвёртая волна — единый retry readback RPC
+
+Опубликованный SHA293 — `c092661fd9cc6f56ce248769d086172d0c366c7c`.
+Точный ulYQNy:6619 sources,222 excluded,1813 raw/720 retained/
+1093 unresolved; Go12645/21259,missing8614. Raw SHA256:
+`b9afd74325016f5f917fbd6db89716611791815abd3f25b76aaef3a276c92403`;
+clone-set06011a2d… . Exact26/55 unit/full authority build, AST3,
+tooling/scan PASS LOCAL,0 FAIL/SKIP; push и Draft PR PATCH/GET293 есть.
+
+Два одинаковых client-owned retry loops вынесены в private generic
+callReadbackRPC. Это НЕ универсальная retry policy, новая библиотека,
+новый timeout или повтор неидемпотентных команд. Два прежних generated RPC
+замкнуты в callbacks с теми же ctx/request pointers, credential/JWS bytes,
+idempotency/correlation IDs; запросы не перестраиваются между попытками.
+
+Матрица каждого RPC:первая попытка без нового context precheck;
+Unavailable (включая wrapped) →100ms→вторая→250ms→третья;
+success/другая ошибка/третья попытка →выход. Timer wait cancellation
+останавливает timer и возвращает ctx.Err НАПРЯМУЮ. Ошибка самого RPC
+(включая context.Canceled) обёрнута ровно прежним stage prefix с %w.
+Caller возвращает нулевой SnapshotAttestationReceipt при любой ошибке;
+частичный callback result не становится принятой квитанцией. Новых
+goroutines, контекстов, storage/grants или clocks у helper нет.
+
+Inverse AST1 возвращает весь client.go SHA293:ACTUAL helper loop после
+подстановки callback/result/zero-return буквально совпадает с обоими
+старыми loops, callback target/ctx/request и stage prefix проверены.
+Проверяется final wrapping policy и exact import delta codes/status;
+остальное полное дерево клиента неизменно. Context7/grpc-go и pinned
+v1.82.1 status.Code/FromError docs сверены:wrapped status сохраняет code,
+plain/context error не превращается сам по себе в codes.Unavailable.
+
+20 новых table subcases для обоих реальных stage prefixes проверяют
+first/third success, wrapped Unavailable, максимум3 попытки, denied/plain
+failure, wrapped RPC cancellation, direct wait cancellation/deadline и
+сохранённую первую попытку уже отменённого context. Проверены cause identity,
+точный error text/code и callback result identity. Реальные timers, но
+callbacks локальные без сети/credential/controller. Это не доказательство
+дедупликации сервера или успешного replay после потери ответа.
+
+Selected27 верхних/76 всех unit и full authority build -p=2 PASS LOCAL,
+0 FAIL/SKIP. Component compiled NOT RUN, explicit regex/env-u DSN прежние.
+Новые helper/test2 EN→RU, весь readback43/43,missing0;17 Node/Go checker
+units, inverse AST1,5 ignores и diff-check PASS LOCAL.
+
+Выполненная команда unit/build (из модуля internal-rpc-authority):
+```bash
+set -e
+set -o pipefail
+env -u KODEX_AUTHORITY_POSTGRES_TEST_DSN GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/client/readback ./internal/client/restoreagent ./internal/domain/types/value ./internal/domain/service ./internal/repository/postgres/authority -run '^(TestReadbackRPCRetryPreservesErrorBoundaries|TestNewRequestUUIDReturnsDistinctVersionFourIdentifiers|TestSecretAttestorReusesTransportAcrossRefreshes|TestPollНеЗакрываетAdmissionВоВремяШтатнойПроверки|TestVerifySafeNoDirectiveFailClosedДоПервогоВнешнегоPoll|TestVerifySafeNoDirectiveПринимаетТолькоOpenИСозревшийCompleted|TestJoinedAuthorityUUIDPreservesEncoding|TestTerminatedAuthorityUUIDPreservesEncoding|TestReadbackTTLWindowsCoverProjectedSecretDelivery|TestReadbackIntentIdentityIncludesSourceRevision|TestValidCredentialAuthentication|TestMatchesObservedCaller|TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration|TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding|TestAuthorizationExpiryDoesNotExceedMetadataWindow|TestDurableFreshnessClockAndOutageBoundaries|TestDurableFreshnessConsumesNetworkTimeAndFailsOnDatabaseLoss|TestDurableFreshnessRejectsCorruptionAndSlidingSameReceipt|TestFreshnessAdoptsExactReplicaReceiptForWorkingAccept|TestIssueContinuationInheritsVerifiedRootAndReservesChild|TestSnapshotActivationAllowsFreshReceiptForExactSnapshot|TestContextAcceptanceUsesExactSnapshotReceiptArguments|TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor|TestProofReservationAllowsConcurrentOutOfOrderProofs|TestContinuationReservationAtomicallyRequiresAcceptedParent|TestReadinessReservationUsesModeSpecificWritePath|TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt)$' | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Рабочий eRh8ek:6621 sources,222 excluded,1812 raw/720 retained/
+1092 unresolved; Go12647/21261,missing8614. Удалена одна настоящая
+retry group157tokens; новые группы не добавлены,1812 остальных keys/counts
+прежние. Registry602/720 буквально прежний, новых exclusions нет.
+Raw SHA256:
+`34cb38603bcddc858c0403a014721c7cfa0f5e3765a5ff33527c8b5f42e8df96`;
+clone-set:
+`ee12a7b9aedb8e8b0351a046699b7b9490c1e8b44742c771b347db582dee8c77`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, dependencies, contracts, applied migrations и live state прежние.
+Finding verifyDirective из293 НЕ исправлен; historical FAIL/scoped NOT RUN
+сохраняются. Общая задача открыта.
 
 ## Двести девяносто третья волна — полный комментарий restore-agent
 

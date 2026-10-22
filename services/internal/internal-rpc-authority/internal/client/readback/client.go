@@ -17,9 +17,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -431,24 +429,13 @@ func (client *Client) Attest(
 		IdempotencyKey:               challengeKey,
 		CorrelationId:                challengeKey,
 	}
-	var challenge *internalrpcauthorityv1.IssueAttestationChallengeResponse
-	for attempt, delay := range []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond} {
-		if delay > 0 {
-			timer := time.NewTimer(delay)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return repository.SnapshotAttestationReceipt{}, ctx.Err()
-			case <-timer.C:
-			}
-		}
-		challenge, err = client.transport.api.IssueAttestationChallenge(ctx, challengeRequest)
-		if err == nil || status.Code(err) != codes.Unavailable || attempt == 2 {
-			break
-		}
-	}
+	challenge, err := callReadbackRPC(ctx, "issue readback attestation challenge", func() (
+		*internalrpcauthorityv1.IssueAttestationChallengeResponse, error,
+	) {
+		return client.transport.api.IssueAttestationChallenge(ctx, challengeRequest)
+	})
 	if err != nil {
-		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("issue readback attestation challenge: %w", err)
+		return repository.SnapshotAttestationReceipt{}, err
 	}
 	if challenge.GetKind() !=
 		internalrpcauthorityv1.ReadbackAttestationKind_READBACK_ATTESTATION_KIND_SNAPSHOT ||
@@ -525,24 +512,13 @@ func (client *Client) Attest(
 		IdempotencyKey:                   attestationKey,
 		CorrelationId:                    attestationKey,
 	}
-	var receipt *internalrpcauthorityv1.AttestServedStateResponse
-	for attempt, delay := range []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond} {
-		if delay > 0 {
-			timer := time.NewTimer(delay)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return repository.SnapshotAttestationReceipt{}, ctx.Err()
-			case <-timer.C:
-			}
-		}
-		receipt, err = client.transport.api.AttestServedState(ctx, request)
-		if err == nil || status.Code(err) != codes.Unavailable || attempt == 2 {
-			break
-		}
-	}
+	receipt, err := callReadbackRPC(ctx, "attest served authority state", func() (
+		*internalrpcauthorityv1.AttestServedStateResponse, error,
+	) {
+		return client.transport.api.AttestServedState(ctx, request)
+	})
 	if err != nil {
-		return repository.SnapshotAttestationReceipt{}, fmt.Errorf("attest served authority state: %w", err)
+		return repository.SnapshotAttestationReceipt{}, err
 	}
 	if receipt.GetKind() !=
 		internalrpcauthorityv1.ReadbackAttestationKind_READBACK_ATTESTATION_KIND_SNAPSHOT ||
