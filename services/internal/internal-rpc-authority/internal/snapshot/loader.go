@@ -264,32 +264,19 @@ type operationBinding struct {
 // version, attempt or idempotency values.
 // requestProfile называет требуемые политикой измерения привязки, а не переданные вызывающим значения
 // ресурса, версии, попытки или идемпотентности.
-type requestProfile struct {
-	Mode        string `json:"mode"`
-	Resource    string `json:"resource"`
-	Version     string `json:"version"`
-	Attempt     string `json:"attempt"`
-	Idempotency string `json:"idempotency"`
-}
+type requestProfile policydeclaration.RequestProfile
 
 // continuationProfile restricts a child operation to one exact parent operation and full RPC method; it
 // does not authorize unrelated delegation edges.
 // continuationProfile ограничивает дочернюю операцию одной точной родительской операцией и полным
 // методом RPC, не разрешая посторонние рёбра делегирования.
-type continuationProfile struct {
-	ParentOperationID string `json:"parent_operation_id"`
-	ParentFullMethod  string `json:"parent_full_method"`
-}
+type continuationProfile policydeclaration.ContinuationProfile
 
 // localPeer carries policy-owned local UID, primary GID and shared filesystem GID pins for Unix-socket
 // boundaries; these values are not observed peer credentials by themselves.
 // localPeer содержит закреплённые политикой UID, основной GID и общий файловый GID для границ
 // Unix-сокетов; сами значения не являются наблюдаемыми учётными данными стороны.
-type localPeer struct {
-	UID         uint32 `json:"uid"`
-	PrimaryGID  uint32 `json:"primary_gid"`
-	SharedFSGID uint32 `json:"shared_fs_gid"`
-}
+type localPeer policydeclaration.LocalPeer
 
 // Load verifies the independently rooted manifest signer and canonical signed snapshot, checks
 // revision/lifetime/history and key bindings, then projects role-specific policy and key material. It

@@ -86,28 +86,15 @@ type binding struct {
 
 // requestProfile defines which request pins must be supplied for an operation.
 // requestProfile задаёт обязательные поля привязки запроса для операции.
-type requestProfile struct {
-	Mode        string `json:"mode"`
-	Resource    string `json:"resource"`
-	Version     string `json:"version"`
-	Attempt     string `json:"attempt"`
-	Idempotency string `json:"idempotency"`
-}
+type requestProfile policydeclaration.RequestProfile
 
 // continuationProfile pins a delegated operation to its parent operation.
 // continuationProfile привязывает делегированную операцию к родительской.
-type continuationProfile struct {
-	ParentOperationID string `json:"parent_operation_id"`
-	ParentFullMethod  string `json:"parent_full_method"`
-}
+type continuationProfile policydeclaration.ContinuationProfile
 
 // localPeer records the expected Unix identity on the local transport.
 // localPeer хранит ожидаемую Unix-идентичность локального соединения.
-type localPeer struct {
-	UID         uint32 `json:"uid"`
-	PrimaryGID  uint32 `json:"primary_gid"`
-	SharedFSGID uint32 `json:"shared_fs_gid"`
-}
+type localPeer policydeclaration.LocalPeer
 
 // profile collects one workload's proof and target binding inputs before emission.
 // profile собирает исходные параметры доказательства и цели одной нагрузки.

@@ -4056,6 +4056,22 @@
       "fragmentSHA256": "907ee35763ee633f66d71616d063d44a14ac98610b6b17d9a4901a0a20add9a3",
       "count": 1,
       "reason": "Совпадает116-token форма лексикографического sort.Slice comparator, но общий алгоритм уже предоставляет стандартная сортировка. Runtime environment сортирует сетевые правила по Destination/Protocol/Port, publisher — открытые ключи доказательств по Issuer/Generation/Status, закрепляя разные канонические JSON digests. Типы среднего и последнего ключей различны, порядок полей является частью разных persisted contracts. Новый общий helper потребовал бы generic projections/comparator callbacks ради явного трёхполевого порядка и скрыл бы эти привязки без устранения доменного повтора. Прочитаны полные окружающие операции; оставлено только точное окно этих путей и fragment SHA-256 с кратностью1, не другие сортировки или файлы."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/controlplaneclient/cmd/policygen/main.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/snapshot/loader.go",
+      "fragmentSHA256": "cf6fda12475ebbfcdcb34223015275ea257cfcc91aa49176327f981dec5d7a51",
+      "count": 1,
+      "reason": "После реального выноса producer и3 binding-profile forms это156-token окно пересекает конец policy envelope, nominal producer definition и начало operation binding. Оба consumer сохраняют свои slices локальных типов; у writer поле authority_proof_producer_id имеет omitempty, у signed reader — нет. Общего исполняемого алгоритма здесь нет, а перенос всего envelope потребовал бы generic record с параметрами producer/binding либо изменения nominal/serialization boundaries ради коротких деклараций. Повторяемая техническая field layout уже вынесена; consumer-owned machine-policy и closed operation views остаются у владельцев. Сохранена только точная пара путей/fragment/count1, не policygen, loader или все DTO."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/authorityproof/service.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/snapshot/loader.go",
+      "fragmentSHA256": "e13abfb8529fb783c63869b80066b0229c33bac263bdf043e61e11bb5fdc7142",
+      "count": 1,
+      "reason": "Остаточные156 tokens соединяют nominal producer wrapper, domain-owned operationBinding и уже общие профили запроса/продолжения/Unix peer. Resolver использует ProducerID, loader — ProofProducerID с тем же JSON key; вложенные типы намеренно остаются отдельными named types. Объединение полного binding потребовало бы изменения доменных полей/вызовов либо generic schema с несколькими типами, чтобы сохранить эти границы. Проверки indexPolicy/role projection не повторяются, а общие24 producer и10 profile fields уже имеют один источник. Здесь сохраняется явная доменная форма, а не копия алгоритма; исключены только точные paths/fragment/count1, не файлы или операции полномочий."
     }
   ]
 }

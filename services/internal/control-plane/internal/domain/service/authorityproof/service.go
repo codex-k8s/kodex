@@ -122,24 +122,25 @@ type operationBinding struct {
 	Continuation        *continuationProfile `json:"continuation,omitempty"`
 }
 
-type requestProfile struct {
-	Mode        string `json:"mode"`
-	Resource    string `json:"resource"`
-	Version     string `json:"version"`
-	Attempt     string `json:"attempt"`
-	Idempotency string `json:"idempotency"`
-}
+// requestProfile keeps this resolver's nominal request-binding declaration over
+// the shared field layout; validRequestProfile still enforces its closed modes
+// and required/forbidden dimensions before a binding can be used.
+// requestProfile сохраняет отдельную декларацию привязки resolver на общей форме;
+// validRequestProfile по-прежнему проверяет закрытые режимы и обязательность
+// либо запрет измерений до использования привязки.
+type requestProfile policydeclaration.RequestProfile
 
-type continuationProfile struct {
-	ParentOperationID string `json:"parent_operation_id"`
-	ParentFullMethod  string `json:"parent_full_method"`
-}
+// continuationProfile retains the domain's exact parent-operation/method input;
+// type reuse does not accept a parent context or create delegation authority.
+// continuationProfile сохраняет точный доменный ввод родительской операции
+// и метода; общий тип не принимает контекст родителя и не выдаёт делегирование.
+type continuationProfile policydeclaration.ContinuationProfile
 
-type localPeer struct {
-	UID         uint32 `json:"uid"`
-	PrimaryGID  uint32 `json:"primary_gid"`
-	SharedFSGID uint32 `json:"shared_fs_gid"`
-}
+// localPeer retains configured Unix-peer pins as a distinct policy type, not
+// observed credentials; transport authentication remains independently required.
+// localPeer сохраняет настройки Unix-стороны отдельным типом политики, а не
+// наблюдаемыми учётными данными; проверка транспорта требуется независимо.
+type localPeer policydeclaration.LocalPeer
 
 type provenance struct {
 	Source       string `json:"source"`

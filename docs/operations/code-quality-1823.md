@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.253.0
+version: 1.254.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,89 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятьдесят четвёртая волна — общие binding profiles
+
+Опубликованный SHA253 — `fbf6aef214d0761f0de4820da937a6f84d602ce4`.
+Точный xvmMjv:6594 sources,222 excluded,1820 raw/608 retained/
+1212 unresolved; Go10761/21224, missing10463. Raw SHA256:
+`970758ce6879581d1e02e535b360e6c0d723b50aed95e0571d3156095a84c040`.
+Clone-set:
+`6b60606e87945d191cccb1a2b428633e320053ca9fbb04bd8148ddebf04786a9`.
+Точные4 scoped unit/build, push/readback и Draft PR PATCH/GET253 подтверждены.
+
+Сопоставлены9 полных определений requestProfile, continuationProfile и
+localPeer в тех же3 writer/loader/resolver consumers. Одинаковые5 string,
+2 string и3 uint32 поля вынесены в policydeclaration.RequestProfile,
+ContinuationProfile и LocalPeer без production imports. Все9 local
+declarations остаются named defined types, не aliases; типы вложенных
+полей operation bindings, имена, порядок и JSON tags неизменны. Никаких
+defaults, accepted-parent decisions, peer observation, policy values или
+business permissions в leaf не добавлено. README описывает эти non-goals.
+
+Inverse AST4 разворачивает9 local definitions и сравнивает весь новый
+production file с3 прежними normalized struct layouts: identity SHA253.
+Новые4 declarations EN→RU, все9 local declarations тоже; scope13/13.
+Полный реестр затронутых5 Go-файлов:123 declarations,82 bilingual,
+41 прежний missing в control-plane остаётся видимым и не называется PASS.
+Повторение comment patch после отсутствующего exact README context сделано
+только после readback: первая patch была отклонена без частичных изменений.
+
+Один новый unit содержит6 zero/populated fixtures всех3 форм: exact
+ordinary JSON bytes, strict decode, canonical roundtrip и сравнение всех
+значений.10 malformed inputs проверяют неизвестные/повторные поля, неверные
+типы и отрицательный/переполненный uint32. Это проверка прежних типов и
+serialization, не доказательство transport identity или authority.
+Существующие profile/continuation/project-scope/owner tests пройдены повторно.
+
+Матрица неизменного пути:
+
+| Поле/consumer | Прежняя граница | Что не переносилось |
+| --- | --- | --- |
+| RequestProfile | Writer emits exact per-operation dimensions; resolver validRequestProfile и domain request checks | Нет default либо ослабления REQUIRED/FORBIDDEN |
+| ContinuationProfile | Signed exact parent tuple, index/role selection и accepted-context verification | Поля не становятся разрешением делегирования или доказательством принятия родителя |
+| LocalPeer | Policy-owned pins против фактической транспортной проверки | Настройки UID/GID не заменяют observed credential |
+| Shared leaf | Только формы данных, не владельцы прав/состояния | Нет I/O, provider, crypto, config read, lifecycle или события |
+
+Из3 прежних остаточных windows удалено одно137-token окно, другое
+226→156; прежнее156-token envelope window сохраняется. Multiset comparison:
+2 old keys заменены1 residual key, остальные1818 groups неизменны;
+raw1820→1819. Обе оставшиеся156-token пары полностью прочитаны: это
+consumer-owned nominal envelopes/operation binding и общий type wrapper,
+не повтор проверок. Writer/reader имеют разные omitempty semantics,
+resolver называет producer field иначе; сохранение local nested types при
+полном общем record потребовало бы generic schema либо смены доменных
+границ. Реальные24 producer и10 profile fields уже общие. Для этих2
+остатков добавлены exact path/fragment/count1 reasons, не файлы/DTO целиком.
+Все прежние507 entries/608 occurrences неизменны; теперь509/610.
+
+Ранее полностью прочитанные guides/AGENTS не изменились; критерий shared
+leaf GO-DOC-006 и GOV-DOC-003 сверены. Используется прежний encoding/json v1
+contract, сверенный через Context7/pinned Go1.26.6 docs; новые SDK/imports,
+go.mod/go.sum, generated outputs, templates, policy values, контракты и
+миграции не менялись. Handwritten writer меняет лишь9 type declarations
+в общем наборе3 consumers, а не generated output.
+
+| Unit scope | Верхние / все PASS | Build |
+| --- | --- | --- |
+| internalrpcauth `.` и `./policydeclaration` |14 /40 | Полный module PASS LOCAL |
+| controlplaneclient `./cmd/policygen` |9 /9 | Полный module PASS LOCAL |
+| control-plane `./internal/domain/service/authorityproof` |10 /38 | Полный module PASS LOCAL с -p=2 |
+| authority domain/... + application/publisher/snapshot/grpc |50 /108 | Полный module PASS LOCAL |
+
+Те же -mod=readonly/-count=1/-timeout120s, GOENV/GOWORK off, Go1.26.6,
+GOMAXPROCS=4;0 FAIL/SKIP.17 Node/Go checker units, new docs4/4,
+selected13/13, inverse AST4, gofmt/diff-check, scan и5 addressed ignores
+PASS LOCAL. Full unit всех modules, component/codegen/live/browser/deploy/
+ИИ/почта/STT NOT RUN по scoped режиму; full acceptance не заявлена.
+
+Рабочий cxvMRI:6596 sources,222 excluded,1819 raw/610 retained/
+1209 unresolved; Go10768/21228, missing10460. Raw SHA256:
+`af8c95fd2097ca5f520ed9d1e8d102b071fa1b09d62c22e217ae754911a3bf79`.
+Clone-set:
+`8558b12ea14588f04450d9d42901b7411b168af46a0a9e418f039d7422cacc4d`.
+Точный post-commit run публикуется в том же Draft PR. Прежние FAIL/SKIP/
+NOT RUN сохранены; полная задача продолжается.
 
 ## Двести пятьдесят третья волна — общая декларация proof producer
 
