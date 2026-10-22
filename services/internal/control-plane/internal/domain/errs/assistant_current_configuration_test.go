@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// TestAssistantCurrentConfigurationStagePreservesClassWithoutDisclosingCause checks all configuration labels, unknown-stage fallback, ErrUnavailable matching and private-cause suppression. Nil, cancellation, deadlines and other error classes must pass through unchanged; fixtures are synthetic errors, not storage failures.
+// TestAssistantCurrentConfigurationStagePreservesClassWithoutDisclosingCause проверяет все метки конфигурации, запасное значение неизвестного этапа, соответствие ErrUnavailable и скрытие закрытой причины. Nil, отмена, сроки и другие классы должны проходить неизменными; оснастка содержит синтетические ошибки, а не сбои хранилища.
 func TestAssistantCurrentConfigurationStagePreservesClassWithoutDisclosingCause(t *testing.T) {
 	for _, stage := range []string{AssistantCurrentPromptContext, AssistantCurrentConfigurationView, AssistantCurrentOwnerCoreRead,
 		AssistantCurrentOwnerCoreVersion, AssistantCurrentTemplateProjection, AssistantCurrentUnclassified} {

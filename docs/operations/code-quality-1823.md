@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.273.0
+version: 1.274.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,56 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят четвёртая волна — порт образов и закрытая диагностика
+
+Опубликованный SHA273 — `fa04492539eaea13bfc6d8efeded807227f74785`.
+Точный5GtzWQ:6605 sources,222 excluded,1821 raw/666 retained/
+1155 unresolved; Go11904/21243, missing9339. Raw SHA256:
+`21145fafafbf72194d6c2696c6d71d5bc68902b9e195677736f685b55279beec`;
+clone-set:
+`ae72897170dcb0ee007a67f8abf04a2bca24b6b076459db4736e0788d0fa3e86`.
+Push/readback и Draft PR PATCH/GET273 подтверждены. Build для metadata-only
+273 неприменим;2 local rotation units,17 Node units и Go checker PASS.
+
+Прочитаны целиком repository/roleimage/repository.go196 lines и весь
+domain/errs:errors.go161, warm diagnostic70 и3 test files. По исходным
+формам и соответствующим service/repository consumers добавлены122/122
+предметных EN→RU comments:47 declarations порта и75 всего пакета errs.
+Отдельно описаны organization/project reads и mutations, leased build,
+technical failure/verdict/risk acceptance, admission terminal read без
+повторного claim и последовательные request/claim/authorize/complete
+promotion. Наличие полей DTO, токена либо digest не объявлено доказательством
+проверки байтов/полномочий или успешного push.
+
+Диагностика явно различает3 wrapper families, сохранение causes через
+Unwrap и fixed public Error strings, закрытые поля/этапы и fallback.
+Для plan index0 допустим только EMPTY, остальные5 этапов1..32;
+category precedence VERSION→CONFLICT→INVALID. Warm сохраняет уже известный
+внутренний этап, nil не оборачивается, неизвестные строки дают UNKNOWN.
+Tests описаны по реальным fixtures:не выданы за полный перебор integer
+границ, реальный storage failure или runtime reconciliation.
+
+Первый apply_patch отклонил обратный порядок hunks при поиске строки в
+двухфункциональном test file; git status подтвердил отсутствие частичных
+изменений. Исправлен только порядок hunks, затем6 непересекающихся batches
+применены однократно. AST6 без comments/positions идентичен SHA273:
+sentinels, constants, branches, signatures, fields и test fixtures прежние.
+Generated, runtime, SQL/migrations, manifests и retained registry не менялись.
+
+Рабочий mwLpDC:6605/222,1821/666/1155; Go12026/21243, missing9217.
+Все1821 clone multiset keys/counts неизменны, новых исключений нет.
+Raw SHA256:
+`48a1de36d2b9aafa8748e06df5e05931828d8501a466d0bc81b4635a70171781`;
+clone-set прежний ae728971… . Selected docs122/122, AST6,17 Node units,
+Go checker units,5 ignore boundaries и gofmt/diff-check PASS LOCAL.
+CP errs/repository/types/grpc/roleimage106 верхних/302 всех units PASS,
+0 FAIL; те же3 explicit SKIP:TestAssistantWarmRuntimeOwnerSnapshotTransport,
+TestLegacyEmailClaimCasterFixture, TestSecretOwnerLoopbackHarness.
+Полный CP build -p=2 PASS LOCAL. После коммита повторяются exact scan и
+проверки; результаты нового SHA публикуются в том же Draft PR.
+Full baseline/component/browser/deploy/live по scoped границам NOT RUN;
+исторические FAIL не устранены этой документацией, общая задача открыта.
 
 ## Двести семьдесят третья волна — независимые key-delivery snapshots
 
