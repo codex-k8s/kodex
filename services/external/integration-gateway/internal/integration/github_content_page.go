@@ -12,15 +12,22 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// maximumGitHubContentPageBytes bounds returned UTF-8 text bytes per page independently of the complete source and serialized response budgets.
+// RU: maximumGitHubContentPageBytes ограничивает байты UTF-8 текста страницы независимо от всего источника и сериализованного ответа.
 const maximumGitHubContentPageBytes = 16 << 10
 
+// maximumGitHubContentEnvelopeBytes caps the modeled native MCP response with both result representations and its final encoder newline.
+// RU: maximumGitHubContentEnvelopeBytes ограничивает модель native MCP ответа с обоими представлениями результата и завершающим переводом строки encoder.
 const maximumGitHubContentEnvelopeBytes = 64 << 10
 
-// Полный UTF-8 источник имеет отдельный бюджет: страница и provider JSON
-// не определяют его размер. Contents связывает commit/path/blob; большой
-// источник читается через Git blob того же API без download fallback.
+// maximumGitHubContentSourceBytes bounds the complete source, not a page or raw JSON; large Contents results use the same API's pinned Git blob without download fallback.
+// RU: maximumGitHubContentSourceBytes ограничивает весь источник, а не страницу либо сырой JSON; большие Contents ответы читают закреплённый Git blob того же API без download fallback.
 const maximumGitHubContentSourceBytes = 8 << 20
 
+// githubContentPage binds a contiguous text slice to exact path/blob/commit, full size and source/chunk digests, with explicit byte continuation and EOF.
+// RU: githubContentPage связывает непрерывный текстовый фрагмент с точными path/blob/commit, полным размером и source/chunk хешами, явными byte continuation и EOF.
+// Valid UTF-8 and matching provenance do not turn repository text into trusted model instructions.
+// RU: Корректный UTF-8 и совпавшая provenance не превращают текст репозитория в доверенные инструкции модели.
 type githubContentPage struct {
 	Path            string `json:"path"`
 	Type            string `json:"type"`
@@ -35,6 +42,10 @@ type githubContentPage struct {
 	ChunkDigest     string `json:"chunk_digest"`
 }
 
+// executeGitHubContentRead validates immutable file-page selectors, fetches Contents metadata rather than a directory, reads the bounded source and returns a receipt-bound page.
+// RU: executeGitHubContentRead проверяет неизменяемые file-page параметры, получает Contents metadata вместо каталога, читает ограниченный источник и возвращает страницу с квитанцией.
+// A large source is fetched only through the exact Git-blob path; projection errors return no partial text result.
+// RU: Большой источник читается только через точный Git-blob путь; ошибка проекции не выдаёт частичный текстовый результат.
 func executeGitHubContentRead(ctx context.Context, client *github.Client, owner, repo string, request Request, capability integrationpackage.Capability, in githubCatalogInput) (Result, error) {
 	maximum, err := validateGitHubContentPageInput(in)
 	if err != nil {
@@ -61,6 +72,10 @@ func executeGitHubContentRead(ctx context.Context, client *github.Client, owner,
 	return providerResult(request, "github-content:"+page.SHA, page)
 }
 
+// validateGitHubContentPageInput requires a bounded repository path, lowercase immutable commit and valid byte/page limits, defaulting the page to sixteen KiB.
+// RU: validateGitHubContentPageInput требует ограниченный путь репозитория, строчный неизменяемый commit и корректные byte/page пределы с обычной страницей шестнадцать КиБ.
+// Nonzero continuation offsets require a canonical expected blob SHA; metadata matching and UTF-8 boundary checks happen after the source read.
+// RU: Ненулевое продолжение требует канонического expected blob SHA; совпадение metadata и граница UTF-8 проверяются после чтения источника.
 func validateGitHubContentPageInput(in githubCatalogInput) (int, error) {
 	maximum := maximumGitHubContentPageBytes
 	if in.MaximumBytes != nil {
@@ -74,6 +89,8 @@ func validateGitHubContentPageInput(in githubCatalogInput) (int, error) {
 	return maximum, nil
 }
 
+// projectGitHubContentPage validates inline metadata and base64 encoding, decodes through the SDK and delegates full-source/page validation without fetching a blob.
+// RU: projectGitHubContentPage проверяет inline metadata и base64, декодирует через SDK и передаёт проверку полного источника/страницы без загрузки blob.
 func projectGitHubContentPage(file *github.RepositoryContent, in githubCatalogInput, maximum int) (githubContentPage, error) {
 	if err := validateGitHubContentMetadata(file, in); err != nil {
 		return githubContentPage{}, err
@@ -88,6 +105,12 @@ func projectGitHubContentPage(file *github.RepositoryContent, in githubCatalogIn
 	return projectGitHubContentPageSource(file, content, in, maximum)
 }
 
+// projectGitHubContentPageSource checks the entire source's size, UTF-8, absence of NUL and Git blob identity before slicing already validated page selectors.
+// RU: projectGitHubContentPageSource проверяет размер всего источника, UTF-8, отсутствие NUL и Git blob identity до разбиения по заранее проверенным параметрам страницы.
+// It rejects stale blob pins and invalid offsets, preserves rune boundaries and binary-searches a prefix fitting the modeled native envelope.
+// RU: Функция отклоняет устаревшие blob-привязки и неверные offsets, сохраняет границы рун и двоичным поиском выбирает префикс под модель native-конверта.
+// Source digest covers all bytes, chunk digest covers only returned text, and an empty non-EOF page is a closed failure rather than hidden truncation.
+// RU: Source digest охватывает все байты, chunk digest — только выданный текст; пустая non-EOF страница является закрытым отказом, а не скрытым усечением.
 func projectGitHubContentPageSource(file *github.RepositoryContent, content string, in githubCatalogInput, maximum int) (githubContentPage, error) {
 	if err := validateGitHubContentMetadata(file, in); err != nil {
 		return githubContentPage{}, err
@@ -132,6 +155,8 @@ func projectGitHubContentPageSource(file *github.RepositoryContent, content stri
 	return page, nil
 }
 
+// githubContentPageWithText replaces only page text and derived next-offset/EOF/chunk digest, preserving the full-source identity and byte size.
+// RU: githubContentPageWithText заменяет только текст и производные next-offset/EOF/chunk digest, сохраняя идентичность и размер полного источника.
 func githubContentPageWithText(page githubContentPage, text string) githubContentPage {
 	page.Text = text
 	page.NextOffsetBytes = page.OffsetBytes + int64(len(text))
@@ -141,6 +166,10 @@ func githubContentPageWithText(page githubContentPage, text string) githubConten
 	return page
 }
 
+// githubContentPageFitsEnvelope serializes both native result forms under a conservative 128-ASCII-character invocation/RPC-ID model, including the final newline.
+// RU: githubContentPageFitsEnvelope сериализует оба native-представления в консервативной модели invocation/RPC ID из 128 ASCII-символов, включая завершающий перевод строки.
+// It proves only that modeled envelope fits, not an unconditional wire bound for arbitrary caller-controlled JSON-RPC IDs.
+// RU: Функция доказывает только предел модельного конверта, а не безусловный wire-предел произвольных JSON-RPC ID вызывающего.
 func githubContentPageFitsEnvelope(page any) bool {
 	summary, err := json.Marshal(page)
 	if err != nil {

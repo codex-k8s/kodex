@@ -18,8 +18,12 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// githubPageFixtureCommit pins every synthetic content request to one immutable lowercase commit rather than a mutable branch name.
+// RU: githubPageFixtureCommit закрепляет каждый синтетический content-запрос за одним неизменяемым строчным commit вместо изменяемого имени ветки.
 const githubPageFixtureCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
+// TestGitHubContentPagesDefaultSixteenKiB checks the unchanged default text limit and non-EOF byte continuation for a larger inline source.
+// RU: TestGitHubContentPagesDefaultSixteenKiB проверяет прежний обычный предел текста и non-EOF byte continuation большого inline-источника.
 func TestGitHubContentPagesDefaultSixteenKiB(t *testing.T) {
 	file := githubPageFixtureFile(strings.Repeat("x", 32<<10), "docs/source.md")
 	adapter, credential, _ := githubPageFixtureAdapter(t, file)
@@ -29,6 +33,8 @@ func TestGitHubContentPagesDefaultSixteenKiB(t *testing.T) {
 	}
 }
 
+// githubPageFixtureNativeWire independently serializes both native MCP representations with the supplied RPC ID and final encoder newline for actual-byte assertions.
+// RU: githubPageFixtureNativeWire независимо сериализует оба native MCP представления с переданным RPC ID и завершающим переводом строки encoder для проверки точных байтов.
 func githubPageFixtureNativeWire(t *testing.T, page githubContentPage, id any) []byte {
 	t.Helper()
 	summary, err := json.Marshal(page)
@@ -49,6 +55,8 @@ func githubPageFixtureNativeWire(t *testing.T, page githubContentPage, id any) [
 	return wire.Bytes()
 }
 
+// githubPageFixtureFile creates base64 inline metadata with a Git-protocol blob SHA-1 for exact synthetic text; it does not read files or use that SHA-1 as the public security digest.
+// RU: githubPageFixtureFile создаёт base64 inline metadata с Git-protocol blob SHA-1 точного синтетического текста, не читая файлы и не используя SHA-1 как публичный security digest.
 func githubPageFixtureFile(content, path string) *github.RepositoryContent {
 	// SHA-1 здесь проверяет Git object protocol, а не служит security digest.
 	gitHash := sha1.Sum([]byte("blob " + strconv.Itoa(len(content)) + "\x00" + content))
@@ -56,6 +64,8 @@ func githubPageFixtureFile(content, path string) *github.RepositoryContent {
 		Size: github.Ptr(len(content)), Encoding: github.Ptr("base64"), Content: github.Ptr(base64.StdEncoding.EncodeToString([]byte(content)))}
 }
 
+// githubPageFixtureAdapter installs one bounded fake Contents response and asserts exact method, repository, immutable ref and fake credential while counting requests.
+// RU: githubPageFixtureAdapter устанавливает один ограниченный фиктивный Contents ответ, проверяет точные method, repository, immutable ref и фиктивный credential, считая запросы.
 func githubPageFixtureAdapter(t *testing.T, file *github.RepositoryContent) (*Adapter, *CredentialRevision, *int) {
 	t.Helper()
 	adapter := testAdapter(t)
@@ -76,6 +86,8 @@ func githubPageFixtureAdapter(t *testing.T, file *github.RepositoryContent) (*Ad
 	return adapter, credential, &count
 }
 
+// githubPageFixtureRead runs the typed adapter and decodes a text page, requiring exact effect/input/provider/response receipt pins and no whole-file base64 fallback.
+// RU: githubPageFixtureRead запускает типизированный адаптер и разбирает текстовую страницу, требуя точные effect/input/provider/response привязки квитанции без whole-file base64 fallback.
 func githubPageFixtureRead(t *testing.T, adapter *Adapter, credential *CredentialRevision, input map[string]any) githubContentPage {
 	t.Helper()
 	request := invocationRequest(t, adapter.definitions["github"], "github.repository.content.read", input, credential)
@@ -95,6 +107,8 @@ func githubPageFixtureRead(t *testing.T, adapter *Adapter, credential *Credentia
 	return page
 }
 
+// TestGitHubContentPagesReadFullPinnedSourceToEOF reconstructs complete ASCII, escaped and Unicode fixture sources through contiguous pages, checking digests, rune boundaries and an unambiguous replayable empty EOF.
+// RU: TestGitHubContentPagesReadFullPinnedSourceToEOF восстанавливает полные ASCII, escaped и Unicode источники оснастки непрерывными страницами, проверяя хеши, границы рун и однозначный повторяемый пустой EOF.
 func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 	for _, fixture := range []struct {
 		name, content string
@@ -155,6 +169,8 @@ func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 	}
 }
 
+// TestGitHubContentPagesRejectInvalidInput rejects mutable/malformed refs, unsafe paths and invalid offset/SHA/page budgets, and proves a mutable native ref causes no provider request.
+// RU: TestGitHubContentPagesRejectInvalidInput отклоняет mutable/неверные refs, небезопасные пути и неверные offset/SHA/page бюджеты, доказывая отсутствие provider-запроса для mutable native ref.
 func TestGitHubContentPagesRejectInvalidInput(t *testing.T) {
 	for _, fixture := range []struct {
 		name string
@@ -194,6 +210,8 @@ func TestGitHubContentPagesRejectInvalidInput(t *testing.T) {
 	}
 }
 
+// TestGitHubContentPagesLargeSourcePreservesPinsAndDeliveryBudget checks selected offsets of large inline sources through the complete executable adapter, retaining exact source/chunk digests and the modeled delivery budget.
+// RU: TestGitHubContentPagesLargeSourcePreservesPinsAndDeliveryBudget проверяет выбранные offsets больших inline-источников через полный исполняемый адаптер с точными source/chunk хешами и модельным бюджетом доставки.
 func TestGitHubContentPagesLargeSourcePreservesPinsAndDeliveryBudget(t *testing.T) {
 	for _, size := range []int{536156, maximumGitHubInlineContentBytes} {
 		t.Run(strconv.Itoa(size), func(t *testing.T) {
@@ -227,6 +245,8 @@ func TestGitHubContentPagesLargeSourcePreservesPinsAndDeliveryBudget(t *testing.
 	}
 }
 
+// TestGitHubContentPagesLargeSourceDoesNotHideInvalidTail puts invalid UTF-8 or NUL beyond the first page and requires a single-read safe failure without exposing a valid-looking prefix.
+// RU: TestGitHubContentPagesLargeSourceDoesNotHideInvalidTail помещает неверный UTF-8 либо NUL за первой страницей и требует безопасный отказ после одного чтения без выдачи правдоподобного префикса.
 func TestGitHubContentPagesLargeSourceDoesNotHideInvalidTail(t *testing.T) {
 	for _, tail := range []string{"\xff", "\x00"} {
 		file := githubPageFixtureFile(strings.Repeat("x", 96<<10)+tail, "AGENTS.md")
@@ -240,6 +260,8 @@ func TestGitHubContentPagesLargeSourceDoesNotHideInvalidTail(t *testing.T) {
 	}
 }
 
+// TestGitHubContentPagesVerifyEntireSourceAndMetadata rejects inconsistent path/type/encoding/size/blob evidence and invalid hidden tails, then checks stale SHA and non-rune continuation offsets.
+// RU: TestGitHubContentPagesVerifyEntireSourceAndMetadata отклоняет неверные path/type/encoding/size/blob доказательства и скрытый хвост, затем проверяет устаревший SHA и continuation внутри руны.
 func TestGitHubContentPagesVerifyEntireSourceAndMetadata(t *testing.T) {
 	for _, fixture := range []struct {
 		name string
@@ -279,6 +301,8 @@ func TestGitHubContentPagesVerifyEntireSourceAndMetadata(t *testing.T) {
 	}
 }
 
+// TestGitHubContentPagesBoundActualSerializedNativeEnvelope independently measures escaped/Unicode page output for selected numeric and bounded string IDs, requiring adaptive shortening and no empty non-EOF result.
+// RU: TestGitHubContentPagesBoundActualSerializedNativeEnvelope независимо измеряет escaped/Unicode вывод для выбранных числовых и ограниченных строковых ID, требуя адаптивного сокращения без пустого non-EOF результата.
 func TestGitHubContentPagesBoundActualSerializedNativeEnvelope(t *testing.T) {
 	for _, text := range []string{strings.Repeat("\x01", 16<<10), strings.Repeat("\\\"<>&", 4000), strings.Repeat("🙂", 4096)} {
 		path := strings.Repeat("p", 1024)
@@ -306,6 +330,8 @@ func TestGitHubContentPagesBoundActualSerializedNativeEnvelope(t *testing.T) {
 	assertGitHubPageError(t, err, "INTEGRATION_RESPONSE_INVALID")
 }
 
+// TestGitHubContentPagesNativeBudgetSavingsAndCallerIDLimit compares the old/new modeled delivery capacity and preserves an oversized caller-ID counterexample to any unconditional sixty-four-KiB actual-wire claim.
+// RU: TestGitHubContentPagesNativeBudgetSavingsAndCallerIDLimit сравнивает ёмкость старой/новой модели доставки и сохраняет контрпример длинного caller ID против безусловного фактического wire-предела шестьдесят четыре КиБ.
 func TestGitHubContentPagesNativeBudgetSavingsAndCallerIDLimit(t *testing.T) {
 	for _, fixture := range []struct{ name, text, path string }{
 		{"ascii", strings.Repeat("x", 536156), "AGENTS.md"},
@@ -367,6 +393,8 @@ func TestGitHubContentPagesNativeBudgetSavingsAndCallerIDLimit(t *testing.T) {
 	}
 }
 
+// assertGitHubPageError unwraps a SafeError and requires its exact closed code without accepting unrelated or raw provider failures.
+// RU: assertGitHubPageError извлекает SafeError и требует точный закрытый код, не принимая постороннюю либо сырую provider-ошибку.
 func assertGitHubPageError(t *testing.T, err error, code string) {
 	t.Helper()
 	var safe *SafeError

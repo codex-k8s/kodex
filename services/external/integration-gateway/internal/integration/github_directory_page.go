@@ -13,9 +13,16 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// maximumGitHubDirectoryEntries rejects the Contents API's ambiguous thousand-entry ceiling instead of treating a possibly truncated catalog as complete.
+// RU: maximumGitHubDirectoryEntries отклоняет неоднозначный предел Contents API в тысячу элементов вместо признания возможно усечённого каталога полным.
 const maximumGitHubDirectoryEntries = 999
+
+// maximumGitHubDirectoryPageSize bounds returned metadata rows per page, not the upstream Contents request's complete directory response.
+// RU: maximumGitHubDirectoryPageSize ограничивает выданные строки метаданных страницы, а не полный upstream Contents ответ каталога.
 const maximumGitHubDirectoryPageSize = 50
 
+// githubDirectoryPage binds a compact serialized metadata slice to path/commit and full-catalog digest, with exact consumed offset, total and EOF.
+// RU: githubDirectoryPage связывает компактный сериализованный metadata-фрагмент с path/commit и хешем всего каталога, точными offset, total и EOF.
 type githubDirectoryPage struct {
 	Items         string `json:"items"`
 	Path          string `json:"path"`
@@ -28,6 +35,10 @@ type githubDirectoryPage struct {
 	EOF           bool   `json:"eof"`
 }
 
+// executeGitHubDirectoryList validates immutable directory selectors and continuation pins, fetches one whole bounded Contents catalog, then pages its safe metadata locally.
+// RU: executeGitHubDirectoryList проверяет неизменяемые directory-параметры и continuation-привязки, получает один полный ограниченный Contents каталог и локально выдаёт страницы безопасных метаданных.
+// A file result or catalog reaching the upstream truncation ceiling fails closed without silently switching to a Trees fallback.
+// RU: Ответ файла либо каталог на границе upstream-усечения закрыто отклоняются без скрытого перехода к Trees fallback.
 func executeGitHubDirectoryList(ctx context.Context, client *github.Client, owner, repo string, request Request, capability integrationpackage.Capability, in githubCatalogInput) (Result, error) {
 	if in.Limit == 0 {
 		in.Limit = 20
@@ -58,6 +69,8 @@ func executeGitHubDirectoryList(ctx context.Context, client *github.Client, owne
 	return providerResult(request, "github-directory:"+page.CatalogDigest+":"+strconv.Itoa(page.Cursor), page)
 }
 
+// validGitHubDirectoryDigest accepts only a lowercase sha256-prefixed digest with exactly thirty-two decoded bytes for continuation comparisons.
+// RU: validGitHubDirectoryDigest принимает только строчный digest с префиксом sha256 и ровно тридцатью двумя декодированными байтами для сравнения продолжений.
 func validGitHubDirectoryDigest(value string) bool {
 	if len(value) != len("sha256:")+sha256.Size*2 || !strings.HasPrefix(value, "sha256:") || value != strings.ToLower(value) {
 		return false
@@ -66,6 +79,12 @@ func validGitHubDirectoryDigest(value string) bool {
 	return err == nil
 }
 
+// projectGitHubDirectoryPage validates every immediate directory entry, including the hidden tail, then sorts unique paths and hashes the entire owner/repository/path/commit index.
+// RU: projectGitHubDirectoryPage проверяет все непосредственные элементы каталога, включая невыданный хвост, затем сортирует уникальные пути и хеширует весь owner/repository/path/commit индекс.
+// It rejects stale digest or out-of-range cursors and reduces only returned row count to fit the modeled envelope, preserving explicit continuity and EOF.
+// RU: Функция отклоняет устаревший digest либо неверный cursor и уменьшает только число выданных строк под модельный конверт, сохраняя явные непрерывность и EOF.
+// Symlink/submodule entries remain metadata only; opaque URLs and file content are never copied into this directory projection.
+// RU: Symlink/submodule остаются только метаданными; непрозрачные URL и содержимое файлов не копируются в directory-проекцию.
 func projectGitHubDirectoryPage(directory []*github.RepositoryContent, owner, repo string, in githubCatalogInput) (githubDirectoryPage, error) {
 	items := make([]githubContentView, 0, len(directory))
 	prefix := in.Path

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.174.0
+version: 1.175.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,76 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят пятая волна — весь GitHub adapter и его тесты
+
+На базе опубликованного SHA `7943812136675f70ca2a039e5d0f2e18020161fc`
+завершены оставшиеся 92 объявления двенадцати GitHub-файлов: content page 10,
+blob 7, directory page 6, automation 9 и восемь test-файлов с 60 объявлениями.
+Все выбранные файлы прочитаны полностью. Весь handwritten github*.go контур
+теперь EN→RU: 16 файлов, 132/132 объявления, scoped Go-docs-check — PASS LOCAL.
+Новые комментарии описывают конкретное поведение и ограничения, а не имена.
+Восемь тестовых файлов получили подготовленные по прочитанному коду точные
+комментарии через проверяемые AST anchors и apply_patch; общего генератора
+бессодержательных описаний не добавлено. Механическое сравнение двенадцати
+полных файлов после удаления комментариев/нормализации пустых строк/gofmt
+подтвердило точное совпадение исполняемого кода с parent. Тесты не изменены.
+
+Content comments разделяют полный source budget, raw SDK response и text-page
+budget; immutable ref/expected blob/offset и полная UTF-8/NUL/Git hash проверка
+предшествуют выдаче префикса. Большой source читается только точным Git blob
+того же API; private intent выбирает ограниченный raw-response cap, а не
+выдаёт owner authority. Downstream source/chunk digests и EOF пересчитываются
+при адаптивном сокращении текста, пустой non-EOF не считается успехом.
+Корректный UTF-8/provenance не объявлен доверием к инструкциям репозитория.
+
+Модель native envelope сохраняет оба представления, вложенный JSON и LF,
+но предполагает RPC ID до 128 ASCII-символов. Комментарии не обещают
+безусловный actual wire <=64 КиБ для произвольного caller ID: существующий
+unit сохраняет длинный ID как явный контрпример. Worst-case file-index
+rename unit измеряет safe summary, не весь native RPC wire. Это описание
+прежнего ограничения, не его исправление и не скрытое усиление transport.
+
+Directory comments объясняют загрузку полного ограниченного Contents index
+с последующей локальной пагинацией, а не upstream streaming. Cap1000 закрыто
+отклоняется; скрытого Trees fallback нет. Проверяется весь каталог с хвостом,
+sort/unique metadata digest связывает owner/repository/path/commit и полный
+index; page count сокращается без нарушения offset/EOF. Symlink/submodule
+остаются только метаданными без перехода к содержимому или download URL.
+
+Automation comments различают typed workflow/run/job/check projections,
+parent-run association, ограниченные READ retry и одиночные commands.
+Workflow inputs отвергают duplicate keys, вложенность/null, неверные значения,
+излишнее число полей и trailing JSON, сохраняя json.Number без float-конверсии.
+Fixture comments отделяют реальные проверяемые условия от громких test names:
+«ActualGeneratedSource» использует синтетический текст размера generated-файла,
+не настоящий generated-исходник; grant presence tests не доказывают серверный
+revocation. Draft/review/local transport не выдаются за live PR или HumanGate.
+Generated output, его шаблоны и генераторы ради комментариев не менялись.
+
+Context7 /google/go-github дал master docs и некорректный для v74 пример
+GetContents с другим числом возвращаемых значений. Использован только общий
+контекст file/directory API; actual GetContents/GetContent/GetBlob проверены
+локальным go doc закреплённого v74.0.0. Download fallback, SDK updates и
+новый constructor API не применялись.
+
+Полные `go test -count=1 -json ./...` и `go build ./...` gateway — PASS LOCAL
+для выполненной области: 118 верхних PASS, 1932 PASS с подтестами, 0 FAIL,
+один прежний SKIP TestCPProducedEmailClaim. Disposable CP producer — NOT RUN,
+claim не подделывался. 16 unit анализатора, unit Go-checker, scoped checker,
+пять ignore-boundaries, gofmt/diff-check — PASS LOCAL. Go1.26.6,
+GOENV=off/GOWORK=off. Точный опубликованный SHA и повтор проверок фиксируются
+в PR. Component/live, PostgreSQL, browser/deploy, реальные providers/почта
+и агенты не запускались и не обозначаются PASS.
+
+Detector: 6563 source, 222 generated/lock исключения, 1847 raw,
+574 точных решения и 1273 неразобранные, без новых выносов/исключений.
+Raw SHA-256 `bded657345317636b03d6dbb9315aa78605ecbb7ebdeaef3e71ba4ada93cedfd`,
+clone-set fingerprint остался
+`ccdb88d8e18c3ccd2a889f042b4a35e8abbbaf9fc4554b7f5446355c60b8ea7b`.
+Go-реестр 6198/21120, непокрыты 14922; весь gateway 484/621, ещё 137.
+Полный repository Go-docs-check — NOT RUN; прежний diagnostics FAIL не скрыт.
+Цель и единый Draft PR пока не завершены и не готовы к приёмке владельцем.
 
 ## Сто семьдесят четвёртая волна — source/writeback и метрики
 

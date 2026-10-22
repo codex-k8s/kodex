@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// TestGitHubPullRequestDraftUsesTypedProviderRequest checks omitted/false/true draft values produce the exact typed SDK payload and a receipt-bound projection through a local fixture, not a live PR.
+// RU: TestGitHubPullRequestDraftUsesTypedProviderRequest проверяет точный SDK payload и проекцию с квитанцией для пропущенного/false/true draft через локальную оснастку, а не живой PR.
 func TestGitHubPullRequestDraftUsesTypedProviderRequest(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -60,6 +62,8 @@ func TestGitHubPullRequestDraftUsesTypedProviderRequest(t *testing.T) {
 	}
 }
 
+// TestGitHubPullRequestDraftInvalidInputHasNoProviderEffect rejects wrong draft types, aliases and caller authority fields before reaching the local provider endpoint.
+// RU: TestGitHubPullRequestDraftInvalidInputHasNoProviderEffect отклоняет неверные типы draft, aliases и caller authority поля до локального provider endpoint.
 func TestGitHubPullRequestDraftInvalidInputHasNoProviderEffect(t *testing.T) {
 	for _, test := range []struct {
 		name  string

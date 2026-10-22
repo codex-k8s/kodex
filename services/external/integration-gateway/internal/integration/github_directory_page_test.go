@@ -16,6 +16,8 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// githubDirectoryFixturePage independently decodes the public directory envelope, including optional next cursor as a zero-valued field for EOF assertions.
+// RU: githubDirectoryFixturePage независимо разбирает публичный directory-конверт, включая необязательный next cursor как нулевое поле для проверки EOF.
 type githubDirectoryFixturePage struct {
 	Items         string `json:"items"`
 	Path          string `json:"path"`
@@ -28,6 +30,8 @@ type githubDirectoryFixturePage struct {
 	EOF           bool   `json:"eof"`
 }
 
+// githubDirectoryFixtureEntries constructs ordered regular-file metadata with predictable unique names and sizes, without loading file bodies.
+// RU: githubDirectoryFixtureEntries создаёт упорядоченные regular-file metadata с предсказуемыми уникальными именами и размерами без загрузки body файлов.
 func githubDirectoryFixtureEntries(count int, prefix string) []*github.RepositoryContent {
 	entries := make([]*github.RepositoryContent, count)
 	for index := range entries {
@@ -37,6 +41,8 @@ func githubDirectoryFixtureEntries(count int, prefix string) []*github.Repositor
 	return entries
 }
 
+// githubDirectoryFixtureAdapter serves one in-memory full Contents catalog, asserting exact repository/commit/path, absent upstream paging parameters and the fake bearer token.
+// RU: githubDirectoryFixtureAdapter выдаёт полный Contents каталог в памяти, проверяя точные repository/commit/path, отсутствие upstream paging-параметров и фиктивный bearer token.
 func githubDirectoryFixtureAdapter(t *testing.T, entries []*github.RepositoryContent, path string) (*Adapter, *CredentialRevision, *int) {
 	t.Helper()
 	adapter := testAdapter(t)
@@ -58,6 +64,8 @@ func githubDirectoryFixtureAdapter(t *testing.T, entries []*github.RepositoryCon
 	return adapter, credential, &calls
 }
 
+// githubDirectoryFixtureWire independently models both native result forms and final encoder newline with bounded IDs, excluding the owner-only receipt from model content.
+// RU: githubDirectoryFixtureWire независимо моделирует оба native-представления и завершающий перевод строки encoder с ограниченными ID, исключая owner-only квитанцию из model content.
 func githubDirectoryFixtureWire(t *testing.T, summary string) []byte {
 	t.Helper()
 	// Та же публичная форма callback: receipt не входит в model result.
@@ -75,6 +83,8 @@ func githubDirectoryFixtureWire(t *testing.T, summary string) []byte {
 	return wire.Bytes()
 }
 
+// TestGitHubDirectoryPagesLargeCatalogComplete reconstructs a large catalog with exact cursor/digest/receipt continuity and no private provider bodies or download URLs in safe pages.
+// RU: TestGitHubDirectoryPagesLargeCatalogComplete восстанавливает большой каталог с точными cursor/digest/receipt continuation и без приватных provider body либо download URL в безопасных страницах.
 func TestGitHubDirectoryPagesLargeCatalogComplete(t *testing.T) {
 	entries := githubDirectoryFixtureEntries(507, "src/"+strings.Repeat("r", 95))
 	entries[0].DownloadURL = github.Ptr("https://private-provider.example.test/content")
@@ -133,6 +143,8 @@ func TestGitHubDirectoryPagesLargeCatalogComplete(t *testing.T) {
 	}
 }
 
+// TestGitHubDirectoryPagesRejectMalformedWholeIndex rejects ambiguous thousand-entry caps and invalid hidden-tail metadata without returning the earlier valid rows or retrying local validation.
+// RU: TestGitHubDirectoryPagesRejectMalformedWholeIndex отклоняет неоднозначный предел тысячи записей и неверные metadata скрытого хвоста без выдачи ранних корректных строк и повтора локальной проверки.
 func TestGitHubDirectoryPagesRejectMalformedWholeIndex(t *testing.T) {
 	for _, fixture := range []struct {
 		name   string
@@ -186,6 +198,8 @@ func TestGitHubDirectoryPagesRejectMalformedWholeIndex(t *testing.T) {
 	}
 }
 
+// TestGitHubDirectoryPagesAdaptiveWireAndSortedSnapshot requires smaller escaped-metadata pages to fit the modeled envelope while preserving sorted whole-index digest and exact consumed offset despite upstream reordering.
+// RU: TestGitHubDirectoryPagesAdaptiveWireAndSortedSnapshot требует уменьшения escaped-metadata страниц под модельный конверт с сохранением sorted whole-index digest и точного offset при переупорядочении upstream.
 func TestGitHubDirectoryPagesAdaptiveWireAndSortedSnapshot(t *testing.T) {
 	entries := githubDirectoryFixtureEntries(80, "src/"+strings.Repeat("\"<&🙂", 100))
 	adapter, credential, _ := githubDirectoryFixtureAdapter(t, entries, "src")
@@ -225,6 +239,8 @@ func TestGitHubDirectoryPagesAdaptiveWireAndSortedSnapshot(t *testing.T) {
 	}
 }
 
+// TestGitHubDirectoryPagesInputAndContinuationFailClosed rejects invalid selectors before provider access and stale continuation digest/offset after exactly one catalog read, never returning partial data.
+// RU: TestGitHubDirectoryPagesInputAndContinuationFailClosed отклоняет неверные параметры до provider-доступа и устаревшие continuation digest/offset после ровно одного чтения каталога без частичных данных.
 func TestGitHubDirectoryPagesInputAndContinuationFailClosed(t *testing.T) {
 	for _, fixture := range []struct {
 		name   string
@@ -270,6 +286,8 @@ func TestGitHubDirectoryPagesInputAndContinuationFailClosed(t *testing.T) {
 	}
 }
 
+// TestGitHubDirectoryPagesEmptyAndExactTerminalOffset checks root defaults, the accepted 999-entry boundary and exact terminal offset yielding empty rows, explicit EOF and no next cursor.
+// RU: TestGitHubDirectoryPagesEmptyAndExactTerminalOffset проверяет root defaults, допустимую границу 999 записей и точный terminal offset с пустыми строками, явным EOF и отсутствием next cursor.
 func TestGitHubDirectoryPagesEmptyAndExactTerminalOffset(t *testing.T) {
 	for _, count := range []int{0, 1, 999} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
@@ -296,6 +314,8 @@ func TestGitHubDirectoryPagesEmptyAndExactTerminalOffset(t *testing.T) {
 	}
 }
 
+// TestGitHubDirectoryPagesDigestBindsRepositoryDirectoryCommitAndEntireIndex verifies owner/repository/path/commit/total and hidden-tail changes alter the digest, with invalid UTF-8 paths rejected.
+// RU: TestGitHubDirectoryPagesDigestBindsRepositoryDirectoryCommitAndEntireIndex проверяет изменение digest при изменении owner/repository/path/commit/total и скрытого хвоста, отклоняя неверные UTF-8 пути.
 func TestGitHubDirectoryPagesDigestBindsRepositoryDirectoryCommitAndEntireIndex(t *testing.T) {
 	in := githubCatalogInput{Path: "src", Ref: githubPageFixtureCommit, Limit: 20}
 	entries := githubDirectoryFixtureEntries(31, "src/")
@@ -329,6 +349,8 @@ func TestGitHubDirectoryPagesDigestBindsRepositoryDirectoryCommitAndEntireIndex(
 	}
 }
 
+// TestGitHubDirectoryPagesPreserveCurrentPackageAndGrantPins rejects inconsistent package revision/digest, absent or zero-version grant and foreign resource scope before provider access; it does not simulate server-side revocation.
+// RU: TestGitHubDirectoryPagesPreserveCurrentPackageAndGrantPins отклоняет неверные package revision/digest, отсутствующий либо нулевой grant и чужой resource scope до provider-доступа, не имитируя серверный отзыв полномочий.
 func TestGitHubDirectoryPagesPreserveCurrentPackageAndGrantPins(t *testing.T) {
 	for _, fixture := range []struct {
 		name, code string

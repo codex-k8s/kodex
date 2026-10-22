@@ -11,6 +11,8 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// githubWorkflowView projects only workflow identity, name, repository path and state rather than the SDK's complete response metadata.
+// RU: githubWorkflowView проецирует только workflow identity, имя, путь репозитория и состояние вместо полных SDK-метаданных.
 type githubWorkflowView struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
@@ -18,6 +20,8 @@ type githubWorkflowView struct {
 	State string `json:"state"`
 }
 
+// githubRunView carries run/workflow identity, status/conclusion and exact head metadata with its provider URL for a safe typed result.
+// RU: githubRunView хранит run/workflow identity, status/conclusion и точные head-метаданные с provider URL для безопасного типизированного результата.
 type githubRunView struct {
 	ID         int64  `json:"id"`
 	WorkflowID int64  `json:"workflow_id"`
@@ -29,10 +33,14 @@ type githubRunView struct {
 	URL        string `json:"url"`
 }
 
+// projectGitHubRun copies the selected workflow-run fields through SDK getters; operation identity validation remains with its caller.
+// RU: projectGitHubRun копирует выбранные workflow-run поля через SDK getters; идентичность операции проверяет вызывающий.
 func projectGitHubRun(item *github.WorkflowRun) githubRunView {
 	return githubRunView{item.GetID(), item.GetWorkflowID(), item.GetName(), item.GetStatus(), item.GetConclusion(), item.GetHeadSHA(), item.GetHeadBranch(), item.GetHTMLURL()}
 }
 
+// githubJobView retains job/run identity, status/conclusion and head SHA so the caller can preserve the selected parent run boundary.
+// RU: githubJobView сохраняет job/run identity, status/conclusion и head SHA для соблюдения границы выбранного родительского run.
 type githubJobView struct {
 	ID         int64  `json:"id"`
 	RunID      int64  `json:"run_id"`
@@ -42,10 +50,14 @@ type githubJobView struct {
 	HeadSHA    string `json:"head_sha"`
 }
 
+// projectGitHubJob copies safe job fields without changing parent-run association or interpreting a conclusion as platform approval.
+// RU: projectGitHubJob копирует безопасные job-поля без изменения связи с parent run и без трактовки conclusion как платформенного одобрения.
 func projectGitHubJob(item *github.WorkflowJob) githubJobView {
 	return githubJobView{item.GetID(), item.GetRunID(), item.GetName(), item.GetStatus(), item.GetConclusion(), item.GetHeadSHA()}
 }
 
+// githubCheckView projects check identity, status, head SHA and provider-authored output text; that text is data, not trusted platform instructions.
+// RU: githubCheckView проецирует check identity, status, head SHA и provider output-текст; текст является данными, а не доверенной платформенной инструкцией.
 type githubCheckView struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
@@ -56,10 +68,16 @@ type githubCheckView struct {
 	Summary    string `json:"summary"`
 }
 
+// projectGitHubCheck copies check and optional output getter values without adding approval or mutation authority.
+// RU: projectGitHubCheck копирует check и необязательные output getter-значения без добавления approval либо mutation authority.
 func projectGitHubCheck(item *github.CheckRun) githubCheckView {
 	return githubCheckView{item.GetID(), item.GetName(), item.GetStatus(), item.GetConclusion(), item.GetHeadSHA(), item.GetOutput().GetTitle(), item.GetOutput().GetSummary()}
 }
 
+// executeGitHubAutomation dispatches repository-scoped checks, workflows, runs and jobs through bounded reads or single command attempts.
+// RU: executeGitHubAutomation направляет repository-scoped checks, workflows, runs и jobs через ограниченные чтения либо единичные попытки команд.
+// Individual reads verify selected IDs, job results also match the parent run, and unsupported operations fail closed rather than invoking arbitrary SDK methods.
+// RU: Отдельные чтения сверяют выбранные ID, job-результаты также совпадают с parent run, неподдерживаемые операции закрыто отклоняются вместо произвольного SDK-вызова.
 func (adapter *Adapter) executeGitHubAutomation(ctx context.Context, client *github.Client, owner, repo string, request Request, capability integrationpackage.Capability, in githubCatalogInput, options github.ListOptions) (Result, error) {
 	switch request.Operation {
 	case "github.check_run.list":
@@ -171,6 +189,10 @@ func (adapter *Adapter) executeGitHubAutomation(ctx context.Context, client *git
 	}
 }
 
+// githubWorkflowInputs parses one bounded-shape JSON object with unique short keys and only string, boolean or lossless json.Number values.
+// RU: githubWorkflowInputs разбирает один JSON-объект ограниченной формы с уникальными короткими ключами и только string, boolean либо точными json.Number значениями.
+// Empty input means absent workflow inputs; duplicate keys, nested/null values, oversized strings, too many fields or trailing documents are rejected before dispatch.
+// RU: Пустой вход означает отсутствие workflow inputs; повторные ключи, вложенные/null значения, слишком длинные строки, лишние поля либо последующие документы отклоняются до отправки.
 func githubWorkflowInputs(raw string) (map[string]any, error) {
 	if raw == "" {
 		return nil, nil

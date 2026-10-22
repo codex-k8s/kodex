@@ -11,6 +11,8 @@ import (
 	"testing"
 )
 
+// TestGitHubPullIndexLargeProviderPagesPreservePagination reads two synthetic oversized upstream PR pages into compact body-free indices with exact identity, next cursor and forty unique entries.
+// RU: TestGitHubPullIndexLargeProviderPagesPreservePagination читает две синтетические большие upstream PR страницы в компактные индексы без body с точными identity, next cursor и сорока уникальными записями.
 func TestGitHubPullIndexLargeProviderPagesPreservePagination(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")
@@ -72,6 +74,8 @@ func TestGitHubPullIndexLargeProviderPagesPreservePagination(t *testing.T) {
 	}
 }
 
+// TestGitHubPullReadStillReturnsEntireDescription verifies a dedicated PR read retains the entire Unicode description after compact list projection is introduced.
+// RU: TestGitHubPullReadStillReturnsEntireDescription проверяет сохранение полного Unicode-описания отдельным PR-read после введения компактной проекции списка.
 func TestGitHubPullReadStillReturnsEntireDescription(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")
@@ -90,13 +94,19 @@ func TestGitHubPullReadStillReturnsEntireDescription(t *testing.T) {
 	}
 }
 
+// githubTrackedResponseBody exposes whether the upstream fake response was closed while delegating byte reads to its synthetic reader.
+// RU: githubTrackedResponseBody показывает закрытие upstream фиктивного ответа, передавая чтение байтов синтетическому reader.
 type githubTrackedResponseBody struct {
 	io.Reader
 	closed bool
 }
 
+// Close records response cleanup without modifying fixture data or managing a real network connection.
+// RU: Close отмечает очистку ответа без изменения данных оснастки и без управления настоящим сетевым соединением.
 func (body *githubTrackedResponseBody) Close() error { body.closed = true; return nil }
 
+// TestGitHubOversizedProviderResponseFailsOnceAndClosesBody requires one upstream attempt and body closure on raw overflow, distinguishing READ validation failure from unknown mutation outcome.
+// RU: TestGitHubOversizedProviderResponseFailsOnceAndClosesBody требует одну upstream-попытку и закрытие body при raw overflow, различая READ-ошибку проверки и неопределённый mutation-результат.
 func TestGitHubOversizedProviderResponseFailsOnceAndClosesBody(t *testing.T) {
 	for _, operation := range []string{"github.pull_request.list", "github.pull_request.create"} {
 		t.Run(operation, func(t *testing.T) {

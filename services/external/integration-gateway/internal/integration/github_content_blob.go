@@ -13,12 +13,16 @@ import (
 )
 
 const (
+	// maximumGitHubInlineContentBytes selects the inline Contents range; larger encoding-none files require separately pinned blob retrieval.
+	// RU: maximumGitHubInlineContentBytes задаёт inline Contents диапазон; большие encoding-none файлы требуют отдельно закреплённого чтения blob.
 	maximumGitHubInlineContentBytes = 1 << 20
-	maximumGitHubBlobResponseBytes  = 12 << 20
+	// maximumGitHubBlobResponseBytes bounds the raw encoded blob response, not decoded source bytes or the returned model page.
+	// RU: maximumGitHubBlobResponseBytes ограничивает сырой кодированный blob-ответ, а не декодированные байты источника и не страницу модели.
+	maximumGitHubBlobResponseBytes = 12 << 20
 )
 
-// Этот private intent создаётся только после проверенного Contents read.
-// Он выбирает локальный byte budget, не заменяя claim/grant/repository authority.
+// githubContentBlobIntent is created after validated Contents metadata to select an exact local raw-response budget, not to replace owner claim/grant/repository authority.
+// RU: githubContentBlobIntent создаётся после проверки Contents metadata для выбора точного локального raw-response бюджета, не заменяя owner claim/grant/repository authority.
 type githubContentBlobIntent struct {
 	url        string
 	owner      string
@@ -27,8 +31,14 @@ type githubContentBlobIntent struct {
 	sha        string
 }
 
+// githubContentBlobContextKey keeps the private budget intent separate from caller input and ordinary HTTP metadata.
+// RU: githubContentBlobContextKey отделяет закрытый budget intent от входа вызывающего и обычных HTTP-метаданных.
 type githubContentBlobContextKey struct{}
 
+// validateGitHubContentMetadata requires the exact file path, regular file type, explicit bounded size, canonical blob SHA and supported encoding representation.
+// RU: validateGitHubContentMetadata требует точный file path, обычный file type, явный ограниченный размер, канонический blob SHA и допустимое encoding-представление.
+// Encoding none is permitted only above the inline threshold with explicitly empty content; a supplied expected SHA must match before blob retrieval.
+// RU: Encoding none допускается только выше inline-порога с явно пустым content; заданный expected SHA обязан совпасть до загрузки blob.
 func validateGitHubContentMetadata(file *github.RepositoryContent, in githubCatalogInput) error {
 	if file == nil || file.GetPath() != in.Path || file.GetType() != "file" || file.Size == nil ||
 		file.GetSize() < 0 || file.GetSize() > maximumGitHubContentSourceBytes || !sourceCommitPattern.MatchString(file.GetSHA()) {
@@ -52,6 +62,12 @@ func validateGitHubContentMetadata(file *github.RepositoryContent, in githubCata
 	return nil
 }
 
+// readGitHubContentSource decodes valid inline Contents or retrieves the exact same-origin Git blob with a private method/repository/SHA/size budget intent.
+// RU: readGitHubContentSource декодирует корректный inline Contents либо читает точный same-origin Git blob с закрытым method/repository/SHA/size budget intent.
+// Large blobs require matching metadata and strict bounded base64 decoding; UTF-8, NUL and full Git-hash checks remain in the page projection.
+// RU: Большой blob требует совпавших метаданных и строгого ограниченного base64-разбора; UTF-8, NUL и полный Git hash проверяет проекция страницы.
+// It never follows a download URL or substitutes another host when the selected source cannot be verified.
+// RU: Функция не следует download URL и не подставляет другой хост, когда выбранный источник не удаётся проверить.
 func readGitHubContentSource(ctx context.Context, client *github.Client, owner, repo string, capability integrationpackage.Capability, file *github.RepositoryContent, in githubCatalogInput) (string, error) {
 	if err := validateGitHubContentMetadata(file, in); err != nil {
 		return "", err
@@ -86,6 +102,10 @@ func readGitHubContentSource(ctx context.Context, client *github.Client, owner, 
 	return string(decoded), nil
 }
 
+// githubProviderResponseLimit uses the ordinary SDK cap without an intent and grants the larger blob cap only to its exact validated HTTPS GET without query or fragment.
+// RU: githubProviderResponseLimit использует обычный SDK cap без intent и допускает больший blob cap только для точного проверенного HTTPS GET без query и fragment.
+// Invalid intent type, source size or request binding fails before transport rather than silently falling back to a wider response budget.
+// RU: Неверные тип intent, размер источника либо привязка запроса отклоняются до transport вместо скрытого перехода к большему response-бюджету.
 func githubProviderResponseLimit(request *http.Request) (int, bool) {
 	value := request.Context().Value(githubContentBlobContextKey{})
 	if value == nil {
