@@ -17,13 +17,29 @@ import (
 	"google.golang.org/grpc"
 )
 
+// errArtifactTransfer is the fixed binding/protocol-integrity failure distinct
+// from local spool I/O or propagated owner transport errors.
+// errArtifactTransfer — fixed binding/protocol-integrity failure отдельно
+// от local spool I/O и возвращаемых owner transport errors.
 var errArtifactTransfer = errors.New("runtime artifact transfer binding is invalid")
 
+// artifactTransferPin records exact owner artifact identity, digest, byte count
+// and revision, with optional version/name/media checks. It is a locator/commitment,
+// not an execution credential or permission grant.
+// artifactTransferPin хранит exact owner artifact identity,digest,byte count/revision
+// и optional version/name/media checks. Это locator/commitment,не execution
+// credential и не permission grant.
 type artifactTransferPin struct {
 	ref, project, name, media, digest string
 	size, revision, version           int64
 }
 
+// matches requires identity/project/digest/size/revision equality and checks
+// version/name/media only when their pins are nonzero/nonempty. It does not inspect
+// the byte stream, scan result, proto unknown fields or current owner eligibility.
+// matches требует identity/project/digest/size/revision equality и проверяет version/
+// name/media лишь при nonzero/nonempty pins. Byte stream,scan result,proto unknown
+// fields и текущая owner eligibility здесь не проверяются.
 func (pin artifactTransferPin) matches(artifact *cp.Artifact) bool {
 	return artifact != nil && artifact.GetRef() == pin.ref && artifact.GetProjectRef() == pin.project &&
 		artifact.GetDigest() == pin.digest && artifact.GetSizeBytes() == pin.size && int64(artifact.GetRevision()) == pin.revision &&
@@ -31,8 +47,16 @@ func (pin artifactTransferPin) matches(artifact *cp.Artifact) bool {
 		(pin.media == "" || artifact.GetMediaType() == pin.media)
 }
 
-// Partial bytes принадлежат только приватному spool. Успех требует metadata,
-// checksum всего тела, owner Complete и clean EOF в этом порядке.
+// receiveArtifactTransfer validates metadata first, writes bounded nonempty chunks
+// only to the caller's private destination and checks full byte count/hash, owner
+// Complete and clean EOF in that order before success. Premature EOF, extra frames,
+// corruption, cancellation and destination short/error writes fail; partial bytes
+// are not rolled back here, so the caller must discard/release a failed private file.
+// receiveArtifactTransfer сначала проверяет metadata,пишет bounded nonempty chunks
+// лишь в private destination caller и до успеха сверяет full byte count/hash,owner
+// Complete и clean EOF в этом порядке. Premature EOF,extra frames,corruption,
+// cancellation,short/error writes дают отказ; partial bytes не откатываются здесь,
+// поэтому caller обязан discard/release ошибочного private file.
 func receiveArtifactTransfer(ctx context.Context, recv func() (*cp.StreamExecutionArtifactResponse, error), destination io.Writer, pin artifactTransferPin) error {
 	if pin.size < 0 || pin.size > runtimecontract.MaximumArtifactTransferBytes || !runtimeFileDigestPattern.MatchString(pin.digest) {
 		return errArtifactTransfer
@@ -83,6 +107,14 @@ func receiveArtifactTransfer(ctx context.Context, recv func() (*cp.StreamExecuti
 	}
 }
 
+// serveArtifactTransfer uses a bounded timeout to obtain a completely verified
+// private file before exposing headers or bytes, then reauthorizes the execution
+// ticket and sends the exact pinned length/digest. Acquisition/protocol failures
+// map to 503/409; a later response-copy failure is logged but cannot undo sent bytes.
+// serveArtifactTransfer с bounded timeout получает полностью verified private file
+// до выдачи headers/bytes,затем повторно авторизует execution ticket и отправляет
+// exact pinned length/digest. Acquisition/protocol failures дают 503/409; поздний
+// response-copy failure логируется,но не отменяет уже отправленные bytes.
 func (server *Server) serveArtifactTransfer(writer http.ResponseWriter, request *http.Request, input runtimecontract.RunnerInput, pin artifactTransferPin, media string) {
 	if server.config.FileTransferTimeout < time.Second || server.config.FileTransferTimeout > runtimecontract.MaximumArtifactTransferDuration {
 		http.Error(writer, errArtifactSpool.Error(), http.StatusServiceUnavailable)
@@ -115,8 +147,14 @@ func (server *Server) serveArtifactTransfer(writer http.ResponseWriter, request 
 	}
 }
 
-// Возвращается только полный private spool после owner Complete и clean EOF.
-// Ошибочный путь всегда закрывает файл и освобождает общий слот передачи.
+// verifiedArtifactSpool acquires capacity before opening a lease/fence/generation
+// bound owner stream, verifies its full protocol and size, then rewinds the file.
+// Every failing path releases descriptor/slot; success transfers that cleanup to
+// the returned callback. It does not itself perform the final HTTP ticket recheck.
+// verifiedArtifactSpool получает capacity до lease/fence/generation-bound owner stream,
+// проверяет full protocol/size и перематывает file. Каждый failing path освобождает
+// descriptor/slot; success передаёт cleanup returned callback. Финальная HTTP ticket
+// перепроверка здесь не выполняется.
 func (server *Server) verifiedArtifactSpool(ctx context.Context, input runtimecontract.RunnerInput, pin artifactTransferPin) (*os.File, func(), error) {
 	file, release, err := server.spool.acquire(ctx)
 	if err != nil {
@@ -148,6 +186,14 @@ func (server *Server) verifiedArtifactSpool(ctx context.Context, input runtimeco
 	return file, release, nil
 }
 
+// catalogArtifact validates four single-valued file selectors, canonical revision
+// and digest, resolves exact metadata through the lease-bound file catalog, and
+// passes its matching pins to verified transfer. Query refs are locators only;
+// owner eligibility and final ticket reauthorization remain separate boundaries.
+// catalogArtifact проверяет четыре single-valued file selectors,canonical revision
+// и digest,получает exact metadata через lease-bound file catalog и передаёт matching
+// pins verified transfer. Query refs — лишь locators; owner eligibility
+// и final ticket reauthorization остаются отдельными boundaries.
 func (server *Server) catalogArtifact(writer http.ResponseWriter, request *http.Request, input runtimecontract.RunnerInput, ref string) {
 	query, err := url.ParseQuery(request.URL.RawQuery)
 	if err != nil || len(request.URL.RawQuery) > 1024 || len(query) != 4 || !validFileRef(ref, "art_") {

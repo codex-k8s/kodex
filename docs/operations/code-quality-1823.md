@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.199.0
+version: 1.200.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,46 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двухсотая волна — private artifact spool и проверенная передача
+
+Точный опубликованный SHA199 — `58fca2f7fcaa4d01f748129ae2ca6571af1f7d1c`.
+Callback253 верхних/1361 всех PASS,0 FAIL,2 прежних SKIP; полный RC build PASS.
+Exact VNukfq:6578 sources,222 excluded,1837 raw,586 retained,1251 unresolved;
+Go7430/21148,missing13718; raw SHA256
+`db692f05581a9e45e747b9609f9fe7ae1d3c25fb2c41b77ae1fab7e2d1b29465`,
+clone-set `3180c549f6bcf70f2ab8fe0645d968aa2896107f2f263c8372778c0ebd02c06d`.
+
+Все35 declarations пяти полностью прочитанных artifact_spool/transfer и их
+spool/transfer/projection test файлов описаны предметно EN→RU,scoped35/35;
+дополнительно описан локальный размер large-file fixture. Указаны rooted inode/
+UID/mode checks,non-root/subPath как deployment obligations,отсутствие repair
+unsafe child и различие world-writable/group-writable root validation.
+Successful create немедленно unlink,но unlink failure не объявлен успешным
+удалением pathname. Readiness canary отдельно от двух transfer slots.
+Directory close не join-ит и не закрывает in-flight file descriptors;
+каждый release callback идемпотентно закрывает свой file и возвращает capacity.
+
+Transfer pin/metadata не выданы за grant,AV verdict или live owner eligibility.
+Документирован порядок metadata → bounded chunks → total hash/size → Complete
+→ clean EOF,затем полный private spool и повторная HTTP ticket authorization
+до headers/bytes. Partial destination data не откатываются receiver автоматически:
+failed file освобождает caller. Late HTTP delivery failure не отменяет уже
+переданные bytes. Deadline test использует context-aware recv,не доказывает
+отменяемость произвольной blocking функции. Container harness SKIP без explicit
+disposable fixture не объявлен доказательством container isolation.
+
+Полная non-comment/gofmt сверка всех5 файлов с SHA199 — PASS,только комментарии.
+Рабочий nryG1J:6578 sources,222 excluded,1837 raw,586 retained,1251 unresolved;
+Go7465/21148,missing13683; raw SHA256
+`a035234cbd800e72038ab7fd511395d917d86b5a0080eddf6704cfdf2d6b27b0`,
+clone-set неизменен; новых/исчезнувших групп и exceptions нет.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly,17 Node units,Go-checker unit,scoped35/35,
+5 ignore-boundaries,gofmt и diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+Полный repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+точные post-commit результаты публикуются в Draft PR,общая цель не завершена.
 
 ## Сто девяносто девятая волна — delegation и все workflow callback helpers
 

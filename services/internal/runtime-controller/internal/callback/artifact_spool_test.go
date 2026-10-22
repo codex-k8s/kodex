@@ -10,6 +10,12 @@ import (
 	"testing"
 )
 
+// TestArtifactSpoolPreparationKubernetesVolume simulates a public setgid volume
+// root locally, rejects unprepared use and checks eight concurrent preparations
+// yield a working private spool without changing root permissions; no cluster is used.
+// TestArtifactSpoolPreparationKubernetesVolume локально моделирует public setgid volume
+// root,запрещает unprepared use и проверяет восемь concurrent preparations
+// без изменения root permissions; кластер не используется.
 func TestArtifactSpoolPreparationKubernetesVolume(t *testing.T) {
 	directory := t.TempDir()
 	if err := os.Chmod(directory, os.ModeSetgid|0777); err != nil {
@@ -40,6 +46,12 @@ func TestArtifactSpoolPreparationKubernetesVolume(t *testing.T) {
 	}
 }
 
+// TestArtifactSpoolPreparationRejectsUntrustedChild checks symlink roots/children,
+// public or regular-file children and unclean traversal paths are rejected rather
+// than repaired during preparation.
+// TestArtifactSpoolPreparationRejectsUntrustedChild проверяет отказ symlink roots/children,
+// public/regular-file children и unclean traversal paths вместо исправления
+// при preparation.
 func TestArtifactSpoolPreparationRejectsUntrustedChild(t *testing.T) {
 	for _, scenario := range []string{"symlink-root", "symlink-child", "public-child", "file-child", "traversal"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -80,8 +92,12 @@ func TestArtifactSpoolPreparationRejectsUntrustedChild(t *testing.T) {
 	}
 }
 
-// Контейнерный harness запускает настоящий constructor/readiness и unlink path
-// на subPath, подготовленном отдельным non-root init binary.
+// TestArtifactSpoolContainerStartup runs only with the explicit disposable-container
+// directory; it checks constructor/readiness/unlinked files and an unwritable authority
+// mount. Without that fixture it skips and does not prove real container isolation.
+// TestArtifactSpoolContainerStartup запускается лишь с explicit disposable-container
+// directory: проверяет constructor/readiness/unlinked files и unwritable authority
+// mount. Без fixture — SKIP,доказательства реальной container isolation нет.
 func TestArtifactSpoolContainerStartup(t *testing.T) {
 	directory := os.Getenv("KODEX_ARTIFACT_SPOOL_CONTAINER_DIRECTORY")
 	if directory == "" {
@@ -111,6 +127,12 @@ func TestArtifactSpoolContainerStartup(t *testing.T) {
 	}
 }
 
+// TestArtifactSpoolUnlinksImmediatelyAndBoundsConcurrentTransfers checks two-slot
+// capacity, absent reachable temporary names, independent readiness canary, idempotent
+// release and directory close preserving in-flight descriptors until caller release.
+// TestArtifactSpoolUnlinksImmediatelyAndBoundsConcurrentTransfers проверяет two-slot
+// capacity,отсутствие reachable temporary names,independent readiness canary,idempotent
+// release и сохранение in-flight descriptors после directory close до caller release.
 func TestArtifactSpoolUnlinksImmediatelyAndBoundsConcurrentTransfers(t *testing.T) {
 	directory := t.TempDir()
 	spool, err := openArtifactSpool(directory)
@@ -166,6 +188,12 @@ func TestArtifactSpoolUnlinksImmediatelyAndBoundsConcurrentTransfers(t *testing.
 	}
 }
 
+// TestArtifactSpoolRejectsUnsafeDirectoryAndCanceledAcquisition checks unsafe mount/
+// private paths are rejected and an already canceled request consumes no transfer slot.
+// It does not simulate every possible concurrent filesystem replacement.
+// TestArtifactSpoolRejectsUnsafeDirectoryAndCanceledAcquisition проверяет отказ unsafe
+// mount/private paths и отсутствие занятого slot у already canceled request.
+// Все возможные concurrent filesystem replacement этим не моделируются.
 func TestArtifactSpoolRejectsUnsafeDirectoryAndCanceledAcquisition(t *testing.T) {
 	for _, scenario := range []string{"symlink mount", "symlink private", "public private", "world writable"} {
 		t.Run(scenario, func(t *testing.T) {
