@@ -12,6 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/domain/types/value"
 )
 
+// testKeys supplies disposable synthetic key copies and configurable reservation/cancellation failures;
+// its counter is not the durable production guard.
+// testKeys предоставляет отдельные synthetic key copies и настраиваемые reservation/cancellation failures;
+// счётчик не является устойчивым production guard.
 type testKeys struct {
 	identity    value.DraftEncryptionKey
 	material    []byte
@@ -21,18 +25,31 @@ type testKeys struct {
 	cancel      context.CancelFunc
 }
 
+// Current returns an independent synthetic material copy or a configured unavailable error without
+// checking context or manifest state.
+// Current возвращает независимую synthetic material copy либо настроенную unavailable error без проверки
+// context и manifest state.
 func (keys *testKeys) Current(context.Context) (value.DraftEncryptionKey, []byte, error) {
 	if keys.unavailable {
 		return value.DraftEncryptionKey{}, nil, errors.New("fixture key source unavailable")
 	}
 	return keys.identity, bytes.Clone(keys.material), nil
 }
+
+// Resolve returns a material copy only for the exact configured identity, otherwise a synthetic
+// missing-key error.
+// Resolve возвращает material copy лишь точной настроенной identity, иначе synthetic missing-key error.
 func (keys *testKeys) Resolve(_ context.Context, identity value.DraftEncryptionKey) ([]byte, error) {
 	if keys.unavailable || identity != keys.identity {
 		return nil, errors.New("fixture key missing")
 	}
 	return bytes.Clone(keys.material), nil
 }
+
+// ReserveEncryption counts every attempt, can reject it or cancel the caller and otherwise succeeds
+// without validating identity or persistence.
+// ReserveEncryption учитывает каждую попытку, может отказать либо отменить caller, иначе успешен без
+// проверки identity и persistence.
 func (keys *testKeys) ReserveEncryption(context.Context, value.DraftEncryptionKey) error {
 	keys.reserves++
 	if keys.denied {
@@ -44,6 +61,10 @@ func (keys *testKeys) ReserveEncryption(context.Context, value.DraftEncryptionKe
 	return nil
 }
 
+// cryptoFixture builds a real Cipher over synthetic key ports and a matching scoped binding/digest; it
+// needs no cluster, provider or production key.
+// cryptoFixture создаёт реальный Cipher с synthetic key ports и совпадающими scoped binding/digest;
+// cluster, provider и production key не нужны.
 func cryptoFixture(t *testing.T) (*Cipher, *testKeys, value.SecretDraftBinding, []byte) {
 	t.Helper()
 	material := bytes.Repeat([]byte{0x63}, 32)
@@ -59,6 +80,12 @@ func cryptoFixture(t *testing.T) (*Cipher, *testKeys, value.SecretDraftBinding, 
 	return crypt, keys, binding, plaintext
 }
 
+// TestCipherRoundTripRandomNonceAndNoPlaintextAlias encrypts twice, checks distinct ciphertext and
+// overhead/reservation counts, decrypts and confirms clearing output leaves caller plaintext/key
+// untouched; it is not a statistical nonce proof.
+// TestCipherRoundTripRandomNonceAndNoPlaintextAlias дважды шифрует, проверяет разные ciphertext и
+// overhead/reservation counts, расшифровывает и проверяет сохранность caller plaintext/key после очистки
+// output; это не статистическое доказательство nonce.
 func TestCipherRoundTripRandomNonceAndNoPlaintextAlias(t *testing.T) {
 	crypt, keys, binding, plaintext := cryptoFixture(t)
 	first, err := crypt.Encrypt(t.Context(), binding, plaintext)
@@ -82,6 +109,11 @@ func TestCipherRoundTripRandomNonceAndNoPlaintextAlias(t *testing.T) {
 	}
 }
 
+// TestCipherBindsEveryOwnerFieldAndKeyGeneration mutates each scoped binding coordinate and then key
+// generation, requiring authentication failure with no plaintext, even when the stub still returns the
+// same key bytes.
+// TestCipherBindsEveryOwnerFieldAndKeyGeneration меняет каждую scoped binding coordinate и key generation,
+// требуя authentication failure без plaintext, даже если подмена возвращает прежние key bytes.
 func TestCipherBindsEveryOwnerFieldAndKeyGeneration(t *testing.T) {
 	crypt, keys, binding, plaintext := cryptoFixture(t)
 	encrypted, err := crypt.Encrypt(t.Context(), binding, plaintext)
@@ -116,6 +148,10 @@ func TestCipherBindsEveryOwnerFieldAndKeyGeneration(t *testing.T) {
 	}
 }
 
+// TestCipherRejectsCorruptionAndMalformedBounds corrupts nonce/body/tag, tests empty/oversized ciphertext
+// and empty/oversized or digest-mismatched plaintext, requiring closed errors and no output.
+// TestCipherRejectsCorruptionAndMalformedBounds повреждает nonce/body/tag, проверяет пустой/слишком
+// большой ciphertext и пустой/слишком большой либо digest-mismatched plaintext, требуя отказа без output.
 func TestCipherRejectsCorruptionAndMalformedBounds(t *testing.T) {
 	crypt, _, binding, plaintext := cryptoFixture(t)
 	encrypted, err := crypt.Encrypt(t.Context(), binding, plaintext)
@@ -144,6 +180,12 @@ func TestCipherRejectsCorruptionAndMalformedBounds(t *testing.T) {
 	}
 }
 
+// TestCipherRequiresDurableReservationAndLiveContext checks denial, cancellation during reservation, no
+// new reservation for an already-cancelled request and unavailable keys; the stub does not prove durable
+// persistence.
+// TestCipherRequiresDurableReservationAndLiveContext проверяет denial, cancellation при reservation,
+// отсутствие нового reservation для уже отменённого запроса и unavailable keys; подмена не доказывает
+// durable persistence.
 func TestCipherRequiresDurableReservationAndLiveContext(t *testing.T) {
 	crypt, keys, binding, plaintext := cryptoFixture(t)
 	keys.denied = true

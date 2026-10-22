@@ -15,10 +15,21 @@ import (
 )
 
 const (
+	// maximumKeyringBytes caps encoded runtime and administrative keyring input at 64 KiB before decoding.
+	// maximumKeyringBytes ограничивает encoded runtime и administrative keyring input до 64 КиБ перед
+	// декодированием.
 	maximumKeyringBytes = 64 << 10
-	maximumKeyringKeys  = 128
+	// maximumKeyringKeys caps retained key entries at 128; rotation refuses capacity exhaustion rather than
+	// silently retiring read keys.
+	// maximumKeyringKeys ограничивает retained key entries до 128; rotation отказывает при исчерпании ёмкости
+	// вместо скрытого удаления read keys.
+	maximumKeyringKeys = 128
 )
 
+// keyringDocument is the strict versioned JSON envelope containing current/retained key material; it must
+// never be logged or returned as an ordinary API DTO.
+// keyringDocument — строгий versioned JSON envelope с current/retained key material; его нельзя логировать
+// и возвращать как обычный API DTO.
 type keyringDocument struct {
 	Version  int           `json:"version"`
 	Revision int64         `json:"revision"`
@@ -26,17 +37,29 @@ type keyringDocument struct {
 	Keys     []keyDocument `json:"keys"`
 }
 
+// keyDocument pairs sensitive 32-byte material with its SHA-256 ID and positive generation; decoded
+// material slices require explicit clearing.
+// keyDocument связывает чувствительный 32-байтовый material с SHA-256 ID и положительным generation;
+// decoded material slices требуют явной очистки.
 type keyDocument struct {
 	ID         string `json:"id"`
 	Generation int64  `json:"generation"`
 	Material   []byte `json:"material"`
 }
 
+// FileKeys rereads a configured keyring and delegates durable rollback/use checks to KeyGuard; it caches
+// neither material nor a local authority counter.
+// FileKeys повторно читает настроенный keyring и делегирует устойчивые rollback/use checks KeyGuard; ни
+// материал, ни локальный authority counter не кэширует.
 type FileKeys struct {
 	path  string
 	guard secretdrafts.KeyGuard
 }
 
+// NewFileKeys accepts a clean absolute path and nonnil guard without opening the file or validating guard
+// readiness; typed nils remain the caller's responsibility.
+// NewFileKeys принимает clean absolute path и nonnil guard без открытия файла и проверки guard readiness;
+// typed nil остаётся ответственностью caller.
 func NewFileKeys(path string, guard secretdrafts.KeyGuard) (*FileKeys, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || guard == nil {
 		return nil, ErrEncryptionUnavailable
@@ -44,6 +67,10 @@ func NewFileKeys(path string, guard secretdrafts.KeyGuard) (*FileKeys, error) {
 	return &FileKeys{path: path, guard: guard}, nil
 }
 
+// Current loads and observes the manifest, copies the selected current material and clears the decoded
+// keyring before returning; reservation is a separate step.
+// Current загружает и учитывает manifest, копирует выбранный current material и очищает decoded keyring до
+// return; reservation выполняется отдельно.
 func (source *FileKeys) Current(ctx context.Context) (value.DraftEncryptionKey, []byte, error) {
 	document, manifest, err := source.load(ctx)
 	defer clearKeyring(&document)
@@ -58,6 +85,10 @@ func (source *FileKeys) Current(ctx context.Context) (value.DraftEncryptionKey, 
 	return value.DraftEncryptionKey{}, nil, ErrEncryptionUnavailable
 }
 
+// Resolve loads/observes the latest manifest and copies only the matching retained ID/generation, clearing
+// the decoded keyring without consuming write budget.
+// Resolve загружает/учитывает последний manifest и копирует лишь совпавший retained ID/generation, очищая
+// decoded keyring без расхода write budget.
 func (source *FileKeys) Resolve(ctx context.Context, wanted value.DraftEncryptionKey) ([]byte, error) {
 	document, _, err := source.load(ctx)
 	defer clearKeyring(&document)
@@ -72,6 +103,10 @@ func (source *FileKeys) Resolve(ctx context.Context, wanted value.DraftEncryptio
 	return nil, ErrEncryptionUnavailable
 }
 
+// ReserveEncryption delegates the exact identity to the durable guard and maps every failure to the fixed
+// unavailable error.
+// ReserveEncryption передаёт точную identity устойчивому guard и отображает любой failure в фиксированную
+// unavailable error.
 func (source *FileKeys) ReserveEncryption(ctx context.Context, key value.DraftEncryptionKey) error {
 	if err := source.guard.Reserve(ctx, key); err != nil {
 		return ErrEncryptionUnavailable
@@ -79,6 +114,10 @@ func (source *FileKeys) ReserveEncryption(ctx context.Context, key value.DraftEn
 	return nil
 }
 
+// Check loads/observes and clears the keyring, then verifies current-key readiness without reserving
+// encryption use; it can update manifest guard state.
+// Check загружает/учитывает и очищает keyring, затем проверяет current-key readiness без резервирования
+// использования; может обновлять manifest guard state.
 func (source *FileKeys) Check(ctx context.Context) error {
 	document, manifest, err := source.load(ctx)
 	clearKeyring(&document)
@@ -91,6 +130,12 @@ func (source *FileKeys) Check(ctx context.Context) error {
 	return nil
 }
 
+// load checks initial cancellation, reads a bounded securefile, strictly decodes it and observes the
+// durable manifest before returning material; failures clear raw/decoded copies and never fall back to an
+// older keyring.
+// load проверяет исходную cancellation, читает bounded securefile, строго декодирует и учитывает durable
+// manifest до возврата материала; при отказе очищает raw/decoded copies и не откатывается к старому
+// keyring.
 func (source *FileKeys) load(ctx context.Context) (keyringDocument, value.DraftKeyManifest, error) {
 	if err := ctx.Err(); err != nil {
 		return keyringDocument{}, value.DraftKeyManifest{}, err
@@ -111,6 +156,12 @@ func (source *FileKeys) load(ctx context.Context) (keyringDocument, value.DraftK
 	return document, manifest, nil
 }
 
+// decodeKeyring strictly validates version/revision/count, unique material-bound IDs/generations and the
+// highest-generation current key. It sorts metadata to hash a key-free manifest, permits revision gaps and
+// clears decoded material on invalid input.
+// decodeKeyring строго проверяет version/revision/count, уникальные связанные с материалом IDs/generations
+// и current key с максимальным generation. Сортирует metadata для хеша manifest без материала, допускает
+// разрывы revision и очищает decoded material при ошибке.
 func decodeKeyring(data []byte) (keyringDocument, value.DraftKeyManifest, error) {
 	var document keyringDocument
 	invalid := func() (keyringDocument, value.DraftKeyManifest, error) {
@@ -154,6 +205,10 @@ func decodeKeyring(data []byte) (keyringDocument, value.DraftKeyManifest, error)
 	return document, manifest, nil
 }
 
+// clearKeyring overwrites each decoded material slice without removing metadata or claiming to erase other
+// copies or expanded AES state.
+// clearKeyring обнуляет каждый decoded material slice без удаления metadata и без гарантии стирания иных
+// копий и expanded AES state.
 func clearKeyring(document *keyringDocument) {
 	for index := range document.Keys {
 		clear(document.Keys[index].Material)

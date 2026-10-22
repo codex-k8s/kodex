@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.232.0
+version: 1.233.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,72 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцать третья волна — AEAD и private keyring
+
+Опубликованный SHA232 — `161d88069c1eb7cd1fc95935d0d38ab15b06e9c4`.
+Точный YhoTRq: 6587 sources, 222 excluded, 1823 raw, 597 retained,
+1226 unresolved; Go9291/21196, missing11905. Raw SHA256:
+`15c787bfbd543e8dd1eb3e959fc19480e6cce9693f9ac0f773fefcadf11fefa7`.
+Clone-set:
+`b413e1434acf4250c9dab613c71f7e28af7fd560cbab827898600203221af9e1`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA232 domain9/30,
+app composition1/9 и полная сборка secret-broker PASS, 0 FAIL/SKIP.
+
+Полностью прочитаны все6 файлов integration/stagingcrypto923 строки;
+55/55 declarations и package comment получили EN→RU пояснения.
+Дополнительно сверена securefile.Read boundary. Изменены только comments/
+gofmt: AST6 идентичен SHA232 без comments/token.Pos. Ни один runtime
+statement, key format, API, dependency, permission или lifecycle не изменён.
+
+Описаны AES-256-GCM/random nonce с overhead28, authenticated scoped
+binding/key identity и content digest, durable reservation до Seal,
+точные cancellation checkpoints и владение plaintext/ciphertext/key copies.
+Очистка копий не объявлена стиранием всех expanded AES state/прочих copies.
+keyAssociatedData может использовать capacity переданного slice;
+validKeyIdentity проверяет representation, не correspondence к материалу.
+
+FileKeys повторно читает bounded securefile и вызывает guard.Observe;
+Check/Resolve не тратят encryption allowance, но могут менять accepted
+manifest state. Current copy и ReserveEncryption остаются раздельными,
+с теми же generic error boundaries. Strict keyring decoder проверяет
+материал/ID, unique generations/current maximum и retained limits;
+gaps revision допустимы. Поля document не выдаются за публичный DTO.
+
+Administrative Generate/Rotate/Copy лишь создают private O_EXCL file,
+не активируют ключ в кластере. Expected revision, retention, capacity/
+overflow, exact mode/owner/nlink/size, file→directory fsync и best-effort
+removal после отказа описаны по коду. Нет обещания atomic activation
+или гарантированного rollback. os.Root descriptor не назван mount
+namespace или универсальной защитой от privileged filesystem races.
+
+Context7 /golang/go и local Go1.26.6 go doc сверены для
+cipher.NewGCMWithRandomNonce и os.Root. Runtime не переводится на новую
+версию SDK и не получает новых primitives. Сводка не подменяет source:
+не приписано, что AEAD требует AAD длины NonceSize; это разные параметры.
+
+Unit `./internal/integration/stagingcrypto`:9 верхних/19 всех PASS,
+0 FAIL/SKIP. Отдельная app encrypted lifecycle/readiness composition:
+1 верхний/9 всех PASS, 0 FAIL/SKIP. Общие флаги
+`go test -mod=readonly -count=1 -timeout 120s -json`, GOENV/GOWORK off,
+Go1.26.6, GOMAXPROCS=4. Полная сборка secret-broker
+`go build -mod=readonly ./...` PASS LOCAL.
+Криптографические tests действительно выполняют AES round-trip, изменение
+AAD/organization/generation, corrupt nonce/body/tag, bounds/reservation/
+cancellation; material tests создают только disposable keyrings.
+Synthetic reservation не доказывает durable guard. Сравнение двух
+ciphertexts не названо статистическим proof случайности nonce.
+
+Scope55/55, AST identity6, gofmt/diff-check, assessment и5 ignore boundaries
+PASS LOCAL. Рабочий RmMidN: 6587 sources,222 excluded,1823 raw,597 retained,
+1226 unresolved; Go9346/21196, missing11850. Raw SHA256:
+`956a290d194bd9518265e8c1c93c2f23ec2d51c7f37f67455ed0f1c9442104be`.
+Clone-set прежний b413e143...; fragment/path/count multiset и registry
+неизменны. Финальная правка wording одного test comment не меняет AST.
+Точный post-commit scan/unit/build будет опубликован в том же Draft PR.
+Полная задача не завершена;11850 declarations и1226 групп впереди.
+Прежние FAIL/SKIP/NOT RUN сохранены; live/browser/deploy/модель/почта
+и полная приёмка NOT RUN, никаких настоящих ключей не читали/не меняли.
 
 ## Двести тридцать вторая волна — доменные ports и recovery черновиков
 
