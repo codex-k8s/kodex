@@ -27,6 +27,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/providerfinancewire"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
@@ -455,6 +456,14 @@ func (server *Server) nextWarm(writer http.ResponseWriter, request *http.Request
 	_ = json.NewEncoder(writer).Encode(input)
 }
 
+// progress authorizes an exact execution, validates the selected progress/message/
+// financial/process shape and submits the lease-fenced projection to the owner.
+// Local process observation is recorded only after owner acceptance; financial
+// casting preserves measurements without deciding account eligibility.
+// progress авторизует точное выполнение, проверяет выбранную форму progress,
+// message, financial либо process и передаёт lease-fenced проекцию владельцу.
+// Локальное наблюдение процесса записывается лишь после принятия владельцем;
+// перевод financial сохраняет измерения, не решая допустимость аккаунта.
 func (server *Server) progress(writer http.ResponseWriter, request *http.Request, leaseRef string) {
 	input, ok := server.authorize(request, leaseRef)
 	if !ok {
@@ -476,7 +485,7 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	defer cancel()
 	projection := &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration}
 	if payload.Financial != nil {
-		projection.Financial = castFinancialObservation(*payload.Financial)
+		projection.Financial = providerfinancewire.ObservationToProto(*payload.Financial)
 	} else if message := payload.Message; message != nil {
 		digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, "message:"+message.ItemID)))
 		projection.Message = &controlplanev1.RunMessage{Ref: "msg_" + hex.EncodeToString(digest[:16]),

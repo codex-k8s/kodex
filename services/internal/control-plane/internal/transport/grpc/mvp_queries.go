@@ -6,6 +6,7 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/providerfinancewire"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -29,6 +30,13 @@ func (server *Server) ListProviderDefinitions(ctx context.Context, request *cont
 	return response, nil
 }
 
+// ListProviderAccounts resolves the transport principal before choosing the
+// financial-summary-only or paged account read. The summary branch rejects mixed
+// filters; owner services determine scope/eligibility and wire casting does not
+// turn observed balances into execution permission.
+// ListProviderAccounts получает transport principal до выбора только финансового
+// обзора либо списка аккаунтов. Обзор отвергает смешанные фильтры; owner services
+// определяют scope/eligibility, а wire-проекция не превращает баланс в право запуска.
 func (server *Server) ListProviderAccounts(ctx context.Context, request *controlplanev1.ListProviderAccountsRequest) (*controlplanev1.ListProviderAccountsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProviderAccounts_FullMethodName)
 	if err != nil {
@@ -46,7 +54,7 @@ func (server *Server) ListProviderAccounts(ctx context.Context, request *control
 		for _, account := range overview.Accounts {
 			projected := &controlplanev1.ProviderFinancialDisplayAccount{Ref: account.Ref, Name: account.Name}
 			if summary := account.FinancialSummary; summary != nil {
-				projected.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: castFinancialObservation(summary.Observation), ReceivedAt: timestamp(summary.ReceivedAt), Version: summary.Version}
+				projected.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: providerfinancewire.ObservationToProto(summary.Observation), ReceivedAt: timestamp(summary.ReceivedAt), Version: summary.Version}
 			}
 			result.Accounts = append(result.Accounts, projected)
 		}
@@ -146,6 +154,12 @@ func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapa
 		ReadinessBlockers: value.ReadinessBlockers}
 }
 
+// castProviderAccount projects the supplied domain account, optional financial
+// observation and authorization details without recomputing readiness or financial
+// eligibility; the caller must supply an already authorized read projection.
+// castProviderAccount переводит переданный доменный аккаунт, необязательные
+// финансовое наблюдение и authorization details без пересчёта readiness
+// и financial eligibility; caller передаёт уже авторизованную read-проекцию.
 func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderAccount {
 	result := &controlplanev1.ProviderAccount{
 		Deletion: castProviderAccountDeletion(value.Deletion), Verification: castProviderAccountVerification(value.Verification),
@@ -155,7 +169,7 @@ func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderA
 		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), SafeStatusReason: value.SafeStatusReason,
 	}
 	if value.FinancialSummary != nil {
-		result.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: castFinancialObservation(value.FinancialSummary.Observation), ReceivedAt: timestamp(value.FinancialSummary.ReceivedAt), Version: value.FinancialSummary.Version}
+		result.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: providerfinancewire.ObservationToProto(value.FinancialSummary.Observation), ReceivedAt: timestamp(value.FinancialSummary.ReceivedAt), Version: value.FinancialSummary.Version}
 	}
 	if value.Authorization != nil {
 		result.Authorization = &controlplanev1.ProviderAuthorization{

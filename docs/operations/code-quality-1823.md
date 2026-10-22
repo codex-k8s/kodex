@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.193.0
+version: 1.194.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,71 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто четвёртая волна — общий financial wire caster
+
+На точном запушенном SHA `8023d2b5ea6d582e1403c73b1af344d5585b833d`
+волны193 workload84 верхних/300 всех PASS,0 FAIL,1 прежний wire SKIP;
+полный runtime-controller build PASS. Exact CzB80z:6575 sources,
+222 excluded,1840 raw,582 retained,1258 unresolved; Go7038/21141,
+missing14103; raw SHA256
+`a2007ab2da443b399e83040cdbfc8241aebcfd9fb12953f6b75831c3eb86ea56`,
+clone-set `d8014d294a06609222907c801d6abe4f1077236fd3a56ad5f58405a8d13bc93b`.
+
+Реальный одинаковый financial caster двух production units вынесен
+в узкий providerfinancewire module. ObservationToProto содержит буквально
+прежний алгоритм CP и RC; обе локальные реализации удалены,5 call sites
+используют общий код. Обратный mapper нужен только CP и остался там.
+Новый module зависит лишь от runtimecontract/controlplaneapi, оба уже нужны
+обоим потребителям. Общий controlplaneclient не получает новую зависимость
+и её fan-out на остальные deployable. Два go.mod и точные Docker COPY
+обоих consumers обновлены; версии SDK и прежние go.sum не менялись.
+Новый module имеет собственные go.mod/go.sum, README и unit-тесты.
+
+Сохраняются sequence/state/restriction, порядок окон, отсутствующие scalar
+pointers, присутствующее false/0, пустые containers и точный balance без float.
+Как прежде, outer protobuf containers новые, scalar pointers разделяются:
+это не deep clone и не выдача оплаченного допуска. Проверка input,
+actor/account/lease, eligibility, timestamps, HumanGate и owner RPC не менялись.
+Новый caster намеренно не добавляет validation: тест проверяет и буквальный
+перенос некорректных domain values, а не скрытое изменение policy.
+
+Все4 объявления нового module и5 затронутых существующих функций/методов
+описаны EN→RU. Scoped checker всех libs плюс2 CP finance files:
+291 файл,2536/2536; вся libs/go отдельно2534/2534. Обратная подстановка
+пяти вызовов и удалённых adapters восстанавливает весь executable text
+четырёх прежних файлов; тело общего алгоритма идентично обоим исходным.
+go.mod меняет лишь require/replace нового module, Dockerfile — один COPY.
+Context7 protobuf-go вернул сведения о wrappers/opaque, не подменяющие
+нашу Open Struct API; фактические optional pointer fields подтверждены
+локальным go doc pinned controlplaneapi. Generated не редактировалось.
+
+При первом scan обнаружен дефект inventory для unstaged tracked deletion:
+Git ещё перечислял удалённый файл, lstat завершал анализ ENOENT. Исправление
+пропускает только ENOENT для точного Git --deleted; произвольное исчезновение,
+ошибки доступа и symlink по-прежнему закрыто отклоняются. Новый unit через
+отдельный временный Git repo проверяет удаление, включение нового source,
+generated exclusion и отказ symlink. 17 Node unit и Go-checker PASS.
+Промежуточная сверка старых Docker fingerprints закрыто отказала; два окна
+повторно разобраны по полным путям/позициям после нового COPY и обновлены
+адресно. Retained count не расширен, broad ignore не добавлен.
+
+Локально: new module3 верхних/3 всех PASS; CP transport87/201 PASS,
+3 прежних SKIP (AssistantWarmRuntimeOwnerSnapshotTransport,
+LegacyEmailClaimCasterFixture,SecretOwnerLoopbackHarness); RC callback250/1349
+PASS,2 прежних SKIP (ArtifactSpoolContainerStartup,RuntimeMCPCatalogWireProducer).
+Все0 FAIL; пропущенные wire/component/container suites NOT RUN.
+Полные builds нового module,CP,RC-mod=readonly PASS LOCAL; Go1.26.6,
+GOENV=off/GOWORK=off. Docker image build и live/deploy не запускались.
+
+Рабочий tzdv04:6576 sources,222 excluded,1839 raw,582 retained,
+1257 unresolved; financial duplicate действительно исчез,новых клонов нет.
+Go7047/21143,missing14096; raw SHA256
+`cf58823f9508cb1bc05041213ce582f37d0f3b60518721b5f24e5da837996342`,
+clone-set `58041a831f89eeae6a2221fd52bc1ff213d255721c8f49313d48c767a1595061`.
+Финальные fingerprints/повтор build-unit/точный опубликованный SHA —
+в текущем PR. Общая цель ещё не завершена; полный repo-check,
+component/live/browser/deploy,агенты/STT/почта NOT RUN, PR Draft без merge.
 
 ## Сто девяносто третья волна — завершены комментарии workload
 

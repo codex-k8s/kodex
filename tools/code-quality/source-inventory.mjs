@@ -76,6 +76,17 @@ export function generatedReason(filename, header) {
 }
 
 export function inventory(root) {
+  // Только подтверждённое Git удаление допускает отсутствие tracked-файла.
+  // Ошибки доступа, неожиданный пропавший файл и symlink остаются отказом.
+  const deleted = new Set(
+    execFileSync("git", ["ls-files", "--deleted", "-z"], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    })
+      .split("\0")
+      .filter(Boolean),
+  );
   const filenames = execFileSync(
     "git",
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -96,7 +107,13 @@ export function inventory(root) {
     )
       continue;
     const fullPath = path.join(root, filename);
-    const info = fs.lstatSync(fullPath);
+    let info;
+    try {
+      info = fs.lstatSync(fullPath);
+    } catch (error) {
+      if (error.code === "ENOENT" && deleted.has(filename)) continue;
+      throw error;
+    }
     if (!info.isFile())
       throw Error("Source inventory requires regular files: " + filename);
     const fd = fs.openSync(

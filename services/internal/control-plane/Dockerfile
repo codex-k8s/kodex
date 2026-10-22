@@ -23,6 +23,7 @@ COPY libs/go/integrationpackage/ libs/go/integrationpackage/
 COPY libs/go/integrationgatewayauth/ libs/go/integrationgatewayauth/
 COPY libs/go/objectstorage/ libs/go/objectstorage/
 COPY libs/go/observability/ libs/go/observability/
+COPY libs/go/providerfinancewire/ libs/go/providerfinancewire/
 COPY libs/go/oidcidentity/ libs/go/oidcidentity/
 COPY libs/go/oidcverifier/ libs/go/oidcverifier/
 COPY libs/go/runtimecontract/ libs/go/runtimecontract/

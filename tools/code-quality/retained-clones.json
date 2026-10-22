@@ -2797,7 +2797,7 @@
       "format": "docker",
       "firstPath": "services/external/control-api-gateway/Dockerfile",
       "secondPath": "services/internal/runtime-controller/Dockerfile",
-      "fragmentSHA256": "f3e9287922077c4b63e12dac944d18f56a31dc7cfa34b381ac8b895406f1f108",
+      "fragmentSHA256": "badc01862a4286c212a14523f8c8370bef3eff408231b333ca3d31b8dd66a199",
       "count": 1,
       "reason": "Совпадает закреплённая Go builder-основа и последовательность COPY локальных модулей, но пара собирает независимые gateway/controller бинарники с собственными списками зависимостей и runtime. Общий Dockerfile скрыл бы точный build context и инвалидацию каждого слоя."
     },
@@ -2837,7 +2837,7 @@
       "format": "docker",
       "firstPath": "services/external/control-api-gateway/Dockerfile",
       "secondPath": "services/internal/control-plane/Dockerfile",
-      "fragmentSHA256": "5031ec47775d09000fecad3ababa7097d57a4cb060c4bf6ae25ecccdd6da51f1",
+      "fragmentSHA256": "e37525fc388c36d3924213a72a63f4991bed0000992eec62527f1bd4f192ef77",
       "count": 1,
       "reason": "Окно COPY локальных Go-модулей control API и control plane похоже после нормализации имён, но фактические библиотеки и выходные бинарники различны. Это перекрытие списка, не повтор исполняемой сборочной операции; отдельные Dockerfile сохраняют явные зависимости."
     },

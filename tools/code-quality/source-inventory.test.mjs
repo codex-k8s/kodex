@@ -1,6 +1,32 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
 import test from "node:test";
-import { generatedReason } from "./source-inventory.mjs";
+import { generatedReason, inventory } from "./source-inventory.mjs";
+
+test("inventory handles tracked deletion without hiding new source or symlinks", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "kodex-inventory-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    for (const name of ["removed.go", "tracked.go"]) {
+      fs.writeFileSync(path.join(root, name), "package example\n");
+    }
+    execFileSync("git", ["add", "--", "removed.go", "tracked.go"], { cwd: root });
+    fs.unlinkSync(path.join(root, "removed.go"));
+    fs.writeFileSync(path.join(root, "new.go"), "package example\n");
+    fs.writeFileSync(path.join(root, "wire.pb.go"), "package example\n");
+    assert.deepEqual(inventory(root), {
+      sources: ["new.go", "tracked.go"],
+      excluded: [{ path: "wire.pb.go", reason: "generated-filename" }],
+    });
+    fs.symlinkSync("tracked.go", path.join(root, "linked.go"));
+    assert.throws(() => inventory(root), /requires regular files/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("generated outputs are excluded independently of their language", () => {
   for (const filename of [
