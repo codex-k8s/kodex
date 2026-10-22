@@ -22,6 +22,10 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// completionDiagnostic builds an exact-bound synthetic notification-failure
+// observation for callback tests; it is not evidence from a running provider.
+// completionDiagnostic собирает точно привязанное синтетическое наблюдение
+// ошибки уведомления для callback-тестов, не свидетельство работающего провайдера.
 func completionDiagnostic(input runtimecontract.RunnerInput) *runtimecontract.ProviderFailureDiagnostic {
 	return &runtimecontract.ProviderFailureDiagnostic{Schema: runtimecontract.ProviderFailureDiagnosticSchema,
 		RuntimeRevisionDigest: input.RuntimeRevisionDigest, InputDigest: input.InputDigest, ExecutionBindingDigest: input.ExecutionBindingDigest,
@@ -30,6 +34,10 @@ func completionDiagnostic(input runtimecontract.RunnerInput) *runtimecontract.Pr
 		Notification: "thread/tokenUsage/updated", NotificationError: "TOKEN_USAGE_LAST_EXCEEDS_TOTAL", AccountRead: "NONE"}
 }
 
+// diagnosticCompletionClient is a typed completion RPC spy with a pre-call
+// assertion hook and configurable result; embedded unexercised RPCs are not fakes.
+// diagnosticCompletionClient записывает типизированные completion RPC с hook
+// проверки до записи и заданным результатом; остальные встроенные RPC не подменены.
 type diagnosticCompletionClient struct {
 	cp.RuntimeWorkServiceClient
 	err      error
@@ -37,12 +45,22 @@ type diagnosticCompletionClient struct {
 	before   func()
 }
 
+// CompleteExecution invokes the required hook, retains the request and returns
+// an empty response plus the configured error without committing owner state.
+// CompleteExecution вызывает обязательный hook, сохраняет запрос и возвращает
+// пустой ответ с заданной ошибкой, не фиксируя состояние владельца.
 func (client *diagnosticCompletionClient) CompleteExecution(_ context.Context, request *cp.CompleteExecutionRequest, _ ...grpc.CallOption) (*cp.CompleteExecutionResponse, error) {
 	client.before()
 	client.requests = append(client.requests, request)
 	return &cp.CompleteExecutionResponse{}, client.err
 }
 
+// TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup checks local route
+// ordering: a nil mock owner result permits one safe pre-cleanup observation,
+// whereas replay, failure, success and rejected bindings do not fabricate it.
+// TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup проверяет порядок
+// локального маршрута: nil от mock владельца допускает одно безопасное наблюдение
+// до очистки; повтор, ошибка, успех и неверные привязки не подделывают его.
 func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 	for _, scenario := range []string{"exact", "missing", "CP error", "replay", "success", "unauthorized", "input", "execution", "session", "turn", "attempt", "private enum"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -139,6 +157,12 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 	}
 }
 
+// TestProviderCompletionDiagnosticDirectUnknownCannotReflectPrivateValues
+// verifies invalid provider details become unavailable rather than reflected,
+// and a nonnil owner error suppresses the observation entirely.
+// TestProviderCompletionDiagnosticDirectUnknownCannotReflectPrivateValues
+// проверяет замену неверных подробностей провайдера на недоступность без их
+// отражения, а также полное подавление наблюдения при ненулевой ошибке владельца.
 func TestProviderCompletionDiagnosticDirectUnknownCannotReflectPrivateValues(t *testing.T) {
 	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "nod_fixture", SessionRef: "ses_fixture", TurnRef: "trn_fixture", Attempt: 1,
 		RuntimeRevisionDigest: strings.Repeat("a", 64), InputDigest: strings.Repeat("b", 64), ExecutionBindingDigest: strings.Repeat("c", 64)}

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.189.0
+version: 1.190.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,58 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяностая волна — наблюдения провайдера в callback
+
+На точном запушенном SHA `4bd1f02a4fa855db31233a732fb34d361c2dfd49`
+волны189 workload unit84 верхних/300 всех PASS,0 FAIL,1 прежний wire SKIP;
+полный runtime-controller build PASS. Exact scan86FBHQ подтвердил
+6575 sources,222 исключения,1842 raw,581 retained,1261 unresolved;
+Go6901/21139,непокрыты14238; raw
+`3eeadca2ef71a3e68a4f75b3b745d7b743295789b48bf99a947a5f112449d6be`,
+clone-set `45b3ce0da54fa0f98ada699c0098badfba3451c7bcf36845632fdfe4ce0b4006`.
+
+Все32 объявления шести callback-файлов completion_rejection_diagnostic,
+provider_completion_diagnostic, provider_process и соответствующих тестов
+описаны предметно EN→RU. Все11 constants получили собственные пояснения.
+Разделены диагностика отказа и commit, nil owner error и AlreadyExists,
+проверенная привязка и произвольный payload, закрытые codes и remote details.
+Ограниченный one-second cold-Pod read не продлевает lifecycle и не приписывает
+warm-историю ходу. Ephemeral process store не назван authority watermark:
+его чтение требует отдельного fresh leased owner read, restart оставляет UNKNOWN.
+Указаны mutex, копирование наблюдения, запрет конфликтов, поколение/fence,
+удаление terminal записи и отсутствие alias через публичную map.
+Тестовые mock-ответы явно не названы настоящими durable owner commits.
+
+Все6 файлов после удаления комментариев/gofmt точно совпадают с родителем:
+runtime text, constants, signatures, проверки, порядок и asserts не менялись.
+Новых зависимостей/API/событий нет. Проверены фактические6 полных файлов
+и соответствующий test-to-owner путь, а не только имена объявлений.
+
+Разобрано одно111-token окно двух typed test RPC spies: CompleteExecution
+и ReportExecutionProgress имеют разные nominal requests/responses,
+собственные request slices, hook ordering и разные lifecycle сценарии.
+Generic recorder ради трёх общих statements добавил бы обёртку и скрыл
+различие exact callbacks; оставлено одно адресное решение с текущим
+fragment SHA256 `0e0aa37ba05c5033b8f658643b8a3bdd823d9e9d3d36e629c5eb980ca80061c9`.
+Другая обнаруженная группа financial caster в этой волне не меняется
+и остаётся unresolved; ей не приписывается различие типов или готовый вынос.
+
+Локально go test -mod=readonly -count=1 -json ./internal/callback дал
+250 верхних/1349 всех PASS,0 FAIL,2 прежних SKIP:
+TestArtifactSpoolContainerStartup и TestRuntimeMCPCatalogWireProducer.
+Эти container/wire suites остаются NOT RUN. Полный build runtime-controller,
+16 unit анализатора,unit Go-checker,scoped docs32/32,5 ignore-boundaries
+и diff-check PASS LOCAL; Go1.26.6,GOENV=off/GOWORK=off.
+
+Рабочий detector rV1xqK:6575 sources,222 excluded,1842 raw,582 retained,
+1260 unresolved; Go6933/21139,непокрыты14206. Raw SHA256
+`66092dc9042f121b97dbf00b2356677a5f46a413bffbc0b30df0ed96dc68b57a`,
+clone-set `ba3326f983f941ab44dc37d832978e8b524eb996fdf7e7708857df3ecad846d1`.
+Изменившийся comment-bearing fragment не объявлен уменьшением raw-клонов.
+Точный опубликованный SHA и повтор проверок публикуются в том же Draft PR.
+Полный repo Go-docs -check,component/live,browser/deploy,агенты/STT/почта
+NOT RUN; цель ещё не завершена, merge/ready/owner approve не выполняются.
 
 ## Сто восемьдесят девятая волна — контекст и диагностика workload
 

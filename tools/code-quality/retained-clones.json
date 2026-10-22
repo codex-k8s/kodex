@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/callback/provider_completion_diagnostic_test.go",
+      "secondPath": "services/internal/runtime-controller/internal/callback/provider_process_test.go",
+      "fragmentSHA256": "0e0aa37ba05c5033b8f658643b8a3bdd823d9e9d3d36e629c5eb980ca80061c9",
+      "count": 1,
+      "reason": "Точное 111-token окно включает конец разных fixtures, два typed RPC spy и начало разных scenario tables. CompleteExecution и ReportExecutionProgress используют разные nominal request/response, отдельные requests slices и методы generated port. Совпадает лишь обязательный before hook перед append и возвратом заданной ошибки. Generic recorder ради трёх строк потребует параметров типов и дополнительной оболочки, а объединённый mock скроет точное разделение completion/cleanup и process-progress authority assertions. Реальные lifecycle сценарии различны. Сохраняется только это окно с точными путями, fragment digest и одним вхождением, не файлы или методы целиком."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/control-plane/internal/providercredentialclient/managed_renewal.go",
       "secondPath": "services/internal/control-plane/internal/providercredentialclient/managed_renewal.go",
       "fragmentSHA256": "d9ab194a605f31a5f24f8de400f9be86718d93503b1756bfe6445e16dd4f6432",

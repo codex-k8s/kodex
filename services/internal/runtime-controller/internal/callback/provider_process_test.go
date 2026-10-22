@@ -19,6 +19,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// providerProcessCurrentInput prepares a system-assistant fixture with explicit
+// synthetic input/execution pins, lease generation and a private fence sentinel.
+// providerProcessCurrentInput готовит fixture системного помощника с явными
+// синтетическими привязками input/выполнения, поколением аренды и sentinel fence.
 func providerProcessCurrentInput() runtimecontract.RunnerInput {
 	input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
 	input.InputDigest, input.ExecutionBindingDigest = strings.Repeat("c", 64), strings.Repeat("d", 64)
@@ -26,6 +30,12 @@ func providerProcessCurrentInput() runtimecontract.RunnerInput {
 	return input
 }
 
+// TestProviderProcessCoordinatorExactLifecycleAndNoMutableAlias checks initial
+// UNKNOWN, exact replay, conflicting/foreign observations, generation rollover,
+// terminal removal and restart, including isolation from a mutated public map.
+// TestProviderProcessCoordinatorExactLifecycleAndNoMutableAlias проверяет
+// начальный UNKNOWN, точный повтор, конфликт и чужие привязки, смену поколения,
+// terminal-удаление и restart, включая изоляцию от изменения публичной map.
 func TestProviderProcessCoordinatorExactLifecycleAndNoMutableAlias(t *testing.T) {
 	input := providerProcessCurrentInput()
 	value := runtimecontract.BindProviderProcessObservation(input, "0.160.0")
@@ -93,6 +103,10 @@ func TestProviderProcessCoordinatorExactLifecycleAndNoMutableAlias(t *testing.T)
 	}
 }
 
+// providerProcessProgressClient spies on the typed progress RPC with a required
+// pre-call hook and configurable error; it does not persist progress or leases.
+// providerProcessProgressClient записывает типизированный progress RPC
+// с обязательным hook и заданной ошибкой, не сохраняя прогресс и аренды.
 type providerProcessProgressClient struct {
 	cp.RuntimeWorkServiceClient
 	err      error
@@ -100,12 +114,24 @@ type providerProcessProgressClient struct {
 	before   func()
 }
 
+// ReportExecutionProgress runs the pre-call assertion, records the exact request
+// and returns the configured error alongside an empty response, without a commit.
+// ReportExecutionProgress выполняет проверку до вызова, записывает точный запрос
+// и возвращает заданную ошибку с пустым ответом, не выполняя commit.
 func (client *providerProcessProgressClient) ReportExecutionProgress(_ context.Context, request *cp.ReportExecutionProgressRequest, _ ...grpc.CallOption) (*cp.ReportExecutionProgressResponse, error) {
 	client.before()
 	client.requests = append(client.requests, request)
 	return &cp.ReportExecutionProgressResponse{}, client.err
 }
 
+// TestProviderProcessProgressCheckedRouteRequiresOwnerAcceptance checks that
+// local progress publishes a process version only after mock owner acceptance
+// and exact registration; malformed payloads, foreign pins, conflicts and owner
+// errors cannot create a version or expose private binding data.
+// TestProviderProcessProgressCheckedRouteRequiresOwnerAcceptance проверяет,
+// что локальный progress публикует версию лишь после принятия mock владельцем
+// и точной регистрации; неверный payload, чужие привязки, конфликт и ошибки
+// владельца не создают версию и не раскрывают закрытые данные привязки.
 func TestProviderProcessProgressCheckedRouteRequiresOwnerAcceptance(t *testing.T) {
 	for _, scenario := range []string{"exact", "owner unavailable", "owner terminal", "unauthorized", "stale header", "attempt", "image", "revision", "unknown field", "raw UA", "duplicate version", "conflicting version", "unregistered"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -195,6 +221,14 @@ func TestProviderProcessProgressCheckedRouteRequiresOwnerAcceptance(t *testing.T
 	}
 }
 
+// TestProviderProcessOwnCurrentReadSeparatesActualVersionFromInventoryAndPrivateBinding
+// checks the local own-current tool's fresh mock owner read and safe transient
+// process view. Inventory alone remains UNKNOWN, private pins/history omit the
+// version, and failed owner eligibility cannot expose a stale observation.
+// TestProviderProcessOwnCurrentReadSeparatesActualVersionFromInventoryAndPrivateBinding
+// проверяет свежий mock owner read инструмента own-current и безопасный временный
+// вид процесса. Один inventory остаётся UNKNOWN; закрытые привязки не выдаются,
+// версия не попадает в историю, а отказ владельца не раскрывает старое наблюдение.
 func TestProviderProcessOwnCurrentReadSeparatesActualVersionFromInventoryAndPrivateBinding(t *testing.T) {
 	for _, observed := range []bool{false, true} {
 		input, arguments, response := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)

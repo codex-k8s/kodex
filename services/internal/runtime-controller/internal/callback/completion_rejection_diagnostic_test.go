@@ -16,6 +16,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestCompletionRejectionDiagnosticBoundary drives the local completion route
+// through payload, provenance and owner-RPC failures, unauthorized calls,
+// success and replay, checking exact safe log fields and no rejected cleanup.
+// TestCompletionRejectionDiagnosticBoundary проверяет локальный маршрут завершения
+// при отказах payload, происхождения и owner RPC, отсутствии авторизации, успехе
+// и повторе: точные безопасные поля лога и отсутствие очистки при отказе.
 func TestCompletionRejectionDiagnosticBoundary(t *testing.T) {
 	for _, scenario := range []string{"malformed", "unknown field", "invalid payload", "revision", "attempt", "provider binding", "owner unavailable", "owner permission", "unauthorized", "header mismatch", "success", "replay"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -123,6 +129,12 @@ func TestCompletionRejectionDiagnosticBoundary(t *testing.T) {
 	}
 }
 
+// TestCompletionRejectionDiagnosticClosedEnums checks normalization of OK and
+// unknown numeric codes to Unknown, all canonical failure codes, closed stage/
+// reason pairs and a missing logger without reflecting arbitrary input.
+// TestCompletionRejectionDiagnosticClosedEnums проверяет замену OK и неизвестных
+// числовых кодов на Unknown, все канонические коды отказа, закрытые пары стадии
+// и причины, а также отсутствие logger без отражения произвольного ввода.
 func TestCompletionRejectionDiagnosticClosedEnums(t *testing.T) {
 	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "nod_fixture", SessionRef: "ses_fixture", TurnRef: "trn_fixture", Attempt: 1}
 	for _, code := range []codes.Code{codes.OK, codes.Canceled, codes.Unknown, codes.InvalidArgument, codes.DeadlineExceeded, codes.NotFound, codes.AlreadyExists, codes.PermissionDenied, codes.ResourceExhausted, codes.FailedPrecondition, codes.Aborted, codes.OutOfRange, codes.Unimplemented, codes.Internal, codes.Unavailable, codes.DataLoss, codes.Unauthenticated, codes.Code(999999)} {
