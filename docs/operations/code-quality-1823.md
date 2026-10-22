@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.250.0
+version: 1.251.0
 updated: 2026-10-22
 ---
 
@@ -1704,6 +1704,68 @@ PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
 
+## Двести пятьдесят первая волна — прикладной допуск и активация authority
+
+Опубликованный SHA250 — `bef52ea325032371b9f75ed8403b647fd094c06e`.
+Точный79Nfx9:6590 sources,222 excluded,1823 raw/607 retained/
+1216 unresolved; Go10593/21216, missing10623. Raw SHA256:
+`1c46a19f3462df434f0a1bcc01059d8cf6a8a49304c4db13f5a6bdab2e42c35c`.
+Clone-set:
+`6ca1f23deb63bf6ae965b56c73d5392a21904903bc9c9146b173458aff607301`.
+Точный unit/build, push/readback и Draft PR PATCH/GET250 подтверждены.
+
+Полностью прочитаны794 строки всех6 application файлов authority.
+Все65/65 declarations, package docs, local issuer constant и прежнее
+inline пояснение описаны EN→RU. Это только комментарии: AST6 идентичен
+SHA250, executable code, imports, signatures, messages и test assertions
+не менялись. Generated, контракты, события и миграции неизменны.
+
+Неверное прежнее впечатление от «ActivateSnapshot открывает снимок» уточнено:
+активация запрашивает доступность, но restore block способен оставить допуск
+закрытым. ReplaceActivatedSnapshot сам не получает attestation; его caller
+передаёт уже активированный домен. SetRestoreBlocked(false) не открывает
+available автоматически, а WaitDrained не закрывает приём новых операций:
+это обязанность вызывающего перед ожиданием. begin completion callback
+нужно вызвать ровно один раз, собственной once-guard в нём нет.
+Проверка current, counted domain work и uncounted readiness описаны раздельно.
+
+Pending receipt существует только в памяти и поддерживает retry той же
+snapshot/history привязки с запасом более5 секунд. Неуспешная durable
+активация сохраняет его, успешная очищает; cache не заменяет устойчивый
+high-watermark. Портовые test stubs прямо названы ограниченными: no-op
+Reserve/Continuation/Verification не доказывают replay/security, Freshness
+берёт синтетические wall-clock данные, не время PostgreSQL. Прикладные
+publisher/readback/restore wrappers не получают новых validation/copy либо
+authority гарантий только из-за предметного комментария.
+
+Матрица неизменного пути:
+
+| Путь | Сохранённая граница | Изменение состояния/завершение |
+| --- | --- | --- |
+| Issue / continuation / Verify | begin держит read lock до current/inflight increment | Deferred completion уменьшает счётчик; прежняя domain verification/receipt |
+| Restore block | admission write lock; generic availability не обходит block | Закрывает новые запросы; drain ждёт прежние, снятие block не открывает available |
+| Activation/replacement | Независимая attestation и serialized pending cache | Durable activation до замены pointer, прежняя ошибка не становится success |
+| Readiness/metadata | current availability отдельно от ServedStateReady | Ни readiness, ни metadata сами не открывают допуск |
+| Restore/publisher/readback wrappers | Те же typed команды и domain owners | Прежние idempotency, ACK, barriers и terminal results без нового события |
+
+В текущем detector нет unresolved windows с application файлами. Новых
+exclusions не добавлялось;506 entries/607 occurrences не менялись.
+`go test -mod=readonly -count=1 -timeout 120s -json ./internal/domain/...
+./internal/application ./internal/publisher ./internal/snapshot
+./internal/transport/grpc`:48 верхних/92 всех PASS,0 FAIL/SKIP.
+Полный authority build PASS LOCAL;17 Node/Go checker units, scope65/65,
+AST6, gofmt/diff-check и5 addressed ignores PASS LOCAL. Go1.26.6,
+GOENV/GOWORK off, GOMAXPROCS=4. Component/live/browser/deploy/ИИ/почта/STT
+NOT RUN; новых доказательств PostgreSQL или реального восстановления нет.
+
+Рабочий Fdci7X:6590 sources,222 excluded,1823 raw/607 retained/
+1216 unresolved; Go10658/21216, missing10558. Raw SHA256:
+`e2b35bb114fdfecca3323e8a7db8b37b8cade9d3ea622b0104b06a1973fc15ac`.
+Clone-set:
+`6ca1f23deb63bf6ae965b56c73d5392a21904903bc9c9146b173458aff607301`.
+Точный post-commit run публикуется в том же Draft PR; прежние FAIL/SKIP/
+NOT RUN сохранены. Задача продолжается, готовность всего PR не заявлена.
+
 ## Двести пятидесятая волна — publisher graph и устойчивые идентификаторы
 
 Опубликованный SHA249 — `2fad6f704a6f708fb3b5eb1ac6ddd791a84ffbc0`.
@@ -1734,7 +1796,7 @@ input namespaces, порядок частей, NUL join без trailing separato
 Новый API честно описывает SHA-256 с битами версии5, а не стандартный SHA-1
 UUIDv5, случайный credential или однозначное кодирование произвольных NUL tuples.
 
-Inverse AST6 возвращает только4 calls/2 imports/functions и требует точное
+Inverse AST6 возвращает4 calls, удалённые imports и2 functions, требуя точное
 совпадение тела helper с обеими удалёнными копиями: identity SHA249.
 Новые golden units проверяют7 случаев, включая пустые части, trailing empty,
 embedded NUL equivalence, UTF-8 и существующий rotation namespace vector.
