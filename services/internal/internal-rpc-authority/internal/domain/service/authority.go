@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -16,6 +15,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 )
 
 const (
@@ -896,16 +896,14 @@ func authorizationExpiry(now time.Time, ttl time.Duration, validUntil time.Time)
 	return expiresAt.UTC().Truncate(time.Second)
 }
 
+// newUUID supplies a fresh server-generated authorization-context JTI using
+// the shared cryptographic version-four encoder. It does not register the
+// issued context, reserve replay state or grant authority on its own.
+// newUUID выдаёт свежий назначенный сервером JTI контекста авторизации через
+// общий криптографический кодировщик версии четыре. Самостоятельно контекст
+// не регистрируется, replay state не резервируется и полномочия не выдаются.
 func newUUID() (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return "", err
-	}
-	value[6] = (value[6] & 0x0f) | 0x40
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value[:])
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32], nil
+	return value.NewAuthorityUUID()
 }
 
 func (authority *Authority) registerIssuedContext(ctx context.Context, compact string, claims model.AuthorizationClaims, parentDigest string) error {

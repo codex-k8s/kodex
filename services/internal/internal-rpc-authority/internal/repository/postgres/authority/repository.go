@@ -2,14 +2,13 @@ package authority
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -322,16 +321,14 @@ func snapshotReadinessArgs(
 	}
 }
 
+// randomUUID obtains the readiness probe's fresh version-four identifier;
+// the caller owns its transaction and rollback. Generating the ID does not
+// perform a database write or prove that replay storage is writable.
+// randomUUID получает свежий идентификатор версии четыре для пробы готовности;
+// транзакцией и откатом владеет вызывающий. Генерация ID не выполняет запись
+// в БД и не доказывает доступность записи replay storage.
 func randomUUID() (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return "", err
-	}
-	value[6] = (value[6] & 0x0f) | 0x40
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value[:])
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32], nil
+	return value.NewAuthorityUUID()
 }
 
 // Freshness читает receipt общего workload watermark, а не локальный pod receipt.

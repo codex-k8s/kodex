@@ -2,7 +2,6 @@ package readback
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
@@ -569,13 +568,5 @@ func deterministicUUID(parts ...string) string {
 // newRequestUUID fills sixteen bytes through crypto/rand and formats a version-4 RFC-variant UUID for a new exchange. It preserves the error-returning call shape; uniqueness is probabilistic, not a stored deduplication guarantee.
 // newRequestUUID получает шестнадцать байтов через crypto/rand и форматирует UUID версии 4 с вариантом RFC для нового обмена. Сохраняется форма возврата ошибки; уникальность вероятностная, а не гарантия сохранённой дедупликации.
 func newRequestUUID() (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return "", err
-	}
-	value[6] = (value[6] & 0x0f) | 0x40
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value[:])
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32], nil
+	return value.NewAuthorityUUID()
 }

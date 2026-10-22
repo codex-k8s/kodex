@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.291.0
+version: 1.292.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,60 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто вторая волна — общий случайный UUID authority
+
+Опубликованный SHA291 — `c40ec4827ab5eca88ff0286b7f04d1303456285c`.
+Точный c7mYsB:6618 sources,222 excluded,1816 raw/720 retained/
+1096 unresolved; Go12599/21258,missing8659. Raw SHA256:
+`445f05b43a6638f29a6ccfc273367aef14efd643a32e47b82ea8b1daa5062c4d`;
+clone-set0a6e9ecd… . Exact7/24 unit/full authority build, inverse AST3,
+tooling/scan PASS LOCAL,0 FAIL/SKIP; push и Draft PR PATCH/GET291 есть.
+
+Прочитаны три одинаковых тела случайного UUID, импорты и каждый caller:
+readback challenge request, новый JTI authorization context и replay
+readiness probe внутри rollback-транзакции. Реализация буквально вынесена
+в domain/value.NewAuthorityUUID; три прежних private names и их error API
+сохранены. Helper зависит только от crypto/rand и encoding/hex.
+Generated UUID не является credential, authority или durable uniqueness.
+
+Матрица:no context/storage/clock ownership у helper; новые16 random bytes,
+прежние version4/variant bits, lowercase/hyphen formatting и error branch.
+Readback оставляет свежий challenge request ID на exchange и повтор одного
+ID только внутри своего retry. Issue context по-прежнему отдельно
+регистрирует binding; readiness по-прежнему выполняет mode-specific SQL
+probe и rollback у caller. Ни JTI, ни случайный probe ID не заменяют
+reservation или server-owned permissions. Транзакции и claims не менялись.
+
+Inverse AST3 разворачивает ACTUAL helper во всех полных callers SHA291;
+три прежних тела буквально равны. Проверяется exact import delta:
+только старые rand/hex imports и новая leaf dependency. Все остальные
+declarations, calls, strings, SQL, directives прежние. Два прежних wrapper
+и новый helper получили EN→RU; readback wrapper уже документирован.
+Целевой scope4/4,3 новых bilingual declarations, остальная документация
+этих крупных файлов остаётся в общем backlog.
+
+26 верхних/55 всех выбранных unit readback/restore/value/domain service/
+PostgreSQL query-arguments и полный authority build -p=2 PASS LOCAL,
+0 FAIL/SKIP. Явный regex включает все26 hermetic tests этих пакетов,
+но не opt-in PostgreSQL concurrency test; его DSN удалён из child env.
+Component compiled,NOT RUN, не скрытый PASS. Прежний readback unit
+проверяет32 UUID через новый helper:shape/version/variant/no repetition;
+это не statistical entropy или durable replay proof. Новых тестовых
+копий генератора ради покрытия не добавлено.17 Node/Go checker units,
+inverse AST3, docs4/4,5 ignores и diff-check PASS LOCAL.
+
+Рабочий4XJUvo:6619 sources,222 excluded,1813 raw/720 retained/
+1093 unresolved; Go12602/21259,missing8657. Три настоящих UUID windows
+136/135/114tokens удалены, новых нет;1813 остальных keys/counts прежние.
+Registry602/720 буквально прежний, новых exclusions нет.
+Raw SHA256:
+`e32d583ebff19ea1df2ab59045b3969e8d5814c39f09f4fc328e23f38543208f`;
+clone-set:
+`9e614ba43181ef7961ca458c47b1d827352e8b8273e62e4129c64ca909bee864`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, dependencies, contracts, applied migrations и live state прежние.
+Задача открыта; historical FAIL и scoped NOT RUN сохраняются.
 
 ## Двести девяносто первая волна — общий UUID readback и restore
 
