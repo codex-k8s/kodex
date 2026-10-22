@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.233.0
+version: 1.234.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,67 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцать четвёртая волна — ciphertext/runtime adapters
+
+Опубликованный SHA233 — `b63fafc83de04c29e2cd55ebfff46272752ec57d`.
+Точный MoW76u:6587 sources,222 excluded,1823 raw,597 retained,
+1226 unresolved; Go9346/21196, missing11850. Raw SHA256:
+`0a6f3f62f68388096ed477b5cf93dbc099c606f832a8c95bc09637bc2751404d`.
+Clone-set:
+`b413e1434acf4250c9dab613c71f7e28af7fd560cbab827898600203221af9e1`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA233 stagingcrypto9/19,
+app composition1/9 и полная сборка secret-broker PASS, 0 FAIL/SKIP.
+
+Все5 файлов integration/stagingstorage и draftruntime полностью прочитаны,
+771 строка;50/50 declarations получили EN→RU пояснения, включая private
+validators/error mapping, interface methods и tests. AST5 идентичен SHA233
+без comments/token.Pos. Изменены лишь comments/gofmt, не storage statements,
+permissions, contracts, dependencies или registry.
+
+Ciphertext adapter описывает fixed managed purpose, strict scoped binding,
+immutable Opaque shape, digest/key pins, authoritative readback после Create
+и exact descriptor перед Read/Delete. Existing-name observation не разрешает
+перезаписывать иной ciphertext. Cleanup требует UID/RV preconditions и
+NotFound; Conflict/неопределённый error не разрешает blind retry.
+Check readiness доказывает только фиксированный Get path, не create/delete
+permissions. clearData обнуляет byte slices, но удаление StringData references
+не выдано за стирание immutable string memory.
+
+Runtime adapter использует прежний Materializer вместо второго store.
+Проверены соответствие claimed PUBLISH work, canonical versioned name,
+WorkKindDraft, operation/generation, digest/revision и exact UID/RV.
+Publish выполняет прежние create→readback→full equality, Lookup не публикует,
+Delete только передаёт verified pins. Ни metadata matching, ни эти adapters
+не названы источником grant authority/lease freshness/owner decision.
+mapError сохраняет nil даже после cancellation; при ошибке cancellation
+имеет прежний приоритет над upstream diagnostics.
+
+Unit `./internal/integration/stagingstorage ./internal/integration/draftruntime`:
+10 верхних/51 всех PASS,0 FAIL/SKIP. Отдельная app encrypted lifecycle/
+readiness composition:1 верхний/9 всех PASS,0 FAIL/SKIP.
+Флаги `go test -mod=readonly -count=1 -timeout 120s -json`,
+GOENV/GOWORK off, Go1.26.6, GOMAXPROCS=4.
+Полная сборка secret-broker `go build -mod=readonly ./...` PASS LOCAL.
+
+Kubernetes tracker/Materializer fixtures проверяют forwarded exact options,
+immutable/corrupt/replaced refusals, scoped/organization isolation,
+Get-only refusal для backup и отсутствие повторного delete при NotFound.
+Fake API не доказывает реальное enforcement API-server. Test с именем
+UnknownCreate фактически проверяет existing-name/different-ciphertext,
+не моделирует произвольную потерю Create reply; комментарий это уточняет.
+Context7 /kubernetes/client-go и local pinned go doc сверены для
+Preconditions UID/ResourceVersion и SecretInterface; API не менялся.
+
+Scope50/50, AST identity5, gofmt/diff-check, assessment и5 ignore boundaries
+PASS LOCAL. Рабочий lEaXXK:6587 sources,222 excluded,1823 raw,597 retained,
+1226 unresolved; Go9396/21196, missing11800. Raw SHA256:
+`8c11149040a92974c467bc55baab0a9c42490f2485f3c4284b2b1168878d0529`.
+Clone-set b413e143...; multiset fragment/path/count и registry неизменны,
+это не новый вынос группы. Точный post-commit scan/unit/build публикуются
+в том же Draft PR. Задача остаётся незавершённой:11800 declarations/1226 групп.
+Прежние FAIL/SKIP/NOT RUN сохранены. Browser/live/deploy/ИИ/STT/почта
+и полная приёмка NOT RUN согласно scoped решению.
 
 ## Двести тридцать третья волна — AEAD и private keyring
 
