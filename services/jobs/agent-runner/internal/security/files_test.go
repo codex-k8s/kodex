@@ -6,6 +6,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// TestWorkspaceVolumeRootsAcceptKubeletPermissionsOnlyAtExactMounts checks three tolerated kubelet root modes at exactly three paths and rejects nested/traversal paths, foreign UID/GID, insufficient group access and symlink type.
+// TestWorkspaceVolumeRootsAcceptKubeletPermissionsOnlyAtExactMounts проверяет три допустимых режима корня kubelet на ровно трёх путях и отказ для вложенных путей и выхода наверх, чужих UID и GID, недостаточного группового доступа и типа ссылки.
 func TestWorkspaceVolumeRootsAcceptKubeletPermissionsOnlyAtExactMounts(t *testing.T) {
 	for _, mode := range []uint32{0o2770, 0o2775, 0o2777} {
 		stat := unix.Stat_t{Uid: 0, Gid: 29000, Mode: unix.S_IFDIR | mode}

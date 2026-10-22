@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.207.0
+version: 1.208.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,48 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восьмая волна — файловая и локальная граница runner
+
+Точный опубликованный SHA207 — `16d1f5d40418adc8e7bbf890d5e1ba7d1809670c`.
+Exact ut7lkB:6580 sources,222 excluded,1837 raw,588 retained,1249 unresolved;
+Go7828/21151,missing13323;raw SHA256
+`cc8e0e1dd80092081790c020c65ba4ae9186ec5047a96f85c9fc917bc7bef903`;
+clone-set `8e1bbba12641385a74a135199f28f8dc5b40f312563ebcb240a287a90e02317c`.
+Весь runtime-controller1377/1377 EN→RU;полный unit403/1858 PASS,0 FAIL,
+3 прежних SKIP;полный build PASS. Remote head и PATCH/GET Draft PR207
+подтверждены.
+
+Семь файлов runner security/filetransfer/model прочитаны целиком,25/25
+объявлений и три package comments — предметно EN→RU. Описаны относительный
+GET-дескриптор с четырьмя однозначными selectors и immutable turn/catalog
+scope,отдельные header/body budgets и запрет redirect в клоне транспорта.
+Синтаксис и expected digest не выданы за актуальную owner eligibility либо
+проверку response bytes. Runtime input alias использует единственный
+канонический decoder;обычный os.Open не назван no-follow или owner check.
+
+Для protected executable явно отделены путь/метаданные от content hash и
+lease authority;Lstat обход не назван атомарным descriptor pinning.
+Workspace создание использует mkdirat/openat/O_NOFOLLOW и отдельные
+private/shared правила;точное volume-root исключение проверяет метаданные,
+не происхождение монтирования. Рекурсивная защита chmod не названа Kubernetes
+readOnly mount;поздняя ошибка может оставить уже защищённых потомков.
+Тесты используют только временные деревья и синтетические descriptors,
+не workload или provider session. Поведение и права не менялись.
+
+Полная non-comment/gofmt сверка7 файлов с SHA207 — PASS.
+Targeted runner security/filetransfer/model:4 верхних/24 всех unit PASS,
+0 FAIL,0 SKIP;у model отдельного test файла нет. Полный runner build
+`-mod=readonly`,scoped25/25,17 Node units,unit Go-checker,5 ignore-boundaries,
+gofmt/diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+Context7 `/golang/go` проверен по net/http Client.Timeout,reading body и
+redirect handling;новых SDK/dependencies нет.
+Рабочий O3qluF:6580 sources,222 excluded,1837 raw,588 retained,1249 unresolved;
+Go7853/21151,missing13298;raw SHA256
+`709dd17fa2d46eb021846d926c82de6fc6a0872e82364c71900da10d53055766`.
+Clone-set неизменен,новых/исчезнувших групп и исключений нет.
+Полный runner unit,общий repo-check,component/live,browser/deploy,агенты/STT/
+почта NOT RUN. Цель не завершена,post-commit квитанция — в том же Draft PR.
 
 ## Двести седьмая волна — полный охват runtime-controller
 
