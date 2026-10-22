@@ -83,7 +83,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	processor := retention.NewProcessor(retentionpostgres.New(pool), objects)
 	workers := serviceruntime.StartWorkers(
 		lifecycle,
-		serveTechnical(technical),
+		technical.Worker(),
 		monitorReadiness(pool, objects, readiness, metrics, logger, config),
 		runRetentionLoop(processor, retentionMetrics, logger, config),
 		runPreparedLoop(prepared.NewProcessor(preparedRepository, objects), logger, config),
@@ -157,21 +157,6 @@ func openObjectStorage(ctx context.Context, config Config) (*s3store.Store, erro
 		return nil, errors.New("open artifact-retention object storage")
 	}
 	return store, nil
-}
-
-// serveTechnical adapts the blocking technical HTTP server to a cancelable runtime worker.
-// RU: serveTechnical адаптирует блокирующий технический HTTP-сервер к отменяемому runtime worker.
-func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.Serve() }()
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
 
 // dependencyChecker exposes the startup/readiness probe of the exact object-store adapter.

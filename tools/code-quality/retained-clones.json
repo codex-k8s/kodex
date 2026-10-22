@@ -3,6 +3,46 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/app/app.go",
+      "secondPath": "services/external/integration-gateway/internal/app/app.go",
+      "fragmentSHA256": "1ce58f2a99a287c116a9b473955f5f2c68f64be0c0a3911def0ee0134e0056bc",
+      "count": 1,
+      "reason": "Совпало начало двух composition roots: загрузка разных nominal Config, startup timeout и вызовы уже общих RuntimeConfigFromEnv/NewRuntime. HTTP worker вынесен отдельно в httpserver.Worker, а этот фрагмент не содержит новой общей runtime-реализации. Config принадлежат разным deployable и имеют разные ошибки, поля и зависимости; общий callback-конструктор скрыл бы место startup deadline и последующий порядок cleanup. Сохранено только точное окно, не Run целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/integration-gateway/internal/app/app.go",
+      "secondPath": "services/external/interaction-gateway/internal/app/app.go",
+      "fragmentSHA256": "74f875c118fa59529ff4cba25baed3af9533ca41308a83adc669ee3582ad4735",
+      "count": 1,
+      "reason": "Окно включает локальные issuer UID/GID и последовательность загрузки разных Config, startup context и общей observability runtime. Identical Serve worker действительно вынесен в httpserver.Worker; оставшееся является явной сборкой независимых процессов, а не дублированным primitive. Interaction регистрирует deferred telemetry cleanup сразу после startup, integration выполняет его в терминальной цепочке после workers. Унификация root скроет это различие жизненного цикла; оставлено точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/integration-gateway/internal/app/app.go",
+      "secondPath": "services/jobs/automation-scheduler/internal/app/app.go",
+      "fragmentSHA256": "02aece9e5d50a7185bdd726ccf9d92018d9e7638b91b2a88ce8e105acd29feb2",
+      "count": 1,
+      "reason": "Совпала оболочка composition root с issuer constants, собственной типизированной конфигурацией и вызовами существующей общей telemetry runtime. Scheduler и integration имеют разные startup/worker/cleanup цепочки; scheduler также сам останавливает и join-ит HTTP Serve при отмене, тогда как integration оставляет Shutdown владельцу. Общая root-обёртка потребует callbacks для разных Config и смешает эти обязанности, не устраняя отдельной реализации. Сохранено только это окно, не lifecycle целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/integration-gateway/internal/app/app.go",
+      "secondPath": "services/jobs/automation-scheduler/internal/app/app.go",
+      "fragmentSHA256": "05beed9ad5907c62b4ad08bdfe88bae721e4cb5f3b90c26c04e0a96b21417459",
+      "count": 1,
+      "reason": "Слабая нормализация сопоставляет поля защищённого controlplaneclient.Config для IntegrationGatewayOperations и AutomationSchedulerOperations и начало разных следующих зависимостей. Вызов Dial уже общий; caller workload, operation profile, путь grant и deadline назначает собственный composition root. Scheduler немедленно регистрирует deferred Close, integration закрывает client после join работников. Общий mapper добавил бы вторую конфигурацию и скрыл профиль полномочий либо порядок очистки; сохраняется точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/integration-gateway/internal/app/app.go",
+      "secondPath": "services/external/interaction-gateway/internal/app/app.go",
+      "fragmentSHA256": "fcf518cee2c99e95acd0a5125ef592fde1729328b89694a4cd00e9865343c3d4",
+      "count": 1,
+      "reason": "Нормализованное окно связывает разные защищённые operation profiles и последующую сборку разных adapter.Config: integration имеет OpenAPI/synthetic/email TLS пути, interaction — Mattermost allowed hosts и usertext. Общая Dial boundary уже в controlplaneclient; provider policy, credential paths и владение Close различаются. Нет одинаковой самостоятельной операции поверх этих nominal типов; generic factory ради списков полей скроет проверяемый mapping полномочий. Сохранено только точное совпадение."
+    },
+    {
+      "format": "go",
       "firstPath": "services/jobs/role-image-builder/internal/app/app.go",
       "secondPath": "services/jobs/role-image-builder/internal/clients/imageowner/admission_terminal.go",
       "fragmentSHA256": "4b20f718ac9435b863f7f69717162ea6d1d2f30ab3106b379506f907c497d311",

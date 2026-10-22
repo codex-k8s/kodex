@@ -160,7 +160,7 @@ func serve(lifecycle, shutdownBase context.Context, controller *runner.Runner, c
 		return err
 	}
 	workers := serviceruntime.StartWorkers(lifecycle,
-		serveTechnical(technical),
+		technical.Worker(),
 		monitorReadiness(controller, readiness, sharedMetrics, metrics, logger, config),
 		runBackupLoop(controller, metrics, status, logger, config),
 	)
@@ -173,21 +173,6 @@ func serve(lifecycle, shutdownBase context.Context, controller *runner.Runner, c
 		serviceruntime.ShutdownOperation{Name: "technical HTTP", Timeout: config.ShutdownTimeout / 2, Run: technical.Shutdown},
 	)
 	return errors.Join(err, shutdownErr)
-}
-
-// serveTechnical adapts the technical HTTP server to the owned cancellable worker lifecycle.
-// RU: serveTechnical подключает технический HTTP-сервер к управляемому отменяемому жизненному циклу worker.
-func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.Serve() }()
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
 
 // monitorReadiness periodically checks dependencies and readback before updating readiness and last-success gauges.

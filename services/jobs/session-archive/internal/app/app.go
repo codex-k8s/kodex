@@ -94,7 +94,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	readiness.Set(false, "control_plane_unchecked")
 	metrics.SetReady(false)
-	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), runLoop(control, kubernetes, readiness, metrics, owned, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, technical.Worker(), runLoop(control, kubernetes, readiness, metrics, owned, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -106,21 +106,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing},
 		serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: 5 * time.Second, Run: telemetry.FlushSentry})
 	return errors.Join(err, shutdownErr)
-}
-
-// serveTechnical adapts the technical HTTP listener to the controller's cancellable worker lifecycle.
-// RU: serveTechnical подключает технический HTTP-listener к отменяемому жизненному циклу workers контроллера.
-func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.Serve() }()
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
 
 // runLoop checks Kubernetes availability and claims at most one owner task before a bounded polling delay.

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.170.0
+version: 1.171.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,85 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят первая волна — общий технический HTTP worker
+
+На базе опубликованного SHA `cd6d754b94996426bf291f9ac175d5d72151705a`
+пять одинаковых serveTechnical удалены из integration-gateway,
+interaction-gateway, backup-controller, session-archive и artifact-retention.
+Все пять используют `technical.Worker()` из существующего `libs/go/httpserver`;
+новой зависимости от serviceruntime у библиотеки нет. Возвращается обычная
+функция `func(context.Context) error`, принимаемая прежней worker group.
+Совместимых локальных wrappers не осталось.
+
+Создание Worker не запускает goroutine. При исполнении сохраняются прежние
+буфер результата, запуск Serve и select результата/ctx.Done. Отмена возвращает
+ctx.Err, но не вызывает Shutdown и не join-ит Serve; эти обязанности остаются
+у composition root в прежнем порядке. Ошибка Serve не подавляется; обычный
+HTTP shutdown по-прежнему превращается существующим Serve в nil. Отличающийся
+serveTechnical планировщика автоматизаций не менялся: он сам выполняет
+ограниченный Shutdown и join, поэтому не заменён похожим адаптером.
+
+Механическое сравнение после удаления комментариев/gofmt подтвердило:
+новое тело Worker совпадает с каждым из пяти прежних; обратная замена call
+и удаление старого объявления восстанавливают все пять composition-файлов.
+Config, work_health и completion_test поменяли только комментарии.
+Новых startup/cleanup guarantees, network/authority checks, retry и
+состояний не добавлено. В частности, ранняя ошибка startup не объявляется
+покрытой terminal cleanup, а отмена Worker — ожиданием завершения Serve.
+
+Пять новых unit не открывают сокеты: настоящий http.Server использует
+управляемый net.Listener без соединений. Проверены отсутствие запуска при
+получении Worker, безопасный отказ nil/unstarted receiver, отмена без
+присвоения Shutdown, штатный shutdown→nil и сохранение неожиданной ошибки
+listener. Оснастка использует ограниченные ожидания и независимую очистку.
+Все 12 новых объявлений и 21 сохранившееся объявление четырёх app-файлов
+полностью EN→RU: scoped Go-docs-check 33/33 — PASS LOCAL. Во всём
+httpserver 41/41, во всём integration-gateway 167/621; оставшиеся 454
+объявления шлюза ещё не завершены. Удалены пять старых функций, четыре
+из которых уже были описаны; общий знаменатель не скрыт.
+
+Полные `go test -count=1 -json ./...` и `go build ./...` в шести модулях
+выполнены с `GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`:
+
+| Модуль | Верхние PASS | PASS с подтестами | SKIP | FAIL |
+| --- | ---: | ---: | ---: | ---: |
+| libs/go/httpserver | 11 | 13 | 0 | 0 |
+| integration-gateway | 118 | 1932 | 1 | 0 |
+| interaction-gateway | 54 | 160 | 0 | 0 |
+| backup-controller | 18 | 18 | 3 | 0 |
+| session-archive | 39 | 194 | 2 | 0 |
+| artifact-retention | 13 | 23 | 3 | 0 |
+
+Итого 253 верхних PASS, 2340 PASS с подтестами, девять прежних SKIP.
+NOT RUN: CPProducedEmailClaim требует disposable CP producer;
+backup SeaweedFSOperationLock/BackupRestoreDrillReadback/SessionArchiveBackupFixture;
+archive RestoreThenRunnerCaptureAcrossUIDs/SeaweedFSSnapshotRestoreDelete;
+retention ClaimExecutesWithRuntimeRole/RevisionRetentionComponent/SeaweedFSExactVersionAbsent.
+Их зависимости не подделывались, SKIP не записан как PASS. 16 unit анализатора,
+unit Go-checker, пять ignore-boundaries, scoped checker, gofmt и diff-check
+также PASS LOCAL. `go test -race -count=20 -run '^TestWorker' .`
+в httpserver — PASS LOCAL. Повтор на точном опубликованном SHA фиксируется в PR.
+
+Context7 /websites/pkg_go_dev_go1_25_3 и локальный Go1.26.6 go doc
+net/http.Server.Serve/Shutdown подтвердили различие возврата Serve,
+закрытия listener и завершения Shutdown; API/версия stdlib не менялись.
+Ни создание root context, ни скрытый самостоятельный shutdown не добавлены.
+
+Detector: 6563 source-файла, 222 generated/lock исключения, 1847 raw-групп.
+Четыре реальные группы Serve удалены. Два startup fragment hash изменились
+только из-за содержательных комментариев, сами совпадения сохранились:
+это не ещё два устранённых дубликата. Все пять оставшихся integration
+composition окон получили точные адресные решения с причиной: разные
+nominal Config, operation profiles и порядок cleanup; общий Dial/telemetry
+runtime уже находится в библиотеке. Без широких исключений и без нового
+generic composition framework. Итог 574 точных решения, 1273 неразобранные;
+raw SHA-256 `d42d3f6ed427ebc5ee91e8975ad0ba8a4d4d4b97d79041b3028a956830ccf79f`,
+отпечаток `ccdb88d8e18c3ccd2a889f042b4a35e8abbbaf9fc4554b7f5446355c60b8ea7b`.
+Go-реестр: 5881/21120, непокрыты 15239. Полный repository checker —
+NOT RUN при неполном покрытии; прежний diagnostics FAIL не скрыт.
+Browser/deploy, PostgreSQL, реальные providers/почта/агенты — NOT RUN.
+Цель и единый Draft PR остаются незавершёнными.
 
 ## Сто семидесятая волна — общий provider transport и page projection
 

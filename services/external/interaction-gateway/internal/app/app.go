@@ -88,7 +88,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	metrics.SetReady(true)
 	sources := newSourceManager(control.Interaction, adapter, logger, config)
 	workers := serviceruntime.StartWorkers(lifecycle,
-		serveTechnical(technical),
+		technical.Worker(),
 		runDeliveryLoop(control, adapter, logger, config),
 		runInvocationLoop(control.Runtime, adapter, logger, config),
 		runSourceRefresh(sources, control, logger, config),
@@ -103,21 +103,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serviceruntime.ShutdownOperation{Name: "technical HTTP", Timeout: config.ShutdownTimeout / 6, Run: technical.Shutdown},
 	)
 	return errors.Join(err, shutdownErr)
-}
-
-// serveTechnical adapts HTTP serving to worker cancellation; the composition root separately owns Server.Shutdown.
-// RU: serveTechnical связывает HTTP Serve с отменой worker; отдельный Server.Shutdown остаётся обязанностью композиции.
-func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.Serve() }()
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
 
 // runDeliveryLoop polls sequential delivery work within an operation deadline and logs only transitions into or out of degradation.

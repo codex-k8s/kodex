@@ -13,10 +13,18 @@ import (
 )
 
 const (
-	serviceName      = "integration-gateway"
+	// serviceName identifies this workload in telemetry and the protected RPC caller profile; it grants no authority by itself.
+	// RU: serviceName обозначает workload в телеметрии и защищённом RPC-профиле вызывающего, сам по себе не выдавая полномочий.
+	serviceName = "integration-gateway"
+	// metricsSubsystem namespaces the gateway's shared process collectors independently of individual integration providers.
+	// RU: metricsSubsystem задаёт пространство общих метрик процесса шлюза независимо от отдельных провайдеров интеграций.
 	metricsSubsystem = "integration_gateway"
 )
 
+// Config holds process endpoints, projected credential paths and lifecycle budgets; it contains no raw connection secrets.
+// RU: Config хранит адреса процесса, пути спроецированных credentials и бюджеты жизненного цикла, не содержа сырых секретов подключений.
+// loadConfig applies deployment environment overrides before validation; integration-specific policy remains in owner claims and adapters.
+// RU: loadConfig применяет переменные развёртывания до валидации; политика конкретной интеграции остаётся в owner claims и адаптерах.
 type Config struct {
 	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
@@ -43,6 +51,10 @@ type Config struct {
 	ClaimLimit                  int32         `env:"INTEGRATION_GATEWAY_CLAIM_LIMIT"`
 }
 
+// loadConfig parses typed environment overrides onto fixed service defaults and returns a zero configuration on parse or validation failure.
+// RU: loadConfig накладывает типизированные переменные окружения на фиксированные настройки сервиса и возвращает нулевую конфигурацию при ошибке разбора или проверки.
+// Defaults do not supply the required deployment environment or make credential files valid or available.
+// RU: Значения по умолчанию не задают обязательное окружение развёртывания и не подтверждают корректность либо доступность credential-файлов.
 func loadConfig() (Config, error) {
 	config := Config{
 		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.kodex-system.svc:8443",
@@ -67,6 +79,12 @@ func loadConfig() (Config, error) {
 	return config, nil
 }
 
+// validate rejects unsupported RPC profiles, environments, endpoints, runtime paths and lifecycle budgets before dependencies are opened.
+// RU: validate отклоняет неподдерживаемые RPC-профили, окружения, адреса, runtime-пути и бюджеты до открытия зависимостей.
+// Work is limited to one claim with operation plus completion below the lease budget; proxies and synthetic routes use exact destinations.
+// RU: Работа ограничена одним claim с операцией и завершением в пределах аренды; proxy и синтетические маршруты имеют точные назначения.
+// The optional local OpenAPI route requires the trusted-cluster profile, its exact HTTPS host and a normalized absolute CA path.
+// RU: Необязательный локальный OpenAPI-маршрут требует trusted-cluster профиля, точного HTTPS-хоста и нормализованного абсолютного пути CA.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("integration-gateway RPC profile is invalid")

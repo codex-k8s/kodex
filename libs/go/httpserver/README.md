@@ -4,7 +4,7 @@ title: Технический HTTP server
 type: component
 status: approved
 owner: backend
-version: 1.2.0
+version: 1.3.0
 updated: 2026-10-22
 ---
 
@@ -15,17 +15,27 @@ updated: 2026-10-22
 для безопасного readback: только точный `GET` без query/body и с общими
 защитными заголовками. Библиотека не регистрирует изменяющие состояние или
 произвольные маршруты, не создаёт root context и не
-скрывает goroutine. Владелец процесса передаёт handler метрик, предикат
-готовности и отдельно вызывает ограниченный `Shutdown`.
+запускает goroutine при создании сервера. Владелец процесса передаёт handler
+метрик, предикат готовности и отдельно вызывает ограниченный `Shutdown`.
 
 Публичный API состоит из `New`, `StandardProcessConfig`, `ExactGETRoute`,
-`Listen`, блокирующего `Serve` и `Shutdown`. `StandardProcessConfig` возвращает
-одинаковые лимиты для небольших gateway/job: 2 с на заголовки, 5 с на чтение
+`Listen`, блокирующего `Serve`, адаптера `Worker` и `Shutdown`.
+`StandardProcessConfig` возвращает одинаковые лимиты для небольших gateway/job:
+2 с на заголовки, 5 с на чтение
 и запись, 30 с простоя, 32 КиБ заголовков и 128 соединений. Он не открывает
 socket и не выбирает адрес за вызывающего; другие компоненты могут передать
 собственный `Config`.
 `Listen` резервирует socket после startup barrier, а goroutine и порядок
-cancel/join принадлежат composition root. Конфигурация закрыто ограничивает
+cancel/join принадлежат composition root. `Worker()` возвращает функцию
+`func(context.Context) error`, пригодную для `serviceruntime.StartWorkers`
+без зависимости библиотеки от конкретной worker group. Создание функции
+ничего не запускает; при выполнении она запускает `Serve` и ждёт его
+результат либо отмену контекста. При отмене функция возвращает `ctx.Err()`,
+но не закрывает listener и не дожидается `Serve`: владелец отдельно вызывает
+`Shutdown` в прежнем порядке. Буфер результата позволяет `Serve` вернуть
+ошибку и после завершения worker. Это не замена адаптеров, которые сами
+выполняют shutdown и join, например у планировщика автоматизаций.
+Конфигурация закрыто ограничивает
 read-header/read/write/idle timeouts и размер headers; маршруты принимают
 только `GET`, ставят `no-store`/`nosniff` и не читают request body сверх 1 MiB.
 
