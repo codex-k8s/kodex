@@ -10,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestConfigurationCatalogGuidanceMatchesContext checks seven context/capability fixtures against exact tool-descriptor digests excluding description, available read guidance and immutable input.
+// TestConfigurationCatalogGuidanceMatchesContext проверяет семь конфигураций контекста и операций по точным дайджестам описания инструмента без description, доступным подсказкам чтения и неизменности входа.
 func TestConfigurationCatalogGuidanceMatchesContext(t *testing.T) {
 	for _, test := range []struct {
 		name, kind, schemaDigest string
@@ -72,6 +74,8 @@ func TestConfigurationCatalogGuidanceMatchesContext(t *testing.T) {
 	}
 }
 
+// TestAssistantCatalogReadGuidanceIncludesAgentRuntime checks recovery guidance mentions runtime metadata, byte/digest pagination, server-owned context and the bounded retry rule.
+// TestAssistantCatalogReadGuidanceIncludesAgentRuntime проверяет упоминание метаданных выполнения, байтовых страниц и дайджеста, серверного контекста и ограниченного повтора в подсказке восстановления.
 func TestAssistantCatalogReadGuidanceIncludesAgentRuntime(t *testing.T) {
 	for _, fragment := range []string{"AGENT_RUNTIME_CONFIGURATION", "configuration_offset_bytes", "configuration_sha256", "current server-owned context", "at most once"} {
 		if !strings.Contains(assistantCatalogReadInputGuidance, fragment) {

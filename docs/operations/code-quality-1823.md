@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.204.0
+version: 1.205.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,44 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятая волна — основной каталог конфигурации помощника
+
+Точный опубликованный SHA204 — `11a9505ec8c8da8c76e2f1457358d9f4e9458961`.
+Exact ZD2pao:6580 sources,222 excluded,1837 raw,587 retained,1250 unresolved;
+Go7709/21151,missing13442;raw SHA256
+`d38ac25b73838d5f6f0c2bebfccc8982786d90fb4605c4064d0f81b170d83647`.
+Clone-set `5c9255a6d45d7de39d007ca68d34ef770c45db87d6cca1a18f792c397465ee03`.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP;полный RC build PASS.
+Remote head и PATCH/GET Draft PR204 подтверждены.
+
+Пять файлов assistant_catalog и guidance/names/projection/definition tests
+прочитаны целиком;31/31 объявление EN→RU,в том числе30 новых комментариев.
+Описаны разделение turn-pinned local index и fenced owner read,закрытый
+селектор и context-dependent виды,ограничения страниц и запросов,точные
+scope/profile/organization привязки. Имя credential key не является его
+значением,read не связан с разрешением create,а display-name замена
+не меняет refs или авторитетный protobuf snapshot.
+
+Предел64KiB относится к сериализованной model envelope с JSON escaping;
+уменьшение page maximum не ослабляет проверку полного снимка. Специальные
+agent/workflow/current/integration casters остаются отдельными. Описана
+закрытая field-presence matrix,exact promoted image/tool-inventory pins и
+структурные reasoning identifiers:future canonical names не запрещаются
+жёстким списком известных моделей или степеней. Ошибка элемента отклоняет
+всю проекцию,не даёт mutation/execute authority.
+
+Полная non-comment/gofmt сверка5 файлов с SHA204 — PASS,исполняемый код
+не менялся. Scoped31/31,17 Node units,unit Go-checker,5 ignore-boundaries,
+gofmt/diff-check PASS LOCAL. Callback253/1361 PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly PASS. Go1.26.6,GOENV/GOWORK off.
+Рабочий mzL2gf:6580 sources,222 excluded,1837 raw,587 retained,1250 unresolved;
+Go7739/21151,missing13412;raw SHA256
+`76d73aa1b215eccf390aa68e890b55b45cae91cc89cfb3d658ef8ec9224eb936`.
+Clone-set неизменен,новых/исчезнувших групп и исключений нет.
+Общий repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+общая цель не завершена,post-commit квитанция публикуется в том же Draft PR.
 
 ## Двести четвёртая волна — поиск ресурсов и каталоги доступов
 

@@ -13,6 +13,12 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+// configurationCatalog builds the turn-pinned local catalog first, then optionally performs one fenced owner configuration or integration-definition lookup.
+// Definition search trims an optional query to at most 80 runes, validates offsets through 10000 and rejects mixed or oversized responses.
+// Only public definition fields and the credential key name are projected; no credential value or integration execution is requested.
+// configurationCatalog сначала создаёт локальный каталог закреплённого хода, затем при необходимости выполняет один запрос конфигурации либо определений интеграций к владельцу с ограждением.
+// Поиск определений обрезает необязательный запрос до проверки предела 80 рун, проверяет смещение до 10000 и отклоняет смешанные либо слишком большие ответы.
+// Проецируются только публичные поля определения и имя ключа учётных данных; значение ключа и выполнение интеграции не запрашиваются.
 func (server *Server) configurationCatalog(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
 	result, err := configurationCatalog(input, arguments)
 	if err != nil {
@@ -105,12 +111,20 @@ func (server *Server) configurationCatalog(ctx context.Context, input runtimecon
 	return catalog, nil
 }
 
+// maximumAssistantIntegrationDefinitions limits one owner integration-definition page to ten entries, independently of pinned agent-list limits.
+// maximumAssistantIntegrationDefinitions ограничивает страницу определений интеграций владельца десятью элементами независимо от пределов закреплённого списка сотрудников.
 const maximumAssistantIntegrationDefinitions = 10
 
+// maximumAssistantConfigurationEntries limits ordinary configuration and integration-candidate pages to ten entries before model projection.
+// maximumAssistantConfigurationEntries ограничивает обычные страницы конфигурации и кандидатов интеграций десятью элементами до проекции для модели.
 const maximumAssistantConfigurationEntries = 10
+
+// maximumAssistantConfigurationPageModelBytes caps serialized model-facing configuration-page envelopes at 64 KiB including JSON escaping and navigation fields.
+// maximumAssistantConfigurationPageModelBytes ограничивает сериализованную оболочку страницы конфигурации для модели 64 КиБ с учётом экранирования JSON и навигационных полей.
 const maximumAssistantConfigurationPageModelBytes = 64 << 10
 
-// Имя только для модельной проекции: refs, scope и owner snapshot не меняются.
+// assistantCatalogResourceName replaces the own SYSTEM assistant's exact localization marker only in model-facing display names; refs, scope and owner snapshots remain unchanged.
+// assistantCatalogResourceName заменяет точный маркер локализации собственного системного помощника только в названии для модели; ссылки, область и снимки владельца не изменяются.
 func assistantCatalogResourceName(input runtimecontract.RunnerInput, ref, name string) string {
 	if input.IsSystemAssistant() && ref != "" && ref == input.AgentRef && name == "i18n:SYSTEM_ASSISTANT_NAME" {
 		return "Системный помощник"
@@ -118,8 +132,14 @@ func assistantCatalogResourceName(input runtimecontract.RunnerInput, ref, name s
 	return name
 }
 
+// assistantConfigurationCatalogKinds lists the eight base read selectors; context/scope predicates add specialized kinds without mutating this shared slice.
+// assistantConfigurationCatalogKinds перечисляет восемь основных селекторов чтения; предикаты контекста и области добавляют специальные виды без изменения этого общего среза.
 var assistantConfigurationCatalogKinds = []string{"ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION"}
 
+// assistantConfigurationCatalogInputSchema builds a closed catalog selector with kind-specific assistant refs and optional context-dependent entity/page fields.
+// The schema advertises snapshot eligibility only; parser, owner read and response casters still enforce their own boundaries.
+// assistantConfigurationCatalogInputSchema создаёт закрытый селектор каталога со ссылкой помощника по области и необязательными полями сущности и страницы, зависящими от контекста.
+// Схема объявляет только доступность по снимку; анализатор, чтение владельца и преобразователи ответа отдельно проверяют свои границы.
 func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput) map[string]any {
 	assistantRef := opaqueRefSchema()
 	if input.AssistantScope == runtimecontract.AssistantScopeProject {
@@ -160,6 +180,14 @@ func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput)
 	return objectSchema([]string{"kind", "assistant_ref"}, properties)
 }
 
+// parseAssistantConfigurationCatalog validates a closed selector, assistant lease/organization metadata, scope-specific self identity, entity pairing and bounded query/offset filters.
+// Configuration-page selectors, account/profile usage and current-execution pins are checked before constructing the typed owner request.
+// Local shape/page mistakes remain recoverable input errors; unavailable server-owned context or foreign self identity does not.
+// This validates request representation against trusted input, not current owner authorization or a configuration mutation.
+// parseAssistantConfigurationCatalog проверяет закрытый селектор, метаданные аренды и организации помощника, собственную идентичность по области, пару полей сущности и ограниченные фильтры запроса и смещения.
+// Селекторы страницы конфигурации, использование аккаунта и профиля, привязки текущего выполнения проверяются до создания типизированного запроса владельцу.
+// Локальные ошибки формы и страницы остаются исправимыми ошибками ввода; недоступный серверный контекст и чужая собственная идентичность — нет.
+// Проверяется представление запроса относительно доверенного входа, а не актуальная авторизация у владельца или изменение конфигурации.
 func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any, raw any) (*controlplanev1.AssistantConfigurationCatalogRequest, error) {
 	invalid := errors.New("assistant configuration catalog request is invalid")
 	invalidInput := invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
@@ -314,6 +342,8 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 	return request, nil
 }
 
+// assistantConfigurationCatalogKindKnown recognizes base and six specialized catalog kind names; recognition alone does not establish scope/context availability.
+// assistantConfigurationCatalogKindKnown распознаёт основные и шесть специальных имён видов каталога; распознавание само по себе не устанавливает доступность по области или контексту.
 func assistantConfigurationCatalogKindKnown(kind string) bool {
 	if kind == "PROJECT_INTEGRATION_GRANTS" || kind == "RECIPIENT_INTEGRATION_GRANTS" || kind == "WORKFLOW_CONFIGURATION" || kind == "WORKFLOW_METADATA" || kind == "AGENT_CONFIGURATION" || kind == "AGENT_RUNTIME_CONFIGURATION" {
 		return true
@@ -326,6 +356,12 @@ func assistantConfigurationCatalogKindKnown(kind string) bool {
 	return false
 }
 
+// assistantConfigurationCatalog sends the parsed selector with exact lease/fence/generation under the request timeout, rejects mixed outer responses and invokes the matching caster.
+// Own current configuration adds an observed provider-process snapshot; full agent/workflow reads become bounded model pages.
+// Other reads extend the caller's local catalog only after successful validation, without applying any owner state.
+// assistantConfigurationCatalog отправляет разобранный селектор с точными арендой, ограждением и поколением в пределах таймаута, отклоняет смешанный внешний ответ и вызывает нужный преобразователь.
+// Собственная текущая конфигурация дополняется наблюдаемым снимком процесса провайдера; полные чтения сотрудника и процесса превращаются в ограниченные страницы модели.
+// Другие чтения расширяют локальный каталог вызывающей стороны только после проверки без применения состояния владельца.
 func (server *Server) assistantConfigurationCatalog(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, raw any, catalog map[string]any) (any, error) {
 	request, err := parseAssistantConfigurationCatalog(input, arguments, raw)
 	if err != nil {
@@ -360,8 +396,10 @@ func (server *Server) assistantConfigurationCatalog(ctx context.Context, input r
 	return catalog, nil
 }
 
-// Полный owner snapshot проходит прежний caster; размер модельной страницы
-// задаёт только сервер, независимо от бюджета общего индекса сотрудников.
+// boundedAssistantConfigurationPageCatalog serializes a page envelope with an empty agent list and repeatedly halves its byte allowance until JSON fits the server budget.
+// The already validated full snapshot is not weakened; offsets reflect actual projected bytes, and exhaustion returns a page error.
+// boundedAssistantConfigurationPageCatalog сериализует оболочку страницы с пустым списком сотрудников и последовательно делит байтовый предел пополам, пока JSON не уложится в серверный бюджет.
+// Проверка полного снимка не ослабляется; смещения отражают фактически выданные байты, а исчерпание предела возвращает ошибку страницы.
 func boundedAssistantConfigurationPageCatalog(configuration map[string]any, page assistantConfigurationPageRequest, projectRef string, maximumModelBytes int) (map[string]any, error) {
 	for {
 		projected, projectionErr := pageAssistantConfigurationSnapshot(configuration, page)
@@ -381,6 +419,12 @@ func boundedAssistantConfigurationPageCatalog(configuration map[string]any, page
 	}
 }
 
+// castAssistantConfigurationCatalog dispatches specialized closed read variants, then validates ordinary response kind, organization/scope/profile, pagination and unique entries.
+// Projects only allowed fields per kind, including independently checked promoted image inventories and public recipe environment keys.
+// Any invalid entry rejects the entire projection; this read caster neither authorizes execution nor writes grants/configuration.
+// castAssistantConfigurationCatalog направляет специальные закрытые варианты чтения в свои преобразователи, затем проверяет обычные вид ответа, организацию, область, профиль, страницы и уникальные элементы.
+// Проецирует только поля соответствующего вида, включая отдельно проверенный инвентарь опубликованного образа и публичный ключ окружения рецепта.
+// Некорректный элемент отклоняет всю проекцию; преобразователь чтения не разрешает выполнение и не записывает доступы либо конфигурацию.
 func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant configuration catalog response is invalid")
 	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_METADATA {
@@ -475,15 +519,31 @@ func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, reques
 		"next_offset": response.GetNextOffset()}, nil
 }
 
+// validAssistantCatalogScope accepts ORGANIZATION only without project/profile refs, or PROJECT with both syntactically valid refs; resource ownership is checked elsewhere.
+// validAssistantCatalogScope принимает ORGANIZATION только без ссылок проекта и профиля либо PROJECT с обеими синтаксически корректными ссылками; владение ресурсом проверяется отдельно.
 func validAssistantCatalogScope(scope, projectRef, profileRef string) bool {
 	return scope == "ORGANIZATION" && projectRef == "" && profileRef == "" ||
 		scope == "PROJECT" && validAssistantResourceRef(projectRef) && validAssistantResourceRef(profileRef)
 }
 
+// assistantCatalogPinnedImagePattern recognizes a bounded-character image reference ending in a lowercase SHA256 pin; matching alone proves neither image existence nor admission.
+// assistantCatalogPinnedImagePattern распознаёт ссылку образа из допустимых символов с конечной привязкой SHA256 в нижнем регистре; совпадение не доказывает существование или допуск образа.
 var assistantCatalogPinnedImagePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.:/_-]*@sha256:[a-f0-9]{64}$`)
+
+// assistantCatalogModelPattern accepts 1..128 ASCII model-key characters without deciding provider support, account access or reasoning compatibility.
+// assistantCatalogModelPattern принимает 1..128 ASCII-символов ключа модели без решения о поддержке провайдером, доступе аккаунта или совместимости рассуждений.
 var assistantCatalogModelPattern = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,128}$`)
+
+// assistantCatalogEnvironmentKeyPattern recognizes a lowercase recipe-environment key of 1..100 characters starting with a letter, not a runtime secret or arbitrary resource ref.
+// assistantCatalogEnvironmentKeyPattern распознаёт ключ окружения рецепта длиной 1..100 символов нижнего регистра с начальной буквой, а не секрет выполнения или произвольную ссылку ресурса.
 var assistantCatalogEnvironmentKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9.-]{0,99}$`)
 
+// validAssistantConfigurationCatalogEntry checks common display/scope/integer bounds and a closed field-presence matrix for each ordinary catalog kind.
+// Model rows require catalog provenance and structural reasoning names; image rows require exact pins, accepted/promoted state and matching tool inventory.
+// Assistant rows preserve the source helper boundary; syntax and snapshot consistency checks do not replace owner eligibility.
+// validAssistantConfigurationCatalogEntry проверяет общие пределы названия, области и целых значений, закрытую матрицу допустимых полей для каждого обычного вида каталога.
+// Строки моделей требуют происхождение каталога и структурные имена рассуждений; строки образов — точные привязки, состояния допуска и публикации, соответствующий инвентарь инструментов.
+// Строки помощников сохраняют границу исходного помощника; синтаксис и согласованность снимка не заменяют допуск владельца.
 func validAssistantConfigurationCatalogEntry(input runtimecontract.RunnerInput, kind controlplanev1.AssistantConfigurationCatalogKind, response *controlplanev1.AssistantConfigurationCatalogResponse, entry *controlplanev1.AssistantConfigurationCatalogEntry) bool {
 	if !utf8.ValidString(entry.GetName()) || strings.TrimSpace(entry.GetName()) == "" || utf8.RuneCountInString(entry.GetName()) > 160 ||
 		!validAssistantCatalogScope(entry.GetScopeKind(), entry.GetProjectRef(), entry.GetAssistantProfileRef()) || entry.GetVersion() < 0 || entry.GetVersion() > 9007199254740991 || entry.GetRecipeGeneration() < 0 || entry.GetRecipeGeneration() > 9007199254740991 {
@@ -556,6 +616,8 @@ func validAssistantConfigurationCatalogEntry(input runtimecontract.RunnerInput, 
 	return true
 }
 
+// validAssistantCatalogProvider accepts a nonempty UTF-8 provider name through 64 bytes without surrounding whitespace; it is not a provider registry lookup.
+// validAssistantCatalogProvider принимает непустое UTF-8 имя провайдера до 64 байт без окружающих пробелов; поиск в реестре провайдеров не выполняется.
 func validAssistantCatalogProvider(provider string) bool {
 	return provider != "" && len(provider) <= 64 && utf8.ValidString(provider) && strings.TrimSpace(provider) == provider
 }
@@ -568,6 +630,10 @@ func validAssistantCatalogDigest(digest string) bool {
 	return runtimecontract.ValidSHA256Text(digest)
 }
 
+// validAssistantCatalogReasoning accepts at most sixteen unique structurally valid effort names and requires the default among them, or an empty list/default pair.
+// Future canonical names remain allowed; this does not hardcode a model's supported effort set.
+// validAssistantCatalogReasoning принимает не более шестнадцати уникальных структурно корректных имён рассуждений и требует присутствия значения по умолчанию либо одновременно пустые список и значение.
+// Будущие канонические имена допускаются; поддерживаемый конкретной моделью набор здесь не зашит.
 func validAssistantCatalogReasoning(efforts []string, defaultEffort string) bool {
 	if len(efforts) > 16 {
 		return false

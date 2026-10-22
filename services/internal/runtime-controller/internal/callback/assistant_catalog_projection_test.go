@@ -7,6 +7,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestAssistantCatalogSafeProjectionPublishesOnlyClosedKind checks activity parameters expose only the eight recognized base kind names, never selector queries, refs, headers or credential canaries.
+// TestAssistantCatalogSafeProjectionPublishesOnlyClosedKind проверяет, что параметры активности раскрывают только восемь известных основных видов без запросов селектора, ссылок, заголовков и контрольных значений учётных данных.
 func TestAssistantCatalogSafeProjectionPublishesOnlyClosedKind(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeSystem)
 	for _, kind := range []string{"ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION"} {
@@ -27,6 +29,8 @@ func TestAssistantCatalogSafeProjectionPublishesOnlyClosedKind(t *testing.T) {
 	}
 }
 
+// TestAssistantCatalogSafeProjectionKeepsUnknownAndInvalidSelectorsEmpty checks ten malformed/unknown selectors yield empty activity metadata rather than trusting a sibling catalogKind field.
+// TestAssistantCatalogSafeProjectionKeepsUnknownAndInvalidSelectorsEmpty проверяет, что десять некорректных либо неизвестных селекторов дают пустые метаданные активности, а не доверие соседнему полю catalogKind.
 func TestAssistantCatalogSafeProjectionKeepsUnknownAndInvalidSelectorsEmpty(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeSystem)
 	for _, selector := range []any{

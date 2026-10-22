@@ -11,17 +11,25 @@ import (
 	"google.golang.org/grpc"
 )
 
+// assistantDefinitionCatalogClient captures one typed owner-search request and returns a configured response, replacing only that RPC in catalog tests.
+// assistantDefinitionCatalogClient сохраняет типизированный поисковый запрос владельца и возвращает заданный ответ, подменяя только этот RPC в тестах каталога.
 type assistantDefinitionCatalogClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	request  *controlplanev1.SearchAssistantResourcesRequest
 	response *controlplanev1.SearchAssistantResourcesResponse
 }
 
+// SearchAssistantResources records the supplied request and returns fixture metadata with no network, credential lookup or persistent owner effect.
+// SearchAssistantResources записывает переданный запрос и возвращает тестовые метаданные без сети, поиска учётных данных и устойчивых изменений владельца.
 func (client *assistantDefinitionCatalogClient) SearchAssistantResources(_ context.Context, request *controlplanev1.SearchAssistantResourcesRequest, _ ...grpc.CallOption) (*controlplanev1.SearchAssistantResourcesResponse, error) {
 	client.request = request
 	return client.response, nil
 }
 
+// TestAssistantCatalogDiscoversExactIntegrationDefinitionWithoutCredential checks trimmed definition lookup forwards exact lease pins and public configuration fields, including only the credential key name.
+// The query remains absent from safe activity parameters, and read access is not coupled to connection-create permission.
+// TestAssistantCatalogDiscoversExactIntegrationDefinitionWithoutCredential проверяет передачу точных привязок аренды и публичных полей конфигурации при поиске определения с обрезанным запросом, включая только имя ключа учётных данных.
+// Запрос отсутствует в безопасных параметрах активности, а чтение не связывается с правом создания подключения.
 func TestAssistantCatalogDiscoversExactIntegrationDefinitionWithoutCredential(t *testing.T) {
 	client := &assistantDefinitionCatalogClient{response: &controlplanev1.SearchAssistantResourcesResponse{Definitions: []*controlplanev1.AssistantIntegrationDefinition{{
 		Key: "https-json", Name: "HTTPS JSON", Adapter: "HTTPS_JSON_READ", CredentialSecretKey: "token",
@@ -53,6 +61,8 @@ func TestAssistantCatalogDiscoversExactIntegrationDefinitionWithoutCredential(t 
 	}
 }
 
+// TestAssistantCatalogRejectsUnboundOrMalformedDefinitionLookup checks six cases reject ordinary scope, missing fence, invalid offsets or extra caller fields before returning definition metadata.
+// TestAssistantCatalogRejectsUnboundOrMalformedDefinitionLookup проверяет отказ без выдачи метаданных определения в шести случаях: обычная область, нет ограждения, некорректные смещения или лишние поля вызывающей стороны.
 func TestAssistantCatalogRejectsUnboundOrMalformedDefinitionLookup(t *testing.T) {
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 4}
 	for _, test := range []struct {
