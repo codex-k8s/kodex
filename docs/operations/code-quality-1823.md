@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.300.0
+version: 1.301.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,53 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста первая волна — исполнитель PITR и общие evidence annotations
+
+Опубликованный SHA300 — `9bf5fcb20b85ee8a155cf3d8bb9f41a9642bac2e`.
+Exact v85yLU:6627 sources,222 excluded,1808 raw/723 retained/
+1085 unresolved; Go13021/21274,missing8253.47/168 unit/full build,
+AST2/tooling PASS LOCAL; sourceSHA, push и Draft PR PATCH/GET300 есть.
+Общий объём не завершён.
+
+Прочитан весь executor.go733 lines и обе12-key карты publication/verification.
+29 прежних declarations и новые helper/unit описаны EN→RU;scope4 files49/49,
+весь PITR package5 files62/62,missing0. Package header также EN→RU.
+Комментарии различают config substring @sha256: и полную проверку образа,
+моделируемый spec и unmodeled fields, provider health и SQL probe.
+Submitted create возвращает progress error; нет ожидания или самостоятельного
+coordination COMPLETED. Publish может записать Secret до отказа readback.
+sameEvidenceIntent намеренно игнорирует issue/completion timestamps и
+restored resource version. Эти политики и ошибки остались прежними.
+
+evidenceAnnotations возвращает новую12-key карту для publishEvidence и
+verifyAnnotations. Exact decimal uint64 и все string values/key spellings
+прежние; общий helper не подписывает, не даёт authority и не меняет источник
+ключей, predecessor CAS, время, replay, HTTP порядок или error strings.
+Inverse AST2 разворачивает ACTUAL helper map в обоих полных caller files,
+восстанавливает лишь удалённый неиспользуемый strconv import verifier и
+сравнивает с300. Directives прежние. Нет общей generic trust-схемы.
+Один110-token detector clone действительно удалён;1807 остальных
+keys/cardinalities прежние, новых fragments нет. Registry605/723 не менялся.
+
+Новый pure unit проверяет12 точных ключей и строк, нулевые значения,
+максимальный uint64 anchor, сохранение leading-zero строковых versions и
+раздельное владение картами. Это проверка mapping, не signature или реальный
+restore.48 верхних/171 всех app/domain/value/snapshot/PITR units PASS LOCAL,
+0 FAIL/SKIP; full authority build -p=2 PASS LOCAL.17 Node и Go checker unit,
+AST2,scope49/49 и PITR62/62,5 ignores/diff-check PASS LOCAL.
+Команда300 сохранена с прежними mod-readonly/timeout/GOMAXPROCS/pipefail;
+единственный новый верхний unit имеет2 subcases. Кластер, credentials,
+CNPG/Backup/PITR/Secret writes, DB/component/live/full acceptance NOT RUN.
+
+Рабочий fGEdoi:6629 sources,222 excluded,1807 raw/723 retained/
+1084 unresolved; Go13052/21276,missing8224. Raw SHA256:
+`f680c4717721da5c576ba10c5dc84442fab250f306adeffb450f3d4b2dab7b88`;
+clone-set:
+`0ad51d31f9f584cca53f84330b48e6dd0666b1bc4a9a93627d43314e70fd35b3`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Generated/contracts/deps/SQL/migrations/live state прежние.
+Historical FAIL и finding293 не исправлены. Общая задача остаётся открытой.
 
 ## Трёхсотая волна — манифест Backup и проверка evidence
 

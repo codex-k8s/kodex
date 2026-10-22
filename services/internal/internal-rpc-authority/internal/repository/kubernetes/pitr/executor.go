@@ -1,4 +1,7 @@
-// Package pitr реализует Kubernetes-адаптер исполнения и проверки PostgreSQL PITR.
+// Package pitr executes and verifies authority-owned PostgreSQL recovery through
+// fixed Kubernetes resources and independently signed completion evidence.
+// Пакет pitr выполняет и проверяет принадлежащее authority восстановление PostgreSQL
+// через фиксированные Kubernetes-ресурсы и независимо подписанное completion evidence.
 package pitr
 
 import (
@@ -25,11 +28,16 @@ import (
 )
 
 const (
+	// barmanPluginName fixes the CloudNativePG Barman plugin identity for backup resolution and recovery manifests; it is not selected from untrusted restore payloads.
+	// barmanPluginName фиксирует идентичность CloudNativePG Barman plugin для разрешения backup и recovery manifests без выбора из недоверенных restore payloads.
 	barmanPluginName = "barman-cloud.cloudnative-pg.io"
-	cnpgAPIVersion   = "postgresql.cnpg.io/v1"
+	// cnpgAPIVersion pins the CloudNativePG resource API version expected in observed Backup/Cluster envelopes and generated recovery Cluster objects.
+	// cnpgAPIVersion закрепляет версию CloudNativePG API в наблюдённых оболочках Backup и Cluster и создаваемых объектах recovery Cluster.
+	cnpgAPIVersion = "postgresql.cnpg.io/v1"
 )
 
-// ExecutorConfig задаёт immutable inputs фактического CloudNativePG PITR.
+// ExecutorConfig pins Kubernetes/TLS and evidence-key paths, selected backup/source/Barman settings, PostgreSQL image/storage, three instances and timeout. Constructor shape checks do not authenticate image provenance or validate storage quantities.
+// ExecutorConfig закрепляет Kubernetes и TLS, пути evidence key, настройки выбранных backup, source и Barman, образ PostgreSQL, storage, три экземпляра и timeout. Проверки формы конструктора не аутентифицируют image provenance и не проверяют storage quantities.
 type ExecutorConfig struct {
 	Address            string
 	TLSServerName      string
@@ -49,8 +57,8 @@ type ExecutorConfig struct {
 	Timeout            time.Duration
 }
 
-// Executor создаёт отдельный CNPG cluster и публикует evidence только после
-// readback healthy provider status с exact primary timeline.
+// Executor owns the client, private evidence signer and manifest resolver used to create/read a deterministic recovery Cluster and publish completion evidence. External Cluster/Secret writes are separate effects, not one transaction with coordination state.
+// Executor владеет клиентом, закрытым evidence signer и manifest resolver для создания и чтения детерминированного recovery Cluster и публикации completion evidence. Внешние записи Cluster и Secret — отдельные эффекты, а не одна транзакция с coordination state.
 type Executor struct {
 	config      ExecutorConfig
 	client      *http.Client
@@ -61,6 +69,8 @@ type Executor struct {
 	now         func() time.Time
 }
 
+// clusterEnvelope captures observed Cluster identity, raw spec and modeled health status; ordinary JSON decoding allows additional provider fields.
+// clusterEnvelope содержит наблюдённые identity Cluster, исходный spec и описанный health status; обычное JSON-декодирование допускает дополнительные provider fields.
 type clusterEnvelope struct {
 	APIVersion string          `json:"apiVersion"`
 	Kind       string          `json:"kind"`
@@ -69,6 +79,8 @@ type clusterEnvelope struct {
 	Status     clusterStatus   `json:"status"`
 }
 
+// objectMetadata carries modeled Kubernetes identity/version/generation and annotation pins shared by Backup and Cluster readback. Nonempty values alone do not authenticate their source.
+// objectMetadata передаёт описанные Kubernetes identity, version, generation и annotation pins для readback Backup и Cluster. Одни непустые значения не аутентифицируют источник.
 type objectMetadata struct {
 	Name            string            `json:"name"`
 	Namespace       string            `json:"namespace"`
@@ -78,6 +90,8 @@ type objectMetadata struct {
 	Annotations     map[string]string `json:"annotations"`
 }
 
+// clusterStatus models observed generation, aggregate readiness, primary/timeline and per-instance conditions used by validateHealthyCluster; it is provider-reported data, not a fresh SQL probe.
+// clusterStatus описывает observed generation, суммарную readiness, primary, timeline и поэкземплярные conditions для validateHealthyCluster; это provider-reported data, а не свежая SQL-проверка.
 type clusterStatus struct {
 	ObservedGeneration uint64                           `json:"observedGeneration"`
 	Phase              string                           `json:"phase"`
@@ -88,17 +102,23 @@ type clusterStatus struct {
 	Conditions         []clusterCondition               `json:"conditions"`
 }
 
+// instanceReportedState preserves the provider's primary flag and case-sensitive timeLineID field used to bind the chosen primary to the aggregate timeline.
+// instanceReportedState сохраняет primary flag и регистрозависимое поле timeLineID provider для привязки выбранного primary к общему timeline.
 type instanceReportedState struct {
 	IsPrimary  bool   `json:"isPrimary"`
 	TimelineID uint64 `json:"timeLineID"`
 }
 
+// clusterCondition carries one provider condition's type/status/reason; health requires the exact Ready/True/ClusterIsReady tuple rather than arbitrary truth-like text.
+// clusterCondition передаёт type, status и reason одной provider condition; health требует точного набора Ready, True и ClusterIsReady, а не произвольного похожего текста.
 type clusterCondition struct {
 	Type   string `json:"type"`
 	Status string `json:"status"`
 	Reason string `json:"reason"`
 }
 
+// desiredCluster is the typed create payload for the deterministic recovery Cluster, combining fixed API kind, immutable intent annotations and the selected recovery spec.
+// desiredCluster — типизированный create payload детерминированного recovery Cluster с фиксированным API kind, immutable intent annotations и выбранным recovery spec.
 type desiredCluster struct {
 	APIVersion string          `json:"apiVersion"`
 	Kind       string          `json:"kind"`
@@ -106,6 +126,8 @@ type desiredCluster struct {
 	Spec       desiredSpec     `json:"spec"`
 }
 
+// desiredMetadata holds the deterministic recovery name/namespace, intent annotations and workload labels; provider-created UID/resourceVersion are not synthesized here.
+// desiredMetadata содержит детерминированные recovery name и namespace, intent annotations и workload labels; назначаемые provider UID и resourceVersion здесь не выдумываются.
 type desiredMetadata struct {
 	Name        string            `json:"name"`
 	Namespace   string            `json:"namespace"`
@@ -113,6 +135,8 @@ type desiredMetadata struct {
 	Labels      map[string]string `json:"labels"`
 }
 
+// desiredSpec contains the modeled instance/image/strategy/storage/bootstrap/external-cluster fields used for canonical intent comparison. Unmodeled provider spec fields are not part of this typed comparison.
+// desiredSpec содержит описанные instance, image, strategy, storage, bootstrap и external-cluster fields для canonical intent comparison. Неописанные provider spec fields в типизированное сравнение не входят.
 type desiredSpec struct {
 	Instances        uint32            `json:"instances"`
 	ImageName        string            `json:"imageName"`
@@ -122,37 +146,50 @@ type desiredSpec struct {
 	ExternalClusters []externalCluster `json:"externalClusters"`
 }
 
+// desiredStorage copies the configured storage class and size strings into the recovery manifest without parsing quantities or provisioning storage itself.
+// desiredStorage копирует настроенные строки storage class и size в recovery manifest без разбора quantities и самостоятельного выделения storage.
 type desiredStorage struct {
 	StorageClass string `json:"storageClass"`
 	Size         string `json:"size"`
 }
 
+// desiredBootstrap wraps the recovery-only bootstrap specification rather than an initialization or import mode.
+// desiredBootstrap оборачивает recovery-only bootstrap specification, а не режим initialization или import.
 type desiredBootstrap struct {
 	Recovery desiredRecovery `json:"recovery"`
 }
 
+// desiredRecovery binds the fixed origin external-cluster alias to the exact target time, source timeline and provider backup ID chosen for recovery.
+// desiredRecovery связывает фиксированный alias origin внешнего cluster с точными target time, source timeline и provider backup ID восстановления.
 type desiredRecovery struct {
 	Source         string         `json:"source"`
 	RecoveryTarget recoveryTarget `json:"recoveryTarget"`
 }
 
+// recoveryTarget serializes UTC RFC3339 target time, decimal timeline and provider backup ID; it is configuration for CNPG, not evidence recovery has completed.
+// recoveryTarget сериализует UTC RFC3339 target time, десятичный timeline и provider backup ID; это конфигурация CNPG, а не evidence завершённого восстановления.
 type recoveryTarget struct {
 	TargetTime string `json:"targetTime"`
 	TargetTLI  string `json:"targetTLI"`
 	BackupID   string `json:"backupID"`
 }
 
+// externalCluster associates the fixed origin source alias with its Barman recovery plugin configuration inside the desired Cluster spec.
+// externalCluster связывает фиксированный source alias origin с конфигурацией Barman recovery plugin в желаемом Cluster spec.
 type externalCluster struct {
 	Name   string         `json:"name"`
 	Plugin externalPlugin `json:"plugin"`
 }
 
+// externalPlugin supplies the Barman plugin name and exact object/server parameter map used to select backup storage, without embedding storage credentials.
+// externalPlugin задаёт имя Barman plugin и точную карту параметров object и server для выбора backup storage без включения storage credentials.
 type externalPlugin struct {
 	Name       string            `json:"name"`
 	Parameters map[string]string `json:"parameters"`
 }
 
-// NewExecutor создаёт отдельного owner фактического PITR.
+// NewExecutor validates fixed Kubernetes/source/evidence bindings, three instances, timeout, nonempty storage and the image's @sha256: substring, loads CA/private JWK and creates a manifest resolver. It configures TLS 1.3 and redirect refusal without making API calls; full image syntax/trust and key delivery are external responsibilities.
+// NewExecutor проверяет фиксированные Kubernetes, source и evidence bindings, три экземпляра, timeout, непустой storage и подстроку @sha256: образа, загружает CA и private JWK и создаёт manifest resolver. TLS 1.3 и запрет redirect задаются без API calls; полный синтаксис образа, доверие ему и доставку ключа обеспечивают внешние механизмы.
 func NewExecutor(config ExecutorConfig) (*Executor, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
@@ -226,14 +263,15 @@ func NewExecutor(config ExecutorConfig) (*Executor, error) {
 	}, nil
 }
 
-// Close закрывает простаивающие Kubernetes API connections.
+// Close closes both manifest-resolver and executor idle HTTP connections; it does not cancel a caller context, delete recovery Clusters or erase signed evidence.
+// Close закрывает простаивающие HTTP-соединения manifest resolver и executor без отмены caller context, удаления recovery Clusters и стирания signed evidence.
 func (executor *Executor) Close() {
 	executor.manifest.Close()
 	executor.client.CloseIdleConnections()
 }
 
-// Execute создаёт или readback-проверяет exact PITR cluster и атомарно
-// публикует signed evidence. Повтор после crash не создаёт новый cluster.
+// Execute requires PREPARED state with matching target/ACK counts and manifest digest, ensures the deterministic Cluster, validates observed health, builds claims and publishes evidence. A submitted create returns a progress error for a later retry; the method neither waits in a loop nor advances coordination to COMPLETED itself.
+// Execute требует PREPARED state с совпадающими target и ACK counts и manifest digest, обеспечивает детерминированный Cluster, проверяет наблюдённый health, строит claims и публикует evidence. Отправленный create возвращает progress error для последующего повтора; метод не ожидает в цикле и сам не переводит coordination в COMPLETED.
 func (executor *Executor) Execute(
 	ctx context.Context,
 	state model.RestoreState,
@@ -276,6 +314,8 @@ func (executor *Executor) Execute(
 	return executor.publishEvidence(ctx, state, claims)
 }
 
+// ensureCluster builds deterministic intent, GETs the exact Cluster and POSTs only after 404; create success or conflict returns submitted=true for a later read. Existing objects require identity, modeled spec digest and exact desired annotations; no Cluster update or ambiguous blind re-create occurs here.
+// ensureCluster строит детерминированный intent, читает точный Cluster GET и отправляет POST лишь после 404; успех create либо conflict возвращает submitted=true для позднего чтения. Existing objects требуют identity, digest описанного spec и точных desired annotations; обновления Cluster и слепого повтора неопределённого create здесь нет.
 func (executor *Executor) ensureCluster(
 	ctx context.Context,
 	state model.RestoreState,
@@ -360,6 +400,8 @@ func (executor *Executor) ensureCluster(
 	return cluster, desired, false, nil
 }
 
+// desiredCluster validates restore ID and exact manifest digest/target, derives the name from ID prefix and epoch, hashes immutable intent and builds recovery spec from configured instance/image/storage values. It only returns a value and does not create a Cluster or authenticate the supplied state.
+// desiredCluster проверяет restore ID и точные manifest digest и target, выводит имя из префикса ID и epoch, хеширует immutable intent и строит recovery spec из настроенных instance, image и storage values. Возвращается лишь значение без создания Cluster и аутентификации переданного state.
 func (executor *Executor) desiredCluster(
 	state model.RestoreState,
 	manifest BackupManifest,
@@ -454,6 +496,8 @@ func (executor *Executor) desiredCluster(
 	}, nil
 }
 
+// validateHealthyCluster requires matching observed/current generation, exact healthy phase and instance count, the expected primary prefix, Ready condition and a primary-reported timeline matching aggregate status. It returns that timeline without probing PostgreSQL or comparing it with the source timeline.
+// validateHealthyCluster требует совпадения observed и current generation, точных healthy phase и числа экземпляров, ожидаемого префикса primary, Ready condition и совпадения primary-reported timeline с общим status. Timeline возвращается без проверки PostgreSQL и сравнения с source timeline.
 func validateHealthyCluster(
 	cluster clusterEnvelope,
 	desired desiredCluster,
@@ -490,6 +534,8 @@ func validateHealthyCluster(
 	return primary.TimelineID, nil
 }
 
+// buildClaims canonically hashes the expected target and accepted ACK sets, copies restore/manifest/provider pins and records an exact next anchor with predecessor at the current second. It constructs claims only; it does not validate every source field, sign or persist them.
+// buildClaims канонически хеширует expected target и accepted ACK sets, копирует restore, manifest и provider pins и записывает точный следующий anchor с predecessor и текущей секундой. Строятся только claims без проверки каждого исходного поля, подписи и сохранения.
 func (executor *Executor) buildClaims(
 	state model.RestoreState,
 	manifest BackupManifest,
@@ -550,6 +596,8 @@ func (executor *Executor) buildClaims(
 	}, nil
 }
 
+// publishEvidence reads the pre-existing evidence Secret, accepts an already matching signed intent or requires predecessor annotations, signs and version-CAS-PUTs one evidence payload, then GETs and checks served evidence. Later failure can follow a persisted PUT; retries must read current state rather than assume rollback.
+// publishEvidence читает существующий evidence Secret, принимает уже совпадающий signed intent либо требует predecessor annotations, подписывает и version-CAS-PUT-ит один evidence payload, затем читает GET и проверяет served evidence. Поздний отказ возможен после сохранённого PUT; повтор должен читать текущее состояние, а не предполагать rollback.
 func (executor *Executor) publishEvidence(
 	ctx context.Context,
 	state model.RestoreState,
@@ -595,20 +643,7 @@ func (executor *Executor) publishEvidence(
 	current.APIVersion = "v1"
 	current.Kind = "Secret"
 	current.Type = "Opaque"
-	current.Metadata.Annotations = map[string]string{
-		"kodex.dev/restore-anchor-revision":              strconv.FormatUint(claims.AnchorRevision, 10),
-		"kodex.dev/restore-epoch":                        strconv.FormatUint(claims.RestoreEpoch, 10),
-		"kodex.dev/restore-evidence-digest-sha256":       digestHex,
-		"kodex.dev/restore-predecessor-revision":         strconv.FormatUint(claims.Predecessor.Revision, 10),
-		"kodex.dev/restore-predecessor-digest-sha256":    claims.Predecessor.DigestSHA256,
-		"kodex.dev/restored-cluster-uid":                 claims.RestoredClusterUID,
-		"kodex.dev/restored-timeline-id":                 strconv.FormatUint(claims.RestoredTimelineID, 10),
-		"kodex.dev/cnpg-backup-uid":                      claims.BackupResourceUID,
-		"kodex.dev/cnpg-backup-resource-version":         claims.BackupResourceVersion,
-		"kodex.dev/cnpg-backup-id":                       claims.ProviderBackupID,
-		"kodex.dev/cnpg-source-cluster-uid":              claims.SourceClusterUID,
-		"kodex.dev/cnpg-source-cluster-resource-version": claims.SourceClusterResourceVersion,
-	}
+	current.Metadata.Annotations = evidenceAnnotations(claims, digestHex)
 	current.Data = map[string]string{
 		evidenceDataKey: base64.StdEncoding.EncodeToString([]byte(compact)),
 	}
@@ -642,6 +677,8 @@ func (executor *Executor) publishEvidence(
 	return nil
 }
 
+// existingEvidenceMatches strictly decodes stored Base64, verifies canonical JWS with this executor's public key, compares normalized intent and checks served annotations against actual signed claims. It does not independently enforce the verifier's complete identity/time/state policy.
+// existingEvidenceMatches строго декодирует сохранённый Base64, проверяет canonical JWS публичным ключом этого executor, сравнивает нормализованный intent и served annotations с фактическими signed claims. Полная identity, time и state policy verifier независимо не выполняется.
 func (executor *Executor) existingEvidenceMatches(
 	secret secretEnvelope,
 	expected model.RestoreFenceEvidenceClaims,
@@ -679,6 +716,8 @@ func (executor *Executor) existingEvidenceMatches(
 	) == nil
 }
 
+// sameEvidenceIntent zeroes issue/completion times and restored resource version in value copies, then compares canonical bytes of all remaining fields. It intentionally allows those three observations to differ and does not verify either signature.
+// sameEvidenceIntent обнуляет issue и completion times и restored resource version в копиях значений, затем сравнивает canonical bytes остальных полей. Этим трём наблюдениям намеренно разрешено различаться; подписи не проверяются.
 func sameEvidenceIntent(
 	actual model.RestoreFenceEvidenceClaims,
 	expected model.RestoreFenceEvidenceClaims,
@@ -697,6 +736,8 @@ func sameEvidenceIntent(
 	return err == nil && bytes.Equal(actualCanonical, expectedCanonical)
 }
 
+// do reloads the projected token for one caller-selected executor-owned endpoint, sends the context-bound request and reads a bounded response before closing it. It returns HTTP status to the caller and does not retry transport errors or interpret JSON.
+// do перечитывает projected token для одного переданного принадлежащего executor endpoint, отправляет запрос с контекстом и читает ограниченный ответ до закрытия. HTTP status возвращается caller без повтора transport errors и интерпретации JSON.
 func (executor *Executor) do(
 	ctx context.Context,
 	method string,

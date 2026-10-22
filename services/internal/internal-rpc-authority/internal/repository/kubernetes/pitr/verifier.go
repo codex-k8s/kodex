@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -365,20 +364,7 @@ func verifyAnnotations(
 	claims model.RestoreFenceEvidenceClaims,
 	digest string,
 ) error {
-	expected := map[string]string{
-		"kodex.dev/restore-anchor-revision":              strconv.FormatUint(claims.AnchorRevision, 10),
-		"kodex.dev/restore-epoch":                        strconv.FormatUint(claims.RestoreEpoch, 10),
-		"kodex.dev/restore-evidence-digest-sha256":       digest,
-		"kodex.dev/restore-predecessor-revision":         strconv.FormatUint(claims.Predecessor.Revision, 10),
-		"kodex.dev/restore-predecessor-digest-sha256":    claims.Predecessor.DigestSHA256,
-		"kodex.dev/restored-cluster-uid":                 claims.RestoredClusterUID,
-		"kodex.dev/restored-timeline-id":                 strconv.FormatUint(claims.RestoredTimelineID, 10),
-		"kodex.dev/cnpg-backup-uid":                      claims.BackupResourceUID,
-		"kodex.dev/cnpg-backup-resource-version":         claims.BackupResourceVersion,
-		"kodex.dev/cnpg-backup-id":                       claims.ProviderBackupID,
-		"kodex.dev/cnpg-source-cluster-uid":              claims.SourceClusterUID,
-		"kodex.dev/cnpg-source-cluster-resource-version": claims.SourceClusterResourceVersion,
-	}
+	expected := evidenceAnnotations(claims, digest)
 	for name, value := range expected {
 		if annotations[name] != value {
 			return errors.New("restore evidence served annotation mismatch")
