@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.271.0
+version: 1.272.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,63 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят вторая волна — managed HTTP views и реальные границы unit proof
+
+Опубликованный SHA271 — `e529aab97f5fd51c8030c82e66543075180a6182`.
+Точный iXVHVa:6605 sources,222 excluded,1821 raw/655 retained/
+1166 unresolved; Go11874/21243, missing9369. Raw SHA256:
+`1eb9cc8a6e470226f9512922e1d318e6064312fdccc6c372ef9936ac057441fb`.
+Clone-set:
+`ae72897170dcb0ee007a67f8abf04a2bca24b6b076459db4736e0788d0fa3e86`.
+Точные unit/build, push/readback и Draft PR PATCH/GET271 подтверждены.
+
+Полностью прочитаны314 строк managed_configuration_views.go и266 строк
+managed_configuration_endpoints_test.go. Все30 declarations описаны EN→RU,
+включая response interface getters, runtime error variable, request guards,
+strict absent/match selectors, metadata/revision/consumer views, numeric/
+digest validators, fixtures/recorder и20-route regression unit. Внутренний
+комментарий о generated oneOf и explicit-null проверке тоже переведён EN→RU.
+Generated code, ошибка исполняемого кода и тестовые значения не изменялись.
+
+Комментарии точно различают byte bounds и owner authority: requireMutation
+парсит optional ETag, не проверяет key presence; project presence guard не
+проверяет grammar/ownership; managedConsumerIdentity только closed kind и
+непустая bounded string. Absent запрещает даже null/zero revision/version
+fields, match проверяет safe positive version и ASCII revision ref; неизвестные
+поля отклоняются, но helper не назван universal duplicate-JSON detector.
+
+Response guard проверяет shape, timestamp, enum/action sets, availability
+presence и optional copy metadata, но не устанавливает provenance/ownership.
+managedRevisionView проверяет digest format, не пересчитывает его по content;
+managedRevisionForConfiguration проверяет kind-dependent SourceAvailable,
+не arbitrary route/plan correspondence. Endpoint-specific exact readback
+проверки по-прежнему отдельны. Content не локализуется; pointers/nil и
+copied nonnil diagnostics/actions сохраняются согласно прежней реализации.
+
+Реальные пределы unit proof тоже описаны: recorder клонирует unary request и
+создаёт synthetic reply без SSO/owner transaction;20-route test проверяет
+ожидаемый RPC suffix и поля, не всю криптографическую authority цепочку.
+Invalid-draft test сочетает несколько неверных признаков и не изолирует
+каждый guard, несмотря на его прежнее имя. PermissionDenied→403 проверен
+на одном history path, а duplicate-consumer unit вызывает validator напрямую.
+Это уточнение evidence, не подмена прежних тестов или изменение продукта.
+
+AST2 без комментариев идентичен SHA271; selected docs30/30. Combined с271
+и уже документированными managed draft endpoints/tests:7 выбранных файлов,
+82/82 EN→RU declarations, не весь gateway. Raw/retained groups с двумя
+изменёнными paths нет; новых исключений нет. Рабочий ZxFc8S:6605 sources,
+222 excluded,1821 raw/655 retained/1166 unresolved; Go11904/21243,
+missing9339. Raw SHA256:
+`93798eb826fd858b140563c8e8ca173f3ca3f80fea2e3cf747412fda285e04da`.
+Clone-set и551 registry entries/655 occurrences неизменны.
+
+Весь gateway HTTP422 верхних/1780 всех unit и full gateway build -p=2
+PASS LOCAL,0 FAIL/SKIP. Docs30/30+82/82, AST2,17 Node/Go checker units,
+canonical scan/5 ignore boundaries и diff-check PASS LOCAL. Точные повторные
+checks публикуются на новом SHA с push/PR readback. General9339 missing/
+1166 unresolved ещё предстоят; full/browser/live/component/deploy NOT RUN
+согласно scoped решению владельца.
 
 ## Двести семьдесят первая волна — HTTP rebind input preparation
 

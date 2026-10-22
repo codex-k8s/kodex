@@ -20,8 +20,20 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// managedFixtureContent is synthetic Cyrillic source text with enum- and translation-like prefixes
+// used to detect unintended response localization. It is not a real user document or executable
+// configuration.
+// managedFixtureContent является синтетическим кириллическим текстом с похожими на enum и ключ
+// перевода префиксами для выявления нежелательной локализации ответа. Это не реальный документ
+// пользователя или исполняемая конфигурация.
 const managedFixtureContent = "TYPE_остается исходным текстом\ni18n:это не ключ перевода"
 
+// managedFixture creates fresh typed configuration and revision messages with fixed time, source,
+// digest, and version pins for HTTP tests. Fixture metadata describes no real published or authorized
+// resource.
+// managedFixture создаёт новые типизированные сообщения конфигурации и ревизии с фиксированными
+// временем, исходником, дайджестом и версиями для HTTP-тестов. Метаданные не описывают реальный
+// опубликованный или разрешённый ресурс.
 func managedFixture() (*controlplanev1.ManagedConfigurationSet, *controlplanev1.ManagedConfigurationRevision) {
 	now := timestamppb.New(time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC))
 	revision := &controlplanev1.ManagedConfigurationRevision{
@@ -35,6 +47,12 @@ func managedFixture() (*controlplanev1.ManagedConfigurationSet, *controlplanev1.
 	return configuration, revision
 }
 
+// managedRPCRecorder is an in-process unary client fixture that captures a cloned request and returns
+// configurable failure or synthetic projections. It does not provide a real transport, session
+// authentication, owner transaction, or general stream implementation.
+// managedRPCRecorder является внутрипроцессной unary-подменой клиента, сохраняющей копию запроса и
+// возвращающей заданную ошибку или синтетические проекции. Реальные транспорт, аутентификация сессии,
+// транзакция владельца и общая реализация потоков отсутствуют.
 type managedRPCRecorder struct {
 	grpc.ClientConnInterface
 	method        string
@@ -43,6 +61,13 @@ type managedRPCRecorder struct {
 	revisionState controlplanev1.ManagedConfigurationState
 }
 
+// Invoke captures the method and a deep Proto copy before returning the configured failure or
+// constructing a method-specific fixture response. The default fills the generated
+// configuration/revision fields by reflection; these synthetic replies are not evidence of real owner
+// lifecycle transitions.
+// Invoke сохраняет метод и глубокую Proto-копию до возврата заданной ошибки или создания
+// соответствующего методу ответа. По умолчанию сгенерированные поля конфигурации и ревизии заполняются
+// рефлексией; синтетические ответы не доказывают реальные переходы владельца.
 func (client *managedRPCRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	client.method, client.request = method, proto.Clone(request.(proto.Message))
 	if client.failure != nil {
@@ -81,6 +106,10 @@ func (client *managedRPCRecorder) Invoke(_ context.Context, method string, reque
 	return nil
 }
 
+// managedTestHandler connects the generated HTTP routes to typed query and command clients backed by
+// the supplied recorder. It intentionally has no live SSO, network connection, or owner service.
+// managedTestHandler соединяет сгенерированные HTTP-маршруты с типизированными query и command
+// клиентами заданного recorder. Реальных SSO, сетевого подключения и сервиса владельца намеренно нет.
 func managedTestHandler(client *managedRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{
 		Query:   controlplanev1.NewPlatformQueryServiceClient(client),
@@ -88,6 +117,12 @@ func managedTestHandler(client *managedRPCRecorder) http.Handler {
 	}})
 }
 
+// managedTestRequest creates an in-memory JSON request with fixed synthetic idempotency, CSRF, and
+// version-three If-Match headers. The fixture headers are test data, not authenticated owner
+// credentials.
+// managedTestRequest создаёт JSON-запрос в памяти с фиксированными синтетическими заголовками
+// идемпотентности, CSRF и If-Match версии3. Заголовки являются тестовыми данными, а не удостоверенными
+// реквизитами владельца.
 func managedTestRequest(method, path, body string) *http.Request {
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -97,6 +132,14 @@ func managedTestRequest(method, path, body string) *http.Request {
 	return request
 }
 
+// TestManagedConfigurationRoutesCallExactTypedRPC covers twenty selected routes, expected RPC suffixes
+// and statuses, mutation and resource pins, project-versus-organization input, unchanged source text,
+// pagination, and STT zero-value output. It uses generated typed clients and a recorder, not live
+// authorization or a complete proof of every method's owner boundary.
+// TestManagedConfigurationRoutesCallExactTypedRPC проверяет20 выбранных маршрутов, ожидаемые суффиксы
+// RPC и статусы, привязки изменения и ресурса, проектный и общий вход, сохранность текста, пагинацию и
+// нулевые поля STT. Используются сгенерированные клиенты и recorder, а не реальная авторизация или
+// полное доказательство каждой границы владельца.
 func TestManagedConfigurationRoutesCallExactTypedRPC(t *testing.T) {
 	t.Parallel()
 	draftBody := "{\"configurationRef\":\"mcfg_fixture01\",\"projectRef\":\"prj_fixture01\",\"name\":\"Название\",\"contentFormat\":\"TEXT\",\"content\":\"TYPE_source\"}"
@@ -180,6 +223,14 @@ func TestManagedConfigurationRoutesCallExactTypedRPC(t *testing.T) {
 	}
 }
 
+// TestManagedConfigurationViewPreservesSourceAndRejectsInvalidProducerShape checks unchanged
+// source/name, nonnil diagnostics, and ETag output, then rejects unknown state, unsafe revision,
+// malformed digest, and missing creation time. It validates producer shape rather than cryptographic
+// content provenance.
+// TestManagedConfigurationViewPreservesSourceAndRejectsInvalidProducerShape проверяет неизменность
+// исходника и имени, ненулевую диагностику и ETag, затем отказ для неизвестного состояния,
+// небезопасной ревизии, неверного дайджеста и отсутствующего времени. Проверяется форма производителя,
+// а не криптографическое происхождение содержимого.
 func TestManagedConfigurationViewPreservesSourceAndRejectsInvalidProducerShape(t *testing.T) {
 	t.Parallel()
 	configuration, revision := managedFixture()
@@ -205,6 +256,12 @@ func TestManagedConfigurationViewPreservesSourceAndRejectsInvalidProducerShape(t
 	}
 }
 
+// TestManagedConfigurationRejectsCallerAuthorityAndMissingOCCBeforeRPC supplies three invalid draft
+// fixtures with If-Match removed and asserts rejection before any recorded RPC. The combined invalid
+// inputs demonstrate early rejection but do not isolate each individual draft guard.
+// TestManagedConfigurationRejectsCallerAuthorityAndMissingOCCBeforeRPC передаёт три неверных черновика
+// с удалённым If-Match и проверяет отказ до зарегистрированного RPC. Совместные неверные признаки
+// доказывают ранний отказ, но не изолируют каждую отдельную проверку черновика.
 func TestManagedConfigurationRejectsCallerAuthorityAndMissingOCCBeforeRPC(t *testing.T) {
 	t.Parallel()
 	for _, body := range []string{
@@ -223,6 +280,12 @@ func TestManagedConfigurationRejectsCallerAuthorityAndMissingOCCBeforeRPC(t *tes
 	}
 }
 
+// TestManagedConfigurationCreateRejectsInvalidProjectScopeBeforeRPC checks four scope cases: missing
+// project for prompt/image and forbidden project for integration/STT. Every case must return the local
+// invalid-request response without reaching the RPC recorder.
+// TestManagedConfigurationCreateRejectsInvalidProjectScopeBeforeRPC проверяет четыре случая:
+// отсутствие проекта у промпта и образа и запрещённый проект у интеграции и STT. Каждый случай даёт
+// локальный отказ неверного запроса без обращения к recorder RPC.
 func TestManagedConfigurationCreateRejectsInvalidProjectScopeBeforeRPC(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -243,6 +306,12 @@ func TestManagedConfigurationCreateRejectsInvalidProjectScopeBeforeRPC(t *testin
 	}
 }
 
+// TestManagedConfigurationPropagatesOwnerDenial verifies that a synthetic PermissionDenied from the
+// configuration-history owner path becomes HTTP403. It is error-mapping evidence, not a real SSO or
+// owner eligibility test.
+// TestManagedConfigurationPropagatesOwnerDenial проверяет преобразование синтетического
+// PermissionDenied пути истории конфигурации в HTTP403. Это доказательство преобразования ошибки, а не
+// реальная проверка SSO или допустимости владельца.
 func TestManagedConfigurationPropagatesOwnerDenial(t *testing.T) {
 	t.Parallel()
 	client := &managedRPCRecorder{failure: status.Error(codes.PermissionDenied, "denied")}
@@ -253,6 +322,12 @@ func TestManagedConfigurationPropagatesOwnerDenial(t *testing.T) {
 	}
 }
 
+// TestManagedConfigurationRejectsDuplicateConsumerBindings calls the shared consumer validator with
+// two identical kind/reference selections and requires rejection. It directly tests duplicate
+// detection, not dispatch through an HTTP route or a live owner.
+// TestManagedConfigurationRejectsDuplicateConsumerBindings вызывает общий validator потребителей с
+// двумя одинаковыми парами вид/ссылка и требует отказ. Проверяется непосредственно обнаружение
+// повторов, а не HTTP-маршрут или реальный владелец.
 func TestManagedConfigurationRejectsDuplicateConsumerBindings(t *testing.T) {
 	t.Parallel()
 	var consumer generated.ManagedConfigurationConsumerInput
