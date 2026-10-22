@@ -14,18 +14,32 @@ import (
 )
 
 const (
-	maximumRunSnapshotItems   = 128
-	runSnapshotReadTimeout    = 5 * time.Second
+	// maximumRunSnapshotItems limits the complete root/child/predecessor run snapshot set to 128 records before browser projection; it is not a separate graph-node count limit.
+	// maximumRunSnapshotItems ограничивает полный набор снимков корня, детей и предшественников 128 записями до браузерной проекции; это не отдельный предел числа узлов графа.
+	maximumRunSnapshotItems = 128
+	// runSnapshotReadTimeout caps each owner graph read at five seconds without extending an earlier parent deadline.
+	// runSnapshotReadTimeout ограничивает каждое чтение графа у владельца пятью секундами, не продлевая более ранний срок родителя.
+	runSnapshotReadTimeout = 5 * time.Second
+	// runSnapshotRefreshTimeout bounds the shared refresh context at ten seconds; cooperative RPC cancellation and worker joining still determine return time.
+	// runSnapshotRefreshTimeout ограничивает общий контекст обновления десятью секундами; время возврата по-прежнему зависит от кооперативной отмены RPC и ожидания работников.
 	runSnapshotRefreshTimeout = 10 * time.Second
-	runSnapshotReadWorkers    = 2
+	// runSnapshotReadWorkers permits at most two concurrent owner reads per refresh, not concurrent mutation of the socket or subscription map.
+	// runSnapshotReadWorkers разрешает не более двух одновременных чтений у владельца за обновление, но не параллельное изменение сокета или таблицы подписок.
+	runSnapshotReadWorkers = 2
 )
 
+// errRunSnapshotInvalid is the closed failure for incomplete, inconsistently bound or oversized run projections, without embedding owner payloads or references in its text.
+// errRunSnapshotInvalid — закрытая ошибка неполной, несогласованной или чрезмерной проекции запуска без данных владельца и ссылок в тексте.
 var errRunSnapshotInvalid = errors.New("run snapshot projection is invalid")
 
+// readRunSnapshot delegates an exact root read with the socket lifecycle context, requesting the full owner run-snapshot set.
+// readRunSnapshot передаёт чтение точного корня с жизненным контекстом сокета, запрашивая полный набор снимков запусков у владельца.
 func (multiplexer *sessionMultiplexer) readRunSnapshot(ref string) (*controlplanev1.GetRunGraphResponse, error) {
 	return multiplexer.readRunSnapshotWithin(multiplexer.ctx, ref)
 }
 
+// readRunSnapshotWithin derives a bounded child context and requests GetRunGraph with IncludeRunSnapshots=true, observing any failure without changing the returned response/error or authenticating the root locally.
+// readRunSnapshotWithin создаёт ограниченный дочерний контекст и запрашивает GetRunGraph с IncludeRunSnapshots=true, наблюдая отказ без изменения возвращаемых ответа и ошибки и без локальной авторизации корня.
 func (multiplexer *sessionMultiplexer) readRunSnapshotWithin(parent context.Context, ref string) (*controlplanev1.GetRunGraphResponse, error) {
 	started := time.Now()
 	parentBudget := runSnapshotParentBudget(parent, started)
@@ -36,10 +50,14 @@ func (multiplexer *sessionMultiplexer) readRunSnapshotWithin(parent context.Cont
 	return snapshot, err
 }
 
+// refreshSubscribedRuns refreshes only registered socket subscriptions under the existing lifecycle context; it does not enumerate all accessible runs.
+// refreshSubscribedRuns обновляет только зарегистрированные подписки сокета в существующем жизненном контексте, не перечисляя все доступные запуски.
 func (multiplexer *sessionMultiplexer) refreshSubscribedRuns() bool {
 	return multiplexer.refreshSubscribedRunsWithin(multiplexer.ctx)
 }
 
+// refreshSubscribedRunsWithin bounds registered roots, rotates their read order and uses at most two workers under one shared deadline. Workers return only RPC results; the caller alone publishes complete projections or marks a subscription unavailable. Deadline exhaustion produces closed failures for unread roots, while parent/socket cancellation or backpressure stops transport. Deferred cancellation and Wait join cooperative workers before return; no cached owner payload or authority is reused, and a noncooperative client is not forcibly terminated.
+// refreshSubscribedRunsWithin ограничивает зарегистрированные корни, меняет начальный порядок чтения и использует не более двух работников с единым сроком. Работники возвращают только RPC-результаты; лишь вызывающий публикует полные проекции либо отмечает подписку недоступной. Исчерпание срока выдаёт закрытые отказы непрочитанным корням, а отмена родителя, сокета или перегрузка останавливает транспорт. Отложенные отмена и Wait ожидают кооперативных работников до возврата; старые данные и полномочия не переиспользуются, некооперативный клиент принудительно не завершается.
 func (multiplexer *sessionMultiplexer) refreshSubscribedRunsWithin(parent context.Context) bool {
 	if multiplexer.ctx.Err() != nil || errors.Is(parent.Err(), context.Canceled) {
 		return false
@@ -52,6 +70,7 @@ func (multiplexer *sessionMultiplexer) refreshSubscribedRunsWithin(parent contex
 	if len(refs) > maximumRunSubscriptions {
 		return false
 	}
+	// The offset stores only this socket's read order, never payload or authority.
 	// Сдвиг хранит только порядок чтений текущего socket, не payload или authority.
 	start := multiplexer.runRefreshOffset % len(refs)
 	refs = append(refs[start:], refs[:start]...)
@@ -98,6 +117,7 @@ func (multiplexer *sessionMultiplexer) refreshSubscribedRunsWithin(parent contex
 			if multiplexer.ctx.Err() != nil || errors.Is(parent.Err(), context.Canceled) {
 				return false
 			}
+			// The shared budget expired: unread subscriptions must not become available.
 			// Истёк общий бюджет: непрочитанные подписки не получают готовность.
 			for index, ref := range refs {
 				if !completed[index] && !multiplexer.failRunSnapshot(multiplexer.runs[ref]) {
@@ -125,18 +145,23 @@ func (multiplexer *sessionMultiplexer) refreshSubscribedRunsWithin(parent contex
 	return true
 }
 
-// Работники возвращают только результаты RPC; socket и подписки меняет владелец.
+// runSnapshotReadResult carries a worker's input index, owner response and error back to the single subscription owner; workers do not mutate socket state themselves.
+// runSnapshotReadResult передаёт индекс входа, ответ владельца и ошибку от работника единственному владельцу подписок; сами работники состояние сокета не меняют.
 type runSnapshotReadResult struct {
 	index    int
 	snapshot *controlplanev1.GetRunGraphResponse
 	err      error
 }
 
+// failRunSnapshot marks the nonnil subscription unavailable and enqueues its exact RUN_UNAVAILABLE problem at the existing cursor, returning queue-admission success without advancing that cursor.
+// failRunSnapshot отмечает ненулевую подписку недоступной и ставит её точный RUN_UNAVAILABLE на прежнем курсоре, возвращая успех допуска очереди без продвижения курсора.
 func (multiplexer *sessionMultiplexer) failRunSnapshot(subscription *runSubscription) bool {
 	subscription.available = false
 	return multiplexer.sendStreamProblem(subscription.requestRef, "RUN", subscription.rootRef, subscription.cursor, "RUN_UNAVAILABLE")
 }
 
+// projectCompleteRunSnapshot checks the established subscription's root/graph revision/sequence, exact expected run set, node/edge references, project bindings and retry/continuation predecessor evidence. It projects each run with matching session-readiness and bounded archive-task metadata, then measures the entire generated envelope. Failure returns a closed error and emits only the projection diagnostic; success does not enqueue or advance state. This validates an owner read, not authorization to create or execute graph nodes.
+// projectCompleteRunSnapshot проверяет корень, ревизию и sequence графа установленной подписки, точный ожидаемый набор запусков, ссылки узлов и рёбер, проектные привязки и свидетельства предшественников retry/continuation. Каждый запуск проецируется с согласованной готовностью сессии и ограниченной metadata архивной задачи, затем измеряется полный generated-конверт. Отказ возвращает закрытую ошибку и только диагностику проекции; успех не ставит кадр в очередь и не продвигает состояние. Проверяется чтение у владельца, а не право создавать или выполнять узлы.
 func projectCompleteRunSnapshot(value *controlplanev1.GetRunGraphResponse, subscription *runSubscription, localize func(string) string) (result generated.RunSnapshotEnvelope, projectionErr error) {
 	started := time.Now()
 	defer func() { observeRunSnapshotProjectionFailure(started, projectionErr) }()
@@ -222,6 +247,8 @@ func projectCompleteRunSnapshot(value *controlplanev1.GetRunGraphResponse, subsc
 	return envelope, nil
 }
 
+// snapshotRetryPredecessors validates cross-run RETRY_OF/CONTINUES root-process links, matching retry pins or a succeeded predecessor sharing the nonempty session, unique incoming lineage and absence of cycles. Same-run continuation edges are left to other graph checks. It returns admitted predecessor references for read projection, not grants or new run state; retry predecessor terminality is not checked here.
+// snapshotRetryPredecessors проверяет межзапусковые корневые RETRY_OF/CONTINUES, точные retry-привязки либо успешного предшественника с общей непустой сессией, единственную входящую связь и отсутствие циклов. CONTINUES внутри одного запуска оставляются другим проверкам графа. Возвращаются допустимые ссылки предшественников для проекции чтения, а не grants или новое состояние; терминальность retry-предшественника здесь не проверяется.
 func snapshotRetryPredecessors(graph *controlplanev1.RunGraph, values []*controlplanev1.Run) (map[string]bool, bool) {
 	nodes := map[string]*controlplanev1.RunNode{}
 	for _, node := range graph.GetNodes() {

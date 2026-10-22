@@ -13,6 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// completeRunSnapshotFixture constructs a synthetic root/child response with matching graph revision, event sequence and distinct session-readiness bindings; it is not a live execution or authority grant.
+// completeRunSnapshotFixture создаёт тестовый ответ корня и ребёнка с согласованными ревизией графа, sequence события и раздельной готовностью сессий; это не настоящий запуск и не grant полномочий.
 func completeRunSnapshotFixture() *cp.GetRunGraphResponse {
 	root := &cp.Run{Ref: "run_root0001", RootRunRef: "run_root0001", ProjectRef: "prj_project1", Version: 1,
 		SessionRef: "ses_root0001", GraphRevision: 4, LastEventSequence: 7,
@@ -25,6 +27,8 @@ func completeRunSnapshotFixture() *cp.GetRunGraphResponse {
 		Nodes: []*cp.RunNode{{Ref: "nod_child001", RunRef: child.Ref}}}, Runs: []*cp.Run{root, child}}
 }
 
+// TestCompleteRunSnapshotBindingAndClosedFailures independently mutates missing/duplicate/foreign runs, graph references, root body, session readiness, cursor and size/count bounds, requiring closed projection failure while valid child/cross-root/root-only fixtures remain accepted.
+// TestCompleteRunSnapshotBindingAndClosedFailures независимо меняет отсутствующие, повторные и чужие запуски, ссылки графа, тело корня, готовность сессии, курсор и пределы размера и количества, требуя закрытого отказа; допустимые ребёнок, межкорневой ребёнок и одиночный корень остаются принятыми.
 func TestCompleteRunSnapshotBindingAndClosedFailures(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -90,6 +94,8 @@ func TestCompleteRunSnapshotBindingAndClosedFailures(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotRetryLineage accepts a synthetic canceled retry predecessor only with its exact root-process edge/pin, then rejects missing/foreign/duplicate/cyclic lineage. It does not execute a retry or prove all predecessor-state policy.
+// TestRunSnapshotRetryLineage принимает тестового отменённого retry-предшественника с точными корневым ребром и привязкой, затем отклоняет отсутствующие, чужие, повторные и циклические связи. Retry не выполняется, полная политика состояния предшественника не доказывается.
 func TestRunSnapshotRetryLineage(t *testing.T) {
 	fixture := func() *cp.GetRunGraphResponse {
 		v := completeRunSnapshotFixture()
@@ -123,12 +129,16 @@ func TestRunSnapshotRetryLineage(t *testing.T) {
 	}
 }
 
+// snapshotQueryRecorder provides a fixed owner cursor and one complete synthetic root graph while recording requested refs and optionally denying reads; embedded client methods are not a real server.
+// snapshotQueryRecorder предоставляет фиксированный курсор владельца и один полный тестовый граф корня, запоминая ссылки и при необходимости запрещая чтения; встроенные методы клиента не являются настоящим сервером.
 type snapshotQueryRecorder struct {
 	cp.PlatformQueryServiceClient
 	refs []string
 	fail bool
 }
 
+// TestRunSnapshotContinuationLineage requires the exact CONTINUES edge from a succeeded root sharing the session and rejects missing edge, wrong session/state/node, retry pin or duplicate lineage without creating runs.
+// TestRunSnapshotContinuationLineage требует точное CONTINUES от успешного корня с общей сессией и отклоняет отсутствие ребра, неверные сессию, состояние, узел, retry-привязку и повтор связи без создания запусков.
 func TestRunSnapshotContinuationLineage(t *testing.T) {
 	fixture := func() *cp.GetRunGraphResponse {
 		v := completeRunSnapshotFixture()
@@ -160,10 +170,14 @@ func TestRunSnapshotContinuationLineage(t *testing.T) {
 	}
 }
 
+// GetPlatformEventCursor returns a fixed synthetic organization and sequence ten, ignoring request/context rather than consulting an event store.
+// GetPlatformEventCursor возвращает фиксированные тестовые организацию и sequence десять, игнорируя запрос и контекст вместо обращения к event store.
 func (query *snapshotQueryRecorder) GetPlatformEventCursor(context.Context, *cp.GetPlatformEventCursorRequest, ...grpc.CallOption) (*cp.GetPlatformEventCursorResponse, error) {
 	return &cp.GetPlatformEventCursorResponse{OrganizationRef: "org_fixture1", CurrentSequence: 10}, nil
 }
 
+// GetRunGraph requires IncludeRunSnapshots and a bounded context, records the requested ref and returns the sole fixture graph or configured permission/not-found failures without network access.
+// GetRunGraph требует IncludeRunSnapshots и ограниченный контекст, запоминает ссылку и возвращает единственный тестовый граф либо настроенные запрет и отсутствие без сети.
 func (query *snapshotQueryRecorder) GetRunGraph(ctx context.Context, input *cp.GetRunGraphRequest, _ ...grpc.CallOption) (*cp.GetRunGraphResponse, error) {
 	if !input.GetIncludeRunSnapshots() {
 		return nil, status.Error(codes.Internal, "projection selector missing")
@@ -182,6 +196,8 @@ func (query *snapshotQueryRecorder) GetRunGraph(ctx context.Context, input *cp.G
 	return value, nil
 }
 
+// TestRunSnapshotRefreshOnlyRegisteredRootsAndRevocation checks refresh reads only the registered root and marks it unavailable after the synthetic owner starts denying access, without broad run enumeration.
+// TestRunSnapshotRefreshOnlyRegisteredRootsAndRevocation проверяет чтение только зарегистрированного корня и его недоступность после тестового отказа владельца без общего перечисления запусков.
 func TestRunSnapshotRefreshOnlyRegisteredRootsAndRevocation(t *testing.T) {
 	query := &snapshotQueryRecorder{}
 	mux := &sessionMultiplexer{ctx: t.Context(), server: &Server{query: query}, localize: func(value string) string { return value }, outbound: make(chan outboundFrame, 8), runs: map[string]*runSubscription{
@@ -196,6 +212,8 @@ func TestRunSnapshotRefreshOnlyRegisteredRootsAndRevocation(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotRefreshAfterLostOrganizationWake advances the fake authoritative organization cursor to trigger one subscribed-root rejoin, then proves an unchanged cursor does not repeatedly reread snapshots.
+// TestRunSnapshotRefreshAfterLostOrganizationWake продвигает тестовый авторитетный курсор организации для единственного перечитывания зарегистрированного корня, затем доказывает отсутствие повторных снимков при неизменном курсоре.
 func TestRunSnapshotRefreshAfterLostOrganizationWake(t *testing.T) {
 	query := &snapshotQueryRecorder{}
 	mux := &sessionMultiplexer{ctx: t.Context(), organizationRef: "org_fixture1", platformCursor: 7,

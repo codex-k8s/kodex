@@ -10,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
 )
 
+// TestPlannedRunGraphRealtimeProjection checks synthetic graph node planned flags, references, revision and sequence survive projection and full-envelope serialization within the byte bound.
+// TestPlannedRunGraphRealtimeProjection проверяет сохранение planned-флагов, ссылок, ревизии и sequence тестовых узлов при проекции и сериализации полного конверта в байтовой границе.
 func TestPlannedRunGraphRealtimeProjection(t *testing.T) {
 	for _, plannedCount := range []int{0, 31} {
 		t.Run(fmt.Sprintf("planned_%d", plannedCount), func(t *testing.T) {
@@ -35,6 +37,8 @@ func TestPlannedRunGraphRealtimeProjection(t *testing.T) {
 	}
 }
 
+// TestPlannedRunEventRealtimeProjection preserves both true and false planned flags and the exact sequence through typed event and wire-envelope projection.
+// TestPlannedRunEventRealtimeProjection сохраняет оба значения planned и точный sequence через типизированное событие и wire-конверт.
 func TestPlannedRunEventRealtimeProjection(t *testing.T) {
 	for _, planned := range []bool{false, true} {
 		t.Run(fmt.Sprintf("planned_%t", planned), func(t *testing.T) {
@@ -52,6 +56,8 @@ func TestPlannedRunEventRealtimeProjection(t *testing.T) {
 	}
 }
 
+// TestPlannedRunProjectionStillRejectsUnknownPrivateFields rejects undeclared credential fields and string-valued planned flags for both graph and event JSON, without running any graph node.
+// TestPlannedRunProjectionStillRejectsUnknownPrivateFields отклоняет необъявленные credential-поля и строковый planned в JSON графа и события без выполнения узлов.
 func TestPlannedRunProjectionStillRejectsUnknownPrivateFields(t *testing.T) {
 	for _, node := range []string{`{"planned":true,"privateCredential":"private_fixture"}`, `{"planned":false,"privateCredential":"private_fixture"}`, `{"planned":"true"}`} {
 		if _, err := decodeClosed[generated.RunGraph]([]byte(`{"nodes":[` + node + `]}`)); err == nil {

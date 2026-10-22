@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.310.0
+version: 1.311.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,81 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста одиннадцатая волна — полные снимки запусков и завершение чтений
+
+Предыдущий опубликованный SHA — `6eba5ee8c7ae8b4d0753c2e331d4051b6484234a`.
+Exact1WcuuP:6639 sources,222 excluded,1803 raw/725 retained/
+1078 unresolved; Go13572/21293,missing7721. Source SHA, push и Draft PR
+body/head310 подтверждены GET. Общая задача не завершена.
+
+Полностью прочитаны7 файлов run_snapshot, refresh, planned/service-code,
+empty-collection и artifact-revision signal tests:1045 исходных строк.
+Все46 declarations EN→RU; два прежних inline lifecycle пояснения тоже
+двуязычны. Полные AST7 и //go: directives равны310. Исполняемый код,
+assertions, зависимости и generated не менялись; новых helpers/исключений нет.
+
+Комментарии различают:
+- 128 run snapshots и отдельные graph-node counts;5s RPC/10s shared context
+  не продлевают parent deadline и не гарантируют принудительный разрыв
+  некооперативного клиента;
+- два workers возвращают только RPC results, а socket/subscriptions меняет
+  прежний единый владелец; round-robin offset хранит порядок, не payload
+  или authority. Deferred cancel/Wait ожидает работников;
+- истёкший budget выдаёт закрытые RUN_UNAVAILABLE непрочитанным корням,
+  тогда как cancellation/backpressure останавливает transport; cursor
+  внутри failRunSnapshot не продвигается;
+- complete projection проверяет exact root/graph/run set, edges/project/
+  session-readiness и archive task metadata, затем полный byte cap;
+  она не выдаёт права создавать/исполнять узлы;
+- RETRY_OF/CONTINUES evidence проверяется для owner read. CONTINUES требует
+  succeeded predecessor с общей nonempty session; terminality retry
+  predecessor здесь НЕ проверяется. Документированное отсутствие проверки
+  не объявлено новым разрешением или security fix;
+- artifact-revision tuple test проверяет metadata syntax и закрытые поля,
+  не хеш реальных bytes; optional collections сохраняют [] против absent.
+
+Context7 /golang/go и pinned Go1.26.6 WaitGroup.Go/AfterFunc docs сверены.
+WaitGroup join не назван принудительным kill; AfterFunc stop сам по себе
+не ждёт уже запущенный callback. В существующем коде callback только cancel,
+а явный Wait относится к двум RPC workers. API и порядок не менялись.
+
+Матрица прежних эффектов:
+
+| Путь | Прежняя граница | Failure/readback |
+| --- | --- | --- |
+| registered root → GetRunGraph | owner RPC/application context, IncludeRunSnapshots, bounded child deadline | возвращаются прежние response/error, без локальной выдачи прав |
+| refresh → максимум2 workers | bounded subscription set, shared parent, socket cancellation, read-only results | owner goroutine публикует; cancel/Wait перед return, без payload cache |
+| deadline → unread roots | completed indices и прежние subscriptions/cursors | unavailable+точный stream problem, без выдуманного snapshot |
+| owner bundle → complete projection | root/revision/sequence, exact run set, graph refs, project/readiness/archive metadata | closed error/diagnostic; no queue/cursor effect внутри projection |
+| retry/continuation graph → predecessor set | exact root-process edge/pins, unique lineage, cycle rejection | только допустимые ссылки чтения, не grants/new run state |
+| queue backpressure → cancel/join | прежний outbound admission owner | false transport после ожидания workers, без дополнительных queued results |
+
+584 верхних/2677 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP.17 Node unit, Go checker unit, AST7, scope46/46,
+5 addressed ignores, gofmt и git diff --check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+Существующие synthetic concurrency tests проверяют shared deadline,
+round-robin, explicit cleanup barrier, expired/canceled parent,
+backpressure и отсутствие active workers после возврата. Они не доказывают
+live RPC/broker/provider behavior. Browser/owner service/credentials,
+component/deploy/full acceptance NOT RUN. Исторические FAIL/finding293
+не исправлены; generated/contracts/dependencies/SQL/migrations/live прежние.
+
+Рабочий tSOVXy:6639 sources,222 excluded,1803 raw/725 retained/
+1078 unresolved; Go13618/21293,missing7675. Raw SHA256:
+`71c1c3cd6aecd6df88e61d5fbf6424f169a67c1a76600c3cacd82e1dd83baeeb`.
+Все1803 clone keys/counts и clone-set
+`39441cde4926945f8ab65f604929475462754411f3772c4519a71673f3bc677f`
+прежние. В этой волне clone groups не устранялись; registry607/725 прежний.
+После коммита exact scan/unit/build и remote readback повторяются.
+Остаток Go:gateway1443,CP6232; полный -check ещё не пройден.
 
 ## Триста десятая волна — платформенные и организационные снимки
 
