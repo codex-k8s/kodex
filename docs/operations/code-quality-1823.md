@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.304.0
+version: 1.305.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,46 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста пятая волна — entrypoint и каталог сообщений gateway
+
+Опубликованный SHA304 — `d8a163060f9864abfd17437394fff2f44453c47d`.
+Exact8rqGni:6631 sources,222 excluded,1807 raw/725 retained/
+1082 unresolved; Go13157/21276,missing8119. Gateway12/30,
+authorityclient16/45 и controlplaneclient26/34 unit/full builds/tooling
+PASS LOCAL; sourceSHA,push и Draft PR PATCH/GET304 подтверждены.
+Общий объём не завершён.
+
+Прочитаны3 Go files155 lines.9 declarations EN→RU,scope9/9; package
+usertext header двуязычный. Полные AST3 и go:embed directive прежние.
+messages остаётся binary-owned embed.FS, файлы YAML не менялись.
+Comments различают static source-marker scan и полноценный Go/SQL/YAML
+parser; catalogKeys сортирует, но не deduplicate-ит IDs. Unit читает
+только локальные CP .go/.sql source files, а не runtime credentials.
+CLI main создаёт единственный root/signal lifecycle, прежние stdout/stderr,
+English diagnostic и exit status не менялись. Указано, что os.Exit
+пропускает отложенный signal cleanup; сам CLI не запускался.
+
+Gateway app/client/usertext units14 верхних/32 всех PASS LOCAL,0 FAIL/SKIP;
+cmd package без tests compiled, не выдаётся за проверку CLI поведения.
+Full gateway build -p=2,17 Node и Go checker unit, AST3,scope9/9,
+5 exact ignores/diff-check PASS LOCAL. Команда304 дополнена
+./internal/usertext ./cmd/control-api-gateway с прежними mod-readonly,
+count1,timeout120s,GOMAXPROCS4 и set-e/pipefail ограничениями.
+Remote RPC/NATS/OIDC/STT/provider, browser/CLI/live/component/full acceptance
+NOT RUN. Нового library API или изменения dependencies нет.
+
+Рабочий mi7mQg:6631 sources,222 excluded,1807 raw/725 retained/
+1082 unresolved; Go13166/21276,missing8110. Все normalized clone keys/
+cardinalities, clone-set и registry607/725 прежние; новых exclusions нет.
+Raw SHA256:
+`f9cdb8e6a3c4103624df5bb8b830e5c6d26a0b62953ab457cb2c379ace65cf2a`;
+clone-set:
+`7eb4be03b35d8a5de141d64023f0ede40f472118e80f8433317f4aec527ae2da`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Generated/contracts/SQL/migrations/live state прежние.
+Historical FAIL/finding293 не исправлены. Go остаток:gateway1878,CP6232.
+Общая задача остаётся открытой.
 
 ## Триста четвёртая волна — общий resolver RPC method и gateway clients
 
