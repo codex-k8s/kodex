@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.221.0
+version: 1.222.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,72 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать вторая волна — post-join нормализация workspace
+
+Опубликованный SHA221 — `0affc4a9e8f344e27fbb08739a2364a95ecea8f6`.
+Exact GydOcX:6584 sources,222 excluded,1831 raw,594 retained,1237 unresolved;
+Go8541/21168,missing12627;raw SHA256
+`eed19b3e2997fc64e7b5e5a1025beb2b0a302abbc9472dd72d798fb1cc4abb1d`;
+clone-set `085d7dc48aa5419c1f29b33dc5eb68cd745683018db377e8c06e9cc299921528`.
+Push/readback иPATCH/GET Draft PR221 подтверждены;broker/stream20/58
+unit иfull runner build PASS наэтом SHA.
+
+Целиком прочитаны post_join_workspace.go,post_join_workspace_test.go,
+workspace_access.go,workspace_access_test.go.55/55 declarations EN→RU,
+включая local contextKey/snapshot;дополнительно пояснён local sentinel.
+Описаны independent bounded cleanup context,precondition stop/join,
+нормализация как послеSUCCEEDED,так ипослеFAILED,сохранение исходного
+отказа/usage/source pins иdowngrade только успешного результата.
+Функция cleanup сама не останавливает провайдера;ошибка outbox не
+оправдывает пропуск обязательного metadata cleanup.
+
+Guard reasons описаны отдельно:назначаются rejecting guard,не выводятся
+из private path/body/error text. Error остаётся фиксированным,Unwrap
+намеренно сохраняет cause;constructor не назван enum validator.
+Logger принимает reason лишь ссоответствующим stage sentinel/typed error,
+посторонние stage/cause/reason дают UNKNOWN,raw chain не логируется.
+
+Traversal описан как metadata-only:точные UID/GID/root mode,cooperative
+lock,защищённый directory fd,beneath/no-symlink/no-cross-mount,
+statx mount ID,общий entry/byte бюджет сroot entry ипроверки inode metadata.
+Private file bodies не читаются ине chmodded;group read/search получает
+только каталог провайдера. Это не глобальная transaction:ранее изменённые
+каталоги не откатываются приlater rejection. Stat comparator не сравнивает
+atime/body ине заменяет lock;отсутствие statx metadata даётclosed failure.
+Kernel fixture описана какявно включаемая disposable проверка двух UID,
+не production switch и не доказательство,выполненное вэтой волне.
+
+Все4 Go AST идентичны SHA221 без comments/token.Pos.
+Изменений production behavior,permissions,quota,grant/lifecycle нет.
+Вscope нет unresolved/retained detector groups;whole-repo
+pair/fragment/count multiset неизменен. Новых библиотек,helpers,исключений,
+API илиdependencies не добавлено.
+
+Выбранные codex units:7 верхних/24 всех PASS,0 FAIL,1 SKIP:
+`TestProviderWorkspaceAccessKernel` — explicit disposable root opt-in.
+Фактически выполнены local tempdir private-directory normalization
+ссохранением private files,runner input preservation,symlink/hardlink/FIFO,
+foreign/root identity/mode/group,entry/byte quota,cancel/policy denial,
+replacement inode rejection,post-join outcome/context иclosed JSON logs.
+Root dual-UID child stages,production normalization wrapper сUID10002
+иruntime root,реальные агенты/контейнеры НЕ запускались.
+Из runner сGOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4 иудалёнными
+`KODEX_WORKSPACE_ACCESS_KERNEL_TEST`/`KODEX_WORKSPACE_ACCESS_KERNEL_CHILD`:
+`go test -mod=readonly -count=1 -json ./internal/codex -run '^(TestPostJoinWorkspace|TestProviderFilesystemDiagnostics|TestProviderWorkspaceAccess)'`.
+Full runner `go build -mod=readonly ./...`,scope55/55,17 Node units,
+Go-checker unit,5 ignore boundaries,gofmt/diff-check PASS LOCAL.
+Context7 `/golang/sys`:Openat2/OpenHow/Flags/Resolve interface;
+это не новая library migration и не claim оlive kernel acceptance.
+
+Рабочий DLvQ3v:6584 sources,222 excluded,1831 raw,594 retained,1237 unresolved;
+Go8596/21168,missing12572;raw SHA256
+`b60810f2ac150cdaa6a24e100f4aed50bdcd37a72a4e80ca0867ddd6fcebc5ef`;
+clone-set `085d7dc48aa5419c1f29b33dc5eb68cd745683018db377e8c06e9cc299921528`.
+Точное post-commit измерение публикуется втомже Draft PR.
+Полный runner/codex/repo unit иобщий Go-docs check ещё не выполнены;
+исторические FAIL/SKIP/NOT RUN сохраняются. Live/browser/deploy/ИИ/STT/
+почта NOT RUN. Общая задача остаётся активной,merge/ready не выполняются.
 
 ## Двести двадцать первая волна — broker UDS, auth и потоковая диагностика
 

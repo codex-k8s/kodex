@@ -13,12 +13,22 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// workspaceAccessBudget caps post-join metadata normalization independently of the completed turn's context.
+// workspaceAccessBudget ограничивает нормализацию метаданных после join независимо от контекста завершённого хода.
 const workspaceAccessBudget = 2 * time.Second
 
+// errProviderWorkspaceAccess is the stable workspace-guard sentinel without private paths or contents.
+// errProviderWorkspaceAccess является устойчивым маркером workspace guard без приватных путей и содержимого.
 var errProviderWorkspaceAccess = errors.New("provider workspace directory access is invalid")
 
-// Только writer после stop/join делает собственные рабочие каталоги доступными
-// для metadata/quota обхода runner. Private file bodies не открываются.
+// normalizeProviderWorkspaceAccess requires the provider UID and exact runtime root/policy, obtains the
+// cooperative workspace lock and opens work with beneath/no-symlink/no-cross-mount constraints. It
+// normalizes metadata after provider stop/join and verifies the opened root still matches its directory
+// entry. It never opens private file bodies; the caller supplies the stopped-writer precondition.
+// normalizeProviderWorkspaceAccess требует UID провайдера, точный runtime root и policy, получает
+// согласующую блокировку и открывает work без выхода за root, symlink и пересечения mount. После
+// stop/join она нормализует метаданные и сверяет открытый корень с записью каталога. Содержимое
+// приватных файлов не открывается; предварительную остановку writer обеспечивает вызывающий код.
 func normalizeProviderWorkspaceAccess(ctx context.Context, input model.Input) error {
 	if os.Geteuid() != providerWriterUID {
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemOwner)
@@ -49,7 +59,12 @@ func normalizeProviderWorkspaceAccess(ctx context.Context, input model.Input) er
 	return nil
 }
 
-// Проверяемые UID/GID назначает только production callsite, не input агента.
+// normalizeWorkspaceAccess validates context/policy and exact runner-owned setgid root, then counts
+// that root before metadata-only traversal. Production assigns UID/GID parameters, never agent input;
+// this lower-level helper does not acquire the lock or stop a writer itself.
+// normalizeWorkspaceAccess проверяет context/policy и точный setgid корень владельца runner, затем
+// учитывает корень перед metadata-only обходом. UID/GID назначает production callsite, не агент;
+// нижнеуровневый helper самостоятельно не блокирует workspace и не останавливает writer.
 func normalizeWorkspaceAccess(ctx context.Context, directory *os.File, policy runtimecontract.RuntimeWorkspacePolicy, runnerUID, providerUID, group uint32) error {
 	if ctx.Err() != nil {
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemContext)
@@ -65,8 +80,20 @@ func normalizeWorkspaceAccess(ctx context.Context, directory *os.File, policy ru
 	return normalizeWorkspaceAccessTree(ctx, directory, policy, runnerUID, providerUID, group, &usage)
 }
 
+// workspaceAccessUsage accumulates all visited entries including root and regular-file bytes across
+// recursive calls so nested directories cannot restart quota accounting.
+// workspaceAccessUsage накапливает все посещённые записи, включая корень, и байты обычных файлов
+// между рекурсивными вызовами, не позволяя вложенным каталогам начать квоту заново.
 type workspaceAccessUsage struct{ entries, bytes int64 }
 
+// normalizeWorkspaceAccessTree performs bounded metadata enumeration, rejects foreign owners, links,
+// special files and unverified mount changes, and applies shared entry/byte quotas. Regular bodies
+// are never read or chmodded; directory descendants are normalized only through protected descriptors.
+// Earlier directory changes are not rolled back if a later entry fails, so this is not a transaction.
+// normalizeWorkspaceAccessTree ограниченно перечисляет метаданные, отвергает чужих владельцев, ссылки,
+// специальные файлы и непроверенные mount, применяя общие entry/byte квоты. Тела обычных файлов
+// не читаются и их права не меняются; каталоги нормализуются через защищённые дескрипторы.
+// Ранее изменённые каталоги не откатываются при последующем отказе: это не транзакция.
 func normalizeWorkspaceAccessTree(ctx context.Context, directory *os.File, policy runtimecontract.RuntimeWorkspacePolicy, runnerUID, providerUID, group uint32, usage *workspaceAccessUsage) error {
 	if ctx.Err() != nil {
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemContext)
@@ -137,6 +164,12 @@ func normalizeWorkspaceAccessTree(ctx context.Context, directory *os.File, polic
 	return nil
 }
 
+// normalizeWorkspaceAccessChild matches the opened child to its prior metadata and checks runner
+// traversability before recursion. Only provider-owned directories gain group read/search and the
+// required group; inode/owner/link/time and expected final metadata are rechecked against the parent entry.
+// normalizeWorkspaceAccessChild сверяет открытый каталог с прежними метаданными и проверяет доступ
+// runner до рекурсии. Только каталог провайдера получает group read/search и нужную группу;
+// inode, владелец, ссылки, время и ожидаемые итоговые метаданные сверяются с записью родителя.
 func normalizeWorkspaceAccessChild(ctx context.Context, parent, child *os.File, name string, before unix.Stat_t, policy runtimecontract.RuntimeWorkspacePolicy, runnerUID, providerUID, group uint32, usage *workspaceAccessUsage) error {
 	var opened unix.Stat_t
 	if unix.Fstat(int(child.Fd()), &opened) != nil || !sameWorkspaceAccessStat(before, opened) || opened.Mode&unix.S_IFMT != unix.S_IFDIR {
@@ -167,6 +200,10 @@ func normalizeWorkspaceAccessChild(ctx context.Context, parent, child *os.File, 
 	return nil
 }
 
+// openWorkspaceAccessDirectory opens a directory relative to a trusted parent descriptor with Openat2
+// beneath/no-symlink/no-cross-mount resolution and close-on-exec; it has no weaker fallback on unsupported kernels.
+// openWorkspaceAccessDirectory открывает каталог относительно доверенного parent fd через Openat2
+// с beneath/no-symlink/no-cross-mount и close-on-exec; ослабленного fallback для другого ядра нет.
 func openWorkspaceAccessDirectory(parent int, name string) (int, error) {
 	return unix.Openat2(parent, name, &unix.OpenHow{
 		Flags:   unix.O_RDONLY | unix.O_DIRECTORY | unix.O_NOFOLLOW | unix.O_CLOEXEC,
@@ -174,11 +211,19 @@ func openWorkspaceAccessDirectory(parent int, name string) (int, error) {
 	})
 }
 
+// sameWorkspaceAccessStat compares device/inode, owner/group, full mode, link count, size and mtime/ctime.
+// It deliberately does not compare access time or file bytes and is not by itself a mutation lock.
+// sameWorkspaceAccessStat сравнивает device/inode, владельца, группу, mode, ссылки, размер и mtime/ctime.
+// Она не сравнивает atime или содержимое и сама по себе не является блокировкой изменений.
 func sameWorkspaceAccessStat(left, right unix.Stat_t) bool {
 	return left.Dev == right.Dev && left.Ino == right.Ino && left.Uid == right.Uid && left.Gid == right.Gid &&
 		left.Mode == right.Mode && left.Nlink == right.Nlink && left.Size == right.Size && left.Mtim == right.Mtim && left.Ctim == right.Ctim
 }
 
+// sameWorkspaceAccessMount requires successful statx mount-ID observations for parent and child and
+// an exact match; missing kernel support/metadata fails closed rather than assuming the mount is safe.
+// sameWorkspaceAccessMount требует успешного statx mount-ID для родителя и записи и точного совпадения;
+// отсутствие поддержки или метаданных даёт закрытый отказ, а не предположение о безопасном mount.
 func sameWorkspaceAccessMount(parent int, name string) bool {
 	var root, child unix.Statx_t
 	return unix.Statx(parent, "", unix.AT_EMPTY_PATH|unix.AT_SYMLINK_NOFOLLOW, unix.STATX_MNT_ID, &root) == nil &&
