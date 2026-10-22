@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.215.0
+version: 1.216.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,61 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестнадцатая волна — все тестовые объявления app runner
+
+Опубликованный SHA215 — `27b7da5187280ee5f68bd3c73eb22aa28a0ecc58`.
+Exact8x0AuS:6584 sources,222 excluded,1834 raw,594 retained,1240 unresolved;
+Go8254/21162,missing12908;raw SHA256
+`5c8843a538c86868d18123a9aebe34d5fc62d5923b5671587bdaf507b50f3ac6`;
+clone-set `1f1e959f51c29f74b0a2a710a7e71976435ba263532fb23803fa5e909cf9f877`.
+Push/readback иPATCH/GET Draft PR215 подтверждены. На SHA215 выбранные
+app/codex/testfixture28/97 unit PASS,0 FAIL,1 native-UID SKIP;
+full runner build PASS. Свежий main не менялся.
+
+Восемь оставшихся test-файлов app прочитаны целиком;22 declarations получили
+EN→RU. Весь app:24 файла157/157,включая production85/85 ивсе тестовые сущности.
+Go AST8 изменённых файлов полностью идентичен SHA215 без comments/token.Pos.
+Никакие executable statements,fixtures,assertions,permissions или env guards
+не менялись. Сохраняются local test-only evidence boundaries:название
+acceptance не означает live CODEX_SHELL/платформенную приёмку.
+
+Пояснены typed prompt provenance против user markers,shared producer oracle,
+cold/resume/stale notice cardinality,subprocess CRUD иlost-ACK terminal retry.
+Разделены inert direct helpers,реально выполняемые parent-controlled bwrap
+children иотдельные opt-in container/root ELF entrypoints. Workspace helper
+не назван network-isolated:его argv не запрашивает unshare-net,в отличие от
+environment-volume helper. Heavy/container mode явно требует подготовленную
+оснастку иточный UID до записи;комментарии не обещают выполненный контур.
+
+Полный `go test -mod=readonly -count=1 -json ./internal/app ./internal/testfixture`
+без -run:53 верхних/144 всех PASS,0 FAIL,3 SKIP —
+TestWorkspaceNestedMountContainer,TestWorkspaceProtectionContainer и
+TestHeavyWorkspacePublicationKernel. Последние3 contours NOT RUN,не PASS.
+Outbox/container direct helper при пустом env просто возвращается;такой
+неактивный PASS не доказывает dual-UID publication. Реально выполнены все6
+environment native mount modes иworkspace bwrap CRUD/protected-write/canary
+children,точные local TLS callbacks иretried terminal deliveries,monitor
+cleanup,filesystem guards иshared continuation projection oracle.
+
+Перед полным unit удалены из child env только fixture opt-in keys:
+KODEX_CANARY_TEST_MODE/ROOT,KODEX_ENVIRONMENT_CANARY_TEST,
+KODEX_WORKSPACE_TEST_PROCESS,KODEX_OUTBOX_PUBLICATION_TEST,
+KODEX_WORKSPACE_CONTAINER_TEST,KODEX_HEAVY_KERNEL_TEST,
+KODEX_HEAVY_FIXTURE_STAGE/ROOT/KIND,KODEX_HEAVY_PROVIDER_TEST_BINARY.
+GOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4. Full runner build
+-mod=readonly,all-app scoped157/157,17 Node units,Go-checker unit,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL. Новых API/dependencies нет;
+предыдущие Context7 Go документы сохраняют применимость.
+
+Рабочий h7ZoSB:6584 sources,222 excluded,1834 raw,594 retained,1240 unresolved;
+Go8276/21162,missing12886;raw SHA256
+`102e5900c2f2912fa8c9984fbd526b265500def76eff74f18b35028895bb13a7`;
+clone-set `32b6901aa5b8dd3f65bef2b4b40e86d316cd68b50a4bf8ecd7263329bc465330`.
+Pair/fragment/count multiset не менялся;новых groups/exceptions нет.
+Полный runner/repo unit иобщий Go-docs check ещё не выполнены;live/browser/
+deploy/настоящие ИИ/STT/почта NOT RUN. Цель остаётся незавершённой;
+точный post-commit результат публикуется втом же Draft PR.
 
 ## Двести пятнадцатая волна — основной turn runner и общий rollout fixture
 

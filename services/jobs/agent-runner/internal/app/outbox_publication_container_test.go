@@ -13,6 +13,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// TestRunnerOutboxPublicationContainer is inert without an explicit publication mode and requires runner UID 10001 before checking private-file denial or exact dual-UID modes and collected bytes/digests inside a disposable container; a direct inactive return is not container evidence.
+// TestRunnerOutboxPublicationContainer неактивен без явного publication mode и требует runner UID 10001 до проверки отказа private-file либо точных dual-UID modes и collected bytes/digests в одноразовом контейнере; прямой неактивный выход не доказывает контейнерный сценарий.
 func TestRunnerOutboxPublicationContainer(t *testing.T) {
 	mode := os.Getenv("KODEX_OUTBOX_PUBLICATION_TEST")
 	if mode == "" {

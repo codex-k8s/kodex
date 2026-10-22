@@ -11,8 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// Тот же synthetic immutable input сверяется CP с полным producer output.
-// Изменение test-only; runner production и shared predicate остаются прежними.
+// TestContinuationTaskProjectionProducerRunnerOracle reads the shared synthetic producer fixture and checks cold/resumed prompt history, exact task cardinality and platform notice projection without invoking a provider or granting authority.
+// TestContinuationTaskProjectionProducerRunnerOracle читает общую синтетическую producer fixture и проверяет cold/resumed prompt history, точное число task-вхождений и platform notice projection без провайдера и выдачи полномочий.
 func TestContinuationTaskProjectionProducerRunnerOracle(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "internal", "control-plane", "internal", "repository", "postgres", "platform", "testdata", "continuation_task_projection_v1.json"))
 	var fixture runtimecontract.RunnerInput

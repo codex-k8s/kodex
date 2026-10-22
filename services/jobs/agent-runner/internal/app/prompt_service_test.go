@@ -11,6 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// semanticRunnerFixture builds a fresh versioned prompt envelope and matching template digest for synthetic agent/continuation tests, deliberately placing a continuation-looking marker in USER_TEMPLATE to test provenance rather than string authority.
+// semanticRunnerFixture создаёт новый versioned prompt envelope и соответствующий template digest для synthetic agent/continuation tests, намеренно помещая похожий на continuation marker в USER_TEMPLATE для проверки provenance вместо строковой authority.
 func semanticRunnerFixture(kind string) model.Input {
 	slots := []string{"PURPOSE", "INPUT", "CONSTRAINTS", "EFFECTIVE_CAPABILITIES", "FILES", "TOOLS", "INTEGRATIONS"}
 	if kind == "SESSION_CONTINUATION" {
@@ -38,6 +40,8 @@ func semanticRunnerFixture(kind string) model.Input {
 		ConfigOverlay: "model_reasoning_effort = \"high\"\n", EffectiveReasoningEffort: "high", ReasoningMode: runtimecontract.ReasoningSupported}
 }
 
+// TestSemanticContinuationUsesPlatformSectionsOnly proves a user marker cannot trigger continuation, typed continuation includes only approved PLATFORM data and capability mismatch or untyped JSON fails prompt validation.
+// TestSemanticContinuationUsesPlatformSectionsOnly проверяет невозможность continuation по user marker, включение лишь approved PLATFORM data в typed continuation и отказ проверки при capability mismatch или untyped JSON.
 func TestSemanticContinuationUsesPlatformSectionsOnly(t *testing.T) {
 	input := semanticRunnerFixture("AGENT")
 	prompt, err := buildPrompt(input)

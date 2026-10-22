@@ -20,8 +20,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Отдельная точка запуска: root исполняет только изолированные синтетические ELF
-// под двумя UID; учётные данные, runtime Pod и пользовательские файлы не нужны.
+// TestHeavyWorkspacePublicationKernel requires explicit disposable-root opt-in and a compiled synthetic provider ELF, then runs bounded two-UID BUILD/BEFORE/FINISH/COLLECT stages for clean/quota/symlink cases. A child-stage invocation dispatches only to the confined runner helper; no live credentials or runtime Pods are used.
+// TestHeavyWorkspacePublicationKernel требует явный disposable-root opt-in и скомпилированный synthetic provider ELF, затем выполняет ограниченные two-UID BUILD/BEFORE/FINISH/COLLECT stages для clean/quota/symlink. Child-stage invocation направляется лишь в confined runner helper; живые реквизиты и runtime Pods не используются.
 func TestHeavyWorkspacePublicationKernel(t *testing.T) {
 	if stage := os.Getenv("KODEX_HEAVY_FIXTURE_STAGE"); stage != "" {
 		heavyWorkspaceRunnerChild(t, stage)
@@ -92,6 +92,8 @@ func TestHeavyWorkspacePublicationKernel(t *testing.T) {
 	}
 }
 
+// heavyWorkspaceRunnerChild checks the exact synthetic root and runner UID before proving pre-normalization denial or post-normalization canary/provenance/collection. It verifies seven published files plus service artifacts and preserved private-cache denial, never relaxing source ownership or reading private cache content successfully.
+// heavyWorkspaceRunnerChild сверяет точный synthetic root и runner UID до pre-normalization denial либо post-normalization canary/provenance/collection. Проверяет семь опубликованных файлов плюс service artifacts и сохранённый private-cache denial без ослабления source ownership и успешного чтения private cache.
 func heavyWorkspaceRunnerChild(t *testing.T, stage string) {
 	if os.Geteuid() != 10001 {
 		t.Fatal("runner fixture identity mismatch")

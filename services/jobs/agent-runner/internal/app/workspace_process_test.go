@@ -19,6 +19,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// TestWorkspaceCanaryPublicationAndResetCoordinate runs eight bounded concurrent canary/publication/reset rounds on one disposable outbox and requires a final provenance publication to remain collectable under the cooperative directory lock.
+// TestWorkspaceCanaryPublicationAndResetCoordinate выполняет восемь ограниченных concurrent canary/publication/reset раундов одного одноразового outbox и требует доступность итоговой provenance publication для сбора под согласующим directory lock.
 func TestWorkspaceCanaryPublicationAndResetCoordinate(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
@@ -57,8 +59,8 @@ func TestWorkspaceCanaryPublicationAndResetCoordinate(t *testing.T) {
 	}
 }
 
-// Детерминированный процесс агента выполняет настоящий файловый сценарий без
-// обращения к платной модели. Отказы проверяются отдельно от успешной записи.
+// TestWorkspaceAgentProcess is an inert helper without an explicit mode; controlled test children perform real synthetic create/read/atomic-replace/delete or protected-write denial inside the prepared mount view. It uses no model or actual agent session, and the canary mode requires non-root execution.
+// TestWorkspaceAgentProcess — неактивный helper без явного mode; управляемые тестовые children выполняют настоящий synthetic create/read/atomic-replace/delete либо protected-write denial в подготовленном mount view. Модель и настоящая agent session не используются; canary mode требует non-root.
 func TestWorkspaceAgentProcess(t *testing.T) {
 	mode := os.Getenv("KODEX_WORKSPACE_TEST_PROCESS")
 	if mode == "" {
@@ -131,6 +133,8 @@ func TestWorkspaceAgentProcess(t *testing.T) {
 	}
 }
 
+// TestWorkspaceSubprocessWriteAndCompletionProvenance runs synthetic filesystem CRUD, publishes exact revision/attempt provenance and checks the three-artifact completion satisfies the canonical consumer contract without a provider run.
+// TestWorkspaceSubprocessWriteAndCompletionProvenance выполняет synthetic filesystem CRUD, публикует точные revision/attempt provenance и проверяет three-artifact completion по каноническому consumer contract без провайдера.
 func TestWorkspaceSubprocessWriteAndCompletionProvenance(t *testing.T) {
 	root := workspaceProcessFixture(t)
 	runWorkspaceProcess(t, root, "positive")
@@ -167,11 +171,15 @@ func TestWorkspaceSubprocessWriteAndCompletionProvenance(t *testing.T) {
 	}
 }
 
+// TestWorkspaceCanaryWithNonRootProcess invokes the canary helper in the prepared non-root mount fixture and relies on it to prove write readiness and complete temporary cleanup.
+// TestWorkspaceCanaryWithNonRootProcess вызывает canary helper в подготовленной non-root mount fixture для проверки write readiness и полной временной очистки.
 func TestWorkspaceCanaryWithNonRootProcess(t *testing.T) {
 	root := workspaceProcessFixture(t)
 	runWorkspaceProcess(t, root, "canary")
 }
 
+// TestNextAttemptClearsOutboxWithoutFollowingForeignSymlink adds a previous-attempt symlink to a separate temporary sentinel tree and requires reset to empty the outbox without modifying the target.
+// TestNextAttemptClearsOutboxWithoutFollowingForeignSymlink добавляет previous-attempt symlink на отдельное временное sentinel-дерево и требует пустой outbox после reset без изменения target.
 func TestNextAttemptClearsOutboxWithoutFollowingForeignSymlink(t *testing.T) {
 	root := workspaceProcessFixture(t)
 	foreign := t.TempDir()
@@ -194,6 +202,8 @@ func TestNextAttemptClearsOutboxWithoutFollowingForeignSymlink(t *testing.T) {
 	}
 }
 
+// TestCompletionKeepsProvenanceAtArtifactLimit exceeds the synthetic outbox file count and requires a sixteen-artifact result with workspace provenance prioritized immediately after result.md.
+// TestCompletionKeepsProvenanceAtArtifactLimit превышает число synthetic outbox files и требует sixteen-artifact result с workspace provenance сразу после result.md.
 func TestCompletionKeepsProvenanceAtArtifactLimit(t *testing.T) {
 	root := workspaceProcessFixture(t)
 	for i := 0; i < 20; i++ {
@@ -210,6 +220,8 @@ func TestCompletionKeepsProvenanceAtArtifactLimit(t *testing.T) {
 	}
 }
 
+// TestWorkspaceSubprocessRejectsProtectedWrites checks immutable input, credential marker, foreign mount, symlink and traversal writes fail in controlled child mount fixtures without contacting a model.
+// TestWorkspaceSubprocessRejectsProtectedWrites проверяет отказы записи immutable input, credential marker, foreign mount, symlink и traversal в управляемых child mount fixtures без модели.
 func TestWorkspaceSubprocessRejectsProtectedWrites(t *testing.T) {
 	for _, mode := range []string{"immutable", "credential", "foreign", "symlink", "traversal"} {
 		t.Run(mode, func(t *testing.T) {
@@ -219,6 +231,8 @@ func TestWorkspaceSubprocessRejectsProtectedWrites(t *testing.T) {
 	}
 }
 
+// workspaceProcessFixture creates only a temporary fixed workspace tree and inert auth marker for mount tests; the marker is not a live credential and the returned root remains owned by test cleanup.
+// workspaceProcessFixture создаёт лишь временное фиксированное workspace-дерево и неактивный auth marker для mount tests; marker не живые реквизиты, возвращённый root принадлежит test cleanup.
 func workspaceProcessFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -233,6 +247,8 @@ func workspaceProcessFixture(t *testing.T) string {
 	return root
 }
 
+// runWorkspaceProcess runs the current test binary under bounded bwrap user/mount isolation with a read-only system root, protected input/auth/foreign bindings and an explicit synthetic mode. It reports child failure without invoking the production runner or asserting network-namespace isolation that these arguments do not request.
+// runWorkspaceProcess запускает текущий тестовый бинарь в ограниченной bwrap user/mount isolation с read-only system root, защищёнными input/auth/foreign bindings и явным synthetic mode. Сообщает child failure без production runner и без заявления network-namespace isolation, не запрошенной этими аргументами.
 func runWorkspaceProcess(t *testing.T, root, mode string) {
 	t.Helper()
 	if mode == "symlink" {
@@ -264,6 +280,8 @@ func runWorkspaceProcess(t *testing.T, root, mode string) {
 	}
 }
 
+// TestCollectArtifactsDoesNotBlockOnFIFO places a synthetic FIFO in a temporary outbox and requires immediate collection of only result.md rather than blocking for a pipe writer.
+// TestCollectArtifactsDoesNotBlockOnFIFO помещает synthetic FIFO во временный outbox и требует сбор лишь result.md без ожидания pipe writer.
 func TestCollectArtifactsDoesNotBlockOnFIFO(t *testing.T) {
 	root := workspaceProcessFixture(t)
 	if err := unix.Mkfifo(filepath.Join(root, ".kodex/outbox/pipe"), 0o600); err != nil {

@@ -21,9 +21,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
-// Это локальный рабочий runTurn с настоящими TLS callbacks и subprocess CRUD.
-// Provider и startup dependencies заменены fixtures; live CODEX_SHELL этот тест
-// не доказывает. Потерянный ACK повторяет только completion, а не сам turn.
+// TestRuntimeTurnContextWorkspaceAndRetriedCompletion runs real local turn orchestration with synthetic preparation/provider seams, TLS callbacks and bounded filesystem child CRUD. It verifies cold/resume notice routing, assistant artifact exclusion, stale-notice rejection, measured usage, stable lost-ACK completion and single execution; it is not live CODEX_SHELL or platform acceptance.
+// TestRuntimeTurnContextWorkspaceAndRetriedCompletion выполняет настоящую локальную turn orchestration с synthetic preparation/provider seams, TLS callbacks и ограниченным файловым CRUD child. Проверяет cold/resume notice routing, исключение assistant artifacts, stale-notice rejection, measured usage, stable lost-ACK completion и single execution; это не live CODEX_SHELL и не приёмка платформы.
 func TestRuntimeTurnContextWorkspaceAndRetriedCompletion(t *testing.T) {
 	for _, mode := range []string{"agent", "workflow", "assistant", "cold continuation", "provider resume", "stale notice"} {
 		t.Run(mode, func(t *testing.T) {
@@ -157,6 +156,8 @@ func TestRuntimeTurnContextWorkspaceAndRetriedCompletion(t *testing.T) {
 	}
 }
 
+// acceptanceTurnFixture builds independent synthetic agent/workflow/assistant or resumed inputs, matching prompt-template digests, workspace policy and artifact capabilities without creating projects, grants or accounts.
+// acceptanceTurnFixture создаёт независимые synthetic agent/workflow/assistant или resumed inputs с соответствующими prompt-template digests, workspace policy и artifact capabilities без создания проектов, grants или аккаунтов.
 func acceptanceTurnFixture(t *testing.T, mode string) model.Input {
 	t.Helper()
 	kind := "AGENT"
