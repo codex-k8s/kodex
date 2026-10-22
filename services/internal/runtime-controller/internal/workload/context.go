@@ -7,6 +7,14 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// hydrateRuntimeContext builds and validates a digest-bound skill/memory snapshot
+// for the input scope, then publishes it only on success. File-catalog hydration
+// happens first and may change input.FileCatalog even when a later check fails;
+// callers must discard a rejected input rather than rely on rollback.
+// hydrateRuntimeContext собирает и проверяет привязанный к digest снимок навыков
+// и памяти для области input, назначая ContextSnapshot только после успеха.
+// Каталог файлов обрабатывается раньше и может изменить input.FileCatalog даже
+// при последующем отказе; отвергнутый input следует отбросить, отката здесь нет.
 func hydrateRuntimeContext(input *runtimecontract.RunnerInput, revision *cp.RuntimeRevisionSnapshot) error {
 	if input == nil || revision == nil {
 		return runtimecontract.ErrRuntimeContext
@@ -62,6 +70,12 @@ func hydrateRuntimeContext(input *runtimecontract.RunnerInput, revision *cp.Runt
 	return nil
 }
 
+// hydrateRuntimeFileCatalog clears the previous catalog, converts the closed
+// purpose enum and validates an optional catalog for a project turn. It copies
+// references and pins only; it neither fetches files nor authorizes their reads.
+// hydrateRuntimeFileCatalog очищает прежний каталог, переводит закрытый enum
+// назначений и проверяет необязательный каталог проектного хода. Копируются
+// только ссылки и привязки; загрузка файлов и разрешение чтения здесь не выдаются.
 func hydrateRuntimeFileCatalog(input *runtimecontract.RunnerInput, revision *cp.RuntimeRevisionSnapshot) error {
 	input.FileCatalog = nil
 	source := revision.GetFileCatalog()
@@ -93,6 +107,12 @@ func hydrateRuntimeFileCatalog(input *runtimecontract.RunnerInput, revision *cp.
 	return nil
 }
 
+// contextProvenanceFromProto rejects missing provenance or an invalid timestamp,
+// then copies attribution and revision fields with a UTC creation time. This
+// conversion alone does not authenticate the actor or verify content digests.
+// contextProvenanceFromProto отвергает отсутствие provenance и неверную временную
+// метку, затем копирует авторство и версии с временем создания в UTC. Сам перевод
+// не удостоверяет actor и не проверяет соответствие digest содержимому.
 func contextProvenanceFromProto(value *cp.ContextProvenance) (runtimecontract.RuntimeContextProvenance, error) {
 	if value == nil || value.GetCreatedAt().CheckValid() != nil {
 		return runtimecontract.RuntimeContextProvenance{}, runtimecontract.ErrRuntimeContext

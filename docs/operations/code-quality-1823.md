@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.188.0
+version: 1.189.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,59 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят девятая волна — контекст и диагностика workload
+
+Исходный точный запушенный SHA —
+`d5d8c69d7d880a8ba62b8e9f53a64a8cf47df3e5` (волна188): 6575 sources,
+222 generated/lock исключения, 1842 raw, 581 точное решение и 1261
+неразобранная группа; Go6869/21140, непокрыты14271.
+
+Все32 оставшихся объявления восьми файлов workload — context,
+context_projection_test, context_admission_test, continuation_context_test,
+deadline, deadline_test, envelope_reason, validation_reason_test — получили
+предметные EN→RU комментарии. Отдельно описаны назначение ContextSnapshot
+только после проверки при неатомарной предварительной замене FileCatalog,
+отсутствие чтения файлов/выдачи полномочий при переводе ссылок и provenance,
+отсутствие продления сроков и различие валидной timestamp и будущего срока.
+Тестовые пояснения разделяют fake Kubernetes/local CEL от live admission,
+синтетические scan labels от антивирусного заключения и решение владельца
+о resume от потребления его снимка. UNKNOWN — отсутствие диагноза, не допуск.
+
+Удалён отдельный diagnosticSHA256 regexp:13 мест используют уже существующий
+runtimecontract.ValidSHA256Text с буквально тем же anchored lower-hex64
+шаблоном. Порядок ветвей, закрытые diagnostic codes, schema hash и validators
+не менялись. Обратная подстановка13 calls и удалённого regexp вместе со
+снятием комментариев/gofmt даёт точное совпадение всех8 файлов с родителем.
+Новый API, dependency, формат, совместимый decoder или broad ignore не добавлены.
+Две ранее разобранные пары diagnostic/shared validator сохранили адресные
+решения: диагностика объясняет уже состоявшийся отказ и не выдаёт полномочий.
+
+Сначала patch с непоследовательными anchors закрыто отклонён; readback
+подтвердил чистое дерево, затем применены исправленные anchors. Первое
+восстановление старого regexp в отдельной сверочной JS-команде некорректно
+обработало replacement-метасимвол; исправлен callback только проверочной
+команды, повторная полная сверка PASS. Исполняемые source не менялись ради
+устранения ошибок проверочной оснастки.
+
+Context7 /protocolbuffers/protobuf-go и локальный go doc подтвердили CheckValid
+(включая nil/range) и AsTime; protobuf SDK/генерация не менялись.
+Локально go test -mod=readonly -count=1 -json ./internal/workload дал
+84 верхних/300 всех PASS,0 FAIL, один прежний SKIP
+TestAssistantWarmRuntimeOwnerWireBuild: соответствующий wire producer NOT RUN.
+Полный go build -mod=readonly ./... runtime-controller,16 unit анализатора,
+unit Go-checker, scoped checker32/32, пять ignore-boundaries и diff-check —
+PASS LOCAL. Использован Go1.26.6, GOENV=off/GOWORK=off.
+
+Рабочий detector:6575 sources,222 исключения,1842 raw,581 retained,
+1261 unresolved. Go6901/21139, непокрыты14238; denominator уменьшился на
+удалённый regexp,32 объявления покрыты. Рабочий raw SHA-256
+`21d9906d190755db8207e24561fafd46189e8f1a2c30c2d072a64881493416e4`,
+clone-set `45b3ce0da54fa0f98ada699c0098badfba3451c7bcf36845632fdfe4ce0b4006`.
+Вынос ниже порога detector; уменьшение raw-групп не заявляется. Точный
+опубликованный SHA и повтор build/unit/scan фиксируются в текущем PR.
+Полный repo Go-docs -check, component/live, browser/deploy, агенты/STT/почта
+NOT RUN; общий объём цели остаётся незавершённым.
 
 ## Сто восемьдесят восьмая волна — завершён provider credential client
 

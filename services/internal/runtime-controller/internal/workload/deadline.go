@@ -6,6 +6,14 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// RuntimeExecutionDeadlineFromProto preserves an absent optional policy as nil,
+// rejects unknown fields and malformed clock timestamps, then validates the
+// converted deadline contract. It preserves time values without extending the
+// owner's budget; contract validity is not a check that the deadline is future.
+// RuntimeExecutionDeadlineFromProto сохраняет отсутствие необязательной политики
+// как nil, отвергает неизвестные поля и неверные метки часов, затем проверяет
+// переведённый контракт срока. Время не продлевается относительно бюджета
+// владельца; корректность контракта не означает, что срок ещё не наступил.
 func RuntimeExecutionDeadlineFromProto(value *cp.RuntimeExecutionDeadline) (*runtimecontract.RuntimeExecutionDeadline, error) {
 	if value == nil {
 		return nil, nil

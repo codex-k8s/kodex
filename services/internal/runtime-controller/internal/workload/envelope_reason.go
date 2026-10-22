@@ -11,18 +11,50 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// Только диагностическая проекция OR-ветки RunnerInput.Validate execution.go.
-// Вызывается после её отказа ENVELOPE, не разрешает выполнение, не меняет input,
-// ошибки и owner lifecycle. Эти private predicates повторены точно; mutation
-// tests сверяют проекцию с настоящим shared validator. Drift закрывается UNKNOWN.
+// diagnosticOpaque recognizes opaque references only for the post-rejection
+// envelope diagnostic. It grants no execution rights; mutation tests compare
+// diagnostic classifications with the shared validator and drift stays UNKNOWN.
+// diagnosticOpaque распознаёт непрозрачные ссылки только для диагностики уже
+// отвергнутого конверта. Допуск не выдаётся; mutation-тесты сверяют классификацию
+// с общим валидатором, а нераспознанное расхождение остаётся UNKNOWN.
 var diagnosticOpaque = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$`)
+
+// diagnosticProfile recognizes the bounded ASCII profile identifier used by
+// envelope diagnostics; it does not resolve a profile or prove its ownership.
+// diagnosticProfile распознаёт ограниченный ASCII-идентификатор профиля для
+// диагностики конверта; профиль не загружается и его принадлежность не доказывается.
 var diagnosticProfile = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
-var diagnosticSHA256 = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+// diagnosticImageDigest recognizes a lowercase SHA-256 image digest with its
+// required algorithm prefix; matching does not verify image bytes or admission.
+// diagnosticImageDigest распознаёт digest образа в нижнем регистре с обязательным
+// префиксом SHA-256; совпадение не проверяет байты образа и его допуск.
 var diagnosticImageDigest = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
+// diagnosticSystemRevision recognizes the two platform revision-name forms as
+// a diagnostic alternative to opaque references, not as evidence of authority.
+// diagnosticSystemRevision распознаёт две формы имени платформенной ревизии
+// для диагностики вместо opaque-ссылки, но не подтверждает полномочия.
 var diagnosticSystemRevision = regexp.MustCompile(`^system-assistant-(?:core-v[1-9][0-9]*|runtime-[a-f0-9]{64})$`)
+
+// diagnosticUUID matches the lowercase UUID form, supported version nibble and
+// RFC variant expected by the diagnostic guard; it does not resolve a session.
+// diagnosticUUID проверяет нижний регистр UUID, допустимую версию и RFC-вариант,
+// ожидаемые диагностикой; существование сессии при этом не проверяется.
 var diagnosticUUID = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$`)
+
+// diagnosticDefinitionVersion recognizes a positive-major three-component
+// integration version, not version ordering or compatibility of its package.
+// diagnosticDefinitionVersion распознаёт трёхкомпонентную версию интеграции
+// с положительной major-частью, но не порядок версий и совместимость пакета.
 var diagnosticDefinitionVersion = regexp.MustCompile(`^[1-9][0-9]*\.[0-9]+\.[0-9]+$`)
 
+// runtimeEnvelopeReason projects the first recognized envelope violation into a
+// closed code without mutating input. It is called after validation rejects;
+// UNKNOWN means no diagnostic match, never permission to execute the input.
+// runtimeEnvelopeReason переводит первое распознанное нарушение конверта
+// в закрытый код без изменения input. Функция вызывается после отказа валидатора;
+// UNKNOWN означает отсутствие диагноза, а не разрешение выполнить input.
 func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
 	if input.Schema != runtimecontract.RunnerInputSchemaV9 {
 		return "ENVELOPE_SCHEMA"
@@ -48,13 +80,13 @@ func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
 	if input.RuntimeRevisionVersion < 1 {
 		return "ENVELOPE_REVISION_VERSION"
 	}
-	if !diagnosticSHA256.MatchString(input.RuntimeRevisionDigest) {
+	if !runtimecontract.ValidSHA256Text(input.RuntimeRevisionDigest) {
 		return "ENVELOPE_REVISION_DIGEST"
 	}
 	if !diagnosticPinnedImage(input.ImageReference, input.ImageManifestDigest) {
 		return "ENVELOPE_IMAGE"
 	}
-	if input.RoleRuntimeContractRevision == 0 || !diagnosticSHA256.MatchString(input.RoleRuntimeContractSHA256) {
+	if input.RoleRuntimeContractRevision == 0 || !runtimecontract.ValidSHA256Text(input.RoleRuntimeContractSHA256) {
 		return "ENVELOPE_ROLE_CONTRACT"
 	}
 	if !diagnosticOpaque.MatchString(input.RoleDefinitionRef) {
@@ -63,13 +95,13 @@ func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
 	if !diagnosticProfile.MatchString(input.RuntimeProfileRef) || input.RuntimeProfileRevision == "" || len(input.RuntimeProfileRevision) > 128 {
 		return "ENVELOPE_RUNTIME_PROFILE"
 	}
-	if !diagnosticOpaque.MatchString(input.InstructionRef) || !diagnosticSHA256.MatchString(input.InstructionDigest) {
+	if !diagnosticOpaque.MatchString(input.InstructionRef) || !runtimecontract.ValidSHA256Text(input.InstructionDigest) {
 		return "ENVELOPE_INSTRUCTION_BINDING"
 	}
-	if !diagnosticOpaque.MatchString(input.PromptTemplateRef) || !diagnosticSHA256.MatchString(input.PromptTemplateDigest) {
+	if !diagnosticOpaque.MatchString(input.PromptTemplateRef) || !runtimecontract.ValidSHA256Text(input.PromptTemplateDigest) {
 		return "ENVELOPE_PROMPT_TEMPLATE"
 	}
-	if !diagnosticSHA256.MatchString(input.PromptMaterializationDigest) {
+	if !runtimecontract.ValidSHA256Text(input.PromptMaterializationDigest) {
 		return "ENVELOPE_PROMPT_MATERIALIZATION"
 	}
 	if strings.TrimSpace(input.Instructions) == "" || len(input.Instructions) > 1<<20 {
@@ -81,22 +113,22 @@ func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
 	if !diagnosticOpaque.MatchString(input.ProviderAccountRef) {
 		return "ENVELOPE_PROVIDER_ACCOUNT_REF"
 	}
-	if !diagnosticOpaque.MatchString(input.ProviderCredentialRef) || input.ProviderCredentialRevision < 1 || !diagnosticSHA256.MatchString(input.ProviderCredentialSHA256) {
+	if !diagnosticOpaque.MatchString(input.ProviderCredentialRef) || input.ProviderCredentialRevision < 1 || !runtimecontract.ValidSHA256Text(input.ProviderCredentialSHA256) {
 		return "ENVELOPE_PROVIDER_CREDENTIAL"
 	}
-	if !diagnosticOpaque.MatchString(input.RuntimeConfigRef) || input.RuntimeConfigVersion < 1 || !diagnosticSHA256.MatchString(input.RuntimeConfigDigest) {
+	if !diagnosticOpaque.MatchString(input.RuntimeConfigRef) || input.RuntimeConfigVersion < 1 || !runtimecontract.ValidSHA256Text(input.RuntimeConfigDigest) {
 		return "ENVELOPE_RUNTIME_CONFIGURATION"
 	}
-	if !diagnosticOpaque.MatchString(input.ProviderPolicyRef) || input.ProviderPolicyVersion < 1 || !diagnosticSHA256.MatchString(input.ProviderPolicyDigest) {
+	if !diagnosticOpaque.MatchString(input.ProviderPolicyRef) || input.ProviderPolicyVersion < 1 || !runtimecontract.ValidSHA256Text(input.ProviderPolicyDigest) {
 		return "ENVELOPE_PROVIDER_POLICY"
 	}
-	if !diagnosticOpaque.MatchString(input.ConfigOverlayRef) || input.ConfigOverlayVersion < 1 || !diagnosticSHA256.MatchString(input.ConfigOverlayDigest) {
+	if !diagnosticOpaque.MatchString(input.ConfigOverlayRef) || input.ConfigOverlayVersion < 1 || !runtimecontract.ValidSHA256Text(input.ConfigOverlayDigest) {
 		return "ENVELOPE_CONFIG_OVERLAY"
 	}
-	if !diagnosticOpaque.MatchString(input.RuntimeEnvironmentRef) || input.RuntimeEnvironmentVersion < 1 || !diagnosticSHA256.MatchString(input.RuntimeEnvironmentDigest) {
+	if !diagnosticOpaque.MatchString(input.RuntimeEnvironmentRef) || input.RuntimeEnvironmentVersion < 1 || !runtimecontract.ValidSHA256Text(input.RuntimeEnvironmentDigest) {
 		return "ENVELOPE_RUNTIME_ENVIRONMENT"
 	}
-	if !diagnosticOpaque.MatchString(input.EnvironmentBindingRef) || input.EnvironmentBindingVersion < 1 || !diagnosticSHA256.MatchString(input.EnvironmentBindingDigest) {
+	if !diagnosticOpaque.MatchString(input.EnvironmentBindingRef) || input.EnvironmentBindingVersion < 1 || !runtimecontract.ValidSHA256Text(input.EnvironmentBindingDigest) {
 		return "ENVELOPE_ENVIRONMENT_BINDING"
 	}
 	if input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write" {
@@ -155,6 +187,12 @@ func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
 	return "UNKNOWN"
 }
 
+// diagnosticIntegrationGrants classifies grant shape, approval/risk consistency,
+// schema pins and duplicate bindings in validator order. An empty result means
+// no diagnostic violation, not an authoritative grant or approved side effect.
+// diagnosticIntegrationGrants классифицирует форму grants, согласованность
+// подтверждения и риска, привязки схем и дубли в порядке валидатора. Пустой
+// результат означает отсутствие диагноза, но не выдачу grant и не одобрение действия.
 func diagnosticIntegrationGrants(grants []runtimecontract.RunnerIntegrationGrant) string {
 	refs := make(map[string]struct{}, len(grants))
 	bindings := make(map[string]struct{}, len(grants))
@@ -173,8 +211,8 @@ func diagnosticIntegrationGrants(grants []runtimecontract.RunnerIntegrationGrant
 			len(grant.CapabilityDescription) > 2000 {
 			return "ENVELOPE_INTEGRATION_TEXT"
 		}
-		if !diagnosticDefinitionVersion.MatchString(grant.DefinitionVersion) || !diagnosticSHA256.MatchString(grant.DefinitionDigest) ||
-			grant.Operation == "" || len(grant.Operation) > 255 || !diagnosticSHA256.MatchString(grant.InputSchemaSHA256) {
+		if !diagnosticDefinitionVersion.MatchString(grant.DefinitionVersion) || !runtimecontract.ValidSHA256Text(grant.DefinitionDigest) ||
+			grant.Operation == "" || len(grant.Operation) > 255 || !runtimecontract.ValidSHA256Text(grant.InputSchemaSHA256) {
 			return "ENVELOPE_INTEGRATION_PACKAGE"
 		}
 		if !diagnosticIntegrationSchema(grant.InputSchema, grant.InputSchemaSHA256) {
@@ -196,6 +234,12 @@ func diagnosticIntegrationGrants(grants []runtimecontract.RunnerIntegrationGrant
 	return ""
 }
 
+// diagnosticIntegrationSchema requires bounded valid object-schema JSON with
+// additionalProperties=false and the SHA-256 of the exact raw text. It does not
+// canonicalize JSON, compile the schema or authorize the described operation.
+// diagnosticIntegrationSchema требует ограниченный корректный JSON схемы объекта
+// с additionalProperties=false и SHA-256 точного исходного текста. JSON не
+// канонизируется, схема не компилируется и право на операцию не выдаётся.
 func diagnosticIntegrationSchema(raw, expectedDigest string) bool {
 	if len(raw) == 0 || len(raw) > 64<<10 || !json.Valid([]byte(raw)) {
 		return false
@@ -210,6 +254,10 @@ func diagnosticIntegrationSchema(raw, expectedDigest string) bool {
 	return hex.EncodeToString(digest[:]) == expectedDigest
 }
 
+// diagnosticContains performs exact case-sensitive membership in a supplied
+// closed diagnostic list; it does not normalize or infer unknown values.
+// diagnosticContains проверяет точное регистрозависимое вхождение в переданный
+// закрытый список диагностики, не нормализуя и не угадывая неизвестные значения.
 func diagnosticContains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
@@ -219,16 +267,33 @@ func diagnosticContains(values []string, want string) bool {
 	return false
 }
 
+// diagnosticSecretFile recognizes bounded, clean absolute paths under the two
+// allowed secret roots without control delimiters. It does not touch the
+// filesystem, resolve symlinks or prove that a secret exists or is readable.
+// diagnosticSecretFile распознаёт ограниченные чистые абсолютные пути внутри
+// двух разрешённых корней секретов без управляющих разделителей. Файловая система
+// не читается, ссылки не разрешаются, наличие и доступность секрета не доказываются.
 func diagnosticSecretFile(value string) bool {
 	return len(value) <= 512 && !strings.ContainsAny(value, "\x00\r\n") && filepath.IsAbs(value) && filepath.Clean(value) == value &&
 		(strings.HasPrefix(value, "/var/run/secrets/") || strings.HasPrefix(value, "/run/secrets/"))
 }
+
+// diagnosticPinnedImage checks the bounded reference and exact digest suffix,
+// rejecting ASCII spaces, tabs, CR/LF and template delimiters. It does not pull the image,
+// verify a signature or replace the platform admission decision.
+// diagnosticPinnedImage проверяет длину ссылки и точный digest-суффикс,
+// отвергая ASCII-пробел, табуляцию, CR/LF и разделители шаблонов. Образ не скачивается,
+// подпись не проверяется и решение платформы о допуске не заменяется.
 func diagnosticPinnedImage(reference, digest string) bool {
 	return len(reference) >= 73 && len(reference) <= 512 && !strings.ContainsAny(reference, " \t\r\n") &&
 		diagnosticImageDigest.MatchString(digest) && strings.HasSuffix(reference, "@"+digest) &&
 		!strings.Contains(reference, "$") && !strings.Contains(reference, "{") && !strings.Contains(reference, "}")
 }
 
+// knownEnvelopeReason accepts only enumerated envelope diagnostic codes;
+// UNKNOWN and caller-supplied lookalikes are deliberately not recognized.
+// knownEnvelopeReason принимает только перечисленные диагностические коды
+// конверта; UNKNOWN и похожие произвольные строки намеренно не распознаются.
 func knownEnvelopeReason(reason string) bool {
 	switch reason {
 	case "ENVELOPE_SCHEMA",
