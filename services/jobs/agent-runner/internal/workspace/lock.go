@@ -13,13 +13,16 @@ import (
 )
 
 const (
+	// workspaceLockBudget caps cooperative lock contention at one second even if the caller grants a longer deadline.
+	// workspaceLockBudget ограничивает ожидание согласующей блокировки одной секундой даже при более позднем сроке вызывающего.
 	workspaceLockBudget = time.Second
-	workspaceLockPoll   = 5 * time.Millisecond
+	// workspaceLockPoll is the cancellable retry interval after nonblocking flock contention or interruption, avoiding a busy loop.
+	// workspaceLockPoll задаёт отменяемый интервал повторов после nonblocking flock contention или прерывания без активного кручения.
+	workspaceLockPoll = 5 * time.Millisecond
 )
 
-// Lock согласует служебные scan/write/cleanup между процессами одного
-// execution. Блокируется inode корневого directory, без lock-файла в outbox.
-// Это не authorization: provider writes по-прежнему проверяет workspace policy.
+// Lock acquires an exclusive advisory flock on the root directory inode without a persistent lock file, retrying under caller cancellation and a one-second budget. Closing the returned handle releases it; it coordinates service writes but is not authorization or a provider filesystem sandbox.
+// Lock получает исключительный advisory flock inode корневого каталога без постоянного lock-файла, повторяя при отмене вызывающего и бюджете одна секунда. Закрытие handle освобождает lock; это согласование служебных записей, не авторизация и не файловая песочница provider.
 func Lock(ctx context.Context, root string) (*os.File, error) {
 	if root == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root {
 		return nil, &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}

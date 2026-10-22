@@ -13,11 +13,15 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// drainCommitter exposes entry and release channels for a single synthetic callback, making drain timing observable without real credential persistence.
+// drainCommitter предоставляет каналы входа и освобождения одного синтетического callback для наблюдения drain без сохранения реальных реквизитов.
 type drainCommitter struct {
 	called  chan struct{}
 	release chan struct{}
 }
 
+// CommitProviderCredentialRefresh signals entry, waits for test release or cancellation and returns the resulting context error; it does not persist authentication.
+// CommitProviderCredentialRefresh сигнализирует вход, ждёт освобождения тестом или отмены и возвращает ошибку контекста; авторизацию не сохраняет.
 func (committer *drainCommitter) CommitProviderCredentialRefresh(ctx context.Context, _ model.Input, _ runtimecontract.RunnerProviderCredentialRefreshRequest) error {
 	close(committer.called)
 	select {
@@ -28,6 +32,8 @@ func (committer *drainCommitter) CommitProviderCredentialRefresh(ctx context.Con
 	}
 }
 
+// TestRelayDrainsBoundRefreshArrivingAfterCancellation cancels the listener lifecycle before sending a valid framed refresh and requires callback completion, a positive acknowledgement and bounded joining. UID enforcement is tested separately.
+// TestRelayDrainsBoundRefreshArrivingAfterCancellation отменяет lifecycle listener до передачи корректного refresh и требует завершение callback, положительное подтверждение и ограниченное ожидание выхода. Проверка UID тестируется отдельно.
 func TestRelayDrainsBoundRefreshArrivingAfterCancellation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "relay.sock")
 	listener, err := net.Listen("unix", path)
@@ -78,6 +84,8 @@ func TestRelayDrainsBoundRefreshArrivingAfterCancellation(t *testing.T) {
 	}
 }
 
+// TestRelayDrainClosesSlowPeerAndJoins sends an unfinished JSON body, cancels lifecycle and requires bounded shutdown without invoking the credential committer.
+// TestRelayDrainClosesSlowPeerAndJoins передаёт незаконченный JSON, отменяет lifecycle и требует ограниченное завершение без вызова committer реквизитов.
 func TestRelayDrainClosesSlowPeerAndJoins(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "relay.sock")
 	listener, err := net.Listen("unix", path)

@@ -10,6 +10,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// environmentCanaryPolicy adds synthetic volume declarations to the default environment policy and normalizes digests, failing the test on invalid configuration.
+// environmentCanaryPolicy добавляет синтетические тома в стандартную environment policy и нормализует дайджесты, завершая тест при неверной конфигурации.
 func environmentCanaryPolicy(t *testing.T, volumes []runtimecontract.RuntimeVolume) runtimecontract.RuntimeEnvironmentPolicy {
 	t.Helper()
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
@@ -21,6 +23,8 @@ func environmentCanaryPolicy(t *testing.T, volumes []runtimecontract.RuntimeVolu
 	return policy
 }
 
+// TestEnvironmentCanaryRejectsMissingMountsAndSymlinks checks absent/plain-directory/symlink mounts, altered digests/paths and cancellation, preserving a foreign sentinel; it also accepts an empty declared-volume list without mounting anything.
+// TestEnvironmentCanaryRejectsMissingMountsAndSymlinks проверяет отсутствующий/обычный каталог/symlink вместо mount, изменённые дайджесты/пути и отмену с сохранением внешнего sentinel; принимает пустой список томов без создания mounts.
 func TestEnvironmentCanaryRejectsMissingMountsAndSymlinks(t *testing.T) {
 	for _, mode := range []string{"absent", "directory", "symlink", "digest", "path", "cancelled"} {
 		t.Run(mode, func(t *testing.T) {
@@ -74,6 +78,8 @@ func TestEnvironmentCanaryRejectsMissingMountsAndSymlinks(t *testing.T) {
 	}
 }
 
+// TestEnvironmentFilesystemChecksTypeReadOnlyAndMemoryLimit checks exact and smaller tmpfs budgets, rejects oversized/read-only/wrong/degenerate capacities and distinguishes synthetic disk metadata without real mounts.
+// TestEnvironmentFilesystemChecksTypeReadOnlyAndMemoryLimit проверяет точную и меньшую tmpfs-квоты, отклоняет чрезмерную/read-only/чужую/вырожденную ёмкость и различает синтетические disk-метаданные без реальных mounts.
 func TestEnvironmentFilesystemChecksTypeReadOnlyAndMemoryLimit(t *testing.T) {
 	volume := runtimecontract.RuntimeVolume{Kind: runtimecontract.RuntimeVolumeEphemeralMemory, SizeMiB: 16}
 	stat := unix.Statfs_t{Type: unix.TMPFS_MAGIC, Bsize: 4096, Blocks: 4096}

@@ -14,6 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestWorkspaceLockProcess is an inert helper unless the explicit test-root variable is set; then it holds a directory lock and signals readiness until stdin releases it or the process exits.
+// TestWorkspaceLockProcess — неактивный helper без явной test-root переменной; с ней держит directory lock и сигнализирует готовность до освобождения через stdin или выхода процесса.
 func TestWorkspaceLockProcess(t *testing.T) {
 	root := os.Getenv("KODEX_WORKSPACE_LOCK_TEST_ROOT")
 	if root == "" {
@@ -31,6 +33,8 @@ func TestWorkspaceLockProcess(t *testing.T) {
 	}
 }
 
+// TestWorkspaceLockAcrossProcessesCancellationAndCrashRecovery starts a bounded copy of the test binary to hold the lock, verifies caller and local contention deadlines, kills that child and proves lock recovery without persistent files.
+// TestWorkspaceLockAcrossProcessesCancellationAndCrashRecovery запускает ограниченную копию тестового бинаря с lock, проверяет сроки вызывающего и самой блокировки, завершает child и доказывает восстановление без постоянных файлов.
 func TestWorkspaceLockAcrossProcessesCancellationAndCrashRecovery(t *testing.T) {
 	root := t.TempDir()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -89,6 +93,8 @@ func TestWorkspaceLockAcrossProcessesCancellationAndCrashRecovery(t *testing.T) 
 	}
 }
 
+// TestWorkspaceLockRejectsSymlinkRoot requires rejection when the supplied final root component is a symlink, without asserting ancestor-path validation.
+// TestWorkspaceLockRejectsSymlinkRoot требует отказ, когда конечный компонент root — symlink, не утверждая проверки пути предков.
 func TestWorkspaceLockRejectsSymlinkRoot(t *testing.T) {
 	root := t.TempDir()
 	link := filepath.Join(t.TempDir(), "alias")

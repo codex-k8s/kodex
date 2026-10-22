@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/testfixture/turn_input.go",
+      "secondPath": "services/jobs/agent-runner/internal/credentialrelay/relay_test.go",
+      "fragmentSHA256": "3f9956da145785b6bbfa579df95355882e4a62b6ac6f04dae73434b45c703498",
+      "count": 1,
+      "reason": "144-token совпадение содержит только литералы runtime/config/provider policy и callback metadata двух independently seeded fixtures, а не копию авторизации или вычисления digest: runtimecontract функции уже общие. Controller factory создаёт SYSTEM turn, relay factory — NONE с производными Kubernetes identity и отдельными pinned runtime/credential hashes; реальные проверки relay именно мутируют эти pins. Прямая зависимость runner от controller/internal нарушила бы unit boundary, а общий helper с overrides ради части fixture связал бы независимые ожидания producer/consumer. Локальная validRelayFixture уже переиспользуется всеми relay tests. Сохранено одно точное окно по двум путям и hash/count, а не фабрики/файлы целиком."
+    },
+    {
+      "format": "go",
       "firstPath": "libs/go/runtimecontract/execution_test.go",
       "secondPath": "services/jobs/agent-runner/internal/callback/client_test.go",
       "fragmentSHA256": "711f1bb550a23ce6dfb9c5005e80569f652a284742987f4ceb93534c0f748879",

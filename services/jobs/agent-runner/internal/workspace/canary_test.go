@@ -14,12 +14,16 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// cancelAfterCanaryWrite wraps the test context and marks cancellation only once a nonce-owned current file exists, targeting cleanup after an actual write.
+// cancelAfterCanaryWrite оборачивает тестовый контекст и отмечает отмену лишь после появления current-файла nonce-каталога для проверки очистки после реальной записи.
 type cancelAfterCanaryWrite struct {
 	context.Context
 	root     string
 	observed bool
 }
 
+// Err observes the synthetic readiness file and returns cancellation after it appears; otherwise it forwards the underlying context error.
+// Err наблюдает синтетический файл готовности и возвращает отмену после его появления; иначе передаёт ошибку исходного контекста.
 func (ctx *cancelAfterCanaryWrite) Err() error {
 	paths, _ := filepath.Glob(filepath.Join(ctx.root, ".kodex/outbox/.readiness-*/current.txt"))
 	if len(paths) != 0 {
@@ -29,6 +33,8 @@ func (ctx *cancelAfterCanaryWrite) Err() error {
 	return ctx.Context.Err()
 }
 
+// TestCanaryCancellationAfterWriteCleansTemporaryFiles injects cancellation after file creation and requires an error plus an empty outbox after cleanup.
+// TestCanaryCancellationAfterWriteCleansTemporaryFiles вводит отмену после создания файла и требует ошибку и пустой outbox после очистки.
 func TestCanaryCancellationAfterWriteCleansTemporaryFiles(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o700); err != nil {
@@ -44,6 +50,8 @@ func TestCanaryCancellationAfterWriteCleansTemporaryFiles(t *testing.T) {
 	}
 }
 
+// TestCanaryDoesNotCountImmutableContextAgainstWritableQuota places an oversized sparse file in protected context and verifies it does not consume the writable-workspace quota.
+// TestCanaryDoesNotCountImmutableContextAgainstWritableQuota помещает чрезмерный sparse-файл в защищённый context и проверяет отсутствие его учёта в writable-квоте workspace.
 func TestCanaryDoesNotCountImmutableContextAgainstWritableQuota(t *testing.T) {
 	root := t.TempDir()
 	for _, path := range []string{".kodex/outbox", "context/skills"} {
@@ -66,6 +74,8 @@ func TestCanaryDoesNotCountImmutableContextAgainstWritableQuota(t *testing.T) {
 	}
 }
 
+// TestCanaryDoesNotTraverseSeparateSessionVolumeForWorkspaceQuota builds oversized, permission-restricted synthetic provider state and requires readiness without traversing that separate quota domain.
+// TestCanaryDoesNotTraverseSeparateSessionVolumeForWorkspaceQuota создаёт чрезмерный синтетический provider state с ограниченными правами и требует готовность без обхода этой отдельной области квоты.
 func TestCanaryDoesNotTraverseSeparateSessionVolumeForWorkspaceQuota(t *testing.T) {
 	root := t.TempDir()
 	private := filepath.Join(root, ".kodex/state/codex-home/private")
@@ -94,10 +104,14 @@ func TestCanaryDoesNotTraverseSeparateSessionVolumeForWorkspaceQuota(t *testing.
 	}
 }
 
+// testPolicy returns a fresh canonical workspace policy for synthetic filesystem tests without changing runtime configuration.
+// testPolicy возвращает новую каноническую workspace policy для синтетических файловых тестов без изменения runtime-конфигурации.
 func testPolicy() runtimecontract.RuntimeWorkspacePolicy {
 	return runtimecontract.RuntimeWorkspacePolicyV1()
 }
 
+// TestCanaryEnforcesConfiguredLowerWorkspaceQuota accepts an empty workspace under a reduced limit, then requires the quota reason after writing one byte above it.
+// TestCanaryEnforcesConfiguredLowerWorkspaceQuota принимает пустой workspace с уменьшенным лимитом и требует причину quota после записи на один байт сверх него.
 func TestCanaryEnforcesConfiguredLowerWorkspaceQuota(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o700); err != nil {
@@ -117,6 +131,8 @@ func TestCanaryEnforcesConfiguredLowerWorkspaceQuota(t *testing.T) {
 	}
 }
 
+// TestRunCanaryExercisesAtomicWritablePathAndCleansUp runs the actual synthetic create/read/replace/delete probe and requires no remaining outbox entries.
+// TestRunCanaryExercisesAtomicWritablePathAndCleansUp выполняет реальную синтетическую пробу создания/чтения/замены/удаления и требует отсутствия остаточных entries outbox.
 func TestRunCanaryExercisesAtomicWritablePathAndCleansUp(t *testing.T) {
 	root := t.TempDir()
 	for _, path := range []string{".kodex/outbox", "input", "knowledge"} {
@@ -133,6 +149,8 @@ func TestRunCanaryExercisesAtomicWritablePathAndCleansUp(t *testing.T) {
 	}
 }
 
+// TestConcurrentCanariesDoNotInvalidateEachOther runs eight bounded rounds of eight synchronized probes against one workspace and requires all successes and complete cleanup.
+// TestConcurrentCanariesDoNotInvalidateEachOther выполняет восемь ограниченных раундов по восемь синхронных проб одного workspace и требует все успехи и полную очистку.
 func TestConcurrentCanariesDoNotInvalidateEachOther(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
@@ -165,6 +183,8 @@ func TestConcurrentCanariesDoNotInvalidateEachOther(t *testing.T) {
 	}
 }
 
+// TestWorkspaceWriteAcceptanceCreatesReplacesDeletesAndPublishesExactResult runs the probe, publishes synthetic provenance and checks exact decoded fields with no surviving temporary result; it is local unit evidence, not platform acceptance.
+// TestWorkspaceWriteAcceptanceCreatesReplacesDeletesAndPublishesExactResult выполняет пробу, публикует синтетическую provenance и сверяет точные поля без остаточного временного результата; это локальный unit, не приёмка платформы.
 func TestWorkspaceWriteAcceptanceCreatesReplacesDeletesAndPublishesExactResult(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
@@ -192,6 +212,8 @@ func TestWorkspaceWriteAcceptanceCreatesReplacesDeletesAndPublishesExactResult(t
 	}
 }
 
+// TestPublishResultRejectsInvalidOrIncompleteProvenance independently corrupts revision digest, attempt and execution digest and requires publication to reject each case.
+// TestPublishResultRejectsInvalidOrIncompleteProvenance отдельно повреждает дайджест ревизии, попытку и дайджест исполнения и требует отказ публикации в каждом случае.
 func TestPublishResultRejectsInvalidOrIncompleteProvenance(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
@@ -215,6 +237,8 @@ func TestPublishResultRejectsInvalidOrIncompleteProvenance(t *testing.T) {
 	}
 }
 
+// TestRunCanaryRejectsSymlinkEscape points the outbox outside the synthetic root through a symlink and requires the path-outside-workspace reason.
+// TestRunCanaryRejectsSymlinkEscape направляет outbox за синтетический root через symlink и требует причину выхода из workspace.
 func TestRunCanaryRejectsSymlinkEscape(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex"), 0o770); err != nil {
@@ -229,6 +253,8 @@ func TestRunCanaryRejectsSymlinkEscape(t *testing.T) {
 	}
 }
 
+// TestWorkspaceDenialsAreExactAndDoNotContainPaths checks protected and escaped policy paths, byte/file quota boundaries and representative errno classifications without exposing absolute paths.
+// TestWorkspaceDenialsAreExactAndDoNotContainPaths проверяет защищённые и выходящие из policy пути, byte/file квоты и представительные errno-классификации без раскрытия абсолютных путей.
 func TestWorkspaceDenialsAreExactAndDoNotContainPaths(t *testing.T) {
 	policy := testPolicy()
 	if access, reason := policy.AccessForPath("/workspace/input/file"); access != runtimecontract.RuntimeWorkspaceReadOnly || reason != "" {
@@ -258,6 +284,8 @@ func TestWorkspaceDenialsAreExactAndDoNotContainPaths(t *testing.T) {
 	}
 }
 
+// TestWritableUsageStopsAtDirectoryAndByteBudgets exceeds the entry budget with nested directories and the byte budget with a sparse file, requiring quota failures in both walks.
+// TestWritableUsageStopsAtDirectoryAndByteBudgets превышает бюджет entries вложенными каталогами и byte-бюджет sparse-файлом, требуя quota-отказов обоих обходов.
 func TestWritableUsageStopsAtDirectoryAndByteBudgets(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "a/b/c/d"), 0o700); err != nil {

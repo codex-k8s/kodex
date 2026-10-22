@@ -8,8 +8,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// RunEnvironmentCanary проверяет только объявленные immutable policy тома.
-// Дополнительный путь из argv не принимается; чужие файлы не перечисляются.
+// RunEnvironmentCanary validates normalized policy digests and the root, then locks and probes only declared environment volumes using distinct mount IDs. Empty volume lists succeed without a probe; network/RBAC digests are not proof of live network or RBAC enforcement.
+// RunEnvironmentCanary проверяет нормализованные дайджесты policy и root, затем блокирует и пробует лишь объявленные тома с отдельными mount IDs. Пустой список успешен без пробы; дайджесты network/RBAC не доказывают фактическое сетевое или RBAC-ограничение.
 func RunEnvironmentCanary(ctx context.Context, root string, policy runtimecontract.RuntimeEnvironmentPolicy) error {
 	normalized, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
 	if ctx.Err() != nil || root == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root || err != nil ||
@@ -42,6 +42,8 @@ func RunEnvironmentCanary(ctx context.Context, root string, policy runtimecontra
 	return nil
 }
 
+// probeEnvironmentVolume opens a declared child without following symlinks, requires statx mount identity distinct from the parent and an acceptable writable filesystem, then runs the private-directory canary without listing existing volume files.
+// probeEnvironmentVolume открывает объявленный дочерний каталог без symlinks, требует отдельный от родителя mount identity statx и допустимую writable ФС, затем запускает приватную пробу без перечисления существующих файлов тома.
 func probeEnvironmentVolume(ctx context.Context, parent int, parentMountID uint64, volume runtimecontract.RuntimeVolume) error {
 	if ctx.Err() != nil {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
@@ -65,6 +67,8 @@ func probeEnvironmentVolume(ctx context.Context, parent int, parentMountID uint6
 	return runDirectoryCanary(ctx, directory)
 }
 
+// validEnvironmentFilesystem rejects read-only or degenerate filesystems, requires bounded tmpfs capacity for memory volumes and non-tmpfs for disk volumes. Disk sizeLimit enforcement belongs to kubelet/admission, not statfs.
+// validEnvironmentFilesystem отклоняет read-only и вырожденные ФС, требует ограниченную ёмкость tmpfs для memory-томов и не-tmpfs для disk. Контроль disk sizeLimit принадлежит kubelet/admission, не statfs.
 func validEnvironmentFilesystem(stat unix.Statfs_t, volume runtimecontract.RuntimeVolume) bool {
 	if stat.Flags&unix.ST_RDONLY != 0 || stat.Bsize <= 0 || stat.Blocks == 0 || volume.SizeMiB < 16 || volume.SizeMiB > 10240 {
 		return false

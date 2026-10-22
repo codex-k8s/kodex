@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestPeerUIDReadsUnixPeerAndAuthorizationAllowsOnlyProvider reads the actual test process UID over a disposable Unix socket, then independently checks the provider and relay UID allowlists.
+// TestPeerUIDReadsUnixPeerAndAuthorizationAllowsOnlyProvider читает фактический UID тестового процесса через одноразовый Unix-сокет и отдельно проверяет allowlists UID provider и relay.
 func TestPeerUIDReadsUnixPeerAndAuthorizationAllowsOnlyProvider(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "relay.sock")
 	listener, err := net.Listen("unix", path)
@@ -49,6 +51,8 @@ func TestPeerUIDReadsUnixPeerAndAuthorizationAllowsOnlyProvider(t *testing.T) {
 	}
 }
 
+// TestWriteFullHandlesPartialWrites limits each synthetic write to seven bytes and verifies complete byte preservation across multiple calls.
+// TestWriteFullHandlesPartialWrites ограничивает каждую синтетическую запись семью байтами и проверяет полное сохранение данных за несколько вызовов.
 func TestWriteFullHandlesPartialWrites(t *testing.T) {
 	want := bytes.Repeat([]byte("credential-relay-payload"), 1024)
 	writer := &partialWriter{maximum: 7}
@@ -60,12 +64,16 @@ func TestWriteFullHandlesPartialWrites(t *testing.T) {
 	}
 }
 
+// TestWriteFullRejectsZeroLengthWrite requires io.ErrShortWrite from a writer reporting no progress without an error, preventing an endless retry loop.
+// TestWriteFullRejectsZeroLengthWrite требует io.ErrShortWrite от writer без прогресса и ошибки, предотвращая бесконечные повторы.
 func TestWriteFullRejectsZeroLengthWrite(t *testing.T) {
 	if err := writeFull(zeroWriter{}, []byte("payload")); !errors.Is(err, io.ErrShortWrite) {
 		t.Fatalf("writeFull() error = %v", err)
 	}
 }
 
+// TestDecodeRequestRejectsPayloadOutsideBound supplies one byte beyond the configured maximum and requires rejection before semantic validation.
+// TestDecodeRequestRejectsPayloadOutsideBound передаёт на один байт больше предела и требует отказ до семантической проверки.
 func TestDecodeRequestRejectsPayloadOutsideBound(t *testing.T) {
 	oversized := bytes.Repeat([]byte("x"), maximumRequestBytes+1)
 	if _, err := decodeRequest(bytes.NewReader(oversized)); err == nil {
@@ -73,6 +81,8 @@ func TestDecodeRequestRejectsPayloadOutsideBound(t *testing.T) {
 	}
 }
 
+// TestDecodeRequestRejectsUnknownFields places forbidden top-level fields beside refresh and verifies strict decoding rejects the old or widened shape.
+// TestDecodeRequestRejectsUnknownFields добавляет запрещённые верхнеуровневые поля рядом с refresh и проверяет отказ строгого decoder для старой или расширенной формы.
 func TestDecodeRequestRejectsUnknownFields(t *testing.T) {
 	raw := []byte(`{"lease_ref":"lease_abcdefgh","refresh":{},"authentication":"forbidden"}`)
 	if _, err := decodeRequest(bytes.NewReader(raw)); err == nil {
@@ -80,6 +90,8 @@ func TestDecodeRequestRejectsUnknownFields(t *testing.T) {
 	}
 }
 
+// TestValidateRequestRequiresExactExecutionBinding accepts the synthetic baseline and separately rejects changes to lease, fence, generation, revision or prior credential identity/hash.
+// TestValidateRequestRequiresExactExecutionBinding принимает синтетическую основу и отдельно отклоняет изменения lease, fence, generation, ревизии или прежних identity/хеша реквизитов.
 func TestValidateRequestRequiresExactExecutionBinding(t *testing.T) {
 	input, payload := validRelayFixture()
 	if _, err := validateRequest(input, payload); err != nil {
@@ -104,6 +116,8 @@ func TestValidateRequestRequiresExactExecutionBinding(t *testing.T) {
 	}
 }
 
+// TestValidateRequestAcceptsOnlyCompatibleWarmTurn derives a warm system-assistant input, accepts its compatible turn and rejects a model change that breaks compatibility.
+// TestValidateRequestAcceptsOnlyCompatibleWarmTurn строит warm-вход системного помощника, принимает совместимый ход и отклоняет смену модели, нарушающую совместимость.
 func TestValidateRequestAcceptsOnlyCompatibleWarmTurn(t *testing.T) {
 	turn, payload := validRelayFixture()
 	turn.AssistantScope = runtimecontract.AssistantScopeSystem
@@ -127,6 +141,8 @@ func TestValidateRequestAcceptsOnlyCompatibleWarmTurn(t *testing.T) {
 	}
 }
 
+// TestRequestEncodingStaysInsideRelayBound encodes a normal synthetic request and checks it fits the configured framing budget; it does not prove every maximum-size combination.
+// TestRequestEncodingStaysInsideRelayBound кодирует обычный синтетический запрос и проверяет бюджет framing; не доказывает все сочетания максимальных размеров.
 func TestRequestEncodingStaysInsideRelayBound(t *testing.T) {
 	_, payload := validRelayFixture()
 	raw, err := json.Marshal(payload)
@@ -138,6 +154,8 @@ func TestRequestEncodingStaysInsideRelayBound(t *testing.T) {
 	}
 }
 
+// validRelayFixture builds a fresh non-assistant turn with derived Kubernetes identity and pinned execution/environment digests plus synthetic rotated authentication; no live files, grants or provider access are created.
+// validRelayFixture создаёт новый ход без области помощника с производной Kubernetes identity, закреплёнными дайджестами исполнения/окружения и синтетической ротацией авторизации; живые файлы, grants и доступ к провайдеру не создаются.
 func validRelayFixture() (model.Input, request) {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	image := runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh",
@@ -190,12 +208,16 @@ func validRelayFixture() (model.Input, request) {
 	return input, payload
 }
 
+// partialWriter records bounded fragments and call count to exercise complete-write logic without a socket or external side effect.
+// partialWriter сохраняет ограниченные фрагменты и счётчик вызовов для проверки полной записи без сокета и внешнего эффекта.
 type partialWriter struct {
 	buffer  bytes.Buffer
 	maximum int
 	calls   int
 }
 
+// Write caps each fragment at the configured maximum, increments the call count and delegates accepted bytes to its buffer.
+// Write ограничивает фрагмент заданным максимумом, увеличивает счётчик вызовов и передаёт принятые байты своему буферу.
 func (writer *partialWriter) Write(payload []byte) (int, error) {
 	writer.calls++
 	if len(payload) > writer.maximum {
@@ -204,6 +226,10 @@ func (writer *partialWriter) Write(payload []byte) (int, error) {
 	return writer.buffer.Write(payload)
 }
 
+// zeroWriter simulates a broken writer that reports neither progress nor failure, isolating the relay's short-write guard.
+// zeroWriter моделирует неисправный writer без прогресса и ошибки для отдельной проверки защиты relay от неполной записи.
 type zeroWriter struct{}
 
+// Write deliberately returns zero and nil without consuming bytes so writeFull must reject a non-progressing writer.
+// Write намеренно возвращает ноль и nil без принятия байтов, требуя от writeFull отказа writer без прогресса.
 func (zeroWriter) Write([]byte) (int, error) { return 0, nil }

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.212.0
+version: 1.213.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тринадцатая волна — credential relay, workspace и entrypoint runner
+
+Опубликованный SHA212 — `e91c4d8835ee4f2ecef730854844fde96583e279`.
+Exact f5WguN:6582 sources,222 excluded,1835 raw,593 retained,1242 unresolved;
+Go8026/21156,missing13130;raw SHA256
+`2f0f8c598ac8df1c53645dd54071f7c4b2f6e0a033ede00999f90950559705b7`;
+clone-set `edc23c9d7b1d3ac389158431f52333c78b880be83d05c16030a113625b172c4b`.
+Push/readback и PATCH/GET Draft PR212 подтверждены;на этом SHA callback/
+readiness35/83 unit PASS,0 FAIL,1 direct wire SKIP;полный runner build PASS.
+
+Все3 файла credentialrelay,6 workspace иentrypoint прочитаны целиком.
+87/87 declarations EN→RU плюс5 локальных const пояснений;пакетные пояснения
+также двуязычны. Исполняемый код не менялся:Go AST всех10 файлов совпадает
+с SHA212 без comments/token.Pos. Не запускались реальные relay,агенты,
+provider binaries,canaries рабочих mounts или процессы кластера.
+
+Relay:объяснены разные provider/relay SO_PEERCRED UID,ограничение frame/ack,
+seal write,cancellation close,отсутствие automatic retry/default client
+deadline иточная последовательность local binding → authoritative callback
+→ positive ack. Bounded post-cancel drain не назван отзывом grant;окончательная
+проверка владельца обязательна. Strict JSON здесь запрещает unknown/trailing
+values,но не заявлен запрет duplicate known keys. Предел сравнения обычного
+turn иусиленный warm compatibility описаны без выдуманных проверок.
+
+Workspace:advisory inode flock отделён от authorization/provider sandbox,
+usage scan — от полной volume quota/race-proof snapshot. Описаны skip
+read-only context/session-state,entry/byte budgets,nonce-only create/fsync/
+read/rename/delete иbest-effort cleanup. O_NOFOLLOW применяется кконечному
+root component иотносительным компонентам,не объявлен проверкой всех предков.
+Environment canary сверяет distinct statx mount ID итип/capacity,но disk
+sizeLimit принадлежит kubelet/admission. Shape-check ResultProvenance не
+назван серверной подписью/grant. Main docs сохраняют факт bypass defer при
+os.Exit. Runtime diagnostics,syscalls,policy ипорядок проверок неизменны.
+
+Unit credentialrelay+workspace:26 верхних/41 всех PASS,0 FAIL/SKIP.
+Реально выполнены synthetic UDS framing/drain/cancel иdirectory write/lock
+tests,включая parent-controlled child test binary для lock recovery;
+неактивный прямой helper TestWorkspaceLockProcess без env не выдаётся за
+отдельное доказательство. Full runner build -mod=readonly,scoped87/87,
+17 Node units,Go-checker unit,5 ignore-boundaries,gofmt/diff-check PASS LOCAL.
+Go1.26.6,GOENV/GOWORK off. Context7 `/golang/sys`:flock/Openat no-follow;
+новых SDK/dependencies иruntime API изменений нет.
+
+Один exact144-token fixture window controller/relay адресно сохранён:
+общие runtimecontract computations уже используются,литералы разных
+SYSTEM/NONE inputs не вынесены через чужой internal либо в production API.
+Workspace detector groups не имеет. Pair/fragment/count multiset неизменен;
+сдвиги координат от комментариев меняют clone-set,не число групп.
+Рабочий FRs9B3 до последних2 entrypoint docs:1835 raw,594 retained,
+1241 unresolved;Go8111/21156,missing13045;raw SHA256
+`c4a9741f58165a56603fdfe59fa9d4c727f452f48e7e646d6b2866952077aa1f`;
+clone-set `4fe862f8f572c3a1a0c49d7a13e6024a54908529924dd14a62a56498948765ac`.
+Post-commit inventory обновит иэти2 комментария вобщем счётчике.
+Общий repo-check,полный runner unit,live/browser/deploy/ИИ/STT/почта NOT RUN;
+цель не завершена,тот же Draft PR остаётся единственным рабочим PR.
 
 ## Двести двенадцатая волна — весь callback-клиент runner
 
