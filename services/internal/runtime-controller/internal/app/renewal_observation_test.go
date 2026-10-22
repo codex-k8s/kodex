@@ -23,8 +23,16 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// renewalPrivateSentinel is synthetic private-looking text inserted into errors, fences and input to detect accidental log disclosure.
+// It is not a real token or credential.
+// renewalPrivateSentinel является синтетическим текстом, похожим на частные данные, в ошибках, ограждениях и входе для обнаружения утечки в журнал.
+// Это не настоящий токен или учётные данные.
 const renewalPrivateSentinel = "PRIVATE_RENEWAL_SENTINEL token=private payload=private"
 
+// renewalObservationInput adds deterministic execution pins and private-looking sentinel fields to the tracking fixture.
+// The fixture permits checking allowed log fields without granting or renewing any real lease.
+// renewalObservationInput добавляет детерминированные привязки выполнения и поля с частным синтетическим текстом к образцу отслеживания.
+// Образец позволяет проверять допустимые поля журнала без выдачи или продления настоящей аренды.
 func renewalObservationInput() runtimecontract.RunnerInput {
 	input := runtimeTrackingInput()
 	input.RunRef, input.NodeRef = "run_observation_abcdefgh", "nod_observation_abcdefgh"
@@ -34,6 +42,10 @@ func renewalObservationInput() runtimecontract.RunnerInput {
 	return input
 }
 
+// renewalRecord rejects sentinel disclosure and decodes exactly one JSON warning with the fixed renewal message.
+// Malformed, additional or differently classified records fail the test rather than being accepted as evidence.
+// renewalRecord отклоняет раскрытие синтетических частных данных и разбирает ровно одно JSON-предупреждение с фиксированным сообщением продления.
+// Неверные, дополнительные или иначе классифицированные записи проваливают тест, а не принимаются как доказательство.
 func renewalRecord(t *testing.T, wire *bytes.Buffer) map[string]any {
 	t.Helper()
 	if strings.Contains(wire.String(), "PRIVATE_RENEWAL_SENTINEL") || strings.Contains(wire.String(), "token=private") {
@@ -47,6 +59,10 @@ func renewalRecord(t *testing.T, wire *bytes.Buffer) map[string]any {
 	return record
 }
 
+// assertRenewalPins compares all expected locator, generation/attempt, digest and binding-status fields after JSON decoding.
+// Numeric expectations use float64 because the decoded record is map[string]any.
+// assertRenewalPins сопоставляет ожидаемые поля указателей, поколения/попытки, дайджестов и статуса привязки после разбора JSON.
+// Числовые ожидания используют float64, поскольку разобранная запись имеет тип map[string]any.
 func assertRenewalPins(t *testing.T, record map[string]any, input runtimecontract.RunnerInput, binding string) {
 	t.Helper()
 	for key, expected := range map[string]any{
@@ -62,6 +78,10 @@ func assertRenewalPins(t *testing.T, record map[string]any, input runtimecontrac
 	}
 }
 
+// TestRenewalObservationClosedCodesPhasesAndPrivateJoinedErrors covers every supported failure code across renewal phases,
+// ensuring joined private errors do not replace the primary code or disclose details; unknown inputs normalize to closed fallback values.
+// TestRenewalObservationClosedCodesPhasesAndPrivateJoinedErrors охватывает поддержанные коды ошибок во всех фазах продления,
+// проверяя, что объединённые частные ошибки не заменяют основной код и не раскрывают детали; неизвестные входы нормализуются в закрытые значения.
 func TestRenewalObservationClosedCodesPhasesAndPrivateJoinedErrors(t *testing.T) {
 	input := renewalObservationInput()
 	for _, phase := range []renewalPhase{renewalPhaseTrack, renewalPhaseDrain, renewalPhaseMaterialization} {
@@ -95,10 +115,20 @@ func TestRenewalObservationClosedCodesPhasesAndPrivateJoinedErrors(t *testing.T)
 	}
 }
 
+// renewalUnknownContext embeds a real test context but supplies an unrecognized Err result for diagnostic normalization tests.
+// It does not alter the embedded context's deadline or cancellation channel.
+// renewalUnknownContext встраивает настоящий тестовый контекст, но задаёт неизвестный результат Err для проверки нормализации диагностики.
+// Срок и канал отмены встроенного контекста не меняются.
 type renewalUnknownContext struct{ context.Context }
 
+// Err returns a fresh synthetic private error so classification must use UNKNOWN rather than logging the cause.
+// Err возвращает новую синтетическую частную ошибку, чтобы классификация использовала UNKNOWN вместо вывода причины.
 func (ctx renewalUnknownContext) Err() error { return errors.New(renewalPrivateSentinel) }
 
+// TestRenewalObservationSnapshotsContextBeforeCleanupAndKeepsTrace checks active, canceled, expired and unknown request contexts
+// are logged before cleanup while preserving parent state, trace/span identifiers and the unchanged global logger.
+// TestRenewalObservationSnapshotsContextBeforeCleanupAndKeepsTrace проверяет, что активный, отменённый, просроченный и неизвестный контексты запроса
+// фиксируются до очистки с сохранением состояния родителя, идентификаторов trace/span и неизменного глобального журнала.
 func TestRenewalObservationSnapshotsContextBeforeCleanupAndKeepsTrace(t *testing.T) {
 	for _, state := range []string{observationContextActive, observationContextCanceled, observationContextDeadline, observationUnknown} {
 		t.Run(state, func(t *testing.T) {
@@ -140,6 +170,10 @@ func TestRenewalObservationSnapshotsContextBeforeCleanupAndKeepsTrace(t *testing
 	}
 }
 
+// TestRenewalObservationDoesNotLogSuccessOrUnsafePins requires silence on success and a missing logger,
+// and checks invalid locator/digest fields and negative counters are sanitized without inventing complete bindings.
+// TestRenewalObservationDoesNotLogSuccessOrUnsafePins требует отсутствия записи при успехе и отсутствии журнала
+// и проверяет очистку неверных указателей/дайджестов и отрицательных счётчиков без выдумывания полных привязок.
 func TestRenewalObservationDoesNotLogSuccessOrUnsafePins(t *testing.T) {
 	var wire bytes.Buffer
 	runtime := &runtime{logger: slog.New(slog.NewJSONHandler(&wire, nil))}
@@ -165,6 +199,10 @@ func TestRenewalObservationDoesNotLogSuccessOrUnsafePins(t *testing.T) {
 	runtime.logRenewalFailure(t.Context(), t.Context(), input, renewalPhaseTrack, errors.New(renewalPrivateSentinel))
 }
 
+// renewalObservationClient records synthetic renewals, verifies exact lease/fence/generation pins and delegates the failure to a test callback.
+// It retains the request context so tests can distinguish primary observation from later cleanup cancellation.
+// renewalObservationClient записывает синтетические продления, проверяет точные привязки аренды/ограждения/поколения и передаёт ошибку тестовому обратному вызову.
+// Контекст запроса сохраняется, чтобы тесты отличали исходное наблюдение от последующей отмены при очистке.
 type renewalObservationClient struct {
 	runtimeWorkClientStub
 	calls   atomic.Int32
@@ -174,6 +212,10 @@ type renewalObservationClient struct {
 	t       *testing.T
 }
 
+// RenewExecution counts the call, saves its context and rejects any changed request pin through the owning test.
+// It returns the configured failure without issuing a network call or an owner receipt.
+// RenewExecution считает обращение, сохраняет контекст и отклоняет изменённые привязки запроса через тест-владелец.
+// Возвращается настроенная ошибка без сетевого обращения или квитанции владельца.
 func (client *renewalObservationClient) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.RenewExecutionResponse, error) {
 	client.calls.Add(1)
 	client.request = ctx
@@ -183,6 +225,10 @@ func (client *renewalObservationClient) RenewExecution(ctx context.Context, requ
 	return nil, client.renew(ctx)
 }
 
+// renewalObservationTurns wraps local lifecycle counters with assertions that a complete renewal warning already exists before deletion.
+// It carries only synthetic pins and a test buffer, not a Kubernetes workload client.
+// renewalObservationTurns дополняет локальные счётчики жизненного цикла проверкой наличия полного предупреждения продления до удаления.
+// Хранятся только синтетические привязки и тестовый буфер, а не клиент нагрузки Kubernetes.
 type renewalObservationTurns struct {
 	turnLifecycleStub
 	wire  *bytes.Buffer
@@ -191,6 +237,10 @@ type renewalObservationTurns struct {
 	phase renewalPhase
 }
 
+// DeleteTurn verifies the warning phase, pre-cleanup request state and all expected pins before delegating to the local delete counter.
+// No real Pod, Secret or volume is deleted.
+// DeleteTurn проверяет фазу предупреждения, состояние запроса до очистки и все ожидаемые привязки перед передачей локальному счётчику удаления.
+// Настоящие Pod, Secret и тома не удаляются.
 func (turns *renewalObservationTurns) DeleteTurn(ctx context.Context, lease string) error {
 	record := renewalRecord(turns.t, turns.wire)
 	if record[renewalPhaseKey] != string(turns.phase) || record[renewalRequestContextKey] != observationContextActive {
@@ -200,6 +250,10 @@ func (turns *renewalObservationTurns) DeleteTurn(ctx context.Context, lease stri
 	return turns.turnLifecycleStub.DeleteTurn(ctx, lease)
 }
 
+// TestRenewalObservationPrecedesTrackAndDrainDeletionWithoutChangingFailures covers track/drain with denial and transient status fixtures.
+// It checks observation order, unchanged stop/delete and completion behavior, request cleanup and tracker capacity release.
+// TestRenewalObservationPrecedesTrackAndDrainDeletionWithoutChangingFailures проверяет отслеживание и завершение работы с отказами и временными статусами.
+// Проверяются порядок наблюдения, неизменные остановка/удаление и завершение, очистка запроса и освобождение ёмкости отслеживания.
 func TestRenewalObservationPrecedesTrackAndDrainDeletionWithoutChangingFailures(t *testing.T) {
 	for _, phase := range []renewalPhase{renewalPhaseTrack, renewalPhaseDrain} {
 		for _, code := range []codes.Code{codes.PermissionDenied, codes.Unavailable, codes.DeadlineExceeded} {
@@ -238,6 +292,10 @@ func TestRenewalObservationPrecedesTrackAndDrainDeletionWithoutChangingFailures(
 	}
 }
 
+// TestRenewalObservationMaterializationUsesTrustedClaimPinsBeforeCancellation records a claim-only materialization denial before cancellation.
+// The original error, exact renewal request and closed publication/handoff remain unchanged, with one observation and no retry.
+// TestRenewalObservationMaterializationUsesTrustedClaimPinsBeforeCancellation фиксирует отказ размещения с привязками только заявки до отмены.
+// Исходная ошибка, точный запрос продления и запрет публикации/передачи сохраняются, с одним наблюдением и без повторов.
 func TestRenewalObservationMaterializationUsesTrustedClaimPinsBeforeCancellation(t *testing.T) {
 	input := renewalObservationInput()
 	input.ExecutionBindingDigest = ""
@@ -275,6 +333,10 @@ func TestRenewalObservationMaterializationUsesTrustedClaimPinsBeforeCancellation
 	renewalRecord(t, &wire)
 }
 
+// TestRenewalObservationMaterializationRPCDeadlineIsNotCleanupCancellation makes the request deadline expire during materialization renewal.
+// The warning must retain DeadlineExceeded and an active parent, distinguishing that failure from later keeper cancellation without adding a retry.
+// TestRenewalObservationMaterializationRPCDeadlineIsNotCleanupCancellation доводит запрос до истечения срока во время продления для размещения.
+// Предупреждение должно сохранить DeadlineExceeded и активного родителя, отличая ошибку от последующей отмены держателя без добавления повтора.
 func TestRenewalObservationMaterializationRPCDeadlineIsNotCleanupCancellation(t *testing.T) {
 	input := renewalObservationInput()
 	var wire bytes.Buffer

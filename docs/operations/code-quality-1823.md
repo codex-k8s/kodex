@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.181.0
+version: 1.182.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,59 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят вторая волна — продление аренды и закрытая диагностика
+
+На базе опубликованного SHA `14136835a5889d497f4956f3ebf6fc576bf82970`
+все 59 прежних объявлений четырёх файлов app/lease_renewal и renewal_observation
+с их тестами получили предметные EN→RU комментарии. Прочитаны все ветви
+повторов, cancellation/deadline, привязки ответа, таймеры, safe-log фильтры
+и фактические assertions synthetic-клиентов. Вместе с новым helper
+scoped Go-docs-check 60/60 —
+PASS LOCAL; остальные файлы app этим не объявляются завершёнными.
+
+Описаны различия последнего owner-confirmed срока и входных полей,
+ограничение retries четырьмя при известном сроке и только временных ошибках,
+запрет поздним success возрождать истёкшую аренду, проверка exact lease/
+fence/generation и локальное сокращение срока safety margin. Логирование
+фиксирует состояние запроса до cleanup cancellation, но не является
+доказательством owner commit/revocation. Syntax-filtered pins не названы
+доказанным происхождением; Context.Err classification не названа проверкой
+часов deadline. Закрытые status/phase/context значения и отсутствие raw
+error/fence/input в журнале отражены без изменения исполняемой логики.
+
+Одинаковая подготовка восстановления callback в track/drain тестах
+вынесена в package-private callbackRecoveryFixture: прежние локальные
+input/coordinator, transient-first renewal, совпадающий expiry, счётчики
+и runtime создаются заново для каждого теста. Различающиеся настройки
+track/drain и assertions остались в исходных тестах. Дополнительный импорт
+уже используемой module runtimecontract нужен только для типа результата.
+Новая функция также EN→RU; второго алгоритма или legacy wrapper нет.
+
+Полные четыре файла механически сравнены с parent: после раскрытия двух
+fixture calls, удаления нового type import и только строк комментариев
+исполняемые строки после gofmt идентичны.
+Lease authority, RPC, retries, timestamps, cancellation, lifecycle,
+метрики, SDK и applied migrations не менялись. Комментарии тестов явно
+относятся к synthetic stubs, local callback/coordinator и test logger,
+а не к реальному владельцу, Pod, БД или provider session.
+
+PASS LOCAL: RC `go test -count=1 -json ./internal/app` — 56 верхних PASS,
+166 PASS с подтестами, 0 SKIP/FAIL; полный module `go build ./...`,
+16 unit анализатора, Go-checker, пять ignore-boundaries, scoped docs и
+diff-check. Go1.26.6, GOENV=off/GOWORK=off. Точный опубликованный SHA и
+повтор проверок фиксируются в PR. Component/live/browser/deploy, реальные
+агенты и полный repository Go-docs-check — NOT RUN; прежний diagnostics
+FAIL не скрыт и не исправлялся под видом комментариев.
+
+Detector: 6569 source, 222 generated/lock исключения, 1843 raw,
+578 точных решений, 1265 неразобранных. После выноса удалена одна
+прежняя 179-token группа тестовой подготовки; новых групп нет, реестр
+исключений неизменен. Рабочий raw SHA-256
+`071093f03f957dd2343b0bac5f9fbcdc20eee177601c12a976caed21c07e805a`,
+clone-set fingerprint
+`95d5dc88d1ccb7b0366997c4765a2b428d78db18511bc59523be5bed51684273`.
+Go-реестр 6697/21131, непокрыты 14434. Единый Draft PR и цель не завершены.
 
 ## Сто восемьдесят первая волна — завершён клиент проекции и общая test-конфигурация
 
