@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
+import { createTemplateJSONReader } from "./template-json-reader.mjs";
 
 const runPattern = /^v[0-9]{14}-[a-f0-9]{40}$/;
 const artifactPattern = /^imgart_[A-Za-z0-9_-]{8,88}$/;
@@ -370,28 +371,7 @@ export async function watchRecipe(options, runtime = {}) {
   const seen = new Set();
   let observed = false;
   let failed = false;
-  const read = (args, template) => {
-    if (Date.now() >= deadline || runtime.signal?.aborted) return null;
-    if (runtime.read) return runtime.read(args, template);
-    try {
-      return JSON.parse(
-        execFileSync(
-          "kubectl",
-          [...base, ...args, "-o", `go-template=${template}`],
-          {
-            env,
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "ignore"],
-            timeout: Math.min(6000, Math.max(1, deadline - Date.now())),
-            killSignal: "SIGKILL",
-            maxBuffer: 1 << 20,
-          },
-        ),
-      );
-    } catch {
-      return null;
-    }
-  };
+  const read = createTemplateJSONReader(base, env, deadline, runtime);
   const capture = (line, sourceBinding) => {
     if (observed || failed || runtime.signal?.aborted) return;
     const diagnostic = parseDiagnostic(line, binding);

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { chmodSync, lstatSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
+import { createTemplateJSONReader } from "./template-json-reader.mjs";
 
 const uid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const run = /^v[0-9]{14}-[a-f0-9]{40}$/;
@@ -171,28 +172,7 @@ export async function watchPhase(options, runtime = {}) {
   const children = new Map(),
     seen = new Set();
   let observation;
-  const read = (args, template) => {
-    if (Date.now() >= deadline || runtime.signal?.aborted) return null;
-    if (runtime.read) return runtime.read(args, template);
-    try {
-      return JSON.parse(
-        execFileSync(
-          "kubectl",
-          [...base, ...args, "-o", `go-template=${template}`],
-          {
-            env,
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "ignore"],
-            timeout: Math.min(6000, Math.max(1, deadline - Date.now())),
-            killSignal: "SIGKILL",
-            maxBuffer: 1 << 20,
-          },
-        ),
-      );
-    } catch {
-      return null;
-    }
-  };
+  const read = createTemplateJSONReader(base, env, deadline, runtime);
   try {
     emit({ event: "PHASE_WATCH_STARTED", ...binding });
     while (Date.now() < deadline && !runtime.signal?.aborted && !observation) {

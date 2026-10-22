@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.276.0
+version: 1.277.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,70 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят седьмая волна — общий metadata reader диагностики
+
+Опубликованный SHA276 — `913462264163acc54e9995f3f393b8cd732b5c7c`.
+Точный aFnxRj:6607 sources,222 excluded,1819 raw/666 retained/
+1153 unresolved; Go12081/21243, missing9162. Raw SHA256:
+`c99de7662c2404a6b0dc700042019351cf1d6c1237680e29fd67da98a906bbf7`;
+clone-set d655630e… . Exact app30/119, authority build -p=2, docs46/46,
+AST4, tooling/scan PASS LOCAL,0 FAIL/SKIP; push/readback и Draft PR
+PATCH/GET276 подтверждены.
+
+Две одинаковые read closures watchRecipe/watchPhase вынесены в
+tools/diagnostics/template-json-reader.mjs:createTemplateJSONReader.
+Оба callers сохранили исходные base/env/deadline/runtime; получение
+кандидатов, exact UID/owner/run/phase validation, capture, children/join,
+output и cleanup не менялись. Отдельный artifact watch читает также raw logs,
+имеет другой remaining-budget path и32KiB bound и не объединён с JSON read.
+Новый helper — только общий transport этих двух инструментов, не новый
+кластерный контроллер/authority source. Его создание не выполняет I/O.
+
+Сохранены start-of-read deadline/cancel guard, dynamic runtime.read и его
+receiver/result/throw behavior. Production execFileSync использует прежние
+argv, caller-owned env, UTF-8, ignored stdin/stderr, pipe stdout,
+timeout=min(6000,max(1,remaining)),SIGKILL,maxBuffer1MiB и JSON.parse.
+Ошибка процесса или JSON даёт null, raw diagnostic наружу не возвращается.
+In-flight abort не добавлен:signal проверяется только до синхронного чтения,
+как раньше. execute injection используется только unit fixture и не
+доступна из CLI input. Node24.21.0/Context7 nodejs/node execFileSync и
+node:test mock.method сверены; новых dependencies нет.
+
+Inverse byte proof восстанавливает оба полных исходных script files SHA276
+и сравнивает shared body с обеими прежними closures. Validator/command/
+policy/state/lifecycle paths вне extraction byte-identical. Первый builder
+отказал на ошибке длины delimiter до изменения callers; helper уже был
+создан отдельным apply_patch. Исправлена граница extraction, затем оба
+callers применены однократно; исходные tests и shell producer неизменны.
+
+6 новых герметичных unit PASS,0 FAIL/SKIP:lazy creation/exact arguments и
+process limits; expired/cancelled no-call; dynamic fixture receiver/result/
+exception; process/JSON errors; отсутствие typed validation в transport;
+remaining cap/floor и пересечение срока между двумя Date.now calls.
+Mock execute не запускает kubectl, clocks synthetic. Дополнительно21
+существующих diagnostics unit выполнены до правок:19 PASS/2 FAIL; после
+выноса вместе с6 новыми25 PASS/2 тех же FAIL,0 SKIP. Сохраняются:
+admit failure persists closed first intent… — устаревшая regex fixture не
+находит technical recovery branch; producer derives projection… — fixture
+не создаёт обязательный vulnerability-report.json. Это воспроизведённые
+прежние FAIL, не устранённые extraction, не скрытые skip и не общий PASS.
+Tests используют synthetic metadata/spawn/bridge и private disposable dirs;
+реальных cluster/key/model/SSO операций нет.
+
+Рабочий HPmySR до форматирования нового unit:6609 sources,222 excluded,
+1818 raw/666 retained/1152 unresolved; Go12081/21243,missing9162.
+Удалена ровно1 raw137-token group;1818 остальных keys/counts прежние,
+новых нет, registry562 entries/666 occurrences неизменен. Raw SHA256:
+`8fce2e7d843fd6f0de86357a65ae02987737df381b214b7e3649591192edbc98`;
+clone-set:
+`e1699ebc68474e18a6934cedebe0185820943427d4038694048f6be4b4c3c53c`.
+17 Node/Go checker units, inverse byte proof,5 ignore boundaries и
+diff-check PASS LOCAL. Prettier3.8.1 применён только к2 новым files;
+node --check всех4 scripts PASS. Отдельного build у raw ESM нет; Go runtime
+build неприменим к этому diff, новый Go PASS не заявляется. После коммита
+повторяются exact scan/unit/syntax checks и PR readback. Общая задача
+остаётся открытой; full baseline/live/browser/deploy NOT RUN.
 
 ## Двести семьдесят шестая волна — конфигурация и диагностика authority
 
