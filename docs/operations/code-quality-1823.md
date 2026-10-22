@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.219.0
+version: 1.220.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,64 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцатая волна — финансовые наблюдения и transport projection
+
+Опубликованный SHA219 — `f2e61db6f6813c6319718a7d2681de57d36cda5d`.
+Exact zcFaF8:6584 sources,222 excluded,1831 raw,594 retained,1237 unresolved;
+Go8411/21166,missing12755;raw SHA256
+`c8d81ef5314c95636a19ff4eb12c7954b3d20bea3d521ab0b3b442a8bd7d2d7a`;
+clone-set `085d7dc48aa5419c1f29b33dc5eb68cd745683018db377e8c06e9cc299921528`.
+Push/readback иPATCH/GET Draft PR219 подтверждены;activity/usage20/86 unit
+иfull runner build PASS наэтом SHA.
+
+Прочитаны7 файлов provider_finance,provider_process,runtime_environment
+с тестами иrate_limit_snapshot_test.go.34/34 declarations EN→RU.
+Финансовое уведомление только пробуждает authoritative read;невыдаёт
+допуск и не переписывает typed quota denial. Ordinary read оставляет64-й
+слот final collector;stop/join принадлежит вызывающему коду. Описаны
+fresh account/read после auth epoch,exact private accountId match,
+nullable/unbound UNAVAILABLE,epoch race ипередача остальных ошибок.
+financialResponseBound не назван полноценной проверкой всех полей
+финансового снимка:они остаются вruntimecontract parser.
+
+User-agent prefix отличён от clientInfo suffix,аreported version — от
+независимой аттестации бинаря/образа. Synthetic actualProcessUserAgent
+явно не назван live CLI probe. Process activity остаётся привязанной кinput
+итребует проверки peer/порядка наconsumer boundary.
+Transport projection сохраняет точные gateway/proxy/NO_PROXY/trust path;
+credential regexp проверяет только форму,не подпись gateway. Закреплённый
+CA path не объявлен проверкой файла/сертификата. Непрошенные env не
+наследуются,transport-owned names не подменяются user/secret projections.
+Никаких изменений runtime literals/ошибок/API/полномочий нет.
+
+Все7 AST идентичны SHA219 без comments/token.Pos;изменены только
+пояснения. Вэтом scope нет ниraw unresolved,ниretained detector groups.
+Поэтому искусственная библиотека/fixture abstraction не добавлялась,
+исключения не расширялись. Pair/fragment/count multiset всего repo
+неизменен;новых/исчезнувших групп нет.
+
+Выбранные codex units:19 верхних/32 всех PASS,0 FAIL/SKIP.
+Реально выполнены synthetic финансовые RPC/notification/epoch/budget
+сценарии,correlated method absence versus exact pinned no-snapshot outcome,
+credit metadata versus typed terminal denial,initialize grammar/privacy,
+process exact input/writer/first activity иtransport env collision guards.
+Только in-process JSON/channels/test env,без remote endpoints/модели.
+Команда из runner,GOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4:
+`go test -mod=readonly -count=1 -json ./internal/codex -run '^(TestTerminalConsumedByFinancial|TestRateLimitNotification|TestBrokerFinancialSequence|TestFinancial|TestInitializeObservesCurrentProvider|TestInitializeRejectsHostile|TestProviderProcessBroker|TestRateLimitSnapshot|TestRuntimeTransportEnvironment|TestAppServerEnvironmentPreserves)'`.
+Full runner `go build -mod=readonly ./...`,scope34/34,17 Node units,
+Go-checker unit,5 ignore boundaries,gofmt/diff-check PASS LOCAL.
+Новых library/SDK semantics нет;прошлые Context7 данные не выданы
+за новое исследование external provider.
+
+Рабочий EfqLKP:6584 sources,222 excluded,1831 raw,594 retained,1237 unresolved;
+Go8445/21166,missing12721;raw SHA256
+`d9e4bd4442b8b2d528aac1e797d5d9f976c2362fffef4eccf990746edac44384`;
+clone-set `085d7dc48aa5419c1f29b33dc5eb68cd745683018db377e8c06e9cc299921528`.
+Точное post-commit измерение публикуется втомже Draft PR.
+Полный runner/codex/repo unit иобщий Go-docs check ещё не выполнены;
+исторические FAIL/SKIP/NOT RUN сохраняются. Live/browser/deploy/ИИ/STT/
+почта NOT RUN. Общая задача остаётся незавершённой,merge/ready не выполняются.
 
 ## Двести девятнадцатая волна — поток broker activity и измерения
 

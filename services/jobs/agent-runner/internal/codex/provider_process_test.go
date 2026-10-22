@@ -11,8 +11,16 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// actualProcessUserAgent is a synthetic pinned initialize sample with a disclosure sentinel;
+// its name does not imply a live CLI/version check on the current host.
+// actualProcessUserAgent является синтетическим закреплённым примером initialize с маркером утечки;
+// название не означает проверку живого CLI или его версии на текущем сервере.
 const actualProcessUserAgent = "kodex-agent-runner/0.160.0 (HOST_PRIVATE_SENTINEL 12.0.0; x86_64) unknown (kodex-agent-runner; 1)"
 
+// providerProcessInput supplies independent synthetic organization/run/revision/image pins over the
+// diagnostic fixture so broker tests can mutate each boundary without accessing live resources.
+// providerProcessInput задаёт синтетические привязки организации, запуска, ревизии и образа поверх
+// diagnostic fixture для отдельных подмен границ без обращения к живым ресурсам.
 func providerProcessInput() model.Input {
 	input := diagnosticInput()
 	input.OrganizationRef, input.ProjectRef, input.RunRef, input.NodeRef = "org_fixture123", "prj_fixture123", "run_fixture123", "nod_fixture123"
@@ -22,11 +30,19 @@ func providerProcessInput() model.Input {
 	return input
 }
 
+// initializeProcessResponse serializes a synthetic initialize envelope, accepting arbitrary user-agent
+// types so negative tests exercise the actual strict consumer rather than a prevalidated fixture.
+// initializeProcessResponse кодирует синтетический initialize с произвольным типом user-agent,
+// чтобы негативные тесты проходили настоящий строгий потребитель, а не готовую проверенную fixture.
 func initializeProcessResponse(userAgent any) json.RawMessage {
 	raw, _ := json.Marshal(map[string]any{"codexHome": "/private/provider", "platformFamily": "unix", "platformOs": "linux", "userAgent": userAgent})
 	return raw
 }
 
+// TestInitializeObservesCurrentProviderProcessVersionWithoutRawMetadata verifies prefix extraction,
+// input-bound publication, removal of raw host metadata and rejection of duplicate initialization.
+// TestInitializeObservesCurrentProviderProcessVersionWithoutRawMetadata проверяет извлечение префикса,
+// привязанную публикацию, сокрытие исходных метаданных хоста и отказ повторному initialize.
 func TestInitializeObservesCurrentProviderProcessVersionWithoutRawMetadata(t *testing.T) {
 	state := newProtocolState("")
 	if state.initialize(initializeProcessResponse(actualProcessUserAgent), "/private/provider") != nil || state.processVersion != "0.160.0" {
@@ -52,6 +68,10 @@ func TestInitializeObservesCurrentProviderProcessVersionWithoutRawMetadata(t *te
 	}
 }
 
+// TestInitializeRejectsHostileOrClientOnlyVersion rejects wrong types, client-only versions, malformed
+// prefixes, private suffixes and control characters without storing a version or disclosing raw metadata.
+// TestInitializeRejectsHostileOrClientOnlyVersion отвергает неверные типы, версии только клиента,
+// повреждённые префиксы, приватные суффиксы и управляющие символы без сохранения версии или утечки.
 func TestInitializeRejectsHostileOrClientOnlyVersion(t *testing.T) {
 	for _, ua := range []any{nil, 42, "kodex-agent-runner", "kodex-agent-runner/1 (Debian 12; x86_64) unknown (kodex-agent-runner; 0.160.0)",
 		strings.Replace(actualProcessUserAgent, "0.160.0", "unknown", 1), strings.Replace(actualProcessUserAgent, "0.160.0", "00.160.0", 1),
@@ -66,6 +86,12 @@ func TestInitializeRejectsHostileOrClientOnlyVersion(t *testing.T) {
 	}
 }
 
+// TestProviderProcessBrokerRequiresCurrentWriterAndFirstExactActivity requires exact execution pins,
+// trusted writer UID and a single first process activity; forged, duplicate or late observations
+// cannot reach callbacks. Synthetic terminal failure remains failure after the valid observation.
+// TestProviderProcessBrokerRequiresCurrentWriterAndFirstExactActivity требует точных привязок исполнения,
+// доверенного UID и единственного первого события процесса; подмена, повтор и позднее событие
+// не доходят до callback. Синтетический итоговый отказ не превращается в успех после верного события.
 func TestProviderProcessBrokerRequiresCurrentWriterAndFirstExactActivity(t *testing.T) {
 	input := providerProcessInput()
 	value := runtimecontract.BindProviderProcessObservation(input, "0.160.0")

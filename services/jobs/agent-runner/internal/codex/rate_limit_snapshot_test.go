@@ -7,8 +7,12 @@ import (
 	"testing"
 )
 
-// Это синтетическая проверка существующей opaque-проекции, не новый контракт
-// account RPC и не доказательство финансового допуска конкретного аккаунта.
+// TestRateLimitSnapshotDoesNotAssignLocalAdmission treats opaque credit/rate metadata as a wake signal,
+// not a local admission decision or execution result; synthetic successful turns remain successful.
+// This is not proof that a particular real account is financially eligible.
+// TestRateLimitSnapshotDoesNotAssignLocalAdmission рассматривает opaque credit/rate данные как пробуждение,
+// а не локальное решение о допуске или итог; синтетические успешные ходы остаются успешными.
+// Это не доказывает финансовую доступность конкретного реального аккаунта.
 func TestRateLimitSnapshotDoesNotAssignLocalAdmission(t *testing.T) {
 	for _, snapshot := range []string{
 		`{"primary":{"usedPercent":100,"windowDurationMins":10080},"credits":{"hasCredits":true,"unlimited":false,"balance":"SYNTHETIC_CREDIT_SENTINEL"}}`,
@@ -46,6 +50,10 @@ func TestRateLimitSnapshotDoesNotAssignLocalAdmission(t *testing.T) {
 	}
 }
 
+// TestRateLimitSnapshotCannotOverrideTypedProviderDenial preserves typed quota denial and its blocked
+// presentation even when credit metadata is present before or after the failed terminal.
+// TestRateLimitSnapshotCannotOverrideTypedProviderDenial сохраняет типизированный отказ по квоте и его
+// отображение как блокировки при кредитных метаданных до или после итогового отказа.
 func TestRateLimitSnapshotCannotOverrideTypedProviderDenial(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID, state.turnID = testThreadID, testTurnID
@@ -76,6 +84,10 @@ func TestRateLimitSnapshotCannotOverrideTypedProviderDenial(t *testing.T) {
 	}
 }
 
+// TestRateLimitSnapshotDoesNotRelaxOuterEnvelopeOrTurnBinding rejects unknown/duplicate/trailing
+// notification fields and a quota terminal bound to another thread despite otherwise plausible metadata.
+// TestRateLimitSnapshotDoesNotRelaxOuterEnvelopeOrTurnBinding отклоняет лишние и повторные поля,
+// лишний JSON и квотный итог чужого потока, несмотря на внешне правдоподобные метаданные.
 func TestRateLimitSnapshotDoesNotRelaxOuterEnvelopeOrTurnBinding(t *testing.T) {
 	for _, payload := range []string{
 		`{}`,
