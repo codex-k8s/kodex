@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.171.0
+version: 1.172.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,51 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят вторая волна — полный app шлюза интеграций
+
+На базе опубликованного SHA `dd07c35ec342b8a832a830a8a48503290866470d`
+завершены 49 оставшихся объявлений internal/app в configuration_source,
+configuration_writeback и двух соответствующих test-файлах. Все восемь
+файлов пакета полностью EN→RU: scoped go-docs-check 70/70 — PASS LOCAL.
+Механическое сравнение четырёх файлов после удаления комментариев и
+нормализации пустых строк/gofmt подтвердило неизменность исполняемого кода.
+Тела тестов и интерфейсы не изменены; новые abstractions не добавлялись.
+
+Комментарии источников описывают limit=1, claimant/lease/deadline,
+резерв финализации, budget cap, очистку байтов, отмену без завершения и
+точный owner receipt. SYNC_BLOCKED не назван допущенной конфигурацией,
+READY требует совпадения accepted commit/content digest. Потерянный ACK
+не разрешает повтор чтения или owner completion. Work-health tests
+описывают прежние проверки свежести и сброса успешного наблюдения.
+
+Для writeback описаны все шесть методов execution interface, opener,
+метрики уже совершённых внешних попыток и порядок prepare→begin receipt→
+effect→readback→completion. Read-only recovery и AlreadyStarted не выдают
+право нового эффекта; ошибка push/create не означает автоматический повтор.
+Fail QUEUED/FAILED/UNKNOWN_OUTCOME и branch completion QUEUED/FAILED
+отделены от успешного PR. Сохранены exact lease/approval/content/repository
+pins, timestamp equality и обязательное увеличение версии receipt.
+Комментарии fixture объясняют реальную имитацию lost ACK после эффекта,
+а не выдают синтетические сценарии за работу настоящего Git-провайдера.
+
+`go test -count=1 -json ./internal/app` — PASS LOCAL: пять верхних PASS,
+40 PASS с подтестами, без SKIP/FAIL. `go build ./...` всего gateway —
+PASS LOCAL. Использован Go1.26.6 с GOENV=off/GOWORK=off. Полный gateway
+набор на parent SHA уже выполнен в волне171; комментарий-only проверка
+не называется новым полным module/component/live прогоном. Точный новый
+SHA и повтор применимой области фиксируются в PR. Provider SDK, Proto,
+схемы, owner authority/lifecycle и runtime logs/errors не изменялись.
+
+Повтор detector сохранил тот же clone-set fingerprint
+`ccdb88d8e18c3ccd2a889f042b4a35e8abbbaf9fc4554b7f5446355c60b8ea7b`:
+6563 source, 222 generated/lock исключения, 1847 raw, 574 точных решения,
+1273 неразобранные. Новых выносов/исключений эта волна не объявляет.
+Raw SHA-256 `814257d71088a023e1635c88329189d96c811843456b0531ca93bec55b85bb9c`.
+Go-реестр 5930/21120, непокрыты 15190; весь gateway 216/621, оставшиеся
+405 ещё в работе. Полный repository go-docs-check — NOT RUN. Прежний
+diagnostics FAIL не скрыт, full acceptance/deploy/реальные агенты и почта
+не выполнялись. Цель и один Draft PR остаются незавершёнными.
 
 ## Сто семьдесят первая волна — общий технический HTTP worker
 
