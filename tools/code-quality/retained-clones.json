@@ -4408,6 +4408,94 @@
       "fragmentSHA256": "4aa84301a1f57b3c3fbc327ecbc6f711da73f81a12990a151a031957a40ad1b3",
       "count": 1,
       "reason": "Окно214 tokens идёт от integration publication через integration rebind к STT create против STT publication→STT rebind→Git detach. Общая decode/consumer/mutation цепочка обоих rebind уже реально вынесена с сохранением порядка и exact RPC; остаток пересекает несвязанные create/detach lifecycle boundaries. requireMutation/writeRPCProblem/writeManagedResult также общие. Полный generic dispatcher или callback response factory не уберёт нового связного алгоритма, но скроет команды и специальные detach checks. Только residual hash/count1, не файлы/семейства."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "6bc5bb94340455838482ee40dd5d292a0a2291d27b660b33c88b50599a4e1f25",
+      "count": 1,
+      "reason": "Окно4282 tokens сравнивает начало двух самостоятельных flat publisher registries: общие issuer/verifier records до границы следующего target. Полное структурное сравнение подтвердило16 одинаковых общих объектов, но base содержит16 targets, extended profile17 с interaction-gateway и иным порядком session-archive. ConfigMap profile заменяет весь key-delivery-targets.yaml; rotation canonical path требует именно base16 без interaction, а raw bytes участвуют в owner operation ID. Это security snapshot data, не повторный runtime алгоритм. Новый include/template/byte generator ввёл бы отдельный build/canonicalization contract ради двух независимых snapshots. Сохранён лишь exact cross-file hash/count1, не реестры или YAML целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "2f53d3755f602554aae7c000c726444eba4eeb74330bdb49b5fd0b999b872b14",
+      "count": 1,
+      "reason": "Окно issuer schema пересекает scheduler readback и secret-broker target в base против interaction-gateway readback и runtime-controller target в extended profile. Workload/role, SPIFFE/service-account, database principal и Secret/NetworkPolicy bindings принадлежат разным явным получателям. Проверено полное сравнение16 общих objects и отдельный17-й target; эти конкретные окна сравнивают разные records, не общий алгоритм. Обобщение полей шаблоном потребовало бы нового materializer и замаскировало exact snapshot identity. Исключены только два пути/fragment/count1."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "e5fc6f85d279b21ffd48cbfa9f0cdd007275f289e84804bcf9ee5c374d9a4155",
+      "count": 1,
+      "reason": "Окно818 tokens содержит границу scheduler→secret-broker issuer в base против email-bridge→session-archive issuer в extended registry. Похожая shape обязательна по closed target schema, но получатели, key/trust/database/readback/restore identities и ordering различны. Реестры потребляются как самостоятельные flat ConfigMap snapshots и привязаны raw digest к rotation identity; стандартного runtime include/merge здесь нет. Новый template/include protocol ради схемных полей не является выносом общего бизнесового алгоритма. Только exact pair/hash/count1, без wildcard по workload."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "c54100cfa2c9f8d1d410115ed13beb462d761e12691ef834b77646e5f33a6aba",
+      "count": 1,
+      "reason": "Окно сравнивает restore/readback хвост secret-broker issuer и начало его verifier с runtime-controller readback и началом STT issuer extended profile. Названия credential/ack/possession keys, expected roles и exact NetworkPolicy отличаются; common field names задаёт schema, не единая операция. Объединение этих chunks потребовало бы нового build-time templating и не заменило бы обязательные буквальные owner bindings. Полные registry objects и различие16/17 targets сверены без изменения файлов. Сохранён exact hash/count1 этой пары."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "4c1ee7b52f089b53f08390505c9dcf4df2fc4f0b0b0adf329ed5ee00f5726ac6",
+      "count": 1,
+      "reason": "Окно идёт от session-archive readback к control-api-gateway issuer в base, а другая сторона — от runtime-controller readback к STT issuer extended profile. Совпадает декларативная форма tail/header, но target tuples, credential metadata и service identities разные. Это не связный дублируемый алгоритм; generic target-template сократит имена полей ценой отдельного canonical byte materializer и скроет security snapshots, чьи hashes назначают rotation operation. Все общие16 target objects проверены одинаковыми. Только exact paths/hash/count1."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "a3844dd9390d5da53bf4bd301a65032ea344dfc7ec097103c8b17c6d4059a80d",
+      "count": 1,
+      "reason": "Короткое окно сравнивает хвост session-archive и начало control-api-gateway issuer base с хвостом secret-broker verifier и тем же control-api issuer extended profile. Common target действительно одинаков, но соседние roles и ordering не совпадают. Flat registry каждого profile является полным pinned input; выделение фрагмента потребовало бы нового include/merge consumer либо генератора, отсутствующего в текущем контракте и неприемлемого как скрытая нормализация raw source digest. Сохранён только exact cross-file fragment/count1."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "e1536fd9f6ce6505ab6d4b6451720bf2acfa8605bbfd9f67da88b2638c9222d4",
+      "count": 1,
+      "reason": "Точное3480-token окно — общий блок control-api issuer, control-plane issuer/verifier/resolver и integration-gateway после перемещения session-archive между profile snapshots. Семантическое сравнение всех16 общих targets подтвердило тождество полей. При этом extended profile имеет отдельный17-й interaction target, base rotation guard требует ровно16 и исходный flat input hash; profile ConfigMap заменяет весь файл. Это намеренно повторённые данные независимых immutable deployment inputs, не shared runtime logic. Добавление template/materialization pipeline изменило бы ownership/canonicalization workflow. Исключён только exact hash/count1, не общая policy family."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "8e16bd96a3d131b82b65e2ba3a617e7fce0ddaef06783ea7810dbd08851ed51d",
+      "count": 1,
+      "reason": "Окно сравнивает restore/readback tail control-api issuer и следующий control-plane issuer в base с tail STT issuer и следующим STT verifier extended profile. Schema fields совпадают, но target tuples, exact credential/possession/ack resources и expected roles различны. Общего исполняемого алгоритма в YAML нет, а генератор конкатенированных partial snapshots ввёл бы новый источник canonical bytes для rotation identity. Сохранены разные явные records и только точная pair/hash/count1; Secret/NetworkPolicy grants не обобщены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "4dc296cb0d8a76f747cc8442a94e1bc37a29fe83e6d70c41c5ea5cd79920024b",
+      "count": 1,
+      "reason": "Окно сравнивает первые31 строки runtime-controller issuer base и interaction-gateway issuer extended profile. Похожая target shape не означает одинаковые SPIFFE/service-account, auth/trust Secret names, database login и restore binding. Extended-only interaction нельзя перенести в base: текущий rotation guard явно исключает его и требует16 targets. Автоматический workload-prefix synthesis потребовал бы заново доказать exact authority bindings и raw digest compatibility; новый build materializer не оправдан для двух самостоятельных snapshots. Оставлен только exact cross-file fragment/count1, не все issuer declarations."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "77694abdc6eaba8566fc1e2d49ae9d9e9fd10805f105a93f25864186d21a4b6d",
+      "count": 1,
+      "reason": "Окно идёт от readback runtime-controller к STT issuer в base против readback interaction-gateway к runtime-controller issuer extended profile. Это две границы самостоятельных records со схожей schema, разными readback identities и порядком, не общий алгоритм для helper. Source profiles потребляют полный flat registry и raw bytes связывают owner operation ID; include/template abstraction добавила бы новый материализующий этап вместо простого выноса runtime кода. Только точная пара/fragment/count1, без исключения snapshot целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
+      "secondPath": "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
+      "fragmentSHA256": "eab2ff7ed64e78071877c9737978b6c8998d54c96e234e1fd378e944989b366b",
+      "count": 1,
+      "reason": "Точное1489-token окно сохраняет общий конец STT issuer, STT verifier и email-bridge в обоих profiles; extended snapshot после него содержит перенесённый session-archive и отдельный interaction target раньше. Все16 common records проверены структурно идентичными, но весь набор и raw byte digest различаются. Это намеренный повтор closed deployment data для самостоятельных flat snapshots, а не два runtime implementation. Без изменения loader/schema или введения нового byte generator нельзя подключить внешний chunk стандартным YAML include. Сохранён лишь этот exact hash/count1; schema, manifests и runtime policy не изменены."
     }
   ]
 }

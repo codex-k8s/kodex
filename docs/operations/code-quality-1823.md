@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.272.0
+version: 1.273.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят третья волна — независимые key-delivery snapshots
+
+Опубликованный SHA272 — `f3e51212d84ac1eb242e449a4c96e04e8bcbf82e`.
+Точный qBjpjX:6605 sources,222 excluded,1821 raw/655 retained/
+1166 unresolved; Go11904/21243, missing9339. Raw SHA256:
+`a4a4aad155307416680a728242e660c4abd4af26a46dcc04c6b5432de10bd635`.
+Clone-set:
+`ae72897170dcb0ee007a67f8abf04a2bca24b6b076459db4736e0788d0fa3e86`.
+Точные unit/build, push/readback и Draft PR PATCH/GET272 подтверждены.
+
+Разобраны11 cross-file YAML совпадений двух flat key-delivery target
+registries, включая4282/3480/1489-token окна. Оба полных файла (994 и1057
+строк) разобраны read-only yq4.54.1; все объекты и вложенные поля сравнены
+структурно по(workload_id,role), а не по похожим названиям Secret.
+В base16 уникальных targets, в extended profile17:16 общих объектов
+идентичны, дополнительно interaction-gateway/AUTHORIZATION_ISSUER и другой
+порядок session-archive. Версия формата1 и source_revision7 у обоих.
+Прочитаны ConfigMap-generator consumers и точный rotation registry path.
+
+Byte SHA256 base:
+`0ec8ec41a7852f2a5b70eb07ac17294e38b7aac0cfd3b0ccd23cceb22f76d954`;
+extended:
+`e88c4496bf202a07a58a769e28ddfbac08c88e838adb3208b7a5bbfc266701bc`.
+Оба остались неизменными. Profile ConfigMap заменяет целиком строковое
+содержимое key-delivery-targets.yaml. deriveCanonicalRegistryAdvance
+требует base16 без interaction-gateway; deriveRegistryRotationIdentity
+связывает именно raw bytes и source revision с owner operation ID.
+
+Это повтор декларативных данных самостоятельных security snapshots, а не
+два runtime implementation. Новый include/merge/byte generator добавил бы
+отдельный authoring/materialization pipeline вместо выноса алгоритма в
+существующую библиотеку; автоматическая общая правка также связала бы два
+отдельных deployment inputs. Для этих двух flat inputs такой новый слой
+нецелесообразен. Сохранены11 exact path/fragment/count1 решений, в каждом
+отмечены конкретные target blocks или пересекаемые границы разных records.
+Ни файл целиком, ни остальные issuer patches, ни YAML/security family не
+исключены. Прежние551 registry entries неизменны; теперь562/666 occurrences.
+Это только исключения анализатора дубликатов, не runtime security waiver.
+
+17 code-quality Node units и Go checker unit PASS LOCAL. Дополнительно
+два выбранных существующих unit authority-rotation-transition PASS,0 FAIL/
+SKIP: exact registry bytes bind owner identity и canonical base16 advance.
+Их policy77 — фиксированная публичная историческая fixture; результат не
+объявлен проверкой текущей live policy. Оба unit используют только локальные
+данные и yq, не kubectl/кластер/SSO/ключевой materializer. Context7
+/mikefarah/yq compact JSON read-only conversion и фактическая CLI версия
+сверены; новых зависимостей, генераторов или установки инструментов нет.
+
+Assessment на точном прежнем raw qBjpjX даёт1821 raw/666 retained/
+1155 unresolved. Source files, manifests, Go declarations, runtime code и
+clone-set не изменялись; executable build в этой metadata-only волне
+неприменим, не объявлен новым PASS. После коммита выполняются новый полный
+scan, exact byte/registry-prefix proof и те же unit с публикацией в Draft PR.
+General9339 Go missing и1155 clone groups остаются работой цели.
+Deploy, browser, live, component и полная приёмка NOT RUN по scope владельца.
 
 ## Двести семьдесят вторая волна — managed HTTP views и реальные границы unit proof
 
