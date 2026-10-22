@@ -640,6 +640,12 @@ func validateRuntimeRevisionDigest(input runtimecontract.RunnerInput, binding Pr
 	return nil
 }
 
+// validateRunnerInput checks the required context and complete runtime envelope before turn lineage,
+// exact per-set manifest digests and the combined workspace catalog; it returns classified failures
+// without changing owner state, fetching artifact bytes or creating a workload.
+// validateRunnerInput проверяет обязательный контекст и полный runtime-envelope до связи с ходом,
+// точных хешей наборов и общего каталога workspace; возвращает классифицированные отказы
+// без изменения состояния владельца, получения байтов артефактов или создания workload.
 func validateRunnerInput(input runtimecontract.RunnerInput) error {
 	if _, err := input.RequiredContextSnapshot(time.Now()); err != nil {
 		return validationFailure("REQUIRED_CONTEXT", err)
@@ -656,19 +662,7 @@ func validateRunnerInput(input runtimecontract.RunnerInput) error {
 			set.Provenance == "SESSION_HISTORY" && set.TurnRef == input.TurnRef {
 			return validationFailure("ATTACHMENT_LINEAGE", errors.New("runtime attachment turn lineage is invalid"))
 		}
-		artifacts := make([]runtimecontract.RunnerInputArtifact, 0)
-		for _, artifact := range input.InputArtifacts {
-			if artifact.AttachmentSetRef != set.Ref {
-				continue
-			}
-			canonicalArtifact := artifact
-			canonicalArtifact.Scope = runtimecontract.AttachmentScopeInput
-			canonicalArtifact.AttachmentSetRef = ""
-			canonicalArtifact.AttachmentPurpose = ""
-			canonicalArtifact.Provenance = ""
-			artifacts = append(artifacts, canonicalArtifact)
-		}
-		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, artifacts)
+		manifest, err := runtimecontract.BuildAttachmentSetManifest(set, input.InputArtifacts)
 		if err != nil || manifest.Digest != set.ManifestDigest {
 			return validationFailure("ATTACHMENT_MANIFEST", errors.New("runtime attachment manifest digest is invalid"))
 		}

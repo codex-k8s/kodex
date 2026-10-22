@@ -2,8 +2,8 @@
 title: Runtime-контракты Kodex
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-10-10
+version: 1.1.1
+updated: 2026-10-22
 ---
 
 # Runtime-контракты Kodex
@@ -12,6 +12,13 @@ updated: 2026-10-10
 инвентаризации образов и безопасных доказательств допуска. Доменные permissions,
 tenant eligibility, PostgreSQL lifecycle и issuer credentials ему не принадлежат.
 Он не выполняет RPC, сетевые запросы, сканирование, подпись или изменение данных.
+
+`BuildAttachmentSetManifest` одинаково восстанавливает канонический INPUT-manifest
+одного точного набора из полного каталога runtime-controller и agent-runner.
+Он копирует выбранные записи без изменения входа и сохраняет исходные правила
+`BuildAttachmentManifest`. Полные provenance/lineage проверки, сравнение ожидаемого
+digest и разрешение получения байтов остаются у потребителей. Helper не выдаёт
+полномочий, не выполняет I/O и не меняет wire/schema либо исторические хеши.
 
 `ValidateRuntimeSessionContext` одинаково используется owner producer CP,
 полным RC input validator и доставкой provider context в runner. Обычный USER

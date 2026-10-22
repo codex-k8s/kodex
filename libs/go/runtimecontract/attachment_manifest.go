@@ -202,6 +202,30 @@ func BuildAttachmentManifest(attachmentSetRef, attachmentContext string, artifac
 	return CanonicalAttachmentManifest{Manifest: manifest, Bytes: rawManifest, Digest: digest}, nil
 }
 
+// BuildAttachmentSetManifest selects one exact set from an already validated runtime catalog,
+// copies its files into the original INPUT representation and delegates canonical encoding.
+// It does not validate runtime provenance, compare the expected digest or grant artifact access;
+// callers retain those checks before materialization, and the supplied catalog is not mutated.
+// BuildAttachmentSetManifest выбирает точный набор из уже проверенного каталога runtime,
+// копирует его файлы в исходное представление INPUT и делегирует каноническое кодирование.
+// Происхождение runtime, ожидаемый хеш и права на артефакты здесь не проверяются;
+// эти проверки до материализации остаются у вызывающего кода, исходный каталог не изменяется.
+func BuildAttachmentSetManifest(set RunnerAttachmentSet, artifacts []RunnerInputArtifact) (CanonicalAttachmentManifest, error) {
+	selected := make([]RunnerInputArtifact, 0)
+	for _, artifact := range artifacts {
+		if artifact.AttachmentSetRef != set.Ref {
+			continue
+		}
+		canonical := artifact
+		canonical.Scope = AttachmentScopeInput
+		canonical.AttachmentSetRef = ""
+		canonical.AttachmentPurpose = ""
+		canonical.Provenance = ""
+		selected = append(selected, canonical)
+	}
+	return BuildAttachmentManifest(set.Ref, set.Purpose, selected)
+}
+
 // ArtifactWorkspacePath builds an absolute input or knowledge path from a validated filename,
 // position, and set reference, replacing unsafe basename characters before joining.
 // ArtifactWorkspacePath строит абсолютный путь входа или знаний по проверенным имени, позиции

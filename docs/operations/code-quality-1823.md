@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.176.0
+version: 1.177.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,77 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят седьмая волна — канонический manifest наборов вложений
+
+На базе опубликованного SHA `d3a01d9851fa241957ee6e083bad618f4a9b372e`
+в существующий runtimecontract.BuildAttachmentSetManifest вынесены три
+одинаковые подготовки точного набора: runtime-controller validateRunnerInput,
+runner materializeInputArtifacts и verifyInputArtifacts. Helper выбирает
+AttachmentSetRef, копирует записи, восстанавливает исходный INPUT scope,
+очищает только set/purpose/provenance поля и вызывает прежний canonical encoder.
+Исходный каталог не меняется. Ожидаемый digest и полномочия он не проверяет:
+full runtime/provenance validation и сравнение digest остаются у потребителей.
+Сериализация, хеши и ограничения прежнего BuildAttachmentManifest не менялись.
+
+После первого выноса detector показал остаточный локальный повтор runner:
+одинаковую сборку всех set manifests и общего workspace manifest. Он тоже
+вынесен в private buildInputManifests своего unit, без переноса сервисных
+ошибок в библиотеку. Сохраняются порядок проверок и оба прежних error text;
+ни частичный map, ни filesystem effects не выдаются при отказе. Две старые
+копии удалены. Все новые объявления и три изменённые функции получили
+предметные EN→RU комментарии, README общей библиотеки актуализирован.
+
+Карта неизменённых границ для #1823:
+
+| Потребитель | Проверки до эффекта | Эффект после успешной проверки |
+| --- | --- | --- |
+| runtime-controller validateRunnerInput | required context → полный input.Validate → turn lineage → per-set digest → общий workspace catalog | функция не создаёт Pod, grant или owner transition |
+| runner materializeInputArtifacts | все per-set digest → общий workspace catalog | прежние reset/directories → callback bytes → файлы/manifests → read-only protection |
+| runner verifyInputArtifacts | те же все per-set digest → общий workspace catalog | прежние чтение manifests/README и exact file digests, без исправления файлов |
+
+Helper не читает env, секреты и файлы, не делает RPC и не владеет
+create/claim/cancel/retry/terminal. Authority, lease, RuntimeRevision,
+immutable input, events и authoritative owner read paths не изменены.
+Новых контрактов/состояний/миграций или обходов provenance не добавлено.
+
+Механически подтверждено: все три старых внутренних алгоритма идентичны
+телу общего helper после переименования локальных переменных; полные
+файлы callers отличаются от parent только двумя заявленными выносами
+и комментариями после удаления комментариев/gofmt. Новые unit проверяют
+точные канонические bytes/digest, current/history, перестановку файлов,
+тот же ref в чужом наборе, исключение knowledge, неизменность входа,
+ошибки метаданных/дубликатов/пустого набора и прежний пустой manifest.
+Локальный runner unit проверяет порядок ошибок set/workspace в обоих
+callers, отсутствие частичного результата, callback и записи workspace
+до отказа. Это синтетические проверки, не реальный запуск агента.
+
+PASS LOCAL: полный runtimecontract unit — 111 верхних PASS, 531 PASS
+с подтестами, 0 SKIP/FAIL; workload package runtime-controller — 84 верхних,
+300 PASS с подтестами и один прежний SKIP TestAssistantWarmRuntimeOwnerWireBuild;
+app package runner — 50 верхних, 139 PASS с подтестами и три прежних SKIP
+TestWorkspaceNestedMountContainer, TestWorkspaceProtectionContainer,
+TestHeavyWorkspacePublicationKernel. Все три module `go build ./...` прошли.
+Не запущенные wire/container/kernel profiles — NOT RUN, env для снятия
+SKIP не подделывались. Первоначальная команда runtimecontract из корневого
+модуля отклонена до компиляции; фактический полный запуск выполнен из его
+правильного module cwd. Go1.26.6, GOENV=off/GOWORK=off.
+
+Новые/изменённые объявления EN→RU, scoped Go-docs-check общей библиотеки
+и новых файлов runner — PASS LOCAL. Пять ignore-boundaries — PASS LOCAL;
+точный опубликованный SHA, повтор build/unit и unit анализатора фиксируются
+в текущем PR после коммита. Full repository check, component/live,
+PostgreSQL/browser/deploy/провайдеры и реальные агенты — NOT RUN.
+Прежний diagnostics FAIL не скрыт и не исправлялся этой волной.
+
+Detector: 6566 source, 222 generated/lock исключения, 1845 raw,
+574 точных решения и 1271 неразобранная группа. Относительно parent удалены
+две прежние группы canonicalization/runner preparation, новых групп нет;
+исключения не добавлялись и не расширялись. Рабочий raw SHA-256
+`00bc1c159336c1d23369e0ce7c1b6bfc431866e13b406bfe346d3d38842f4cf5`,
+clone-set fingerprint
+`4980ff53183c62e1b61866f740dad7a95698b4a936f062a78b3076fbb25f0b2c`.
+Go-реестр 6343/21125, непокрыты 14782. Единый Draft PR и цель ещё не завершены.
 
 ## Сто семьдесят шестая волна — завершены комментарии шлюза интеграций
 

@@ -686,30 +686,16 @@ func scopedArtifacts(artifacts []runtimecontract.RunnerInputArtifact, scope stri
 	return result
 }
 
+// materializeInputArtifacts verifies canonical catalogs before resetting input/knowledge/session
+// trees, retrieves exact artifact bytes through the callback, writes manifests and protects read-only
+// trees; a catalog failure precedes those effects and this function grants no additional access.
+// materializeInputArtifacts проверяет канонические каталоги до очистки деревьев input/knowledge/session,
+// получает точные байты через callback, записывает манифесты и защищает деревья только для чтения;
+// ошибка каталога предшествует этим эффектам, дополнительных прав функция не выдаёт.
 func materializeInputArtifacts(ctx context.Context, input model.Input, client *callback.Client) error {
-	setManifests := make(map[string]runtimecontract.CanonicalAttachmentManifest, len(input.AttachmentSets))
-	for _, set := range input.AttachmentSets {
-		setArtifacts := make([]runtimecontract.RunnerInputArtifact, 0)
-		for _, artifact := range input.InputArtifacts {
-			if artifact.AttachmentSetRef != set.Ref {
-				continue
-			}
-			canonicalArtifact := artifact
-			canonicalArtifact.Scope = runtimecontract.AttachmentScopeInput
-			canonicalArtifact.AttachmentSetRef = ""
-			canonicalArtifact.AttachmentPurpose = ""
-			canonicalArtifact.Provenance = ""
-			setArtifacts = append(setArtifacts, canonicalArtifact)
-		}
-		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, setArtifacts)
-		if err != nil || manifest.Digest != set.ManifestDigest {
-			return errors.New("runtime attachment manifest digest is invalid")
-		}
-		setManifests[set.Ref] = manifest
-	}
-	workspaceManifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
+	setManifests, workspaceManifest, err := buildInputManifests(input)
 	if err != nil {
-		return errors.New("build runtime workspace manifest")
+		return err
 	}
 	if err := resetWorkspaceDirectory(ctx, input.WorkspaceRoot, "input"); err != nil {
 		return err
@@ -746,30 +732,16 @@ func materializeInputArtifacts(ctx context.Context, input model.Input, client *c
 	return protectReadOnlyWorkspaceTrees(input.WorkspaceRoot, "input", "knowledge")
 }
 
+// verifyInputArtifacts rebuilds the expected catalogs before checking exact on-disk manifests,
+// README files and artifact digests inside the workspace; it performs readback only and never repairs
+// mismatched files or accepts persisted bytes as a replacement for the runtime input authority.
+// verifyInputArtifacts восстанавливает ожидаемые каталоги до сверки точных манифестов на диске,
+// README и хешей файлов внутри workspace; выполняет только чтение, не исправляет несовпадения
+// и не заменяет полномочия runtime-входа сохранёнными байтами.
 func verifyInputArtifacts(input model.Input) error {
-	sets := make(map[string]runtimecontract.CanonicalAttachmentManifest, len(input.AttachmentSets))
-	for _, set := range input.AttachmentSets {
-		artifacts := make([]runtimecontract.RunnerInputArtifact, 0)
-		for _, artifact := range input.InputArtifacts {
-			if artifact.AttachmentSetRef != set.Ref {
-				continue
-			}
-			canonical := artifact
-			canonical.Scope = runtimecontract.AttachmentScopeInput
-			canonical.AttachmentSetRef = ""
-			canonical.AttachmentPurpose = ""
-			canonical.Provenance = ""
-			artifacts = append(artifacts, canonical)
-		}
-		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, artifacts)
-		if err != nil || manifest.Digest != set.ManifestDigest {
-			return errors.New("runtime attachment manifest digest is invalid")
-		}
-		sets[set.Ref] = manifest
-	}
-	workspaceManifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
+	sets, workspaceManifest, err := buildInputManifests(input)
 	if err != nil {
-		return errors.New("build runtime workspace manifest")
+		return err
 	}
 	if err := verifyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", "manifest.json"), workspaceManifest.Bytes, int64(len(workspaceManifest.Bytes))); err != nil {
 		return err
