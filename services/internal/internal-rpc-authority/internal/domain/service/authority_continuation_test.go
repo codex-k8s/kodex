@@ -16,6 +16,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// TestIssueContinuationInheritsVerifiedRootAndReservesChild signs a local synthetic parent and checks inherited authority/authentication, parent-capped expiry, captured reservation/registration and rejection after uncertain registration. Real ES256 runs, but the capture store does not enforce durable parent acceptance or replay.
+// TestIssueContinuationInheritsVerifiedRootAndReservesChild подписывает локального синтетического родителя и проверяет наследование полномочий и аутентификации, ограничение срока родителем, захваченные reservation и регистрацию и отказ при неопределённой регистрации. ES256 настоящий, но capture store не обеспечивает устойчивое принятие родителя и replay.
 func TestIssueContinuationInheritsVerifiedRootAndReservesChild(t *testing.T) {
 	t.Parallel()
 
@@ -34,18 +36,42 @@ func TestIssueContinuationInheritsVerifiedRootAndReservesChild(t *testing.T) {
 	}
 
 	const (
+		// parentOperation selects the synthetic upstream operation; no STT runs.
+		// parentOperation выбирает синтетическую upstream-операцию без запуска STT.
 		parentOperation = "platform.stt.transcribe"
-		parentMethod    = "/stt.v1.SpeechToTextService/Transcribe"
-		childOperation  = "platform.stt.policy.resolve"
-		childMethod     = "/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy"
-		gatewaySPIFFE   = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
-		sttSPIFFE       = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
-		controlSPIFFE   = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
-		sttAudience     = "urn:kodex:internal-rpc:stt-tts-service"
+		// parentMethod pins the parent RPC spelling in local signed claims.
+		// parentMethod закрепляет имя RPC родителя в локальных подписанных claims.
+		parentMethod = "/stt.v1.SpeechToTextService/Transcribe"
+		// childOperation selects the configured continuation edge in the fixture.
+		// childOperation выбирает настроенное ребро continuation в эталоне.
+		childOperation = "platform.stt.policy.resolve"
+		// childMethod pins the child RPC without calling its real service.
+		// childMethod закрепляет RPC ребёнка без вызова настоящего сервиса.
+		childMethod = "/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy"
+		// gatewaySPIFFE is the synthetic parent's signed caller identity.
+		// gatewaySPIFFE — подписанная идентичность caller синтетического родителя.
+		gatewaySPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+		// sttSPIFFE is the parent target and child issuer/caller in the fixture.
+		// sttSPIFFE — цель родителя и issuer/caller ребёнка в эталоне.
+		sttSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
+		// controlSPIFFE pins the synthetic child target, not a live peer.
+		// controlSPIFFE закрепляет синтетическую цель ребёнка, а не живой peer.
+		controlSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+		// sttAudience binds the signed parent to the local upstream profile.
+		// sttAudience связывает подписанного родителя с локальным upstream-профилем.
+		sttAudience = "urn:kodex:internal-rpc:stt-tts-service"
+		// controlAudience binds the generated child to the downstream profile.
+		// controlAudience связывает созданного ребёнка с downstream-профилем.
 		controlAudience = "urn:kodex:internal-rpc:control-plane"
-		parentJTI       = "31f5dff2-73e8-4053-aa60-b2916705ce43"
-		requestID       = "1cf1a64f-8563-4d45-9ef9-33c30679de48"
-		correlationID   = "7d07bc69-bf60-403e-aa05-d5066848369b"
+		// parentJTI fixes one local parent identity for lineage and digest assertions.
+		// parentJTI задаёт локальную идентичность родителя для проверок lineage и digest.
+		parentJTI = "31f5dff2-73e8-4053-aa60-b2916705ce43"
+		// requestID pins the child derivation input across simulated repeats.
+		// requestID закрепляет вход вывода ребёнка при имитируемых повторах.
+		requestID = "1cf1a64f-8563-4d45-9ef9-33c30679de48"
+		// correlationID is trace linkage and does not confer parent authority.
+		// correlationID связывает трассировку и не даёт полномочий родителя.
+		correlationID = "7d07bc69-bf60-403e-aa05-d5066848369b"
 	)
 	requestDigest := strings.Repeat("c", 64)
 	policyDigest := strings.Repeat("a", 64)
@@ -150,6 +176,9 @@ func TestIssueContinuationInheritsVerifiedRootAndReservesChild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("выпустить continuation: %v", err)
 	}
+	if childClaims.JTI != "0d651862-d9ad-5210-8972-6a937ff788c5" {
+		t.Fatalf("continuation JTI encoding changed: %s", childClaims.JTI)
+	}
 	if childClaims.JTI != deterministicContinuationJTI(parentJTI, childOperation, requestID) ||
 		childClaims.Continuation == nil || childClaims.Continuation.RootJTI != parentJTI ||
 		childClaims.Continuation.ParentJTI != parentJTI || childClaims.Continuation.RequestID != requestID ||
@@ -178,6 +207,8 @@ func TestIssueContinuationInheritsVerifiedRootAndReservesChild(t *testing.T) {
 	}
 }
 
+// continuationCaptureStore records parent/child reservations and issued bindings and can fail registration for the local continuation unit. Other methods return synthetic success and do not implement database transactions or replay protection.
+// continuationCaptureStore записывает reservations родителя и ребёнка и выданные привязки и может отклонить регистрацию в локальном unit continuation. Остальные методы синтетически успешны и не реализуют транзакции БД и replay protection.
 type continuationCaptureStore struct {
 	parent, child     repository.Reservation
 	calls             int
@@ -185,7 +216,12 @@ type continuationCaptureStore struct {
 	registrationError error
 }
 
+// Reserve succeeds without storing or rejecting a reused proof in this fixture; it is not evidence of one-use proof enforcement.
+// Reserve в этом эталоне успешен без сохранения proof и отклонения повтора; одноразовость proof не доказывается.
 func (*continuationCaptureStore) Reserve(context.Context, repository.Reservation) error { return nil }
+
+// ReserveContinuation captures the exact proposed parent/child values and increments a counter without checking parent acceptance, expiry or duplicate child identity.
+// ReserveContinuation сохраняет точные предложенные значения родителя и ребёнка и увеличивает счётчик без проверки принятия родителя, срока и повторной идентичности ребёнка.
 func (store *continuationCaptureStore) ReserveContinuation(
 	_ context.Context,
 	parent repository.Reservation,
@@ -194,20 +230,36 @@ func (store *continuationCaptureStore) ReserveContinuation(
 	store.parent, store.child, store.calls = parent, child, store.calls+1
 	return nil
 }
+
+// ActivateSnapshot accepts the fixture snapshot without writing a durable watermark, validating a receipt or executing independent readback.
+// ActivateSnapshot принимает эталонный снимок без записи устойчивой отметки, проверки квитанции и независимого readback.
 func (*continuationCaptureStore) ActivateSnapshot(context.Context, repository.SnapshotState) error {
 	return nil
 }
+
+// AcceptVerification always succeeds in the capture store; the enclosing unit exercises local token verification but not atomic snapshot acceptance or replay reservation.
+// AcceptVerification всегда успешен в capture store; основной unit проверяет локальную проверку токена, но не атомарное принятие снимка и replay reservation.
 func (*continuationCaptureStore) AcceptVerification(context.Context, repository.SnapshotState, repository.Reservation) error {
 	return nil
 }
-func (*continuationCaptureStore) Ready(context.Context, repository.SnapshotState) error { return nil }
-func (*continuationCaptureStore) Close()                                                {}
 
+// Ready returns synthetic success without opening a database connection, probing RLS or testing a real replay write path.
+// Ready возвращает синтетический успех без подключения к БД, проверки RLS и реального пути записи replay.
+func (*continuationCaptureStore) Ready(context.Context, repository.SnapshotState) error { return nil }
+
+// Close is a no-op because this fixture owns only in-memory captured values and no pool, connection or worker lifecycle.
+// Close ничего не делает: эталон владеет лишь захваченными значениями в памяти, а не пулом, соединением и жизненным циклом worker.
+func (*continuationCaptureStore) Close() {}
+
+// Freshness returns a synthetic thirty-second receipt window using real wall-clock observation time and the supplied receipt ID. It does not establish database-clock provenance or persist a lease.
+// Freshness возвращает синтетическое тридцатисекундное окно квитанции с реальными настенными часами наблюдения и переданным ID. Происхождение часов БД не доказывается и аренда не сохраняется.
 func (*continuationCaptureStore) Freshness(_ context.Context, state repository.SnapshotState) (repository.SnapshotFreshness, error) {
 	now := time.Now()
 	return repository.SnapshotFreshness{ReceiptID: state.AttestationReceiptID, ObservedAt: now, ValidUntil: now.Add(30 * time.Second)}, nil
 }
 
+// RegisterIssuedContext captures the binding then returns the configured fixture error, modeling an uncertain registration response without committing anything to a database.
+// RegisterIssuedContext сохраняет привязку в памяти и возвращает настроенную ошибку эталона, моделируя неопределённый ответ регистрации без фиксации в БД.
 func (store *continuationCaptureStore) RegisterIssuedContext(_ context.Context, _ repository.SnapshotState, binding repository.IssuedContextBinding) error {
 	store.binding = binding
 	return store.registrationError

@@ -15,23 +15,43 @@ import (
 )
 
 const (
-	restoreDirectiveType         = "kodex-internal-rpc-restore-directive+jws"
-	restoreACKType               = "kodex-internal-rpc-restore-quiescence-ack+jws"
-	restoreDirectiveTTL          = 30 * time.Second
-	restoreACKTTL                = 30 * time.Second
-	restoreControllerIssuer      = restoreControllerSPIFFE
-	restoreWorkloadAudience      = "urn:kodex:internal-rpc-authority-restore-workload"
+	// restoreDirectiveType pins the controller-signed role-bound quiescing-directive JWS type, distinct from issuance, role credential and workload ACK protocols.
+	// restoreDirectiveType закрепляет тип JWS подписанной контроллером ролевой директивы дренирования отдельно от протоколов выдачи, role credential и ACK workload.
+	restoreDirectiveType = "kodex-internal-rpc-restore-directive+jws"
+	// restoreACKType identifies workload-signed quiescence evidence validated with the ACK public key pinned in its role credential.
+	// restoreACKType обозначает подписанное workload доказательство дренирования, проверяемое публичным ACK-ключом из закреплённого role credential.
+	restoreACKType = "kodex-internal-rpc-restore-quiescence-ack+jws"
+	// restoreDirectiveTTL limits newly issued and accepted quiescing directives to thirty seconds, independently of the five-minute delivered role credential.
+	// restoreDirectiveTTL ограничивает новые и принимаемые директивы дренирования тридцатью секундами независимо от пятиминутного доставленного role credential.
+	restoreDirectiveTTL = 30 * time.Second
+	// restoreACKTTL limits accepted workload ACK timing to thirty seconds; it does not establish the completion safe-window or physical PITR duration.
+	// restoreACKTTL ограничивает время принимаемого ACK workload тридцатью секундами, не задавая окно безопасного завершения и длительность физического PITR.
+	restoreACKTTL = 30 * time.Second
+	// restoreControllerIssuer reuses the fixed controller SPIFFE issuer for signed issuance/directive claims, not a request-selected caller identity.
+	// restoreControllerIssuer использует фиксированного SPIFFE-издателя контроллера для подписанных issuance и directive claims, а не выбранную запросом идентичность caller.
+	restoreControllerIssuer = restoreControllerSPIFFE
+	// restoreWorkloadAudience is the exact audience of directives sent to workloads, separate from the controller audience of role credentials and ACKs.
+	// restoreWorkloadAudience — точная аудитория директив для workloads отдельно от аудитории контроллера у role credentials и ACK.
+	restoreWorkloadAudience = "urn:kodex:internal-rpc-authority-restore-workload"
+	// restoreRoleCredentialPurpose restricts accepted signer records to restore-role credential trust, not any otherwise valid verification key.
+	// restoreRoleCredentialPurpose ограничивает принимаемые записи подписанта назначением доверия restore-role credential, а не любым корректным проверяющим ключом.
 	restoreRoleCredentialPurpose = "RESTORE_ROLE_CREDENTIAL"
-	restoreOperatorSubject       = "system:serviceaccount:kodex-system:internal-rpc-authority-restore-operator"
-	restoreOperatorAudience      = "urn:kodex:internal-rpc-authority-restore-controller"
+	// restoreOperatorSubject pins the sole operator ServiceAccount subject permitted to reserve prepare/complete application authorization after external TokenReview.
+	// restoreOperatorSubject закрепляет единственный subject ServiceAccount оператора для резервирования прикладной авторизации prepare и complete после внешнего TokenReview.
+	restoreOperatorSubject = "system:serviceaccount:kodex-system:internal-rpc-authority-restore-operator"
+	// restoreOperatorAudience is the exact TokenReview-derived application audience required for restore-operator command authorization.
+	// restoreOperatorAudience — точная прикладная аудитория результата TokenReview для авторизации команд оператора восстановления.
+	restoreOperatorAudience = "urn:kodex:internal-rpc-authority-restore-controller"
 )
 
-// RestorePeer описывает проверенную mTLS-идентичность caller.
+// RestorePeer carries the SPIFFE identity established by the authenticated transport. A string in this struct is not itself proof that mTLS or caller authorization ran.
+// RestorePeer передаёт SPIFFE-идентичность, установленную аутентифицированным транспортом. Строка структуры сама не доказывает выполнение mTLS и авторизации caller.
 type RestorePeer struct {
 	SPIFFEID string
 }
 
-// RestoreController координирует остановку workload и устойчивое ограждение.
+// RestoreController coordinates durable restore state, database fences, trusted role credentials, publisher delivery and independent completion evidence. It does not itself perform physical PITR or infer operator authority from command fields.
+// RestoreController согласует устойчивое состояние восстановления, ограждения БД, доверенные role credentials, доставку publisher и независимые доказательства завершения. Физический PITR не выполняется и полномочия оператора из полей команды не выводятся.
 type RestoreController struct {
 	databaseClusterID    string
 	controllerKey        internalrpcauth.ES256Key
@@ -46,7 +66,8 @@ type RestoreController struct {
 	now                  func() time.Time
 }
 
-// RestoreDirectiveResult содержит директиву и текущее состояние.
+// RestoreDirectiveResult represents either a no-directive observation with current state or a persisted signed directive and its expiry; it does not create a caller grant merely by carrying state.
+// RestoreDirectiveResult представляет наблюдение без директивы с текущим состоянием либо сохранённую подписанную директиву и срок; перенос состояния сам не создаёт grant вызывающего.
 type RestoreDirectiveResult struct {
 	NoDirective      bool
 	State            model.RestoreState
@@ -54,13 +75,15 @@ type RestoreDirectiveResult struct {
 	ExpiresAt        time.Time
 }
 
-// RestoreACKResult содержит принятую запись и новое состояние.
+// RestoreACKResult returns the coordination state and accepted ACK receipt only after the controller's record/fence steps succeed; it is not raw unverified workload input.
+// RestoreACKResult возвращает состояние координации и принятую квитанцию ACK лишь после успешных шагов записи и ограждения контроллера; это не сырой непроверенный вход workload.
 type RestoreACKResult struct {
 	State   model.RestoreState
 	Receipt model.RestoreACKRecord
 }
 
-// AuthorizeOperator связывает проверенный TokenReview result с exact command.
+// AuthorizeOperator validates externally reviewed operator subject/namespace/account/audience, token digest and one of two exact commands, then reserves authorization for its idempotency/semantic digest. It does not perform TokenReview itself or treat mTLS alone as operator permission.
+// AuthorizeOperator проверяет внешне подтверждённые subject, namespace, account и audience оператора, дайджест токена и одну из двух точных команд, затем резервирует авторизацию по idempotency и semantic digest. TokenReview здесь не выполняется и одного mTLS недостаточно для права оператора.
 func (controller *RestoreController) AuthorizeOperator(
 	ctx context.Context,
 	credential model.RestoreOperatorCredential,
@@ -104,7 +127,8 @@ func (controller *RestoreController) AuthorizeOperator(
 	return nil
 }
 
-// NewRestoreController создаёт контроллер из устойчивых границ состояния.
+// NewRestoreController requires the fixed database cluster, a private controller key, nonzero registry/trust generations and all durable/evidence ports. It stores supplied registry/key maps without deep cloning or performing their external cryptographic loading, and starts no restore.
+// NewRestoreController требует фиксированный кластер БД, закрытый ключ контроллера, ненулевые поколения реестра и доверия и все порты состояния и доказательств. Переданные карты сохраняются без глубокого копирования и внешней криптографической загрузки; восстановление не запускается.
 func NewRestoreController(
 	databaseClusterID string,
 	controllerKey internalrpcauth.ES256Key,
@@ -150,7 +174,8 @@ func NewRestoreController(
 	}, nil
 }
 
-// Prepare начинает цикл восстановления и переводит его в QUIESCING.
+// Prepare validates intent identifiers, overwrites clock/expected targets/controller pins from trusted state, persists coordination, applies the quiescing fence and publishes/records credentials in sorted target order. These are separate durable/external steps; a later error does not undo earlier fences or deliveries.
+// Prepare проверяет идентификаторы намерения, заменяет время, ожидаемые цели и привязки контроллера доверенными данными, сохраняет координацию, применяет ограждение дренирования и публикует и записывает credentials по отсортированным целям. Это отдельные устойчивые и внешние шаги; поздняя ошибка не отменяет ранние ограждения и доставки.
 func (controller *RestoreController) Prepare(
 	ctx context.Context,
 	command model.PrepareRestoreCommand,
@@ -260,7 +285,8 @@ func (controller *RestoreController) Prepare(
 	return state, nil
 }
 
-// GetDirective возвращает workload только его действующую директиву.
+// GetDirective returns no-directive state before role verification when not QUIESCING or the supplied revision is current. Otherwise it verifies the peer-bound role, reuses an unexpired persisted target directive or signs and durably saves a fresh stop/drain directive before returning.
+// GetDirective возвращает состояние без директивы до проверки роли, если фаза не QUIESCING либо переданная ревизия текущая. Иначе проверяет роль в области peer, переиспользует непросроченную сохранённую директиву цели либо подписывает и устойчиво сохраняет новую stop/drain директиву до возврата.
 func (controller *RestoreController) GetDirective(
 	ctx context.Context,
 	peer RestorePeer,
@@ -362,7 +388,8 @@ func (controller *RestoreController) GetDirective(
 	}, nil
 }
 
-// Acknowledge проверяет и резервирует подтверждение остановки workload.
+// Acknowledge validates request ID, peer-bound role, controller-owned directive and signed drained-workload evidence, then records a semantic-idempotent ACK and applies its next fence. A fence failure can follow a persisted ACK; no earlier side effect is rolled back here.
+// Acknowledge проверяет ID запроса, роль в области peer, принадлежащую контроллеру директиву и подписанное доказательство дренированного workload, затем записывает семантически идемпотентный ACK и применяет следующее ограждение. Отказ ограждения может следовать за сохранённым ACK; ранние эффекты здесь не откатываются.
 func (controller *RestoreController) Acknowledge(
 	ctx context.Context,
 	peer RestorePeer,
@@ -459,7 +486,8 @@ func (controller *RestoreController) Acknowledge(
 	return RestoreACKResult{State: next, Receipt: receipt}, nil
 }
 
-// Complete завершает восстановление только после полного набора подтверждений.
+// Complete requires the exact PREPARED restore intent, obtains independent PITR evidence and overwrites caller evidence fields with that result before durable completion/fence application. It does not execute the restore or accept a caller's completion assertion as proof.
+// Complete требует точное намерение восстановления PREPARED, получает независимое доказательство PITR и заменяет им переданные поля доказательства до устойчивого завершения и применения ограждения. Восстановление не выполняется и утверждение caller о завершении не принимается за доказательство.
 func (controller *RestoreController) Complete(
 	ctx context.Context,
 	command model.CompleteRestoreCommand,
@@ -522,7 +550,8 @@ func (controller *RestoreController) Complete(
 	return state, nil
 }
 
-// Recover восстанавливает согласованность ограждения после перезапуска.
+// Recover reloads durable coordination, reapplies its database fence and checks exact fence readback. It restores fencing consistency rather than restoring database files or issuing new operator authority.
+// Recover перечитывает устойчивую координацию, повторно применяет её ограждение БД и проверяет точный readback. Восстанавливается согласованность ограждения, а не файлы БД или новые полномочия оператора.
 func (controller *RestoreController) Recover(ctx context.Context) error {
 	state, err := controller.coordination.Load(ctx)
 	if err != nil {
@@ -534,7 +563,8 @@ func (controller *RestoreController) Recover(ctx context.Context) error {
 	return controller.fence.RestoreFenceReady(ctx, state)
 }
 
-// Ready сверяет устойчивое состояние координации и ограждения.
+// Ready requires StartupReady's durable coordination/fence checks and additionally the publisher's working readiness path, returning no state on either failure.
+// Ready требует устойчивые проверки координации и ограждения StartupReady и дополнительно рабочую готовность publisher, не возвращая состояние при любом отказе.
 func (controller *RestoreController) Ready(ctx context.Context) (model.RestoreState, error) {
 	state, err := controller.StartupReady(ctx)
 	if err != nil {
@@ -546,8 +576,8 @@ func (controller *RestoreController) Ready(ctx context.Context) (model.RestoreSt
 	return state, nil
 }
 
-// StartupReady сверяет durable coordination и fence без циклической
-// зависимости от readback всех workload, которые сами опрашивают controller.
+// StartupReady checks coordination readiness, loads state and verifies the exact database fence without depending on publisher/workload readback, avoiding a cyclic startup dependency.
+// StartupReady проверяет готовность координации, загружает состояние и сверяет точное ограждение БД без зависимости от publisher и workload readback, избегая циклической зависимости запуска.
 func (controller *RestoreController) StartupReady(
 	ctx context.Context,
 ) (model.RestoreState, error) {
@@ -564,16 +594,20 @@ func (controller *RestoreController) StartupReady(
 	return state, nil
 }
 
-// RoleTrustMetadata возвращает обслуживаемую метаинформацию доверия.
+// RoleTrustMetadata returns the configured served role-trust metadata by value; it performs no fresh read, trust rotation or signature verification.
+// RoleTrustMetadata возвращает настроенные метаданные обслуживаемого доверия роли по значению без свежего чтения, ротации доверия и проверки подписи.
 func (controller *RestoreController) RoleTrustMetadata() model.RestoreRoleTrustMetadata {
 	return controller.roleTrustMetadata
 }
 
-// SignerGeneration возвращает поколение ключа директив контроллера.
+// SignerGeneration reports the configured controller directive-signing generation, distinct from workload ACK or publisher role-credential generations.
+// SignerGeneration сообщает настроенное поколение подписи директив контроллера отдельно от поколений ACK workload и role credential publisher.
 func (controller *RestoreController) SignerGeneration() uint64 {
 	return controller.controllerGeneration
 }
 
+// ensureIssuance proposes fresh UUIDs and current second-truncated time to the durable target issuance operation, which returns the canonical existing-or-new record. The returned record, not a discarded proposal, supplies later signed identity/time.
+// ensureIssuance предлагает новые UUID и текущее время с точностью секунды устойчивой операции выдачи цели, возвращающей каноническую прежнюю либо новую запись. Последующим подписанным идентичности и времени служит возвращённая запись, а не отброшенное предложение.
 func (controller *RestoreController) ensureIssuance(
 	ctx context.Context,
 	state model.RestoreState,
@@ -606,6 +640,8 @@ func (controller *RestoreController) ensureIssuance(
 	return record, nil
 }
 
+// verifyRoleCredential verifies current/previous purpose-bound publisher trust, canonical signature/time and exact peer/restore/phase-generation bindings, then requires an expected target and persisted matching delivery digest. It returns claims and the compact digest without consuming ACK replay state.
+// verifyRoleCredential проверяет текущее либо предыдущее доверие publisher с назначением, каноническую подпись и время и точные привязки peer, восстановления, фазы и поколений, затем требует ожидаемую цель и сохранённый дайджест доставки. Claims и дайджест compact возвращаются без потребления replay ACK.
 func (controller *RestoreController) verifyRoleCredential(
 	peer RestorePeer,
 	compact string,
@@ -677,6 +713,8 @@ func (controller *RestoreController) verifyRoleCredential(
 	return claims, digestCompact(compact), nil
 }
 
+// verifyDirective first requires the exact controller-owned persisted compact/digest, then verifies its JWS with the controller public key and checks role/restore/phase/credential and stop/drain bindings. This differs from the workload agent's mounted-certificate trust path.
+// verifyDirective сначала требует точные сохранённые compact и дайджест, принадлежащие контроллеру, затем проверяет JWS публичным ключом контроллера и привязки роли, восстановления, фазы, credential и stop/drain. Это отличается от доверия смонтированному сертификату у агента workload.
 func (controller *RestoreController) verifyDirective(
 	compact string,
 	credential model.RestoreRoleCredentialClaims,
@@ -744,6 +782,8 @@ func (controller *RestoreController) verifyDirective(
 	return claims, nil
 }
 
+// verifyACK derives and fingerprints the credential-pinned public ACK key, verifies canonical ACK signature/time and exact directive/role/generation/digest bindings, requiring stopped admission, drained work and zero in-flight count. Replay reservation is a later coordination operation.
+// verifyACK получает и вычисляет отпечаток закреплённого credential публичного ACK-ключа, проверяет канонические подпись и время и точные привязки директивы, роли, поколений и дайджестов, требуя остановленный допуск, дренирование и нулевой счётчик запросов. Replay резервируется позднее в координации.
 func (controller *RestoreController) verifyACK(
 	compact string,
 	credential model.RestoreRoleCredentialClaims,
@@ -820,6 +860,8 @@ func (controller *RestoreController) verifyACK(
 	return claims, digestCompact(compact), nil
 }
 
+// restoreCredentialRejected returns the fixed typed unauthenticated error for rejected role credentials without exposing signer, peer or secret details.
+// restoreCredentialRejected возвращает фиксированную типизированную unauthenticated для отклонённого role credential без раскрытия подписанта, peer и деталей секрета.
 func restoreCredentialRejected() error {
 	return failure.New(
 		failure.Unauthenticated,
@@ -827,6 +869,8 @@ func restoreCredentialRejected() error {
 	)
 }
 
+// mapRestorePersistence maps replay, idempotency conflict and absence to their closed domain failure kinds and everything else to persistence-unavailable, preserving the cause under the supplied fixed operation message.
+// mapRestorePersistence переводит replay, конфликт идемпотентности и отсутствие в закрытые доменные виды ошибок, остальное — в persistence-unavailable, сохраняя причину под переданным фиксированным сообщением операции.
 func mapRestorePersistence(message string, err error) error {
 	switch {
 	case errors.Is(err, repository.ErrReplay):
@@ -840,6 +884,8 @@ func mapRestorePersistence(message string, err error) error {
 	}
 }
 
+// deliveryTargetID preserves target lookup spelling by replacing underscores in the role with hyphens and lowercasing ASCII before appending it to workload ID. It is formatting, not target registration or authorization.
+// deliveryTargetID сохраняет форму поиска цели, заменяя подчёркивания роли дефисами и переводя ASCII в нижний регистр перед добавлением к ID workload. Это форматирование, а не регистрация цели и авторизация.
 func deliveryTargetID(workloadID, role string) string {
 	value := role
 	for index := range value {
@@ -850,6 +896,8 @@ func deliveryTargetID(workloadID, role string) string {
 	return workloadID + "." + lowerASCII(value)
 }
 
+// lowerASCII copies the input bytes and lowercases only ASCII A-Z, preserving all other bytes without Unicode normalization or locale-sensitive casing.
+// lowerASCII копирует входные байты и переводит только ASCII A-Z в нижний регистр, сохраняя остальные байты без нормализации Unicode и локального преобразования регистра.
 func lowerASCII(value string) string {
 	buffer := []byte(value)
 	for index := range buffer {
@@ -860,6 +908,8 @@ func lowerASCII(value string) string {
 	return string(buffer)
 }
 
+// digestCompact returns lowercase SHA-256 hex over exact compact JWS bytes; digest equality does not replace canonical decoding, signer trust or signature verification.
+// digestCompact возвращает строчный hex SHA-256 точных compact-байтов JWS; равенство дайджеста не заменяет канонический разбор, доверие подписанту и проверку подписи.
 func digestCompact(compact string) string {
 	digest := sha256.Sum256([]byte(compact))
 	return hex.EncodeToString(digest[:])

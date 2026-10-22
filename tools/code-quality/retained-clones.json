@@ -4816,6 +4816,30 @@
       "fragmentSHA256": "c4aae8e9c7212c6690dca29fc92c61aedb65c92bfc19c1369ca6732811d10361",
       "count": 1,
       "reason": "Совпадает декларативный префикс остановки, но окно начинается в process-owned select/readiness и заканчивается у разных Kubernetes API versus publisher-client ресурсов. Shared RunShutdown исполняет cancel/join/context/error policy, telemetry tail уже общий. Универсальный main/shutdown-router потребовал бы скрыть граф владения publisher и restore-controller; их конкретный порядок ресурсов оставлен явно в composition roots."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/client/restoreagent/agent.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/domain/service/restore.go",
+      "fragmentSHA256": "77c29db9a89d8bf1d8a7fd1bc6fee95a2f61d4290f50c09f2de9385ebf841735",
+      "count": 1,
+      "reason": "Проверка подписи, canonical JSON и времени уже исполняется общими internalrpcauth helpers. Agent выводит ключ из закреплённого mounted certificate и возвращает собственную ошибку; controller сначала требует точный сохранённый compact/digest, использует свой controller key и типизированный отказ, затем проверяет свои source/phase pins. Обобщение оставшегося протокольного каркаса скрыло бы разные источники доверия, а не вынесло общий криптографический алгоритм."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/client/restoreagent/agent.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/domain/service/restore.go",
+      "fragmentSHA256": "b41709c7962db1a04e9d1726920f7737a80f18eff2420282c71f6cfcfcef1c17",
+      "count": 1,
+      "reason": "Окно сравнивает directive agent с ACK controller: общие canonical signature/decode/time primitives уже переиспользуются. ACK проверяется ключом credential public JWK с thumbprint, своим protected type, issuer/audience/subject и drain/digest pins; directive имеет другой источник ключа и другой профиль. Универсальный verifier с параметрами этих полномочий ухудшил бы явность trust derivation и typed rejection. Сохранён только точный короткий профиль, не дубликат криптографии."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/domain/service/authority.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/domain/service/authority.go",
+      "fragmentSHA256": "112e42d618381907c73eac740fb7a195185f4a9f3ac0023cac7729921adfc1c5",
+      "count": 1,
+      "reason": "Совпадает заполнение плоской схемы AuthorizationClaims, но fresh Issue выводит caller/authority/credential authentication из проверенного proof и резервирует proof до случайного JTI и подписи. Continuation наследует проверенный parent/root, ограничивает TTL родителем и использует deterministic child JTI с принятой parent reservation после подписи. Общие validators/signing уже вынесены. Generic claims builder со входными actor flags скрыл бы происхождение полномочий ради декларативного окна."
     }
   ]
 }

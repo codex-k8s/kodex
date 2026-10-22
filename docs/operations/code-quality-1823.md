@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.297.0
+version: 1.298.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,78 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто восьмая волна — domain authority, publisher и restore
+
+Опубликованный SHA297 — `c2800ba8e3dc848ad695db89f07287c7ee268d4f`.
+Точный g8Rf0M:6627 sources,222 excluded,1809 raw/720 retained/
+1089 unresolved; Go12830/21273,missing8443. Exact38/102 unit и
+full authority build, inverse AST6,17 Node/Go checker — PASS LOCAL.
+Push и Draft PR PATCH/GET297 подтверждены; общий объём не завершён.
+
+Прочитаны три полных domain service файла2815 lines, continuation unit,
+существующий JoinedAuthorityUUID и его fixtures.109 прежних непокрытых
+объявлений получили предметные EN→RU; scope5 Go files111/111,missing0.
+Дополнительно описаны12 локальных constant fixture pins, которые checker
+не включает в denominator. Комментарии фиксируют реальные ограничения:
+Issue резервирует proof до подписи и не откатывает reservation при отказе;
+Continuation наследует root и ограничивает expiry, подписывает до durable
+accepted-parent reservation. Verify сверяет observed peer с claims.Caller.
+Свежесть всегда требует authoritative DB read, а не offline LKG fallback.
+Publisher внешние записи могут предшествовать ошибке, map Registry не
+копируется, iteration не стабильна. RestoreController не выполняет PITR,
+Prepare/ACK/Complete имеют отдельные durable/external шаги, не одну транзакцию.
+
+deterministicContinuationJTI использует существующий JoinedAuthorityUUID.
+Сохранены порядок parent/operation/request, NUL МЕЖДУ тремя строками без
+trailing NUL, SHA-256 truncation и version/variant bits. Это маленький
+повтор ниже порога detector: уменьшение raw groups ему не приписывается.
+Independent Node crypto golden для actual continuation fixture добавлен
+к прежнему unit, ещё4 fixed3-tuple vectors покрывают пустые строки, ASCII,
+UTF-8 и embedded separator. Helper не объявляется standard UUIDv5 или
+однозначным кодированием произвольных NUL-содержащих tuples.
+Context7 /golang/go подтвердил Sum256 и alias semantics; pinned Go1.26.6
+go doc strings.Join подтвердил separator между elements без trailing.
+Inverse AST5 разворачивает ACTUAL прежний helper с fixed3 join/array alias,
+убирает только новые golden assertions/vectors и сравнивает полные AST
+пяти файлов с297. Директивы и сам shared helper буквально прежние.
+
+Три точных detector окна retained с отдельными SHA/count reasons:
+agent directive versus controller directive125tokens; agent directive
+versus controller ACK109tokens; fresh Issue versus Continuation claims
+layout101tokens. Canonical signature/decode/time primitives уже общие.
+Первые два окна различаются источником public key и provenance/type/pins/
+typed rejection; третье — источником actor/root и порядком reservation.
+Новый generic verifier/claims-builder скрыл бы эти authority boundaries.
+Оба окна каждого совпадения прочитаны. Прежние602 entries буквальный
+prefix, добавлены ровно3 entries;605 entries покрывают723 occurrences.
+Никакого исключения целых файлов/каталогов или изменения порога нет.
+
+38 верхних/106 всех selected unit (команда297, тот же explicit regex и
+env-u PostgreSQL DSN) и full authority build -p=2 — PASS LOCAL,0 FAIL/SKIP.
+Дополнительно полностью ./internal/app ./internal/domain/service
+./internal/domain/types/value:45 верхних/166 всех unit PASS LOCAL,0 FAIL/SKIP:
+```bash
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 \
+  go test -mod=readonly -count=1 -timeout 120s \
+  ./internal/app ./internal/domain/service ./internal/domain/types/value
+```
+JSON variant команд даёт счётчики без подавления failures и запускается с
+set -e / pipefail.17 Node и Go checker unit, inverse AST5, scope docs111/111
+и diff-check PASS LOCAL. Реальная БД, replay concurrency, Secret delivery,
+restore, browser/cluster/model/live/component — NOT RUN.
+
+Рабочий zDGxFB:6627 sources,222 excluded,1809 raw/723 retained/
+1086 unresolved; Go12939/21273,missing8334. Все1809 normalized clone
+keys/counts прежние; нет удалённых/новых fragments. Координаты изменились
+из-за комментариев. Raw SHA256:
+`b58a4ded063f6d1e2b0f7ec6dc04b43510172ab17abdd33d368ba7461a55b19b`;
+clone-set:
+`da154898bde42fe444399f1f002f5cd36e96143c40af02957470c4014d69d31d`.
+После коммита выполняется exact scan/unit/build и remote readback.
+Generated, contracts, dependencies, SQL и applied migrations неизменны.
+verifyDirective finding293 и historical FAIL остаются открытыми; новая
+документация не является их исправлением. Общий PR остаётся Draft.
 
 ## Двести девяносто седьмая волна — PostgreSQL adapters и общие layouts
 

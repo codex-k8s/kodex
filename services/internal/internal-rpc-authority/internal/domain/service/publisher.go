@@ -18,25 +18,43 @@ import (
 )
 
 const (
-	restoreIssuanceType        = "kodex-internal-rpc-restore-role-issuance+jws"
-	restoreRoleCredentialType  = "kodex-internal-rpc-restore-role-credential+jws"
+	// restoreIssuanceType pins the controller's issuance-directive JWS type, separate from the resulting role credential and delivery receipt.
+	// restoreIssuanceType закрепляет тип JWS директивы выдачи контроллера отдельно от полученных role credential и квитанции доставки.
+	restoreIssuanceType = "kodex-internal-rpc-restore-role-issuance+jws"
+	// restoreRoleCredentialType identifies the publisher-signed restore-role credential protocol; it is not the workload ACK or controller directive type.
+	// restoreRoleCredentialType обозначает протокол подписанного publisher restore-role credential, а не тип ACK workload или директивы контроллера.
+	restoreRoleCredentialType = "kodex-internal-rpc-restore-role-credential+jws"
+	// restoreDeliveryReceiptType identifies the signed receipt binding actual role/ACK material delivery to one issuance and readback digest.
+	// restoreDeliveryReceiptType обозначает подписанную квитанцию, связывающую фактическую доставку материала role и ACK с одной выдачей и дайджестом readback.
 	restoreDeliveryReceiptType = "kodex-internal-rpc-restore-role-delivery-receipt+jws"
-	restoreControllerSPIFFE    = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"
-	restorePublisherSPIFFE     = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
-	restorePublisherAudience   = "urn:kodex:internal-rpc-authority-restore-role-credential-publisher"
-	restoreControllerAudience  = "urn:kodex:internal-rpc-authority-restore-controller"
-	restoreIssuanceTTL         = 30 * time.Second
-	restoreRoleCredentialTTL   = 5 * time.Minute
-	// Projected Kubernetes Secret updates can lag behind the publisher by up to
-	// a kubelet sync period. Keep the pinned intent comfortably valid across
-	// that delivery lag and a bounded sidecar startup retry window.
+	// restoreControllerSPIFFE is the fixed trusted controller identity required for publication requests and issuance claims, not a value chosen from the target registry.
+	// restoreControllerSPIFFE — фиксированная доверенная идентичность контроллера для запросов публикации и issuance claims, а не значение из реестра целей.
+	restoreControllerSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"
+	// restorePublisherSPIFFE is the fixed issuer of restore-role credentials and delivery receipts; transport authentication and signing-key trust are separate requirements.
+	// restorePublisherSPIFFE — фиксированный издатель restore-role credentials и квитанций доставки; аутентификация транспорта и доверие ключу подписи требуются отдельно.
+	restorePublisherSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
+	// restorePublisherAudience is the exact audience of controller issuance directives accepted by this publisher, distinct from the controller audience of generated credentials.
+	// restorePublisherAudience — точная аудитория принимаемых publisher директив выдачи контроллера отдельно от аудитории контроллера у созданных credentials.
+	restorePublisherAudience = "urn:kodex:internal-rpc-authority-restore-role-credential-publisher"
+	// restoreControllerAudience binds generated role credentials and delivery receipts to the restore controller rather than an arbitrary workload endpoint.
+	// restoreControllerAudience связывает созданные role credentials и квитанции доставки с контроллером восстановления, а не произвольным endpoint workload.
+	restoreControllerAudience = "urn:kodex:internal-rpc-authority-restore-controller"
+	// restoreIssuanceTTL limits accepted issuance directives to thirty seconds using the common clock-skew rule; delivered role material has a separate lifetime.
+	// restoreIssuanceTTL ограничивает принимаемые директивы выдачи тридцатью секундами по общему правилу расхождения часов; доставленный role material имеет отдельный срок.
+	restoreIssuanceTTL = 30 * time.Second
+	// restoreRoleCredentialTTL sets the five-minute lifetime of role credentials and delivery receipts from the persisted ACK-material issue time, keeping retries byte-stable.
+	// restoreRoleCredentialTTL задаёт пятиминутный срок role credentials и квитанций доставки от сохранённого времени выдачи ACK-material, сохраняя стабильные байты повторов.
+	restoreRoleCredentialTTL = 5 * time.Minute
+	// publishedReadbackIntentTTL keeps pinned intents valid for ten minutes from the bucket time to tolerate projected delivery lag and startup retries; credential lifetime remains separately bounded.
+	// publishedReadbackIntentTTL сохраняет PINNED intents на десять минут от времени bucket для задержки projected delivery и повторов запуска; срок credential ограничивается отдельно.
 	publishedReadbackIntentTTL = 10 * time.Minute
-	// Новый material появляется реже длительности credential, оставляя старому
-	// material три минуты overlap для atomic projected Secret delivery.
+	// readbackMaterialRotationInterval rounds publication time into two-minute buckets, rotating readback credential intent identities without changing them on every refresh.
+	// readbackMaterialRotationInterval округляет время публикации в двухминутные bucket, меняя идентичности намерений readback credential не на каждый refresh.
 	readbackMaterialRotationInterval = 2 * time.Minute
 )
 
-// RestoreCredentialSigner описывает ключ удостоверений восстановления.
+// RestoreCredentialSigner supplies a private restore-role signer with exact source/digest/key-set/generation provenance; the caller's trust loader authenticates those pins.
+// RestoreCredentialSigner предоставляет закрытый подписант restore-role с точным происхождением source, digest, key-set и generation; подлинность привязок устанавливает загрузчик доверия вызывающего.
 type RestoreCredentialSigner struct {
 	Key            internalrpcauth.ES256Key
 	SourceRevision uint64
@@ -45,7 +63,8 @@ type RestoreCredentialSigner struct {
 	Generation     uint64
 }
 
-// ReadbackCredentialSigner описывает независимый ключ проверки выдачи.
+// ReadbackCredentialSigner carries independent readback-credential signing material and provenance; NewPublisher requires its key ID to differ from the restore-role signer.
+// ReadbackCredentialSigner содержит независимый материал подписи readback credential и его происхождение; NewPublisher требует ID ключа, отличающийся от подписанта restore-role.
 type ReadbackCredentialSigner struct {
 	Key            internalrpcauth.ES256Key
 	SourceRevision uint64
@@ -54,14 +73,16 @@ type ReadbackCredentialSigner struct {
 	Generation     uint64
 }
 
-// ControllerIdentity связывает workload контроллера с его поколением и ключом.
+// ControllerIdentity supplies transport-established controller SPIFFE identity, public key and generation to publication; carrying this struct alone does not prove authentication.
+// ControllerIdentity передаёт установленную транспортом SPIFFE-идентичность контроллера, публичный ключ и поколение для публикации; наличие структуры само не доказывает аутентификацию.
 type ControllerIdentity struct {
 	SPIFFEID   string
 	Key        internalrpcauth.ES256Key
 	Generation uint64
 }
 
-// Publisher доставляет назначенные ключи и удостоверения через Kubernetes Secret.
+// Publisher coordinates trusted registry targets, separate signing purposes, durable receipts and versioned Secret delivery. graphMu protects graph/publication bookkeeping; completed external writes are not rolled back by a later method error.
+// Publisher согласует доверенные цели реестра, отдельные назначения подписи, устойчивые квитанции и версионированную доставку Secret. graphMu защищает учёт графа и публикации; поздняя ошибка не откатывает завершённые внешние записи.
 type Publisher struct {
 	registry       model.DeliveryTargetRegistry
 	signer         RestoreCredentialSigner
@@ -74,7 +95,8 @@ type Publisher struct {
 	now            func() time.Time
 }
 
-// AttachAuthorityGraph присоединяет обязательный полный publish/readback path.
+// AttachAuthorityGraph installs one nonnil graph under the mutex and rejects replacement. It does not publish state, activate a snapshot or make readiness pass by attachment alone.
+// AttachAuthorityGraph устанавливает один ненулевой граф под mutex и отклоняет замену. Состояние не публикуется, снимок не активируется и одного присоединения недостаточно для readiness.
 func (publisher *Publisher) AttachAuthorityGraph(
 	graph repository.AuthorityGraphLifecycle,
 ) error {
@@ -90,7 +112,8 @@ func (publisher *Publisher) AttachAuthorityGraph(
 	return nil
 }
 
-// PublishAuthorityGraph публикует snapshot, auth/proof keys и trust bundles.
+// PublishAuthorityGraph requires writable persistence/fence state, publishes through the attached graph and then updates local graph state and target readback source pins under lock. Graph effects can precede a returned error; a nil graph fails closed.
+// PublishAuthorityGraph требует доступную запись хранения и ограждения, публикует через присоединённый граф, затем обновляет локальное состояние и привязки readback source целей под блокировкой. Эффекты графа могут предшествовать ошибке; nil-граф закрыто отклоняется.
 func (publisher *Publisher) PublishAuthorityGraph(
 	ctx context.Context,
 ) (model.AuthoritySnapshotPublication, error) {
@@ -121,7 +144,8 @@ func (publisher *Publisher) PublishAuthorityGraph(
 	return publication, nil
 }
 
-// NewPublisher создаёт publisher из реестра, независимых ключей и хранилищ.
+// NewPublisher checks registry header presence/provenance shape, two private signers with different IDs and nonnil store/delivery ports, then installs the clock. It does not verify the registry signature, deep-copy targets, attach a graph or contact a Secret backend.
+// NewPublisher проверяет заголовок реестра и форму происхождения, двух закрытых подписантов с разными ID и ненулевые порты store и delivery, затем задаёт часы. Подпись реестра не проверяется, цели глубоко не копируются, граф не присоединяется и backend Secret не вызывается.
 func NewPublisher(
 	registry model.DeliveryTargetRegistry,
 	signer RestoreCredentialSigner,
@@ -158,7 +182,8 @@ func NewPublisher(
 	}, nil
 }
 
-// PublishReadbackMaterials доставляет отдельные материалы проверки выдачи.
+// PublishReadbackMaterials gates writes, snapshots target values under graphMu and publishes sequentially using one two-minute bucket. Target order follows map iteration; failure returns no result slice even though earlier target deliveries may already have persisted.
+// PublishReadbackMaterials проверяет разрешение записи, копирует значения целей под graphMu и последовательно публикует с одним двухминутным bucket. Порядок целей следует map; при ошибке срез результатов не возвращается, хотя доставки ранних целей могли сохраниться.
 func (publisher *Publisher) PublishReadbackMaterials(
 	ctx context.Context,
 ) ([]model.PublishedReadbackMaterial, error) {
@@ -186,6 +211,8 @@ func (publisher *Publisher) PublishReadbackMaterials(
 	return results, nil
 }
 
+// publishReadbackMaterial validates graph pins, obtains possession material, durably pins the exact intent and signs/delivers its credential. It recovers an ambiguous delivery only by same-intent readback and verifies returned compact signature, exact payload and named bindings before returning private material to the trusted caller.
+// publishReadbackMaterial проверяет привязки графа, получает материал владения, устойчиво закрепляет точное намерение и подписывает и доставляет credential. Неопределённая доставка разрешается только readback того же intent; до возврата закрытого материала доверенному caller проверяются подпись compact, точный payload и именованные привязки.
 func (publisher *Publisher) publishReadbackMaterial(
 	ctx context.Context,
 	target model.DeliveryTarget,
@@ -418,6 +445,8 @@ func (publisher *Publisher) publishReadbackMaterial(
 	}, nil
 }
 
+// readbackIntentID derives a stable NUL-joined identifier from the fixed namespace, target ID, graph source revision and effective material revision. It does not allocate a random identity or bind secret values.
+// readbackIntentID выводит устойчивый NUL-joined идентификатор из фиксированного пространства, ID цели, ревизии источника графа и эффективной ревизии материала. Случайная идентичность не создаётся и значения секретов не привязываются.
 func readbackIntentID(target model.DeliveryTarget, effectiveRevision uint64) string {
 	return value.JoinedAuthorityUUID(
 		"readback-intent",
@@ -427,6 +456,8 @@ func readbackIntentID(target model.DeliveryTarget, effectiveRevision uint64) str
 	)
 }
 
+// ensureReadbackPossession reuses a cryptographically checked current generation, rejects rollback/gaps and otherwise generates the next target key for create/CAS. A failed write is resolved by reading and validating served material, not by blindly writing another key.
+// ensureReadbackPossession переиспользует криптографически проверенное текущее поколение, отклоняет rollback и пропуски, иначе генерирует следующий ключ цели для create или CAS. Отказ записи разрешается чтением и проверкой обслуженного материала, а не слепой записью нового ключа.
 func (publisher *Publisher) ensureReadbackPossession(
 	ctx context.Context,
 	target model.DeliveryTarget,
@@ -533,6 +564,8 @@ func (publisher *Publisher) ensureReadbackPossession(
 	return delivered, nil
 }
 
+// validateReadbackPossession parses the private JWK and decimal generation, recomputes its public thumbprint and requires the target's exact generation/key ID plus matching stored fields. It neither writes material nor authenticates a different Secret resource.
+// validateReadbackPossession разбирает закрытый JWK и десятичное поколение, пересчитывает публичный отпечаток и требует точные поколение и ID ключа цели и совпавшие сохранённые поля. Материал не записывается и другой ресурс Secret не аутентифицируется.
 func validateReadbackPossession(
 	material repository.SecretMaterial,
 	target model.DeliveryTarget,
@@ -571,7 +604,8 @@ func validateReadbackPossession(
 	return nil
 }
 
-// Publish выпускает и доставляет роль восстановления для целевого workload.
+// Publish gates persistence and controller identity, resolves a same-directive persisted idempotent receipt before revalidating new issuance, then validates target, delivers stable ACK/role material and signs/persists a delivery receipt. Failures after external delivery do not undo Secret writes; conflicting inputs cannot reuse the receipt.
+// Publish проверяет хранение и идентичность контроллера, разрешает сохранённую квитанцию идемпотентности той же директивы до проверки новой выдачи, затем проверяет цель, доставляет стабильный материал ACK и role и подписывает и сохраняет квитанцию. Отказ после внешней доставки не откатывает Secret; конфликтующий вход не переиспользует квитанцию.
 func (publisher *Publisher) Publish(
 	ctx context.Context,
 	controller ControllerIdentity,
@@ -812,7 +846,8 @@ func (publisher *Publisher) Publish(
 	return saved, nil
 }
 
-// Ready сверяет хранилище и фактически опубликованные материалы Secret.
+// Ready checks writable persistence/fence state, available signer/registry/attached publication and graph readiness for that publication. It is not a pure check of local configuration or a newly created connection.
+// Ready проверяет запись хранения и ограждения, наличие подписанта, реестра и присоединённой публикации и готовность графа этой публикации. Это не чистая проверка локальной конфигурации или созданного соединения.
 func (publisher *Publisher) Ready(ctx context.Context) error {
 	if err := publisher.ensureWritable(ctx); err != nil {
 		return err
@@ -837,6 +872,8 @@ func (publisher *Publisher) Ready(ctx context.Context) error {
 	return nil
 }
 
+// ensureWritable delegates the persistence/restore-fence readiness gate to the store and returns a typed unavailable failure on refusal without fallback writes.
+// ensureWritable передаёт проверку готовности хранения и ограждения восстановления store и при отказе возвращает типизированную unavailable без запасного пути записи.
 func (publisher *Publisher) ensureWritable(ctx context.Context) error {
 	if err := publisher.store.PublisherReady(ctx); err != nil {
 		return failure.Wrap(
@@ -848,16 +885,20 @@ func (publisher *Publisher) ensureWritable(ctx context.Context) error {
 	return nil
 }
 
-// Registry возвращает проверенный реестр целей доставки.
+// Registry returns the configured registry struct by value, with its target map still shared rather than a defensive copy. Callers must not mutate it or infer a fresh durable readback from this getter.
+// Registry возвращает настроенную структуру реестра по значению, сохраняя общую карту целей вместо защитной копии. Вызывающий не должен менять её или считать getter свежим устойчивым readback.
 func (publisher *Publisher) Registry() model.DeliveryTargetRegistry {
 	return publisher.registry
 }
 
-// SignerGeneration возвращает обслуживаемое поколение ключа восстановления.
+// SignerGeneration reports the configured restore-role signing generation, not the separate readback signer or latest registry/source revision.
+// SignerGeneration сообщает настроенное поколение подписи restore-role, а не отдельного подписанта readback или последнюю ревизию реестра и источника.
 func (publisher *Publisher) SignerGeneration() uint64 {
 	return publisher.signer.Generation
 }
 
+// verifyDirective verifies the controller key ID/protected type and canonical issuance JWS, then checks thirty-second timing and exact issuer/audience/restore identity generations. Target-registry/workload binding is checked separately by directiveMatchesTarget.
+// verifyDirective проверяет ID ключа контроллера, защищённый тип и канонический issuance JWS, затем тридцатисекундное время и точные issuer, audience, идентичность восстановления и поколения. Привязка реестра целей и workload отдельно проверяется directiveMatchesTarget.
 func (publisher *Publisher) verifyDirective(
 	controller ControllerIdentity,
 	compact string,
@@ -921,6 +962,8 @@ func (publisher *Publisher) verifyDirective(
 	return claims, nil
 }
 
+// ensureACKMaterial reuses only material matching directive digest/JTI or creates a new target ACK key, stable role/receipt JTIs and issue time once. It checks served directive binding after creation; Publish performs the later key/thumbprint and credential readback checks.
+// ensureACKMaterial переиспользует лишь материал с совпавшими дайджестом директивы и JTI либо однократно создаёт новый ACK-ключ цели, устойчивые JTI роли и квитанции и время. После создания проверяется привязка обслуженной директивы; поздние проверки ключа, отпечатка и credential readback выполняет Publish.
 func (publisher *Publisher) ensureACKMaterial(
 	ctx context.Context,
 	target model.DeliveryTarget,
@@ -1014,6 +1057,8 @@ func (publisher *Publisher) ensureACKMaterial(
 	return material, nil
 }
 
+// directiveMatchesTarget compares the signed subject, registry revision/digest and workload/role/generation fields with the exact configured target. It does not verify the directive signature or derive a target from untrusted text.
+// directiveMatchesTarget сравнивает подписанные subject, ревизию и дайджест реестра и поля workload, роли и поколений с точной настроенной целью. Подпись директивы не проверяется и цель из недоверенного текста не выводится.
 func directiveMatchesTarget(
 	directive model.CredentialIssuanceDirective,
 	target model.DeliveryTarget,
