@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.178.0
+version: 1.179.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,75 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят девятая волна — общий DNS resource-label parser
+
+На базе опубликованного SHA `14b433adbe25174f8861e074f72d7f9b7193a54c`
+в существующий runtimecontract.ValidDNSLabel вынесен общий чистый разбор
+одной метки имени ресурса. Шесть локальных реализаций control-plane/runtime-
+controller и внутренний validDNSLabelContract теперь делегируют ему;
+седьмой локальный consumer, credentialprojection, сохраняет поверх него
+свою прежнюю более строгую проверку первого символа. Старые циклы и
+повторный regex compilation удалены. Private predicate names остаются
+адаптерами своих потребителей, а не вторыми реализациями или legacy API.
+Новых module/dependencies, RPC, wire/schema, lifecycle/authority решений
+или изменений строк сохранённых имён не добавлено.
+
+Матрица неизменённой грамматики:
+
+| Потребители | Первая позиция | Остальное и границы |
+| --- | --- | --- |
+| CP config/materializer/provider client/repository, RC config/workload, shared runtime contract | строчная ASCII-буква либо цифра | 1..63 байта, буквы/цифры/внутренние дефисы, без крайних дефисов |
+| RC credentialprojection | только строчная ASCII-буква, как до выноса | та же общая грамматика; первая цифра не становится разрешённой |
+
+Лексическое совпадение не объявлено DNS lookup, существованием ресурса,
+owner eligibility, доступом к Secret либо проверкой exact UID/revision/digest.
+Эти прежние проверки остаются у исходных потребителей. PostgreSQL SQL,
+транзакции и applied migrations не менялись. Три CP файла получают импорт
+уже используемой module runtimecontract; лишний strings import materializer
+удалён, regexp в RC config сохранён для отдельного SHA-256 pattern.
+
+Полные восемь исходных файлов механически сравнены с parent после
+нормализации комментариев/gofmt: изменения только в телах заявленных
+валидаторов и необходимых imports. Все восемь исходных функций отдельно
+скомпилированы во временной приватной оснастке вместе с их текущими
+заменами: 115727 входов и 925816 сравнений — PASS LOCAL, различий нет.
+Покрыты все пары байтов, каждый байт во всех позициях длин 1/2/3/62/63/64
+и дополнительные Unicode/control/path cases. Это ограниченное сравнение
+и проверка построения, не заявление полного формального доказательства.
+Первая сборка временной оснастки потребовала квалифицировать private
+shared call импортом runtimecontract; production-код при этом не менялся.
+
+Новые постоянные unit проверяют явные границы и независимую закреплённую
+грамматику, все пары байтов и позиции около лимита. Отдельный unit клиента
+проекции сохраняет запрет первой цифры; Secret/брокер не вызываются.
+Новые четыре объявления, шесть ранее недокументированных predicates
+и общий README получили предметные EN→RU описания. Все libs/go плюс новый
+projection test — scoped Go-docs-check 2523/2523, PASS LOCAL; остальные
+объявления затронутых больших файлов этим не объявлены завершёнными.
+
+PASS LOCAL: runtimecontract `go test -count=1 -json ./...` — 113 верхних
+PASS, 533 PASS с подтестами, 0 SKIP/FAIL; RC app/credentialprojection/workload
+— 149 верхних, 496 PASS с подтестами, 0 FAIL и один прежний SKIP
+TestAssistantWarmRuntimeOwnerWireBuild. CP app/credentialmaterializer/
+providercredentialclient/repository-postgres-platform — по Go-отчёту 414
+верхних PASS, 1432 PASS с подтестами, 0 FAIL, 63 component SKIP. Для этого
+unit-only запуска явно сняты только disposable test DSN/template vars,
+чтобы не использовать унаследованную БД; тесты не редактировались.
+PostgreSQL component контур не выполнен и не выдаётся за PASS. Все три
+module `go build ./...` — PASS LOCAL. 16 unit анализатора, Go-checker,
+пять ignore-boundaries и diff-check — PASS LOCAL. Go1.26.6, GOENV=off/GOWORK=off.
+Точный опубликованный SHA и повтор проверок будут зафиксированы в PR.
+
+Detector: 6569 source, 222 generated/lock исключения, 1844 raw,
+578 точных решений и 1266 неразобранных. Удалены две прежние группы
+DNS parser, новых групп нет; registry исключений не менялся. Рабочий raw
+SHA-256 `81e52fb9c206ca75f0a88264b706d9e5e43cccc663eb57914b37bb81bbfef81a`,
+clone-set fingerprint
+`217d95767987d590b166f6f097ee7102b05d92c5a99a412a150aea6047cac0b9`.
+Go-реестр 6530/21129, непокрыты 14599. Component/live/browser/deploy и
+реальные агенты/провайдеры — NOT RUN; прежний diagnostics FAIL не скрыт.
+Полный repository Go-docs-check — NOT RUN. Цель и единый Draft PR не завершены.
 
 ## Сто семьдесят восьмая волна — весь Kubernetes workload manager
 

@@ -643,19 +643,7 @@ func equalRuntimeKubernetesRules(left, right []RuntimeKubernetesRule) bool {
 // validDNSLabelContract accepts a bounded lowercase ASCII DNS label without leading or trailing hyphens.
 // validDNSLabelContract допускает ограниченную строчную ASCII DNS-label без дефиса в начале или конце.
 func validDNSLabelContract(value string) bool {
-	if value == "" || len(value) > 63 || strings.HasPrefix(value, "-") || strings.HasSuffix(value, "-") {
-		return false
-	}
-	for _, character := range value {
-		if character < 'a' || character > 'z' {
-			if character < '0' || character > '9' {
-				if character != '-' {
-					return false
-				}
-			}
-		}
-	}
-	return true
+	return ValidDNSLabel(value)
 }
 
 // runtimeResourceName appends the first eight SHA-256 bytes of an identity to the fixed resource prefix.

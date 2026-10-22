@@ -8,9 +8,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -100,16 +100,12 @@ func cloneData(input map[string][]byte) map[string][]byte {
 	return result
 }
 
+// validDNSLabel checks namespace and Secret label syntax through the shared resource-name parser;
+// Kubernetes ownership, credentials and materialization effects remain separate checks.
+// validDNSLabel проверяет синтаксис меток пространства и Secret общим разбором имён ресурсов;
+// владение Kubernetes, реквизиты и эффекты материализации проверяются отдельно.
 func validDNSLabel(value string) bool {
-	if value == "" || len(value) > 63 || strings.HasPrefix(value, "-") || strings.HasSuffix(value, "-") {
-		return false
-	}
-	for _, character := range value {
-		if (character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '-' {
-			return false
-		}
-	}
-	return true
+	return runtimecontract.ValidDNSLabel(value)
 }
 
 func validDataKey(value string) bool {

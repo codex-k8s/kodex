@@ -240,15 +240,10 @@ func validSHA256(value string) bool {
 	return true
 }
 
+// validDNSLabel preserves this projection client's existing letter-first restriction in addition
+// to the shared resource-label grammar; adopting the common parser must not admit leading digits here.
+// validDNSLabel сохраняет прежнее требование первой буквы клиента проекции поверх общей грамматики
+// меток ресурсов; переход на общий разбор не должен разрешать здесь первую цифру.
 func validDNSLabel(value string) bool {
-	if len(value) == 0 || len(value) > 63 || value[0] < 'a' || value[0] > 'z' && (value[0] < '0' || value[0] > '9') {
-		return false
-	}
-	for index, character := range value {
-		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-' && index > 0 && index < len(value)-1 {
-			continue
-		}
-		return false
-	}
-	return true
+	return value != "" && value[0] >= 'a' && value[0] <= 'z' && runtimecontract.ValidDNSLabel(value)
 }

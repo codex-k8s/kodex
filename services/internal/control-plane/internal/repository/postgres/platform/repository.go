@@ -146,17 +146,12 @@ func (repository *Repository) ConfigureProviderCredential(config ProviderCredent
 	return nil
 }
 
+// validDNSLabel delegates provider Secret name syntax to the shared resource-label parser while
+// leaving exact credential metadata, scope and content verification with the repository owner.
+// validDNSLabel делегирует синтаксис имени Secret провайдера общему разбору меток ресурсов,
+// оставляя точную проверку метаданных реквизитов, области и содержимого владельцу хранилища.
 func validDNSLabel(value string) bool {
-	if value == "" || len(value) > 63 {
-		return false
-	}
-	for index, character := range value {
-		valid := character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-'
-		if !valid || character == '-' && (index == 0 || index == len(value)-1) {
-			return false
-		}
-	}
-	return true
+	return runtimecontract.ValidDNSLabel(value)
 }
 
 func (repository *Repository) Ready(ctx context.Context) error {

@@ -11,6 +11,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/google/uuid"
@@ -211,17 +212,12 @@ func validProviderCredentialDescriptor(value entity.ProviderCredentialDescriptor
 		validLowerHexSHA256(value.ContentSHA256)
 }
 
+// validDNSLabel validates a returned provider Secret name with the shared bounded ASCII grammar;
+// matching this syntax does not validate the descriptor's UID, revision or authority.
+// validDNSLabel проверяет возвращённое имя Secret провайдера общей ограниченной ASCII-грамматикой;
+// совпадение синтаксиса не проверяет UID, ревизию или полномочия дескриптора.
 func validDNSLabel(value string) bool {
-	if value == "" || len(value) > 63 {
-		return false
-	}
-	for index, character := range value {
-		if ((character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '-') ||
-			character == '-' && (index == 0 || index == len(value)-1) {
-			return false
-		}
-	}
-	return true
+	return runtimecontract.ValidDNSLabel(value)
 }
 
 func validLowerHexSHA256(value string) bool {

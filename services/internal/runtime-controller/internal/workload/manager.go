@@ -2925,16 +2925,7 @@ func fsGroupChangePolicyPointer(value corev1.PodFSGroupChangePolicy) *corev1.Pod
 // validDNSLabel accepts one to sixty-three lowercase ASCII letters, digits or internal hyphens; uppercase, Unicode and leading/trailing hyphens are rejected without a DNS lookup.
 // validDNSLabel принимает от одного до шестидесяти трёх строчных ASCII-букв, цифр либо внутренних дефисов; верхний регистр, Unicode и крайние дефисы отклоняются без DNS-запроса.
 func validDNSLabel(value string) bool {
-	if value == "" || len(value) > 63 {
-		return false
-	}
-	for index, character := range value {
-		valid := character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-'
-		if !valid || character == '-' && (index == 0 || index == len(value)-1) {
-			return false
-		}
-	}
-	return true
+	return runtimecontract.ValidDNSLabel(value)
 }
 
 // validDNSSubdomain checks a nonempty name of at most 253 bytes as individually valid dot-separated DNS labels, rejecting empty components and trailing dots.

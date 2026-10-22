@@ -176,8 +176,12 @@ func validPinnedImageReference(reference string) bool {
 		!strings.ContainsAny(reference[:separator], "${}")
 }
 
+// validDNSLabel uses the shared bounded ASCII grammar for configured Kubernetes resource names;
+// resource existence and access are not established by this lexical check.
+// validDNSLabel использует общую ограниченную ASCII-грамматику имён ресурсов Kubernetes;
+// существование ресурса и доступ к нему этой лексической проверкой не подтверждаются.
 func validDNSLabel(value string) bool {
-	return regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$`).MatchString(value)
+	return runtimecontract.ValidDNSLabel(value)
 }
 
 func validDNSSubdomain(value string) bool {

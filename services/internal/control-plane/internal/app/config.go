@@ -12,6 +12,7 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 const (
@@ -334,17 +335,12 @@ func validObjectStorageBoundary(config Config) bool {
 		validRuntimeIdentifier(config.ObjectStorageRegion) && validDNSLabel(config.ObjectStorageBucket) && validDNSLabel(config.SessionArchiveStorageBucket)
 }
 
+// validDNSLabel applies the shared single-label ASCII grammar to configured storage/resource names
+// without resolving a host, checking a bucket or granting access to an existing object.
+// validDNSLabel применяет общую ASCII-грамматику одной метки к настроенным именам хранилища и ресурсов
+// без разрешения узла, проверки бакета или выдачи доступа к существующему объекту.
 func validDNSLabel(value string) bool {
-	if value == "" || len(value) > 63 {
-		return false
-	}
-	for index, character := range value {
-		valid := character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-'
-		if !valid || character == '-' && (index == 0 || index == len(value)-1) {
-			return false
-		}
-	}
-	return true
+	return runtimecontract.ValidDNSLabel(value)
 }
 
 func validUUID(value string) bool {
