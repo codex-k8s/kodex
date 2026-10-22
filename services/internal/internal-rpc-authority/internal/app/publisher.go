@@ -26,7 +26,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// PublisherConfig задаёт соединения, ключи и реестр publisher.
+// PublisherConfig supplies the publisher's listeners, database identity, fixed-role signer references and provenance, trust/policy/target paths, Kubernetes delivery settings and shutdown budget through tagged environment fields. It carries references rather than credential values; configuration parsing does not prove loaded trust, successful publication or endpoint readiness.
+// PublisherConfig задаёт через поля окружения listeners издателя, идентичность БД, ссылки подписантов фиксированных ролей и происхождение, пути доверия, политики и целей, настройки доставки Kubernetes и бюджет завершения. Хранятся ссылки, а не значения реквизитов; разбор не доказывает загруженное доверие, успешную публикацию или готовность endpoint.
 type PublisherConfig struct {
 	Listen                       string        `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_LISTEN"`
 	TechnicalListen              string        `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
@@ -62,7 +63,8 @@ type PublisherConfig struct {
 	ShutdownTimeout              time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
-// LoadPublisherConfig читает и проверяет типизированное окружение publisher.
+// LoadPublisherConfig applies publisher defaults, parses the tagged environment, accepts only the supported secret backend and validates listener syntax plus required database/signer/controller identities and digest shapes. It neither reads signer files nor verifies trust, database connectivity or a positive shutdown timeout here; construction paths perform their own checks later.
+// LoadPublisherConfig задаёт исходные параметры publisher, разбирает окружение по тегам, допускает только поддерживаемое хранилище Secret и проверяет синтаксис listeners, обязательные идентичности БД, подписантов и контроллера и форму дайджестов. Файлы подписантов, доверие, подключение БД и положительность срока завершения здесь не проверяются; последующие конструкторы выполняют собственные проверки.
 func LoadPublisherConfig() (PublisherConfig, error) {
 	config := PublisherConfig{
 		Listen:                       ":8444",
@@ -114,7 +116,8 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	return config, nil
 }
 
-// RunPublisher запускает доставку ключей и сервер выдачи ролей восстановления.
+// RunPublisher composes capability PostgreSQL, the exact target registry, three explicit signer roles, Secret/snapshot delivery and the authority graph, then publishes startup graph and readback material before serving its mTLS publisher RPC. Reconciliation updates bounded readiness diagnostics; normal shutdown preserves worker/server/client/database order before telemetry, while early startup failures use independent once-only telemetry cleanup. It uses caller-owned lifecycle/shutdown contexts and performs real publication when invoked, so unit validation must not call this against live state.
+// RunPublisher собирает PostgreSQL с ролью возможности, точный реестр целей, три явные роли подписантов, доставку Secret и снимка и граф полномочий, затем публикует стартовые граф и readback до обслуживания mTLS RPC издателя. Сопоставление обновляет ограниченную диагностику готовности; штатное завершение сохраняет порядок исполнителей, серверов, клиентов и БД перед телеметрией, ранние ошибки старта используют независимую однократную очистку телеметрии. Используются контексты жизненного цикла и завершения вызывающего, при вызове выполняется настоящая публикация, поэтому юнит-проверка не должна запускать это на живом состоянии.
 func RunPublisher(
 	lifecycle context.Context,
 	shutdownBase context.Context,
@@ -400,56 +403,52 @@ func RunPublisher(
 	metrics.SetReady(false)
 	shutdownErr := serviceruntime.RunShutdown(
 		shutdownBase,
-		serviceruntime.ShutdownOperation{
-			Name: "workers", Timeout: config.ShutdownTimeout,
-			Run: func(ctx context.Context) error {
-				workers.Stop()
-				return workers.Wait(ctx)
+		telemetry.shutdownOperations(config.ShutdownTimeout,
+			serviceruntime.ShutdownOperation{
+				Name: "workers", Timeout: config.ShutdownTimeout,
+				Run: func(ctx context.Context) error {
+					workers.Stop()
+					return workers.Wait(ctx)
+				},
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "grpc-server", Timeout: config.ShutdownTimeout,
-			Run: func(ctx context.Context) error { return stopGRPC(ctx, grpcRuntime) },
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "technical-http", Timeout: config.ShutdownTimeout,
-			Run: technicalServer.Shutdown,
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "kubernetes-api", Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				snapshotDelivery.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name: "grpc-server", Timeout: config.ShutdownTimeout,
+				Run: func(ctx context.Context) error { return stopGRPC(ctx, grpcRuntime) },
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "secret-delivery", Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				delivery.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name: "technical-http", Timeout: config.ShutdownTimeout,
+				Run: technicalServer.Shutdown,
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "postgresql", Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				pool.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name: "kubernetes-api", Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					snapshotDelivery.Close()
+					return nil
+				},
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "otel-tracing", Timeout: config.ShutdownTimeout,
-			Run: telemetry.shutdownTracing,
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "sentry-flush", Timeout: config.ShutdownTimeout,
-			Run: telemetry.flushSentry,
-		},
+			serviceruntime.ShutdownOperation{
+				Name: "secret-delivery", Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					delivery.Close()
+					return nil
+				},
+			},
+			serviceruntime.ShutdownOperation{
+				Name: "postgresql", Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					pool.Close()
+					return nil
+				},
+			},
+		)...,
 	)
 	telemetryFinished = true
 	logger.Info("authority publisher stopped")
 	return errors.Join(runtimeErr, shutdownErr)
 }
 
+// reconcilePublisher calls graph publication first, skips readback publication only when graph publication fails, and always queries readiness afterward. It returns the three errors separately so the runtime can distinguish partial progress without blindly retrying within this helper.
+// reconcilePublisher сначала публикует граф, пропускает публикацию readback только при ошибке графа и всегда затем запрашивает готовность. Три ошибки возвращаются отдельно, позволяя runtime различать частичный прогресс без слепого повтора внутри помощника.
 func reconcilePublisher(
 	ctx context.Context,
 	publishGraph func(context.Context) error,
@@ -464,6 +463,8 @@ func reconcilePublisher(
 	return graphErr, publishErr, readyErr
 }
 
+// openPublisherPostgres delegates exact DSN/TLS/session identity to the common capability pool with the publisher role, fixed application name and maximum eight connections; it does not expose a second database-authentication path.
+// openPublisherPostgres передаёт точные DSN, TLS и идентичность сессии общему пулу с ролью publisher, фиксированным именем приложения и максимум восемью соединениями; отдельного пути аутентификации БД нет.
 func openPublisherPostgres(
 	ctx context.Context,
 	config PublisherConfig,
@@ -475,6 +476,8 @@ func openPublisherPostgres(
 	})
 }
 
+// normalizePublisherMethod maps only PublishRoleCredential and CheckReadiness to closed diagnostic labels and collapses every other method to unknown. This normalization bounds observability and does not authorize credential issuance.
+// normalizePublisherMethod сопоставляет только PublishRoleCredential и CheckReadiness закрытым диагностическим меткам и сводит остальные методы к unknown. Нормализация ограничивает наблюдаемость и не разрешает выдачу реквизитов.
 func normalizePublisherMethod(method string) string {
 	switch method {
 	case internalrpcauthorityv1.RestoreRoleCredentialPublisherService_PublishRoleCredential_FullMethodName:

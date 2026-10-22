@@ -28,7 +28,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// ReadbackConfig задаёт независимый сервис проверки обслуживаемого снимка.
+// ReadbackConfig carries the independent attestor's listener/TLS/database locators, root/manifest/credential-trust file references, verifier generation and shutdown budget. It contains no decoded trust or guarantee that a running attestor has activated a durable watermark.
+// ReadbackConfig хранит адреса listeners, TLS и БД независимого attestor, ссылки на файлы root, manifest и credential-trust, поколение verifier и бюджет завершения. Разобранного доверия и гарантии активации устойчивого watermark работающим attestor нет.
 type ReadbackConfig struct {
 	Listen                 string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_LISTEN"`
 	TechnicalListen        string        `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
@@ -46,7 +47,8 @@ type ReadbackConfig struct {
 	ShutdownTimeout        time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
-// LoadReadbackConfig читает и проверяет окружение сервиса проверки.
+// LoadReadbackConfig initializes independent-attestor defaults, parses environment tags and checks both listener addresses, nonempty PostgreSQL user/server name and nonzero verifier generation. File loading, mTLS trust and database/session checks happen later; this parser does not itself probe readiness or validate every timeout.
+// LoadReadbackConfig задаёт исходные параметры независимого attestor, разбирает теги окружения и проверяет оба адреса listeners, непустые пользователя и имя сервера PostgreSQL и ненулевое поколение verifier. Загрузка файлов, доверие mTLS и проверки БД или сессии выполняются позже; разборщик сам не проверяет готовность или все сроки.
 func LoadReadbackConfig() (ReadbackConfig, error) {
 	config := ReadbackConfig{
 		Listen:                 ":8443",
@@ -78,7 +80,8 @@ func LoadReadbackConfig() (ReadbackConfig, error) {
 	return config, nil
 }
 
-// RunReadbackAttestor запускает независимую проверку обслуживаемого снимка.
+// RunReadbackAttestor loads and verifies the independent root/manifest/credential trust chain, activates its durable state and checks the startup working path before exposing mTLS challenge/attestation/readiness RPC. A periodic worker reloads trust and closes local readiness on loading or watermark failure; normal shutdown attempts worker join and closes servers/database before telemetry. It uses the supplied lifecycle/shutdown contexts and is a real runtime, not a harmless unit readiness probe.
+// RunReadbackAttestor загружает и проверяет независимую цепочку root, manifest и credential-trust, активирует её устойчивое состояние и проверяет стартовый рабочий путь до открытия mTLS RPC challenge, attestation и readiness. Периодический исполнитель перечитывает доверие и закрывает локальную готовность при ошибке загрузки или watermark; штатное завершение пытается дождаться исполнителей и закрывает серверы и БД перед телеметрией. Используются переданные контексты жизненного цикла и завершения; это настоящий runtime, а не безвредная юнит-проба готовности.
 func RunReadbackAttestor(
 	lifecycle context.Context,
 	shutdownBase context.Context,
@@ -273,42 +276,38 @@ func RunReadbackAttestor(
 	metrics.SetReady(false)
 	shutdownErr := serviceruntime.RunShutdown(
 		shutdownBase,
-		serviceruntime.ShutdownOperation{
-			Name: "workers", Timeout: config.ShutdownTimeout,
-			Run: func(ctx context.Context) error {
-				workers.Stop()
-				return workers.Wait(ctx)
+		telemetry.shutdownOperations(config.ShutdownTimeout,
+			serviceruntime.ShutdownOperation{
+				Name: "workers", Timeout: config.ShutdownTimeout,
+				Run: func(ctx context.Context) error {
+					workers.Stop()
+					return workers.Wait(ctx)
+				},
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "grpc-server", Timeout: config.ShutdownTimeout,
-			Run: func(ctx context.Context) error { return stopGRPC(ctx, grpcRuntime) },
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "technical-http", Timeout: config.ShutdownTimeout,
-			Run: technicalServer.Shutdown,
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "postgresql", Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				pool.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name: "grpc-server", Timeout: config.ShutdownTimeout,
+				Run: func(ctx context.Context) error { return stopGRPC(ctx, grpcRuntime) },
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "otel-tracing", Timeout: config.ShutdownTimeout,
-			Run: telemetry.shutdownTracing,
-		},
-		serviceruntime.ShutdownOperation{
-			Name: "sentry-flush", Timeout: config.ShutdownTimeout,
-			Run: telemetry.flushSentry,
-		},
+			serviceruntime.ShutdownOperation{
+				Name: "technical-http", Timeout: config.ShutdownTimeout,
+				Run: technicalServer.Shutdown,
+			},
+			serviceruntime.ShutdownOperation{
+				Name: "postgresql", Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					pool.Close()
+					return nil
+				},
+			},
+		)...,
 	)
 	telemetryFinished = true
 	logger.Info("readback attestor stopped")
 	return errors.Join(runtimeErr, shutdownErr)
 }
 
+// readbackTrustState copies exact loader metadata into the domain readback-trust snapshot, retaining root, bundle, trust-set, signer and predecessor/served digests and normalizing only ServedAt to a UTC second. It does not verify signatures or assign new provenance revisions itself.
+// readbackTrustState копирует точные метаданные загрузчика в доменный снимок доверия readback, сохраняя root, bundle, trust-set, подписанта и дайджесты предшественника и обслуживаемого состояния и нормализуя только ServedAt до секунды UTC. Подписи не проверяются и новые ревизии происхождения не назначаются.
 func readbackTrustState(
 	metadata snapshot.ReadbackTrustMetadata,
 	now time.Time,
@@ -328,6 +327,8 @@ func readbackTrustState(
 	}
 }
 
+// openReadbackPostgres uses the shared exact-identity capability pool with the readback-attestor role, fixed application name and eight-connection limit, preserving its separate database principal from publisher or restore workloads.
+// openReadbackPostgres использует общий пул точной идентичности с ролью readback-attestor, фиксированным именем приложения и пределом восьми соединений, сохраняя отдельного субъекта БД от publisher и restore.
 func openReadbackPostgres(
 	ctx context.Context,
 	config ReadbackConfig,
@@ -339,6 +340,8 @@ func openReadbackPostgres(
 	})
 }
 
+// loadMTLSServerConfig loads one certificate/key pair and a nonempty parseable PEM client CA pool, returning TLS 1.3 minimum with mandatory verified client certificates. File/CA errors are sanitized; TLS peer verification here does not assign a workload role or replace per-RPC authorization and replay checks.
+// loadMTLSServerConfig загружает пару сертификата и ключа и непустой разбираемый PEM-пул CA клиентов и возвращает TLS минимум 1.3 с обязательной проверкой клиентского сертификата. Ошибки файлов и CA безопасны; проверка TLS-партнёра здесь не назначает роль workload и не заменяет авторизацию RPC или replay-проверки.
 func loadMTLSServerConfig(certificateFile, privateKeyFile, clientCAFile string) (
 	*tls.Config,
 	error,
@@ -363,6 +366,8 @@ func loadMTLSServerConfig(certificateFile, privateKeyFile, clientCAFile string) 
 	}, nil
 }
 
+// normalizeReadbackMethod assigns closed labels only to challenge issuance, served-state attestation and readiness RPC, returning unknown for every other full method. It is diagnostic classification rather than permission selection.
+// normalizeReadbackMethod назначает закрытые метки только RPC выдачи challenge, аттестации обслуживаемого состояния и готовности, возвращая unknown остальным полным методам. Это диагностическая классификация, а не выбор полномочий.
 func normalizeReadbackMethod(method string) string {
 	switch method {
 	case internalrpcauthorityv1.AuthorityReadbackAttestorService_IssueAttestationChallenge_FullMethodName:

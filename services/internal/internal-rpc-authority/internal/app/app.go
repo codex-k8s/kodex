@@ -471,59 +471,51 @@ func Run(
 	metrics.SetReady(false)
 	shutdownErr := serviceruntime.RunShutdown(
 		shutdownBase,
-		serviceruntime.ShutdownOperation{
-			Name:    "grpc-server",
-			Timeout: config.ShutdownTimeout,
-			Run: func(ctx context.Context) error {
-				return stopGRPC(ctx, grpcRuntime)
+		telemetry.shutdownOperations(config.ShutdownTimeout,
+			serviceruntime.ShutdownOperation{
+				Name:    "grpc-server",
+				Timeout: config.ShutdownTimeout,
+				Run: func(ctx context.Context) error {
+					return stopGRPC(ctx, grpcRuntime)
+				},
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "workers",
-			Timeout: config.ShutdownTimeout,
-			Run: func(ctx context.Context) error {
-				workers.Stop()
-				return workers.Wait(ctx)
+			serviceruntime.ShutdownOperation{
+				Name:    "workers",
+				Timeout: config.ShutdownTimeout,
+				Run: func(ctx context.Context) error {
+					workers.Stop()
+					return workers.Wait(ctx)
+				},
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "technical-http",
-			Timeout: config.ShutdownTimeout,
-			Run:     technicalServer.Shutdown,
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "readback-attestors",
-			Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				return closeReadbackAttestors()
+			serviceruntime.ShutdownOperation{
+				Name:    "technical-http",
+				Timeout: config.ShutdownTimeout,
+				Run:     technicalServer.Shutdown,
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "secret-delivery",
-			Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				delivery.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name:    "readback-attestors",
+				Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					return closeReadbackAttestors()
+				},
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "postgresql",
-			Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				store.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name:    "secret-delivery",
+				Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					delivery.Close()
+					return nil
+				},
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "otel-tracing",
-			Timeout: config.ShutdownTimeout,
-			Run:     telemetry.shutdownTracing,
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "sentry-flush",
-			Timeout: config.ShutdownTimeout,
-			Run:     telemetry.flushSentry,
-		},
+			serviceruntime.ShutdownOperation{
+				Name:    "postgresql",
+				Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					store.Close()
+					return nil
+				},
+			},
+		)...,
 	)
 	telemetryFinished = true
 	logger.Info(logMessageStop, "mode", string(mode))

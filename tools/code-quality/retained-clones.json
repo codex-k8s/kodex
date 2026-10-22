@@ -4800,6 +4800,22 @@
       "fragmentSHA256": "92d5279640c2812ce3e494db57b6b4233e3c7ccd65be6701d5a8facedc6a7480",
       "count": 1,
       "reason": "Два коротких самостоятельных entrypoint различаются фиксированным ModeIssuer/ModeVerifier и ролью SafeRuntimeFailure. Общая работа уже в app.Run; здесь остаются process-owned root context, signal cancellation, stderr и os.Exit. Вынос этих границ в новый library main-helper скрыл бы владение процессом и нарушил явное создание root в main ради совпадения imports/version/обёртки."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/app/publisher.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/app/readback.go",
+      "fragmentSHA256": "c4aae8e9c7212c6690dca29fc92c61aedb65c92bfc19c1369ca6732811d10361",
+      "count": 1,
+      "reason": "Окно пересекает ожидание lifecycle/serve-error, закрытие readiness и декларацию owner-specific worker/gRPC/HTTP cleanup до разных Kubernetes-versus-PostgreSQL ресурсов. Исполнение cancel/join уже в serviceruntime, общий tracing/Sentry хвост вынесен. Новый generic lifecycle-router ради оставшегося process-owned каркаса скрыл бы порядок и владение отдельными ресурсами; сохраняются точные декларативные профили, не копия общего runtime."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/app/publisher.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/app/restore.go",
+      "fragmentSHA256": "c4aae8e9c7212c6690dca29fc92c61aedb65c92bfc19c1369ca6732811d10361",
+      "count": 1,
+      "reason": "Совпадает декларативный префикс остановки, но окно начинается в process-owned select/readiness и заканчивается у разных Kubernetes API versus publisher-client ресурсов. Shared RunShutdown исполняет cancel/join/context/error policy, telemetry tail уже общий. Универсальный main/shutdown-router потребовал бы скрыть граф владения publisher и restore-controller; их конкретный порядок ресурсов оставлен явно в composition roots."
     }
   ]
 }

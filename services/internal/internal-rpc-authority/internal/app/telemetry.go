@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -61,6 +62,23 @@ func (telemetry *appTelemetry) shutdownTracing(ctx context.Context) error {
 		telemetry.traceErr = telemetry.ShutdownTracing(ctx)
 	})
 	return telemetry.traceErr
+}
+
+// shutdownOperations copies the caller's ordered resource cleanup list and appends the shared tracing-then-Sentry tail with unchanged names, callbacks and supplied timeout. It only constructs descriptors: execution, context ownership, invalid-timeout rejection and error joining remain with serviceruntime.RunShutdown. A fresh backing slice prevents overwriting the caller's spare capacity.
+// shutdownOperations копирует упорядоченный список очистки ресурсов вызывающего и добавляет общий хвост tracing, затем Sentry с прежними именами, обработчиками и переданным сроком. Создаются только описания: исполнение, владение контекстом, отказ некорректному сроку и объединение ошибок остаются в serviceruntime.RunShutdown. Новый массив среза не позволяет перезаписать запасную ёмкость вызывающего.
+func (telemetry *appTelemetry) shutdownOperations(timeout time.Duration, preceding ...serviceruntime.ShutdownOperation) []serviceruntime.ShutdownOperation {
+	operations := make([]serviceruntime.ShutdownOperation, 0, len(preceding)+2)
+	operations = append(operations, preceding...)
+	return append(operations,
+		serviceruntime.ShutdownOperation{
+			Name: "otel-tracing", Timeout: timeout,
+			Run: telemetry.shutdownTracing,
+		},
+		serviceruntime.ShutdownOperation{
+			Name: "sentry-flush", Timeout: timeout,
+			Run: telemetry.flushSentry,
+		},
+	)
 }
 
 // flushSentry invokes the shared Sentry flush only once with the first caller's context and caches its result independently from tracing cleanup.

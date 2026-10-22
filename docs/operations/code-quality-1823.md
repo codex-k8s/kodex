@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.288.0
+version: 1.289.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,84 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят девятая волна — общий хвост shutdown без смены порядка
+
+Опубликованный SHA288 — `835f7ea32565ebb3d56f82411bfcfe9e642126ae`.
+Точный UKh5a1:6615 sources,222 excluded,1819 raw/718 retained/
+1101 unresolved; Go12492/21254,missing8762. Raw SHA256:
+`7c538d37495cc08d3bcd417855fde045779cd5918232aef5482d0e77099adc61`;
+clone-setf56d5bee… . Exact app30/119 и полный authority build,
+docs51/51, AST5/directives/tooling/scan PASS LOCAL,0 FAIL/SKIP;
+push/readback и Draft PR PATCH/GET288 подтверждены.
+
+Полностью прочитаны publisher487/readback377/restore602 lines, текущий
+telemetry wrapper и RunShutdown core; GO-DOC-006 перечитан полностью,
+GUIDE-DOC-006 не менялся. Новый private appTelemetry.shutdownOperations
+только копирует caller-owned список ресурсов и добавляет прежние
+otel-tracing→sentry-flush descriptors. Их names, bound methods и exact
+timeout сохраняются, даже для0/negative; существующий RunShutdown
+по-прежнему исполняет callbacks, создаёт contexts, отклоняет invalid
+budgets и объединяет errors. Нового runtime/main router, root context,
+goroutine, event/command/grant или изменения dependency lifecycle нет.
+
+Матрица прежнего и нового normal shutdown одинакова. Для всех строк
+origin — lifecycle cancellation либо ошибка server; сначала закрываются
+локальные readiness/metric, затем выполняются перечисленные callbacks
+с прежним shutdownBase и индивидуальными config.ShutdownTimeout:
+
+| Runtime | Ресурсы до общего tracing→Sentry хвоста |
+| --- | --- |
+| issuer/verifier | grpc→workers Stop/Wait→technical HTTP→readback attestors→Secret delivery→PostgreSQL |
+| publisher | workers Stop/Wait→grpc→technical HTTP→snapshot Kubernetes API→Secret delivery→PostgreSQL |
+| readback attestor | workers Stop/Wait→grpc→technical HTTP→PostgreSQL |
+| restore controller | workers Stop/Wait→grpc→technical HTTP→publisher client→evidence client→Kubernetes coordination→PostgreSQL |
+
+Error joining, cancellation/deadline propagation, invalid-budget skipping
+и отсутствие preemption зависшего callback остаются в неизменённом
+serviceruntime. Early startup failure использует прежний отдельный
+cleanupAfterStartupFailure, не новый builder. Terminal/retry/delete/claim
+переходы доменов и event consumers не меняются: helper не вызывает
+бизнесовых операций, authoritative state/read paths прежние.
+
+Inverse AST5 разворачивает реальный helper tail во всех4 текущих callers
+и восстанавливает каждый полный source SHA288, включая ресурсный порядок,
+closures, callbacks, timeout, error handling и существующие telemetry
+methods/imports. Builder копирует backing slice до append. Новый3-case
+unit проверяет positive/zero/negative budget forwarding, отсутствие
+callback execution при construction, resource order/identity, spare-capacity
+изоляцию и bound trace/Sentry methods через cached once-only errors.
+Это metadata/callback test без SDK/network/resources, не реальная доставка
+телеметрии или успешный server/worker shutdown.
+
+24 declarations publisher/readback/restore описаны EN→RU; новый helper
+и unit2/2, весь scope6 files63/63. Comments различают config validation
+и startup probes/publication, independent trust activation и DTO copy,
+TLS peer и RPC authority, restore retry и fixed session hooks, а также
+controller P-256/key-ID extraction и certificate-chain/time validation.
+Context7/golang/go append/make semantics сверены. Authority app31 верхний/
+123 всех unit, весь serviceruntime8/11 и полный authority build -p=2
+PASS LOCAL,0 FAIL/SKIP.17 Node/Go checker units, docs/inverse AST/clone
+proof,5 ignores и gofmt/diff-check PASS LOCAL. Production runtimes,
+DB/TLS/Kubernetes, telemetry delivery и deploy не запускались.
+
+Raw delta:удалены4 windows, добавлены2; два tail windows115/126tokens
+действительно устранены, два старых151-token prefix стали159-token
+после явного builder call.1815 остальных keys/counts прежние. Эти два
+prefix окна прочитаны целиком:они пересекают process-owned select/readiness
+и декларацию worker/grpc/HTTP до разных dependency suffix. Execution
+primitives уже shared, telemetry tail вынесен; универсальный lifecycle
+router не вводится.2 exact path/hash/count reasons, прежние600 entries
+неизменны, теперь602/720 occurrences. Не исключены функции/файлы целиком.
+
+Рабочий 2oNDCe:6616 sources,222 excluded,1817 raw/720 retained/
+1097 unresolved; Go12518/21256,missing8738. Raw SHA256:
+`c94b184ee2ea411e6463fdcd59fb35a9e0812f041584916a43d26868ef0da770`;
+clone-set:
+`99900001094d676053ae3c028de3ce0fcb32d3f885cf2ca807d30586b4cc72e7`.
+Assessment после2 exact reasons повторён. После коммита exact scan/unit/
+build и PR readback повторяются. Contracts, applied migrations, generated
+и live state прежние; задача не завершена, historical FAIL/NOT RUN прежние.
 
 ## Двести восемьдесят восьмая волна — lifecycle и обслуживаемая готовность
 
