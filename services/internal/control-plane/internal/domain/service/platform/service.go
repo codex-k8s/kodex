@@ -180,9 +180,9 @@ func (service *Service) Search(ctx context.Context, p value.Principal, filter qu
 	if err != nil {
 		return nil, 0, "", err
 	}
-	filter.Query = strings.TrimSpace(filter.Query)
-	if len([]rune(filter.Query)) < 2 || len([]rune(filter.Query)) > 200 {
-		return nil, 0, "", errs.ErrInvalid
+	filter.Query, err = normalizePlatformSearchQuery(filter.Query)
+	if err != nil {
+		return nil, 0, "", err
 	}
 	if filter.Page.Size == 0 {
 		filter.Page.Size = filter.Limit
@@ -214,9 +214,9 @@ func (service *Service) SearchVFS(ctx context.Context, p value.Principal, filter
 	if err != nil {
 		return nil, 0, "", err
 	}
-	filter.Query = strings.TrimSpace(filter.Query)
-	if len([]rune(filter.Query)) < 2 || len([]rune(filter.Query)) > 200 {
-		return nil, 0, "", errs.ErrInvalid
+	filter.Query, err = normalizePlatformSearchQuery(filter.Query)
+	if err != nil {
+		return nil, 0, "", err
 	}
 	return service.repository.SearchVFS(ctx, p, filter)
 }

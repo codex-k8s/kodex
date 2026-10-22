@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.281.0
+version: 1.282.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,54 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят вторая волна — нормализация поиска и соседние методы
+
+Опубликованный SHA281 — `eac07aec51a4fde48fc61ce1644a63c6e98c1888`.
+Точный 5VpPRA:6611 sources,222 excluded,1820 raw/684 retained/
+1136 unresolved; Go12276/21249,missing8973. Raw SHA256:
+`13609086c6abdf15c602357bed4ba9e3da64aa9f735197fadf45791213632c59`;
+clone-set0fde05d2… . Exact platform service23/60, CP build -p=2,
+2 gateway authority-profile units, docs143/143, inverse AST3/tooling/scan
+PASS LOCAL,0 FAIL/SKIP; push/readback и Draft PR PATCH/GET281 подтверждены.
+
+Две одинаковые нормализации Search/SearchVFS вынесены в private
+normalizePlatformSearchQuery: TrimSpace и прежний предел2..200 рун.
+Principal разрешается до вызова helper; разные typed repository calls,
+возвращаемые значения и только Search fallback Page.Size←Limit сохранены.
+Unicode-нормализация и новая валидация UTF-8 не добавлены: прежние байты
+возвращаются без изменения внутренних пробелов. Context7/golang/go и
+документация strings.TrimSpace закреплённого Go1.26.6 сверены.
+
+15 новых unit cases проверяют пустую/пробельную строку, обе границы,
+внешние Unicode-пробелы, внутренние пробелы, emoji, combining code points,
+многобайтный верхний предел и прежний приём двух invalid UTF-8 bytes.
+Весь platform service24 верхних/76 всех unit и полный CP build -p=2
+PASS LOCAL,0 FAIL/SKIP; репозиторий, БД, модель и поиск не запускались.
+Inverse AST6 восстанавливает весь service.go SHA281, обе исходные
+нормализации и три comments-only sibling files.
+
+Все19 declarations integration_candidates/runtime_secret_draft/skill
+прочитаны и описаны EN→RU: чтение кандидатов не выдаёт grant, границы
+PROJECT/ORGANIZATION не смешиваются, interactive freshness и закрытые
+действия остаются прежними, shape/digest length не означают owner/content
+proof. Вместе с новым helper/unit добавлены21 comments; combined6 files
+159/159.17 Node units, Go checker units, docs/AST/clone proof,5 ignores,
+gofmt/diff-check PASS LOCAL.
+
+Рабочий EfikMA:6613 sources,222 excluded,1820 raw/684 retained/
+1136 unresolved; Go12297/21251,missing8954. Удалено9 old fragment keys,
+появилось9 новых окон после comments/helper;1811 остальных occurrences
+прежние. Исходного120-token search window больше нет; это не заявление
+об удалении9 алгоритмов или отсутствии residual wrapper similarities.
+У helper и его unit raw windows нет. Registry566/684 не менялся.
+Raw SHA256:
+`1eb28e198898554a7c149847c297aaebdc6e825e7d8d940db5c1e6d54aab7489`;
+clone-set:
+`d26e78aa42b32f22ebfb576be54ce76c8246be478922267c146a531c357a3599`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, contracts, applied migrations и live state неизменны.
+Общая задача не завершена; historical FAIL и NOT RUN сохраняются.
 
 ## Двести восемьдесят первая волна — общий upload digest и closed lists
 
