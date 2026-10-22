@@ -7,6 +7,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 )
 
+// TestIdentityEnvironmentSecretExactAuthorityOperations pins selected identity/environment/configuration/mail/conversation methods in both routing/proof registries and checks their opaque resource scope does not require a browser project locator. It invokes no RPC.
+// TestIdentityEnvironmentSecretExactAuthorityOperations закрепляет выбранные identity, environment, configuration, mail и conversation methods в routing и proof registries и проверяет отсутствие требования browser project locator для opaque resource scope. RPC не вызывается.
 func TestIdentityEnvironmentSecretExactAuthorityOperations(t *testing.T) {
 	for operation, method := range map[string]string{
 		"platform.query.projects.purge-recovery.get":          controlplanev1.PlatformQueryService_GetProjectPurgeRecovery_FullMethodName,
@@ -38,7 +40,11 @@ func TestIdentityEnvironmentSecretExactAuthorityOperations(t *testing.T) {
 	}
 }
 
+// TestAuthorityProofProfileIncludesDirectOrganizationScopedSTT requires direct speech proof registration without unrelated project scope or control-plane routing, using only local operation maps.
+// TestAuthorityProofProfileIncludesDirectOrganizationScopedSTT требует регистрации direct speech proof без несвязанного project scope и control-plane routing, используя лишь локальные operation maps.
 func TestAuthorityProofProfileIncludesDirectOrganizationScopedSTT(t *testing.T) {
+	// operation pins the direct organization-scoped speech command checked across independent routing maps.
+	// operation закрепляет прямую organization-scoped speech command для сверки независимых routing maps.
 	const operation = "platform.stt.transcribe"
 	sttOperations := controlplaneclient.STTGatewayOperations()
 	proofOperations := authorityProofOperations()
@@ -53,6 +59,8 @@ func TestAuthorityProofProfileIncludesDirectOrganizationScopedSTT(t *testing.T) 
 	}
 }
 
+// TestSecretDraftProofUsesDedicatedBrokerTarget checks every secret-draft operation appears in proof registration and is absent from control-plane routing and caller-project-required scope; it does not exercise a broker connection.
+// TestSecretDraftProofUsesDedicatedBrokerTarget проверяет наличие каждой secret-draft operation в proof registration и отсутствие в control-plane routing и caller-project-required scope без подключения к broker.
 func TestSecretDraftProofUsesDedicatedBrokerTarget(t *testing.T) {
 	for operation, method := range controlplaneclient.SecretDraftGatewayOperations() {
 		if authorityProofOperations()[operation] != method {

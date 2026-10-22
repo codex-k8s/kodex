@@ -12,15 +12,31 @@ import (
 )
 
 const (
-	serviceName               = "control-api-gateway"
-	controlPlaneTarget        = "dns:///control-plane.kodex-system.svc:8443"
+	// serviceName supplies the fixed gateway identity used by telemetry and the NATS connection name, not a caller-controlled resource or actor name.
+	// serviceName задаёт фиксированную идентичность gateway для telemetry и имени NATS connection, а не выбранные caller имена ресурса и actor.
+	serviceName = "control-api-gateway"
+	// controlPlaneTarget pins the permitted gRPC resolver target for the control-plane service; configuration validation rejects another target independently of certificate trust.
+	// controlPlaneTarget закрепляет допустимый gRPC resolver target control-plane service; configuration validation отклоняет иной target независимо от certificate trust.
+	controlPlaneTarget = "dns:///control-plane.kodex-system.svc:8443"
+	// controlPlaneTLSServerName pins the exact control-plane TLS identity separately from its resolver address; the transport client performs certificate verification.
+	// controlPlaneTLSServerName закрепляет точную TLS identity control-plane отдельно от resolver address; сертификат проверяет transport client.
 	controlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
-	secretBrokerTarget        = "dns:///secret-broker.kodex-system.svc:8443"
+	// secretBrokerTarget pins the sole secret-broker gRPC destination used for protected secret operations rather than a URL supplied by browser input.
+	// secretBrokerTarget закрепляет единственное secret-broker gRPC destination защищённых secret operations, а не URL browser input.
+	secretBrokerTarget = "dns:///secret-broker.kodex-system.svc:8443"
+	// secretBrokerTLSServerName fixes the TLS server identity expected for the dedicated secret broker, independent of the caller's project or grant payload.
+	// secretBrokerTLSServerName фиксирует ожидаемую TLS server identity выделенного secret broker независимо от проекта caller и grant payload.
 	secretBrokerTLSServerName = "secret-broker.kodex-system.svc.cluster.local"
-	sttTarget                 = "dns:///stt-tts-service.kodex-system.svc:8443"
-	sttTLSServerName          = "stt-tts-service.kodex-system.svc.cluster.local"
+	// sttTarget pins the direct speech-service gRPC destination so organization-scoped speech operations do not route to an arbitrary caller-selected service.
+	// sttTarget закрепляет direct speech-service gRPC destination, не позволяя organization-scoped speech operations выбрать произвольный сервис из caller input.
+	sttTarget = "dns:///stt-tts-service.kodex-system.svc:8443"
+	// sttTLSServerName fixes the speech service certificate name independently of the resolver target and the model-provider identity behind that service.
+	// sttTLSServerName фиксирует имя сертификата speech service отдельно от resolver target и model-provider identity за этим сервисом.
+	sttTLSServerName = "stt-tts-service.kodex-system.svc.cluster.local"
 )
 
+// Config holds the process environment bindings for listeners, trust/credential paths, OIDC/session state, exact internal targets, NATS and bounded request/concurrency budgets. Values are validated during loading; no secret contents are embedded in this structure.
+// Config содержит process environment bindings listeners, trust и credential paths, OIDC и session state, exact internal targets, NATS и ограниченные request и concurrency budgets. Значения проверяются при загрузке; содержимое секретов в структуру не включается.
 type Config struct {
 	RPCProfile                        string        `env:"KODEX_RPC_PROFILE"`
 	WebSocketLegacyUntil              string        `env:"KODEX_WS_LEGACY_UNTIL"`
@@ -76,6 +92,8 @@ type Config struct {
 	PerSubjectWebSocketConcurrency    int           `env:"CONTROL_API_GATEWAY_PER_SUBJECT_WEBSOCKET_CONCURRENCY"`
 }
 
+// loadConfig applies explicit process defaults, parses tagged environment overrides with caarlos0/env and returns the config with its validation result. It does not open referenced files, dial dependencies or silently replace invalid values.
+// loadConfig задаёт явные process defaults, разбирает помеченные environment overrides через caarlos0/env и возвращает config с результатом validation. Указанные файлы не открываются, dependencies не подключаются и неверные значения тихо не заменяются.
 func loadConfig() (Config, error) {
 	config := Config{
 		HTTPListen: ":8443", TechnicalListen: ":9090", TLSCertificateFile: "/var/run/secrets/kodex/control-api-gateway/public-tls/tls.crt", TLSPrivateKeyFile: "/var/run/secrets/kodex/control-api-gateway/public-tls/tls.key",
@@ -93,6 +111,8 @@ func loadConfig() (Config, error) {
 	return config, config.validate()
 }
 
+// validate checks the RPC profile, absolute cutoff/listener/path shape, HTTPS OIDC and origin relationships, pinned internal targets, TLS NATS shape and selected timeout/concurrency bounds. It does not read credentials, verify certificates or prove dependency readiness; later constructors apply their own constraints.
+// validate проверяет RPC profile, форму абсолютного cutoff, listeners и paths, связи HTTPS OIDC и origins, закреплённые internal targets, форму TLS NATS и выбранные timeout и concurrency bounds. Credentials не читаются, сертификаты и готовность dependencies не проверяются; последующие конструкторы применяют свои ограничения.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
 		return errors.New("control API RPC profile is invalid")
@@ -149,8 +169,13 @@ func (config Config) validate() error {
 	}
 	return nil
 }
+
+// origins splits the configured comma-delimited allowlist without trimming, sorting, deduplicating or validating entries; load-time validation owns eligibility.
+// origins делит настроенный allowlist по запятым без обрезки, сортировки, удаления повторов и проверки entries; допустимость проверяется при загрузке.
 func (config Config) origins() []string { return strings.Split(config.AllowedOrigins, ",") }
 
+// legacyWebSocketDeadline accepts an absent cutoff or canonical UTC-Z RFC3339 text no more than twenty-four hours ahead of the supplied clock. An already expired absolute cutoff remains valid data and is not reset to a fresh window.
+// legacyWebSocketDeadline допускает отсутствие cutoff либо канонический UTC-Z RFC3339 текст не более чем на двадцать четыре часа впереди переданных часов. Уже истёкший абсолютный cutoff остаётся допустимыми данными и не сбрасывается на новое окно.
 func (config Config) legacyWebSocketDeadline(now time.Time) (time.Time, error) {
 	if config.WebSocketLegacyUntil == "" {
 		return time.Time{}, nil

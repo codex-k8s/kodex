@@ -1,4 +1,7 @@
-// Package app содержит composition root web-first control-api-gateway.
+// Package app owns control API process composition, startup barriers and bounded
+// worker/HTTP shutdown without implementing domain authority decisions.
+// Пакет app владеет композицией процесса control API, startup barriers и ограниченным
+// завершением workers и HTTP без реализации доменных решений о полномочиях.
 package app
 
 import (
@@ -30,8 +33,12 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// issuerUID and issuerGID pin the expected local authorization issuer's peer credentials passed to all internal clients; these numeric socket-identity checks do not grant a browser user application permission.
+// issuerUID и issuerGID закрепляют ожидаемые peer credentials локального издателя полномочий, передаваемые всем внутренним клиентам; числовые проверки socket identity не выдают browser user прикладное разрешение.
 const issuerUID, issuerGID = 29001, 29000
 
+// Run loads configuration, constructs telemetry, identity/session/RPC/NATS dependencies and checks the local infrastructure barrier before starting public/technical HTTP and readiness/refresh workers. On the normal worker-stop path it drains requests, cancels serving contexts and closes resources in the declared order; startup errors return at their existing cleanup points.
+// Run загружает конфигурацию, создаёт telemetry, identity, session, RPC и NATS dependencies и проверяет local infrastructure barrier до запуска public и technical HTTP и readiness и refresh workers. При штатном выходе workers завершаются запросы, отменяются serving contexts и ресурсы закрываются в объявленном порядке; startup errors возвращаются в прежних точках cleanup.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
@@ -180,6 +187,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	return errors.Join(err, shutdownErr)
 }
 
+// oidcRefreshWorker periodically refreshes OIDC signing keys under the RPC timeout, logs only transitions into/out of degraded state and returns context cancellation. It does not log token contents, refresh browser sessions or change readiness directly.
+// oidcRefreshWorker периодически обновляет OIDC signing keys с RPC timeout, пишет лишь переходы в degraded state и обратно и возвращает отмену контекста. Содержимое токенов не логируется, browser sessions не обновляются и readiness напрямую не меняется.
 func oidcRefreshWorker(verifier *oidcauth.Verifier, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
@@ -205,6 +214,8 @@ func oidcRefreshWorker(verifier *oidcauth.Verifier, logger *slog.Logger, config 
 	}
 }
 
+// connectNATS opens the configured TLS 1.3 NATS connection with pinned server name/CA, client certificate and user credentials, unlimited reconnects and bounded connect/flush checks. Failed initial flush closes the connection; the helper has no lifecycle context and does not create subscriptions.
+// connectNATS открывает настроенное TLS 1.3 NATS-соединение с закреплёнными server name и CA, client certificate и user credentials, неограниченными reconnects и ограниченными connect и flush checks. Отказ первого flush закрывает соединение; lifecycle context не передаётся и subscriptions не создаются.
 func connectNATS(config Config, logger *slog.Logger) (*nats.Conn, error) {
 	options := []nats.Option{nats.Name(serviceName), nats.Secure(&tls.Config{MinVersion: tls.VersionTLS13, ServerName: config.NATSTLSServerName}), nats.RootCAs(config.NATSCAFile), nats.ClientCert(config.NATSCertificateFile, config.NATSPrivateKeyFile), nats.UserCredentials(config.NATSCredentialsFile), nats.NoEcho(), nats.Timeout(3 * time.Second), nats.ReconnectWait(time.Second), nats.MaxReconnects(-1), nats.PingInterval(20 * time.Second), nats.MaxPingsOutstanding(2), nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {
 		logger.Warn("realtime NATS connection interrupted", "error_class", "dependency")
@@ -220,6 +231,8 @@ func connectNATS(config Config, logger *slog.Logger) (*nats.Conn, error) {
 	return connection, nil
 }
 
+// httpWorker runs the supplied HTTP or TLS server, treats ErrServerClosed as normal and on cancellation performs bounded drain with forced Close on failure before joining Serve. It leaves hijacked-connection cancellation to the process-owned serving context.
+// httpWorker запускает переданный HTTP либо TLS server, считает ErrServerClosed штатным и при отмене выполняет ограниченный drain с принудительным Close при отказе до join Serve. Отмена hijacked connections остаётся у принадлежащего процессу serving context.
 func httpWorker(server *http.Server, tlsEnabled bool, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -246,6 +259,9 @@ func httpWorker(server *http.Server, tlsEnabled bool, config Config) servicerunt
 		}
 	}
 }
+
+// readinessWorker immediately and periodically checks realtime, revocation and browser-state dependencies with one bounded context, updates readiness/metrics and logs state transitions. Exit marks both unready; it does not itself probe every provider or issue a synthetic user request.
+// readinessWorker немедленно и периодически проверяет realtime, revocation и browser-state dependencies одним ограниченным контекстом, обновляет readiness и metrics и логирует переходы. При выходе обе готовности снимаются; каждый provider не опрашивается и синтетический user request не отправляется.
 func readinessWorker(realtime *websockettransport.Server, revocations *sessionrevocation.Store, browserState *browserstate.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		defer func() {
@@ -279,6 +295,9 @@ func readinessWorker(realtime *websockettransport.Server, revocations *sessionre
 		}
 	}
 }
+
+// methodOperations builds a new method-to-operation map by reversing the control-plane gateway registry for telemetry. A repeated method would overwrite the earlier entry; this mapping is not an authorization decision.
+// methodOperations строит новую карту method к operation обращением control-plane gateway registry для telemetry. Повторный method перезаписал бы прежнюю entry; карта не является решением авторизации.
 func methodOperations() map[string]string {
 	result := map[string]string{}
 	for operation, method := range controlplaneclient.ControlAPIGatewayOperations() {
@@ -287,6 +306,8 @@ func methodOperations() map[string]string {
 	return result
 }
 
+// authorityProofOperations starts with the control-plane operation map and copies direct STT then secret-draft broker operations into it. The result selects exact proof targets without routing those direct operations through control-plane.
+// authorityProofOperations начинает с карты control-plane operations и копирует direct STT, затем secret-draft broker operations. Результат выбирает точные proof targets без маршрутизации этих прямых операций через control-plane.
 func authorityProofOperations() map[string]string {
 	result := controlplaneclient.ControlAPIGatewayOperations()
 	maps.Copy(result, controlplaneclient.STTGatewayOperations())
@@ -294,9 +315,14 @@ func authorityProofOperations() map[string]string {
 	return result
 }
 
+// authorityProjectRequiredOperations returns the canonical gateway operation set requiring a project locator for authority proof construction; resource-owned/organization scope is not inferred by this forwarding helper.
+// authorityProjectRequiredOperations возвращает канонический набор gateway operations, требующих project locator для построения authority proof; resource-owned и organization scope этим перенаправляющим helper не выводятся.
 func authorityProjectRequiredOperations() map[string]struct{} {
 	return controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
 }
+
+// secureHeaders sets nosniff, no-referrer, same-origin microphone-only permissions and restrictive API CSP before calling the next handler. The downstream handler can still replace headers; this wrapper does not authenticate requests or implement CORS.
+// secureHeaders задаёт nosniff, no-referrer, разрешение микрофона лишь same-origin и ограничительный API CSP до вызова следующего handler. Последующий handler может заменить заголовки; wrapper не аутентифицирует запросы и не реализует CORS.
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")

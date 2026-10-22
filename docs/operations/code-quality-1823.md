@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.302.0
+version: 1.303.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,63 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста третья волна — composition root control API gateway
+
+Опубликованный SHA302 — `3cbd3c065b93bfd0f2c16d10f0a6c74205b9842d`.
+Exact BagCEL:6629 sources,222 excluded,1807 raw/723 retained/
+1084 unresolved; Go13091/21276,missing8185. Authority150 files1382/1382.
+Exact50/173 и38/106 unit/full authority build/tooling PASS LOCAL;
+sourceSHA, push и Draft PR PATCH/GET302 подтверждены. Общий объём открыт.
+
+Полностью прочитаны8 gateway app files850 lines.35 declarations EN→RU,
+scope35/35,missing0; shared issuerUID/issuerGID declaration имеет один общий
+предметный комментарий о peer credentials локального сокета, не user permission.
+Package header и local STT operation constant также описаны.
+Полные AST8 и go directives совпадают с302; behavior/config/defaults и
+cleanup points не менялись. Это не исправление возможных partial-startup
+cleanup gaps и не переоценка readiness всего provider/model пути.
+
+Comments точно различают process и serving cancellation: WithoutCancel
+сохраняет values, снимает deadline/cancellation; graceful drain не прекращает
+accepted request до бюджета, forced Close не владеет hijacked WebSockets,
+их contexts отдельно отменяет Run. NATS connect/flush имеют свои timeouts,
+а не lifecycle context; readiness checks не объявлены полным synthetic user
+scenario. Probe listeners/metrics/policy strings и порядок workers прежние.
+Context7 /golang/go и pinned Go1.26.6 go doc WithoutCancel/Shutdown/Close
+сверены. Http shutdown unit использует loopback, не OS signal/живой backend.
+
+Две exact retained группы:119tokens — независимый выбранный RPC-method
+oracle против runtime mounted-file path list в CP config;132tokens —
+перекрывающиеся со сдвигом окна одного RPC-method list в unit.
+Оба окна каждого совпадения прочитаны; executable общего блока нет.
+Generated identifiers в handwritten oracle не превращают тест в generated
+output. Нельзя вывести ожидания из production registry ради нулевого detector.
+Добавлены2 exact digest/count reasons; прежние605 entries буквальный prefix,
+607 entries покрывают725 occurrences, без broad исключений/смены порога.
+
+Все app unit10/10 и полный gateway build -p=2 PASS LOCAL,0 FAIL/SKIP.
+17 Node и Go checker unit, AST8,scope35/35,5 ignores/diff-check PASS LOCAL.
+Команда gateway unit из модуля:
+```bash
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 \
+  go test -mod=readonly -count=1 -timeout 120s ./internal/app
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 \
+  go build -mod=readonly -p=2 ./...
+```
+JSON variant считает failures с set-e/pipefail. Run, remote RPC, NATS,
+OIDC, TLS credentials, browser/live/component/full acceptance NOT RUN.
+
+Рабочий XqFjos:6629 sources,222 excluded,1807 raw/725 retained/
+1082 unresolved; Go13126/21276,missing8150. Все normalized clone keys/
+cardinalities прежние. Raw SHA256:
+`2152b172be669e2b993aaf446712d90615e180634fbc7bf6262cce886240efad`;
+clone-set:
+`7eb4be03b35d8a5de141d64023f0ede40f472118e80f8433317f4aec527ae2da`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Generated/dependencies/contracts/SQL/applied migrations/live state прежние.
+Historical FAIL/finding293 не исправлены. Остаток Go:gateway1918,CP6232.
+Общая цель не завершена.
 
 ## Триста вторая волна — завершение Go-комментариев authority
 
