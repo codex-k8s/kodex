@@ -14,6 +14,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/domain/types/value"
 )
 
+// Service orchestrates exact owner-authorized draft commands and cleanup recovery through explicit ports;
+// its mutex protects recovery readiness, not command serialization.
+// Service согласует точные owner-authorized draft commands и cleanup recovery через явные ports; mutex
+// защищает recovery readiness, не сериализует команды.
 type Service struct {
 	owner                             secretdrafts.Owner
 	cipher                            secretdrafts.Cipher
@@ -28,12 +32,24 @@ type Service struct {
 	recoveryRan, recoveryReady        bool
 }
 
+// Option configures a new service during trusted composition; it is not a user-facing runtime
+// configuration command.
+// Option настраивает новый service при доверенной composition; это не пользовательская runtime
+// configuration command.
 type Option func(*Service)
 
+// WithObserver installs an optional observer, including nil, without starting work or checking dependency
+// readiness.
+// WithObserver устанавливает необязательный observer, включая nil, без запуска работы и проверки
+// dependency readiness.
 func WithObserver(observer secretdrafts.Observer) Option {
 	return func(service *Service) { service.observer = observer }
 }
 
+// New requires nonnil ports, a positive bounded byte limit and distinct nonempty namespaces, then applies
+// nonnil options. It does not probe ports, detect typed nils or start recovery.
+// New требует nonnil ports, положительный ограниченный byte limit и разные непустые namespaces, затем
+// применяет nonnil options. Ports, typed nil и recovery здесь не проверяются и не запускаются.
 func New(owner secretdrafts.Owner, cipher secretdrafts.Cipher, keys secretdrafts.Checker, staged secretdrafts.EncryptedStore,
 	runtime secretdrafts.RuntimeStore, maximumBytes int, stagedNamespace, runtimeNamespace string, options ...Option) (*Service, error) {
 	if owner == nil || cipher == nil || keys == nil || staged == nil || runtime == nil || maximumBytes < 1 ||
@@ -50,6 +66,10 @@ func New(owner secretdrafts.Owner, cipher secretdrafts.Cipher, keys secretdrafts
 	return service, nil
 }
 
+// Check first probes dependencies, then requires the most recent completed reconciliation to have
+// succeeded; it does not itself run recovery.
+// Check сначала проверяет dependencies, затем требует успеха последнего завершённого reconciliation; сам
+// recovery не запускает.
 func (service *Service) Check(ctx context.Context) error {
 	if err := service.CheckDependencies(ctx); err != nil {
 		return err
@@ -63,6 +83,10 @@ func (service *Service) Check(ctx context.Context) error {
 	return nil
 }
 
+// CheckDependencies checks owner, key readiness and staging in that order, mapping key failure to
+// Unavailable; it does not probe cipher or runtime storage.
+// CheckDependencies проверяет owner, готовность ключей и staging в таком порядке, отображая key failure в
+// Unavailable; cipher и runtime storage не проверяет.
 func (service *Service) CheckDependencies(ctx context.Context) error {
 	if err := service.owner.Check(ctx); err != nil {
 		return err
@@ -73,6 +97,12 @@ func (service *Service) CheckDependencies(ctx context.Context) error {
 	return service.staged.Check(ctx)
 }
 
+// Execute clears caller plaintext on every return, validates input before consuming a grant and checks
+// exact owner work before lease-bounded effects. SAVE seals, VALIDATE/PUBLISH open, DISCARD only cleans;
+// uncertain writes/completion are left for recovery, never blindly repeated or failed.
+// Execute очищает caller plaintext при любом return, проверяет input до потребления grant и exact owner
+// work до lease-bounded effects. SAVE шифрует, VALIDATE/PUBLISH расшифровывают, DISCARD только очищает;
+// неопределённые writes/completion оставляет recovery без слепого повтора и Fail.
 func (service *Service) Execute(ctx context.Context, kind value.DraftOperation, grant string, plaintext []byte) (value.DraftResult, error) {
 	// Владение request bytes заканчивается вместе с командой, включая ошибки consume.
 	defer clear(plaintext)
@@ -182,6 +212,12 @@ func (service *Service) Execute(ctx context.Context, kind value.DraftOperation, 
 	return result, nil
 }
 
+// validateWork matches binding/draft/scope/namespaces and claim shape; active work additionally needs a
+// positive claim and future lease/expiry with lease no later than expiry. Recovery skips time freshness,
+// not exact binding checks.
+// validateWork сверяет binding/draft/scope/namespaces и форму claim; active work дополнительно требует
+// положительный claim, будущие lease/expiry и lease не позже expiry. Recovery пропускает актуальность
+// времени, не exact binding checks.
 func (service *Service) validateWork(work value.DraftWork, active bool) error {
 	if work.Binding.Validate() != nil || work.OperationRef == "" || work.ClaimGeneration < 0 ||
 		(work.ClaimantID == "") != (work.ClaimGeneration == 0) || active && work.ClaimGeneration == 0 ||
@@ -201,6 +237,10 @@ func (service *Service) validateWork(work value.DraftWork, active bool) error {
 	return nil
 }
 
+// validateValue enforces nonempty bounded bytes, the binding's exact SHA-256 and BINARY/UTF-8 STRING/UTF-8
+// JSON rules; syntactic JSON is not application-schema validation.
+// validateValue требует непустые ограниченные байты, точный SHA-256 из binding и правила BINARY/UTF-8
+// STRING/UTF-8 JSON; JSON syntax не заменяет application-schema validation.
 func (service *Service) validateValue(binding value.SecretDraftBinding, plaintext []byte) error {
 	if len(plaintext) == 0 || len(plaintext) > service.maximumBytes {
 		return secretdrafts.ErrInvalid
@@ -224,6 +264,10 @@ func (service *Service) validateValue(binding value.SecretDraftBinding, plaintex
 	return secretdrafts.ErrInvalid
 }
 
+// fail reports the definite failure once using the supplied context; if owner acknowledgement fails it
+// joins the original cause with Unavailable, not with raw owner diagnostics.
+// fail однократно сообщает определённый failure через переданный context; при отказе owner acknowledgement
+// объединяет исходную cause с Unavailable, не с raw owner diagnostics.
 func (service *Service) fail(ctx context.Context, work value.DraftWork, cause error) error {
 	if err := service.owner.Fail(ctx, work); err != nil {
 		return errors.Join(cause, secretdrafts.ErrUnavailable)

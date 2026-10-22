@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.231.0
+version: 1.232.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,66 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцать вторая волна — доменные ports и recovery черновиков
+
+Опубликованный SHA231 — `ec0090245c8d786291c1587116873158c98ac856`.
+Точный cKNPEF: 6587 sources, 222 excluded, 1823 raw, 597 retained,
+1226 unresolved; Go 9200/21196, missing 11996. Raw SHA256:
+`0dfbcbfd475572be6018e98760a4f8e8f8b7951777be7462caf0b01ceb5ac4d9`.
+Clone-set:
+`b413e1434acf4250c9dab613c71f7e28af7fd560cbab827898600203221af9e1`.
+Push/readback, Draft PR PATCH/GET exact body подтверждены. На SHA231
+96 верхних/338 всех secret-broker grpc/Kubernetes/recovery PASS, 0 FAIL/SKIP,
+полная сборка, 17 Node units и Go checker unit PASS LOCAL.
+
+Пять полностью прочитанных файлов domain repository/service secretdraft
+получили91 предметное EN→RU пояснение: errors, interface methods, service
+options/checks/commands, cleanup diagnostics, recovery/worker и все fixtures/
+tests. Дополнительно сверены выбранные implementations key guard, AEAD,
+draft owner и runtime materializer; они не менялись.
+Scope91/91 PASS. Ранее описанные domain value declarations не переписаны.
+Никаких runtime statements, import/dependency/contracts/schema, generated,
+registry или lifecycle изменений: Go AST всех5 файлов идентичен SHA231
+без comments/token.Pos, включая развёрнутый для комментария Checker interface.
+
+Описание Execute фиксирует input clearing при любом return, pre-consume
+проверки, exact owner work, deadline-bound effects и отсутствие слепого
+повтора/Fail после неоднозначного write или Complete. Recovery не decrypt/
+republish: owner KEEP/DELETE решает каждый эффект отдельно; оба actions
+проверяются до первого delete. Последовательность ciphertext→runtime→
+cleanup ACK и точные descriptors сохраняются, частичные эффекты не откатываются.
+Это документация прежнего исполнения, не новая матрица переходов.
+
+Worker лишь возвращает caller-owned loop; positive interval, meaningful
+timeout и startup barrier принадлежат composition, не обеспечиваются одним
+именем метода. Readiness зависит от последнего завершённого recovery и
+проверяет owner/key/staging, не cipher/runtime. Тестовые ports явно названы
+подменами: fake cipher не доказывает encryption, fake owner не проверяет grant,
+synthetic delete может отмечать absence даже с ошибкой.
+Cleanup diagnostics имеют fixed Error и unwrap-able cause; class precedence
+для joined errors и вложенный cleanup stage описаны без изменения runtime текста.
+
+`go test -mod=readonly -count=1 -timeout 120s -json ./internal/domain/...`:
+9 верхних/30 всех PASS, 0 FAIL/SKIP. Отдельный существующий
+app encrypted lifecycle/readiness composition:1 верхний/9 всех PASS, 0 FAIL/SKIP.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4. Полная сборка
+secret-broker `go build -mod=readonly ./...` PASS LOCAL.
+Domain tests проверяют четыре commands, early refusal, uncertain outcome,
+KEEP, exact cleanup после NotFound и учёт deletions при потерянном ACK;
+app fixture дополнительно использует реальный AEAD/keyring, но fake owner/
+Kubernetes. Ни один результат не доказывает live CP/cluster authority.
+Scope checker, inverse AST5, gofmt/diff-check PASS LOCAL.
+
+Рабочий qfZDlt: 6587 sources, 222 excluded, 1823 raw, 597 retained,
+1226 unresolved; Go 9291/21196, missing11905. Raw SHA256:
+`3c3d41aae0cbf39aff339cc3658bff261ff436958004e29ad74c23c1d0d9c8fd`.
+Clone-set прежний b413e143...; canonical assessment и5 addressed ignore
+boundaries PASS. Fragment/path/count multiset и retained registry неизменны.
+Сдвиг координат после comments не объявлен новым устранённым дублем.
+Полный код задачи ещё не готов; оставшиеся11905 declarations/1226 групп
+продолжают учитываться. Исторические FAIL/SKIP/NOT RUN сохранены.
+Browser/live/deploy/ИИ/STT/почта и полная приёмка NOT RUN по scoped решению.
 
 ## Двести тридцать первая волна — consume boundary и последние группы secret-broker
 
