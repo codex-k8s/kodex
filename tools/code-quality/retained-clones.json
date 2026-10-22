@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/control-plane/internal/providercredentialclient/managed_renewal.go",
+      "secondPath": "services/internal/control-plane/internal/providercredentialclient/managed_renewal.go",
+      "fragmentSHA256": "d9ab194a605f31a5f24f8de400f9be86718d93503b1756bfe6445e16dd4f6432",
+      "count": 1,
+      "reason": "Совпало короткое окно typed write/read RPC adapters продления: RenewManagedProviderCredential может произвести credential, ObserveManagedProviderCredentialRenewal только наблюдает результат и отдельно помечает Recovered, в том числе при ошибке конвертации. У них разные generated request/response nominal types и защищённые RPC methods. Общие task binding, вычисление request digests и результат уже вынесены в validRenewalTask, deterministicRequestDigest и credentialRenewalResult. Универсальный dispatcher или interface только ради nil/unknown checks скрыл бы различие вызовов и partial-error semantics; оставлено точное 130-token self-clone окно, не файл."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/app/app.go",
       "secondPath": "services/internal/runtime-controller/internal/app/app.go",
       "fragmentSHA256": "6324d9ab3e23f73e66f838010a2b8bfc8ce2ff3dcb96286f70560522dbd503e7",

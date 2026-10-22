@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.187.0
+version: 1.188.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят восьмая волна — завершён provider credential client
+
+На базе опубликованного SHA `fc267b2e361d5a41cb5e3402229301adcdd8cb91`
+все оставшиеся 28 объявлений authorization cleanup, managed renewal,
+model catalog и их тестов получили предметные EN→RU комментарии после
+полного чтения пяти файлов. Вместе с новым package-private digest helper
+и двумя unit весь providercredentialclient — 62/62 объявления в девяти
+файлах, scoped Go-docs-check PASS LOCAL.
+
+Три одинаковых deterministic protobuf/SHA-256/hex вычисления заменены
+deterministicRequestDigest. Валидация task/binding, два разных writer/owner
+envelopes и прежние ошибки остались у вызвавших методов; helper не выдаёт
+authority, не делает RPC/I/O и не меняет запрос. Детерминированный protobuf
+не назван canonical across languages/versions. Новые tests сравнивают hash
+с буквальными wire bytes по проверенным generated tags, включая unknown
+field suffix, неизменность logical input и прежнее пустое кодирование nil;
+invalid UTF-8 вызывает serialization error без hash частичного результата.
+Generated files только читались, их содержимое не редактировалось.
+
+Все пять прежних файлов механически восстановлены раскрытием трёх helper
+calls и возвращением удалённых imports: non-comment строки после gofmt
+точно совпадают с parent. Тело helper точно совпадает с прежним алгоритмом
+model request digest. Ни один dependency, wire/schema, RPC method,
+authorization/recovery check, state mapping или applied migration не менялся.
+
+Комментарии сохраняют важные различия: metadata-only observation не
+удаляет объекты; unfenced absence не становится confirmed; produced
+credential возвращается для отдельной задачи, а не удаляется как побочный
+эффект. Renewal UNKNOWN_OUTCOME не получает credential или фиктивный
+успех; Recovered после conversion не заменяет проверку returned error.
+Timestamp syntax не объявлена freshness check, digest match — owner grant,
+а receipt text — проверенной подписью. Context7 protobuf MarshalOptions/
+Deterministic и Clone сверены; внешняя версия SDK не менялась.
+
+PASS LOCAL: CP `go test -mod=readonly -count=1 -json
+./internal/providercredentialclient` — 13 верхних PASS, 43 PASS с подтестами,
+0 SKIP/FAIL; полный module `go build -mod=readonly ./...`, scoped docs
+62/62, 16 unit анализатора, Go-checker, пять ignore-boundaries и diff-check.
+Go1.26.6, GOENV=off/GOWORK=off. Повтор на точном опубликованном SHA
+фиксируется в PR. Component/live/browser/deploy, реальные агенты и полный
+repository Go-docs-check — NOT RUN; прежний diagnostics FAIL не скрыт.
+
+Detector: 6575 source, 222 generated/lock исключения, 1842 raw. Прежнее
+130-token write/read adapter окно managed_renewal сохранило executable
+структуру и получило новый fragment hash только из-за комментария.
+Ему добавлено одно точное count=1 решение: разные generated RPC types,
+внешний write против observation и отдельный Recovered/error mapping,
+при уже общих binding/digest/result helpers. Файл целиком не исключался.
+Теперь 581 точное решение, 1261 неразобранная группа. Короткий hash algorithm
+не был отдельной detector-группой и его вынос не назван уменьшением raw.
+Рабочий raw SHA-256
+`9c8701c889ad5c1986785ca34cb61782f9c5167bfda4576dafaa2a7b71376d40`,
+clone-set fingerprint
+`dff387253227c0f7d89fca1a1768c6f3dfbb12571dbfcc17105d0801f1d68135`.
+Go-реестр 6869/21140, непокрыты 14271. Единый Draft PR и цель не завершены.
 
 ## Сто восемьдесят седьмая волна — единая грамматика SHA-256 text
 
