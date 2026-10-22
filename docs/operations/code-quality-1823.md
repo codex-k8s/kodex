@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.190.0
+version: 1.191.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,60 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто первая волна — полный основной тест workload manager
+
+Исходный точный SHA `7858b919b45f0e64468b4e65fa795cfa1f23ab5c`
+волны190 запушен и проверен: callback250 верхних/1349 всех PASS,0 FAIL,
+2 прежних container/wire SKIP; полный runtime-controller build PASS.
+Exact scan gizaJT:6575 sources,222 excluded,1842 raw,582 retained,
+1260 unresolved; Go6933/21139,missing14206. Raw SHA256
+`3f50711d5abd32b9af60a5919d9d27e8fcedc816e7037efe44e73e750fc40f17`,
+clone-set `ba3326f983f941ab44dc37d832978e8b524eb996fdf7e7708857df3ecad846d1`.
+
+Полностью прочитан manager_test.go (2170 исходных строк) и предметно
+документированы все69 прежних объявлений, включая5 constants и helpers.
+Вместе с2 новыми helpers scoped checker даёт71/71 EN→RU. Пояснены точные
+image/credential/projection/workspace pins, контейнерная матрица, refresh
+предшественника, архивная lineage, отсутствие автоматического права публикации,
+warm rotation/replacement, PVC ownership/create race, попытки и cleanup,
+server defaults и отсутствие Kubernetes token. Test seals и fake tracker не
+названы реальными owner grants, broker receipts, live scans либо provider login.
+Ограничения permissive fixture mappers и nil/empty env semantics описаны
+буквально, без приписывания отсутствующих проверок.
+
+Две реальные группы вынесены в локальные тестовые helpers без нового module:
+materializeTestTurn выполняет прежние BuildTurnInput/EnsureTurn с синтетической
+проекцией и возвращает exact input/bindings; recreateWarmPodFixture выполняет
+общую последовательность создания terminal warm Pod, удаления до замены,
+повторной материализации и проверки not-ready. Разные terminal mutations
+и конечные security/readiness asserts остаются в собственных тестах.
+Новый helper не меняет production implementation или policy.
+
+Обратное раскрытие4 calls и удаление2 helper declarations вместе с comments
+восстанавливает весь исполняемый файл родителя. Единственные сопутствующие
+изменения —2 текста отказа теста приведены к сообщению общего helper,
+а t.Helper сохраняет атрибуцию вызывающего теста. Условия, API effects,
+порядок, входные данные и число тестов не менялись.
+
+Context7 /kubernetes/client-go и локальный go doc NewSimpleClientset
+подтверждают fake tracker без настоящих validation/defaulting/controllers;
+SDK, зависимости, generated и Kubernetes manifests не менялись.
+Локально workload go test -mod=readonly -count=1 -json ./internal/workload:
+84 верхних/300 всех PASS,0 FAIL,1 прежний SKIP
+TestAssistantWarmRuntimeOwnerWireBuild (wire producer NOT RUN).
+Полный go build -mod=readonly ./... runtime-controller, scoped docs71/71,
+5 ignore-boundaries и diff-check PASS LOCAL; Go1.26.6,GOENV=off/GOWORK=off.
+
+Рабочий scan uDS78N:6575 sources,222 excluded,1840 raw,582 retained,
+1258 unresolved. Обе исходные группы manager_test действительно исчезли,
+новых исключений нет. Go7004/21141,missing14137: покрыты69 прежних и2 новых
+объявления. Raw SHA256
+`7c5df7a57e9958dca596403c15c185ffee4bf95eb1ce26f7d0f52c96ffdd6607`,
+clone-set `d8014d294a06609222907c801d6abe4f1077236fd3a56ad5f58405a8d13bc93b`.
+Точный опубликованный SHA и повтор build/unit/scan публикуются в том же PR.
+Полный repo -check, component/live, browser/deploy, агенты/STT/почта NOT RUN.
+Цель не завершена, PR остаётся Draft без merge/owner approve.
 
 ## Сто девяностая волна — наблюдения провайдера в callback
 

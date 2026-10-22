@@ -25,12 +25,42 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// testDigest is the synthetic promoted role-image digest used for exact pins;
+// it does not identify an image that these unit tests pull or scan.
+// testDigest задаёт синтетический digest допущенного образа для точных привязок;
+// эти unit-тесты не скачивают и не сканируют соответствующий образ.
 const testDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+// testDefaultDigest distinguishes the platform release image from the role image
+// so fixture assertions can detect unintended credential-relay image reuse.
+// testDefaultDigest отличает платформенный release-образ от образа роли,
+// позволяя обнаружить неверный выбор образа credential relay в fixture.
 const testDefaultDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+
+// testContractDigest is a fixed lexical runtime-contract pin for the fixtures,
+// not a computed proof of the current repository's runner artifact.
+// testContractDigest является фиксированной привязкой контракта для fixtures,
+// а не вычисленным доказательством текущего runner artifact репозитория.
 const testContractDigest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+// testProviderDigest is the SHA-256 of the fixed synthetic provider-auth bytes
+// created by newTestManager; no external account is represented.
+// testProviderDigest содержит SHA-256 фиксированных синтетических auth-байтов
+// из newTestManager и не относится к внешней учётной записи.
 const testProviderDigest = "004ab004093ba6916de2d7fa718d1e1539157f24f04e747d0346e86e0a87556c"
+
+// testArtifactDigest supplies a synthetic attachment digest for manifest pins;
+// the fixture does not download or verify corresponding artifact bytes.
+// testArtifactDigest задаёт синтетический digest вложения для manifest-привязок;
+// fixture не скачивает и не проверяет соответствующие байты артефакта.
 const testArtifactDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 
+// TestAssistantRunContextPreservesEmptyAllowedOperationsInRevisionDigest checks
+// that sealing and rebuilding a run context preserves an explicitly empty,
+// nonnil allowed-operation list rather than changing its digest representation.
+// TestAssistantRunContextPreservesEmptyAllowedOperationsInRevisionDigest
+// проверяет сохранение явно пустого, но не nil списка операций контекста запуска
+// при закреплении и повторной сборке без изменения digest-представления.
 func TestAssistantRunContextPreservesEmptyAllowedOperationsInRevisionDigest(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -64,6 +94,12 @@ func TestAssistantRunContextPreservesEmptyAllowedOperationsInRevisionDigest(t *t
 	}
 }
 
+// TestRunAsLeaderHasCompleteClientGoCallbacks invokes leader election with an
+// already canceled context and requires context.Canceled, exercising callback
+// setup without acquiring leadership or executing real cluster work.
+// TestRunAsLeaderHasCompleteClientGoCallbacks запускает выбор лидера с уже
+// отменённым контекстом и требует context.Canceled, проверяя настройку callbacks
+// без получения лидерства и реальной работы в кластере.
 func TestRunAsLeaderHasCompleteClientGoCallbacks(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -76,6 +112,12 @@ func TestRunAsLeaderHasCompleteClientGoCallbacks(t *testing.T) {
 	}
 }
 
+// TestAllowsLastKnownGoodObservationOnlyForTransientAPIFailure checks wrapped
+// deadline, unavailable and throttling errors against forbidden and unknown
+// integrity errors; only the selected transient failures permit cached evidence.
+// TestAllowsLastKnownGoodObservationOnlyForTransientAPIFailure сравнивает
+// обёрнутые ошибки срока, недоступности и лимита с запретом и неизвестной ошибкой
+// целостности: сохранённые наблюдения допускаются лишь для выбранных сбоев.
 func TestAllowsLastKnownGoodObservationOnlyForTransientAPIFailure(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -99,17 +141,18 @@ func TestAllowsLastKnownGoodObservationOnlyForTransientAPIFailure(t *testing.T) 
 	}
 }
 
+// TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential inspects
+// fake-client materialization of role/provider/relay/init boundaries, pinned
+// projections, tickets, credential mounts, proxy grant and bounded workspace/PVC.
+// It verifies generated objects, not live admission, image trust or isolation.
+// TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential
+// проверяет через fake-клиент границы role/provider/relay/init, точные проекции,
+// ticket, mounts реквизитов, proxy grant и ограниченные workspace/PVC. Проверяются
+// сформированные объекты, а не live admission, доверие к образу или изоляция.
 func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildTurnInput(testExecution(false))
-	if err != nil {
-		t.Fatalf("BuildTurnInput() error = %v", err)
-	}
-	credentials := testCredentialProjection(input)
-	if err := manager.EnsureTurn(context.Background(), input, binding, credentials); err != nil {
-		t.Fatalf("EnsureTurn() error = %v", err)
-	}
+	input, binding, credentials := materializeTestTurn(t, manager, testExecution(false))
 	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(Pod) error = %v", err)
@@ -300,6 +343,10 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	}
 }
 
+// hasMountAt reports any exact volume-name/mount-path pair in a container;
+// it does not check subpaths, read-only flags or the mounted volume source.
+// hasMountAt ищет точную пару имени тома и пути в контейнере,
+// не проверяя subpath, режим чтения и источник смонтированного тома.
 func hasMountAt(container corev1.Container, volumeName, path string) bool {
 	for _, mount := range container.VolumeMounts {
 		if mount.Name == volumeName && mount.MountPath == path {
@@ -309,6 +356,10 @@ func hasMountAt(container corev1.Container, volumeName, path string) bool {
 	return false
 }
 
+// mountReadOnly compares the first matching named mount with the expected
+// read-only flag; missing mounts fail, even when the expected flag is false.
+// mountReadOnly сравнивает режим первого mount с заданным именем с ожидаемым;
+// отсутствие mount даёт false даже при ожидаемом writable-режиме.
 func mountReadOnly(container corev1.Container, volumeName string, expected bool) bool {
 	for _, mount := range container.VolumeMounts {
 		if mount.Name == volumeName {
@@ -318,6 +369,10 @@ func mountReadOnly(container corev1.Container, volumeName string, expected bool)
 	return false
 }
 
+// podVolumeByName returns the first named Pod volume or fails the calling test;
+// its zero-value return exists only to satisfy the compiler after Fatalf.
+// podVolumeByName возвращает первый том Pod с заданным именем либо завершает
+// тест; нулевой результат нужен лишь компилятору после Fatalf.
 func podVolumeByName(t *testing.T, pod *corev1.Pod, name string) corev1.Volume {
 	t.Helper()
 	for _, volume := range pod.Spec.Volumes {
@@ -329,6 +384,12 @@ func podVolumeByName(t *testing.T, pod *corev1.Pod, name string) corev1.Volume {
 	return corev1.Volume{}
 }
 
+// TestManagerAcceptsOnlyDefaultOrValidExplicitStorageClass checks construction
+// with a valid explicit StorageClass name and rejection of a slash-bearing name;
+// it does not prove that the class exists or can provision storage.
+// TestManagerAcceptsOnlyDefaultOrValidExplicitStorageClass проверяет создание
+// manager с допустимым именем StorageClass и отказ для имени со слешем,
+// не доказывая существование класса или возможность выделения диска.
 func TestManagerAcceptsOnlyDefaultOrValidExplicitStorageClass(t *testing.T) {
 	t.Parallel()
 	config := testManagerConfig()
@@ -342,6 +403,10 @@ func TestManagerAcceptsOnlyDefaultOrValidExplicitStorageClass(t *testing.T) {
 	}
 }
 
+// TestManagerRejectsSharedControlAndRuntimeNamespace checks constructor refusal
+// when control-plane and runtime namespaces coincide, before materialization.
+// TestManagerRejectsSharedControlAndRuntimeNamespace проверяет отказ конструктора
+// при совпадении control-plane и runtime namespaces до материализации.
 func TestManagerRejectsSharedControlAndRuntimeNamespace(t *testing.T) {
 	t.Parallel()
 	config := testManagerConfig()
@@ -351,6 +416,12 @@ func TestManagerRejectsSharedControlAndRuntimeNamespace(t *testing.T) {
 	}
 }
 
+// TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision changes only the
+// provider Secret resource version after input construction and requires denial
+// instead of materializing credentials outside the sealed runtime revision.
+// TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision меняет только
+// resource version provider Secret после сборки input и требует отказа,
+// исключая материализацию реквизитов вне закреплённой runtime-ревизии.
 func TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -364,6 +435,12 @@ func TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision(t *testing.T)
 	}
 }
 
+// TestMaterializeProviderCredentialRefreshCreatesImmutableRevisionIdempotently
+// assigns synthetic API metadata through a fake reactor and checks two refreshes
+// return the same immutable Secret with exact auth/digest data and no duplicate.
+// TestMaterializeProviderCredentialRefreshCreatesImmutableRevisionIdempotently
+// назначает синтетические API-метаданные fake reactor и проверяет два refresh:
+// один неизменяемый Secret с точными auth/digest, стабильная привязка, без дубля.
 func TestMaterializeProviderCredentialRefreshCreatesImmutableRevisionIdempotently(t *testing.T) {
 	client, manager, input, payload := managedOAuthRefreshFixture(t)
 	client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
@@ -408,6 +485,12 @@ func TestMaterializeProviderCredentialRefreshCreatesImmutableRevisionIdempotentl
 	}
 }
 
+// TestMaterializeProviderCredentialRefreshRejectsInvalidLineage mutates account,
+// auth mode, duplicate security fields, unchanged bytes, predecessor reference
+// and pinned Secret presence, requiring the closed refresh-rejected sentinel.
+// TestMaterializeProviderCredentialRefreshRejectsInvalidLineage меняет аккаунт,
+// режим auth, дубли полей безопасности, неизменённые байты, ссылку предшественника
+// и наличие точного Secret, требуя закрытый sentinel отказа refresh.
 func TestMaterializeProviderCredentialRefreshRejectsInvalidLineage(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -443,6 +526,12 @@ func TestMaterializeProviderCredentialRefreshRejectsInvalidLineage(t *testing.T)
 	}
 }
 
+// managedOAuthRefreshFixture creates an isolated fake manager with synthetic old
+// OAuth bytes, seals and materializes one turn, and returns a same-account refresh
+// request with new bytes; it performs no real OAuth or provider operation.
+// managedOAuthRefreshFixture создаёт отдельный fake manager со старыми
+// синтетическими OAuth-байтами, закрепляет и материализует ход и возвращает refresh
+// того же аккаунта с новыми байтами; реальных OAuth/provider операций нет.
 func managedOAuthRefreshFixture(t *testing.T) (*fake.Clientset, *Manager, runtimecontract.RunnerInput, runtimecontract.RunnerProviderCredentialRefreshRequest) {
 	t.Helper()
 	client := fake.NewSimpleClientset()
@@ -481,10 +570,20 @@ func managedOAuthRefreshFixture(t *testing.T) (*fake.Clientset, *Manager, runtim
 	}
 }
 
+// managedOAuthAuthentication formats quoted synthetic OAuth fields as JSON;
+// it is a test-data constructor, not a credential validator or login operation.
+// managedOAuthAuthentication форматирует синтетические OAuth-поля с кавычками
+// в JSON; это конструктор тестовых данных, не проверка реквизитов и не вход.
 func managedOAuthAuthentication(accountID, accessToken, refreshToken string) []byte {
 	return []byte(fmt.Sprintf(`{"auth_mode":"chatgpt","tokens":{"account_id":%q,"access_token":%q,"refresh_token":%q}}`, accountID, accessToken, refreshToken))
 }
 
+// TestEnsureTurnMountsExactBrokerEnvironmentSecretOutsideTicket seals synthetic
+// environment values and Secret descriptors, checks ticket bytes stay secret-free,
+// and requires only the provider container to receive the exact projection key.
+// TestEnsureTurnMountsExactBrokerEnvironmentSecretOutsideTicket закрепляет
+// синтетические env и дескрипторы Secret, проверяет отсутствие секрета в ticket
+// и точную передачу projection key лишь контейнеру провайдера.
 func TestEnsureTurnMountsExactBrokerEnvironmentSecretOutsideTicket(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -526,14 +625,7 @@ func TestEnsureTurnMountsExactBrokerEnvironmentSecretOutsideTicket(t *testing.T)
 	}
 	execution.Revision.RuntimeEnvironmentDigest = environmentDigest
 	sealTestTurnExecution(execution)
-	input, binding, err := manager.BuildTurnInput(execution)
-	if err != nil {
-		t.Fatalf("BuildTurnInput() error = %v", err)
-	}
-	credentials := testCredentialProjection(input)
-	if err := manager.EnsureTurn(context.Background(), input, binding, credentials); err != nil {
-		t.Fatalf("EnsureTurn() error = %v", err)
-	}
+	input, _, credentials := materializeTestTurn(t, manager, execution)
 
 	ticket, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), ticketName(input.LeaseRef), metav1.GetOptions{})
 	if err != nil {
@@ -573,6 +665,12 @@ func TestEnsureTurnMountsExactBrokerEnvironmentSecretOutsideTicket(t *testing.T)
 	}
 }
 
+// TestEnsureTurnRejectsCredentialProjectionKeySetMismatch substitutes a runtime
+// Secret projection's key mapping and requires EnsureTurn rejection instead of
+// injecting an unbound key into the provider environment.
+// TestEnsureTurnRejectsCredentialProjectionKeySetMismatch подменяет отображение
+// ключа runtime Secret projection и требует отказ EnsureTurn вместо передачи
+// непривязанного ключа в окружение провайдера.
 func TestEnsureTurnRejectsCredentialProjectionKeySetMismatch(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -619,6 +717,12 @@ func TestEnsureTurnRejectsCredentialProjectionKeySetMismatch(t *testing.T) {
 	}
 }
 
+// TestValidateImageAcceptsOnlyPromotedOrExactReleaseDefault checks the configured
+// promoted repository and exact default image pins, rejecting an arbitrary pinned
+// repository; this is a local reference rule, not a scanner or registry check.
+// TestValidateImageAcceptsOnlyPromotedOrExactReleaseDefault проверяет ссылки
+// настроенного promoted-репозитория и точного default-образа, отвергая посторонний
+// pinned-репозиторий; это правило ссылок, а не сканер и не проверка registry.
 func TestValidateImageAcceptsOnlyPromotedOrExactReleaseDefault(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -640,6 +744,12 @@ func TestValidateImageAcceptsOnlyPromotedOrExactReleaseDefault(t *testing.T) {
 	}
 }
 
+// TestBuildTurnInputCarriesExactEnvironmentImageAndSelectedTools checks that
+// environment artifact/recipe/generation/reference/digest and selected tool usage
+// hints survive conversion from the sealed revision without substitution.
+// TestBuildTurnInputCarriesExactEnvironmentImageAndSelectedTools проверяет
+// сохранение artifact/recipe/generation/reference/digest окружения и подсказок
+// выбранных инструментов при переводе закреплённой ревизии без подмены.
 func TestBuildTurnInputCarriesExactEnvironmentImageAndSelectedTools(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -661,6 +771,12 @@ func TestBuildTurnInputCarriesExactEnvironmentImageAndSelectedTools(t *testing.T
 	}
 }
 
+// TestBuildTurnInputCarriesExactAttachmentProvenance checks current-turn
+// attachment-set and artifact identity, source/version/scope pins and the
+// deterministic workspace path; it does not read the attachment bytes.
+// TestBuildTurnInputCarriesExactAttachmentProvenance проверяет идентичность
+// attachment set и артефакта текущего хода, source/version/scope и определённый
+// путь workspace; байты вложения не читаются.
 func TestBuildTurnInputCarriesExactAttachmentProvenance(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -698,6 +814,12 @@ func TestBuildTurnInputCarriesExactAttachmentProvenance(t *testing.T) {
 	}
 }
 
+// TestBuildTurnInputCarriesSessionHistoryTurnLineage adds a separately pinned
+// historical attachment set and checks its prior-turn provenance, session scope
+// and workspace path survive resealing without becoming current-turn material.
+// TestBuildTurnInputCarriesSessionHistoryTurnLineage добавляет отдельно
+// закреплённый набор истории и проверяет прежний ход, session scope и путь
+// workspace после перепривязки без превращения истории в материал текущего хода.
 func TestBuildTurnInputCarriesSessionHistoryTurnLineage(t *testing.T) {
 	t.Parallel()
 	execution := testExecution(false)
@@ -748,6 +870,12 @@ func TestBuildTurnInputCarriesSessionHistoryTurnLineage(t *testing.T) {
 	}
 }
 
+// TestBuildTurnInputRejectsAttachmentProvenanceDrift mutates manifest, artifact
+// revision/version/source/scope/name/set and turn lineage without resealing,
+// requiring BuildTurnInput to reject every changed attachment binding.
+// TestBuildTurnInputRejectsAttachmentProvenanceDrift меняет manifest, revision,
+// version, source, scope, имя, set артефакта и происхождение хода без перепривязки,
+// требуя отказа BuildTurnInput для каждой изменённой привязки.
 func TestBuildTurnInputRejectsAttachmentProvenanceDrift(t *testing.T) {
 	t.Parallel()
 	tests := map[string]func(*controlplanev1.RuntimeRevisionSnapshot){
@@ -793,6 +921,12 @@ func TestBuildTurnInputRejectsAttachmentProvenanceDrift(t *testing.T) {
 	}
 }
 
+// TestBuildTurnInputAllowsLocalWorkspaceWithoutArtifactCapability checks that
+// writable local workspace does not require or add artifact-publication rights,
+// preserving exact capability lists including an unrecognized workspace key.
+// TestBuildTurnInputAllowsLocalWorkspaceWithoutArtifactCapability проверяет,
+// что локальный writable workspace не требует и не добавляет права публикации
+// артефактов, сохраняя список capabilities, включая неизвестный workspace key.
 func TestBuildTurnInputAllowsLocalWorkspaceWithoutArtifactCapability(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -847,6 +981,12 @@ func TestBuildTurnInputAllowsLocalWorkspaceWithoutArtifactCapability(t *testing.
 	}
 }
 
+// TestBuildWarmInputAllowsLocalWorkspaceWithoutArtifactCapability checks a
+// sealed warm revision with no capabilities still receives workspace-write
+// without gaining artifact-publication capabilities.
+// TestBuildWarmInputAllowsLocalWorkspaceWithoutArtifactCapability проверяет,
+// что закреплённая warm-ревизия без capabilities получает workspace-write,
+// но не приобретает право публикации артефактов.
 func TestBuildWarmInputAllowsLocalWorkspaceWithoutArtifactCapability(t *testing.T) {
 	t.Parallel()
 	revision := testWarmRevision()
@@ -862,6 +1002,10 @@ func TestBuildWarmInputAllowsLocalWorkspaceWithoutArtifactCapability(t *testing.
 	}
 }
 
+// TestTurnPodStateRejectsStaleWarmRevision supplies a running warm Pod with
+// another revision digest and requires CONFLICT rather than accepting its phase.
+// TestTurnPodStateRejectsStaleWarmRevision задаёт running warm Pod с другим
+// digest ревизии и требует CONFLICT, а не доверие только фазе Pod.
 func TestTurnPodStateRejectsStaleWarmRevision(t *testing.T) {
 	warmPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "system-assistant-warm", Namespace: "kodex-runtime", Annotations: map[string]string{revisionAnnotation: strings.Repeat("c", 64)}}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
 	client := fake.NewSimpleClientset(warmPod)
@@ -879,6 +1023,12 @@ func TestTurnPodStateRejectsStaleWarmRevision(t *testing.T) {
 	}
 }
 
+// TestTurnPodStateUsesColdPodForSystemAssistantFallback materializes a cold
+// system-assistant turn with the fake client and checks non-warm observation
+// returns UNKNOWN for its unset Pod status, not a warm-Pod readiness claim.
+// TestTurnPodStateUsesColdPodForSystemAssistantFallback материализует холодный
+// ход системного помощника fake-клиентом и проверяет UNKNOWN при пустом Pod status
+// в non-warm чтении вместо утверждения о готовности warm Pod.
 func TestTurnPodStateUsesColdPodForSystemAssistantFallback(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -898,6 +1048,12 @@ func TestTurnPodStateUsesColdPodForSystemAssistantFallback(t *testing.T) {
 	}
 }
 
+// TestTurnPodStateClassifiesColdRuntimeContainers checks workspace preparation/
+// initialization failures, terminated role/provider and readiness combinations
+// against closed state/diagnostic pairs on exact fake cold-Pod specifications.
+// TestTurnPodStateClassifiesColdRuntimeContainers проверяет ошибки подготовки
+// и инициализации workspace, завершённые role/provider и сочетания готовности
+// по закрытым state/diagnostic для точных fake-спецификаций холодного Pod.
 func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -995,6 +1151,12 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 	}
 }
 
+// TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift proves changed
+// turn task/revision identity can preserve a warm compatibility digest while
+// changing the selected model changes it; it does not authorize warm reuse.
+// TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift проверяет
+// сохранение warm compatibility digest при изменении задания и идентичности
+// ревизии, но изменение при смене модели; само переиспользование не разрешается.
 func TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -1034,39 +1196,16 @@ func TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift(t *testing.T
 	}
 }
 
+// TestEnsureWarmRecreatesTerminalPod requires deletion of a failed warm Pod
+// before a later call creates a nonterminal replacement with exact revision,
+// writable workdir and read-only protected mounts; a fresh Pod is not ready.
+// TestEnsureWarmRecreatesTerminalPod требует удалить failed warm Pod до создания
+// замены следующим вызовом: точная ревизия, writable workdir и read-only mounts
+// защищённых данных; новый Pod не объявляется готовым.
 func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
-	client := fake.NewSimpleClientset()
-	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildWarmInput(testWarmRevision())
-	if err != nil {
-		t.Fatalf("BuildWarmInput() error = %v", err)
-	}
-	terminal := manager.runtimePod(input, binding, nil, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
-	terminal.Status.Phase = corev1.PodFailed
-	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
-		t.Fatalf("Create(terminal warm Pod) error = %v", err)
-	}
-	ready, err := manager.EnsureWarm(context.Background(), input, binding)
-	if err != nil {
-		t.Fatalf("EnsureWarm() error = %v", err)
-	}
-	if ready {
-		t.Fatal("deleted warm Pod cannot be ready")
-	}
-	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
-		t.Fatalf("terminal warm Pod was not deleted before replacement: %v", err)
-	}
-	ready, err = manager.EnsureWarm(context.Background(), input, binding)
-	if err != nil {
-		t.Fatalf("second EnsureWarm() error = %v", err)
-	}
-	if ready {
-		t.Fatal("new warm Pod cannot be ready before Kubernetes observation")
-	}
-	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("Get(recreated warm Pod) error = %v", err)
-	}
+	input, pod := recreateWarmPodFixture(t, func(pod *corev1.Pod) {
+		pod.Status.Phase = corev1.PodFailed
+	})
 	if pod.Status.Phase == corev1.PodFailed || pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
 		t.Fatalf("terminal warm Pod was not recreated: phase=%q", pod.Status.Phase)
 	}
@@ -1083,6 +1222,12 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	}
 }
 
+// TestDeactivateWarmDeletesOnlyOwnedRuntimeMaterial checks idempotent removal
+// of managed warm Pod/tickets/projections and refusal to delete a foreign Pod
+// occupying the warm name, using fake API readback rather than live deletion.
+// TestDeactivateWarmDeletesOnlyOwnedRuntimeMaterial проверяет идемпотентное
+// удаление управляемых warm Pod, tickets и projections и отказ удалять чужой Pod
+// с warm-именем через fake API readback, не реальное удаление.
 func TestDeactivateWarmDeletesOnlyOwnedRuntimeMaterial(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1132,48 +1277,31 @@ func TestDeactivateWarmDeletesOnlyOwnedRuntimeMaterial(t *testing.T) {
 	}
 }
 
+// TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime treats a running-phase
+// Pod with a terminated role container as terminal, requiring deletion before
+// replacement and no readiness until a new Kubernetes observation exists.
+// TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime считает running Pod
+// с завершённым role-контейнером terminal, требует удаления до замены
+// и не допускает готовности без нового Kubernetes-наблюдения.
 func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
-	client := fake.NewSimpleClientset()
-	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildWarmInput(testWarmRevision())
-	if err != nil {
-		t.Fatalf("BuildWarmInput() error = %v", err)
-	}
-	terminal := manager.runtimePod(input, binding, nil, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
-	terminal.Status.Phase = corev1.PodRunning
-	terminal.Status.ContainerStatuses = []corev1.ContainerStatus{
-		{Name: "role-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}}},
-		{Name: "provider-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
-	}
-	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
-		t.Fatalf("Create(terminal warm Pod) error = %v", err)
-	}
-	ready, err := manager.EnsureWarm(context.Background(), input, binding)
-	if err != nil {
-		t.Fatalf("EnsureWarm() error = %v", err)
-	}
-	if ready {
-		t.Fatal("deleted warm Pod cannot be ready")
-	}
-	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
-		t.Fatalf("terminated warm Pod was not deleted before replacement: %v", err)
-	}
-	ready, err = manager.EnsureWarm(context.Background(), input, binding)
-	if err != nil {
-		t.Fatalf("second EnsureWarm() error = %v", err)
-	}
-	if ready {
-		t.Fatal("recreated warm Pod cannot be ready before Kubernetes observation")
-	}
-	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("Get(recreated warm Pod) error = %v", err)
-	}
+	_, pod := recreateWarmPodFixture(t, func(pod *corev1.Pod) {
+		pod.Status.Phase = corev1.PodRunning
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+			{Name: "role-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}}},
+			{Name: "provider-runtime", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+		}
+	})
 	if runtimePodTerminal(pod) {
 		t.Fatalf("running warm Pod with a terminated runtime was not recreated: %#v", pod.Status.ContainerStatuses)
 	}
 }
 
+// TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets checks terminal
+// warm deletion removes its ticket before replacement, rotates its token and
+// reconciles managed warm tickets to the single current revision.
+// TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets проверяет
+// удаление ticket terminal warm Pod до замены, ротацию token и сведение
+// управляемых warm tickets к одной текущей ревизии.
 func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1224,6 +1352,12 @@ func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T)
 	}
 }
 
+// TestEnsureWarmReplacesTicketFromPreviousControllerInstance supplies an older
+// controller's synthetic ticket and checks the current-name ticket binds both
+// encoded workload instance and controller annotation to the current manager.
+// TestEnsureWarmReplacesTicketFromPreviousControllerInstance задаёт ticket
+// прежнего controller и проверяет привязку workload instance в кодированном input
+// и controller annotation текущего ticket к действующему manager.
 func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1260,6 +1394,12 @@ func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
 	}
 }
 
+// TestEnsureWarmReplacesTicketWithStaleCallbackAddress stores an otherwise
+// revision-pinned ticket with an old callback URL and requires its replacement
+// input to use the current callback address after EnsureWarm.
+// TestEnsureWarmReplacesTicketWithStaleCallbackAddress сохраняет ticket
+// с точной ревизией, но старым callback URL и требует текущий callback-адрес
+// в заменённом input после EnsureWarm.
 func TestEnsureWarmReplacesTicketWithStaleCallbackAddress(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1296,6 +1436,12 @@ func TestEnsureWarmReplacesTicketWithStaleCallbackAddress(t *testing.T) {
 	}
 }
 
+// TestEnsureWarmReplacesTicketWithStaleProviderSecretBinding changes the ticket's
+// provider Secret resource-version pin and checks EnsureWarm replaces it with
+// the exact current provider binding rather than reusing stale authority.
+// TestEnsureWarmReplacesTicketWithStaleProviderSecretBinding меняет привязку
+// resource version provider Secret в ticket и проверяет её замену точной текущей
+// привязкой при EnsureWarm вместо использования устаревшего полномочия.
 func TestEnsureWarmReplacesTicketWithStaleProviderSecretBinding(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1322,6 +1468,12 @@ func TestEnsureWarmReplacesTicketWithStaleProviderSecretBinding(t *testing.T) {
 	}
 }
 
+// TestEnsureTurnRejectsExistingPodFromAnotherRevision creates an otherwise
+// expected cold Pod with a foreign revision annotation and requires denial
+// rather than adoption merely because the Pod name matches.
+// TestEnsureTurnRejectsExistingPodFromAnotherRevision создаёт ожидаемый холодный
+// Pod с чужой revision annotation и требует отказа, а не принятия
+// по одному совпадению имени Pod.
 func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1340,6 +1492,12 @@ func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 	}
 }
 
+// TestBuildTurnRejectsRuntimeRevisionDigestMismatch mutates required digest,
+// effort, revision/image/environment/credential/role/prompt/workspace pins,
+// MCP grants and STT configuration without resealing and requires rejection.
+// TestBuildTurnRejectsRuntimeRevisionDigestMismatch меняет digest, reasoning,
+// revision/image/environment/credential/role/prompt/workspace-привязки,
+// MCP grants и STT без перепривязки и требует отказа.
 func TestBuildTurnRejectsRuntimeRevisionDigestMismatch(t *testing.T) {
 	t.Parallel()
 	tests := map[string]func(*controlplanev1.RuntimeRevisionSnapshot){
@@ -1388,6 +1546,12 @@ func TestBuildTurnRejectsRuntimeRevisionDigestMismatch(t *testing.T) {
 	}
 }
 
+// TestEnsureTurnRejectsStaleImmutableProjection seeds an immutable ConfigMap
+// with a stale MCP manifest and otherwise expected annotations, requiring
+// conflict before any turn Pod can be created from it.
+// TestEnsureTurnRejectsStaleImmutableProjection задаёт immutable ConfigMap
+// со старым MCP manifest и остальными ожидаемыми annotations, требуя
+// конфликт до создания какого-либо Pod хода на её основе.
 func TestEnsureTurnRejectsStaleImmutableProjection(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1415,6 +1579,12 @@ func TestEnsureTurnRejectsStaleImmutableProjection(t *testing.T) {
 	}
 }
 
+// TestKubernetesMaterializationPayloadLimitFailsClosed checks both text and byte
+// sizing count key overhead beyond a payload at the configured boundary;
+// it exercises size helpers rather than an API-server object-size limit.
+// TestKubernetesMaterializationPayloadLimitFailsClosed проверяет, что размеры
+// text и byte payload учитывают накладной размер ключа сверх граничного значения;
+// проверяются size helpers, а не ограничение API server на размер объекта.
 func TestKubernetesMaterializationPayloadLimitFailsClosed(t *testing.T) {
 	t.Parallel()
 	oversized := strings.Repeat("x", maximumKubernetesProjectionBytes)
@@ -1426,6 +1596,12 @@ func TestKubernetesMaterializationPayloadLimitFailsClosed(t *testing.T) {
 	}
 }
 
+// TestSessionPVCRejectsCrossTenantAndProjectReuse creates one session claim
+// then changes organization or project under the same session, requiring an
+// exact-binding refusal rather than cross-scope volume reuse.
+// TestSessionPVCRejectsCrossTenantAndProjectReuse создаёт session claim
+// и меняет организацию либо проект той же сессии, требуя отказа по exact binding
+// вместо использования тома в другой области.
 func TestSessionPVCRejectsCrossTenantAndProjectReuse(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1450,6 +1626,12 @@ func TestSessionPVCRejectsCrossTenantAndProjectReuse(t *testing.T) {
 	}
 }
 
+// TestAssistantSessionPVCPromotesOnlyExactGlobalBinding checks one-way exact
+// system-session volume binding to a project, idempotent repeat, foreign/reverse
+// denial and refusal to promote while an active Pod still consumes the claim.
+// TestAssistantSessionPVCPromotesOnlyExactGlobalBinding проверяет однонаправленную
+// точную привязку тома системной сессии к проекту, повтор, чужую и обратную
+// привязку и отказ продвижения при активном Pod-потребителе claim.
 func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1504,6 +1686,12 @@ func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
 	}
 }
 
+// TestAssistantSessionPVCPromotesAfterExactTerminatingConsumerIsDrained seeds
+// an exactly attributed terminating consumer in the fake tracker and checks
+// removal precedes successful project-binding readback for its session claim.
+// TestAssistantSessionPVCPromotesAfterExactTerminatingConsumerIsDrained добавляет
+// точно привязанного terminating-потребителя в fake tracker и проверяет
+// его удаление до успешного readback проектной привязки session claim.
 func TestAssistantSessionPVCPromotesAfterExactTerminatingConsumerIsDrained(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1545,6 +1733,12 @@ func TestAssistantSessionPVCPromotesAfterExactTerminatingConsumerIsDrained(t *te
 	}
 }
 
+// TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt materializes two
+// distinct sealed attempts, checks removed context is not inherited, deletes the
+// predecessor's resources and requires retry Pod/projection to survive cleanup.
+// TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt материализует две
+// разные закреплённые попытки, проверяет отсутствие удалённого контекста,
+// удаляет ресурсы предшественника и сохраняет retry Pod и projection.
 func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1608,6 +1802,12 @@ func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	}
 }
 
+// TestSessionPVCCreateRaceChecksWinnerBeforePod simulates AlreadyExists after
+// a competing PVC create and checks exact readback permits only the same scope;
+// a foreign winner prevents Pod creation rather than being blindly adopted.
+// TestSessionPVCCreateRaceChecksWinnerBeforePod моделирует AlreadyExists после
+// конкурирующего создания PVC и допускает Pod лишь после точного readback области;
+// чужой победитель не принимается и блокирует создание Pod.
 func TestSessionPVCCreateRaceChecksWinnerBeforePod(t *testing.T) {
 	for _, foreign := range []bool{false, true} {
 		t.Run(fmt.Sprintf("foreign-%t", foreign), func(t *testing.T) {
@@ -1639,6 +1839,12 @@ func TestSessionPVCCreateRaceChecksWinnerBeforePod(t *testing.T) {
 	}
 }
 
+// TestExistingRuntimePodRejectsSecurityDrift mutates an existing generated Pod's
+// group, seccomp, host namespace/network or service-link settings one at a time,
+// requiring EnsureTurn refusal instead of adopting the changed security boundary.
+// TestExistingRuntimePodRejectsSecurityDrift по одному меняет group, seccomp,
+// host namespaces/network и service links уже созданного Pod, требуя отказ
+// EnsureTurn вместо принятия изменённой границы безопасности.
 func TestExistingRuntimePodRejectsSecurityDrift(t *testing.T) {
 	for name, mutate := range map[string]func(*corev1.Pod){
 		"fsGroup": func(pod *corev1.Pod) { pod.Spec.SecurityContext.FSGroup = int64Pointer(0) },
@@ -1675,6 +1881,12 @@ func TestExistingRuntimePodRejectsSecurityDrift(t *testing.T) {
 	}
 }
 
+// TestEnsureTurnAcceptsAPIServerContainerDefaults explicitly applies selected
+// API-server container/port/probe defaults to a fake Pod and checks exact
+// re-materialization accepts them; it does not exercise real server defaulting.
+// TestEnsureTurnAcceptsAPIServerContainerDefaults явно добавляет выбранные
+// server defaults контейнеров, портов и probes в fake Pod и проверяет их
+// принятие при повторной материализации, не выполняя реальный server defaulting.
 func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1713,6 +1925,12 @@ func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
 	}
 }
 
+// TestRetiredKubernetesAccessCannotMaterializeExecutionPolicy checks unsupported
+// access kind is denied before any fake API action and unsupported egress cannot
+// produce an execution NetworkPolicy; no retired access is silently granted.
+// TestRetiredKubernetesAccessCannotMaterializeExecutionPolicy проверяет отказ
+// неизвестного access kind до любого fake API action и запрет NetworkPolicy
+// для неизвестного egress, исключая неявное предоставление старого доступа.
 func TestRetiredKubernetesAccessCannotMaterializeExecutionPolicy(t *testing.T) {
 	t.Parallel()
 	client := fake.NewSimpleClientset()
@@ -1738,6 +1956,12 @@ func TestRetiredKubernetesAccessCannotMaterializeExecutionPolicy(t *testing.T) {
 	}
 }
 
+// TestRuntimePodDoesNotProjectKubernetesToken checks generated runtime Pods
+// explicitly disable token automount and contain no projected ServiceAccount
+// token source, independently of the service-account name.
+// TestRuntimePodDoesNotProjectKubernetesToken проверяет явный запрет token
+// automount и отсутствие projected ServiceAccount token в runtime Pod
+// независимо от имени service account.
 func TestRuntimePodDoesNotProjectKubernetesToken(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -1762,6 +1986,12 @@ func TestRuntimePodDoesNotProjectKubernetesToken(t *testing.T) {
 	}
 }
 
+// TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy creates execution policy
+// and immutable projection without a Pod, then requires stale cleanup to remove
+// the ServiceAccount, NetworkPolicy and projection observed by the fake client.
+// TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy создаёт execution policy
+// и immutable projection без Pod и требует удаления ServiceAccount,
+// NetworkPolicy и projection при очистке по fake readback.
 func TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1789,6 +2019,78 @@ func TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy(t *testing.T) {
 	}
 }
 
+// materializeTestTurn builds the supplied sealed fixture and materializes it
+// through the manager with synthetic credential-projection metadata, failing
+// the caller on either error. It returns exact input and bindings for assertions,
+// not a live provider session or independently verified broker receipt.
+// materializeTestTurn собирает переданную закреплённую fixture и материализует
+// её через manager с синтетическими метаданными credential projection, завершая
+// тест при любой ошибке. Возвращает точные input и привязки для asserts,
+// а не live-сессию провайдера или независимо проверенную broker receipt.
+func materializeTestTurn(t *testing.T, manager *Manager, execution *controlplanev1.ClaimedExecution) (runtimecontract.RunnerInput, ProviderSecretBinding, CredentialProjection) {
+	t.Helper()
+	input, binding, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	credentials := testCredentialProjection(input)
+	if err := manager.EnsureTurn(context.Background(), input, binding, credentials); err != nil {
+		t.Fatalf("EnsureTurn() error = %v", err)
+	}
+	return input, binding, credentials
+}
+
+// recreateWarmPodFixture materializes an exact warm Pod, applies the supplied
+// terminal mutation, checks deletion before replacement and requires both
+// reconciliation calls to report not-ready. All API effects use a fresh fake
+// client; the returned Pod has no real container readiness evidence.
+// recreateWarmPodFixture собирает точный warm Pod, применяет переданную
+// terminal-мутацию, проверяет удаление до замены и отсутствие ready у обоих
+// вызовов согласования. Все API effects идут в новый fake-клиент;
+// возвращённый Pod не имеет реальных свидетельств готовности контейнеров.
+func recreateWarmPodFixture(t *testing.T, mutate func(*corev1.Pod)) (runtimecontract.RunnerInput, *corev1.Pod) {
+	t.Helper()
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildWarmInput(testWarmRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	terminal := manager.runtimePod(input, binding, nil, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
+	mutate(terminal)
+	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create(terminal warm Pod) error = %v", err)
+	}
+	ready, err := manager.EnsureWarm(context.Background(), input, binding)
+	if err != nil {
+		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	if ready {
+		t.Fatal("deleted warm Pod cannot be ready")
+	}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("terminal warm Pod was not deleted before replacement: %v", err)
+	}
+	ready, err = manager.EnsureWarm(context.Background(), input, binding)
+	if err != nil {
+		t.Fatalf("second EnsureWarm() error = %v", err)
+	}
+	if ready {
+		t.Fatal("new warm Pod cannot be ready before Kubernetes observation")
+	}
+	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(recreated warm Pod) error = %v", err)
+	}
+	return input, pod
+}
+
+// newTestManager constructs a manager with fixed synthetic configuration and
+// seeds a pinned immutable provider Secret in the supplied fake client, failing
+// the caller on duplicate/invalid setup; it establishes no real provider session.
+// newTestManager создаёт manager с фиксированной синтетической конфигурацией
+// и закреплённый immutable provider Secret в переданном fake-клиенте, завершая тест
+// при ошибке подготовки; реальная сессия провайдера не устанавливается.
 func newTestManager(t *testing.T, client *fake.Clientset) *Manager {
 	t.Helper()
 	manager, err := New(client, testManagerConfig())
@@ -1808,6 +2110,12 @@ func newTestManager(t *testing.T, client *fake.Clientset) *Manager {
 	return manager
 }
 
+// testManagerConfig returns fresh synthetic namespaces, callback/proxy endpoints,
+// signing bytes, image pins and storage settings; no network or cluster setup
+// is performed and the data must not be used as deployment credentials.
+// testManagerConfig возвращает новые синтетические namespaces, callback/proxy,
+// signing bytes, image pins и storage settings; сеть и кластер не настраиваются,
+// данные не предназначены для реквизитов развёртывания.
 func testManagerConfig() Config {
 	return Config{
 		Environment: "test", ControlNamespace: "kodex-system", RuntimeNamespace: "kodex-runtime",
@@ -1826,6 +2134,12 @@ func testManagerConfig() Config {
 	}
 }
 
+// TestWarmRuntimeProxyGrantSupportsManagedWebAccess locally signs and verifies
+// a warm workload proxy grant and its HTTPS GET domain rule, checking exact
+// workload identity without contacting the gateway or destination.
+// TestWarmRuntimeProxyGrantSupportsManagedWebAccess локально подписывает
+// и проверяет proxy grant warm-нагрузки и правило HTTPS GET домена с точной
+// идентичностью workload, не обращаясь к gateway или целевому хосту.
 func TestWarmRuntimeProxyGrantSupportsManagedWebAccess(t *testing.T) {
 	t.Parallel()
 	manager := &Manager{config: testManagerConfig()}
@@ -1871,6 +2185,12 @@ func TestWarmRuntimeProxyGrantSupportsManagedWebAccess(t *testing.T) {
 	}
 }
 
+// testCredentialProjection returns synthetic immutable-Secret metadata and a
+// fresh identity key map for input Secret names; it neither creates that Secret
+// nor validates projected bytes or obtains a broker-issued receipt.
+// testCredentialProjection возвращает синтетические метаданные immutable Secret
+// и новую map одноимённых ключей для Secret input; Secret не создаётся,
+// байты не проверяются и broker receipt не запрашивается.
 func testCredentialProjection(input runtimecontract.RunnerInput) CredentialProjection {
 	keys := make(map[string]string, len(input.SecretProjections))
 	for _, item := range input.SecretProjections {
@@ -1883,6 +2203,12 @@ func testCredentialProjection(input runtimecontract.RunnerInput) CredentialProje
 	}
 }
 
+// TestProviderSandboxSecurityContextDoesNotAssumeNodeLocalAppArmor checks an
+// empty AppArmor configuration leaves the profile unset while preserving the
+// provider's Unconfined seccomp choice; it does not prove node sandbox support.
+// TestProviderSandboxSecurityContextDoesNotAssumeNodeLocalAppArmor проверяет,
+// что пустая настройка AppArmor не задаёт профиль, сохраняя Unconfined seccomp
+// провайдера; поддержка sandbox на узле не доказывается.
 func TestProviderSandboxSecurityContextDoesNotAssumeNodeLocalAppArmor(t *testing.T) {
 	securityContext := providerSandboxSecurityContext(10002, "")
 	if securityContext.AppArmorProfile != nil {
@@ -1893,6 +2219,14 @@ func TestProviderSandboxSecurityContextDoesNotAssumeNodeLocalAppArmor(t *testing
 	}
 }
 
+// testExecution builds a fresh sealed synthetic turn with exact credential,
+// artifact, environment, workspace and lease pins; the flag selects system
+// assistant scope and omits employee tool hints. Fixture sealing is local test
+// preparation, not a server-issued grant, real scan or provider authentication.
+// testExecution собирает новый закреплённый синтетический ход с точными
+// credential, artifact, environment, workspace и lease; флаг выбирает системного
+// помощника и исключает подсказки инструментов сотрудника. Локальное закрепление
+// fixture не является server grant, реальным scan или авторизацией провайдера.
 func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 	assistantScope := controlplanev1.AssistantScope_ASSISTANT_SCOPE_NONE
 	if systemAssistant {
@@ -1977,6 +2311,12 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 	return execution
 }
 
+// testWarmRevision derives a system-assistant fixture, removes all attachments,
+// binds default Kubernetes access to warm identities and reseals the revision;
+// it panics on invalid fixture preparation rather than producing a live lease.
+// testWarmRevision получает fixture системного помощника, удаляет вложения,
+// привязывает default Kubernetes access к warm identities и перепривязывает
+// ревизию; ошибка подготовки вызывает panic, live lease не выдаётся.
 func testWarmRevision() *controlplanev1.RuntimeRevisionSnapshot {
 	execution := testExecution(true)
 	execution.Revision.AttachmentSetRef = ""
@@ -1997,6 +2337,12 @@ func testWarmRevision() *controlplanev1.RuntimeRevisionSnapshot {
 	return execution.Revision
 }
 
+// sealTestTurnExecution rebuilds the fixture's turn input, catalogs and context
+// with exact run/node/lease pins and overwrites only its revision digest. Invalid
+// preparation panics; it intentionally bypasses the real owner persistence path.
+// sealTestTurnExecution пересобирает input, каталоги и контекст тестового хода
+// с точными run/node/lease и заменяет лишь digest ревизии. Ошибка вызывает panic;
+// реальная запись состояния у владельца намеренно не выполняется.
 func sealTestTurnExecution(execution *controlplanev1.ClaimedExecution) {
 	manager := &Manager{config: testManagerConfig()}
 	input, err := manager.baseInput(execution.Revision, runtimecontract.RunnerModeTurn)
@@ -2028,6 +2374,12 @@ func sealTestTurnExecution(execution *controlplanev1.ClaimedExecution) {
 	execution.Revision.RevisionDigest = digest
 }
 
+// sealTestWarmRevision rebuilds warm input/catalogs/context and overwrites the
+// fixture revision digest including provider-source pins; invalid preparation
+// panics without creating a ticket, Pod or authoritative owner record.
+// sealTestWarmRevision пересобирает warm input, каталоги и контекст и заменяет
+// digest fixture с привязками источника провайдера; ошибка вызывает panic,
+// ticket, Pod и авторитетная запись владельца не создаются.
 func sealTestWarmRevision(revision *controlplanev1.RuntimeRevisionSnapshot) {
 	manager := &Manager{config: testManagerConfig()}
 	input, err := manager.baseInput(revision, runtimecontract.RunnerModeWarm)
@@ -2052,6 +2404,14 @@ func sealTestWarmRevision(revision *controlplanev1.RuntimeRevisionSnapshot) {
 	revision.RevisionDigest = digest
 }
 
+// testRuntimeEnvironmentPolicyProto projects supported resource, volume, web
+// and egress fields into fixture protobuf without validation. Unknown web mode
+// falls to NONE, volume/protocol to disk/TCP and destination to enum zero;
+// callers must not treat this permissive fixture mapper as admission.
+// testRuntimeEnvironmentPolicyProto переносит поддержанные resources, volumes,
+// web и egress в тестовый protobuf без проверки. Неизвестные web mode становятся
+// NONE, volume/protocol — disk/TCP, destination — enum zero; такой mapper
+// тестовых данных нельзя считать механизмом допуска.
 func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironmentPolicy) *controlplanev1.RuntimeEnvironmentPolicy {
 	result := &controlplanev1.RuntimeEnvironmentPolicy{
 		Resources: &controlplanev1.RuntimeResourcePolicy{
@@ -2103,6 +2463,12 @@ func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironment
 	return result
 }
 
+// testRuntimeKubernetesAccessProto builds a NONE-profile fixture while copying
+// namespace, service account, digest and rule data with fresh verb/name slices;
+// it does not validate the profile or grant Kubernetes access.
+// testRuntimeKubernetesAccessProto собирает fixture с NONE profile, копируя
+// namespace, service account, digest и правила с новыми verb/name slices;
+// профиль не проверяется и Kubernetes-доступ не предоставляется.
 func testRuntimeKubernetesAccessProto(access runtimecontract.RuntimeKubernetesAccess) *controlplanev1.RuntimeKubernetesAccess {
 	profileKind := controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
 	result := &controlplanev1.RuntimeKubernetesAccess{Profile: &controlplanev1.RuntimeKubernetesAccessProfile{
@@ -2115,6 +2481,12 @@ func testRuntimeKubernetesAccessProto(access runtimecontract.RuntimeKubernetesAc
 	return result
 }
 
+// runtimeEnvironmentContract copies image recipe/artifact pins and ordered tool
+// metadata from protobuf into a new fixture slice using nil-safe getters;
+// it does not check image admission, tool execution or source authenticity.
+// runtimeEnvironmentContract переносит image recipe/artifact и упорядоченные
+// метаданные инструментов из protobuf в новый slice через nil-safe getters,
+// не проверяя допуск образа, запуск инструментов и подлинность источника.
 func runtimeEnvironmentContract(revision *controlplanev1.RuntimeRevisionSnapshot) (runtimecontract.RuntimeEnvironmentImage, []runtimecontract.RuntimeEnvironmentTool) {
 	image := runtimecontract.RuntimeEnvironmentImage{
 		ArtifactRef: revision.GetRoleImageArtifactRef(), RecipeRef: revision.GetRoleImageRecipeRef(),
@@ -2130,6 +2502,10 @@ func runtimeEnvironmentContract(revision *controlplanev1.RuntimeRevisionSnapshot
 	return image, tools
 }
 
+// hasMount reports any exact named mount without inspecting its source,
+// path, permissions or whether the container can actually access its contents.
+// hasMount ищет mount по точному имени без проверки источника, пути,
+// прав и фактической доступности содержимого контейнеру.
 func hasMount(container corev1.Container, name string) bool {
 	for _, mount := range container.VolumeMounts {
 		if mount.Name == name {
@@ -2139,6 +2515,10 @@ func hasMount(container corev1.Container, name string) bool {
 	return false
 }
 
+// hasEnv matches a literal environment name/value pair; it does not resolve
+// ValueFrom or prove the effective environment of a running process.
+// hasEnv ищет точную пару имени и буквального env-значения, не разрешая
+// ValueFrom и не подтверждая окружение работающего процесса.
 func hasEnv(container corev1.Container, name, value string) bool {
 	for _, item := range container.Env {
 		if item.Name == name && item.Value == value {
@@ -2148,6 +2528,10 @@ func hasEnv(container corev1.Container, name, value string) bool {
 	return false
 }
 
+// envValue returns the first matching environment entry's literal value and
+// presence flag; ValueFrom-only entries still count as present with empty Value.
+// envValue возвращает буквальное Value первого env с нужным именем и признак
+// наличия; запись лишь с ValueFrom тоже считается найденной с пустым Value.
 func envValue(container corev1.Container, name string) (string, bool) {
 	for _, item := range container.Env {
 		if item.Name == name {
@@ -2157,6 +2541,10 @@ func envValue(container corev1.Container, name string) (string, bool) {
 	return "", false
 }
 
+// containerByName returns the first named container or fails the calling test;
+// a zero value follows Fatalf only for static return completeness.
+// containerByName возвращает первый контейнер с заданным именем либо завершает
+// тест; нулевое значение после Fatalf нужно лишь для полноты возврата.
 func containerByName(t *testing.T, containers []corev1.Container, name string) corev1.Container {
 	t.Helper()
 	for _, container := range containers {
