@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.172.0
+version: 1.173.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,79 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят третья волна — основной адаптер и GitHub boundary
+
+На базе опубликованного SHA `72240f95138584c0f558445caf45c229c4c284ed`
+завершены 102 объявления шести файлов internal/integration:
+adapter.go — 45, adapter_test.go — 18, provider_http.go — 9,
+github_transport.go — 3, github.go — 8, github_collaboration.go — 19.
+Scoped go-docs-check 102/102 — PASS LOCAL. Вся прочитанная исходная
+область описана по реальному поведению, без механического
+повторения имени. Обратное сравнение после удаления комментариев,
+нормализации пустых строк и gofmt подтвердило точное совпадение всего
+исполняемого кода шести файлов. Тесты, зависимости, API и runtime errors
+не изменены.
+
+Основной adapter документирует разделение transport claim mapping,
+definition/capability consistency и настоящей owner authority, закрытую
+маршрутизацию, READ health-test, ограничение timeout/attempts и точные
+scope/input/response digests. Наличие grant ID не названо самостоятельной
+авторизацией; промежуточный Result не назван уже проверенным output.
+Для неопределённого non-READ результата сохранён UNKNOWN вместо обещания
+безопасного повторения. Указаны точные границы synthetic reconciliation
+и schema/receipt validation, без добавления новых runtime checks.
+
+Credential comments различают синтаксис UID/resource-version и настоящий
+Kubernetes readback, временное ожидание file-read failure и немедленный
+digest mismatch. Cleanup очищает исходный byte slice, но не строковые
+копии SDK token — более сильное стирание не заявлено. equalStringMap
+описан без усиления: lookup не отличает отсутствующий key от пустой строки.
+Это сохранение поведения, не скрытая новая security-реализация.
+
+Provider HTTP описывает exact binding/auth, TLS URL shape отдельно от
+egress destination policy, GET/HEAD retry и одиночный mutation без replay,
+разные UNKNOWN stages, bounded response и закрытие body. JSON decoder
+требует один документ/EOF, но не объявлен отвергающим неизвестные поля.
+Raw SDK response limits отделены от меньшей safe projection; body целиком
+проверяется до SDK decode. Никакие общие API/capability права не расширены.
+
+GitHub comments описывают READ retry/rate classification, marker search
+с пределом страниц и первым найденным issue, readback вместо повторного
+create/edit, отсутствие provider-version CAS. Compact PR/file indices не
+выдаются за полный body/patch/content. File pages закреплены head/base/
+total до и после списка с exact count/offset/EOF/next checks; individual
+comment read/mutation проверяет issue URL. Fixture comments явно
+отделяют local fake transport и синтетические grant/lease от настоящих
+HumanGate/SMTP/provider гарантий. Exactly-once не заявлен.
+
+Context7 /google/go-github вернул новый client-options API, не совпадающий
+с закреплённым v74. Его constructors/origin-auth гарантии не применялись.
+Реальные WithAuthToken и Issues.Edit сверены по локальному go doc v74.0.0;
+используется прежний NewClient(*http.Client).WithAuthToken и BaseURL,
+без обновления SDK. Прочитано фактическое ограничение blob/raw response.
+
+`go test -count=1 -json ./internal/integration` и `go build ./...` всего
+gateway — PASS LOCAL для выполненной области: 102 верхних PASS,
+1857 PASS с подтестами, 0 FAIL, один прежний SKIP TestCPProducedEmailClaim.
+Disposable CP producer остаётся NOT RUN, owner claim не подделывался.
+Unit после первых 75 и после всех 102 комментариев имеет те же результаты;
+точный опубликованный SHA проверяется отдельно и фиксируется в PR.
+16 unit анализатора, unit Go-checker, scoped checker, пять ignore-boundaries,
+gofmt/diff-check — PASS LOCAL. Go1.26.6, GOENV=off/GOWORK=off.
+Browser, PostgreSQL component/live, deploy, реальные providers/почта/агенты
+не запускались и не обозначаются PASS.
+
+Detector не изменил clone set: 6563 source, 222 generated/lock исключения,
+1847 raw, 574 точных решения и 1273 неразобранные. В gateway нет оставшихся
+неразобранных групп, но остальные модули ещё требуют разбора; новых выносов
+либо исключений эта comment-only волна не объявляет. Raw SHA-256
+`0464692325017a4cd74410f21f3b9f2793bdcc906fe52b80b9d3dcc226d4efb6`,
+отпечаток `ccdb88d8e18c3ccd2a889f042b4a35e8abbbaf9fc4554b7f5446355c60b8ea7b`.
+Go-реестр 6032/21120, непокрыты 15088; весь gateway 318/621, ещё 303
+объявления в работе. Полный repository Go-docs-check — NOT RUN при
+неполном покрытии. Прежний diagnostics FAIL не скрыт; цель и Draft PR
+ещё не завершены и не готовы к приёмке владельцем.
 
 ## Сто семьдесят вторая волна — полный app шлюза интеграций
 

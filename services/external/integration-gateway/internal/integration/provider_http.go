@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// providerCall contains the validated provider binding, projected credential reference and bounded payload selected by a typed adapter, not an arbitrary external URL command.
+// RU: providerCall содержит проверенную provider-привязку, ссылку credential и ограниченный payload типизированного адаптера, а не произвольную внешнюю URL-команду.
+// JSON and multipart bodies are mutually exclusive; Client optionally selects an already configured specialized transport.
+// RU: JSON и multipart body взаимоисключаемы; Client необязательно выбирает уже настроенный специализированный transport.
 type providerCall struct {
 	BaseURL, Method, Path, AuthScheme, AuthHeader, Username, EffectKey, IdempotencyHeader string
 	Query                                                                                 url.Values
@@ -27,6 +31,8 @@ type providerCall struct {
 	Client                                                                                *http.Client
 }
 
+// callProvider returns only the bounded successful body from the common provider boundary, preserving its safe or unknown-outcome errors.
+// RU: callProvider возвращает только ограниченное успешное тело общей provider-границы, сохраняя безопасные ошибки либо неопределённость результата.
 func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]byte, error) {
 	response, err := adapter.callProviderResponse(ctx, call)
 	if err != nil {
@@ -35,12 +41,22 @@ func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]
 	return response.Body, nil
 }
 
+// providerResponse carries a bounded successful body, copied headers and status so typed adapters can validate projections and pagination without a live response stream.
+// RU: providerResponse передаёт ограниченное успешное тело, копию заголовков и статус для проверки проекций и пагинации без живого потока ответа.
 type providerResponse struct {
 	Body       []byte
 	Header     http.Header
 	StatusCode int
 }
 
+// callProviderResponse validates HTTPS base/path and OpenAPI auth bindings, loads exact credentials, and sends bounded requests with per-attempt deadlines.
+// RU: callProviderResponse проверяет HTTPS base/path и OpenAPI auth-привязки, загружает точный credential и отправляет ограниченные запросы со сроком каждой попытки.
+// GET/HEAD may retry selected statuses or transport errors under capability policy; other methods run once with transport replay disabled.
+// RU: GET/HEAD могут повторять выбранные статусы либо transport-ошибки по политике capability; другие методы выполняются один раз с отключённым transport replay.
+// Mutation transport failures, failed successful-body reads and server errors retain distinct UNKNOWN stages instead of implying safe resend.
+// RU: Transport-ошибки изменения, ошибка чтения успешного тела и server-ошибки сохраняют отдельные этапы UNKNOWN, а не разрешают безопасный повтор.
+// Every obtained response body closes before return or retry, credentials are cleared on exit, and only successful responses expose copied headers.
+// RU: Каждое полученное тело закрывается до возврата либо повтора, credential очищается при выходе, а копия заголовков выдаётся только для успешного ответа.
 func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerCall) (*providerResponse, error) {
 	baseURL, err := parseProviderBaseURL(call.BaseURL)
 	if err != nil || call.Path == "" || !strings.HasPrefix(call.Path, "/") || strings.HasPrefix(call.Path, "//") {
@@ -190,6 +206,10 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 	return nil, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
 }
 
+// parseProviderBaseURL accepts an HTTPS hostname at the default or explicit 443 port, rejecting literal IPs, userinfo, query, fragment and paths beyond root.
+// RU: parseProviderBaseURL принимает HTTPS-имя с обычным либо явным портом 443, отклоняя IP-литералы, userinfo, query, fragment и путь глубже корня.
+// It normalizes the root path but does not resolve DNS or replace the egress gateway's destination policy.
+// RU: Функция нормализует корневой путь, но не разрешает DNS и не заменяет политику назначений egress gateway.
 func parseProviderBaseURL(raw string) (*url.URL, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil ||
@@ -201,11 +221,17 @@ func parseProviderBaseURL(raw string) (*url.URL, error) {
 	return parsed, nil
 }
 
+// retryableProviderStatus permits only throttling and selected transient gateway/service statuses; method and attempt-budget checks remain with the caller.
+// RU: retryableProviderStatus допускает только ограничение частоты и выбранные временные gateway/service статусы; метод и бюджет попыток проверяет вызывающий.
 func retryableProviderStatus(status int) bool {
 	return status == http.StatusTooManyRequests || status == http.StatusBadGateway ||
 		status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
 }
 
+// waitProviderRetry waits a capability-scaled delay clamped to 50 milliseconds through two seconds and returns false on cancellation.
+// RU: waitProviderRetry ждёт вычисленную по capability паузу от 50 миллисекунд до двух секунд и возвращает false при отмене.
+// Retry-After seconds or HTTP-date override the delay; invalid values or requested waits above two seconds decline the retry rather than sleeping longer.
+// RU: Retry-After в секундах либо HTTP-date заменяет паузу; неверное значение либо ожидание свыше двух секунд запрещают повтор вместо долгого сна.
 func waitProviderRetry(ctx context.Context, capability integrationpackage.Capability, attempt int, retryAfter string) bool {
 	delay := time.Duration(capability.Execution.RetryBackoffMilliseconds) * time.Millisecond * time.Duration(attempt)
 	if retryAfter != "" {
@@ -239,6 +265,10 @@ func waitProviderRetry(ctx context.Context, capability integrationpackage.Capabi
 	}
 }
 
+// decodeProviderJSON decodes exactly one JSON value and requires EOF, returning a safe error without exposing parser diagnostics.
+// RU: decodeProviderJSON разбирает ровно одно JSON-значение и требует EOF, возвращая безопасную ошибку без parser-диагностики.
+// It does not disallow unknown object fields or replace typed projection and capability-schema validation.
+// RU: Функция не запрещает неизвестные поля объекта и не заменяет типизированную проекцию и проверку схемы capability.
 func decodeProviderJSON(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	if err := decoder.Decode(target); err != nil || decoder.Decode(&struct{}{}) != io.EOF {
@@ -247,6 +277,10 @@ func decodeProviderJSON(raw []byte, target any) error {
 	return nil
 }
 
+// providerResult requires a nonempty provider reference, JSON-encodes the typed projection and binds its exact bytes to the claimed effect/input.
+// RU: providerResult требует непустую provider-ссылку, кодирует типизированную проекцию в JSON и связывает точные байты с назначенными effect/input.
+// Marshal failure returns an empty result with a safe code; final size and output-schema checks remain in validateExecutionResult.
+// RU: Ошибка marshal возвращает пустой результат с безопасным кодом; итоговые размер и output schema проверяет validateExecutionResult.
 func providerResult(request Request, providerRef string, projection any) (Result, error) {
 	if providerRef == "" {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
