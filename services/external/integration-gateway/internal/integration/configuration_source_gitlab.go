@@ -13,6 +13,10 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// readGitLab resolves the configured ref, verifies merge-base ancestry and reads the regular file at the exact resolved commit rather than a later mutable ref.
+// RU: readGitLab разрешает настроенный ref, проверяет merge-base историю и читает обычный файл по точному commit, а не позднему изменяемому ref.
+// File path/ref/commit/blob, decoded size, provider SHA-256 and Git blob SHA-1 must agree before content is returned.
+// RU: File path/ref/commit/blob, декодированный размер, provider SHA-256 и Git blob SHA-1 обязаны совпасть до возврата содержимого.
 func (reader configurationSourceReader) readGitLab(ctx context.Context, configuration map[string]string, work *cp.ManagedConfigurationSourceWork) (ConfigurationSourceResult, error) {
 	base, err := parseProviderBaseURL(configuration["base_url"])
 	if err != nil {
@@ -76,6 +80,10 @@ func (reader configurationSourceReader) readGitLab(ctx context.Context, configur
 	return ConfigurationSourceResult{CommitSHA: commit.ID, Content: content, Ancestry: ancestry}, nil
 }
 
+// gitLabSourceBlob searches at most ten hundred-entry directory pages at the pinned commit and returns the first matching regular-file blob ID.
+// RU: gitLabSourceBlob ищет не более десяти страниц каталога по сто элементов на закреплённом commit и возвращает первый совпавший blob ID обычного файла.
+// Invalid or repeated paths in the searched prefix fail closed; short-page exhaustion means not found, while exhausted pagination is not proof of absence.
+// RU: Неверные либо повторяющиеся пути просмотренной части закрыто отклоняются; конец короткой страницы означает not found, а исчерпанный бюджет не доказывает отсутствие.
 func (reader configurationSourceReader) gitLabSourceBlob(ctx context.Context, base *url.URL, root, wanted, commit string) (string, error) {
 	parent := path.Dir(wanted)
 	if parent == "." {
@@ -124,6 +132,8 @@ func (reader configurationSourceReader) gitLabSourceBlob(ctx context.Context, ba
 	return "", sourceResponseInvalid()
 }
 
+// gitLabSourceJSON reads one bounded GitLab JSON response through the shared source boundary and clears raw bytes after typed decoding.
+// RU: gitLabSourceJSON читает один ограниченный GitLab JSON-ответ через общую source-границу и очищает сырые байты после типизированного разбора.
 func (reader configurationSourceReader) gitLabSourceJSON(ctx context.Context, base *url.URL, path string, query url.Values, target any) error {
 	raw, err := reader.get(ctx, reader.adapter.providerHTTPClient, base, path, query, "application/json")
 	if err != nil {

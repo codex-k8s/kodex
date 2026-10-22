@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.173.0
+version: 1.174.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,76 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят четвёртая волна — source/writeback и метрики
+
+На базе опубликованного SHA `474ca0ba4e5a6c4a6c087e6649defca02bb3471d`
+завершены 74 объявления десяти файлов integration-gateway: source 13,
+GitHub/GitLab readers по 3 и их тесты 2; writeback 14, Git workspace 16,
+provider boundary 10, два test-файла по 3; business metrics 7.
+Вся эта область EN→RU, scoped Go-docs-check 74/74 — PASS LOCAL.
+Все десять файлов прочитаны полностью. Механическое сравнение после
+удаления комментариев, нормализации пустых строк и gofmt подтвердило
+точное совпадение всего исполняемого кода с parent. При первоначальном
+форматировании обнаружены два ошибочных удвоения сигнатур в patch;
+они удалены до unit/build и сравнения. Конечный diff — только комментарии.
+
+Source comments описывают exact owner claim/lease/deadline, поддерживаемые
+kind/format, ungated READ capability, отдельные 256-КиБ content/1-МиБ
+response лимиты и caller-owned очистку байтов. Provider evidence не
+названо допуском конфигурации или самостоятельной owner-авторизацией.
+GitHub проходит pinned commit/tree/blob с проверкой regular file и
+неусечённого tree; GitLab использует pinned commit, merge base, ограниченный
+directory search и exact file/blob/digest. SHA-1 явно принадлежит Git
+object protocol, а SHA-256 — публичной content provenance. Не обещана
+проверка неизвестных JSON полей либо полная уникальность за пределами
+фактически просмотренного directory prefix.
+
+Writeback comments разделяют server-materialized approval metadata,
+локальную подготовку кандидата, обязательный caller-owned begin receipt,
+внешний эффект, readback и owner completion. Open не выдаёт новое
+одобрение; Prepare не делает push. Push lease закрепляет отсутствие только
+proposal ref, не атомарную неизменность source ref. Source ref не входит
+в refspec. Read-only PR recovery может читать immutable commit после
+удаления proposal branch. PR/MR evidence требует точные marker, branch,
+commit, repository/project и canonical URL; duplicate/budget exhaustion
+не выдаются за единственное совпадение или доказанное отсутствие.
+
+Git comments описывают частный bare workspace, credential-file/askpass,
+неунаследованное окружение, fixed author/time, HTTPS-only TLS/proxy,
+отключённые redirects/hooks/credential helpers, stdout cap, discarded
+stderr и bounded process-group cancellation. Readiness проверяет только
+executable/temp-dir, а не весь provider path. Cleanup best-effort,
+не secure erasure и не гарантированная очистка строковых копий. Метрики
+фиксируют уже выполненную попытку отдельно от owner persistence/admission;
+их закрытые labels и английские HELP/runtime diagnostics не изменены.
+
+Context7 /git/htmldocs подтвердил explicit empty-expect force-with-lease
+и plumbing write-tree/commit-tree. Обобщённые lease гарантии не расширены
+до multi-ref транзакции; Git flags, executable и dependencies не менялись.
+Тестовые comments отделяют controlled fake providers и локальный настоящий
+Git HTTPS backend от production connectivity, HumanGate и secure erasure.
+
+Полные `go test -count=1 -json ./...` и `go build ./...` gateway —
+PASS LOCAL для выполненной области: 118 верхних PASS, 1932 PASS с подтестами,
+0 FAIL и один прежний SKIP TestCPProducedEmailClaim. Его disposable CP
+producer остаётся NOT RUN, claim не подделывался. 16 unit анализатора,
+unit Go-checker, scoped checker, пять ignore-boundaries, gofmt/diff-check
+также PASS LOCAL. Использован Go1.26.6 с GOENV=off/GOWORK=off.
+Точный опубликованный SHA и повтор применимой области фиксируются в PR.
+Component/live, PostgreSQL, browser/deploy, реальные providers/почта/агенты
+не запускались и не обозначаются PASS.
+
+Повтор detector сохраняет clone-set fingerprint
+`ccdb88d8e18c3ccd2a889f042b4a35e8abbbaf9fc4554b7f5446355c60b8ea7b`:
+6563 source, 222 generated/lock исключения, 1847 raw, 574 точных решения,
+1273 неразобранные. Raw SHA-256
+`9e69ff4424e915f2f59e8c561239802bbb2952a95d96cdcee0cc3982fa8385f2`.
+Новых выносов/исключений эта comment-only волна не объявляет.
+Go-реестр 6106/21120, непокрыты 15014. Весь gateway 392/621, ещё 229;
+app, fixture/команды и теперь metrics завершены полностью. Полный
+repository Go-docs-check — NOT RUN при неполном покрытии; прежний
+diagnostics FAIL не скрыт. Цель и один Draft PR остаются незавершёнными.
 
 ## Сто семьдесят третья волна — основной адаптер и GitHub boundary
 

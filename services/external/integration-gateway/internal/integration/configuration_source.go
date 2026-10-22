@@ -18,24 +18,40 @@ import (
 )
 
 const (
-	maximumSourceContentBytes  = 256 << 10
+	// maximumSourceContentBytes caps decoded configuration bytes independently of the larger provider-response envelope.
+	// RU: maximumSourceContentBytes ограничивает декодированные байты конфигурации независимо от большего provider-response конверта.
+	maximumSourceContentBytes = 256 << 10
+	// maximumSourceResponseBytes bounds raw source metadata and encoded-content responses before parsing them.
+	// RU: maximumSourceResponseBytes ограничивает сырые метаданные источника и ответы с кодированным содержимым до разбора.
 	maximumSourceResponseBytes = 1 << 20
 )
 
+// sourceCommitPattern accepts only canonical lowercase forty-character Git object IDs used by these source adapters.
+// RU: sourceCommitPattern принимает только канонические строчные сорокасимвольные Git object ID этих source-адаптеров.
 var sourceCommitPattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
 
+// ConfigurationSourceResult returns exact provider commit/content provenance and ancestry; the owner must still validate and admit the configuration itself.
+// RU: ConfigurationSourceResult возвращает точные commit/content provenance и происхождение истории; владелец ещё обязан проверить и допустить саму конфигурацию.
+// Successful content bytes become caller-owned and must be cleared after owner completion or rejection.
+// RU: Успешно прочитанные байты переходят вызывающему и требуют очистки после owner completion либо отклонения.
 type ConfigurationSourceResult struct {
 	CommitSHA, ContentSHA256 string
 	Content                  []byte
 	Ancestry                 cp.ManagedConfigurationSourceAncestry
 }
 
+// configurationSourceError carries a closed source-failure enum without retaining provider diagnostics or file contents.
+// RU: configurationSourceError хранит закрытый source-failure enum без provider-диагностики и содержимого файлов.
 type configurationSourceError struct {
 	failure cp.ManagedConfigurationSourceFailure
 }
 
+// Error exposes one fixed diagnostic regardless of the internal source-failure classification.
+// RU: Error возвращает одну фиксированную диагностику независимо от внутренней source-failure классификации.
 func (*configurationSourceError) Error() string { return "configuration source read failed" }
 
+// ConfigurationSourceFailure extracts a wrapped source failure and maps every unrelated error to unavailable for the owner's failure report.
+// RU: ConfigurationSourceFailure извлекает обёрнутую source-ошибку и переводит остальные ошибки в unavailable для owner-отчёта.
 func ConfigurationSourceFailure(err error) cp.ManagedConfigurationSourceFailure {
 	var failure *configurationSourceError
 	if errors.As(err, &failure) {
@@ -44,14 +60,24 @@ func ConfigurationSourceFailure(err error) cp.ManagedConfigurationSourceFailure 
 	return cp.ManagedConfigurationSourceFailure_MANAGED_CONFIGURATION_SOURCE_FAILURE_UNAVAILABLE
 }
 
+// sourceFailure wraps an already selected source-failure enum without incorporating untrusted error strings.
+// RU: sourceFailure оборачивает уже выбранный source-failure enum без включения недоверенных строк ошибок.
 func sourceFailure(failure cp.ManagedConfigurationSourceFailure) error {
 	return &configurationSourceError{failure: failure}
 }
 
+// sourceResponseInvalid produces the common closed failure for malformed claims, source metadata or content evidence.
+// RU: sourceResponseInvalid формирует общий закрытый отказ для неверных claims, source-метаданных либо доказательств содержимого.
 func sourceResponseInvalid() error {
 	return sourceFailure(cp.ManagedConfigurationSourceFailure_MANAGED_CONFIGURATION_SOURCE_FAILURE_RESPONSE_INVALID)
 }
 
+// ReadConfigurationSource validates the claimed source, bounds its deadline by capability and lease, then reads only GitHub or GitLab through the pinned credential.
+// RU: ReadConfigurationSource проверяет назначенный источник, ограничивает срок capability и арендой, затем читает только GitHub либо GitLab с закреплённым credential.
+// It clears credential bytes and rejected content, returning accepted bytes only with a canonical commit, size check and freshly computed SHA-256.
+// RU: Функция очищает credential-байты и отклонённое содержимое, возвращая байты только с каноническим commit, проверенным размером и новым SHA-256.
+// Provider evidence is not configuration admission, and a deadline or cancellation overrides a partially obtained result.
+// RU: Доказательства провайдера не являются допуском конфигурации; истечение срока либо отмена отменяют частично полученный результат.
 func (adapter *Adapter) ReadConfigurationSource(ctx context.Context, work *cp.ManagedConfigurationSourceWork) (ConfigurationSourceResult, error) {
 	request, definition, configuration, err := adapter.validateConfigurationSource(work)
 	if err != nil {
@@ -102,6 +128,12 @@ func (adapter *Adapter) ReadConfigurationSource(ctx context.Context, work *cp.Ma
 	return result, nil
 }
 
+// validateConfigurationSource checks known-field owner work, lease/deadline pins, bounded path/ref/content settings and supported configuration kind/format.
+// RU: validateConfigurationSource проверяет owner-работу без неизвестных полей, lease/deadline, ограниченные path/ref/content и поддерживаемые kind/format.
+// The parsed package and public configuration must identify the exact GitHub/GitLab repository and an ungated READ capability whose input schema accepts the selected file.
+// RU: Разобранный пакет и публичная конфигурация обязаны обозначать точный GitHub/GitLab репозиторий и READ capability без gate, схема которой принимает выбранный файл.
+// These are consistency checks of trusted owner work, not independent authorization of caller-created lease or connection identifiers.
+// RU: Это проверки согласованности доверенной owner-работы, а не самостоятельная авторизация созданных вызывающим lease либо connection ID.
 func (adapter *Adapter) validateConfigurationSource(work *cp.ManagedConfigurationSourceWork) (Request, integrationpackage.Package, map[string]string, error) {
 	invalid := func() (Request, integrationpackage.Package, map[string]string, error) {
 		return Request{}, integrationpackage.Package{}, nil, sourceResponseInvalid()
@@ -165,13 +197,18 @@ func (adapter *Adapter) validateConfigurationSource(work *cp.ManagedConfiguratio
 	return request, definition, configuration, nil
 }
 
+// configurationSourceReader carries one operation's credential bytes and decoded-content limit while reusing adapter-owned HTTP transports.
+// RU: configurationSourceReader хранит credential-байты одной операции и предел декодированного содержимого, используя HTTP transport адаптера.
 type configurationSourceReader struct {
 	adapter        *Adapter
 	credential     []byte
 	maximumContent int
 }
 
-// Только GET внутри проверенного endpoint; новый retry назначается владельцем work.
+// get performs one GET under the selected base endpoint, preserving escaped path/query and fixed auth/accept headers without an application-level retry.
+// RU: get выполняет один GET внутри выбранного base endpoint, сохраняя escaped path/query и фиксированные auth/accept заголовки без прикладного повтора.
+// It maps closed status failures, closes obtained bodies and rejects empty, oversized or unreadable responses; new work retries belong to the owner.
+// RU: Функция классифицирует статусы, закрывает полученное body и отклоняет пустой, слишком большой либо нечитаемый ответ; новые work-повторы назначает владелец.
 func (reader configurationSourceReader) get(ctx context.Context, client *http.Client, base *url.URL, path string, query url.Values, accept string) ([]byte, error) {
 	endpoint := *base
 	escaped := strings.TrimSuffix(endpoint.EscapedPath(), "/") + path

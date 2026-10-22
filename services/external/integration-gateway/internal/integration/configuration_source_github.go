@@ -13,6 +13,10 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// readGitHub resolves the selected ref once, checks unchanged or fast-forward ancestry and traverses exact commit/tree IDs to a regular bounded blob.
+// RU: readGitHub однократно разрешает выбранный ref, проверяет unchanged либо fast-forward историю и проходит точные commit/tree ID до обычного ограниченного blob.
+// Truncated or duplicate tree entries, symlinks, submodules and inconsistent base64/blob evidence fail closed before content is returned.
+// RU: Усечённые либо повторяющиеся tree entries, symlink, submodule и несогласованные base64/blob доказательства закрыто отклоняются до возврата содержимого.
 func (reader configurationSourceReader) readGitHub(ctx context.Context, configuration map[string]string, work *cp.ManagedConfigurationSourceWork) (ConfigurationSourceResult, error) {
 	base := reader.adapter.githubBaseURL
 	root := "/repos/" + url.PathEscape(configuration["owner"]) + "/" + url.PathEscape(configuration["repository"])
@@ -131,6 +135,10 @@ func (reader configurationSourceReader) readGitHub(ctx context.Context, configur
 	return ConfigurationSourceResult{CommitSHA: commit, Content: content, Ancestry: ancestry}, nil
 }
 
+// githubJSON obtains one bounded authenticated GitHub source response, clears its raw byte buffer and unmarshals into the caller's typed projection.
+// RU: githubJSON получает один ограниченный аутентифицированный GitHub source-ответ, очищает сырой буфер и разбирает его в типизированную проекцию вызывающего.
+// Unknown object fields remain allowed by json.Unmarshal; subsequent exact provenance checks are still mandatory.
+// RU: json.Unmarshal допускает неизвестные поля объекта; последующие точные provenance-проверки остаются обязательными.
 func (reader configurationSourceReader) githubJSON(ctx context.Context, base *url.URL, path string, query url.Values, target any) error {
 	raw, err := reader.get(ctx, reader.adapter.githubHTTPClient, base, path, query, "application/vnd.github+json")
 	if err != nil {
@@ -143,7 +151,8 @@ func (reader configurationSourceReader) githubJSON(ctx context.Context, base *ur
 	return nil
 }
 
-// SHA-1 требуется Git object protocol; public provenance отдельно получает SHA-256.
+// matchesGitBlobSHA compares the Git-protocol SHA-1 of the exact blob header and content; public content provenance separately uses SHA-256.
+// RU: matchesGitBlobSHA сравнивает Git-protocol SHA-1 точного blob-заголовка и содержимого; публичная content provenance отдельно использует SHA-256.
 func matchesGitBlobSHA(content []byte, expected string) bool {
 	hash := sha1.New()
 	_, _ = hash.Write([]byte("blob " + strconv.Itoa(len(content)) + "\x00"))

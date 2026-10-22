@@ -18,6 +18,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// sourceWorkFixture builds a synthetic GitHub/GitLab source claim with a temporary fake credential, exact package/repository pins and future fenced lease/deadline.
+// RU: sourceWorkFixture создаёт синтетический GitHub/GitLab source claim с временным фиктивным credential, точными package/repository привязками и будущими fenced lease/deadline.
+// Fixture identifiers do not represent live owner authorization or installed configuration.
+// RU: Идентификаторы оснастки не являются живой owner-авторизацией либо установленной конфигурацией.
 func sourceWorkFixture(t *testing.T, adapter *Adapter, provider string) *cp.ManagedConfigurationSourceWork {
 	t.Helper()
 	credential := testCredential(t, adapter, "source-fixture-token")
@@ -41,6 +45,12 @@ func sourceWorkFixture(t *testing.T, adapter *Adapter, provider string) *cp.Mana
 	}
 }
 
+// TestConfigurationSourceReadsExactCommitAndRegularBlob exercises both providers through fake transports with exact commit, ancestry, regular-file and content-hash evidence.
+// RU: TestConfigurationSourceReadsExactCommitAndRegularBlob проверяет обоих провайдеров через фиктивный transport с точными commit, ancestry, regular-file и content-hash доказательствами.
+// Foreign claims, invalid packages, expiry, divergence, symlink/submodule, partial/oversized responses and inconsistent blob bytes must not become accepted content.
+// RU: Чужие claims, неверные пакеты, истечение срока, divergence, symlink/submodule, partial/oversized ответы и неверные blob-байты не должны стать принятым содержимым.
+// The gated-read case rejects an invalid package before a provider call; this is not a live HumanGate or remote source-admission check.
+// RU: Gated-read сценарий отклоняет неверный пакет до provider-вызова; это не живая проверка HumanGate либо удалённого допуска источника.
 func TestConfigurationSourceReadsExactCommitAndRegularBlob(t *testing.T) {
 	for _, provider := range []string{"github", "gitlab"} {
 		for _, mode := range []string{"initial", "unchanged", "forward", "diverged", "symlink", "submodule", "blob_digest", "content_digest", "foreign_commit", "partial", "missing", "oversize", "unauthorized", "forbidden", "foreign_repository", "expired", "unknown_payload", "foreign_package", "gated_read"} {

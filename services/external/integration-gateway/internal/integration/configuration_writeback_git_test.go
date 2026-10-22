@@ -18,6 +18,8 @@ import (
 	"time"
 )
 
+// gitFixtureRun executes controlled Git fixture commands inside a test-owned directory with explicit synthetic authorship and no inherited global/system Git configuration.
+// RU: gitFixtureRun выполняет управляемые Git-команды оснастки в каталоге теста с явным фиктивным авторством и без унаследованной global/system Git-конфигурации.
 func gitFixtureRun(t *testing.T, directory string, input []byte, args ...string) string {
 	t.Helper()
 	command := exec.CommandContext(t.Context(), writeBackGitBinary, args...)
@@ -31,6 +33,12 @@ func gitFixtureRun(t *testing.T, directory string, input []byte, args ...string)
 	return strings.TrimSpace(string(raw))
 }
 
+// TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential uses a real Git HTTP backend over loopback TLS with a private test CA and fake credential.
+// RU: TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential использует настоящий Git HTTP backend через loopback TLS с приватной тестовой CA и фиктивным credential.
+// It checks the candidate's base/blob/parent, proposal-only push, rejection of overwriting an existing proposal, private credential permissions and workspace removal.
+// RU: Тест проверяет base/blob/parent кандидата, push только proposal, запрет перезаписи существующей proposal-ветки, права credential и удаление workspace.
+// This proves the isolated fixture path, not production provider reachability, source-ref atomicity or secure filesystem erasure.
+// RU: Это доказательство изолированного пути оснастки, а не доступности production-провайдера, source-ref атомарности либо безопасного стирания файловой системы.
 func TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential(t *testing.T) {
 	root := t.TempDir()
 	repository := filepath.Join(root, "repo.git")
@@ -142,6 +150,10 @@ func TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential(t
 	}
 }
 
+// TestWriteBackGitCancellationIsBoundedAndIgnoresInheritedGitConfiguration runs a controlled sleeping alias to test process-group cancellation within a short budget.
+// RU: TestWriteBackGitCancellationIsBoundedAndIgnoresInheritedGitConfiguration запускает управляемый спящий alias для проверки отмены process group за короткий срок.
+// It also checks the explicit no-global/no-system/noninteractive environment settings without performing a remote Git operation.
+// RU: Тест также сверяет явные no-global/no-system/noninteractive настройки окружения без удалённой Git-операции.
 func TestWriteBackGitCancellationIsBoundedAndIgnoresInheritedGitConfiguration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()

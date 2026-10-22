@@ -14,14 +14,24 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// configurationWriteBackError stores a closed owner-report failure class without keeping provider payloads, credentials or raw Git diagnostics.
+// RU: configurationWriteBackError хранит закрытый класс ошибки owner-отчёта без provider payload, credentials и сырой Git-диагностики.
 type configurationWriteBackError struct {
 	failure cp.ManagedConfigurationGitWriteBackFailure
 }
 
+// Error returns the same safe diagnostic for every internally classified writeback failure.
+// RU: Error возвращает одну безопасную диагностику для любого внутреннего класса ошибки записи.
 func (*configurationWriteBackError) Error() string { return "configuration writeback failed" }
+
+// writeBackFailure wraps an already selected owner failure enum without incorporating an external error string.
+// RU: writeBackFailure оборачивает уже выбранный owner failure enum без включения внешней строки ошибки.
 func writeBackFailure(code cp.ManagedConfigurationGitWriteBackFailure) error {
 	return &configurationWriteBackError{failure: code}
 }
+
+// ConfigurationWriteBackFailure unwraps a classified writeback error, distinguishes deadline expiry and maps every remaining error to unavailable.
+// RU: ConfigurationWriteBackFailure извлекает классифицированную writeback-ошибку, выделяет истечение срока и переводит остальные ошибки в unavailable.
 func ConfigurationWriteBackFailure(err error) cp.ManagedConfigurationGitWriteBackFailure {
 	var safe *configurationWriteBackError
 	if errors.As(err, &safe) {
@@ -33,9 +43,18 @@ func ConfigurationWriteBackFailure(err error) cp.ManagedConfigurationGitWriteBac
 	return cp.ManagedConfigurationGitWriteBackFailure_MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_UNAVAILABLE
 }
 
+// ConfigurationWriteBackCandidate pins the prepared commit, tree, replacement blob and original blob for owner begin and later provider readback.
+// RU: ConfigurationWriteBackCandidate закрепляет подготовленные commit, tree, новый и исходный blob для owner begin и последующего provider readback.
 type ConfigurationWriteBackCandidate struct{ CommitSHA, TreeSHA, BlobSHA, BaseBlobSHA string }
+
+// ConfigurationWriteBackPullRequest holds the provider-validated numeric reference and exact canonical URL of a matching pull or merge request.
+// RU: ConfigurationWriteBackPullRequest хранит проверенные числовую provider-ссылку и точный канонический URL совпавшего pull либо merge request.
 type ConfigurationWriteBackPullRequest struct{ Ref, URL string }
 
+// ConfigurationWriteBackExecution owns a cloned server work snapshot, loaded credential, lazy private Git workspace and prepared candidate for one application-managed execution.
+// RU: ConfigurationWriteBackExecution владеет копией серверной работы, credential, отложенным приватным Git workspace и кандидатом одного исполнения под управлением приложения.
+// It validates provider operations but does not issue approval or persist owner lifecycle transitions; the caller must sequence begin, effect, readback and completion.
+// RU: Объект проверяет provider-операции, но не выдаёт одобрение и не сохраняет owner-переходы; вызывающий обязан упорядочить begin, effect, readback и completion.
 type ConfigurationWriteBackExecution struct {
 	adapter       *Adapter
 	work          *cp.ManagedConfigurationGitWriteBackWork
@@ -48,6 +67,10 @@ type ConfigurationWriteBackExecution struct {
 	candidate     *ConfigurationWriteBackCandidate
 }
 
+// Close best-effort removes the private Git directory and clears loaded credential and cloned proposed-content bytes after an opened execution.
+// RU: Close пытается удалить приватный Git-каталог и очищает загруженные credential-байты и копию proposed content после открытого исполнения.
+// Removal errors are not returned, and neither filesystem secure erasure nor clearing previously created string copies is guaranteed.
+// RU: Ошибки удаления не возвращаются; безопасное стирание файловой системы и очистка ранее созданных строковых копий не гарантируются.
 func (execution *ConfigurationWriteBackExecution) Close() {
 	if execution.git != nil {
 		execution.git.close()
@@ -56,6 +79,14 @@ func (execution *ConfigurationWriteBackExecution) Close() {
 	clear(execution.work.ProposedContent)
 }
 
+// OpenConfigurationWriteBack checks exact proposal/lease/revision/content/author bindings, fixed proposal-branch semantics and supported execute or read-only recovery state.
+// RU: OpenConfigurationWriteBack проверяет точные proposal/lease/revision/content/author привязки, фиксированную proposal-ветку и допустимое execute либо read-only recovery состояние.
+// GitHub additionally requires its Git destination; each write capability must require HUMAN_EACH_EFFECT, while the source read must remain READ/NONE.
+// RU: GitHub дополнительно требует Git destination; каждая write capability обязана требовать HUMAN_EACH_EFFECT, а чтение источника — оставаться READ/NONE.
+// After bounding work by lease and capability deadlines, it loads credentials and clones the snapshot without pushing, creating a PR or granting approval.
+// RU: После ограничения срока работой, арендой и capability функция загружает credential и клонирует снимок без push, создания PR и выдачи одобрения.
+// Approval metadata is consistency evidence from the owner claim, not independent authorization of a caller-created proposal.
+// RU: Метаданные одобрения являются доказательством согласованности owner claim, а не самостоятельной авторизацией созданного вызывающим предложения.
 func (adapter *Adapter) OpenConfigurationWriteBack(ctx context.Context, work *cp.ManagedConfigurationGitWriteBackWork) (*ConfigurationWriteBackExecution, error) {
 	invalid := func() (*ConfigurationWriteBackExecution, error) {
 		return nil, writeBackFailure(cp.ManagedConfigurationGitWriteBackFailure_MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_RESPONSE_INVALID)
@@ -153,10 +184,14 @@ func (adapter *Adapter) OpenConfigurationWriteBack(ctx context.Context, work *cp
 	return &ConfigurationWriteBackExecution{adapter: adapter, work: proto.Clone(work).(*cp.ManagedConfigurationGitWriteBackWork), definition: definition, configuration: configuration, credential: credential, remote: remote, deadline: deadline}, nil
 }
 
+// validWriteBackRef applies the existing bounded branch/ref syntax restrictions before passing names to fixed Git operations; it is not a general Git ref parser.
+// RU: validWriteBackRef применяет существующие ограничения длины и синтаксиса ветки/ref до передачи фиксированным Git-операциям, не являясь общим Git ref parser.
 func validWriteBackRef(ref string) bool {
 	return ref != "" && len(ref) <= 256 && !strings.HasPrefix(ref, "-") && !strings.HasPrefix(ref, "/") && !strings.HasSuffix(ref, "/") && !strings.HasSuffix(ref, ".") && !strings.HasSuffix(ref, ".lock") && !strings.Contains(ref, "..") && !strings.Contains(ref, "//") && !strings.Contains(ref, "@{") && !strings.ContainsAny(ref, " ~^:?*[\\\x00\r\n\t")
 }
 
+// prepareGit lazily creates the execution's isolated bare repository and credential-file environment, reusing an existing workspace without remote mutation.
+// RU: prepareGit отложенно создаёт изолированный bare-репозиторий и credential-file окружение исполнения, используя имеющийся workspace без внешнего изменения.
 func (execution *ConfigurationWriteBackExecution) prepareGit(ctx context.Context) error {
 	if execution.git != nil {
 		return nil
@@ -170,6 +205,10 @@ func (execution *ConfigurationWriteBackExecution) prepareGit(ctx context.Context
 	return nil
 }
 
+// PrepareCandidate permits execute mode only, requires the exact current base and absent proposal branch, then prepares one-file Git objects locally.
+// RU: PrepareCandidate допускает только execute mode, требует точную текущую базу и отсутствие proposal-ветки, затем локально готовит Git-объекты одного файла.
+// It validates equivalent typed provider inputs and remembers the exact candidate for PushCandidate; preparation does not itself perform push or owner begin.
+// RU: Функция проверяет соответствующие типизированные provider inputs и запоминает точного кандидата для PushCandidate; подготовка не выполняет push либо owner begin.
 func (execution *ConfigurationWriteBackExecution) PrepareCandidate(ctx context.Context) (ConfigurationWriteBackCandidate, error) {
 	ctx, cancel := context.WithDeadline(ctx, execution.deadline)
 	defer cancel()
@@ -214,6 +253,10 @@ func (execution *ConfigurationWriteBackExecution) PrepareCandidate(ctx context.C
 	return result, nil
 }
 
+// PushCandidate requires execute mode and the exact remembered candidate, rechecks source/base and absent proposal, then pushes only that proposal ref.
+// RU: PushCandidate требует execute mode и точного запомненного кандидата, заново сверяет source/base и отсутствие proposal, затем отправляет только proposal ref.
+// The caller must already hold a validated owner begin receipt; the Git lease protects proposal absence, not an atomic source-ref precondition.
+// RU: Вызывающий уже обязан иметь проверенную owner begin квитанцию; Git lease защищает отсутствие proposal, а не атомарное условие исходной ветки.
 func (execution *ConfigurationWriteBackExecution) PushCandidate(ctx context.Context, candidate ConfigurationWriteBackCandidate) error {
 	ctx, cancel := context.WithDeadline(ctx, execution.deadline)
 	defer cancel()
@@ -231,6 +274,8 @@ func (execution *ConfigurationWriteBackExecution) PushCandidate(ctx context.Cont
 	return execution.git.push(ctx, p.GetProposalBranch(), candidate.CommitSHA)
 }
 
+// validateInput serializes the server-derived provider payload and checks the selected capability schema, classifying rejected content without sending it.
+// RU: validateInput сериализует выведенный сервером provider payload и проверяет схему выбранной capability, классифицируя отклонённое содержимое без отправки.
 func (execution *ConfigurationWriteBackExecution) validateInput(operation string, input map[string]any) error {
 	capability, ok := execution.definition.Capability(operation)
 	if !ok {
