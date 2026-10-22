@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.257.0
+version: 1.258.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,71 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятьдесят восьмая волна — typed managed-draft endpoints
+
+Опубликованный SHA257 — `b75b0caae3f08b6c89e7966cd480b9c984c1760f`.
+Точный Hf3GLN:6598 sources,222 excluded,1818 raw/610 retained/
+1208 unresolved; Go10882/21230, missing10348. Raw SHA256:
+`96c92b1ef3a772a796cbff09fcad404b56dc56ee3ff145190072a423b4ddb3f8`.
+Clone-set:
+`dfd12f7f57f53ad28407d6fe607498a62ec6b34d9a1fd89a68ffa06d9c3ae4e7`.
+Точные unit/build, push/readback и Draft PR PATCH/GET257 подтверждены.
+
+Полностью прочитаны managed_draft_endpoints.go240 строк и его432-строчный
+unit file, точные8 typed save/discard mappings и связанные input/scope/
+version/result/error helpers. Все27 declarations описаны EN→RU; дополнительно
+комментарий локального OpenAPI source и прежнее пояснение сохранения неверного
+черновика стали двуязычными. AST2 без комментариев/координат совпадает с
+SHA257: bodies/imports/generated params/RPC types/fields/literals неизменны.
+
+Комментарии различают проверку синтаксиса и владение, пустой присутствующий
+draft source и отсутствующий content, raw unfinished source и publication
+validation, save child lineage и точный discard receipt. Поле kind выбирает
+допустимую форму, но не назначает actor/owner. Ошибка нормализации обычного
+JSON/YAML draft не выдаётся за успешный допуск; raw draft остаётся доступным
+редактору для диагностики. OPENAPI_IMPORT имеет отдельную строгую ошибочную
+ветвь. In-memory test recorder не объявляется реальным владельцем данных.
+
+Детектор нашёл одну799-token перекрывающуюся пару внутри production file.
+Прочитаны обе полные стороны до и после комментариев. Общие вычисления уже
+имеют helpers managedDraftMutation/readManagedDraftSave/writeManagedDraftResult
+и writeRPCProblem. Остаток — явные8 bindings специализированных typed
+RPC/request и generated params с конкретным kind; prompt save также сверяет
+scope receipt. Universal kind/reflect dispatcher или дополнительные callbacks
+ради этой композиции скрыли бы закрытый набор изменяющих состояние команд,
+не устранив новый общий доменный алгоритм. Добавлено одно точное reasoned
+исключение по path/fragment/count1, не файл, tests или все endpoint handlers.
+Прежние509 entries/610 occurrences побайтно неизменны; теперь510/611.
+
+Матрица неизменного пути:
+
+| Вход | Вызов владельца | Проверка результата |
+| --- | --- | --- |
+| Prompt save | Exact SavePromptTemplateDraft и validated optional scope | Scope receipt, новый child draft и version+1 |
+| Image/integration/STT save | Собственный typed Save RPC каждого вида | UI owner/kind, normalized content/digest, parent и published head |
+| Четыре discard | Exact Discard RPC каждого вида с OCC/idempotency | Та же revision ref, DISCARDED, version+1 |
+| Ошибка/несоответствие | Без generic mutation dispatch | Закрытый HTTP problem, не success/ETag |
+
+Все422 верхних/1780 всех unit cases HTTP transport и полный gateway module
+build — PASS LOCAL,0 FAIL/SKIP. Включены существующие8 exact command mappings,
+invalid inputs before RPC, шесть owner error classes, corrupted receipt
+матрицы и import normalization. Тестовый HTTP handler подключён к fake typed
+RPC client, не реальной auth/SSO/domain persistence. Go1.26.6, GOENV/GOWORK
+off, GOMAXPROCS=4, -mod=readonly/-count=1/-timeout120s.17 Node/Go checker
+units, scope27/27, AST2, scan/assessment,5 addressed ignores, gofmt/diff-check
+PASS LOCAL. Полный unit иных packages, review/component/browser/live/deploy/
+модели/STT/почта NOT RUN по scope; исторические FAIL сохраняются.
+
+Рабочий wECSX3:6598 sources,222 excluded,1818 raw/611 retained/
+1207 unresolved; Go10909/21230, missing10321. Raw SHA256:
+`089883664fe9033cfbb09584ef65f6ca42a4c5dd1aa573fd2a80fc2e2cdadf37`.
+Clone-set:
+`5a02d07cf6d6ff94034f5d450f51a98b1aef6f1d850697961925d8a8c41fd0eb`.
+Raw count не уменьшился: одна рассмотренная группа сохранена явно, а не
+названа выносом. Generated output, контракты, wire, dependencies и миграции
+не менялись. Exact post-commit report публикуется в том же Draft PR;
+задача остаётся активной до полного разбора и документации.
 
 ## Двести пятьдесят седьмая волна — readback attestor
 

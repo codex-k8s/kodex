@@ -4072,6 +4072,14 @@
       "fragmentSHA256": "f385bbed26611e9aab540f1f05d963769b79505aaf202a40078ef023366c2e60",
       "count": 1,
       "reason": "Остаточные156 tokens соединяют nominal producer wrapper, domain-owned operationBinding и уже общие профили запроса/продолжения/Unix peer. Resolver использует ProducerID, loader — ProofProducerID с тем же JSON key; вложенные типы намеренно остаются отдельными named types. Объединение полного binding потребовало бы изменения доменных полей/вызовов либо generic schema с несколькими типами, чтобы сохранить эти границы. Проверки indexPolicy/role projection не повторяются, а общие24 producer и10 profile fields уже имеют один источник. Здесь сохраняется явная доменная форма, а не копия алгоритма; исключены только точные paths/fragment/count1, не файлы или операции полномочий."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_draft_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_draft_endpoints.go",
+      "fragmentSHA256": "cc94fdb7a2677b480fe7a682fc4280761a87a62db8d9ededa44910d4c3ea78f4",
+      "count": 1,
+      "reason": "Прочитаны оба перекрывающихся799-token окна и все8 typed save/discard handlers четырёх configuration kinds. Общие алгоритмы уже выделены в managedDraftMutation, readManagedDraftSave, writeManagedDraftResult и writeRPCProblem; остаток — явная привязка конкретного HTTP метода и generated params к своему специализированному RPC/request и kind. Prompt save дополнительно проверяет exact scope receipt, save и discard имеют разную lineage/readback семантику. Универсальный dispatcher по kind или function/reflect registry ради этих typed adapters скрыл бы закрытый набор state-changing команд и их auditability; дополнительный response helper с теми же многочисленными pins не убрал бы эту привязку. Сохранена только данная точная пара фрагментов внутри одного source path по fragment SHA-256/count1, не весь файл, тесты или managed configuration lifecycle."
     }
   ]
 }
