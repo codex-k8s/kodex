@@ -17,6 +17,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestNextWarmAcceptsTurnWithCompatibleRuntime serves one synthetic turn and checks warm revision/ticket headers, proving compatible turns remain available despite different turn-specific bindings.
+// TestNextWarmAcceptsTurnWithCompatibleRuntime выдаёт один синтетический ход и проверяет warm-ревизию/ticket в заголовках: совместимый ход доступен при отличающихся привязках конкретного исполнения.
 func TestNextWarmAcceptsTurnWithCompatibleRuntime(t *testing.T) {
 	turn := validWarmTurnFixture()
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -53,6 +55,8 @@ func TestNextWarmAcceptsTurnWithCompatibleRuntime(t *testing.T) {
 	}
 }
 
+// TestPostReportsOnlySafeHTTPStatus returns a private conflict body and requires the callback error to contain only the fixed safe HTTP-status diagnostic.
+// TestPostReportsOnlySafeHTTPStatus возвращает приватное тело конфликта и требует от callback только фиксированную безопасную диагностику HTTP-статуса.
 func TestPostReportsOnlySafeHTTPStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		http.Error(writer, "sensitive internal diagnostic", http.StatusConflict)
@@ -72,18 +76,14 @@ func TestPostReportsOnlySafeHTTPStatus(t *testing.T) {
 	}
 }
 
+// TestCompleteRejectsInvalidPayloadBeforeTransport rejects an empty completion locally and asserts that the synthetic callback endpoint was never invoked.
+// TestCompleteRejectsInvalidPayloadBeforeTransport локально отклоняет пустое завершение и проверяет отсутствие вызова синтетического callback endpoint.
 func TestCompleteRejectsInvalidPayloadBeforeTransport(t *testing.T) {
 	called := false
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	client := callbackFixtureClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		called = true
 	}))
-	defer server.Close()
-	base, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := &Client{http: server.Client(), base: base, token: "ticket"}
-	err = client.Complete(context.Background(), validWarmTurnFixture(), runtimecontract.RunnerCompletionRequest{})
+	err := client.Complete(context.Background(), validWarmTurnFixture(), runtimecontract.RunnerCompletionRequest{})
 	if err == nil || err.Error() != "validate runtime completion: runner completion is invalid" {
 		t.Fatalf("Complete() error = %v", err)
 	}
@@ -92,6 +92,8 @@ func TestCompleteRejectsInvalidPayloadBeforeTransport(t *testing.T) {
 	}
 }
 
+// TestCompleteRetriesTransientCallbackWithoutChangingPayload makes two 503 replies precede success and verifies exactly three requests with byte-identical completion bodies.
+// TestCompleteRetriesTransientCallbackWithoutChangingPayload выдаёт два ответа 503 перед успехом и проверяет ровно три запроса с побайтно одинаковым телом завершения.
 func TestCompleteRetriesTransientCallbackWithoutChangingPayload(t *testing.T) {
 	var attempts atomic.Int32
 	var mu sync.Mutex
@@ -128,6 +130,8 @@ func TestCompleteRetriesTransientCallbackWithoutChangingPayload(t *testing.T) {
 	}
 }
 
+// TestProgressDoesNotDuplicateTransientControlPlaneOutage configures retries but requires ordinary progress to make only one request when the control plane returns 503.
+// TestProgressDoesNotDuplicateTransientControlPlaneOutage задаёт повторы, но требует от обычного progress только один запрос при ответе control plane 503.
 func TestProgressDoesNotDuplicateTransientControlPlaneOutage(t *testing.T) {
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -149,6 +153,8 @@ func TestProgressDoesNotDuplicateTransientControlPlaneOutage(t *testing.T) {
 	}
 }
 
+// TestDefaultCallbackRetryWindowCoversControlPlaneRestart checks that scheduled backoff alone totals at least seven seconds; it does not restart a control plane or measure request timeouts.
+// TestDefaultCallbackRetryWindowCoversControlPlaneRestart проверяет сумму задержек не менее семи секунд; не перезапускает control plane и не измеряет сроки запросов.
 func TestDefaultCallbackRetryWindowCoversControlPlaneRestart(t *testing.T) {
 	var window time.Duration
 	for _, delay := range defaultCallbackRetryDelays {
@@ -159,6 +165,8 @@ func TestDefaultCallbackRetryWindowCoversControlPlaneRestart(t *testing.T) {
 	}
 }
 
+// TestRetryableCallbackStatusUsesClosedTransientSet checks the six allowed transient statuses and representative client/authority/conflict failures that must not retry.
+// TestRetryableCallbackStatusUsesClosedTransientSet проверяет шесть разрешённых временных статусов и представительные клиентские/authority/конфликтные отказы без повторов.
 func TestRetryableCallbackStatusUsesClosedTransientSet(t *testing.T) {
 	t.Parallel()
 	for _, code := range []int{
@@ -186,6 +194,8 @@ func TestRetryableCallbackStatusUsesClosedTransientSet(t *testing.T) {
 	}
 }
 
+// TestCompleteDoesNotRetryStateConflict returns 409 and requires exactly one terminal callback despite a configured retry schedule.
+// TestCompleteDoesNotRetryStateConflict возвращает 409 и требует ровно один конечный callback при заданном расписании повторов.
 func TestCompleteDoesNotRetryStateConflict(t *testing.T) {
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -209,6 +219,8 @@ func TestCompleteDoesNotRetryStateConflict(t *testing.T) {
 	}
 }
 
+// TestRecordNativeToolCallUsesExecutionScopedBoundedPayload checks the POST lease route, ticket and typed native-tool projection, retaining revision, call identifier and tool kind.
+// TestRecordNativeToolCallUsesExecutionScopedBoundedPayload проверяет POST-маршрут lease, ticket и типизированную проекцию инструмента с сохранением ревизии, идентификатора вызова и вида.
 func TestRecordNativeToolCallUsesExecutionScopedBoundedPayload(t *testing.T) {
 	var captured runtimecontract.RunnerNativeToolCallRequest
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -243,6 +255,8 @@ func TestRecordNativeToolCallUsesExecutionScopedBoundedPayload(t *testing.T) {
 	}
 }
 
+// TestRecordNativeToolCallRetriesTransientCallback returns 504 once and requires a second request to deliver the same bounded native-tool event successfully.
+// TestRecordNativeToolCallRetriesTransientCallback однократно возвращает 504 и требует второй запрос для успешной доставки того же ограниченного события инструмента.
 func TestRecordNativeToolCallRetriesTransientCallback(t *testing.T) {
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -269,6 +283,8 @@ func TestRecordNativeToolCallRetriesTransientCallback(t *testing.T) {
 	}
 }
 
+// TestProgressDoesNotRetryClientError returns 400 and requires one progress attempt with a safe status error even when retry delays are configured.
+// TestProgressDoesNotRetryClientError возвращает 400 и требует одну попытку progress с безопасной ошибкой статуса даже при заданных задержках.
 func TestProgressDoesNotRetryClientError(t *testing.T) {
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -290,15 +306,11 @@ func TestProgressDoesNotRetryClientError(t *testing.T) {
 	}
 }
 
+// TestRecordNativeToolCallRejectsUnsafeParametersBeforeTransport supplies forbidden raw command parameters and verifies rejection before any callback request.
+// TestRecordNativeToolCallRejectsUnsafeParametersBeforeTransport передаёт запрещённые сырые параметры команды и проверяет отказ до любого callback-запроса.
 func TestRecordNativeToolCallRejectsUnsafeParametersBeforeTransport(t *testing.T) {
 	called := false
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
-	defer server.Close()
-	base, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	client := callbackFixtureClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
 	call := runtimecontract.NativeToolCall{CallID: "call-shell", Revision: 2, Kind: runtimecontract.NativeToolKindShell,
 		State: runtimecontract.NativeToolStateSucceeded, SafeResult: runtimecontract.NativeToolResultCompleted,
 		SafeParameters: map[string]any{"command": "print secret"}}
@@ -310,6 +322,8 @@ func TestRecordNativeToolCallRejectsUnsafeParametersBeforeTransport(t *testing.T
 	}
 }
 
+// TestCommitProviderCredentialRefreshUsesExecutionScopedCallback checks the exact lease route/ticket and typed revision, prior credential identity/hash and synthetic rotated authentication bytes.
+// TestCommitProviderCredentialRefreshUsesExecutionScopedCallback проверяет точный маршрут lease/ticket, типизированную ревизию, прежние identity/хеш реквизитов и синтетические байты новой авторизации.
 func TestCommitProviderCredentialRefreshUsesExecutionScopedCallback(t *testing.T) {
 	var captured runtimecontract.RunnerProviderCredentialRefreshRequest
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -350,15 +364,11 @@ func TestCommitProviderCredentialRefreshUsesExecutionScopedCallback(t *testing.T
 	}
 }
 
+// TestCompleteRejectsMismatchedAttemptBeforeTransport changes only the attempt of an otherwise valid completion and verifies rejection without contacting the endpoint.
+// TestCompleteRejectsMismatchedAttemptBeforeTransport меняет только попытку корректного в остальном завершения и проверяет отказ без обращения к endpoint.
 func TestCompleteRejectsMismatchedAttemptBeforeTransport(t *testing.T) {
 	called := false
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { called = true }))
-	defer server.Close()
-	base, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	client := callbackFixtureClient(t, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { called = true }))
 	input := validWarmTurnFixture()
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt + 1, Success: true, ResultSummary: "done"}
 	if err := client.Complete(context.Background(), input, payload); err == nil {
@@ -369,15 +379,11 @@ func TestCompleteRejectsMismatchedAttemptBeforeTransport(t *testing.T) {
 	}
 }
 
+// TestCommitProviderCredentialRefreshRejectsInvalidPayloadBeforeTransport sends an empty rotation request and requires validation to fail before the synthetic server is called.
+// TestCommitProviderCredentialRefreshRejectsInvalidPayloadBeforeTransport передаёт пустую ротацию и требует отказ проверки до обращения к синтетическому серверу.
 func TestCommitProviderCredentialRefreshRejectsInvalidPayloadBeforeTransport(t *testing.T) {
 	called := false
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
-	defer server.Close()
-	base, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	client := callbackFixtureClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
 	if err := client.CommitProviderCredentialRefresh(context.Background(), validWarmTurnFixture(), runtimecontract.RunnerProviderCredentialRefreshRequest{}); err == nil {
 		t.Fatal("invalid provider credential refresh was accepted")
 	}
@@ -386,6 +392,21 @@ func TestCommitProviderCredentialRefreshRejectsInvalidPayloadBeforeTransport(t *
 	}
 }
 
+// callbackFixtureClient starts an isolated loopback HTTP fixture with a synthetic ticket, registers server cleanup even on fatal failure and leaves each test's handler and assertions explicit.
+// callbackFixtureClient запускает изолированную HTTP-фикстуру на loopback с синтетическим ticket, регистрирует закрытие сервера даже при fatal-отказе и оставляет handler и проверки каждого теста явными.
+func callbackFixtureClient(t *testing.T, handler http.Handler) *Client {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Client{http: server.Client(), base: base, token: "ticket"}
+}
+
+// validWarmTurnFixture builds a fresh synthetic system-assistant turn with pinned environment and execution digests. Paths and credential hashes are inert metadata; no files, credentials, workloads or provider calls are created.
+// validWarmTurnFixture создаёт новый синтетический ход системного помощника с закреплёнными окружением и дайджестами исполнения. Пути и хеши реквизитов — неактивные данные; файлы, реквизиты, нагрузки и вызовы провайдера не создаются.
 func validWarmTurnFixture() runtimecontract.RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	image := runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh",

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.211.0
+version: 1.212.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,56 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двенадцатая волна — весь callback-клиент runner
+
+Опубликованный SHA211 — `3570f35ddc4ef2aea59d7735d5a24ccb69abd6c2`.
+Exact77BkVz:6582 sources,222 excluded,1837 raw,590 retained,1247 unresolved;
+Go7969/21155,missing13186;raw SHA256
+`bab8c51c881b46c1250e57ef23840a92b2f868e02ddd738b0cdcebcdab95f899`;
+clone-set `160a21fdaa9ba26b4f3710f53b0631e7630ef3c6d5adc06484f18d7c5f861e13`.
+Remote head,чистые worktree/main,bot identity,OPEN Issue иDraft PR проверены.
+
+Все12 файлов callback прочитаны;63/63 declarations покрыты EN→RU
+(56 прежних плюс новый helper;6 уже были покрыты). Описаны отдельные
+control/file budgets,пределы и неизменность повторяемого тела,закрытый набор
+HTTP statuses,non-retriable progress/credential rotation,detached terminal
+completion и cancellation-aware остальные callbacks. Optional financial
+telemetry не названа просто «5xx optional»:408/429 также optional по прежнему
+retry predicate. Headers не названы самостоятельной authority.
+Отмечены partial writes до итогового hash check,abort частичного file response,
+server-owned context pins и отсутствие гарантии pre-allocation bounds/очистки
+на раннем отказе readCredential. Transport profiles/permissions не менялись.
+
+Повтор NewServer/cleanup/URL/client в четырёх negative tests вынесен в
+локальный callbackFixtureClient. Handlers,typed requests и assertions остались
+у тестов;server closure теперь зарегистрирована через t.Cleanup,что сохраняет
+нужное завершение этих последовательных тестов и закрывает fatal parse path.
+Две100-token self-clone группы действительно исчезли;новых групп нет по
+multiset pair/fragment/count сравнению. Это не достигнуто комментариями или
+широким исключением. Производственный код менялся только комментариями:
+Go AST11 файлов (включая2 неизменённых) идентичен SHA211 без token.Pos.
+Client_test с выносом проверен diff и unit,не объявлен AST-identical.
+
+Три точных retained windows добавлены с обоснованиями:независимый contract
+fixture с иной областью помощника,controller producer/runner consumer fixture
+с разными workload/образом/provider/pins и typed expectations разных endpoints.
+Общая producer fixture не импортируется через чужой internal и не превращается
+в production test API;typed credential/tool projection assertions не стираются
+универсальным decoder. Остальные фрагменты/файлы остаются в detector scope.
+
+Рабочий GX3IY7:6582 sources,222 excluded,1835 raw,593 retained,1242 unresolved;
+Go8026/21156,missing13130;raw SHA256
+`229603a976930f50351374416f6460a852e1943808485348ebfc70d4040ff6c7`;
+clone-set `edc23c9d7b1d3ac389158431f52333c78b880be83d05c16030a113625b172c4b`.
+Callback+readiness35 верхних/83 всех unit PASS,0 FAIL,1 direct SKIP
+TestRuntimeMCPCatalogWireConsumer без fixture;его harness PASS на SHA211
+не выдаётся за новый запуск. Полный runner build -mod=readonly,scoped63/63,
+17 Node units,Go-checker unit,5 ignore-boundaries,gofmt/diff-check PASS LOCAL.
+Go1.26.6,GOENV/GOWORK off. Context7 `/golang/go`:testing cleanup ordering,
+context.WithoutCancel иResponseController;новых SDK/dependencies нет.
+Полный runner unit,общий repo-check,live/browser/deploy/ИИ/STT/почта NOT RUN.
+Цель не завершена;post-commit scan иточные проверки публикуются вDraft PR.
 
 ## Двести одиннадцатая волна — общий exact TLS transport и MCP readiness
 

@@ -16,9 +16,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
-// WriteSkillFile использует существующий execution callback, но отдельную
-// типизированную привязку к SkillBundle. Controller разрешает её из snapshot,
-// а не из переданного ref либо обычного списка workspace inputs.
+// WriteSkillFile requires an exact skill bundle/file pin in the current context snapshot before using its typed artifact query. It checks bounded length and digest, but may write bytes before the final check; callers must discard failed output. Controller resolves snapshot authority, not the supplied ref alone.
+// WriteSkillFile требует точную привязку bundle/файла навыка в текущем снимке контекста до типизированного artifact-запроса. Проверяет ограниченный размер и дайджест, но может записать байты до последней проверки; неуспешный результат нужно отбросить. Controller разрешает полномочия снимка, а не одной переданной ссылки.
 func (client *Client) WriteSkillFile(ctx context.Context, input model.Input, skill runtimecontract.RuntimeSkillBundle, pin runtimecontract.RuntimeSkillFile, destination io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, filetransfer.TotalTimeout)
 	defer cancel()

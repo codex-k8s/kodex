@@ -11,6 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestOptionalFinancialDeliveryPreservesAuthorityDenial checks success and selected 4xx/5xx replies, keeping client rejections visible and optional server failures silent without replaying telemetry.
+// TestOptionalFinancialDeliveryPreservesAuthorityDenial проверяет успех и выбранные 4xx/5xx: клиентские отказы возвращаются, необязательные серверные ошибки скрываются без повторной телеметрии.
 func TestOptionalFinancialDeliveryPreservesAuthorityDenial(t *testing.T) {
 	for _, code := range []int{204, 403, 404, 409, 422, 500, 503} {
 		t.Run(http.StatusText(code), func(t *testing.T) {

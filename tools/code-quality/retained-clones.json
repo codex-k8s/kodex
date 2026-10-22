@@ -3,6 +3,30 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution_test.go",
+      "secondPath": "services/jobs/agent-runner/internal/callback/client_test.go",
+      "fragmentSHA256": "711f1bb550a23ce6dfb9c5005e80569f652a284742987f4ceb93534c0f748879",
+      "count": 1,
+      "reason": "Совпало 139-token окно литерала двух независимых тестовых входов, а не самостоятельный алгоритм: contract unit задаёт обычный turn с AssistantScopeNone и собственными производными именами, callback consumer — SYSTEM assistant с совместимым warm-контуром. Различаются эффективные Kubernetes identity, часть pins и построение итоговых bindings. Fixture contract находится внутри package runtimecontract; импорт общего fixture-subpackage, зависящего от runtimecontract, создаёт test import cycle, а перенос в production API только ради тестовых literals необоснован. Внутри каждого unit factory уже одна. Оставлено только точное окно по двум путям/хешу/одному вхождению, не фабрики целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/testfixture/turn_input.go",
+      "secondPath": "services/jobs/agent-runner/internal/callback/client_test.go",
+      "fragmentSHA256": "0fa6cf1febf7088016d1b267d3454783085410cb5dfbd7cfffa5dd49ff9e032b",
+      "count": 1,
+      "reason": "205-token хвост independently constructed synthetic producer/consumer inputs повторяет transport/mount metadata и вызов общих digest functions, уже принадлежащих runtimecontract. Полные фабрики не идентичны: workload/fence, role image/reference, instructions/task, provider и credential/role hashes различаются; callback отдельно доказывает warm compatibility. Controller fixture уже разделена внутри собственного unit и защищена internal boundary; импорт её в runner недопустим. Публикация общей fixture с набором overrides ради литералов связала бы независимые ожидания producer/consumer и скрыла точный input каждого теста, не убрав копирование алгоритма. Сохранён лишь данный exact fragment с count1; оставшаяся runner factory не исключена."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/jobs/agent-runner/internal/callback/client_test.go",
+      "secondPath": "services/jobs/agent-runner/internal/callback/client_test.go",
+      "fragmentSHA256": "a68c74ec1d0a89ac96e54e0aeebe2590099d5416b3cbec2397f4d4b5574d197a",
+      "count": 1,
+      "reason": "Нормализованное 146-token окно похоже лишь формой typed HTTP expectations: native-tool-call и provider-credential-refresh проверяют разные literal routes, разные nominal request structs и разные captured поля. Оба намеренно самостоятельно запрещают unknown JSON fields, требуют POST/lease/ticket и проверяют собственный payload. Общий untyped decoder/dispatcher ради server/error boilerplate скрыл бы контрактную границу safe tool projection против authentication rotation. Реальный повтор server/client setup в четырёх pre-transport negative tests уже вынесен в callbackFixtureClient. Сохранено только точное self-clone окно двух typed assertions по digest/count1, без whole-test исключения."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/runtime-controller/internal/callback/files_test.go",
       "secondPath": "services/internal/runtime-controller/internal/callback/files_test.go",
       "fragmentSHA256": "f8a4d266f49be56cadbdb1bbb90b572bba466759c16f7f4915c4bc2e54887bce",

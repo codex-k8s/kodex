@@ -14,6 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestProviderProcessCallbackUsesExistingExactProgressAndStableRetry checks the existing progress route and bindings, byte-stable retry after 503 and pre-transport rejection of an observation with a foreign attempt.
+// TestProviderProcessCallbackUsesExistingExactProgressAndStableRetry проверяет прежний progress-маршрут и привязки, неизменные байты повтора после 503 и локальный отказ наблюдения чужой попытки.
 func TestProviderProcessCallbackUsesExistingExactProgressAndStableRetry(t *testing.T) {
 	input := validWarmTurnFixture()
 	value := runtimecontract.BindProviderProcessObservation(input, "0.160.0")
