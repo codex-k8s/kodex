@@ -12,6 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault checks both scopes separate immutable execution workspace policy from fresh configuration and report SDK cached-search defaults as unverified metadata.
+// Private workspace/auth paths and execution secrets must not enter the projected JSON.
+// TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault проверяет в обеих областях отделение неизменяемой политики рабочей области выполнения от свежей конфигурации и выдачу кешированного поиска SDK как непроверенных метаданных по умолчанию.
+// Частные пути рабочей области и авторизации, секреты выполнения не должны попадать в проецируемый JSON.
 func TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -50,6 +54,8 @@ func TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault(t *testi
 	}
 }
 
+// TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn checks fresh published live-search settings remain distinct from the turn's cached overlay and invalid settings never fall back silently.
+// TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn проверяет отделение свежих опубликованных настроек живого поиска от кешированного поиска настроек хода и запрет молчаливой замены некорректных настроек значением по умолчанию.
 func TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn(t *testing.T) {
 	input, arguments, response := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
 	input.ConfigOverlay = "web_search = \"cached\"\n"
@@ -75,6 +81,8 @@ func TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn(t *testing.T) {
 	}
 }
 
+// TestAssistantCurrentExecutionDiscoveryRejectsMissingOrInvalidPolicy checks ten workspace-policy mutations reject the entire read projection rather than defaulting, exposing private paths or claiming a valid policy.
+// TestAssistantCurrentExecutionDiscoveryRejectsMissingOrInvalidPolicy проверяет отклонение всей проекции чтения для десяти изменений политики рабочей области без подстановки умолчания, раскрытия частных путей или заявления корректности политики.
 func TestAssistantCurrentExecutionDiscoveryRejectsMissingOrInvalidPolicy(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -108,8 +116,10 @@ func TestAssistantCurrentExecutionDiscoveryRejectsMissingOrInvalidPolicy(t *test
 	}
 }
 
-// Metadata относится к default закреплённого SDK, а не к доказанному native call.
-// Изменение pin или writer требует повторной проверки первичного source SDK.
+// TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter checks local Docker/npm/lock pins and writer-source markers supporting SDK-default discovery metadata.
+// This source guard does not execute Codex, prove an actual hosted-search call or revalidate an upstream SDK implementation.
+// TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter проверяет локальные привязки Docker, npm и lockfile, маркеры исходника записи настроек, на которых основаны метаданные умолчания SDK.
+// Проверка исходников не запускает Codex, не доказывает реальный серверный поисковый вызов и не перепроверяет реализацию внешнего SDK.
 func TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter(t *testing.T) {
 	_, source, _, ok := runtime.Caller(0)
 	if !ok {

@@ -13,6 +13,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantCandidateInventoryFixture builds inert VERIFIED image/tool observations from the canonical probe list and supplied manifest pin.
+// Hashes and versions are synthetic metadata; no image, binary, provenance signature or scanner is executed.
+// assistantCandidateInventoryFixture создаёт неактивные наблюдения VERIFIED образа и инструментов по каноническому списку проб и переданной привязке манифеста.
+// Хеши и версии — синтетические метаданные; образ, бинарный файл, подпись происхождения или сканер не запускаются.
 func assistantCandidateInventoryFixture(entry *cp.AssistantConfigurationCatalogEntry) *cp.ImageToolInventory {
 	digest := strings.Repeat("a", 64)
 	inventory := &cp.ImageToolInventory{Status: "VERIFIED", Sha256: digest, ImageDigest: entry.ManifestDigest, ProvenanceSha256: digest,
@@ -24,6 +28,10 @@ func assistantCandidateInventoryFixture(entry *cp.AssistantConfigurationCatalogE
 	return inventory
 }
 
+// TestAssistantCandidateInventoryTraversesMCPWithExactPromotionPins checks both scopes project accepted/promoted fixture pins and all probe observations through local MCP without putting full evidence into activity history.
+// The test checks representation and binding, not a real build, scan or image admission.
+// TestAssistantCandidateInventoryTraversesMCPWithExactPromotionPins проверяет в обеих областях проекцию тестовых привязок допуска и публикации, всех наблюдений проб через локальный MCP без помещения полного свидетельства в историю активности.
+// Проверяются представление и привязки, а не настоящие сборка, сканирование или допуск образа.
 func TestAssistantCandidateInventoryTraversesMCPWithExactPromotionPins(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -69,6 +77,8 @@ func TestAssistantCandidateInventoryTraversesMCPWithExactPromotionPins(t *testin
 	}
 }
 
+// TestAssistantCandidateInventoryRejectsDetachedOrUnboundedEvidence checks ten detached/malformed inventory mutations and inventory leakage into three unrelated catalog kinds are rejected.
+// TestAssistantCandidateInventoryRejectsDetachedOrUnboundedEvidence проверяет отклонение десяти отвязанных либо некорректных изменений инвентаря и его передачи в три посторонних вида каталога.
 func TestAssistantCandidateInventoryRejectsDetachedOrUnboundedEvidence(t *testing.T) {
 	input, arguments, response := assistantFreshCatalogFixture(runtimecontract.AssistantScopeSystem, "IMAGE_ARTIFACTS")
 	response.AssistantConfigurationCatalog.Entries[0].VerifiedToolInventory = assistantCandidateInventoryFixture(response.AssistantConfigurationCatalog.Entries[0])
@@ -124,6 +134,8 @@ func TestAssistantCandidateInventoryRejectsDetachedOrUnboundedEvidence(t *testin
 	}
 }
 
+// TestAssistantCandidateInventoryPreservesHistoricalUnavailable checks a historical UNAVAILABLE inventory stays explicitly empty instead of fabricating verified hashes, image pins or platform observations.
+// TestAssistantCandidateInventoryPreservesHistoricalUnavailable проверяет сохранение исторического инвентаря UNAVAILABLE явно пустым без выдуманных проверенных хешей, привязок образа и наблюдений платформ.
 func TestAssistantCandidateInventoryPreservesHistoricalUnavailable(t *testing.T) {
 	input, arguments, response := assistantFreshCatalogFixture(runtimecontract.AssistantScopeSystem, "IMAGE_ARTIFACTS")
 	request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])

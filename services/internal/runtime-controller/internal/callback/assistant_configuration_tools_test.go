@@ -12,10 +12,22 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// createSystemImageOperation names the SYSTEM-only image-recipe creation proposal exercised by local schema and draft tests; it is not a build command.
+// createSystemImageOperation задаёт имя системного предложения создания рецепта образа для локальных тестов схемы и черновика; командой сборки не является.
 const createSystemImageOperation = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+
+// updateSystemImageOperation names the SYSTEM-only image-recipe update proposal, keeping it distinct from creation and runtime configuration.
+// updateSystemImageOperation задаёт имя системного предложения изменения рецепта образа отдельно от создания и настройки выполнения.
 const updateSystemImageOperation = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+
+// prepareAssistantConfigurationOperation names the server-hydrated runtime-configuration proposal shared by system and eligible project-self tests.
+// prepareAssistantConfigurationOperation задаёт имя предложения конфигурации выполнения с серверными привязками для тестов системного и допустимого собственного проектного помощника.
 const prepareAssistantConfigurationOperation = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
 
+// TestSystemAssistantImageSchemaAllowsOnlyCatalogTemplateOmission checks image creation may omit Dockerfile for the owner catalog template but still requires the exact helper locator, name and environment key.
+// An explicitly supplied Dockerfile remains a nonempty bounded string in the closed schema.
+// TestSystemAssistantImageSchemaAllowsOnlyCatalogTemplateOmission проверяет допустимость отсутствия Dockerfile при создании образа по шаблону каталога владельца с обязательными точной ссылкой помощника, именем и ключом окружения.
+// Явно переданный Dockerfile остаётся непустой ограниченной строкой в закрытой схеме.
 func TestSystemAssistantImageSchemaAllowsOnlyCatalogTemplateOmission(t *testing.T) {
 	for _, schema := range assistantPlanOperationSchemas(assistantConfigurationFixture(runtimecontract.AssistantScopeSystem)) {
 		if assistantSchemaType(schema) != createSystemImageOperation {
@@ -34,6 +46,10 @@ func TestSystemAssistantImageSchemaAllowsOnlyCatalogTemplateOmission(t *testing.
 	t.Fatal("system assistant image operation is missing")
 }
 
+// TestAssistantRuntimeConfigurationSearchClosedOwnBoundary checks hosted-search modes follow the runtime contract in both scopes, omission preserves the existing path and PROJECT cannot target another helper.
+// Selecting a hosted-search mode does not test or enable arbitrary network access.
+// TestAssistantRuntimeConfigurationSearchClosedOwnBoundary проверяет соответствие режимов серверного поиска контракту выполнения в обеих областях, сохранение прежнего пути при отсутствии поля и запрет чужого помощника в проектной области.
+// Выбор режима серверного поиска не проверяет и не включает произвольный сетевой доступ.
 func TestAssistantRuntimeConfigurationSearchClosedOwnBoundary(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input := assistantConfigurationFixture(scope)
@@ -61,6 +77,8 @@ func TestAssistantRuntimeConfigurationSearchClosedOwnBoundary(t *testing.T) {
 	}
 }
 
+// assistantConfigurationFixture creates fresh synthetic self/profile/account/lease and project-screen metadata for local proposal tests, without files, credentials or a provider session.
+// assistantConfigurationFixture создаёт новые синтетические метаданные помощника, профиля, аккаунта, аренды и проектного экрана для локальных тестов предложений без файлов, учётных данных или сессии провайдера.
 func assistantConfigurationFixture(scope runtimecontract.AssistantScope) runtimecontract.RunnerInput {
 	return runtimecontract.RunnerInput{AssistantScope: scope, AgentRef: "agt_own12345", ProjectRef: "prj_context123",
 		RuntimeProfileRef: "builtin-safe-runtime", ProviderAccountRef: "pacc_current123", Model: "gpt-6.1-sol", EffectiveReasoningEffort: "medium",
@@ -68,12 +86,16 @@ func assistantConfigurationFixture(scope runtimecontract.AssistantScope) runtime
 		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "PROJECT", EntityRef: "prj_context123"}}
 }
 
+// assistantConfigurationParameters builds editable runtime settings with one fixed-policy synthetic provider account of weight one; it contains no owner identity or credential values.
+// assistantConfigurationParameters создаёт редактируемые настройки выполнения с одним синтетическим аккаунтом провайдера и весом один при фиксированной политике; идентичности владельца и значений учётных данных нет.
 func assistantConfigurationParameters(agentRef string) map[string]any {
 	return map[string]any{"agentRef": agentRef, "runtimeProfileRef": "builtin-safe-runtime", "model": "gpt-6.1-sol",
 		"reasoningEffort": "medium", "providerPolicyMode": "FIXED",
 		"providerAccounts": []any{map[string]any{"accountRef": "pacc_current123", "weight": float64(1)}}}
 }
 
+// TestAssistantRuntimeConfigurationReasoningUsesCanonicalBoundary checks reasoning schema, parameter validation and owner-draft routing agree on canonical syntax, empty omission and 64-character bounds.
+// TestAssistantRuntimeConfigurationReasoningUsesCanonicalBoundary проверяет согласованность схемы рассуждений, проверки параметров и маршрута черновика владельца по каноническому синтаксису, пустому значению и пределу 64 символа.
 func TestAssistantRuntimeConfigurationReasoningUsesCanonicalBoundary(t *testing.T) {
 	schema := assistantRuntimeConfigurationSchema(opaqueRefSchema())["properties"].(map[string]any)["reasoningEffort"].(map[string]any)
 	pattern := regexp.MustCompile(schema["pattern"].(string))
@@ -97,6 +119,8 @@ func TestAssistantRuntimeConfigurationReasoningUsesCanonicalBoundary(t *testing.
 	}
 }
 
+// TestAssistantConfigurationCatalogKeepsExactSelfAcrossScreenContexts checks six scope/screen combinations retain unique closed self-configuration schemas, immutable helper locators and credential-free current metadata.
+// TestAssistantConfigurationCatalogKeepsExactSelfAcrossScreenContexts проверяет для шести сочетаний области и экрана уникальные закрытые схемы собственной настройки, неизменяемые ссылки помощника и текущие метаданные без учётных данных.
 func TestAssistantConfigurationCatalogKeepsExactSelfAcrossScreenContexts(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, screen := range []string{"PROJECT", "AGENT", "ENVIRONMENT"} {
@@ -157,6 +181,10 @@ func TestAssistantConfigurationCatalogKeepsExactSelfAcrossScreenContexts(t *test
 	}
 }
 
+// TestAssistantSpecializedConfigurationProposesOnlyOwnerDraft checks six image/runtime proposals reach one draft RPC with exact lease coordinates while dropping caller target, OCC and before/after authority.
+// These local stubs neither build images nor apply configuration changes.
+// TestAssistantSpecializedConfigurationProposesOnlyOwnerDraft проверяет отправку шести предложений образа и выполнения в один RPC черновика с точными координатами аренды и удалением переданных вызывающим цели, OCC и полномочий before/after.
+// Локальные подстановки не собирают образы и не применяют изменения конфигурации.
 func TestAssistantSpecializedConfigurationProposesOnlyOwnerDraft(t *testing.T) {
 	for _, fixture := range []struct {
 		name, kind, target string
@@ -198,6 +226,8 @@ func TestAssistantSpecializedConfigurationProposesOnlyOwnerDraft(t *testing.T) {
 	}
 }
 
+// TestAssistantSpecializedConfigurationRejectsScopeAndAuthorityInjection checks foreign scopes/identities, extra owner or credential fields, invalid account weights and unknown policy modes cannot reach proposal RPC.
+// TestAssistantSpecializedConfigurationRejectsScopeAndAuthorityInjection проверяет, что чужие области и идентичности, лишние поля владельца и учётных данных, неверные веса аккаунта и неизвестные режимы политики не достигают RPC предложения.
 func TestAssistantSpecializedConfigurationRejectsScopeAndAuthorityInjection(t *testing.T) {
 	for _, fixture := range []struct {
 		name, kind string
@@ -237,6 +267,8 @@ func TestAssistantSpecializedConfigurationRejectsScopeAndAuthorityInjection(t *t
 	assertAssistantConfigurationRejected(t, runtimecontract.AssistantScopeSystem, prepareAssistantConfigurationOperation, parameters)
 }
 
+// assertAssistantConfigurationRejected requires a local proposal error and zero captured owner requests for the supplied scope, operation and parameters.
+// assertAssistantConfigurationRejected требует локальную ошибку предложения и отсутствие записанных запросов владельца для переданных области, операции и параметров.
 func assertAssistantConfigurationRejected(t *testing.T, scope runtimecontract.AssistantScope, kind string, parameters map[string]any) {
 	t.Helper()
 	client := &scopedAssistantPlanClient{}

@@ -15,13 +15,19 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// Public entrypoint: scripts/tests/runtime-mcp-catalog-test.sh. Ответ получается
-// настоящим serveMCP, а не копией metadata/schema в consumer fixture.
+// TestRuntimeMCPCatalogWireProducer writes actual local serveMCP tools/list responses for synthetic scope/file/integration/delegation/launch variants to a new owner-only fixture file.
+// The public harness is scripts/tests/runtime-mcp-catalog-test.sh; an absent output-path variable skips this producer, not a passing wire check.
+// No model, external integration or runtime workload is launched.
+// TestRuntimeMCPCatalogWireProducer записывает реальные локальные ответы serveMCP tools/list для синтетических вариантов области, файлов, интеграции, делегирования и запуска в новый тестовый файл с доступом только владельцу.
+// Публичная оснастка — scripts/tests/runtime-mcp-catalog-test.sh; отсутствие переменной пути пропускает producer и не означает успешной проверки wire.
+// Модель, внешняя интеграция или нагрузка выполнения не запускаются.
 func TestRuntimeMCPCatalogWireProducer(t *testing.T) {
 	path := os.Getenv("KODEX_RUNTIME_MCP_CATALOG_FIXTURE")
 	if path == "" {
 		t.Skip("KODEX_RUNTIME_MCP_CATALOG_FIXTURE is not configured")
 	}
+	// fixture pairs one named synthetic RunnerInput with its serialized local MCP catalog for the separate consumer harness.
+	// fixture связывает именованный синтетический RunnerInput с сериализованным локальным каталогом MCP для отдельной потребляющей оснастки.
 	type fixture struct {
 		Name    string
 		Input   runtimecontract.RunnerInput

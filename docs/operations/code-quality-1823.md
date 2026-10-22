@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.206.0
+version: 1.207.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,52 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести седьмая волна — полный охват runtime-controller
+
+Точный опубликованный SHA206 — `a70e94d5420cb3385764dad09d227fd3c6a728c5`.
+Exact NFoOJ2:6580 sources,222 excluded,1837 raw,588 retained,1249 unresolved;
+Go7767/21151,missing13384;raw SHA256
+`449ef5ee93b1c080faa7acc50f014554535269dc2262f888544de1614f96feb3`;
+clone-set `8e1bbba12641385a74a135199f28f8dc5b40f312563ebcb240a287a90e02317c`.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP;полный RC build PASS.
+Remote head и PATCH/GET Draft PR206 подтверждены.
+
+Целиком прочитаны11 оставшихся callback test файлов:configuration catalog/tools,
+current diagnostics/execution discovery,file revision,image artifacts,plan
+diagnostics,MCP wire producer,project locator/scope и system self-environment.
+Все61 объявления,включая local fixture type и test constants,получили
+предметные EN→RU комментарии. Проверка всего unit теперь1377/1377 в153
+Go файлах,в том числе callback813/813;это не общий PASS репозитория.
+
+Комментарии фиксируют точные lease/scope boundaries для черновиков,
+запрет caller authority/OCC,закрытые параметры и динамическую доступность схем.
+Успешный fake RPC не выдан за apply или owner approval. Current owner view
+отделён от immutable turn и SDK-default metadata:source pin test не запускает
+Codex и не доказывает actual hosted-search call. Image inventory fixtures
+синтетические;UNAVAILABLE не превращается в VERIFIED. ErrorInfo tests
+сохраняют закрытые stage/category labels без private payload и неоднозначных
+details. MCP wire producer с отсутствующим output path остаётся SKIP;
+права0600/O_EXCL описывают только его локальный синтетический fixture file.
+
+Полная non-comment/gofmt сверка11 файлов с SHA206 — PASS:исполняемый код
+не менялся. 17 Node units,unit Go-checker,unit-wide doc-check1377/1377,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL.
+Полный runtime-controller unit запуск `go test -mod=readonly -count=1 -json ./...`:
+403 верхних/1858 всех PASS,0 FAIL,3 прежних SKIP
+AssistantWarmRuntimeOwnerWireBuild/ArtifactSpoolContainerStartup/
+RuntimeMCPCatalogWireProducer (их producer/container suites NOT RUN).
+Три opt-in env переменные оснастки явно сняты только для дочернего unit
+процесса;live данные,кластер и агентские нагрузки не использованы.
+Callback отдельно253/1361 PASS,0 FAIL,2 прежних SKIP;полный RC build PASS.
+Go1.26.6,GOENV/GOWORK off.
+
+Рабочий DrLgIA:6580 sources,222 excluded,1837 raw,588 retained,1249 unresolved;
+Go7828/21151,missing13323;raw SHA256
+`6b67818026fb7cbaadd092e34cd1ed9aa466cf1539986f8b789167ed80d1084e`.
+Clone-set неизменен;новых/исчезнувших detector-групп и исключений нет.
+Общий repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+общая цель не завершена,точный post-commit scan будет в том же Draft PR.
 
 ## Двести шестая волна — тесты восстановления каталога и credential refresh
 
