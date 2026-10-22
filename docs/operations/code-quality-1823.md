@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.268.0
+version: 1.269.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,57 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят девятая волна — завершён domain/types control-plane
+
+Опубликованный SHA268 — `aca014a0be6944d7c502b3eca70c1526fb020fd2`.
+Точный oHE8We:6604 sources,222 excluded,1816 raw/631 retained/
+1185 unresolved; Go11743/21241, missing9498. Raw SHA256:
+`74dfbed909cd0edaad36e5395a5a1fdf7e7b7c7ebf982e2155d400ee993ea214`.
+Clone-set:
+`76d91b9edfa7b069e47c6dd52e215b05bcb3fb34dbcd431aa6a5d6c79ad698a6`.
+Точные unit/build, push/readback и Draft PR PATCH/GET268 подтверждены.
+
+Полностью прочитаны последние14 entity files и финансовый unit: context,
+effective capabilities, email/owner/mailbox specification, file targets,
+interaction identity, purge recovery, account lifecycle, authorization
+cleanup/reservation, financial summary/overview и usage context.
+Все51 declarations описаны EN→RU, включая ProviderFinancialOverview.Add,
+FinancialRemaining и synthetic ranking unit. Первый bounded patch проход
+отказал до изменения provider_finance.go из-за qualified method key; после
+проверки фактически изменённых11 файлов исправлен только ключ метода и
+применены оставшиеся три файла. Повторного наложения комментариев не было.
+
+Quota window percentage, independent paid-credit balance и launch eligibility
+явно различены. Add держит до3 display rows, но считает полный eligible set;
+unknown наблюдение не названо нулём, Exhausted не означает отсутствие credits.
+Описаны точные5min/30sec freshness bounds и стабильные ref ties; не внесено
+новых финансовых вычислений. Unit с6202 synthetic accounts и точной строкой
+balance прежний; provider billing/реальные аккаунты не вызывались.
+
+Context provenance/scan/review records не объявлены самостоятельным admission;
+mail config/preview/publication, per-message human approval и reconciliation
+остаются разными состояниями. Actor/subject strings и scopes требуют owner
+validation. Logical purge recovery не доказывает удаление физических bytes,
+cleanup observation не подменяет terminal receipt. Existing recovery fields
+не переименованы, нового compatibility path нет.
+
+AST14 без комментариев идентичен SHA268: поля, JSON tags, pointers, imports,
+арифметика, branches, test fixtures и ошибки не менялись. Selected checker51/51.
+Дополнительно весь domain/types subtree:52 файла,615/615 declarations EN→RU.
+Это завершение именно этого subtree, не всех CP domain/services/repositories.
+Raw/retained groups с14 затронутыми paths нет; новых исключений нет.
+
+Рабочий UGYMR9:6604 sources,222 excluded,1816 raw/631 retained/
+1185 unresolved; Go11794/21241, missing9447. Raw SHA256:
+`84b2b29fd0a537a6fe7447ed6cced567737582233bf59360a20f6d8f58e3d88c`.
+Clone-set и528 retained entries/631 occurrences неизменны.
+Selected CP repository/...+types/...+grpc+roleimage102 верхних/278 всех unit
+PASS,0 FAIL,те же3 explicit SKIP; full CP build -p=2 PASS LOCAL.
+17 Node units, Go checker unit, docs51/51+615/615, AST14, canonical scan,
+5 ignore boundaries и diff-check PASS LOCAL. На точном commit проверки
+повторяются перед push/PR readback. General9447 missing/1185 unresolved ещё
+предстоят; full acceptance/browser/live/component/deploy NOT RUN по scope.
 
 ## Двести шестьдесят восьмая волна — shared opaque resource grammar
 

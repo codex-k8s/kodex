@@ -8,6 +8,14 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestFinancialOverviewRanksCompleteSetWithBoundedStorage scans 6,202 synthetic accounts, verifies
+// global ranking with three display rows and deterministic ties, preserves the exact independent
+// paid-credit balance string, and checks small sets and stale observations. It does not exercise
+// provider billing or launch gating.
+// TestFinancialOverviewRanksCompleteSetWithBoundedStorage просматривает 6 202 синтетических аккаунта,
+// проверяет общее ранжирование с тремя строками и устойчивым порядком при равенстве, сохраняет точную
+// отдельную строку платного баланса и проверяет малые наборы и старые наблюдения. Тест не обращается к
+// оплате провайдера и не проверяет допуск запуска.
 func TestFinancialOverviewRanksCompleteSetWithBoundedStorage(t *testing.T) {
 	at := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
 	summary := func(used int32) *ProviderFinancialSummary {

@@ -2,7 +2,12 @@ package entity
 
 import api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 
-// EmailMailboxSpecification содержит только редактируемые параметры, без owner lineage.
+// EmailMailboxSpecification contains only editable mailbox routing, protocol, endpoint, folder,
+// limits, and operation-policy settings, without owner lineage. These settings are validated before
+// publication and do not themselves authorize a send or carry raw authentication secrets.
+// EmailMailboxSpecification содержит только редактируемые настройки маршрутизации, протокола, конечных
+// точек, папок, лимитов и политик операций ящика без происхождения владельца. Настройки проверяются до
+// публикации и сами не разрешают отправку и не передают исходные секреты аутентификации.
 type EmailMailboxSpecification struct {
 	Enabled         bool                       `json:"enabled"`
 	ReceiveProtocol api.MailboxReceiveProtocol `json:"receive_protocol"`
