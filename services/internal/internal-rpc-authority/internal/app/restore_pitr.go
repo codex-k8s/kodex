@@ -11,7 +11,8 @@ import (
 	kubernetesrestore "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
 )
 
-// RestorePITRConfig задаёт independent executable CloudNativePG owner.
+// RestorePITRConfig describes the independent executor's Kubernetes and evidence-key locators, exact source/backup/Barman inputs, PostgreSQL image and storage shape plus request timeout. It contains desired inputs, not an approved coordination state, a verified image digest or proof that PITR has completed.
+// RestorePITRConfig описывает адреса Kubernetes и ключа evidence независимого исполнителя, точные входы source, backup и Barman, образ PostgreSQL, хранилище и срок запроса. Это требуемые входы, а не одобренное состояние координации, проверенный дайджест образа или доказательство завершённого PITR.
 type RestorePITRConfig struct {
 	KubernetesAddress       string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS"`
 	KubernetesTLSServerName string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME"`
@@ -28,7 +29,8 @@ type RestorePITRConfig struct {
 	Timeout                 time.Duration `env:"INTERNAL_RPC_AUTHORITY_RESTORE_TIMEOUT"`
 }
 
-// LoadRestorePITRConfig читает closed immutable PITR inputs.
+// LoadRestorePITRConfig applies executor defaults and parses environment, requiring fixed source/Barman server names, nonempty backup/object/storage inputs and an image string containing the @sha256: marker. This lexical marker check is not digest verification or admission; client/executor constructors perform later checks, and parsing does not contact Kubernetes.
+// LoadRestorePITRConfig задаёт исходные параметры исполнителя и разбирает окружение, требуя фиксированные имена source и Barman server, непустые backup, object и storage и наличие маркера @sha256: в строке образа. Лексическая проверка маркера не проверяет дайджест и не является допуском; последующие конструкторы клиентов и исполнителя проверяют дальше, разбор не обращается к Kubernetes.
 func LoadRestorePITRConfig() (RestorePITRConfig, error) {
 	config := RestorePITRConfig{
 		KubernetesAddress:       "https://kubernetes.default.svc:443",
@@ -58,7 +60,8 @@ func LoadRestorePITRConfig() (RestorePITRConfig, error) {
 	return config, nil
 }
 
-// RunRestorePITR выполняет фактический PITR и публикует independent evidence.
+// RunRestorePITR constructs the fixed-namespace coordination/evidence executor clients with three desired database instances, loads current coordination and executes only when shouldExecuteRestorePITR permits it. Recognized inactive phases return success without Execute; unknown phases fail closed. Client construction still precedes the phase decision, and a real invocation can perform CloudNativePG recovery and publish signed evidence; unit tests must use only the separate pure phase predicate.
+// RunRestorePITR создаёт клиенты координации и исполнителя evidence фиксированного namespace с тремя требуемыми экземплярами БД, загружает текущую координацию и исполняет только при разрешении shouldExecuteRestorePITR. Распознанные неактивные фазы возвращают успех без Execute, неизвестные отклоняются. Создание клиентов всё равно предшествует выбору фазы, настоящий вызов может выполнить восстановление CloudNativePG и опубликовать подписанное evidence; юнит-тесты должны вызывать только отдельный чистый предикат фазы.
 func RunRestorePITR(
 	ctx context.Context,
 	shutdownBase context.Context,
@@ -126,6 +129,8 @@ func RunRestorePITR(
 	return executor.Execute(ctx, state)
 }
 
+// shouldExecuteRestorePITR permits execution only for PREPARED, treats empty/OPEN/QUIESCING/COMPLETED as successful no-ops and rejects every other persisted phase. It classifies only the phase; restore identity, evidence eligibility and authority are not validated by this predicate.
+// shouldExecuteRestorePITR разрешает исполнение только для PREPARED, считает пустую фазу, OPEN, QUIESCING и COMPLETED успешным отсутствием действия и отклоняет остальные сохранённые фазы. Классифицируется только фаза; идентичность восстановления, допустимость evidence и полномочия этим предикатом не проверяются.
 func shouldExecuteRestorePITR(state model.RestoreState) (bool, error) {
 	switch state.Phase {
 	case "", "OPEN", "QUIESCING", "COMPLETED":

@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestReconcilePublisherSkipsReadbackAfterGraphFailure injects a graph-publication error and verifies it is returned, readback is never called and readiness is still checked once. All callbacks are in-memory fixtures; no graph, Secret or database is published.
+// TestReconcilePublisherSkipsReadbackAfterGraphFailure подставляет ошибку публикации графа и проверяет её возврат, отсутствие вызова readback и одну проверку готовности. Все обработчики — эталоны в памяти; граф, Secret и БД не публикуются.
 func TestReconcilePublisherSkipsReadbackAfterGraphFailure(t *testing.T) {
 	t.Parallel()
 
@@ -42,6 +44,8 @@ func TestReconcilePublisherSkipsReadbackAfterGraphFailure(t *testing.T) {
 	}
 }
 
+// TestReconcilePublisherPublishesReadbackAfterGraphSuccess supplies successful synthetic graph/readback/readiness callbacks and requires one readback call with no returned errors. It covers the local reconciliation branch rather than real publication or transport readiness.
+// TestReconcilePublisherPublishesReadbackAfterGraphSuccess задаёт успешные синтетические обработчики графа, readback и готовности и требует один вызов readback без возвращённых ошибок. Проверяется локальная ветвь сопоставления, а не реальная публикация или готовность транспорта.
 func TestReconcilePublisherPublishesReadbackAfterGraphSuccess(t *testing.T) {
 	t.Parallel()
 

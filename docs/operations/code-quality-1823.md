@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.289.0
+version: 1.290.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,60 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяностая волна — завершение комментариев authority app
+
+Опубликованный SHA289 — `ae8c0fa673d1116bc96f0a338e86244ea923d25d`.
+Точный 1Mx92B:6616 sources,222 excluded,1817 raw/720 retained/
+1097 unresolved; Go12518/21256,missing8738. Raw SHA256:
+`4b1c90469b25a693a99a8429fc22eee29dea59bf4467b4c1387e57e9594743e3`;
+clone-set99900001… . Exact app31/123, serviceruntime8/11 и полный
+authority build, docs63/63, inverse AST5/tooling/scan PASS LOCAL,
+0 FAIL/SKIP; push/readback и Draft PR PATCH/GET289 подтверждены.
+
+Полностью прочитаны последние11 app files,933 lines:proof resolver,
+reconcile units, embedded readback query, restore commands/PITR/retry,
+Secret backend и Unix socket lifecycle.37/37 declarations EN→RU,
+включая private types, constants, interface Close и tests. Весь app:
+28 Go files169/169 declarations,missing0. Это закрытие только app,
+не всего authority или репозитория. AST11 без comments/positions и
+//go:embed directives идентичны SHA289; тела, SQL и параметры прежние.
+
+Comments описывают primary receipt→signer verification→resolver attestation
+без обещания отката уже выполненной primary операции, bounded generation
+file parsing без canonical-spelling proof, role-specific projected versus
+publisher delivery и отсутствие authority из backend discriminator.
+Restore operator сохраняет mTLS плюс application bearer/exact manifest/
+idempotency и специализированные prepare/complete responses; recovery
+применяет fence, а не выполняет PITR. Pure PITR phase selection не
+проверяет весь restore state, image @sha256 marker не равен admission.
+
+Unix comments точно различают real-directory metadata и peer authority,
+temporary rename publication и explicit published-path removal. Отдельно
+названы существующие ограничения:любой dial failure ведёт к stale unlink,
+Close не перепроверяет inode пути. Эти ветви не выдаются за доказанную
+liveness/identity защиту и не исправляются comments-only изменением.
+Unit comments различают synthetic pings/cancellation и реальные
+NetworkPolicy/database/deadline/Secret-rotation сценарии. Context7/golang/go
+и pinned1.26.6 SetUnlinkOnClose/ParseUint docs сверены.
+
+Весь app31 верхний/123 всех unit и полный authority build -p=2
+PASS LOCAL,0 FAIL/SKIP.17 Node/Go checker units, scope docs37/37 и
+all-app169/169, AST/directive/clone proof,5 ignores и diff-check PASS.
+Restore/PITR/operator runtime, сокеты фиксированного пути, mounted
+credentials, Kubernetes/DB/TLS/attestation не запускались. Это только
+прочитанный source/compile и синтетические units, не live acceptance.
+
+Рабочий iu0QNU:6616 sources,222 excluded,1817 raw/720 retained/
+1097 unresolved; Go12555/21256,missing8701. Все1817 clone keys/counts
+и clone-set прежние, registry602/720 неизменён; новых exclusions нет.
+Raw SHA256:
+`9a3cfdd237e3a2f44d68072e4348524c9ae89067fcd2a2220be7c7d37b0ace88`;
+clone-set:
+`99900001094d676053ae3c028de3ce0fcb32d3f885cf2ca807d30586b4cc72e7`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, contracts, applied migrations и live state прежние.
+Общая задача открыта; historical FAIL и scoped NOT RUN сохраняются.
 
 ## Двести восемьдесят девятая волна — общий хвост shutdown без смены порядка
 

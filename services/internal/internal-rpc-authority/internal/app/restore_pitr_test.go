@@ -6,6 +6,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// TestShouldExecuteRestorePITR checks the four recognized no-op phases and the sole executable PREPARED phase through the pure predicate. It creates no executor, database instances, evidence or Kubernetes client.
+// TestShouldExecuteRestorePITR проверяет четыре распознанные фазы без действия и единственную исполняемую PREPARED через чистый предикат. Исполнитель, экземпляры БД, evidence и клиент Kubernetes не создаются.
 func TestShouldExecuteRestorePITR(t *testing.T) {
 	t.Parallel()
 
@@ -21,6 +23,8 @@ func TestShouldExecuteRestorePITR(t *testing.T) {
 	}
 }
 
+// TestShouldExecuteRestorePITRRejectsUnknownPhase requires the unrecognized RESTORING string to fail rather than being treated as an executable or silently completed state. This is local phase validation, not a real recovery transition.
+// TestShouldExecuteRestorePITRRejectsUnknownPhase требует отказ для нераспознанной строки RESTORING вместо её трактовки как исполняемого или тихо завершённого состояния. Это локальная проверка фазы, а не реальный переход восстановления.
 func TestShouldExecuteRestorePITRRejectsUnknownPhase(t *testing.T) {
 	t.Parallel()
 
