@@ -335,11 +335,7 @@ func RunPublisher(
 		pool.Close()
 		return errors.New("listen on publisher technical endpoint")
 	}
-	technicalServer := newPublisherTechnicalServer(
-		readiness,
-		metrics,
-		publisherApplication,
-	)
+	technicalServer := newSnapshotTechnicalServer(readiness, metrics)
 	readiness.Set(false, "waiting-for-authority-graph-readback")
 	metrics.SetReady(false)
 	workers := serviceruntime.StartWorkers(lifecycle, func(ctx context.Context) error {
@@ -477,31 +473,6 @@ func openPublisherPostgres(
 		ExpectedUser: config.PostgresExpectedUser, Capability: sessionrepository.CapabilityPublisher,
 		ApplicationName: "internal_rpc_authority_publisher", MaxConnections: 8,
 	})
-}
-
-func newPublisherTechnicalServer(
-	readiness *serviceruntime.Readiness,
-	metrics *observability.Metrics,
-	publisherApplication *application.Publisher,
-) *http.Server {
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", metrics.PrometheusHandler())
-	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) {
-		_, _ = response.Write([]byte("ok\n"))
-	})
-	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
-		if ready, _ := readiness.Ready(); !ready {
-			http.Error(response, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		_, _ = response.Write([]byte("ready\n"))
-	})
-	return &http.Server{
-		Handler: mux, ReadHeaderTimeout: 2 * time.Second,
-		ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second,
-		IdleTimeout: 30 * time.Second,
-	}
 }
 
 func normalizePublisherMethod(method string) string {

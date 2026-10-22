@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.274.0
+version: 1.275.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,68 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят пятая волна — общий профиль служебных HTTP-проб
+
+Опубликованный SHA274 — `bff5f8933dd423f420c3b445e343596d6647b74f`.
+Точный oc8fmp:6605 sources,222 excluded,1821 raw/666 retained/
+1155 unresolved; Go12026/21243, missing9217. Raw SHA256:
+`e1ed772972f1211c448564033fd6c65966d02fbf835b398c3269edea27a6b62e`;
+clone-set ae728971… . На точном SHA274 CP106/302 PASS,3 прежних SKIP,
+полный CP build -p=2, docs122/122, AST6/tooling/scan PASS LOCAL.
+Push/readback и Draft PR PATCH/GET274 подтверждены.
+
+Три одинаковых factory bodies в publisher/readback/restore заменены
+единственным private newSnapshotTechnicalServer в app/technical_server.go.
+Удалены сами3 прежние фабрики и их неиспользуемые application-параметры,
+а не оставлены wrappers/параллельные реализации. Все3 production call sites
+и3 synthetic test bindings используют новую фабрику. Общие primitives
+serviceruntime.Readiness и observability.Metrics остаются существующими
+библиотеками; локален только точный route/response composition profile
+этого service unit, без нового общего lifecycle или security primitive.
+
+Authority newTechnicalServer не объединён:он явно задаёт content type до
+Write, тогда как3 вынесенных профиля оставляли это net/http sniffing.
+Прочитан существующий libs/go/httpserver.New:он GET-only,health/live/ready
+204,headers/body/header/connection limits и отдельный listener lifecycle.
+Его подстановка изменила бы wire behavior; новый generic boolean/profile
+dispatcher не добавлен. Timeout2/5/5/30 seconds, все прежние zero defaults,
+methodless exact paths, body/status и metrics handler сохранены.
+
+Жизненный цикл не изменён:construction только создаёт mux/server без I/O;
+live/health читают локальный ответ, ready читает только cached snapshot,
+metrics использует уже созданный registry. Listener reservation, startup
+barrier, Serve/ErrServerClosed handling, workers, cancel/join и shutdown
+остаются в прежних production callers. RPC/actor/owner/grants/tasks/events,
+transaction state и readiness producers не менялись; новых переходов нет.
+Inverse AST7 восстанавливает3 полных production files SHA274, сравнивает
+тело helper с каждым из3 исходных bodies и восстанавливает весь прежний
+readiness test. Отдельный authority app.go byte-identical.
+
+Новые unit проверяют свежие server/mux instances, исходные timeouts и unset
+address/TLS/lifecycle hooks;54 direct handler requests(3 cached states ×
+6 paths ×GET/POST/HEAD) и3 metrics reads проверяют status/body/content type,
+query handling, exact path/404 и отсутствие private readiness reason.
+ResponseRecorder HEAD не объявлен transport body suppression. Listener,
+TLS и реальные timeout expirations не запускались. Весь прежний readiness
+test file6/6 и helper/new tests3/3 описаны EN→RU, всего9/9 selected.
+Остальные объявления3 больших app files пока остаются в общем backlog.
+
+Рабочий9ZSrjo:6607 sources,222 excluded,1819 raw/666 retained/
+1153 unresolved; Go12035/21243, missing9208. Удалены ровно2 raw groups
+242/251tokens,1819 остальных keys/counts прежние, новых нет; все562
+retained entries/666 occurrences неизменны. Raw SHA256:
+`d78ebbc791c39af41327694592bb293635c03915b901bc5ca5c19cc9d646f1fc`;
+clone-set:
+`d655630e7fadd86b0d2dcbee882998212747118e291710d2d182a7ee954e5b6f`.
+Весь authority internal/app30 верхних/119 всех units PASS,0 FAIL/SKIP;
+полный authority build -p=2 PASS LOCAL. Docs9/9, inverse AST7,17 Node/Go
+checker units,5 ignore boundaries и gofmt/diff-check PASS LOCAL.
+Context7/golang/go ServeMux methodless matching/timeouts и pinned1.26.6
+ServeMux/ResponseRecorder docs сверены; dependencies/generated неизменны.
+После коммита повторяются exact scan/build/unit и PR readback.
+Общая задача не завершена; full baseline/live/browser/deploy NOT RUN,
+исторические FAIL не устранены этой волной.
 
 ## Двести семьдесят четвёртая волна — порт образов и закрытая диагностика
 

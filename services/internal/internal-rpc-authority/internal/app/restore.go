@@ -340,11 +340,7 @@ func RunRestoreController(
 		pool.Close()
 		return errors.New("listen on restore controller technical endpoint")
 	}
-	technicalServer := newRestoreTechnicalServer(
-		readiness,
-		metrics,
-		restoreApplication,
-	)
+	technicalServer := newSnapshotTechnicalServer(readiness, metrics)
 	workers := serviceruntime.StartWorkers(
 		lifecycle,
 		monitorRestoreReadiness(
@@ -586,33 +582,6 @@ func loadControllerSigningKey(
 		Public:  publicKey,
 		Private: privateKey,
 	}, nil
-}
-
-func newRestoreTechnicalServer(
-	readiness *serviceruntime.Readiness,
-	metrics *observability.Metrics,
-	restoreApplication *application.RestoreController,
-) *http.Server {
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", metrics.PrometheusHandler())
-	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) {
-		_, _ = response.Write([]byte("ok\n"))
-	})
-	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
-		if ready, _ := readiness.Ready(); !ready {
-			http.Error(response, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		_, _ = response.Write([]byte("ready\n"))
-	})
-	return &http.Server{
-		Handler:           mux,
-		ReadHeaderTimeout: 2 * time.Second,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      5 * time.Second,
-		IdleTimeout:       30 * time.Second,
-	}
 }
 
 func normalizeRestoreMethod(method string) string {

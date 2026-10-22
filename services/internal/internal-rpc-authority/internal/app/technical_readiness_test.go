@@ -14,6 +14,8 @@ import (
 	model "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// TestTechnicalReadinessUsesOnlyCachedSnapshot checks authority and the three snapshot-profile consumers against the same in-memory readiness transitions. No application instance is available to the snapshot factory; the test proves handler behavior, not a live dependency probe or listener.
+// TestTechnicalReadinessUsesOnlyCachedSnapshot проверяет authority и три потребителя профиля снимка при одинаковых переходах готовности в памяти. Фабрика снимка не получает экземпляр приложения; тест доказывает поведение обработчика, а не живую проверку зависимости или listener.
 func TestTechnicalReadinessUsesOnlyCachedSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -21,9 +23,9 @@ func TestTechnicalReadinessUsesOnlyCachedSnapshot(t *testing.T) {
 	metrics := observability.NewMetrics("authority_readiness_test", "test", nil)
 	servers := map[string]*http.Server{
 		"authority": newTechnicalServer(Config{}, readiness, metrics, nil),
-		"publisher": newPublisherTechnicalServer(readiness, metrics, nil),
-		"readback":  newReadbackTechnicalServer(readiness, metrics, nil),
-		"restore":   newRestoreTechnicalServer(readiness, metrics, nil),
+		"publisher": newSnapshotTechnicalServer(readiness, metrics),
+		"readback":  newSnapshotTechnicalServer(readiness, metrics),
+		"restore":   newSnapshotTechnicalServer(readiness, metrics),
 	}
 
 	for name, server := range servers {
@@ -47,12 +49,18 @@ func TestTechnicalReadinessUsesOnlyCachedSnapshot(t *testing.T) {
 	}
 }
 
+// restoreStartupReadinessStub returns a chosen synthetic infrastructure error and an empty restore state without external I/O.
+// restoreStartupReadinessStub возвращает выбранную синтетическую ошибку инфраструктуры и пустое состояние восстановления без внешнего I/O.
 type restoreStartupReadinessStub struct{ err error }
 
+// StartupReady ignores the test context and returns the configured result, allowing the readiness cache to be exercised without PostgreSQL.
+// StartupReady игнорирует тестовый контекст и возвращает настроенный результат для проверки кэша готовности без PostgreSQL.
 func (stub restoreStartupReadinessStub) StartupReady(context.Context) (model.RestoreState, error) {
 	return model.RestoreState{}, stub.err
 }
 
+// TestRestoreReadinessCachesOnlyDirectInfrastructureProbe checks that a failed synthetic startup probe publishes the fixed unavailable reason and that the next successful probe restores ready. Logging is discarded and no database is contacted.
+// TestRestoreReadinessCachesOnlyDirectInfrastructureProbe проверяет публикацию фиксированной причины недоступности при неуспешной синтетической стартовой пробе и восстановление готовности при следующей успешной. Логи отбрасываются, обращений к БД нет.
 func TestRestoreReadinessCachesOnlyDirectInfrastructureProbe(t *testing.T) {
 	t.Parallel()
 
@@ -70,6 +78,8 @@ func TestRestoreReadinessCachesOnlyDirectInfrastructureProbe(t *testing.T) {
 	}
 }
 
+// TestTechnicalHealthDoesNotDependOnReadiness checks that authority health returns 204 while its local snapshot is initially not ready; this is not proof of dependency readiness.
+// TestTechnicalHealthDoesNotDependOnReadiness проверяет ответ 204 от health authority при исходно неготовом локальном снимке; готовность зависимостей этим не доказывается.
 func TestTechnicalHealthDoesNotDependOnReadiness(t *testing.T) {
 	t.Parallel()
 
@@ -83,6 +93,8 @@ func TestTechnicalHealthDoesNotDependOnReadiness(t *testing.T) {
 	}
 }
 
+// TestAuthorityReadinessAggregatesIndependentLocalConditions checks conjunction and priority of snapshot and replay conditions, single-edge reporting and recovery. One successful condition must not hide another failing condition; only in-memory state is exercised.
+// TestAuthorityReadinessAggregatesIndependentLocalConditions проверяет конъюнкцию и приоритет условий снимка и replay, однократное сообщение перехода и восстановление. Успех одного условия не должен скрывать сбой другого; проверяется только состояние в памяти.
 func TestAuthorityReadinessAggregatesIndependentLocalConditions(t *testing.T) {
 	t.Parallel()
 
