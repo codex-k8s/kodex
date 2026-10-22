@@ -14,6 +14,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// TestRuntimeExecutionFailureLogKeepsContextSeparateAndRedactsCause exercises active, cancelled and expired contexts with private joined errors, checking closed attributes, preserved trace identity and no mutation of the global logger.
+// TestRuntimeExecutionFailureLogKeepsContextSeparateAndRedactsCause проверяет активный, отменённый и просроченный контексты с приватными joined errors, закрытые поля, trace identity и отсутствие изменения глобального logger.
 func TestRuntimeExecutionFailureLogKeepsContextSeparateAndRedactsCause(t *testing.T) {
 	for _, state := range []string{"ACTIVE", "CANCELED", "DEADLINE_EXCEEDED"} {
 		t.Run(state, func(t *testing.T) {

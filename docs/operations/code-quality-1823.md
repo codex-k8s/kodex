@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.213.0
+version: 1.214.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,60 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести четырнадцатая волна — диагностика, trust bundle и контекст сессии
+
+Опубликованный SHA213 — `c69eb945bd28645ea373893e1b6a6c94ceb5041a`.
+Exact XMAeN9:6582 sources,222 excluded,1835 raw,594 retained,1241 unresolved;
+Go8113/21156,missing13043;raw SHA256
+`5c97e92bb9acaf70ed6bd79d8f985ec017cd4934da502ca5ece5314e0afd9230`;
+clone-set `4fe862f8f572c3a1a0c49d7a13e6024a54908529924dd14a62a56498948765ac`.
+Remote head,main,bot identity,OPEN Issue иDraft PR сверены;push/readback
+иPATCH/GET PR213 подтверждены. На SHA213 relay/workspace26/41 unit PASS,
+0 FAIL/SKIP;full runner build PASS,main clone чистый и неизменённый.
+
+Все11 файлов выбранного блока app прочитаны целиком:execution/MCP/workspace
+diagnostics,egress trust bundle,session context иworkspace monitor с тестами.
+56/56 declarations EN→RU (54 прежних и2 новых). Пояснения отделяют closed
+diagnostics от raw errors/context causes,снимок readiness от синхронного I/O,
+join callback от гарантии bounded arbitrary check иWaitDelay от process-group
+termination. Session history остаётся JSON data;provider resume добавляет
+только новую проверенную notice,не новую transport-role/authority.
+CA append означает parseable certificate,не полную chain verification;
+Mkdir/ReadFile/rename не объявлены bounded allocation,ancestor no-follow
+или directory-fsync guarantee. Поведение этих путей не менялось.
+
+Реальный повтор закрытого workspace reason predicate вынесен в private
+closedWorkspaceReason того же app:completion logger,artifact-denial constructor
+иcanary output используют один набор4 кодов с generic I/O fallback.
+Exact OK по-прежнему обрабатывается только как успех canary,не denial.
+Извлечение не переносит errno mapping,stage normalization,logger либо owner
+checks в общий универсальный dispatcher. Новый table unit независимо задаёт
+прежние literal codes ипроверяет unknown/private/OK/whitespace/case отказ.
+После обратного раскрытия трёх callsites иудаления только новых helper/unit
+Go AST всех11 прежних файлов совпадает с SHA213 без comments/token.Pos;
+helper body дополнительно сверяется с точной ожидаемой реализацией.
+
+Выбранные app unit:16 верхних/43 всех PASS,0 FAIL/SKIP. Проверены structured
+redaction/trace,typed artifact guards,synthetic local TLS completion,CA bundle,
+cold/resume/large/invalid session history,monitor stop/freshness иtest-binary
+canary filesystem/hang/overflow. Прямой inert helper не выдаётся за отдельное
+доказательство:три controlled child modes действительно выполнены parent.
+Команда из runner:env -u KODEX_CANARY_TEST_MODE -u KODEX_CANARY_TEST_ROOT,
+GOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4;
+`go test -mod=readonly -count=1 -json ./internal/app -run '^(TestClosedWorkspaceReason|TestRuntimeExecutionFailureLog|TestMCPStartupDiagnostic|TestWorkspaceCompletion|TestWorkspaceArtifactCollection|TestMaterializeRuntimeEgressTrust|TestSessionContext|TestLargeStrictContinuation|TestWorkspaceCanaryProcess|TestWorkspaceReadiness|TestWorkspaceMonitor)'`.
+Full runner build -mod=readonly,scoped56/56,17 Node units,Go-checker unit,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL. Context7 `/golang/go`:
+exec.Cmd Cancel/WaitDelay иI/O cleanup;новых dependencies/SDK нет.
+
+Рабочий DOyG4S:6582 sources,222 excluded,1835 raw,594 retained,1241 unresolved;
+Go8169/21158,missing12989;raw SHA256
+`c3b5a9f44a4667cc879ee9932fa31268b85ae02f7a2072f1f98a648beb5160ff`;
+clone-set прежний `4fe862f8f572c3a1a0c49d7a13e6024a54908529924dd14a62a56498948765ac`.
+Новых groups/exceptions нет. Короткий полезный повтор был ниже detector
+threshold,поэтому его вынос не назван уменьшением raw count.
+Полный app/runner unit,общий repo-check,live/browser/deploy/ИИ/STT/почта
+NOT RUN;цель не завершена,точный post-commit scan публикуется втом же PR.
 
 ## Двести тринадцатая волна — credential relay, workspace и entrypoint runner
 
