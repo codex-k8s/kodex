@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.239.0
+version: 1.240.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,74 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сороковая волна — credential projections и STT boundary
+
+Опубликованный SHA239 — `ed4580a486148591d04cb06f6fedac9dfaa13971`.
+Точный YJoezL:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9653/21196, missing11543. Raw SHA256:
+`2c92191fefe21c6fcc590354d68a6c89091a4b251148990695b910aaaede72f7`.
+Clone-set:
+`7436f30828050d32b9f9fb5f929d26c884c27dba169e1da00b6cd6c4ebf85204`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA239 recovery/
+controlplane16/22, docs70/70,17 Node/Go checker units и full build PASS.
+
+Пять файлов credential_projections, trusted_projection_test, trusted_stt
+и соответствующие tests полностью прочитаны847 строк.51/51 declarations
+получили EN→RU пояснения. AST5 идентичен SHA239 без comments/token.Pos.
+Ни permission/method/profile checks, owner resolution, bearer relay,
+storage effects, protobuf/JSON statements или cleanup buffer order не менялись.
+
+Описано разделение exact server-established admission, уже verified sidecar
+context и owner-resolved trusted snapshot. DTO/request IDs и locator hash не
+назначают actor/tenant authority. verifiedProjectionAuthority сверяет прежние
+claims/provenance/revisions/expiry, не выполняет новую signature/replay check.
+UUID syntax не названа доказательством существования identity; trimmed
+provenance reference не выдан за length-bound validation.
+Runtime/assistant/STT имеют разные project-shape rules, не одну общую scope policy.
+
+Runtime materialization сохраняет owner resolve→manifest→exact storage→
+metadata descriptor. STT resolve проверяет exact account/generation/expiry
+перед чтением owner-pinned Secret. Byte buffers очищаются defer, ответ содержит
+независимую key copy и locator clone. Это не запуск audio transcription
+или provider-side проверка настоящего ключа; decoded immutable JSON strings
+не объявлены обнулёнными очисткой byte slices.
+
+Trusted STT требует explicit single bearer и short-lived organization locator,
+передавая opaque credential владельцу для повторной eligibility/actor/tenant
+проверки. Snapshot digest — не signature и не самостоятельная authority.
+Deterministic protobuf не выдан за canonical cross-language/version формат.
+projectedAPIKey отвергает unknown fields/trailing JSON, но не duplicate keys;
+ни код, ни формат credential ради комментариев не ужесточались.
+projectionStorageError имеет прежние closed messages, preserveOwnerError
+по-прежнему может сохранить owner gRPC diagnostic, не универсальная redaction.
+
+Context7 /protocolbuffers/protobuf-go: Deterministic/Clone, дополнительно
+pinned local go doc MarshalOptions и стандартные JSON Unmarshal/
+DisallowUnknownFields. Первый resolver по import path дал нерелевантные
+результаты, поэтому использован точный protobuf-go match, не чужая библиотека.
+Также local UUID.Validate подтверждает лишь syntax. Runtime dependencies
+и generated output не менялись.
+
+Полный unit `./internal/transport/grpc/...`:36 верхних/165 всех PASS,
+0 FAIL/SKIP. Флаги `go test -mod=readonly -count=1 -timeout 120s -json`,
+GOENV/GOWORK off, Go1.26.6, GOMAXPROCS=4.
+Полная сборка secret-broker `go build -mod=readonly ./...` PASS LOCAL.
+Tests реально проверяют synthetic admission/locator/continuation, scope
+matrix, owner snapshot refusal, opaque bearer relay без actor-header leakage,
+owner-before-store/exact pins, wrong binding/storage errors и byte clearing.
+Это fake owner/store и in-memory interceptors, не real signed issuer, кластер,
+STT audio/model или OpenAI запросы.
+
+Scope51/51, AST identity5, gofmt/diff-check, assessment и5 addressed ignores
+PASS LOCAL. Рабочий edsdjj:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9704/21196, missing11492. Raw SHA256:
+`36900a6b76172eb063cae5fbb54b18a06eb8024e4beddfab3ee8f9efa4e3bb38`.
+Clone-set прежний7436f308...; multiset fragment/path/count и registry
+неизменны. Точный post-commit scan/unit/build публикуются в том же Draft PR.
+Задача не завершена:11492 declarations/1226 групп впереди.
+Прежние FAIL/SKIP/NOT RUN сохранены; full acceptance/browser/live/deploy/
+ИИ/STT/почта NOT RUN по scoped решению.
 
 ## Двести тридцать девятая волна — recovery policy и bounded metrics
 

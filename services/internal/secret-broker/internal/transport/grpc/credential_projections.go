@@ -25,23 +25,88 @@ import (
 )
 
 const (
+	// runtimeProjectionFailureMessage is the fixed projection warning text; structured diagnostics must not
+	// include credential bytes or arbitrary upstream error text.
+	// runtimeProjectionFailureMessage — фиксированный текст projection warning; structured diagnostics не
+	// должны включать credential bytes и произвольный upstream error text.
 	runtimeProjectionFailureMessage = "runtime credential projection failed"
-	credentialProjectionAudience    = "urn:kodex:internal-rpc:secret-broker"
-	secretBrokerWorkloadID          = "secret-broker"
-	secretBrokerSPIFFEID            = "spiffe://kodex.local/ns/kodex-system/sa/secret-broker"
-	runtimeControllerWorkloadID     = "runtime-controller"
-	runtimeControllerSPIFFEID       = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
-	sttWorkloadID                   = "stt-tts-service"
-	sttSPIFFEID                     = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
-	runtimeProjectionOperation      = "platform.runtime.credentials.materialize"
-	assistantProjectionOperation    = "platform.runtime.credentials.system-assistant.materialize"
-	runtimeReadinessOperation       = "platform.runtime.credentials.readiness.check"
-	sttCredentialOperation          = "platform.stt.credential.project"
-	maximumAuthorityRevision        = uint64(1<<53 - 1)
-	maximumProjectedAPIKeyBytes     = 16 << 10
-	minimumProjectedAPIKeyBytes     = 8
+	// credentialProjectionAudience pins the expected verified-authorization audience for the broker,
+	// independently of RPC method and caller identity.
+	// credentialProjectionAudience закрепляет ожидаемую verified-authorization audience broker отдельно от RPC
+	// method и caller identity.
+	credentialProjectionAudience = "urn:kodex:internal-rpc:secret-broker"
+	// secretBrokerWorkloadID is the exact verifier target-workload claim expected for projection
+	// authorization.
+	// secretBrokerWorkloadID — exact verifier target-workload claim, ожидаемый для projection authorization.
+	secretBrokerWorkloadID = "secret-broker"
+	// secretBrokerSPIFFEID pins the projection target's verified SPIFFE identity; it is a public identity
+	// string, not a key or bearer credential.
+	// secretBrokerSPIFFEID закрепляет verified SPIFFE identity target проекции; это public identity string, не
+	// ключ и не bearer credential.
+	secretBrokerSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/secret-broker"
+	// runtimeControllerWorkloadID selects the expected runtime projection caller workload, not a
+	// caller-supplied actor or tenant.
+	// runtimeControllerWorkloadID задаёт ожидаемый runtime projection caller workload, не actor либо tenant по
+	// выбору caller.
+	runtimeControllerWorkloadID = "runtime-controller"
+	// runtimeControllerSPIFFEID is the exact runtime-controller peer/subject identity checked in both
+	// admission profiles.
+	// runtimeControllerSPIFFEID — exact runtime-controller peer/subject identity, проверяемый в обоих
+	// admission profiles.
+	runtimeControllerSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
+	// sttWorkloadID selects the STT caller workload for transcription credential authority, separately from
+	// runtime projection callers.
+	// sttWorkloadID задаёт STT caller workload для transcription credential authority отдельно от runtime
+	// projection callers.
+	sttWorkloadID = "stt-tts-service"
+	// sttSPIFFEID pins the expected STT service peer/subject for credential projection, not the mailbox or
+	// human actor identity.
+	// sttSPIFFEID закрепляет ожидаемый STT service peer/subject для credential projection, не mailbox и не
+	// human actor identity.
+	sttSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
+	// runtimeProjectionOperation is the exact operation/permission required for execution runtime
+	// materialization, not a wildcard projection grant.
+	// runtimeProjectionOperation — exact operation/permission для execution runtime materialization, не
+	// wildcard projection grant.
+	runtimeProjectionOperation = "platform.runtime.credentials.materialize"
+	// assistantProjectionOperation identifies the separate system-assistant projection permission whose
+	// project-scope rules differ from runtime execution materialization.
+	// assistantProjectionOperation обозначает отдельную system-assistant projection permission с project-scope
+	// rules, отличными от runtime execution materialization.
+	assistantProjectionOperation = "platform.runtime.credentials.system-assistant.materialize"
+	// runtimeReadinessOperation protects projection-path readiness without authorizing credential
+	// materialization itself.
+	// runtimeReadinessOperation защищает projection-path readiness без разрешения самой credential
+	// materialization.
+	runtimeReadinessOperation = "platform.runtime.credentials.readiness.check"
+	// sttCredentialOperation is the exact operation/permission required to project an owner-authorized
+	// transcription credential.
+	// sttCredentialOperation — exact operation/permission для проекции owner-authorized transcription
+	// credential.
+	sttCredentialOperation = "platform.stt.credential.project"
+	// maximumAuthorityRevision bounds positive source/provenance/credential revisions to 2^53-1, preserving
+	// exact integer representation across transport consumers.
+	// maximumAuthorityRevision ограничивает положительные source/provenance/credential revisions до 2^53-1 для
+	// точного целочисленного представления между transport consumers.
+	maximumAuthorityRevision = uint64(1<<53 - 1)
+	// maximumProjectedAPIKeyBytes limits the extracted API-key byte length to 16 KiB; it is not a bound on raw
+	// JSON document allocation.
+	// maximumProjectedAPIKeyBytes ограничивает длину извлечённого API key до 16 КиБ; это не ограничение
+	// выделения памяти под raw JSON document.
+	maximumProjectedAPIKeyBytes = 16 << 10
+	// minimumProjectedAPIKeyBytes rejects extracted keys shorter than eight bytes without claiming
+	// provider-side key validity.
+	// minimumProjectedAPIKeyBytes отклоняет извлечённые keys короче восьми байтов без гарантии provider-side
+	// key validity.
+	minimumProjectedAPIKeyBytes = 8
 )
 
+// MaterializeRuntimeCredentials derives authority for the fixed runtime method/operation, logs authority
+// failure without its text and delegates owner resolution/materialization; request identity fields do not
+// create authority.
+// MaterializeRuntimeCredentials получает authority для fixed runtime method/operation, логирует authority
+// failure без его текста и делегирует owner resolution/materialization; request identity fields не создают
+// authority.
 func (server *Server) MaterializeRuntimeCredentials(ctx context.Context, request *secretbrokerv1.MaterializeRuntimeCredentialsRequest) (*secretbrokerv1.MaterializeRuntimeCredentialsResponse, error) {
 	authority, err := runtimeProjectionAuthority(ctx,
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName, runtimeProjectionOperation)
@@ -52,6 +117,10 @@ func (server *Server) MaterializeRuntimeCredentials(ctx context.Context, request
 	return server.materializeRuntimeCredentials(ctx, request, authority)
 }
 
+// MaterializeSystemAssistantCredentials first requires the separate assistant-method authority, then a
+// nested execution request, and returns only the common materializer's projection descriptor.
+// MaterializeSystemAssistantCredentials сначала требует отдельную assistant-method authority, затем nested
+// execution request, возвращая лишь projection descriptor общего materializer.
 func (server *Server) MaterializeSystemAssistantCredentials(ctx context.Context, request *secretbrokerv1.MaterializeSystemAssistantCredentialsRequest) (*secretbrokerv1.MaterializeSystemAssistantCredentialsResponse, error) {
 	authority, err := runtimeProjectionAuthority(ctx,
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName, assistantProjectionOperation)
@@ -68,6 +137,12 @@ func (server *Server) MaterializeSystemAssistantCredentials(ctx context.Context,
 	return &secretbrokerv1.MaterializeSystemAssistantCredentialsResponse{Projection: response.GetProjection()}, nil
 }
 
+// materializeRuntimeCredentials forwards exact execution pins to the owner, validates the resulting
+// manifest and invokes the exact storage materializer before returning metadata/key names only. Storage
+// errors are mapped; existing owner gRPC errors are preserved, not universally redacted.
+// materializeRuntimeCredentials передаёт exact execution pins владельцу, проверяет полученный manifest и
+// вызывает exact storage materializer до возврата лишь metadata/key names. Storage errors отображаются;
+// существующие owner gRPC errors сохраняются, не очищаются универсально.
 func (server *Server) materializeRuntimeCredentials(ctx context.Context, request *secretbrokerv1.MaterializeRuntimeCredentialsRequest, authority *controlplanev1.CredentialProjectionAuthority) (*secretbrokerv1.MaterializeRuntimeCredentialsResponse, error) {
 	resolved, err := server.owner.ResolveRuntimeCredentialProjection(ctx, &controlplanev1.ResolveRuntimeCredentialProjectionRequest{
 		Authority: authority, WorkloadInstance: request.GetWorkloadInstance(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(),
@@ -105,12 +180,20 @@ func (server *Server) materializeRuntimeCredentials(ctx context.Context, request
 	return &secretbrokerv1.MaterializeRuntimeCredentialsResponse{Projection: descriptor}, nil
 }
 
+// logRuntimeProjectionFailure emits only the supplied stage and gRPC code when a logger exists; current
+// private callsites supply fixed stages, and the error message itself is not logged.
+// logRuntimeProjectionFailure при наличии logger выводит лишь переданные stage и gRPC code; текущие
+// private callsites задают fixed stages, сам error message не логируется.
 func (server *Server) logRuntimeProjectionFailure(ctx context.Context, stage string, err error) {
 	if server.catalogLogger != nil {
 		server.catalogLogger.WarnContext(ctx, runtimeProjectionFailureMessage, "stage", stage, "grpc_code", status.Code(err).String())
 	}
 }
 
+// CheckRuntimeCredentialProjectionReadiness requires its exact authority, then probes owner projection
+// support, local store and last-scan recovery health; any joined failure yields fixed Unavailable.
+// CheckRuntimeCredentialProjectionReadiness требует exact authority, затем проверяет owner projection
+// support, local store и last-scan recovery health; любой joined failure даёт fixed Unavailable.
 func (server *Server) CheckRuntimeCredentialProjectionReadiness(ctx context.Context, _ *secretbrokerv1.CheckRuntimeCredentialProjectionReadinessRequest) (*secretbrokerv1.CheckRuntimeCredentialProjectionReadinessResponse, error) {
 	if _, err := runtimeProjectionAuthority(ctx,
 		secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName, runtimeReadinessOperation); err != nil {
@@ -122,6 +205,14 @@ func (server *Server) CheckRuntimeCredentialProjectionReadiness(ctx context.Cont
 	return &secretbrokerv1.CheckRuntimeCredentialProjectionReadinessResponse{Ready: true}, nil
 }
 
+// ProjectTranscriptionCredential binds transport/locator authority, obtains an exact owner
+// account/generation/expiry descriptor and reads only that credential. It clears raw/key byte copies,
+// returns an independent API-key copy plus a cloned locator and never starts audio transcription or
+// validates the key with a provider.
+// ProjectTranscriptionCredential связывает transport/locator authority, получает exact owner
+// account/generation/expiry descriptor и читает лишь этот credential. Очищает raw/key byte copies,
+// возвращает независимую API-key copy и locator clone без запуска audio transcription и проверки ключа у
+// provider.
 func (server *Server) ProjectTranscriptionCredential(ctx context.Context, request *sttv1.ProjectTranscriptionCredentialRequest) (*sttv1.ProjectTranscriptionCredentialResponse, error) {
 	authority, ctx, err := transcriptionProjectionAuthority(ctx, request.GetAuthority())
 	if err != nil {
@@ -163,6 +254,12 @@ func (server *Server) ProjectTranscriptionCredential(ctx context.Context, reques
 	}, nil
 }
 
+// verifiedProjectionAuthority checks exact audience/caller/target/method/operation, provenance
+// shape/bounded revisions and live expiry on a context already verified by middleware. It maps those
+// claims without performing signature/replay verification itself or trusting a request-supplied snapshot.
+// verifiedProjectionAuthority проверяет exact audience/caller/target/method/operation, provenance
+// shape/ограниченные revisions и live expiry в context, уже проверенном middleware. Отображает claims без
+// самостоятельной signature/replay verification и без доверия request-supplied snapshot.
 func verifiedProjectionAuthority(ctx context.Context, callerID, callerSPIFFEID, fullMethod, operation string) (*controlplanev1.CredentialProjectionAuthority, *internalrpcauthorityv1.VerifiedAuthorizationContext, error) {
 	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
 	if !ok || verified.GetContractVersion() != 1 || verified.GetAudience() != credentialProjectionAudience ||
@@ -185,6 +282,10 @@ func verifiedProjectionAuthority(ctx context.Context, callerID, callerSPIFFEID, 
 	}, verified, nil
 }
 
+// validProjectionProject requires no project for catalog/system-assistant routes, permits absent or valid
+// project for STT and requires a valid identity for other methods.
+// validProjectionProject требует отсутствия project для catalog/system-assistant routes, допускает absent
+// либо valid project для STT и требует valid identity для остальных methods.
 func validProjectionProject(method string, project *internalrpcauthorityv1.AuthorityIdentity) bool {
 	if method == controlplanev1.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName {
 		return project == nil
@@ -198,6 +299,11 @@ func validProjectionProject(method string, project *internalrpcauthorityv1.Autho
 	return validProjectionIdentity(project)
 }
 
+// validProjectionIdentity checks UUID syntax plus known nonzero source, nonempty trimmed reference,
+// bounded positive revision and lowercase digest; it does not resolve the identity or impose a
+// reference-length limit here.
+// validProjectionIdentity проверяет UUID syntax, known nonzero source, nonempty trimmed reference, bounded
+// positive revision и lowercase digest; identity не разрешает и reference-length limit здесь не задаёт.
 func validProjectionIdentity(identity *internalrpcauthorityv1.AuthorityIdentity) bool {
 	if identity == nil || identity.GetProvenance() == nil || uuid.Validate(identity.GetId()) != nil {
 		return false
@@ -209,6 +315,12 @@ func validProjectionIdentity(identity *internalrpcauthorityv1.AuthorityIdentity)
 		provenance.GetRevision() > 0 && provenance.GetRevision() <= maximumAuthorityRevision && validProjectionSHA256(provenance.GetDigestSha256())
 }
 
+// sameDelegatedAuthorityLocator requires matching root identities/source/provenance and a valid
+// request/correlation shape; verified continuation expiry may shorten but never exceed the parent locator.
+// It compares already-verified metadata, not an independent proof signature.
+// sameDelegatedAuthorityLocator требует совпадения root identities/source/provenance и valid
+// request/correlation shape; verified continuation expiry может сокращать, но не превышать parent locator.
+// Сверяет уже проверенные metadata, не самостоятельную proof signature.
 func sameDelegatedAuthorityLocator(locator *sttv1.DelegatedAuthorityLocator, verified *internalrpcauthorityv1.VerifiedAuthorizationContext) bool {
 	if locator == nil || verified == nil || locator.GetExpiresAt() == nil || locator.GetExpiresAt().CheckValid() != nil ||
 		verified.GetExpiresAt() == nil || verified.GetExpiresAt().CheckValid() != nil ||
@@ -227,12 +339,20 @@ func sameDelegatedAuthorityLocator(locator *sttv1.DelegatedAuthorityLocator, ver
 		((authority.GetProject() == nil && locator.GetProject() == nil) || sameProjectionProvenance(locator.GetProject(), authority.GetProject().GetProvenance()))
 }
 
+// sameProjectionProvenance requires both values and exact source/reference/revision/digest equality
+// without resolving or refreshing either source.
+// sameProjectionProvenance требует оба значения и exact source/reference/revision/digest equality без
+// разрешения и обновления sources.
 func sameProjectionProvenance(locator *sttv1.AuthorityIdentityProvenance, verified *internalrpcauthorityv1.AuthorityProvenance) bool {
 	return locator != nil && verified != nil && locator.GetSource() == int32(verified.GetSource()) &&
 		locator.GetReference() == verified.GetReference() && locator.GetRevision() == verified.GetRevision() &&
 		locator.GetDigestSha256() == verified.GetDigestSha256()
 }
 
+// validCorrelation accepts one to 128 ASCII letters/digits or dot/underscore/colon/hyphen, not arbitrary
+// request metadata or authorization authority.
+// validCorrelation принимает от 1 до 128 ASCII letters/digits либо dot/underscore/colon/hyphen, не
+// arbitrary request metadata и не authorization authority.
 func validCorrelation(value string) bool {
 	if value == "" || len(value) > 128 {
 		return false
@@ -247,6 +367,10 @@ func validCorrelation(value string) bool {
 	return true
 }
 
+// validProjectionSHA256 accepts exactly 64 lowercase hexadecimal bytes, including an all-zero value; it
+// checks representation, not content authenticity.
+// validProjectionSHA256 принимает ровно 64 lowercase hexadecimal bytes, включая all-zero value; проверяет
+// representation, не content authenticity.
 func validProjectionSHA256(value string) bool {
 	if len(value) != 64 {
 		return false
@@ -259,6 +383,13 @@ func validProjectionSHA256(value string) bool {
 	return true
 }
 
+// runtimeProjectionManifest binds the explicit transport profile and expiry, replacing a trusted selector
+// only with a matching owner snapshot, then copies execution/provider/runtime pins. It rejects mixed
+// profiles and nil runtime entries; full source eligibility and storage-shape validation stay with
+// owner/store.
+// runtimeProjectionManifest связывает explicit transport profile и expiry, заменяя trusted selector лишь
+// совпавшим owner snapshot, затем копирует execution/provider/runtime pins. Отклоняет mixed profiles и nil
+// runtime entries; полная source eligibility и storage-shape validation остаются у owner/store.
 func runtimeProjectionManifest(authority *controlplanev1.CredentialProjectionAuthority, request *secretbrokerv1.MaterializeRuntimeCredentialsRequest, resolved *controlplanev1.ResolveRuntimeCredentialProjectionResponse) (kubernetesstore.CredentialProjectionManifest, error) {
 	if authority != nil && authority.GetRpcProfile() == transportprofile.TrustedCluster {
 		owner := resolved.GetAuthority()
@@ -312,6 +443,12 @@ func runtimeProjectionManifest(authority *controlplanev1.CredentialProjectionAut
 	return manifest, nil
 }
 
+// runtimeProjectionAuthority accepts only the exact server-established trusted admission selector or a
+// verified authorization context for the fixed runtime caller/method/permission; trusted owner fields are
+// resolved later, not copied from request metadata.
+// runtimeProjectionAuthority принимает лишь exact server-established trusted admission selector либо
+// verified authorization context fixed runtime caller/method/permission; trusted owner fields разрешаются
+// позже, не копируются из request metadata.
 func runtimeProjectionAuthority(ctx context.Context, method, operation string) (*controlplanev1.CredentialProjectionAuthority, error) {
 	if admission, ok := serviceidentity.FromContext(ctx); ok && admission.RPCProfile == transportprofile.TrustedCluster {
 		if admission.Peer.SPIFFEID != runtimeControllerSPIFFEID || admission.TargetSPIFFEID != secretBrokerSPIFFEID ||
@@ -325,6 +462,12 @@ func runtimeProjectionAuthority(ctx context.Context, method, operation string) (
 	return authority, err
 }
 
+// projectedAPIKey decodes one apikey-mode JSON object with unknown fields/trailing data rejected and
+// validates extracted byte bounds/edge whitespace/no CR-LF-NUL. It does not reject duplicate keys or
+// verify provider credentials; clearing returned bytes does not erase decoded immutable strings.
+// projectedAPIKey декодирует один apikey-mode JSON object, отклоняя unknown fields/trailing data, и
+// проверяет extracted byte bounds/edge whitespace/отсутствие CR-LF-NUL. Duplicate keys и provider
+// credentials не проверяет; очистка возвращённых bytes не стирает decoded immutable strings.
 func projectedAPIKey(raw []byte) ([]byte, error) {
 	var credential struct {
 		APIKey   string `json:"OPENAI_API_KEY"`
@@ -347,6 +490,11 @@ func projectedAPIKey(raw []byte) ([]byte, error) {
 	return key, nil
 }
 
+// projectionStorageError maps input/conflict/stale-source failures to fixed gRPC errors and every other
+// failure to Unavailable without raw diagnostics; it is a failure-path mapper, not a nil-success
+// pass-through.
+// projectionStorageError отображает input/conflict/stale-source failures в fixed gRPC errors, остальные
+// failures — в Unavailable без raw diagnostics; это failure-path mapper, не nil-success pass-through.
 func projectionStorageError(err error) error {
 	switch {
 	case errors.Is(err, kubernetesstore.ErrCredentialProjectionInvalid), errors.Is(err, kubernetesstore.ErrProviderCredentialInputInvalid):
