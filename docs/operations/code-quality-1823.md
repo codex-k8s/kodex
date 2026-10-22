@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.234.0
+version: 1.235.0
 updated: 2026-10-22
 ---
 
@@ -1704,6 +1704,63 @@ PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
 
+## Двести тридцать пятая волна — устойчивый key-use guard
+
+Опубликованный SHA234 — `2a69d7ebd89c11fc2acad6615fbd21f1862b6451`.
+Точный 0S6bRx:6587 sources,222 excluded,1823 raw,597 retained,
+1226 unresolved; Go9396/21196, missing11800. Raw SHA256:
+`362a65ae22c6ab2eab758d81a5f763a73a36593cf150a2d6d3e39f3e60a017fa`.
+Clone-set:
+`b413e1434acf4250c9dab613c71f7e28af7fd560cbab827898600203221af9e1`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA234 storage/runtime
+10/51, app composition1/9 и полная сборка secret-broker PASS,0 FAIL/SKIP.
+
+Полностью прочитаны guard.go/guard_test.go602 строки.44/44 declarations
+и package comment описаны EN→RU: константы, ConfigMaps interface, persisted
+state, manifest/current-key rules, CAS loop/readiness/recovery inspection,
+fake client и все tests. AST2 идентичен SHA234 без comments/token.Pos;
+менялись только comments/gofmt, не границы доступа, counters или retry policy.
+
+Guard не хранит local high-watermark: каждый Observe/Reserve/CheckCurrent
+проверяет существующий exact ConfigMap и строгий JSON. Genesis требует
+пустых nonnil counters; отсутствующий объект не создаётся неявно.
+Forward revision/current-generation не могут откатить предыдущие keys/
+counters. Reserve тратит allowance до Seal, не возвращая его при дальнейшей
+ошибке; CheckCurrent не делает Update/reservation. Лимит2^24 и отдельные
+ограничения128 keys/64KiB/eight attempts/five seconds описаны по source.
+
+CAS повторяет только explicit Conflict с новым Get/decision по actual state.
+Unknown Update reply отказывает, даже если counter уже увеличен; следующий
+Reserve не переиспользует ту же allowance. Успешный Update проверяется по
+точному UID, новому RV и serialized state; metadata не названы grant authority.
+Observe копирует keys для дальнейшего хранения/retries, но caller обязан
+держать input стабильным во время вызова. InspectRecovery относится к
+своим fixed namespace/name, использует прежний decoder и может вернуть nil
+genesis manifest; это не API для правки high-watermark.
+
+Unit stagingguard+stagingcrypto:16 верхних/52 всех PASS,0 FAIL/SKIP.
+Отдельная app encrypted lifecycle/readiness composition:1 верхний/9 всех
+PASS,0 FAIL/SKIP. Флаги
+`go test -mod=readonly -count=1 -timeout 120s -json`, GOENV/GOWORK off,
+Go1.26.6, GOMAXPROCS=4. Полная сборка secret-broker
+`go build -mod=readonly ./...` PASS LOCAL.
+32 concurrent fixtures действительно разделяют mutex-protected synthetic
+ConfigMap и проверяют счётчик успешных reservations, budget exhaustion,
+restart-as-new-instance, lost ACK/refetch/rotation, strict corrupt refusal.
+Это не live API-server/restart или доказательство многорепличного кластера.
+Новых external library APIs нет; ранее сверенные pinned client-go metadata
+и context semantics не изменены.
+
+Scope44/44, AST identity2, gofmt/diff-check, assessment и5 addressed ignore
+boundaries PASS LOCAL. Рабочий fDqmC5:6587 sources,222 excluded,1823 raw,
+597 retained,1226 unresolved; Go9440/21196, missing11756. Raw SHA256:
+`5f710d53f71846946ee6bcea176fa04e3b643c37ad619575237c42d72fbc6c3b`.
+Clone-set b413e143...; fragment/path/count multiset и registry неизменны.
+Точный post-commit scan/unit/build публикуются в том же Draft PR.
+Общая задача не завершена:11756 declarations/1226 групп ещё учитываются.
+Исторические FAIL/SKIP/NOT RUN сохранены. Полная приёмка и live/browser/
+deploy/ИИ/STT/почта NOT RUN; ключи действующего окружения не читались/не менялись.
+
 ## Двести тридцать четвёртая волна — ciphertext/runtime adapters
 
 Опубликованный SHA233 — `b63fafc83de04c29e2cd55ebfff46272752ec57d`.
@@ -1829,7 +1886,7 @@ Clone-set прежний b413e143...; fragment/path/count multiset и registry
 Точный post-commit scan/unit/build будет опубликован в том же Draft PR.
 Полная задача не завершена;11850 declarations и1226 групп впереди.
 Прежние FAIL/SKIP/NOT RUN сохранены; live/browser/deploy/модель/почта
-и полная приёмка NOT RUN, никаких настоящих ключей не читали/не меняли.
+и полная приёмка NOT RUN; существующие ключи платформы не читали/не меняли.
 
 ## Двести тридцать вторая волна — доменные ports и recovery черновиков
 
