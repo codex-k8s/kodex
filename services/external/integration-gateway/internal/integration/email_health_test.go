@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+// TestEmailHealthDiagnosticReader exercises status-only and structured protocol reports, requires one local request and closed diagnostic reasons, and rejects private text in readiness summaries.
+// TestEmailHealthDiagnosticReader проверяет отчёты только со статусом и структурированные отчёты протоколов, требует один локальный запрос и закрытые причины диагностики, отклоняет закрытый текст в сводке готовности.
 func TestEmailHealthDiagnosticReader(t *testing.T) {
 	for _, tc := range []struct{ name, body, code, summary string }{
 		{"old-ready", `{"status":"ready"}`, "", "i18n:INTEGRATION_TEST_SUCCEEDED"},

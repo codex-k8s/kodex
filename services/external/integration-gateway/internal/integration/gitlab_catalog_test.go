@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// gitLabExtendedResponse supplies synthetic catalog responses only under the escaped configured project, checking operation-specific routes and pagination before returning branch, commit, note, merge-request or pipeline fixtures.
+// gitLabExtendedResponse выдаёт синтетические ответы каталога только в экранированном заданном проекте, проверяя маршруты операций и страницы перед возвратом данных веток, коммитов, заметок, запросов слияния и конвейеров.
 func gitLabExtendedResponse(t *testing.T, operation string, r *http.Request) (string, bool) {
 	t.Helper()
 	if !strings.HasPrefix(operation, "gitlab.") {

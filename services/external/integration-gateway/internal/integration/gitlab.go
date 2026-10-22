@@ -11,6 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// gitLabProject decodes the provider's project identity and basic metadata so metadata reads can verify the configured namespace path before projection.
+// gitLabProject декодирует идентификатор проекта провайдера и основные сведения, позволяя проверить заданный путь пространства имён до проекции.
 type gitLabProject struct {
 	ID                int64  `json:"id"`
 	PathWithNamespace string `json:"path_with_namespace"`
@@ -19,6 +21,8 @@ type gitLabProject struct {
 	Archived          bool   `json:"archived"`
 }
 
+// gitLabIssue carries issue identity, state and description for reads and effect-marker lookup; result helpers deliberately expose only operation-specific fields.
+// gitLabIssue хранит идентификаторы, состояние и описание задачи для чтения и поиска маркера эффекта; преобразователи результата выдают только поля соответствующей операции.
 type gitLabIssue struct {
 	IID         int64  `json:"iid"`
 	ID          int64  `json:"id"`
@@ -28,6 +32,8 @@ type gitLabIssue struct {
 	WebURL      string `json:"web_url"`
 }
 
+// gitLabMergeRequest decodes merge-request identity and branch metadata for read/create results without automatically exposing the full description.
+// gitLabMergeRequest декодирует идентификатор запроса слияния и сведения о ветках для чтения и создания, не выдавая полное описание автоматически.
 type gitLabMergeRequest struct {
 	IID          int64  `json:"iid"`
 	Title        string `json:"title"`
@@ -38,6 +44,8 @@ type gitLabMergeRequest struct {
 	WebURL       string `json:"web_url"`
 }
 
+// gitLabPipeline holds the pipeline identity, status and commit coordinates checked against the requested pipeline before read or retry projection.
+// gitLabPipeline хранит идентификатор, состояние и координаты коммита конвейера, проверяемые по запрошенному конвейеру перед проекцией чтения или повторного запуска.
 type gitLabPipeline struct {
 	ID     int64  `json:"id"`
 	Status string `json:"status"`
@@ -46,6 +54,8 @@ type gitLabPipeline struct {
 	WebURL string `json:"web_url"`
 }
 
+// testGitLab validates the selected definition and performs a project metadata request with its declared health capability, without executing a write.
+// testGitLab проверяет выбранное определение и запрашивает сведения проекта с объявленной возможностью проверки готовности, не выполняя запись.
 func (adapter *Adapter) testGitLab(ctx context.Context, request Request, configuration map[string]string) error {
 	definition, err := adapter.validateDefinition(request)
 	if err != nil {
@@ -56,6 +66,8 @@ func (adapter *Adapter) testGitLab(ctx context.Context, request Request, configu
 	return err
 }
 
+// executeGitLab dispatches built-in operations within the configured project path, validates operation-specific identities and projects bounded provider results; writes carry the existing effect key through the shared HTTP boundary.
+// executeGitLab направляет встроенные операции в заданный путь проекта, проверяет относящиеся к операции идентификаторы и формирует ограниченный результат; записи передают существующий ключ эффекта через общую HTTP-границу.
 func (adapter *Adapter) executeGitLab(
 	ctx context.Context,
 	request Request,
@@ -236,6 +248,8 @@ func (adapter *Adapter) executeGitLab(
 	}
 }
 
+// gitLabIssueOperation reads or updates one positive project-local IID, rejects an empty update and verifies the returned IID; only reads include a nonempty description.
+// gitLabIssueOperation читает или изменяет один положительный IID внутри проекта, отклоняет пустое изменение и проверяет IID ответа; непустое описание включает только чтение.
 func (adapter *Adapter) gitLabIssueOperation(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte, projectPath string) (Result, error) {
 	var input struct {
 		IssueIID    int64  `json:"issue_iid"`
@@ -280,6 +294,8 @@ func (adapter *Adapter) gitLabIssueOperation(ctx context.Context, request Reques
 	return providerResult(request, "gitlab-issue:"+strconv.FormatInt(provider.IID, 10), projection)
 }
 
+// createGitLabIssue searches one page for the effect marker before creating an issue with that marker; this limited lookup does not provide global uniqueness or resolve an uncertain POST outcome.
+// createGitLabIssue ищет маркер эффекта на одной странице перед созданием задачи с этим маркером; ограниченный поиск не обеспечивает глобальную уникальность и не разрешает неопределённый исход POST.
 func (adapter *Adapter) createGitLabIssue(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte, projectPath string) (Result, error) {
 	var input struct {
 		Title       string `json:"title"`
@@ -320,6 +336,8 @@ func (adapter *Adapter) createGitLabIssue(ctx context.Context, request Request, 
 	return gitLabIssueResult(request, created)
 }
 
+// gitLabIssueResult requires a positive IID, title and web URL before producing the compact issue result and project-local provider reference.
+// gitLabIssueResult требует положительный IID, заголовок и веб-адрес перед выдачей компактного результата задачи и ссылки провайдера внутри проекта.
 func gitLabIssueResult(request Request, issue gitLabIssue) (Result, error) {
 	if issue.IID < 1 || issue.Title == "" || issue.WebURL == "" {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
@@ -329,6 +347,8 @@ func gitLabIssueResult(request Request, issue gitLabIssue) (Result, error) {
 	})
 }
 
+// gitLabMergeRequestOperation verifies the IID of a read or creates a merge request with an effect marker and key; creation does not perform a marker search or reconciliation in this helper.
+// gitLabMergeRequestOperation проверяет IID при чтении либо создаёт запрос слияния с маркером и ключом эффекта; поиск маркера и сверка неопределённого результата создания здесь не выполняются.
 func (adapter *Adapter) gitLabMergeRequestOperation(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte, projectPath string) (Result, error) {
 	if request.Operation == "gitlab.merge_request.read" {
 		var input struct {
@@ -375,6 +395,8 @@ func (adapter *Adapter) gitLabMergeRequestOperation(ctx context.Context, request
 	return gitLabMergeRequestResult(request, provider)
 }
 
+// gitLabMergeRequestResult requires a positive IID and web URL, projects common merge-request fields, and adds source and target branches only for reads.
+// gitLabMergeRequestResult требует положительный IID и веб-адрес, выдаёт общие поля запроса слияния и добавляет исходную и целевую ветки только при чтении.
 func gitLabMergeRequestResult(request Request, provider gitLabMergeRequest) (Result, error) {
 	if provider.IID < 1 || provider.WebURL == "" {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
@@ -386,6 +408,8 @@ func gitLabMergeRequestResult(request Request, provider gitLabMergeRequest) (Res
 	return providerResult(request, "gitlab-merge-request:"+strconv.FormatInt(provider.IID, 10), output)
 }
 
+// createGitLabDiscussion posts one marked note to the selected positive merge-request IID with the effect key and requires a positive returned note ID; it does not retry or deduplicate notes itself.
+// createGitLabDiscussion отправляет одну заметку с маркером выбранному положительному IID запроса слияния, передаёт ключ эффекта и требует положительный ID заметки; самостоятельно повторы и устранение дублей не выполняет.
 func (adapter *Adapter) createGitLabDiscussion(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte, projectPath string) (Result, error) {
 	var input struct {
 		MergeRequestIID int64  `json:"merge_request_iid"`
@@ -412,6 +436,8 @@ func (adapter *Adapter) createGitLabDiscussion(ctx context.Context, request Requ
 	})
 }
 
+// gitLabJSON forwards the selected method, scoped path, query, payload and effect key through the common bearer-authenticated provider boundary using the supplied capability.
+// gitLabJSON передаёт выбранные метод, ограниченный путь, параметры, тело и ключ эффекта через общую bearer-авторизованную границу провайдера с переданной возможностью.
 func (adapter *Adapter) gitLabJSON(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, method, path string, query url.Values, body any, effectKey string) ([]byte, error) {
 	return adapter.callProvider(ctx, providerCall{
 		BaseURL: configuration["base_url"], Method: method, Path: path, Query: query, Body: body,
@@ -419,6 +445,8 @@ func (adapter *Adapter) gitLabJSON(ctx context.Context, request Request, capabil
 	})
 }
 
+// gitLabProjectPath escapes the configured namespace/project as one GitLab API path component; it does not take a project identifier from model input.
+// gitLabProjectPath экранирует заданные пространство имён и проект как один компонент пути GitLab API; идентификатор проекта из входа модели не берётся.
 func (adapter *Adapter) gitLabProjectPath(configuration map[string]string) string {
 	return "/api/v4/projects/" + url.PathEscape(configuration["project_path"])
 }

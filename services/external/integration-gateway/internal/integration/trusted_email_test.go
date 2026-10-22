@@ -9,13 +9,19 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
+// trustedEmailRecorder stores the last forwarded request for in-memory transport assertions without contacting an email service.
+// trustedEmailRecorder сохраняет последний переданный запрос для проверок транспорта в памяти без обращения к почтовому сервису.
 type trustedEmailRecorder struct{ request *http.Request }
 
+// RoundTrip records the forwarded request and returns an empty successful JSON response without performing network I/O.
+// RoundTrip записывает переданный запрос и возвращает пустой успешный JSON-ответ без сетевого ввода-вывода.
 func (recorder *trustedEmailRecorder) RoundTrip(request *http.Request) (*http.Response, error) {
 	recorder.request = request
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}"))}, nil
 }
 
+// TestTrustedEmailTransportIsExactAndPreservesGrant verifies the exact internal route, overwritten profile headers, preserved fence and unchanged original request, rejecting foreign targets before the recorder; it does not prove cluster network isolation.
+// TestTrustedEmailTransportIsExactAndPreservesGrant проверяет точный внутренний маршрут, замену заголовков профиля, сохранение fence и исходного запроса, отклоняет чужие назначения до регистратора; сетевую изоляцию кластера не доказывает.
 func TestTrustedEmailTransportIsExactAndPreservesGrant(t *testing.T) {
 	recorder := &trustedEmailRecorder{}
 	transport := trustedEmailTransport{base: recorder}

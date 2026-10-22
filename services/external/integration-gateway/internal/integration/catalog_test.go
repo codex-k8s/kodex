@@ -14,7 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integrationfixture"
 )
 
-// Каждый advertised operation обязан иметь отдельный положительный сценарий.
+// catalogInputs defines valid synthetic inputs for every advertised managed-MCP operation, allowing the catalog tests to detect an operation without its own positive scenario.
+// catalogInputs задаёт корректные синтетические входы каждой объявленной операции управляемого MCP, позволяя тестам каталога обнаружить операцию без собственного положительного сценария.
 func catalogInputs() map[string]string {
 	return map[string]string{
 		"https_json.resource.read":             `{}`,
@@ -149,6 +150,8 @@ func catalogInputs() map[string]string {
 	}
 }
 
+// TestEveryAdvertisedOperation enumerates shipped executable managed-MCP capabilities and runs each against local provider fixtures, checking authentication, receipts and applicable continuation cursors rather than live provider behavior.
+// TestEveryAdvertisedOperation перебирает поставляемые исполняемые возможности управляемого MCP и выполняет каждую на локальных провайдерах, проверяя авторизацию, квитанции и применимые курсоры, а не поведение живых провайдеров.
 func TestEveryAdvertisedOperation(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -239,6 +242,8 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 	}
 }
 
+// catalogResponse dispatches synthetic provider replies and verifies scoped routes, pagination and mailbox command/binding serialization; unsupported providers fail the test instead of returning a generic success.
+// catalogResponse выбирает синтетические ответы провайдеров и проверяет ограниченные маршруты, страницы и сериализацию почтовой команды с привязкой; неподдерживаемый провайдер завершает тест ошибкой вместо общего успеха.
 func catalogResponse(t *testing.T, provider, operation string, r *http.Request) string {
 	t.Helper()
 	if body, ok := confluenceExtendedResponse(t, operation, r); ok {
@@ -412,6 +417,8 @@ func catalogResponse(t *testing.T, provider, operation string, r *http.Request) 
 	return ""
 }
 
+// TestEveryMutationPreservesUnknownOutcome drops the response after one non-read provider request and makes reconciliation unavailable, requiring an uncertain outcome with body replay disabled and no second mutation.
+// TestEveryMutationPreservesUnknownOutcome теряет ответ после одного изменяющего запроса провайдера и делает сверку недоступной, требуя неопределённый исход с запрещённым повтором тела и без второго изменения.
 func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 	for operation, raw := range catalogInputs() {
 		provider := catalogProviderKey(operation)
@@ -458,6 +465,8 @@ func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 	}
 }
 
+// TestScopeDeniedBeforeCredentialRead replaces every operation's scope digest with a detached value and removes the credential reader, requiring the closed request-rejected classification.
+// TestScopeDeniedBeforeCredentialRead заменяет хеш области каждой операции несогласованным значением и отключает читателя учётных данных, требуя закрытую классификацию отклонённого запроса.
 func TestScopeDeniedBeforeCredentialRead(t *testing.T) {
 	for operation, raw := range catalogInputs() {
 		t.Run(operation, func(t *testing.T) {
@@ -480,6 +489,8 @@ func TestScopeDeniedBeforeCredentialRead(t *testing.T) {
 	}
 }
 
+// TestReadOperationsHandleRateLimits injects an initial 429 for each read and checks its adapter-specific retry/prerequisite count; email and Context7 must stop after one request.
+// TestReadOperationsHandleRateLimits подставляет первоначальный 429 каждой операции чтения и проверяет число повторов и предварительных запросов её адаптера; почта и Context7 обязаны остановиться после одного запроса.
 func TestReadOperationsHandleRateLimits(t *testing.T) {
 	for operation, raw := range catalogInputs() {
 		provider := catalogProviderKey(operation)
@@ -549,6 +560,8 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 	}
 }
 
+// catalogProviderKey maps the HTTPS JSON operation to its hyphenated package key and otherwise takes the operation's first dotted component for fixture lookup.
+// catalogProviderKey сопоставляет HTTPS JSON-операции ключ пакета с дефисом, для остальных берёт первый компонент имени до точки для выбора оснастки.
 func catalogProviderKey(operation string) string {
 	if operation == "https_json.resource.read" {
 		return "https-json"
@@ -556,6 +569,8 @@ func catalogProviderKey(operation string) string {
 	return strings.Split(operation, ".")[0]
 }
 
+// TestEmailNotReadyCannotSend returns an unavailable local bridge response and requires send to fail after one mailbox-operation request; it does not test real SMTP readiness or delivery.
+// TestEmailNotReadyCannotSend возвращает недоступность локального моста и требует отказ отправки после одного запроса почтовой операции; реальную готовность SMTP или доставку не проверяет.
 func TestEmailNotReadyCannotSend(t *testing.T) {
 	adapter := testAdapter(t)
 	var credential *CredentialRevision
@@ -574,6 +589,8 @@ func TestEmailNotReadyCannotSend(t *testing.T) {
 	}
 }
 
+// TestConfluenceForeignSpaceCannotMutate returns a page in another space and rejects update, attachment upload and child creation before any non-read provider request.
+// TestConfluenceForeignSpaceCannotMutate возвращает страницу другого пространства и отклоняет изменение, загрузку вложения и создание потомка до любого изменяющего запроса провайдера.
 func TestConfluenceForeignSpaceCannotMutate(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")

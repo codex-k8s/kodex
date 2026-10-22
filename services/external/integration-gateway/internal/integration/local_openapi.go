@@ -13,8 +13,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 )
 
+// localOpenAPIHost identifies the sole internal synthetic provider eligible for the optional trusted-cluster fixture client.
+// localOpenAPIHost задаёт единственного внутреннего синтетического провайдера, которому доступен необязательный тестовый клиент trusted-cluster.
 const localOpenAPIHost = "integration-synthetic.kodex-system.svc.cluster.local"
 
+// newLocalOpenAPIClient enables only a complete trusted-cluster fixture configuration with the exact HTTPS host and a securely read CA; its direct TLS 1.3 client neither uses a proxy nor follows redirects.
+// newLocalOpenAPIClient включает только полную тестовую конфигурацию trusted-cluster с точным HTTPS-узлом и безопасно прочитанным CA; прямой TLS 1.3-клиент не использует прокси и не следует перенаправлениям.
 func newLocalOpenAPIClient(config Config) (*url.URL, *http.Client, error) {
 	if config.LocalOpenAPIBaseURL == "" && config.LocalOpenAPICAFile == "" {
 		return nil, nil, nil
@@ -55,6 +59,8 @@ func newLocalOpenAPIClient(config Config) (*url.URL, *http.Client, error) {
 	}, nil
 }
 
+// openAPIClient chooses the private fixture client only for an exact configured base URL match and uses the ordinary OpenAPI client for every other origin.
+// openAPIClient выбирает закрытый тестовый клиент только при точном совпадении заданного базового URL, для остальных источников использует обычный OpenAPI-клиент.
 func (adapter *Adapter) openAPIClient(baseURL string) *http.Client {
 	if adapter.localOpenAPIBaseURL != nil && baseURL == adapter.localOpenAPIBaseURL.String() {
 		return adapter.localOpenAPIClient

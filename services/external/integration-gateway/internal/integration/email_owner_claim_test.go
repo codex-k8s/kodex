@@ -13,6 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestCPProducedEmailClaim consumes a bounded protobuf claim from a disposable control-plane producer, checks fence propagation and rejects modified authority; without that producer entrypoint it explicitly skips instead of fabricating a claim.
+// TestCPProducedEmailClaim принимает ограниченный protobuf-claim от одноразового производителя control plane, проверяет передачу fence и отклоняет изменённые полномочия; без точки входа производителя явно пропускается, не подделывая claim.
 func TestCPProducedEmailClaim(t *testing.T) {
 	kind := os.Getenv("KODEX_EMAIL_CLAIM_KIND")
 	if kind == "" {

@@ -5,12 +5,14 @@ import (
 	"unicode"
 )
 
-// Проверяем замкнутость выражения перед добавлением project boundary.
-// Грамматику JQL проверяет Jira; сортировка остаётся за внешними скобками.
+// scopedJiraQuery checks balanced quotes and parentheses under a depth limit, wraps the predicate in the project boundary and keeps top-level ORDER BY outside; Jira still validates the full JQL grammar.
+// scopedJiraQuery проверяет баланс кавычек и скобок с ограничением глубины, оборачивает условие границей проекта и оставляет верхнеуровневый ORDER BY снаружи; полную грамматику JQL по-прежнему проверяет Jira.
 func scopedJiraQuery(project, query string) (string, bool) {
 	depth := 0
 	quote := byte(0)
 	escaped := false
+	// token records a top-level word and its byte offset so the scope wrapper can separate a trailing ORDER BY without rewriting quoted or nested expressions.
+	// token хранит верхнеуровневое слово и его байтовую позицию, позволяя отделить завершающий ORDER BY без изменения выражений в кавычках или скобках.
 	type token struct {
 		word  string
 		start int

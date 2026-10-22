@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// jiraExtendedResponse supplies local Jira catalog fixtures while checking project users, issue/related-resource routes, pagination, disabled attachment redirects and multipart shape; it does not contact Jira.
+// jiraExtendedResponse выдаёт локальные данные каталога Jira, проверяя пользователей проекта, маршруты задач и ресурсов, страницы, запрет перенаправлений вложений и форму multipart; к Jira не обращается.
 func jiraExtendedResponse(t *testing.T, operation string, r *http.Request) (string, bool) {
 	t.Helper()
 	if !strings.HasPrefix(operation, "jira.") {

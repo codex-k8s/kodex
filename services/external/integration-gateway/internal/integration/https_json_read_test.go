@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// TestHTTPSJSONReadUsesOnlyPinnedEndpointAndCredential checks exact GET routing and bearer authentication, preserved large JSON numbers and shared readiness, then rejects a changed resource path or missing credential before another request.
+// TestHTTPSJSONReadUsesOnlyPinnedEndpointAndCredential проверяет точный GET-маршрут и bearer-авторизацию, сохранение больших JSON-чисел и общий путь готовности, затем отклоняет изменённый путь или отсутствие учётных данных до нового запроса.
 func TestHTTPSJSONReadUsesOnlyPinnedEndpointAndCredential(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "fixture-token")
@@ -37,6 +39,8 @@ func TestHTTPSJSONReadUsesOnlyPinnedEndpointAndCredential(t *testing.T) {
 	}
 }
 
+// TestHTTPSJSONReadRejectsUnboundedOrInvalidResponse injects scalar, null, trailing-document and oversized JSON responses and requires a closed failure for each local fixture.
+// TestHTTPSJSONReadRejectsUnboundedOrInvalidResponse подставляет скалярный, null, содержащий второй документ и слишком большой JSON-ответы, требуя закрытый отказ для каждой локальной оснастки.
 func TestHTTPSJSONReadRejectsUnboundedOrInvalidResponse(t *testing.T) {
 	for _, body := range []string{`null`, `1`, `"text"`, `{"ok":true} {"extra":true}`, `{"data":"` + strings.Repeat("x", maximumHTTPSJSONBodyBytes) + `"}`} {
 		t.Run(body[:min(len(body), 16)], func(t *testing.T) {

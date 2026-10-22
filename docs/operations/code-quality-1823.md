@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.175.0
+version: 1.176.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,68 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят шестая волна — завершены комментарии шлюза интеграций
+
+На базе опубликованного SHA `7e415b9d692ccafa4af574f62682aedb2e531e78`
+завершены оставшиеся 137 объявлений в 28 файлах integration-gateway:
+75 production и 62 тестовых. Весь handwritten Go шлюза теперь EN→RU:
+78 файлов, 621/621 объявление, scoped Go-docs-check — PASS LOCAL.
+Файлы прочитаны полностью; предметные комментарии объясняют ограничения,
+проверки, эффекты и границы фактически существующей реализации.
+Точные тексты внесены через apply_patch по проверенным AST anchors,
+включая локальный тип token; генератор бессодержательных описаний не добавлен.
+Механическое сравнение всех 28 файлов после удаления комментариев,
+нормализации пустых строк и gofmt подтвердило совпадение исполняемого кода
+с parent. Форматирование email_revision_test не изменило условия теста.
+
+MCP comments разделяют фиксированные операции READ и протокольные HTTP POST,
+точный proxy/SNI/endpoint, ограниченные тело/событие/текст, отсутствие
+standalone SSE и reconnect retries, проверку обязательных инструментов и
+неполную проверку JSON Schema. Неподдерживаемые инструменты не объявлены
+исполняемыми. Очистка byte slice не названа стиранием строковой копии секрета;
+проверка точного echo не выдана за общий redaction. Context7
+/modelcontextprotocol/go-sdk вернул старый design.md; актуальные поля
+StreamableClientTransport сверены с локальным go doc закреплённого v1.8.0,
+без применения устаревшего API, обновления SDK или изменения транспорта.
+
+Почтовые comments фиксируют typed command, срок execution lease, fence,
+отдельную проверку источника claim и отсутствие авторизации отправки самим
+адаптером. Обычный TLS-клиент и существующий явный trusted-cluster plaintext
+hop описаны раздельно: второй не назван mTLS или безопасностью, доказанной
+одним заголовком. Tests проверяют local socket/сериализацию, uncertain outcome,
+отсутствие replay, точный UID/UIDVALIDITY/folder/thread и локальную TLS-границу;
+они не выданы за доставку почты, trusted-caller authenticity или NetworkPolicy.
+Исторические формы readiness описаны, но не расширены и не переписаны.
+
+OpenAPI comments отделяют проверенный binding от model path/query/body,
+raw-response digest от canonical JSON и fixture transport от обычного.
+GitLab search одного листа не обещает exactly-once, глобальную уникальность
+или reconciliation после неопределённого POST. Jira wrapper не назван полным
+JQL parser; Confluence next link только отдаёт cursor, а не право обращаться
+к произвольному URL. Parent/version, multipart и download byte checks описаны
+там, где фактически выполняются, без выдуманной общей authority-проверки.
+Catalog tests явно различают реальные локальные fixtures и внешние сервисы.
+
+Полные `go test -count=1 -json ./...` и `go build ./...` gateway — PASS LOCAL:
+118 верхних PASS, 1932 PASS с подтестами, 0 FAIL и один прежний SKIP
+TestCPProducedEmailClaim. Disposable CP producer — NOT RUN; claim и env
+для снятия SKIP не подделывались. 16 unit анализатора, unit Go-checker,
+scoped checker 621/621, пять ignore-boundaries и diff-check — PASS LOCAL.
+Go1.26.6, GOENV=off/GOWORK=off. Точный опубликованный SHA и повтор проверок
+будут зафиксированы в PR; эти результаты относятся к рабочему дереву волны.
+Component/live, PostgreSQL, browser/deploy, реальные providers/почта и агенты
+не запускались и не обозначаются PASS.
+
+Detector: 6563 source, 222 generated/lock исключения, 1847 raw,
+574 точных решения и 1273 неразобранные; новых выносов/исключений в волне нет.
+Raw SHA-256 `b6cda92e087f415e499a96332b2ddf970b1cba08a5775c904d172941f0b46c00`,
+clone-set fingerprint остался
+`ccdb88d8e18c3ccd2a889f042b4a35e8abbbaf9fc4554b7f5446355c60b8ea7b`.
+Go-реестр 6335/21120, непокрыты 14785; весь gateway завершён 621/621.
+Далее — остальные модули и 1273 неразобранные группы дубликатов.
+Полный repository Go-docs-check — NOT RUN; прежний diagnostics FAIL не скрыт.
+Цель и единый Draft PR пока не завершены и не готовы к приёмке владельцем.
 
 ## Сто семьдесят пятая волна — весь GitHub adapter и его тесты
 

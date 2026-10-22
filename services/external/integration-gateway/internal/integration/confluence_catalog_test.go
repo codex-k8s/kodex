@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// confluenceExtendedResponse models scoped page prerequisites and catalog operations with route/cursor assertions, versioned comments and local attachment bytes, without calling a Confluence server.
+// confluenceExtendedResponse моделирует проверку страницы и операции каталога с проверкой маршрутов и курсоров, версиями комментариев и локальными байтами вложения, не обращаясь к серверу Confluence.
 func confluenceExtendedResponse(t *testing.T, operation string, r *http.Request) (string, bool) {
 	t.Helper()
 	switch operation {

@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+// TestCatalogPinnedAuthorityBeforeCredentials corrupts definition/version, operation, risk, policy, scope or input for every fixture operation and requires rejection with the credential reader unavailable.
+// TestCatalogPinnedAuthorityBeforeCredentials искажает определение и версию, операцию, риск, политику, область либо вход каждой тестовой операции и требует отказ при недоступном читателе учётных данных.
 func TestCatalogPinnedAuthorityBeforeCredentials(t *testing.T) {
 	adapter := testAdapter(t)
 	adapter.credentials = nil
@@ -40,6 +42,8 @@ func TestCatalogPinnedAuthorityBeforeCredentials(t *testing.T) {
 	}
 }
 
+// TestCatalogMutationProviderFailuresNeverReplay checks one mutation and no replay after server errors, denial or malformed success; empty-body acceptance endpoints are deliberately excluded from the malformed-JSON case.
+// TestCatalogMutationProviderFailuresNeverReplay проверяет единственное изменение без повтора после ошибки сервера, запрета или некорректного успеха; конечные точки с подтверждением без тела намеренно исключены из случая некорректного JSON.
 func TestCatalogMutationProviderFailuresNeverReplay(t *testing.T) {
 	for operation, raw := range catalogInputs() {
 		provider := catalogProviderKey(operation)
@@ -99,6 +103,8 @@ func TestCatalogMutationProviderFailuresNeverReplay(t *testing.T) {
 	}
 }
 
+// TestCatalogResourceIdentifiersBeforeCredentialRead supplies traversal, foreign-project and URL-shaped identifiers and requires validation failure while credentials cannot be read.
+// TestCatalogResourceIdentifiersBeforeCredentialRead передаёт переходы по пути, идентификаторы чужого проекта и URL вместо ID, требуя отказ проверки при недоступном чтении учётных данных.
 func TestCatalogResourceIdentifiersBeforeCredentialRead(t *testing.T) {
 	for _, scenario := range []struct {
 		operation string
@@ -125,6 +131,8 @@ func TestCatalogResourceIdentifiersBeforeCredentialRead(t *testing.T) {
 	}
 }
 
+// TestGitHubFileNamesAreEscapedAndEmptyFilesRemainUsable creates an empty file through a fake transport and checks that question/hash filename characters remain in the path rather than changing query or fragment routing.
+// TestGitHubFileNamesAreEscapedAndEmptyFilesRemainUsable создаёт пустой файл через подставной транспорт и проверяет, что вопросительный знак и решётка имени остаются в пути, не меняя параметры или фрагмент маршрута.
 func TestGitHubFileNamesAreEscapedAndEmptyFilesRemainUsable(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")
@@ -148,6 +156,8 @@ func TestGitHubFileNamesAreEscapedAndEmptyFilesRemainUsable(t *testing.T) {
 	}
 }
 
+// TestProviderFilesAreBoundedBeforeDecoding returns an oversized body for four file/attachment reads, requiring rejection without a summary and with bounded prerequisite calls.
+// TestProviderFilesAreBoundedBeforeDecoding возвращает слишком большое тело четырём операциям чтения файлов и вложений, требуя отказ без сводки и с ограниченным числом предварительных запросов.
 func TestProviderFilesAreBoundedBeforeDecoding(t *testing.T) {
 	for _, operation := range []string{"github.repository.content.read", "gitlab.repository.file.read", "jira.attachment.read", "confluence.attachment.read"} {
 		t.Run(operation, func(t *testing.T) {
@@ -169,6 +179,8 @@ func TestProviderFilesAreBoundedBeforeDecoding(t *testing.T) {
 	}
 }
 
+// TestGitLabPaginationUsesExactProviderCursor checks an empty terminal cursor or the exact next numeric page and rejects backward, oversized and opaque continuation headers.
+// TestGitLabPaginationUsesExactProviderCursor проверяет пустой завершающий курсор либо точную следующую числовую страницу, отклоняет обратные, слишком большие и непрозрачные заголовки продолжения.
 func TestGitLabPaginationUsesExactProviderCursor(t *testing.T) {
 	for _, next := range []string{"", "3", "1", "10001", "opaque"} {
 		t.Run("next="+next, func(t *testing.T) {
@@ -194,6 +206,8 @@ func TestGitLabPaginationUsesExactProviderCursor(t *testing.T) {
 	}
 }
 
+// TestJiraQueryScopePreservesSortingAndRejectsEscapes verifies the project wrapper and preserved top-level sorting around quoted/nested expressions, rejecting unmatched delimiters and a sorting-only query.
+// TestJiraQueryScopePreservesSortingAndRejectsEscapes проверяет обёртку проекта и сохранение верхнеуровневой сортировки вокруг кавычек и вложенных выражений, отклоняет незамкнутые разделители и запрос только с сортировкой.
 func TestJiraQueryScopePreservesSortingAndRejectsEscapes(t *testing.T) {
 	for _, query := range []string{`status = Open`, `status = Open ORDER BY created DESC`, `summary ~ "ORDER BY" AND (status = Open OR status = Closed)`, `summary ~ "a\\\"b"`} {
 		result, ok := scopedJiraQuery("OPS", query)
@@ -211,6 +225,8 @@ func TestJiraQueryScopePreservesSortingAndRejectsEscapes(t *testing.T) {
 	}
 }
 
+// TestWorkflowInputsAreTypedAndBounded accepts primitive workflow inputs, rejects duplicate keys, nested/null values and trailing JSON, then checks typed dispatch payload materialization through a fake transport.
+// TestWorkflowInputsAreTypedAndBounded принимает примитивные параметры workflow, отклоняет повтор ключей, вложенные значения, null и второй JSON, затем проверяет типизированное тело запуска через подставной транспорт.
 func TestWorkflowInputsAreTypedAndBounded(t *testing.T) {
 	inputs, err := githubWorkflowInputs(`{"name":"release","dry_run":true,"count":2}`)
 	if err != nil || inputs["name"] != "release" || inputs["dry_run"] != true {
@@ -239,6 +255,8 @@ func TestWorkflowInputsAreTypedAndBounded(t *testing.T) {
 	}
 }
 
+// TestRelatedResourcesNeverEscapeParentScope injects foreign or missing parent relationships for Jira/Confluence resources, requiring bounded read-only verification and no mutation or attachment download.
+// TestRelatedResourcesNeverEscapeParentScope подставляет чужую либо отсутствующую связь с родителем для ресурсов Jira и Confluence, требуя ограниченную проверку только чтением без изменения или скачивания вложения.
 func TestRelatedResourcesNeverEscapeParentScope(t *testing.T) {
 	for _, operation := range []string{"jira.attachment.read", "jira.attachment.delete", "jira.issue.link.read", "jira.issue.link.delete", "confluence.page.comment.update", "confluence.attachment.read", "confluence.attachment.delete"} {
 		t.Run(operation, func(t *testing.T) {
@@ -276,6 +294,8 @@ func TestRelatedResourcesNeverEscapeParentScope(t *testing.T) {
 	}
 }
 
+// TestConfluenceReplyBindsVerifiedParent requires page and parent-comment reads before the third-call reply POST, whose payload uses the verified parent and omits a competing page ID.
+// TestConfluenceReplyBindsVerifiedParent требует чтения страницы и родительского комментария до третьего запроса POST ответа, чьё тело содержит проверенного родителя без конкурирующего ID страницы.
 func TestConfluenceReplyBindsVerifiedParent(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")

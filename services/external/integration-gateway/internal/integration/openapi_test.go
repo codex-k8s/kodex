@@ -11,6 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// openAPITestCapability builds a synthetic gated PATCH binding with a fixed origin, ticket path, API-key header and idempotency header for adapter-level tests.
+// openAPITestCapability создаёт синтетическую PATCH-привязку с подтверждением, закреплёнными источником, путём задачи, заголовками API-ключа и идемпотентности для тестов адаптера.
 func openAPITestCapability() integrationpackage.Capability {
 	return integrationpackage.Capability{
 		Operation: "openapi.ticket.update", Risk: "WRITE", ApprovalPolicy: "HUMAN_SCOPED",
@@ -23,6 +25,8 @@ func openAPITestCapability() integrationpackage.Capability {
 	}
 }
 
+// TestImportedOpenAPIHealthUsesOperationNotCapabilityKey imports a health specification with distinct operation and capability names, then requires one GET at its exact endpoint through the normal test entrypoint.
+// TestImportedOpenAPIHealthUsesOperationNotCapabilityKey импортирует спецификацию готовности с разными именами операции и возможности, затем требует один GET к точной конечной точке через обычную точку входа проверки.
 func TestImportedOpenAPIHealthUsesOperationNotCapabilityKey(t *testing.T) {
 	const source = `openapi: 3.1.0
 info: {title: Проверка, version: 1.0.0}
@@ -60,6 +64,8 @@ paths:
 	}
 }
 
+// TestOpenAPIExecutionRejectsChangedOriginBeforeCredentialReadOrNetwork changes or removes the configured origin and requires a configuration error with no outbound request or credential access.
+// TestOpenAPIExecutionRejectsChangedOriginBeforeCredentialReadOrNetwork меняет либо удаляет заданный источник и требует ошибку конфигурации без внешнего запроса и доступа к учётным данным.
 func TestOpenAPIExecutionRejectsChangedOriginBeforeCredentialReadOrNetwork(t *testing.T) {
 	adapter := testAdapter(t)
 	capability := openAPITestCapability()
@@ -78,6 +84,8 @@ func TestOpenAPIExecutionRejectsChangedOriginBeforeCredentialReadOrNetwork(t *te
 	}
 }
 
+// TestOpenAPIExecutionPinsEndpointHeadersAndOneEffect checks one fake PATCH with the exact URL, custom authentication/idempotency headers, canonical body and disabled replay, then checks its receipt and JSON projection.
+// TestOpenAPIExecutionPinsEndpointHeadersAndOneEffect проверяет один подставной PATCH с точным URL, собственными заголовками авторизации и идемпотентности, каноническим телом и запретом повтора, затем квитанцию и JSON-проекцию.
 func TestOpenAPIExecutionPinsEndpointHeadersAndOneEffect(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "fixture-key")
@@ -104,6 +112,8 @@ func TestOpenAPIExecutionPinsEndpointHeadersAndOneEffect(t *testing.T) {
 	}
 }
 
+// TestOpenAPIExecutionUsesOnlyExactLocalFixtureClient binds the internal synthetic origin to a separate fake client and verifies exact bearer-authenticated routing without using the public OpenAPI client.
+// TestOpenAPIExecutionUsesOnlyExactLocalFixtureClient привязывает внутренний синтетический источник отдельному подставному клиенту и проверяет точный маршрут с bearer-авторизацией без использования публичного OpenAPI-клиента.
 func TestOpenAPIExecutionUsesOnlyExactLocalFixtureClient(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "fixture-bearer-token")
@@ -137,6 +147,8 @@ func TestOpenAPIExecutionUsesOnlyExactLocalFixtureClient(t *testing.T) {
 	}
 }
 
+// TestOpenAPIProductionClientRejectsRedirectBeforeSecondRequest constructs the ordinary configured client with a fake transport, injects a temporary redirect and requires failure after exactly one request.
+// TestOpenAPIProductionClientRejectsRedirectBeforeSecondRequest создаёт обычный настроенный клиент с подставным транспортом, подставляет временное перенаправление и требует отказ после ровно одного запроса.
 func TestOpenAPIProductionClientRejectsRedirectBeforeSecondRequest(t *testing.T) {
 	adapter, err := New(Config{
 		CredentialDirectory: t.TempDir(),
@@ -173,6 +185,8 @@ func TestOpenAPIProductionClientRejectsRedirectBeforeSecondRequest(t *testing.T)
 	}
 }
 
+// TestOpenAPIRejectsPathEscapeBeforeNetwork supplies traversal, embedded separators, a missing template field and an object-valued query, requiring rejection before provider transport.
+// TestOpenAPIRejectsPathEscapeBeforeNetwork передаёт переходы по пути, встроенные разделители, отсутствие поля шаблона и объектный параметр, требуя отказ до транспорта провайдера.
 func TestOpenAPIRejectsPathEscapeBeforeNetwork(t *testing.T) {
 	adapter := testAdapter(t)
 	capability := openAPITestCapability()
@@ -190,6 +204,8 @@ func TestOpenAPIRejectsPathEscapeBeforeNetwork(t *testing.T) {
 	}
 }
 
+// TestOpenAPIWriteDoesNotRetryUnknownOutcome injects a connection failure for a write and checks the transport-stage uncertain outcome with exactly one attempt and no automatic replay.
+// TestOpenAPIWriteDoesNotRetryUnknownOutcome подставляет ошибку соединения при записи и проверяет неопределённый исход стадии транспорта с ровно одной попыткой без автоматического повтора.
 func TestOpenAPIWriteDoesNotRetryUnknownOutcome(t *testing.T) {
 	adapter := testAdapter(t)
 	capability := openAPITestCapability()

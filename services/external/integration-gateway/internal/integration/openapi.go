@@ -15,9 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
-// executeOpenAPI принимает только проверенный package binding. Вход модели
-// заполняет закреплённые path/query/body, но не выбирает host, method,
-// authentication header или idempotency contract.
+// executeOpenAPI fills only path, query and body from model input under the verified package binding; host, method, authentication and idempotency remain fixed, while the result hashes raw response bytes and projects bounded canonical JSON.
+// executeOpenAPI заполняет из входа модели только путь, параметры и тело согласно проверенной привязке пакета; узел, метод, авторизация и идемпотентность закреплены, результат хеширует исходные байты ответа и выдаёт ограниченный канонический JSON.
 func (adapter *Adapter) executeOpenAPI(ctx context.Context, request Request, capability integrationpackage.Capability,
 	configuration map[string]string, canonicalInput []byte) (Result, error) {
 	binding := capability.OpenAPI
@@ -68,6 +67,8 @@ func (adapter *Adapter) executeOpenAPI(ctx context.Context, request Request, cap
 		map[string]any{"body_json": string(canonicalResponse)})
 }
 
+// openAPIRequestPath replaces complete template segments with bounded escaped primitive values, rejecting separators, dot traversal, controls and oversized paths; unused parameters are not checked here.
+// openAPIRequestPath заменяет целые сегменты шаблона ограниченными экранированными примитивами, отклоняя разделители, переходы через точки, управляющие символы и длинные пути; лишние параметры здесь не проверяются.
 func openAPIRequestPath(template string, raw any) (string, error) {
 	parameters := map[string]any{}
 	if raw != nil {
@@ -99,6 +100,8 @@ func openAPIRequestPath(template string, raw any) (string, error) {
 	return path, nil
 }
 
+// openAPIRequestQuery encodes at most twenty-four primitive-valued parameters with per-value and total URL budgets; schema-specific names and required fields are checked outside this encoder.
+// openAPIRequestQuery кодирует не более двадцати четырёх параметров-примитивов с ограничением каждого значения и общей длины URL; имена и обязательные поля схемы проверяются вне кодировщика.
 func openAPIRequestQuery(raw any) (url.Values, error) {
 	query := url.Values{}
 	if raw == nil {
@@ -121,6 +124,8 @@ func openAPIRequestQuery(raw any) (url.Values, error) {
 	return query, nil
 }
 
+// openAPIPrimitiveText formats nonempty strings, JSON numbers and booleans without accepting objects, arrays, null or empty string parameters.
+// openAPIPrimitiveText форматирует непустые строки, JSON-числа и логические значения, не принимая объекты, массивы, null и пустые строковые параметры.
 func openAPIPrimitiveText(value any) (string, error) {
 	switch item := value.(type) {
 	case string:
