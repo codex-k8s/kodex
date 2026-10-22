@@ -15,12 +15,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// fakeSource provides fixed synthetic skill bytes, call counting and an optional read failure for local materialization tests, without network or owner storage.
+// fakeSource предоставляет фиксированные синтетические байты навыка, счётчик вызовов и необязательную ошибку чтения для локальных тестов материализации без сети и хранилища владельца.
 type fakeSource struct {
 	body  []byte
 	calls int
 	fail  bool
 }
 
+// WriteSkillFile counts the call and writes configured bytes or returns unexpected EOF; it deliberately leaves pin verification to the materializer.
+// WriteSkillFile учитывает вызов и записывает заданные байты либо возвращает неожиданный конец потока; проверка привязок намеренно остаётся материализатору.
 func (source *fakeSource) WriteSkillFile(_ context.Context, _ runtimecontract.RunnerInput, _ runtimecontract.RuntimeSkillBundle, _ runtimecontract.RuntimeSkillFile, writer io.Writer) error {
 	source.calls++
 	if source.fail {
@@ -30,6 +34,10 @@ func (source *fakeSource) WriteSkillFile(_ context.Context, _ runtimecontract.Ru
 	return err
 }
 
+// fixture creates fresh synthetic input, one hashed skill, one retained memory record and a fixed clock with recomputed snapshot digest.
+// No real scan or provider is run; scan/provenance fields are inert test metadata.
+// fixture создаёт новые синтетические вход, один хешированный навык, одну сохраняемую запись памяти и фиксированное время с пересчитанным дайджестом снимка.
+// Настоящее сканирование и провайдер не запускаются; поля сканирования и происхождения — неактивные тестовые метаданные.
 func fixture() (runtimecontract.RunnerInput, runtimecontract.RuntimeContextSnapshot, *fakeSource, time.Time) {
 	now := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
 	input := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", ProjectRef: "proj_abcdefgh", AgentRef: "agt_abcdefgh",
@@ -49,6 +57,8 @@ func fixture() (runtimecontract.RunnerInput, runtimecontract.RuntimeContextSnaps
 	return input, snapshot, source, now
 }
 
+// TestMaterializesExactSkillAndMemoryThenClearsRemovedContext checks exact local skill/memory materialization and fetch count, ordinary attempt separation and removal of context dropped by renewal.
+// TestMaterializesExactSkillAndMemoryThenClearsRemovedContext проверяет точную локальную материализацию навыка и памяти, число загрузок, разделение обычных попыток и удаление контекста, исключённого при обновлении.
 func TestMaterializesExactSkillAndMemoryThenClearsRemovedContext(t *testing.T) {
 	input, snapshot, source, now := fixture()
 	root := t.TempDir()
@@ -87,6 +97,8 @@ func TestMaterializesExactSkillAndMemoryThenClearsRemovedContext(t *testing.T) {
 	}
 }
 
+// TestWarmContextReusesOnlyIdenticalPins checks SYSTEM warm context survives a new turn/attempt with identical pins but rejects a changed memory snapshot.
+// TestWarmContextReusesOnlyIdenticalPins проверяет сохранение прогретого контекста SYSTEM при новом ходе и попытке с одинаковыми привязками и отказ для изменённого снимка памяти.
 func TestWarmContextReusesOnlyIdenticalPins(t *testing.T) {
 	input, snapshot, source, now := fixture()
 	input.AssistantScope = runtimecontract.AssistantScopeSystem
@@ -110,6 +122,8 @@ func TestWarmContextReusesOnlyIdenticalPins(t *testing.T) {
 	}
 }
 
+// TestProjectAssistantContextCannotReuseForeignAttemptPins checks PROJECT context rejects a manifest after turn/attempt changes, without inheriting SYSTEM-only reuse behavior.
+// TestProjectAssistantContextCannotReuseForeignAttemptPins проверяет отказ проектного контекста для манифеста после изменения хода и попытки без наследования повторного использования, доступного только SYSTEM.
 func TestProjectAssistantContextCannotReuseForeignAttemptPins(t *testing.T) {
 	input, snapshot, source, now := fixture()
 	input.AssistantScope = runtimecontract.AssistantScopeProject
@@ -126,6 +140,8 @@ func TestProjectAssistantContextCannotReuseForeignAttemptPins(t *testing.T) {
 	}
 }
 
+// TestContextValidationPrecedesFileFetch checks five digest/path/retention/project/binding mutations fail before the synthetic source is called.
+// TestContextValidationPrecedesFileFetch проверяет отказ до обращения к синтетическому источнику для пяти изменений дайджеста, пути, срока хранения, проекта и привязки.
 func TestContextValidationPrecedesFileFetch(t *testing.T) {
 	for _, kind := range []string{"digest", "traversal", "retention", "foreign", "revoked"} {
 		t.Run(kind, func(t *testing.T) {
@@ -152,6 +168,10 @@ func TestContextValidationPrecedesFileFetch(t *testing.T) {
 	}
 }
 
+// TestContextRejectsCorruptUnsafeAndAdditionalFiles checks ten content/mode/link/layout/expiry/read-only mutations reject the local tree, including FIFO without blocking.
+// The writable-mount case requests the actual read-only flag check against a disposable directory.
+// TestContextRejectsCorruptUnsafeAndAdditionalFiles проверяет отказ для десяти изменений содержимого, режима, ссылок, структуры, срока и read-only, включая FIFO без блокировки.
+// Случай writable-mount запрашивает настоящую проверку флага read-only для одноразового каталога.
 func TestContextRejectsCorruptUnsafeAndAdditionalFiles(t *testing.T) {
 	for _, kind := range []string{"content", "mode", "directory group inheritance", "symlink", "hardlink", "directory symlink", "extra file", "fifo", "expiry", "writable mount"} {
 		t.Run(kind, func(t *testing.T) {
@@ -220,6 +240,8 @@ func TestContextRejectsCorruptUnsafeAndAdditionalFiles(t *testing.T) {
 	}
 }
 
+// TestPartialAndOverBudgetFetchNeverPublishManifest checks short, oversized, wrong-hash, failed-source and mismatched-frontmatter fetches leave no published manifest.
+// TestPartialAndOverBudgetFetchNeverPublishManifest проверяет отсутствие опубликованного манифеста при короткой, слишком большой, неверно хешированной загрузке, отказе источника и несовпадении frontmatter.
 func TestPartialAndOverBudgetFetchNeverPublishManifest(t *testing.T) {
 	for _, kind := range []string{"short", "long", "wrong digest", "network", "manifest mismatch"} {
 		t.Run(kind, func(t *testing.T) {
@@ -248,6 +270,8 @@ func TestPartialAndOverBudgetFetchNeverPublishManifest(t *testing.T) {
 	}
 }
 
+// TestMaterializerDoesNotFollowOldSymlinks checks clearing an old skills symlink preserves the foreign target's sentinel while rebuilding only the owned context tree.
+// TestMaterializerDoesNotFollowOldSymlinks проверяет сохранение контрольного файла чужой цели при очистке прежней ссылки skills и перестроении только собственного дерева контекста.
 func TestMaterializerDoesNotFollowOldSymlinks(t *testing.T) {
 	input, snapshot, _, now := fixture()
 	snapshot.Skills, snapshot.Memories = nil, nil

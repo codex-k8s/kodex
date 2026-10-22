@@ -3896,6 +3896,14 @@
       "fragmentSHA256": "ee3cc7e166d1fcaa73297c28365bb73e7b50919b6ed7570cfeaab1185e5c1861",
       "count": 1,
       "reason": "Сопоставлены production bindExecutionHeaders отдельного agent-runner и независимый test-only bindTestExecutionHeaders runtime-controller. Тест вручную формирует точные имена заголовков и затем по одному изменяет девять tenant/session/attempt/digest/method координат, проверяя чужие и устаревшие привязки; другие route tests используют тот же локальный эталон. Перенос обеих сторон в один formatter связал бы producer и проверочную оснастку общей ошибкой mapping, а импорт internal другого unit запрещён. Сохранён только точный fragment/path/count, не файлы, не production transport и не проверки authority."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/jobs/agent-runner/internal/app/workspace_process_test.go",
+      "secondPath": "services/jobs/agent-runner/internal/contextfiles/process_test.go",
+      "fragmentSHA256": "77ee19227f073b9c26041b1a948e436c78b98ea221700b0f74a91a683ecf9ed9",
+      "count": 1,
+      "reason": "Совпадают11 строк локальной process-test оснастки: поиск текущего test binary, десятисекундный context и начало bwrap argv с текущими UID/GID. Дальше app проверяет workspace/credential/foreign-write границы, contextfiles — read-only snapshot и допустимую рабочую запись; пути test binary, mounts, child selector и env намеренно заданы явно в каждой проверке. Общий runner потребовал бы настраиваемого argv/режимов ради короткого подготовительного фрагмента и скрыл бы проверяемый состав sandbox либо вернул бы только boilerplate tuple. Доменные проверки и production-код не дублируются; сохраняется точная пара/fragment/count, не весь тест или каталог."
     }
   ]
 }

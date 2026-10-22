@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.208.0
+version: 1.209.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,55 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девятая волна — materialized context runner
+
+Точный опубликованный SHA208 — `c5154f26974fb2f376ac7abfc4ef579d386c3fcc`.
+Exact o0vwdf:6580 sources,222 excluded,1837 raw,588 retained,1249 unresolved;
+Go7853/21151,missing13298;raw SHA256
+`97526397732ddf365f10f3a82b8bc46d66596232a132ad2e9d332db6e4b92374`;
+clone-set `8e1bbba12641385a74a135199f28f8dc5b40f312563ebcb240a287a90e02317c`.
+Runner security/filetransfer/model4/24 PASS,0 FAIL/SKIP,полный runner build PASS.
+Remote head и PATCH/GET Draft PR208 подтверждены.
+
+Все4 файла contextfiles прочитаны целиком;35/35 declarations,включая
+FileSource.WriteSkillFile,получили предметные EN→RU комментарии.
+Описаны validation-before-fetch,точные byte/hash pins,bounded writer sticky
+failure,manifest-last и проверка полного дерева,single startup writer и
+best-effort очистка частичного результата. SYSTEM reusable manifest
+сохраняет session/snapshot,но очищает turn/revision/attempt;проектный
+помощник не получает это исключение. Повтор manifests не выдаёт authority.
+
+os.Root containment отделён от предварительного Lstat path walk и проверки
+ST_RDONLY. Chmod открытому inode не выдан за readOnly mount. Strict SKILL.md
+YAML/UTF8/NUL/body проверка не является antivirus или semantic safety.
+Комментарий к writeFile не обещает atomic rename,а boundedWriter требует
+проверки sticky flag даже при nil ошибке короткой записи.
+
+Полная non-comment/gofmt сверка4 файлов с SHA208 — PASS:executable неизменён.
+Полный contextfiles unit до/после комментариев:11 верхних/37 всех PASS,
+0 FAIL,0 SKIP;включает временные файлы,выделенный umask subprocess и шесть
+bwrap test-binary modes с read-only context/writable workspace.
+Это synthetic локальные процессы,не ИИ,live данные или кластер.
+Env knobs child helpers явно сняты только в родительском test процессе.
+Полный runner build-mod=readonly,scoped35/35,17 Node units,Go-checker unit,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+Context7 `/golang/go`:os.Root/OpenRoot/OpenFile,path containment и symlinks;
+новых dependencies нет.
+
+Рабочий IVruRK до registry entry:6580 sources,222 excluded,1837 raw,
+Go7888/21151,missing13263;raw SHA256
+`cfa94660032394544bf7d7c6d0b83f6dad3675514169c6f2159323025b30261b`;
+clone-set `137229a43d6838da9463e85be25c34e905f175ff4543f97dca1bc8055c554b59`.
+Пары/fragment hashes/count полностью совпадают с SHA208:изменились только
+координаты process-test окна после doc blocks. Exact115token/11line
+решение сохраняет явный состав двух разных bwrap filesystem fixtures:
+общий programmable process runner ради короткой подготовки скрыл бы
+mount/child/env различия либо добавил tuple-only helper без доменной операции.
+После assessment с этим exact решением589 retained,1248 unresolved;
+raw count не уменьшился. Node units повторены после registry update.
+Полный runner unit,общий repo-check,component/live,browser/deploy,агенты/STT/
+почта NOT RUN. Общая цель не завершена,post-commit scan публикуется в Draft PR.
 
 ## Двести восьмая волна — файловая и локальная граница runner
 

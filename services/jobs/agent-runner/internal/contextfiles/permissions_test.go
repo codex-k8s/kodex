@@ -13,6 +13,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// TestMaterializeWithPrivateUmask reexecutes only this test under a private subprocess umask, verifies exact nested file/setgid-directory modes, then requires failed renewal cleanup.
+// The process-wide umask changes only inside the bounded child, never in the parent test runner.
+// TestMaterializeWithPrivateUmask повторно запускает только этот тест в дочернем процессе с частным umask, проверяет точные режимы вложенных файлов и setgid-каталогов, затем очистку после ошибки обновления.
+// Общепроцессный umask меняется только в ограниченном дочернем процессе, а не в родительском test runner.
 func TestMaterializeWithPrivateUmask(t *testing.T) {
 	const child = "KODEX_CONTEXT_UMASK_TEST"
 	if os.Getenv(child) != "1" {
@@ -81,6 +85,8 @@ func TestMaterializeWithPrivateUmask(t *testing.T) {
 	}
 }
 
+// TestExactModeRejectsClosedDescriptor checks chmod/readback on a closed disposable file returns the fixed context error instead of accepting an unverified mode.
+// TestExactModeRejectsClosedDescriptor проверяет возврат фиксированной ошибки контекста при chmod и считывании закрытого одноразового файла вместо принятия непроверенного режима.
 func TestExactModeRejectsClosedDescriptor(t *testing.T) {
 	file, err := os.CreateTemp(t.TempDir(), "mode")
 	if err != nil {
