@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.261.0
+version: 1.262.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,80 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят вторая волна — transport-neutral repository port
+
+Опубликованный SHA261 — `58547fd00d88f970fbfc1fe2551038bf7311e8fb`.
+Точный0uHWqJ:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go11097/21233, missing10136. Raw SHA256:
+`59cf8f0f18565c37972e0560a13e053cc2879ccd0bfbe40dabae80da7c0457d3`.
+Clone-set:
+`0f8f3355ad011e09c95b2680d610405762da26f27418368bdcb1a17f7cb323f2`.
+Точные unit/build, push/readback и Draft PR PATCH/GET261 подтверждены.
+Issue/PR/head/body, branch и неизменность ранее прочитанных guides сверены.
+
+Прочитан весь399-строчный domain/repository/platform/repository.go,
+повторно полностью GO-DOC-002343 строки и связанные Principal/Mutation.
+Все200 declarations описаны EN→RU:29 типов,1 constant и170 interface
+methods. Package comment тоже двуязычен. Combined с261:308/308 в двух
+выбранных файлах, не полнота всех repository/type packages.
+
+Чтобы не угадывать смысл безымянных string/int параметров, read-only AST
+анализ сопоставил все170 методов порта с конкретными сигнатурами PostgreSQL
+Repository; синтаксические ошибки/неполный набор закрыто отклоняются.
+Для неоднозначных поведений прочитаны точные implementation windows:
+event sequence/completion против total, graph snapshot auxiliary runs,
+artifact purge lifecycle result, assistant lease/fence/generation scope,
+mail config readback и descriptor resolve/validate modes. Это чтение кода,
+не новый PostgreSQL runtime/component proof; adapter/SQL не изменялся.
+
+Комментарии различают ожидаемые pins и verified principal/owner state,
+opaque operation grant и безопасную диагностику, exact credential descriptors
+и raw bytes, closable download stream и копирование metadata. ArtifactReader
+сам не гарантирует file backing/byte limit/Close; MaximumArtifactBytes512MiB
+не является автоматическим reader limiter. ResolveRuntimeCredentialProjection
+требует свой непустой fence mode, Validate — отдельные права и пустой fence;
+false не объявлен новым materialization grant. Bootstrap/local cleanup без
+Principal не представлены как browser-facing authority. Общий Execute не
+объявлен arbitrary kind/payload bypass либо единой DB-транзакцией всех внешних
+object effects. Ready не доказывает здоровье всех downstream/provider flows.
+
+Матрица неизменных контрактных ролей:
+
+| Группа методов/входов | Привязка | Отделённая обязанность |
+| --- | --- | --- |
+| Proof/worker grant | Authenticated subject, exact workload/instance/generation/revision/envelope/time | Owner resolution и durable acceptance, не полномочие от заполнения struct |
+| Runtime secret/draft | Exact operation/claimant/generation/materialization и versioned impact | Prepare, consume, finish/fail/recover остаются разными командами |
+| Credential projection | Exact RPC authority/runtime/session/turn/attempt/input and descriptor pins | Разные resolve/validate/STT modes, без выдачи raw secret bytes |
+| Artifact/execution file | Principal, exact revision/purpose либо lease/fence/generation | Metadata отдельно от admitted byte read и stream cleanup |
+| Dialog/catalog/search | Principal/context либо exact assistant lease | Cursor/preview/candidate не расширяют resource eligibility |
+| Lifecycle/work claims | Typed command/mutation либо exact worker/task/lease tuple | Порт не исполняет и не проверяет переход сам по одной сигнатуре |
+
+Первая попытка собрать весь comment patch в одном stdout была усечена
+ограничением вывода: JSON parse отказал до apply. Readback подтвердил чистое
+дерево; затем применены5 bounded batches по40 в обратном порядке исходных
+позиций. Итоговый AST1 без комментариев/координат совпадает с SHA261, включая
+все signatures/imports/fields/constants. Ни method sets, body, SQL, adapters,
+миграции, proto/API, generated outputs или dependencies не менялись.
+
+102 верхних/278 всех unit PASS domain/repository/... + domain/types/... +
+grpc + domain/service/roleimage,0 FAIL,те же3 SKIP disposable grpc contours,
+поимённо перечисленные в260. Полный control-plane build -p=2 PASS LOCAL.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4, -mod=readonly/-count=1/
+-timeout120s.17 Node units, Go checker units, docs200/200 и combined308/308,
+AST1, scan/assessment,5 addressed ignores и gofmt/diff-check PASS LOCAL.
+Это build/unit, не проверка owner DB atomicity/concurrency или live auth.
+Full unit прочих packages/modules, component/review/browser/live/deploy/
+модели/STT/почта NOT RUN по scope; прежние FAIL остаются открытыми.
+
+Рабочий KJXs23:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go11297/21233, missing9936. Raw SHA256:
+`e0a2096eaedbd5a8bc7b0a39bf21d315378ccc2e294e4ab749289c138e5eb276`.
+Clone-set прежний:
+`0f8f3355ad011e09c95b2680d610405762da26f27418368bdcb1a17f7cb323f2`.
+Registry528 entries/631 occurrences не менялся. Комментарии не выдаются за
+устранение дубликатов. Exact post-commit отчёт публикуется в том же Draft PR;
+полный разбор/документация и итоговые scoped проверки ещё впереди.
 
 ## Двести шестьдесят первая волна — базовые доменные сущности
 
