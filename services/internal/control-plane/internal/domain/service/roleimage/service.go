@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/opaqueref"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -591,18 +592,12 @@ func validDisplayName(input string) bool {
 	return strings.TrimSpace(input) == input && utf8.ValidString(input) && len(input) > 0 && len(input) <= 160
 }
 
+// validRef applies the shared opaque-reference grammar to the caller's exact resource prefix.
+// Resource existence, scope, admission state, and permission remain separate owner-side checks.
+// validRef применяет общую грамматику непрозрачных ссылок к точному префиксу ресурса вызывающего кода.
+// Существование ресурса, область, состояние допуска и полномочия проверяются отдельно владельцем.
 func validRef(input, prefix string) bool {
-	if len(input) < len(prefix)+9 || len(input) > 96 || !strings.HasPrefix(input, prefix+"_") {
-		return false
-	}
-	for _, character := range input[len(prefix)+1:] {
-		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
-			character >= '0' && character <= '9' || character == '-' || character == '_' {
-			continue
-		}
-		return false
-	}
-	return true
+	return opaqueref.Valid(input, prefix)
 }
 
 func validRepository(input string) bool {

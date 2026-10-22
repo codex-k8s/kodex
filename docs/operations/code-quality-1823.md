@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.267.0
+version: 1.268.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,63 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят восьмая волна — shared opaque resource grammar
+
+Опубликованный SHA267 — `eb6754c775a8f7e4712d63f114ea2407a9808dd5`.
+Точный T26wjz:6602 sources,222 excluded,1817 raw/631 retained/
+1186 unresolved; Go11739/21238, missing9499. Raw SHA256:
+`abf12cf3ebe1b50da7067b78ab043d9bcda776f59f4c120da9fe0625b9edc272`.
+Clone-set:
+`f147f3eb0a7cfb00c9dd0dffcd29b1204e963e9be36541086fcc968cef9c3a62`.
+Точные unit/build, push/readback и Draft PR PATCH/GET267 подтверждены.
+
+Прочитаны обе122-token/17-line копии exact opaque-ref validator в
+controlplaneclient и roleimage, их request-context/list/managed-command calls,
+GO-DOC-006 criterion/grammar boundary и полный README internalrpcauth.
+Чистый leaf package internalrpcauth/opaqueref содержит одну Valid(reference,
+prefix), зависящую только от strings. Оба consumers уже используют этот Go
+module; go.mod/go.sum и module dependencies не менялись. Это синтаксический
+runtime primitive, не domain entity, permission, lookup или owner resolver.
+
+Оба прежних локальных имени сохранены thin wrappers без изменения call sites,
+порядка principal/context/permission checks либо строк ошибок. Грамматика
+прежняя: exact prefix, underscore, минимум8 ASCII букв/цифр/-/_ суффикса,
+общая длина максимум96 байтов. Префикс намеренно не нормализован и не получил
+новой валидации: это существующий caller contract, не новое разрешение
+произвольной области. Stable catalogue keys и другие ref grammars не заменены.
+README описывает API, non-goals, false failure policy и отсутствие I/O,
+state/lifecycle/observability ownership. Generated/контракты не менялись.
+
+Inverse AST4 разворачивает ровно два thin wrappers и убирает только два
+новых imports; полные consumer files идентичны SHA267 без комментариев.
+Ещё две пары в этих четырёх отдельно сравнивают тело shared helper с каждым
+старым validator после одного переименования идентификатора. Новые function
+и два unit описаны EN→RU; selected scope24/24 в новом leaf и client.go плюс
+один newly documented roleimage.validRef. Весь roleimage/service.go этим
+не объявлен документированным.
+
+Два новых unit:17 exact boundary/alphabet/prefix cases и все256 suffix byte
+values против явного accepted alphabet, не копии range predicate. Включены
+minimum/max/max+1, wrong/case prefix, separator, NUL/Unicode/invalid UTF-8,
+и прежнее literal empty/Unicode/underscore prefix поведение. Existing client
+unit сохраняют refusal-before-invoke и exact unary/stream context forwarding.
+
+В рабочем xWGyJN:6604 sources,222 excluded,1816 raw/631 retained/
+1185 unresolved; Go11743/21241, missing9498. Raw SHA256:
+`a32aef811d046879c982e85b2156fb19e30eabbab188648fe0425188a010c4ef`.
+Clone-set:
+`76d91b9edfa7b069e47c6dd52e215b05bcb3fb34dbcd431aa6a5d6c79ad698a6`.
+Multiset proof: удалена ровно одна прежняя122-token группа, новых нет,
+1816 остальных path/hash/count неизменны. Retained528 entries/631 occurrences
+прежние, исключений не добавлено.
+
+На рабочем дереве: новый opaqueref2 верхних/19 всех, весь client26/34,
+roleimage13/51 unit PASS,0 FAIL/SKIP; полные builds трёх modules -p=2
+PASS LOCAL. Docs24/24+wrapper, inverse AST4,17 Node/Go checker units,
+canonical scan/5 ignores и diff-check PASS LOCAL. Проверки повторяются на
+точном commit перед push/PR readback. Общие9498 missing и1185 unresolved
+ещё предстоят; полной приёмки, browser/live/component/deploy не выполнялось.
 
 ## Двести шестьдесят седьмая волна — image supply-chain и integration candidates
 

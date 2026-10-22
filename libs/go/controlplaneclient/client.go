@@ -15,6 +15,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/opaqueref"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -58,17 +59,7 @@ func WithProjectReference(ctx context.Context, reference string) (context.Contex
 // validOpaqueReference checks the bounded opaque identifier syntax for a prefix.
 // validOpaqueReference проверяет ограниченный формат непрозрачного идентификатора.
 func validOpaqueReference(reference, prefix string) bool {
-	if len(reference) < len(prefix)+9 || len(reference) > 96 || !strings.HasPrefix(reference, prefix+"_") {
-		return false
-	}
-	for _, character := range reference[len(prefix)+1:] {
-		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
-			character >= '0' && character <= '9' || character == '-' || character == '_' {
-			continue
-		}
-		return false
-	}
-	return true
+	return opaqueref.Valid(reference, prefix)
 }
 
 // Config defines the protected connection, proof resolver, and operation mapping.
