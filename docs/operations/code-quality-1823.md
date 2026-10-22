@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.301.0
+version: 1.302.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,61 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста вторая волна — завершение Go-комментариев authority
+
+Опубликованный SHA301 — `83d5e0b688c758de969956473d9a1a3350a68956`.
+Exact ayR19a:6629 sources,222 excluded,1807 raw/723 retained/
+1084 unresolved; Go13052/21276,missing8224.48/171 unit/full build,
+AST2/tooling PASS LOCAL; sourceSHA, push и Draft PR PATCH/GET301 есть.
+110-token annotations duplicate устранён реально, не исключением.
+
+Полностью прочитаны store733, envelope unit20, TokenReview unit75 и
+PostgreSQL concurrency fixture332 lines —1160 lines суммарно.
+39 оставшихся declarations получили EN→RU,scope39/39. Дополнительно
+описаны13 локальных constants. Весь собственный Go модуля
+internal-rpc-authority:150 files,1382/1382 declarations,missing0.
+Это завершение комментариев модуля, НЕ общего разбора clones и НЕ
+доказательство runtime/security готовности. Generated output не менялся.
+
+Comments различают adapter и domain authority: TokenReview возвращает identity/
+token digest, а reservation позднее; command fields не подписываются самим
+Store. mutate делает до5 CAS attempts и может повторить callback, даже no-op
+записывает envelope. HTTP read/write не объявлены полной проверкой served
+kind/state equality; пустая запись возвращает zero state. Complete adapter
+проверяет увеличение anchor, exact increment принадлежит evidence verifier.
+validSHA256 принимает uppercase hex. StrictJSON не объявлен duplicate-key/
+depth protection. Все эти ограничения и runtime errors прежние.
+
+Concurrency fixture описан как destructive schema-owning: DSN проверяется
+лишь на непустоту, disposable proof внутри теста отсутствует. Пересоздаются
+упрощённые tables/functions, не полный production RLS/grants/issued-context
+контур. Он НЕ запускался, его SQL literals не менялись. Прежняя explicit
+selected-unit regex исключает этот component, DSN удалён из дочернего env;
+компиляция test code не названа component PASS. Локальный TLS TokenReview
+unit использует синтетические разные operator/controller tokens и клиент
+httptest, а не реальный Kubernetes authenticator.
+
+Полные app/domain/value/snapshot/PITR/restore units:50 верхних/173 всех
+PASS LOCAL,0 FAIL/SKIP. Дополнительно прежние selected38/106 unit и full
+authority build -p=2 PASS LOCAL. Команда301 дополнена пакетом
+./internal/repository/kubernetes/restore, затем выполнена selected команда298
+с прежними timeout/mod-readonly/GOMAXPROCS/pipefail/env-u ограничениями.
+17 Node и Go checker unit, полные AST4/directives,scope39/39,
+module1382/1382,5 ignores и diff-check PASS LOCAL. В AST сохранены также
+все SQL string literals. Реальная БД, destructive fixture, RLS, кластер,
+TokenReview/provider, восстановление и component/live/full acceptance NOT RUN.
+
+Рабочий CZxCwN:6629 sources,222 excluded,1807 raw/723 retained/
+1084 unresolved; Go13091/21276,missing8185. Все normalized clone keys/
+cardinalities и registry605/723 прежние. Raw SHA256:
+`84e4663b586d5e7a61bb3ee26a6cfc88718c8836ca418acf82003d7ce1196833`;
+clone-set:
+`a2031e1f21fb3f15a666488328a5ed7da7bbf75c561331177521547797f3a913`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Generated/contracts/deps/applied migrations/live state прежние.
+Historical FAIL и finding293 не исправлены. Основной остаток Go comments:
+gateway1953 и control-plane6232 declarations. Общая задача не завершена.
 
 ## Триста первая волна — исполнитель PITR и общие evidence annotations
 
