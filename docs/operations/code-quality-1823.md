@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.194.0
+version: 1.195.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,67 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто пятая волна — весь основной callback server
+
+На точном запушенном SHA `776881f7ab4533bfd3b7de60a5b1d4556eb90c6d`
+волны194 new module3/3 PASS,CP transport87/201 PASS с3 прежними SKIP,
+RC callback250/1349 PASS с2 прежними SKIP; все0 FAIL,полные3 builds PASS.
+Exact cMQuk6:6576 sources,222 excluded,1839 raw,582 retained,
+1257 unresolved; Go7047/21143,missing14096. Raw SHA256
+`eabde3e45b1f3f8cf9f50f6cd1c465397668b69a9e41166fa938a7edc926426e`,
+clone-set `58041a831f89eeae6a2221fd52bc1ff213d255721c8f49313d48c767a1595061`.
+
+Целиком прочитан callback/server.go (2329 исходных строк); все95 прежде
+непокрытых declarations и package description получили предметные EN→RU
+комментарии. Файл теперь96/96. Описаны16-slot process-local queue и restart,
+ticket/headers/owner authority, HTTP/spool ownership, независимые shutdown/
+cleanup budgets, refresh Secret до owner commit и точный successor readback,
+native activity отдельно от запуска tool, artifact pins и warm compatibility.
+AlreadyExists не назван новым diagnostic commit, cleanup failure не отменяет
+принятый owner result, локальная очередь не объявлена durable claim.
+
+Полностью описаны MCP notifications/dispatch, safe running/completion activity,
+ошибки проекции после effect без обещания rollback, допустимые input-recovery
+responses, plan normalization/locators отдельно от текущих permissions/versions/
+HumanGate. Указаны permissive/default ветки локальных shape filters, отсутствие
+полного JSON Schema исполнения для anyOf presence check, map/slice ownership,
+Rune bounds без приписывания strict UTF-8/NUL validation, optional metadata/null.
+Owner-observed WAITING_APPROVAL/UNKNOWN_OUTCOME не объявлены terminal success.
+Status activity зависит от toolErr,а business outcome хранится отдельно.
+
+Комментарий decode буквально описывает maximum+1 limited-reader view,
+а не обещает подсчёт/дочитывание полного body либо duplicate-key/case canonicality.
+Новых проверок или усиления текущего security boundary не добавлено.
+TLS/trusted profiles описаны раздельно: trusted plaintext — явный выбранный
+deployment profile,не fallback после ошибки сертификата.
+Context7 /golang/go и локальный go doc подтверждают WithoutCancel/Shutdown;
+SDK,transport profiles,grant protocol и lifecycle не менялись.
+
+Единственное изменение executable — один parse/length/re-encode SHA-256
+предикат safeToolCallResult использует уже существующий ValidSHA256Text.
+Сохраняется ровно64 lowercase hex,включая нулевой digest,без новых dependencies.
+Обратная подстановка прежнего блока восстанавливает весь non-comment файл;
+сверка отдельно нормализует только gofmt alignment подписи Close,изменившийся
+после разнесения соседних one-line методов собственными doc blocks.
+Ранняя сверка обнаружила именно этот форматный случай; после его точной
+нормализации полный executable identity PASS,условия/owner RPC прежние.
+
+Локально callback250 верхних/1349 всех PASS,0 FAIL,2 прежних SKIP
+TestArtifactSpoolContainerStartup и TestRuntimeMCPCatalogWireProducer;
+соответствующие container/wire suites NOT RUN. Runtimecontract115/535 PASS,
+0 SKIP/FAIL. Полные builds RC/runtimecontract-mod=readonly,17 Node unit,
+unit Go-checker,scoped96/96,5 ignore-boundaries,diff-check PASS LOCAL;
+Go1.26.6,GOENV=off/GOWORK=off.
+
+Рабочий lOP0sZ:6576 sources,222 excluded,1839 raw,582 retained,
+1257 unresolved; Go7142/21143,missing14001. Raw SHA256
+`cad695607486fab9bbdd2c12f8ab414e87ab1b3005ac4ff93cc1ab7c83d4d85e`,
+clone-set неизменен. Новых exceptions нет; вынос короткого predicate
+ниже порога detector не объявлен снижением raw-групп.
+Точный опубликованный SHA и повтор проверок фиксируются в текущем PR.
+Полный repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN.
+Общая цель остаётся незавершённой; PR Draft без merge/ready/owner approve.
 
 ## Сто девяносто четвёртая волна — общий financial wire caster
 
