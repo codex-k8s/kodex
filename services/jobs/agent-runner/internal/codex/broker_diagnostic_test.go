@@ -11,11 +11,15 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// diagnosticInput returns a fresh synthetic session/turn/attempt and digest tuple for broker diagnostic binding tests, without issuing a grant or reading runtime state.
+// diagnosticInput возвращает новый synthetic session/turn/attempt и digest tuple для broker diagnostic binding tests без выдачи grant и чтения runtime state.
 func diagnosticInput() model.Input {
 	return model.Input{SessionRef: "ses_fixture1", TurnRef: "trn_fixture1", Attempt: 1,
 		RuntimeRevisionDigest: strings.Repeat("a", 64), InputDigest: strings.Repeat("b", 64), ExecutionBindingDigest: strings.Repeat("c", 64)}
 }
 
+// TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements serializes and reads bound synthetic failures, requiring safe stage/detail and measured usage, immutable diagnostic accessors, rejection of another attempt and inability to forge private state through JSON.
+// TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements сериализует и читает bound synthetic failures, требуя safe stage/detail и measured usage, immutable diagnostic accessors, отказ другой attempt и невозможность подделки private state через JSON.
 func TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements(t *testing.T) {
 	input := diagnosticInput()
 	for _, stage := range []providerExecutionStage{providerStageHomePrepare, providerStageTerminalWait, providerStageUnknown} {
@@ -50,6 +54,8 @@ func TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements(t *testi
 	}
 }
 
+// TestBrokerDiagnosticEarlyStageAndPrivacy writes an explicit early-auth-stage failure with a private sentinel and requires the bound closed diagnostic to survive without serializing the source error.
+// TestBrokerDiagnosticEarlyStageAndPrivacy пишет явный early-auth-stage failure с private sentinel и требует сохранение bound closed diagnostic без сериализации исходной ошибки.
 func TestBrokerDiagnosticEarlyStageAndPrivacy(t *testing.T) {
 	input := diagnosticInput()
 	var wire bytes.Buffer
@@ -63,6 +69,8 @@ func TestBrokerDiagnosticEarlyStageAndPrivacy(t *testing.T) {
 	}
 }
 
+// TestBrokerDiagnosticPreservesBoundTerminalFailure transfers a typed failed terminal result and verifies diagnostic kind/code, execution outcome and measured usage remain consistent rather than becoming a transport failure.
+// TestBrokerDiagnosticPreservesBoundTerminalFailure передаёт typed failed terminal result и сверяет согласованность diagnostic kind/code, execution outcome и measured usage без превращения в transport failure.
 func TestBrokerDiagnosticPreservesBoundTerminalFailure(t *testing.T) {
 	input := diagnosticInput()
 	value := bindProviderDiagnostic(input, runtimecontract.ProviderFailureDiagnostic{
@@ -82,6 +90,8 @@ func TestBrokerDiagnosticPreservesBoundTerminalFailure(t *testing.T) {
 	}
 }
 
+// TestBrokerDiagnosticRejectsForeignPeerPinsAndMalformedTerminal changes peer UID, exact input/revision/execution/session/turn/attempt pins or terminal shape and requires no accepted diagnostic or private error text.
+// TestBrokerDiagnosticRejectsForeignPeerPinsAndMalformedTerminal меняет peer UID, точные input/revision/execution/session/turn/attempt pins или terminal shape и требует отсутствие принятой diagnostic и private error text.
 func TestBrokerDiagnosticRejectsForeignPeerPinsAndMalformedTerminal(t *testing.T) {
 	input := diagnosticInput()
 	value, _ := providerFailureDetails(providerStageTerminalWait, errors.New("PRIVATE_SENTINEL"))

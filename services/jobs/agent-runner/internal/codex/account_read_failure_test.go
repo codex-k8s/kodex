@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestClosedAccountReadFailurePinnedCategories independently maps every pinned static message to its reason and logging allowlist, then rejects whitespace, suffix and case near-matches.
+// TestClosedAccountReadFailurePinnedCategories независимо связывает каждое pinned static message с причиной и logging allowlist, затем отклоняет близкие whitespace, suffix и case варианты.
 func TestClosedAccountReadFailurePinnedCategories(t *testing.T) {
 	for _, row := range []struct{ message, reason string }{
 		{"failed to load workspace requirements", "REQUIREMENTS_LOAD"},
@@ -44,6 +46,8 @@ func TestClosedAccountReadFailurePinnedCategories(t *testing.T) {
 	}
 }
 
+// TestClosedAccountReadFailureRejectsOtherMethodAndCode varies RPC method spelling and numeric code and requires NONE for every unrelated call, regardless of the otherwise recognizable payload.
+// TestClosedAccountReadFailureRejectsOtherMethodAndCode меняет написание RPC method и numeric code и требует NONE для чужих вызовов независимо от узнаваемого payload.
 func TestClosedAccountReadFailureRejectsOtherMethodAndCode(t *testing.T) {
 	raw := accountReadFailureFixture(t, "workspace routing discovery failed", nil)
 	for _, row := range []struct {
@@ -59,6 +63,8 @@ func TestClosedAccountReadFailureRejectsOtherMethodAndCode(t *testing.T) {
 	}
 }
 
+// TestClosedAccountReadFailureRejectsInvalidAndSessionOnlyPayloads covers malformed/oversized/duplicate/unknown/null envelopes, embedded-code mismatch, invalid UTF-8 and session-only messages, requiring UNKNOWN rather than accidental direct-account classification.
+// TestClosedAccountReadFailureRejectsInvalidAndSessionOnlyPayloads проверяет malformed/oversized/duplicate/unknown/null envelopes, embedded-code mismatch, неверный UTF-8 и session-only messages, требуя UNKNOWN вместо случайной direct-account classification.
 func TestClosedAccountReadFailureRejectsInvalidAndSessionOnlyPayloads(t *testing.T) {
 	for _, raw := range []json.RawMessage{
 		nil, json.RawMessage(`null`), json.RawMessage(`[]`), json.RawMessage(`{}`),
@@ -86,7 +92,11 @@ func TestClosedAccountReadFailureRejectsInvalidAndSessionOnlyPayloads(t *testing
 	}
 }
 
+// TestClosedAccountReadFailureNeverExposesPrivatePayload injects synthetic private strings into message/data and logging reasons, requiring only closed outputs while allowing an exact known message even with opaque private data.
+// TestClosedAccountReadFailureNeverExposesPrivatePayload вводит synthetic private strings в message/data и logging reasons, требуя лишь закрытые outputs и допуская точное известное message даже с opaque private data.
 func TestClosedAccountReadFailureNeverExposesPrivatePayload(t *testing.T) {
+	// private is a synthetic disclosure sentinel, not a credential or network target.
+	// private — synthetic disclosure sentinel, не реквизиты и не сетевой target.
 	const private = "private-sentinel-credential https://private.invalid/account?token=private-sentinel"
 	for _, row := range []struct{ message, want string }{
 		{private, "UNKNOWN"},
@@ -111,6 +121,8 @@ func TestClosedAccountReadFailureNeverExposesPrivatePayload(t *testing.T) {
 	}
 }
 
+// accountReadFailureFixture encodes a synthetic internal RPC error with caller-chosen message/data for isolated parser tests; it does not perform an account read or contain live credentials.
+// accountReadFailureFixture кодирует synthetic internal RPC error с выбранными тестом message/data для изолированного parser; не выполняет account read и не содержит живых реквизитов.
 func accountReadFailureFixture(t *testing.T, message string, data any) json.RawMessage {
 	t.Helper()
 	raw, err := json.Marshal(map[string]any{"code": -32603, "message": message, "data": data})

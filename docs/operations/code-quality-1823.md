@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.217.0
+version: 1.218.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемнадцатая волна — закрытая диагностика account RPC и broker
+
+Опубликованный SHA217 — `4d844d8629f4b331e552201d563dc93814cebe6b`.
+Exact QqkPcg:6584 sources,222 excluded,1832 raw,594 retained,1238 unresolved;
+Go8322/21164,missing12842;raw SHA256
+`3bd4784db4dcaccc8446bcdc62b2b876c1866707c0b9bebd1f956bb85ec47275`;
+clone-set `a2c4517d1be785325d788f8d34d62aa3b2dd1c1378ed8557909402bb78442726`.
+Push/readback иPATCH/GET Draft PR217 подтверждены;codex17/80 unit PASS,
+0 FAIL/SKIP;full runner build PASS.
+
+Все7 файлов account/financial/broker response diagnostics с тестами прочитаны.
+46/46 declarations EN→RU:45 прежних иprivate helper;добавлено пояснение
+local synthetic disclosure sentinel. Исторические pinned Codex source refs
+сохранены как исторические,не объявлены новой проверкой внешнего provider.
+Пояснены exact message versus near-match,NONE versus UNKNOWN,optional financial
+snapshot absence versus authentication/policy failure иtyped wrapper cause
+versus безопасная category для логов. Error/JSON не выводят cause,но Unwrap
+намеренно сохраняет её для errors.Is;constructor не назван enum validator,
+public classifier проверяет allowlist иtyped nil. Outcome/usage не менялись.
+
+Повтор bounded UTF-8 error envelope/closed JSON fields/expected numeric code
+вынесен в private decodeAccountRPCErrorFields того же пакета с2 consumers.
+Method/code correlation остаётся у account/read,аfinancial method,запрет
+data даже null иexact no-snapshots message — у financial classifier.
+Helper не решает eligibility/authority,не логирует raw fields ине переносит
+классификацию одного RPC в другой. Existing malformed/duplicate/oversize/
+private-data tests проверяют обе стороны. Это короткий полезный повтор,
+не detector group,поэтому raw count reduction ему не приписан.
+
+После обратного раскрытия двух callsites,восстановления прежнего raw guard
+иutf8 import Go AST всех7 прежних файлов совпадает с SHA217 без comments/
+token.Pos;actual helper body также сверяется с точным ожидаемым source.
+Classifiers/closed categories/sentinels/allowlist ипорядок data/message
+проверок прежние. Новых API,events,SDK,dependencies илиданных живой среды нет.
+
+Выбранные codex unit:11 верхних/55 всех PASS,0 FAIL/SKIP.
+Проверены pinned account reasons иnear matches,другие methods/codes,
+malformed/duplicate/null/session-only/private errors,точный financial outcome,
+все broker response categories cjoined sentinels/context causes/typed nil,
+frame/order/replay/tool/terminal/archive/callback failures иbound private
+diagnostic provenance. Только in-memory synthetic frames,без model/network.
+Из runner сGOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4:
+`go test -mod=readonly -count=1 -json ./internal/codex -run '^(TestClosedAccountReadFailure|TestFinancialUnavailable|TestBrokerDiagnostic|TestBrokerResponseFailureCategory|TestBrokerResponseReadFailureCategories)'`.
+Full runner build -mod=readonly,scoped46/46,17 Node units,Go-checker unit,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL. Новых library API нет;
+исторический pinned external-source mapping вблоке не исследовался заново.
+
+Рабочий K0gNxH:6584 sources,222 excluded,1832 raw,594 retained,1238 unresolved;
+Go8368/21165,missing12797;raw SHA256
+`254e7c50b9f28a3262f93cc1d60a6707a3ab9f41f40880ea6be9812ee025f24f`;
+clone-set прежний `a2c4517d1be785325d788f8d34d62aa3b2dd1c1378ed8557909402bb78442726`.
+Pair/fragment/count multiset неизменен;новых groups/exceptions нет.
+Полный codex/runner/repo unit иобщий Go-docs check ещё не выполнены;
+live/browser/deploy/настоящие ИИ/STT/почта NOT RUN. Цель остаётся активной,
+точный post-commit scan публикуется втом же Draft PR.
 
 ## Двести семнадцатая волна — конфигурация и provider context runner
 

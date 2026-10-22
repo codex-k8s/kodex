@@ -5,25 +5,15 @@ import (
 	"unicode/utf8"
 )
 
-// closedAccountReadFailure классифицирует только статические ошибки прямого
-// account/read закреплённого Codex 0.160.0. Источник: официальный tag
-// rust-v0.160.0, codex-rs/app-server/src/request_processors/account_processor/
-// workspace_routing.rs:57–104,157–168. Session-only variants недостижимы при
-// read_account(None). Диагностика не назначает authority и не меняет outcome.
-// Исходные message/data остаются только локальным входом и не возвращаются.
+// closedAccountReadFailure classifies only exact static messages from the pinned direct account/read internal-error profile after method/code and bounded-envelope checks. Unrelated calls return NONE and malformed or unrecognized content returns UNKNOWN; raw message/data never becomes a returned diagnostic or authority decision.
+// closedAccountReadFailure классифицирует лишь точные статические сообщения pinned direct account/read internal-error profile после method/code и bounded-envelope checks. Чужие вызовы дают NONE, malformed или неизвестные данные — UNKNOWN; сырые message/data не становятся возвращённой диагностикой или authority decision.
+// Историческая привязка: rust-v0.160.0, codex-rs/app-server/src/request_processors/account_processor/workspace_routing.rs:57–104,157–168; session-only variants не относятся к direct read_account(None).
 func closedAccountReadFailure(method string, code int64, raw json.RawMessage) string {
 	if method != "account/read" || code != -32603 {
 		return "NONE"
 	}
-	if len(raw) == 0 || len(raw) > maximumDiagnosticBytes || !utf8.Valid(raw) {
-		return "UNKNOWN"
-	}
-	fields, err := decodeObject(raw, schema([]string{"code", "message"}, "code", "message", "data"))
-	if err != nil {
-		return "UNKNOWN"
-	}
-	var embeddedCode int64
-	if strictDecode(fields["code"], &embeddedCode) != nil || embeddedCode != code {
+	fields, valid := decodeAccountRPCErrorFields(raw, code)
+	if !valid {
 		return "UNKNOWN"
 	}
 	message, err := decodeBoundedString(fields["message"], maximumDiagnosticBytes)
@@ -72,7 +62,8 @@ func closedAccountReadFailure(method string, code int64, raw json.RawMessage) st
 	}
 }
 
-// safeAccountReadFailure повторно ограничивает значение на logging boundary.
+// safeAccountReadFailure rechecks the closed reason vocabulary at the logging boundary, preserving known reasons/NONE/UNKNOWN and collapsing every arbitrary string to UNKNOWN without trimming or guessing from text.
+// safeAccountReadFailure повторно сверяет закрытый словарь причин на logging boundary, сохраняя известные причины/NONE/UNKNOWN и заменяя произвольные строки на UNKNOWN без обрезки и угадывания по тексту.
 func safeAccountReadFailure(reason string) string {
 	switch reason {
 	case "REQUIREMENTS_LOAD", "MISSING_ACCOUNT_ID", "DISCOVERY_CANCELLED", "ACCOUNT_CHANGED",
@@ -84,4 +75,21 @@ func safeAccountReadFailure(reason string) string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+// decodeAccountRPCErrorFields checks the common bounded UTF-8 error envelope, exact code/message schema and expected numeric RPC code. Method correlation, data eligibility and message interpretation remain with each caller; raw fields stay private to diagnostic classification.
+// decodeAccountRPCErrorFields проверяет общий ограниченный UTF-8 error envelope, точную code/message schema и ожидаемый numeric RPC code. Method correlation, допустимость data и толкование message остаются у вызывающих; сырые поля остаются приватными для diagnostic classification.
+func decodeAccountRPCErrorFields(raw json.RawMessage, expectedCode int64) (map[string]json.RawMessage, bool) {
+	if len(raw) == 0 || len(raw) > maximumDiagnosticBytes || !utf8.Valid(raw) {
+		return nil, false
+	}
+	fields, err := decodeObject(raw, schema([]string{"code", "message"}, "code", "message", "data"))
+	if err != nil {
+		return nil, false
+	}
+	var code int64
+	if strictDecode(fields["code"], &code) != nil || code != expectedCode {
+		return nil, false
+	}
+	return fields, true
 }

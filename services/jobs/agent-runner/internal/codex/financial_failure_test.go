@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestFinancialUnavailableRequiresExactOutcome checks the one allowed financial-unavailable envelope and rejects wrong method/code/message, data even when null, whitespace suffixes, duplicate keys and trailing JSON.
+// TestFinancialUnavailableRequiresExactOutcome проверяет единственный допустимый financial-unavailable envelope и отклоняет wrong method/code/message, data даже при null, whitespace suffixes, duplicate keys и trailing JSON.
 func TestFinancialUnavailableRequiresExactOutcome(t *testing.T) {
 	for _, row := range []struct {
 		method string
