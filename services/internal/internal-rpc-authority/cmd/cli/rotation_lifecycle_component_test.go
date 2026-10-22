@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// testAuthorityRotationLifecycle exercises the disposable publisher prepare/begin/deliver/promote/abort protocol, exact source/predecessor binding, replay behavior, required readbacks, overlap blocking and durable retirement. Admin-seeded readbacks and manually expired overlap fields accelerate this synthetic scenario; cleanup removes only its rows and restores the neighboring fixture. It is not a live attestation, real elapsed-overlap or production recovery test.
+// testAuthorityRotationLifecycle проверяет в одноразовой БД протокол publisher prepare, begin, deliver, promote и abort, точные привязки источника и предшественника, повторы, обязательные readback, блокировку перекрытия и устойчивый вывод. Созданные администратором readback и вручную истёкшие поля перекрытия ускоряют синтетический сценарий; очистка удаляет только его строки и восстанавливает соседний эталон. Это не живая аттестация, проверка реального ожидания перекрытия или промышленного восстановления.
 func testAuthorityRotationLifecycle(t *testing.T, port uint64) {
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 	defer cancel()
@@ -71,7 +73,8 @@ func testAuthorityRotationLifecycle(t *testing.T, port uint64) {
 		}
 	}
 
-	// Genesis остаётся покрыт baseline; здесь проверяется upgrade живой history.
+	// revisionOne, revisionTwo and revisionThree reserve the three consecutive synthetic source revisions for this disposable lifecycle scenario; genesis is covered by the shared baseline fixture.
+	// revisionOne, revisionTwo и revisionThree закрепляют три последовательные синтетические исходные ревизии одноразового сценария жизненного цикла; genesis проверяется общим исходным эталоном.
 	const revisionOne, revisionTwo, revisionThree int64 = 1093003, 1093004, 1093005
 	predecessorDigest := strings.Repeat("b", 64)
 	registryOne, snapshotOne := strings.Repeat("c", 64), strings.Repeat("d", 64)

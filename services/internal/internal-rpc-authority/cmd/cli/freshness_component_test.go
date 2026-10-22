@@ -13,9 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-// Настоящие LOGIN и production challenge/consume/accept SQL; receipt не вставляется
-// вручную. Owner publication берётся из общего migration fixture, подпись/claims
-// отдельно проверяются service tests. 31s проходят по настоящим часам PostgreSQL.
+// testAuthorityFreshnessProtocol exercises real LOGIN roles and canonical challenge/consume/register/activate/accept SQL within the disposable migration fixture, including idempotent receipts, version-one-to-two activation, durable issued bindings, replay and a lock wait across the thirty-second freshness deadline. It waits on real database time, reconnects after expiry and requires a new receipt/context for recovery; owner snapshot data is synthetic and signature verification belongs to separate service tests. Only the component entry calls it, with a sixty-five-second local budget.
+// testAuthorityFreshnessProtocol проверяет реальные LOGIN-роли и канонические SQL challenge, consume, register, activate и accept в одноразовой миграционной оснастке, включая идемпотентные квитанции, переход активации с первой версии на вторую, устойчивые issued-привязки, replay и ожидание блокировки через тридцатисекундную границу свежести. Используется реальное время БД, после истечения выполняется переподключение, для восстановления нужны новые квитанция и контекст; данные снимка владельца синтетические, подпись проверяется отдельными сервисными тестами. Помощник вызывается только компонентной точкой входа с локальным бюджетом шестьдесят пять секунд.
 func testAuthorityFreshnessProtocol(t *testing.T, port uint64) {
 	ctx, cancel := context.WithTimeout(t.Context(), 65*time.Second)
 	defer cancel()
@@ -199,6 +198,8 @@ func testAuthorityFreshnessProtocol(t *testing.T, port uint64) {
 		lateArgs[k] = v
 	}
 	lateArgs["caller_workload_id"], lateArgs["context_signer_generation"] = "control-plane", int64(1)
+	// lateResult is the local buffered-channel result of the verifier acceptance query delayed by a conflicting replay-key transaction. It keeps snapshot eligibility, replay reservation and query error separate so a post-deadline database response cannot be mistaken for acceptance.
+	// lateResult — локальный результат запроса принятия verifier, задержанного конфликтующей транзакцией ключа replay, для буферизованного канала. Допустимость снимка, резервирование replay и ошибка запроса хранятся отдельно, чтобы ответ БД после срока не считался принятием.
 	type lateResult struct {
 		snapshot, replay bool
 		err              error

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.286.0
+version: 1.287.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,52 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят седьмая волна — завершение комментариев authority cmd
+
+Опубликованный SHA286 — `23f7ac91382e4246d8259ac09652bac633a7cd42`.
+Точный 7o0kWr:6615 sources,222 excluded,1819 raw/718 retained/
+1101 unresolved; Go12407/21254,missing8847. Raw SHA256:
+`52dcde9a0a2b5918e48ff1681037de0e4500fc5e943fa3e1862f9a114c59b907`;
+clone-set01a0079f… . Exact bootstrap/app32/125, полный authority build,
+docs25/25, inverse AST5/tooling/scan PASS LOCAL,0 FAIL/SKIP;
+push/readback и Draft PR PATCH/GET286 подтверждены.
+
+Полностью прочитаны последние9 CLI files:rotation/repair и их обычные
+units, component migration/freshness/rotation/provenance/workload fixtures.
+34/34 declarations описаны EN→RU, включая2 local channel-result types;
+дополнительно пояснены4 local const declarations. Весь authority cmd:
+40 Go files,142/142 declarations,missing0. Это завершение только cmd,
+не всех Go declarations репозитория.
+
+Комментарии разделяют syntax confirmation и owner database authority,
+bounded status/watch и exact operation terminal predicate, uncertain abort
+без blind retry, input buffer clearing и остающуюся immutable string.
+Для component fixtures явно описаны synthetic snapshots/JWS placeholders,
+direct admin readbacks/deadline updates, реальный LOGIN versus role switch,
+SQLSTATE-specific refusal, durable state/rejoin versus повтор локального
+предиката, RLS/retirement и реальные database-time freshness waits.
+Тела, SQL literals, параметры, timing, assertions и //go:embed прежние;
+AST9/directive proof идентичен SHA286. Applied migrations не менялись.
+
+15 обычных CLI unit,21 с subtests, и полный authority build -p=2
+PASS LOCAL,0 FAIL/SKIP. Точная команда SHA284 выбирает15 unit names,
+KODEX_AUTHORITY_MIGRATION_TEST_PORT удалён из child env; все test files
+компилируются, но component entry не вызывается. Component PostgreSQL,
+rotation/freshness protocols и live authority — NOT RUN, не PASS.
+17 Node/Go checker units, scope docs34/34 и all-cmd142/142, AST/clone
+proof,5 ignores и gofmt/diff-check PASS LOCAL.
+
+Рабочий XlTFAQ:6615 sources,222 excluded,1819 raw/718 retained/
+1101 unresolved; Go12441/21254,missing8813. Весь clone multiset1819 и
+clone-set прежние; registry600/718 неизменён, новых exclusions нет.
+Raw SHA256:
+`85c45ea0a90fd776e78d33eadb1db4eb707569356db5d59f505f4a84b5599825`;
+clone-set:
+`01a0079f54f39df98a9ec6807a72beea8da86c465ae11dc3a713d39fe0754be0`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, contracts, applied migrations и live state прежние.
+Общая задача открыта; historical FAIL и scoped NOT RUN сохраняются.
 
 ## Двести восемьдесят шестая волна — общая сборка публичных метаданных ключа
 

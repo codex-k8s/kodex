@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// legacyPreimage creates canonical synthetic publication-input JSON containing a large public policy fixture and fixed registry digest, failing the component test on encoding error. It is deliberately greater than small legacy transport budgets, not a real credential or a proof accepted without database correlation.
+// legacyPreimage создаёт канонический синтетический JSON входа публикации с большим публичным эталоном политики и фиксированным дайджестом реестра и завершает компонентный тест при ошибке кодирования. Размер намеренно превышает старые малые транспортные бюджеты; это не реальный реквизит и не доказательство, принимаемое без сопоставления БД.
 func legacyPreimage(t *testing.T) string {
 	t.Helper()
 	raw, err := internalrpcauth.CanonicalJSON(map[string]string{"manifest_bundle": "fixture-public-bundle", "policy": "fixture-policy" + strings.Repeat("p", 700000), "registry_digest_sha256": strings.Repeat("d", 64)})
@@ -16,6 +18,8 @@ func legacyPreimage(t *testing.T) string {
 	return string(raw)
 }
 
+// seedLegacyRegistryProvenance inserts only the disposable revision-one-hundred promoted intent and history fixture, binding its stored publication-input hash to legacyPreimage. It runs as the fixture administrator before forward migrations to reproduce old provenance, not as a production publisher or repair command.
+// seedLegacyRegistryProvenance вставляет только одноразовые продвинутое намерение и историю ревизии сто, связывая сохранённый хеш входа публикации с legacyPreimage. Оснасточный администратор выполняет это до прямых миграций для воспроизведения старого происхождения, а не как промышленный издатель или команда восстановления.
 func seedLegacyRegistryProvenance(t *testing.T, port uint64) {
 	ctx := t.Context()
 	admin := workloadBoundaryConnection(t, ctx, port, "postgres", "")
@@ -27,6 +31,8 @@ func seedLegacyRegistryProvenance(t *testing.T, port uint64) {
  VALUES(100,repeat('c',64),1,1,1,99,repeat('b',64),'{}',clock_timestamp(),'fixture.public.signature','14650000-0000-4000-8000-000000000001',encode(sha256(convert_to($1,'UTF8')),'hex'),1)`, legacyPreimage(t))
 }
 
+// testLegacyRegistryProvenance verifies the migrated synthetic history initially cannot serve a predecessor without proof, denies publisher repair/table access and rejects malformed, foreign, noncanonical or mismatching preimages. It accepts exact repair idempotently across reconnect, checks immutable history and a single receipt, then deletes only its synthetic revision range. The helper requires the disposable database and does not perform a live administrative repair.
+// testLegacyRegistryProvenance проверяет, что мигрированная синтетическая история сначала не выдаёт предшественника без доказательства, запрещает publisher восстановление и чтение таблицы и отклоняет некорректные, чужие, неканонические и несовпадающие прообразы. Точное восстановление принимается идемпотентно после переподключения, проверяются неизменность истории и одна квитанция, затем удаляется только синтетическая ревизия. Помощник требует одноразовую БД и не выполняет живое административное восстановление.
 func testLegacyRegistryProvenance(t *testing.T, port uint64) {
 	ctx := t.Context()
 	admin := workloadBoundaryConnection(t, ctx, port, "postgres", "")
