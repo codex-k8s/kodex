@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.294.0
+version: 1.295.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,73 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто пятая волна — комментарии SQL-каталогов authority
+
+Опубликованный SHA294 — `6d45e91ba93ae475f5efa24277f479ff51897e9b`.
+Точный CkMyLV:6621 sources,222 excluded,1812 raw/720 retained/
+1092 unresolved; Go12647/21261,missing8614. Raw SHA256:
+`d331d0a93112e328900ee239f6ee32ce74eaa916584f236d0ab2fa5a1c8db34e`;
+clone-setee12a7b9… . Exact27/76 unit/full authority build, inverse AST1,
+tooling/scan PASS LOCAL,0 FAIL/SKIP; push и Draft PR PATCH/GET294 есть.
+
+Прочитаны пять queries.go authority/publisher/readback/restore/session,
+317 lines, три связанные unit files и45 embedded SQL files/952 lines.
+65/65 declarations EN→RU, включая embedded vars, private querySet,
+load/validate helpers и test helper. Исходные SQL не менялись.
+
+Comments точно описывают proof/context/continuation reservations,
+nonregressing watermark, independent fresh replica receipt, exact versus
+advanced snapshot path, signed predecessor, caller-scoped issued binding;
+publisher intent/delivery/publication provenance и exact promotion targets;
+readback peer/digest/nonce/idempotency, trust versus readiness и одноразовый
+consume function; restore exact fence и роль session_user/current_user.
+Политика принадлежит DB/store, а не факту загрузки строки. SET ROLE меняет
+effective role в пределах уже выданных прав, не создаёт LOGIN authority.
+
+Различия валидаторов сохранены и явно названы:authority/session проверяют
+nonempty text и name/cardinality PREFIX, возвращая исходные bytes.
+Publisher/readback требуют только name плюс space, не проверяя cardinality.
+Ни один из этих Go helper не является полным SQL parser либо runtime
+directory discovery. У publisher/readback map iteration не гарантирует
+первый invalid query. Comments не приписывают им более строгую валидацию.
+
+Тесты описаны по фактическим assertions:source substring/pgx named rewrite
+не равны execution/restart/concurrency/signature proof; trust readiness
+map test проверяет9 keys и НЕ переписывает SQL несмотря на своё имя.
+SQLSTATE40001 classifier и READ COMMITTED options проверяются локально,
+а не настоящим serialization conflict или consumer transaction.
+Context7/jackc/pgx docs и pinned5.10.0 StrictNamedArgs/RewriteQuery source
+сверены:exact missing/extra names, локальная rewrite без SQL execution.
+GO-DOC-002 полностью перечитан; гайды и database policy не менялись.
+
+33 верхних/82 всех selected unit и full authority build -p=2 PASS LOCAL,
+0 FAIL/SKIP. Дополнительно к294 реально выполнены3 publisher и3 readback
+repository unit; session/restore packages скомпилированы без своих tests.
+Opt-in PostgreSQL concurrency component compiled NOT RUN; DSN удалён,
+explicit regex не запускает его.17 Node/Go checker units, AST8/directives,
+scope docs65/65,5 ignores и diff-check PASS LOCAL. AST8 без comments/
+positions прежний, //go:embed сохранены; SQL/migrations diff пуст.
+
+Выполненная команда unit/build (из модуля internal-rpc-authority):
+```bash
+set -e
+set -o pipefail
+env -u KODEX_AUTHORITY_POSTGRES_TEST_DSN GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/client/readback ./internal/client/restoreagent ./internal/domain/types/value ./internal/domain/service ./internal/repository/postgres/authority ./internal/repository/postgres/publisher ./internal/repository/postgres/readback ./internal/repository/postgres/session ./internal/repository/postgres/restore -run '^(TestPromoteSnapshotUsesExactRequiredTargets|TestLoadSnapshotHistoryIncludesCurrentRevisionForRestart|TestLoadSnapshotPredecessorUsesPersistedCrossDomainProvenance|TestReadbackTrustReadinessArgsMatchQuery|TestSerializationFailureClassificationIsExact|TestReadbackConsumeUsesReadCommittedIsolation|TestReadbackRPCRetryPreservesErrorBoundaries|TestNewRequestUUIDReturnsDistinctVersionFourIdentifiers|TestSecretAttestorReusesTransportAcrossRefreshes|TestPollНеЗакрываетAdmissionВоВремяШтатнойПроверки|TestVerifySafeNoDirectiveFailClosedДоПервогоВнешнегоPoll|TestVerifySafeNoDirectiveПринимаетТолькоOpenИСозревшийCompleted|TestJoinedAuthorityUUIDPreservesEncoding|TestTerminatedAuthorityUUIDPreservesEncoding|TestReadbackTTLWindowsCoverProjectedSecretDelivery|TestReadbackIntentIdentityIncludesSourceRevision|TestValidCredentialAuthentication|TestMatchesObservedCaller|TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration|TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding|TestAuthorizationExpiryDoesNotExceedMetadataWindow|TestDurableFreshnessClockAndOutageBoundaries|TestDurableFreshnessConsumesNetworkTimeAndFailsOnDatabaseLoss|TestDurableFreshnessRejectsCorruptionAndSlidingSameReceipt|TestFreshnessAdoptsExactReplicaReceiptForWorkingAccept|TestIssueContinuationInheritsVerifiedRootAndReservesChild|TestSnapshotActivationAllowsFreshReceiptForExactSnapshot|TestContextAcceptanceUsesExactSnapshotReceiptArguments|TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor|TestProofReservationAllowsConcurrentOutOfOrderProofs|TestContinuationReservationAtomicallyRequiresAcceptedParent|TestReadinessReservationUsesModeSpecificWritePath|TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt)$' | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Рабочий mKnlXH:6621 sources,222 excluded,1812 raw/720 retained/
+1092 unresolved; Go12712/21261,missing8549. Все1812 clone keys/counts/
+clone-set и registry602/720 прежние; новых exclusions нет.
+Raw SHA256:
+`e741e400e3ee56683cd2a637ccb76f91ab5ee51eadc9d2aa4a7794e85a0a6b98`;
+clone-set:
+`ee12a7b9aedb8e8b0351a046699b7b9490c1e8b44742c771b347db582dee8c77`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, contracts, applied migrations и live state прежние.
+Finding verifyDirective из293 НЕ исправлен; historical FAIL/scoped NOT RUN
+сохраняются. Общая задача открыта.
 
 ## Двести девяносто четвёртая волна — единый retry readback RPC
 
