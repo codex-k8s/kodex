@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.177.0
+version: 1.178.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,79 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семьдесят восьмая волна — весь Kubernetes workload manager
+
+На базе опубликованного SHA `f7b4c5fa927df192fc9534a5f306dfd76ab5ff03`
+полностью прочитан manager.go runtime-controller и подготовлены точные
+содержательные EN→RU комментарии оставшихся 177 объявлений: 48 констант,
+типы, ошибки, методы материализации/сверки/очистки и private helpers.
+Весь файл теперь 178/178, scoped Go-docs-check — PASS LOCAL.
+Комментарии внесены через apply_patch по проверенным AST anchors, без
+генератора общих описаний. Полное механическое сравнение файла с parent
+после удаления комментариев/нормализации пустых строк/gofmt подтвердило
+точное совпадение исполняемого кода. SDK, поля, runtime errors/logs,
+Proto/JSON, Kubernetes manifests и порядки вызовов не менялись.
+
+Комментарии различают Kubernetes lease election и owner execution fencing;
+drain budget и доказанное завершение; local ticket/token lookup и свежую
+owner authority. Описаны реальные точные UID/resourceVersion/digest checks,
+broker metadata без значений, отдельно warm Secret materialization и
+асинхронная замена Pod. EnsureTurn сам не продлевает lease: guard принадлежит
+переданному вызывающему, подготовка до публикации здесь не откатывается.
+Stop запрашивает удаление, сохраняя callback данные; Delete не назван
+атомарным terminal владельца. Session PVC сохраняется; допустимый перевод
+project binding отдельно требует точного завершаемого потребителя и UID
+precondition с bounded readback исчезновения.
+
+Не усилены обещания прежнего кода: warm ticket/projection cleanup читает
+только одну страницу до 256 объектов, managedMetadataMatches допускает
+лишние метаданные, runtimePodMatches сравнивает выбранные поля, а budget
+данных не измеряет весь serialized Kubernetes object. Token matching
+warm-turn отделён от сохранения прежнего случайного токена других режимов.
+Parse managed OAuth не назван полной закрытой схемой, duplicate-key reader
+не объявлен имеющим отдельный depth limit. Provider sandbox явно сохраняет
+существующий unconfined seccomp и необязательный node-local AppArmor,
+не выдаётся за RuntimeDefault или доказанную node enforcement.
+
+Четыре точные группы оставлены тремя адресными решениями path/fragment/count:
+оболочки Secret/ConfigMap cleanup, два окна typed API pagination orphan scan
+и Create/Get ServiceAccount против NetworkPolicy. Общие active hash/inspect
+и metadata predicates уже одни; различаются nominal Kubernetes APIs,
+диагностика и проверяемые token-automount/spec условия. Обобщённый
+reflective list/create dispatcher ради этих коротких окон не вводится.
+Ни файл, ни методы целиком не исключены. Последняя группа появилась только
+после comments/gofmt, хотя исполняемые тела не менялись; raw-счётчик не выдан
+за число новых программных повторов либо сделанных выносов.
+
+Два межмодульных совпадения manager.go пока остаются в очереди: DNS label
+и Proto enum caster. Найдены семь локальных DNS readers и существующий
+runtimecontract validator; один reader имеет более строгий первый символ.
+Их нельзя объединять потерей этого различия или скрывать общим исключением.
+Изменений validators в этой волне нет.
+
+Context7 /kubernetes/client-go: прочитаны LeaseDuration/RenewDeadline/
+RetryPeriod/ReleaseOnCancel, ListOptions Limit/Continue и UID/resourceVersion
+preconditions. Точные LeaderElectionConfig и DeleteOptions дополнительно
+сверены локальным go doc закреплённого k8s.io/* v0.36.3; SDK не обновлён.
+ReleaseOnCancel не объявлен гарантией отсутствия одновременного исполнения.
+
+PASS LOCAL: workload package `go test -count=1 -json ./internal/workload` —
+84 верхних PASS, 300 PASS с подтестами, 0 FAIL и один прежний SKIP
+TestAssistantWarmRuntimeOwnerWireBuild; полный module `go build ./...`;
+scoped checker 178/178, 16 unit анализатора, unit Go-checker, пять
+ignore-boundaries и diff-check. Go1.26.6, GOENV=off/GOWORK=off.
+Warm owner-wire profile — NOT RUN, env для снятия SKIP не подделывался.
+Точный опубликованный SHA и повтор проверок будут указаны в текущем PR.
+Полный repository Go-docs-check, component/live/PostgreSQL/browser/deploy
+и реальные агенты/провайдеры — NOT RUN; прежний diagnostics FAIL не скрыт.
+
+Detector: 6566 source, 222 generated/lock исключения, 1846 raw,
+578 точных решений и 1268 неразобранных. Рабочий raw SHA-256
+`2277a5ed5bc484ffd552b518eca3e26f51d9f334bd998da58cb08f976652b62c`,
+clone-set fingerprint
+`836d38eca986124fd684f9b5d83b77cc27a692d08f334c4ff98492659fa82bf6`.
+Go-реестр 6520/21125, непокрыты 14605. Цель и единый Draft PR не завершены.
 
 ## Сто семьдесят седьмая волна — канонический manifest наборов вложений
 

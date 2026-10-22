@@ -3792,6 +3792,30 @@
       "fragmentSHA256": "122a1119ef2ff41624341d45f7ebb73ad42eda88f602a310a337a4dc76311143",
       "count": 1,
       "reason": "Два перекрывающихся окна состоят из typed overrides четырёх разных generated RPC: claim и completion для connection test и invocation. Каждый метод сохраняет свою request/response сигнатуру и callback, проверяемые тестами lease identity и effect receipt. Исполняемая общая операция отсутствует; generic dispatcher сделал бы границу менее явной. Исключён точный self-clone, не файл или тестовый пакет."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/workload/manager.go",
+      "secondPath": "services/internal/runtime-controller/internal/workload/manager.go",
+      "fragmentSHA256": "ff474e0a87c1ef2827ad3ad45d0bf0cca5ce1cd51ffd9737baa862b1acf3c6c8",
+      "count": 1,
+      "reason": "Совпадает короткая оболочка обхода страниц Secret tickets и ConfigMap projections в CleanupStaleTurns. Их typed Kubernetes clients, источники Pod binding и собственные сообщения ошибок остаются явными; общий activeHashes уже вычисляется один раз. Унификация потребовала бы нового адаптера метаданных и delete callbacks только ради небольшого цикла, скрывая различие закрытых токенов и несекретных VFS-проекций без общего доменного действия. Сохранено точное окно с прежним порядком best-effort очистки, не весь метод."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/workload/manager.go",
+      "secondPath": "services/internal/runtime-controller/internal/workload/manager.go",
+      "fragmentSHA256": "e9fe8c39881a02dbff3120c9f6f6387e4b9d2aeebc03a27fd7266cb50ec11661",
+      "count": 2,
+      "reason": "Два точных совпадения сопоставляют соседние typed list/pagination для ServiceAccount, Role и RoleBinding при поиске осиротевших execution hashes. Само решение о controller/active hash уже вынесено в один inspect callback. Повторяется только получение страниц разных Kubernetes API с разными ошибками; отражательный ListInterface либо набор преобразующих callbacks ради удаления явных nominal клиентов добавил бы новый общий транспорт без самостоятельной общей операции. Сохранены только эти два fragment/path/count окна, NetworkPolicy и остальной файл не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/workload/manager.go",
+      "secondPath": "services/internal/runtime-controller/internal/workload/manager.go",
+      "fragmentSHA256": "c42264eb7b07419e29e0d0def302e08c97dba0435e4e699e411c1063beed1b4b",
+      "count": 1,
+      "reason": "Нормализатор сопоставляет Create/AlreadyExists/Get оболочки ensureServiceAccount и ensureNetworkPolicy. Первый сверяет token automount, второй полную NetworkPolicy.Spec; общая проверка требуемых labels/annotations уже в managedMetadataMatches. Универсальная create-or-verify обёртка потребовала бы callbacks для разных nominal ресурсов и скрыла бы разные security invariants без устранения их проверок. Совпадение выявлено только после GoDoc/gofmt, исполняемый код не менялся. Сохранено лишь точное окно, не две функции целиком."
     }
   ]
 }
