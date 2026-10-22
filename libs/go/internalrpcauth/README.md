@@ -53,7 +53,11 @@ Production-подпакет — чистая форма без импортов 
 SHA-256 сертификата и допускает обработчик только с нейтральным проверенным
 контекстом. Соответствие идентификатора операции конкретному RPC и получение
 authority proof остаются связкой конкретного сервиса и не входят в общую
-библиотеку.
+библиотеку. Чистый `authorityclient.MethodOperations` даёт общий exact map
+lookup для `OperationResolver`, но не определяет registry, не проверяет его
+допустимость и не выдаёт разрешений. Nil map возвращает отсутствие, present
+empty value сохраняет presence; строки не нормализуются, карта не копируется.
+Владение данными и синхронизация изменений остаются у caller.
 
 Для server-stream RPC с единственным initial request сервис передаёт exact
 method в optional requestBoundMethods обоих stream interceptors. Закрытый

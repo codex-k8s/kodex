@@ -11,6 +11,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// dialTrustedCluster accepts only the exact profile and secret-broker target with bounded request timeout, registers draft plus named secret operations and installs the trusted unary boundary on a plaintext gRPC connection. It reads no ordinary TLS/issuer files; network trust remains the deployment profile's responsibility.
+// dialTrustedCluster допускает лишь точные profile и secret-broker target с ограниченным request timeout, регистрирует draft и именованные secret operations и устанавливает trusted unary boundary на plaintext gRPC connection. Обычные TLS и issuer files не читаются; network trust обеспечивает deployment profile.
 func dialTrustedCluster(config Config) (*Client, error) {
 	if config.RPCProfile != "trusted-cluster" ||
 		strings.TrimPrefix(config.Target, "dns:///") != "secret-broker.kodex-system.svc:8443" ||

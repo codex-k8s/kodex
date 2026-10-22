@@ -17,12 +17,16 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// draftIssuer embeds the unused generated interface and records the actual issuance request, optionally returning a fixture PermissionDenied. It returns a marker context, not a signed production token.
+// draftIssuer встраивает неиспользуемый generated interface и записывает фактический issuance request с необязательным fixture PermissionDenied. Возвращается marker context, а не подписанный production token.
 type draftIssuer struct {
 	auth.AuthorizationIssuerServiceClient
 	request *auth.IssueAuthorizationContextRequest
 	denied  bool
 }
 
+// IssueAuthorizationContext captures the request pointer before applying configured fixture refusal and otherwise returns a fixed context marker without validation, signing or replay persistence.
+// IssueAuthorizationContext сохраняет request pointer до настроенного fixture refusal и иначе возвращает фиксированный context marker без validation, подписи и replay persistence.
 func (i *draftIssuer) IssueAuthorizationContext(_ context.Context, r *auth.IssueAuthorizationContextRequest, _ ...grpc.CallOption) (*auth.IssueAuthorizationContextResponse, error) {
 	i.request = r
 	if i.denied {
@@ -31,11 +35,15 @@ func (i *draftIssuer) IssueAuthorizationContext(_ context.Context, r *auth.Issue
 	return &auth.IssueAuthorizationContextResponse{CompactJws: "fixture-context"}, nil
 }
 
+// draftProof captures the requested operation/method and context-bound request digest and can deny resolution. It does not establish project ownership or create a real authority proof.
+// draftProof сохраняет запрошенные operation и method и context-bound request digest и может отказать в resolution. Project ownership не устанавливается и настоящий authority proof не создаётся.
 type draftProof struct {
 	operation, method, digest string
 	denied                    bool
 }
 
+// AuthorityProof records the operation/method and any bound digest, then returns synthetic proof/correlation or PermissionDenied. Ignoring a missing digest here leaves the enclosing unit responsible for asserting exact binding.
+// AuthorityProof записывает operation, method и доступный bound digest, затем возвращает synthetic proof и correlation либо PermissionDenied. Отсутствующий digest здесь игнорируется, а точную binding проверяет основной unit.
 func (p *draftProof) AuthorityProof(ctx context.Context, operation, method string) (string, string, error) {
 	p.operation, p.method = operation, method
 	p.digest, _ = authorityclient.RequestDigest(ctx)
@@ -45,6 +53,8 @@ func (p *draftProof) AuthorityProof(ctx context.Context, operation, method strin
 	return "fixture-proof", "fixture-correlation", nil
 }
 
+// TestSecretDraftProtectedClientBindsExactRequestAndRejectsMissingAuthority exercises each registered draft method with success/proof/issuer outcomes, pins deterministic protobuf digest and outgoing context, and rejects unregistered RevealSecret before invoke. The final invoker is a local callback, not a broker or real secret store.
+// TestSecretDraftProtectedClientBindsExactRequestAndRejectsMissingAuthority проверяет каждый зарегистрированный draft method при success, proof и issuer outcomes, закрепляет deterministic protobuf digest и outgoing context и отклоняет незарегистрированный RevealSecret до invoke. Итоговый invoker — локальный callback, а не broker и реальное secret store.
 func TestSecretDraftProtectedClientBindsExactRequestAndRejectsMissingAuthority(t *testing.T) {
 	inputs := map[string]proto.Message{
 		sb.SecretBrokerService_SaveSecretDraft_FullMethodName:           &sb.SaveSecretDraftRequest{OperationGrant: "fixture-grant", Value: []byte("fixture-value")},

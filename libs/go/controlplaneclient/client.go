@@ -1,5 +1,9 @@
-// Package controlplaneclient создаёт mTLS и signed-authority gRPC clients к
-// специализированным web-first сервисам control-plane.
+// Package controlplaneclient composes generated control-plane clients with the
+// selected transport, operation registry and authority/service-identity boundary.
+// Domain ownership and command semantics remain with the remote services.
+// Пакет controlplaneclient связывает generated control-plane clients с выбранными
+// transport, operation registry и authority/service-identity boundary.
+// Доменное владение и семантика команд остаются у удалённых сервисов.
 package controlplaneclient
 
 import (
@@ -104,16 +108,11 @@ type Client struct {
 	grantFile               string
 }
 
-// operationSet maps exact gRPC methods back to registered operation IDs.
-// operationSet сопоставляет точные методы gRPC с зарегистрированными операциями.
-type operationSet map[string]string
-
-// OperationID resolves a full method only when it is present in the closed set.
-// OperationID возвращает операцию лишь для метода из закрытого набора.
-func (operations operationSet) OperationID(fullMethod string) (string, bool) {
-	value, ok := operations[fullMethod]
-	return value, ok
-}
+// operationSet names the shared exact-method map in this client's signatures;
+// validateOperations still owns nonempty/duplicate registry checks locally.
+// operationSet обозначает общую exact-method карту в сигнатурах этого client;
+// проверки nonempty и duplicate registry остаются у local validateOperations.
+type operationSet = authorityclient.MethodOperations
 
 // Dial builds the configured protected control-plane client and proof path.
 // Dial создаёт настроенный защищённый клиент control-plane и путь доказательства.

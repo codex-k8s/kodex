@@ -1,4 +1,7 @@
-// Package sttclient подключает control API к защищённому streaming STT RPC.
+// Package sttclient composes exact speech RPC routing with the selected transport
+// and authority-interceptor profile; recognition remains in the speech service.
+// Пакет sttclient связывает exact speech RPC routing с выбранными transport
+// и authority-interceptor profile; распознавание остаётся в speech service.
 package sttclient
 
 import (
@@ -18,6 +21,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// Config supplies the speech-service TLS paths/name, resolver target, local issuer peer IDs, proof provider and dial budget for ordinary mode; the separate trusted constructor consumes only its selected profile fields.
+// Config задаёт speech-service TLS paths и name, resolver target, local issuer peer IDs, proof provider и dial budget обычного режима; отдельный trusted constructor использует лишь поля выбранного profile.
 type Config struct {
 	RPCProfile                                                                 string
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
@@ -26,19 +31,20 @@ type Config struct {
 	Proofs                                                                     authorityclient.ProofProvider
 }
 
+// Client owns the generated speech client and its gRPC connection plus an optional local authorization issuer. It does not contain a model-provider credential or implement audio recognition itself.
+// Client владеет generated speech client, его gRPC connection и необязательным local authorization issuer. Model-provider credential не хранится и audio recognition самостоятельно не выполняется.
 type Client struct {
 	Speech     sttv1.SpeechToTextServiceClient
 	connection *grpc.ClientConn
 	issuer     *authorityclient.LocalConnection
 }
 
-type operationSet map[string]string
+// operationSet names the exact full-method registry consumed by speech authorization interceptors, without introducing wildcard resolution or model-specific authority.
+// operationSet обозначает exact full-method registry для speech authorization interceptors без wildcard resolution и model-specific authority.
+type operationSet = authorityclient.MethodOperations
 
-func (operations operationSet) OperationID(method string) (string, bool) {
-	operation, ok := operations[method]
-	return operation, ok
-}
-
+// Dial selects trusted-cluster explicitly or validates ordinary paths/issuer/proofs/budget, loads transport credentials, authenticates the local issuer and creates protected unary/stream speech clients. Connection construction is lazy for the remote target; it does not prove speech readiness or perform transcription.
+// Dial явно выбирает trusted-cluster либо проверяет обычные paths, issuer, proofs и budget, загружает transport credentials, аутентифицирует local issuer и создаёт protected unary и stream speech clients. Remote target подключается лениво; speech readiness не доказывается и transcription не выполняется.
 func Dial(ctx context.Context, config Config) (*Client, error) {
 	if config.RPCProfile != "" {
 		return dialTrustedCluster(config)
@@ -68,6 +74,8 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	return &Client{Speech: sttv1.NewSpeechToTextServiceClient(connection), connection: connection, issuer: issuer}, nil
 }
 
+// protectedConnection requires transport, issuer and proof dependencies, reverses the exact speech registry and installs both shared unary/stream issuance interceptors with unchanged 65-KiB send and one-MiB receive limits. It opens no local issuer socket itself.
+// protectedConnection требует transport, issuer и proof dependencies, обращает exact speech registry и устанавливает общие unary и stream issuance interceptors с прежними send limit 65 КиБ и receive limit один МиБ. Local issuer socket здесь не открывается.
 func protectedConnection(target string, transport credentials.TransportCredentials, issuer authorityv1.AuthorizationIssuerServiceClient, proofs authorityclient.ProofProvider) (*grpc.ClientConn, error) {
 	if issuer == nil || proofs == nil || transport == nil {
 		return nil, errors.New("STT client authority dependencies are missing")
@@ -89,6 +97,8 @@ func protectedConnection(target string, transport credentials.TransportCredentia
 	return connection, nil
 }
 
+// Close tolerates a nil receiver, otherwise closes the speech connection before an optional issuer and joins errors. A nonnil client is expected to own a nonnil connection; repeated-close behavior is delegated to gRPC.
+// Close допускает nil receiver, иначе закрывает speech connection до необязательного issuer и объединяет ошибки. Ненулевой client должен владеть ненулевым connection; repeated-close behavior передаётся gRPC.
 func (client *Client) Close() error {
 	if client == nil {
 		return nil
@@ -100,6 +110,8 @@ func (client *Client) Close() error {
 	return result
 }
 
+// transportCredentials reads the CA, parses roots and loads the client certificate/key before constructing exact-name TLS credentials with TLS 1.3 minimum. It does not enforce a CA byte limit, key-file ownership or remote readiness itself.
+// transportCredentials читает CA, разбирает roots и загружает client certificate и key до создания exact-name TLS credentials с минимумом TLS 1.3. Собственные CA byte limit, key-file ownership и remote readiness не проверяются.
 func transportCredentials(config Config) (credentials.TransportCredentials, error) {
 	caPEM, err := os.ReadFile(config.CAFile)
 	if err != nil {

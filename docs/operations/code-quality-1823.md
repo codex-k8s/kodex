@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.303.0
+version: 1.304.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,70 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста четвёртая волна — общий resolver RPC method и gateway clients
+
+Опубликованный SHA303 — `388b1de3a4c6db230665f01c2270c1ff8fae3073`.
+Exact V5GeEA:6629 sources,222 excluded,1807 raw/725 retained/
+1082 unresolved; Go13126/21276,missing8150. App35/35,10 unit/full
+gateway build/AST8/tooling PASS LOCAL; sourceSHA, push и Draft PR PATCH/GET303
+подтверждены. Общая задача не завершена.
+
+Прочитаны6 secretbroker/STT client files552 lines, общий OperationResolver
+port и его callers, прежний controlplaneclient lookup и зависимости профилей.
+Все31 прежних непокрытых объявления обработаны:29 описаны EN→RU,
+2 повторных метода удалены в пользу общего lookup. Новый shared type,
+method и unit описаны; scope9 Go files52/52,missing0. Три package headers
+и README API boundary обновлены. Остальные code comments не объявлены
+повторно проверенными целиком только из-за успешного scope счётчика.
+
+authorityclient.MethodOperations содержит одну plain map реализацию
+OperationResolver для3 production consumers. Private operationSet names —
+type aliases одного типа, не wrappers/вторая lookup-реализация и не legacy
+decoder. Callers по-прежнему строят собственные registry и проверяют их
+допустимость; method helper возвращает exact value/presence без normalization,
+fallback, копирования, policy selection, proof/signature или I/O.
+Nil map/unknown возвращают absence, present empty string остаётся present.
+Обычное map aliasing и обязанность синхронизации caller сохранены.
+
+Inverse AST7 восстанавливает actual shared map/method в трёх прежних
+позициях (только alpha-renaming локальных method/value identifiers) и
+сравнивает полные существующие caller/test files с303. Все остальные edits —
+комментарии; constructors, request digests, validation ordering, grant/proof
+source, interceptors, stream limits, TLS/plaintext profile selection и ошибки
+не менялись. Общая type identity намеренно одна; это вынос реализации,
+а не появление полномочий. Go directives и dependency versions прежние.
+Повтор короткий ниже detector threshold: raw reduction ему не приписывается.
+
+Новый pure unit через OperationResolver покрывает6 nil/unknown/exact/case/
+empty-value/empty-key cases и map aliasing. Existing gateway draft unit
+использует callbacks, catalog unit — loopback gRPC с synthetic marker, не
+реальный STT/provider/issuer/signature. Comments прямо различают обычный
+mTLS/local issuer и явный trusted plaintext profile; его network trust не
+объявлен проверенным этими units. grpc.NewClient lazy/no-I/O сверено
+Context7 /grpc/grpc-go и установленным1.82.1 go doc.
+
+Gateway app/secretbroker/sttclient12 верхних/30 всех unit/full gateway build,
+internalrpcauth authorityclient16/45 unit/full module build и полный
+controlplaneclient26/34 unit/build PASS LOCAL,0 FAIL/SKIP.
+Команды под GOENV=off,GOWORK=off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4,
+-mod=readonly,-count=1,-timeout120s; build -p=2, JSON runner с pipefail.
+17 Node и Go checker unit, AST7,scope52/52,5 ignores/diff-check PASS LOCAL.
+Остальные internalrpcauth packages compiled, не объявлены unit PASS целиком.
+Реальные sockets/CA/credentials, services, STT/audio/provider, browser,
+component/live/full acceptance NOT RUN.
+
+Рабочий BgKZ0P:6631 sources,222 excluded,1807 raw/725 retained/
+1082 unresolved; Go13157/21276,missing8119. Все1807 normalized clone
+keys/cardinalities и clone-set прежние, registry607/725 буквально прежний.
+Raw SHA256:
+`e6ac004847af14c887424e4b7c2e844f95fbf3ca2050c7c80bc8802314e9a973`;
+clone-set:
+`7eb4be03b35d8a5de141d64023f0ede40f472118e80f8433317f4aec527ae2da`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Generated/contracts/deps/SQL/migrations/live state прежние.
+Historical FAIL/finding293 не исправлены. Остаток Go:gateway1887,CP6232.
+Общая цель и Draft PR открыты.
 
 ## Триста третья волна — composition root control API gateway
 
