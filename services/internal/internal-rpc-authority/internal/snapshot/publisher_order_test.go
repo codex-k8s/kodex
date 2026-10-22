@@ -12,6 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
+// TestVerifyPublisherSnapshotCompactUsesSnapshotLimit signs a synthetic payload exceeding the ordinary
+// authorization limit and verifies that the separate full-snapshot limit accepts it.
+// TestVerifyPublisherSnapshotCompactUsesSnapshotLimit подписывает синтетическое содержимое больше
+// обычного предела контекста и проверяет принятие отдельным пределом полного снимка.
 func TestVerifyPublisherSnapshotCompactUsesSnapshotLimit(t *testing.T) {
 	t.Parallel()
 	key := mustPublisherTestKey(t, "snapshot-limit")
@@ -37,6 +41,10 @@ func TestVerifyPublisherSnapshotCompactUsesSnapshotLimit(t *testing.T) {
 	}
 }
 
+// TestPublisherKeyDocumentsIgnoreRegistryMapOrder reverses synthetic key input and requires
+// byte-identical canonical authorization/proof documents, not merely equal parsed fields.
+// TestPublisherKeyDocumentsIgnoreRegistryMapOrder меняет порядок синтетических ключей и требует побайтно
+// одинаковые канонические документы контекстов и доказательств, а не только равенство полей.
 func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 	t.Parallel()
 	now := time.Unix(1_786_507_482, 0).UTC()
@@ -85,6 +93,10 @@ func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 	}
 }
 
+// TestPublisherKeyValidityAllowsPlannedForwardOnlyRotation pins current-key expiry to the publication
+// window and requires at least a ninety-day operational rotation interval.
+// TestPublisherKeyValidityAllowsPlannedForwardOnlyRotation закрепляет окончание текущего ключа за окном
+// публикации и требует не менее девяноста дней для плановой ротации.
 func TestPublisherKeyValidityAllowsPlannedForwardOnlyRotation(t *testing.T) {
 	t.Parallel()
 	now := time.Unix(1_786_507_482, 0).UTC()
@@ -112,6 +124,11 @@ func TestPublisherKeyValidityAllowsPlannedForwardOnlyRotation(t *testing.T) {
 	}
 }
 
+// TestPublisherPreviousKeyUsesAuthoritativeDeadline checks that explicit previous-key deadlines,
+// serialized to Unix seconds, govern both authorization and proof trust rather than a fresh publication
+// window.
+// TestPublisherPreviousKeyUsesAuthoritativeDeadline проверяет применение явного срока предыдущего ключа
+// в Unix-секундах к доверию контекстам и доказательствам вместо нового окна публикации.
 func TestPublisherPreviousKeyUsesAuthoritativeDeadline(t *testing.T) {
 	t.Parallel()
 	now := time.Unix(1_786_507_482, 0).UTC()
@@ -157,6 +174,10 @@ func TestPublisherPreviousKeyUsesAuthoritativeDeadline(t *testing.T) {
 	}
 }
 
+// TestPublisherPreviousKeyCanBeRetiredAfterDeadline keeps an expired PREVIOUS record's original deadline
+// and valid interval while proving existing loaders can retain it alongside active CURRENT keys.
+// TestPublisherPreviousKeyCanBeRetiredAfterDeadline сохраняет прежний срок истёкшего PREVIOUS и
+// корректный интервал и проверяет возможность его хранения загрузчиками рядом с активными CURRENT.
 func TestPublisherPreviousKeyCanBeRetiredAfterDeadline(t *testing.T) {
 	t.Parallel()
 	now := time.Unix(1_786_507_482, 0).UTC()
@@ -231,6 +252,10 @@ func TestPublisherPreviousKeyCanBeRetiredAfterDeadline(t *testing.T) {
 	}
 }
 
+// TestBindPublisherKeyAudiencesUsesSignedPolicy requires deterministic authorization audiences and
+// separate proof audiences from the supplied synthetic policy.
+// TestBindPublisherKeyAudiencesUsesSignedPolicy требует воспроизводимые аудитории контекстов и отдельные
+// аудитории доказательств из заданной синтетической политики.
 func TestBindPublisherKeyAudiencesUsesSignedPolicy(t *testing.T) {
 	t.Parallel()
 	issuer := "spiffe://kodex.local/ns/kodex-system/sa/caller"
@@ -260,6 +285,10 @@ func TestBindPublisherKeyAudiencesUsesSignedPolicy(t *testing.T) {
 	}
 }
 
+// TestBindPublisherKeyAudiencesRejectsDelegatedIssuer rejects an operation whose issuer differs from its
+// caller SPIFFE, before keys can be audience-bound.
+// TestBindPublisherKeyAudiencesRejectsDelegatedIssuer отклоняет операцию с отличающимся от SPIFFE
+// вызывающего подписантом до привязки аудиторий ключей.
 func TestBindPublisherKeyAudiencesRejectsDelegatedIssuer(t *testing.T) {
 	t.Parallel()
 	_, _, err := bindPublisherKeyAudiences(nil, nil, policy{
@@ -274,6 +303,10 @@ func TestBindPublisherKeyAudiencesRejectsDelegatedIssuer(t *testing.T) {
 	}
 }
 
+// publisherTestKey constructs one synthetic CURRENT key record with the given identity, purpose and
+// generation and a fixed test audience; it performs no key generation or trust validation.
+// publisherTestKey создаёт одну синтетическую запись CURRENT с заданными личностью, назначением и
+// поколением и фиксированной тестовой аудиторией без генерации ключа и проверки доверия.
 func publisherTestKey(
 	issuer string,
 	workloadID string,
@@ -288,6 +321,10 @@ func publisherTestKey(
 	}
 }
 
+// mustPublisherTestKey generates an ES256 fixture key and stops the test on failure without printing
+// private key material.
+// mustPublisherTestKey создаёт ключ ES256 для оснастки и при ошибке останавливает тест без вывода
+// закрытого материала.
 func mustPublisherTestKey(t *testing.T, id string) internalrpcauth.ES256Key {
 	t.Helper()
 	key, err := internalrpcauth.GenerateES256Key(id)

@@ -1,7 +1,6 @@
 package snapshot
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -11,11 +10,22 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// restoreRoleTrustType pins the protected JWS type for restore-role credential trust, preventing
+// substitution by normal-readback trust despite similar key fields.
+// restoreRoleTrustType закрепляет защищённый тип JWS доверия учётным данным восстановления, не позволяя
+// подменить его обычным доверием проверки доставки при сходных полях ключей.
 const restoreRoleTrustType = "kodex-internal-rpc-restore-role-trust+jws"
 
+// restoreRoleTrustMaximumValidity bounds restore trust publication lifetime to 366 days; individual
+// signer-key validity is checked separately.
+// restoreRoleTrustMaximumValidity ограничивает срок публикации доверия восстановлению 366 днями; сроки
+// отдельных ключей подписантов проверяются отдельно.
 const restoreRoleTrustMaximumValidity = 366 * 24 * time.Hour
 
-// RestoreRoleTrustOptions задаёт цепочку доверия роли восстановления.
+// RestoreRoleTrustOptions provides the independent manifest root/bundle and restore-role trust paths
+// with an optional clock; it grants no operator or workload authority.
+// RestoreRoleTrustOptions задаёт независимые пути корня и набора манифеста и доверия восстановлению с
+// необязательными часами, не выдавая полномочий оператора или нагрузки.
 type RestoreRoleTrustOptions struct {
 	ManifestRootPublicJWKFile  string
 	ManifestRootMetadataFile   string
@@ -24,6 +34,10 @@ type RestoreRoleTrustOptions struct {
 	Now                        time.Time
 }
 
+// restoreRoleTrustDocument contains the signed restore-controller-specific audience, source/key-set
+// revisions, manifest generation, declared trust digest, history and public role keys.
+// restoreRoleTrustDocument содержит подписанные аудиторию контроллера восстановления, ревизии источника
+// и ключей, поколение манифеста, заявленный хеш доверия, историю и открытые ключи ролей.
 type restoreRoleTrustDocument struct {
 	Version          int                   `json:"v"`
 	Issuer           string                `json:"iss"`
@@ -39,17 +53,18 @@ type restoreRoleTrustDocument struct {
 	ValidUntil       int64                 `json:"valid_until"`
 }
 
-type restoreRoleTrustKey struct {
-	Status     string          `json:"status"`
-	Generation uint64          `json:"credential_signer_generation"`
-	KeyID      string          `json:"kid"`
-	PublicJWK  json.RawMessage `json:"public_jwk"`
-	Thumbprint string          `json:"jwk_thumbprint_sha256"`
-	NotBefore  int64           `json:"not_before"`
-	NotAfter   int64           `json:"not_after"`
-}
+// restoreRoleTrustKey is the nominal public restore-credential signer record; matching a normal-readback
+// record's JSON shape does not make their purposes interchangeable.
+// restoreRoleTrustKey — отдельная открытая запись подписанта учётных данных восстановления; совпадение
+// JSON-формы с обычной проверкой доставки не делает назначения взаимозаменяемыми.
+type restoreRoleTrustKey credentialSignerKey
 
-// LoadRestoreRoleTrust проверяет корневую подпись и ключ роли восстановления.
+// LoadRestoreRoleTrust verifies a restore-specific document through rooted CURRENT manifest trust,
+// enforces issuer/audience/generation, bounded lifetime/history and exactly one CURRENT and NEXT role
+// key, then returns records and source metadata without activating them.
+// LoadRestoreRoleTrust проверяет документ восстановления через укоренённое доверие CURRENT манифеста,
+// подписанта, аудиторию, поколение, ограниченные сроки и историю и ровно один CURRENT и NEXT роли, затем
+// возвращает записи и метаданные без их активации.
 func LoadRestoreRoleTrust(options RestoreRoleTrustOptions) (
 	map[string]service.VerificationKeyRecord,
 	model.RestoreRoleTrustMetadata,

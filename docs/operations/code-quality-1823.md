@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.251.0
+version: 1.252.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,87 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятьдесят вторая волна — снимки и цепочки доверия authority
+
+Опубликованный SHA251 — `7d7f61ee9a36238abfcf50f4db2a8b1c225c8107`.
+Точный vxpFnR:6590 sources,222 excluded,1823 raw/607 retained/
+1216 unresolved; Go10658/21216, missing10558. Raw SHA256:
+`0d6caa0d3f26ba6fef0c8f69b36206ac2e5434ff11aa9292a9085c4fbf8eb4ce`.
+Clone-set:
+`6ca1f23deb63bf6ae965b56c73d5392a21904903bc9c9146b173458aff607301`.
+Точный unit/build, push/readback и Draft PR PATCH/GET251 подтверждены.
+
+Полностью прочитаны2512 строк всех10 исходных snapshot файлов, включая
+loader, builder, proof/restore/readback trust и тесты.94 прежних и4 новых
+declarations описаны EN→RU:98/98 в12 файлах, package и прежние inline
+пояснения также двуязычны. Нагрузочный current key generation отличён от
+manifest generation; signed/declared digest не назван автоматически
+пересчитанным. Verified file loading не подменяет durable activation либо
+persistent high-watermark. Старое «VerifyPublisherManifestSigner до I/O»
+исправлено: пробная подпись и чтение root/bundle files действительно есть,
+внешней публикации нет. BuildForPublisher читает os.ReadFile и затем
+проверяет длину до decode, а не делает ограниченный streaming read.
+
+В одном private validReadbackSignerMetadata собраны два identical участка:
+thumbprint → exact key ID/thumbprint → positive generation → closed status
+→ inclusive not-before / exclusive expiry. ParsePublicJWK остаётся раньше;
+разные manifest/credential ошибки, outer signatures, purpose/audience,
+duplicate IDs и CURRENT cardinality остались на прежних местах. Схема
+credentialSignerKey стала одной общей формой7 JSON fields. Readback и
+restore записи остаются разными named defined types, не type aliases:
+их issuer, audience, purpose, корни и проверки не объединены. Manifest
+generation tag не подменяет credential generation. Local zeroDigest
+заменён уже существующей package constant zeroSHA256 без смены literal.
+
+Inverse AST10 разворачивает2 predicate calls,2 named underlying types,
+старый local constant/import и проверяет новый predicate body и общую
+field layout на точное совпадение с удалёнными участками: identity SHA251.
+Новые units:14 вариантов public-key metadata, включая обе границы времени,
+другую timezone того же instant, invalid key/ID/thumbprint/generation/status;
+и canonical JSON roundtrip обоих nominal типов с exact bytes/names и
+отказом unknown manifest-generation field. Это локальные public-key и
+serialization проверки, не проверка полной живой root chain.
+
+Матрица неизменного пути:
+
+| Источник/consumer | Прежняя граница | Эффект и переход |
+| --- | --- | --- |
+| Snapshot loader issuer/verifier | Immutable root → root-signed bundle → exact CURRENT → signed snapshot/history → role projection | Возврат policy/key records; storage activation отдельно, новых прав нет |
+| Normal readback trust | Независимый readback root/manifest и credential trust; exact outer type/issuer/audience | Общий predicate только после key parse; прежние ошибки/cardinality/history; без state write |
+| Restore role trust | Собственные audience/type и CURRENT/NEXT constraints | Только общая field shape, отдельный named type и прежний validator |
+| Snapshot publisher | Rooted signer, policy, exact audiences/history и canonical sign/readback | Локальное построение bytes; доставка/receipt/promotion у прежних владельцев |
+| Private helper | Нет actor/authority, сети, storage, clock fallback или goroutine | Только прежний predicate; explicit now передаёт caller |
+
+Две настоящие raw группы удалены, новых нет по multiset comparison
+format/paths/fragment/count. Оставлены две unresolved декларативные группы
+machine-policy DTO с generator/доменным proof consumer: их возможный общий
+wire contract ещё требует разбора и не спрятан в исключение. Одно116-token
+окно лексикографической сортировки network Destination/Protocol/Port против
+proof Issuer/Generation/Status получило exact reason: разные typed order
+contracts, сама сортировка уже стандартная. Все прежние506 entries/
+607 occurrences неизменны; теперь507 entries/608 occurrences.
+
+GO-DOC-001/003/006, REPO-DOC-001, GUIDE-DOC-003/006 и AGENTS не изменились
+от ранее прочитанных полных версий; GOV-DOC-003 перечитан. Context7 Go
+time.Before/Unix и pinned Go1.26.6 docs сверены; границы сравнивают instant,
+а time.Unix сам не даёт явный UTC location. Новых SDK/dependencies нет.
+`go test -mod=readonly -count=1 -timeout 120s -json ./internal/domain/...
+./internal/application ./internal/publisher ./internal/snapshot
+./internal/transport/grpc`:50 верхних/108 всех PASS,0 FAIL/SKIP;
+полный authority build PASS LOCAL.17 Node/Go checker units, scope98/98,
+inverse AST10, gofmt/diff-check и5 addressed ignores PASS LOCAL.
+Component/live/browser/deploy/ИИ/почта/STT NOT RUN; не заявлена проверка
+реального restore, TokenReview, PostgreSQL/Secret CAS или защищённых mounts.
+
+Рабочий9ub851:6592 sources,222 excluded,1821 raw/608 retained/
+1213 unresolved; Go10756/21220, missing10464. Raw SHA256:
+`257b84be569736a3ad8cfec55c2d9de6bafe3738eb021165a030494f10139b74`.
+Clone-set:
+`ee99bde70db9c6c9fffdbaa6fb41552a45e148b700b847bf7496ecb0c2f2573d`.
+Промежуточный o7oPnV был до общей field layout, не final. Точный post-commit
+run публикуется в том же Draft PR; прежние FAIL/SKIP/NOT RUN сохранены,
+полная готовность задачи ещё не достигнута.
 
 ## Двести пятьдесят первая волна — прикладной допуск и активация authority
 

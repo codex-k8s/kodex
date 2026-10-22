@@ -4048,6 +4048,14 @@
       "fragmentSHA256": "51a903fd826a21ec7503ed32a0f0a8eb2c112c68bb8105673a9ce21c12ab8532",
       "count": 1,
       "reason": "Перекрывающееся100-token окно сравнивает конец fingerprint OCI promotion (role-runtime contract, версии, platforms/tools) с readback attestor маршрутом, SNI, CA, audience и методами доставки authority. Это разные typed projections; ни общий вычисляемый результат, ни операция авторизации или жизненного цикла не повторяются. Вынос такой последовательности selector assignments в библиотеку ухудшил бы явную проверку security-полей. Сохранено только данное точное окно двух файлов с fragment SHA-256/count1, без исключения целого mapping или файла."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/environment_policy.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/snapshot/publisher.go",
+      "fragmentSHA256": "907ee35763ee633f66d71616d063d44a14ac98610b6b17d9a4901a0a20add9a3",
+      "count": 1,
+      "reason": "Совпадает116-token форма лексикографического sort.Slice comparator, но общий алгоритм уже предоставляет стандартная сортировка. Runtime environment сортирует сетевые правила по Destination/Protocol/Port, publisher — открытые ключи доказательств по Issuer/Generation/Status, закрепляя разные канонические JSON digests. Типы среднего и последнего ключей различны, порядок полей является частью разных persisted contracts. Новый общий helper потребовал бы generic projections/comparator callbacks ради явного трёхполевого порядка и скрыл бы эти привязки без устранения доменного повтора. Прочитаны полные окружающие операции; оставлено только точное окно этих путей и fragment SHA-256 с кратностью1, не другие сортировки или файлы."
     }
   ]
 }

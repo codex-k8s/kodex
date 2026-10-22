@@ -12,13 +12,23 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// zeroSHA256 is the all-zero predecessor digest for the first publication only; it is not a successful
+// digest of arbitrary missing content.
+// zeroSHA256 — нулевой хеш предшественника только первой публикации; это не успешный хеш произвольного
+// отсутствующего содержимого.
 const zeroSHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
 
-// PublisherSnapshotValidity оставляет достаточно времени для плановой
-// forward-only ротации без суточного отказа неизменной установки.
+// PublisherSnapshotValidity sets the 180-day publication/key window used for planned forward-only
+// rotation; explicit previous-key retirement deadlines override it where supplied.
+// PublisherSnapshotValidity задаёт окно публикации и ключей в 180 дней для плановой последовательной
+// ротации; явно переданные сроки вывода предыдущего ключа заменяют его.
 const PublisherSnapshotValidity = 180 * 24 * time.Hour
 
-// PublisherKey задаёт один server-owned ключ снимка.
+// PublisherKey supplies an issuer/workload-bound key with lifecycle generation, purpose and audiences to
+// publication; the key value may contain private material although emitted documents use public-only
+// JWKs.
+// PublisherKey передаёт публикации ключ с привязкой к подписанту и нагрузке, поколением, назначением и
+// аудиториями; значение может содержать закрытый материал, хотя документы получают лишь открытые JWK.
 type PublisherKey struct {
 	Issuer     string
 	WorkloadID string
@@ -29,7 +39,12 @@ type PublisherKey struct {
 	Key        internalrpcauth.ES256Key
 }
 
-// PublisherBuildOptions задаёт независимо проверяемые входы публикации.
+// PublisherBuildOptions carries independently rooted signer inputs, exact policy/source/history and
+// authorization/proof keys plus an optional previous-key deadline; construction does not publish or
+// persist them.
+// PublisherBuildOptions содержит независимо укоренённые входы подписанта, точные политику, источник и
+// историю, ключи контекстов и доказательств и необязательный срок предыдущего ключа; само создание не
+// публикует и не сохраняет их.
 type PublisherBuildOptions struct {
 	ManifestSigner             internalrpcauth.ES256Key
 	ManifestSignerGeneration   uint64
@@ -47,7 +62,10 @@ type PublisherBuildOptions struct {
 	PreviousKeyNotAfter        *time.Time
 }
 
-// PublisherBuildResult содержит полный подписанный снимок и proof trust.
+// PublisherBuildResult returns the full signed snapshot, its verified canonical payload/digest,
+// proof-trust bytes and policy revision; delivery and durable acceptance are separate operations.
+// PublisherBuildResult возвращает полный подписанный снимок, проверенное каноническое содержимое и хеш,
+// байты доверия доказательствам и ревизию политики; доставка и устойчивое принятие выполняются отдельно.
 type PublisherBuildResult struct {
 	SnapshotCompactJWS string
 	SnapshotPayload    []byte
@@ -56,8 +74,12 @@ type PublisherBuildResult struct {
 	PolicyRevision     uint64
 }
 
-// VerifyPublisherSnapshotCompact проверяет полный snapshot с его отдельным
-// bounded limit, не расширяя лимит обычного authorization JWS.
+// VerifyPublisherSnapshotCompact verifies exact type/key and canonical signed payload with the
+// full-snapshot byte budget, returning a copy; it does not validate domain lifetime/history or
+// persistent eligibility.
+// VerifyPublisherSnapshotCompact проверяет точные тип и ключ и каноническое подписанное содержимое с
+// бюджетом полного снимка, возвращая копию; доменные срок, история и устойчивый допуск здесь не
+// проверяются.
 func VerifyPublisherSnapshotCompact(
 	compact string,
 	key internalrpcauth.ES256Key,
@@ -76,13 +98,22 @@ func VerifyPublisherSnapshotCompact(
 	return append([]byte(nil), verified.CanonicalPayload...), nil
 }
 
+// publisherPolicyDocument is the versioned input policy envelope read by the builder; strict decoding is
+// followed by explicit publisher-profile checks.
+// publisherPolicyDocument — версионированная входная оболочка политики сборщика; за строгим
+// декодированием следуют явные проверки профиля публикации.
 type publisherPolicyDocument struct {
 	Version        int    `json:"v"`
 	PolicyRevision uint64 `json:"policy_revision"`
 	Policy         policy `json:"policy"`
 }
 
-// BuildForPublisher проверяет root→manifest signer и строит полный снимок.
+// BuildForPublisher verifies the rooted manifest signer, reads policy bytes and checks their length
+// before decoding, binds public key audiences/history, then signs and reads back the snapshot and builds
+// source-pinned proof trust without delivery or storage writes.
+// BuildForPublisher проверяет укоренённого подписанта, читает байты политики и проверяет их длину до
+// декодирования, связывает аудитории и историю открытых ключей, затем подписывает и перепроверяет снимок
+// и строит доверие доказательствам с привязкой к источнику без доставки и записи в хранилище.
 func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, error) {
 	if options.ManifestSigner.Private == nil ||
 		options.ManifestSignerGeneration == 0 ||
@@ -211,6 +242,12 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 	}, nil
 }
 
+// bindPublisherKeyAudiences derives exact sorted audiences separately from operation callers and proof
+// producers, rejects delegated authorization issuers, and returns new key slices without overwriting
+// input audience slices.
+// bindPublisherKeyAudiences раздельно выводит точные отсортированные аудитории из вызывающих операции и
+// производителей доказательств, отклоняет делегированных подписантов контекстов и возвращает новые срезы
+// ключей без перезаписи исходных аудиторий.
 func bindPublisherKeyAudiences(
 	authorizationKeys []PublisherKey,
 	proofKeys []PublisherKey,
@@ -265,7 +302,11 @@ func bindPublisherKeyAudiences(
 	return boundAuthorization, boundProof, nil
 }
 
-// VerifyPublisherManifestSigner проверяет root→bundle→CURRENT signer до I/O.
+// VerifyPublisherManifestSigner signs a local probe and reads pinned root/bundle files to require the
+// exact rooted CURRENT public key and generation; it performs file I/O but no external publication.
+// VerifyPublisherManifestSigner подписывает локальный пробный документ и читает закреплённые корневые
+// файлы и набор доверия, требуя точные открытый CURRENT и поколение; файловый ввод есть, внешней
+// публикации нет.
 func VerifyPublisherManifestSigner(
 	signer internalrpcauth.ES256Key,
 	signerGeneration uint64,
@@ -314,6 +355,11 @@ func VerifyPublisherManifestSigner(
 	return nil
 }
 
+// publisherIssuerSets validates authorization-key inputs, emits public-only JWK records with
+// status-dependent intervals and copied audiences, and sorts issuer/key output independently of registry
+// iteration order.
+// publisherIssuerSets проверяет входные ключи контекстов, выдаёт открытые JWK со сроками по статусу и
+// копиями аудиторий и сортирует подписантов и ключи независимо от порядка реестра.
 func publisherIssuerSets(
 	values []PublisherKey,
 	now time.Time,
@@ -377,6 +423,11 @@ func publisherIssuerSets(
 	return result, nil
 }
 
+// publisherProofTrust builds a canonically encoded public proof-key trust document tied to exact
+// snapshot digest/history, orders keys deterministically and decodes the result through the shared
+// schema before returning.
+// publisherProofTrust строит канонический документ открытых ключей доказательств с точными хешем и
+// историей снимка, воспроизводимо сортирует ключи и перед возвратом декодирует результат общей схемой.
 func publisherProofTrust(
 	options PublisherBuildOptions,
 	now time.Time,
@@ -452,6 +503,11 @@ func publisherProofTrust(
 	return canonical, nil
 }
 
+// publisherKeyNotAfter uses the explicit UTC deadline for PREVIOUS keys when nonzero, otherwise the
+// existing publication window; non-PREVIOUS statuses also receive that window and are validated by their
+// owning paths.
+// publisherKeyNotAfter использует явный ненулевой срок UTC для PREVIOUS, иначе существующее окно
+// публикации; остальные статусы также получают это окно и проверяются владеющими путями.
 func publisherKeyNotAfter(
 	status string,
 	now time.Time,
@@ -461,13 +517,19 @@ func publisherKeyNotAfter(
 		return now.Add(PublisherSnapshotValidity), nil
 	}
 	if previousKeyNotAfter == nil || previousKeyNotAfter.IsZero() {
-		// Совместимый reader старой protocol_version=1 публикации. Новый
-		// составной путь всегда передаёт назначенный PostgreSQL deadline.
+		// Preserve the existing protocol_version=1 missing-deadline fallback;
+		// the composed rotation path supplies a PostgreSQL-assigned deadline.
+		// Сохраняется существующий запасной путь protocol_version=1 без срока;
+		// составной путь ротации передаёт срок, назначенный PostgreSQL.
 		return now.Add(PublisherSnapshotValidity), nil
 	}
 	return previousKeyNotAfter.UTC(), nil
 }
 
+// publisherKeyNotBefore normally starts one minute before publication, but moves before notAfter for
+// already-retired previous keys so their serialized interval remains ordered.
+// publisherKeyNotBefore обычно начинает срок за минуту до публикации, но для уже выведенного предыдущего
+// ключа сдвигает начало до notAfter, сохраняя порядок сериализованного интервала.
 func publisherKeyNotBefore(now, notAfter time.Time) time.Time {
 	notBefore := now.Add(-time.Minute)
 	if !notBefore.Before(notAfter) {
@@ -476,6 +538,10 @@ func publisherKeyNotBefore(now, notAfter time.Time) time.Time {
 	return notBefore
 }
 
+// publisherHistory returns a zero bootstrap predecessor or copies and validates a bounded predecessor
+// history, using its last exact revision/digest as the next publication's predecessor.
+// publisherHistory возвращает нулевого начального предшественника либо копирует и проверяет ограниченную
+// историю, используя последнюю точную ревизию и хеш как предшественника новой публикации.
 func publisherHistory(
 	sourceRevision uint64,
 	values []model.RevisionDigest,
