@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.245.0
+version: 1.246.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,70 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок шестая волна — общий local device-worker join
+
+Опубликованный SHA245 — `c096fc357f8496212e329b169d290f5f5d4e5fde`.
+Точный AF0bVR:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go10153/21197, missing11044. Raw SHA256:
+`85d68e03217d7cd88bee6503c607d56bfc1fce0e0c462a5c66500fcbed94b56b`.
+Clone-set:
+`2a826d9629d0a79c8055dc8d87f7b653ec1bf6d85503532e16a77aa51da2972a`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA245127 верхних/
+445 unit, full build и scan PASS LOCAL,0 FAIL/SKIP.
+
+Прочитаны614 строк service.go/test.go, все63 прежних declarations
+описаны EN→RU. Из Discard и CleanupAuthorization вынесен один узкий
+stopAndJoinDeviceWorker: mutex lookup, once discard, session.Close и ожидание
+done/context принадлежат общей local resource операции. Helper не выполняет
+durable store effect, не проверяет authority, не удаляет map registration,
+не меняет бюджет и не добавляет ранний ctx check для отсутствующего worker.
+Это полезный малый повтор ниже100-token detector threshold; число raw
+групп не уменьшилось и вынос не выдан за закрытие detector finding.
+
+Матрица сохранённого порядка двух caller paths:
+
+| Путь/состояние | До helper | После helper / отмена |
+| --- | --- | --- |
+| Discard invalid/mixed target | Проверка target до lookup | Отказ до stop/store |
+| Discard exact attempt | Upstream authority, exact target shape | Join, затем exact compensation; ctx error прекращает путь |
+| CleanupAuthorization replay | Exact identity и existing terminal receipt | Replay без stop/fence/write |
+| CleanupAuthorization active | Exact identity, durable pending CAS fence | Join, result-name fence, terminal receipt; незавершённый join не завершает receipt |
+| Local registration absent | Никаких local effects | Сохраняется следующий storage path даже при уже canceled ctx |
+| Worker canceled/not done | Once discard и session close | Возврат ctx error, без fake done и map removal |
+| Worker done/repeated stop | Once discard, существующий done | Идемпотентный local join, registration удаляет сам worker |
+
+Создание/claim/renew/retry/recovery grants, task versions, domain state,
+owner proof и terminal transactions не менялись; helper не добавляет
+переход/событие/новый authorizable endpoint. Создание worker и fresh pending
+read перед Wait, отдельный uncanceled bounded finish context и Close/WaitGroup
+контракт сохранены. Close требует upstream запрета concurrent Start;
+комментарии не обещают собственного shutdown deadline или отмены lifecycle.
+MaterializeAPIKey очищает encoded bytes, не исходный caller buffer/Go strings.
+
+Четыре новых unit-теста проверяют absent+canceled semantics, once/replay,
+stop-before-cancel-return и запрет Discard storage compensation до done.
+Имеющийся real service/fake Kubernetes cleanup test проверяет durable fence,
+cancel незавершённого join, отсутствие terminal receipt, subsequent recovery
+и replacement target. Пять этих tests отдельно с -race PASS,0 FAIL/SKIP.
+Обратное AST-преобразование2 восстанавливает прежние blocks вместо двух
+helper calls и удаляет только новый helper/четыре теста: identity SHA245 PASS.
+Первый apply_patch отклонён целиком из-за лишнего out-of-order context hunk;
+readback подтвердил отсутствие частичного выноса, исправленный patch применён.
+
+Полные три пакета:131 верхних/449 всех PASS,0 FAIL/SKIP; full build PASS LOCAL.
+Flags/команды те же, плюс `go test -mod=readonly -race -count=1 -timeout 120s
+-json ./internal/providercredential -run
+'TestStopAndJoinDeviceWorker|TestDiscardJoinsDeviceWorker|TestCleanupAuthorizationJoinsStartedWorkerAndRecoversProducedCredential'`.
+Scope68/68, inverse AST2, gofmt/diff-check и scan/5 ignores PASS LOCAL.
+Рабочий gciTxO:6587 sources,222 excluded,1824 raw/598 retained/
+1226 unresolved; Go10221/21202, missing10981. Raw SHA256:
+`eeedc6e767b196414d1919f788dccab0fabb19865ea195d49546617e3a57e937`.
+Clone-set и registry прежние; new denominator включает helper+4 tests,
+не generated declarations. Точный post-commit run публикуется в PR.
+Secret-broker1211/1282:71 appserver/authorization declarations остаются.
+Прежние FAIL/SKIP/NOT RUN сохранены; полный объём задачи ещё не завершён,
+браузер/live/deploy/provider/model не выполнялись.
 
 ## Двести сорок пятая волна — проверенный каталог возможностей модели
 
