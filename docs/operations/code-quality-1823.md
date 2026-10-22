@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.241.0
+version: 1.242.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,68 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок вторая волна — exact Kubernetes storage и проекции
+
+Опубликованный SHA241 — `538f5f59acbcd659aaa3428d63dd841fc569aec7`.
+Точный t5pNv1:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9766/21197, missing11431. Raw SHA256:
+`cec7d70e0c86ae4940d39c788a1d2ba1dd601e955503cbc505c71307fc14a16b`.
+Clone-set:
+`7436f30828050d32b9f9fb5f929d26c884c27dba169e1da00b6cd6c4ebf85204`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA241 grpc/caster36/165,
+полная сборка secret-broker,17 Node/Go checker units и docs239/239 PASS,
+0 FAIL/SKIP.
+
+Полностью прочитаны1510 строк семи storage/work-kind/projection файлов;
+все99 declarations теперь имеют предметные EN→RU комментарии.
+Исполняемый код не менялся: AST всех7 файлов идентичен SHA241.
+Уточнены owner route без вывода из prefix, exact object/content checks,
+copy/clear ownership, preconditioned delete с последующим чтением отсутствия.
+Kubernetes List получает полные Secret DTO, хотя наружу возвращает metadata;
+прежнее утверждение «Data не читается» заменено точным описанием.
+При раннем отказе list обнуляет обработанные DTO, не обещает очистку всех
+ещё не просмотренных элементов ответа или всех независимых копий.
+
+Проекции разделяют active create и допускающий истёкший срок cleanup read.
+Структура manifest не доказывает transport signature/owner authority;
+sameCredentialProjection не сравнивает manifest. Стандартный json.Unmarshal
+не объявлен запретом неизвестных/duplicate полей. Digest и deterministic name
+не являются полномочиями; name включает только часть manifest, остальные
+привязки сверяются отдельно. maximumCredentialProjection сейчас нигде
+не используется: объявленная1MiB constant не выдана за исполняемый лимит.
+Историческое имя sortedDataKeys не соответствует сортировке: это отмечено,
+исполняемое поведение helper не менялось.
+
+Context7 /kubernetes/client-go и pinned go doc DeleteOptions/
+fake.NewSimpleClientset сверены. Fake tracker назначает synthetic UID/RV,
+но не доказывает API-server validation, immutability или enforcement
+preconditions. Unit-тесты проверяют переданные delete options и локальные
+guard branches, а не состояние реального кластера. Первичный rg дополнительно
+указал несуществующий validation-файл; фактический validator прочитан
+в credential_projections.go, исходники не угадывались.
+
+Полный `./internal/kubernetes`:47 верхних/154 всех PASS,0 FAIL/SKIP;
+полная сборка secret-broker PASS LOCAL. Команды Go1.26.6:
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4
+go test -mod=readonly -count=1 -timeout 120s -json ./internal/kubernetes`
+и `go build -mod=readonly ./...`. Package docs99/99 и AST7 PASS.
+
+Первый assessment корректно FAIL-closed: сырой fragment включает вставленные
+между двумя методами комментарии, поэтому прежний retained hash b3d07e23...
+устарел. Повторно прочитаны обе стороны: те же102 tokens через границу
+методов, не новый общий алгоритм; заменён только exact hash на3583ffa4...,
+причина, пара файлов и count1 сохранены. Прочие1823 группы неизменны;
+ни расширенных исключений, ни нового «устранённого» дубликата нет.
+После обновления assessment PASS:1824 raw/598 retained/1226 unresolved.
+Рабочий отчёт0wf43H, raw SHA256:
+`ebaed9b8fb16eaf86a27308bc5cd3a451b4c7b0109bd86303d3eb61f7beea069`.
+Clone-set:
+`2a826d9629d0a79c8055dc8d87f7b653ec1bf6d85503532e16a77aa51da2972a`.
+Исторический первый FAIL не скрыт; конечные числа и post-commit проверки
+публикуются в том же Draft PR. Generated/contracts/migrations не менялись;
+общая задача, остальные missing/unresolved и прежние FAIL/SKIP/NOT RUN
+остаются открытыми. Browser/live/deploy/модели не запускались.
 
 ## Двести сорок первая волна — provider RPC и общий transport diagnostic
 

@@ -6,6 +6,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// TestMaterializationWorkKindIsRequiredAndNeverInferred supplies empty and unknown kinds beside a
+// draft-looking reference and verifies rejection before any Secret is created.
+// TestMaterializationWorkKindIsRequiredAndNeverInferred передаёт пустые и неизвестные kinds рядом с
+// похожей на draft ссылкой и проверяет отказ до создания Secret.
 func TestMaterializationWorkKindIsRequiredAndNeverInferred(t *testing.T) {
 	for _, kind := range []MaterializationWorkKind{"", "UNKNOWN", "CREATE", "PUBLISH"} {
 		t.Run(string(kind), func(t *testing.T) {
@@ -23,6 +27,11 @@ func TestMaterializationWorkKindIsRequiredAndNeverInferred(t *testing.T) {
 	}
 }
 
+// TestMaterializationOwnerRouteIsExactAcrossLookupReadbackAndDelete tests both owner routes and verifies
+// that changing only the route cannot look up, read back or delete the original materialization.
+// TestMaterializationOwnerRouteIsExactAcrossLookupReadbackAndDelete проверяет оба маршрута владельца и
+// подтверждает, что смена только маршрута не позволяет найти, перечитать или удалить исходную
+// materialization.
 func TestMaterializationOwnerRouteIsExactAcrossLookupReadbackAndDelete(t *testing.T) {
 	for _, kind := range []MaterializationWorkKind{WorkKindImmediate, WorkKindDraft} {
 		t.Run(string(kind), func(t *testing.T) {
@@ -54,6 +63,10 @@ func TestMaterializationOwnerRouteIsExactAcrossLookupReadbackAndDelete(t *testin
 	}
 }
 
+// TestOldOrUnknownMaterializationLabelFailsClosedWithoutUpgradeOrDelete corrupts the work-kind
+// annotation in the fake tracker and verifies list/delete refusal without implicit upgrade or removal.
+// TestOldOrUnknownMaterializationLabelFailsClosedWithoutUpgradeOrDelete повреждает work-kind annotation
+// в fake tracker и проверяет отказ list/delete без неявного преобразования или удаления.
 func TestOldOrUnknownMaterializationLabelFailsClosedWithoutUpgradeOrDelete(t *testing.T) {
 	for _, kind := range []string{"", "UNKNOWN"} {
 		store, client := newTestStore(t)
