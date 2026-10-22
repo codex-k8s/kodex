@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/policydeclaration"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -92,32 +93,13 @@ type policyDocument struct {
 	} `json:"policy"`
 }
 
-type proofProducer struct {
-	ProducerID                         string   `json:"producer_id"`
-	CallerWorkloadID                   string   `json:"caller_workload_id"`
-	CallerSPIFFEID                     string   `json:"caller_spiffe_id"`
-	OwnerWorkloadID                    string   `json:"owner_workload_id"`
-	OwnerSPIFFEID                      string   `json:"owner_spiffe_id"`
-	FullMethod                         string   `json:"full_method"`
-	TLSServerName                      string   `json:"tls_server_name"`
-	TransportTrustBundleID             string   `json:"transport_trust_bundle_id"`
-	ApplicationCredential              string   `json:"application_credential"`
-	ApplicationCredentialMetadata      string   `json:"application_credential_metadata"`
-	ApplicationCredentialIssuer        string   `json:"application_credential_issuer"`
-	ApplicationCredentialAudience      string   `json:"application_credential_audience"`
-	ApplicationCredentialTrustBundleID string   `json:"application_credential_trust_bundle_id"`
-	AuthorityProofIssuer               string   `json:"authority_proof_issuer"`
-	AuthorityProofAudience             string   `json:"authority_proof_audience"`
-	AuthorityProofTrustBundleID        string   `json:"authority_proof_trust_bundle_id"`
-	AuthorityProofMaxAgeSeconds        int64    `json:"authority_proof_max_age_seconds"`
-	DeadlineMilliseconds               int64    `json:"deadline_milliseconds"`
-	MaxAttempts                        int      `json:"max_attempts"`
-	RetryableGRPCCodes                 []string `json:"retryable_grpc_codes"`
-	IdempotencyScope                   string   `json:"idempotency_scope"`
-	AuthoritySources                   []string `json:"authority_sources"`
-	AllowedOperationIDs                []string `json:"allowed_operation_ids"`
-	ServerResolvedFields               []string `json:"server_resolved_fields"`
-}
+// proofProducer retains this domain's nominal policy input with the shared JSON
+// field layout; indexPolicy and request-time checks still own credential,
+// operation, identity and authority validation before any proof is signed.
+// proofProducer сохраняет отдельный доменный вход политики с общей формой JSON;
+// indexPolicy и проверки запроса по-прежнему проверяют учётные данные, операцию,
+// личность и полномочия до подписи любого доказательства.
+type proofProducer policydeclaration.ProofProducer
 
 type operationBinding struct {
 	OperationID         string               `json:"operation_id"`

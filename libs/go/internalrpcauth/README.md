@@ -1,5 +1,19 @@
 # Авторизация внутренних RPC
 
+`policydeclaration.ProofProducer` задаёт единственную форму полей JSON декларации
+производителя доказательств для существующих writer/reader машинной политики.
+Это техническая форма данных, не проверенная личность, credential или grant.
+Генератор, authority loader и доменный resolver сохраняют собственные nominal
+типы на этой форме, прежние envelope versions, tags и отсутствие `omitempty`.
+Списки остаются обычными изменяемыми slices: value copy не делает deep copy.
+Допустимые issuer/audience, маршруты, permission matrix, TTL, retry, подписи и
+eligibility проверяют прежние потребители; тип не задаёт бизнесовых значений.
+Production-подпакет — чистая форма без импортов и криптографических зависимостей.
+Он не читает env, не создаёт goroutine/метрики, не делает I/O, retry или
+состояния активации. Ошибки syntax/canonical/unknown/duplicate JSON по-прежнему
+принадлежат выбранному strict decoder, а semantic rejection — владельцу
+профиля. Поля и их сериализация неизменны; нового compatibility decoder нет.
+
 Модуль содержит сгенерированный транспортный контракт Go
 `internalrpcauthority.v1`. Исходный Proto находится в
 `contracts/proto/internalrpcauthority/v1` и изменяется только там.

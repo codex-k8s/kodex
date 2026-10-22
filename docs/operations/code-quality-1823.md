@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.252.0
+version: 1.253.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,98 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятьдесят третья волна — общая декларация proof producer
+
+Опубликованный SHA252 — `497e42d00074bffe6578d904fd2d5fb0163c5264`.
+Точный itOJfC:6592 sources,222 excluded,1821 raw/608 retained/
+1213 unresolved; Go10756/21220, missing10464. Raw SHA256:
+`24475966e8d724d6ded50e91a301a8fe6cbaac5ef245fc9c5e887c58fff01d73`.
+Clone-set:
+`ee99bde70db9c6c9fffdbaa6fb41552a45e148b700b847bf7496ecb0c2f2573d`.
+Точный unit/build, push/readback и Draft PR PATCH/GET252 подтверждены.
+
+Сопоставлены полные24-field определения producer в handwritten policy writer,
+authority snapshot loader и доменном control-plane proof resolver; прочитаны
+их envelopes, заполнение/чтение полей, indexPolicy и существующие units.
+Это один технический wire layout, а не три разные политики. В существующий
+module internalrpcauth добавлен чистый leaf policydeclaration.ProofProducer
+без production imports. Все3 потребителя теперь имеют свои named defined
+types поверх общей формы; это не aliases. Сохранены поля, порядок, Go-типы,
+JSON tags, отсутствие omitempty, nil/empty slices и имена local types.
+Policy values, routes, TTL, issuer/audience, credentials и semantic validation
+не перенесены в библиотеку. README явно описывает непроверенные данные,
+отсутствие authority/effects/deep copy, decoding failure policy и владельцев.
+
+Inverse AST4 разворачивает3 definitions/imports и сравнивает весь новый
+production source с прежним normalized struct: consumers identity SHA252,
+24 поля совпадают с каждой исходной копией. Новые4 declarations (тип,
+golden constant и2 tests) EN→RU; все3 затронутых local declarations также
+двуязычные: scope7/7. Общий реестр5 затронутых файлов содержит123 declarations,
+из них79 bilingual/44 missing: это прежние неразобранные объявления
+control-plane, а не готовность всего файла. Они не исключены и не отмечены PASS.
+
+Golden unit закрепляет exact zero-value JSON с24 fields без вывода ожидаемых
+ключей из проверяемого типа; отдельно проверяются3 ordinary/canonical roundtrip
+с nil/empty/populated lists и всеми значениями. Strict decoder unit проверяет6
+неверных syntax/shape inputs и отдельно сохраняет допустимость синтаксически
+корректных, но semantic-unverified values: новая форма не стала валидатором
+прав или политики. Это data/serialization tests, не real proof issuance.
+
+Первый рабочий policygen unit FAIL setup: импорт root internalrpcauth для
+одного типа потянул crypto dependencies, которых нет в его go.sum. Вместо
+обновления зависимостей форма перенесена в чистый подпакет. Проверенный
+go list -deps подтверждает leaf import, отсутствие root internalrpcauth и
+jwx у policygen; go.mod/go.sum не менялись. После переноса все4 scoped
+unit/build команды повторены успешно. Никакие generated outputs, templates,
+контракты, policies или миграции не менялись; source writer поменял только
+import/definition/comment ради реального выноса, не ради generated комментариев.
+
+Матрица сохранённого пути:
+
+| Потребитель | Прежний источник полномочий | Что сохранилось |
+| --- | --- | --- |
+| Policy writer | Repo-owned closed profiles и installation inputs | Те же values, order и json.MarshalIndent; type reuse не запускает provider/owner effects |
+| Authority loader | Rooted signed snapshot → role-specific projection | Те же подписанные producer references и domain bindings; declaration сама ничего не удостоверяет |
+| Domain resolver | Verified transport/application credential и owner state | Прежние indexPolicy, operation/credential/authority checks, replay и proof signing |
+| Shared leaf | Полномочий нет | Только24-field форма; нет config read, crypto, I/O, context, goroutine или lifecycle |
+
+Три прежних fragment/path groups заменены двумя остаточными окнами:
+332→156 и232→226 tokens, затрагивающими соседние nominal envelopes/bindings;
+raw1821→1820, остальные1818 groups сохранили точные multiset keys. Это
+net уменьшение на1, не заявление о закрытии3 групп. Остаточные3 окна
+machine-policy area, включая прежнее перекрытие137 tokens, остаются
+unresolved для дальнейшего разбора. Новых exclusions нет,507 entries/
+608 occurrences неизменны. Не скрыты whole files или generators.
+
+GO-DOC-006 перечитан по критерию независимых consumers/leaf dependencies;
+остальные ранее полностью прочитанные guides/AGENTS не изменились.
+GOV-DOC-003 перечитан. Context7 encoding/json tags сверены; часть выдачи
+относилась к json/v2 и не использована как доказательство v1 semantics.
+Pinned Go1.26.6 go doc encoding/json.Marshal подтверждает используемые
+v1 tags/nil rules, а точный порядок и bytes доказаны golden test/AST.
+
+| Unit scope | Верхние / все PASS | Build |
+| --- | --- | --- |
+| internalrpcauth `.` и `./policydeclaration` |13 /33 | Полный module PASS LOCAL |
+| controlplaneclient `./cmd/policygen` |9 /9 | Полный module PASS LOCAL |
+| control-plane `./internal/domain/service/authorityproof` |10 /38 | Полный module PASS LOCAL с -p=2 |
+| authority domain/... + application/publisher/snapshot/grpc |50 /108 | Полный module PASS LOCAL |
+
+Все команды: -mod=readonly, -count=1, -timeout120s, GOENV/GOWORK off,
+Go1.26.6, GOMAXPROCS=4;0 FAIL/SKIP в финальном повторе.17 Node/Go checker
+units, new docs4/4, selected declarations7/7, inverse AST4, gofmt/diff-check,
+scan и5 addressed ignores PASS LOCAL. Full unit всех4 modules, отдельный
+codegen execution, component/live/browser/deploy/ИИ/почта/STT NOT RUN;
+полная приёмка не заявлена, начальный setup FAIL не скрыт.
+
+Рабочий eo5xJJ:6594 sources,222 excluded,1820 raw/608 retained/
+1212 unresolved; Go10761/21224, missing10463. Raw SHA256:
+`33fa59a0cbc8888c62cd7cde3ba80f45a55f560f2f7c397f869011c519be3c5f`.
+Clone-set:
+`6b60606e87945d191cccb1a2b428633e320053ca9fbb04bd8148ddebf04786a9`.
+Точный post-commit run публикуется в том же Draft PR. Общая задача
+продолжается; прежние FAIL/SKIP/NOT RUN сохраняются.
 
 ## Двести пятьдесят вторая волна — снимки и цепочки доверия authority
 

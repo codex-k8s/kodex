@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/policydeclaration"
 )
 
 // Endpoint constants pin the identities and methods emitted into the machine policy.
@@ -54,34 +55,11 @@ type policy struct {
 	OperationBindings       []binding  `json:"operation_bindings"`
 }
 
-// producer describes how one caller obtains an authority proof from its owner.
-// producer описывает получение доказательства полномочий вызывающим субъектом.
-type producer struct {
-	ProducerID                         string   `json:"producer_id"`
-	CallerWorkloadID                   string   `json:"caller_workload_id"`
-	CallerSPIFFEID                     string   `json:"caller_spiffe_id"`
-	OwnerWorkloadID                    string   `json:"owner_workload_id"`
-	OwnerSPIFFEID                      string   `json:"owner_spiffe_id"`
-	FullMethod                         string   `json:"full_method"`
-	TLSServerName                      string   `json:"tls_server_name"`
-	TransportTrustBundleID             string   `json:"transport_trust_bundle_id"`
-	ApplicationCredential              string   `json:"application_credential"`
-	ApplicationCredentialMetadata      string   `json:"application_credential_metadata"`
-	ApplicationCredentialIssuer        string   `json:"application_credential_issuer"`
-	ApplicationCredentialAudience      string   `json:"application_credential_audience"`
-	ApplicationCredentialTrustBundleID string   `json:"application_credential_trust_bundle_id"`
-	AuthorityProofIssuer               string   `json:"authority_proof_issuer"`
-	AuthorityProofAudience             string   `json:"authority_proof_audience"`
-	AuthorityProofTrustBundleID        string   `json:"authority_proof_trust_bundle_id"`
-	AuthorityProofMaxAgeSeconds        int64    `json:"authority_proof_max_age_seconds"`
-	DeadlineMilliseconds               int64    `json:"deadline_milliseconds"`
-	MaxAttempts                        int      `json:"max_attempts"`
-	RetryableGRPCCodes                 []string `json:"retryable_grpc_codes"`
-	IdempotencyScope                   string   `json:"idempotency_scope"`
-	AuthoritySources                   []string `json:"authority_sources"`
-	AllowedOperationIDs                []string `json:"allowed_operation_ids"`
-	ServerResolvedFields               []string `json:"server_resolved_fields"`
-}
+// producer keeps the generator's nominal policy record while inheriting the
+// common proof-producer field layout; encoding does not authenticate the data.
+// producer сохраняет именованную запись генератора с общей формой полей
+// производителя доказательств; сериализация не удостоверяет данные.
+type producer policydeclaration.ProofProducer
 
 // binding pins one operation to its caller, target, permission, and request profile.
 // binding закрепляет операцию за вызывающим субъектом, целью, правом и профилем запроса.

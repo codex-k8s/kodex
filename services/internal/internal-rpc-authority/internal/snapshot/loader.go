@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/policydeclaration"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
@@ -224,37 +225,13 @@ type policy struct {
 	OperationBindings       []operationBinding       `json:"operation_bindings"`
 }
 
-// authorityProofProducer describes the policy-owned route, credentials, proof trust, bounded retry and
-// authority sources for one proof producer; it is configuration metadata, not a live credential.
-// authorityProofProducer описывает принадлежащие политике маршрут, учётные привязки, доверие,
-// ограниченные повторы и источники полномочий одного производителя доказательств; это метаданные
-// конфигурации, не действующий секрет.
-type authorityProofProducer struct {
-	ProducerID                         string   `json:"producer_id"`
-	CallerWorkloadID                   string   `json:"caller_workload_id"`
-	CallerSPIFFEID                     string   `json:"caller_spiffe_id"`
-	OwnerWorkloadID                    string   `json:"owner_workload_id"`
-	OwnerSPIFFEID                      string   `json:"owner_spiffe_id"`
-	FullMethod                         string   `json:"full_method"`
-	TLSServerName                      string   `json:"tls_server_name"`
-	TransportTrustBundleID             string   `json:"transport_trust_bundle_id"`
-	ApplicationCredential              string   `json:"application_credential"`
-	ApplicationCredentialMetadata      string   `json:"application_credential_metadata"`
-	ApplicationCredentialIssuer        string   `json:"application_credential_issuer"`
-	ApplicationCredentialAudience      string   `json:"application_credential_audience"`
-	ApplicationCredentialTrustBundleID string   `json:"application_credential_trust_bundle_id"`
-	AuthorityProofIssuer               string   `json:"authority_proof_issuer"`
-	AuthorityProofAudience             string   `json:"authority_proof_audience"`
-	AuthorityProofTrustBundleID        string   `json:"authority_proof_trust_bundle_id"`
-	AuthorityProofMaxAgeSeconds        int64    `json:"authority_proof_max_age_seconds"`
-	DeadlineMilliseconds               int64    `json:"deadline_milliseconds"`
-	MaxAttempts                        int      `json:"max_attempts"`
-	RetryableGRPCCodes                 []string `json:"retryable_grpc_codes"`
-	IdempotencyScope                   string   `json:"idempotency_scope"`
-	AuthoritySources                   []string `json:"authority_sources"`
-	AllowedOperationIDs                []string `json:"allowed_operation_ids"`
-	ServerResolvedFields               []string `json:"server_resolved_fields"`
-}
+// authorityProofProducer keeps the snapshot loader's nominal producer record
+// over the common machine-policy field layout; signed provenance and role-specific
+// projection remain loader/domain checks rather than properties of the type.
+// authorityProofProducer сохраняет отдельную запись загрузчика снимка на общей
+// форме полей машинной политики; подписанное происхождение и выбор по роли
+// проверяются загрузчиком и доменом, а не обеспечиваются самим типом.
+type authorityProofProducer policydeclaration.ProofProducer
 
 // operationBinding pins caller, target, full RPC, permission, proof producer, local peers and
 // request/continuation profiles in the signed policy; the loader projects only the applicable workload
