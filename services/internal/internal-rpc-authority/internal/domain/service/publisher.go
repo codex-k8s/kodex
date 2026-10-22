@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 )
 
 const (
@@ -293,7 +293,7 @@ func (publisher *Publisher) publishReadbackMaterial(
 			err,
 		)
 	}
-	credentialJTI := deterministicUUID(
+	credentialJTI := value.JoinedAuthorityUUID(
 		"readback-credential",
 		intentID,
 		publisher.readbackSigner.Key.KeyID,
@@ -419,7 +419,7 @@ func (publisher *Publisher) publishReadbackMaterial(
 }
 
 func readbackIntentID(target model.DeliveryTarget, effectiveRevision uint64) string {
-	return deterministicUUID(
+	return value.JoinedAuthorityUUID(
 		"readback-intent",
 		target.TargetID,
 		strconv.FormatUint(target.ReadbackSourceRevision, 10),
@@ -569,16 +569,6 @@ func validateReadbackPossession(
 		)
 	}
 	return nil
-}
-
-func deterministicUUID(parts ...string) string {
-	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	value := digest[:16]
-	value[6] = (value[6] & 0x0f) | 0x50
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value)
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32]
 }
 
 // Publish выпускает и доставляет роль восстановления для целевого workload.

@@ -11,12 +11,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// rotationSecretDelivery is an in-memory key-delivery fixture with write counting and one ambiguous
+// post-write failure; it does not implement Kubernetes ownership or API-server CAS enforcement.
+// rotationSecretDelivery — оснастка доставки ключей в памяти со счётчиком записей и одним неопределённым
+// отказом после записи; владение Kubernetes и серверная проверка CAS здесь не реализованы.
 type rotationSecretDelivery struct {
 	material          domainrepository.SecretMaterial
 	writes            int
 	unknownAfterWrite bool
 }
 
+// TestNormalRotationOperationIDMatchesDeliveryGoldenVector pins the established
+// namespace/revision/digest mapping so refactoring cannot silently change persisted operation IDs.
+// TestNormalRotationOperationIDMatchesDeliveryGoldenVector закрепляет принятое отображение пространства,
+// ревизии и хеша, чтобы рефакторинг не менял устойчивые идентификаторы операций.
 func TestNormalRotationOperationIDMatchesDeliveryGoldenVector(t *testing.T) {
 	t.Parallel()
 	graph := &Graph{config: GraphConfig{Registry: model.DeliveryTargetRegistry{
@@ -28,15 +36,27 @@ func TestNormalRotationOperationIDMatchesDeliveryGoldenVector(t *testing.T) {
 	}
 }
 
+// ReadVersioned returns the fixture's current material as present regardless of the supplied path; tests
+// use it only for one synthetic target.
+// ReadVersioned возвращает текущий материал оснастки как существующий независимо от пути; тесты
+// используют его только для одной синтетической цели.
 func (delivery *rotationSecretDelivery) ReadVersioned(context.Context, string) (domainrepository.SecretMaterial, bool, error) {
 	return delivery.material, true, nil
 }
 
+// CreateVersioned counts a creation attempt and returns empty material; this limited fixture is not a
+// general create/readback backend.
+// CreateVersioned учитывает попытку создания и возвращает пустой материал; ограниченная оснастка не
+// заменяет полноценное хранилище создания и чтения.
 func (delivery *rotationSecretDelivery) CreateVersioned(context.Context, string, map[string]string) (domainrepository.SecretMaterial, error) {
 	delivery.writes++
 	return domainrepository.SecretMaterial{}, nil
 }
 
+// WriteVersionedCAS counts attempts, compares the synthetic version and stores updated material before
+// optionally returning an ambiguous error so recovery must read rather than write again.
+// WriteVersionedCAS считает попытки, сверяет синтетическую версию и сохраняет новый материал до
+// необязательной неопределённой ошибки, чтобы восстановление требовало чтения, а не повторной записи.
 func (delivery *rotationSecretDelivery) WriteVersionedCAS(_ context.Context, _ string, version uint64, data map[string]string) (domainrepository.SecretMaterial, error) {
 	delivery.writes++
 	if version != delivery.material.Version {
@@ -50,6 +70,10 @@ func (delivery *rotationSecretDelivery) WriteVersionedCAS(_ context.Context, _ s
 	return delivery.material, nil
 }
 
+// rotationPublicationStore embeds unused port methods and implements only publication/predecessor reads
+// with exact synthetic pins, phase, rejection control and read counting.
+// rotationPublicationStore встраивает неиспользуемые методы порта и реализует лишь чтение публикации и
+// предшественника с точными синтетическими привязками, фазой, управляемым отказом и счётчиком чтений.
 type rotationPublicationStore struct {
 	domainrepository.PublisherStore
 	publication model.AuthoritySnapshotPublication
@@ -59,11 +83,19 @@ type rotationPublicationStore struct {
 	reads       int
 }
 
+// LoadSnapshotPublication returns fixture presence only for an exact revision/input-digest match and
+// increments the read count; it does not persist new state.
+// LoadSnapshotPublication возвращает наличие только при точном совпадении ревизии и хеша входа оснастки
+// и увеличивает счётчик чтений; нового состояния здесь нет.
 func (store *rotationPublicationStore) LoadSnapshotPublication(_ context.Context, revision uint64, inputDigest string) (model.AuthoritySnapshotPublication, bool, error) {
 	store.reads++
 	return store.publication, store.publication.SourceRevision == revision && store.publication.InputDigestSHA256 == inputDigest, nil
 }
 
+// LoadSnapshotPredecessor requires exact revision, snapshot and registry digests plus the fixture's
+// presence flag and returns the recorded phase for historical validation.
+// LoadSnapshotPredecessor требует точные ревизию, хеши снимка и реестра и разрешённое наличие оснастки,
+// затем возвращает записанную фазу для исторической проверки.
 func (store *rotationPublicationStore) LoadSnapshotPredecessor(_ context.Context, revision uint64, snapshotDigest, registryDigest string) (model.AuthoritySnapshotPredecessor, bool, error) {
 	store.reads++
 	value := model.AuthoritySnapshotPredecessor{
@@ -76,6 +108,10 @@ func (store *rotationPublicationStore) LoadSnapshotPredecessor(_ context.Context
 	return value, found, nil
 }
 
+// TestSnapshotHistoryForBuildKeepsStableBoundaryWindow proves that initial publication and rejoin after
+// its persistence use the same 32 predecessors rather than shifting the signed history window.
+// TestSnapshotHistoryForBuildKeepsStableBoundaryWindow проверяет одинаковые 32 предшественника при
+// первой публикации и повторе после сохранения, без сдвига подписанного окна истории.
 func TestSnapshotHistoryForBuildKeepsStableBoundaryWindow(t *testing.T) {
 	t.Parallel()
 
@@ -98,6 +134,10 @@ func TestSnapshotHistoryForBuildKeepsStableBoundaryWindow(t *testing.T) {
 	assertRevisionWindow(t, restarted, 1, 32)
 }
 
+// TestSnapshotHistoryForBuildTrimsNewRevisionToLatestWindow requires a new publication to retain only
+// the latest 32 predecessor revisions when more are available.
+// TestSnapshotHistoryForBuildTrimsNewRevisionToLatestWindow требует сохранения только последних 32
+// ревизий предшественников для новой публикации при более длинной истории.
 func TestSnapshotHistoryForBuildTrimsNewRevisionToLatestWindow(t *testing.T) {
 	t.Parallel()
 
@@ -108,6 +148,10 @@ func TestSnapshotHistoryForBuildTrimsNewRevisionToLatestWindow(t *testing.T) {
 	assertRevisionWindow(t, history, 2, 33)
 }
 
+// TestSnapshotHistoryForBuildRejectsMissingPersistedRevision rejects rejoin when the supposedly
+// persisted current revision is not the exact history tail.
+// TestSnapshotHistoryForBuildRejectsMissingPersistedRevision отклоняет повтор, когда предположительно
+// сохранённая текущая ревизия не является точным хвостом истории.
 func TestSnapshotHistoryForBuildRejectsMissingPersistedRevision(t *testing.T) {
 	t.Parallel()
 
@@ -121,6 +165,10 @@ func TestSnapshotHistoryForBuildRejectsMissingPersistedRevision(t *testing.T) {
 	}
 }
 
+// TestKeyRotationRejectsAValidButUnknownPredecessorDigestBeforeCAS requires a syntactically valid but
+// unregistered predecessor digest to fail before any synthetic external write.
+// TestKeyRotationRejectsAValidButUnknownPredecessorDigestBeforeCAS требует отказа для синтаксически
+// допустимого, но неизвестного хеша предшественника до любой синтетической внешней записи.
 func TestKeyRotationRejectsAValidButUnknownPredecessorDigestBeforeCAS(t *testing.T) {
 	t.Parallel()
 	current, err := internalrpcauth.GenerateES256Key("rotation-current")
@@ -157,6 +205,10 @@ func TestKeyRotationRejectsAValidButUnknownPredecessorDigestBeforeCAS(t *testing
 	}
 }
 
+// revisionHistory constructs inclusive consecutive fixture revisions with fixed-width hexadecimal
+// digests; these values are deterministic metadata, not signed publications.
+// revisionHistory создаёт включительный последовательный диапазон ревизий оснастки с шестнадцатеричными
+// хешами фиксированной ширины; это воспроизводимые метаданные, а не подписанные публикации.
 func revisionHistory(first, last uint64) []model.RevisionDigest {
 	result := make([]model.RevisionDigest, 0, last-first+1)
 	for revision := first; revision <= last; revision++ {
@@ -168,6 +220,10 @@ func revisionHistory(first, last uint64) []model.RevisionDigest {
 	return result
 }
 
+// assertRevisionWindow checks the expected inclusive window length and first/last revision for locally
+// constructed histories; it does not independently validate every interior digest.
+// assertRevisionWindow проверяет ожидаемую длину включительного окна и первую и последнюю ревизии
+// локальной истории; каждый внутренний хеш отдельно не проверяется.
 func assertRevisionWindow(
 	t *testing.T,
 	history []model.RevisionDigest,
@@ -189,6 +245,12 @@ func assertRevisionWindow(
 	}
 }
 
+// TestKeyRotationBindsDistinctRegistryAndSnapshotDigestsAndResumesWithoutSecondCAS verifies distinct
+// digest domains, exact predecessor eligibility and rejoin without a second write, including mutation
+// failures before CAS.
+// TestKeyRotationBindsDistinctRegistryAndSnapshotDigestsAndResumesWithoutSecondCAS проверяет разные
+// области хеширования, точного допустимого предшественника и повтор без второй записи, включая отказ при
+// подменах до CAS.
 func TestKeyRotationBindsDistinctRegistryAndSnapshotDigestsAndResumesWithoutSecondCAS(t *testing.T) {
 	t.Parallel()
 	oldManifest, oldPolicy := []byte("exact manifest"), []byte("policy revision 76")
@@ -252,6 +314,10 @@ func TestKeyRotationBindsDistinctRegistryAndSnapshotDigestsAndResumesWithoutSeco
 	}
 }
 
+// TestKeyRotationResolvesHistoricalManifestChange requires rotation to use the persisted predecessor
+// publication even when current manifest bytes produce a different input digest.
+// TestKeyRotationResolvesHistoricalManifestChange требует использования сохранённой публикации
+// предшественника при ротации, даже если новый манифест даёт другой хеш входа.
 func TestKeyRotationResolvesHistoricalManifestChange(t *testing.T) {
 	t.Parallel()
 	oldManifest, newManifest, policy := []byte("old manifest"), []byte("new manifest"), []byte("exact policy")
@@ -287,6 +353,12 @@ func TestKeyRotationResolvesHistoricalManifestChange(t *testing.T) {
 	}
 }
 
+// TestNormalRotationTransformsKeysAcrossThreeImmutablePublications checks DISTRIBUTE/SWITCH/RETIRE key
+// transitions, the next cycle and uncertain-write rejoin using in-memory material with exactly counted
+// writes.
+// TestNormalRotationTransformsKeysAcrossThreeImmutablePublications проверяет переходы ключей
+// DISTRIBUTE/SWITCH/RETIRE, следующий цикл и повтор после неопределённой записи на материале в памяти с
+// точным счётчиком записей.
 func TestNormalRotationTransformsKeysAcrossThreeImmutablePublications(t *testing.T) {
 	t.Parallel()
 	manifest, policy := []byte("exact manifest"), []byte("exact policy")
@@ -362,6 +434,10 @@ func TestNormalRotationTransformsKeysAcrossThreeImmutablePublications(t *testing
 	}
 }
 
+// mustRotationKey generates a fresh synthetic ES256 key or stops the calling test without printing
+// private key material.
+// mustRotationKey создаёт новый синтетический ключ ES256 либо останавливает тест, не печатая закрытый
+// материал.
 func mustRotationKey(t *testing.T, keyID string) internalrpcauth.ES256Key {
 	t.Helper()
 	key, err := internalrpcauth.GenerateES256Key(keyID)
@@ -371,6 +447,10 @@ func mustRotationKey(t *testing.T, keyID string) internalrpcauth.ES256Key {
 	return key
 }
 
+// phasePublication builds a metadata-only publication fixture from explicit revision, registry/snapshot
+// digests and phase-bound inputs; it neither signs nor delivers a snapshot.
+// phasePublication создаёт публикацию-оснастку только с метаданными из явных ревизии, хешей реестра и
+// снимка и входов фазы; подписи и доставки снимка здесь нет.
 func phasePublication(
 	t *testing.T,
 	revision uint64,

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.249.0
+version: 1.250.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,79 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятидесятая волна — publisher graph и устойчивые идентификаторы
+
+Опубликованный SHA249 — `2fad6f704a6f708fb3b5eb1ac6ddd791a84ffbc0`.
+Точный KVdJgx:6588 sources,222 excluded,1824 raw/604 retained/
+1220 unresolved; Go10537/21216, missing10679. Raw SHA256:
+`54c7053a6d9378d965b1cd68233cb0bcb70091a4419b91722a97e20169d42c49`.
+Clone-set:
+`1ebcf8101887964a309decd4b0f3464043230f15e3f3afc622677726baa81555`.
+Точный unit/build, push/readback и Draft PR PATCH/GET249 подтверждены.
+
+Прочитаны1875 строк всех5 publisher source/test файлов, реальные вызовы
+в domain/service/publisher и оба варианта UUID у readback/restore клиентов.
+Весь publisher теперь54/54 declarations EN→RU; новый helper/test2/2,
+вместе56/56 в7 файлах. Package docs и прежние inline пояснения также
+двуязычные. Комментарии отличают намерение до записи ключей от сохранения
+снимка перед доставкой trust/snapshot, а delivery — от consumer acceptance.
+Ready не назван чистым health query: он способен продвинуть durable phase.
+deliveryReady не приписана полная криптографическая проверка каждого Secret,
+а sameExactMaterial не назван общим validator произвольных карт.
+
+Одинаковое построение deterministicUUID в graph и domain publisher вынесено
+в один JoinedAuthorityUUID в канонический internal/domain/types/value.
+Это helper одного сервиса с двумя реальными потребителями, не общий utils
+и не новая зависимость libs. Оба прежних тела удалены,4 вызова заменены;
+input namespaces, порядок частей, NUL join без trailing separator, SHA-256,
+усечение, version/variant bits и строковый формат сохранены побайтно.
+Клиентские алгоритмы с завершающим NUL не объединены: их кодирование другое.
+Новый API честно описывает SHA-256 с битами версии5, а не стандартный SHA-1
+UUIDv5, случайный credential или однозначное кодирование произвольных NUL tuples.
+
+Inverse AST6 возвращает только4 calls/2 imports/functions и требует точное
+совпадение тела helper с обеими удалёнными копиями: identity SHA249.
+Новые golden units проверяют7 случаев, включая пустые части, trailing empty,
+embedded NUL equivalence, UTF-8 и существующий rotation namespace vector.
+Существующие rotation/readback-intent units проходят с теми же результатами.
+Одна настоящая raw clone group удалена; новых групп нет по multiset ключам
+format/paths/fragment/count. Остальные1823 группы сохранили точные фрагменты.
+
+Матрица сохранённого пути (никаких новых lifecycle переходов):
+
+| Инициатор | Владелец/полномочие | Идентичность и эффект |
+| --- | --- | --- |
+| Graph intent/normal rotation | Прежние registry/signer/fence и durable PublisherStore | Только прежний namespace/revision/digest ID; Prepare/Begin/CAS/history/delivery сохраняют порядок |
+| Domain readback credential/intent | Прежний проверенный target и PublisherStore | Только прежний namespace/intent/key ID; выдача, idempotency и подпись не меняются |
+| Consumer readiness | Прежние exact snapshot/target readbacks | Ready сохраняет phase advancement и все сроки, barrier и ошибки |
+| Helper | Нет полномочий, сети, storage, clock, random или side effects | Только неизменное преобразование строк; не проверяет eligibility |
+
+Полностью разобраны обе стороны ещё3 detector windows108/128/100 tokens:
+это typed field mappings OCI promotion provenance/SBOM/build/contract и
+authority restore/readback routes/material. Weak-нормализация имён создаёт
+внешнее сходство без общего алгоритма. Добавлены exact path/fragment/count1
+reasons, не целые файлы. Прежние503 entries/604 occurrences неизменны;
+теперь506 entries покрывают607 occurrences. Control-plane код не менялся.
+REPO-DOC-001/GO-DOC-006 перечитаны перед новым value helper. Context7 Go
+sha256.Sum256/hex.EncodeToString и pinned Go1.26.6 docs сверены; SDK нет.
+
+Первый рабочий запуск FAIL compilation: после удаления локального helper
+в domain publisher остался unused strings import. Импорт удалён; повтор
+полного scoped unit/build PASS LOCAL:48 верхних/92 всех PASS,0 FAIL/SKIP.
+Команда прежняя249: domain/..., application, publisher, snapshot, transport/grpc,
+затем полный authority build; GOENV/GOWORK off, Go1.26.6, GOMAXPROCS=4.
+17 Node units, Go checker units, scope56/56, inverse AST6, gofmt/diff-check
+и5 addressed ignores PASS LOCAL. Начальный ufNUup — не final measurement.
+Component/live/browser/deploy/ИИ/почта/STT NOT RUN, полная приёмка не заявлена.
+
+Рабочий Q0T9pM:6590 sources,222 excluded,1823 raw/607 retained/
+1216 unresolved; Go10593/21216, missing10623. Raw SHA256:
+`433465fdabfc36626fe5cc655c3509cd2efa7dea72333ed4a44cf0bd551de18c`.
+Clone-set:
+`6ca1f23deb63bf6ae965b56c73d5392a21904903bc9c9146b173458aff607301`.
+Точный post-commit run публикуется в том же Draft PR; вся задача ещё не
+завершена, прежние FAIL/SKIP/NOT RUN не скрываются.
 
 ## Двести сорок девятая волна — типы и порты authority
 

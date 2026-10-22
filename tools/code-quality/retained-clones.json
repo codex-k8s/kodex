@@ -4024,6 +4024,30 @@
       "fragmentSHA256": "a8bd1f1b7de7b614d00cbc43dae49ca0a0184b79cbd20984fbc85ec806d8761b",
       "count": 1,
       "reason": "Ложное semantic совпадение weak detector: с одной стороны handwritten список строковых fullMethodName разных RPC для проверки authority profile gateway, с другой — список uint32 номеров Linux syscalls для seccomp denylist приватной image probe. После нормализации selector identifiers эти разные типы и границы выглядят одинаковыми последовательностями констант. Общего значения, исполняемой операции или цикла между ними нет; вынос в helper/lib связал бы HTTP authority tests с kernel sandbox без семантического основания. Исключена только точная пара фрагментов с кратностью1, не все списки констант, файлы или проверки."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_promotions.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/publisher/registry.go",
+      "fragmentSHA256": "4f6492235c481cd6342443c338ffb02e5d47d2244112ae85101887e54be0b65c",
+      "count": 1,
+      "reason": "Ложное семантическое совпадение после нормализации имён в weak detector:108 tokens назначения полей хеша запроса продвижения OCI-образа сопоставлены с преобразованием проверенной YAML-цели доставки полномочий. В первом случае поля фиксируют provenance/build/SBOM, во втором — роли восстановления, ACK и адрес контроллера. Обе полные операции и соседние поля прочитаны; общего типа, проверки или эффекта нет. Универсальный copier скрыл бы точную привязку разных security boundary. Сохранены только эти файлы, fragment SHA-256 и кратность1, не функции или категории mappings."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_promotions.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/publisher/registry.go",
+      "fragmentSHA256": "1688741d57d5193aba77f8cd45d0ec131df95b7c3603f98e585989460f898c95",
+      "count": 1,
+      "reason": "Совпадают128 tokens последовательных named-field assignments, но promotionRequestDigest связывает свидетельства допуска OCI с версиями рецепта/сборки, а LoadRegistry проецирует readback credentials, possession key и поколение материала из проверенного реестра. Поля похожи только после стирания имён детектором, их значения и полномочия не взаимозаменяемы. Общий helper либо reflection copier смешал бы независимые доменные контракты без общего алгоритма. Исключение закрепляет точные пути, fragment SHA-256 и одно occurrence; остальные повторы этих файлов остаются видимыми."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_promotions.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/publisher/registry.go",
+      "fragmentSHA256": "51a903fd826a21ec7503ed32a0f0a8eb2c112c68bb8105673a9ce21c12ab8532",
+      "count": 1,
+      "reason": "Перекрывающееся100-token окно сравнивает конец fingerprint OCI promotion (role-runtime contract, версии, platforms/tools) с readback attestor маршрутом, SNI, CA, audience и методами доставки authority. Это разные typed projections; ни общий вычисляемый результат, ни операция авторизации или жизненного цикла не повторяются. Вынос такой последовательности selector assignments в библиотеку ухудшил бы явную проверку security-полей. Сохранено только данное точное окно двух файлов с fragment SHA-256/count1, без исключения целого mapping или файла."
     }
   ]
 }
