@@ -5,13 +5,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/google/go-github/v74/github"
 )
 
+// githubCatalogInput decodes the registered GitHub catalog's operation-specific fields, including explicit pointer-valued optional limits/pins.
+// It is a transport shape, not a grant; package schemas and selected operation handlers enforce field eligibility and scope separately.
+// githubCatalogInput декодирует поля зарегистрированного каталога GitHub, включая указатели для явно заданных необязательных лимитов и привязок.
+// Это форма транспорта, а не grant; допустимость полей и область отдельно проверяют схемы package и обработчики выбранных операций.
 type githubCatalogInput struct {
 	Path                  string `json:"path"`
 	Ref                   string `json:"ref"`
@@ -47,6 +50,8 @@ type githubCatalogInput struct {
 	ExpectedChangedFiles  *int   `json:"expected_changed_files"`
 }
 
+// githubContentView carries compact repository-entry metadata without embedding file contents or conferring access to that path.
+// githubContentView переносит компактные метаданные записи репозитория без содержимого файла или выдачи доступа к пути.
 type githubContentView struct {
 	Path string `json:"path"`
 	Type string `json:"type"`
@@ -54,18 +59,24 @@ type githubContentView struct {
 	Size int    `json:"size"`
 }
 
+// githubBranchView projects a branch name, commit SHA and protection flag rather than exposing the complete SDK object.
+// githubBranchView проецирует имя ветки, SHA коммита и флаг защиты вместо выдачи полного SDK-объекта.
 type githubBranchView struct {
 	Name      string `json:"name"`
 	SHA       string `json:"sha"`
 	Protected bool   `json:"protected"`
 }
 
+// githubCommitView holds the commit identity/message/URL used by list/read projections; URL is output metadata, not a new fetch target.
+// githubCommitView хранит идентичность, сообщение и URL коммита для проекций списка и чтения; URL — метаданные ответа, не новое назначение запроса.
 type githubCommitView struct {
 	SHA     string `json:"sha"`
 	Message string `json:"message"`
 	URL     string `json:"url"`
 }
 
+// githubFileChange models commit-file metadata and an optional provider patch; callers choose which operation may expose that data.
+// githubFileChange описывает метаданные файла коммита и необязательный patch провайдера; допустимость выдачи определяет вызывающая операция.
 type githubFileChange struct {
 	Filename         string  `json:"filename"`
 	PreviousFilename string  `json:"previous_filename,omitempty"`
@@ -76,6 +87,10 @@ type githubFileChange struct {
 	Patch            *string `json:"patch,omitempty"`
 }
 
+// projectGitHubFiles rejects nil entries and unsafe current/previous paths, then copies the selected SDK fields into independent values.
+// It does not independently verify blob SHA or patch completeness and does not retrieve file contents.
+// projectGitHubFiles отклоняет nil-записи и небезопасные текущие и прежние пути, затем копирует выбранные поля SDK в независимые значения.
+// SHA blob и полнота patch независимо не проверяются, содержимое файлов не загружается.
 func projectGitHubFiles(files []*github.CommitFile) ([]githubFileChange, error) {
 	result := make([]githubFileChange, 0, len(files))
 	for _, file := range files {
@@ -87,7 +102,10 @@ func projectGitHubFiles(files []*github.CommitFile) ([]githubFileChange, error) 
 	return result, nil
 }
 
-// SDK получает только проверенный путь внутри закреплённого репозитория.
+// validRepositoryPath checks a lexical relative path without leading slash, empty/dot components, backslash or NUL/CR/LF.
+// Empty input follows allowEmpty; this predicate performs no URL decoding, existence lookup or repository authorization.
+// validRepositoryPath проверяет лексический относительный путь без начального слеша, пустых и точечных компонентов, обратного слеша или NUL, CR и LF.
+// Пустой вход зависит от allowEmpty; декодирование URL, поиск существования и полномочия репозитория не проверяются.
 func validRepositoryPath(value string, allowEmpty bool) bool {
 	if value == "" {
 		return allowEmpty
@@ -103,6 +121,10 @@ func validRepositoryPath(value string, allowEmpty bool) bool {
 	return true
 }
 
+// githubCatalogPage applies bounded read retry, checks returned count/NextPage and normalizes a nil SDK slice before shared projection.
+// Only an exact next page within 10000 is accepted; provider-specific selection and upstream repository/capability scope are unchanged.
+// githubCatalogPage применяет ограниченный повтор чтения, проверяет количество и NextPage ответа и нормализует nil-срез SDK до общей проекции.
+// Принимается только точная следующая страница в пределах 10000; выбор данных провайдера и вышестоящая область репозитория и capability не меняются.
 func githubCatalogPage[T any](ctx context.Context, capability integrationpackage.Capability, request Request, limit, page int, call func() ([]T, *github.Response, error)) (Result, error) {
 	next := 0
 	items, err := githubRead(ctx, capability, func() ([]T, *github.Response, error) {
@@ -121,17 +143,13 @@ func githubCatalogPage[T any](ctx context.Context, capability integrationpackage
 	if items == nil {
 		items = []T{}
 	}
-	body, err := json.Marshal(items)
-	if err != nil {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-	}
-	return providerResult(request, request.Operation+":"+strconv.Itoa(page), struct {
-		Items string `json:"items"`
-		Count int    `json:"count"`
-		Next  int    `json:"next_cursor,omitempty"`
-	}{string(body), len(items), next})
+	return catalogPageProjection(request, page, items, next)
 }
 
+// executeGitHubCatalog dispatches pinned-repository content, branch and commit operations, delegating directory/content and collaboration paths explicitly.
+// It preserves operation-specific defaults, selected response checks and unknown mutation outcomes; authority comes from upstream request validation.
+// executeGitHubCatalog направляет операции содержимого, веток и коммитов закреплённого репозитория, явно делегируя каталог, чтение файлов и совместную работу.
+// Сохраняются специфичные умолчания, выбранные проверки ответа и неизвестные исходы изменений; полномочия происходят из вышестоящей проверки запроса.
 func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github.Client, owner, repo string, request Request, capability integrationpackage.Capability, raw []byte) (Result, error) {
 	var in githubCatalogInput
 	if json.Unmarshal(raw, &in) != nil {
@@ -260,6 +278,10 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 	}
 }
 
+// githubCommandResult applies mutation error/unknown-outcome classification before producing the existing accepted receipt projection.
+// It does not independently reconcile an ambiguous provider result or retry the command.
+// githubCommandResult классифицирует ошибку и неизвестный исход изменения до создания прежней проекции accepted и квитанции.
+// Неопределённый исход провайдера независимо не сверяется и команда не повторяется.
 func githubCommandResult(request Request, response *github.Response, err error) (Result, error) {
 	if err := githubMutationError(response, err); err != nil {
 		return Result{}, err

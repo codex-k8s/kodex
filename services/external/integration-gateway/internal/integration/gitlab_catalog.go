@@ -8,6 +8,8 @@ import (
 	"strconv"
 )
 
+// gitLabCatalogInput decodes operation-specific identifiers, content and pagination fields from the previously schema-validated request.
+// gitLabCatalogInput декодирует идентификаторы, содержимое и поля страниц выбранной операции из ранее проверенного схемой запроса.
 type gitLabCatalogInput struct {
 	Branch          string `json:"branch"`
 	Ref             string `json:"ref"`
@@ -28,6 +30,8 @@ type gitLabCatalogInput struct {
 	Cursor          int    `json:"cursor"`
 }
 
+// gitLabCommitView retains selected commit metadata for typed responses without adding a network request to the returned web URL.
+// gitLabCommitView сохраняет выбранные метаданные коммита для типизированного ответа без сетевого обращения к возвращённому web URL.
 type gitLabCommitView struct {
 	ID      string `json:"id"`
 	ShortID string `json:"short_id"`
@@ -36,6 +40,8 @@ type gitLabCommitView struct {
 	WebURL  string `json:"web_url"`
 }
 
+// gitLabBranchView projects branch flags and its commit; callers verify required identity fields before returning the view.
+// gitLabBranchView проецирует флаги ветки и её коммит; обязательные поля идентичности проверяются вызывающим до выдачи.
 type gitLabBranchView struct {
 	Name      string           `json:"name"`
 	Protected bool             `json:"protected"`
@@ -43,6 +49,8 @@ type gitLabBranchView struct {
 	Commit    gitLabCommitView `json:"commit"`
 }
 
+// gitLabTreeView models a repository-tree entry whose path and identity are validated by the selected list operation.
+// gitLabTreeView описывает запись дерева репозитория, путь и идентичность которой проверяет выбранная операция списка.
 type gitLabTreeView struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -51,6 +59,8 @@ type gitLabTreeView struct {
 	Mode string `json:"mode"`
 }
 
+// gitLabDiffView preserves provider diff text and completeness flags together with old/new paths, without claiming a complete source review.
+// gitLabDiffView сохраняет diff-текст провайдера и флаги полноты вместе с прежним и новым путями, не объявляя полное чтение исходников.
 type gitLabDiffView struct {
 	OldPath     string `json:"old_path"`
 	NewPath     string `json:"new_path"`
@@ -62,6 +72,8 @@ type gitLabDiffView struct {
 	TooLarge    bool   `json:"too_large"`
 }
 
+// gitLabNoteView carries note identity/content and parent type/IID so issue and merge-request handlers can enforce their parent binding.
+// gitLabNoteView переносит идентичность и содержимое заметки и тип и IID родителя для проверки связи с задачей или merge request.
 type gitLabNoteView struct {
 	ID           int64  `json:"id"`
 	Body         string `json:"body"`
@@ -70,12 +82,16 @@ type gitLabNoteView struct {
 	NoteableType string `json:"noteable_type"`
 }
 
+// gitLabDiscussionView groups a provider discussion and its notes; the list validator bounds notes and verifies each parent binding.
+// gitLabDiscussionView объединяет обсуждение провайдера и заметки; валидатор списка ограничивает заметки и проверяет связь каждой с родителем.
 type gitLabDiscussionView struct {
 	ID             string           `json:"id"`
 	IndividualNote bool             `json:"individual_note"`
 	Notes          []gitLabNoteView `json:"notes"`
 }
 
+// gitLabJobView projects CI job metadata and nested pipeline identity, not logs, credentials or an execution authorization token.
+// gitLabJobView проецирует метаданные CI job и вложенную идентичность pipeline, а не логи, реквизиты или токен полномочий исполнения.
 type gitLabJobView struct {
 	ID       int64          `json:"id"`
 	Name     string         `json:"name"`
@@ -86,6 +102,10 @@ type gitLabJobView struct {
 	Pipeline gitLabPipeline `json:"pipeline"`
 }
 
+// providerTypedObject decodes a typed provider response and applies its operation-specific predicate before common receipt projection.
+// It preserves a closed invalid-response error and performs no extra provider I/O or authorization inference.
+// providerTypedObject декодирует типизированный ответ провайдера и применяет предикат операции до общей проекции квитанции.
+// Сохраняется закрытая ошибка неверного ответа; дополнительные запросы или вывод полномочий не выполняются.
 func providerTypedObject[T any](request Request, body []byte, reference string, valid func(T) bool) (Result, error) {
 	var value T
 	if decodeProviderJSON(body, &value) != nil || !valid(value) {
@@ -94,6 +114,10 @@ func providerTypedObject[T any](request Request, body []byte, reference string, 
 	return providerResult(request, reference, value)
 }
 
+// providerPageResult validates every decoded element/count and preserves GitLab's single X-Next-Page or full-page fallback semantics.
+// Nil is normalized before cursor checks; only final JSON projection is shared with GitHub, not provider-specific paging rules.
+// providerPageResult проверяет каждый декодированный элемент и количество и сохраняет семантику одного X-Next-Page GitLab либо запаса полной страницы.
+// Nil нормализуется до проверки курсора; с GitHub разделяется только итоговая JSON-проекция, а не правила страниц провайдера.
 func providerPageResult[T any](request Request, response *providerResponse, limit, page int, valid func(T) bool) (Result, error) {
 	var values []T
 	if decodeProviderJSON(response.Body, &values) != nil || len(values) > limit {
@@ -122,17 +146,13 @@ func providerPageResult[T any](request Request, response *providerResponse, limi
 	} else if len(values) == limit && page < 10000 {
 		next = page + 1
 	}
-	encoded, err := json.Marshal(values)
-	if err != nil {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-	}
-	return providerResult(request, request.Operation+":"+strconv.Itoa(page), struct {
-		Items string `json:"items"`
-		Count int    `json:"count"`
-		Next  int    `json:"next_cursor,omitempty"`
-	}{string(encoded), len(values), next})
+	return catalogPageProjection(request, page, values, next)
 }
 
+// executeGitLabCatalog maps the closed operation set to the configured project path, HTTP verb and typed body, then validates operation-specific responses.
+// Pagination and parent identity remain provider-owned here; mutation effect keys and transport unknown-outcome policy are retained unchanged.
+// executeGitLabCatalog сопоставляет закрытое множество операций настроенному пути проекта, HTTP-методу и типизированному телу и проверяет специфичные ответы.
+// Страницы и идентичность родителя остаются здесь специфичными для провайдера; ключи эффектов и транспортная политика неизвестных исходов не меняются.
 func (adapter *Adapter) executeGitLabCatalog(ctx context.Context, request Request, call providerCall, raw []byte) (Result, error) {
 	var in gitLabCatalogInput
 	if json.Unmarshal(raw, &in) != nil {

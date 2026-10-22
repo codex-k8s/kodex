@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.169.0
+version: 1.170.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,75 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто семидесятая волна — общий provider transport и page projection
+
+На базе опубликованного SHA `f74e534fcf534288d09d7ddbb0af56ab60115e5d`
+устранены две точные группы адаптеров в минимальной области internal/integration.
+Одинаковые jiraJSON/confluenceJSON удалены без compatibility wrappers;
+все девять Jira и шесть Confluence calls используют configuredProviderJSON.
+Он передаёт тот же BaseURL/Method/Path/Query/Body, auth scheme/username,
+exact request.Credential, effect key и capability в прежний callProvider.
+Сетевые назначения, credential read, authority, retry и provider validation
+не перенесены в новый универсальный policy layer.
+
+GitHub/GitLab разделяют только catalogPageProjection: json.Marshal списка,
+прежние string items/count/omitempty next_cursor, reference operation:page
+и прежний providerResult с receipt digest. GitHub SDK NextPage/count/retry
+и GitLab per-item validation, X-Next-Page/full-page fallback остаются
+разными. Обе прежние nil→empty нормализации остались на прежних местах;
+сам generic helper не добавляет normalization, scope или cursor validation.
+
+Механическое сравнение подтвердило точное совпадение нового configured
+helper с обоими прежними телами, восстановление всех 15 call sites и
+четырёх полных non-comment файлов после обратной подстановки двух выносов.
+Порядок запросов, payload, methods, callbacks и ошибки не менялись.
+Новые helpers не создают root context, background worker, connection или grant.
+
+Два новых unit проверяют буквальные wire bytes и receipt для nil/empty,
+Unicode, JSON/HTML escaping и типизированного списка. Проверены effect/input
+bindings, operation:page, отсутствие нулевого next_cursor и SHA-256 точной
+summary. Непредставимый JSON type даёт прежний SafeError и нулевой Result,
+не partial data или внутреннюю ошибку. Эти unit не используют credentials,
+HTTP server или SDK; common configured glue дополнительно покрыт существующим
+полным каталогом fake-provider тестов и точным сравнением полей.
+
+Все 40 сохранившихся прежних и четыре новых объявления выбранных семи
+source/test файлов EN→RU — 44/44; старые два wrapper объявления удалены.
+Scoped go-docs -check по полному inventory этих файлов — PASS LOCAL.
+Jira и Confluence описаны полностью, включая реальные ограничения синтаксиса
+issue keys, lack of issue-version CAS, effect-marker reconciliation и
+проверку Confluence space/version перед выдачей body. Все 10 GitHub catalog
+и 11 GitLab catalog объявлений также описаны. Весь gateway ещё в работе:
+146/622, непокрыты 476; это не полная готовность unit.
+
+Context7 сначала предложил сторонний JSON-iterator — он не применялся.
+Запрос официальной Go stdlib /websites/pkg_go_dev_go1_25_3 вернул смешанные
+v1/v2 snippets: использованы только данные для import encoding/json,
+не json/v2. Nil/empty, omitempty, unsupported types и escaping дополнительно
+сверены по локальному go doc encoding/json.Marshal закреплённого Go1.26.6.
+Import, SDK и поведение JSON не обновлялись; golden unit закрепляют v1 bytes.
+
+Полный `go test -count=1 -json ./...` и `go build ./...` integration-gateway —
+PASS LOCAL для выполненной области: 118 верхних PASS, 1932 PASS с подтестами,
+0 FAIL, один прежний SKIP TestCPProducedEmailClaim. Его disposable CP producer
+остаётся NOT RUN; данные owner claim не подделывались. До изменений выбранный
+internal/integration unit также завершился успешно; полный parent module
+PASS/прежний SKIP привязан к предыдущему SHA выше. Новые projection tests
+отдельно PASS. 16 unit анализатора, unit Go-checker, пять ignore-boundaries,
+gofmt и diff-check — PASS LOCAL. Go использует
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. PostgreSQL, browser/deploy/live,
+настоящие providers/почта и агенты — NOT RUN.
+
+Detector: 6561 source-файл, 222 исключения, 1851 raw-группа,
+569 точных решений и 1282 неразобранные; raw SHA-256
+`a7c3534c28e80b31c06323ba83f99b1230d203d188d81fe40c912b822e39ced2`,
+отпечаток `4cbad2ac5611bef8fd3dfb53f162ddda042a6d1232fc817913b290d0298baf49`.
+Multiset format/path/fragment/count подтвердил удаление ровно двух групп
+315e914f/db0b2195, без новых групп или исключений. Общий Go-реестр —
+5852/21113, непокрыты 15261. Полный repository go-docs-check — NOT RUN,
+прежний diagnostics FAIL остаётся открытым. Точный scan/build/unit нового
+SHA публикуется в текущем PR; вся цель не завершена.
 
 ## Сто шестьдесят девятая волна — synthetic provider шлюза интеграций
 
