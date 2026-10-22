@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.254.0
+version: 1.255.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,64 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятьдесят пятая волна — доменный resolver полномочий
+
+Опубликованный SHA254 — `d3f92def71cef3613be80b62d844565b5bdb4858`.
+Точный CT7ZDw:6596 sources,222 excluded,1819 raw/610 retained/
+1209 unresolved; Go10768/21228, missing10460. Raw SHA256:
+`7abc52bc4549ec5fe8cd9eeaacc6e9707c82672b1c73196ad879e87c6c462b9e`.
+Clone-set:
+`8558b12ea14588f04450d9d42901b7411b168af46a0a9e418f039d7422cacc4d`.
+Draft PR и Issue открыты, head/body254 сверены перед продолжением.
+
+Полностью прочитаны7 Go-файлов authorityproof,1053 прежних строки, включая
+test fixtures, instance binding и runtime provenance. Добавлено59 осмысленных
+EN→RU declaration comments;4 прежних сохранены, scope63/63. Package comment
+и прежний inline comment также двуязычны. AST7 без комментариев/координат
+совпадает с SHA254: executable bodies, imports, типы, literals и тесты
+не менялись. Прочитаны связанные OIDC constructor/refresh/close и обе
+стороны совпадений; новые библиотеки и библиотечные API не добавлялись.
+
+Комментарии различают чтение/проверку и устойчивые эффекты: New создаёт
+OIDC verifier с первоначальным refresh, Ready может передать worker grant
+доменному владельцу; Resolve последовательно получает доменные полномочия,
+ревизию и подпись, но не объявляется одной транзакцией. Поле ResourceReference
+не используется самим Resolve; request digest и policy dimensions не
+объявляются проверкой этого поля. readBounded сначала читает целый файл,
+потом ограничивает длину; ему не приписаны streaming/no-follow гарантии.
+Close закрывает idle HTTP connections, не grants или domain workers.
+
+Worker claim fields не назначают root actor/tenant; это обязанность доменного
+владельца. Разграничены cryptographic checks и durable owner acceptance,
+runtime actor provenance и минимальный срок producer/lease/grant. Указаны
+реальные ограничения текущих helpers: первый подходящий map producer,
+сравнение канонического public JWK, а не root signature документа доверия,
+и тесты локальных подписей/fixtures, не внешнего provider. Существующие
+форматы instance binding не расширялись и не заменялись.
+
+Первый assessment после комментариев — FAIL: exact retained fragment hash
+устарел. Повторно прочитаны resolver166–222 и snapshot loader225–279;
+156-token nominal binding window имеет прежнюю причину сохранения. Обновлён
+только его fragment hash; reason/count/paths и остальные508 записей
+неизменны. Никакого broad ignore, снятия проверки либо нового исключения.
+Обе пока неразобранные пары proof/worker claim форм остаются unresolved;
+комментарии не выдаются за устранение дубликатов.
+
+Повторные10 верхних/38 всех authorityproof unit cases и полный build
+control-plane с -p=2 — PASS LOCAL,0 FAIL/SKIP.17 Node units, Go checker
+units, scoped docs63/63, AST7, canonical assessment,5 addressed ignores,
+gofmt и diff-check — PASS LOCAL. Full unit прочих packages, component,
+codegen, review, browser/live/deploy, модели, STT и почта — NOT RUN по
+согласованному режиму build/unit. Ранее отмеченные FAIL не скрыты.
+
+Рабочий SeamZ5:6596 sources,222 excluded,1819 raw/610 retained/
+1209 unresolved; Go10827/21228, missing10401. Raw SHA256:
+`fef5dd18c3fc0afb5f7e9b478a819591d36e916c8c5ac7ad2efa8a7a0cdba37a`.
+Clone-set:
+`6fe544e41e09823678665ee9d65f5b245b76c50adbae357c9bbec62ca7916560`.
+Точный post-commit report будет опубликован в том же Draft PR; вся задача
+остаётся незавершённой до полного разбора и покрытия.
 
 ## Двести пятьдесят четвёртая волна — общие binding profiles
 

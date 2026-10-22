@@ -4069,7 +4069,7 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/domain/service/authorityproof/service.go",
       "secondPath": "services/internal/internal-rpc-authority/internal/snapshot/loader.go",
-      "fragmentSHA256": "e13abfb8529fb783c63869b80066b0229c33bac263bdf043e61e11bb5fdc7142",
+      "fragmentSHA256": "f385bbed26611e9aab540f1f05d963769b79505aaf202a40078ef023366c2e60",
       "count": 1,
       "reason": "Остаточные156 tokens соединяют nominal producer wrapper, domain-owned operationBinding и уже общие профили запроса/продолжения/Unix peer. Resolver использует ProducerID, loader — ProofProducerID с тем же JSON key; вложенные типы намеренно остаются отдельными named types. Объединение полного binding потребовало бы изменения доменных полей/вызовов либо generic schema с несколькими типами, чтобы сохранить эти границы. Проверки indexPolicy/role projection не повторяются, а общие24 producer и10 profile fields уже имеют один источник. Здесь сохраняется явная доменная форма, а не копия алгоритма; исключены только точные paths/fragment/count1, не файлы или операции полномочий."
     }
