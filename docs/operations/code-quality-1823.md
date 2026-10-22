@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.275.0
+version: 1.276.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,59 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят шестая волна — конфигурация и диагностика authority
+
+Опубликованный SHA275 — `c8caefca154a63784e2526ee9279c83f40cdfa83`.
+Точный HtOyJl:6607 sources,222 excluded,1819 raw/666 retained/
+1153 unresolved; Go12035/21243, missing9208. Raw SHA256:
+`bc349c42284b17dfc639bc49f99c887c6f34968811c2d3a3ab53d2439fbde6ea`;
+clone-set:
+`d655630e7fadd86b0d2dcbee882998212747118e291710d2d182a7ee954e5b6f`.
+На точном SHA275 app30/119, полный authority build -p=2, docs9/9,
+inverse AST7 и tooling/scan PASS LOCAL,0 FAIL/SKIP. Push/readback и
+Draft PR PATCH/GET275 подтверждены.
+
+Прочитаны целиком config460/config-test106/runtime-diagnostics137/
+runtime-diagnostics-test86 lines;46/46 declarations описаны EN→RU,
+включая local workloadProfile, patterns, constants и private wrappers.
+Дополнительно предметно описан local maximumSafeInteger, не включённый
+текущим checker в denominator declarations, и переведено внутреннее
+пояснение классификации joined context error.
+
+Comments различают defaults→env.Parse→registered profile→Validate;
+точный mode/workload/SPIFFE registry и lexical checks; URI/path/digest
+syntax и реальную загрузку/проверку данных. Config construction не объявлен
+полностью проверенной конфигурацией. Validate проверяет actual process
+UID/GID, но не открывает файлы и не проверяет DNS/TLS connectivity.
+setRuntimeSecretNames только инициализирует defaults, applyWorkloadProfile
+назначает4 object names из закрытого реестра; credential values не нужны.
+runtimeUUIDPattern описан как pattern declaration без утверждения, что
+он применяется конкретным runtime path. Profiles и все поля неизменны.
+
+SafeRuntimeFailure документирован по closed mode/stage/domain/class/
+SQLSTATE/context output без cause.Error. runtimeErrorClass сохраняет
+приоритет PostgreSQL→snapshot rollback→gRPC→net.OpError→deadline→cancel→
+other net.Error→UNKNOWN; context state отдельно от original failure class.
+Tests описывают13 synthetic error chains,12 stage labels,7 profile examples,
+unknown binding и4 foreign-SPIFFE/unsupported-mode examples. Invalid-mode
+Run отказывает до зависимостей; это не successful startup или live RPC.
+Новых проверок/fixtures и изменений runtime behavior нет.
+
+AST4 без comments/positions идентичен SHA275. Все1819 clone keys/counts
+и562 retained entries/666 occurrences неизменны; новых exclusions нет.
+Рабочий jN5mBa:6607/222,1819/666/1153; Go12081/21243, missing9162.
+Raw SHA256:
+`584234236f9c9f45f28e7be7345659b5f2c298490fdc89c33742428e0c40f895`;
+clone-set прежний d655630e… . Docs46/46, AST4,17 Node/Go checker units,
+5 ignore boundaries и gofmt/diff-check PASS LOCAL. Весь authority/app
+30 верхних/119 всех units и полный authority build -p=2 PASS LOCAL,
+0 FAIL/SKIP. Context7/caarlos0/env и pinned v11.3.1 Parse docs сверены;
+первый go doc из root без dependency отказал, правильный module lookup
+успешен без go get/go.mod/go.sum изменений. После коммита exact проверки
+и PR readback повторяются. Generated, SQL, manifests и authority/lifecycle
+контракты неизменны. Общая задача не завершена, прежние FAIL не устранены;
+full baseline/component/browser/live/deploy NOT RUN по scoped границам.
 
 ## Двести семьдесят пятая волна — общий профиль служебных HTTP-проб
 

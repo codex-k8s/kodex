@@ -2,6 +2,8 @@ package app
 
 import "testing"
 
+// TestApplyWorkloadProfilePinsKubernetesSecrets checks seven registered issuer/verifier examples for all four derived Secret names and resolver activation. It exercises only local profile data, not Kubernetes objects, Secret contents or every registry entry.
+// TestApplyWorkloadProfilePinsKubernetesSecrets проверяет семь зарегистрированных примеров issuer/verifier по четырём полученным именам Secret и включению resolver. Проверяются только локальные данные профиля, а не объекты Kubernetes, содержимое Secret или все записи реестра.
 func TestApplyWorkloadProfilePinsKubernetesSecrets(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -78,6 +80,8 @@ func TestApplyWorkloadProfilePinsKubernetesSecrets(t *testing.T) {
 	}
 }
 
+// TestApplyWorkloadProfileRejectsUnknownBinding verifies that an unknown issuer workload with a matching-looking SPIFFE string is rejected rather than deriving authority from string shape.
+// TestApplyWorkloadProfileRejectsUnknownBinding проверяет отказ для неизвестного workload issuer со SPIFFE-строкой подходящего вида вместо вывода полномочий из формы строки.
 func TestApplyWorkloadProfileRejectsUnknownBinding(t *testing.T) {
 	t.Parallel()
 	config := Config{
@@ -90,6 +94,8 @@ func TestApplyWorkloadProfileRejectsUnknownBinding(t *testing.T) {
 	}
 }
 
+// TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole checks email and interaction issuers against another workload's SPIFFE identity and their unsupported verifier-mode bindings. All four cases are local registry checks without remote authentication.
+// TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole проверяет email- и interaction-issuer с SPIFFE-идентичностью другого workload и с неподдерживаемой привязкой режима verifier. Все четыре случая являются локальными проверками реестра без удалённой аутентификации.
 func TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole(t *testing.T) {
 	t.Parallel()
 	for _, workload := range []string{"email-bridge", "interaction-gateway"} {

@@ -13,25 +13,37 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-// Mode выбирает назначение локального authority-компонента.
+// Mode selects the local authorization issuer or verifier composition; it does not represent the publisher, readback or restore-controller binaries, which use their own configurations.
+// Mode выбирает локальную сборку издателя или проверяющего авторизации; publisher, readback и restore-controller используют собственные конфигурации и этим типом не задаются.
 type Mode string
 
 // Поддерживаемые режимы локального authority-компонента.
 const (
-	ModeIssuer   Mode = "issuer"
+	// ModeIssuer selects authorization-context issuance and its mode-derived socket, process identity, database capability and readback role defaults.
+	// ModeIssuer выбирает выдачу контекста авторизации и зависящие от режима исходные сокет, идентичность процесса, возможность БД и роль контрольного чтения.
+	ModeIssuer Mode = "issuer"
+	// ModeVerifier selects authorization verification and its mode-specific defaults; resolver activation is subsequently pinned by the registered workload profile.
+	// ModeVerifier выбирает проверку авторизации и исходные параметры этого режима; включение resolver затем закрепляется зарегистрированным профилем workload.
 	ModeVerifier Mode = "verifier"
 )
 
+// socketRoot is the fixed parent directory for the issuer and verifier Unix sockets; Validate requires the exact mode path and this parent rather than accepting arbitrary runtime paths.
+// socketRoot — фиксированный родительский каталог Unix-сокетов issuer и verifier; Validate требует точный путь режима и этот каталог, а не произвольный путь runtime.
 const socketRoot = "/run/kodex/internal-rpc-authority"
 
 var (
-	digestPattern      = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	// digestPattern accepts exactly sixty-four lowercase hexadecimal characters for digest fields used by app configuration consumers; matching syntax does not rehash or authenticate source content.
+	// digestPattern принимает ровно шестьдесят четыре шестнадцатеричных символа нижнего регистра для полей дайджестов потребителей конфигурации app; совпадение синтаксиса не пересчитывает хеш и не подтверждает подлинность содержимого.
+	digestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	// runtimeUUIDPattern describes lowercase hyphenated UUID syntax with versions one through eight and RFC variant bits. This declaration alone neither assigns a runtime identity nor proves that any particular path applies the pattern.
+	// runtimeUUIDPattern описывает UUID нижнего регистра с дефисами, версиями от одной до восьмой и битами варианта RFC. Само объявление не назначает идентичность runtime и не доказывает применение шаблона конкретным путём.
 	runtimeUUIDPattern = regexp.MustCompile(
 		`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
 	)
 )
 
-// Config задаёт полностью проверенную конфигурацию issuer или verifier.
+// Config carries mode-derived process and socket identities, tagged environment inputs, file paths, registered Secret names and lifecycle budgets for issuer or verifier. LoadConfig applies profiles and validation; constructing this struct directly does not prove readable files, trusted TLS material or reachable dependencies.
+// Config содержит зависящие от режима идентичности процесса и сокета, входы окружения с тегами, файловые пути, зарегистрированные имена Secret и бюджеты жизненного цикла issuer или verifier. LoadConfig применяет профили и проверки; прямое создание структуры не доказывает читаемость файлов, доверенный TLS-материал или доступность зависимостей.
 type Config struct {
 	Mode                              Mode
 	ServiceName                       string
@@ -91,7 +103,8 @@ type Config struct {
 	ReplayRetentionAfterExpiry        time.Duration
 }
 
-// LoadConfig читает типизированное окружение и проверяет конфигурацию режима.
+// LoadConfig initializes mode-specific defaults, parses tagged environment values, applies the exact registered workload/SPIFFE profile and calls Validate in that order. Unknown modes fail before environment parsing; success is configuration validation, not file loading or a database or network readiness probe.
+// LoadConfig последовательно задаёт исходные параметры режима, разбирает значения окружения по тегам, применяет точный зарегистрированный профиль workload/SPIFFE и вызывает Validate. Неизвестные режимы отклоняются до разбора окружения; успех означает проверку конфигурации, а не загрузку файлов или пробу готовности БД либо сети.
 func LoadConfig(mode Mode) (Config, error) {
 	config := Config{
 		Mode:                             mode,
@@ -171,6 +184,8 @@ func LoadConfig(mode Mode) (Config, error) {
 	return config, nil
 }
 
+// setRuntimeSecretNames initializes four readback and restore Secret names from a supplied prefix. It performs no registry check or Secret access; LoadConfig subsequently replaces these defaults with the registered workload profile.
+// setRuntimeSecretNames задаёт четыре исходных имени readback- и restore-Secret по переданному префиксу. Проверки реестра или доступа к Secret нет; LoadConfig затем заменяет эти значения зарегистрированным профилем workload.
 func setRuntimeSecretNames(config *Config, prefix string) {
 	base := "internal-rpc-authority-" + prefix
 	config.ReadbackCredentialSecret = base + "-readback-credential"
@@ -179,12 +194,14 @@ func setRuntimeSecretNames(config *Config, prefix string) {
 	config.RestoreACKSecret = base + "-restore-ack"
 }
 
-// applyWorkloadProfile закрывает trusted deployment configuration до реестра
-// известных workload. Имена Secret нельзя выбирать через окружение workload.
+// applyWorkloadProfile requires a known mode/workload pair, the profile's exact SPIFFE identity and a supported Secret backend, then overwrites the four Secret names and resolver-enabled flag from that closed registry. It rejects nil or foreign bindings without consulting Kubernetes or accepting environment-chosen Secret names.
+// applyWorkloadProfile требует известную пару режима и workload, точную SPIFFE-идентичность профиля и поддерживаемое хранилище Secret, затем заменяет четыре имени Secret и признак включения resolver данными закрытого реестра. Nil и чужие привязки отклоняются без обращения к Kubernetes и без принятия выбранных окружением имён Secret.
 func applyWorkloadProfile(config *Config) error {
 	if config == nil {
 		return errors.New("authority workload profile is required")
 	}
+	// workloadProfile is the local registry record binding one mode/workload to an exact SPIFFE identity, four Secret object names and resolver availability. It stores references, not credential values or authority granted by caller input.
+	// workloadProfile — локальная запись реестра, связывающая режим и workload с точной SPIFFE-идентичностью, четырьмя именами объектов Secret и доступностью resolver. Она хранит ссылки, а не значения реквизитов или полномочия из ввода вызывающего.
 	type workloadProfile struct {
 		spiffeID                    string
 		readbackCredentialSecret    string
@@ -327,7 +344,8 @@ func applyWorkloadProfile(config *Config) error {
 	return nil
 }
 
-// Validate проверяет точные пути, идентичности и ограниченные интервалы.
+// Validate checks supported backend, workload and SPIFFE shape, endpoint syntax, pinned Secret-name presence, exact mode socket and actual process UID/GID, nonroot peer IDs, generation and connection bounds, enabled-resolver paths, duration limits, socket permissions, database identity and absolute file paths. It neither opens those files nor proves TLS/DNS connectivity; exact workload registration belongs to applyWorkloadProfile.
+// Validate проверяет поддерживаемое хранилище, форму workload и SPIFFE, синтаксис endpoint, наличие закреплённых имён Secret, точный сокет режима и фактические UID/GID процесса, ненулевые идентификаторы peer, пределы поколений и соединений, пути включённого resolver, интервалы, права сокета, идентичность БД и абсолютность файловых путей. Файлы не открываются, TLS/DNS-связность не доказывается; точная регистрация workload проверяется applyWorkloadProfile.
 func (config Config) Validate() error {
 	_, err := selectSecretBackend(config.SecretBackend)
 	if err != nil {
@@ -372,6 +390,8 @@ func (config Config) Validate() error {
 	if config.ExpectedPeerUID == 0 || config.ExpectedPeerGID == 0 {
 		return errors.New("root UDS peer is forbidden")
 	}
+	// maximumSafeInteger bounds generation counters to the exact integer range shared with JSON number consumers; it does not validate any referenced credential.
+	// maximumSafeInteger ограничивает счётчики поколений диапазоном точных целых, общим с потребителями JSON-чисел; связанный реквизит этим не проверяется.
 	const maximumSafeInteger = uint64(9_007_199_254_740_991)
 	if config.PostgresMaxConnections < 1 ||
 		config.PostgresMaxConnections > 32 ||
@@ -452,6 +472,8 @@ func (config Config) Validate() error {
 	return nil
 }
 
+// parseEnvironment delegates tagged struct decoding to env.Parse and replaces any parser error with one fixed English message, avoiding reflection of invalid environment values. It does not execute shell expressions or load a dotenv file.
+// parseEnvironment передаёт разбор структуры по тегам в env.Parse и заменяет любую ошибку разборщика одним фиксированным английским сообщением, не отражая некорректные значения окружения. Shell-выражения не исполняются, dotenv-файл не загружается.
 func parseEnvironment(target any) error {
 	if err := env.Parse(target); err != nil {
 		return errors.New("parse environment configuration")
