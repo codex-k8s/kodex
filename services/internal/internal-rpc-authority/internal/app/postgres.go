@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// postgresConnectionConfig binds one capability pool to its DSN file, exact TLS server and session user, capability role, application name and maximum connections. It carries locators and expected identities, not parsed passwords or proof that a connection has been authenticated.
+// postgresConnectionConfig связывает пул одной возможности с файлом DSN, точными TLS-сервером и пользователем сессии, ролью возможности, именем приложения и пределом соединений. Хранятся адреса и ожидаемые идентичности, а не разобранные пароли или доказательство аутентифицированного подключения.
 type postgresConnectionConfig struct {
 	DSNFile         string
 	TLSServerName   string
@@ -19,8 +21,8 @@ type postgresConnectionConfig struct {
 	MaxConnections  int32
 }
 
-// openCapabilityPostgres открывает статическую installation-scoped identity и
-// после каждого acquire подтверждает неизменяемый session_user.
+// openCapabilityPostgres requires nonempty expected identity/capability and one through sixty-four connections, reads a bounded DSN and rejects fallbacks, a foreign host/user, absent password, missing CA/SNI or insecure TLS. It installs tracing and exact session setup on connect plus identity/capability checking before each acquire, then pings the pool and closes it on ping failure. Rejected configuration is sanitized; the returned pool belongs to the caller, and this function does not explicitly erase the parsed DSN buffer.
+// openCapabilityPostgres требует непустые ожидаемые идентичность и возможность и от одного до шестидесяти четырёх соединений, читает ограниченный DSN и отклоняет запасные подключения, чужие host или user, отсутствие пароля, CA или SNI и небезопасный TLS. Устанавливает tracing, точную настройку сессии при подключении и проверку идентичности и возможности перед каждым acquire, затем проверяет пул ping и закрывает его при ошибке ping. Отказы конфигурации безопасны; возвращённый пул принадлежит вызывающему, явной очистки разобранного буфера DSN нет.
 func openCapabilityPostgres(
 	ctx context.Context,
 	config postgresConnectionConfig,

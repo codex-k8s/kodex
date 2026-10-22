@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.287.0
+version: 1.288.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,61 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят восьмая волна — lifecycle и обслуживаемая готовность
+
+Опубликованный SHA287 — `c47dd03c526b66481a5e6f70c267b76e2cee4cbb`.
+Точный rlBk54:6615 sources,222 excluded,1819 raw/718 retained/
+1101 unresolved; Go12441/21254,missing8813. Raw SHA256:
+`a4b09f97313d5f0f3310ca5f80dacfdce5cc1fbaa5de5334ddd64b6f8e04ecbf`;
+clone-set01a0079f… . Exact CLI15/21 и полный authority build,
+docs34/34+all-cmd142/142, AST9/directives/tooling/scan PASS LOCAL,
+0 FAIL/SKIP; push/readback и Draft PR PATCH/GET287 подтверждены.
+
+Полностью прочитаны app.go849 lines, snapshot_maintenance_test160,
+postgres68, telemetry82 и continuation method unit.51/51 declarations
+описаны EN→RU, включая local readiness/cleanup ports и их methods,
+private lifecycle helpers, configuration и once-only telemetry wrappers;
+дополнительно описан local maximum activation-backoff constant.
+AST5 без comments/positions идентичен SHA287, directives прежние.
+State transitions, error classification/order, SQL/wire и raw bodies
+не менялись; это не реализация нового startup/shutdown протокола.
+
+Comments явно отделяют initially-true local readiness aggregate от probe,
+conjunction/edge logging от authority, startup restore/readback barriers
+от config construction и ordered bounded shutdown attempts от гарантии
+успешного join. Описаны retry всех activation errors с caller budget,
+source tuple versus local scheduling, invalid-load fail-closed и только
+bounded current-readiness fallback при разрешённом replacement failure.
+Deferred refresh не продвигает lastRefresh и не продлевает receipt expiry.
+
+Для DB описаны exact host/user/password/CA/SNI/no-fallback checks и
+AfterConnect/BeforeAcquire session capability checks без выдачи DSN-file
+presence за identity proof. Telemetry comments сохраняют отдельные once/
+cached errors, independent cleanup contexts, discarded startup errors и
+точные SQL/connection attribute exclusions, не обещая общей redaction.
+Context7/jackc/pgx и pinned BeforeAcquire/otelpgx docs сверены; обновления
+версий или замены deprecated API в этой волне нет.
+
+11 maintenance declarations описывают stub-controlled counters/errors,
+fixed local times и5 replacement cases, не real receipt/timer/database
+proof. Весь authority app30 верхних/119 всех unit и полный build -p=2
+PASS LOCAL,0 FAIL/SKIP.17 Node/Go checker units, docs51/51, AST/clone
+proof,5 ignores и gofmt/diff-check PASS LOCAL. Production Run, DB/TLS,
+workers, readback/restore и listener paths не запускались.
+
+Рабочий A5lsI2:6615 sources,222 excluded,1819 raw/718 retained/
+1101 unresolved; Go12492/21254,missing8762. Весь1819 clone-key/count
+multiset прежний; координаты и clone-set меняются от comments, registry
+600/718 неизменён, новых exclusions нет. Два shutdown окна с publisher/
+restore пока unresolved:caller-specific order/closure ownership требуют
+отдельного разбора, не blanket ignore. Raw SHA256:
+`1cd07af68d64144afbc3ac729685e7da084c4f80224b48e6174ede3143f12264`;
+clone-set:
+`f56d5beea086861dfe8812adf96e503807066267b8b8d434e585c8d384846d7a`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, contracts, applied migrations и live state прежние.
+Общая задача открыта; historical FAIL и scoped NOT RUN сохраняются.
 
 ## Двести восемьдесят седьмая волна — завершение комментариев authority cmd
 
