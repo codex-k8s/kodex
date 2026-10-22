@@ -21,14 +21,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TestAssistantSessionResumeComponent(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
-	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
+// prepareAssistantSessionResumeRepository initializes the identical synthetic credential/image/bootstrap and observed warm-runtime state used by the resume and failed-rollout scenarios. The caller owns the already isolated pool and context and their original defers; no real model, registry or Kubernetes operation is performed by this fixture setup. It returns the exact owner, worker and derived warm principal without broadening their permissions.
+// prepareAssistantSessionResumeRepository создаёт одинаковое синтетическое состояние реквизита, образа, bootstrap и наблюдаемого тёплого runtime для сценариев возобновления и неуспешного rollout. Вызывающий владеет уже изолированными pool и контекстом и их исходными defer; эта подготовка не выполняет реальных операций модели, реестра или Kubernetes. Возвращаются точные owner, worker и полученный warm principal без расширения их полномочий.
+func prepareAssistantSessionResumeRepository(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*Repository, *platformservice.Service, value.Principal, value.Principal, value.Principal) {
+	t.Helper()
 	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +54,20 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
 		t.Fatal(err)
 	}
+	return r, service, owner, worker, warm
+}
+
+// TestAssistantSessionResumeComponent checks system and project conversations for exact original JSON history, native-session reuse after archive/restore, incompatible-runtime cold starts, cancellation, rejection of late ACKs and idempotent retry. It uses an isolated PostgreSQL fixture and synthetic provider/archive tuples; it does not start Codex or verify rollout bytes independently.
+// TestAssistantSessionResumeComponent проверяет системные и проектные диалоги по точной исходной JSON-истории, повторному использованию native-сессии после архивации и восстановления, холодному старту при несовместимом runtime, отмене, отклонению поздних ACK и идемпотентному retry. Используются изолированная PostgreSQL-оснастка и синтетические tuples провайдера и архива; Codex не запускается, байты rollout независимо не проверяются.
+func TestAssistantSessionResumeComponent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	r, service, owner, worker, warm := prepareAssistantSessionResumeRepository(t, ctx, pool)
 	invoke := func(kind command.Kind, actor value.Principal, key string, payload any) command.Result {
 		t.Helper()
 		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "resume-" + key}, Payload: payload})
@@ -276,8 +286,8 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 	}
 }
 
-// Проверяется owner-переход с synthetic tuple. Происхождение байтов rollout
-// подтверждает runner; PostgreSQL не умеет независимо проверять произвольный SHA.
+// TestAssistantFailedRolloutStorageComponent checks that a failed turn can publish its exact newer storage tuple atomically with terminal graph, audit, receipt and events, while rejecting foreign or stale claims and preserving replay identity. Both assistant scopes also cover snapshot revocation/retry and superseded deletion authority. Tuples and object receipts are synthetic; rollout-byte provenance belongs to the runner, not PostgreSQL or this fixture.
+// TestAssistantFailedRolloutStorageComponent проверяет атомарную публикацию точного нового tuple хранилища неуспешного хода вместе с конечным графом, аудитом, квитанцией и событиями при отказе чужим или устаревшим захватам и сохранении идентичности повтора. Оба scope помощника также проверяют отзыв и retry снимка и прекращение прежних полномочий удаления. Tuples и объектные квитанции синтетические; происхождение байтов rollout подтверждает runner, а не PostgreSQL или эта оснастка.
 func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -286,35 +296,7 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
-	prepareObservedWarmFixture(t, ctx, r)
-	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.turns.add"}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
-	service, err := platformservice.New(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := worker
-	warm.Permission = "platform.runtime.warm.report"
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	r, service, owner, worker, _ := prepareAssistantSessionResumeRepository(t, ctx, pool)
 	claimPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.tasks.claim")
 	snapshotPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.snapshot.complete")
 	for index, scopeKind := range []string{"SYSTEM", "PROJECT"} {
@@ -541,6 +523,8 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 	}
 }
 
+// prepareAssistantSessionArchiveRoundTrip advances only the isolated fixture's idle/retention clocks and drives owner commands through snapshot publication and PVC deletion. Its returned closure exercises blocked execution before exact restore, corrupt-tuple rejection, restore replay, object GC and same-generation republication without rewriting historical receipts. Synthetic object evidence does not prove actual S3 or PVC I/O; a failure-only SQL probe diagnoses a duplicate archive constraint in this disposable database.
+// prepareAssistantSessionArchiveRoundTrip переводит только idle/retention clocks изолированной оснастки и выполняет команды владельца до публикации снимка и удаления PVC. Возвращаемое замыкание проверяет запрет исполнения до точного восстановления, отказ повреждённому tuple, повтор восстановления, GC объектов и повторную публикацию того же поколения без переписывания исторических квитанций. Синтетические доказательства объектов не подтверждают реальное I/O S3 или PVC; SQL-проба только при ошибке диагностирует дубликат архивного ограничения в этой одноразовой БД.
 func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, worker, owner value.Principal, conversationRef, sessionRef, suffix string) func() {
 	t.Helper()
 	if _, err := r.pool.Exec(ctx, `UPDATE control_plane.session_storage SET idle_since=clock_timestamp()-interval '1 hour' WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, sessionRef); err != nil {
@@ -739,6 +723,8 @@ func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, 
 	}
 }
 
+// snapshotGeneration reads the stored content generation for the exact session reference in the disposable repository and fails the test on a read error. It does not derive generation from archive metadata or validate source content hashes.
+// snapshotGeneration читает сохранённое поколение содержимого по точной ссылке сессии в одноразовом репозитории и завершает тест ошибкой при неуспешном чтении. Поколение не выводится из метаданных архива, хеши исходного содержимого не проверяются.
 func snapshotGeneration(t *testing.T, ctx context.Context, r *Repository, sessionRef string) int64 {
 	t.Helper()
 	var generation int64

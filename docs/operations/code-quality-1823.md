@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.278.0
+version: 1.279.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,61 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семьдесят девятая волна — подготовка сценариев resume/failed rollout
+
+Опубликованный SHA278 — `3ec57a64412ed2d5119be42e4cf9f4149b32cf22`.
+Точный uWvLor:6609 sources,222 excluded,1818 raw/666 retained/
+1152 unresolved; Go12128/21243,missing9115. Raw SHA256:
+`207c3c8e987538ff07b4f830259de5f7673790ff14243e83182e4e96ce274e4a`;
+clone-set e1699ebc… . Exact CP106/302, CP build -p=2, docs47/47 и
+whole ports294/294, AST7/tooling/scan PASS LOCAL,3 прежних SKIP.
+Push/readback и Draft PR PATCH/GET278 подтверждены.
+
+Весь749-line assistant_session_resume_component_test.go прочитан, включая
+оба сценария и archive round-trip/GC helpers. Два одинаковых setup blocks
+New→synthetic credential/image configuration→Bootstrap→observed warm
+fixture→resolved owner/worker→service→GetSystemAssistant→ReportWarmRuntime
+вынесены в private prepareAssistantSessionResumeRepository в том же файле.
+Возвращаются repository/service/owner/worker/warm; первый caller сохраняет
+warm для следующих шагов, второй явно отбрасывает неиспользуемый результат.
+Context creation/cancel, isolated DSN, pool allocation/Close и их defers
+остались у обоих callers в прежнем порядке. Новых shared database fixtures,
+глобального mutable state или альтернативного bootstrap source не появилось.
+Единственный дополнительный test-only эффект:t.Helper для диагностики.
+
+Все5/5 declarations файла теперь предметно EN→RU. Comments различают
+native history/config compatibility и новые ходы, cancel/late ACK/retry,
+FAILED tuple publication с audit/receipt/events, snapshot revoke/reclaim и
+прекращение прежних delete grants. Архивные receipts/tuples synthetic:
+проверка PostgreSQL state не объявлена независимым доказательством rollout
+bytes, S3/PVC I/O или real Codex startup. Round-trip helper явно отмечает
+изолированные clock updates и failure-only SQL diagnostic probe.
+Исполняемые assertions, payloads, raw SQL и scope/case matrices неизменны.
+
+Inverse AST3 восстанавливает полный файл SHA278 и сравнивает shared body
+с обеими исходными копиями, включая все значения/порядок. Raw1818→1816:
+12 keys сменились10 из-за extraction и выбора detector representative;
+1806 остальных occurrences неизменны. Конкретная469-token self-copy
+устранена; десять появившихся окон не объявлены десятью новыми runtime
+копиями или устранёнными алгоритмами и остаются unresolved. Все остальные
+файлы сторон delta byte-identical, retained registry562/666 неизменен;
+новых exclusions нет. Рабочий uPhDJ5 до уточнения комментария cancel:
+6609/222,1816/666/1150; Go12133/21244,missing9111. Raw SHA256:
+`04486880b83ce3bed074f71c01671e359c1591f79632a125713ed7493da45ead`;
+clone-set:
+`9c33a2ea06d8e16819abf04041d3e6bc4a476ff4af36b26f2e10c9f9f366d208`.
+
+Тестовый пакет компилируется; две затронутые component entry points
+запущены с явно удалёнными3 disposable-DSN env keys:0 PASS/2 SKIP,
+0 FAIL из-за отсутствия opt-in disposable PostgreSQL. Это НЕ component
+PASS и не повод подключаться к живой базе. Profile CP unit106/302 PASS,
+те же3 прежних SKIP; полный CP build -p=2 PASS LOCAL. Docs5/5, inverse
+AST3/clone proof,17 Node/Go checker units,5 ignores и gofmt/diff-check PASS.
+После коммита exact build/unit/scan и PR readback повторяются. Production,
+contracts, migrations, generated и cluster не менялись. Общая задача
+не завершена; прежние diagnostics/STT FAIL остаются, live/full acceptance
+NOT RUN по scoped границам.
 
 ## Двести семьдесят восьмая волна — оставшиеся порты control-plane
 
