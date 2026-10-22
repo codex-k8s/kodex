@@ -14,6 +14,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// castProjectAssistantIntegrationCatalog projects a project assistant's own integration candidates after scope/profile/project matching and bounded, unique entries.
+// Validates typed entry contents, definition pins and candidate schemas; GitHub capabilities require a public repository scope.
+// Outer response-kind/organization/pagination checks belong to its caller; this caster does not authorize or apply a grant.
+// castProjectAssistantIntegrationCatalog формирует кандидатов интеграции собственного проектного помощника после сверки области, профиля, проекта и ограниченного уникального списка.
+// Проверяет типизированное содержимое, привязки определения и схемы кандидатов; операции GitHub требуют публичную область репозитория.
+// Проверки внешнего вида ответа, организации и страниц принадлежат вызывающей стороне; преобразователь не разрешает и не применяет доступ.
 func castProjectAssistantIntegrationCatalog(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("project assistant integration catalog response is invalid")
 	if input.AssistantScope != runtimecontract.AssistantScopeProject || request.GetAssistantRef() != input.AgentRef ||
@@ -49,6 +55,12 @@ func castProjectAssistantIntegrationCatalog(input runtimecontract.RunnerInput, r
 		"project_integration_grants": entries, "next_offset": response.GetNextOffset()}, nil
 }
 
+// projectIntegrationCandidateProjection validates a closed candidate and capability, exact schema hash/object, risk, reason and approval-policy consistency.
+// Stored enabled state remains separate from grantability, and optional public repository scope is checked independently.
+// The returned metadata is not an execution grant and does not enable a currently unavailable package.
+// projectIntegrationCandidateProjection проверяет закрытые данные кандидата и операции, точный хеш и объект схемы, риск, причину и согласованность политики подтверждения.
+// Сохранённое состояние включения отделено от возможности выдать доступ; необязательная публичная область репозитория проверяется отдельно.
+// Возвращаемые метаданные не дают права выполнения и не включают недоступный пакет.
 func projectIntegrationCandidateProjection(candidate *controlplanev1.SystemAssistantIntegrationGrantCandidate) (map[string]any, error) {
 	invalid := errors.New("project assistant integration catalog candidate is invalid")
 	if candidate == nil || !projectCatalogCandidateMessageValid(candidate) {
@@ -131,10 +143,14 @@ func projectIntegrationCandidateProjection(candidate *controlplanev1.SystemAssis
 	return result, nil
 }
 
+// projectCatalogGitHubIdentifier limits each public owner/repository component to 1..100 ASCII identifier characters; callers also reject single/double dots.
+// projectCatalogGitHubIdentifier ограничивает публичные компоненты owner/repository длиной 1..100 символов ASCII-идентификатора; вызывающие стороны отдельно запрещают одну и две точки.
 var projectCatalogGitHubIdentifier = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
-// Новый map разрешён только отдельной закрытой проверкой public GitHub scope.
-// Общий current-read validator по-прежнему запрещает произвольные maps.
+// projectCatalogEntryMessageValid clones an already non-nil entry and removes only its resource-scope map before recursive closed-message validation.
+// The public GitHub scope is validated separately rather than making arbitrary maps acceptable to the shared validator.
+// projectCatalogEntryMessageValid копирует уже непустой элемент и удаляет только карту области ресурса до рекурсивной проверки закрытого сообщения.
+// Публичная область GitHub проверяется отдельно; общий валидатор не начинает принимать произвольные карты.
 func projectCatalogEntryMessageValid(entry *controlplanev1.ProjectAssistantIntegrationGrantCatalogEntry) bool {
 	copy := proto.Clone(entry).(*controlplanev1.ProjectAssistantIntegrationGrantCatalogEntry)
 	if copy.Candidate != nil {
@@ -143,12 +159,22 @@ func projectCatalogEntryMessageValid(entry *controlplanev1.ProjectAssistantInteg
 	return validAssistantCurrentReadMessage(copy.ProtoReflect(), 0)
 }
 
+// projectCatalogCandidateMessageValid clones an already non-nil candidate and temporarily removes resource scope so all other fields pass the map-free typed validator.
+// Scope identity, contents and hash remain mandatory in the separate public-scope path.
+// projectCatalogCandidateMessageValid копирует уже непустого кандидата и временно удаляет область ресурса для проверки остальных полей типизированным валидатором без карт.
+// Идентичность, содержимое и хеш области остаются обязательными в отдельной проверке публичной области.
 func projectCatalogCandidateMessageValid(candidate *controlplanev1.SystemAssistantIntegrationGrantCandidate) bool {
 	copy := proto.Clone(candidate).(*controlplanev1.SystemAssistantIntegrationGrantCandidate)
 	copy.ResourceScope = nil
 	return validAssistantCurrentReadMessage(copy.ProtoReflect(), 0)
 }
 
+// projectCatalogPublicGitHubScope accepts only a GitHub repository capability with exactly owner/repository public values and their canonical JSON SHA256.
+// Rejects unknown protobuf fields, unexpected keys, dot/path components and mismatched kind/hash without exposing rejected contents.
+// This verifies scope representation, not GitHub existence, repository membership or execution authority.
+// projectCatalogPublicGitHubScope принимает только операцию репозитория GitHub с ровно двумя публичными значениями owner/repository и SHA256 канонического JSON.
+// Отклоняет неизвестные поля protobuf, лишние ключи, точечные компоненты пути и несовпадающие вид либо хеш без раскрытия отклонённых данных.
+// Проверяется представление области, а не существование в GitHub, членство в репозитории или право выполнения.
 func projectCatalogPublicGitHubScope(candidate *controlplanev1.SystemAssistantIntegrationGrantCandidate) (map[string]any, error) {
 	invalid := errors.New("project assistant public resource scope is invalid")
 	scope := candidate.GetResourceScope()
@@ -175,6 +201,9 @@ func projectCatalogPublicGitHubScope(candidate *controlplanev1.SystemAssistantIn
 	}
 	return map[string]any{"kind": "GITHUB_REPOSITORY", "values": values, "digest": scope.GetDigest()}, nil
 }
+
+// projectCatalogApprovalPolicy maps only NONE, HUMAN_EACH_EFFECT and HUMAN_SCOPED enum values to short names; unknown values return false.
+// projectCatalogApprovalPolicy преобразует только значения NONE, HUMAN_EACH_EFFECT и HUMAN_SCOPED в короткие имена; для неизвестных значений возвращает false.
 func projectCatalogApprovalPolicy(policy controlplanev1.IntegrationApprovalPolicy) (string, bool) {
 	value := strings.TrimPrefix(policy.String(), "INTEGRATION_APPROVAL_POLICY_")
 	return value, value == "NONE" || value == "HUMAN_EACH_EFFECT" || value == "HUMAN_SCOPED"

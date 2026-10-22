@@ -6,6 +6,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestSystemAssistantIntegrationGrantClosedPlanShape checks the SYSTEM-only grant update schema, exact connection target and rejection of caller ownership fields.
+// Scoped approval paths must be present, unique nonempty strings; valid paths are accepted for proposal, not execution.
+// TestSystemAssistantIntegrationGrantClosedPlanShape проверяет системную схему изменения доступа, точную цель подключения и отказ для переданных вызывающей стороной полей владения.
+// Пути частичного подтверждения должны присутствовать, быть уникальными непустыми строками; допустимые пути принимаются для предложения, не выполнения.
 func TestSystemAssistantIntegrationGrantClosedPlanShape(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeSystem)
 	input.AssistantContext.AllowedOperations = []string{"CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"}

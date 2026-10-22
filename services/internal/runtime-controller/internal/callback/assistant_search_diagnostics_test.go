@@ -20,6 +20,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// assistantSearchDiagnosticClient records search calls and exact requests while returning configured metadata or failure; other exercised MCP methods use its embedded stub.
+// assistantSearchDiagnosticClient фиксирует поисковые вызовы и точные запросы, возвращая заданные метаданные или ошибку; прочие вызываемые методы MCP берутся из вложенной подстановки.
 type assistantSearchDiagnosticClient struct {
 	*assistantFreshCatalogMCPClient
 	response *controlplanev1.SearchAssistantResourcesResponse
@@ -28,12 +30,16 @@ type assistantSearchDiagnosticClient struct {
 	request  *controlplanev1.SearchAssistantResourcesRequest
 }
 
+// SearchAssistantResources increments the local call count, captures the request and returns the configured response/error without any remote search.
+// SearchAssistantResources увеличивает локальный счётчик, сохраняет запрос и возвращает заданные ответ и ошибку без удалённого поиска.
 func (client *assistantSearchDiagnosticClient) SearchAssistantResources(_ context.Context, request *controlplanev1.SearchAssistantResourcesRequest, _ ...grpc.CallOption) (*controlplanev1.SearchAssistantResourcesResponse, error) {
 	client.calls++
 	client.request = request
 	return client.response, client.failure
 }
 
+// TestAssistantSearchDiagnosticsDoNotTrustUnregisteredStages checks untyped errors, unknown local classes, a nil wrapper and remote status text all retain the closed unknown fallback.
+// TestAssistantSearchDiagnosticsDoNotTrustUnregisteredStages проверяет, что нетипизированные ошибки, неизвестные локальные классы, nil-оболочка и удалённый текст статуса сохраняют закрытый неизвестный результат.
 func TestAssistantSearchDiagnosticsDoNotTrustUnregisteredStages(t *testing.T) {
 	for _, err := range []error{
 		errors.New("PRIVATE_UNKNOWN_ERROR"),
@@ -47,6 +53,8 @@ func TestAssistantSearchDiagnosticsDoNotTrustUnregisteredStages(t *testing.T) {
 	}
 }
 
+// TestAssistantSearchDiagnosticsPreserveSystemAndProjectSuccess checks Unicode query lengths at both accepted limits and exact lease/fence/generation forwarding in both assistant scopes.
+// TestAssistantSearchDiagnosticsPreserveSystemAndProjectSuccess проверяет Unicode-запросы на обеих допустимых границах и точную передачу аренды, ограждения и поколения в обеих областях помощника.
 func TestAssistantSearchDiagnosticsPreserveSystemAndProjectSuccess(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input, _, _ := assistantOwnCurrentFixture(scope)
@@ -62,6 +70,10 @@ func TestAssistantSearchDiagnosticsPreserveSystemAndProjectSuccess(t *testing.T)
 	}
 }
 
+// TestAssistantSearchHintsExactResourceContextWithoutGrantingAuthority exercises twelve navigation cases in both assistant scopes, including exact paths with tabs, foreign projects and integrations.
+// Assertions keep existing routes and allowed operations unchanged; no owner permission is created by the hint.
+// TestAssistantSearchHintsExactResourceContextWithoutGrantingAuthority проверяет двенадцать случаев навигации в обеих областях помощника, включая точные пути с вкладками, чужие проекты и интеграции.
+// Проверки сохраняют исходные маршруты и разрешённые операции; подсказка не создаёт полномочий владельца.
 func TestAssistantSearchHintsExactResourceContextWithoutGrantingAuthority(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, test := range []struct {
@@ -101,6 +113,8 @@ func TestAssistantSearchHintsExactResourceContextWithoutGrantingAuthority(t *tes
 	}
 }
 
+// TestAssistantSearchSchemaMatchesClosedQueryInput checks that the tool exposes only the required query field with 2..160 bounds, fixed guidance and no additional properties.
+// TestAssistantSearchSchemaMatchesClosedQueryInput проверяет единственное обязательное поле query с пределами 2..160, фиксированной подсказкой и запретом дополнительных свойств.
 func TestAssistantSearchSchemaMatchesClosedQueryInput(t *testing.T) {
 	schema := assistantResourceSearchTool()["inputSchema"].(map[string]any)
 	properties := schema["properties"].(map[string]any)
@@ -112,6 +126,8 @@ func TestAssistantSearchSchemaMatchesClosedQueryInput(t *testing.T) {
 	}
 }
 
+// TestAssistantSearchDiagnosticsKeepClosedStagesAndOwnerCodes checks nine local/owner/response failures for fixed classes, exact RPC counts and preservation of only actual owner gRPC codes.
+// TestAssistantSearchDiagnosticsKeepClosedStagesAndOwnerCodes проверяет девять локальных ошибок, ошибок владельца и ответа: фиксированные классы, точное число RPC и сохранение кодов gRPC только от настоящей ошибки владельца.
 func TestAssistantSearchDiagnosticsKeepClosedStagesAndOwnerCodes(t *testing.T) {
 	input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeProject)
 	for _, test := range []struct {
@@ -145,6 +161,8 @@ func TestAssistantSearchDiagnosticsKeepClosedStagesAndOwnerCodes(t *testing.T) {
 	}
 }
 
+// TestAssistantSearchDiagnosticsKeepFailedMCPProjectionPrivate checks both scopes retain failed MCP/activity projection and closed log labels on an owner error without query, header or instruction canaries.
+// TestAssistantSearchDiagnosticsKeepFailedMCPProjectionPrivate проверяет в обеих областях сохранение неуспешной проекции MCP и активности, закрытых полей лога при ошибке владельца без контрольных значений запроса, заголовка и инструкций.
 func TestAssistantSearchDiagnosticsKeepFailedMCPProjectionPrivate(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {

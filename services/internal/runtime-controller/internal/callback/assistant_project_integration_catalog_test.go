@@ -12,6 +12,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestProjectAssistantIntegrationGrantNativeCatalog checks exact project/profile metadata and a digest-verified public repository scope, then rejects fifteen malformed candidate mutations.
+// The test also rejects SYSTEM discovery of the PROJECT-only catalog; no real integration or grant is created.
+// TestProjectAssistantIntegrationGrantNativeCatalog проверяет точные метаданные проекта и профиля, публичную область репозитория с проверенным дайджестом и отказ для пятнадцати изменений кандидата.
+// Также отклоняет обнаружение проектного каталога системным помощником; настоящая интеграция или доступ не создаются.
 func TestProjectAssistantIntegrationGrantNativeCatalog(t *testing.T) {
 	input, args, response := assistantFreshCatalogFixture(runtimecontract.AssistantScopeProject, "PROJECT_INTEGRATION_GRANTS")
 	schema := `{"type":"object","additionalProperties":false,"properties":{}}`
@@ -103,6 +107,9 @@ func TestProjectAssistantIntegrationGrantNativeCatalog(t *testing.T) {
 		t.Fatal("SYSTEM accepted PROJECT grant catalog")
 	}
 }
+
+// TestProjectAssistantIntegrationGrantToolClosedParameters checks only the immutable project helper can propose its own grant locator, excluding caller owner fields and SYSTEM scope.
+// TestProjectAssistantIntegrationGrantToolClosedParameters проверяет предложение указателя собственного доступа только неизменяемым проектным помощником без полей владельца из запроса и без системной области.
 func TestProjectAssistantIntegrationGrantToolClosedParameters(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeProject)
 	input.AssistantContext.AllowedOperations = append(input.AssistantContext.AllowedOperations, "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT")

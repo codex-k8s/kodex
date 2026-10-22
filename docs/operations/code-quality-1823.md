@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.203.0
+version: 1.204.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,46 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести четвёртая волна — поиск ресурсов и каталоги доступов
+
+Точный опубликованный SHA203 — `ae64e3f629645892cd91486e911abab747b8c383`.
+Exact X3H9QH:6580 sources,222 excluded,1837 raw,587 retained,1250 unresolved;
+Go7653/21151,missing13498;raw SHA256
+`fd71ffbb4693afa0003c0e2925459c33ec8169687bedc21eb16965f6c6aae7e6`,
+clone-set `5c9255a6d45d7de39d007ca68d34ef770c45db87d6cca1a18f792c397465ee03`.
+Callback+credentialprojection+testfixture263/1392 PASS,0 FAIL,2 прежних SKIP;
+полный RC build PASS;remote head и PATCH/GET Draft PR203 подтверждены.
+
+Целиком прочитаны13 файлов поиска ресурсов,каталогов проектных/адресных
+доступов и тестов собственного изменения полномочий помощника.
+Все56 объявлений имеют предметные EN→RU комментарии. Поиск ограничен
+метаданными,закрытыми видами,десятью результатами и запросом2..160 рун;
+навигационный hint не меняет контекст или grants,ARTIFACT route не даёт
+чтения файла. Локальные guards не выданы за owner verification аренды.
+
+Описаны семь закрытых диагностических классов,фиксированный публичный
+текст,сохранение настоящего owner gRPC code и отсутствие private canaries
+в MCP/activity/log output. Исправимый локальный ввод отделён от отказа
+итоговой записи активности: последний не обещает безопасный retry.
+Каталоги проверяют recipient/context/definition pins и schema digest,
+а публичный GitHub map имеет отдельную проверку двух полей с каноническим
+хешем. Stored enabled state не равен grantability;metadata недоступного
+пакета не включает права. Самонастройка остаётся предложением черновика,
+не применённым изменением. Различия SYSTEM/PROJECT и обычного экранного
+пути сохранены. Новых API,обобщённых dispatchers или dependencies нет.
+
+Полная non-comment/gofmt сверка13 файлов с SHA203 — PASS:исполняемый код
+не менялся. Scoped56/56,17 Node units,unit Go-checker,5 ignore-boundaries,
+gofmt/diff-check PASS LOCAL. Callback253/1361 PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly PASS. Go1.26.6,GOENV/GOWORK off.
+Рабочий738n9N:6580 sources,222 excluded,1837 raw,587 retained,1250 unresolved;
+Go7709/21151,missing13442;raw SHA256
+`9d7f73677c94905e9eae0f7d4b0a2710698993998c8c7ae33a8d75731576e063`.
+Clone-set неизменен,новых/исчезнувших групп либо исключений нет.
+Общий repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+цель не завершена,post-commit результат публикуется в том же Draft PR.
 
 ## Двести третья волна — каталог интеграций, снимок выполнения и общий тестовый вход
 

@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestProjectAssistantConnectionClosedPlanShape checks PROJECT-only, server-hydrated connection preparation is advertised only with its snapshot operation.
+// Foreign helper identities, caller owner/credential fields and other scopes are rejected without creating a real connection.
+// TestProjectAssistantConnectionClosedPlanShape проверяет объявление проектной подготовки подключения с серверными привязками только при наличии операции в снимке.
+// Чужой помощник, переданные вызывающей стороной поля владельца или учётных данных и другие области отклоняются без создания настоящего подключения.
 func TestProjectAssistantConnectionClosedPlanShape(t *testing.T) {
 	const kind = "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeProject)

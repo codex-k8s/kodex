@@ -12,6 +12,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestAssistantArtifactSearchMetadataRoute checks artifact results expose exactly eight metadata fields and a file-screen link, keeping runtime tool availability unchanged in both scopes.
+// TestAssistantArtifactSearchMetadataRoute проверяет, что результаты артефактов раскрывают ровно восемь полей метаданных и ссылку экрана файлов без изменения доступности инструментов в обеих областях.
 func TestAssistantArtifactSearchMetadataRoute(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -42,6 +44,8 @@ func TestAssistantArtifactSearchMetadataRoute(t *testing.T) {
 	}
 }
 
+// TestAssistantArtifactSearchRejectsInjectedIdentityAndUnknownKind rejects path/query/fragment injection and unknown artifact result kinds, then parses the exact canonical file-screen query locator.
+// TestAssistantArtifactSearchRejectsInjectedIdentityAndUnknownKind отклоняет внедрение пути, параметров и фрагмента, неизвестные виды результата, затем разбирает точный канонический указатель экрана файлов.
 func TestAssistantArtifactSearchRejectsInjectedIdentityAndUnknownKind(t *testing.T) {
 	input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeProject)
 	for _, item := range []*cp.SearchResult{
@@ -64,6 +68,8 @@ func TestAssistantArtifactSearchRejectsInjectedIdentityAndUnknownKind(t *testing
 	}
 }
 
+// TestAssistantArtifactSearchSchemaAndGrantGuidance checks the closed eight-field artifact metadata schema and explicit instructions requiring separate project-file discovery and read access.
+// TestAssistantArtifactSearchSchemaAndGrantGuidance проверяет закрытую схему восьми полей метаданных артефакта и явные инструкции об отдельном поиске проектного файла и допуске к чтению.
 func TestAssistantArtifactSearchSchemaAndGrantGuidance(t *testing.T) {
 	tool := assistantResourceSearchTool()
 	output := tool["outputSchema"].(map[string]any)

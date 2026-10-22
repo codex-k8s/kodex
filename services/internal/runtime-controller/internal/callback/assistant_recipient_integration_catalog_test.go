@@ -12,6 +12,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestAssistantRecipientIntegrationCatalogClosedRead checks recipient catalogs for both assistant scopes and AGENT/WORKFLOW contexts, including disabled or unavailable grants.
+// Mutations of identity, versions, schema digest, unknown fields, mixed arms and duplicate candidates must fail; selected workflow agents retain the original context pin.
+// TestAssistantRecipientIntegrationCatalogClosedRead проверяет каталоги получателей в обеих областях помощника и контекстах AGENT/WORKFLOW, включая выключенные и недоступные доступы.
+// Изменения идентичности, версий, дайджеста схемы, неизвестные поля, смешанные варианты и дубликаты отклоняются; выбор сотрудника процесса сохраняет привязку исходного контекста.
 func TestAssistantRecipientIntegrationCatalogClosedRead(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeProject, runtimecontract.AssistantScopeSystem} {
 		for _, kind := range []string{"AGENT", "WORKFLOW"} {
