@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.246.0
+version: 1.247.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,68 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести сорок седьмая волна — завершение комментариев secret-broker
+
+Опубликованный SHA246 — `4092e08c90d231dce8ee6d89e62a142d07b151d0`.
+Точный khuwBs:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go10221/21202, missing10981. Raw SHA256:
+`c00cbeb3c24b7c383e22c80253bb7b014741e30e5b3c58836eab43fb480e8feb`.
+Clone-set:
+`2a826d9629d0a79c8055dc8d87f7b653ec1bf6d85503532e16a77aa51da2972a`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA246131 верхних/
+449 unit,5 targeted -race units, full build и scan PASS LOCAL,0 FAIL/SKIP.
+
+Полностью прочитаны1026 строк четырёх оставшихся appserver/account/pipes/
+authorization-cleanup source/test файлов.71 прежнее declaration и local
+attempt/account fixture constants предметно описаны EN→RU; старое inline
+объяснение выбора file credential store дополнено непосредственным переводом.
+Весь handwritten Go secret-broker теперь1282/1282 в111 файлах,
+включая private/test/interface/local type declarations и ранее внесённые
+helpers. Generated/vendor не редактировались; AST4 идентичен SHA246.
+
+Комментарии описывают explicit owned pipes отдельно от Cmd.Wait, bounded
+line/message/request/diagnostic budgets, отсутствие concurrent RPC multiplexer,
+strict request correlation и отказ unsolicited server authority/refresh.
+Sequential call ID и общий response channel требуют сериализации вызывающим;
+бюджеты фаз terminate не выданы за независимый общий deadline всех final waits.
+Deferred clear в write относится к pre-append marshaled slice, не гарантирует
+стирание immutable полей или reallocated newline framing copy.
+
+Device Wait требует login-completed и account-updated до account/read,
+не запрашивает refreshToken и возвращает exact-read private file bytes.
+File reader требует mode0600/effective UID/regular/single-link/no-follow,
+ограниченный JSON и inode readback, но не доказывает отсутствие concurrent
+правок того же inode. Root Stat не объявлен no-symlink/ownership verifier,
+safe server-derived home component — prerequisite верхнего слоя.
+Masked email сохраняет domain и до двух local-part runes; minimal shape
+не выдан за full RFC validation или доказательство владения email.
+Исполняемые ограничения не ослаблялись и не усиливались этой волной.
+
+Context7 /golang/go и pinned go doc Cmd.Stdout/WaitDelay сверены;
+не смешаны прямой *os.File inheritance и SDK-owned copy goroutines.
+Реальные local synthetic shell tests проверяют exit-before-read, inherited
+descendant pipe, TERM-resistant leader, overflow, fd cleanup и session Close
+replay. Auth fixtures проверяют local regular/symlink/hardlink/FIFO/mode;
+настоящие Codex/account/device-code/OAuth/provider не запускались.
+
+Полный модуль `go test -mod=readonly -count=1 -timeout 120s -json ./...`:
+205 верхних/658 всех PASS,0 FAIL,1 SKIP — TestSecretOwnerCompositionConsumer.
+Перед запуском проверено отсутствие трёх opt-in composition config env;
+values не читались и не выводились. Отсутствующий real CP/PostgreSQL fixture
+контур не подменён synthetic успешной приёмкой. Full `go build -mod=readonly
+./...` PASS LOCAL. Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4.
+Также17 Node/Go checker units, module docs1282/1282, AST4,
+gofmt/diff-check, assessment и5 addressed ignores PASS LOCAL.
+
+Рабочий qm0LPi:6587 sources,222 excluded,1824 raw/598 retained/
+1226 unresolved; Go10292/21202, missing10910. Raw SHA256:
+`6583cd14aaab23464171ef876fc146f1d6a3cb24942b1d946f1ba77dc8f537df`.
+Clone-set, весь fragment/path/count multiset и registry неизменны.
+Точный post-commit full unit/build/scan публикуется в том же Draft PR.
+Secret-broker завершён по comments и scoped build/unit, не весь репозиторий:
+10910 declarations и1226 групп ещё впереди. Прежние FAIL/SKIP/NOT RUN
+сохранены; full acceptance/browser/live/deploy/real models NOT RUN.
 
 ## Двести сорок шестая волна — общий local device-worker join
 
