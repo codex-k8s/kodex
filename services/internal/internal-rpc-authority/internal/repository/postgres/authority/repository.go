@@ -13,7 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Store реализует устойчивое резервирование и high-watermark снимка.
+// Store binds a PostgreSQL pool, target workload and readiness reservation mode to fixed authority queries. SQL owns durable replay/snapshot effects; this struct is not a principal or authorization decision.
+// Store связывает пул PostgreSQL, целевой workload и режим readiness reservation с фиксированными запросами authority. Устойчивые эффекты replay и снимков принадлежат SQL; структура не является principal или решением о доступе.
 type Store struct {
 	pool                     *pgxpool.Pool
 	targetWorkloadID         string
@@ -21,7 +22,8 @@ type Store struct {
 	queries                  querySet
 }
 
-// New создаёт хранилище для точного целевого workload.
+// New rejects a nil pool, empty target and unsupported readiness mode, then validates embedded query headers. It does not open a connection, prove RLS permissions or activate a snapshot.
+// New отклоняет nil-пул, пустую цель и неподдерживаемый режим readiness, затем проверяет заголовки встроенных запросов. Соединение не открывается, права RLS не доказываются и снимок не активируется.
 func New(
 	pool *pgxpool.Pool,
 	targetWorkloadID string,
@@ -44,7 +46,8 @@ func New(
 	}, nil
 }
 
-// Reserve атомарно резервирует одноразовый идентификатор.
+// Reserve chooses proof SQL only for the proof kind and context SQL otherwise, mapping a false/no-row result to replay. The caller owns kind eligibility; this method does not independently validate every reservation field.
+// Reserve выбирает proof SQL только для вида proof, иначе context SQL, преобразуя false или отсутствие строки в replay. Допустимость вида задаёт вызывающий; каждое поле reservation здесь независимо не проверяется.
 func (store *Store) Reserve(
 	ctx context.Context,
 	reservation repository.Reservation,
@@ -70,8 +73,8 @@ func (store *Store) Reserve(
 	return nil
 }
 
-// ReserveContinuation подтверждает durable parent acceptance и атомарно
-// резервирует детерминированный child JTI.
+// ReserveContinuation executes one parent/child statement and distinguishes an unaccepted parent from a repeated child reservation. It does not mint either identity or create a new parent acceptance.
+// ReserveContinuation выполняет один statement родителя и ребёнка, различая непринятого родителя и повтор reservation ребёнка. Идентичности не выпускаются и новое принятие родителя не создаётся.
 func (store *Store) ReserveContinuation(
 	ctx context.Context,
 	parent repository.Reservation,
@@ -91,7 +94,8 @@ func (store *Store) ReserveContinuation(
 	return nil
 }
 
-// ActivateSnapshot продвигает high-watermark обслуживаемого снимка.
+// ActivateSnapshot passes exact target, revision/history and receipt arguments to the database activation boundary and maps a false result to snapshot rollback. No local watermark or signature verification substitutes for that statement.
+// ActivateSnapshot передаёт точные цель, ревизии и историю и квитанцию границе активации БД, преобразуя false в rollback снимка. Локальная отметка или проверка подписи не заменяет этот statement.
 func (store *Store) ActivateSnapshot(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -110,7 +114,8 @@ func (store *Store) ActivateSnapshot(
 	return nil
 }
 
-// AcceptVerification атомарно принимает снимок и резервирование контекста.
+// AcceptVerification combines snapshot and context arguments plus caller/signer bindings in one statement. It reports snapshot refusal before replay refusal; partial booleans are not a successful context acceptance.
+// AcceptVerification объединяет аргументы снимка и контекста и привязки caller и подписанта в одном statement. Отказ снимка возвращается раньше отказа replay; частичные bool не означают успешное принятие контекста.
 func (store *Store) AcceptVerification(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -140,7 +145,8 @@ func (store *Store) AcceptVerification(
 	return nil
 }
 
-// Ready проверяет соединение, обслуживаемый снимок и запись резервирования.
+// Ready pings PostgreSQL, checks the exact served snapshot and attempts a mode-specific replay write in a transaction that must explicitly roll back for success. Deferred rollback on other exits is best-effort under the same context; this method does not close the pool.
+// Ready проверяет связь с PostgreSQL и точный обслуживаемый снимок, затем пробует запись replay нужного вида в транзакции, требующей явного успешного rollback. Отложенный rollback на остальных выходах выполняется по возможности с тем же контекстом; пул не закрывается.
 func (store *Store) Ready(
 	ctx context.Context,
 	expected repository.SnapshotState,
@@ -191,6 +197,8 @@ func (store *Store) Ready(
 	return nil
 }
 
+// readinessReservation builds a one-minute synthetic probe from the supplied ID/time and selects the exact proof or context query by the store's registered mode. It performs no SQL and rejects unknown modes.
+// readinessReservation строит минутную синтетическую пробу по переданным ID и времени и выбирает точный proof либо context query по зарегистрированному режиму store. SQL не выполняется, неизвестные режимы отклоняются.
 func (store *Store) readinessReservation(
 	probeID string,
 	now time.Time,
@@ -215,7 +223,8 @@ func (store *Store) readinessReservation(
 	}
 }
 
-// DeleteExpired удаляет истёкшие резервирования указанного назначения.
+// DeleteExpired selects a registered cleanup kind; proof cleanup first invokes caller-scoped issued-binding cleanup, then deletes expired proof rows. Those two statements are not wrapped here in one transaction, so a later failure does not undo the earlier cleanup.
+// DeleteExpired выбирает зарегистрированный вид очистки; для proof сначала вызывается очистка issued bindings в области caller, затем удаляются просроченные proof rows. Два statement здесь не обёрнуты общей транзакцией, поэтому поздняя ошибка не отменяет раннюю очистку.
 func (store *Store) DeleteExpired(
 	ctx context.Context,
 	kind repository.ReservationKind,
@@ -244,11 +253,14 @@ func (store *Store) DeleteExpired(
 	return nil
 }
 
-// Close закрывает пул PostgreSQL.
+// Close closes the injected PostgreSQL pool; lifecycle owners must stop consumers before invoking it and must not treat this as closing only a borrowed connection.
+// Close закрывает внедрённый пул PostgreSQL; владелец жизненного цикла сначала останавливает потребителей и не трактует метод как закрытие одного заимствованного соединения.
 func (store *Store) Close() {
 	store.pool.Close()
 }
 
+// proofReservationArgs maps exact caller/operation/issuer/revision/JTI/digest bindings and UTC expiry into the proof statement's strict named arguments without validating eligibility or executing SQL.
+// proofReservationArgs преобразует точные привязки caller, operation, issuer, revision, JTI, digest и срок UTC в строгие именованные аргументы proof statement без проверки допустимости и исполнения SQL.
 func proofReservationArgs(value repository.Reservation) pgx.StrictNamedArgs {
 	return pgx.StrictNamedArgs{
 		"caller_workload_id":      value.ScopeID,
@@ -261,6 +273,8 @@ func proofReservationArgs(value repository.Reservation) pgx.StrictNamedArgs {
 	}
 }
 
+// continuationReservationArgs keeps parent target/JTI/digest separate from child caller/JTI/digest/UTC expiry, preserving the two lineage roles instead of inferring a parent from the child.
+// continuationReservationArgs разделяет target, JTI и digest родителя и caller, JTI, digest и срок UTC ребёнка, сохраняя две роли происхождения вместо вывода родителя из ребёнка.
 func continuationReservationArgs(parent, child repository.Reservation) pgx.StrictNamedArgs {
 	return pgx.StrictNamedArgs{
 		"parent_target_workload_id":      parent.ScopeID,
@@ -273,6 +287,8 @@ func continuationReservationArgs(parent, child repository.Reservation) pgx.Stric
 	}
 }
 
+// contextReservationArgs maps one target-scoped JTI, digest and UTC expiry to context reservation SQL; it neither derives target ownership nor alters the input value.
+// contextReservationArgs преобразует JTI в области target, дайджест и срок UTC в аргументы context reservation SQL, не выводя владение целью и не меняя входное значение.
 func contextReservationArgs(value repository.Reservation) pgx.StrictNamedArgs {
 	return pgx.StrictNamedArgs{
 		"target_workload_id":      value.ScopeID,
@@ -282,6 +298,8 @@ func contextReservationArgs(value repository.Reservation) pgx.StrictNamedArgs {
 	}
 }
 
+// snapshotArgs creates fresh parallel history arrays in original order and maps snapshot/receipt/predecessor pins for one target. Revision-to-int64 conversion is unchanged and performs no separate range or signature validation.
+// snapshotArgs создаёт новые параллельные массивы истории в исходном порядке и преобразует привязки снимка, квитанции и предшественника для одной цели. Преобразование ревизии в int64 не меняется и отдельно диапазон или подпись не проверяет.
 func snapshotArgs(
 	targetWorkloadID string,
 	value repository.SnapshotState,
@@ -307,6 +325,8 @@ func snapshotArgs(
 	}
 }
 
+// snapshotReadinessArgs supplies the exact target/source/key-set/policy/signer fields without a local receipt parameter, letting SQL validate the workload's persisted receipt.
+// snapshotReadinessArgs передаёт точные target, source, key-set, policy и signer без параметра локальной квитанции, позволяя SQL проверить сохранённую квитанцию workload.
 func snapshotReadinessArgs(
 	targetWorkloadID string,
 	value repository.SnapshotState,
@@ -331,7 +351,8 @@ func randomUUID() (string, error) {
 	return value.NewAuthorityUUID()
 }
 
-// Freshness читает receipt общего workload watermark, а не локальный pod receipt.
+// Freshness reads the shared workload receipt, database observation time and computed deadline. Missing rows, nil deadlines or nonfuture deadlines become NotReady; it returns no local-clock substitute or partial freshness on error.
+// Freshness читает общую квитанцию workload, время наблюдения БД и вычисленный срок. Отсутствие строки, nil-срок или срок не позже наблюдения дают NotReady; локальные часы и частичная свежесть при ошибке не выдаются.
 func (store *Store) Freshness(ctx context.Context, state repository.SnapshotState) (repository.SnapshotFreshness, error) {
 	var result repository.SnapshotFreshness
 	var deadline *time.Time
@@ -350,8 +371,8 @@ func (store *Store) Freshness(ctx context.Context, state repository.SnapshotStat
 	return result, nil
 }
 
-// RegisterIssuedContext не повторяет UNKNOWN: исходный JTI остаётся единственным
-// намерением, proof reservation не позволяет автоматически выпустить второй.
+// RegisterIssuedContext attempts registration once and, after an error, reads only that same exact binding under the original context. A matching readback resolves uncertainty; otherwise the original failure is wrapped without a new JTI, budget or mutation retry.
+// RegisterIssuedContext однократно пытается зарегистрировать контекст и после ошибки читает только ту же точную привязку под исходным контекстом. Совпавший readback разрешает неопределённость; иначе оборачивается исходная ошибка без нового JTI, бюджета и повтора изменения.
 func (store *Store) RegisterIssuedContext(ctx context.Context, state repository.SnapshotState, binding repository.IssuedContextBinding) error {
 	var parent *string
 	if binding.ParentJTI != "" {

@@ -9,16 +9,19 @@ import (
 
 	domainrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/readbackrow"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Repository реализует устойчивое состояние publisher в PostgreSQL.
+// Repository persists publisher delivery, publication and rotation state through a caller-configured PostgreSQL pool. Database functions own transition eligibility; it does not deliver Kubernetes material itself.
+// Repository сохраняет состояния доставки, публикации и ротации publisher через настроенный вызывающим пул PostgreSQL. Допустимостью переходов владеют функции БД; материал Kubernetes самостоятельно не доставляется.
 type Repository struct {
 	pool *pgxpool.Pool
 }
 
-// LoadSnapshotHistory читает ограниченную forward-only цепочку.
+// LoadSnapshotHistory reads the SQL-bounded history, closes rows, rejects scan/iteration failures and sorts revision/digest pairs ascending. It can retain the current revision among the thirty-three rows; predecessor-window selection belongs to the consumer.
+// LoadSnapshotHistory читает ограниченную SQL историю, закрывает rows, отклоняет ошибки Scan и итерации и сортирует пары ревизии и дайджеста по возрастанию. Среди тридцати трёх строк может быть текущая ревизия; окно предшественников выбирает потребитель.
 func (repository *Repository) LoadSnapshotHistory(
 	ctx context.Context,
 ) (model.AuthoritySnapshotHistory, error) {
@@ -53,7 +56,8 @@ func (repository *Repository) LoadSnapshotHistory(
 	return result, nil
 }
 
-// LoadSnapshotPublication возвращает immutable same-input publication.
+// LoadSnapshotPublication reads immutable publication fields by source revision and input digest, distinguishing absence from failure. It does not regenerate a signed snapshot or validate its signature here.
+// LoadSnapshotPublication читает неизменяемые поля публикации по исходной ревизии и дайджесту входа, отличая отсутствие от ошибки. Подписанный снимок не генерируется заново и его подпись здесь не проверяется.
 func (repository *Repository) LoadSnapshotPublication(
 	ctx context.Context,
 	sourceRevision uint64,
@@ -92,8 +96,8 @@ func (repository *Repository) LoadSnapshotPublication(
 	return result, true, nil
 }
 
-// LoadSnapshotPredecessor возвращает exact historical publication вместе с
-// сохранённой registry/phase provenance, не реконструируя прежние inputs.
+// LoadSnapshotPredecessor reads persisted publication plus registry/phase provenance under exact source and registry digests. Absence is explicit; historic inputs are not reconstructed from current configuration.
+// LoadSnapshotPredecessor читает сохранённую публикацию с происхождением реестра и фазы по точным дайджестам источника и реестра. Отсутствие выражено явно; исторический вход не восстанавливается из текущей конфигурации.
 func (repository *Repository) LoadSnapshotPredecessor(
 	ctx context.Context,
 	sourceRevision uint64,
@@ -136,7 +140,8 @@ func (repository *Repository) LoadSnapshotPredecessor(
 	return result, true, nil
 }
 
-// PrepareRotation фиксирует intent до первой внешней CAS-доставки.
+// PrepareRotation invokes the fixed preparation transition with intent, source, predecessor and expected-readback arguments before external delivery; it performs no Kubernetes CAS.
+// PrepareRotation вызывает фиксированный переход подготовки с аргументами намерения, источника, предшественника и ожидаемых readback до внешней доставки; Kubernetes CAS не выполняется.
 func (repository *Repository) PrepareRotation(
 	ctx context.Context,
 	value model.AuthorityRotationIntent,
@@ -145,7 +150,8 @@ func (repository *Repository) PrepareRotation(
 		"prepare publisher authority rotation")
 }
 
-// LoadOrPrepareRotationOperation фиксирует одну составную normal rotation.
+// LoadOrPrepareRotationOperation selects the database function that durably resolves one composite rotation from its registry/base pins, without supplying phase-publication arguments or local deadlines.
+// LoadOrPrepareRotationOperation выбирает функцию БД, устойчиво разрешающую составную ротацию по привязкам реестра и основания, без аргументов публикации фазы или локальных дедлайнов.
 func (repository *Repository) LoadOrPrepareRotationOperation(
 	ctx context.Context,
 	value model.AuthorityRotationOperation,
@@ -153,8 +159,8 @@ func (repository *Repository) LoadOrPrepareRotationOperation(
 	return repository.rotationOperation(ctx, loadOrPrepareRotationOperationSQL, value, "")
 }
 
-// LoadRotationOperation возвращает сохранённую operation без создания нового
-// намерения и без изменения назначенных PostgreSQL дедлайнов.
+// LoadRotationOperation reads one persisted operation by ID and reports absence separately, preserving database-assigned status/times rather than creating an intent or extending a deadline.
+// LoadRotationOperation читает одну сохранённую операцию по ID и отдельно сообщает отсутствие, сохраняя назначенные БД статус и времена без нового намерения или продления дедлайна.
 func (repository *Repository) LoadRotationOperation(
 	ctx context.Context,
 	operationID string,
@@ -177,7 +183,8 @@ func (repository *Repository) LoadRotationOperation(
 	return result, true, nil
 }
 
-// PrepareRotationPhase связывает phase intent с operation до внешнего CAS.
+// PrepareRotationPhase binds operation, phase, intent/source/predecessor and publication-input digest in the fixed function call. A false result becomes snapshot rollback; no external delivery occurs.
+// PrepareRotationPhase связывает операцию, фазу, намерение, источник, предшественника и дайджест входа публикации в фиксированном вызове функции. False становится rollback снимка; внешней доставки нет.
 func (repository *Repository) PrepareRotationPhase(
 	ctx context.Context,
 	operation model.AuthorityRotationOperation,
@@ -200,8 +207,8 @@ func (repository *Repository) PrepareRotationPhase(
 	return nil
 }
 
-// AdvanceRotationOperation переводит составную операцию только после exact
-// promoted publication соответствующей фазы.
+// AdvanceRotationOperation submits the phase and exact publication pins to the fixed database operation-advance function, returning its persisted state rather than deciding eligibility from local booleans.
+// AdvanceRotationOperation передаёт фазу и точные привязки публикации фиксированной функции БД продвижения операции, возвращая сохранённое состояние вместо определения допустимости локальными bool.
 func (repository *Repository) AdvanceRotationOperation(
 	ctx context.Context,
 	value model.AuthorityRotationOperation,
@@ -213,6 +220,8 @@ func (repository *Repository) AdvanceRotationOperation(
 		publication.SourceDigestSHA256, publication.InputDigestSHA256)
 }
 
+// rotationOperation supplies six base positional arguments and adds phase/publication arguments only for a nonempty phase, then scans the ten-column operation state. Callers must choose the matching fixed SQL profile; this helper does not validate a generic dynamic query.
+// rotationOperation передаёт шесть основных позиционных аргументов и добавляет фазу и публикацию только при непустой фазе, затем читает десять колонок состояния операции. Вызывающий выбирает совместимый фиксированный SQL-профиль; общий динамический запрос helper не проверяет.
 func (repository *Repository) rotationOperation(
 	ctx context.Context,
 	query string,
@@ -241,7 +250,8 @@ func (repository *Repository) rotationOperation(
 	return result, nil
 }
 
-// BeginRotationDelivery необратимо закрывает возможность безопасного abort.
+// BeginRotationDelivery executes the fixed durable transition that marks delivery started for exact intent/source pins; actual CAS and readback remain outside this method.
+// BeginRotationDelivery выполняет фиксированный устойчивый переход начала доставки по точным привязкам намерения и источника; сами CAS и readback остаются вне метода.
 func (repository *Repository) BeginRotationDelivery(
 	ctx context.Context,
 	value model.AuthorityRotationIntent,
@@ -250,7 +260,8 @@ func (repository *Repository) BeginRotationDelivery(
 		"begin publisher authority rotation delivery")
 }
 
-// MarkRotationDelivered отделяет CAS/readback доставки от promotion consumers.
+// MarkRotationDelivered records the fixed delivered transition for the exact intent/source binding, separately from snapshot promotion and consumer readiness.
+// MarkRotationDelivered фиксирует переход доставки для точной привязки намерения и источника отдельно от продвижения снимка и готовности потребителей.
 func (repository *Repository) MarkRotationDelivered(
 	ctx context.Context,
 	value model.AuthorityRotationIntent,
@@ -259,6 +270,8 @@ func (repository *Repository) MarkRotationDelivered(
 		"mark publisher authority rotation delivered")
 }
 
+// rotationTransition builds strict intent/source arguments and adds predecessor/readback-count fields only for the exact prepare SQL body. It stage-wraps driver errors and maps false to rollback; fixed call sites own the query choice.
+// rotationTransition строит строгие аргументы намерения и источника и добавляет поля предшественника и числа readback только для точного тела prepare SQL. Ошибки драйвера оборачиваются этапом, false означает rollback; запрос выбирают фиксированные call sites.
 func (repository *Repository) rotationTransition(
 	ctx context.Context,
 	query string,
@@ -285,7 +298,8 @@ func (repository *Repository) rotationTransition(
 	return nil
 }
 
-// AppendSnapshot фиксирует immutable publication intent и payload.
+// AppendSnapshot submits immutable publication pins once; on false it reads the same revision/input digest and accepts a match of the checked intent/version/predecessor fields. Driver errors propagate without mutation retry, and success may return either the submitted value or persisted publication.
+// AppendSnapshot однократно передаёт неизменяемые привязки публикации; при false читает те же ревизию и дайджест входа и принимает совпадение проверенных полей намерения, версий и предшественника. Ошибки драйвера возвращаются без повтора изменения; успех возвращает переданное либо сохранённое значение.
 func (repository *Repository) AppendSnapshot(
 	ctx context.Context,
 	value model.AuthoritySnapshotPublication,
@@ -339,7 +353,8 @@ func (repository *Repository) AppendSnapshot(
 	return value, nil
 }
 
-// SnapshotPublicationReady продвигает intent только после полного readback set.
+// SnapshotPublicationReady is a promotion command despite its name: it requires nonempty expected targets and passes their ordered workload/role/generation arrays and exact publication pins to SQL. False reports an incomplete readback set.
+// SnapshotPublicationReady, несмотря на имя, является командой продвижения: требует непустые ожидаемые цели и передаёт в SQL упорядоченные массивы workload, ролей и поколений и точные привязки публикации. False сообщает неполный набор readback.
 func (repository *Repository) SnapshotPublicationReady(
 	ctx context.Context,
 	value model.AuthoritySnapshotPublication,
@@ -381,7 +396,8 @@ func (repository *Repository) SnapshotPublicationReady(
 	return nil
 }
 
-// New создаёт репозиторий поверх проверенного пула PostgreSQL.
+// New rejects a nil pool and validates fixed publisher query headers without pinging the database, asserting runtime privileges or running a rotation.
+// New отклоняет nil-пул и проверяет заголовки фиксированных publisher queries без Ping БД, подтверждения runtime-привилегий или запуска ротации.
 func New(pool *pgxpool.Pool) (*Repository, error) {
 	if pool == nil {
 		return nil, errors.New("publisher PostgreSQL pool is nil")
@@ -392,7 +408,8 @@ func New(pool *pgxpool.Pool) (*Repository, error) {
 	return &Repository{pool: pool}, nil
 }
 
-// LoadPublishedCredential читает ранее опубликованное удостоверение.
+// LoadPublishedCredential reads a delivery receipt by its idempotency key under the pool's database boundary, returning explicit absence and discarding partial scan values on failure.
+// LoadPublishedCredential читает квитанцию доставки по ключу идемпотентности под границей БД пула, явно возвращая отсутствие и отбрасывая частичные значения Scan при ошибке.
 func (repository *Repository) LoadPublishedCredential(
 	ctx context.Context,
 	idempotencyKey string,
@@ -414,7 +431,8 @@ func (repository *Repository) LoadPublishedCredential(
 	return result, true, nil
 }
 
-// SavePublishedCredential идемпотентно сохраняет опубликованное удостоверение.
+// SavePublishedCredential submits the exact receipt/directive/credential-generation fields and returns the database's stored result. No row means idempotency conflict; signing, external delivery and automatic retries are not performed here.
+// SavePublishedCredential передаёт точные поля квитанции, директивы и поколений credential и возвращает сохранённый результат БД. Отсутствие строки означает конфликт идемпотентности; подписи, внешней доставки и автоматических повторов здесь нет.
 func (repository *Repository) SavePublishedCredential(
 	ctx context.Context,
 	value model.PublishedCredential,
@@ -445,7 +463,8 @@ func (repository *Repository) SavePublishedCredential(
 	return result, nil
 }
 
-// PublisherReady проверяет доступность чтения и записи publisher.
+// PublisherReady executes the persistence-boundary readiness statement and requires its boolean result, rather than treating a nonnil pool or successful query-header validation as readiness.
+// PublisherReady выполняет statement готовности границы хранения и требует его bool-результат вместо признания готовности по ненулевому пулу или проверенным заголовкам.
 func (repository *Repository) PublisherReady(ctx context.Context) error {
 	var ready bool
 	if err := repository.pool.QueryRow(ctx, readinessSQL).Scan(&ready); err != nil {
@@ -457,7 +476,8 @@ func (repository *Repository) PublisherReady(ctx context.Context) error {
 	return nil
 }
 
-// PinReadbackIntent фиксирует ожидаемое состояние для независимой проверки.
+// PinReadbackIntent inserts or resolves exact intent/material bindings. After no rows it performs one separate exact pinned-intent lookup to observe a concurrent commit without granting UPDATE; persistent absence becomes idempotency conflict.
+// PinReadbackIntent вставляет либо разрешает точные привязки намерения и материала. После отсутствия строк выполняется один отдельный точный поиск PINNED intent для наблюдения конкурентного commit без выдачи UPDATE; повторное отсутствие становится конфликтом идемпотентности.
 func (repository *Repository) PinReadbackIntent(
 	ctx context.Context,
 	value model.ReadbackIntent,
@@ -509,29 +529,12 @@ func (repository *Repository) PinReadbackIntent(
 	return result, nil
 }
 
+// scanReadbackIntent scans the fixed eighteen-column intent layout, rejects scan errors and invalid JSON, then copies the public JWK bytes. It does not validate JWK algorithm/key identity or prove the intent's eligibility.
+// scanReadbackIntent читает фиксированный восемнадцатиколоночный layout intent, отклоняет ошибки Scan и невалидный JSON, затем копирует байты публичного JWK. Алгоритм и идентичность JWK и допустимость intent здесь не проверяются.
 func scanReadbackIntent(row rowScanner) (model.ReadbackIntent, error) {
 	var result model.ReadbackIntent
 	var publicJWK []byte
-	err := row.Scan(
-		&result.IntentID,
-		&result.Kind,
-		&result.IntentRevision,
-		&result.IntentDigestSHA256,
-		&result.WorkloadID,
-		&result.WorkloadSPIFFEID,
-		&result.Role,
-		&result.WorkloadGeneration,
-		&result.CredentialGeneration,
-		&result.MaterialGeneration,
-		&result.PossessionKeyID,
-		&result.PossessionKeyGeneration,
-		&publicJWK,
-		&result.PossessionKeyThumbprint,
-		&result.SourceRevision,
-		&result.ServedStateDigestSHA256,
-		&result.Status,
-		&result.ExpiresAt,
-	)
+	err := row.Scan(readbackrow.Destinations(&result, &publicJWK)...)
 	if err != nil {
 		return model.ReadbackIntent{}, err
 	}
@@ -542,10 +545,16 @@ func scanReadbackIntent(row rowScanner) (model.ReadbackIntent, error) {
 	return result, nil
 }
 
+// rowScanner is the narrow positional scan seam for publisher result decoding, independent of a concrete pgx row or database connection lifecycle.
+// rowScanner — узкий интерфейс позиционного Scan для декодирования publisher results независимо от конкретного pgx row и жизненного цикла соединения БД.
 type rowScanner interface {
+	// Scan writes into the exact ordered destination pointers and returns a decoding error; callers must not treat partially written destinations as accepted domain state.
+	// Scan пишет в точные упорядоченные указатели результата и возвращает ошибку декодирования; частично записанные значения нельзя считать принятым доменным состоянием.
 	Scan(...any) error
 }
 
+// scanPublished scans eight receipt fields and returns the scan error alongside its result, which may be partial on failure. Repository callers decide absence/conflict mapping and discard that partial result.
+// scanPublished читает восемь полей квитанции и возвращает ошибку Scan вместе с результатом, который при отказе может быть частичным. Repository callers определяют отсутствие и конфликт и отбрасывают частичный результат.
 func scanPublished(row rowScanner) (model.PublishedCredential, error) {
 	var result model.PublishedCredential
 	err := row.Scan(

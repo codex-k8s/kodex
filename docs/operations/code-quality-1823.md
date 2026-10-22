@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.296.0
+version: 1.297.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,89 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести девяносто седьмая волна — PostgreSQL adapters и общие layouts
+
+Опубликованный SHA296 — `89a547d37450cf80d63d0788bc437fbf6ff841cb`.
+Точный K1Gj4W:6623 sources,222 excluded,1812 raw/720 retained/
+1092 unresolved; Go12750/21266,missing8516. Raw SHA256:
+`e13eba8cdd3471904ae70fab8163f8ad4cb93812cf7ccbfcd6eb11d555e316cb`;
+clone-setee12a7b9… . Exact34/87 unit/full authority build, inverse AST4,
+tooling/scan PASS LOCAL,0 FAIL/SKIP; push и Draft PR PATCH/GET296 есть.
+
+Полностью прочитаны пять repository/session files1589 lines и связанные
+query/model declarations.73 прежних непокрытых declarations получили
+предметные EN→RU;7 новых helpers/tests также документированы. Scope10
+Go files84/84,missing0, включая ранее покрытые4 declarations. Это не
+завершение всех PostgreSQL component fixtures или всего authority.
+
+Три detector duplicates реально вынесены:
+1. Общий readbackrow.Destinations возвращает18 exact typed pointers для
+publisher intent, readback intent и suffix challenge. Caller-owned
+JSON semantics НЕ объединены:publisher по-прежнему json.Valid+copy,
+readback по-прежнему RawMessage без validation/copy.
+2. restoreFenceArgs даёт apply/readback те же5 bindings и nullable UTC
+safe-window; ноль остаётся typed nil, остальные Unix seconds не нормализуются
+и не получают новой проверки допустимости.
+3. Session activateCapability содержит прежний Exec→identity→exact LOGIN/
+effective-role check для Configure/Ensure. Исходные prechecks/fast paths и
+закрытый assumeQuery остаются у callers; helper не открывает connection,
+не выбирает произвольную роль, не меняет ctx/SQL/error strings и не reset-ит
+роль после ошибки. Connection rejection остаётся у pool hook caller.
+
+Дополнительно readbackTrustArgs переиспользует9 readiness bindings и
+добавляет прежние predecessor digest/served time в свежую карту. Все11
+ключей, типы и значения прежние, включая нули. Это не новая trust policy.
+
+Inverse AST6 разворачивает ACTUAL18-pointer layout во всех3 scan sites,
+actual restore helper в2 callers, actual role-activation tail в2 callers
+и объединённую карту11 значений в прежнем literal order. Новый helper/
+test code вырезается только из restored comparison; полный прежний AST
+authority/publisher/readback/restore/session и readback unit file равен296.
+SQL, directives, transactions/commit/rollback и domain result mappings прежние.
+
+Comments явно описывают partial effects и ограничения:IssueChallenge write
+может сохраниться при последующем load error; cleanup statements не являются
+одной транзакцией; Reserve выбирает context path для non-proof input, сам
+kind eligibility не проверяет. SnapshotPublicationReady фактически продвигает
+publication, не pure probe. Signed publication lookup не равен signature
+verification. Readback DB retry ограничен5 попытками40001 и прежними
+25/75/150/300ms; deferred rollback best-effort с тем же ctx не объявлен
+подтверждённым cleanup. Context7/jackc/pgx и pinned5.10.0 Tx/BeginTx docs
+сверены:context cancellation не делает auto-rollback. Эти ветви не исправлялись.
+
+Новые pure units pin18 pointer identities/order и fresh slice; проверяют
+restore zero/positive/negative Unix→nullable UTC,5 keys и оба SQL rewrites;
+проверяют5 registered и3 rejected capability profiles без SQL execution;
+pin11 activation values и map independence. Никакой SET ROLE, scanner/driver
+row execution, RLS, replay reservation, restore fence или real transaction
+этими fixtures не выполняется. Прежний concurrency component NOT RUN.
+
+38 верхних/102 всех selected unit и full authority build -p=2 PASS LOCAL,
+0 FAIL/SKIP.17 Node/Go checker units, inverse AST6, scope docs84/84,
+5 ignores и diff-check PASS LOCAL. Explicit regex/env-u DSN прежние;
+component code compiled, live DB/model/cluster paths NOT RUN.
+
+Выполненная команда unit/build (из модуля internal-rpc-authority):
+```bash
+set -e
+set -o pipefail
+env -u KODEX_AUTHORITY_POSTGRES_TEST_DSN GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/client/readback ./internal/client/restoreagent ./internal/domain/types/value ./internal/domain/service ./internal/repository/postgres/authority ./internal/repository/postgres/publisher ./internal/repository/postgres/readback ./internal/repository/postgres/session ./internal/repository/postgres/restore ./internal/client/kubernetessecret ./internal/client/projectedsecret ./internal/client/publisher ./internal/client/secretschema ./internal/repository/postgres/readbackrow -run '^(TestDestinationsPreservesColumnPointerIdentity|TestRestoreFenceArgsPreservesNullableWindow|TestAssumeQueryUsesOnlyRegisteredStatements|TestReadbackActivationArgsPreserveAllPins|TestSecretSchemasPreserveKeysAndIndependentStorage|TestPromoteSnapshotUsesExactRequiredTargets|TestLoadSnapshotHistoryIncludesCurrentRevisionForRestart|TestLoadSnapshotPredecessorUsesPersistedCrossDomainProvenance|TestReadbackTrustReadinessArgsMatchQuery|TestSerializationFailureClassificationIsExact|TestReadbackConsumeUsesReadCommittedIsolation|TestReadbackRPCRetryPreservesErrorBoundaries|TestNewRequestUUIDReturnsDistinctVersionFourIdentifiers|TestSecretAttestorReusesTransportAcrossRefreshes|TestPollНеЗакрываетAdmissionВоВремяШтатнойПроверки|TestVerifySafeNoDirectiveFailClosedДоПервогоВнешнегоPoll|TestVerifySafeNoDirectiveПринимаетТолькоOpenИСозревшийCompleted|TestJoinedAuthorityUUIDPreservesEncoding|TestTerminatedAuthorityUUIDPreservesEncoding|TestReadbackTTLWindowsCoverProjectedSecretDelivery|TestReadbackIntentIdentityIncludesSourceRevision|TestValidCredentialAuthentication|TestMatchesObservedCaller|TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration|TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding|TestAuthorizationExpiryDoesNotExceedMetadataWindow|TestDurableFreshnessClockAndOutageBoundaries|TestDurableFreshnessConsumesNetworkTimeAndFailsOnDatabaseLoss|TestDurableFreshnessRejectsCorruptionAndSlidingSameReceipt|TestFreshnessAdoptsExactReplicaReceiptForWorkingAccept|TestIssueContinuationInheritsVerifiedRootAndReservesChild|TestSnapshotActivationAllowsFreshReceiptForExactSnapshot|TestContextAcceptanceUsesExactSnapshotReceiptArguments|TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor|TestProofReservationAllowsConcurrentOutOfOrderProofs|TestContinuationReservationAtomicallyRequiresAcceptedParent|TestReadinessReservationUsesModeSpecificWritePath|TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt)$' | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Рабочий emREgK:6627 sources,222 excluded,1809 raw/720 retained/
+1089 unresolved; Go12830/21273,missing8443. Удалены ровно3 groups
+136/133/104tokens; новых нет,1809 остальных keys/counts прежние.
+Registry602/720 буквально прежний, новых exclusions нет.
+Raw SHA256:
+`469ab9a57aedad81b5d91415874922f14fbaf8847728dbbd3aa1dead5cc548ee`;
+clone-set:
+`34d697aa690a93402cab54d565a063a52e100b7a2b32f2d6f45546dca6e2a606`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, dependencies, contracts, applied migrations и live state прежние.
+Finding verifyDirective из293 НЕ исправлен; historical FAIL/scoped NOT RUN
+сохраняются. Общая задача открыта.
 
 ## Двести девяносто шестая волна — общий каталог полей Secret
 
