@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.230.0
+version: 1.231.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,93 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцать первая волна — consume boundary и последние группы secret-broker
+
+Опубликованный SHA230 — `60726eacd2d88af79abb9f17662096bdc50a6e4e`.
+Точный 6nw8ue: 6587 sources, 222 excluded, 1827 raw, 596 retained,
+1231 unresolved; Go 9062/21189, missing 12127. Raw SHA256:
+`f3c59b2523d04e3d94b3a590c702e6aafe4f04c6946a090687ff481c3ba4c216`.
+Clone-set:
+`40c7d0cceac386b0ba6f0488e993dad70011ddd17008df93e627872c95b547a9`.
+Push/readback, Draft PR и exact body подтверждены. На SHA230 unit
+grpc/caster/value33/154 и отдельная app composition1/9, полная сборка PASS.
+
+Полностью прочитаны пять текущих Go-файлов: grpc server/server_test,
+recovery reconciler_test, Kubernetes provider_authorization_cleanup_test
+и provider_cleanup_snapshot_test. Актуальные AGENT-DOC-001 и GOV-DOC-003
+повторно прочитаны; ранее прочитанные GO-DOC-001/003 и GUIDE-DOC-003/006
+не изменились. Один production helper и три test factories остаются внутри
+своих пакетов; нового общего runtime-примитива, API или lifecycle нет.
+
+| Вход | Порядок consume и последующих эффектов |
+| --- | --- |
+| CREATE/ROTATE | Size refusal до Consume; затем прежние kind/namespace/shape, digest/type, materialization и owner Complete |
+| REVEAL | Consume и прежние проверки; exact read, owner Complete, копия ответа; adapter buffer обнуляется defer |
+| REVOKE | Consume и прежние проверки; все descriptors до owner Complete; затем serial exact cleanup без rollback уже завершённого revoke |
+| Consume error | Прежний preserveOwnerError; никакого Fail или storage effect |
+| Invalid consumed metadata | Прежний MATERIALIZATION_INVALID через failPermanent; неполные operation/generation по-прежнему не дают Fail |
+
+consumeValidatedOperation ровно переносит Consume→preserveOwnerError→
+validateOperation→failPermanent и возвращает тот же operation pointer.
+Fixed kind задаёт прежний явный RPC callsite, не клиентское поле.
+Grant/context/namespace и порядок error precedence сохранены. Actual lease
+freshness и authority остаются у owner: timestamp shape не объявлен expiry
+проверкой. Complete/Fail по-прежнему имеют независимый bounded retry context;
+новый helper не создаёт grant, retry, background task, event или transaction.
+
+mutationServerFixture применяется только к двум прежним successful mutation
+fixtures. expiredRecoveryFixture настраивает owner/store/reconciler, но не
+выполняет reconciliation вместо теста. authorizationCleanupTargetFixture
+создаёт прежнюю попытку и exact UID/resourceVersion target до установки
+reactors; t.Parallel, отдельные assertions, разные success/failure cases
+и контексты прежних callers сохранены.
+
+Единственное новое retained-решение:
+`b3d07e23c20b620e988973cbb8d4fe24a550c6bfc6feb2bd661f4f488b3c15fe`
+для credential_projections.go/store.go. Это окно102 токенов, пересекающее
+конец exact-check метода и начало отдельного List метода в обоих файлах.
+Разные nominal types, manifests/effect checks, selectors и decode/sort
+не образуют единый общий алгоритм; Kubernetes List уже принадлежит SDK.
+Оба production-файла здесь не менялись; прочитаны выбранные фрагменты
+с контекстом методов. Исключение ограничено путями/хешем/count1, не файлами.
+Все прежние registry entries неизменны.
+
+В пяти файлах 138/138 declarations имеют содержательные EN→RU пояснения:
+131 прежнее и7 новых объявлений. Описаны limits typed-nil/readiness,
+hint disclosure, JSON syntax без schema validation, timestamp shape,
+numeric enum casts и сохранение исходных gRPC status diagnostics.
+Это описание фактического поведения, не скрытые исправления/новые гарантии.
+
+Inverse-проверка удаляет только четыре helper declarations и три новых tests,
+разворачивает их calls и восстанавливает прежний err binding:
+Go AST всех пяти исходных файлов совпал с SHA230 без comments/token.Pos.
+Отдельные negative units проверяют четыре fixed kinds, single-use grant,
+неверные kind/namespace/lease/generation и size rejection до Consume.
+Это тесты fake owner/store, не доказательство реального CP grant lifecycle.
+
+Unit `./internal/transport/grpc/... ./internal/kubernetes ./internal/recovery`:
+96 верхних/338 всех PASS, 0 FAIL/SKIP; полный повтор после комментариев PASS.
+Флаги: `go test -mod=readonly -count=1 -timeout 120s -json`,
+GOENV/GOWORK off, Go1.26.6, GOMAXPROCS=4.
+Полная сборка secret-broker `go build -mod=readonly ./...` PASS LOCAL.
+17 Node units, unit Go checker, scope138/138, пять addressed ignore boundaries,
+gofmt/diff-check PASS LOCAL. Context7 /grpc/grpc-go: status.FromError/
+GRPCStatus/details; дополнительно local go doc закреплённого модуля.
+Wrapped status не назван sanitizer; runtime diagnostics не изменены.
+
+Рабочий sLgjLg: 6587 sources, 222 excluded, 1823 raw, 597 retained,
+1226 unresolved; Go 9200/21196, missing 11996. Raw SHA256:
+`53cc409f5c6c8a8318929d82a6dea6b63aede740ec07ea35a48d14a9c9616b09`.
+Clone-set:
+`b413e1434acf4250c9dab613c71f7e28af7fd560cbab827898600203221af9e1`.
+Multiset: новых групп0, удалены ровно 2b810a8b..., 05d9cf4e...,
+b0cf5090..., 91bf038d...; registry +1. В secret-broker unresolved0,
+но все Go-комментарии этого модуля ещё не завершены.
+Точный post-commit scan/unit/build публикуются в прежнем Draft PR.
+Общая задача не завершена: остаются11996 declarations и1226 групп.
+Исторические FAIL/SKIP/NOT RUN не переименованы в PASS.
+Live/browser/deploy/ИИ/STT/почта и полная приёмка NOT RUN.
 
 ## Двести тридцатая волна — общие draft metadata adapters secret-broker
 

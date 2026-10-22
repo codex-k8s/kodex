@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/secret-broker/internal/kubernetes/credential_projections.go",
+      "secondPath": "services/internal/secret-broker/internal/kubernetes/store.go",
+      "fragmentSHA256": "b3d07e23c20b620e988973cbb8d4fe24a550c6bfc6feb2bd661f4f488b3c15fe",
+      "count": 1,
+      "reason": "Совпало102-token окно, пересекающее границу двух методов: хвост проверки CredentialProjection по полному Manifest и начало ListRuntimeCredentialProjections против хвоста проверки MaterializationEffect и начала ListManaged. Различаются nominal return/error types, owner bindings, labels и дальнейшие decoding/sorting rules; общего связного алгоритма во всём окне нет. Сам Kubernetes List уже реализован SDK, а ещё один generic read/parse/predicate helper ради коротких typed branches скрыл бы разные exact-proof и secret-clearing границы, не убрав существующую копию бизнесовой операции. Сохранены только эта точная пара/fragment/count1, не namespace operations, файлы или обработчики целиком."
+    },
+    {
+      "format": "go",
       "firstPath": "scripts/tests/fixtures/email-legacy/managed_test.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/email_authorization_component_test.go",
       "fragmentSHA256": "f7e27d5eeadb9ccfca511a21782e48258eb42feab821d531c25c8f352a5ada1a",
