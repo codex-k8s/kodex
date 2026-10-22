@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.183.0
+version: 1.184.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,71 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят четвёртая волна — общий HTTP shutdown/join worker
+
+На базе опубликованного SHA `a2315e399af1bbc89cfe53e7f0f017e65cf539e3`
+два одинаковых self-shutdown HTTP workers runtime-controller и platform
+worker grant удалены; потребители вызывают общий httpserver.ShutdownWorker
+с прежними ListenAndServe/Shutdown callbacks и timeout. Новая функция не
+читает env, не создаёт root context, не меняет routes/server limits и не
+добавляет retry, defaults либо authority. Отличающийся прежний
+httpserver.Server.Worker не заменён: при cancel он оставляет shutdown/join
+владельцу, а вынесенный вариант сам выполняет shutdown и join.
+
+Матрица сохранённых исходов:
+
+| Исход | Сохранённое поведение |
+| --- | --- |
+| Создание worker | нет I/O/goroutines/callback calls |
+| Serve вернул ErrServerClosed, включая wrapped | nil без вызова shutdown |
+| Serve вернул другую ошибку | исходная ошибка без shutdown/retry |
+| Cancel lifecycle | shutdown context сохраняет values, снимает parent cancel/deadline и получает прежний timeout |
+| Shutdown завершился | worker всё равно дожидается serve; нештатная serve error объединяется с shutdown error |
+| Shutdown timeout | сохраняется DeadlineExceeded; join serve не назван ожиданием всех активных handlers/hijacked connections |
+
+Оба прежних worker body механически нормализованы к общему: различия
+только имена budget/context и вызовы переданных callbacks. Полные файлы
+обоих consumers восстановлены обратной заменой вызова/import и старой
+функцией; non-comment строки после gofmt точно совпадают с parent.
+Ещё три RC файла изменены только комментариями и сравнены так же.
+Callback остаётся ответственным за соблюдение context; новый helper не
+обещает принудительно прервать зависший callback. Оба consumers явно
+подключили уже существующий локальный module httpserver; новый replace
+понадобился только authority. Внешние версии и go.sum не менялись.
+
+Четыре новых unit с 12 подтестами используют управляемые callbacks без
+сокетов: lazy construction, early serve return, normal/wrapped closure,
+8 комбинаций cancellation/shutdown/serve outcomes, values и independent
+deadline, явный join, cancel cleanup контекста и timeout. Все 20 оставшихся
+RC объявлений app/main/drain/readiness и все пять новых shared/test функций
+описаны предметно EN→RU; package app также двуязычен. Scoped docs-check всех
+libs/go и четырёх RC файлов — 2547/2547, PASS LOCAL. Остальной authority
+файл этим не объявлен полностью прокомментированным.
+
+PASS LOCAL: httpserver полный `go test -mod=readonly -count=1 -json ./...`
+— 15 верхних PASS, 29 PASS с подтестами; RC app/cmd — 56 верхних/166 PASS;
+authority platformworkergrant — 10 верхних/24 PASS. Во всех выбранных unit
+0 SKIP/FAIL; полные `go build -mod=readonly ./...` трёх module — PASS LOCAL.
+16 unit анализатора, Go-checker, пять ignore-boundaries и diff-check —
+PASS LOCAL. Go1.26.6, GOENV=off/GOWORK=off. Context7 net/http Shutdown/
+ErrServerClosed и pinned local go doc Shutdown/WithoutCancel сверены.
+Точный опубликованный SHA и повтор команд фиксируются в PR.
+
+Detector: 6571 source, 222 generated/lock исключения, 1842 raw. Удалена
+одна прежняя 158-token группа d735d2f7, новых нет. Два отдельных точных
+решения сохраняют только service-owned startup wiring: разные protected
+client/proof registries и вызовы уже общего telemetry runtime с разными
+Config/metrics composition. Общий dispatcher скрыл бы nominal types и
+привязки полномочий, а не устранил бы реализацию. Для каждого зафиксированы
+два пути, fragment digest и count=1; никаких file/directory ignores.
+Теперь 580 точных решений и 1262 неразобранных; raw SHA-256
+`02c29b6853b5bbf083644c65465e51702b31fdb4582f1c736aec2681cc936703`,
+clone-set fingerprint
+`7771b8d6e3e7ef597399e53f0fa22556fe5dc250176b7a16c9a98d9b60f645c0`.
+Go-реестр 6749/21134, непокрыты 14385. Component/live/browser/deploy,
+реальные агенты и полный repository Go-docs-check — NOT RUN; прежний
+diagnostics FAIL не скрыт. Единый Draft PR и цель остаются незавершёнными.
 
 ## Сто восемьдесят третья волна — весь materialization lease keeper
 

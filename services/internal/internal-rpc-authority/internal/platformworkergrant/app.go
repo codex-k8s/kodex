@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	sharedhttpserver "github.com/codex-k8s/kodex/libs/go/httpserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/google/uuid"
@@ -89,7 +90,7 @@ func Run(lifecycle, shutdownBase context.Context) error {
 		return readCurrent(configuration, key, time.Now()) == nil
 	})
 	workers := serviceruntime.StartWorkers(lifecycle,
-		serveHTTP(server, configuration.ShutdownTimeout),
+		sharedhttpserver.ShutdownWorker(server.ListenAndServe, server.Shutdown, configuration.ShutdownTimeout),
 		rotationWorker(configuration, key, readiness, slog.Default()),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
@@ -307,27 +308,4 @@ func technicalServer(address string, readiness *serviceruntime.Readiness, grantR
 		writer.WriteHeader(http.StatusNoContent)
 	})
 	return &http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 3 * time.Second, WriteTimeout: 3 * time.Second, IdleTimeout: 15 * time.Second, MaxHeaderBytes: 8 << 10}
-}
-
-func serveHTTP(server *http.Server, shutdownTimeout time.Duration) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.ListenAndServe() }()
-		select {
-		case err := <-done:
-			if errors.Is(err, http.ErrServerClosed) {
-				return nil
-			}
-			return err
-		case <-ctx.Done():
-			shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
-			defer cancel()
-			err := server.Shutdown(shutdown)
-			serveErr := <-done
-			if !errors.Is(serveErr, http.ErrServerClosed) {
-				err = errors.Join(err, serveErr)
-			}
-			return err
-		}
-	}
 }

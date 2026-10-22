@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+// TestCallbackListenerSurvivesLifecycleUntilRuntimeReadback uses a loopback HTTP listener to verify callbacks remain usable after lifecycle cancellation.
+// Closing the synthetic runtime-done channel must then cancel and join the callback worker; no real runner or Kubernetes workload is involved.
+// TestCallbackListenerSurvivesLifecycleUntilRuntimeReadback на loopback HTTP listener проверяет доступность обратных вызовов после отмены жизненного цикла.
+// Закрытие синтетического канала завершения выполнения должно затем отменить работника обратных вызовов и дождаться его; настоящий исполнитель или нагрузка Kubernetes не используются.
 func TestCallbackListenerSurvivesLifecycleUntilRuntimeReadback(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

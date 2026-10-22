@@ -4,7 +4,7 @@ title: Технический HTTP server
 type: component
 status: approved
 owner: backend
-version: 1.3.0
+version: 1.4.0
 updated: 2026-10-22
 ---
 
@@ -19,7 +19,7 @@ updated: 2026-10-22
 метрик, предикат готовности и отдельно вызывает ограниченный `Shutdown`.
 
 Публичный API состоит из `New`, `StandardProcessConfig`, `ExactGETRoute`,
-`Listen`, блокирующего `Serve`, адаптера `Worker` и `Shutdown`.
+`Listen`, блокирующего `Serve`, адаптеров `Worker`/`ShutdownWorker` и `Shutdown`.
 `StandardProcessConfig` возвращает одинаковые лимиты для небольших gateway/job:
 2 с на заголовки, 5 с на чтение
 и запись, 30 с простоя, 32 КиБ заголовков и 128 соединений. Он не открывает
@@ -35,6 +35,24 @@ cancel/join принадлежат composition root. `Worker()` возвраща
 `Shutdown` в прежнем порядке. Буфер результата позволяет `Serve` вернуть
 ошибку и после завершения worker. Это не замена адаптеров, которые сами
 выполняют shutdown и join, например у планировщика автоматизаций.
+`ShutdownWorker(serve, shutdown, timeout)` предназначен именно для
+существующих self-shutdown workers: он принимает принадлежащие потребителю
+callbacks `http.Server.ListenAndServe` и `Shutdown`, ничего не запускает
+при создании и не меняет конфигурацию или маршруты сервера. При выполнении
+запускает serve, а при отмене создаёт отдельный shutdown context со значениями
+работника, но без его отмены/deadline, затем с переданным timeout вызывает
+shutdown и дожидается возврата serve. `http.ErrServerClosed`, включая
+обёрнутый, считается штатным; остальные serve/shutdown errors сохраняются,
+в ветке отмены объединяются. При раннем возврате serve shutdown не вызывается.
+Callbacks и положительный timeout проверяет владелец до создания;
+библиотека не подставляет defaults, не читает env, не назначает authority
+и не повторяет операции. Shutdown callback обязан соблюдать context;
+возврат serve не означает, что после timeout завершились все handlers или
+hijacked-соединения. Их отдельный жизненный цикл остаётся у владельца.
+Этот adapter не заменяет `Server.Worker()`: его cancel/shutdown/join
+контракт намеренно иной. Прежние локальные serveHTTP у двух потребителей
+удалены, совместимые обёртки не оставлены.
+
 Конфигурация закрыто ограничивает
 read-header/read/write/idle timeouts и размер headers; маршруты принимают
 только `GET`, ставят `no-store`/`nosniff` и не читают request body сверх 1 MiB.

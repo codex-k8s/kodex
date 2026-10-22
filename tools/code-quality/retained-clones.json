@@ -4,6 +4,22 @@
     {
       "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/app/app.go",
+      "secondPath": "services/internal/runtime-controller/internal/app/app.go",
+      "fragmentSHA256": "6324d9ab3e23f73e66f838010a2b8bfc8ce2ff3dcb96286f70560522dbd503e7",
+      "count": 1,
+      "reason": "Совпало окно явной сборки protected clients: общий controlplaneclient.Dial уже переиспользуется, но gateway задаёт собственные operation/proof/project registries и telemetry interceptor, controller — runtime/projection операции и иную workload identity. Следующие клиенты имеют разные nominal Config и RPC: sttclient против credentialprojection. Общий dispatcher скрыл бы exact SNI/CA/certificate/proof привязки и порядок закрытия ради коротких if/defer. Оставлено только это точное 142-token окно, не функции Run и не сервисы."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/app/app.go",
+      "secondPath": "services/internal/secret-broker/internal/app/app.go",
+      "fragmentSHA256": "db70f9d68ba7b3ed2a6dfbf3c160c0d631bd726f75d6117127e80bb739bcd5ab",
+      "count": 1,
+      "reason": "Совпало только начало двух composition roots: загрузка независимых nominal Config, собственный startup context и уже общие RuntimeConfigFromEnv/NewRuntime/Logger. Сама telemetry runtime не копируется; дальше secret-broker задаёт иной metrics subsystem и закрытый RPC methods registry, controller — свой registry и runtime workers. Универсальная callback-обёртка над несколькими проверками ошибок не устранила бы реализации, но скрыла бы принадлежность startup/shutdown и последующей сборки. Сохранено точное 114-token окно, не Run целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/app/app.go",
       "secondPath": "services/external/integration-gateway/internal/app/app.go",
       "fragmentSHA256": "1ce58f2a99a287c116a9b473955f5f2c68f64be0c0a3911def0ee0134e0056bc",
       "count": 1,
