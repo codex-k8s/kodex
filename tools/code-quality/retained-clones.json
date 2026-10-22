@@ -3888,6 +3888,14 @@
       "fragmentSHA256": "c42264eb7b07419e29e0d0def302e08c97dba0435e4e699e411c1063beed1b4b",
       "count": 1,
       "reason": "Нормализатор сопоставляет Create/AlreadyExists/Get оболочки ensureServiceAccount и ensureNetworkPolicy. Первый сверяет token automount, второй полную NetworkPolicy.Spec; общая проверка требуемых labels/annotations уже в managedMetadataMatches. Универсальная create-or-verify обёртка потребовала бы callbacks для разных nominal ресурсов и скрыла бы разные security invariants без устранения их проверок. Совпадение выявлено только после GoDoc/gofmt, исполняемый код не менялся. Сохранено лишь точное окно, не две функции целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/callback/provider_credential_refresh_test.go",
+      "secondPath": "services/jobs/agent-runner/internal/callback/client.go",
+      "fragmentSHA256": "ee3cc7e166d1fcaa73297c28365bb73e7b50919b6ed7570cfeaab1185e5c1861",
+      "count": 1,
+      "reason": "Сопоставлены production bindExecutionHeaders отдельного agent-runner и независимый test-only bindTestExecutionHeaders runtime-controller. Тест вручную формирует точные имена заголовков и затем по одному изменяет девять tenant/session/attempt/digest/method координат, проверяя чужие и устаревшие привязки; другие route tests используют тот же локальный эталон. Перенос обеих сторон в один formatter связал бы producer и проверочную оснастку общей ошибкой mapping, а импорт internal другого unit запрещён. Сохранён только точный fragment/path/count, не файлы, не production transport и не проверки authority."
     }
   ]
 }

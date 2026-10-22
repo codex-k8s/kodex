@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.205.0
+version: 1.206.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,52 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестая волна — тесты восстановления каталога и credential refresh
+
+Точный опубликованный SHA205 — `b91ba73663f98ab2640ec0f5bcfe79c62e9d16db`.
+Exact SE01qz:6580 sources,222 excluded,1837 raw,587 retained,1250 unresolved;
+Go7739/21151,missing13412;raw SHA256
+`c70060c38fe7a7328d5494817ad6ed676e94be820e8fb5d133136c0e55d9740d`;
+clone-set `5c9255a6d45d7de39d007ca68d34ef770c45db87d6cca1a18f792c397465ee03`.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP;полный RC build PASS.
+Remote head и PATCH/GET Draft PR205 подтверждены.
+
+Целиком прочитаны catalog_input_diagnostics,provider_credential_refresh и
+server_catalog_page_parameters tests;все28 declarations получили EN→RU.
+Описаны разные фазы authorization/operation/terminal activity,исправимый
+локальный ввод отдельно от foreign/revoked/stale owner state,проверки
+MCP/log privacy и EOF чтения. Safe activity публикует только допустимые
+page coordinates,не refs или hashes;default берётся из одного parser.
+Ошибки owner и terminal recording не становятся безопасным retry по тексту.
+
+Refresh fixture использует fake Kubernetes и неактивные строковые credentials,
+не живой кластер или аккаунт. Повтор маршрута доказывает одинаковые
+idempotency keys и metadata-only commit,не реальную durable exactly-once
+семантику:stub принимает оба запроса. Отдельные проверки сверяют ticket,
+revision digest,точные Secret bytes и readback новой ревизии.
+
+Одна прежняя176token группа получила новый raw fragment hash только из-за
+вставленных doc blocks на границе bindTestExecutionHeaders;executable
+полностью идентичен. После чтения обеих сторон добавлено exact решение:
+production emitter agent-runner и независимый эталон request headers в
+тестах runtime-controller не объединяются,чтобы общий formatter не
+скрыл ошибку mapping. Девять отдельных мутаций проверяют boundary.
+Исключены только точные пути/fragment/count,не файлы или весь test unit.
+
+Полная non-comment/gofmt сверка3 Go файлов с SHA205,scoped28/28,
+17 Node units,unit Go-checker,5 ignore-boundaries,gofmt/diff-check PASS LOCAL.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly PASS. Go1.26.6,GOENV/GOWORK off.
+Рабочий W8FzWH до добавления registry entry:6580 sources,222 excluded,
+1837 raw;Go7767/21151,missing13384;raw SHA256
+`d377724104a15d7572360b2827ddbdd2f53f7d9d9606dae5c81a1bc609cd70a6`;
+clone-set `8e1bbba12641385a74a135199f28f8dc5b40f312563ebcb240a287a90e02317c`.
+Повтор assessment этого отчёта с новым exact решением:588 retained,1249 unresolved.
+Это не снижение raw count;точный повтор scan после коммита будет в PR.
+Общий repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+общая цель не завершена,PR остаётся Draft.
 
 ## Двести пятая волна — основной каталог конфигурации помощника
 

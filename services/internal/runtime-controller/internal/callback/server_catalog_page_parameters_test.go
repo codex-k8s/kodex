@@ -20,6 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// catalogPageParametersFixture selects the workflow fixture only for WORKFLOW_CONFIGURATION and otherwise returns the agent fixture used by this closed test matrix.
+// catalogPageParametersFixture выбирает образец процесса только для WORKFLOW_CONFIGURATION, иначе возвращает образец сотрудника, используемый закрытой тестовой матрицей.
 func catalogPageParametersFixture(t *testing.T, kind string) (runtimecontract.RunnerInput, map[string]any, *controlplanev1.AssistantConfigurationCatalogResponse) {
 	t.Helper()
 	if kind == "WORKFLOW_CONFIGURATION" {
@@ -28,6 +30,10 @@ func catalogPageParametersFixture(t *testing.T, kind string) (runtimecontract.Ru
 	return assistantAgentConfigurationFixture(t)
 }
 
+// TestCatalogPageSafeParametersPublishValidatedRequestCoordinates checks both paged read kinds and assistant scopes expose only parsed offset/maximum integers plus kind, never source refs or hashes.
+// Default page size comes from the canonical parser rather than a second policy copy.
+// TestCatalogPageSafeParametersPublishValidatedRequestCoordinates проверяет, что оба вида постраничного чтения и обе области помощника раскрывают только разобранные целые смещение и предел, а также вид без исходных ссылок и хешей.
+// Размер страницы по умолчанию берётся из канонического анализатора, а не второй копии политики.
 func TestCatalogPageSafeParametersPublishValidatedRequestCoordinates(t *testing.T) {
 	for _, kind := range []string{"WORKFLOW_CONFIGURATION", "AGENT_CONFIGURATION"} {
 		for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeProject, runtimecontract.AssistantScopeSystem} {
@@ -81,6 +87,8 @@ func TestCatalogPageSafeParametersPublishValidatedRequestCoordinates(t *testing.
 	}
 }
 
+// TestCatalogPageSafeParametersInvalidInputKeepsKindOnly checks twenty-four malformed page, selector and trusted-context mutations cannot add numeric coordinates to safe activity parameters.
+// TestCatalogPageSafeParametersInvalidInputKeepsKindOnly проверяет, что двадцать четыре некорректных изменения страницы, селектора и доверенного контекста не добавляют числовые координаты в безопасные параметры активности.
 func TestCatalogPageSafeParametersInvalidInputKeepsKindOnly(t *testing.T) {
 	mutations := []struct {
 		name   string
@@ -140,6 +148,8 @@ func TestCatalogPageSafeParametersInvalidInputKeepsKindOnly(t *testing.T) {
 	}
 }
 
+// TestCatalogPageSafeParametersDoNotExpandOtherKinds checks non-page catalog kinds expose only a recognized kind and unknown kinds expose nothing, despite injected page/content fields.
+// TestCatalogPageSafeParametersDoNotExpandOtherKinds проверяет для непостраничных видов каталога только известный вид, а для неизвестных — пустой результат, несмотря на подставленные поля страницы и содержимого.
 func TestCatalogPageSafeParametersDoNotExpandOtherKinds(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeSystem)
 	for _, kind := range []string{"MODELS", "CURRENT_CONFIGURATION", "ROLE_ENVIRONMENTS", "UNKNOWN_PRIVATE_SENTINEL"} {
@@ -158,16 +168,24 @@ func TestCatalogPageSafeParametersDoNotExpandOtherKinds(t *testing.T) {
 	}
 }
 
+// catalogPageActivityClient captures cloned local activity requests while delegating catalog lookup to the embedded fixture client.
+// catalogPageActivityClient сохраняет копии локальных запросов активности, передавая поиск каталога вложенному тестовому клиенту.
 type catalogPageActivityClient struct {
 	*assistantDefinitionCatalogClient
 	activities []*controlplanev1.RecordRunToolCallRequest
 }
 
+// RecordRunToolCall stores a protobuf clone and returns a synthetic event receipt without enforcing real owner authorization or persistence.
+// RecordRunToolCall сохраняет protobuf-копию и возвращает синтетическую квитанцию события без настоящей авторизации владельца или устойчивой записи.
 func (client *catalogPageActivityClient) RecordRunToolCall(_ context.Context, request *controlplanev1.RecordRunToolCallRequest, _ ...grpc.CallOption) (*controlplanev1.RecordRunToolCallResponse, error) {
 	client.activities = append(client.activities, proto.Clone(request).(*controlplanev1.RecordRunToolCallRequest))
 	return &controlplanev1.RecordRunToolCallResponse{Event: &controlplanev1.RunEvent{Ref: "event_synthetic123"}}, nil
 }
 
+// TestCatalogPageSafeParametersTraverseNativeActivityWithoutChangingFailure checks valid/invalid workflow and agent pages traverse local MCP with two exact revisioned activity records.
+// Only valid input gains numeric page coordinates; invalid input keeps existing failed state and bounded corrective guidance.
+// TestCatalogPageSafeParametersTraverseNativeActivityWithoutChangingFailure проверяет прохождение допустимых и некорректных страниц процесса и сотрудника через локальный MCP с двумя точными версионированными записями активности.
+// Только допустимый ввод получает числовые координаты страницы; некорректный сохраняет прежнее неуспешное состояние и ограниченную подсказку исправления.
 func TestCatalogPageSafeParametersTraverseNativeActivityWithoutChangingFailure(t *testing.T) {
 	for _, kind := range []string{"WORKFLOW_CONFIGURATION", "AGENT_CONFIGURATION"} {
 		for _, invalid := range []bool{false, true} {
