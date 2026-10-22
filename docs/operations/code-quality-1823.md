@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.279.0
+version: 1.280.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,56 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восьмидесятая волна — основной сервис control-plane
+
+Опубликованный SHA279 — `efee98a7118d998b4139884598af2c155428ff21`.
+Точный X4cGv4:6609 sources,222 excluded,1816 raw/666 retained/
+1150 unresolved; Go12133/21244,missing9111. Raw SHA256:
+`f83a7442b7087c9c886d6a6575abbfad50b28bbe91d6563729240237e4ac2c9d`;
+clone-set9c33a2ea… . Exact CP106/302 и CP build PASS,3 прежних SKIP;
+2 targeted component entry points0 PASS/2 SKIP без disposable DSN,
+inverse AST3/docs5/5/tooling/scan PASS. Push/readback и Draft PR
+PATCH/GET279 подтверждены.
+
+Весь service/platform/service.go1505 lines прочитан;138/138 declarations
+описаны EN→RU по фактическим ветвям, в том числе private helpers/options,
+closed command membership и digest fallback. Raw code, fields, signatures,
+order и errors не менялись. AST1 без comments/positions идентичен SHA279.
+Комментарии не приписывают principal resolution полную resource authority:
+операционные owner checks остаются за точными repository paths.
+
+Предметно описаны rune versus byte query bounds, trim/no-trim identity,
+отдельные cursor/total/continuation shapes, static/synthetic/context prompt
+validation и optional includeFull permission/freshness checks без заявления
+output redaction здесь. Upload hashing/length/seek/inspect/rewind и avatar
+CLEAN/AVAILABLE/MIME restrictions разделены; InspectReader не объявлен
+ClamAV или semantic-model scan. JSON digest helper не назван JCS:при marshal
+error сохраняется прежний type-only unsupported marker, а не уникальный
+content intent. Closed command membership не заменяет payload/authority/
+lifecycle validation. Worker/scheduler/archive permissions и Forbidden versus
+Invalid failures не обобщены в универсальную command operation.
+
+Подтверждены полезные следующие выносы/решения по всему файлу:повтор exact
+upload length/digest algorithm, уже общий principal resolver, typed query
+delegation windows и отдельные closed command/permission lists. Они ещё
+не исключены общей записью на файл и не объявлены устранёнными этой волной.
+Registry562 entries/666 occurrences неизменен; generated не менялся.
+
+Рабочий3BemAO:6609/222,1821 raw/666 retained/1155 unresolved;
+Go12271/21244,missing8973. Raw SHA256:
+`c011f6a39d6c998abbd4b57dcd17a791cacb72d3f35f7b841ec88e25a661cf9e`;
+clone-set:
+`95e2ca1a56a2e138caf506a26562173731c95986b1b9b74329ec83d5c3b2797c`.
+Рост raw на5 после comment/gofmt отражает detector line-window/min-lines
+границы, не добавление5 алгоритмов:AST исполняемого файла идентичен.
+Новые unresolved окна остаются в общей работе, а не скрываются ignore.
+Docs138/138, AST1,17 Node/Go checker units,5 ignore boundaries и
+gofmt/diff-check PASS LOCAL. Весь CP domain/service/platform22 верхних/
+43 всех units и полный CP build -p=2 PASS LOCAL,0 FAIL/SKIP.
+После коммита exact build/unit/scan и PR readback повторяются. Общая
+задача не завершена; прежние diagnostics/STT FAIL остаются, full baseline/
+component/browser/live/deploy NOT RUN по scoped границам.
 
 ## Двести семьдесят девятая волна — подготовка сценариев resume/failed rollout
 
