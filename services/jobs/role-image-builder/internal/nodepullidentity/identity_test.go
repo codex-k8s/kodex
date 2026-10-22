@@ -2,6 +2,8 @@ package nodepullidentity
 
 import "testing"
 
+// TestCommonNameMatchesNodePullIdentity pins the exact node-hash/generation encoding and validates that generated fixture locally.
+// TestCommonNameMatchesNodePullIdentity закрепляет точное кодирование хеша узла и поколения и локально проверяет полученную фикстуру.
 func TestCommonNameMatchesNodePullIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -14,6 +16,10 @@ func TestCommonNameMatchesNodePullIdentity(t *testing.T) {
 	}
 }
 
+// TestCommonNameValidationRejectsExpandedIdentity rejects wrong formats, generations, hash width/case, suffix and zero generation.
+// These syntax cases do not exercise certificate validation or Kubernetes node identity lookup.
+// TestCommonNameValidationRejectsExpandedIdentity отклоняет неверные формат, поколение, длину и регистр хеша, суффикс и нулевое поколение.
+// Синтаксические случаи не проверяют сертификат или поиск идентичности узла Kubernetes.
 func TestCommonNameValidationRejectsExpandedIdentity(t *testing.T) {
 	t.Parallel()
 

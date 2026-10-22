@@ -16,6 +16,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestFailedPredecessorRecoveryRequiresFreshExactJob compares inventory to fresh fake scan/sign Jobs before creating recovery admit.
+// Foreign runs, replaced UIDs, wrong phases and nonfailed state must fail without creation; exact recovery replay remains idempotent.
+// TestFailedPredecessorRecoveryRequiresFreshExactJob сравнивает список со свежими искусственными scan/sign Jobs до создания восстанавливающего admit.
+// Чужой запуск, заменённый UID, неверный этап и отсутствие ошибки должны дать отказ без создания; точный повтор восстановления остаётся идемпотентным.
 func TestFailedPredecessorRecoveryRequiresFreshExactJob(t *testing.T) {
 	for _, phase := range []string{"scan", "sign"} {
 		for _, scenario := range []string{"valid", "foreign_run", "replaced_uid", "wrong_phase", "not_failed"} {
@@ -70,6 +74,10 @@ func TestFailedPredecessorRecoveryRequiresFreshExactJob(t *testing.T) {
 	}
 }
 
+// TestFailedPredecessorRecoveryRenderedCEL renders local scan/admit fixtures, checks scan resource budgets and evaluates recovery CEL.
+// Unknown failure codes, foreign phase labels and missing predecessor UID must be rejected without applying any manifest.
+// TestFailedPredecessorRecoveryRenderedCEL формирует локальные scan/admit фикстуры, проверяет ресурсы scan и вычисляет CEL восстановления.
+// Неизвестные коды ошибки, чужие метки этапа и отсутствие UID предшественника должны отклоняться без применения манифестов.
 func TestFailedPredecessorRecoveryRenderedCEL(t *testing.T) {
 	policies, err := readAdmissionPolicies()
 	if err != nil {
@@ -129,6 +137,10 @@ func TestFailedPredecessorRecoveryRenderedCEL(t *testing.T) {
 	}
 }
 
+// TestTechnicalFailureDoesNotFabricateRejectedEvidence runs extracted production failure functions with a local shell and synthetic bridge.
+// Across phases and RPC availability it checks unchanged input evidence, no fabricated approval files and receipt markers only after actual stub success.
+// TestTechnicalFailureDoesNotFabricateRejectedEvidence исполняет извлечённые функции ошибок production-скрипта в локальном shell с искусственным bridge.
+// Для этапов и доступности RPC проверяются неизменность входных доказательств, отсутствие поддельных файлов одобрения и маркеры квитанций только после успеха заглушки.
 func TestTechnicalFailureDoesNotFabricateRejectedEvidence(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join(repositoryRoot(), "deploy/k8s/base/image-supply-chain/image-admission.sh"))
 	if err != nil {
@@ -215,6 +227,10 @@ func TestTechnicalFailureDoesNotFabricateRejectedEvidence(t *testing.T) {
 	}
 }
 
+// TestFailedPredecessorTerminalCallbackIgnoresIncompleteEvidence runs the real admit shell entrypoint with only policy preflight and RPC stubbed.
+// Each closed predecessor code first fails on callback outage, then recovers without modifying incomplete scan data or creating signed admission evidence.
+// TestFailedPredecessorTerminalCallbackIgnoresIncompleteEvidence исполняет настоящий shell-вход admit с подменой только предварительной политики и RPC.
+// Каждый закрытый код предшественника сначала даёт ошибку недоступного callback, затем восстанавливается без изменения неполного scan или создания подписанного допуска.
 func TestFailedPredecessorTerminalCallbackIgnoresIncompleteEvidence(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join(repositoryRoot(), "deploy/k8s/base/image-supply-chain/image-admission.sh"))
 	if err != nil {

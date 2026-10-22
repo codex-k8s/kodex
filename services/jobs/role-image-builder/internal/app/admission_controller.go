@@ -14,8 +14,16 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/admissioncontroller"
 )
 
+// admissionControllerServiceName fixes the controller command's telemetry identity independently of the builder process.
+// admissionControllerServiceName фиксирует идентичность telemetry команды контроллера независимо от процесса сборщика.
 const admissionControllerServiceName = "image-admission-controller"
 
+// RunAdmissionController wires telemetry, profile-selected availability, the local renderer, in-cluster client and pinned leadership.
+// After infrastructure preflight it starts technical HTTP and workers, then stops them and joins bounded cleanup errors on exit.
+// Existing availability-profile selection is preserved; this composition path does not itself grant admission or start an agent session.
+// RunAdmissionController связывает telemetry, доступность по выбранному профилю, локальный renderer, внутрикластерный клиент и закреплённое лидерство.
+// После проверки инфраструктуры запускаются технический HTTP и workers, а при выходе они останавливаются с объединением ограниченных ошибок очистки.
+// Существующий выбор профиля доступности сохраняется; корень композиции сам не выдаёт допуск и не запускает сессию агента.
 func RunAdmissionController(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadAdmissionControllerConfig()
 	if err != nil {
@@ -110,9 +118,17 @@ func RunAdmissionController(lifecycle, shutdownBase context.Context, buildVersio
 	}
 }
 
+// monitorAdmissionControllerReadiness periodically probes only local controller infrastructure and publishes readiness transitions.
+// Checks use per-request timeouts; failures close readiness without stopping the loop, and cancellation ends the next wait.
+// monitorAdmissionControllerReadiness периодически проверяет только локальную инфраструктуру контроллера и публикует переходы готовности.
+// Проверки используют отдельные таймауты; ошибка закрывает готовность без остановки цикла, а отмена завершает очередное ожидание.
 func monitorAdmissionControllerReadiness(controller *admissioncontroller.Controller, readiness *serviceruntime.Readiness,
 	metrics *sharedobservability.Metrics, logger interface {
+		// InfoContext records restored readiness without taking ownership of the caller's logger.
+		// InfoContext записывает восстановление готовности, не забирая владение журналом вызывающего.
 		InfoContext(context.Context, string, ...any)
+		// WarnContext records a closed local-infrastructure failure class without logging private API error details.
+		// WarnContext записывает закрытый класс сбоя локальной инфраструктуры без внутренних подробностей ошибки API.
 		WarnContext(context.Context, string, ...any)
 	}, config admissionControllerConfig) serviceruntime.Worker {
 	return func(ctx context.Context) error {

@@ -37,11 +37,7 @@ func TestControllerMaterializesSequentialAdmissionAndPromotion(t *testing.T) {
 	client := fake.NewClientset(testPolicy())
 	controller := newTestController(t, client, testRenderer{}, testConfig())
 	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
-	controller.now = func() time.Time { return now }
-	ctx := context.Background()
-	if err := controller.Reconcile(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ctx := reconcileTestAt(t, controller, now)
 	workspaces, _ := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).List(ctx, metav1.ListOptions{})
 	if len(workspaces.Items) != 1 {
 		t.Fatalf("expected one admission workspace, got %d", len(workspaces.Items))
@@ -180,11 +176,7 @@ func TestControllerDropsFailedWorkspaceAndBacksOff(t *testing.T) {
 	client := fake.NewClientset(testPolicy())
 	controller := newTestController(t, client, testRenderer{}, testConfig())
 	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
-	controller.now = func() time.Time { return now }
-	ctx := context.Background()
-	if err := controller.Reconcile(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ctx := reconcileTestAt(t, controller, now)
 	workspaces, _ := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).List(ctx, metav1.ListOptions{})
 	id := workspaces.Items[0].Labels[idLabel]
 	job, _ := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, "mc-admit-"+id+"-claim", metav1.GetOptions{})
@@ -285,11 +277,7 @@ func TestControllerRejectsConcurrentPromotionJobs(t *testing.T) {
 	client := fake.NewClientset(testPolicy())
 	controller := newTestController(t, client, testRenderer{}, testConfig())
 	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
-	controller.now = func() time.Time { return now }
-	ctx := context.Background()
-	if err := controller.Reconcile(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ctx := reconcileTestAt(t, controller, now)
 	secondRunID := makeRunID(now.Add(time.Second), testOrchestrationRevision)
 	second, err := (testRenderer{}).Render(ctx, testPolicy(), "production", secondRunID, "promote")
 	if err != nil {
@@ -316,11 +304,7 @@ func TestControllerDoesNotMaterializePhaseForDeletingWorkspace(t *testing.T) {
 	client := fake.NewClientset(testPolicy())
 	controller := newTestController(t, client, testRenderer{}, testConfig())
 	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
-	controller.now = func() time.Time { return now }
-	ctx := context.Background()
-	if err := controller.Reconcile(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ctx := reconcileTestAt(t, controller, now)
 	workspaces, err := client.CoreV1().PersistentVolumeClaims(testConfig().Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil || len(workspaces.Items) != 1 {
 		t.Fatalf("read admission workspace: count=%d err=%v", len(workspaces.Items), err)
@@ -637,6 +621,58 @@ func newTestController(t *testing.T, client *fake.Clientset, renderer Renderer, 
 		t.Fatal(err)
 	}
 	return controller
+}
+
+// reconcileTestAt fixes a caller-selected instant and performs exactly one explicit successful fake reconciliation.
+// It returns the same background test context used by the original callers; tests that advance captured clocks must not use this helper.
+// reconcileTestAt закрепляет выбранный момент и выполняет ровно одно явное успешное искусственное согласование.
+// Возвращается прежний фоновый тестовый контекст; тесты с продвижением захваченных часов не должны использовать этот помощник.
+func reconcileTestAt(t *testing.T, controller *Controller, now time.Time) context.Context {
+	t.Helper()
+	controller.now = func() time.Time { return now }
+	ctx := context.Background()
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	return ctx
+}
+
+// TestReconcileTestAtPreservesExplicitClockAndSingleCycle checks clock/context identity and one availability read per idle work kind.
+// Only the expected synthetic claim/promotion pair and one workspace may be created; it neither starts workers nor performs another cycle.
+// TestReconcileTestAtPreservesExplicitClockAndSingleCycle проверяет часы, идентичность контекста и одно чтение доступности каждого вида новой работы.
+// Допускаются только ожидаемые искусственные claim и promotion и один рабочий том; workers и дополнительный цикл не запускаются.
+func TestReconcileTestAtPreservesExplicitClockAndSingleCycle(t *testing.T) {
+	client := fake.NewClientset(testPolicy())
+	config := testConfig()
+	calls := 0
+	config.WorkSource = workAvailabilityFunc(func(ctx context.Context) (WorkAvailability, error) {
+		calls++
+		if ctx != context.Background() {
+			t.Fatal("reconcile context changed")
+		}
+		return WorkAvailability{AdmissionAvailable: true, PromotionAvailable: true}, nil
+	})
+	controller := newTestController(t, client, testRenderer{}, config)
+	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
+	ctx := reconcileTestAt(t, controller, now)
+	if ctx != context.Background() || !controller.now().Equal(now) || calls != 2 {
+		t.Fatal("fixed clock helper changed context, time or reconcile count")
+	}
+	jobs, err := client.BatchV1().Jobs(config.Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil || len(jobs.Items) != 2 {
+		t.Fatal("fixed clock helper created unexpected jobs")
+	}
+	seen := map[string]bool{}
+	for _, job := range jobs.Items {
+		seen[job.Labels[phaseLabel]] = true
+		if job.Annotations[runIDAnnotation] != makeRunID(now, testOrchestrationRevision) {
+			t.Fatal("fixed clock helper changed run binding")
+		}
+	}
+	workspaces, err := client.CoreV1().PersistentVolumeClaims(config.Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil || len(workspaces.Items) != 1 || !seen["claim"] || !seen["promote"] {
+		t.Fatal("fixed clock helper changed admission/promotion materialization")
+	}
 }
 
 // TestNewTestControllerPreservesCallerInputs checks pointer/config identity and

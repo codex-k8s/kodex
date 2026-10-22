@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.167.0
+version: 1.168.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,77 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят восьмая волна — завершение role-image-builder
+
+На базе опубликованного SHA `746d2f46e754bb509c9382ee2bf6802ccb401f45`
+четыре одинаковых старта controller tests вынесены в reconcileTestAt:
+caller-selected fixed clock, прежний context.Background, ровно один Reconcile
+и прежний fatal при ошибке. Assertions жизненного цикла, список ресурсов,
+удаление, backoff, второй promotion и deleting workspace остаются у сценариев.
+Helper используется только там, где outer now впоследствии не меняется;
+тесты с продвигающимися захваченными часами не переписаны.
+
+Новый unit проверяет точные часы/context, два чтения availability (по одному
+на admission/promotion), только два ожидаемых Jobs, один PVC и точный run ID.
+Он не запускает workers или следующий цикл. Механическое разворачивание
+четырёх call sites и удаление новых helper/unit вернуло прежний non-comment
+controller_test.go после gofmt. Восемнадцать остальных source/test файлов
+после удаления comments точно равны предыдущему SHA. Production behavior,
+policy, команды, API, authority, порядок отказов и applied migrations не менялись.
+
+Документированы 126 прежних и два новых объявления. Теперь все собственные
+66 Go-файлов role-image-builder имеют EN→RU комментарии: 569/569,
+включая все 198 admissioncontroller declarations, app/config/tests,
+node-pull identity, metrics, runner и локальный buildResult. Это подтверждено
+не только глобальным AST inventory: отдельный запуск того же go-docs -check
+на полном module slice из общего source inventory завершился PASS LOCAL
+с missing=0. Generated inventory не расширялся и source-файлы не скрывались.
+
+Комментарии явно различают selected-field resource checks и полный admission,
+UID deletion request и асинхронный garbage collection, local backoff и durable
+PVC recovery, plain proof digest и owner decision. Reconcile задаёт List Limit,
+но не читает continuation; adoption не сравнивает каждый Pod/PVC field.
+JobFailed counter fallback не назван строгим terminal-condition proof.
+Существующие fixed-name policy и profile selection сохранены без добавления
+новых compatibility paths. Node common-name syntax не названа доверием к
+сертификату или проверкой существования узла. Runner renew начинается после
+Prepare, общий deadline остаётся у caller; shutdown timeout не выдаётся за
+доказанный join всех workers. Runtime diagnostics и Prometheus HELP остались
+английскими с прежними байтами.
+
+Через Context7 /kubernetes/client-go сверены ListOptions/Continue и deletion
+preconditions; локальные go doc закреплённых Kubernetes v0.36.3 подтвердили
+UID/RV preconditions и поведение Limit. Через /caarlos0/env сверены Parse,
+struct/env overlay, duration и time.Time; библиотека и env policy не менялись.
+Готовность проверялась только synthetic unit helpers, не настоящим startup.
+
+Полный `go test -count=1 -json ./...` role-image-builder и `go build ./...` —
+PASS LOCAL: 129 верхних тестов, 340 PASS с подтестами, 0 SKIP/FAIL.
+До изменений admissioncontroller и выбранные app/node-pull packages также
+PASS; после первых правок controller отдельно прошёл 43 верхних/139 PASS.
+У runner и business observability нет test files: они скомпилированы,
+но самостоятельное unit-покрытие этих пакетов не заявляется.
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, gofmt и
+diff-check — PASS LOCAL. Go использует
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Настоящие BuildKit/registry,
+Kubernetes, PostgreSQL, browser/deploy/live и реальные агенты — NOT RUN.
+
+Detector: 6558 source-файлов, 222 исключения, 1853 raw-группы,
+569 точных решений и 1284 неразобранные; raw SHA-256
+`c5a07c3d63098b4dd2b73113b24dc5ea733ea2a643f516711e2c68bdaae5ab0f`,
+полный отпечаток `432f28aec0581727ce562d6627235bb7e049a6834e9e6b96a1b4b611870edbf7`.
+Multiset format/path/fragment/count подтвердил удаление ровно трёх прежних
+controller_test групп 41336d52/5b2e786f/67b219ef без новых групп и исключений.
+Полный отпечаток учитывает также координаты и классификацию: помимо сдвигов
+после comments, jscpd выбрал другую прежнюю пару install.sh того же fragment
+9ed47d64 и сменил exact/renamed. Install.sh не менялся; это не новый вынос
+или устранённая группа. Реестр исключений продолжает проверять все 569 решений.
+
+Общий Go-реестр — 5706/21106, непокрыты 15400. Полный repository go-docs-check
+остаётся NOT RUN при известном неполном покрытии, прежний diagnostics FAIL
+остаётся открытым. Точный scan/module-check/build/unit нового SHA публикуется
+в текущем PR; завершение одного модуля не является завершением всей цели.
 
 ## Сто шестьдесят седьмая волна — выбор лидера контроллера
 

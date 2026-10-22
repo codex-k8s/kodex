@@ -1,4 +1,5 @@
-// Package runner реализует один bounded claim/build/complete цикл.
+// Package runner coordinates one context-controlled claim/materialize/build/complete cycle with the authoritative owner client.
+// Пакет runner координирует один управляемый контекстом цикл claim, материализации, сборки и завершения с авторитетным клиентом владельца.
 package runner
 
 import (
@@ -13,8 +14,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// Config sets the lease-renew ticker interval while the asynchronous build is active; preparation runs before that ticker starts.
+// Config задаёт интервал продления аренды во время асинхронной сборки; подготовка выполняется до запуска этого ticker.
 type Config struct{ RenewInterval time.Duration }
 
+// Runner binds the owner RPC client, local build executor and business counters without owning their process-level shutdown.
+// Runner связывает owner RPC-клиент, локальный исполнитель сборки и бизнес-счётчики, не владея их остановкой на уровне процесса.
 type Runner struct {
 	client   *controlplane.Client
 	executor *build.Executor
@@ -22,6 +27,8 @@ type Runner struct {
 	config   Config
 }
 
+// New requires all three runtime dependencies and a renew interval from five seconds through one minute, without claiming work.
+// New требует все три зависимости среды и интервал продления от пяти секунд до минуты, не захватывая работу.
 func New(client *controlplane.Client, executor *build.Executor, metrics *observability.Metrics, config Config) (*Runner, error) {
 	if client == nil || executor == nil || metrics == nil || config.RenewInterval < 5*time.Second || config.RenewInterval > time.Minute {
 		return nil, errors.New("role image builder runner configuration is invalid")
@@ -29,6 +36,14 @@ func New(client *controlplane.Client, executor *build.Executor, metrics *observa
 	return &Runner{client: client, executor: executor, metrics: metrics, config: config}, nil
 }
 
+// Cycle claims one candidate, materializes pinned inputs and multiplexes build progress, lease renewals and completion.
+// Cancellation or progress/renew failure cancels and joins the build before workspace cleanup; cancellation also attempts a bounded owner failure RPC.
+// Build/materialization errors report closed diagnostics, while successful evidence still requires owner Complete; no image admission is granted here.
+// The caller owns the overall deadline; the renewal ticker begins only after synchronous preparation has succeeded.
+// Cycle захватывает одного кандидата, материализует закреплённые входы и совмещает прогресс сборки, продление аренды и завершение.
+// Отмена или ошибка прогресса либо продления отменяет и ожидает сборку до очистки рабочего тома; отмена также пытается сообщить ограниченный по времени owner failure RPC.
+// Ошибки сборки и материализации передают закрытую диагностику, а успешные доказательства ещё требуют owner Complete; допуск образа здесь не выдаётся.
+// Общий срок задаёт вызывающий; ticker продления начинается только после успешной синхронной подготовки.
 func (runner *Runner) Cycle(ctx context.Context) error {
 	claim, err := runner.client.Claim(ctx, uuid.NewString())
 	if errors.Is(err, controlplane.ErrNoWork) {
@@ -65,6 +80,8 @@ func (runner *Runner) Cycle(ctx context.Context) error {
 	runner.metrics.Observe("context", "success")
 	buildContext, cancelBuild := context.WithCancel(ctx)
 	defer cancelBuild()
+	// buildResult transfers the executor's final evidence/error through one buffered completion message to the coordinating cycle.
+	// buildResult передаёт итоговые доказательства и ошибку исполнителя одним буферизованным сообщением завершения координирующему циклу.
 	type buildResult struct {
 		evidence controlplane.BuildEvidence
 		err      error
