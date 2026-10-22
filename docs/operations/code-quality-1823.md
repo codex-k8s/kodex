@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.225.0
+version: 1.226.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,54 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать шестая волна — parser tests и границы доказательств
+
+Опубликованный SHA225 — `4d76747af2b24aafc8f51c275fb2fba203d244af`.
+Точный отчёт 0lTybj: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 8845/21177, missing 12332. Raw SHA256:
+`d6b0decb53e09faf5b75f99843a2a416fb47cc6a38e728d6b298c6e4ad50b45a`.
+Clone-set:
+`d380f057dd437b7c0bd92de75d08cf3c9a83917d0101a47313400a72e3c7d934`.
+Push/readback и PATCH/GET PR225 подтверждены. На SHA225 parser unit
+59 верхних/185 всех PASS, 0 FAIL/SKIP; полная сборка runner PASS.
+
+Полностью прочитаны parser_test.go (958 строк), parser_response_usage_test.go
+(273) и parser_usage_compaction_test.go (246). Все 71 объявление EN→RU;
+отдельно описаны шесть локальных констант private/zeroCounters. Вместе с
+предыдущей волной parser production и эти три файла имеют 188/188
+покрытых объявлений. Исполняемые AST всех трёх файлов идентичны SHA225,
+игнорируя только comments/token.Pos. Проверки и условия тестов не менялись.
+
+Комментарии различают display metadata и measured receipts, UNKNOWN и
+явный numeric zero, terminal count и успешный lifecycle, exact replay и
+изменённый receipt, cache-write default только при отсутствии. Описаны
+closed reasons, arithmetic/overflow, сохранение предыдущих измерений,
+границы metadata, tuple isolation, compaction без выдуманного native tool
+и отсутствие сырых sentinels в safe projection. Поиск named schema не
+объявлен semantic completeness; membership approval method не является
+grant или owner decision. Synthetic MCP inventory не доказывает работу
+живого сервера, лексический workspace scope не является файловой
+авторизацией, а parsed JSON не доказывает живую CLI compatibility.
+
+Все те же 59 Test-функций трёх файлов выбраны точным regexp из предыдущей
+волны: 59 верхних/185 всех PASS, 0 FAIL/SKIP; полная сборка runner PASS.
+Команды, Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4 и timeout120s прежние.
+17 Node units, unit Go checker, полнота scope 71/71, AST3, пять addressed
+ignore boundaries, gofmt/diff-check PASS LOCAL. Новых API, библиотек,
+SDK, выносов и dependencies нет; Context7 encoding/json проверен в волне225.
+
+Рабочий hxkVvx: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 8916/21177, missing 12261. Raw SHA256:
+`5213944c625a0d6e5f4a844c2a1d54d29b007f0341156a72d09c450d9a4c7006`.
+Clone-set прежний:
+`d380f057dd437b7c0bd92de75d08cf3c9a83917d0101a47313400a72e3c7d934`.
+В этих файлах нет detector groups; multiset пар/fragment/count неизменен.
+Новые искусственные выносы или исключения не нужны. Точное post-commit
+измерение и повторные unit/build публикуются в том же Draft PR.
+Полные runner/codex/repo unit и общий Go-docs check ещё не завершены.
+Исторические FAIL/SKIP/NOT RUN сохранены; live/browser/deploy/ИИ/STT/
+почта NOT RUN. Общая задача активна; merge/ready не выполняются.
 
 ## Двести двадцать пятая волна — полный JSONL parser runner
 

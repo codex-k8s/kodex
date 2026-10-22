@@ -10,8 +10,16 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// codex160UsageBreakdownFixture supplies deterministic numeric counters without optional cache-write;
+// it represents synthetic pinned-schema input, not captured usage from a live account.
+// codex160UsageBreakdownFixture задаёт числовые counters без необязательного cache-write;
+// это синтетические данные закреплённой схемы, не расход живого аккаунта.
 const codex160UsageBreakdownFixture = `{"totalTokens":100,"inputTokens":80,"cachedInputTokens":20,"outputTokens":20,"reasoningOutputTokens":5}`
 
+// TestTokenUsageClosedFailureReasons covers structural, presence, type, range and last/total errors,
+// requiring a zero result, fixed error text and the same closed reason through notification wrapping.
+// TestTokenUsageClosedFailureReasons охватывает ошибки структуры, наличия, типа, пределов и last/total,
+// требуя нулевой результат, фиксированный error text и сохранение закрытой причины при обёртывании.
 func TestTokenUsageClosedFailureReasons(t *testing.T) {
 	envelope := func(total, last string) string { return `{"total":` + total + `,"last":` + last + `}` }
 	changed := func(field, value string) string {
@@ -74,6 +82,10 @@ func TestTokenUsageClosedFailureReasons(t *testing.T) {
 	}
 }
 
+// TestCodex160UsageCacheWriteDefaultsOnlyWhenMissing verifies missing, explicit zero and positive
+// optional cache-write counters while preserving the remaining measured fields and context window.
+// TestCodex160UsageCacheWriteDefaultsOnlyWhenMissing проверяет отсутствие, явный ноль и положительный
+// optional cache-write, сохраняя остальные измеряемые поля и размер контекста.
 func TestCodex160UsageCacheWriteDefaultsOnlyWhenMissing(t *testing.T) {
 	for _, test := range []struct {
 		name, extra string
@@ -94,6 +106,10 @@ func TestCodex160UsageCacheWriteDefaultsOnlyWhenMissing(t *testing.T) {
 	}
 }
 
+// TestCodex160UsageCacheWriteInvalidPresentValuesFailClosed rejects null, wrong types, fractional,
+// overflowing or out-of-range cache-write values, duplicate keys and an unknown accounting field.
+// TestCodex160UsageCacheWriteInvalidPresentValuesFailClosed отвергает null, неверный тип, дробные,
+// переполненные и выходящие за пределы cache-write, duplicate keys и неизвестное поле учёта.
 func TestCodex160UsageCacheWriteInvalidPresentValuesFailClosed(t *testing.T) {
 	for _, value := range []string{`null`, `-1`, `1.5`, `9223372036854775808`, `"0"`, `true`, `[]`, `{}`, `81`} {
 		t.Run(value, func(t *testing.T) {
@@ -111,6 +127,10 @@ func TestCodex160UsageCacheWriteInvalidPresentValuesFailClosed(t *testing.T) {
 	}
 }
 
+// TestCodex160UsageOtherRequiredFieldsAndInvariantsRemainClosed rejects each missing required
+// counter and representative arithmetic, cache, reasoning and negative-value violations without cache-write.
+// TestCodex160UsageOtherRequiredFieldsAndInvariantsRemainClosed отвергает отсутствие каждого
+// обязательного counter и нарушения арифметики, cache, reasoning и знака без optional cache-write.
 func TestCodex160UsageOtherRequiredFieldsAndInvariantsRemainClosed(t *testing.T) {
 	for _, field := range []string{"totalTokens", "inputTokens", "cachedInputTokens", "outputTokens", "reasoningOutputTokens"} {
 		t.Run(field, func(t *testing.T) {
@@ -136,7 +156,13 @@ func TestCodex160UsageOtherRequiredFieldsAndInvariantsRemainClosed(t *testing.T)
 	}
 }
 
+// TestCodex160UsageEveryPresentCounterRejectsNull substitutes null into each explicit zero counter,
+// including optional cache-write, to prevent decoding it silently as a confirmed numeric zero.
+// TestCodex160UsageEveryPresentCounterRejectsNull подставляет null вместо каждого явного нуля,
+// включая optional cache-write, запрещая молча считать его подтверждённым числовым нулём.
 func TestCodex160UsageEveryPresentCounterRejectsNull(t *testing.T) {
+	// zeroCounters keeps every known counter explicit so null cannot be confused with omission.
+	// zeroCounters задаёт все известные counters явно, отделяя null от отсутствия поля.
 	const zeroCounters = `{"totalTokens":0,"inputTokens":0,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0}`
 	for _, field := range []string{"totalTokens", "inputTokens", "cachedInputTokens", "cacheWriteInputTokens", "outputTokens", "reasoningOutputTokens"} {
 		t.Run(field, func(t *testing.T) {
@@ -148,6 +174,10 @@ func TestCodex160UsageEveryPresentCounterRejectsNull(t *testing.T) {
 	}
 }
 
+// TestCodex160UsageOptionalCacheWriteInTotalAndLast exercises independent omission/defaulting in
+// display total/last and rejects a last cache-write value larger than total's default zero.
+// TestCodex160UsageOptionalCacheWriteInTotalAndLast проверяет независимое отсутствие/default в
+// display total/last и отвергает last cache-write выше нулевого total по умолчанию.
 func TestCodex160UsageOptionalCacheWriteInTotalAndLast(t *testing.T) {
 	withWrite := strings.TrimSuffix(codex160UsageBreakdownFixture, `}`) + `,"cacheWriteInputTokens":10}`
 	withZero := strings.TrimSuffix(codex160UsageBreakdownFixture, `}`) + `,"cacheWriteInputTokens":0}`
@@ -172,6 +202,10 @@ func TestCodex160UsageOptionalCacheWriteInTotalAndLast(t *testing.T) {
 	}
 }
 
+// TestCodex160CompactionAndOptionalUsageReachOrdinaryTerminal feeds a buffered synthetic stream
+// through waitTerminal, retaining measured usage and one final message without inventing a compaction tool.
+// TestCodex160CompactionAndOptionalUsageReachOrdinaryTerminal проводит буферизованный synthetic stream
+// через waitTerminal, сохраняя измеренный usage и одно final message без выдуманного compaction tool.
 func TestCodex160CompactionAndOptionalUsageReachOrdinaryTerminal(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID, state.result.SessionID = testThreadID, testThreadID
@@ -218,6 +252,10 @@ func TestCodex160CompactionAndOptionalUsageReachOrdinaryTerminal(t *testing.T) {
 	}
 }
 
+// TestCodex160CompactionRejectsWrongTupleAndUnknownItemFields rejects foreign tuple values and
+// forbidden fields on both start/completion without recording terminal or native-tool state.
+// TestCodex160CompactionRejectsWrongTupleAndUnknownItemFields отвергает чужой tuple и запрещённые
+// поля на start/completion без записи terminal или native-tool state.
 func TestCodex160CompactionRejectsWrongTupleAndUnknownItemFields(t *testing.T) {
 	for _, method := range []string{"item/started", "item/completed"} {
 		for _, test := range []struct{ name, thread, turn, item string }{
