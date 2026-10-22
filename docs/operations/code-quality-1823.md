@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.168.0
+version: 1.169.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,76 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят девятая волна — synthetic provider шлюза интеграций
+
+На базе опубликованного SHA `3a8f6014a52424df03479110721b7c8fb9ead9ad`
+четыре одинаковых GET/empty-body guard заменены приватным validReadRequest
+того же integrationfixture. Сохранён порядок method→body, status/error bytes,
+закрытие тела и остановка до store access; маршрутизация/auth остаются у Handler.
+Две одинаковые ошибки TLS bearer digest стали одним private diagnostic alias.
+
+| Route | Прежний метод | Прежнее тело | Остальная логика |
+| --- | --- | --- | --- |
+| health | GET | empty | ответ ok независимо от ready |
+| ready | GET | empty | прежний atomic ready → 200/503 |
+| journal | GET | empty | optional key и current/exact receipt |
+| diagnostic | GET | empty | local counters, без effect |
+
+Новый unit проверяет все четыре маршрута по трём сценариям: неверный метод
+не читает/не закрывает тело и даёт прежний 405; неверное GET body читает один
+байт, закрывается один раз и даёт прежний 400; пустое тело закрывается один
+раз и сохраняет успешный ответ. Проверены точные JSON errors, три headers,
+оставшиеся байты reader и отсутствие journal/receipt/fault allocation.
+Новая проверка использует прямой ServeHTTP без listener. Механическое
+обратное преобразование четырёх guard sites и двух aliases восстановило
+прежний non-comment runtime source. Старые tests не менялись; store, run tests
+и оба cmd после удаления comments точно равны прежнему SHA.
+
+Все 97 прежних и пять новых объявлений описаны EN→RU: integrationfixture
+98/98 и обе команды 4/4, всего 102/102 в семи Go-файлах. Отдельный запуск
+того же go-docs -check на полном выбранном package/cmd slice общего inventory
+завершился PASS LOCAL, missing=0. Весь integration-gateway ещё не завершён:
+102/620, непокрыты 518. Generated, fixtures и tests из source inventory
+не исключались ради покрытия.
+
+Комментарии различают process-local mutex/receipt и durable exactly-once,
+историческую projection и current tombstone, fault diagnostics и resource
+mutation. Bearer защищает только OpenAPI prefix, не plain fixture routes;
+SetReady меняет probe, не глобальный authorization gate. HTTP default :8080
+отличается от explicit loopback override; TLS допускает empty host или loopback.
+TLS paths проверяются синтаксически, файлы читаются позже в Run. Shutdown
+имеет общий deadline для concurrent servers, а не обещание force-close/join
+после таймаута. Common entrypoints не запускались.
+
+Через Context7 /websites/pkg_go_dev_net_http сверены Header/Request.Body
+ownership и ReadHeaderTimeout. Локальный go doc закреплённого Go1.26.6
+подтвердил nonnil server Body/EOF и server-owned Close; диагностика и wire
+не менялись. Токены, реальные identity files или credentials не читались.
+
+Unit/build выбранного пакета до/после — PASS LOCAL; после 11 верхних тестов,
+35 PASS с подтестами, 0 SKIP/FAIL. Полный `go test -count=1 -json ./...`
+и `go build ./...` integration-gateway также завершились успешно:
+116 верхних PASS, 1925 PASS с подтестами, 0 FAIL и один прежний SKIP
+TestCPProducedEmailClaim. Этот тест требует disposable CP producer entrypoint,
+который здесь не запускался: именно его результат — NOT RUN, а не PASS.
+Пропуск не добавлялся и не подменялся synthetic owner data. Команды
+integration-gateway и integration-synthetic не имеют test files, их build
+успешен, но выполнение main не заявляется. 16 unit анализатора, unit
+Go-checker, пять ignore-boundaries, gofmt и diff-check — PASS LOCAL.
+Go использует `GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`.
+PostgreSQL, browser/deploy/live, настоящие providers/mail и агенты — NOT RUN.
+
+Короткий GET guard ниже detector threshold; raw-группы не удалены и это
+не выдаётся за уменьшение их количества. Detector multiset/fingerprint
+не изменились: 6558 source-файлов, 222 исключения, 1853 raw-группы,
+569 точных решений и 1284 неразобранные; raw SHA-256
+`f3512b58fb7373c0ae1f1fd9a6b57f384821c66564292da3a67691ff715ed689`,
+отпечаток `432f28aec0581727ce562d6627235bb7e049a6834e9e6b96a1b4b611870edbf7`.
+Новых исключений нет. Общий Go-реестр — 5808/21111, непокрыты 15303.
+Полный repository go-docs-check — NOT RUN при неполном покрытии;
+прежний diagnostics FAIL остаётся открытым. Точный scan/build/unit нового
+SHA публикуется в текущем PR; цель ещё не достигнута.
 
 ## Сто шестьдесят восьмая волна — завершение role-image-builder
 
