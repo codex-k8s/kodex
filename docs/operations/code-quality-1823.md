@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.228.0
+version: 1.229.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,93 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать девятая волна — tools/fixtures и полный runner unit
+
+Опубликованный SHA228 — `dcbd39db2831def5f4b86080d99a7ada063b9485`.
+Точный ralu5V: 6586 sources, 222 excluded, 1830 raw, 595 retained,
+1235 unresolved; Go 9006/21177, missing 12171. Raw SHA256:
+`8d305e99912efab9b910aa73bdd4eb4dcb3177ded66589486162536396c7a090`.
+Clone-set:
+`66627e4addb1139b4ee7bf0d1cd2c682e8c8d783e0618e7221b82f88caca2e4d`.
+Push/readback и PATCH/GET PR228 подтверждены.
+
+Дополнительно на точном SHA228 выполнен полный runner unit
+`go test -mod=readonly -count=1 -timeout 120s -json ./...`:
+338 верхних/1053 всех PASS, 0 FAIL, 10 explicit SKIP.
+Полная сборка runner PASS. Go-docs check всего agent-runner:
+123 файла, 1172/1172 declarations. Полный codex unit203/718 с4 SKIP
+и полный runner — разные реально выполненные команды, не сумма результатов.
+
+10 SKIP: TestBrokerCaptureNativeUIDBoundary, TestProbeSandboxKernelChild,
+TestProbeSandboxRestrictedExec, TestRuntimeMCPCatalogWireConsumer,
+TestProviderWorkspaceAccessKernel, TestProviderHeavyWorkspaceKernel,
+TestWorkingDirectoryTwoUIDFixture, TestWorkspaceNestedMountContainer,
+TestWorkspaceProtectionContainer, TestHeavyWorkspacePublicationKernel.
+Неактивные прямые fixture entrypoints, возвращающие PASS без mode,
+не объявлены отдельным доказательством выполнения. Команда использовала
+GOENV/GOWORK off, Go1.26.6, GOMAXPROCS=4; до unit удалены все opt-in
+Getenv/LookupEnv ключи fixture/test/ABI из runner test sources вместе с
+явными companion paths/child flags предыдущей волны. Это не включает
+запуск живого provider, staging, Kubernetes, SMTP или почтовой интеграции.
+
+Полностью прочитаны четыре handwritten Go файла: authority-executable-process,
+email-legacy capture/managed и image-admission-build-context test; также
+прочитаны их overlay/compile entrypoints и Docker ignore rules. Пять
+непокрытых объявлений получили предметные EN→RU комментарии. AST4
+идентичны SHA228 без comments/token.Pos. Весь tools/scripts Go:
+16 файлов, 88/88 declarations. Никакой generated source не изменён.
+Вне четырёх крупных units непокрытых Go declarations больше нет.
+
+Разобрано одно182-token совпадение настройки mailbox READ HumanGate/
+WRITE Allow между historical managed fixture и текущим producer test.
+Оно сохранено точным решением f7e27d5... с count1: historical overlay
+используется только с archived CP d21a024dbf03fca13b20f0cb30d858d743729ed7,
+где credential-bearing claims и старые API; текущий oracle проверяет
+credential-free claims, immutable pins и grant generations. Общий helper
+связал бы независимые compatibility expectations и archived tree с
+меняющимся runtime. Production helper ради17 декларативных строк не
+добавлен. Новая запись ровно одна; все прежние registry entries неизменны.
+Это не широкое исключение historical каталога и не возврат legacy runtime.
+
+Go unit test-only Moby module: 1 верхний/1 всего PASS, 0 FAIL/SKIP.
+Он читает только synthetic tree и создаёт tar в памяти, не Docker build
+или сетевую загрузку. `go build ./...` модуля без production Go target
+не выдан за сборку нового бинаря. Реальный ELF authority-process собран
+без запуска main и его двухминутного ожидания/child. Исторические fixtures
+type-checked через `go test -c -mod=readonly -p2` в exact old CP package,
+не как standalone package с отсутствующими test helpers.
+
+Для compile-only использован отдельный temporary tree из
+`git archive d21a024dbf03fca13b20f0cb30d858d743729ed7` и существующий
+email-legacy-test-overlay.py. Его проверка подтвердила unchanged_files4958
+в pinned source; production/SQL там не меняются. Затем Go1.26.6/GOMAX4
+`go test -mod=readonly -c -p 2 -o <private>/legacy.test ./internal/repository/postgres/platform`
+и build authority fixture PASS. Получены реальные ELF, они не запускались.
+PostgreSQL, historical component harness, caster execution и реальная
+почта NOT RUN. Никаких фактических secret values не читалось.
+Точные fixture bytes сверяются при повторной post-commit компиляции
+того же проверенного temporary tree.
+
+17 Node units, unit Go checker, scope5/5, tools/scripts88/88, AST4,
+5 addressed ignore boundaries, gofmt/diff-check PASS LOCAL.
+Context7 resolve Moby + query не дали документации конкретного matcher;
+нерелевантная выдача не использована. Официальные local package docs
+точного patternmatcher v0.6.0 ReadAll/MatchesOrParentMatches прочитаны.
+Новых библиотек/API/dependencies нет.
+
+Рабочий APqQb1: 6586 sources, 222 excluded, 1830 raw, 596 retained,
+1234 unresolved; Go 9011/21177, missing 12166. Raw SHA256:
+`8a1685d4d2eac062fd5485cb8c20f7839a42eecddf86b9315699fd2b0f9404a3`.
+Clone-set:
+`7c03c3e8e31c39e66bdea7a347d9aa2d54b5f830d4f3119f9f7ca1a17ac78c92`.
+Multiset пар/fragment/count прежний: addressed одна существовавшая группа,
+не скрытая новая. Координаты сместились после комментариев.
+Точное post-commit измерение/компиляция/unit публикуются в том же Draft PR.
+Остались comment coverage и повторы secret-broker, internal-rpc-authority,
+control-api-gateway, control-plane и финальные проверки остальных units.
+Исторические FAIL/SKIP/NOT RUN сохранены; общий Go-docs check ещё не PASS.
+Live/browser/deploy/ИИ/STT/почта NOT RUN. Задача активна, merge/ready нет.
 
 ## Двести двадцать восьмая волна — полный охват codex и полный package unit
 

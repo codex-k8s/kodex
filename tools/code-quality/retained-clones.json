@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "scripts/tests/fixtures/email-legacy/managed_test.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/email_authorization_component_test.go",
+      "fragmentSHA256": "f7e27d5eeadb9ccfca511a21782e48258eb42feab821d531c25c8f352a5ada1a",
+      "count": 1,
+      "reason": "Совпало 182-token окно настройки mailbox READ HumanGate/WRITE Allow в двух независимых test-oracles. Исторический helper копируется test-only overlay в точный архив CP d21a024dbf03fca13b20f0cb30d858d743729ed7 и проверяет прежний producer/caster с credential-bearing claim; текущий CP проверяет immutable package pins, отсутствие credential в claim, grant generations и текущий email authorizer. Общий production helper привязал бы historical fixture к меняющимся API/типам и нарушил проверяемую неизменность archived production tree; перенос одинакового expected policy в общий fixture сделал бы два compatibility oracle зависимыми. Для короткой декларативной настройки независимые expected values полезнее общей абстракции. Сохранена только точная пара/hash/count1, не вся историческая fixture, mail path или файл."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
       "secondPath": "services/jobs/agent-runner/internal/codex/provider_input_proof.go",
       "fragmentSHA256": "b10b3aeb82d5206aab67fdb3dc2ad7f60125f6cb2bcc4cf8e64a97b3b38a2f39",

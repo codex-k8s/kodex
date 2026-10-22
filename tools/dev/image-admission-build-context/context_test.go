@@ -13,7 +13,12 @@ import (
 	"github.com/moby/patternmatcher/ignorefile"
 )
 
-// Используется Docker/Moby matcher, а не приближённая Git/glob-семантика.
+// TestAdmissionDockerContextExcludesPrivateInputs applies the real pinned Docker/Moby ignore matcher
+// to a temporary synthetic tree, then checks the tar contains exactly allowed COPY fixtures and that
+// excluded private fixtures were neither read nor archived. It does not build or upload a real image.
+// TestAdmissionDockerContextExcludesPrivateInputs применяет закреплённый Docker/Moby ignore matcher
+// к временному synthetic tree, проверяя точный allowed COPY состав tar и отсутствие чтения/
+// архивирования private fixtures. Реальный образ она не собирает и не загружает.
 func TestAdmissionDockerContextExcludesPrivateInputs(t *testing.T) {
 	f, err := os.Open("../Dockerfile.local-image-supply-chain.dockerignore")
 	if err != nil {
