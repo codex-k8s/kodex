@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.185.0
+version: 1.186.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,52 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят шестая волна — завершены комментарии всего runtime-controller app
+
+На базе опубликованного SHA `232e91e2a7c4f1b92ba80e3db777390fa1977c8c`
+документированы последние 44 объявления двух runtime test-файлов:
+typed RPC/lifecycle stubs, exact request copies/counters, deadline/claim/
+completion scenarios, warm diagnostic owner/authority fixtures и проверки
+закрытых стадий. Весь internal/app вместе с production и тестами —
+208/208 объявлений в 14 файлах, scoped Go-docs-check PASS LOCAL.
+Машинный формат не подменяет смысл: комментарии написаны после полного
+чтения обеих реализаций и assertions, включая пределы этих доказательств.
+
+Явно разделены синтетический успешный response и реальный owner commit,
+счётчики Stop/Delete и фактическая очистка Kubernetes, локальный callback
+и внешняя квитанция. Retry test проверяет exact idempotency/lease pins,
+а не объявлен сравнением всех возможных полей. Memory fixture не названа
+настоящим OOM; локальная file eligibility не названа full input/authority
+validation. Unknown diagnostic summary mapping не объявлено универсальным
+redaction. У Stop stub описано предположение единственного закрытия
+опционального канала, а у record/count — включение неуспешных attempts.
+Warm fake operation registry и placeholder proof не объявляются настоящим
+grant; настоящий interceptor вызывается только с synthetic issuer/stubs.
+
+Полные два файла механически сравнены с parent: после удаления только
+строк комментариев и нормализации gofmt исполняемые строки идентичны.
+Тестовые входы, callbacks, времена, assertions, errors и число вызовов
+не менялись. По detector в этих двух файлах самостоятельных clone groups
+нет; вынос не симулировался и исключения не добавлялись. Context7
+`/protocolbuffers/protobuf-go` и pinned go doc Clone подтвердили глубокую
+копию тестового request; runtime dependency и generated output неизменны.
+
+PASS LOCAL: RC `go test -mod=readonly -count=1 -json ./internal/app` —
+56 верхних PASS, 166 PASS с подтестами, 0 SKIP/FAIL; полный module
+`go build -mod=readonly ./...`, scoped docs 208/208, 16 unit анализатора,
+Go-checker, пять ignore-boundaries и diff-check. Go1.26.6, GOENV=off/GOWORK=off.
+Повтор на точном опубликованном SHA фиксируется в PR. Component/live/browser/
+deploy, реальные агенты и полный repository Go-docs-check — NOT RUN;
+прежний diagnostics FAIL не скрыт и не устранён этой волной.
+
+Detector: 6571 source, 222 generated/lock исключения, 1842 raw,
+580 точных решений, 1262 неразобранных; набор и реестр исключений неизменны.
+Рабочий raw SHA-256
+`7efaa76e33f07b00b9602094813ba084cf04e532669bbaf0cbdd882a39752cdf`,
+clone-set fingerprint
+`7771b8d6e3e7ef597399e53f0fa22556fe5dc250176b7a16c9a98d9b60f645c0`.
+Go-реестр 6834/21134, непокрыты 14300. Единый Draft PR и цель не завершены.
 
 ## Сто восемьдесят пятая волна — весь основной runtime loop
 
