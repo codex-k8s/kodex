@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.229.0
+version: 1.230.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,102 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцатая волна — общие draft metadata adapters secret-broker
+
+Опубликованный SHA229 — `677813fd99cee94e48242520cb9e20e42a53d09c`.
+Точный EROAc2: 6586 sources, 222 excluded, 1830 raw, 596 retained,
+1234 unresolved; Go 9011/21177, missing 12166. Raw SHA256:
+`5c91c1e91d945292bd120d08ddb07d773ac8b3afe7c9eb3e9dbe45586b5db4f5`.
+Clone-set:
+`7c03c3e8e31c39e66bdea7a347d9aa2d54b5f830d4f3119f9f7ca1a17ac78c92`.
+Push/readback и PATCH/GET PR229 подтверждены. На SHA229 Moby unit1/1,
+compile-only historical overlay и authority process PASS; они не запускались.
+Полный runner338/1053 с10 SKIP принадлежит SHA228, не выдан за новый запуск.
+
+Повторно прочитаны полный AGENT-DOC-001, Issue/PR, GO-DOC-001,
+GO-DOC-003 и GOV-DOC-003. Для текущего выноса полностью прочитаны
+caster secret_draft/scoped_metadata_test, transport secret_drafts,
+оба value файла и существующий app secret_drafts_test319 строк.
+Изменены только эти response adapters/value comments и добавленные unit
+fixtures; runtime claims, owner service, crypto/storage и контракты не менялись.
+
+Два локальных helpers убрали три raw группы без расширения libs/API:
+metadataTimestamps последовательно переводит creation/update через прежний
+timestamp, возвращая ту же ошибку и не выдавая частичную пару.
+Expiry остаётся отдельной проверкой после неё. Хронологическая policy
+не добавлена: update раньше creation по-прежнему допустим в этом caster.
+castDraftResult сохраняет уже отображённую execution error как есть,
+а после успеха единожды вызывает прежний caster и draftBoundaryError.
+
+| RPC | Domain operation / plaintext | Порядок и authority после выноса |
+| --- | --- | --- |
+| SaveSecretDraft | SAVE / прежний request slice | Defer регистрируется до Execute; metadata после него; aliases обнуляются лишь при return |
+| ValidateSecretDraft | VALIDATE / nil | Execute один раз; прежняя error precedence; metadata только после успеха |
+| PublishSecretDraft | PUBLISH / nil | Execute, draft metadata, published metadata; поздний casting failure не откатывает effects |
+| DiscardSecretDraft | DISCARD / nil | Execute один раз; прежняя точная domain cleanup eligibility, затем metadata |
+| CheckSecretDraftReadiness | Нет Execute / нет plaintext | Port Check и прежняя закрытая error boundary без grant consumption |
+
+Opaque grant/context/arguments передаются без изменений; операция выбирается
+явным RPC callsite, не helper или request field. Domain service сохраняет
+authority, claim, состояние, audit/event/recovery и storage transitions.
+Новый helper не создаёт context, retry, worker, grant или event.
+Нет нового lifecycle: owner domain operation и все её исходы остались на
+прежнем пути; response casting не выдаётся за owner commit/rollback.
+
+Изменяемые plain data types получили EN→RU пояснения: они сами не являются
+authority, self-validating immutable snapshot или доказательством digest.
+Указаны scope/ASCII refs, generation/hash/type shape, AEAD-v2 associated
+data, отсутствие key material и обязанность caller управлять lifetime slices.
+Проверка времени не названа полной lifecycle validation. Полный scope:
+6 файлов, 51/51 declarations —39 ранее непокрытых и12 новых, включая
+два helpers и адресные tests. Generated и generators не менялись.
+
+Механическая inverse-проверка восстанавливает только прежние повторённые
+операторы из двух helpers, удаляет новые declarations и сравнивает Go AST:
+5 исходных файлов совпали с SHA229 без comments/token.Pos.
+Для value файлов это чистая comment/gofmt identity; новый RPC test file
+не объявлен идентичным отсутствовавшему источнику. Поведение helpers
+дополнительно проверено unit, а не одной AST-проекцией.
+
+Полный unit `./internal/transport/grpc/... ./internal/domain/types/value`:
+33 верхних/154 всех PASS, 0 FAIL/SKIP. Отдельный
+`./internal/app -run '^TestSecretDraftCompositionEncryptedLifecycleAndReadiness$'`:
+1 верхний/9 всех PASS, 0 FAIL/SKIP. Общие флаги:
+`go test -mod=readonly -count=1 -timeout 120s -json`, GOENV/GOWORK off,
+Go1.26.6, GOMAXPROCS=4. Полная сборка secret-broker
+`go build -mod=readonly ./...` PASS LOCAL.
+
+Новые direct RPC fixtures проверяют четыре operation kinds, exact grant/
+context/bytes, один Execute, отсутствие plaintext в остальных командах,
+прежние error codes/text, сохранение предыдущей error identity, отсутствие
+partial responses и SAVE wipe при success/command/caster/unavailable failure.
+Это не доказательство проверки grant: authority port здесь подменён.
+Существующая app composition действительно проверяет AEAD/keyring,
+fake Kubernetes adapters, scoped SAVE→VALIDATE→PUBLISH/DISCARD и recovery/
+readiness; она не обращается к живому Kubernetes, CP/PostgreSQL или почте.
+Timestamp pair cases включают zero/out-of-range и отсутствие новой chronology
+policy. 17 Node units, unit Go checker, scope51/51, пять addressed ignore
+boundaries, gofmt/diff-check PASS LOCAL.
+
+Context7 /protocolbuffers/protobuf-go: Timestamp/New/CheckValid и range.
+Фактически используемые New/CheckValid дополнительно сверены local go doc
+закреплённого protobuf v1.36.12-0.20260120151049-f2248ac996af.
+Сводка Context7 об invalid AsTime не используется как гарантия: тесты
+вызывают AsTime только после успешного CheckValid. Новых dependencies нет.
+
+Рабочий Pklt73: 6587 sources, 222 excluded, 1827 raw, 596 retained,
+1231 unresolved; Go 9062/21189, missing 12127. Raw SHA256:
+`065258d72fee946b0b6f60c8b04cea24ad8a2a0b501fecf4ebc9fd708720ceb1`.
+Clone-set:
+`40c7d0cceac386b0ba6f0488e993dad70011ddd17008df93e627872c95b547a9`.
+Сравнение multiset: новых групп0, удалены ровно adfc78ac..., 6744415b...,
+ae08c137...; registry не менялся. В secret-broker осталось5 unresolved,
+их дальнейший разбор не подменяется текущим PASS. Точный post-commit
+scan и unit/build публикуются в том же Draft PR.
+Полные остальные unit/Go-docs и все оставшиеся группы впереди; прежние
+FAIL/SKIP/NOT RUN сохранены. Live/browser/deploy/ИИ/STT/почта NOT RUN.
+Общая задача активна, merge/ready не выполняются.
 
 ## Двести двадцать девятая волна — tools/fixtures и полный runner unit
 
