@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.223.0
+version: 1.224.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,95 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать четвёртая волна — полный process lifecycle runner
+
+Опубликованный SHA223 — `d4d1d892c0e55642a99f12abf72534c76a346577`.
+Точный отчёт FoCqAK:6586 sources,222 excluded,1830 raw,595 retained,
+1235 unresolved;Go8607/21177,missing12570. Raw SHA256:
+`2a0317217c513b69dde61a998970e1a42ed977ce071de1edf5d7e567d4a514b7`.
+Clone-set:
+`d380f057dd437b7c0bd92de75d08cf3c9a83917d0101a47313400a72e3c7d934`.
+Push/readback и PATCH/GET Draft PR223 подтверждены. На том SHA:
+serviceruntime8/11,runner8/13,secret-broker5/9 unit и полные сборки
+трёх модулей PASS,0 FAIL/SKIP.
+
+Полностью прочитаны process.go1275 строк и process_test.go713 строк.
+122/122 declarations EN→RU:121 ранее непокрытое объявление и уже описанный
+startAppServerCommand. Дополнительно описаны локальные fixture-константы
+account/valid. Исполняемый код обоих файлов не менялся: Go AST совпадает
+с SHA223 без комментариев и token.Pos.
+
+Пояснены отдельные бюджеты process/termination/readiness/stream,
+номинальный кадровый бюджет очереди и не включённая в него память JSON.
+Строковый тип этапа не назван валидатором. Фиксированный Error обёртки
+отличён от сохранённой приватной причины: appServerCallFailure.Error
+делегирует ей и не является границей сокрытия. Безопасный вывод принадлежит
+закрытой проекции или stage wrapper. Отсутствующая typed-nil safety не
+приписана. RPC и изменяемое состояние по-прежнему упорядочивает caller.
+
+Описана последовательность selection→context/pin/readiness→child
+→initialize/skills/account/thread/MCP→baseline/turn→terminal/thread-read/
+final-finance→stop/join→archive capture. При ошибках остаются проверенные
+измерения. captureReady отдельно требует Wait, завершение readers и
+отсутствие process group. CaptureStoppedRollout сам процесс не
+останавливает: bounded join является условием вызывающего кода.
+Публикация прав captureRollout не транзакционна; ошибочный chown/chmod
+не выдаёт sealed proof. VerifyRestoreArchive явно описан как no-op
+для сохранённой сессии, а не проверка произвольного archive locator.
+
+OpenProtectedFile не назван универсальной mount/ancestor/owner sandbox:
+объяснены no-follow компоненты, regular single-link leaf и проверки
+прав, размера и владельца у caller. DigestArchive читает с текущего
+смещения, сверяет размер/inode/mtime/ctime, но не смысловые записи.
+ReadCredential проверяет размер после чтения, а не ограничивает
+выделение памяти. Проверки account/routing/email/plan не выдают
+сетевые или финансовые полномочия и не проверяют внешний вход.
+Пустое MCP form acknowledgement отделено от owner decision и upstream
+HumanGate. Write не назван транзакционной доставкой или проверкой
+короткой записи с nil error.
+
+Stop/abort/terminate описаны с отдельными ограниченными этапами,
+сохранением причины, поздними уведомлениями, reader drain и эскалацией
+сигналов. Timeout не равен join. Закрытие очереди само не отменяет
+заблокированный Read. Ограниченный возврат terminate не доказывает
+отсутствие всех потомков: для capture это проверяется отдельно.
+Grants, события, API, владение workers и права не менялись.
+
+Запущены все24 Test-функции process_test.go точным anchored regexp:
+24 верхних/85 всех PASS,0 FAIL/SKIP. Неактивный прямой вызов
+TestAppServerPipeProcessFixture без mode сразу возвращается и не
+объявлен отдельным доказательством child execution. Родительские тесты
+действительно запускают synthetic test ELF для buffered/read/exit,
+TERM-resistant, descendant, startup-fd и capture сценариев.
+Также проверены большие UTF-8 instructions на new/resume, pre-start
+invalid fixtures, закрытые protocol/account/routing причины, proxy env,
+usage opt-out, обязательные MCP имена и пустое form acknowledgement.
+Полный executeLocal pipeline, реальный Codex, модель, аккаунты,
+device-code, STT и почта не запускались. Отказ неполных invalid selection
+fixtures не назван проверкой живого каталога.
+
+Команда из runner с GOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4
+и удалёнными KODEX_APP_SERVER_PIPE_FIXTURE,
+KODEX_APP_SERVER_ROLLOUT_PATH,KODEX_APP_SERVER_PIPE_PID_PATH:
+`go test -mod=readonly -count=1 -timeout 120s -json ./internal/codex -run '^(TestAppServerPipeProcessFixture|TestAppServerOwnsPipesUntilReadersDrain|TestAppServerStopPreservesProcessAndDiagnosticFailures|TestAppServerTerminateKillsDescriptorHoldingDescendant|TestAppServerStartFailureClosesOwnedPipes|TestFailedProcessCanCaptureOnlyAfterBoundedJoin|TestAppServerAbortPreservesRealReadError|TestAppServerTermResistantProcessIsKilledAndJoined|TestAppServerStopCloseFailureStillJoins|TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt|TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess|TestProviderStageErrorKeepsClassificationAndHidesDiagnostic|TestProtocolErrorReportsOnlyMethodAndCode|TestWaitTerminalPreservesClosedFailureDiagnostics|TestWaitTerminalClosedStreamAndCancellationDiagnostics|TestProtocolErrorPreservesClosedAccountReadReason|TestClassifyAccountReadResponse|TestAccountReadWorkspaceRoutingClosedSchema|TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy|TestTokenUsageNotificationRemainsEnabled|TestRawProviderResponseItemsRemainSuppressed|TestRequiredMCPToolNamesMatchRuntimeAuthority|TestTrustedMCPToolApproval|TestTrustedMCPToolApprovalRejectsAuthorityExpansion)$'`.
+Полная сборка runner `go build -mod=readonly ./...`,полнота122/122,
+17 Node units,unit Go checker,5 ignore boundaries,gofmt/diff-check
+PASS LOCAL. Библиотеки/API не менялись. Ранее проверенные Context7 и
+официальные local Go1.26.6 os/exec документы не выданы за новую
+проверку внешнего provider.
+
+Рабочий fcrvxC:6586 sources,222 excluded,1830 raw,595 retained,
+1235 unresolved;Go8728/21177,missing12449. Raw SHA256:
+`660c6969ff93ae81e91e2c6bc602cafc3a7021f3cf2930e106a3f5044a9723e3`.
+Clone-set прежний:
+`d380f057dd437b7c0bd92de75d08cf3c9a83917d0101a47313400a72e3c7d934`.
+Multiset пар/fragment/count неизменен. В этих файлах нет detector
+unresolved/retained групп; искусственные выносы или исключения не нужны.
+Точное post-commit измерение публикуется в том же Draft PR.
+Полные runner/codex/repo unit и общий Go-docs check ещё не выполнены.
+Исторические FAIL/SKIP/NOT RUN сохранены. Live/browser/deploy/ИИ/STT/
+почта NOT RUN. Общая задача активна;merge/ready не выполняются.
 
 ## Двести двадцать третья волна — общие owned stdio pipes двух процессов
 
