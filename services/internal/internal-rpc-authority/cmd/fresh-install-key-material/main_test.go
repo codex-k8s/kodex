@@ -11,6 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
+// TestFreshKeyMaterialProcess runs its own test binary as a child to execute fresh-key generation only in a temporary output directory, then checks all eleven worker identities, file/directory modes, public/private correspondence, absence of a private scalar in public JSON and distinct public coordinates. It does not validate all nonworker entries or install a Secret; the output environment marker is only the subprocess harness.
+// TestFreshKeyMaterialProcess запускает собственный тестовый бинарь дочерним процессом для создания ключей только во временном каталоге, затем проверяет одиннадцать идентичностей worker, права файлов и каталогов, соответствие публичных и приватных частей, отсутствие приватного скаляра в публичном JSON и разные публичные координаты. Остальные записи проверяются не полностью, Secret не устанавливается; переменная выходного каталога служит только оснастке дочернего процесса.
 func TestFreshKeyMaterialProcess(t *testing.T) {
 	if os.Getenv("KODEX_TEST_FRESH_KEYS_OUTPUT") != "" {
 		os.Args = []string{"fresh-install-key-material", os.Getenv("KODEX_TEST_FRESH_KEYS_OUTPUT")}

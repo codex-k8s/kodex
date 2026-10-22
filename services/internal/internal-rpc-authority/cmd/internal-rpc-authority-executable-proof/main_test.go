@@ -10,6 +10,8 @@ import (
 	"testing"
 )
 
+// TestInspectExecutable builds a synthetic proc tree in a temporary directory and verifies PID, start ticks and hash, then rejects no match, multiple matches and malformed stat data. It does not inspect a real authority process or simulate every process/file replacement race.
+// TestInspectExecutable создаёт синтетическое дерево proc во временном каталоге и проверяет PID, такты запуска и хеш, затем отклоняет отсутствие совпадения, несколько совпадений и некорректный stat. Реальный процесс authority не проверяется, все гонки замены процесса или файла не моделируются.
 func TestInspectExecutable(t *testing.T) {
 	root := t.TempDir()
 	binary := filepath.Join(root, "binary")
@@ -56,6 +58,8 @@ func TestInspectExecutable(t *testing.T) {
 	}
 }
 
+// TestClosedArguments rejects missing arguments, an unsupported role and arbitrary extra/file arguments before any proc inspection. It covers command shape only and writes no proof or live state.
+// TestClosedArguments отклоняет отсутствие аргументов, неподдерживаемую роль и произвольные лишние или файловые аргументы до чтения proc. Проверяется только форма команды без записи доказательства или живого состояния.
 func TestClosedArguments(t *testing.T) {
 	for _, args := range [][]string{nil, {"--role", "publisher"}, {"--role", "issuer", "--file", "/private"}, {"--file", "/private"}} {
 		if err := run(args, io.Discard); err == nil {

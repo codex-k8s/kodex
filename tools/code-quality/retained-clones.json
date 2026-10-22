@@ -4792,6 +4792,14 @@
       "fragmentSHA256": "309be5a803d75b9dffa2ef6e3fa676256020e723f24e4cd34a4dcbeabb11b3fc",
       "count": 1,
       "reason": "ClaimIntegrationInvocations и ClaimInteractionDeliveries уже разделяют principal и batch validator, но захватывают разные owner tasks/leases через разные ports. Остаточное совпадение — typed delegation; lifecycle маршруты не заменяются generic callback."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/internal-rpc-authority-issuer/main.go",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/internal-rpc-authority-verifier/main.go",
+      "fragmentSHA256": "92d5279640c2812ce3e494db57b6b4233e3c7ccd65be6701d5a8facedc6a7480",
+      "count": 1,
+      "reason": "Два коротких самостоятельных entrypoint различаются фиксированным ModeIssuer/ModeVerifier и ролью SafeRuntimeFailure. Общая работа уже в app.Run; здесь остаются process-owned root context, signal cancellation, stderr и os.Exit. Вынос этих границ в новый library main-helper скрыл бы владение процессом и нарушил явное создание root в main ради совпадения imports/version/обёртки."
     }
   ]
 }

@@ -4,8 +4,8 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.284.0
-updated: 2026-10-22
+version: 1.285.0
+updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
@@ -1703,6 +1703,57 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят пятая волна — служебные утилиты и точки входа authority
+
+Опубликованный SHA284 — `b6f50b618ef6315e324b9458bbd351c455440684`.
+Точный zfLq4A:6615 sources,222 excluded,1820 raw/717 retained/
+1103 unresolved; Go12341/21253,missing8912. Raw SHA256:
+`9f5a2c8bf1fcd1255e99afe8aa5c76a57378e936f3d1d549d7bcab3ff6480494`;
+clone-set8381d099… . Exact CLI15/21, полный authority build -p=2,
+docs42/42, AST4/directives/tooling/scan PASS LOCAL,0 FAIL/SKIP;
+push/readback и Draft PR PATCH/GET284 подтверждены.
+
+Полностью прочитаны15 файлов fresh-install-key-material, executable-proof,
+local-readiness, socket-init и девяти runtime entrypoints;41/41 declarations
+описаны EN→RU без изменения тел. AST15 идентичен SHA284 без comments/
+positions; директивы сохранены отдельно. Комментарии различают unsigned
+local evidence и authority grant, последовательную проверку PID/start ticks/
+file identity и замораживание процесса, initial size check и bounded hash.
+У socket init явно описаны отсутствие liveness proof при removeStale,
+порядок chmod/owner checks, exclusive copy/sync/rename без parent fsync,
+rehash или защиты от растущего source. Новые гарантии не приписаны коду.
+
+Fresh-install comments описывают закрытые15 key slots, создание режимов,
+частичный результат/перезапись без atomic rotation и проверку11 worker
+keys в subprocess unit. Сами временные ключи и байты файлов не выводились.
+Readiness comments разделяют role/socket/UID bindings, presence flags и
+непроверяемые здесь digest bytes; runtime entrypoints сохраняют root/
+lifecycle/shutdown ownership, отдельные roles и error handling.
+Context7/golang/go и pinned1.26.6 SameFile/LimitReader semantics сверены.
+
+Весь authority app и2 utility packages:33 верхних/122 всех unit PASS LOCAL,
+0 FAIL/SKIP. Fresh-key test marker удалён из родительского child env;
+сам unit создаёт свои временные outputs. Socket-init/local-readiness и
+production entrypoints не запускались: там только compile/AST/docs proof.
+Полный authority build -p=2,17 Node/Go checker units, scope docs41/41,
+AST/clone-prefix proof,5 ignores и gofmt/diff-check PASS LOCAL.
+
+Прочитано единственное residual cmd window issuer/verifier:общая работа
+уже в app.Run, а process-owned root/signal/stderr/exit и фиксированная роль
+остаются в main. Новая generic process-main библиотека не вводится.
+Добавлен1 exact path/hash/count reason; прежние599 entries неизменны,
+теперь600/718 occurrences. Comment-only107-token window сменил hash,
+1819 остальных keys/counts прежние; это не удаление алгоритма.
+
+Рабочий bUTaSH:6615 sources,222 excluded,1820 raw/718 retained/
+1102 unresolved; Go12382/21253,missing8871. Raw SHA256:
+`927aa32fbe4cffa07694b7311d1441138877555f87551192c6ccc26c1584363d`;
+clone-set:
+`6e6362d18fbf1a4da8ddbfbe4d85f4a19bdd9dc27129741cf75b9cea372d79f7`.
+Assessment после exact reason повторён. После коммита exact scan/unit/build
+и PR readback повторяются. Generated, contracts, applied migrations и
+live state неизменны; задача не завершена, historical FAIL/NOT RUN прежние.
 
 ## Двести восемьдесят четвёртая волна — команды и свежесть authority CLI
 
