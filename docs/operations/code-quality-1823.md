@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.258.0
+version: 1.259.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,92 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятьдесят девятая волна — проекция подробностей образа
+
+Опубликованный SHA258 — `7d39aec2b1a73ce0e2c0cfa164c049f2dd21fe80`.
+Точный1WAnuf:6598 sources,222 excluded,1818 raw/611 retained/
+1207 unresolved; Go10909/21230, missing10321. Raw SHA256:
+`9d949b4509f3e4abc16ecea4ad2eba0e57f0be7d11ddfef833cbe8941f177982`.
+Clone-set:
+`5a02d07cf6d6ff94034f5d450f51a98b1aef6f1d850697961925d8a8c41fd0eb`.
+Точные HTTP unit/build, push/readback и Draft PR PATCH/GET258 подтверждены.
+Issue/PR, branch/head/body и неизменность ранее прочитанных guides/AGENTS
+сверены перед продолжением; main clone не менялся.
+
+Прочитан весь650-строчный role_images.go, repository Detail и точные
+project/organization domain read boundaries. Два одинаковых цикла/optional
+guards преобразования Detail вынесены в private castRoleImageRecipeDetail
+и закрытый пятикомпонентный view. Caller principal, exact FullMethod,
+Get против GetOrganization, transportError и разные protobuf envelopes
+остались в прежних handlers и прежнем порядке. Вспомогательный view не
+является generated message, authority context или новым источником состояния.
+Ни generic scope switch, ни unsafe conversion между protobuf типами нет.
+
+Новый unit сравнивает mapper с прежним inline преобразованием:3 состояния
+build list (nil/empty/ordered) ×8 вариантов optional artifacts/failure =24
+подслучая. Проверены proto.Equal значений и порядка, сохранение nil списка
+при нуле сборок и точное наличие каждого optional field. Это unit проекции,
+не настоящий mTLS/principal-bound read и не допуск образа.
+Inverse AST2 возвращает оба точных caller tails, сравнивает весь прежний
+source с SHA258 и отдельно новый production helper с прежним inline body
+на объявленной пятикомпонентной форме. Ни проверки, ни вызовы домена,
+request pins, constants, input mappings или другие executable bodies
+помимо указанного выноса не изменены.
+
+37 прежних declarations описаны предметно EN→RU,3 новых тоже; scope40/40
+в3 Go-файлах. Комментарии отделяют source eligibility от caster, claim
+tuple от authority, completion сборки от admission/promotion, nil от
+неизвестного enum и PENDING от принятого verdict. Transport не объявляется
+владельцем lease expiry, signatures, durable claims или registry readback.
+Новые imports SDK/modules и изменения API не требовались; используются
+прежние Go/protobuf primitives, проверенные в предыдущих волнах.
+
+Матрица неизменных границ:
+
+| Операция | До mapper | После mapper / владелец эффекта |
+| --- | --- | --- |
+| GetRoleImageRecipe | Exact project FullMethod principal → service.Get | Project typed response; eligibility у домена |
+| GetOrganizationRoleImageRecipe | Exact organization FullMethod principal → service.GetOrganization | Organization typed response; scope у домена |
+| Detail projection | Уже разрешённые recipe/builds/optional artifacts/failure | Только новый private view, без I/O и полномочий |
+| Manage/claim/renew/progress/admission/promotion | Прежние specialized methods и exact tuples | Прежние owner commands/results, без изменений lifecycle/events |
+
+После выноса большое overlapping окно уменьшилось403→352 tokens. Raw
+count остался1818:8 прежних fragment keys изменились из-за выноса/комментариев,
+8 появились вместо них; остальные1810 multiset groups неизменны. Это
+не выдаётся за удаление8 дубликатов. Новые helper/test не породили новых
+detector groups. Прочитаны обе стороны всех20 остававшихся совпадений этого
+source, включая exact чужие окна access, queries, writeback, email receipts,
+runtime, runtime secrets и organization image handlers.
+
+Общий Detail алгоритм действительно вынесен; остатки — explicit typed RPC
+bindings разных прав/операций и короткие closed enum/response projections.
+Principal/transportError и реальные casters уже общие. Для этих20 групп
+записаны18 отдельных reasoned entries (две пары имеют count2), не broad
+file/layer ignores; все прежние510 entries/611 occurrences неизменны.
+Теперь528 entries/631 retained occurrences. Сходство syntactic wrappers
+не используется как основание для universal authority/lifecycle dispatcher.
+
+101 верхний/277 всех unit PASS выбранных grpc и domain/service/roleimage,
+0 FAIL,3 явных SKIP; полный control-plane build -p=2 PASS LOCAL.
+Пропуски: TestAssistantWarmRuntimeOwnerSnapshotTransport (disposable owner
+wire pipeline не включён), TestLegacyEmailClaimCasterFixture (исходный CP
+producer test entrypoint не включён), TestSecretOwnerLoopbackHarness
+(disposable owner composition не настроена). Эти SKIP не являются PASS;
+старый test bridge не изменялся и новый compatibility path не добавлялся.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4, -mod=readonly/-count=1/
+-timeout120s.17 Node units, Go checker units, scope40/40, inverse AST2,
+canonical scan/assessment,5 addressed ignores, gofmt/diff-check PASS LOCAL.
+Full unit иных packages/modules, component/review/browser/live/deploy/
+модели/STT/почта NOT RUN по scope; прежние FAIL остаются открытыми.
+
+Рабочий TE97br:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go10949/21233, missing10284. Raw SHA256:
+`14d8fa08fac2db292d3ea3cc4936368d8457056e7508998b91733b02eff1a88e`.
+Clone-set:
+`5eca165084ef7b7911a5bc22716c82fc76877d4a70e546aea1da0508a3359715`.
+Exact post-commit отчёт публикуется в том же Draft PR. Общая задача
+остаётся активной; partial docs/retained decisions не являются full readiness.
 
 ## Двести пятьдесят восьмая волна — typed managed-draft endpoints
 

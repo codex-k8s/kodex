@@ -4080,6 +4080,150 @@
       "fragmentSHA256": "cc94fdb7a2677b480fe7a682fc4280761a87a62db8d9ededa44910d4c3ea78f4",
       "count": 1,
       "reason": "Прочитаны оба перекрывающихся799-token окна и все8 typed save/discard handlers четырёх configuration kinds. Общие алгоритмы уже выделены в managedDraftMutation, readManagedDraftSave, writeManagedDraftResult и writeRPCProblem; остаток — явная привязка конкретного HTTP метода и generated params к своему специализированному RPC/request и kind. Prompt save дополнительно проверяет exact scope receipt, save и discard имеют разную lineage/readback семантику. Универсальный dispatcher по kind или function/reflect registry ради этих typed adapters скрыл бы закрытый набор state-changing команд и их auditability; дополнительный response helper с теми же многочисленными pins не убрал бы эту привязку. Сохранена только данная точная пара фрагментов внутри одного source path по fragment SHA-256/count1, не весь файл, тесты или managed configuration lifecycle."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "8dd430c38dd396b2a5e1cae59c363c165efa0c2b181f72fda39b40b8b4f38d91",
+      "count": 1,
+      "reason": "138-token окно сравнивает ListPermissionRegistry с ListRoleEnvironments: разные exact FullMethod, domain methods, entities и typed response/caster. Разрешение principal и transportError уже общие; оставшийся ordered append — стандартная сборка разных protobuf lists, не копия доменного алгоритма. Generic list dispatcher потребовал бы callbacks/type parameters ради сохранения явно проверяемых прав и схем. Сохранено только точное окно двух путей с count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/configuration_writeback.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "1ce290c2a67179be004e4b39a54ceb95e317eca4cbd4fa99bae9ea160e731e17",
+      "count": 1,
+      "reason": "105-token окно соединяет GetManagedConfigurationGitWriteBack и ClaimImageBuild. Одинакова форма principal→typed domain call→transportError, но первое читает proposal/base/proposed source, второе выдаёт lease/token/fence/input через специализированный claim. Общей операции или результата здесь нет; principal/error helpers уже едины. Объединение через универсальный callback скрыло бы read-versus-claim boundary. Исключена только точная пара fragment/count1, не команды writeback/build."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_receipts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "1055cdf1fb7f4d2321f6bbae40a1b99485a0e831ac5f5df825e1e3e03b1b046e",
+      "count": 2,
+      "reason": "Два110-token совпадения одной пары paths сравнивают конец GetEmailEffectReceipt и начала ClaimImageAdmission/ClaimImagePromotion. Receipt/decision read и выдача двух разных image claims имеют разные FullMethod, principal permission, domain input/output и lifecycle. Повторяется только каркас специализированного RPC с уже общими principal/transportError; общий claim dispatcher или function registry не создаётся. Проверены оба occurrence, exact fragment/count2, не все email/image handlers."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/organization_role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "f5a26578cf566347bbb2e5584c3d487fb34eac0c1c1816e571b8100178b9639b",
+      "count": 2,
+      "reason": "Два перекрывающихся окна117/112 tokens одной пары paths проходят через завершение RequestOrganizationRoleImagePromotion и начала ListOrganizationRoleImageRecipeRevisions, ClaimImageAdmission и FailImageAdmission. Mutation receipt, scoped revision query и exact attempt claim/failure — разные специализированные доменные операции. Общие principal/error casters уже используются; перенос этих typed bindings в generic mutation dispatcher скрыл бы обязательные method/attempt pins. Сохранены только exact paths/fragment/count2."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "a8b5cfcb9e58ff6a72e075da33bfb0b56f3f575a71cc6db980a91afbc8d41b17",
+      "count": 1,
+      "reason": "134-token окно сравнивает ListPlatformCapabilities с ListRoleEnvironments, включая границы соседних query методов. Domain lists и protobuf entities/casters различны, общая часть — typed principal/error wrapper и ordered append. Стандартный list loop не требует нового runtime primitive с projection callbacks; общие проверки principal/ошибок уже вынесены. Исключение привязано к данной точной паре путей/fragment/count1, не query layer целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "afab70b82340e371956502f3464ecc6889e10008dd9ba4eed7749fd57b0a7d83",
+      "count": 1,
+      "reason": "139-token окно сравнивает конец ListRuntimeSelections/начало SearchPlatform с переходом от environment catalog к project recipe list. Runtime catalog, search и image list имеют разные typed фильтры, FullMethod и eligibility владельца; одинаковые append/return/principal/error строки не являются общей бизнесовой операцией. Generic dispatcher нарушил бы видимость этих привязок, а базовые helpers уже используются. Только точные paths/fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "e7e49c56a2dbc9e4772eef3aa24e8bf628d0983f4c631e95929730b1687aba93",
+      "count": 1,
+      "reason": "105-token окно сравнивает GetProject и начало ListPlatformMemberships с ClaimImageBuild. Идентичный syntactic principal/domain/error template не объединяет project eligibility, membership list и выдачу build lease/token/fence. Конкретные RPC, domain method, typed inputs и outputs обязаны оставаться явными; общие principal/transportError уже едины. Сохранена только exact path/fragment/count1 пара, не доступ к проектам или claim policy."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "10f0bb8f34813942924467045f2c0a18323d90671a9385531f4c70c5a27ecfed",
+      "count": 1,
+      "reason": "122-token окно сравнивает конец ListOwnerGates/начало GetOwnerGate с project ListRoleImageRecipes. Общая страничная сборка response не означает общий gate/image домен: разные filters, exact FullMethods, entities и principal permissions. Standard append и общие principal/error helpers достаточны; generic list callback ради этого остатка сделал бы binding менее явным. Только точные paths/fragment/count1, без исключения реальных gate transitions."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "aeb5da261738d10d0664db9a6086b4b235388d302d704275e58a6db15887025a",
+      "count": 1,
+      "reason": "124-token окно пересекает короткие imageBuildStage и imagePromotionState enum-map lookups и начало разных ImageBuild/ImageArtifact casters. Каждый enum имеет собственный generated map, prefix, return type и UNSPECIFIED constant; следующая record projection тоже доменная. Общий helper с map/prefix/callback вернул бы безымянный int32 и скрыл закрытые typed enums ради обычного map lookup. Оставлено лишь это точное self-file окно/count1, не все casts."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "088977c5ebf1eaf1b1f725d195a1e9df4f8067681b6a75cee1f56c8635ce62d9",
+      "count": 1,
+      "reason": "Остаточное352-token окно project/organization list-get-manage wrappers уменьшилось с403 после реального выноса detail projection. Общие build/optional-artifact mappings теперь в castRoleImageRecipeDetail. Оставлены разные FullMethod, service.Get против GetOrganization и явные typed response/filter/ManageInput: project path несёт project/role filters, organization — нет. Generic scope switch скрыл бы authorization boundary; точное self-file fragment/count1 сохраняется, не весь файл или вновь вынесенный mapper."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "4b528546879864053ac02b6da89b9a1931b72f7021a1cc0ac081b4272898773a",
+      "count": 1,
+      "reason": "121-token остаток сопоставляет две typed ManageRoleImageRecipe/ManageOrganizationRoleImageRecipe response projections. Базовые castRoleImageRecipe/castImageBuild/castImageArtifact уже общие; оставлены короткие nil guards, reuse field и разные protobuf envelopes после разных owner operations. Новый универсальный Manage wrapper либо промежуточный результат ради этих нескольких полей не дал бы общей доменной логики и связал бы project/organization authority. Только exact self-file fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "d25f23c98b4f3e7772eb72fa19f635b2467ab8bb80972ca3618024ec99a212a5",
+      "count": 1,
+      "reason": "102-token окно пересекает конец RenewImageBuild и начало ReportImageBuildProgress с ClaimImagePromotion/AuthorizeImagePromotion. Renewal lease и promotion claim/authorization используют разные tokens, expected tuples, FullMethods и typed replies; общий lease input уже выделен там, где семантика действительно одна. Здесь остаётся каркас RPC и диагностические helpers, не общий transition. Только exact self-file fragment/count1, без dispatcher lifecycle."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "eab18d6a4c8d641d1b37339fc8b64a636db99b0e423bc47e6593a6be08552953",
+      "count": 1,
+      "reason": "109-token окно соединяет завершение FailImageBuild/начало ClaimImageAdmission с RecordImageAdmission/FailImageAdmission. Эти операции имеют разные exact claim/version/fence/attempt bindings и result kinds; общая часть — транспортный principal/error каркас. BuildLeaseInput уже общий для build lifecycle, а admission сохраняет свой полный input. Объединение в универсальную failure/claim команду скрыло бы границы. Только exact self-file fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "eab18d6a4c8d641d1b37339fc8b64a636db99b0e423bc47e6593a6be08552953",
+      "count": 1,
+      "reason": "101-token окно image failure/claim wrapper похоже на завершение CompleteRuntimeSecretOperation и начало FailRuntimeSecretOperation. Domain-owned secret materialization/claim generation и image build/admission leases не взаимозаменяемы; exact full methods и typed input/output намеренно остаются отдельными. Principal и transportError уже общие, нового общего алгоритма не осталось. Исключена только точная пара paths/fragment/count1, не secret operations."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "c36c3fc7e82129a5b65ace765b050c4770af96fd6126fbb8afca0aebdedb4f4c",
+      "count": 1,
+      "reason": "103-token окно image failure/claim сопоставляется с окончанием ReportWarmRuntime и началом ClaimDueSchedules. Workload runtime state, schedule claims и image leases имеют разные authority/attempt data и владельцев; сходен лишь typed RPC error/principal template. Общие principal/error primitives уже используются; generic claim/state dispatcher ради этого фрагмента был бы ложным объединением. Только exact paths/fragment/count1, не runtime или supply-chain целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "b51fa8db12157d1407629e66d025c851da423773b23dce69851766897512f203",
+      "count": 1,
+      "reason": "115-token окно сравнивает ClaimImageAdmission и ClaimImagePromotion. Несмотря на одинаковые idempotency/principal→claim вызовы, admission несёт attempt/risk/source-evidence pins, promotion — отдельный token и свой authorize/complete путь. Они не объединяются универсальной claim командой; общие domain casters и principal/transportError уже вынесены. Сохранена только exact self-file fragment/count1 пара, не token/attempt checks."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "7b88ffa12464dc6af4c6c46afc8dd4124c3d723f6a17e108c4ae0e4df5878a78",
+      "count": 1,
+      "reason": "205-token окно RecordImageAdmission/FailImageAdmission сопоставляется с FailImageAdmission/ExpireImageAdmissionClaim. Копируются разные специализированные repository input types: record evidence/risk/signatures, terminal failure с error code и expiry с expected attempt/authority tuples. Одинаковые request getters обозначают обязательные pins, но не общий transition; их extraction в generic mutation DTO скрыло бы обязательные/запрещённые поля. Только exact self-file fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "2b29fcc162625d8698c2e6bbb00ce19f7961fa21879691b36f6fdaf8bebfe8f5",
+      "count": 1,
+      "reason": "117-token окно ClaimImagePromotion/AuthorizeImagePromotion сопоставляется с AuthorizeImagePromotion/CompleteImagePromotion. Claim token, authorization token и completion readback принадлежат трём разным специализированным командам и typed envelopes, хотя principal/error template совпадает. Их порядок, exact method и immutable manifest/readback pins остаются явными; базовые casters уже общие. Только exact self-file fragment/count1, не весь promotion lifecycle."
     }
   ]
 }
