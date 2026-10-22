@@ -19,6 +19,31 @@ import (
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
+// TestLivenessRoutesShareStateAndResponse fixes both route aliases for live/stopping states and GET/POST, preserving the exact status/body behavior without starting a server.
+// TestLivenessRoutesShareStateAndResponse закрепляет оба route aliases для live/stopping и GET/POST, сохраняя точные статус/тело без запуска сервера.
+func TestLivenessRoutesShareStateAndResponse(t *testing.T) {
+	for _, live := range []bool{false, true} {
+		state := &health{}
+		state.live.Store(live)
+		handler := healthHandler(state)
+		for _, path := range []string{"/healthz", "/livez"} {
+			for _, method := range []string{http.MethodGet, http.MethodPost} {
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, httptest.NewRequest(method, path, nil))
+				wantStatus, wantBody := http.StatusServiceUnavailable, "process is stopping\n"
+				if live {
+					wantStatus, wantBody = http.StatusNoContent, ""
+				}
+				if response.Code != wantStatus || response.Body.String() != wantBody {
+					t.Errorf("%s %s: status %d body %q", method, path, response.Code, response.Body.String())
+				}
+			}
+		}
+	}
+}
+
+// TestRuntimeExecutionFailureCodePreservesAuthorityBoundary checks auth, unsupported authority, required MCP and generic transport sentinels retain their distinct existing execution classifications.
+// TestRuntimeExecutionFailureCodePreservesAuthorityBoundary проверяет сохранение разных прежних execution-классификаций для auth, unsupported authority, required MCP и generic transport sentinels.
 func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
 	tests := []struct {
 		name string
@@ -39,6 +64,8 @@ func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
 	}
 }
 
+// TestRuntimeArtifactFailureCodeRemainsClosed preserves the one public artifact code while forcing an invented internal diagnostic code to the generic unavailable fallback.
+// TestRuntimeArtifactFailureCodeRemainsClosed сохраняет единственный публичный artifact code, переводя выдуманный internal diagnostic code в общий unavailable fallback.
 func TestRuntimeArtifactFailureCodeRemainsClosed(t *testing.T) {
 	t.Parallel()
 	if safeFailureCode("RUNTIME_ARTIFACT_INVALID") != "RUNTIME_ARTIFACT_INVALID" ||
@@ -47,6 +74,8 @@ func TestRuntimeArtifactFailureCodeRemainsClosed(t *testing.T) {
 	}
 }
 
+// TestCollectArtifactsRejectsHardlinkWithoutReadingTarget creates a disposable link to a synthetic outside file and requires a redacted collection failure rather than returned private bytes.
+// TestCollectArtifactsRejectsHardlinkWithoutReadingTarget создаёт одноразовую ссылку на синтетический внешний файл и требует очищенный отказ сбора вместо возврата приватных байтов.
 func TestCollectArtifactsRejectsHardlinkWithoutReadingTarget(t *testing.T) {
 	root := t.TempDir()
 	if os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770) != nil {
@@ -61,6 +90,8 @@ func TestCollectArtifactsRejectsHardlinkWithoutReadingTarget(t *testing.T) {
 	}
 }
 
+// TestRuntimeMCPFailureCodeIsPreservedForCompletion composes execution and public-code classifiers and requires the required-MCP failure to remain distinguishable at completion.
+// TestRuntimeMCPFailureCodeIsPreservedForCompletion объединяет execution- и public-code classifiers и требует отличимости required-MCP failure при completion.
 func TestRuntimeMCPFailureCodeIsPreservedForCompletion(t *testing.T) {
 	t.Parallel()
 
@@ -70,6 +101,8 @@ func TestRuntimeMCPFailureCodeIsPreservedForCompletion(t *testing.T) {
 	}
 }
 
+// runnerInputArtifact builds one synthetic pinned attachment descriptor with exact scope/order/source; knowledge artifacts additionally receive the expected project-binding provenance.
+// runnerInputArtifact создаёт один синтетический pinned attachment descriptor с точными scope/order/source; knowledge дополнительно получает ожидаемую project-binding provenance.
 func runnerInputArtifact(ref, fileName, mediaType, scope string, position, version int64, source string) runtimecontract.RunnerInputArtifact {
 	artifact := runtimecontract.RunnerInputArtifact{
 		Ref: ref, FileName: fileName, MediaType: mediaType,
@@ -83,6 +116,8 @@ func runnerInputArtifact(ref, fileName, mediaType, scope string, position, versi
 	return artifact
 }
 
+// bindAttachmentCatalog annotates synthetic current/session artifacts and appends their declared sets for unit fixtures; it does not authorize attachments or clone the input's existing backing arrays.
+// bindAttachmentCatalog дополняет синтетические current/session artifacts и добавляет объявленные sets для unit fixtures; не авторизует вложения и не копирует существующие backing arrays входа.
 func bindAttachmentCatalog(input model.Input) model.Input {
 	for index := range input.InputArtifacts {
 		artifact := &input.InputArtifacts[index]
@@ -115,6 +150,8 @@ func bindAttachmentCatalog(input model.Input) model.Input {
 	return input
 }
 
+// materializedInstructions builds deterministic unversioned launch blocks and a sorted exact capability block for isolated tests, without resolving user data or writing platform configuration.
+// materializedInstructions создаёт определённые unversioned launch blocks и сортированный точный capability block для изолированных тестов без разрешения user data и записи platform configuration.
 func materializedInstructions(kind string, capabilities []string) string {
 	blocks := map[string]string{
 		"workflow-stage":       `<workflow-stage used="false">unused</workflow-stage>`,
@@ -133,6 +170,8 @@ func materializedInstructions(kind string, capabilities []string) string {
 	return "Server materialized prompt.\n" + blocks["workflow-stage"] + "\n" + blocks["automation"] + "\n" + blocks["session-continuation"] + "\n" + capabilityBlock
 }
 
+// TestBuildInitialPromptUsesExactServerTask checks initial task whitespace and trailing newline reach the prompt unchanged, with no local task reconstruction.
+// TestBuildInitialPromptUsesExactServerTask проверяет неизменную передачу пробелов и завершающего newline исходной задачи в prompt без локального пересоздания задачи.
 func TestBuildInitialPromptUsesExactServerTask(t *testing.T) {
 	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "  Analyze the attached customer brief.\n"}
 	prompt, err := buildPrompt(input)
@@ -144,6 +183,8 @@ func TestBuildInitialPromptUsesExactServerTask(t *testing.T) {
 	}
 }
 
+// TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks checks synthetic revision/model/reasoning/tool/config/environment pins and the required continuation/capability blocks appear in the existing continuation prompt.
+// TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks проверяет synthetic revision/model/reasoning/tool/config/environment pins и обязательные continuation/capability blocks в прежнем continuation prompt.
 func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *testing.T) {
 	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "Continue with the changes.", CodexSessionID: "00000000-0000-4000-8000-000000000001",
 		Attempt: 2, RuntimeRevisionRef: "rrev_abcdefgh", RuntimeRevisionVersion: 3, RuntimeRevisionDigest: strings.Repeat("a", 64),
@@ -175,6 +216,8 @@ func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *te
 	}
 }
 
+// TestMaterializedPromptCoversAllRunnerLaunchKinds covers initial agent, workflow, automation, resumed continuation and retry fixtures, checking instruction validity and exact revision-delta presence without launching workloads.
+// TestMaterializedPromptCoversAllRunnerLaunchKinds проверяет initial agent, workflow, automation, resumed continuation и retry fixtures, корректность instructions и точное наличие revision-delta без запуска нагрузок.
 func TestMaterializedPromptCoversAllRunnerLaunchKinds(t *testing.T) {
 	tests := []struct {
 		name, kind   string
@@ -219,6 +262,8 @@ func TestMaterializedPromptCoversAllRunnerLaunchKinds(t *testing.T) {
 	}
 }
 
+// TestValidateInstructionsAcceptsOnlyServerMaterializedPrompt accepts the synthetic expected blocks and rejects unresolved variables, plain text, competing used kinds or a foreign capability block.
+// TestValidateInstructionsAcceptsOnlyServerMaterializedPrompt принимает синтетические ожидаемые блоки и отклоняет unresolved variables, plain text, конфликтующие used kinds и чужой capability block.
 func TestValidateInstructionsAcceptsOnlyServerMaterializedPrompt(t *testing.T) {
 	input := model.Input{Instructions: materializedInstructions("workflow-stage", []string{"project.read"}), Capabilities: []string{"project.read"}}
 	if err := validateMaterializedInstructions(input); err != nil {
@@ -235,6 +280,8 @@ func TestValidateInstructionsAcceptsOnlyServerMaterializedPrompt(t *testing.T) {
 	}
 }
 
+// TestWriteInputManifestsUsesCanonicalFullCatalog independently constructs current/history/workspace catalogs, publishes them to a temporary root and verifies canonical bytes, 0440 files and setgid 0750 protected directories.
+// TestWriteInputManifestsUsesCanonicalFullCatalog независимо строит current/history/workspace catalogs, публикует во временный root и сверяет канонические байты, файлы 0440 и защищённые setgid 0750 каталоги.
 func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 	root := t.TempDir()
 	input := model.Input{
@@ -316,6 +363,8 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 	}
 }
 
+// TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation supplies a bad manifest digest and requires every pre-existing temporary input/session/knowledge sentinel to remain unchanged.
+// TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation передаёт неверный manifest digest и требует сохранения всех прежних временных input/session/knowledge sentinels.
 func TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation(t *testing.T) {
 	root := t.TempDir()
 	for _, directory := range []string{"input", "session", "knowledge"} {
@@ -345,6 +394,8 @@ func TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation
 	}
 }
 
+// TestVerifyInputArtifactsRejectsSymlinkWithoutTargetLeakage replaces a canonical manifest with a symlink and requires verification to fail without exposing its target path.
+// TestVerifyInputArtifactsRejectsSymlinkWithoutTargetLeakage заменяет канонический manifest символьной ссылкой и требует отказ без раскрытия target path.
 func TestVerifyInputArtifactsRejectsSymlinkWithoutTargetLeakage(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "input"), 0o770); err != nil {
@@ -367,6 +418,8 @@ func TestVerifyInputArtifactsRejectsSymlinkWithoutTargetLeakage(t *testing.T) {
 	}
 }
 
+// TestVerifyInputArtifactsRejectsFIFOWithoutWaitingForWriter uses a disposable FIFO at the manifest path and requires verification to reject it without waiting for a writer.
+// TestVerifyInputArtifactsRejectsFIFOWithoutWaitingForWriter использует одноразовый FIFO вместо manifest и требует отказ проверки без ожидания writer.
 func TestVerifyInputArtifactsRejectsFIFOWithoutWaitingForWriter(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "input"), 0o770); err != nil {
@@ -380,6 +433,8 @@ func TestVerifyInputArtifactsRejectsFIFOWithoutWaitingForWriter(t *testing.T) {
 	}
 }
 
+// TestMaterializedInstructionsRejectUnpromisedNames passes unresolved agent/project template variables and requires rejection before prompt use.
+// TestMaterializedInstructionsRejectUnpromisedNames передаёт unresolved agent/project template variables и требует отказ до использования prompt.
 func TestMaterializedInstructionsRejectUnpromisedNames(t *testing.T) {
 	for _, instructions := range []string{"{{ .agent.name }}", "{{ .project.name }}"} {
 		if err := validateMaterializedInstructions(model.Input{Instructions: instructions}); err == nil {
@@ -388,6 +443,8 @@ func TestMaterializedInstructionsRejectUnpromisedNames(t *testing.T) {
 	}
 }
 
+// TestSystemAssistantCompletionDoesNotCreateProjectArtifact checks system-assistant completion yields no project artifact collection even when final text exists.
+// TestSystemAssistantCompletionDoesNotCreateProjectArtifact проверяет отсутствие сбора project artifacts для system-assistant completion даже при имеющемся final text.
 func TestSystemAssistantCompletionDoesNotCreateProjectArtifact(t *testing.T) {
 	artifacts, err := completionArtifacts(model.Input{AssistantScope: runtimecontract.AssistantScopeSystem}, "Configuration plan proposed.")
 	if err != nil {
@@ -398,6 +455,8 @@ func TestSystemAssistantCompletionDoesNotCreateProjectArtifact(t *testing.T) {
 	}
 }
 
+// TestCompletionWithoutArtifactCapabilityDoesNotCreateProjectArtifact checks a result without artifact capability cannot trigger collection or synthesize project artifacts.
+// TestCompletionWithoutArtifactCapabilityDoesNotCreateProjectArtifact проверяет запрет сбора и создания project artifacts для результата без artifact capability.
 func TestCompletionWithoutArtifactCapabilityDoesNotCreateProjectArtifact(t *testing.T) {
 	artifacts, err := completionArtifacts(model.Input{}, "Bounded result.")
 	if err != nil {
@@ -408,6 +467,8 @@ func TestCompletionWithoutArtifactCapabilityDoesNotCreateProjectArtifact(t *test
 	}
 }
 
+// TestCollectArtifactsRejectsSymlinkWithoutReadingTarget places a symlink in the temporary outbox and requires a collection failure whose diagnostic never includes the outside path.
+// TestCollectArtifactsRejectsSymlinkWithoutReadingTarget помещает symlink во временный outbox и требует отказ сбора без внешнего пути в диагностике.
 func TestCollectArtifactsRejectsSymlinkWithoutReadingTarget(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
@@ -425,6 +486,8 @@ func TestCollectArtifactsRejectsSymlinkWithoutReadingTarget(t *testing.T) {
 	}
 }
 
+// TestReadinessCanaryReturnsOnlySafeSymlinkDenial first publishes a successful real temporary-workspace probe, then a symlink-denied snapshot, verifying readyz status and exact path-free reason.
+// TestReadinessCanaryReturnsOnlySafeSymlinkDenial сначала публикует успешную реальную пробу временного workspace, затем snapshot отказа symlink, проверяя readyz status и точную причину без пути.
 func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
 	root := t.TempDir()
 	for _, relative := range []string{".kodex/outbox", "input", "knowledge"} {

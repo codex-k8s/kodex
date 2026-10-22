@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.214.0
+version: 1.215.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,77 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятнадцатая волна — основной turn runner и общий rollout fixture
+
+Опубликованный SHA214 — `80af23a882745a03948f0d7963555f04ef570caa`.
+Exact PFdOM1:6582 sources,222 excluded,1835 raw,594 retained,1241 unresolved;
+Go8169/21158,missing12989;raw SHA256
+`5741c28005bd7295e02939c06dfc34f9d4bad4df970debaf51039bc4258d45f7`;
+clone-set `4fe862f8f572c3a1a0c49d7a13e6024a54908529924dd14a62a56498948765ac`.
+Push/readback,чистая ветка,OPEN Issue иDraft PR214 со свежим main сверены;
+app16/43 unit иfull runner build на SHA214 PASS,0 FAIL/SKIP.
+
+Целиком прочитаны app.go,app_test.go,completion_usage_test.go и
+codex/broker_capture_test.go;новые два файла private testfixture также
+полностью проверены. Scope6 файлов87/87 EN→RU:81 прежнее непокрытое
+объявление,4 новых и2 ранее покрытых. Package app пояснение двуязычно.
+Весь production app теперь85/85;вместе со всеми тестами app135/157,
+оставшиеся22 declarations тестов не объявлены покрытыми.
+Описано различие delivery success/failed terminal outcome,нулевого generic
+usage/измеренного расхода,private capture proof после произвольной execute
+ошибки/valid terminal archive tuple после completed execute. Сохранены
+detached bounded terminal delivery,typed activity paths,deadline checks,
+readiness/MCP cleanup иartifact capability/assistant exclusions.
+
+Файловые пояснения не обещают отсутствующие guarantees:input open проверяет
+regular file,но не single-link;outbox collection проверяет single-link.
+Path-based staging предполагает подготовленные parents,не directory-fsync
+durability;rename failure ordinary writer оставляет staging,аartifact writer
+очищает. Session/template validation не названо выдачей authority;существующие
+versioned иunversioned ветки не менялись. Lifecycle/permissions/API прежние.
+
+Реальный125-token повтор подготовки двухстрочного synthetic rollout вынесен
+в runner/internal/testfixture.WriteRolloutSource:app completion иcodex capture
+тесты используют общий mkdir/open/write/sync/close. Никакие capture proofs,
+input pins,broker frames или результат выполнения вfixture не перенесены.
+Сохранены mode0700/0640,umask ипрежние create/write-only flags БЕЗ truncation;
+новый unit проверяет точные bytes,restricted modes иexisting file mode/tail.
+Новый package не зависит от model/codex ине создаёт test import cycle.
+`go list -deps ./cmd/agent-runner` подтверждает0 testfixture/testing runtime
+dependencies. Это private helper одного deployable,не новый общий module.
+
+Дополнительно два идентичных healthz/livez handlers разделяют одну локальную
+closure:новый unit сохраняет exact status/body для двух aliases,двух live
+states иGET/POST. Один AttachmentSet README literal разделён publication/
+readback через private const без изменения bytes. Оба коротких повтора были
+ниже detector threshold. Обратное раскрытие actual helper body,README const
+иclosure с удалением только нового liveness unit даёт идентичный Go AST4
+прежних файлов;порядок двух OR flags восстановлен как коммутативный.
+
+Выбранные app/codex/testfixture unit:28 верхних/97 всех PASS,0 FAIL,
+1 SKIP TestBrokerCaptureNativeUIDBoundary (требует disposable root).
+Direct inert native fixture без env не является проверкой разных UID;
+эта kernel boundary здесь NOT RUN. Реально проверены synthetic capture,
+malformed/foreign proofs,measured usage иlost-ACK terminal retry,artifact
+guards,canonical manifests,prompts иreadiness aliases. Настоящие агенты,
+provider binaries,cluster ипостоянные workspace не запускались.
+Full runner build -mod=readonly,scoped87/87,17 Node units,Go-checker unit,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL;Go1.26.6,GOENV/GOWORK off.
+Перед unit unset KODEX_NATIVE_CAPTURE_FIXTURE/WORKSPACE/OUTCOME.
+Команда из runner с указанным Go environment:
+`go test -mod=readonly -count=1 -json ./internal/testfixture ./internal/app ./internal/codex -run '^(TestWriteRolloutSource|TestLivenessRoutes|TestRuntimeExecutionFailureCode|TestRuntimeArtifactFailureCode|TestCollectArtifacts|TestRuntimeMCPFailureCode|TestBuildInitialPrompt|TestBuildContinuationPrompt|TestMaterializedPrompt|TestValidateInstructions|TestWriteInputManifests|TestMaterializeInputArtifacts|TestVerifyInputArtifacts|TestMaterializedInstructions|TestSystemAssistantCompletion|TestCompletionWithoutArtifact|TestReadinessCanary|TestExecutedTurn|TestRunTurnDelivers|TestBrokerCapture|TestArchiveDigest|TestCaptureCannot)'`.
+Context7 `/golang/go`:OpenFile flags/modes/umask,Sync/Close;
+новых dependencies/SDK нет. REPO-DOC-001 перечитан полностью.
+
+Рабочий rbD95c:6584 sources,222 excluded,1834 raw,594 retained,1240 unresolved;
+Go8254/21162,missing12908;raw SHA256
+`a9fdb977c36740892992fd6bd4a2e854e280cff575bfb020b925af40e5fac268`;
+clone-set `1f1e959f51c29f74b0a2a710a7e71976435ba263532fb23803fa5e909cf9f877`.
+Multiset pair/fragment/count:удалено лишь одно125-token окно,новых групп и
+exceptions нет. Полные app/runner/repo units иобщий Go-docs check ещё не
+выполнены;live/browser/deploy/ИИ/STT/почта NOT RUN. Цель не завершена,
+post-commit scan иточный результат публикуются втом же Draft PR.
 
 ## Двести четырнадцатая волна — диагностика, trust bundle и контекст сессии
 
