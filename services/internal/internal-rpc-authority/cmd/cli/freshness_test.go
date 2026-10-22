@@ -2,6 +2,8 @@ package main
 
 import "testing"
 
+// TestFreshnessActivationArgumentsFailClosed accepts one canonical activation and rejects six altered version/identity/confirmation/flag cases plus truncated and extra arguments. Only parsing runs; no freshness activation, timer loop or database access occurs.
+// TestFreshnessActivationArgumentsFailClosed принимает одну каноническую активацию и отклоняет шесть вариантов версии, идентичности, подтверждения или флага, а также неполные и лишние аргументы. Выполняется только разбор без активации свежести, цикла таймера или доступа к БД.
 func TestFreshnessActivationArgumentsFailClosed(t *testing.T) {
 	valid := []string{"freshness-activate", "--expected-version", "1", "--activation-id", "13130000-0000-4000-8000-000000000300", "--confirm", "ACTIVATE-STAGING-AUTHORITY-FRESHNESS"}
 	action, err := parseCommand(valid)

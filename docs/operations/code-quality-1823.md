@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.283.0
+version: 1.284.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,51 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят четвёртая волна — команды и свежесть authority CLI
+
+Опубликованный SHA283 — `de56d82bad6261bb3e087f8a44ce1d64ceb41414`.
+Точный wqaSYz:6615 sources,222 excluded,1820 raw/717 retained/
+1103 unresolved; Go12299/21253,missing8954. Raw SHA256:
+`b2872966795ce561ddf647efb7341c634671b269da58863d36bc9d3202dc1f6a`;
+clone-set8381d099… . Exact platform service25/90, CP build -p=2,
+docs140/140, inverse AST4/tooling/scan PASS LOCAL,0 FAIL/SKIP;
+push/readback и Draft PR PATCH/GET283 подтверждены.
+
+Полностью прочитаны cmd/cli/main.go, main_test.go, freshness.go и
+freshness_test.go authority;42/42 declarations теперь EN→RU, включая
+private types, commands, embedded SQL references, constants и units.
+Комментарии разделяют command recognition и specialized argument checks,
+точный PostgreSQL verify-full/TLS с реальным подключением в run, forward
+migrations и read-only status, bounded watch и однократную activation.
+Uncertain activation outcome не даёт нового intent/retry; version/age/
+activation readback не выдан за подпись или проверку каждого consumer.
+
+Unit comments явно называют SQL substring/regex/hash assertions проверкой
+исходного контракта, а не concurrent PostgreSQL/lifecycle/security proof.
+Goose function fixture и exact nine-file history не исполняются и не
+меняются. AST4 без comments/positions идентичен SHA283, все //go:embed
+директивы проверены отдельно и сохранены в прежнем порядке. Applied
+migrations byte-unchanged; runtime/errors/API/CLI flags не менялись.
+
+Все15 обычных CLI unit,21 с subtests, PASS LOCAL,0 FAIL/SKIP;
+component entry не выбран, KODEX_AUTHORITY_MIGRATION_TEST_PORT удалён из
+дочернего окружения. Точная команда выбирает15 явно перечисленных tests,
+не выполняет CLI run с БД и не запускает component/rotation протокол.
+Полный authority build -p=2 PASS LOCAL.17 Node units, Go checker units,
+scope docs42/42, AST/directive/clone proof,5 ignores и diff-check PASS.
+
+Рабочий xUnqCU:6615 sources,222 excluded,1820 raw/717 retained/
+1103 unresolved; Go12341/21253,missing8912. Все1820 clone keys/counts
+и clone-set прежние, registry599/717 неизменён, новых exclusions нет.
+Raw SHA256:
+`0442da6e0fc606f33a425e8a459547cbda1537ee5786a7af8415b6754a8bfbdf`;
+clone-set:
+`8381d099ffa390edf49df360045415150bf2a635db5620dcf3c498356206bcb4`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated и live state неизменны. Общая задача открыта; diagnostics/STT
+historical FAIL сохраняются, full baseline/component/browser/live/deploy
+NOT RUN по scoped решению владельца.
 
 ## Двести восемьдесят третья волна — проверка пачки и точные typed-read окна
 

@@ -11,16 +11,38 @@ import (
 	"testing"
 )
 
+// publicationFunctionDeclaration embeds the exact SQL publication-function fixture used to require one matching declaration in the baseline. It is comparison data, not a function executed by this unit suite.
+// publicationFunctionDeclaration встраивает точный SQL-эталон функции публикации для требования одного совпадающего объявления в исходной миграции. Это данные сравнения, а не исполняемая этим юнит-набором функция.
+//
 //go:embed testdata/publisher_append_snapshot_history.sql
 var publicationFunctionDeclaration string
 
+// baselineMigration names the published baseline SQL fixture whose exact SHA-256 and expected authority boundaries are checked by these tests; it is not an editable replacement migration.
+// baselineMigration задаёт опубликованный SQL-эталон исходной миграции, точный SHA-256 и ожидаемые границы полномочий которого проверяются тестами; это не изменяемая замена миграции.
 const baselineMigration = "migrations/20260823000100_internal_rpc_authority_baseline.sql"
+
+// workloadBoundaryMigration identifies the forward workload/database-boundary migration in the expected ordered history; the constant does not apply its SQL.
+// workloadBoundaryMigration определяет прямую миграцию границы workload и БД в ожидаемой упорядоченной истории; константа не применяет SQL.
 const workloadBoundaryMigration = "migrations/20260906000100_workload_database_boundary.sql"
+
+// snapshotWorkloadSignerMigration identifies the forward snapshot/workload-signer boundary migration in the immutable migration-history assertion.
+// snapshotWorkloadSignerMigration определяет прямую миграцию границы снимка и подписанта workload в проверке неизменной истории миграций.
 const snapshotWorkloadSignerMigration = "migrations/20260907000100_snapshot_workload_signer_boundary.sql"
+
+// authorityRotationLifecycleMigration locates the forward rotation-lifecycle SQL fixture for bounded-transition and no-reset text checks.
+// authorityRotationLifecycleMigration указывает прямой SQL-эталон жизненного цикла ротации для текстовых проверок ограниченных переходов и отсутствия сброса.
 const authorityRotationLifecycleMigration = "migrations/20260909000100_authority_rotation_lifecycle.sql"
+
+// authorityNormalRotationOperationMigration locates the forward normal-rotation SQL fixture with explicit distribution, switch and retirement phases; the tests read its bytes rather than run rotation.
+// authorityNormalRotationOperationMigration указывает прямой SQL-эталон штатной ротации с явными фазами распространения, переключения и вывода; тесты читают его байты, а не запускают ротацию.
 const authorityNormalRotationOperationMigration = "migrations/20260909000200_authority_normal_rotation_operation.sql"
+
+// authoritySnapshotPredecessorMigration locates the forward predecessor-provenance SQL fixture used to assert exact cross-domain bindings.
+// authoritySnapshotPredecessorMigration указывает прямой SQL-эталон происхождения предшественника для проверки точных междоменных привязок.
 const authoritySnapshotPredecessorMigration = "migrations/20260909000300_authority_snapshot_predecessor.sql"
 
+// TestParseCommandAcceptsFreshOnlyCommands accepts the forward up action and rejects four retired or unsupported command forms without loading configuration or opening a database.
+// TestParseCommandAcceptsFreshOnlyCommands принимает прямое действие up и отклоняет четыре устаревшие или неподдерживаемые формы команды без загрузки конфигурации и открытия БД.
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	t.Parallel()
 
@@ -38,6 +60,8 @@ func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	}
 }
 
+// TestReadbackContentionMigrationUsesScopedAdvisoryLock checks baseline SQL text for the registered runtime principals, advisory transaction lock, idempotency parameter, row locking and receipt table. Substring presence is not a concurrent PostgreSQL execution proof.
+// TestReadbackContentionMigrationUsesScopedAdvisoryLock проверяет в тексте исходного SQL зарегистрированных субъектов runtime, транзакционную advisory-блокировку, параметр идемпотентности, блокировку строки и таблицу квитанций. Наличие подстрок не доказывает конкурентное исполнение PostgreSQL.
 func TestReadbackContentionMigrationUsesScopedAdvisoryLock(t *testing.T) {
 	t.Parallel()
 
@@ -61,6 +85,8 @@ func TestReadbackContentionMigrationUsesScopedAdvisoryLock(t *testing.T) {
 	}
 }
 
+// TestPeerScopedReadbackMigrationUsesCompositeIdempotencyLookup requires peer-qualified idempotency predicates and lock-key composition in baseline SQL and rejects an unscoped lookup string; it does not execute the database function.
+// TestPeerScopedReadbackMigrationUsesCompositeIdempotencyLookup требует в исходном SQL предикаты идемпотентности с peer и составление ключа блокировки и отклоняет строку поиска без области; функция БД не выполняется.
 func TestPeerScopedReadbackMigrationUsesCompositeIdempotencyLookup(t *testing.T) {
 	t.Parallel()
 
@@ -84,6 +110,8 @@ func TestPeerScopedReadbackMigrationUsesCompositeIdempotencyLookup(t *testing.T)
 	}
 }
 
+// TestSnapshotPredecessorMigrationKeepsExactCrossDomainProvenance checks predecessor SQL for exact revision/digest/publication-input and role predicates, including phase handling. This is source-contract coverage, not a live signed snapshot or database authorization check.
+// TestSnapshotPredecessorMigrationKeepsExactCrossDomainProvenance проверяет SQL предшественника на точные предикаты ревизии, дайджеста, входа публикации и роли, включая обработку фазы. Это проверка исходного контракта, а не живого подписанного снимка или авторизации БД.
 func TestSnapshotPredecessorMigrationKeepsExactCrossDomainProvenance(t *testing.T) {
 	t.Parallel()
 	content, err := os.ReadFile(authoritySnapshotPredecessorMigration)
@@ -107,6 +135,8 @@ func TestSnapshotPredecessorMigrationKeepsExactCrossDomainProvenance(t *testing.
 	}
 }
 
+// TestSnapshotPromotionUsesExactRequiredReadbackTargets checks declared workload/role/generation arrays, cardinality and exact readback joins, and rejects the old dynamic-count query fragment. It reads migration text without promoting a snapshot.
+// TestSnapshotPromotionUsesExactRequiredReadbackTargets проверяет объявленные массивы workload, роли и поколения, мощность и точные соединения readback и отклоняет фрагмент прежнего подсчёта динамических записей. Читается текст миграции без продвижения снимка.
 func TestSnapshotPromotionUsesExactRequiredReadbackTargets(t *testing.T) {
 	t.Parallel()
 
@@ -137,6 +167,8 @@ func TestSnapshotPromotionUsesExactRequiredReadbackTargets(t *testing.T) {
 	}
 }
 
+// TestAuthorityMigrationHistoryPreservesPublishedBaseline requires the exact nine-file ordered forward history and the fixed SHA-256 of the published baseline. It catches byte drift without applying, rolling back or editing migrations.
+// TestAuthorityMigrationHistoryPreservesPublishedBaseline требует точную упорядоченную историю девяти прямых файлов и фиксированный SHA-256 опубликованной исходной миграции. Изменение байтов обнаруживается без применения, отката или редактирования миграций.
 func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	t.Parallel()
 
@@ -156,6 +188,8 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	}
 }
 
+// TestAuthorityNormalRotationOperationHasThreeImmutablePhases checks SQL text for DISTRIBUTE/SWITCH/RETIRE intents, immutable publication bindings, timing fields and locking, and forbids DROP TABLE/TRUNCATE strings. It does not run a rotation protocol.
+// TestAuthorityNormalRotationOperationHasThreeImmutablePhases проверяет SQL-текст на намерения DISTRIBUTE/SWITCH/RETIRE, неизменные привязки публикации, временные поля и блокировки и запрещает строки DROP TABLE/TRUNCATE. Протокол ротации не запускается.
 func TestAuthorityNormalRotationOperationHasThreeImmutablePhases(t *testing.T) {
 	t.Parallel()
 	content, err := os.ReadFile(authorityNormalRotationOperationMigration)
@@ -183,6 +217,8 @@ func TestAuthorityNormalRotationOperationHasThreeImmutablePhases(t *testing.T) {
 	}
 }
 
+// TestAuthorityRotationLifecycleMigrationIsForwardOnlyAndBounded requires lifecycle functions, version two, bounded overlap and terminal/abort predicates in SQL and rejects destructive table-reset text; it is not an executed lifecycle transition matrix.
+// TestAuthorityRotationLifecycleMigrationIsForwardOnlyAndBounded требует в SQL функции жизненного цикла, вторую версию, ограниченное перекрытие и terminal/abort-предикаты и отклоняет текст разрушительного сброса таблиц; это не исполняемая матрица переходов.
 func TestAuthorityRotationLifecycleMigrationIsForwardOnlyAndBounded(t *testing.T) {
 	t.Parallel()
 
@@ -213,6 +249,8 @@ func TestAuthorityRotationLifecycleMigrationIsForwardOnlyAndBounded(t *testing.T
 	}
 }
 
+// TestBaselineWrapsEveryFunctionForGoose counts CREATE FUNCTION declarations and their Goose StatementBegin/StatementEnd wrappers, requiring nonzero equal counts. The regex supports the fixture's dollar delimiters; it is not a general SQL parser.
+// TestBaselineWrapsEveryFunctionForGoose считает объявления CREATE FUNCTION и их обёртки Goose StatementBegin/StatementEnd и требует ненулевое равенство. Регулярное выражение поддерживает dollar-разделители эталона; это не общий SQL-парсер.
 func TestBaselineWrapsEveryFunctionForGoose(t *testing.T) {
 	t.Parallel()
 
@@ -238,6 +276,8 @@ func TestBaselineWrapsEveryFunctionForGoose(t *testing.T) {
 	}
 }
 
+// TestBaselineMaterializesCurrentWorkloadPrincipals requires current principal names, forbids retired identity-lifecycle names and requires exactly one publication-function fixture plus its timestamp signature in baseline bytes. It does not create roles or verify a real session_user.
+// TestBaselineMaterializesCurrentWorkloadPrincipals требует в исходных байтах текущие имена субъектов, запрещает устаревшие имена жизненного цикла идентичности и требует ровно один эталон функции публикации и её временную сигнатуру. Роли не создаются и реальный session_user не проверяется.
 func TestBaselineMaterializesCurrentWorkloadPrincipals(t *testing.T) {
 	t.Parallel()
 
@@ -282,6 +322,8 @@ func TestBaselineMaterializesCurrentWorkloadPrincipals(t *testing.T) {
 	}
 }
 
+// TestBaselineGrantsDatabaseConnectToExactRuntimePrincipals isolates the baseline's first database CONNECT grant, requires all listed runtime principals and forbids PUBLIC and owner role there. It is a bounded source assertion, not a database connection attempt.
+// TestBaselineGrantsDatabaseConnectToExactRuntimePrincipals выделяет первое назначение CONNECT к БД в исходной миграции, требует всех перечисленных субъектов runtime и запрещает там PUBLIC и роль владельца. Это ограниченная проверка исходника, а не попытка подключения к БД.
 func TestBaselineGrantsDatabaseConnectToExactRuntimePrincipals(t *testing.T) {
 	t.Parallel()
 
