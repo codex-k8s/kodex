@@ -8,13 +8,12 @@ import (
 	"unicode/utf8"
 )
 
-// Codex0.160 ограничивает value1000 approximate tokens (4000bytes по
-// utils/string/truncate.rs). Каждый UTF-8 chunk меньше точного byte-предела.
+// currentInstructionChunkBytes keeps UTF-8 fragments at a conservative 3000-byte bound below the existing pinned profile's approximately 4000-byte per-value truncation budget; it is not a universal limit for every provider version.
+// currentInstructionChunkBytes ограничивает UTF-8 fragments консервативными 3000 байтами ниже примерно 4000-байтового per-value truncation budget прежнего pinned profile; это не универсальный предел всех provider versions.
 const currentInstructionChunkBytes = 3000
 
-// Полные bytes поступают в native developer fragments каждого turn, без
-// зависимости от sticky generic instructions и catalog collaboration presets.
-// Чанки не являются самостоятельными источниками: это один точный snapshot.
+// currentInstructionContext splits valid UTF-8 instructions at rune boundaries into ordered application fragments and adds exact byte/chunk counts and SHA-256 revision metadata. Empty text yields metadata only; the mapper does not impose a separate total-input bound, send a request or manufacture instruction authority.
+// currentInstructionContext делит корректные UTF-8 instructions по rune boundaries на упорядоченные application fragments и добавляет точные byte/chunk counts и SHA-256 revision metadata. Пустой текст даёт лишь metadata; mapper не задаёт отдельный total-input bound, не отправляет запрос и не создаёт instruction authority.
 func currentInstructionContext(instructions string) (map[string]any, error) {
 	if !utf8.ValidString(instructions) {
 		return nil, ErrRuntimeProfile

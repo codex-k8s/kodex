@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume checks resumed input keeps the exact prompt and explicit empty records, then rejects a changed snapshot digest rather than reusing prior memory.
+// TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume проверяет точный prompt и явные empty records resumed input, затем отклоняет изменённый snapshot digest вместо повторного использования прежней памяти.
 func TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume(t *testing.T) {
 	input := model.Input{OrganizationRef: "org_abcdefgh", ProjectRef: "proj_abcdefgh", AgentRef: "agt_abcdefgh", CodexSessionID: "previous-thread", RuntimeRevisionRef: "rrev_abcdefgh"}
 	snapshot := runtimecontract.RuntimeContextSnapshot{Schema: runtimecontract.RuntimeContextSchema, OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, AgentRef: input.AgentRef}
@@ -29,6 +31,8 @@ func TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume(t *testing
 	}
 }
 
+// TestMissingContextCannotStartProviderProcess invokes the local execution entrypoint with missing context and requires ErrRuntimeContext before credential loading or provider process creation.
+// TestMissingContextCannotStartProviderProcess вызывает local execution entrypoint без контекста и требует ErrRuntimeContext до credential loading и создания provider process.
 func TestMissingContextCannotStartProviderProcess(t *testing.T) {
 	input := model.Input{Provider: "openai", Model: "gpt-6-astra", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "medium"}
 	if _, err := executeLocal(t.Context(), input, []byte("task"), "", nil); !errors.Is(err, runtimecontract.ErrRuntimeContext) {
@@ -36,6 +40,8 @@ func TestMissingContextCannotStartProviderProcess(t *testing.T) {
 	}
 }
 
+// TestProviderContextUsesNativeSkillAndExactMemoryPins verifies initial/resumed mappings preserve native skill path/name and exact memory record, context digest and current revision pins without promoting memory to instructions.
+// TestProviderContextUsesNativeSkillAndExactMemoryPins проверяет сохранение native skill path/name и точных memory record, context digest и current revision pins в initial/resumed mappings без превращения memory в instructions.
 func TestProviderContextUsesNativeSkillAndExactMemoryPins(t *testing.T) {
 	now := time.Now().UTC()
 	input := model.Input{OrganizationRef: "org_abcdefgh", ProjectRef: "proj_abcdefgh", AgentRef: "agt_abcdefgh",
@@ -85,6 +91,8 @@ func TestProviderContextUsesNativeSkillAndExactMemoryPins(t *testing.T) {
 	}
 }
 
+// TestContextDiscoveryProcessFixture is inert without its explicit mode; a bounded parent-controlled test child implements only synthetic skill-root/list/enable RPC replies for success, missing, changed metadata or persistent-unbound-enable cases, without a real provider.
+// TestContextDiscoveryProcessFixture неактивен без явного mode; ограниченный parent-controlled test child реализует лишь synthetic skill-root/list/enable RPC replies для success, missing, changed metadata или persistent-unbound-enable без настоящего провайдера.
 func TestContextDiscoveryProcessFixture(t *testing.T) {
 	mode := os.Getenv("KODEX_SKILL_DISCOVERY_FIXTURE")
 	if mode == "" {
@@ -150,6 +158,8 @@ func TestContextDiscoveryProcessFixture(t *testing.T) {
 	}
 }
 
+// TestProviderDiscoveryReconcilesExactSkillsInRealProcess runs four synthetic protocol-child modes, requiring exact skill reconciliation success only for the valid case and joining stdin, process and reader without invoking Codex CLI or network.
+// TestProviderDiscoveryReconcilesExactSkillsInRealProcess выполняет четыре synthetic protocol-child modes, требуя успех exact skill reconciliation лишь для корректного случая и ожидая stdin, process и reader без Codex CLI и сети.
 func TestProviderDiscoveryReconcilesExactSkillsInRealProcess(t *testing.T) {
 	for _, mode := range []string{"success", "missing", "wrong metadata", "remains enabled"} {
 		t.Run(mode, func(t *testing.T) {

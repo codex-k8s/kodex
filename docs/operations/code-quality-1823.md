@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.216.0
+version: 1.217.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,67 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семнадцатая волна — конфигурация и provider context runner
+
+Опубликованный SHA216 — `dcd78f4cc10d8fe0572c43ca66fbf519c8de8470`.
+Exact GJVCTW:6584 sources,222 excluded,1834 raw,594 retained,1240 unresolved;
+Go8276/21162,missing12886;raw SHA256
+`0fc457d2eef102e8c76d7325da53f9d1ff63ffe99e40f71dd91ecb59aa69cf93`;
+clone-set `32b6901aa5b8dd3f65bef2b4b40e86d316cd68b50a4bf8ecd7263329bc465330`.
+Push/readback иPATCH/GET Draft PR216 подтверждены;app/testfixture53/144
+unit PASS,0 FAIL,3 explicit opt-in SKIP;full runner build PASS.
+
+Семь файлов config/context/discovery/current-instructions/execution snapshot
+с тестами прочитаны целиком.46/46 declarations EN→RU:44 прежних и2 новых,
+плюс package codex иlocal permissionProfileName const. Описаны typed TOML
+projection/roundtrip,точные volume pins,ограничения environment filters,
+отдельные secret names против secret values иmanaged proxy против CLI domain
+hints. Local model catalog не выдуман;tool existence check не назван запуском.
+Auth.json публикуется до последующих TOML checks:это не whole-home transaction.
+readProviderDigest ограничивает длину после ReadFile,не pre-allocation.
+secureDirectory сохраняет прежний numeric chmod request иточную provider UID
+проверку;новая setgid/ancestor guarantee не заявлена. replacePrivateFile
+не назван universally cleaned staging или directory-fsync durable.
+
+Context mapper сохраняет server prompt,native skill items,current memory pins
+иexplicit empty memory на resume. Skill discovery сначала приводит enabled
+states кexact snapshot,затем повторно сверяет names/descriptions/plugins;
+decoder возвращает иunbound discoveries для их отключения,не допускает их
+автоматически. UTF-8 instruction chunks сохраняют bytes/rune boundaries и
+revision metadata,но сами не выдают authority ине устанавливают total bound.
+Snapshot/transport/owner checks иactual provider config не менялись.
+
+В config_test.go повтор подготовки temporary workspace/home/synthetic auth
+digest вынесен в configurationHomeFixture с5 реальными потребителями.
+Все sandbox/volume/overlay/env/secret differences иspecific assertions
+остались у тестов. Новый unit сверяет independent paths/auth buffers иpin.
+Два detector self-clone окна действительно исчезли;более широких исключений
+нет. Go AST остальных6 файлов идентичен SHA216 без comments/token.Pos;
+config_test refactor проверен diff/units,не объявлен AST-identical.
+
+Выбранные codex units:17 верхних/80 всех PASS,0 FAIL/SKIP. Реально выполнены
+config TOML/permissions/env/search projections,auth/profile negatives,
+empty/native memory mapping,four synthetic discovery child modes,large UTF-8
+turn instruction fragments иexact execution-snapshot tool readiness.
+Sandbox probe unit лишь перехватывает exec.Cmd,не доказывает live sandbox;
+discovery process — текущий test binary,не настоящий Codex CLI/модель.
+Команда из runner:env -u KODEX_SKILL_DISCOVERY_FIXTURE,GOENV/GOWORK off,
+GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4;
+`go test -mod=readonly -count=1 -json ./internal/codex -run '^(TestConfigurationHomeFixture|TestProviderSandboxProbe|TestPrepareHome|TestPublishedVolumePermissions|TestValidateProviderAuthentication|TestValidateRuntimeSelection|TestRuntimeSelectionAccepts|TestProviderContext|TestMissingContext|TestContextDiscovery|TestProviderDiscovery|TestTurnStartPinsModel|TestExecutionSnapshotConsumer)'`.
+Full runner build,scoped46/46,17 Node units,Go-checker unit,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL. Context7
+`/burntsushi/toml`:Encoder,typed decode,Undecoded/IsDefined иomitempty.
+Новых SDK/dependencies иruntime behavior changes нет.
+
+Рабочий O6uG3h:6584 sources,222 excluded,1832 raw,594 retained,1238 unresolved;
+Go8322/21164,missing12842;raw SHA256
+`bf3a83b76ddff026698c9c8a4f9b1aad32352528ede54bc345148dbdb9fdfcdd`;
+clone-set `a2c4517d1be785325d788f8d34d62aa3b2dd1c1378ed8557909402bb78442726`.
+Multiset:удалено2 прежних exact-key occurrences,новых groups/exceptions нет.
+Полный codex/runner/repo unit иобщий Go-docs check ещё не выполнены;
+live/browser/deploy/настоящие ИИ/STT/почта NOT RUN. Цель не завершена,
+post-commit scan публикуется втом же Draft PR.
 
 ## Двести шестнадцатая волна — все тестовые объявления app runner
 
