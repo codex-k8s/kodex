@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.266.0
+version: 1.267.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,44 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят седьмая волна — image supply-chain и integration candidates
+
+Опубликованный SHA266 — `263897ca8736fa661f9ed7230e1f22390979bc6a`.
+Точный55amae:6602 sources,222 excluded,1817 raw/631 retained/
+1186 unresolved; Go11693/21238, missing9545. Raw SHA256:
+`bc0b05dfcea38b095d4ec5fb9423a466532c1f940e528fe55db76aaf6a10292e`.
+Clone-set:
+`f147f3eb0a7cfb00c9dd0dffcd29b1204e963e9be36541086fcc968cef9c3a62`.
+Точные unit/build, push/readback и Draft PR PATCH/GET266 подтверждены.
+
+Полностью прочитаны восемь entity files: role_image, role_image_impact,
+role_image_risk, integration_candidates, system_assistant_integration_grants,
+environment_draft, environment_impact и revision_impact. Все46 declarations
+описаны EN→RU; единственные изменения — комментарии и gofmt.
+Recipe selection не приравнен к immutable build input, claim/capability tokens
+не объявлены безопасными diagnostic values, техническая admission failure
+отделена от vulnerability verdict, human risk acceptance — от успешного допуска
+и promotion. Descriptor не объявлен валидатором Dockerfile или provenance.
+
+Candidate listing/pins/grantability не выдают grant; dependency versions и
+context digest перепроверяются владельцем изменения. Scoped impact pages
+сохраняют per-consumer outcomes и не обещают общей атомарности либо approval
+всех элементов. Saved draft не назван успешно валидированным или published.
+
+AST8 без комментариев идентичен SHA266; scope46/46. Raw/retained groups с
+этими восемью paths нет; ни одно исключение не добавлено. В рабочем qCklyl:
+6602 sources,222 excluded,1817 raw/631 retained/1186 unresolved;
+Go11739/21238, missing9499. Raw SHA256:
+`7c3c71411a233045206056771d9525a2f72588a879146afef40977bbaf70341b`.
+Clone-set и528 registry entries/631 occurrences неизменны.
+
+Выбранные CP repository/...+types/...+grpc+roleimage unit102 верхних/278 всех
+PASS,0 FAIL,те же3 explicit SKIP; full CP module build -p=2 PASS LOCAL.
+Docs46/46, AST8, canonical scan/5 ignore boundaries и diff-check PASS LOCAL.
+На точном новом SHA повторяются scoped unit/build и tooling units с readback
+в том же PR. Общие9499 missing и1186 unresolved остаются работой цели;
+browser/live/component/deploy/full acceptance не выполняются.
 
 ## Двести шестьдесят шестая волна — public runtime metadata и secret lifecycle views
 
