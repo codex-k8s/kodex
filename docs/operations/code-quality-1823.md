@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.285.0
+version: 1.286.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,60 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят шестая волна — общая сборка публичных метаданных ключа
+
+Опубликованный SHA285 — `fbbdeb29c1a248d569e1ac732bd0fd5da1e0fb13`.
+Точный Gtc6TT:6615 sources,222 excluded,1820 raw/718 retained/
+1102 unresolved; Go12382/21253,missing8871. Raw SHA256:
+`903e534aef4dbeea7c308d3f74b6de0abecc9730163ac74184096e58481c6ae0`;
+clone-set6e6362d1… . Exact authority app/utility33/122 и полный build,
+docs41/41, AST15/directives/tooling/scan PASS LOCAL,0 FAIL/SKIP;
+push/readback и Draft PR PATCH/GET285 подтверждены.
+
+Полностью прочитаны bootstrap-material main413 lines и test80 lines.
+Три повторённых metadata constructors теперь вызывают существующий
+newTrustKey с теми же status/generation/key/time arguments и преобразуют
+результат в прежний nominal type. Все4 типа и JSON tags неизменны:
+generation, manifest_signer_generation, credential_signer_generation.
+Shared constructor по-прежнему получает public JWK перед thumbprint;
+private bytes, purpose/audience/signers и ceremony output layout не
+смешиваются. Новых generic типов, trust policy или dependencies нет.
+
+Inverse AST5 восстанавливает весь main.go SHA285, каждую из3 исходных
+metadata constructions и прежний полный test после удаления нового unit
+и его3 imports. Сигнатуры wrappers отдельно неизменны. Новый unit
+проверяет4 nominal types и точные ordered JSON bytes/fields/tags/values
+по literal layout, независимо получая public JWK/thumbprint из библиотеки.
+Старый unit реально загружает временный signed restore-role trust через
+snapshot parser. Это synthetic/offline evidence, не live root rotation,
+admission, кластер или deployment.
+
+24 прежних declarations и новый unit описаны EN→RU, scope2 files25/25;
+добавлен перевод существующего package comment. Документация различает
+DTO/provenance references и authority, raw versus canonical hash,
+public-only serialization и private output, explicit signers и verifier,
+partial/nontransactional writes без permission repair/fsync. Сам runtime
+ключевого материала не является generated source; generated outputs в
+Git не добавлялись и не менялись. Context7/golang/go conversion rules
+сверены; собственные tests на Go1.26.6 доказывают сохранение tags/JSON.
+
+Authority app плюс bootstrap package:32 верхних/125 всех unit и полный
+authority build -p=2 PASS LOCAL,0 FAIL/SKIP.17 Node/Go checker units,
+scope docs/inverse AST/clone proof,5 ignores и gofmt/diff-check PASS LOCAL.
+Production ceremony CLI не запускался; новый unit создаёт синтетический
+ключ только в памяти, существующий пишет материалы только в t.TempDir.
+
+Рабочий oDXl9v:6615 sources,222 excluded,1819 raw/718 retained/
+1101 unresolved; Go12407/21254,missing8847. Удалено ровно1 raw110-token
+constructor window,1819 остальных keys/counts прежние, новых нет.
+Registry600/718 не менялся; новых exclusions нет. Raw SHA256:
+`592e2c9ca168e6d12678eae88355a25eff97deffc059289103625f6b9cf06938`;
+clone-set:
+`01a0079f54f39df98a9ec6807a72beea8da86c465ae11dc3a713d39fe0754be0`.
+После коммита exact scan/unit/build и PR readback повторяются.
+Contracts, applied migrations и live state прежние. Общая задача открыта;
+historical FAIL и scoped NOT RUN сохраняются.
 
 ## Двести восемьдесят пятая волна — служебные утилиты и точки входа authority
 
