@@ -11,6 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestProbeDoesNotInventMissingAndIgnoresOutsideSymlinks checks a disposable root with an outside symlink remains MISSING with no fabricated version/hash/path and no probe execution.
+// TestProbeDoesNotInventMissingAndIgnoresOutsideSymlinks проверяет сохранение MISSING без выдуманной версии, хеша и пути, без выполнения пробы для одноразового корня со ссылкой наружу.
 func TestProbeDoesNotInventMissingAndIgnoresOutsideSymlinks(t *testing.T) {
 	directory := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(directory, "usr/bin"), 0o700); err != nil {
@@ -31,6 +33,8 @@ func TestProbeDoesNotInventMissingAndIgnoresOutsideSymlinks(t *testing.T) {
 	}
 }
 
+// TestVersionProjectionDropsRawOutputAndBounds checks sample tool banners expose only numeric version tokens and an oversized capture keeps exactly 4096 bytes with sticky overflow.
+// TestVersionProjectionDropsRawOutputAndBounds проверяет извлечение из примерных баннеров только числовых токенов версии и сохранение ровно 4096 байт слишком большого вывода с признаком переполнения.
 func TestVersionProjectionDropsRawOutputAndBounds(t *testing.T) {
 	for _, raw := range []string{"go version go1.26.6 linux/amd64 PRIVATE_SENTINEL", "git version 2.53.0 PRIVATE_SENTINEL", "v1.2.3\nPRIVATE_SENTINEL"} {
 		match := versionPattern.FindStringSubmatch(raw)
@@ -46,12 +50,18 @@ func TestVersionProjectionDropsRawOutputAndBounds(t *testing.T) {
 	}
 }
 
+// TestProbeModeRejectsCallerArgumentsBeforeReadingRuntime checks malformed inventory arguments fail before root/input/file observation; no actual inventory or tool command is run.
+// TestProbeModeRejectsCallerArgumentsBeforeReadingRuntime проверяет отказ для неверных аргументов инвентаризации до наблюдения корня, входа или файлов; настоящая инвентаризация и команда инструмента не запускаются.
 func TestProbeModeRejectsCallerArgumentsBeforeReadingRuntime(t *testing.T) {
 	if Run(context.Background(), []string{"runner", Mode, "arbitrary"}) == nil {
 		t.Fatal("unknown probe arguments accepted")
 	}
 }
 
+// TestBuildInfoFallbackRequiresExactExecutableAndSuccessfulReadiness checks both permitted build-info fallbacks require successful readiness, exact unreplaced module/command and canonical version text.
+// Missing, development, foreign and malformed metadata never become an observed tool version.
+// TestBuildInfoFallbackRequiresExactExecutableAndSuccessfulReadiness проверяет для обоих разрешённых резервных путей build-info успешную готовность, точный неподменённый модуль и команду, канонический текст версии.
+// Отсутствующие, разработческие, чужие и некорректные метаданные не становятся наблюдённой версией инструмента.
 func TestBuildInfoFallbackRequiresExactExecutableAndSuccessfulReadiness(t *testing.T) {
 	for _, name := range []string{"goimports", "grpcurl"} {
 		module := "golang.org/x/tools"

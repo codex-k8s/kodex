@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.209.0
+version: 1.210.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,59 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести десятая волна — инструментальный инвентарь и private probe sandbox
+
+Точный опубликованный SHA209 — `fc5b9a104c3321774ee5384b354eededa36c3f1e`.
+Exact ZG3mcT:6580 sources,222 excluded,1837 raw,589 retained,1248 unresolved;
+Go7888/21151,missing13263;raw SHA256
+`369d0b6d104a8eb0f160c9ad69621f1fc1591adc16bd1fbc6d1e62735cfbb39b`;
+clone-set `137229a43d6838da9463e85be25c34e905f175ff4543f97dca1bc8055c554b59`.
+Runner contextfiles/security/filetransfer/model15/61 unit PASS,0 FAIL/SKIP,
+полный runner build PASS;remote head и PATCH/GET Draft PR209 подтверждены.
+
+Четыре файла imageinventory прочитаны целиком;33/33 declarations — EN→RU.
+Описаны закрытые probe path/args,ограниченные hash/version observations,
+first eligible path semantics,build-info fallback только для двух exact
+commands после успешной readiness,sticky4096byte output overflow и bounded
+process-group cleanup. VERIFIED observation не является admission,scanner
+verdict или разрешением агентского запуска. Внешняя wrapper mount/network
+граница не приписана одному helper,который читает /image.
+
+RunSandboxedTool checks идут в прежнем порядке:registry/identity/groups,
+thread lock,capabilities/std descriptors,Landlock/seccomp,close-on-exec,
+рабочий каталог и exec. Документация не обещает general/network sandbox.
+Landlock rights и private metadata denylist отделены;kernel restrictions
+касаются calling thread/будущих children/exec,а не sibling threads.
+FIONBIO exception ограничен проверенными stdout/stderr pipe и полными
+64-bit args;unknown/x32 architectures остаются закрытым отказом.
+Никаких прав,syscalls,фильтров,build job или image admission state не менялось.
+
+Полная non-comment/gofmt сверка4 файлов с SHA209 — PASS.
+Imageinventory unit:6 верхних/6 всех PASS,0 FAIL;2 прямых child-only SKIP
+TestProbeSandboxKernelChild/TestProbeSandboxRestrictedExec.
+Эти helpers реально выполнялись parent-тестом
+TestProbeSandboxKernelPreservesFilesystem через отдельный synthetic
+test-binary child:он проверил byte/mode/directory preservation после kernel
+fence/exec. Прямой SKIP не выдаётся за самостоятельный PASS,но parent kernel
+scenario действительно выполнен. Реальный image inventory job и toolchain
+probes через root entrypoint NOT RUN;ИИ/кластер не использованы.
+Полный runner build,scoped33/33,17 Node units,unit Go-checker,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL;Go1.26.6,GOENV/GOWORK off.
+Context7 `/websites/kernel_doc_html`:официальные Landlock ABI3 TRUNCATE,
+ABI5 IOCTL_DEV,no_new_privs и calling-thread inheritance;новых dependencies нет.
+
+Рабочий Stte56 до registry entry:6580 sources,222 excluded,1837 raw,
+Go7921/21151,missing13230;raw SHA256
+`8190e637aa9a4eb5f9c926effe5aebb9b466a635764f1a46dbe53733d1c9eae0`;
+clone-set `a5e82ec374bc30d7c1b932d7843117f07e4cd565ad0e3d52f6df0c1595a51fd0`.
+Пары/fragment/count неизменны,сдвинулись координаты. Exact решение отделяет
+ложный weak match:string fullMethodName list HTTP authority test vs uint32
+Linux syscall denylist. Между ними нет общей операции или общего значения;
+исключена только эта точная пара,не файлы или все constant registries.
+Assessment с новым решением590 retained,1247 unresolved;raw count не снижен.
+Полный runner unit,общий repo-check,component/live,browser/deploy,агенты/STT/
+почта NOT RUN. Цель не завершена,post-commit результат — в том же Draft PR.
 
 ## Двести девятая волна — materialized context runner
 

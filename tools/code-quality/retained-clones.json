@@ -3904,6 +3904,14 @@
       "fragmentSHA256": "77ee19227f073b9c26041b1a948e436c78b98ea221700b0f74a91a683ecf9ed9",
       "count": 1,
       "reason": "Совпадают11 строк локальной process-test оснастки: поиск текущего test binary, десятисекундный context и начало bwrap argv с текущими UID/GID. Дальше app проверяет workspace/credential/foreign-write границы, contextfiles — read-only snapshot и допустимую рабочую запись; пути test binary, mounts, child selector и env намеренно заданы явно в каждой проверке. Общий runner потребовал бы настраиваемого argv/режимов ради короткого подготовительного фрагмента и скрыл бы проверяемый состав sandbox либо вернул бы только boilerplate tuple. Доменные проверки и production-код не дублируются; сохраняется точная пара/fragment/count, не весь тест или каталог."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/app/context_authority_operations_test.go",
+      "secondPath": "services/jobs/agent-runner/internal/imageinventory/sandbox_exec.go",
+      "fragmentSHA256": "a8bd1f1b7de7b614d00cbc43dae49ca0a0184b79cbd20984fbc85ec806d8761b",
+      "count": 1,
+      "reason": "Ложное semantic совпадение weak detector: с одной стороны handwritten список строковых fullMethodName разных RPC для проверки authority profile gateway, с другой — список uint32 номеров Linux syscalls для seccomp denylist приватной image probe. После нормализации selector identifiers эти разные типы и границы выглядят одинаковыми последовательностями констант. Общего значения, исполняемой операции или цикла между ними нет; вынос в helper/lib связал бы HTTP authority tests с kernel sandbox без семантического основания. Исключена только точная пара фрагментов с кратностью1, не все списки констант, файлы или проверки."
     }
   ]
 }

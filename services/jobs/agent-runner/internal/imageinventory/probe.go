@@ -1,4 +1,5 @@
-// Package imageinventory наблюдает закрытый toolchain в read-only final rootfs.
+// Package imageinventory observes a closed tool registry within the build wrapper's final-rootfs boundary.
+// Пакет imageinventory наблюдает закрытый реестр инструментов в границе финального rootfs build wrapper.
 package imageinventory
 
 import (
@@ -20,13 +21,28 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// Mode selects the privileged image-inventory entrypoint used by the build wrapper; it is distinct from per-tool sandbox execution.
+// Mode выбирает привилегированную точку входа инвентаризации образа для build wrapper отдельно от изолированного выполнения отдельной пробы.
 const Mode = "image-tool-inventory"
+
+// outputPath fixes the externally collected inventory output path, created exclusively outside the observed /image tree.
+// outputPath задаёт фиксированный путь собираемого извне результата инвентаризации, исключительно создаваемого вне наблюдаемого дерева /image.
 const outputPath = "/tmp/kodex-tool-inventory.json"
 
+// invalid is the fixed public probe failure, omitting image contents, arguments and raw tool output.
+// invalid задаёт фиксированный публичный отказ пробы без содержимого образа, аргументов и исходного вывода инструмента.
 var invalid = errors.New("image tool inventory probe failed")
+
+// versionPattern extracts a bounded numeric version token with an optional prefix/suffix; matching alone does not establish executable readiness or provenance.
+// versionPattern извлекает ограниченный числовой токен версии с необязательными префиксом и суффиксом; совпадение само не доказывает готовность исполняемого файла или происхождение.
 var versionPattern = regexp.MustCompile(`(?:^|[^0-9])v?([0-9]+\.[0-9]+(?:\.[0-9]+){0,2}(?:[-+][A-Za-z0-9.-]{1,48})?)`)
 
-// Ввод назначает wrapper, а не recipe: credentials и runtime input не читаются.
+// Run requires root, the inventory mode and five wrapper arguments, validates manifest pins, then observes the closed probe registry within 150 seconds.
+// Reads /image and writes a new external inventory file; wrapper mount/network isolation and supplied pin authority are established elsewhere.
+// It reads no runtime input or provider credentials and does not admit, promote or launch an agent image.
+// Run требует root, режим инвентаризации и пять аргументов wrapper, проверяет привязки манифеста, затем наблюдает закрытый реестр проб в пределах 150 секунд.
+// Читает /image и записывает новый внешний файл инвентаря; изоляция монтирования и сети wrapper, полномочия переданных привязок устанавливаются отдельно.
+// Не читает вход выполнения и учётные данные провайдера, не допускает, не публикует и не запускает образ агента.
 func Run(ctx context.Context, args []string) error {
 	if len(args) != 5 || os.Geteuid() != 0 || args[1] != Mode {
 		return invalid
@@ -74,6 +90,12 @@ func Run(ctx context.Context, args []string) error {
 	return nil
 }
 
+// observe tries registered paths for a readable regular executable through 256 MiB, hashes its observed bytes and runs the bounded version probe.
+// The first eligible path returns VERIFIED or PROBE_FAILED; absent/unreadable candidates remain MISSING, and only two tools allow exact build-info fallback.
+// Execution-path identity relies on the wrapper filesystem layout; this observation is not admission or signature verification.
+// observe перебирает зарегистрированные пути до доступного обычного исполняемого файла размером до 256 МиБ, хеширует наблюдённые байты и запускает ограниченную пробу версии.
+// Первый подходящий путь возвращает VERIFIED либо PROBE_FAILED; отсутствующие и нечитаемые кандидаты остаются MISSING, только два инструмента допускают точный резервный путь через build-info.
+// Идентичность пути выполнения зависит от файловой структуры wrapper; наблюдение не является допуском или проверкой подписи.
 func observe(ctx context.Context, root *os.Root, probe runtimecontract.ImageToolProbe) runtimecontract.ImageToolObservation {
 	item := runtimecontract.ImageToolObservation{Name: probe.Name, Status: "MISSING", Required: probe.Required}
 	for _, path := range probe.Paths {
@@ -114,8 +136,10 @@ func observe(ctx context.Context, root *os.Root, probe runtimecontract.ImageTool
 	return item
 }
 
-// Метаданные не заменяют successful readiness. Version берётся только из
-// actual executable, не из recipe, ожидаемого pin или dev banner.
+// buildInfoProbeVersion accepts only goimports/grpcurl metadata matching their exact main module/command, a canonical version and a successful independent readiness probe.
+// Replacement modules, development banners and metadata without successful execution never fabricate a version.
+// buildInfoProbeVersion принимает только метаданные goimports и grpcurl с точным основным модулем и командой, канонической версией и успешной отдельной пробой готовности.
+// Подменённые модули, баннеры разработки и метаданные без успешного выполнения не создают выдуманную версию.
 func buildInfoProbeVersion(name string, info *debug.BuildInfo, ready bool) (string, bool) {
 	if !ready || info == nil || info.Main.Replace != nil {
 		return "", false
@@ -139,11 +163,15 @@ func buildInfoProbeVersion(name string, info *debug.BuildInfo, ready bool) (stri
 	return match[1], true
 }
 
+// boundedOutput captures at most 4096 combined output bytes and remembers overflow without backpressuring the subprocess; it is not a log sink.
+// boundedOutput сохраняет не более 4096 байт объединённого вывода и запоминает переполнение без блокирования дочернего процесса; хранилищем логов не является.
 type boundedOutput struct {
 	bytes.Buffer
 	overflow bool
 }
 
+// Write keeps only the remaining capture budget while returning the original byte count and nil; callers must reject the sticky overflow flag.
+// Write сохраняет только оставшийся бюджет записи, возвращая исходное число байтов и nil; вызывающий обязан отклонить сохранённый признак переполнения.
 func (output *boundedOutput) Write(raw []byte) (int, error) {
 	count := len(raw)
 	remaining := 4096 - output.Len()
@@ -155,6 +183,8 @@ func (output *boundedOutput) Write(raw []byte) (int, error) {
 	return count, nil
 }
 
+// runProbe requires successful bounded readiness output before extracting one numeric version; clears the captured bytes on return.
+// runProbe требует успешный ограниченный вывод пробы готовности до извлечения одного числового токена версии и очищает записанные байты при возврате.
 func runProbe(ctx context.Context, path string, args []string) (string, bool) {
 	raw, ok := runProbeReadiness(ctx, path, args)
 	defer clear(raw)
@@ -168,6 +198,12 @@ func runProbe(ctx context.Context, path string, args []string) (string, bool) {
 	return string(match[1]), true
 }
 
+// runProbeReadiness reexecutes the current runner in closed probe mode as UID/GID 10001 with a fixed environment and a two-second child deadline.
+// Captures bounded stdout/stderr, kills the process group after completion/cancellation and rejects execution or output overflow failures.
+// Returned bytes belong to the caller for projection and clearing; actual sandbox setup is performed by the child entrypoint.
+// runProbeReadiness повторно запускает текущий runner в закрытом режиме пробы с UID и GID 10001, фиксированным окружением и двухсекундным сроком дочернего процесса.
+// Ограниченно записывает stdout и stderr, завершает группу процессов после выполнения либо отмены, отклоняет ошибку выполнения и переполнение вывода.
+// Возвращаемые байты принадлежат вызывающему для проекции и очистки; саму изоляцию устанавливает дочерняя точка входа.
 func runProbeReadiness(ctx context.Context, path string, args []string) ([]byte, bool) {
 	call, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()

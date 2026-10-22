@@ -16,6 +16,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// TestClosedProbeArguments checks every registered path/argument vector is accepted and added arguments, unknown paths and shell commands fail before restricted exec.
+// TestClosedProbeArguments проверяет принятие каждого зарегистрированного пути с аргументами и отказ для лишних аргументов, неизвестных путей и команд оболочки до ограниченного exec.
 func TestClosedProbeArguments(t *testing.T) {
 	for _, probe := range runtimecontract.ImageToolProbes() {
 		for _, path := range probe.Paths {
@@ -35,6 +37,8 @@ func TestClosedProbeArguments(t *testing.T) {
 	}
 }
 
+// TestProbeSandboxKernelPreservesFilesystem runs a dedicated synthetic test-binary child and verifies its protected temporary file bytes/mode and directory entries remain unchanged.
+// TestProbeSandboxKernelPreservesFilesystem запускает отдельный синтетический дочерний тестовый бинарник и проверяет неизменность байтов и режима защищённого временного файла, содержимого каталога.
 func TestProbeSandboxKernelPreservesFilesystem(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "fixture")
@@ -62,8 +66,10 @@ func TestProbeSandboxKernelPreservesFilesystem(t *testing.T) {
 	}
 }
 
-// Ограничиваем только выделенный child и повторно exec, чтобы проверить
-// наследование kernel fence без изменения потока основного test runner.
+// TestProbeSandboxKernelChild drops capabilities only in the opt-in child, verifies null/pipes, installs real kernel restrictions and reexecutes the restricted test mode.
+// Without the child flag it skips; the parent process and its capabilities are not changed.
+// TestProbeSandboxKernelChild сбрасывает capabilities только в явно включённом дочернем процессе, проверяет null и pipe, устанавливает настоящие ограничения ядра и повторно запускает ограниченный тестовый режим.
+// Без дочернего флага пропускается; родительский процесс и его capabilities не изменяются.
 func TestProbeSandboxKernelChild(t *testing.T) {
 	if os.Getenv("KODEX_PROBE_SANDBOX_TEST") != "restrict" {
 		t.Skip("disposable subprocess only")
@@ -103,6 +109,10 @@ func TestProbeSandboxKernelChild(t *testing.T) {
 	}
 }
 
+// TestProbeSandboxRestrictedExec exercises inherited read permission and denied content/metadata/namespace/group operations in the restricted child, including ioctl argument aliases.
+// Only checked output pipes may toggle FIONBIO, and null writes remain allowed; without the restricted flag this child-only test skips.
+// TestProbeSandboxRestrictedExec проверяет унаследованное чтение и запрещённые операции содержимого, метаданных, пространств и группы в ограниченном потомке, включая псевдонимы аргументов ioctl.
+// Только проверенные выходные pipe могут переключать FIONBIO, запись в null остаётся разрешённой; без флага ограниченного режима дочерний тест пропускается.
 func TestProbeSandboxRestrictedExec(t *testing.T) {
 	if os.Getenv("KODEX_PROBE_SANDBOX_TEST") != "restricted" {
 		t.Skip("restricted subprocess only")
