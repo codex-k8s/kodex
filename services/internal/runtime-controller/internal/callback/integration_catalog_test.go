@@ -11,6 +11,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestIntegrationCatalogIsPagedAndBoundToExactGrant checks twenty synthetic grants
+// yield bounded index/final pages, expose a schema only on exact grant or exact pair
+// selection and reject malformed/mixed/unavailable selectors with InvalidArgument.
+// It does not contact an integration or verify a live grant receipt.
+// TestIntegrationCatalogIsPagedAndBoundToExactGrant проверяет bounded index/final pages
+// двадцати synthetic grants,выдачу schema лишь exact grant/pair selection и отказ
+// malformed/mixed/unavailable selectors с InvalidArgument. Integration не вызывается,
+// live grant receipt не проверяется.
 func TestIntegrationCatalogIsPagedAndBoundToExactGrant(t *testing.T) {
 	input := runtimecontract.RunnerInput{}
 	for index := range 20 {
@@ -67,6 +75,10 @@ func TestIntegrationCatalogIsPagedAndBoundToExactGrant(t *testing.T) {
 	}
 }
 
+// TestIntegrationCatalogSchemaSeparatesSearchAndExactSelection checks the closed
+// input advertises exactly three disjoint index/grant/pair branches.
+// TestIntegrationCatalogSchemaSeparatesSearchAndExactSelection проверяет closed input
+// с ровно тремя отдельными index/grant/pair branches.
 func TestIntegrationCatalogSchemaSeparatesSearchAndExactSelection(t *testing.T) {
 	schema := integrationCatalogTool()["inputSchema"].(map[string]any)
 	branches, ok := schema["oneOf"].([]map[string]any)
@@ -75,6 +87,10 @@ func TestIntegrationCatalogSchemaSeparatesSearchAndExactSelection(t *testing.T) 
 	}
 }
 
+// TestIntegrationToolListDoesNotEmbedGrantSchemas checks compact tools/list omits
+// private schema markers and safe catalog activity logs no query or invocation grant.
+// TestIntegrationToolListDoesNotEmbedGrantSchemas проверяет compact tools/list без
+// private schema markers и safe catalog activity без query/invocation grant.
 func TestIntegrationToolListDoesNotEmbedGrantSchemas(t *testing.T) {
 	input := runtimecontract.RunnerInput{IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{{
 		GrantVersion: 1, ConnectionVersion: 1, ApprovalPolicy: "NONE", ConnectionRef: "int_12345678", CapabilityKey: "test.read", InputSchema: `{"type":"object","additionalProperties":false,"properties":{"secret-marker":{"type":"string"}}}`,

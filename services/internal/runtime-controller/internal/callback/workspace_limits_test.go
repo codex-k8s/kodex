@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestEnvironmentWorkspaceLimitsSchemaIsClosedAndBelowPlatformMaximum checks the
+// proposal schema requires exactly maxBytes/maxFiles with positive integer bounds
+// no greater than the shared platform quota; it does not allocate or enforce a volume.
+// TestEnvironmentWorkspaceLimitsSchemaIsClosedAndBelowPlatformMaximum проверяет proposal
+// schema с ровно maxBytes/maxFiles и positive integer bounds не выше shared platform
+// quota,не выделяя и не ограничивая реальный volume.
 func TestEnvironmentWorkspaceLimitsSchemaIsClosedAndBelowPlatformMaximum(t *testing.T) {
 	resources := environmentPolicySchema()["properties"].(map[string]any)["resources"].(map[string]any)
 	limits := resources["properties"].(map[string]any)["workspaceLimits"].(map[string]any)

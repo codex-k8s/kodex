@@ -6,6 +6,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestNativeToolCallProjectionKeepsCorrelationAndSafeMetadata checks repeated valid
+// native file-change observations derive identical call/idempotency refs and preserve
+// closed safe metadata without attaching a platform capability or grant.
+// TestNativeToolCallProjectionKeepsCorrelationAndSafeMetadata проверяет одинаковые call/
+// idempotency refs повторных valid native file-change observations и closed safe metadata
+// без добавления platform capability/grant.
 func TestNativeToolCallProjectionKeepsCorrelationAndSafeMetadata(t *testing.T) {
 	input := validWarmExecutionInput()
 	payload := runtimecontract.RunnerNativeToolCallRequest{
@@ -40,6 +46,10 @@ func TestNativeToolCallProjectionKeepsCorrelationAndSafeMetadata(t *testing.T) {
 	}
 }
 
+// TestNativeToolCallProjectionRejectsUnknownKind checks an unregistered future native
+// tool kind cannot enter the safe owner activity projection.
+// TestNativeToolCallProjectionRejectsUnknownKind проверяет запрет unregistered future native
+// tool kind в safe owner activity projection.
 func TestNativeToolCallProjectionRejectsUnknownKind(t *testing.T) {
 	input := validWarmExecutionInput()
 	payload := runtimecontract.RunnerNativeToolCallRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest,

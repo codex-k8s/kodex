@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.202.0
+version: 1.203.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,52 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести третья волна — каталог интеграций, снимок выполнения и общий тестовый вход
+
+Точный опубликованный SHA202 — `0e76a6753393ff4c65ebbe6a541bbe260a8d39ce`.
+Exact HQ9ifR:6578 sources,222 excluded,1838 raw,587 retained,1251 unresolved;
+Go7619/21149,missing13530;raw SHA256
+`32e9b28388b1f68875c6218b781587369807f470a96ff73267dccd6381881097`,
+clone-set `74eea41e292d06d4c9c09ad8a5cc7eb999040eea7624fe708e1f5581d4cc20f6`.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP;полный RC build PASS.
+
+Целиком прочитаны integration_catalog/execution_snapshot и девять тестовых
+файлов callback;32 прежних объявления получили предметные EN→RU комментарии.
+Каталог читает закреплённые grants,а не актуальные права владельца;поиск,
+режимы выбора и сортировка копии отделены от разрешения операций. Снимок
+выполнения связывается с реально зарегистрированным процессом coordinator;
+pins образа не выдаются за живое наблюдение. Отдельно описаны закрытый schema
+workspace limits,маршруты финансовых наблюдений,детерминированные ссылки
+native tools,безопасные MCP ответы и наблюдение завершения fake Pod.
+
+Одинаковые тела validWarmExecutionInput/scopeCredentialInput вынесены в
+`runtime-controller/internal/testfixture.TurnInput` с двумя существующими
+тонкими обёртками. Это test support внутри одного unit с двумя реальными
+потребителями,не общий runtime API;production imports не добавлены.
+Пути,идентификаторы и credential hashes синтетические,никаких реальных
+Secrets,файлов,grants,нагрузок или соединений с моделью не создаётся.
+Новый unit проверяет повторяемость,пересчёт input/environment/execution/MCP
+digests и независимость изменяемых workspace rules/denial reasons.
+После обратного раскрытия helper оба прежних тела идентичны;полная
+non-comment/gofmt сверка всех12 существующих файлов с SHA202 — PASS.
+
+Raw detector уменьшился ровно на одну группу521tokens. Два других коротких
+совпадения с agent-runner лишь переехали вместе с fixture,их fragment SHA256
+сохранены и они остаются неразобранными. Новых исключений нет.
+Рабочий KgAe04:6580 sources,222 excluded,1837 raw,587 retained,1250 unresolved;
+Go7653/21151,missing13498;raw SHA256
+`c3ed9054c65e2b409b2d614c3414882aa740110f6e786c4d963f02bfe173e117`,
+clone-set `5c9255a6d45d7de39d007ca68d34ef770c45db87d6cca1a18f792c397465ee03`.
+Scoped14 файлов40/40 EN→RU. Callback+credentialprojection+testfixture:
+263 верхних/1392 всех unit PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly,17 Node units,Go-checker unit,5 ignore-boundaries,
+gofmt/diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+Первый pipeline проверки unit остановился на синтаксической ошибке команды
+подсчёта;он не объявлен PASS. После исправления wrapper все тесты повторены.
+Общий repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+post-commit результат публикуется в Draft PR,общая цель не завершена.
 
 ## Двести вторая волна — task session read и безопасные diagnostics
 

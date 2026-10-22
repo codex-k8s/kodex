@@ -12,8 +12,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// maximumIntegrationCatalogPage caps compact integration index pages at eight
+// grants; exact selection returns only its single matched grant schema.
+// maximumIntegrationCatalogPage ограничивает compact integration index восемью
+// grants; exact selection выдаёт лишь одну matched grant schema.
 const maximumIntegrationCatalogPage = 8
 
+// integrationCatalogTool describes three disjoint discovery modes: query/offset
+// index, exact grant ref or exact connection/capability pair. Schema advertisement
+// exposes only snapshot-bound grants and no connection credentials or invocation authority.
+// integrationCatalogTool описывает три отдельных discovery modes:query/offset index,
+// exact grant ref либо exact connection/capability pair. Схема публикует лишь snapshot-
+// bound grants без connection credentials и invocation authority.
 func integrationCatalogTool() map[string]any {
 	inputSchema := objectSchema(nil, map[string]any{
 		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 256},
@@ -39,20 +49,44 @@ func integrationCatalogTool() map[string]any {
 	}
 }
 
+// integrationCatalogInputError records a local closed selection reason without
+// retaining query text, remote causes or an owner permission decision.
+// integrationCatalogInputError хранит local closed selection reason без query text,
+// remote causes и owner permission decision.
 type integrationCatalogInputError struct{ reason string }
 
+// Error returns fixed safe catalog-input text independent of rejected arguments.
+// Error возвращает fixed safe catalog-input text независимо от rejected arguments.
 func (catalogErr *integrationCatalogInputError) Error() string {
 	return "integration catalog input is invalid"
 }
 
+// GRPCStatus maps the local typed marker to InvalidArgument with fixed text,
+// without attaching arbitrary reason metadata or private input.
+// GRPCStatus отображает local typed marker в InvalidArgument с fixed text без
+// arbitrary reason metadata и private input.
 func (catalogErr *integrationCatalogInputError) GRPCStatus() *status.Status {
 	return status.New(codes.InvalidArgument, catalogErr.Error())
 }
 
+// invalidIntegrationCatalog creates a typed local reason marker only; it does not
+// make a failed owner invocation retryable or issue new grants.
+// invalidIntegrationCatalog создаёт лишь typed local reason marker,не превращая failed
+// owner invocation в retryable и не выдавая grants.
 func invalidIntegrationCatalog(reason string) error {
 	return &integrationCatalogInputError{reason: reason}
 }
 
+// integrationCatalog validates mutually exclusive local selectors, sorts a copied
+// grant slice by connection name/capability/ref and returns a filtered eight-entry
+// index or one selected schema. Only existing immutable input grants are searched;
+// schema JSON is decoded but not rehashed here, and current connection health/owner
+// eligibility/approval are not inferred from discovery.
+// integrationCatalog проверяет exclusive local selectors,сортирует copy grant slice
+// по connection name/capability/ref и выдаёт filtered eight-entry index либо selected
+// schema. Поиск ограничен existing immutable input grants; schema JSON декодируется,
+// но не хешируется заново. Current connection health/owner eligibility/approval
+// из discovery не выводятся.
 func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
 	if len(input.IntegrationGrants) == 0 {
 		return nil, errors.New("integration catalog is not available")
@@ -149,6 +183,12 @@ func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]
 	return result, nil
 }
 
+// integrationCatalogEntry projects grant/definition/capability pins and risk/operation
+// metadata with a 500-rune description, omitting full schema until exact selection.
+// It contains no credential values and neither tests nor invokes the integration.
+// integrationCatalogEntry проецирует grant/definition/capability pins,risk/operation
+// metadata с description до 500 runes,не выдавая full schema до exact selection.
+// Credential values отсутствуют,integration не тестируется и не вызывается.
 func integrationCatalogEntry(grant runtimecontract.RunnerIntegrationGrant) map[string]any {
 	return map[string]any{
 		"grant_ref":      grant.Ref,
