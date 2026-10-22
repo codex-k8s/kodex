@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.184.0
+version: 1.185.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,56 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят пятая волна — весь основной runtime loop
+
+На базе опубликованного SHA `0a8ade58b9b2a15169e2a14a5a0e84566cd2fa4d`
+все 41 объявление app/runtime.go, включая пять методов узких интерфейсов,
+constants и retry schedule, получили предметные EN→RU комментарии.
+Прочитаны весь цикл claim/materialization/tracker, warm reconciliation,
+renewal/drain, failure completion, safe diagnostics и idempotency helper.
+Scoped Go-docs-check 41/41 — PASS LOCAL; тестовые runtime-файлы этим
+не объявляются полностью прокомментированными.
+
+Документированы реальные ограничения: request limit=1 не ограничивает
+параллельные trackers; число полученных executions не доказывает успешный
+старт всех. Warm eligibility без attachments/artifacts не заменяет exact
+compatibility/authority. Materialization keeper передаёт renewal только
+после join, а tracking различает callback completion, leadership loss,
+graceful shutdown, confirmed lease expiry и terminal callback grace.
+Отдельно описаны память/terminal diagnostics и отсутствие синтетического
+owner completion при локальной revoked-turn cleanup.
+
+completeFailure сохраняет один request/idempotency key при ограниченных
+transient retries, трактует AlreadyExists по прежнему пути, отдельно
+обрабатывает PermissionDenied и не удаляет ресурсы при прочем неизвестном
+исходе. Stop/Delete при revoke — best effort с локальным coordinator
+completion, не доказательство удаления или owner commit. boundedRPCFailure
+намеренно не сохраняет raw cause; closed error-text classification не
+даёт authority. waitWithoutCancel, несмотря на имя, соблюдает переданный
+context; UUIDv5 идемпотентности — не подпись и не разрешение. Context7
+`/google/uuid` и pinned go doc NewSHA1 подтверждают только namespace-based
+determinism; внешняя версия библиотеки не менялась.
+
+Полный файл механически сравнён с parent: после удаления только строк
+комментариев и нормализации gofmt исполняемые строки идентичны. Ничего
+не изменено в RPC, leases, retries, cancellation, callback ownership,
+resource cleanup, authority, codegen или applied migrations.
+PASS LOCAL: RC `go test -mod=readonly -count=1 -json ./internal/app` —
+56 верхних PASS, 166 PASS с подтестами, 0 SKIP/FAIL; полный module
+`go build -mod=readonly ./...`, 16 unit анализатора, Go-checker, пять
+ignore-boundaries, scoped docs и diff-check. Go1.26.6, GOENV=off/GOWORK=off.
+Повтор на точном опубликованном SHA фиксируется в PR. Component/live/browser/
+deploy, реальные агенты и полный repository Go-docs-check — NOT RUN;
+прежний diagnostics FAIL не скрыт.
+
+Detector: 6571 source, 222 generated/lock исключения, 1842 raw,
+580 точных решений, 1262 неразобранных; clone-set fingerprint и реестр
+исключений неизменны. Рабочий raw SHA-256
+`1aca3ab4490de22068abdbef6c4beeed242a92d71c06255ad14b87e65596a495`,
+clone-set fingerprint
+`7771b8d6e3e7ef597399e53f0fa22556fe5dc250176b7a16c9a98d9b60f645c0`.
+Go-реестр 6790/21134, непокрыты 14344. Единый Draft PR и цель не завершены.
 
 ## Сто восемьдесят четвёртая волна — общий HTTP shutdown/join worker
 
