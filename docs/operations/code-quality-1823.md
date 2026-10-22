@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.282.0
+version: 1.283.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,55 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести восемьдесят третья волна — проверка пачки и точные typed-read окна
+
+Опубликованный SHA282 — `c97057a4d26845cf7173cc10cf173ad884cce713`.
+Точный DakSlY:6613 sources,222 excluded,1820 raw/684 retained/
+1136 unresolved; Go12297/21251,missing8954. Raw SHA256:
+`0473871eee4a6958fef1a457bfe333c8cd4949c4b901ec2e59a793cb72d3f2c3`;
+clone-setd26e78aa… . Exact platform service24/76, CP build -p=2,
+docs159/159, inverse AST6/tooling/scan PASS LOCAL,0 FAIL/SKIP;
+push/readback и Draft PR PATCH/GET282 подтверждены.
+
+Из ClaimIntegrationConnectionTests/ClaimIntegrationInvocations/
+ClaimInteractionDeliveries вынесена одинаковая проверка instance и
+limit1..32 в private validatePlatformClaimBatch. Principal resolution
+по-прежнему предшествует guard; каждый caller вызывает прежний точный
+repository claim со своей lifecycle authority. Helper не трогает lease,
+grant или состояние, не trim-ит instance перед repository call и не
+добавляет новую политику NUL/Unicode/идентичности.
+
+13 unit cases проверяют inclusive1/32,0/-1/33, int32 extremes, empty,
+ASCII/Unicode blank, nonblank с пробелами и прежний приём NUL.
+Inverse AST4 восстанавливает весь service.go SHA282 и три исходные
+проверки; никаких claim/renew/terminal transitions не менялось.
+Новые helper/unit2/2 EN→RU; combined3 files140/140. Весь platform
+service25 верхних/90 всех unit и полный CP build -p=2 PASS LOCAL,
+0 FAIL/SKIP. Это in-memory input tests, не реальный claim БД/worker.
+
+Прочитаны33 точных окна service/integration_candidates/runtime_secret_draft/
+skill. Principal уже общий, search/upload/batch алгоритмы вынесены;
+остаток — разные typed methods/result arity, recovery versus trash,
+metadata versus mutation/projection, platform versus project membership,
+graph versus snapshot и разные cancellation/blank/trim guards. Для
+каждого fragment/path/count записана отдельная причина сохранения,
+а не generic исключение по имени или целому файлу. Registry566→599,
+684→717 occurrences; прежние566 entries неизменны. Три sibling sources
+byte-identical.31 service windows и2 соседних candidates окна разобраны.
+
+Рабочий FsSkLa:6615 sources,222 excluded,1820 raw/717 retained/
+1103 unresolved; Go12299/21253,missing8954. Два прежних окна123/107tokens
+заменены residual116/100 после helper;1818 остальных прежние, у новых
+helper/unit raw windows0. Raw SHA256:
+`6c57d833c8e66e9ad65757f2ebf736d643f777faabf32865f533789c5f43bc3f`;
+clone-set:
+`8381d099ffa390edf49df360045415150bf2a635db5620dcf3c498356206bcb4`.
+Assessment после33 решений повторён;17 Node/Go checker units, docs,
+inverse AST/clone-prefix proof,5 ignores и gofmt/diff-check PASS LOCAL.
+После коммита exact scan/unit/build и PR readback повторяются.
+Generated, contracts, applied migrations и live state прежние.
+Общая задача открыта; historical FAIL и NOT RUN не переименованы в PASS.
 
 ## Двести восемьдесят вторая волна — нормализация поиска и соседние методы
 

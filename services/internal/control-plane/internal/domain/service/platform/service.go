@@ -1662,8 +1662,8 @@ func (service *Service) ClaimIntegrationConnectionTests(ctx context.Context, p v
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(instance) == "" || limit < 1 || limit > 32 {
-		return nil, errs.ErrInvalid
+	if err := validatePlatformClaimBatch(instance, limit); err != nil {
+		return nil, err
 	}
 	return service.repository.ClaimIntegrationConnectionTests(ctx, p, instance, limit)
 }
@@ -1690,8 +1690,8 @@ func (service *Service) ClaimIntegrationInvocations(ctx context.Context, p value
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(instance) == "" || limit < 1 || limit > 32 {
-		return nil, errs.ErrInvalid
+	if err := validatePlatformClaimBatch(instance, limit); err != nil {
+		return nil, err
 	}
 	return service.repository.ClaimIntegrationInvocations(ctx, p, instance, limit)
 }
@@ -1726,8 +1726,8 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(instance) == "" || limit < 1 || limit > 32 {
-		return nil, errs.ErrInvalid
+	if err := validatePlatformClaimBatch(instance, limit); err != nil {
+		return nil, err
 	}
 	return service.repository.ClaimInteractionDeliveries(ctx, p, instance, limit)
 }

@@ -4528,6 +4528,270 @@
       "fragmentSHA256": "f737c88ed13ae20541f31c6d362d3aff8d06beabf812bb9696a993c0d11a7d0d",
       "count": 1,
       "reason": "Прочитано хвостовое совпадение knownCommand с managed-configuration dispatch: service case продолжается mailbox bind/unbind и возвращает true, repository case завершает иной subset вызовом changeManagedConfiguration(ctx,tx,scope,input). Это явная typed маршрутизация двух уровней, а не общий effect implementation. Новая таблица маршрутов ради пересекающихся имён потребовала бы отдельного контракта групп; здесь нецелесообразна. Исключена ровно одна exact fragment/path пара, guards/default отказ и другие dispatch ветви не скрыты."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/integration_candidates.go",
+      "fragmentSHA256": "a2051d6fd619abd36941c5402738fb6c84d0cdec231be95c7735fe11f2ea4694",
+      "count": 1,
+      "reason": "Окна пересекают последовательность connection/project/recipient/capability candidates с разными entity results и специальным system-assistant read. Общий principal уже вынесен; универсальный callback-router заменил бы явные типизированные repository ports без общего предметного алгоритма."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "bb6bba98a9f998e80326bdfb611e1407e2c278e6ffe9f0a061fb3779163aa3f3",
+      "count": 1,
+      "reason": "Чтение кандидатов интеграции и Consume/CompleteRuntimeSecretOperation лишь одинаково разрешают principal и передают typed input. Второй путь изменяет состояние секретной операции, первый читает кандидатов; смешивать их в универсальной обёртке ради формы тела нецелесообразно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/runtime_secret_draft.go",
+      "fragmentSHA256": "189ec8d54545a6b4bc09866018d0fe3afffc2e3e2ca2ab0db52b07fc6cb30c10",
+      "count": 1,
+      "reason": "Кандидаты соединений/проектов/получателей сопоставлены с Consume/Finish черновика секрета. Типы результатов, предметные эффекты и последующая recovery page различаются. Principal общий; сохраняются специализированные порты, а не generic dispatch жизненного цикла."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "7903d04c4d940b8ff145222e470f483c3ae58b86aae4e65b9934da59544a3c2f",
+      "count": 1,
+      "reason": "Кандидаты integration grants и ListPromptContextVariables имеют отдельные typed query/result. Соседний ListTemplateVariables обрезает query, contextual validation выбирает собственную ветвь. Единственный общий principal уже вынесен; новый router скрыл бы разные предусловия."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "5c631567a7741478c68f0c0b00934d3d77b1b25cdc496ded6e79d67240f100fe",
+      "count": 1,
+      "reason": "Окно recipient/capability candidates и system-assistant candidates пересекается с каталогом переменных и contextual validation. Разные selectors, формы результата и trim semantics сохраняются явно; общий principal не требует ещё одной generic-обёртки."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/runtime_secret_draft.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "ddd974124c21b404136e89a887f9fe69575e9472572a0e44bdc8afed3f72cbde",
+      "count": 1,
+      "reason": "Recovery page черновиков секретов и корзина проектов возвращают разные элементы и используют разные owner eligibility/lifecycle paths. Совпадают principal/error/typed delegation; этот principal уже общий, а универсальная страница скрыла бы отличия recovery и trash."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/runtime_secret_draft.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "015db694b0d69886220ba9f64677f3d3c0a22768d170a88a0625697738929935",
+      "count": 1,
+      "reason": "ListRuntimeSecretDraftRecovery и ListAssistantConversations имеют разные элементы и page/filter input; CheckRuntimeSecretDraftWork не чтение Administration. Разрешение principal уже общее; закрытые предметные вызовы остаются отдельными."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/runtime_secret_draft.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "431dc926f94c724d508c3479d4ebc4e536fb0377068a925992d2ebe61cb3fc60",
+      "count": 1,
+      "reason": "Recovery черновика и recovery материализации секрета используют query.Page versus RuntimeSecretRecoveryPage и разные work entity. Consume-пути также различны; общий principal не обосновывает generic recovery/claim router или объединение lifecycle ports."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "5a3efce6f61f42e665169c116f7e46782b43a6dafb88d874232b05130897c63c",
+      "count": 1,
+      "reason": "ListProjects и ListIntegrationDefinitions возвращают одинаковую арность items/cursor/actions, но разные entity/owner eligibility. Соседние VFS search и schedule runs имеют другие результаты. Principal общий, нового предметного алгоритма в совпадении нет."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "7046b058cd448842bcd34187a80c1c0eb0877e27b50313a2a5abf51218bbd7bc",
+      "count": 1,
+      "reason": "Project listing и provider-account listing имеют разные domain entities и разрешения, хотя оба возвращают action metadata. VFS search и STT configuration не общий путь; principal уже вынесен, универсальная обёртка только усложнила бы типы."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "b343da2052b833bcc15378773c03c71e51d2bd4b341f8ed0c6e04c2d3dbf4071",
+      "count": 1,
+      "reason": "Последовательности trash/project/platform-memberships и candidates/agents/runtime-configuration повторяют каркас typed reads, не общий use case. Item types, boundary и арность различны; principal уже общий, многометодный generic dispatcher не добавляется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "5902a81b11cf725422fddcea8f7918a154b5539108134a979d97fbec4e0ab90d",
+      "count": 1,
+      "reason": "ListTrashedProjects и ListRuntimeSecretRecoveryWork имеют разные page types и предметные состояния; GetProject не ConsumeRuntimeSecretOperation. Сохраняются точные repository methods и типы результатов, а principal/error guard уже вынесен."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "e424fa9ab68984c27bf93c2fce546146dda98e804191ec5cc5d4cab8978a277c",
+      "count": 1,
+      "reason": "Окно project trash/lookup сопоставлено с schedule list/lookup. GetSchedule дополнительно отклоняет blank reference, а соседний execution-artifact read имеет workload/permission fence. Общий principal не оправдывает смешивание разных guards в generic getter."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "ba70258b5c808ecaa7108bbd85de301b175af4a34308a5557e26d8ef7fd80be7",
+      "count": 1,
+      "reason": "Project/trash/membership и workflow reads только используют общий principal с разными typed returns. Соседний ListRuns имеет preserveRequestContext, пагинация опубликованных инструкций отдельная; универсальный read-router скрыл бы различия ошибок и результата."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "00bf2b7e6dc10fa6e3d267aeccec51d26887b3110ebae4754e5af4eca2e473d4",
+      "count": 1,
+      "reason": "GetProject/ListPlatformMemberships и GetIntegrationConnection/GetSystemAssistant читают разные owner-owned entities через отдельные порты. Похожая обработка principal уже общая; родственный синтаксис не превращает эти запросы в один бизнесовый read."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "2fa95465c0111b406b163b17f2edf90cf638c420dab2b6e5854d41e6f16a739d",
+      "count": 1,
+      "reason": "GetProject и GetOwnerGate возвращают разные сущности; соседние memberships и artifacts используют разные арности cursor/total. Principal уже общий, а объединение чтения проекта и решения через generic callback не сокращает предметный алгоритм."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "024fcdc645e39f0fb2c24132ddd70d58181e12df4b32fbf1ad2efb38c30f94ba",
+      "count": 1,
+      "reason": "Окно захватывает несколько независимых reads: platform/project memberships/candidates versus agent/runtime/environment. Entity, selector и result shapes различаются. Разрешение principal общее; generic multi-operation dispatcher ухудшил бы явность контрактов."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "2e04109ec5c5d798559308786c47fa9644e3f19991f0508f66f8bd076ba57ea1",
+      "count": 1,
+      "reason": "GetProject и GetRuntimeSecret — отдельные owner-scoped lookups, не один ресурс. Соседний PrepareRuntimeSecretOperation назначает PROJECT scope и intent digest; общий principal не основание переносить metadata read и secret preparation в один helper."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "a4bf15dcf9af60685bb349f951825a997d6d83c3838cf132b62ce9502f951ac8",
+      "count": 1,
+      "reason": "Platform/project membership lists и schedule revisions/occurrences возвращают разные entities. GetSchedule проверяет blank reference, ListIntegrationDefinitions дополнительно возвращает actions. Общий principal уже есть; generic page/get routing не требуется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "308e70ad02cf8cee3db29466b50f17e051ddb236e75000d14c269c4b5815fcb1",
+      "count": 1,
+      "reason": "Перекрывающиеся окна состоят из platform/project memberships и user candidates. Одинаковый Filter и cursor не устраняют разные authority boundaries и result types; principal общий. Универсальный membership-кандидат dispatcher скрыл бы точные repository operations."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "d27ee3ea2fe416551357e1fab4c26b628ad92cb43524ded3d0fcade979ff1649",
+      "count": 1,
+      "reason": "Membership/candidate reads и environment-agent/version/secret reads имеют разную eligibility и types. Общая часть principal вынесена; generic list callback ради каркаса не заменяет специализированные ports и не даёт общего алгоритма."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "fa737f4dd2043b6dc76ba2b407a331a3e41bb98eb2311fb08a5931203db7b656",
+      "count": 1,
+      "reason": "Большие перекрывающиеся окна перечисляют agents, runtime configurations, environments, readiness, versions и secret metadata. Это несколько typed repository reads, не повторённый алгоритм преобразования; principal общий, generic registry этих операций не вводится."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "8c8db8f99315bc7b22906a32306f979ac6801e820c1f4352addad9ae4dba5869",
+      "count": 1,
+      "reason": "Agent lookup/runtime-configuration и secret lookup/preparation используют разные entities и эффекты. Общий principal уже вынесен; extraction в generic getter потребовала бы типовых параметров и callbacks без общей предметной логики."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "5a77b033bd341763ab2ca29cf30fc5d831bada0270abf03a759207d42f62eed0",
+      "count": 1,
+      "reason": "GetAgent/GetAgentRuntimeConfiguration и GetArtifact/ListArtifactRevisions имеют разные resource boundary и result arity. Principal guard общий; metadata read сотрудника нельзя выдавать за алгоритм работы с версиями артефакта."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "2d1ceaccfa1bb92309f21af369988836c58c23243d82bc8d2afb0f1d202adf38",
+      "count": 1,
+      "reason": "Secret failure/recovery и credential projection resolve — разные typed lifecycle commands/results; последующий Validate возвращает bool. Общий principal уже используется, а универсальная command-обёртка скрыла бы различие failure/reconciliation/projection."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "79960a84a20e6a5a27448d5c2fffe1b4e954e38027b124ea659d381685a4710d",
+      "count": 1,
+      "reason": "Runtime credential projection, boolean validation и transcription projection различают тип реквизита, result и owner checks. Соседний template list ещё и trim query. Principal общий, новый generic projection router не оправдан каркасным совпадением."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "2fe68f77df08741dc58dced2bb9e4dfe1c1a28612b25af60e28008112fa71c0f",
+      "count": 1,
+      "reason": "GetProviderAccount и GetSchedule оба отклоняют blank reference без обрезания перед lookup, но возвращают разные entities и используют разные ownership paths. Это один guard внутри коротких typed reads; principal уже общий, generic getter не упрощает контракт."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "f1a5607c68088d1e745052d56ce3af1d6d5a53ad38d5e12ec7025f6e50c7276e",
+      "count": 1,
+      "reason": "GetWorkflow/ListRuns и GetOwnerGate/ListArtifacts сопоставлены по principal/error каркасу. ListRuns сохраняет request cancellation через preserveRequestContext, artifacts такой обработки не имеют. Сохраняются разные semantics, общий principal уже вынесен."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "ab05a1011f815de39d39df0df034c5de59ed090fb092ed1adeb2f0660fc9e328",
+      "count": 1,
+      "reason": "GetRunGraph и GetRunGraphSnapshot — разные owner repository queries с одинаковой парой typed results, а не взаимозаменяемые чтения. Principal общий; отдельные публичные методы сохраняют явный выбор snapshot consistency без generic callback слоя."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "99c70ba51ecc5a57448707a1781506b968e096d54868aeeab50fc8e03bfe4765",
+      "count": 1,
+      "reason": "Run events возвращают bool continuation, owner gates/artifacts — cursor, artifact revisions имеют дополнительный ref/page. Перекрывающиеся окна typed delegation не общий алгоритм; principal уже общий, арность и специализированные queries сохраняются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/skill.go",
+      "fragmentSHA256": "45f80db21b4d992d6965990f5b2665c4796479fa1d67e799351cc8893080ae85",
+      "count": 1,
+      "reason": "Artifact revisions и skill-bundle revisions имеют одинаковый ref/page каркас, но разные entity и eligibility. GetArtifactRevision имеет revisionRef guard, ListSkillBundles — closed state/query bounds. Principal общий; generic revision router здесь не нужен."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "87159422df2213da92bc49ec90c374718045e07eb8be64b7dcbd53495f35f206",
+      "count": 1,
+      "reason": "ClaimIntegrationConnectionTests и ClaimIntegrationInvocations уже разделяют validatePlatformClaimBatch и principal; остаются разные точные repository claim methods и соседние Resolve/GetInvocation signatures. Generic claim dispatcher ради оставшейся обёртки не вводится."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/service.go",
+      "fragmentSHA256": "309be5a803d75b9dffa2ef6e3fa676256020e723f24e4cd34a4dcbeabb11b3fc",
+      "count": 1,
+      "reason": "ClaimIntegrationInvocations и ClaimInteractionDeliveries уже разделяют principal и batch validator, но захватывают разные owner tasks/leases через разные ports. Остаточное совпадение — typed delegation; lifecycle маршруты не заменяются generic callback."
     }
   ]
 }
