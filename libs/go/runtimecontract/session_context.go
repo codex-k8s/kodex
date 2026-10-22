@@ -55,33 +55,15 @@ func ValidateRuntimeSessionContext(input RunnerInput) (bool, error) {
 
 // continuationDescriptor identifies one prior or current component value in a sealed diff.
 // continuationDescriptor определяет прежнее или текущее значение компонента в заверенном diff.
-type continuationDescriptor struct {
-	Ref     string `json:"ref,omitempty"`
-	Version int64  `json:"version,omitempty"`
-	Digest  string `json:"digest,omitempty"`
-	Value   string `json:"value,omitempty"`
-}
+type continuationDescriptor RuntimeContextDescriptor
 
 // continuationChange records one ordered component transition to current context.
 // continuationChange хранит один упорядоченный переход компонента к текущему контексту.
-type continuationChange struct {
-	Component string                   `json:"component"`
-	Previous  []continuationDescriptor `json:"previous"`
-	Current   []continuationDescriptor `json:"current"`
-	Action    string                   `json:"action"`
-}
+type continuationChange RuntimeContextChange[continuationDescriptor]
 
 // continuationDiff pins revision, session, turn, attempt, and canonical change digest.
 // continuationDiff закрепляет версию, сессию, ход, попытку и канонический дайджест изменений.
-type continuationDiff struct {
-	PreviousRevisionRef string               `json:"previousRevisionRef"`
-	CurrentRevisionRef  string               `json:"currentRevisionRef"`
-	SessionRef          string               `json:"sessionRef"`
-	TurnRef             string               `json:"turnRef"`
-	Attempt             int32                `json:"attempt"`
-	Changes             []continuationChange `json:"changes"`
-	Digest              string               `json:"digest"`
-}
+type continuationDiff RuntimeContextDiff[continuationChange]
 
 // CurrentContinuationNotice validates only the last owner-sealed context message and reports
 // its presence for delivery; callers must independently verify RuntimeRevision and execution binding.

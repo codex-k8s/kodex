@@ -6,36 +6,40 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// RuntimeDescriptor не содержит credentials, locator или произвольные metadata.
-type RuntimeDescriptor struct {
-	Ref     string `json:"ref,omitempty"`
-	Version int64  `json:"version,omitempty"`
-	Digest  string `json:"digest,omitempty"`
-	Value   string `json:"value,omitempty"`
-}
+// RuntimeDescriptor names the prompt owner's component descriptor while sharing its JSON shape
+// with the continuation consumer. It has no credential or locator fields; callers still validate
+// descriptive values and may not use this shape as a redaction mechanism.
+// RuntimeDescriptor именует дескриптор компонента владельца промпта с общей JSON-формой потребителя
+// продолжения. Полей реквизитов и адресов нет; вызывающий код проверяет описательные значения и не
+// использует форму как механизм сокрытия данных.
+type RuntimeDescriptor runtimecontract.RuntimeContextDescriptor
 
-type RuntimeChange struct {
-	Component string              `json:"component"`
-	Previous  []RuntimeDescriptor `json:"previous"`
-	Current   []RuntimeDescriptor `json:"current"`
-	Action    string              `json:"action"`
-}
+// RuntimeChange records one component's ordered previous and current descriptors under the owner's
+// distinct nominal type. Component and action eligibility are checked by the diff functions.
+// RuntimeChange хранит упорядоченные прежние и текущие дескрипторы компонента в отдельном именованном
+// типе владельца. Допустимость компонента и действия проверяют функции различий.
+type RuntimeChange runtimecontract.RuntimeContextChange[RuntimeDescriptor]
 
-type RuntimeDiff struct {
-	PreviousRevisionRef string          `json:"previousRevisionRef"`
-	CurrentRevisionRef  string          `json:"currentRevisionRef"`
-	SessionRef          string          `json:"sessionRef"`
-	TurnRef             string          `json:"turnRef"`
-	Attempt             int32           `json:"attempt"`
-	Changes             []RuntimeChange `json:"changes"`
-	Digest              string          `json:"digest"`
-}
+// RuntimeDiff binds changes to revision and session identity without becoming a continuation grant.
+// The prompt owner retains this named type and its existing prospective and execution validation.
+// RuntimeDiff связывает изменения с ревизиями и сессией, не становясь разрешением продолжения.
+// Владелец промпта сохраняет этот именованный тип и существующие проверки предварительной и исполняемой форм.
+type RuntimeDiff runtimecontract.RuntimeContextDiff[RuntimeChange]
 
+// runtimeComponentOrder fixes the closed component order used for comparison and digest production.
+// runtimeComponentOrder закрепляет закрытый порядок компонентов для сравнения и формирования дайджеста.
 var runtimeComponentOrder = []string{"INSTRUCTIONS", "MODEL", "REASONING", "IMAGE", "ENVIRONMENT", "FILES", "SKILLS", "MEMORY", "TOOLS", "MCP", "INTEGRATIONS", "CAPABILITIES", "POLICY"}
 
-// ValidateRuntimeDiff повторно проверяет closed schema и digest сохранённого notice.
+// ValidateRuntimeDiff reconstructs the closed component maps, rejects unordered or unchanged entries,
+// selects prospective or execution identity validation, and recomputes the stored diff digest. It does
+// not authenticate the notice or replace the consumer's exact runtime-revision checks.
+// ValidateRuntimeDiff восстанавливает закрытые карты компонентов, отклоняет неупорядоченные и
+// неизменившиеся записи, выбирает проверку предварительной или исполняемой личности и пересчитывает
+// сохранённый дайджест различий. Функция не удостоверяет уведомление и не заменяет точные проверки ревизии потребителем.
 func ValidateRuntimeDiff(diff RuntimeDiff) error {
 	previous, current := map[string][]RuntimeDescriptor{}, map[string][]RuntimeDescriptor{}
 	for _, component := range runtimeComponentOrder {
@@ -63,6 +67,12 @@ func ValidateRuntimeDiff(diff RuntimeDiff) error {
 	return nil
 }
 
+// CompareRuntimeContexts requires distinct nonempty revisions and a session, turn, and positive
+// attempt before comparing descriptors. The resulting digest describes that exact execution context;
+// ownership and authorization of the supplied references are checked outside this pure function.
+// CompareRuntimeContexts требует разные непустые ревизии, сессию, ход и положительную попытку перед
+// сравнением дескрипторов. Итоговый дайджест описывает точный контекст исполнения; владение и полномочия
+// указанных ссылок проверяются вне этой чистой функции.
 func CompareRuntimeContexts(previous, current map[string][]RuntimeDescriptor, identity RuntimeDiff) (RuntimeDiff, error) {
 	if identity.PreviousRevisionRef == "" || identity.CurrentRevisionRef == "" || identity.PreviousRevisionRef == identity.CurrentRevisionRef || identity.SessionRef == "" || identity.TurnRef == "" || identity.Attempt < 1 {
 		return RuntimeDiff{}, fmt.Errorf("runtime diff identity is invalid: %w", ErrInvalid)
@@ -70,6 +80,12 @@ func CompareRuntimeContexts(previous, current map[string][]RuntimeDescriptor, id
 	return compareRuntimeDescriptors(previous, current, identity)
 }
 
+// CompareProspectiveRuntimeContexts compares a prospective context with a known prior revision and
+// session while requiring the future revision, turn, and attempt to remain unset. It cannot mint an
+// execution identity in advance of the owner's continuation transition.
+// CompareProspectiveRuntimeContexts сравнивает предварительный контекст с известными прежней ревизией
+// и сессией, требуя незаданных будущих ревизии, хода и попытки. Функция не создаёт личность исполнения
+// до перехода продолжения, выполняемого владельцем.
 func CompareProspectiveRuntimeContexts(previous, current map[string][]RuntimeDescriptor, identity RuntimeDiff) (RuntimeDiff, error) {
 	if identity.PreviousRevisionRef == "" || identity.SessionRef == "" || identity.CurrentRevisionRef != "" || identity.TurnRef != "" || identity.Attempt != 0 {
 		return RuntimeDiff{}, fmt.Errorf("prospective runtime diff identity is invalid: %w", ErrInvalid)
@@ -77,6 +93,12 @@ func CompareProspectiveRuntimeContexts(previous, current map[string][]RuntimeDes
 	return compareRuntimeDescriptors(previous, current, identity)
 }
 
+// compareRuntimeDescriptors validates the complete closed maps and bounded public descriptors, copies
+// changed descriptor slices into component order, and hashes the identity with an empty Digest field.
+// Caller maps and slices are not changed; unchanged components are absent from the resulting diff.
+// compareRuntimeDescriptors проверяет полные закрытые карты и ограниченные публичные дескрипторы,
+// копирует изменённые срезы по порядку компонентов и хеширует личность с пустым полем Digest. Карты
+// и срезы вызывающего кода не меняются; неизменившиеся компоненты отсутствуют в итоговых различиях.
 func compareRuntimeDescriptors(previous, current map[string][]RuntimeDescriptor, identity RuntimeDiff) (RuntimeDiff, error) {
 	for _, context := range []map[string][]RuntimeDescriptor{previous, current} {
 		if len(context) != len(runtimeComponentOrder) {

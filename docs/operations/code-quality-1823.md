@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.264.0
+version: 1.265.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,66 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести шестьдесят пятая волна — общая форма context diff
+
+Опубликованный SHA264 — `a13b5f8125df674eabdf26dd47201118fe1f7908`.
+Точный M72Rti:6600 sources,222 excluded,1818 raw/631 retained/
+1187 unresolved; Go11650/21233, missing9583. Raw SHA256:
+`8e87c01b074c2debf2efb7f3e823cd298b86ee8ebb070fe6c48b8b8d4ed32eb3`.
+Clone-set:
+`0f8f3355ad011e09c95b2680d610405762da26f27418368bdcb1a17f7cb323f2`.
+Точные unit/build, push/readback и Draft PR PATCH/GET264 подтверждены.
+
+Прочитаны оба126-token/27-line клона: runtimecontract continuation descriptor,
+change и diff, а также prompt RuntimeDescriptor/RuntimeChange/RuntimeDiff.
+Их три одинаковые JSON-формы вынесены в runtimecontract/context_diff.go.
+Change и Diff параметризованы только для сохранения разных локальных
+именованных типов обеих сторон. Шесть прежних types остаются definitions,
+не aliases; поля, порядок, tags, omitempty, nil/empty и scalar widths прежние.
+Нового producer/consumer, decoder, compatibility path или grant не введено.
+
+Вся producer-side runtime_diff.go и её два прежних unit описаны EN→RU;
+новые три shared types и два unit тоже. Полный выбранный scope23/23 в пяти
+файлах. Shared shape не проверяет bounds, component/action ordering, digest,
+revision/session/turn/attempt provenance. Существующие producer checks и
+consumer strict decoding, duplicate-key refusal, byte/rune limits и semantic
+notice admission остаются на прежних местах и не объединены универсальным
+валидатором. Current/prospective identity modes остаются разными.
+
+Inverse AST9: для двух production files развёрнуты только шесть точных type
+definitions и удалён только добавленный prompt import; восстановлен AST264.
+Шесть дополнительных сравнений проверяют каждую shared форму после точной
+подстановки прежнего local type; девятая пара — comments-only прежний test.
+Сами execution bodies и semantic digest computation не менялись.
+
+Новые unit проверяют6 точных ordinary JSON golden/roundtrip fixtures:
+descriptor omitempty, Unicode и int64 width, null/empty arrays, field order,
+nested changes; отдельно6 unknown-field/type cases должны отказать в прежнем
+strict decoder. Три проверки nominal identity запрещают незаметный alias.
+Int64 maximum здесь только ordinary JSON shape, не заявление о допустимости
+такого descriptor.Version для JCS/semantic validation (там максимум2^53−1).
+Context7 /golang/go type identity/definitions/instantiations и pinned
+Go1.26.6 encoding/json.Marshal tags/omitempty/nil documentation сверены.
+Новых SDK/dependencies нет.
+
+В рабочем Ql8SQJ:6602 sources,222 excluded,1817 raw/631 retained/
+1186 unresolved; Go11665/21238, missing9573. Raw SHA256:
+`5a7cd229608f0ef7b049d13e1370bd1647e7fd0f61e5ef8425ecdc19ecc7e3ae`.
+Clone-set:
+`f147f3eb0a7cfb00c9dd0dffcd29b1204e963e9be36541086fcc968cef9c3a62`.
+Multiset proof удалил ровно одну старую126-token группу, новых групп нет,
+все1817 других path/hash/count неизменны. Retained528 entries/631 occurrences
+не менялись; не добавлено ни одного исключения. Первый read-only вывод пары
+имел опечатку Node expression; исправленный bounded multiset check выполнен.
+
+Все runtimecontract unit117 верхних/543 всех и все prompt unit42/215 —
+PASS,0 FAIL/SKIP; полные builds обоих modules -p=2 — PASS LOCAL.
+17 Node units, Go checker unit, docs23/23, inverse AST9, canonical scan,
+5 ignore boundaries и diff-check — PASS LOCAL. После commit повторяются
+на точном SHA перед публикацией readback. General missing9573 и unresolved1186
+не завершены; full/docs/review/live/browser/component/deploy — не объявлены
+PASS. По задаче выполняются только build/unit без полной приёмки.
 
 ## Двести шестьдесят четвёртая волна — access и managed configuration views
 
