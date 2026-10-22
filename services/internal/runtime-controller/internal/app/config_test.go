@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestLoadConfigSeparatesControlAndRuntimeNamespaces supplies synthetic environment settings and checks
+// that loaded control and runtime namespaces retain their required distinct values.
+// TestLoadConfigSeparatesControlAndRuntimeNamespaces задаёт синтетическое окружение и проверяет,
+// что загруженные пространства управления и выполнения сохраняют обязательные раздельные значения.
 func TestLoadConfigSeparatesControlAndRuntimeNamespaces(t *testing.T) {
 	t.Setenv("POD_NAMESPACE", "kodex-system")
 	t.Setenv("RUNTIME_CONTROLLER_RUNTIME_NAMESPACE", "kodex-runtime")
@@ -23,6 +27,10 @@ func TestLoadConfigSeparatesControlAndRuntimeNamespaces(t *testing.T) {
 	}
 }
 
+// TestLoadConfigRejectsSharedControlAndRuntimeNamespace verifies startup configuration rejects
+// placing runtime workloads in the control-service namespace.
+// TestLoadConfigRejectsSharedControlAndRuntimeNamespace проверяет отказ конфигурации запуска
+// при размещении рабочих нагрузок выполнения в пространстве управляющих сервисов.
 func TestLoadConfigRejectsSharedControlAndRuntimeNamespace(t *testing.T) {
 	t.Setenv("POD_NAMESPACE", "kodex-system")
 	t.Setenv("RUNTIME_CONTROLLER_RUNTIME_NAMESPACE", "kodex-system")
@@ -37,6 +45,10 @@ func TestLoadConfigRejectsSharedControlAndRuntimeNamespace(t *testing.T) {
 	}
 }
 
+// TestLoadConfigRejectsUnknownProviderAppArmorProfile checks that an owner-supplied unrecognized profile name
+// cannot bypass the closed provider AppArmor profile selection.
+// TestLoadConfigRejectsUnknownProviderAppArmorProfile проверяет, что неизвестное имя профиля от владельца
+// не обходит закрытый выбор профиля AppArmor провайдера.
 func TestLoadConfigRejectsUnknownProviderAppArmorProfile(t *testing.T) {
 	t.Setenv("POD_NAMESPACE", "kodex-system")
 	t.Setenv("RUNTIME_CONTROLLER_RUNTIME_NAMESPACE", "kodex-runtime")

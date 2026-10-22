@@ -16,12 +16,30 @@ import (
 )
 
 const (
-	providerTarget                  = "dns:///secret-broker.kodex-system.svc:8443"
-	providerTLSServerName           = "secret-broker.kodex-system.svc.cluster.local"
+	// providerTarget pins the secret-broker gRPC DNS endpoint accepted by startup validation;
+	// it is a service address, not evidence of peer identity.
+	// providerTarget закрепляет DNS-адрес gRPC secret-broker, допустимый при запуске;
+	// адрес сервиса сам по себе не подтверждает личность узла.
+	providerTarget = "dns:///secret-broker.kodex-system.svc:8443"
+	// providerTLSServerName pins the expected secret-broker certificate name separately from routing.
+	// providerTLSServerName закрепляет ожидаемое имя сертификата secret-broker отдельно от маршрутизации.
+	providerTLSServerName = "secret-broker.kodex-system.svc.cluster.local"
+	// providerAuthorityResolverTarget keeps provider authority resolution on the local control-plane endpoint,
+	// rather than reusing the credential broker address.
+	// providerAuthorityResolverTarget направляет разрешение полномочий провайдера в локальный control-plane,
+	// а не на адрес брокера учётных данных.
 	providerAuthorityResolverTarget = "dns:///127.0.0.1:8443"
-	providerAuthorityResolverSNI    = "control-plane.kodex-system.svc.cluster.local"
+	// providerAuthorityResolverSNI selects the control-plane certificate name for the local resolver;
+	// it deliberately differs from the secret-broker name.
+	// providerAuthorityResolverSNI задаёт имя сертификата control-plane для локального разрешителя;
+	// оно намеренно отличается от имени secret-broker.
+	providerAuthorityResolverSNI = "control-plane.kodex-system.svc.cluster.local"
 )
 
+// Config collects control-plane environment settings, credential metadata, trusted file paths and bounded worker budgets.
+// Parsing these fields does not read the referenced credentials or establish remote readiness.
+// Config объединяет настройки control-plane из окружения, метаданные учётных данных, доверенные пути и бюджеты работников.
+// Разбор полей не читает указанные учётные данные и не подтверждает готовность удалённых сервисов.
 type Config struct {
 	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
 	SkillScannerSocket              string        `env:"CONTROL_PLANE_SKILL_SCANNER_SOCKET"`
@@ -130,6 +148,10 @@ type Config struct {
 	ProviderCleanupTimeout          time.Duration `env:"CONTROL_PLANE_PROVIDER_CREDENTIAL_CLEANUP_OPERATION_TIMEOUT"`
 }
 
+// loadConfig initializes service defaults, applies the process environment and validates the resulting configuration.
+// It returns no usable configuration on failure and does not load dotenv files.
+// loadConfig задаёт исходные настройки сервиса, применяет окружение процесса и проверяет результат.
+// При ошибке пригодная конфигурация не возвращается; файлы dotenv не загружаются.
 func loadConfig() (Config, error) {
 	config := Config{
 		SkillScannerSocket:  "/run/kodex-skill-scanner/clamd.sock",
@@ -212,6 +234,10 @@ func loadConfig() (Config, error) {
 	return config, nil
 }
 
+// validate checks fixed RPC and identity boundaries, path syntax, storage/OIDC settings and bounded service budgets.
+// In the ordinary RPC profile it also inspects the authority socket directory; other referenced files and remote peers are not probed.
+// validate проверяет фиксированные границы RPC и идентичности, синтаксис путей, настройки хранилища/OIDC и бюджеты сервиса.
+// В обычном профиле RPC также проверяется каталог сокета полномочий; остальные указанные файлы и удалённые узлы не опрашиваются.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
 		return errors.New("control-plane RPC profile is invalid")
@@ -293,8 +319,10 @@ func (config Config) validate() error {
 	return nil
 }
 
-// Полностью отсутствующая bootstrap credential допустима: аккаунты создаются
-// владельцем после входа. Частичная конфигурация не превращается в отсутствие.
+// validBootstrapProviderCredentialConfig permits all bootstrap credential fields to be absent,
+// but requires valid name, UID, version and digest metadata when any field is supplied.
+// validBootstrapProviderCredentialConfig допускает отсутствие всех полей начальных учётных данных,
+// но при наличии любого требует корректных метаданных имени, UID, версии и дайджеста.
 func validBootstrapProviderCredentialConfig(config Config) bool {
 	if config.DefaultProviderSecretName == "" && config.DefaultProviderSecretUID == "" &&
 		config.DefaultProviderSecretVersion == "" && config.DefaultProviderCredentialSHA256 == "" {
@@ -305,6 +333,10 @@ func validBootstrapProviderCredentialConfig(config Config) bool {
 		validSHA256(config.DefaultProviderCredentialSHA256)
 }
 
+// validProviderCredentialCleanupConfig bounds cleanup batch size, polling and operation duration
+// without starting a worker or inspecting cleanup state.
+// validProviderCredentialCleanupConfig ограничивает размер пакета очистки, период опроса и длительность операции,
+// не запуская работника и не проверяя состояние очистки.
 func validProviderCredentialCleanupConfig(config Config) bool {
 	return config.ProviderCleanupBatchSize >= 1 && config.ProviderCleanupBatchSize <= 16 &&
 		config.ProviderCleanupPollInterval >= 50*time.Millisecond &&
@@ -313,6 +345,10 @@ func validProviderCredentialCleanupConfig(config Config) bool {
 		config.ProviderCleanupTimeout <= 30*time.Second
 }
 
+// validProviderCredentialBoundary checks the exact broker and local authority-resolver endpoints,
+// their distinct certificate names and the configured CA relationship, without making connections.
+// validProviderCredentialBoundary проверяет точные адреса брокера и локального разрешителя полномочий,
+// раздельные имена сертификатов и связь настроенных CA без установления соединений.
 func validProviderCredentialBoundary(config Config) bool {
 	return config.SecretBrokerTarget == providerTarget &&
 		config.SecretBrokerTLSServerName == providerTLSServerName &&
@@ -343,6 +379,10 @@ func validDNSLabel(value string) bool {
 	return runtimecontract.ValidDNSLabel(value)
 }
 
+// validUUID accepts only the 36-byte lowercase hexadecimal and hyphen layout;
+// it does not restrict UUID version, variant or the all-zero value.
+// validUUID принимает только 36-байтовую запись со строчными шестнадцатеричными символами и дефисами;
+// версия, вариант UUID и полностью нулевое значение не ограничиваются.
 func validUUID(value string) bool {
 	if len(value) != 36 {
 		return false
@@ -361,6 +401,8 @@ func validUUID(value string) bool {
 	return true
 }
 
+// validSHA256 recognizes exactly 64 lowercase hexadecimal bytes; it checks representation, not file content.
+// validSHA256 распознаёт ровно 64 строчных шестнадцатеричных байта; проверяется запись, а не содержимое файла.
 func validSHA256(value string) bool {
 	if len(value) != 64 {
 		return false
@@ -373,19 +415,35 @@ func validSHA256(value string) bool {
 	return true
 }
 
+// validManifestDigest requires the sha256 prefix followed by the exact lowercase digest grammar.
+// It neither downloads a manifest nor checks its provenance.
+// validManifestDigest требует префикс sha256 и точную строчную запись дайджеста.
+// Манифест не загружается, его происхождение не проверяется.
 func validManifestDigest(value string) bool {
 	return len(value) == 71 && value[:7] == "sha256:" && validSHA256(value[7:])
 }
 
+// validImageRepository bounds the repository text, requires a slash and excludes digest separators and whitespace;
+// this lexical filter is not a complete OCI reference parser.
+// validImageRepository ограничивает длину репозитория, требует косую черту и исключает разделитель дайджеста и пробельные символы;
+// этот лексический фильтр не является полным разборщиком ссылок OCI.
 func validImageRepository(value string) bool {
 	return value != "" && len(value) <= 500 && !strings.ContainsAny(value, "@ \t\r\n") && strings.Contains(value, "/")
 }
 
+// validPinnedImageReference splits at the last at-sign and checks repository and manifest-digest syntax.
+// A matching string does not establish image admission, signature or availability.
+// validPinnedImageReference разделяет строку по последному знаку @ и проверяет синтаксис репозитория и дайджеста.
+// Соответствие строки не подтверждает допуск образа, подпись или доступность.
 func validPinnedImageReference(value string) bool {
 	separator := strings.LastIndex(value, "@")
 	return separator > 0 && validImageRepository(value[:separator]) && validManifestDigest(value[separator+1:])
 }
 
+// validRuntimeIdentifier accepts 1..128 ASCII letters, digits, dots, underscores and hyphens
+// for configured runtime names, without resolving a resource or granting access.
+// validRuntimeIdentifier принимает от 1 до 128 букв ASCII, цифр, точек, подчёркиваний и дефисов
+// в настроенных именах выполнения, не разрешая ресурс и не предоставляя доступ.
 func validRuntimeIdentifier(value string) bool {
 	if value == "" || len(value) > 128 {
 		return false

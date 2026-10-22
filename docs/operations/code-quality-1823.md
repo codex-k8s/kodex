@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.179.0
+version: 1.180.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восьмидесятая волна — конфигурация и адаптеры учётных данных
+
+На базе опубликованного SHA `14f8c027d407536b472131f56de4d471e552550b`
+документированы оставшиеся 98 объявлений девяти файлов: конфигурация
+control-plane/runtime-controller, Kubernetes materializer, клиент
+provider credentials, клиент runtime credentialprojection и их выбранные
+тесты. Все 104 объявления этих файлов теперь имеют предметные EN→RU
+комментарии; scoped Go-docs-check — PASS LOCAL. Три package descriptions
+также переведены в двуязычный формат. Ни один generated файл не изменён.
+
+Комментарии различают синтаксис и полномочия: формат UUID/digest либо
+DNS-метки не доказывает существование, актуальность, владение Secret или
+допуск образа. Описаны сохранение точного execution locator, отдельная
+оболочка системного помощника в детерминированном digest, сохранение
+классификации ошибки RPC, отсутствие клиентского retry очистки и граница
+проверки текстовой квитанции без заявления проверки её подписи. У
+Kubernetes materializer явно зафиксированы обновление только существующего
+Secret, ограниченные conflict retry с повторным чтением, сохранение
+посторонних ключей, допустимость одинаковых байтов и отказ при другом
+значении того же ключа. Очистка частной копии не названа очисткой входного
+среза вызывающей стороны. Тесты fake/stub не объявляются проверкой живого
+API, авторизации или подписанного транспорта.
+
+Config loader двух сервисов описан с учётом различий: control-plane
+отбрасывает конфигурацию при validation failure и проверяет каталог
+authority socket в обычном профиле; runtime-controller возвращает
+заполненную конфигурацию вместе с validation error и не читает файлы.
+Ни один loader не загружает dotenv. Context7 проверены `/caarlos0/env`
+(Parse из окружения процесса) и `/kubernetes/client-go` (RetryOnConflict,
+повторный Get/Update, ограничения fake-клиента). SDK и зависимости не менялись.
+
+Все девять файлов механически сравнены с parent после удаления только
+строк комментариев и нормализации gofmt: исполняемое содержимое идентично.
+Поведение, wire, authority/lifecycle, SQL и applied migrations неизменны.
+PASS LOCAL: CP `go test -count=1 -json ./internal/app
+./internal/credentialmaterializer ./internal/providercredentialclient` —
+38 верхних PASS, 123 PASS с подтестами, 0 SKIP/FAIL; RC `go test -count=1
+-json ./internal/app ./internal/credentialprojection` — 65 верхних PASS,
+196 PASS с подтестами, 0 SKIP/FAIL. Оба полных module `go build ./...`,
+16 unit анализатора, Go-checker, пять ignore-boundaries и diff-check —
+PASS LOCAL. Go1.26.6, GOENV=off/GOWORK=off. Только для CP unit запуска сняты
+унаследованные disposable test DSN/template vars; PostgreSQL component
+контур не запускался. Повтор на точном опубликованном SHA фиксируется в PR.
+
+Detector: 6569 source, 222 generated/lock исключения, 1844 raw,
+578 точных решений, 1266 неразобранных; реестр исключений не менялся.
+Сравнение format/path/fragment SHA-256/кратности с parent: 0 удалённых и
+0 добавленных групп, сместились только позиции. Рабочий raw SHA-256
+`429e68d6e194a21eecff33f6d5ab0d43d2a6a59c059c0927fd1352f6d2ed02a1`,
+clone-set fingerprint
+`0c43304273ef17bf4c8f2c35084515e70422d7d24c966ee006dc80504ddd398d`.
+Go-реестр: 6628/21129, непокрыты 14501. Полный repository Go-docs-check,
+component/live/browser/deploy и реальные агенты/провайдеры — NOT RUN.
+Прежний diagnostics FAIL не устранён и не назван PASS. Цель и единый
+Draft PR остаются незавершёнными.
 
 ## Сто семьдесят девятая волна — общий DNS resource-label parser
 

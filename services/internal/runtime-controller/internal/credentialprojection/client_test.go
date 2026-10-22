@@ -14,6 +14,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestMaterializePreservesTrustedFailureClassification checks the wrapped cause retains its Unauthenticated gRPC code.
+// It exercises local error wrapping rather than calling a broker.
+// TestMaterializePreservesTrustedFailureClassification проверяет сохранение кода gRPC Unauthenticated у обёрнутой причины.
+// Проверяется локальная обёртка ошибки, а не обращение к брокеру.
 func TestMaterializePreservesTrustedFailureClassification(t *testing.T) {
 	sentinel := status.Error(codes.Unauthenticated, "closed upstream classification")
 	err := materializationRPCError("materialize credentials", sentinel)
@@ -22,6 +26,10 @@ func TestMaterializePreservesTrustedFailureClassification(t *testing.T) {
 	}
 }
 
+// TestProjectionDescriptorBindsExactExecution accepts matching synthetic execution metadata and verifies
+// the returned Secret name and runtime key mapping.
+// TestProjectionDescriptorBindsExactExecution принимает совпадающие синтетические метаданные выполнения и проверяет
+// возвращённое имя Secret и соответствие ключей выполнения.
 func TestProjectionDescriptorBindsExactExecution(t *testing.T) {
 	input := projectionTestInput()
 	descriptor := projectionTestDescriptor(input)
@@ -34,6 +42,10 @@ func TestProjectionDescriptorBindsExactExecution(t *testing.T) {
 	}
 }
 
+// TestMaterializeRequestCarriesOnlyExactExecutionLocator checks every mapped workload, lease and immutable execution pin
+// in the materialization request, without invoking transport authorization.
+// TestMaterializeRequestCarriesOnlyExactExecutionLocator проверяет каждую передаваемую привязку нагрузки, аренды и неизменяемого выполнения
+// в запросе размещения, не вызывая транспортную авторизацию.
 func TestMaterializeRequestCarriesOnlyExactExecutionLocator(t *testing.T) {
 	input := projectionTestInput()
 	request := materializeRequest(input)
@@ -46,6 +58,10 @@ func TestMaterializeRequestCarriesOnlyExactExecutionLocator(t *testing.T) {
 	}
 }
 
+// TestMaterializationRequestDigestDistinguishesAssistantEnvelope verifies ordinary and system-assistant request wrappers
+// produce different 64-character digests for the same execution locator.
+// TestMaterializationRequestDigestDistinguishesAssistantEnvelope проверяет, что обычная оболочка и оболочка системного помощника
+// дают разные 64-символьные дайджесты для одного указателя выполнения.
 func TestMaterializationRequestDigestDistinguishesAssistantEnvelope(t *testing.T) {
 	input := projectionTestInput()
 	projectDigest, err := MaterializationRequestDigest(input)
@@ -60,6 +76,10 @@ func TestMaterializationRequestDigestDistinguishesAssistantEnvelope(t *testing.T
 	}
 }
 
+// TestProjectionDescriptorRejectsEveryCrossExecutionBinding mutates descriptor pins, expiry and key-set entries
+// and requires rejection of each mismatch; broker authorization and Kubernetes reads are outside this unit test.
+// TestProjectionDescriptorRejectsEveryCrossExecutionBinding изменяет привязки дескриптора, срок и набор ключей
+// и требует отказа при каждом несоответствии; авторизация брокера и чтение Kubernetes в этот unit-тест не входят.
 func TestProjectionDescriptorRejectsEveryCrossExecutionBinding(t *testing.T) {
 	input := projectionTestInput()
 	tests := map[string]func(*secretbrokerv1.RuntimeCredentialProjectionDescriptor){
@@ -109,6 +129,10 @@ func TestProjectionDescriptorRejectsEveryCrossExecutionBinding(t *testing.T) {
 	}
 }
 
+// projectionTestInput returns synthetic execution pins and one required runtime-secret key.
+// It is a descriptor-check fixture, not a complete runnable input or an issued lease.
+// projectionTestInput возвращает синтетические привязки выполнения и один обязательный ключ секрета выполнения.
+// Это образец проверки дескриптора, а не полный вход для запуска или выданная аренда.
 func projectionTestInput() runtimecontract.RunnerInput {
 	return runtimecontract.RunnerInput{
 		WorkloadInstance: "runtime-controller-pod", LeaseRef: "lease_abcdefgh", LeaseFence: "fence-3", LeaseGeneration: 3, RuntimeRevisionRef: "revision_abcdefgh",
@@ -118,6 +142,10 @@ func projectionTestInput() runtimecontract.RunnerInput {
 	}
 }
 
+// projectionTestDescriptor builds matching synthetic Secret metadata from the supplied execution pins,
+// with one runtime key and an expiry one minute ahead of construction time.
+// projectionTestDescriptor создаёт совпадающие синтетические метаданные Secret по переданным привязкам выполнения,
+// с одним ключом выполнения и сроком на минуту позже момента создания.
 func projectionTestDescriptor(input runtimecontract.RunnerInput) *secretbrokerv1.RuntimeCredentialProjectionDescriptor {
 	return &secretbrokerv1.RuntimeCredentialProjectionDescriptor{
 		Namespace: "kodex-runtime", SecretName: "runtime-credentials-0123456789abcdef0123456789abcdef01234567",

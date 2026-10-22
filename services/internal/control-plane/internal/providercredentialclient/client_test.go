@@ -15,16 +15,30 @@ import (
 )
 
 const (
-	cleanupTaskRef    = "pcct_61000000-0000-4000-8000-000000000001"
+	// cleanupTaskRef identifies a synthetic cleanup task used to assert exact RPC request mapping.
+	// cleanupTaskRef обозначает синтетическую задачу очистки для проверки точного преобразования запроса RPC.
+	cleanupTaskRef = "pcct_61000000-0000-4000-8000-000000000001"
+	// cleanupAccountRef supplies a bounded synthetic account reference, not access to an actual provider account.
+	// cleanupAccountRef задаёт ограниченную синтетическую ссылку аккаунта, а не доступ к настоящему аккаунту провайдера.
 	cleanupAccountRef = "pacc_cleanup_Account9Z"
-	cleanupReceipt    = "provider-credential-cleanup:61000000-0000-4000-8000-000000000001:g7"
+	// cleanupReceipt is an opaque synthetic successful response used to test receipt propagation, not signature verification.
+	// cleanupReceipt является непрозрачным синтетическим успешным ответом для проверки передачи квитанции, а не её подписи.
+	cleanupReceipt = "provider-credential-cleanup:61000000-0000-4000-8000-000000000001:g7"
 )
 
+// cleanupCredential supplies valid synthetic Secret metadata shared by cleanup tests.
+// Mutation cases copy this value before changing individual pins.
+// cleanupCredential задаёт корректные синтетические метаданные Secret для тестов очистки.
+// Для проверок изменений значение копируется перед заменой отдельных привязок.
 var cleanupCredential = entity.ProviderCredentialDescriptor{
 	SecretName: "provider-credential-1", SecretUID: "61000000-0000-4000-8000-000000000002",
 	SecretResourceVersion: "cleanup-7", ContentSHA256: strings.Repeat("a", 64),
 }
 
+// providerCredentialClientStub records cleanup calls and returns a configured response or error without network access.
+// Other generated RPC methods remain embedded and are not exercised by these tests.
+// providerCredentialClientStub записывает вызовы очистки и возвращает настроенный ответ или ошибку без доступа к сети.
+// Остальные сгенерированные методы RPC встроены и этими тестами не вызываются.
 type providerCredentialClientStub struct {
 	controlplanev1.ProviderCredentialMaterializerServiceClient
 	response *controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
@@ -33,6 +47,10 @@ type providerCredentialClientStub struct {
 	calls    int
 }
 
+// CleanupProviderCredential captures the request, increments the call counter and returns the configured stub result.
+// It performs no cleanup or server-side authorization.
+// CleanupProviderCredential сохраняет запрос, увеличивает счётчик вызовов и возвращает настроенный результат подставного клиента.
+// Очистка и серверная авторизация не выполняются.
 func (client *providerCredentialClientStub) CleanupProviderCredential(
 	_ context.Context,
 	request *controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest,
@@ -43,6 +61,10 @@ func (client *providerCredentialClientStub) CleanupProviderCredential(
 	return client.response, client.err
 }
 
+// cleanupClient constructs the domain adapter around a stubbed provider-credential client and fails the test on constructor error.
+// No transport connection or real materializer is created.
+// cleanupClient создаёт доменный адаптер вокруг подставного клиента учётных данных и прерывает тест при ошибке конструктора.
+// Транспортное соединение и настоящий сервис размещения не создаются.
 func cleanupClient(t *testing.T, stub *providerCredentialClientStub) *Client {
 	t.Helper()
 	client, err := New(&controlplaneclient.Client{ProviderCredentials: stub})
@@ -52,6 +74,10 @@ func cleanupClient(t *testing.T, stub *providerCredentialClientStub) *Client {
 	return client
 }
 
+// TestCleanupProviderCredentialSendsExactDescriptorAndReturnsReceipt verifies one RPC carries the current task,
+// account, generation and credential pins, and maps the returned terminal receipt.
+// TestCleanupProviderCredentialSendsExactDescriptorAndReturnsReceipt проверяет передачу текущей задачи,
+// аккаунта, поколения и привязок учётных данных одним RPC и преобразование итоговой квитанции.
 func TestCleanupProviderCredentialSendsExactDescriptorAndReturnsReceipt(t *testing.T) {
 	t.Parallel()
 	stub := &providerCredentialClientStub{
@@ -75,6 +101,10 @@ func TestCleanupProviderCredentialSendsExactDescriptorAndReturnsReceipt(t *testi
 	}
 }
 
+// TestCleanupRecoveryPreservesCurrentClaimAndBindsEveryOriginField keeps the current claim separate from recovery origin
+// and checks that changing each tested origin/current-claim field changes the deterministic request digest; it does not exercise signed transport.
+// TestCleanupRecoveryPreservesCurrentClaimAndBindsEveryOriginField отделяет текущую заявку от происхождения восстановления
+// и проверяет изменение детерминированного дайджеста при замене каждого проверяемого поля происхождения или текущей заявки; подписанный транспорт не задействован.
 func TestCleanupRecoveryPreservesCurrentClaimAndBindsEveryOriginField(t *testing.T) {
 	t.Parallel()
 	stub := &providerCredentialClientStub{response: &controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse{TerminalReceipt: cleanupReceipt}}
@@ -116,6 +146,10 @@ func TestCleanupRecoveryPreservesCurrentClaimAndBindsEveryOriginField(t *testing
 	}
 }
 
+// TestCleanupProviderCredentialPropagatesRPCError verifies the upstream error is preserved after exactly one call,
+// without an automatic retry that could repeat cleanup effects.
+// TestCleanupProviderCredentialPropagatesRPCError проверяет сохранение ошибки вышестоящего сервиса после ровно одного вызова,
+// без автоматического повтора, способного повторить последствия очистки.
 func TestCleanupProviderCredentialPropagatesRPCError(t *testing.T) {
 	t.Parallel()
 	want := errors.New("cleanup unavailable")
@@ -128,6 +162,10 @@ func TestCleanupProviderCredentialPropagatesRPCError(t *testing.T) {
 	}
 }
 
+// TestCleanupProviderCredentialRejectsInvalidRequestBeforeRPC mutates references, generation and descriptor fields
+// and requires every invalid request to fail before reaching the stub.
+// TestCleanupProviderCredentialRejectsInvalidRequestBeforeRPC изменяет ссылки, поколение и поля дескриптора
+// и требует отказа для каждого некорректного запроса до обращения к подставному клиенту.
 func TestCleanupProviderCredentialRejectsInvalidRequestBeforeRPC(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -165,6 +203,10 @@ func TestCleanupProviderCredentialRejectsInvalidRequestBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestCleanupProviderCredentialRejectsInvalidTerminalReceipt checks empty, untrimmed, control-bearing and oversized receipts.
+// Failure occurs after the RPC and does not imply rollback of any server effect.
+// TestCleanupProviderCredentialRejectsInvalidTerminalReceipt проверяет пустые, необрезанные, содержащие управляющие символы и слишком длинные квитанции.
+// Отказ происходит после RPC и не означает откат последствий на сервере.
 func TestCleanupProviderCredentialRejectsInvalidTerminalReceipt(t *testing.T) {
 	t.Parallel()
 	for _, receipt := range []string{"", " receipt", "receipt\n", strings.Repeat("r", 513)} {
@@ -185,6 +227,10 @@ func TestCleanupProviderCredentialRejectsInvalidTerminalReceipt(t *testing.T) {
 	}
 }
 
+// changedCredential applies one mutation to a value copy of the synthetic descriptor and returns that copy,
+// so table cases do not modify the shared baseline.
+// changedCredential применяет одно изменение к копии синтетического дескриптора и возвращает её,
+// поэтому строки таблицы не меняют общий исходный образец.
 func changedCredential(change func(*entity.ProviderCredentialDescriptor)) entity.ProviderCredentialDescriptor {
 	result := cleanupCredential
 	change(&result)

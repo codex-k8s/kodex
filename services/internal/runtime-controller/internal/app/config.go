@@ -15,18 +15,44 @@ import (
 )
 
 const (
-	controlPlaneTarget        = "dns:///control-plane.kodex-system.svc:8443"
+	// controlPlaneTarget pins the only control-plane gRPC DNS endpoint accepted by configuration validation.
+	// controlPlaneTarget закрепляет единственный DNS-адрес gRPC control-plane, допустимый при проверке конфигурации.
+	controlPlaneTarget = "dns:///control-plane.kodex-system.svc:8443"
+	// controlPlaneTLSServerName identifies the expected control-plane certificate name independently of its target address.
+	// controlPlaneTLSServerName задаёт ожидаемое имя сертификата control-plane отдельно от адреса подключения.
 	controlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
-	secretBrokerTarget        = "dns:///secret-broker.kodex-system.svc:8443"
+	// secretBrokerTarget fixes credential projection routing to the in-cluster secret-broker gRPC endpoint.
+	// secretBrokerTarget фиксирует маршрут проекции учётных данных на внутрикластерный адрес gRPC secret-broker.
+	secretBrokerTarget = "dns:///secret-broker.kodex-system.svc:8443"
+	// secretBrokerTLSServerName pins the broker certificate name; routing to its service does not by itself establish identity.
+	// secretBrokerTLSServerName закрепляет имя сертификата брокера; маршрут к сервису сам по себе не подтверждает идентичность.
 	secretBrokerTLSServerName = "secret-broker.kodex-system.svc.cluster.local"
-	callbackTLSServerName     = "runtime-controller-callback.kodex-system.svc.cluster.local"
-	defaultControlNamespace   = "kodex-system"
-	defaultRuntimeNamespace   = "kodex-runtime"
-	runtimeCallbackClientID   = "spiffe://kodex.local/ns/kodex-runtime/sa/agent-runner"
+	// callbackTLSServerName fixes the callback server certificate identity expected by runtime runners.
+	// callbackTLSServerName фиксирует идентичность сертификата сервера обратных вызовов, ожидаемую исполнителями.
+	callbackTLSServerName = "runtime-controller-callback.kodex-system.svc.cluster.local"
+	// defaultControlNamespace names the required control-service namespace, kept distinct from runtime workloads.
+	// defaultControlNamespace задаёт обязательное пространство управляющих сервисов, отдельное от рабочих нагрузок выполнения.
+	defaultControlNamespace = "kodex-system"
+	// defaultRuntimeNamespace names the required namespace for runner workloads, separate from the control plane.
+	// defaultRuntimeNamespace задаёт обязательное пространство рабочих нагрузок исполнителя, отдельное от управляющих сервисов.
+	defaultRuntimeNamespace = "kodex-runtime"
+	// runtimeCallbackClientID fixes the runner SPIFFE identity allowed by callback configuration validation.
+	// It is an expected identity, not a credential issued by this constant.
+	// runtimeCallbackClientID фиксирует SPIFFE-идентичность исполнителя, допустимую в настройках обратных вызовов.
+	// Это ожидаемая идентичность, а не выдаваемые константой учётные данные.
+	runtimeCallbackClientID = "spiffe://kodex.local/ns/kodex-runtime/sa/agent-runner"
 )
 
+// sha256TextPattern recognizes exactly 64 lowercase hexadecimal characters for configured image and runtime digests.
+// Matching the expression does not verify the referenced bytes.
+// sha256TextPattern распознаёт ровно 64 строчных шестнадцатеричных символа настроенных дайджестов образа и контракта выполнения.
+// Совпадение с выражением не проверяет указанные байты.
 var sha256TextPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+// Config holds runtime-controller identity, protected endpoint paths, image/runtime policy and bounded execution settings.
+// Values refer to mounted credentials; parsing the structure does not read them or create workloads.
+// Config хранит идентичность runtime-controller, пути защищённых подключений, правила образа/выполнения и ограниченные настройки запуска.
+// Значения ссылаются на смонтированные учётные данные; разбор структуры их не читает и не создаёт нагрузки.
 type Config struct {
 	RPCProfile                     string        `env:"KODEX_RPC_PROFILE"`
 	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
@@ -75,6 +101,10 @@ type Config struct {
 	WarmLongPoll                   time.Duration `env:"RUNTIME_CONTROLLER_WARM_LONG_POLL"`
 }
 
+// loadConfig initializes controller defaults, overlays the process environment and returns configuration with its validation error.
+// Unlike an environment parser failure, validation failure still returns the populated configuration; no dotenv file is read.
+// loadConfig задаёт исходные настройки контроллера, применяет окружение процесса и возвращает конфигурацию с ошибкой её проверки.
+// В отличие от ошибки разбора окружения, ошибка проверки возвращает заполненную конфигурацию; файл dotenv не читается.
 func loadConfig() (Config, error) {
 	config := Config{
 		Environment: "development", ControlNamespace: defaultControlNamespace, RuntimeNamespace: defaultRuntimeNamespace,
@@ -111,6 +141,10 @@ func loadConfig() (Config, error) {
 	return config, config.validate()
 }
 
+// validate enforces fixed service identities and separate namespaces, absolute credential paths, the managed proxy,
+// image/contract syntax and bounded timing/concurrency. It performs no file reads, connection probes or image admission.
+// validate требует фиксированных идентичностей сервисов и раздельных пространств имён, абсолютных путей учётных данных, управляемого прокси,
+// синтаксиса образа/контракта и ограниченных времени и параллелизма. Файлы не читаются, подключения и допуск образа не проверяются.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("runtime controller RPC profile is invalid")
@@ -169,6 +203,10 @@ func (config Config) validate() error {
 	return nil
 }
 
+// validPinnedImageReference requires a nonempty prefix, the last @sha256 separator and exactly 64 lowercase hex digits,
+// excluding template placeholders in the prefix; it does not parse a complete repository grammar or establish admission.
+// validPinnedImageReference требует непустого префикса, последнего разделителя @sha256 и ровно 64 строчных шестнадцатеричных цифр,
+// запрещая шаблонные подстановки в префиксе; полная грамматика репозитория и допуск не проверяются.
 func validPinnedImageReference(reference string) bool {
 	separator := strings.LastIndex(reference, "@sha256:")
 	return separator > 0 && separator+len("@sha256:")+64 == len(reference) &&
@@ -184,6 +222,10 @@ func validDNSLabel(value string) bool {
 	return runtimecontract.ValidDNSLabel(value)
 }
 
+// validDNSSubdomain accepts a nonempty name of at most 253 bytes only when every dot-separated part is a valid DNS label.
+// Empty labels, including leading or trailing dots, are rejected without DNS lookup.
+// validDNSSubdomain принимает непустое имя не длиннее 253 байт, только если каждая часть между точками является корректной DNS-меткой.
+// Пустые метки, включая начальную или конечную точку, отклоняются без DNS-запроса.
 func validDNSSubdomain(value string) bool {
 	if value == "" || len(value) > 253 {
 		return false
