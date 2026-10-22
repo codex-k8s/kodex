@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.269.0
+version: 1.270.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести семидесятая волна — managed configuration gRPC boundary
+
+Опубликованный SHA269 — `1df75346644dc674fe2f8487040d778188b22300`.
+Точный F7Li5R:6604 sources,222 excluded,1816 raw/631 retained/
+1185 unresolved; Go11794/21241, missing9447. Raw SHA256:
+`3b0928ad9b3cca505e1a4bcd9db9d42b52ae7aeb2302a0762387d8d2a9d408f4`.
+Clone-set:
+`76d91b9edfa7b069e47c6dd52e215b05bcb3fb34dbcd431aa6a5d6c79ad698a6`.
+Точные unit/build, push/readback и Draft PR PATCH/GET269 подтверждены.
+
+Целиком прочитан358-строчный transport/grpc/managed_configuration.go.
+Все55 declarations EN→RU: interfaces и11 interface getters, typed commands
+и queries, input/output casters, lifecycle state conversion. Дополнительно
+прочитаны shared execute, exact applied-impact-result guard и обе стороны
+cross-file clones в overlay history, mailbox queries и overview/capabilities.
+Никакие Proto/generated contracts или runtime тела не менялись.
+
+Описаны method-bound principal, typed command dispatch, существующий
+correlation fallback (не назван стабильной гарантией retry), ownership и
+version pins. PublishPromptTemplate проверяет exact applied result; image
+rebind имеет другой typed plan и nonnil empty selected slice. Эти различия
+не потеряны общим handler. Casters не названы валидаторами либо redaction;
+unknown enum lookup и UNSPECIFIED fallback описаны такими, какие есть.
+castManagedConsumer сохраняет прежнюю проекцию без ExpectedAbsent response;
+Readiness/config view не названы реальной transcription/provider проверкой.
+
+AST1 без комментариев идентичен SHA269; fields/tags/values/imports/body
+не изменены. Selected docs55/55. Comments/gofmt изменили raw windows:
+1816→1822,3 старых fragment keys заменены9 occurrences, остальные1813
+path/hash/count неизменны. Это не удаление3 clone algorithms или новая
+бизнесовая копия: исполняемый AST прежний. Все11 текущих target groups и
+обе стороны каждого окна прочитаны, в том числе новые overlapping windows.
+
+Реальная общая логика уже в managedDraftInput/managedRevisionInput/
+managedRebindInput/managedMutation→execute и cast helpers. В остатке —
+точные RPC signatures, FullMethod/command pairs, nominal replies и короткие
+границы разных lifecycle/authority paths, не единый повторный алгоритм.
+Ещё один generic/reflection/response factory скрыл бы эти mappings и
+специальные impact checks ради двух строк. Добавлены10 exact path/fragment/
+count reasons, одна count2 описывает все три окна. Предыдущие528 entries
+побайтно в JSON value representation неизменны; теперь538 entries/642
+occurrences. Ни один файл, RPC family или общий directory не исключён.
+
+Рабочий1DG21m:6604 sources,222 excluded,1822 raw/642 retained/
+1180 unresolved; Go11849/21241, missing9392. Raw SHA256:
+`c0531c3ed98a69e96d5d0810dfaf2b9ded185d2406f3ef6ce81d490f0dff4b5d`.
+Clone-set:
+`547c0c737ee66d3fbef023629aa0c8de23168b8ca8acbfaa71c9f20e27a4a79a`.
+Target unresolved0 проверен машинно, общий unresolved1180 остаётся работой.
+Selected CP repository/...+types/...+grpc+roleimage102 верхних/278 всех unit
+PASS,0 FAIL,те же3 explicit SKIP; full CP build -p=2 PASS LOCAL.
+17 Node/Go checker units, docs55/55, AST1, assessment/multiset/registry-prefix
+proof,5 ignore boundaries и diff-check PASS LOCAL. Точные повторные checks
+и readback публикуются на новом SHA в том же Draft PR. Full/docs completeness
+ещё не достигнуты; browser/live/component/deploy NOT RUN по scope владельца.
 
 ## Двести шестьдесят девятая волна — завершён domain/types control-plane
 

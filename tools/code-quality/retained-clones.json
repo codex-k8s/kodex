@@ -4224,6 +4224,86 @@
       "fragmentSHA256": "2b29fcc162625d8698c2e6bbb00ce19f7961fa21879691b36f6fdaf8bebfe8f5",
       "count": 1,
       "reason": "117-token окно ClaimImagePromotion/AuthorizeImagePromotion сопоставляется с AuthorizeImagePromotion/CompleteImagePromotion. Claim token, authorization token и completion readback принадлежат трём разным специализированным командам и typed envelopes, хотя principal/error template совпадает. Их порядок, exact method и immutable manifest/readback pins остаются явными; базовые casters уже общие. Только exact self-file fragment/count1, не весь promotion lifecycle."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/config_overlay_history.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "309c17fc3fca40eb4e87dbcd1a56e669191b6a9e6acd934ae780a84753718173",
+      "count": 1,
+      "reason": "Окно123 tokens пересекает хвост ListConfigOverlayRevisions и начало GetConfigOverlayRevision против хвоста ListManagedConfigurations и начала ListManagedConfigurationHistory. Совпадают typed page/error/cast plumbing, а owner queries, filter selectors, nominal replies и exact FullMethod различны. page/principal/transportError и casters уже общие; связного повторного алгоритма на всём окне нет. Generic list/read dispatcher с фабрикой ответов скрыл бы маршрутизацию и добавил callbacks ради одного append loop. Сохранена только эта точная пара/fragment/count1, не list/query файлы."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "f1843b1f39458237cac3807ef0c3d9ebf092429f4ececa0bc778261b3c22077c",
+      "count": 1,
+      "reason": "Окно104 tokens сравнивает хвост GetEmailMailboxConfiguration/начало ListEmailMailboxConfigurations с хвостом runtime ROLE_IMAGE binding/началом integration-definition binding. Различаются публичный query principal и RuntimeWork exact methods, mailbox view и managed binding, connection/revision selectors и фиксированные owner kinds. Общие principal/error/cast примитивы уже выделены; общий read-any helper смешал бы разные eligibility boundaries ради коротких return/guard. Исключены только точные пути/hash/count1, не mail/runtime reads в целом."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "dd8ce8287913ccd11df0e6bf587de4d8666e830402d17f1cc74e398876f9971d",
+      "count": 1,
+      "reason": "Окно123 tokens идёт от хвоста CreatePromptTemplateDraft через ValidatePromptTemplateDraft до объявления PublishPromptTemplateDraft; вторая сторона — хвост RebindPromptTemplateConsumers, CreateRoleImageRevisionDraft и начало ValidateRoleImageRevisionDraft. Это последовательность соседних typed RPC, не общий бизнесовый алгоритм. managedDraftInput/managedRevisionInput/managedRebindInput/managedMutation/execute уже общие; остаются exact method+command и nominal responses. Объединение последовательности в generic registry усложнит явные bindings и скроет отдельную prompt-scope/result-validation ветвь. Только exact fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "6be1ec1b60affe01acd5e5fa73c0b5c43a9ebace7afcd9cb0216f68b35b756e4",
+      "count": 1,
+      "reason": "Окно106 tokens пересекает ValidatePromptTemplateDraft и объявление PublishPromptTemplateDraft против terminal return публикации промпта и входа RebindPromptTemplateConsumers. Публикация дополнительно проверяет applied impact plan, чего не делают validate/rebind wrappers. Общая мутация и преобразование входов уже вынесены; повторены лишь короткие typed вызовы/ответы на границах разных методов. Generic handler ради этого окна скрыл бы разные lifecycle contracts, не удаляя содержательного алгоритма. Сохранён exact путь/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "27fc545e275e1e6da5879fb3df7667cba4765d5c12c6503898e898508fec0298",
+      "count": 1,
+      "reason": "Окно101 tokens сравнивает ValidatePromptTemplateDraft и первые поля PublishPromptTemplateDraft с PublishRoleImageRevisionDraft и началом RebindRoleImageConsumers. Сходная форма маскирует разные transitions: prompt publication использует selected plan items и отдельную проверку итогового applied plan, image rebind — consumers и image impact plan. Общие managed input/execute/casters уже существуют; дальнейшая универсальная command/response фабрика ради двух typed строк нецелесообразна. Только точный fragment/count1, без исключения полных методов."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "26e81dfcaaa844716083ce8b998d0bfb01a727f482df89fe8f086003efe482a4",
+      "count": 1,
+      "reason": "Окно219 tokens пересекает результат image rebind и Create/Validate/начало Publish IntegrationDefinition; второе — конец integration publish, RebindIntegrationDefinition и Create/начало ValidateSystemSTT. Общего связного алгоритма через эти границы нет: команды/FullMethod/nominal envelopes разные, а execute и managed converters уже общие. Generic sequence/handler factory перенесёт явные bindings в callbacks и не заменит обязательные generated method signatures. Сохранены лишь точный файл/fragment/count1, не configuration family."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "0f94287630260b39e66f0d38654ed3158fcf62565ce05a028cc92eb18b8cb6f6",
+      "count": 2,
+      "reason": "Два202-token совпадения имеют одну первую сторону RebindPromptTemplateConsumers→CreateRoleImageRevisionDraft→ValidateRoleImageRevisionDraft; вторые стороны перекрывают CreateRoleImage→ValidateRoleImage→PublishRoleImage и PublishSystemSTT→RebindSystemSTT→DetachGit. Прочитаны все три окна. Реальная общая логика уже находится в managedMutation и трёх input casters; остаются обязательные typed RPC signatures, exact method/command pairs и отдельные nominal replies. Универсальная фабрика уменьшит лишь по одному вызову/return ценой скрытой маршрутизации. Count2 точен, файлы/семейства целиком не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "3b6aba598583ee6fbc455c9726351dd58656dccac1494b8cbcc84c118c72f70f",
+      "count": 1,
+      "reason": "Окно329 tokens охватывает RebindPromptTemplateConsumers, Create/Validate/PublishRoleImageRevisionDraft и начало RebindRoleImageConsumers; вторая сторона — RebindIntegrationDefinitionConsumers, Create/Validate/PublishSystemSTT и начало RebindSystemSTTConsumers. Общие managedDraft/Revision/RebindInput и managedMutation→method-bound execute уже выделены. Остались явные отдельные typed RPC и точные method/command/reply mappings; image/prompt специальные impact ветви за окном отличаются. Generic registry/reflection/response factory ради повторённого glue скрыл бы эти bindings без общего нового алгоритма. Сохранён exact fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "142fb3a3cde2c350a7f4a980a9b9fddbcbc2abb3eb80e6d40697ff6f3641f6e8",
+      "count": 1,
+      "reason": "Окно104 tokens начинается с вызова ValidateRoleImageRevisionDraft и доходит до объявления PublishRoleImageRevisionDraft; вторая сторона начинается с вызова PublishIntegrationDefinitionDraft и доходит до RebindIntegrationDefinitionConsumers. Это соседние специализированные commands, а не одинаковая validation/publication/rebind операция. Конвертеры и общий mutation/error путь уже разделяются. Дополнительный generic wrapper переносит единственные две typed строки в фабрику и ухудшает видимость точного метода. Только этот файл/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "924fb98ab5b72f4a175c4e089465c5b7995c1114c5096f30cd7041f2976036dc",
+      "count": 1,
+      "reason": "Окно118 tokens пересекает конец RuntimeWork GetIntegrationConnectionDefinitionConfiguration и начало query GetSystemSTTConfiguration против GetOverview и начала ListPlatformCapabilities. Различаются fixed runtime binding kinds, owner query, method authority и typed ответ; общий principal/transportError/casters уже существует. Единого связного алгоритма чтения нет; generic callback reader усложнит короткие guards и скроет RuntimeWork/query границу. Сохранены только точные два пути/fragment/count1, не query/read handlers целиком."
     }
   ]
 }
