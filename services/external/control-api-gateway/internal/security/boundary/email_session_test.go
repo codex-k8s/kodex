@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestIssueEmailSessionBindsFreshIdentityAndReceipt checks exact receipt/version/digest and elevation expiry capped by freshness, two-minute maximum and bearer, including permitted future clock skew.
+// TestIssueEmailSessionBindsFreshIdentityAndReceipt проверяет точные receipt/version/digest и срок повышения, ограниченный свежестью, максимумом две минуты и bearer, включая допустимое смещение часов в будущее.
 func TestIssueEmailSessionBindsFreshIdentityAndReceipt(t *testing.T) {
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {
@@ -37,6 +39,8 @@ func TestIssueEmailSessionBindsFreshIdentityAndReceipt(t *testing.T) {
 	}
 }
 
+// TestIssueEmailSessionRejectsStaleIdentityAndInvalidPurpose rejects missing/stale/future authentication, absent ACR/AMR and mixed or malformed receipt purposes before either issuance method is called.
+// TestIssueEmailSessionRejectsStaleIdentityAndInvalidPurpose отклоняет отсутствующий, старый или будущий вход, отсутствие ACR/AMR и смешанные либо некорректные цели receipt до вызова любого метода выдачи.
 func TestIssueEmailSessionRejectsStaleIdentityAndInvalidPurpose(t *testing.T) {
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {

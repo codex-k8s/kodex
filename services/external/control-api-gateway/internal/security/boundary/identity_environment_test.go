@@ -13,6 +13,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 )
 
+// TestIdentityEnvironmentRoutesRequireSessionAndCSRF checks a fixed route matrix for verified identity, request deadlines and project binding; absent/mismatched/revoked sessions and mutation CSRF failures cannot enter handlers. It does not execute downstream domain operations.
+// TestIdentityEnvironmentRoutesRequireSessionAndCSRF проверяет фиксированную матрицу маршрутов: личность, сроки запроса и привязку проекта; отсутствие, несовпадение, отзыв сессии и неверный CSRF изменения не допускают обработчики. Дальнейшие доменные операции не выполняются.
 func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 	for _, route := range []struct{ method, path string }{
 		{"GET", "/api/v1/system-stt/model-catalog"},

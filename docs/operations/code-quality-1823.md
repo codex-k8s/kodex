@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.306.0
+version: 1.307.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,85 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста седьмая волна — браузерная граница и оснастка ключей
+
+Предыдущий опубликованный SHA — `6132756da34a3f9f9b0737c481a3a930729b7042`.
+Exact nZa1HF:6633 sources,222 excluded,1806 raw/725 retained/
+1081 unresolved; Go13283/21279,missing7996. Source SHA и открытый Draft PR
+с точным body/head подтверждены GET. Общая задача остаётся незавершённой.
+
+Полностью прочитаны8 файлов boundary (1948 исходных строк). Все114 прежних
+объявлений, включая закрытые context keys, sentinels и interface methods,
+получили предметные EN→RU комментарии. Новый тестовый helper тоже описан:
+весь пакет9 Go files,115/115,bilingual,missing0. Дополнительно описаны
+package boundary, локальные const prefix/projectID и inline callback guard.
+Проверки формата проектной ссылки не названы доказательством прав;
+конструктор копирует origins, а verifier/family/revocation остаются разными
+источниками проверки. Тестовые заглушки не названы JWT verifier или
+устойчивым хранилищем; тест с названием concurrent на деле проверяет
+последовательный readback после revoke, что явно отражено в комментарии.
+
+Повтор подготовки настоящего cookie Store вынесен в package-private
+testSessionKeys: тот же t.TempDir, фиксированный СИНТЕТИЧЕСКИЙ AES key,
+файл0400 и session.New с TTL15min. Никаких настоящих credentials.
+Два теста по-прежнему сами задают principal, семейство, limiter, запросы
+и независимые ожидаемые результаты; общий helper не выбирает исходы
+проверок и не открывает внешние зависимости. Добавлен t.Helper, поэтому
+диагностика setup failure указывает вызывающий тест, а не helper.
+Context7 /golang/go и pinned Go1.26.6 go doc testing.T.Helper/TempDir
+подтверждают атрибуцию ошибки и автоматическое удаление временной папки.
+
+Inverse AST8 разворачивает ФАКТИЧЕСКОЕ тело helper в обоих callers
+(без нового t.Helper/return) и восстанавливает прежние imports. Все
+восемь полных AST совпадают с306; //go: directives неизменны.
+Рабочий production-код не менялся вообще, тестовые assertions прежние.
+157-token group browser_test/configuration_copy_test действительно удалена.
+Две оставшиеся cors_test группы122/199 tokens лишь получили новые fragment
+hash из-за комментариев внутри окон: format/kind/tokens и полные AST
+не менялись, они НЕ объявлены устранёнными. Точный multiset delta проверен:
+три старых hash заменены двумя comment-only hash; остальные1803
+keys/counts прежние. Новых exclusions нет, registry607 entries/725
+occurrences неизменен. Первое вспомогательное ожидание только одного
+изменившегося hash было отвергнуто; после чтения обоих окон проверка
+исправлена на точный наблюдаемый delta, пороги анализатора не менялись.
+
+Карта прежних границ, без новых переходов и событий:
+
+| Сценарий | Прежняя проверка/владелец | Отказ и authoritative readback |
+| --- | --- | --- |
+| Session POST → VerifyAuthorization → Issue | проверенный principal/bearer; limiter; optional exact purpose/freshness | cookie выдаётся только после проверок; долговечный family state отдельно |
+| Browser Start/Callback → Logins/Families | binding/state/code exchange, family creation/read, JWT identity, CSRF, revocation | нет общей транзакции для всех writes; поздний отказ не означает их откат |
+| Middleware → authenticate → protected handler | exact Origin, cookie, revoke, family/browser/CSRF/identity, bearer, subject limiter и typed grant | project selector не выдаёт права; доменные owners проверяют ресурс |
+| Explicit session PUT → family Renew → cookie renewal | Origin/CSRF проверены до backend refresh; cookie и bearer ceilings прежние | ordinary GET/mutation/realtime не обновляет; metadata перечитывает family binding |
+| Exact elevation consume → Revocations → Families/Store | purpose/scope/resource/time до одноразового ConsumeOnce, затем отдельная замена browser/CSRF | поздняя ошибка не откатывает уже consumed record; replay не создаёт cookie |
+| Logout → Families.Revoke → Revocations.Revoke | family сначала, browser revocation затем | ошибка family останавливает второй шаг; внешнего IdP logout здесь нет |
+| Ticket → Families ledger | exact authenticated family/browser/CSRF | одноразовый ledger owner path прежний, открытие socket не добавлено |
+| StopAdmission → atomic stop flag | новые запросы получают503 | уже допущенные handlers не отменяются этим методом |
+
+52 верхних/523 всех выбранных gateway app/client/usertext/session/boundary
+unit и полный gateway build -p=2 — PASS LOCAL,0 FAIL/SKIP.
+17 Node units, Go checker unit, inverse AST8, scope115/115,
+5 addressed ignores, gofmt и git diff --check — PASS LOCAL.
+Выполненная команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+Real browser/SSO/IdP/broker, live credentials, component/deploy/full acceptance
+NOT RUN: это scoped build/unit работа, не security acceptance.
+Generated, contracts, зависимости, SQL/migrations и live state неизменны;
+исторические FAIL и finding293 не объявлены исправленными.
+
+Рабочий gjxMlt:6634 sources,222 excluded,1805 raw/725 retained/
+1080 unresolved; Go13398/21280,missing7882. Raw SHA256:
+`45057c5d92f65187ffe0bbe575cd87bcd9736fc213dc1cafac67273bd31188c9`;
+clone-set:
+`8fdac6b6963a8657dcab57fdb0cb4693228823233a209de1d7601020c5cbf20b`.
+После коммита выполняются exact scan/unit/build и remote readback.
+Остаток Go:gateway1650,CP6232. Неполный -check не объявляется PASS.
 
 ## Триста шестая волна — browser sessions и общий record cipher
 

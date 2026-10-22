@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestOrganizationRevealConsumesOnlyExactScopedElevation rejects mismatched scope/organization/project/secret tuples before consumption, permits one exact organization secret and rejects the simulated replay.
+// TestOrganizationRevealConsumesOnlyExactScopedElevation отклоняет несовпадающие scope/organization/project/secret до расхода, допускает один точный организационный секрет и отвергает имитированный повтор.
 func TestOrganizationRevealConsumesOnlyExactScopedElevation(t *testing.T) {
 	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
 	original := session.Claims{Subject: uuid.NewString(), OrganizationID: uuid.NewString(), OIDCSessionID: uuid.NewString(), SessionRevision: 3,
