@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// runSnapshotStageRecorder simulates run/gate/overview owner reads with one deadline, recording stage/page order and optionally injecting transport or typed/projection failures.
+// runSnapshotStageRecorder имитирует чтения запусков, подтверждений и обзора с единым сроком, запоминает этапы и страницы и при необходимости подставляет транспортный либо типизированный отказ проекции.
 type runSnapshotStageRecorder struct {
 	grpc.ClientConnInterface
 	deadline          time.Time
@@ -25,6 +27,8 @@ type runSnapshotStageRecorder struct {
 	pages             []int32
 }
 
+// Invoke rejects a changed deadline, records the response-selected stage and requested page size, injects configured malformed values or errors and denies unrelated reads without network access.
+// Invoke отклоняет изменённый срок, записывает этап по типу ответа и размер страницы, подставляет настроенные неверные значения или ошибки и запрещает посторонние чтения без сети.
 func (c *runSnapshotStageRecorder) Invoke(ctx context.Context, _ string, request, response any, _ ...grpc.CallOption) error {
 	deadline, bounded := ctx.Deadline()
 	if !bounded || !deadline.Equal(c.deadline) {
@@ -71,6 +75,8 @@ func (c *runSnapshotStageRecorder) Invoke(ctx context.Context, _ string, request
 	return nil
 }
 
+// runSnapshotStageFixture creates a bounded parent context with test cleanup, a fake query client and buffered outbound queue at a fixed synthetic project/cursor.
+// runSnapshotStageFixture создаёт ограниченный родительский контекст с тестовой очисткой, фиктивный query client и буфер исходящих кадров для фиксированных тестовых проекта и курсора.
 func runSnapshotStageFixture(t *testing.T, c *runSnapshotStageRecorder) (*sessionMultiplexer, context.Context) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), heartbeatWakeTimeout)
@@ -82,6 +88,8 @@ func runSnapshotStageFixture(t *testing.T, c *runSnapshotStageRecorder) (*sessio
 	return m, ctx
 }
 
+// TestPlatformSnapshotRunRPCStagesPreserveMappingAndPrivacy tests each owner RPC against four status failures, preserving stage/order/status and page size without partial frames or cursor changes; permission denial stays silent.
+// TestPlatformSnapshotRunRPCStagesPreserveMappingAndPrivacy проверяет каждый owner RPC с четырьмя отказами статуса, сохраняя этап, порядок, статус и страницу без частичных кадров и изменения курсора; отказ в разрешении не логируется.
 func TestPlatformSnapshotRunRPCStagesPreserveMappingAndPrivacy(t *testing.T) {
 	stages := []platformSnapshotReadStage{platformSnapshotRunsListStage, platformSnapshotOwnerGatesListStage, platformSnapshotOverviewGetStage}
 	for index, stage := range stages {
@@ -117,6 +125,8 @@ func TestPlatformSnapshotRunRPCStagesPreserveMappingAndPrivacy(t *testing.T) {
 	}
 }
 
+// TestPlatformSnapshotRunProjectionStageIsClosedAndSingle injects malformed run, gate or overview fields and requires one closed run-projection diagnostic without later RPCs or partial publication.
+// TestPlatformSnapshotRunProjectionStageIsClosedAndSingle подставляет неверные поля запуска, подтверждения или обзора и требует одну закрытую диагностику проекции без последующих RPC и частичной публикации.
 func TestPlatformSnapshotRunProjectionStageIsClosedAndSingle(t *testing.T) {
 	for index, stage := range []platformSnapshotReadStage{platformSnapshotRunsListStage, platformSnapshotOwnerGatesListStage, platformSnapshotOverviewGetStage} {
 		t.Run(string(stage), func(t *testing.T) {
@@ -136,6 +146,8 @@ func TestPlatformSnapshotRunProjectionStageIsClosedAndSingle(t *testing.T) {
 	}
 }
 
+// TestPlatformSnapshotRunSuccessStillReadsEveryOwnerRPC repeats successful snapshot reads and independently checks all three owner RPCs run again in order with no failure logs or parent cancellation.
+// TestPlatformSnapshotRunSuccessStillReadsEveryOwnerRPC повторяет успешные чтения и независимо проверяет повтор всех трёх owner RPC в прежнем порядке без логов отказа и отмены родителя.
 func TestPlatformSnapshotRunSuccessStillReadsEveryOwnerRPC(t *testing.T) {
 	c := &runSnapshotStageRecorder{}
 	m, ctx := runSnapshotStageFixture(t, c)
@@ -154,6 +166,8 @@ func TestPlatformSnapshotRunSuccessStillReadsEveryOwnerRPC(t *testing.T) {
 	}
 }
 
+// TestPlatformSnapshotRunTypedProjectionFailureHasOneClosedStage injects an unknown typed run state and requires the existing invalid-snapshot error and one closed diagnostic after all owner reads, without frames or cursor advancement.
+// TestPlatformSnapshotRunTypedProjectionFailureHasOneClosedStage подставляет неизвестное типизированное состояние запуска и требует прежнюю ошибку неверного снимка и одну закрытую запись после чтений без кадров и продвижения курсора.
 func TestPlatformSnapshotRunTypedProjectionFailureHasOneClosedStage(t *testing.T) {
 	c := &runSnapshotStageRecorder{invalidTyped: true}
 	m, ctx := runSnapshotStageFixture(t, c)

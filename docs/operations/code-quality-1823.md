@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.308.0
+version: 1.309.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,89 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста девятая волна — WebSocket диагностика и byte-boundary оснастка
+
+Предыдущий опубликованный SHA — `7e2d9bdf4c161c63fda1a94a850eb8b4222146f2`.
+Exact p9r5Og:6636 sources,222 excluded,1804 raw/725 retained/
+1079 unresolved; Go13436/21290,missing7854. Source SHA, push и открытый
+Draft PR с точным body/head подтверждены GET. Общая задача не завершена.
+
+Полностью прочитаны7 файлов WebSocket diagnostics/assistant size/hint,
+1211 исходных строк. Все79 прежних declarations получили предметные
+EN→RU комментарии; новые2 helpers и1 unit тоже описаны: scope10 файлов,
+82/82,bilingual,missing0. Локальная const privateMarker и оставшееся
+inline пояснение свежего owner response также EN→RU. Comments различают
+диагностический stage и authority, page-size hint и payload cache,
+synthetic recorder и реальный owner RPC. Helper snapshotDiagnosticLogs
+явно помечен как временная замена process-global logger без parallel use.
+
+assistantSizeBoundaryFixture объединяет подготовку двух byte-boundary
+тестов: новый synthetic conversation,31 дополнительных полных ходов,
+multiplexer и прежний exact bootstrap envelope. Он не вычисляет ожидаемый
+размер, не проверяет результат и не переносит assertions: измерение
+полного JSON, exact boundary, +1 byte и дополнительный delta overhead
+по-прежнему проверяются независимо в двух callers. Inputs создаются заново
+при каждом вызове; shared mutable fixture между тестами не появился.
+
+snapshotDiagnosticGRPCCode объединяет два одинаковых status.Code/clamp
+блока для run/platform observers. Canonical codes OK..Unauthenticated
+прежние, остальное → Unknown. Порядок и уровни Warn/Error, точные log fields,
+stage/kind/page normalization, ошибки caller и cancellation не менялись.
+Helper не логирует и не классифицирует permission/authority или lifecycle.
+Новый pure unit независимо перебирает17 canonical codes и5 случаев
+nil/ordinary/wrapped/maximum uint32/out-of-range, без записи private text.
+codes.Code — uint32; максимальное unsigned значение не названо настоящим
+отрицательным значением типа. Context7 /grpc/grpc-go и pinned v1.82.1
+go doc status.Code/codes.Code сверены; dependency versions не менялись.
+
+Inverse AST7 разворачивает ФАКТИЧЕСКИЕ тела двух helpers в4 местах,
+проверяет точное удаление только ставших лишними gRPC imports и
+восстанавливает прежние imports. Полные AST всех7 прежних файлов равны308;
+//go: directives неизменны. Новый t.Helper — только attribution оснастки.
+Ровно одна196-token группа test setup удалена:
+`5ba100997f7ad38bb6a6fcdc42deca1c38d14ddf7256ad31451f05fd68f4b36f`.
+Остальные1803 clone keys/counts прежние, новых groups/exclusions нет.
+Registry607 entries/725 occurrences не менялся.
+
+Матрица неизменённых эффектов:
+
+| Путь | Прежняя проверка/owner | Результат и failure policy |
+| --- | --- | --- |
+| run read → observer | caller RPC result и parent/read contexts | один закрытый Warn для nonnil; returned status/cancel прежние |
+| platform read → attributed error → observer | прежние owner reads и закрытый stage/kind allowlist | один Error, без raw error/refs/payload; nil silent |
+| projection → observer | прежняя проверка полного typed snapshot | contract-class Warn, без сериализации malformed values |
+| assistant page hint → fresh owner read | page-size hint не authority и не cache | свежие RPC/cursors/версии, bounded page ladder, no partial frame |
+| byte-boundary fixture → два теста | synthetic inputs, каждый caller меряет полный envelope | exact bytes и разные overflow cases остаются независимыми |
+
+Новых grants, owner writes, outbox/events, stream schema, subscription
+transition, timeout, page limit и правил cursor/rejoin не вводилось.
+Это карта кода, не доказательство live transport или multi-Pod durability.
+
+584 верхних/2677 всех gateway app/client/usertext/session/boundary/HTTP/
+problemresponse/WebSocket unit и полный gateway build -p=2 — PASS LOCAL,
+0 FAIL/SKIP.17 Node unit, Go checker unit, inverse AST7, scope82/82,
+5 addressed ignores, gofmt и git diff --check — PASS LOCAL.
+Выполненная команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+Новые оснастки не вызывают реальный owner service или browser; существующие
+локальные unit/loopback проверки не являются browser/live acceptance.
+Real IdP/provider/credentials, component/deploy/full acceptance NOT RUN.
+Generated, contracts, зависимости, SQL/migrations/live state прежние.
+Исторические FAIL и finding293 не исправлены и не переименованы в PASS.
+
+Рабочий dPQqAc:6639 sources,222 excluded,1803 raw/725 retained/
+1078 unresolved; Go13518/21293,missing7775. Raw SHA256:
+`adb19c8d6b154980ca4ffb03b7ad0e9497d2f64c75da2550860ea46341298b57`;
+clone-set:
+`39441cde4926945f8ab65f604929475462754411f3772c4519a71673f3bc677f`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Остаток Go:gateway1543,CP6232. Общий -check ещё не пройден.
 
 ## Триста восьмая волна — общий HTTP problem body
 

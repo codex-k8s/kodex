@@ -20,6 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantSnapshotSizeRecorder serves synthetic assistant/bootstrap/conversation responses, clones requested pagination and applies a configured list failure; unrelated RPCs are denied rather than contacting a server.
+// assistantSnapshotSizeRecorder выдаёт тестовые ответы помощника, bootstrap и диалогов, копирует запрошенную пагинацию и подставляет отказ списка; посторонние RPC запрещаются без обращения к серверу.
 type assistantSnapshotSizeRecorder struct {
 	grpc.ClientConnInterface
 	conversations []*cp.AssistantConversation
@@ -28,6 +30,8 @@ type assistantSnapshotSizeRecorder struct {
 	frames        chan outboundFrame
 }
 
+// Invoke selects fixture output by response type, records an independent conversation request copy and returns a whole bounded owner page/cursor or the configured error, denying unsupported reads.
+// Invoke выбирает тестовый ответ по типу, сохраняет независимую копию запроса диалогов и возвращает целую ограниченную страницу с курсором либо настроенную ошибку, запрещая неподдерживаемые чтения.
 func (c *assistantSnapshotSizeRecorder) Invoke(_ context.Context, _ string, request, response any, _ ...grpc.CallOption) error {
 	switch out := response.(type) {
 	case *cp.GetSystemAssistantResponse:
@@ -52,6 +56,8 @@ func (c *assistantSnapshotSizeRecorder) Invoke(_ context.Context, _ string, requ
 	return nil
 }
 
+// assistantSizeMultiplexer wires fake generated clients and buffered frame/overflow channels with fixed request/cursor values and the test context, without opening a WebSocket connection.
+// assistantSizeMultiplexer связывает тестовые generated clients и буферы кадров и переполнения с фиксированными request/cursor и контекстом теста без открытия WebSocket.
 func assistantSizeMultiplexer(t *testing.T, c *assistantSnapshotSizeRecorder, project string) *sessionMultiplexer {
 	t.Helper()
 	server := &Server{query: cp.NewPlatformQueryServiceClient(c), assistant: cp.NewSystemAssistantServiceClient(c), access: cp.NewAccessServiceClient(c), roleImages: cp.NewRoleImageServiceClient(c)}
@@ -61,6 +67,8 @@ func assistantSizeMultiplexer(t *testing.T, c *assistantSnapshotSizeRecorder, pr
 		outbound: c.frames, overflow: make(chan struct{}, 1)}
 }
 
+// assistantSizeConversations builds distinct synthetic active project conversations with pinned assistant/profile/version and one complete USER turn, preserving the supplied content without truncation.
+// assistantSizeConversations создаёт различные тестовые активные проектные диалоги с точными assistant/profile/version и одним полным USER-ходом, сохраняя переданный текст без усечения.
 func assistantSizeConversations(count int, content string) []*cp.AssistantConversation {
 	values := make([]*cp.AssistantConversation, count)
 	for i := range values {
@@ -72,6 +80,8 @@ func assistantSizeConversations(count int, content string) []*cp.AssistantConver
 	return values
 }
 
+// TestAssistantSnapshotFitsWholeOwnerPage checks project and organization bootstrap retain an entire fitting owner page, exact pagination/content/pins and byte-identical replay without inventing scope or cursor.
+// TestAssistantSnapshotFitsWholeOwnerPage проверяет, что bootstrap проекта и организации сохраняет целую помещающуюся owner-страницу, точные пагинацию, текст, привязки и побайтовый повтор без выдуманной области или курсора.
 func TestAssistantSnapshotFitsWholeOwnerPage(t *testing.T) {
 	for _, project := range []string{"", "prj_fixture01"} {
 		t.Run(project, func(t *testing.T) {
@@ -113,6 +123,8 @@ func TestAssistantSnapshotFitsWholeOwnerPage(t *testing.T) {
 	}
 }
 
+// TestAssistantSnapshotRejectsOversizedWholeConversation requires an oversized single conversation to exhaust only the bounded page ladder and fail before queueing, never truncating turns.
+// TestAssistantSnapshotRejectsOversizedWholeConversation требует для одного чрезмерного диалога исчерпать только ограниченную лестницу страниц и отказать до очереди без усечения ходов.
 func TestAssistantSnapshotRejectsOversizedWholeConversation(t *testing.T) {
 	c := &assistantSnapshotSizeRecorder{conversations: assistantSizeConversations(1, strings.Repeat("😀", 32768))}
 	for range 8 {
@@ -127,6 +139,8 @@ func TestAssistantSnapshotRejectsOversizedWholeConversation(t *testing.T) {
 	}
 }
 
+// TestAssistantSnapshotDoesNotMaskOwnerDenial preserves fake owner permission denial without retrying list reads, publishing frames or manufacturing a resource kind.
+// TestAssistantSnapshotDoesNotMaskOwnerDenial сохраняет тестовый отказ владельца без повторов списка, публикации кадров и выдумывания вида ресурса.
 func TestAssistantSnapshotDoesNotMaskOwnerDenial(t *testing.T) {
 	c := &assistantSnapshotSizeRecorder{failure: status.Error(codes.PermissionDenied, "private synthetic denied input")}
 	m := assistantSizeMultiplexer(t, c, "prj_fixture01")
@@ -136,6 +150,8 @@ func TestAssistantSnapshotDoesNotMaskOwnerDenial(t *testing.T) {
 	}
 }
 
+// TestAssistantSnapshotDeltaPreservesSequenceAndWholeOwnerPage validates delta scope/event/cursor and whole-page content within the frame bound, then ensures duplicate signals do not reread or publish.
+// TestAssistantSnapshotDeltaPreservesSequenceAndWholeOwnerPage проверяет scope/event/cursor delta и целую страницу в границе кадра, затем запрещает повтор чтения или публикации для дубликата события.
 func TestAssistantSnapshotDeltaPreservesSequenceAndWholeOwnerPage(t *testing.T) {
 	c := &assistantSnapshotSizeRecorder{conversations: assistantSizeConversations(42, strings.Repeat("Я", 16000))}
 	m := assistantSizeMultiplexer(t, c, "prj_fixture01")
@@ -155,7 +171,11 @@ func TestAssistantSnapshotDeltaPreservesSequenceAndWholeOwnerPage(t *testing.T) 
 	}
 }
 
+// TestAssistantSnapshotSingletonFailureIsTypedAndPrivate captures logs and queued terminal frames for an oversized singleton, requiring redacted diagnostics and existing typed session/stream failures without advancing the cursor. No live socket is used.
+// TestAssistantSnapshotSingletonFailureIsTypedAndPrivate перехватывает логи и терминальные кадры чрезмерного одиночного диалога, требуя скрытых подробностей и прежних типизированных отказов сессии и потока без продвижения курсора. Настоящий сокет не используется.
 func TestAssistantSnapshotSingletonFailureIsTypedAndPrivate(t *testing.T) {
+	// privateMarker is synthetic oversized content that must never appear in diagnostic logs; it is not a real conversation or credential.
+	// privateMarker — тестовое чрезмерное содержимое, запрещённое в диагностических логах, а не настоящий диалог или credential.
 	const privateMarker = "PRIVATE_SNAPSHOT_SENTINEL"
 	c := &assistantSnapshotSizeRecorder{conversations: assistantSizeConversations(1, strings.Repeat(privateMarker, maximumFrameBytes/len(privateMarker)+1))}
 	m := assistantSizeMultiplexer(t, c, "prj_fixture01")
@@ -191,18 +211,11 @@ func TestAssistantSnapshotSingletonFailureIsTypedAndPrivate(t *testing.T) {
 	}
 }
 
+// TestAssistantSnapshotByteBoundaryIncludesEnvelope independently measures complete serialized metadata plus conversations, accepts exactly maximumFrameBytes and rejects one additional byte without truncation.
+// TestAssistantSnapshotByteBoundaryIncludesEnvelope независимо измеряет полные сериализованные metadata с диалогами, принимает ровно maximumFrameBytes и отвергает дополнительный байт без усечения.
 func TestAssistantSnapshotByteBoundaryIncludesEnvelope(t *testing.T) {
-	c := &assistantSnapshotSizeRecorder{conversations: assistantSizeConversations(1, "")}
+	c, m, envelope := assistantSizeBoundaryFixture(t)
 	conversation := c.conversations[0]
-	for i := range 31 {
-		turn := proto.Clone(conversation.Turns[0]).(*cp.AssistantTurn)
-		turn.Ref, turn.Sequence, turn.Content = fmt.Sprintf("trn_fixture_%02d", i), int64(i+2), strings.Repeat("x", 32768)
-		conversation.Turns = append(conversation.Turns, turn)
-	}
-	m := assistantSizeMultiplexer(t, c, "prj_fixture01")
-	envelope := generated.PlatformSnapshotEnvelope{Type: "PLATFORM_SNAPSHOT", RequestRef: m.platformRequestRef,
-		StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: m.platformCursor,
-		Mode: generated.PlatformSnapshotModeBootstrap, Kind: generated.PlatformResourceKindSystemAssistant, ProjectRef: &m.projectRef}
 	initial, err := m.boundedPlatformSnapshot(envelope)
 	if err != nil {
 		t.Fatal("whole boundary fixture is invalid")
