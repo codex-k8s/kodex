@@ -30,11 +30,29 @@ import (
 )
 
 const (
-	runtimeFileFixtureText  = "synthetic file preview"
+	// runtimeFileFixtureText is synthetic preview/stream content used as a disclosure
+	// canary and exact byte/digest fixture, never real user file data.
+	// runtimeFileFixtureText — synthetic preview/stream content для disclosure canary
+	// и exact byte/digest fixture,не real user file data.
+	runtimeFileFixtureText = "synthetic file preview"
+	// runtimeFileFixtureEntry is one canonical captured-entry-format fixture with
+	// exactly thirty-two lowercase hexadecimal suffix characters.
+	// runtimeFileFixtureEntry — canonical captured-entry-format fixture с ровно
+	// тридцатью двумя lowercase hexadecimal suffix characters.
 	runtimeFileFixtureEntry = "vfe_0123456789abcdef0123456789abcdef"
+	// runtimeFileForeignEntry is a distinct canonical entry-format locator for foreign
+	// selection tests; syntactic validity does not make it a granted catalog entry.
+	// runtimeFileForeignEntry — отличный canonical entry-format locator foreign selection
+	// tests; syntactic validity не делает его granted catalog entry.
 	runtimeFileForeignEntry = "vfe_fedcba9876543210fedcba9876543210"
 )
 
+// runtimeFilesOwnerFixture is a generated-RPC in-memory owner double with exact
+// execution/file pins, read/audit/transfer counters and injected failure flags.
+// Its checks are test assertions, not production transport authentication or storage.
+// runtimeFilesOwnerFixture — generated-RPC in-memory owner double с exact execution/file
+// pins,read/audit/transfer counters и injected failures. Проверки — test assertions,
+// не production transport authentication и не storage.
 type runtimeFilesOwnerFixture struct {
 	cp.UnimplementedRuntimeWorkServiceServer
 	t             *testing.T
@@ -49,6 +67,12 @@ type runtimeFilesOwnerFixture struct {
 	preview       *cp.PreviewExecutionFileResponse
 }
 
+// StreamExecutionArtifact rejects mismatched lease/artifact pins, counts an accepted
+// transfer and emits synthetic metadata/chunk/Complete frames, optionally failing
+// before completion to test that private partial bytes never become HTTP success.
+// StreamExecutionArtifact отвергает mismatched lease/artifact pins,считает accepted
+// transfer и выдаёт synthetic metadata/chunk/Complete frames,при настройке падая
+// до completion для проверки запрета HTTP success с private partial bytes.
 func (fixture *runtimeFilesOwnerFixture) StreamExecutionArtifact(request *cp.StreamExecutionArtifactRequest, stream cp.RuntimeWorkService_StreamExecutionArtifactServer) error {
 	if request.GetLeaseRef() != fixture.input.LeaseRef || request.GetFence() != fixture.input.LeaseFence || request.GetGeneration() != fixture.input.LeaseGeneration || request.GetArtifactRef() != fixture.file.ArtifactRef {
 		return status.Error(codes.PermissionDenied, "synthetic transfer binding denied")
@@ -71,6 +95,14 @@ func (fixture *runtimeFilesOwnerFixture) StreamExecutionArtifact(request *cp.Str
 	return stream.Send(&cp.StreamExecutionArtifactResponse{Part: &cp.StreamExecutionArtifactResponse_Complete{Complete: &cp.RuntimeArtifactTransferComplete{SizeBytes: fixture.file.SizeBytes, Digest: fixture.file.Digest}}})
 }
 
+// TestCatalogBodyUsesMetadataPinAndGeneratedStreamBeforeExposingBytes traverses local
+// HTTP and generated bufconn RPC for seven scenarios, checking exact metadata then
+// stream, no content on invalid query/ticket/owner/partial result, and released spool
+// capacity. It does not verify real mTLS, live owner storage or antivirus scanning.
+// TestCatalogBodyUsesMetadataPinAndGeneratedStreamBeforeExposingBytes проходит local
+// HTTP/generated bufconn RPC семи scenarios: exact metadata затем stream,без content
+// при invalid query/ticket/owner/partial result,с освобождением spool capacity.
+// Real mTLS,live owner storage и antivirus scanning не проверяются.
 func TestCatalogBodyUsesMetadataPinAndGeneratedStreamBeforeExposingBytes(t *testing.T) {
 	for _, scenario := range []string{"exact", "foreign project query", "duplicate purpose", "wrong purpose", "foreign metadata", "partial stream", "missing ticket"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -80,17 +112,7 @@ func TestCatalogBodyUsesMetadataPinAndGeneratedStreamBeforeExposingBytes(t *test
 			})
 			catalog, file := fileFixture(input)
 			owner := &runtimeFilesOwnerFixture{t: t, input: input, catalog: catalog, file: file, failTransfer: scenario == "partial stream"}
-			listener := bufconn.Listen(1 << 20)
-			upstream := grpc.NewServer()
-			cp.RegisterRuntimeWorkServiceServer(upstream, owner)
-			done := make(chan error, 1)
-			go func() { done <- upstream.Serve(listener) }()
-			t.Cleanup(func() { upstream.Stop(); _ = listener.Close(); <-done })
-			connection, err := grpc.NewClient("passthrough:///catalog-transfer-fixture", grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }), grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = connection.Close() })
+			connection := runtimeFilesOwnerConnection(t, owner, "passthrough:///catalog-transfer-fixture")
 			descriptor, ok := fileDescriptor(input, file.Purpose, file)
 			if !ok {
 				t.Fatal("download descriptor missing")
@@ -148,6 +170,12 @@ func TestCatalogBodyUsesMetadataPinAndGeneratedStreamBeforeExposingBytes(t *test
 	}
 }
 
+// check asserts a short request deadline and exact lease/fence/generation/catalog/
+// purpose context, then increments the read count. Assertion failure records a test
+// error rather than implementing a real server authorization decision.
+// check проверяет short request deadline и exact lease/fence/generation/catalog/purpose
+// context,затем увеличивает read count. Ошибка записывается как test error,
+// не как реальное server authorization decision.
 func (fixture *runtimeFilesOwnerFixture) check(ctx context.Context, execution *cp.ExecutionFileContext) {
 	fixture.t.Helper()
 	deadline, ok := ctx.Deadline()
@@ -160,6 +188,10 @@ func (fixture *runtimeFilesOwnerFixture) check(ctx context.Context, execution *c
 	fixture.mu.Unlock()
 }
 
+// SearchExecutionFiles asserts exact execution context and the expected search
+// query/default page size, then returns one synthetic descriptor and empty cursor.
+// SearchExecutionFiles проверяет exact execution context и expected search query/default
+// page size,возвращая synthetic descriptor с empty cursor.
 func (fixture *runtimeFilesOwnerFixture) SearchExecutionFiles(ctx context.Context, request *cp.SearchExecutionFilesRequest) (*cp.SearchExecutionFilesResponse, error) {
 	fixture.check(ctx, request.GetContext())
 	if request.GetQuery() != "synthetic" || request.GetPage().GetPageSize() != 20 {
@@ -168,17 +200,29 @@ func (fixture *runtimeFilesOwnerFixture) SearchExecutionFiles(ctx context.Contex
 	return &cp.SearchExecutionFilesResponse{Catalog: fixture.catalog, Items: []*cp.ExecutionFileDescriptor{fixture.file}, Total: 1, Page: &cp.PageInfo{}}, nil
 }
 
+// GetExecutionFileManifest checks execution pins and returns the fixed catalog
+// and one synthetic descriptor without enumerating any real repository or mailbox.
+// GetExecutionFileManifest проверяет execution pins и возвращает fixed catalog
+// с synthetic descriptor без обхода реального repository и mailbox.
 func (fixture *runtimeFilesOwnerFixture) GetExecutionFileManifest(ctx context.Context, request *cp.GetExecutionFileManifestRequest) (*cp.GetExecutionFileManifestResponse, error) {
 	fixture.check(ctx, request.GetContext())
 	return &cp.GetExecutionFileManifestResponse{Catalog: fixture.catalog, Items: []*cp.ExecutionFileDescriptor{fixture.file}, Total: 1, Page: &cp.PageInfo{}}, nil
 }
 
+// GetExecutionFileMetadata checks exact execution and selected file pins before
+// returning fixture pointers; it does not make defensive copies or current domain reads.
+// GetExecutionFileMetadata проверяет exact execution/selected file pins до fixture
+// pointers без defensive copies и current domain reads.
 func (fixture *runtimeFilesOwnerFixture) GetExecutionFileMetadata(ctx context.Context, request *cp.GetExecutionFileMetadataRequest) (*cp.GetExecutionFileMetadataResponse, error) {
 	fixture.check(ctx, request.GetContext())
 	fixture.checkFile(request.GetFile())
 	return &cp.GetExecutionFileMetadataResponse{Catalog: fixture.catalog, File: fixture.file}, nil
 }
 
+// PreviewExecutionFile checks context/file pins and the expected default/large byte
+// bound, returning either a configured response pointer or the complete synthetic text.
+// PreviewExecutionFile проверяет context/file pins и expected default/large byte bound,
+// выдавая configured response pointer либо complete synthetic text.
 func (fixture *runtimeFilesOwnerFixture) PreviewExecutionFile(ctx context.Context, request *cp.PreviewExecutionFileRequest) (*cp.PreviewExecutionFileResponse, error) {
 	fixture.check(ctx, request.GetContext())
 	fixture.checkFile(request.GetFile())
@@ -194,12 +238,22 @@ func (fixture *runtimeFilesOwnerFixture) PreviewExecutionFile(ctx context.Contex
 	return &cp.PreviewExecutionFileResponse{Catalog: fixture.catalog, File: fixture.file, Text: runtimeFileFixtureText, PreviewDigest: fixture.file.Digest}, nil
 }
 
+// checkFile asserts exact captured entry/artifact/revision/digest selection without
+// silently resolving an alternative file or treating a matching name as authority.
+// checkFile проверяет exact captured entry/artifact/revision/digest selection без
+// неявного выбора другого file и признания matching name источником authority.
 func (fixture *runtimeFilesOwnerFixture) checkFile(exact *cp.ExecutionFileRef) {
 	if exact.GetEntryRef() != fixture.file.EntryRef || exact.GetArtifactRef() != fixture.file.ArtifactRef || exact.GetRevision() != fixture.file.Revision || exact.GetDigest() != fixture.file.Digest {
 		fixture.t.Error("file RPC lost the exact selected entry")
 	}
 }
 
+// RecordRunToolCall checks lease/catalog-bound readonly activity without file content,
+// counts the attempt and optionally fails audit. A successful fixed event ref is only
+// fixture evidence, not a durable owner transaction.
+// RecordRunToolCall проверяет lease/catalog-bound readonly activity без file content,
+// считает attempt и при настройке отклоняет audit. Fixed event ref — лишь fixture
+// evidence,не durable owner transaction.
 func (fixture *runtimeFilesOwnerFixture) RecordRunToolCall(_ context.Context, request *cp.RecordRunToolCallRequest) (*cp.RecordRunToolCallResponse, error) {
 	if request.GetLeaseRef() != fixture.input.LeaseRef || request.GetFence() != fixture.input.LeaseFence || request.GetGeneration() != fixture.input.LeaseGeneration ||
 		request.GetGrantRef() != fixture.catalog.Ref || request.GetCapabilityRef() != "" || !runtimecontract.IsRuntimeFileTool(request.GetTool()) ||
@@ -217,6 +271,38 @@ func (fixture *runtimeFilesOwnerFixture) RecordRunToolCall(_ context.Context, re
 	return &cp.RecordRunToolCallResponse{Event: &cp.RunEvent{Ref: "evt_filefixture1"}}, nil
 }
 
+// runtimeFilesOwnerConnection serves the supplied fake on a private one-MiB
+// bufconn listener using the existing per-scenario passthrough target. Cleanup
+// closes the client first, then stops the server, closes the listener and joins Serve; a
+// construction failure still runs server cleanup. Plaintext is in-memory only,
+// not a production transport profile or proof of mTLS/owner authorization.
+// runtimeFilesOwnerConnection запускает fake на private one-MiB bufconn listener
+// с прежним per-scenario passthrough target. Cleanup сначала закрывает client,
+// затем останавливает server,закрывает listener и join Serve; при construction failure
+// server cleanup сохраняется. Plaintext только in-memory,не production profile
+// и не доказательство mTLS/owner authorization.
+func runtimeFilesOwnerConnection(t *testing.T, owner cp.RuntimeWorkServiceServer, target string) *grpc.ClientConn {
+	t.Helper()
+	listener := bufconn.Listen(1 << 20)
+	upstream := grpc.NewServer()
+	cp.RegisterRuntimeWorkServiceServer(upstream, owner)
+	done := make(chan error, 1)
+	go func() { done <- upstream.Serve(listener) }()
+	t.Cleanup(func() { upstream.Stop(); _ = listener.Close(); <-done })
+	connection, err := grpc.NewClient(target, grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = connection.Close() })
+	return connection
+}
+
+// fileFixture creates one canonical synthetic project-file descriptor and matching
+// catalog from the supplied runtime ref/digest; it hashes actual fixture bytes and
+// does not allocate a real catalog grant or artifact storage record.
+// fileFixture создаёт canonical synthetic project-file descriptor и matching catalog
+// из runtime ref/digest,хешируя actual fixture bytes без создания реального
+// catalog grant и artifact storage record.
 func fileFixture(input runtimecontract.RunnerInput) (*cp.RuntimeFileCatalog, *cp.ExecutionFileDescriptor) {
 	sum := sha256.Sum256([]byte(runtimeFileFixtureText))
 	catalog := &cp.RuntimeFileCatalog{Ref: input.FileCatalog.Ref, Digest: input.FileCatalog.Digest, Total: 1, Purposes: []cp.RuntimeFilePurpose{cp.RuntimeFilePurpose_RUNTIME_FILE_PURPOSE_PROJECT}}
@@ -226,6 +312,14 @@ func fileFixture(input runtimecontract.RunnerInput) (*cp.RuntimeFileCatalog, *cp
 	return catalog, file
 }
 
+// TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC drives four tools
+// through local authenticated HTTP and generated bufconn stubs, checks exact owner
+// request/audit counts and rejects malformed input without reflected payload. A failed
+// RUNNING audit must prevent reads; in-memory plaintext is not live transport proof.
+// TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC проводит четыре tools
+// через local authenticated HTTP/generated bufconn stubs,проверяет exact owner
+// request/audit counts и отказ malformed input без reflected payload. Failed RUNNING
+// audit запрещает read; in-memory plaintext не доказывает live transport.
 func TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC(t *testing.T) {
 	manager, _, input, _, ticket := providerCredentialRefreshRouteFixture(t, func(input *runtimecontract.RunnerInput) {
 		input.Capabilities = append(input.Capabilities, runtimecontract.ArtifactCapability)
@@ -233,19 +327,7 @@ func TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC(t *testing.T) {
 	})
 	catalog, file := fileFixture(input)
 	owner := &runtimeFilesOwnerFixture{t: t, input: input, catalog: catalog, file: file}
-	listener := bufconn.Listen(1 << 20)
-	grpcServer := grpc.NewServer()
-	cp.RegisterRuntimeWorkServiceServer(grpcServer, owner)
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- grpcServer.Serve(listener) }()
-	t.Cleanup(func() { grpcServer.Stop(); _ = listener.Close(); <-serveDone })
-	connection, err := grpc.NewClient("passthrough:///runtime-files-fixture", grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-		return listener.DialContext(ctx)
-	}), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = connection.Close() })
+	connection := runtimeFilesOwnerConnection(t, owner, "passthrough:///runtime-files-fixture")
 	var diagnostic bytes.Buffer
 	server := &Server{manager: manager, config: Config{RequestTimeout: 2 * time.Second}, logger: slog.New(slog.NewTextHandler(&diagnostic, nil)),
 		control: &controlplaneclient.Client{Runtime: cp.NewRuntimeWorkServiceClient(connection)}}
@@ -322,6 +404,12 @@ func TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC(t *testing.T) {
 	}
 }
 
+// TestRuntimeFileReplyAndInputSubstitutionFailClosed mutates catalog/file selection,
+// duplicate/cursor pages and caller authority fields, requiring closed rejection.
+// It also checks tool advertisement depends on the complete execution/catalog snapshot.
+// TestRuntimeFileReplyAndInputSubstitutionFailClosed меняет catalog/file selection,
+// duplicate/cursor pages/caller authority fields,требуя closed rejection,
+// и проверяет зависимость discovery от полного execution/catalog snapshot.
 func TestRuntimeFileReplyAndInputSubstitutionFailClosed(t *testing.T) {
 	input := validWarmExecutionInput()
 	input.FileCatalog = &runtimecontract.RuntimeFileCatalog{Ref: "vfc_filefixture1", Digest: strings.Repeat("a", 64), Total: 1, Purposes: []string{runtimecontract.FilePurposeProject}}
@@ -393,6 +481,12 @@ func TestRuntimeFileReplyAndInputSubstitutionFailClosed(t *testing.T) {
 	}
 }
 
+// TestRuntimeFileToolsExplainCatalogLocalFileSelection checks every file-tool
+// description retains bounded own-catalog/provenance/full-discovery guidance without
+// adding caller catalog/lease/path authority fields to the closed schemas.
+// TestRuntimeFileToolsExplainCatalogLocalFileSelection проверяет bounded own-catalog/
+// provenance/full-discovery guidance каждого file tool без добавления caller
+// catalog/lease/path authority fields в closed schemas.
 func TestRuntimeFileToolsExplainCatalogLocalFileSelection(t *testing.T) {
 	input := validWarmExecutionInput()
 	input.FileCatalog = &runtimecontract.RuntimeFileCatalog{Ref: "vfc_filefixture1", Digest: strings.Repeat("a", 64), Total: 216, Purposes: []string{runtimecontract.FilePurposeRunResult}}
@@ -433,6 +527,12 @@ func TestRuntimeFileToolsExplainCatalogLocalFileSelection(t *testing.T) {
 	}
 }
 
+// TestRuntimeFileEntrySchemaMatchesServerOwnedFormat checks exact vfe_ plus 32-hex
+// entry schema rejects truncated/uppercase variants while independent opaque artifact/
+// run refs keep their original format; syntactic checks do not grant file access.
+// TestRuntimeFileEntrySchemaMatchesServerOwnedFormat проверяет exact vfe_ плюс 32-hex
+// schema и отказ truncated/uppercase variants при прежней independent opaque artifact/
+// run grammar; syntactic checks не дают file access.
 func TestRuntimeFileEntrySchemaMatchesServerOwnedFormat(t *testing.T) {
 	input := validWarmExecutionInput()
 	input.FileCatalog = &runtimecontract.RuntimeFileCatalog{Ref: "vfc_filefixture1", Digest: strings.Repeat("a", 64), Total: 1, Purposes: []string{runtimecontract.FilePurposeProject}}
@@ -457,6 +557,12 @@ func TestRuntimeFileEntrySchemaMatchesServerOwnedFormat(t *testing.T) {
 	}
 }
 
+// TestRuntimeFileMalformedEntryStopsBeforeRemoteRead exercises malformed entries
+// for metadata/preview/read, requiring bounded corrective failure, no owner read and
+// the existing failed activity shape instead of guessed or rewritten entry bytes.
+// TestRuntimeFileMalformedEntryStopsBeforeRemoteRead проверяет malformed entries
+// metadata/preview/read: bounded corrective failure,нет owner read,сохраняется failed
+// activity shape вместо guessed/rewritten entry bytes.
 func TestRuntimeFileMalformedEntryStopsBeforeRemoteRead(t *testing.T) {
 	for _, tool := range []string{runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolRead} {
 		for _, entry := range []string{"vfe_897a44d8dd71438d9dd975a7b766ee", "vfe_" + strings.Repeat("a", 31), "vfe_" + strings.Repeat("a", 33), "vfe_" + strings.Repeat("A", 32), "vfe_" + strings.Repeat("g", 32)} {
@@ -493,6 +599,10 @@ func TestRuntimeFileMalformedEntryStopsBeforeRemoteRead(t *testing.T) {
 	}
 }
 
+// runtimeFileMetadataFailureClient records local metadata/preview/audit calls and
+// injects a selected remote status with private text; embedded unused RPCs must not run.
+// runtimeFileMetadataFailureClient записывает local metadata/preview/audit calls
+// и подставляет remote status с private text; embedded unused RPCs не вызываются.
 type runtimeFileMetadataFailureClient struct {
 	cp.RuntimeWorkServiceClient
 	code        codes.Code
@@ -501,21 +611,39 @@ type runtimeFileMetadataFailureClient struct {
 	projections []*cp.RecordRunToolCallRequest
 }
 
+// GetExecutionFileMetadata captures the request pointer and returns one configured
+// status with a private canary, without choosing another catalog entry.
+// GetExecutionFileMetadata сохраняет request pointer и возвращает configured status
+// с private canary,не выбирая другую catalog entry.
 func (client *runtimeFileMetadataFailureClient) GetExecutionFileMetadata(_ context.Context, request *cp.GetExecutionFileMetadataRequest, _ ...grpc.CallOption) (*cp.GetExecutionFileMetadataResponse, error) {
 	client.requests = append(client.requests, request)
 	return nil, status.Error(client.code, "PRIVATE_FILE_METADATA_FAILURE")
 }
 
+// PreviewExecutionFile captures the exact request and injects the same remote failure
+// used to verify that preview errors are not locally correctable input refusals.
+// PreviewExecutionFile сохраняет exact request и подставляет remote failure для проверки
+// отличия preview errors от locally correctable input refusals.
 func (client *runtimeFileMetadataFailureClient) PreviewExecutionFile(_ context.Context, request *cp.PreviewExecutionFileRequest, _ ...grpc.CallOption) (*cp.PreviewExecutionFileResponse, error) {
 	client.previews = append(client.previews, request)
 	return nil, status.Error(client.code, "PRIVATE_FILE_METADATA_FAILURE")
 }
 
+// RecordRunToolCall records each safe activity attempt and returns a synthetic
+// event ref without persisting a real audit record.
+// RecordRunToolCall записывает safe activity attempt и возвращает synthetic event ref
+// без сохранения real audit record.
 func (client *runtimeFileMetadataFailureClient) RecordRunToolCall(_ context.Context, request *cp.RecordRunToolCallRequest, _ ...grpc.CallOption) (*cp.RecordRunToolCallResponse, error) {
 	client.projections = append(client.projections, request)
 	return &cp.RecordRunToolCallResponse{Event: &cp.RunEvent{Ref: "evt_filefixture1"}}, nil
 }
 
+// TestRuntimeFileRemoteFailureHasNoCorrectionOrRetry checks four remote status classes
+// across metadata/preview/read produce one owner call, no corrective guidance/replay,
+// preserved exact execution pins and no private error disclosure in wire/logs.
+// TestRuntimeFileRemoteFailureHasNoCorrectionOrRetry проверяет четыре remote status classes
+// metadata/preview/read: один owner call,без corrective guidance/replay,с exact execution
+// pins и без private error disclosure в wire/logs.
 func TestRuntimeFileRemoteFailureHasNoCorrectionOrRetry(t *testing.T) {
 	for _, tool := range []string{runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolRead} {
 		for _, code := range []codes.Code{codes.NotFound, codes.PermissionDenied, codes.Unknown, codes.Unavailable} {
@@ -566,6 +694,14 @@ func TestRuntimeFileRemoteFailureHasNoCorrectionOrRetry(t *testing.T) {
 	}
 }
 
+// TestRuntimeRunResultPreviewBoundsAndBinding uses generated in-memory RPC to check
+// complete/large/truncated Unicode previews, source/page commitments, caller bounds
+// and closed failures. Invalid protobuf UTF-8 is rejected at transport, distinct from
+// callback metadata/content checks; no real source bytes are fetched.
+// TestRuntimeRunResultPreviewBoundsAndBinding через generated in-memory RPC проверяет
+// complete/large/truncated Unicode previews,source/page commitments,caller bounds
+// и closed failures. Invalid protobuf UTF-8 отвергается transport отдельно от callback
+// metadata/content checks; real source bytes не запрашиваются.
 func TestRuntimeRunResultPreviewBoundsAndBinding(t *testing.T) {
 	for _, scenario := range []string{"full", "26276 bytes", "39301 bytes", "UTF8 boundary", "wrong digest", "wrong catalog", "wrong pin", "wrong size", "oversized", "invalid UTF8", "NUL", "wrong input digest", "string revision", "maximum exceeded"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -630,17 +766,7 @@ func TestRuntimeRunResultPreviewBoundsAndBinding(t *testing.T) {
 				wantClass = runtimeFileInputFailureClass
 			}
 			owner := &runtimeFilesOwnerFixture{t: t, input: input, catalog: catalog, file: file, preview: response}
-			listener := bufconn.Listen(1 << 20)
-			upstream := grpc.NewServer()
-			cp.RegisterRuntimeWorkServiceServer(upstream, owner)
-			done := make(chan error, 1)
-			go func() { done <- upstream.Serve(listener) }()
-			t.Cleanup(func() { upstream.Stop(); _ = listener.Close(); <-done })
-			connection, err := grpc.NewClient("passthrough:///run-result-preview-fixture", grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }), grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = connection.Close() })
+			connection := runtimeFilesOwnerConnection(t, owner, "passthrough:///run-result-preview-fixture")
 			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: cp.NewRuntimeWorkServiceClient(connection)}}
 			rawResult, err := server.callFileTool(t.Context(), input, runtimecontract.FileToolPreview, arguments)
 			result, _ := rawResult.(map[string]any)
@@ -658,6 +784,10 @@ func TestRuntimeRunResultPreviewBoundsAndBinding(t *testing.T) {
 	}
 }
 
+// TestRuntimeFileFailureClassDoesNotExposeNestedErrors checks wrapped local sentinels
+// map to fixed file classes while arbitrary private nested errors remain control_unknown.
+// TestRuntimeFileFailureClassDoesNotExposeNestedErrors проверяет fixed file classes
+// wrapped local sentinels и control_unknown для arbitrary private nested errors.
 func TestRuntimeFileFailureClassDoesNotExposeNestedErrors(t *testing.T) {
 	for _, scenario := range []struct {
 		err   error

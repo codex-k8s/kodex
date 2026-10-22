@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.200.0
+version: 1.201.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,62 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести первая волна — весь file catalog/read и общий test transport
+
+Точный опубликованный SHA200 — `92eb8b672b23b20fd9bb2c24a72e05f682d3a778`.
+Callback253 верхних/1361 всех PASS,0 FAIL,2 прежних SKIP; полный RC build PASS.
+Exact FEYPVd:6578 sources,222 excluded,1837 raw,586 retained,1251 unresolved;
+Go7465/21148,missing13683; raw SHA256
+`195e8dc16eefad3c94c06d3cad77336473a19f04e0cbc290ca2ba7f117dc742b`,
+clone-set `3180c549f6bcf70f2ab8fe0645d968aa2896107f2f263c8372778c0ebd02c06d`.
+
+Полностью прочитаны files.go,file_read.go,file_read_receipt.go и все три
+соответствующих test файла; все90 declarations с новым helper описаны EN→RU,
+scoped90/90. Описаны exact captured-entry grammar отдельно от opaque refs,
+catalog/purpose/lease provenance,preview/full-source distinction,Unicode/rune
+и byte limits,полный spool/UTF-8/NUL проход и повторный metadata/authority read
+до page evidence. Deadline оставляет config.RequestTimeout перед parent deadline,
+а не обещает неизменные15 секунд при каждой конфигурации. Safe read receipt
+сверяет выбранные wire fields,не весь произвольный wire; extra private metadata
+не копируется в whitelist receipt. Это не provider delivery ACK и не AV verdict.
+
+Четыре одинаковых in-memory gRPC server/client setup вынесены в test-only
+runtimeFilesOwnerConnection. Все прежние passthrough labels,owner doubles,
+assertions/deadlines/fixtures и cleanup order сохранены: client close затем
+server Stop,listener close,Serve join; constructor error сохраняет server cleanup.
+Plaintext остаётся только bufconn,не production transport. Context7 /grpc/grpc-go
+подтвердил NewClient,passthrough,WithContextDialer и in-memory bufconn pattern.
+Production safeFileReadReceipt заменил ручной parse/length/re-encode SHA256
+предикат существующим ValidSHA256Text с той же exact64 lowercase grammar,
+включая нулевой digest,без новых dependencies/permissions/ошибок.
+
+Обратное раскрытие четырёх setup calls,восстановление лишь четырёх удалённых
+test imports и старого SHA predicate восстанавливают весь non-comment/gofmt
+код всех6 файлов с SHA200. Тело нового helper отдельно совпало с прежним setup;
+добавлен только t.Helper для attribution. PASS LOCAL. Два unit tests общего
+SHA validator и полный runtimecontract build также PASS без SKIP/FAIL.
+
+Новая 112-token self-clone group коротких typed RPC mocks появилась лишь потому,
+что doc blocks увеличили окно до minLines; метаданные разных RPC/returns явно
+сохранены одним exact decision. Старые1837 keys не исчезли/не менялись;
+этот вынос ниже прежних detector windows не объявлен снижением raw count.
+Рабочий gnZfaJ:6578 sources,222 excluded,1838 raw,587 retained,1251 unresolved;
+Go7555/21149,missing13594; raw SHA256
+`71766a97993ea54df49832a865688de31b3336aa39e2c4af25ca57a5d8574bf3`,
+clone-set `74eea41e292d06d4c9c09ad8a5cc7eb999040eea7624fe708e1f5581d4cc20f6`.
+Callback253/1361 PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly,17 Node units,Go-checker unit,scoped90/90,
+5 ignore-boundaries,gofmt/diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+
+Полное описание PR через волну200 сохранено byte-exact в
+[истории проверок](code-quality-1823-pr-history.md):84687 UTF-8 bytes,
+SHA256 `b3a75e921f38f8c705d6e0f5621f48b0cca6961af2527e0019a30f4d75b85227`.
+Исторические точные SHA/FAIL/SKIP/NOT RUN не потеряны и не объявлены текущим PASS;
+основное описание PR сокращается только после публикации этого документа.
+Общий repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+post-commit результат фиксируется в Draft PR,общая цель не завершена.
 
 ## Двухсотая волна — private artifact spool и проверенная передача
 

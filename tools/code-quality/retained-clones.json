@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/callback/files_test.go",
+      "secondPath": "services/internal/runtime-controller/internal/callback/files_test.go",
+      "fragmentSHA256": "f8a4d266f49be56cadbdb1bbb90b572bba466759c16f7f4915c4bc2e54887bce",
+      "count": 1,
+      "reason": "Detector после добавления doc blocks впервые пересёк minLines на 112-token overlapping окне трёх прежних коротких typed RPC mocks. GetExecutionFileMetadata и PreviewExecutionFile имеют разные nominal request/response и отдельные captured slices, а RecordRunToolCall возвращает успешный synthetic event вместо отказа. Реальных новых повторяющихся ветвей не добавлено: common in-memory server setup четырёх сценариев уже вынесен отдельно. Generic recorder/dispatcher ради одного append и разных typed returns скрыл бы точный RPC и отдельные assertions о количестве reads/previews/audits. Сохранено лишь это точное self-clone окно с одним вхождением и digest, не файл или весь mock."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/workflow_unicode_bounds_test.go",
       "secondPath": "services/internal/runtime-controller/internal/callback/assistant_workflow_configuration_test.go",
       "fragmentSHA256": "b13ce26f9bbb0e658389ec93ad0b156708becf12f565dc763a7a3993aebc0ec5",
