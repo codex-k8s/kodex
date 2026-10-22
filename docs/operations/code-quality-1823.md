@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.299.0
+version: 1.300.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,56 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Трёхсотая волна — манифест Backup и проверка evidence
+
+Опубликованный SHA299 — `339fd64dbd1825b8a71a6c10ccef7202f8fe6315`.
+Exact lzCoI6:6627 sources,222 excluded,1808 raw/723 retained/
+1085 unresolved; Go12990/21274,missing8284.47/168 unit/full authority
+build, inverse AST7,tooling PASS LOCAL; sourceSHA, push и Draft PR
+PATCH/GET299 подтверждены.132-token fixture clone устранён фактически,
+не исключением. Общая задача не завершена.
+
+Полностью прочитаны manifest.go323 и verifier.go389 lines; также просмотрены
+зависимые objectMetadata, PITR config, shared HTTP read и securefile reader.
+31 declaration EN→RU,scope31/31. Поведение обоих файлов не изменилось:
+полные AST2 без комментариев и go directives совпадают с299.
+
+Комментарии не обещают больше реализации: ManifestResolver последовательно
+читает Backup и source Cluster без общей транзакции, канонически хеширует
+наблюдённые metadata и spec, но не читает WAL и не подписывает manifest.
+exactWALTimeline проверяет24-символьный hex и общий ненулевой timeline,
+не порядок сегментов/LSN/доступность архива. hasExactBarmanPlugin требует
+один точный Barman entry, но допускает plugins других имён.
+Verifier проверяет canonical JWS закреплённым ключом, exact expected intent/
+targets/ACK/predecessor и12 served annotations. Он не перечитывает CNPG
+Cluster и не продвигает durable anchor; time predicates ограничивают
+будущее, а не произвольный максимальный возраст evidence.
+decodeStrictJSON отклоняет unknown fields и trailing JSON, но не duplicate
+keys, не задаёт своих byte/depth limits и может частично менять destination.
+Эти ограничения не исправлялись и не выдаются за security PASS.
+
+Команда299 дополнена ./internal/repository/kubernetes/pitr:47 верхних/
+168 всех unit PASS LOCAL,0 FAIL/SKIP; pitr и credentialrollout не имеют
+собственных unit, их компиляция не доказывает исполнение Kubernetes/PITR.
+Full authority build -p=2,17 Node и Go checker unit, AST2,scope31/31,
+5 exact ignores и diff-check — PASS LOCAL. Все прежние timeout/mod-readonly/
+GOMAXPROCS/pipefail ограничения сохранены. Ни token file, public JWK,
+CA, Backup, evidence Secret или CNPG в живой среде не читались.
+DB/component/browser/model/TLS/runtime restore и полная приёмка NOT RUN.
+Новых библиотек/API, нового parser и новой тестовой гарантии нет.
+
+Рабочий MXdwMj:6627 sources,222 excluded,1808 raw/723 retained/
+1085 unresolved; Go13021/21274,missing8253. Все normalized clone keys и
+cardinalities прежние, registry605/723 буквально прежний, новых
+исключений нет. Координаты окон изменились из-за документации.
+Raw SHA256:
+`3555b4f567c6aa0f79331d24b7aa09050081846db16f39223ba2163ccb0a87bc`;
+clone-set:
+`ccf0468b095f6060e6c6ea8c2287a58acbf2e64ec2836fd4f53cf1c3bb066a71`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Generated, dependencies, SQL/migrations, contracts и live state прежние.
+Historical FAIL и finding293 не исправлены. Цель и единый Draft PR открыты.
 
 ## Двести девяносто девятая волна — freshness fixtures и Kubernetes delivery
 

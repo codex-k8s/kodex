@@ -25,15 +25,28 @@ import (
 )
 
 const (
-	evidenceType       = "kodex-internal-rpc-restore-evidence+jws"
-	evidenceIssuer     = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-pitr"
-	evidenceAudience   = "urn:kodex:internal-rpc-authority-recovery:internal-rpc-authority-primary"
-	evidenceDataKey    = "evidence.jws"
-	maxResponseBytes   = 64 << 10
+	// evidenceType pins the protected JWS type for independently signed restore completion evidence, distinct from directives, ACKs and authorization contexts.
+	// evidenceType закрепляет protected JWS type независимо подписанного restore completion evidence отдельно от directives, ACK и authorization contexts.
+	evidenceType = "kodex-internal-rpc-restore-evidence+jws"
+	// evidenceIssuer fixes the expected PITR workload SPIFFE issuer in signed claims; claim text alone is insufficient without the separately pinned verification key.
+	// evidenceIssuer фиксирует ожидаемого SPIFFE-издателя PITR workload в подписанных claims; одного текста claims без отдельно закреплённого проверяющего ключа недостаточно.
+	evidenceIssuer = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-pitr"
+	// evidenceAudience restricts accepted evidence to recovery of the fixed primary authority database rather than a request-selected database or audience.
+	// evidenceAudience ограничивает принимаемое evidence восстановлением фиксированной primary authority database, а не выбранными запросом БД и аудиторией.
+	evidenceAudience = "urn:kodex:internal-rpc-authority-recovery:internal-rpc-authority-primary"
+	// evidenceDataKey is the sole allowed Secret data entry carrying Base64-encoded compact evidence; VerifyCompletedEvidence rejects additional data entries.
+	// evidenceDataKey — единственная допустимая data entry Secret с Base64-кодированным compact evidence; VerifyCompletedEvidence отклоняет дополнительные data entries.
+	evidenceDataKey = "evidence.jws"
+	// maxResponseBytes caps evidence and shared PITR HTTP response bodies at 64 KiB; callers read one extra byte to reject oversized content rather than accept a truncated document.
+	// maxResponseBytes ограничивает evidence и общие PITR HTTP response bodies 64 КиБ; callers читают дополнительный байт для отказа при превышении вместо принятия усечённого документа.
+	maxResponseBytes = 64 << 10
+	// maxCredentialBytes bounds projected service-account token loading and the final trimmed token to sixteen KiB; it does not relax secure-file ownership or mode checks.
+	// maxCredentialBytes ограничивает загрузку projected service-account token и итоговый обрезанный токен шестнадцатью КиБ без ослабления secure-file ownership и mode checks.
 	maxCredentialBytes = 16 << 10
 )
 
-// Config задаёт exact Kubernetes и trust boundary внешнего PITR evidence.
+// Config identifies the fixed evidence Secret and Kubernetes TLS endpoint, local CA/token and public-JWK files, and a bounded request timeout. The caller supplies trusted mounted paths; key values are not part of the config.
+// Config указывает фиксированный evidence Secret и Kubernetes TLS endpoint, локальные файлы CA, токена и public JWK и ограниченный timeout. Доверенные смонтированные пути задаёт вызывающий; значения ключей конфигурацией не передаются.
 type Config struct {
 	Address            string
 	TLSServerName      string
@@ -45,7 +58,8 @@ type Config struct {
 	Timeout            time.Duration
 }
 
-// Verifier читает и проверяет независимо подписанный served evidence.
+// Verifier owns a fixed Secret read URL, HTTP client, pinned public evidence key and clock. It validates signed served evidence against expected restore state, not a live CNPG cluster re-query or a new restore operation.
+// Verifier владеет фиксированным URL чтения Secret, HTTP-клиентом, закреплённым публичным evidence key и часами. Подписанное served evidence сверяется с ожидаемым restore state без повторного живого опроса CNPG cluster и нового восстановления.
 type Verifier struct {
 	config      Config
 	client      *http.Client
@@ -54,6 +68,8 @@ type Verifier struct {
 	now         func() time.Time
 }
 
+// secretEnvelope models evidence Secret identity, annotations and Base64 data for strict unknown-field decoding. Only fields represented here are accepted before separate identity/data/signature checks.
+// secretEnvelope описывает идентичность evidence Secret, annotations и данные Base64 для строгого декодирования неизвестных полей. До отдельных проверок identity, data и signature допускаются только описанные здесь поля.
 type secretEnvelope struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
@@ -68,7 +84,8 @@ type secretEnvelope struct {
 	Data map[string]string `json:"data"`
 }
 
-// NewVerifier создаёт fail-closed verifier с заранее закреплённым public JWK.
+// NewVerifier validates the fixed API/TLS/namespace/Secret and timeout, loads a bounded public JWK and CA, then configures TLS 1.3 and redirect rejection. It performs no token read, evidence fetch or restore-state transition during construction.
+// NewVerifier проверяет фиксированные API, TLS, namespace, Secret и timeout, загружает ограниченный public JWK и CA, затем задаёт TLS 1.3 и запрет redirect. При создании нет чтения токена, получения evidence и перехода restore state.
 func NewVerifier(config Config) (*Verifier, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
@@ -119,13 +136,14 @@ func NewVerifier(config Config) (*Verifier, error) {
 	}, nil
 }
 
-// Close закрывает простаивающие Kubernetes API connections.
+// Close releases idle verifier HTTP connections without removing evidence, changing the durable restore anchor or cancelling a caller's active request.
+// Close освобождает простаивающие HTTP-соединения verifier без удаления evidence, изменения устойчивого restore anchor и отмены активного запроса вызывающего.
 func (verifier *Verifier) Close() {
 	verifier.client.CloseIdleConnections()
 }
 
-// VerifyCompletedEvidence проверяет root, exact intent, forward-only
-// predecessor, served annotations и фактическую CNPG identity/timeline.
+// VerifyCompletedEvidence reads the fixed Secret, validates its envelope/data and canonical ES256 JWS with the pinned key, then checks exact expected intent/ACK/target/predecessor bindings and served annotations. It returns evidence without advancing state or re-reading CNPG; time checks bound future timestamps, not a general maximum evidence age.
+// VerifyCompletedEvidence читает фиксированный Secret, проверяет оболочку, данные и canonical ES256 JWS закреплённым ключом, затем точные ожидаемые intent, ACK, target, predecessor bindings и served annotations. Evidence возвращается без продвижения состояния и повторного чтения CNPG; time checks ограничивают будущие метки, а не общий максимальный возраст evidence.
 func (verifier *Verifier) VerifyCompletedEvidence(
 	ctx context.Context,
 	expected model.RestoreState,
@@ -282,6 +300,8 @@ func (verifier *Verifier) VerifyCompletedEvidence(
 	}, nil
 }
 
+// validRestoreID requires a 36-byte lowercase UUID-shaped restore ID with exact hyphens, version one through eight and RFC variant; it does not establish existence, ownership or authorization of that restore.
+// validRestoreID требует 36-байтный строчный UUID-подобный restore ID с точными дефисами, версией от одного до восьми и вариантом RFC; существование, владение и разрешение восстановления не устанавливаются.
 func validRestoreID(value string) bool {
 	if len(value) != 36 ||
 		value[8] != '-' ||
@@ -304,6 +324,8 @@ func validRestoreID(value string) bool {
 	return true
 }
 
+// validResourceVersion accepts one to 64 ASCII decimal digits without a leading zero; it validates text only and neither compares versions nor proves Kubernetes object identity.
+// validResourceVersion допускает от одной до 64 ASCII-десятичных цифр без ведущего нуля; проверяется только текст без сравнения версий и доказательства идентичности Kubernetes object.
 func validResourceVersion(value string) bool {
 	if len(value) == 0 || len(value) > 64 || value[0] == '0' {
 		return false
@@ -316,6 +338,8 @@ func validResourceVersion(value string) bool {
 	return true
 }
 
+// request rereads the safe projected token and constructs an authenticated GET for the fixed evidence URL using the caller's context. It does not send the request or follow a URL from evidence payloads.
+// request перечитывает безопасный projected token и строит аутентифицированный GET фиксированного evidence URL с контекстом вызывающего. Запрос не отправляется и URL из evidence payloads не используются.
 func (verifier *Verifier) request(ctx context.Context) (*http.Request, error) {
 	token, err := readToken(verifier.config.TokenFile)
 	if err != nil {
@@ -334,6 +358,8 @@ func (verifier *Verifier) request(ctx context.Context) (*http.Request, error) {
 	return request, nil
 }
 
+// verifyAnnotations compares the required twelve served annotation values with signed claims and the exact compact-byte digest, allowing unrelated annotations. It performs equality checks, not signing or durable anchor advancement.
+// verifyAnnotations сравнивает двенадцать обязательных served annotations с подписанными claims и дайджестом точных compact-байтов, допуская посторонние annotations. Выполняется сравнение, а не подпись и продвижение устойчивого anchor.
 func verifyAnnotations(
 	annotations map[string]string,
 	claims model.RestoreFenceEvidenceClaims,
@@ -361,6 +387,8 @@ func verifyAnnotations(
 	return nil
 }
 
+// readToken delegates to the projected-token secure-file reader, trims whitespace and rejects an empty or oversized result. It returns the credential only to trusted HTTP adapters and replaces file errors with fixed diagnostics.
+// readToken использует secure-file reader projected token, обрезает пробелы и отклоняет пустой либо чрезмерный результат. Credential возвращается лишь доверенным HTTP-адаптерам, а ошибки файла заменяются фиксированной диагностикой.
 func readToken(path string) (string, error) {
 	raw, err := securefile.ReadProjectedServiceAccountToken(path, maxCredentialBytes)
 	if err != nil {
@@ -373,6 +401,8 @@ func readToken(path string) (string, error) {
 	return token, nil
 }
 
+// decodeStrictJSON decodes one JSON value with unknown fields rejected and requires EOF afterward. It can partially mutate the destination on failure and does not reject duplicate keys or impose its own byte/depth limits; callers own those constraints.
+// decodeStrictJSON декодирует одно JSON-значение с запретом неизвестных полей и требует EOF после него. При отказе destination может быть частично изменён; повторные ключи не отклоняются и собственных byte и depth limits нет — эти ограничения задают callers.
 func decodeStrictJSON(raw []byte, destination any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
