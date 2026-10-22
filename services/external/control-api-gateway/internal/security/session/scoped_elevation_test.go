@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestRuntimeSecretElevationRequiresClosedOwnerTuple compares login-purpose and cookie-elevation structural predicates for eight organization/project tuple cases and rejects mixed receipt fields. It does not query actual resource ownership.
+// TestRuntimeSecretElevationRequiresClosedOwnerTuple сравнивает login-purpose и cookie-elevation structural predicates для восьми organization и project tuple cases и отклоняет mixed receipt fields без проверки настоящего resource ownership.
 func TestRuntimeSecretElevationRequiresClosedOwnerTuple(t *testing.T) {
 	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
 	for _, test := range []struct {
@@ -42,6 +44,8 @@ func TestRuntimeSecretElevationRequiresClosedOwnerTuple(t *testing.T) {
 	}
 }
 
+// TestOrganizationElevationScopeIsSealedAndNotRenewed checks post-seal mutation cannot change an organization-only scope and renewal after expiry removes elevation, using a temporary synthetic key and local clock.
+// TestOrganizationElevationScopeIsSealedAndNotRenewed с временным synthetic key и локальными часами проверяет невозможность смены organization-only scope изменением после seal и снятие elevation при renewal после expiry.
 func TestOrganizationElevationScopeIsSealedAndNotRenewed(t *testing.T) {
 	key := filepath.Join(t.TempDir(), "key.hex")
 	writeKey(t, key, strings.Repeat("55", 32))
@@ -68,6 +72,8 @@ func TestOrganizationElevationScopeIsSealedAndNotRenewed(t *testing.T) {
 	}
 }
 
+// TestEmailReconciliationCannotCarryRuntimeSecretScope verifies one valid receipt purpose and rejects added organization/runtime-secret scope in both login and elevation predicates; it does not reconcile or send mail.
+// TestEmailReconciliationCannotCarryRuntimeSecretScope проверяет одну допустимую receipt purpose и отклоняет добавленные organization и runtime-secret scope в login и elevation predicates без reconciliation и отправки почты.
 func TestEmailReconciliationCannotCarryRuntimeSecretScope(t *testing.T) {
 	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
 	purpose := &LoginPurpose{Kind: ElevationKindEmailReconciliation, ReceiptRef: "receipt_example", ReceiptVersion: 3, ReceiptDigest: strings.Repeat("a", 64)}

@@ -15,11 +15,15 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 )
 
+// familyMemory is a mutex-protected in-memory ciphertext/sequence fixture shared by simulated replicas. It implements local atomic CAS, not durable JetStream storage, retention or deployed access controls.
+// familyMemory — защищённый mutex in-memory ciphertext и sequence fixture для моделируемых replicas. Реализуется local atomic CAS, а не durable JetStream storage, retention и deployed access controls.
 type familyMemory struct {
 	mu      sync.Mutex
 	records map[string]browserstate.Record
 }
 
+// Read returns a cloned ciphertext record under the fixture mutex or ErrNotFound, preventing tests from mutating stored bytes through the result. It deliberately ignores context cancellation.
+// Read под fixture mutex возвращает record с клонированным ciphertext либо ErrNotFound, не позволяя тесту менять сохранённые байты через результат. Context cancellation намеренно игнорируется.
 func (s *familyMemory) Read(_ context.Context, id string) (browserstate.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -31,6 +35,8 @@ func (s *familyMemory) Read(_ context.Context, id string) (browserstate.Record, 
 	return record, nil
 }
 
+// CompareAndSwap checks the exact sequence under the mutex, clones supplied ciphertext and increments sequence once on success. This fixture ignores context and has no broker or external persistence.
+// CompareAndSwap под mutex проверяет exact sequence, копирует переданный ciphertext и при успехе однократно увеличивает sequence. Fixture игнорирует context и не имеет broker и внешней persistence.
 func (s *familyMemory) CompareAndSwap(_ context.Context, id string, expected uint64, raw []byte) (browserstate.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -42,12 +48,18 @@ func (s *familyMemory) CompareAndSwap(_ context.Context, id string, expected uin
 	return record, nil
 }
 
+// refreshFunc adapts a local callback to TokenRefresher so units can control returned tokens, failure and synchronization without a real OIDC endpoint.
+// refreshFunc адаптирует локальный callback к TokenRefresher, позволяя units управлять returned tokens, failure и synchronization без настоящего OIDC endpoint.
 type refreshFunc func(context.Context, string) (oidcverifier.BrowserTokens, error)
 
+// Refresh forwards the exact context/token to the configured callback and returns its response/error unchanged; the adapter adds no retry or validation.
+// Refresh передаёт точные context и token настроенному callback и возвращает response и error без изменения; retry и validation не добавляются.
 func (f refreshFunc) Refresh(ctx context.Context, token string) (oidcverifier.BrowserTokens, error) {
 	return f(ctx, token)
 }
 
+// familyFixture creates a synthetic AES-GCM key, in-memory CAS store, fixed local clock and trusted fixture token/principal data, then persists one active family. It performs no login, network request or production key read.
+// familyFixture создаёт synthetic AES-GCM key, in-memory CAS store, фиксированные локальные часы и доверенные fixture token и principal data, затем сохраняет одно active family. Login, network request и чтение production key не выполняются.
 func familyFixture(t *testing.T, refresh TokenRefresher) (*Families, Family, oidcverifier.BrowserTokens) {
 	t.Helper()
 	block, err := aes.NewCipher(bytes.Repeat([]byte{17}, 32))
@@ -76,6 +88,8 @@ func familyFixture(t *testing.T, refresh TokenRefresher) (*Families, Family, oid
 	return families, family, tokens
 }
 
+// TestFamilyRotationPreservesAbsoluteSSOAndSealsCredentials checks one synthetic refresh preserves the absolute ceiling, advances storage sequence, hides token strings in ciphertext and rejects moving it to another family ID; a second fresh read avoids another provider call.
+// TestFamilyRotationPreservesAbsoluteSSOAndSealsCredentials проверяет сохранение absolute ceiling одним synthetic refresh, рост storage sequence, отсутствие token strings в ciphertext и отказ переноса к другому family ID; повторный свежий доступ не вызывает provider.
 func TestFamilyRotationPreservesAbsoluteSSOAndSealsCredentials(t *testing.T) {
 	t.Parallel()
 	var response oidcverifier.BrowserTokens
@@ -104,6 +118,8 @@ func TestFamilyRotationPreservesAbsoluteSSOAndSealsCredentials(t *testing.T) {
 	}
 }
 
+// TestFamilyRefreshCannotCompletePastSessionDeadline advances a fake clock to idle or absolute expiry during the provider callback and checks rejection plus persisted terminal credential removal. The provider and store are local fixtures.
+// TestFamilyRefreshCannotCompletePastSessionDeadline продвигает fake clock к idle либо absolute expiry внутри provider callback и проверяет отказ и сохранённое terminal удаление credentials. Provider и store являются local fixtures.
 func TestFamilyRefreshCannotCompletePastSessionDeadline(t *testing.T) {
 	for _, absolute := range []bool{false, true} {
 		t.Run(map[bool]string{false: "idle", true: "absolute"}[absolute], func(t *testing.T) {
@@ -136,6 +152,8 @@ func TestFamilyRefreshCannotCompletePastSessionDeadline(t *testing.T) {
 	}
 }
 
+// TestUnknownRefreshAndExpiredAttemptNeverReuseToken injects an uncertain provider outcome and an already expired reserved attempt, requiring reauthentication without a second token exchange. It simulates stored crash state rather than restarting a process.
+// TestUnknownRefreshAndExpiredAttemptNeverReuseToken задаёт uncertain provider outcome и уже expired reserved attempt, требуя reauthentication без второго token exchange. Моделируется сохранённое crash state, а не перезапуск процесса.
 func TestUnknownRefreshAndExpiredAttemptNeverReuseToken(t *testing.T) {
 	t.Parallel()
 	calls := 0
@@ -170,6 +188,8 @@ func TestUnknownRefreshAndExpiredAttemptNeverReuseToken(t *testing.T) {
 	}
 }
 
+// TestLogoutFencesConcurrentRefreshAcrossReplicas blocks one local refresh callback, observes pending from a second Families value and revokes through their shared memory CAS, then rejects the late commit. It is a concurrency unit, not a deployed multi-Pod durability test.
+// TestLogoutFencesConcurrentRefreshAcrossReplicas блокирует один local refresh callback, наблюдает pending из второго Families value и отзывает через общий memory CAS, затем отклоняет late commit. Это concurrency unit, а не deployed multi-Pod durability test.
 func TestLogoutFencesConcurrentRefreshAcrossReplicas(t *testing.T) {
 	t.Parallel()
 	started, release := make(chan struct{}), make(chan struct{})
@@ -211,6 +231,8 @@ func TestLogoutFencesConcurrentRefreshAcrossReplicas(t *testing.T) {
 	}
 }
 
+// TestRefreshRejectsChangedSessionAuthority mutates issuer, revision, original authentication time or tenant in synthetic refreshed tokens and requires local renewal refusal. It does not test a real provider's JWT validation.
+// TestRefreshRejectsChangedSessionAuthority меняет issuer, revision, исходное authentication time либо tenant synthetic refreshed tokens и требует local renewal refusal без проверки настоящей provider JWT validation.
 func TestRefreshRejectsChangedSessionAuthority(t *testing.T) {
 	t.Parallel()
 	for name, mutate := range map[string]func(*oidcverifier.Principal){
@@ -231,6 +253,8 @@ func TestRefreshRejectsChangedSessionAuthority(t *testing.T) {
 	}
 }
 
+// TestFamilyRenewalAtAbsoluteLimitDoesNotStorm checks renewal scheduling at the absolute boundary and runs forty-two no-op renewals when access covers it, asserting unchanged version/sequence and eventual expiry. The access-before-absolute branch checks scheduling only.
+// TestFamilyRenewalAtAbsoluteLimitDoesNotStorm проверяет renewal scheduling у absolute boundary и выполняет 42 no-op renewals при покрывающем её access, требуя неизменных version и sequence и последующего expiry. Ветка access-before-absolute проверяет лишь scheduling.
 func TestFamilyRenewalAtAbsoluteLimitDoesNotStorm(t *testing.T) {
 	for _, accessBeforeAbsolute := range []bool{false, true} {
 		t.Run(map[bool]string{false: "access-covers-absolute", true: "access-still-needs-refresh"}[accessBeforeAbsolute], func(t *testing.T) {

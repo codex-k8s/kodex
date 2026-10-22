@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.305.0
+version: 1.306.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,92 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста шестая волна — browser sessions и общий record cipher
+
+Опубликованный SHA305 — `267043049bb788cdeade3832b003a841a96bae30`.
+Exact t7Re9G:6631 sources,222 excluded,1807 raw/725 retained/
+1082 unresolved; Go13166/21276,missing8110. Gateway14/32 unit/full
+build/AST3/tooling PASS LOCAL; sourceSHA,push и Draft PR PATCH/GET305 есть.
+Общий объём не завершён.
+
+Полностью прочитаны10 session files1912 lines и связанные browser-SSO
+правила GUIDE-DOC-003 (версия1.7.30 не менялась).114 прежних declarations
+EN→RU, новые2 helper methods и1 unit тоже описаны. Весь package12 Go files
+117/117,missing0; package header и оставшиеся inline lifecycle пояснения
+переведены EN→RU. Comments различают shape и owner authority, cookie и
+server family, logical Version и storage Sequence, проверку JWT provider
+adapter и местную crypto/CAS boundary. Open не объявлен duplicate-key guard;
+elevation time/reference и caller-owned resource eligibility явно названы.
+
+Store.sealState/openState объединяют повторяемые3 seal и3 open blocks
+family/login/ticket records. Сохранены raw nonce-prefix envelope, current
+key для seal, current→previous fallback для open, nil/short rejection и
+прежние errors. Все3 AAD domain prefixes и точные ID-выражения остаются
+у callers; JSON, версии/expiry, profile selection и CompareAndSwap не
+переносились в cipher helper. Cookie v1 codec и его отдельный AAD прежние.
+Это unit-owned key-selection/error glue вокруг standard AEAD, не новый
+криптографический алгоритм или универсальный authority decoder.
+
+Inverse AST10 разворачивает ACTUAL тела обоих helpers во всех6 call sites,
+с прежними caller return tuples для единственного entropy error, и
+восстанавливает только ставшие неиспользуемыми cipher/rand imports.
+Полные прежние AST десяти caller/test files равны305; directives прежние.
+Аргументы AAD — прежние чистые prefix+ID expressions без нового I/O.
+Одна109-token group действительно удалена;1806 остальных keys/counts
+прежние, новых fragments и новых exclusions нет. Registry607/725 прежний.
+
+Матрица существующего lifecycle (новых transitions/events нет):
+
+| Операция и owner path | Прежний переход/граница | Uncertain/terminal/readback |
+| --- | --- | --- |
+| Cookie Issue/Open/Renew → Store | AEAD cookie, supplied bearer ceiling, exact CSRF; без persistence | Open не подтверждает live bearer/revocation; renew не меняет identity |
+| Family Create → Families.write | trusted caller tokens → ACTIVE, fresh IDs, immutable absolute ceiling → owner CAS0 | Авторитетное чтение Families.Read, отсутствие не восстанавливается из cookie |
+| Login Start → Logins.write | state/nonce/PKCE/browser binding → PENDING CAS0 до выдачи redirect | URL и binding не возвращаются при отказе записи |
+| Login Exchange/Complete → Logins | binding/state/expiry → EXCHANGING CAS → один provider effect → отдельный COMPLETED CAS | EXCHANGING не повторяет code после ошибки/crash; completed readback без tokens |
+| Family idle/refresh → Families | no-op либо idle CAS; refresh сначала REFRESHING/attempt/deadline CAS, затем IdP, exact identity, ACTIVE CAS | IdP effect может пройти до позднего CAS error; старый refresh token не повторяется; Renew игнорирует ошибку best-effort terminate и возвращает reauthentication, что НЕ доказывает durable terminal write |
+| Elevation consume → Families | caller проверил exact purpose/resource/time; active+browser+present elevation → новые browser/CSRF, clear elevation, version++ CAS | До3 conflicts; fresh-auth/owner eligibility не выводятся из наличия pointer |
+| Revoke → Families | raw owner read → TERMINAL, tokens/attempt очищены, version++ CAS | absent/terminal idempotent; до3 conflicts; нет IdP logout внутри этого метода |
+| Ticket issue/consume → отдельный ledger | active family/browser/CSRF/access → digest insert CAS; consume delete CAS до final family/version check | До3 conflicts; lost outcome закрыт; late refusal не возвращает consumed ticket; family version не изменяется ledger write |
+
+Storage authority — прежний browserstate owner-record port, sequence CAS и
+точные family/login/ledger read paths. Нет нового доменного outbox/event,
+нового grant, scope из ciphertext или расширения permissions. Рабочие
+транзакции/HTTP endpoints/retention/deploy policy не менялись.
+Эта карта кода не является runtime proof внешнего брокера/IdP.
+
+Новый pure crypto unit сверяет новые helpers с direct AEAD на всех3 AAD
+domains, nonce-prefix length, binary/empty plaintext, прежнем envelope,
+current/previous overlap и nil-key fallback. Wrong AAD/tamper/short/missing
+overlap/no keys отклоняются. Fixed keys/nonces только synthetic reference.
+Entropy-failure injection НЕ выполнялась; прежний единственный error path
+сверен actual-body/AST. Existing memory-CAS units проверяют renewal/logout/
+login/ticket races, но не доказывают durability или multi-Pod storage.
+Context7 /golang/go и pinned1.26.6 cipher.AEAD docs сверены; nonce generation
+и algorithm choice не менялись, NewGCMWithRandomNonce не вводился.
+
+34 верхних/105 всех gateway app/client/usertext/session unit и полный
+gateway build -p=2 PASS LOCAL,0 FAIL/SKIP.17 Node/Go checker unit,
+AST10,scope/package117/117,5 ignores и diff-check PASS LOCAL.
+Выполненная unit/build команда из модуля gateway:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+Внешние SSO/IdP/browser/broker/credentials, component/live/deploy/full
+acceptance NOT RUN. CLI compiled без самостоятельного запуска.
+
+Рабочий z8Gkh1:6633 sources,222 excluded,1806 raw/725 retained/
+1081 unresolved; Go13283/21279,missing7996. Raw SHA256:
+`1818aa337976fe599486b65e9780ea694809b93235a1f2bb9ef3be364acdca03`;
+clone-set:
+`5521806149144147ddeeb3f04af084882f678fb9cb235c6ec700c035d53640a6`.
+После коммита exact scan/unit/build и remote readback повторяются.
+Generated/contracts/dependencies/SQL/migrations/live state прежние.
+Historical FAIL/finding293 не исправлены. Go остаток:gateway1764,CP6232.
+Общая цель и Draft PR открыты.
 
 ## Триста пятая волна — entrypoint и каталог сообщений gateway
 
