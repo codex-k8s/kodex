@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.182.0
+version: 1.183.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,48 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто восемьдесят третья волна — весь materialization lease keeper
+
+На базе опубликованного SHA `81db4644d2eeb71c478392b94623dda20b6c0e77`
+все 27 объявлений materialization_lease.go и materialization_lease_test.go
+получили предметные EN→RU комментарии. Описаны независимые keepers пакета
+claims, диагностический набор owner pins отдельно от runnable input,
+первое/периодическое продление и expiry watchdog, общий mutex publication/
+renew, cancel cause и отдельно сохранённый owner denial. Пояснены
+неблокирующее создание, await, обязанность stop/join, последнее продление
+после join перед handoff и отсутствие отзыва owner lease самим stop.
+Ограниченный context публикации не назван автоматическим rollback/retry:
+действие обязано само соблюдать cancellation.
+
+Комментарии всех 16 тестовых объявлений отражают реальную оснастку:
+cloned synthetic requests, bounded channel waits, независимое продление
+claims при задержке первого, отказ до/во время публикации, in-flight
+renewal при handoff/shutdown и сохранение конкурентного owner denial.
+Это локальные callbacks и счётчики, не обращения к живому owner/Kubernetes
+и не доказательство длительности production lease. Existing inline
+пояснения также получили английский текст с русским переводом.
+
+Полные два файла механически сравнены с parent: после удаления только
+строк комментариев и нормализации gofmt исполняемые строки идентичны.
+Authority, lifecycle, RPC, retries, синхронизация, длительности и SDK
+не менялись; новые исключения/сущности не добавлялись.
+
+PASS LOCAL: RC `go test -count=1 -json ./internal/app` — 56 верхних PASS,
+166 PASS с подтестами, 0 SKIP/FAIL; полный module `go build ./...`,
+scoped Go-docs-check 27/27, 16 unit анализатора, Go-checker, пять
+ignore-boundaries и diff-check. Go1.26.6, GOENV=off/GOWORK=off. Повтор
+на точном опубликованном SHA фиксируется в PR. Component/live/browser/
+deploy, реальные агенты и полный repository Go-docs-check — NOT RUN;
+прежний diagnostics FAIL не скрыт и не исправлялся этой волной.
+
+Detector: 6569 source, 222 generated/lock исключения, 1843 raw,
+578 точных решений, 1265 неразобранных; clone-set fingerprint неизменен,
+реестр исключений не менялся. Рабочий raw SHA-256
+`326d4bf02a76d3e8427e18c35ddbe084b3ac09aec2be73a5796bb31af6522a32`,
+clone-set fingerprint
+`95d5dc88d1ccb7b0366997c4765a2b428d78db18511bc59523be5bed51684273`.
+Go-реестр 6724/21131, непокрыты 14407. Единый Draft PR и цель не завершены.
 
 ## Сто восемьдесят вторая волна — продление аренды и закрытая диагностика
 
