@@ -14,6 +14,12 @@ import (
 	"unicode/utf8"
 )
 
+// assistantConfigurationPageFixture creates multilingual canonical JSON and its
+// exact digest in a fresh synthetic agent/workflow envelope; no owner read or authority
+// is supplied by these fixed refs and versions.
+// assistantConfigurationPageFixture создаёт multilingual canonical JSON и exact digest
+// в новой synthetic agent/workflow envelope; fixed refs/versions не означают
+// owner read и не дают authority.
 func assistantConfigurationPageFixture(t *testing.T, kind string) (map[string]any, []byte, string) {
 	t.Helper()
 	snapshot := map[string]any{"instructions": strings.Repeat("Я😀中é\n", 1000), "steps": []any{map[string]any{"name": "Полный шаг", "dependsOn": []any{"первый"}}}}
@@ -30,6 +36,12 @@ func assistantConfigurationPageFixture(t *testing.T, kind string) (map[string]an
 	return map[string]any{"kind": kind, "assistant_ref": "agt_fixture123", "organization_ref": "org_fixture123", "project_ref": "prj_fixture123", "entries": []any{}, key: map[string]any{ref: "res_fixture123", "project_ref": "prj_fixture123", "version": int64(7), "configuration_sha256": digest, "configuration": snapshot}}, raw, digest
 }
 
+// TestAssistantConfigurationPageReconstructsExactUTF8Source reassembles seventeen-byte
+// chunks for both source kinds, checking rune boundaries, source/chunk digests, pins,
+// exact EOF and unchanged source maps; it exercises local projection, not live paging.
+// TestAssistantConfigurationPageReconstructsExactUTF8Source собирает chunks до семнадцати
+// bytes обоих source kinds, проверяя rune boundaries,digests,pins,exact EOF и неизменность
+// source maps; проверяется local projection, не live paging.
 func TestAssistantConfigurationPageReconstructsExactUTF8Source(t *testing.T) {
 	for _, kind := range []string{"WORKFLOW_CONFIGURATION", "AGENT_CONFIGURATION"} {
 		t.Run(kind, func(t *testing.T) {
@@ -87,6 +99,12 @@ func TestAssistantConfigurationPageReconstructsExactUTF8Source(t *testing.T) {
 	}
 }
 
+// TestAssistantConfigurationPageParserClosedInputs checks defaults, numeric/type
+// bounds, canonical continuation digest and rejection of extra/page-ineligible keys,
+// with fixed diagnostics that do not reflect the supplied private sentinel.
+// TestAssistantConfigurationPageParserClosedInputs проверяет defaults,numeric/type
+// bounds,canonical continuation digest и отказ extra/page-ineligible keys
+// с fixed diagnostics без отражения переданного private sentinel.
 func TestAssistantConfigurationPageParserClosedInputs(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	page, err := parseAssistantConfigurationPage(map[string]any{"kind": "WORKFLOW_CONFIGURATION"}, "WORKFLOW_CONFIGURATION")
@@ -133,6 +151,12 @@ func TestAssistantConfigurationPageParserClosedInputs(t *testing.T) {
 	}
 }
 
+// TestAssistantConfigurationPageRejectsMismatchWithoutContent verifies bad offsets,
+// source/expected digests, kinds, UTF-8 and byte/chunk limits return no snapshot
+// or reflected sentinel, including a correctly rehashed invalid source.
+// TestAssistantConfigurationPageRejectsMismatchWithoutContent проверяет отказ bad offsets,
+// source/expected digests,kinds,UTF-8,byte/chunk limits без snapshot и reflected sentinel,
+// включая корректно перехешированный неверный source.
 func TestAssistantConfigurationPageRejectsMismatchWithoutContent(t *testing.T) {
 	for _, scenario := range []string{"offset beyond EOF", "offset inside rune", "missing continuation digest", "wrong expected digest", "wrong source digest", "mixed kind", "unknown kind", "invalid UTF8", "oversized source", "invalid maximum"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -176,6 +200,12 @@ func TestAssistantConfigurationPageRejectsMismatchWithoutContent(t *testing.T) {
 	}
 }
 
+// TestAssistantConfigurationPageAdaptiveEncodedBudget reconstructs escaped multilingual
+// sources under a deliberately smaller internal envelope budget, checks shrinkage and
+// all page pins, and rejects an envelope that cannot fit without leaking a partial result.
+// TestAssistantConfigurationPageAdaptiveEncodedBudget восстанавливает escaped multilingual
+// sources с намеренно меньшим internal envelope budget, проверяет shrinkage/page pins
+// и отвергает невмещающийся envelope без выдачи partial result.
 func TestAssistantConfigurationPageAdaptiveEncodedBudget(t *testing.T) {
 	if maximumAssistantCurrentConfigurationBytes != 1<<20 {
 		t.Fatal("полный исходный snapshot расширен")
@@ -231,6 +261,12 @@ func TestAssistantConfigurationPageAdaptiveEncodedBudget(t *testing.T) {
 	}
 }
 
+// TestAssistantConfigurationPageSchemaBudget checks schema/parser/guidance agree on
+// four through 16384 bytes and safe metadata remains pageable without screen context,
+// while ordinary non-assistant runtime receives no configuration-page fields.
+// TestAssistantConfigurationPageSchemaBudget проверяет согласие schema/parser/guidance
+// о четырёх–16384 bytes и доступность safe metadata paging без screen context;
+// ordinary non-assistant runtime не получает configuration-page fields.
 func TestAssistantConfigurationPageSchemaBudget(t *testing.T) {
 	input, _, _ := assistantWorkflowConfigurationFixture(t)
 	properties := assistantConfigurationCatalogInputSchema(input)["properties"].(map[string]any)

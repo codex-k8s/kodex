@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.197.0
+version: 1.198.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,57 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто восьмая волна — полные configuration reads и общий decode
+
+Точный опубликованный SHA197 — `b7f948f14cca414989f5c6dfc49493571464dfbe`.
+Callback251 верхних/1350 всех PASS,0 FAIL,2 прежних SKIP; полный RC build PASS.
+Exact AVf2Gy:6576 sources,222 excluded,1838 raw,582 retained,1256 unresolved;
+Go7263/21144,missing13881; raw SHA256
+`9fc2382abd81870d79d7cd36e7050c0ae105a24de0277508051ecf2953bbd3c2`,
+clone-set `af4c804fa7300fd9d0aeb04c9d1288852b8708e4cd245af8811b51e0afb9bcf7`.
+
+Целиком прочитаны шесть production файлов configuration page,agent full/runtime,
+workflow full/metadata,current own и шесть соответствующих test файлов. Все79
+declarations вместе с новым helper/test — предметно EN→RU,scoped79/79;
+дополнительно описан локальный размер large-page fixture. Зафиксированы byte
+pagination/UTF-8 boundaries/digest/EOF,shallow-copy ownership,typed current DTO
+отдельно от immutable execution pins,UNKNOWN provider state,UNAVAILABLE inventory
+отдельно от VERIFIED и bootstrap unset image без подстановки historical image.
+Inventory structure не названа проверкой реальных binaries/signatures или grant.
+
+Реальный одинаковый SHA256-before-decode алгоритм трёх casters AGENT/full WORKFLOW/
+WORKFLOW_METADATA вынесен в private decodeAssistantConfigurationSnapshot.
+У каждого caller остались exact owner/entity/project/version response checks,
+byte limits,закрытые поля,canonical comparison и собственные semantic validators.
+Runtime metadata caster с отдельным EOF guard не изменён. Общий helper не добавляет
+новой authority,каноникализации,duplicate/EOF/size validation и сохраняет partial
+decoder writes; ошибочный локальный target по-прежнему отбрасывается caller.
+Два новых unit tests и девять table cases фиксируют exact byte digest,отказ до
+mutation при чужом hash,unknown/type/syntax failure и прежние permissive decoder
+cases (null,case aliases,duplicates,trailing,UTF-8 replacement),которые закрываются
+не этим helper,а прежними последующими caster checks. Новых библиотек/SDK нет.
+
+Обратное раскрытие трёх вызовов и точное восстановление лишь двух удалённых
+imports в двух файлах восстанавливают весь non-comment/gofmt код всех12 прежних
+файлов с SHA197. Новый helper отдельно совпал с вынесенным алгоритмом; PASS LOCAL.
+Убраны три прежних detector keys common decode,появились два более коротких
+overlapping окна оставшихся nominal AGENT/WORKFLOW casters: raw уменьшается на1,
+а не на3. Эти два окна сохранены exact decisions с пояснением разных resource
+types/whitelists/semantic checks; два других exact decisions — независимые
+CP/RC Unicode boundary fixtures и разные clone/mutate/reject test envelopes.
+Полных файлов/typed caster функций и формата Go в исключениях нет.
+
+Рабочий LXag4P:6578 sources,222 excluded,1837 raw,586 retained,1251 unresolved;
+Go7342/21148,missing13806; raw SHA256
+`7444b6160504565172c8b66b65e0dfde3b27a1c89915ddd83dbc5f0122c2416a`,
+clone-set `3180c549f6bcf70f2ab8fe0645d968aa2896107f2f263c8372778c0ebd02c06d`.
+Callback253 верхних/1361 всех PASS,0 FAIL,2 прежних SKIP
+ArtifactSpoolContainerStartup/RuntimeMCPCatalogWireProducer (suites NOT RUN);
+полный RC build-mod=readonly,17 Node units,Go-checker unit,scoped79/79,
+5 ignore-boundaries,gofmt и diff-check PASS LOCAL. Go1.26.6,GOENV/GOWORK off.
+Полный repo-check,component/live,browser/deploy,агенты/STT/почта NOT RUN;
+точный post-commit результат будет в текущем Draft PR,цель не завершена.
 
 ## Сто девяносто седьмая волна — все tool schemas и integration outcome fixtures
 

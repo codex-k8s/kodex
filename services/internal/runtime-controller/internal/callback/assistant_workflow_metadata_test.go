@@ -16,6 +16,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// workflowMetadataFixture reads exact checked-in producer metadata bytes, computes
+// their digest and builds a screen-independent synthetic project read selector/response.
+// No private workflow draft or real owner connection is created.
+// workflowMetadataFixture читает exact checked-in producer metadata bytes, считает
+// digest и строит screen-independent synthetic project selector/response.
+// Private workflow draft и real owner connection не создаются.
 func workflowMetadataFixture(t *testing.T) (runtimecontract.RunnerInput, map[string]any, *cp.AssistantConfigurationCatalogResponse) {
 	t.Helper()
 	input, args, _ := assistantFreshCatalogFixture(runtimecontract.AssistantScopeProject, "WORKFLOW_METADATA")
@@ -36,6 +42,12 @@ func workflowMetadataFixture(t *testing.T) (runtimecontract.RunnerInput, map[str
 	return input, args, response
 }
 
+// TestAssistantWorkflowMetadataNativePagesWithoutCurrentScreen checks safe metadata
+// is advertised without exposing full-source reads and reassembles local MCP pages
+// for both assistant scopes through a fake owner.
+// TestAssistantWorkflowMetadataNativePagesWithoutCurrentScreen проверяет discovery safe
+// metadata без full-source reads и собирает local MCP pages обоих assistant scopes
+// через fake owner.
 func TestAssistantWorkflowMetadataNativePagesWithoutCurrentScreen(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeProject, runtimecontract.AssistantScopeSystem} {
 		input, args, response := workflowMetadataFixture(t)
@@ -51,6 +63,12 @@ func TestAssistantWorkflowMetadataNativePagesWithoutCurrentScreen(t *testing.T) 
 	}
 }
 
+// TestAssistantWorkflowMetadataClosedPinsAndPrivateFields mutates rehashed private,
+// null, project/version, duplicate-step, mixed-response and ordinary-runtime cases
+// to verify metadata cannot widen its closed projection or caller scope.
+// TestAssistantWorkflowMetadataClosedPinsAndPrivateFields меняет rehashed private,null,
+// project/version,duplicate-step,mixed-response и ordinary-runtime cases, проверяя
+// невозможность расширить closed projection и caller scope.
 func TestAssistantWorkflowMetadataClosedPinsAndPrivateFields(t *testing.T) {
 	input, args, response := workflowMetadataFixture(t)
 	request, err := parseAssistantConfigurationCatalog(input, args, args["assistant_configuration_catalog"])

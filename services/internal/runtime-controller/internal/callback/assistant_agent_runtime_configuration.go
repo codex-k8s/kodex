@@ -14,6 +14,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// assistantAgentRuntimeReadSnapshot is a closed safe runtime read shape with model,
+// resources, published environment/image pins, configured tool names and observed
+// inventory provenance; environment values, credentials and instructions are absent.
+// assistantAgentRuntimeReadSnapshot — closed safe runtime read shape с model,resources,
+// published environment/image pins,configured tool names и inventory provenance;
+// environment values,credentials и instructions отсутствуют.
 type assistantAgentRuntimeReadSnapshot struct {
 	AgentRef            string `json:"agent_ref"`
 	ProjectRef          string `json:"project_ref"`
@@ -47,11 +53,25 @@ type assistantAgentRuntimeReadSnapshot struct {
 	Resources runtimecontract.RuntimeResourcePolicy `json:"resources"`
 }
 
+// assistantAgentRuntimeConfigurationAvailable advertises safe named runtime reads
+// for SYSTEM or PROJECT with a valid project ref, without requiring an agent screen.
+// Current recipient eligibility is still resolved by the owner.
+// assistantAgentRuntimeConfigurationAvailable публикует safe named runtime reads
+// для SYSTEM либо PROJECT с valid project ref без требования agent screen.
+// Текущую recipient eligibility по-прежнему определяет owner.
 func assistantAgentRuntimeConfigurationAvailable(input runtimecontract.RunnerInput) bool {
 	return input.IsAssistant() && (input.AssistantScope == runtimecontract.AssistantScopeSystem ||
 		input.AssistantScope == runtimecontract.AssistantScopeProject && validAssistantResourceRef(input.ProjectRef))
 }
 
+// castAssistantAgentRuntimeConfiguration binds exact owner response/entity/project
+// and version to bounded canonical JSON, checks closed nested image/model/resources
+// and the digest of exact projected inventory bytes. It rejects mixed/private shapes
+// without treating a reconstructed struct digest as inventory admission evidence.
+// castAssistantAgentRuntimeConfiguration связывает exact owner response/entity/project
+// и version с bounded canonical JSON, проверяет closed image/model/resources
+// и digest точных projected inventory bytes. Mixed/private shapes отвергаются;
+// digest восстановленного struct не выдаётся за inventory admission evidence.
 func castAssistantAgentRuntimeConfiguration(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant agent runtime configuration response is invalid")
 	if !assistantAgentRuntimeConfigurationAvailable(input) || request.GetAssistantRef() != input.AgentRef || request.GetEntityKind() != "AGENT" || !validAssistantResourceRef(request.GetEntityRef()) || response == nil ||
@@ -104,6 +124,14 @@ func castAssistantAgentRuntimeConfiguration(input runtimecontract.RunnerInput, r
 		"agent_runtime_configuration": map[string]any{"agent_ref": configuration.GetAgentRef(), "project_ref": configuration.GetProjectRef(), "version": configuration.GetVersion(), "configuration_sha256": configuration.GetConfigurationSha256(), "configuration": snapshot}}, nil
 }
 
+// validAssistantAgentRuntimeReadSnapshot validates safe model text, normalized resource
+// bounds, refs/versions/digests, pinned image identity and inventory structure for that
+// image. Configured tool names are bounded metadata, not proof each tool is present
+// or executable; reference validity does not resolve current owner eligibility.
+// validAssistantAgentRuntimeReadSnapshot проверяет safe model text,normalized resource
+// bounds,refs/versions/digests,pinned image identity и inventory structure этого image.
+// Configured tool names — bounded metadata, не доказательство наличия/исполнения
+// каждого tool; форма refs не определяет текущую owner eligibility.
 func validAssistantAgentRuntimeReadSnapshot(value assistantAgentRuntimeReadSnapshot) bool {
 	model, resources := value.ModelConfiguration, value.Resources
 	if !validAssistantResourceRef(model.Ref) || model.Version < 1 || model.Version > 9007199254740991 || !validAssistantCatalogDigest(model.Digest) ||

@@ -3,6 +3,38 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/workflow_unicode_bounds_test.go",
+      "secondPath": "services/internal/runtime-controller/internal/callback/assistant_workflow_configuration_test.go",
+      "fragmentSHA256": "b13ce26f9bbb0e658389ec93ad0b156708becf12f565dc763a7a3993aebc0ec5",
+      "count": 1,
+      "reason": "Совпало лишь окно таблицы ASCII/Cyrillic/emoji boundary и overflow и внешнего цикла subtests двух независимых production units. CP проверяет entity.WorkflowVersion и domain/storage field bounds, RC — exact owner response, одновременно меняя editable projection и Draft с новым digest; набор полей и invalid UTF-8 cases различаются. Общая test-only библиотека ради literals и двух loops связала бы независимые доказательства producer/consumer и потребовала callbacks разных nominal моделей. Сами Unicode predicates уже общие либо проверяются по отдельным контрактам. Сохранено только точное 100+-token окно по двум путям и одному вхождению, не тесты/файлы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/callback/assistant_agent_configuration.go",
+      "secondPath": "services/internal/runtime-controller/internal/callback/assistant_workflow_configuration.go",
+      "fragmentSHA256": "8f392a9bc6088eaec33565b2be52888327984526679dbe645e9a60a6eaf48796",
+      "count": 1,
+      "reason": "После реального выноса exact SHA256+typed JSON decode остаётся нормализованное 343-token окно разных AGENT/WORKFLOW owner-response casters. Detector стирает различия GetAgentConfiguration/GetWorkflowConfiguration, AgentRef/WorkflowRef, read snapshot types и отдельных semantic validators. Каждый caster явно сохраняет собственную native context eligibility и запрет чужого response payload; generic dispatcher или interface с synthetic EntityRef скрыл бы номинальные resource/shape границы и порядок отказов. Общий неавторизующий decode уже вынесен. Оставлено лишь точное окно с двумя путями и fragment digest, не caster целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/callback/assistant_agent_configuration.go",
+      "secondPath": "services/internal/runtime-controller/internal/callback/assistant_workflow_configuration.go",
+      "fragmentSHA256": "94d708c05b9b8010d4a148c6ac31b89c83c72d4e6a0941cef409182a597e41f4",
+      "count": 1,
+      "reason": "Перекрывающееся 238-token окно тех же разных nominal owner-response casters продолжается до существенно разных closed JSON shapes: у AGENT четырнадцать полей с instruction/binding/runtime, у WORKFLOW двенадцать с full draft и dependency graph. Общий exact digest/decode уже вынесен без semantic усилений. Свести оставшиеся entity/version checks, typed validators и whitelist к универсальному mapper значит скрыть resource boundary и назначение отдельных read моделей, а не устранить ещё одну одинаковую самостоятельную операцию. Сохранены только это точное окно, два пути и одно вхождение; общий файл/функции не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/runtime-controller/internal/callback/assistant_agent_configuration_test.go",
+      "secondPath": "services/internal/runtime-controller/internal/callback/assistant_workflow_configuration_test.go",
+      "fragmentSHA256": "1308be259aaaf8f2273761afafc49fbdb9b4e96c64ecaf4f5ce98420606c69a4",
+      "count": 1,
+      "reason": "Совпадает короткая оболочка clone/mutate/reject subtest и конец разных mutation maps AGENT и WORKFLOW. Первый fixture проверяет instruction digest/binding, второй полный graph и native context version; дальше тесты имеют разные selectors и JSON invariants. Сам exact full MCP page traversal уже общий readAssistantConfigurationMCP. Ещё один generic helper для clone/mutate/assert скрыл бы точную response mutation и разные failure paths ради нескольких строк, не устранив повторную реализацию поведения. Сохранено только reviewed окно по двум путям, fragment digest и одному вхождению, не файлы или scenario tables."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/runtime-controller/internal/callback/provider_completion_diagnostic_test.go",
       "secondPath": "services/internal/runtime-controller/internal/callback/provider_process_test.go",
       "fragmentSHA256": "0e0aa37ba05c5033b8f658643b8a3bdd823d9e9d3d36e629c5eb980ca80061c9",
