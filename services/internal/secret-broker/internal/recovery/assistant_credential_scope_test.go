@@ -12,16 +12,30 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// scopedProjectionRecoveryOwner wraps the shared fake owner and records cloned validation requests so
+// tests can inspect exact scoped authority without request aliasing.
+// scopedProjectionRecoveryOwner оборачивает общий fake owner и записывает копии validation requests для
+// проверки exact scoped authority без request aliasing.
 type scopedProjectionRecoveryOwner struct {
 	*fakeOwner
 	requests []*controlplanev1.ValidateRuntimeCredentialProjectionRequest
 }
 
+// ValidateRuntimeCredentialProjection records a protobuf clone, then delegates eligibility/error behavior
+// to the fake owner; it does not validate a real signed authority.
+// ValidateRuntimeCredentialProjection записывает protobuf clone, затем делегирует eligibility/error
+// behavior fake owner; реальную signed authority не проверяет.
 func (owner *scopedProjectionRecoveryOwner) ValidateRuntimeCredentialProjection(ctx context.Context, request *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (bool, error) {
 	owner.requests = append(owner.requests, proto.Clone(request).(*controlplanev1.ValidateRuntimeCredentialProjectionRequest))
 	return owner.fakeOwner.ValidateRuntimeCredentialProjection(ctx, request)
 }
 
+// TestScopedAssistantRecoveryPreservesAuthorityAndRevokesOnlyExactProjection covers SYSTEM/PROJECT
+// manifests, checks forwarded authority/execution/source pins and invalidates one lease while preserving
+// another exact projection on fake ports.
+// TestScopedAssistantRecoveryPreservesAuthorityAndRevokesOnlyExactProjection проверяет SYSTEM/PROJECT
+// manifests, forwarded authority/execution/source pins и invalidation одного lease с сохранением другой
+// exact projection на fake ports.
 func TestScopedAssistantRecoveryPreservesAuthorityAndRevokesOnlyExactProjection(t *testing.T) {
 	for _, scope := range []string{"SYSTEM", "PROJECT"} {
 		t.Run(scope, func(t *testing.T) {

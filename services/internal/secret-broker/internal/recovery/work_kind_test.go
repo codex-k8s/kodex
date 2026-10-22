@@ -8,6 +8,10 @@ import (
 	store "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
 
+// TestManagedRecoveryUsesOnlyExplicitImmediateOwnerRoute gives misleading reference prefixes to explicit
+// DRAFT/IMMEDIATE effects and requires only the immediate owner route, with no deletion.
+// TestManagedRecoveryUsesOnlyExplicitImmediateOwnerRoute задаёт вводящие в заблуждение reference prefixes
+// для явных DRAFT/IMMEDIATE effects и требует лишь immediate owner route без удаления.
 func TestManagedRecoveryUsesOnlyExplicitImmediateOwnerRoute(t *testing.T) {
 	t.Parallel()
 	immediate := recoveryMaterialization("sdop_not_a_route", 1)
@@ -26,6 +30,10 @@ func TestManagedRecoveryUsesOnlyExplicitImmediateOwnerRoute(t *testing.T) {
 	}
 }
 
+// TestManagedRecoveryRejectsUnknownSourceWithoutEffects supplies empty/unknown/noncanonical work kinds and
+// requires an error before any owner recovery call or deletion.
+// TestManagedRecoveryRejectsUnknownSourceWithoutEffects передаёт empty/unknown/noncanonical work kinds и
+// требует ошибки до owner recovery call и удаления.
 func TestManagedRecoveryRejectsUnknownSourceWithoutEffects(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []store.MaterializationWorkKind{"", "UNKNOWN", "PUBLISH", "CREATE"} {
@@ -44,6 +52,10 @@ func TestManagedRecoveryRejectsUnknownSourceWithoutEffects(t *testing.T) {
 	}
 }
 
+// TestImmediateMissingOwnerCannotBecomeDraftOrDelete repeats a synthetic missing-owner error twice and
+// requires the same immediate route each time without fallback to draft recovery or deletion.
+// TestImmediateMissingOwnerCannotBecomeDraftOrDelete дважды повторяет synthetic missing-owner error и
+// требует прежнего immediate route без fallback к draft recovery и удалению.
 func TestImmediateMissingOwnerCannotBecomeDraftOrDelete(t *testing.T) {
 	t.Parallel()
 	item := recoveryMaterialization("sdop_missing_owner", 1)

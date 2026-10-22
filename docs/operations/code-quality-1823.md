@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.238.0
+version: 1.239.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,73 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести тридцать девятая волна — recovery policy и bounded metrics
+
+Опубликованный SHA238 — `d989e797ec040b13d63ec074a0a47991123209e8`.
+Точный tc2c5D:6587 sources,222 excluded,1824 raw,598 retained,
+1226 unresolved; Go9609/21196, missing11587. Raw SHA256:
+`09670339ba91facbcd40e5bae8ac059dd89864f41c9c70d573d9533f5e832dc1`.
+Clone-set:
+`7436f30828050d32b9f9fb5f929d26c884c27dba169e1da00b6cd6c4ebf85204`.
+Push/readback и Draft PR PATCH/GET подтверждены. На SHA238 cmd/app/
+observability11/19 PASS,0 FAIL,1 SKIP disposable composition; full build PASS.
+
+Полностью прочитаны3 новых файла recovery571 строк.44 declarations
+и package comment получили EN→RU пояснения; весь пакет с ранее описанным
+reconciler_test теперь70/70 в4 файлах. AST3 идентичен SHA238 без
+comments/token.Pos. Нет изменений effect statements, retry/cancel/owner
+routes, metrics/HELP, contracts, dependencies, test assertions или registry.
+
+Owner ports раздельно обслуживают immediate effects, expired original
+claims и runtime projections. RecoveryWork действительно содержит generated
+kind enum, поэтому удалено прежнее ошибочное утверждение о независимости
+DTO от generated Proto. Наличие metadata не выдано за authority или lease
+freshness: DTO даже не содержит lease timestamp, eligibility принадлежит owner.
+
+ReconcileOnce сохраняет порядок expired claims→projections→managed effects,
+generic joined errors и продолжение остальных items. DRAFT пропускается
+по explicit WorkKind, не по ref prefix. DELETE требует owner action,
+не inferred missing owner; local response check требует specified state,
+а не полной terminal enum validation. Inventory budget принадлежит adapter,
+не придуман самим reconciler. Expired CREATE/ROTATE effect presence не
+повторяет запись; absence/conflict сообщает Fail с original fence.
+Подтверждённый conflict остаётся manual cleanup failure без Delete.
+
+Projection validation error не подменён false; только false owner eligibility
+ведёт к exact projection delete. Authority/execution/provider/runtime-secret
+pins копируются без plaintext, не выдаются как freshly issued grant.
+Optional ports настраиваются до workers по composition contract; Enable
+методы сами не enforce-ят однократность или concurrency-safe reconfiguration.
+Check читает только last-scan atomic health и игнорирует context.
+Worker ждёт первого tick, scan failures не завершают loop; adapters должны
+соблюдать переданный timeout.
+
+Metrics labels нормализуются прежними closed sets; неизвестный action
+попадает в not_found как cardinality fallback, не доказательство отсутствия.
+Backlog gauge отражает failures последнего scan, не точную durable queue
+или unique objects. Context7 /prometheus/client_golang и pinned go doc
+сверены для CounterVec/WithLabelValues/Gauge.Set; runtime API не менялся.
+
+Unit `./internal/recovery ./internal/controlplane`:
+16 верхних/22 всех PASS,0 FAIL/SKIP. Go1.26.6, GOENV/GOWORK off,
+GOMAXPROCS=4, `go test -mod=readonly -count=1 -timeout 120s -json`.
+Полная сборка secret-broker `go build -mod=readonly ./...` PASS LOCAL.
+Существующие units проверяют explicit source routing, unknown-kind refusal,
+отсутствие fallback/delete при missing owner, scoped SYSTEM/PROJECT projection
+pins и отзыв ровно одной из независимых projections на fake ports.
+Ни один такой результат не доказывает live signature/eligibility/cluster.
+
+Полный package docs70/70, AST identity3, gofmt/diff-check, assessment и5
+addressed ignores PASS LOCAL. Рабочий7buC5l:6587 sources,222 excluded,
+1824 raw,598 retained,1226 unresolved; Go9653/21196, missing11543.
+Raw SHA256:
+`6f177f7d7b2c4e4c8c4957584b52649603864bc759875ed58d74757048a88d24`.
+Clone-set прежний7436f308...; fragment/path/count multiset и registry
+неизменны. Точный post-commit scan/unit/build публикуются в том же Draft PR.
+Задача не завершена:11543 declarations/1226 групп ещё остаются.
+Исторические FAIL/SKIP/NOT RUN не переименованы в PASS. Full acceptance/
+browser/live/deploy/ИИ/STT/почта NOT RUN согласно scoped решению.
 
 ## Двести тридцать восьмая волна — composition, config, CLI и метрики
 
