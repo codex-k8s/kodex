@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,8 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// Синтетический terminal aggregate проходит настоящий JSONL reader и parser;
-// процесс Codex, сеть и модель не запускаются.
+// syntheticTerminalFrame pads synthetic command output to the requested encoded frame size so tests
+// cross the actual JSONL reader/parser without starting Codex, networking or a model.
+// syntheticTerminalFrame дополняет синтетический вывод команды до запрошенного размера кодированного кадра
+// для проверки настоящего JSONL reader/parser без запуска Codex, сети или модели.
 func syntheticTerminalFrame(t *testing.T, size int) []byte {
 	t.Helper()
 	command := map[string]any{"type": "commandExecution", "id": "synthetic-command", "command": "printf synthetic", "cwd": "/workspace/work", "status": "completed", "commandActions": []any{}, "aggregatedOutput": "", "exitCode": 0, "durationMs": 1}
@@ -28,6 +29,10 @@ func syntheticTerminalFrame(t *testing.T, size int) []byte {
 	return marshalProtocolFixture(t, envelope)
 }
 
+// TestTerminalAggregateAboveSemanticLineBudget accepts a large transport aggregate whose individual
+// semantic projections remain valid, retaining safe final text and one tool call without its raw output.
+// TestTerminalAggregateAboveSemanticLineBudget принимает большой транспортный итог с допустимыми отдельными
+// смысловыми проекциями, сохраняя безопасный ответ и один вызов инструмента без исходного вывода.
 func TestTerminalAggregateAboveSemanticLineBudget(t *testing.T) {
 	frame := syntheticTerminalFrame(t, 2_297_142)
 	events := make(chan streamEvent, 2)
@@ -44,12 +49,20 @@ func TestTerminalAggregateAboveSemanticLineBudget(t *testing.T) {
 	t.Logf("synthetic terminal frame accepted: bytes=%d", len(frame))
 }
 
+// syntheticResponseFrame builds a JSON response of the requested encoded size for boundary fixtures;
+// callers supply a size at least as large as the empty envelope.
+// syntheticResponseFrame формирует JSON-ответ запрошенного размера для граничных fixtures;
+// вызывающий код обязан передать размер не меньше пустого конверта.
 func syntheticResponseFrame(t *testing.T, size int) []byte {
 	t.Helper()
 	frame := marshalProtocolFixture(t, map[string]any{"id": 1, "result": ""})
 	return marshalProtocolFixture(t, map[string]any{"id": 1, "result": strings.Repeat("x", size-len(frame))})
 }
 
+// TestAppServerFrameExactTransportBoundary checks exact and one-byte-over limits for EOF, LF and CRLF
+// and requires exactly one resulting event followed by channel closure.
+// TestAppServerFrameExactTransportBoundary проверяет точный лимит и превышение на байт для EOF, LF и CRLF,
+// требуя ровно одно результирующее событие с последующим закрытием канала.
 func TestAppServerFrameExactTransportBoundary(t *testing.T) {
 	for _, ending := range []struct{ name, value string }{{"EOF", ""}, {"LF", "\n"}, {"CRLF", "\r\n"}} {
 		for _, delta := range []int{0, 1} {
@@ -69,12 +82,20 @@ func TestAppServerFrameExactTransportBoundary(t *testing.T) {
 	}
 }
 
+// syntheticReadError injects a private underlying reader failure without depending on real I/O faults.
+// syntheticReadError подставляет приватный отказ reader без зависимости от реальных ошибок ввода-вывода.
 type syntheticReadError struct{}
 
+// Read returns no bytes and a synthetic private error to exercise downstream diagnostic redaction.
+// Read возвращает ноль байтов и синтетическую приватную ошибку для проверки сокрытия downstream-диагностики.
 func (syntheticReadError) Read([]byte) (int, error) {
 	return 0, errors.New("private-upstream-detail")
 }
 
+// TestAppServerStreamReasonsRemainClosed tests empty/malformed/duplicate/trailing frames and read errors,
+// retaining internal subtypes while the public diagnostic stays STREAM_INVALID and injected reasons stay hidden.
+// TestAppServerStreamReasonsRemainClosed проверяет пустые, повреждённые, повторные и лишние кадры с ошибками чтения,
+// сохраняя внутренние подтипы, публичный STREAM_INVALID и сокрытие подставленных причин.
 func TestAppServerStreamReasonsRemainClosed(t *testing.T) {
 	for _, test := range []struct {
 		name, reason string
@@ -101,16 +122,17 @@ func TestAppServerStreamReasonsRemainClosed(t *testing.T) {
 			}
 		})
 	}
-	var output bytes.Buffer
-	previous := log.Writer()
-	log.SetOutput(&output)
-	t.Cleanup(func() { log.SetOutput(previous) })
+	output := captureProviderDiagnostic(t)
 	logProviderSafeFailure(providerStageTerminalWait, callFailure("STREAM_INVALID", &appServerStreamFailure{reason: "private-upstream-detail"}))
 	if strings.Contains(output.String(), "private-upstream-detail") || !strings.Contains(output.String(), "stream_error: UNKNOWN") {
 		t.Fatal("injected stream subtype escaped closed log vocabulary")
 	}
 }
 
+// TestAppServerStreamMessageLimitUnchanged feeds one message beyond the allowed count and requires
+// the limit event at the exact boundary followed by the reader's explicit completion signal.
+// TestAppServerStreamMessageLimitUnchanged подаёт на одно сообщение больше лимита и требует
+// событие ограничения на точной границе с явным сигналом завершения reader.
 func TestAppServerStreamMessageLimitUnchanged(t *testing.T) {
 	frame := []byte("{\"id\":1,\"result\":{}}\n")
 	events := make(chan streamEvent, appServerMessageQueueCapacity)
@@ -130,6 +152,10 @@ func TestAppServerStreamMessageLimitUnchanged(t *testing.T) {
 	t.Fatal("message count limit was not enforced")
 }
 
+// TestAppServerFrameQueuePreservesBudgetAndStopJoin pins transport/semantic budgets and fills the
+// bounded event queue before cancelling, requiring reader completion without publishing an extra event.
+// TestAppServerFrameQueuePreservesBudgetAndStopJoin закрепляет транспортный и смысловой бюджеты, заполняет
+// ограниченную очередь перед отменой и требует завершения reader без публикации лишнего события.
 func TestAppServerFrameQueuePreservesBudgetAndStopJoin(t *testing.T) {
 	if appServerMessageQueueCapacity*maximumAppServerFrameBytes != 64<<20 || appServerMessageQueueCapacity != 8 || maximumJSONLLineBytes != 1<<20 {
 		t.Fatal("transport queue or semantic budget changed")
@@ -155,6 +181,10 @@ func TestAppServerFrameQueuePreservesBudgetAndStopJoin(t *testing.T) {
 	}
 }
 
+// TestAppServerLargerFrameRetainsSemanticQuotas mutates a transport-valid aggregate to exceed command,
+// final-message or public-message limits or alter thread identity; semantic consumption must still reject it.
+// TestAppServerLargerFrameRetainsSemanticQuotas подменяет транспортно допустимый итог с превышением лимитов
+// команды, итогового/публичного сообщения или с чужим потоком; смысловой разбор всё равно обязан отказать.
 func TestAppServerLargerFrameRetainsSemanticQuotas(t *testing.T) {
 	for _, test := range []struct{ from, to string }{
 		{"printf synthetic", strings.Repeat("x", maximumJSONLLineBytes+1)},

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.220.0
+version: 1.221.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,83 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести двадцать первая волна — broker UDS, auth и потоковая диагностика
+
+Опубликованный SHA220 — `a61651d6db2837934e1e1e187809450d4ca6f802`.
+Exact K2mjKW:6584 sources,222 excluded,1831 raw,594 retained,1237 unresolved;
+Go8445/21166,missing12721;raw SHA256
+`e48fa45689fe47bc74e71398c09e4c5fafc6e19bd5259c014783801bcabeb384`;
+clone-set `085d7dc48aa5419c1f29b33dc5eb68cd745683018db377e8c06e9cc299921528`.
+Push/readback иPATCH/GET Draft PR220 подтверждены;finance/process/env19/32
+unit иfull runner build PASS наэтом SHA.
+
+Целиком прочитаны broker.go,broker_test.go,stream_failure.go,
+stream_frame_test.go.96/96 declarations EN→RU:94 прежних плюс
+captureProviderDiagnostic иегоunit. Подробно описаны kernel SO_PEERCRED,
+exact UID versus payload identity,UDS deadline/cancel/half-close,
+самостоятельный final-result grace,closed errors/diagnostic categories,
+auth shape versus digest pin versus remote authentication. Обычный JSON
+auth decoder не назван strict duplicate/unknown-fields validator.
+ReadFile доsize validation не выдан за allocation-bounded/no-race opener.
+
+Rollout metadata отличены от private sealed evidence,execution tuple,
+фактического чтения/хеширования ивозможных последующих изменений файла.
+failedProviderResult сохраняет измерения,а не подтверждает outcome или
+credential effect ине делает deep copy. ExecuteProviderTurn выполняется
+однократно,refresh commit получает независимый bounded context,ошибка
+commit сохраняет измерения,unlink auth остаётся best effort.
+ServeProviderBroker обслуживает соединения последовательно,проверяет UID,
+dumpability иsandbox probe,но не доказывает отсутствие authority mounts
+илиjoin cancellation goroutine;эти свойства ему не приписаны.
+Bridge описан как loopback/UDS/bearer-bound путь,не новый authority grant.
+Close не назван graceful drain илибезусловным join,credential regex/length
+не назван криптографической проверкой. Stream reason normalizer сохраняет
+прежнее требование nonnil typed pointer;typed-nil safety не выдумана.
+
+Одинаковый захват standard logger в4 consumers вынесен в private test
+helper captureProviderDiagnostic тогоже package. Writer восстанавливается
+через прежний testing.Cleanup,assertions/reset остаются вкаждом тесте.
+Новый unit фактически пишет synthetic log внутрь subtest ипроверяет
+восстановление outer writer послеcleanup. Комментарий запрещает
+параллельные изменения глобального logger. Это короткий повтор ниже
+detector threshold:raw reduction ему не приписана. Production helper,
+новые packages илибиблиотеки ради теста не добавлялись.
+
+Go AST2 production файлов совпадает с SHA220 без comments/token.Pos.
+Actual body fixture иновый unit точно сверены;после обратного раскрытия
+4 callsites,удаления лишь helper/new test ивозврата log import AST2
+прежних test файлов также совпадает. Ошибки,deadline budget,auth/peer/
+capture validation,транзакции иauthority/lifecycle не менялись.
+Новых unresolved/retained групп вэтом scope нет;whole-repo
+pair/fragment/count multiset неизменен,новых groups/exceptions нет.
+
+Выбранные codex units:20 верхних/58 всех PASS,0 FAIL/SKIP.
+Фактически выполнены synthetic API/OAuth refresh/commit/deadline/cleanup,
+safe failure classes/log redaction,typed usage categories,новая fixture,
+JSONL frames наточном лимите8MiB сEOF/LF/CRLF ипревышением набайт,
+крупный terminal aggregate,semantic quotas,closed stream subtypes,
+message count limit иstop/join приполной bounded queue.
+Это in-process channels/private temp auth/JSON,без Codex child/model/network.
+Сам ServeProviderBroker,реальный privileged UDS/MCP bridge исandbox probe
+вэтом блоке не запускались,их запуск не выдан за unit PASS.
+Из runner сGOENV/GOWORK off,GOTOOLCHAIN=go1.26.6,GOMAXPROCS=4:
+`go test -mod=readonly -count=1 -json ./internal/codex -run '^(TestExecuteProviderTurn|TestProviderIndependentlyEnforces|TestProviderBrokerFailurePreserves|TestProviderSafeFailure|TestProviderBrokerEarlyFailure|TestTokenUsageFailureLogs|TestProviderDiagnosticCapture|TestTerminalAggregateAbove|TestAppServerFrameExact|TestAppServerStreamReasons|TestAppServerStreamMessageLimit|TestAppServerFrameQueue|TestAppServerLargerFrame)'`.
+Full runner `go build -mod=readonly ./...`,scope96/96,17 Node units,
+Go-checker unit,5 ignore boundaries,gofmt/diff-check PASS LOCAL.
+Context7 `/websites/pkg_go_dev_go1_25_3`:AfterFunc stop не ждётcallback,
+UnixConn.CloseWrite,ReverseProxy Director/forwarding semantics.
+Это справка указанной версии;сборка/units реально выполнены Go1.26.6.
+Новых SDK/dependencies/API нет.
+
+Рабочий mZIEAs:6584 sources,222 excluded,1831 raw,594 retained,1237 unresolved;
+Go8541/21168,missing12627;raw SHA256
+`0a54dd20b303901496553016bb6bebd96f930afd589925782e751f805909d0a6`;
+clone-set `085d7dc48aa5419c1f29b33dc5eb68cd745683018db377e8c06e9cc299921528`.
+Точное post-commit измерение публикуется втомже Draft PR.
+Полный runner/codex/repo unit иобщий Go-docs check ещё не выполнены;
+исторические FAIL/SKIP/NOT RUN сохраняются. Live/browser/deploy/ИИ/STT/
+почта NOT RUN. Общая задача остаётся активной,merge/ready не выполняются.
 
 ## Двести двадцатая волна — финансовые наблюдения и transport projection
 
