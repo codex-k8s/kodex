@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.191.0
+version: 1.192.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,49 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто вторая волна — runner schema и границы окружения
+
+На точном запушенном SHA `0607bd9b982a87f5569353cbb4ed6160a2c91850`
+волны191 workload84 верхних/300 всех PASS,0 FAIL,1 прежний wire SKIP,
+полный runtime-controller build PASS. Scoped manager_test71/71, вместе
+с manager.go249/249. Exact hAxycM:6575 sources,222 excluded,1840 raw,
+582 retained,1258 unresolved; Go7004/21141,missing14137; raw SHA256
+`987788ad89182231db844de6800ec47af4e503b87a51f39776b7277ae5673b66`,
+clone-set `d8014d294a06609222907c801d6abe4f1077236fd3a56ad5f58405a8d13bc93b`.
+
+Все17 объявлений пяти полных файлов runner_input_schema_test,files_test,
+workspace_limits_test,environment_executor_test,environment_init_mount_test
+получили предметные EN→RU комментарии. Пояснены состав полей отдельно от
+семантического равенства схем, сортировка required на месте, generic JSON
+без duplicate-key guard, descriptors отдельно от Secret bytes, точные MCP/
+catalog pins и отсутствие file grant у warm input. Ограниченные workspace
+quotas не названы доказанным filesystem enforcement.
+
+Проверки environment volumes/resources и selected CEL expressions описаны
+как локальные проверки спецификаций, не live admission. Отмечены count-check
+без доказательства уникальности expressions, cost100000, режим turn для
+любого значения кроме warm в fixture helper и Eval error как отрицательный
+результат assertRuntimeAdmission. Последнее не скрыто за заявлением, что
+любой негативный кейс доказывает error-free выполнение. Конкретные проверки
+и исторические диагностические строки тестов не менялись.
+
+Все5 файлов без comments/gofmt совпадают с родителем точно; production,
+tests/asserts,контракты,SDK,generated и manifests не менялись. Новых выносов/
+исключений нет, в этих5 файлах не осталось unresolved detector groups.
+Context7 /cel-expr/cel-go и локальный go doc Program.Eval/CostLimit
+подтвердили результат/ошибку и ограничение стоимости; обновление SDK не нужно.
+
+Рабочий S55nhs:6575 sources,222 excluded,1840 raw,582 retained,
+1258 unresolved; Go7021/21141,missing14120, scoped checker17/17 PASS.
+Raw SHA256 `07a266dce74619e14e284ff04ae26ca787b68a286f7b09fb7a49ffb6e2682885`,
+clone-set неизменен. Локально workload84 верхних/300 всех PASS,0 FAIL,
+1 прежний SKIP TestAssistantWarmRuntimeOwnerWireBuild (wire producer NOT RUN).
+Полный runtime-controller build-mod=readonly,16 unit анализатора,
+unit Go-checker,5 ignore-boundaries и diff-check PASS LOCAL;
+Go1.26.6,GOENV=off/GOWORK=off. Точный опубликованный SHA и повтор проверок
+фиксируются в текущем PR. Полный repo -check,component/live,browser/deploy,
+агенты/STT/почта NOT RUN. Цель остаётся незавершённой, PR Draft без merge.
 
 ## Сто девяносто первая волна — полный основной тест workload manager
 

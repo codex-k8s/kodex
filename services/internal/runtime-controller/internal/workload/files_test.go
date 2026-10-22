@@ -9,6 +9,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestBuildTurnInputBindsRuntimeFileCatalogAndSchema checks a sealed file catalog
+// survives runner/schema conversion, changing its digest alters MCP binding,
+// unsealed drift or unknown purposes fail, and warm input cannot inherit it.
+// TestBuildTurnInputBindsRuntimeFileCatalogAndSchema проверяет сохранение
+// закреплённого каталога в runner/схеме, изменение MCP binding при смене digest,
+// отказ для незакреплённой подмены и неизвестных purposes и запрет для warm input.
 func TestBuildTurnInputBindsRuntimeFileCatalogAndSchema(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	execution := testExecution(false)

@@ -20,6 +20,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestRunnerInputSchemaV9MatchesRuntimePayload compares the schema shape with
+// RunnerInput tags, validates generated turn/warm payloads and distinguishes
+// bootstrap profile keys from opaque aggregate references without widening either.
+// TestRunnerInputSchemaV9MatchesRuntimePayload сверяет схему с тегами RunnerInput,
+// проверяет turn/warm payload и отличает bootstrap profile keys от opaque-ссылок
+// агрегатов без расширения допустимых значений обоих видов.
 func TestRunnerInputSchemaV9MatchesRuntimePayload(t *testing.T) {
 	compiled, properties, required := loadRunnerInputSchema(t)
 	assertRunnerInputShape(t, properties, required)
@@ -64,6 +70,12 @@ func TestRunnerInputSchemaV9MatchesRuntimePayload(t *testing.T) {
 	}
 }
 
+// TestRunnerInputSchemaV9CarriesOnlySecretDescriptors validates synthetic env
+// descriptors without copying Secret bytes, then rejects injected secret values
+// and unknown fields; fixture hashes do not prove a real Secret read or scan.
+// TestRunnerInputSchemaV9CarriesOnlySecretDescriptors проверяет синтетические env
+// descriptors без копирования Secret bytes, затем отвергает внедрённое значение
+// секрета и неизвестные поля; fixture hashes не доказывают чтение Secret или scan.
 func TestRunnerInputSchemaV9CarriesOnlySecretDescriptors(t *testing.T) {
 	compiled, _, _ := loadRunnerInputSchema(t)
 	secretValue := []byte("runner-schema-secret-fixture")
@@ -118,6 +130,12 @@ func TestRunnerInputSchemaV9CarriesOnlySecretDescriptors(t *testing.T) {
 	}
 }
 
+// TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage mutates a valid JSON
+// instance to remove turn/set links or mismatch provenance, requiring schema
+// rejection; it does not substitute for owner-side attachment eligibility.
+// TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage убирает связи turn/set
+// или меняет provenance корректного JSON и требует отказа схемы;
+// это не замена проверки допустимости вложения у владельца.
 func TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage(t *testing.T) {
 	compiled, _, _ := loadRunnerInputSchema(t)
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -152,6 +170,12 @@ func TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage(t *testing.T) {
 	}
 }
 
+// loadRunnerInputSchema strictly decodes the repository v9 schema as one JSON
+// document, resolves it and separately returns its property/required lists.
+// It fails the calling test on unsupported fields, trailing data or resolution.
+// loadRunnerInputSchema строго декодирует v9-схему репозитория как один JSON,
+// разрешает её и отдельно возвращает списки свойств и обязательных полей.
+// Неизвестные поля, лишние данные и ошибка разрешения завершают тест.
 func loadRunnerInputSchema(t *testing.T) (*jsonschema.Resolved, map[string]json.RawMessage, []string) {
 	t.Helper()
 	root := filepath.Join("..", "..", "..", "..", "..")
@@ -182,6 +206,12 @@ func loadRunnerInputSchema(t *testing.T) (*jsonschema.Resolved, map[string]json.
 	return resolved, shape.Properties, shape.Required
 }
 
+// assertRunnerInputShape compares sorted schema property/required names with
+// reflected RunnerInput JSON tags, sorting the supplied required slice in place.
+// It checks field presence, not semantic equivalence of every property rule.
+// assertRunnerInputShape сравнивает отсортированные имена свойств и обязательных
+// полей схемы с JSON-тегами RunnerInput, сортируя переданный required на месте.
+// Проверяется состав полей, не смысловое равенство всех правил свойств.
 func assertRunnerInputShape(t *testing.T, properties map[string]json.RawMessage, required []string) {
 	t.Helper()
 	typeOfInput := reflect.TypeOf(runtimecontract.RunnerInput{})
@@ -211,6 +241,12 @@ func assertRunnerInputShape(t *testing.T, properties map[string]json.RawMessage,
 	}
 }
 
+// validateRunnerInputSchema uses the real runner encoder, decodes its JSON as
+// an instance and requires validation against the supplied resolved schema;
+// serialization or schema failure terminates the calling test.
+// validateRunnerInputSchema кодирует input настоящим runner encoder, переводит
+// JSON в instance и требует соответствия переданной разрешённой схеме;
+// ошибка кодирования или проверки завершает вызывающий тест.
 func validateRunnerInputSchema(t *testing.T, schema *jsonschema.Resolved, input runtimecontract.RunnerInput) {
 	t.Helper()
 	raw, err := runtimecontract.EncodeRunnerInput(input)
@@ -222,6 +258,10 @@ func validateRunnerInputSchema(t *testing.T, schema *jsonschema.Resolved, input 
 	}
 }
 
+// decodeJSONInstance unmarshals one JSON value into Go's generic representation
+// for schema mutation tests; it does not enforce duplicate-key or domain rules.
+// decodeJSONInstance декодирует JSON в общее Go-представление для тестовых
+// мутаций схемы, не проверяя повторные ключи и доменные правила.
 func decodeJSONInstance(t *testing.T, raw []byte) any {
 	t.Helper()
 	var instance any

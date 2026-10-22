@@ -20,6 +20,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// executorEnvironmentPod builds a sealed synthetic warm or turn input with
+// normalized disk/memory volumes and returns its generated Pod specification.
+// Values other than warm take the turn-input branch; this helper is not a mode
+// validator and neither creates a Pod nor runs an executor.
+// executorEnvironmentPod собирает закреплённый synthetic warm либо turn input
+// с нормализованными disk/memory volumes и возвращает спецификацию Pod.
+// Значения кроме warm выбирают turn-ветку; helper не проверяет mode,
+// не создаёт Pod и не запускает executor.
 func executorEnvironmentPod(t *testing.T, mode string) *corev1.Pod {
 	t.Helper()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -58,6 +66,14 @@ func executorEnvironmentPod(t *testing.T, mode string) *corev1.Pod {
 	return manager.runtimePod(input, binding, &credentials, "runtime-ticket-fixture", "fixture", mode)
 }
 
+// TestRuntimeExecutorUsesConfiguredResourcesAndSharedEnvironmentVolumes checks
+// provider-only configured resources, smaller driver/relay resources, exact shared
+// writable initializer/role/provider mounts and unchanged credential separation
+// on generated warm/turn Pod specifications, not live resource enforcement.
+// TestRuntimeExecutorUsesConfiguredResourcesAndSharedEnvironmentVolumes проверяет
+// configured resources лишь провайдера, меньшие ресурсы driver/relay, точные общие
+// writable mounts initializer/role/provider и разделение реквизитов в спецификациях
+// warm/turn Pod, не реальное применение resource limits.
 func TestRuntimeExecutorUsesConfiguredResourcesAndSharedEnvironmentVolumes(t *testing.T) {
 	for _, mode := range []string{"turn", "warm"} {
 		t.Run(mode, func(t *testing.T) {
@@ -92,6 +108,12 @@ func TestRuntimeExecutorUsesConfiguredResourcesAndSharedEnvironmentVolumes(t *te
 	}
 }
 
+// TestEnvironmentVolumeAdmissionRejectsAsymmetricAndAuthorityMounts evaluates
+// selected repository CEL rules against exact mounts and missing, aliased,
+// asymmetric, read-only or authority-container mutations of one generated Pod.
+// TestEnvironmentVolumeAdmissionRejectsAsymmetricAndAuthorityMounts проверяет
+// выбранные CEL-правила репозитория для точных mounts и мутаций отсутствия,
+// alias, асимметрии, read-only и передачи authority-контейнерам одного Pod.
 func TestEnvironmentVolumeAdmissionRejectsAsymmetricAndAuthorityMounts(t *testing.T) {
 	programs := runtimeAdmissionPrograms(t, "runtime environment volume mount path is outside the closed workspace catalog", "runtime environment volumes must have exact shared initializer driver and executor mounts")
 	pod := executorEnvironmentPod(t, "turn")
@@ -153,6 +175,12 @@ func TestEnvironmentVolumeAdmissionRejectsAsymmetricAndAuthorityMounts(t *testin
 	}
 }
 
+// TestRuntimeTransportAdmissionRejectsUnsafeOverrides checks selected CEL rules
+// on foreign CA/proxy bypass, duplicate proxy and unsupported TLS/proxy env
+// mutations; local expression results are not a deployed egress-policy proof.
+// TestRuntimeTransportAdmissionRejectsUnsafeOverrides проверяет выбранные CEL
+// для чужого CA, обхода proxy, его дубля и запрещённых TLS/proxy env;
+// локальный результат выражений не доказывает работу развёрнутой egress policy.
 func TestRuntimeTransportAdmissionRejectsUnsafeOverrides(t *testing.T) {
 	programs := runtimeAdmissionPrograms(t, "provider runtime server-owned environment is invalid", "provider runtime contains an unsupported environment variable")
 	for _, name := range []string{"exact", "foreignCA", "foreignBypass", "duplicateProxy", "GIT_SSL_NO_VERIFY", "NODE_TLS_REJECT_UNAUTHORIZED", "PYTHONHTTPSVERIFY", "CURL_SSL_BACKEND", "ALL_PROXY"} {
@@ -183,6 +211,14 @@ func TestRuntimeTransportAdmissionRejectsUnsafeOverrides(t *testing.T) {
 	}
 }
 
+// runtimeAdmissionPrograms reads repository admission YAML and compiles only
+// validations with the requested messages using object/variables and cost 100000.
+// It requires matching program/message counts, not uniqueness or full policy
+// installation, and fails the test on YAML/compile/program errors.
+// runtimeAdmissionPrograms читает admission YAML репозитория и компилирует только
+// проверки с заданными messages с object/variables и cost 100000. Требует равенства
+// числа programs и messages, не уникальности и не установки всей policy;
+// ошибка YAML, compile или Program завершает тест.
 func runtimeAdmissionPrograms(t *testing.T, messages ...string) []cel.Program {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml"))
@@ -223,6 +259,14 @@ func runtimeAdmissionPrograms(t *testing.T, messages ...string) []cel.Program {
 	return programs
 }
 
+// assertRuntimeAdmission projects a Pod into local CEL object/role/provider/all
+// bindings and compares combined results with the expected decision. Eval errors
+// count as rejection, so a negative case alone does not prove error-free execution
+// or actual API-server admission behavior.
+// assertRuntimeAdmission переводит Pod в локальные CEL object/role/provider/all
+// и сравнивает совокупный результат с ожидаемым. Ошибка Eval считается отказом,
+// поэтому один негативный кейс не доказывает отсутствие ошибок вычисления
+// и не подтверждает реальный admission API server.
 func assertRuntimeAdmission(t *testing.T, programs []cel.Program, candidate *corev1.Pod, expected bool) {
 	t.Helper()
 	object, err := k8sruntime.DefaultUnstructuredConverter.ToUnstructured(candidate)
