@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.256.0
+version: 1.257.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,65 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Двести пятьдесят седьмая волна — readback attestor
+
+Опубликованный SHA256 — `b6385e5b3f7f7d6104331c58dd325941a086bc87`.
+Точный ekkglo:6598 sources,222 excluded,1818 raw/610 retained/
+1208 unresolved; Go10857/21230, missing10373. Raw SHA256:
+`af05ecea3e5202718ba74d3979bbd663b1456bfa6d60bdf2d5f3303081a695ee`.
+Clone-set:
+`dfd12f7f57f53ad28407d6fe607498a62ec6b34d9a1fd89a68ffa06d9c3ae4e7`.
+Точные3 unit/build, push/readback и Draft PR PATCH/GET256 подтверждены.
+
+Прочитаны целиком readback.go656 строк и TTL unit32 строки, а также
+связанные ключевые helpers, repository port и точные trust/readiness adapters.
+Все25 declarations получили предметные EN→RU комментарии; дополнительно
+описаны2 локальные бюджетные constants. AST2 без комментариев и координат
+совпадает с SHA256: imports, bodies, fields, literals и error mapping
+не изменены. Новых libraries/API, dependencies, конфигурации или событий нет.
+
+Комментарии различают credential издателя и evidence ключа владения,
+peer-scoped authoritative intent/challenge, точные compact-envelope digests,
+semantic idempotency и durable one-time consumption. Случайно предложенный
+challenge не объявляется результатом до ответа store. Constructor не
+активирует watermark и не обращается к store; Ready требует активированное
+состояние и точное устойчивое подтверждение, не просто соединение с БД.
+ActivateTrust сначала продвигает durable state, затем меняет memory keys/state
+под mutex: ему не приписана единая транзакция между store и памятью.
+verifyCredential проверяет UUID JTI, bindEvidence — лишь непустой evidence
+JTI; отсутствие одинаковой проверки не скрыто описанием «проверяет всё».
+
+Матрица неизменного пути:
+
+| Операция | До устойчивого эффекта | Владелец результата |
+| --- | --- | --- |
+| ActivateTrust | Key-record purpose и shape served state | Store watermark перед memory swap |
+| IssueChallenge | IDs, trusted signed credential, peer-scoped intent, exact binding и semantic digest | IssueReadbackChallenge persist/rejoin |
+| Attest | Точный challenge/credential, possession signature, times, evidence bindings и digests | ConsumeReadbackChallenge и durable receipt |
+| Ready | Непустое activated memory state | ReadbackReady с exact expected state |
+
+TTL unit проверяет только строгие неравенства бюджетов, не измеряет
+доставку Kubernetes. Синтетические тесты домена/обёрток не выдаются за
+реальное подтверждение загруженного снимка или PostgreSQL transaction proof.
+В raw detector нет групп с затронутыми readback source paths; после
+комментариев весь clone-set fingerprint прежний. Registry не менялся.
+
+50 верхних/108 всех выбранных authority domain/application/publisher/
+snapshot/grpc unit cases и полный module build — PASS LOCAL,0 FAIL/SKIP.
+Go1.26.6, GOENV/GOWORK off, GOMAXPROCS=4, -mod=readonly/-count=1/
+-timeout120s.17 Node units, Go checker units, scope25/25, AST2, canonical
+scan/assessment,5 ignores, gofmt/diff-check PASS LOCAL. Full unit прочих
+packages, component, review, browser/live/deploy, модели/STT/почта NOT RUN
+по scope; прошлые FAIL не объявлены исправленными комментариями.
+
+Рабочий btsuSx:6598 sources,222 excluded,1818 raw/610 retained/
+1208 unresolved; Go10882/21230, missing10348. Raw SHA256:
+`22d3a0209bca30999f09e05e7366bd9c01aecf8b77cac2450e56cebce9e5060b`.
+Clone-set прежний:
+`dfd12f7f57f53ad28407d6fe607498a62ec6b34d9a1fd89a68ffa06d9c3ae4e7`.
+Exact post-commit отчёт публикуется в том же Draft PR. Общая задача
+не завершена до полного разбора unresolved и покрытия missing.
 
 ## Двести пятьдесят шестая волна — общая форма worker credential
 

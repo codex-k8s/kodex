@@ -17,19 +17,64 @@ import (
 )
 
 const (
-	readbackCredentialType        = "kodex-internal-rpc-readback-credential+jws"
-	readbackAttestationType       = "kodex-internal-rpc-readback-attestation+jws"
-	readbackCredentialPurpose     = "READBACK_CREDENTIAL"
-	readbackAudience              = "urn:kodex:internal-rpc-authority-readback-attestor"
-	readbackPublisherIssuer       = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
-	readbackCredentialTTL         = 5 * time.Minute
-	readbackChallengeTTL          = 30 * time.Second
-	readbackAllowedClockSkew      = 5 * time.Second
-	readbackChallengeFullMethod   = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge"
+	// readbackCredentialType pins the protected JWS typ for publisher-issued readback credentials,
+	// distinct from workload-signed evidence.
+	// readbackCredentialType закрепляет защищённый JWS typ выпущенных издателем readback credentials,
+	// отличный от свидетельства с подписью нагрузки.
+	readbackCredentialType = "kodex-internal-rpc-readback-credential+jws"
+	// readbackAttestationType pins the evidence JWS typ verified using the exact possession key from the
+	// signed credential, not the publisher's signing key.
+	// readbackAttestationType закрепляет JWS typ свидетельства, проверяемого точным ключом владения из
+	// подписанного credential, а не ключом издателя.
+	readbackAttestationType = "kodex-internal-rpc-readback-attestation+jws"
+	// readbackCredentialPurpose restricts accepted trust records to the readback credential role;
+	// credential purpose is separately bound to the resolved intent kind.
+	// readbackCredentialPurpose ограничивает принимаемые записи доверия ролью readback credential;
+	// назначение самого credential отдельно связывается с разрешённым видом намерения.
+	readbackCredentialPurpose = "READBACK_CREDENTIAL"
+	// readbackAudience pins the common attestor audience in credentials, challenge digests and evidence,
+	// without replacing peer or intent binding.
+	// readbackAudience закрепляет общую аудиторию attestor в credentials, хешах запросов и свидетельстве,
+	// не заменяя привязки стороны и намерения.
+	readbackAudience = "urn:kodex:internal-rpc-authority-readback-attestor"
+	// readbackPublisherIssuer is the exact expected publisher SPIFFE issuer for credentials; evidence
+	// instead binds its issuer to the observed peer.
+	// readbackPublisherIssuer — точный ожидаемый SPIFFE issuer издателя credentials; issuer свидетельства
+	// вместо этого связывается с наблюдаемой стороной.
+	readbackPublisherIssuer = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
+	// readbackCredentialTTL bounds credential validity checked by verifyCredential; it does not extend a
+	// persisted intent or challenge.
+	// readbackCredentialTTL ограничивает срок credential, проверяемый verifyCredential; срок сохранённого
+	// намерения или запроса не продлевает.
+	readbackCredentialTTL = 5 * time.Minute
+	// readbackChallengeTTL bounds newly issued challenges and accepted evidence lifetimes; durable
+	// one-time consumption remains the store's responsibility.
+	// readbackChallengeTTL ограничивает новые запросы и сроки принимаемых свидетельств; устойчивое
+	// одноразовое потребление остаётся обязанностью store.
+	readbackChallengeTTL = 30 * time.Second
+	// readbackAllowedClockSkew supplies the permitted time tolerance to credential and evidence
+	// validators, not a retry or lease extension.
+	// readbackAllowedClockSkew задаёт допустимое расхождение времени проверкам credential и свидетельства,
+	// не повтор или продление lease.
+	readbackAllowedClockSkew = 5 * time.Second
+	// readbackChallengeFullMethod binds challenge idempotency's semantic digest to its exact RPC, so a
+	// method name is not omitted from the hashed request.
+	// readbackChallengeFullMethod включает точный RPC в смысловой хеш идемпотентности запроса, не оставляя
+	// имя метода за пределами хешируемого ввода.
+	readbackChallengeFullMethod = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge"
+	// readbackAttestationFullMethod separates attestation-consumption semantic digests from challenge
+	// issuance, alongside exact challenge, credential and evidence digests.
+	// readbackAttestationFullMethod отличает смысловой хеш потребления свидетельства от выпуска запроса
+	// вместе с точными хешами challenge, credential и evidence.
 	readbackAttestationFullMethod = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState"
 )
 
-// ReadbackAttestor независимо подтверждает фактически обслуживаемый снимок.
+// ReadbackAttestor verifies independently signed credentials and possession evidence using a locked
+// trust view and a durable peer-scoped challenge store. Its in-memory map is not the replay or
+// rollback boundary.
+// ReadbackAttestor проверяет независимо подписанные credentials и свидетельство владения с защищённой
+// блокировкой картой доверия и устойчивым store запросов в области стороны. Карта в памяти не является
+// границей повторов или откатов.
 type ReadbackAttestor struct {
 	mu                 sync.RWMutex
 	trust              map[string]VerificationKeyRecord
@@ -39,8 +84,12 @@ type ReadbackAttestor struct {
 	now                func() time.Time
 }
 
-// ActivateTrust атомарно сохраняет forward-only watermark до замены
-// фактически используемого набора ключей.
+// ActivateTrust validates key records and served-state shape, advances the store's forward-only trust
+// watermark, then replaces the public-key view and state together under the mutex. Durable acceptance
+// precedes the in-memory swap; they are not one cross-store transaction.
+// ActivateTrust проверяет записи ключей и форму served state, продвигает устойчивый watermark доверия,
+// затем вместе заменяет публичные ключи и состояние под mutex. Устойчивое принятие предшествует замене
+// в памяти; общей транзакцией между ними это не является.
 func (attestor *ReadbackAttestor) ActivateTrust(
 	ctx context.Context,
 	trust map[string]VerificationKeyRecord,
@@ -79,24 +128,38 @@ func (attestor *ReadbackAttestor) ActivateTrust(
 	return nil
 }
 
-// TrustState возвращает копию фактически обслуживаемого durable state.
+// TrustState returns a value copy of the in-memory served trust state under a read lock, without
+// rereading or proving current durable readiness.
+// TrustState возвращает копию обслуживаемого состояния доверия из памяти под read lock, не перечитывая
+// и не доказывая текущую устойчивую готовность.
 func (attestor *ReadbackAttestor) TrustState() model.ReadbackTrustState {
 	attestor.mu.RLock()
 	defer attestor.mu.RUnlock()
 	return attestor.trustState
 }
 
-// ReadbackChallengeResult содержит созданный сервером одноразовый запрос.
+// ReadbackChallengeResult carries the store-returned authoritative challenge after issuance or
+// idempotent rejoin, rather than the unpersisted random proposal alone.
+// ReadbackChallengeResult несёт возвращённый store авторитетный запрос после выпуска либо
+// идемпотентного повторного получения, а не только ещё не сохранённое случайное предложение.
 type ReadbackChallengeResult struct {
 	Challenge model.ReadbackChallenge
 }
 
-// ReadbackAttestationResult содержит неизменяемое подтверждение проверки.
+// ReadbackAttestationResult carries the durable consumption receipt returned by the store; possession
+// verification alone does not create this result.
+// ReadbackAttestationResult несёт возвращённое store устойчивое подтверждение потребления; одной
+// проверки владения для этого результата недостаточно.
 type ReadbackAttestationResult struct {
 	Receipt model.ReadbackReceipt
 }
 
-// NewReadbackAttestor создаёт проверяющий сервис из отдельного набора доверия.
+// NewReadbackAttestor requires nonempty readback-purpose public trust, a store and verifier
+// generation, copies public records/audiences and installs the clock. It leaves served trust
+// unactivated; it does not persist a watermark or contact the store.
+// NewReadbackAttestor требует непустое публичное доверие readback, store и поколение verifier,
+// копирует публичные записи с аудиториями и задаёт часы. Обслуживаемое доверие остаётся
+// неактивированным; watermark не сохраняется и вызова store нет.
 func NewReadbackAttestor(
 	trust map[string]VerificationKeyRecord,
 	store repository.ReadbackStore,
@@ -116,7 +179,14 @@ func NewReadbackAttestor(
 	}, nil
 }
 
-// IssueChallenge создаёт устойчивый одноразовый запрос для закреплённого намерения.
+// IssueChallenge validates request IDs, verifies the signed credential and resolves the intent inside
+// the peer boundary before exact binding. It hashes method/credential/intent semantics, generates
+// UUIDs and a random nonce, then lets the store persist or rejoin one bounded challenge; random
+// proposals alone are not the returned authority.
+// IssueChallenge проверяет ID запроса и подписанный credential, разрешает намерение внутри области
+// стороны и проверяет точные привязки. Хеширует смысл метода, credential и намерения, создаёт UUID и
+// случайный nonce, затем передаёт store сохранение либо повторное получение ограниченного запроса;
+// сами случайные предложения не становятся возвращаемым авторитетным состоянием.
 func (attestor *ReadbackAttestor) IssueChallenge(
 	ctx context.Context,
 	peerSPIFFEID string,
@@ -274,7 +344,14 @@ func (attestor *ReadbackAttestor) IssueChallenge(
 	return ReadbackChallengeResult{Challenge: challenge}, nil
 }
 
-// Attest проверяет владение ключом и атомарно фиксирует подтверждение.
+// Attest verifies a credential against the peer-scoped stored challenge, proves possession through its
+// exact public key, validates evidence time/bindings and hashes exact compact evidence plus request
+// semantics. Only the store consumes the challenge and returns a durable receipt under
+// idempotency/replay rules.
+// Attest проверяет credential против сохранённого запроса в области стороны, доказывает владение
+// точным публичным ключом, проверяет сроки и привязки свидетельства и хеширует точный compact evidence
+// со смыслом запроса. Только store потребляет запрос и возвращает устойчивый receipt по правилам
+// идемпотентности и защиты от повторов.
 func (attestor *ReadbackAttestor) Attest(
 	ctx context.Context,
 	peerSPIFFEID string,
@@ -439,7 +516,10 @@ func (attestor *ReadbackAttestor) Attest(
 	return ReadbackAttestationResult{Receipt: receipt}, nil
 }
 
-// Ready подтверждает доступность устойчивого хранилища проверок.
+// Ready rejects an unactivated in-memory trust state and asks the store to verify that exact served
+// state against durable readiness; mere database reachability is insufficient.
+// Ready отклоняет неактивированное состояние доверия в памяти и просит store сверить точное served
+// state с устойчивой готовностью; одной доступности БД недостаточно.
 func (attestor *ReadbackAttestor) Ready(ctx context.Context) error {
 	state := attestor.TrustState()
 	if state.ServedStateDigestSHA256 == "" {
@@ -458,6 +538,14 @@ func (attestor *ReadbackAttestor) Ready(ctx context.Context) error {
 	return nil
 }
 
+// verifyCredential selects a trusted key from the protected header, verifies canonical JWS and strict
+// claims, then checks time, contract, fixed issuer/audience, current key purpose/generation/lifetime
+// and UUID JTI. It returns the exact compact-envelope SHA-256; intent/peer binding and replay
+// acceptance happen separately.
+// verifyCredential выбирает доверенный ключ по защищённому заголовку, проверяет канонический JWS и
+// строгие claims, затем сроки, контракт, фиксированные issuer/audience, назначение, поколение и срок
+// CURRENT ключа и UUID JTI. Возвращает SHA-256 точного compact-конверта; привязки намерения и стороны
+// и принятие без повтора выполняются отдельно.
 func (attestor *ReadbackAttestor) verifyCredential(
 	compact string,
 ) (model.ReadbackCredentialClaims, string, error) {
@@ -539,6 +627,12 @@ func (attestor *ReadbackAttestor) verifyCredential(
 	return claims, hex.EncodeToString(digest[:]), nil
 }
 
+// bindCredentialToIntent binds credential subject/purpose, exact intent revision/digest,
+// workload/peer/role/generations and possession-key metadata to the resolved intent, verifying the
+// public-key thumbprint. It does not load, consume or extend that intent.
+// bindCredentialToIntent связывает субъект и назначение credential, точные ревизию и хеш намерения,
+// нагрузку, сторону, роль, поколения и метаданные ключа владения с разрешённым намерением, проверяя
+// отпечаток публичного ключа. Намерение не загружает, не потребляет и не продлевает.
 func bindCredentialToIntent(
 	credential model.ReadbackCredentialClaims,
 	intent model.ReadbackIntent,
@@ -591,6 +685,14 @@ func bindCredentialToIntent(
 	return nil
 }
 
+// bindEvidence compares evidence contract/peer/subject/purpose, intent and credential bindings,
+// possession metadata, served revision/digest and exact challenge ID/JTI/nonce/digest. It requires a
+// nonempty evidence JTI, not UUID syntax; signature, time and durable consumption are separate
+// caller/store checks.
+// bindEvidence сравнивает контракт, сторону, субъект и назначение свидетельства, привязки намерения и
+// credential, метаданные владения, обслуживаемые ревизию и хеш и точные ID, JTI, nonce и хеш запроса.
+// Требует непустой JTI свидетельства, не синтаксис UUID; подпись, сроки и устойчивое потребление
+// проверяются отдельно вызывающим и store.
 func bindEvidence(
 	evidence model.ReadbackAttestationClaims,
 	credential model.ReadbackCredentialClaims,
@@ -632,6 +734,11 @@ func bindEvidence(
 	return nil
 }
 
+// mapReadbackStoreFailure maps missing state, idempotency/replay and expiry to closed domain failures;
+// unknown store errors become persistence-unavailable while retaining their cause.
+// mapReadbackStoreFailure переводит отсутствие состояния, конфликт идемпотентности, повтор и истечение
+// в закрытые доменные ошибки; неизвестная ошибка store становится persistence-unavailable с
+// сохранением причины.
 func mapReadbackStoreFailure(message string, err error) error {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
@@ -647,6 +754,10 @@ func mapReadbackStoreFailure(message string, err error) error {
 	}
 }
 
+// randomNonce reads 32 cryptographically random bytes and returns unpadded URL-safe Base64,
+// propagating entropy-source failure rather than creating a fallback nonce.
+// randomNonce читает 32 криптографически случайных байта и возвращает URL-safe Base64 без padding,
+// передавая ошибку источника энтропии вместо запасного nonce.
 func randomNonce() (string, error) {
 	var value [32]byte
 	if _, err := rand.Read(value[:]); err != nil {
