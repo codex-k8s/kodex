@@ -9,6 +9,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestSessionPVCAcceptsCanonicalRestoreMetadataAndRejectsForeignOwner checks
+// canonical archive-style PVC metadata is adoptable with or without a project,
+// but changing organization fails. It does not restore archive bytes or validate
+// the synthetic restore-task digest beyond the metadata consumer's rules.
+// TestSessionPVCAcceptsCanonicalRestoreMetadataAndRejectsForeignOwner проверяет
+// принятие PVC с каноническими archive-метаданными с проектом и без него,
+// но отказ при смене организации. Архивные байты не восстанавливаются,
+// синтетический task digest не проверяется сверх правил metadata consumer.
 func TestSessionPVCAcceptsCanonicalRestoreMetadataAndRejectsForeignOwner(t *testing.T) {
 	for _, projectRef := range []string{"", "prj_abcdefgh"} {
 		t.Run(projectRef, func(t *testing.T) {

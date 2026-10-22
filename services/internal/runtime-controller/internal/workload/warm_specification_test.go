@@ -10,6 +10,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestWarmSpecificationPreservesProvisioningAndReadyPod repeatedly reconciles
+// an unchanged warm specification with synthetic readiness states and preserves
+// its UID, then requires deletion after resealing a changed instruction/revision.
+// It does not check that the synthetic readiness means a functioning provider.
+// TestWarmSpecificationPreservesProvisioningAndReadyPod повторно согласует
+// неизменную warm-спецификацию с синтетической readiness и сохраняет UID,
+// затем требует удаления после перепривязки изменённых инструкции и ревизии.
+// Синтетическая readiness не считается доказательством работы провайдера.
 func TestWarmSpecificationPreservesProvisioningAndReadyPod(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()

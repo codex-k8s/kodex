@@ -10,6 +10,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestProjectAssistantMaterializesOnlyPinnedProjectTurn seals a project profile,
+// checks its exact cold Pod and refusal of organization warm input, then mutates
+// profile/project/scope without resealing and requires controller rejection.
+// Fake materialization is not an independent owner-authorization proof.
+// TestProjectAssistantMaterializesOnlyPinnedProjectTurn закрепляет профиль
+// проекта, проверяет точный cold Pod и отказ organization warm input, затем
+// меняет profile/project/scope без перепривязки и требует отказа controller.
+// Fake-материализация не является отдельным доказательством owner authorization.
 func TestProjectAssistantMaterializesOnlyPinnedProjectTurn(t *testing.T) {
 	api := fake.NewSimpleClientset()
 	manager := newTestManager(t, api)

@@ -9,6 +9,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestEnsureTurnGuardDenialDoesNotPublishPod injects a denying publication guard,
+// requires its original error and checks no Pod-create action reached the fake
+// client; it does not claim that earlier preparation created no other resources.
+// TestEnsureTurnGuardDenialDoesNotPublishPod задаёт отказ publication guard,
+// требует исходную ошибку и отсутствие Pod-create у fake-клиента,
+// не утверждая, что подготовка не создала никаких иных ресурсов.
 func TestEnsureTurnGuardDenialDoesNotPublishPod(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -28,6 +34,12 @@ func TestEnsureTurnGuardDenialDoesNotPublishPod(t *testing.T) {
 	}
 }
 
+// TestEnsureTurnGuardUsesCancellablePublicationContext invokes the guard once
+// with an active or canceled derived context, requiring exactly one Pod only
+// for the active path and context.Canceled without publication otherwise.
+// TestEnsureTurnGuardUsesCancellablePublicationContext вызывает guard один раз
+// с активным либо отменённым производным контекстом, требуя один Pod лишь
+// в активной ветке и context.Canceled без публикации в отменённой.
 func TestEnsureTurnGuardUsesCancellablePublicationContext(t *testing.T) {
 	for _, cancelled := range []bool{false, true} {
 		t.Run(map[bool]string{false: "active", true: "cancelled"}[cancelled], func(t *testing.T) {

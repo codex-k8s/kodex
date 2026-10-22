@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.192.0
+version: 1.193.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,46 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто девяносто третья волна — завершены комментарии workload
+
+На точном запушенном SHA `40cb65b48af5067b879d44a4dbe9020b9076bfb5`
+волны192 workload84 верхних/300 всех PASS,0 FAIL,1 прежний wire SKIP;
+полный runtime-controller build PASS. Exact l6i0b2 подтвердил6575 sources,
+222 excluded,1840 raw,582 retained,1258 unresolved; Go7021/21141,
+missing14120; raw SHA256
+`17ec2802c1aeeefbe2a3de15c3b28e06311951e73e0bb4b119e552dcb4694880`,
+clone-set `d8014d294a06609222907c801d6abe4f1077236fd3a56ad5f58405a8d13bc93b`.
+
+Полностью прочитаны оставшиеся13 файлов и предметно описаны17 объявлений
+workload tests. Весь пакет production+tests теперь проходит scoped checker:
+28 файлов,315/315 EN→RU,missing0. Разделены sequential fake materialization
+десяти сессий и реальные параллельные ходы, object isolation и live sandbox,
+синтетические health/context pins и реальный MCP probe, текущий OOMKilled
+и exit137/прошлый OOM. Stop-тест проверяет сохранение callback ticket до
+DeleteTurn, не выдавая fake readback за durable owner receipt.
+
+Пояснены owner-produced optional wire без локального reseal, общая CP fixture
+с неизменным expected digest, project-profile отказ и publication fence,
+restore metadata отдельно от archive bytes, voluntary drain отдельно от
+leadership loss, local trusted-policy render/CEL отдельно от live защиты
+кластера. Eval error считается отказом и не скрывается как доказательство
+безошибочного вычисления. Весь исполняемый текст13 файлов после удаления
+comments/gofmt идентичен родителю; inputs,тайминги,asserts,SKIP guards,
+runtime,generated,dependencies и deploy не менялись.
+
+Локально workload84 верхних/300 всех PASS,0 FAIL,1 прежний SKIP
+TestAssistantWarmRuntimeOwnerWireBuild (producer-dependent wire NOT RUN).
+Полный runtime-controller build-mod=readonly,16 unit анализатора,
+unit Go-checker,scoped всего workload315/315,5 ignore-boundaries,
+diff-check PASS LOCAL; Go1.26.6,GOENV=off/GOWORK=off.
+Рабочий CpIJOz:6575 sources,222 excluded,1840 raw,582 retained,
+1258 unresolved; Go7038/21141,missing14103. Raw SHA256
+`423ef2658b4c4adba141493357053fdc7831e4d7e45709b837777b85acecfe1e`,
+clone-set неизменен. Новых выносов/исключений нет; в этих13 файлах
+нет unresolved detector groups. Точный опубликованный SHA и повтор
+build/unit/scan фиксируются в текущем Draft PR. Общая задача не завершена;
+полный repo -check,component/live,browser/deploy,агенты/STT/почта NOT RUN.
 
 ## Сто девяносто вторая волна — runner schema и границы окружения
 

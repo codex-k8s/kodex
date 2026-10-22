@@ -14,6 +14,14 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestManagedMCPAddCatalogPreservesOwnerPinsAndTypedHealth builds synthetic
+// typed grant/profile/health pins, checks their catalog projection and rejects
+// changed versions, scope, approval or missing/invalid timestamps. It performs
+// no external MCP discovery, health probe or credential validation.
+// TestManagedMCPAddCatalogPreservesOwnerPinsAndTypedHealth собирает синтетические
+// типизированные grant/profile/health pins, проверяет их проекцию и отвергает
+// подмену версий, scope, approval и отсутствие/ошибку timestamps. Реальных MCP
+// discovery, health probe и проверки реквизитов не выполняет.
 func TestManagedMCPAddCatalogPreservesOwnerPinsAndTypedHealth(t *testing.T) {
 	input := runtimecontract.RunnerInput{AgentRef: "agt_agent001", ProjectRef: "prj_project01", AssistantScope: runtimecontract.AssistantScopeNone}
 	grants := []runtimecontract.RunnerIntegrationGrant{}

@@ -11,8 +11,14 @@ import (
 	"testing"
 )
 
-// Та же полная fixture проверяется owner digest и настоящим CP caster;
-// controller не пересчитывает ей expected digest через sealTestTurnExecution.
+// TestRuntimeGrantSnapshotBuildTurnInput reads the shared complete CP fixture,
+// roundtrips protobuf without recomputing its expected owner digest and checks
+// controller bindings. Mutated grants, capabilities, image, environment,
+// credential source and revision digest must fail; no real grant is issued.
+// TestRuntimeGrantSnapshotBuildTurnInput читает общую полную CP fixture,
+// переводит protobuf без пересчёта ожидаемого owner digest и проверяет привязки
+// controller. Изменённые grants, capabilities, образ, окружение, источник
+// реквизитов и digest отвергаются; реальный grant не выдаётся.
 func TestRuntimeGrantSnapshotBuildTurnInput(t *testing.T) {
 	raw, err := os.ReadFile("../../../control-plane/testdata/runtime-snapshot/claim.json")
 	if err != nil {

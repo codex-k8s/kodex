@@ -12,6 +12,14 @@ import (
 	ktesting "k8s.io/client-go/testing"
 )
 
+// TestStopTurnPreservesCallbackAuthorityUntilDurableCleanup checks a 150-second
+// Pod grace budget, Pod-only Stop deletion and callback-ticket resolution until
+// explicit DeleteTurn removes it. Fake readback is not proof of a durable owner
+// completion receipt or successful live container shutdown.
+// TestStopTurnPreservesCallbackAuthorityUntilDurableCleanup проверяет grace
+// 150 секунд, удаление лишь Pod при Stop и доступность callback ticket до явного
+// DeleteTurn. Fake readback не доказывает durable owner receipt завершения
+// или успешную остановку реальных контейнеров.
 func TestStopTurnPreservesCallbackAuthorityUntilDurableCleanup(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -59,6 +67,14 @@ func TestStopTurnPreservesCallbackAuthorityUntilDurableCleanup(t *testing.T) {
 	}
 }
 
+// TestLeadershipRemainsHeldUntilVoluntaryDrainCompletes coordinates a worker's
+// voluntary cancellation and drain using channels, checking the fake Lease stays
+// held until join and is then released. It does not simulate a real competing
+// controller or API-server lease persistence.
+// TestLeadershipRemainsHeldUntilVoluntaryDrainCompletes через каналы согласует
+// добровольную отмену и drain worker, проверяя удержание fake Lease до join
+// и освобождение после него. Реальный конкурентный controller и устойчивое
+// хранение lease в API server не моделируются.
 func TestLeadershipRemainsHeldUntilVoluntaryDrainCompletes(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -103,6 +119,12 @@ func TestLeadershipRemainsHeldUntilVoluntaryDrainCompletes(t *testing.T) {
 	}
 }
 
+// TestLeadershipLossIsDistinctFromVoluntaryShutdown cancels the leadership
+// context before running the worker and requires the closed ErrLeadershipLost
+// cause rather than conflating leadership loss with normal lifecycle shutdown.
+// TestLeadershipLossIsDistinctFromVoluntaryShutdown отменяет leadership context
+// до worker и требует закрытую причину ErrLeadershipLost, не смешивая
+// потерю лидерства с обычной остановкой lifecycle.
 func TestLeadershipLossIsDistinctFromVoluntaryShutdown(t *testing.T) {
 	leadership, cancel := context.WithCancel(t.Context())
 	cancel()
