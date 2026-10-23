@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.325.0
+version: 1.326.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,55 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцать шестая волна — SQL конфигурации и планов помощника
+
+Предыдущий опубликованный SHA — `8fad208cda9a4bd9216386ba4582287fb147ff15`.
+Exact P6XfGT:6645 собственных файлов,222 исключения;1799 raw/750 retained/
+1049 unresolved; Go14435/21315,missing6880. PR1824 остаётся единственным Draft,
+Issue1823 open. Основной клон не менялся.
+
+Прочитаны все75 исходных SQL, связанных с queries_configuration.go.
+Все75 Go-привязок получили предметные английские комментарии с немедленным
+русским переводом. Идентификаторы, исполняемые выражения, порядок объявлений,
+75 директив go:embed и байты всех75 SQL неизменны; AST всего Go-файла совпал.
+SQL-set SHA-256 по точным путям и содержимому:
+`5172bd0ea771cfca1cb5a955f67a214767139273d29b7628c098adb7e1ac217f`.
+
+| Семейство | Что описано по фактическому SQL | Чего это не доказывает |
+| --- | --- | --- |
+| расписания | immutable revision/target pins, lifecycle/OCC, включение, отмена ожидающих экземпляров | provider claim и выполнение расписания |
+| подключения и grants | разные definition readiness/enabled guards, metadata-only credentials, UNKNOWN_OUTCOME dependencies, отдельные grant/version writes | доступность секрета, успешное соединение, право автора |
+| диалоги и ходы | разные conversation/session locks, QUEUED turn/node, fallback лишь исходного заголовка, отдельный RUNNING run | резерв слота, запуск провайдера, глобальная сериализация |
+| планы | draft/revision/validation/receipt/reject/apply, exact state predicates и ID-only writes после owner checks | одобрение по одному наличию строки либо APPLIED statement |
+| перенос в проект | owner-bound session/conversation и server context projection, явная граница NULL-project propagation | перепривязка уже назначенных проектов или новая выдача grants |
+| runtime | проверка heartbeat45s/revision либо запись RECOVERING, отдельное чтение конфигурации | живая готовность runtime или завершённое восстановление |
+
+Комментарии явно отличают SQL predicate от обязанностей вызывающей owner
+транзакции; метаданные и возвращённая строка не объявляются authority.
+Для promote storage описаны именно перечисленные таблицы и NULL-привязки,
+не выдуманная универсальная защита всех ресурсов. Никакие SQL/lifecycle
+дефекты этой волной не исправлялись.
+
+Шесть выбранных hermetic platform unit и полный build control-plane -p=2 —
+PASS LOCAL,0 FAIL/SKIP. Список и команда прежние как в325; это не все unit
+пакета и не PostgreSQL component. 17 Node unit, Go checker unit, полная
+проверка AST1/75 directives/75 SQL bytes, scope75/75,5 addressed ignores,
+gofmt/diff-check — PASS LOCAL. DB/component, browser/deploy/live/model/
+mail/STT/full acceptance — NOT RUN по заданной границе. Historical FAIL и
+finding293 остаются открытыми. Отдельная диагностическая команда чтения
+отчёта сначала обратилась к числовому unresolvedGroups как к массиву;
+исправлена на проверенную схему, product/scanner/unit от этого не падали.
+
+Все1799 нормализованных clone keys/counts прежние: комментарии конфигурации
+не изменили fragment hashes. Два declaration-окна с command catalog уже
+адресно разобраны в325; новых exclusions или решений нет. Сам SQL не исключён.
+Registry632 entries/750 occurrences;1049 unresolved. Полный -check ещё
+не пройден. Go14510/21315,missing6805: gateway789 и control-plane6016.
+Raw report меняет координаты строк, не алгоритмы. Точный canonical scan и
+build/unit повторяются на commit SHA и публикуются текущим разделом PR.
+Generated/contracts/dependencies/migrations/live state неизменны; цель active,
+не готова к приёмке; merge/ready/owner approve не выполняются.
 
 ## Триста двадцать пятая волна — полный каталог SQL команд
 
