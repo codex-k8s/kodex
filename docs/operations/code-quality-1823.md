@@ -4,11 +4,39 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.339.0
+version: 1.340.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 340 — возобновление после демонстрации 23.10.2026
+
+Baseline возобновления на `ac55ad7475567779ce5004f4cde0add008442597`:
+6647 own files, 222 generated/lockfile исключения, 1795 raw clone groups,
+763 точных решения, 1032 неразобранных; Go 15031/21320, непокрыты 6289.
+
+Четыре обработчика attachment-set используют существующий
+`decodeMutationBody`: порядок body → mutation и отдельные typed owner RPC
+сохранены. В этих обработчиках и transport session-archive добавлены
+19 предметных EN→RU комментариев. Разобраны 10 оставшихся окон транспортного
+glue: точные method/command/response types остаются явными; общие helpers уже
+выделены. Исключения привязаны к content hash, паре путей и count; широких
+исключений либо изменения порогов нет.
+
+Замер рабочего дерева после изменений: **1791 raw, 773 retained,
+1018 unresolved; Go 15050/21320, missing 6270**. Clone-set SHA256:
+`1ce4c7c1b833d49550f89e6f586ebacd3e37ca5b5961d852447d3b822292be5b`.
+PASS LOCAL: unit `control-api-gateway/internal/transport/http` и
+`control-plane/internal/transport/grpc`, build обоих модулей,
+assess-clones tests, адресные ignore guards, gofmt и diff-check.
+Общий Go -check, полный финальный build/unit и оставшиеся группы ещё открыты.
+Полная приёмка, deploy и реальные ИИ-запуски не выполнялись.
+
+Функциональные дефекты демонстрации собраны отдельно в существующем PR #1827:
+журнал `docs/operations/retry-child-graph-1826.md` в его ветке. Исправление
+графа доставлено; новый файловый runner ещё не доставлен. Их нельзя считать
+частью измеренного source SHA данного рефакторинга до явной интеграции веток.
 
 ## Передача состояния перед подготовкой показа 23.10.2026
 

@@ -5144,6 +5144,86 @@
       "fragmentSHA256": "ae8b7362857643041c627bdf4f8e8be08758dbbde754652089d5ab39e7604514",
       "count": 1,
       "reason": "Перекрывающееся окно Archive/Restore/Purge SkillBundle повторяет форму трёх коротких transport wrappers вокруг общего execute и castSkillBundle. У переходов разные command kinds и lifecycle semantics, включая необратимый Purge; общий dispatcher не устранил бы бизнес-копию, но скрыл бы точные owner methods. Исключены только этот hash и два exact пути с count1; остальные группы остаются видимыми."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/attachment_set_endpoints.go",
+      "fragmentSHA256": "b477298c556952965db3e41e4037f5212376fc1c8ac8f67753ce7913499e89d3",
+      "count": 1,
+      "reason": "Повторное окно пересекает завершение предыдущего обработчика и разные create RPC: AccessBinding и OrganizationAttachmentSetDraft. Общий разбор тела и mutation уже вынесен в decodeMutationBody, а writeMessage и writeRPCProblem общие. Оставшиеся nominal requests и subject/role либо purpose/artifact fields принадлежат разным владельцам; объединение в универсальный mutation dispatcher скроет эту связь ради короткого glue."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "434f6a5f5a86aae7cd2f680a44a17d0e78155b58cdd15edeb770c69876814c15",
+      "count": 1,
+      "reason": "Сходны RenewScheduleOccurrence и RenewSessionArchiveTask: обе операции используют principal, transportError и castLease, которые уже общие. Однако exact FullMethodName, команда OccurrenceInput либо SessionArchiveTaskInput, domain service method и объект lease различаются. Обобщённый callback ради нескольких строк скроет authority и тип агрегата; оставлено только точное окно двух transport adapters."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_revision_diff.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "2b867c26fff16f9865464fe8559e532d8e6d2d7f3305564f67958f72a8bb4ee1",
+      "count": 1,
+      "reason": "Окно совпадения включает imports и начало разных RPC GetRuntimeRevisionDiff и ClaimSessionArchiveTasks: principal и обработка ошибки общие, затем расходятся read-only diff и state-changing claim задач. Нового самостоятельного алгоритма тут нет; универсальный dispatcher связал бы разные полномочия и lifecycle без полезного сокращения. Исключается точное окно, не проверки или целые handlers."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secret_drafts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "0ad0827c54365f56c0ea9893e1e603f30ddbd3d02151ba1c38cc553a03adc19e",
+      "count": 1,
+      "reason": "Окно проходит через окончание преобразования списка secret-draft recovery и начало CompleteRuntimeSecretDraftOperation, сопоставленные с окончанием archive claim и началом renew. Это соседство boilerplate return/principal, а не общий переход. CastDraftWork/castSessionArchiveTask и методы владельцев различны; общий principal уже вынесен. Исключено лишь это пересекающее функции окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "b783c08d624bca2c795a50139bb4d3291630807dd5ee5de5dad49cc6483354c3",
+      "count": 1,
+      "reason": "Окно начинается в хвосте map secret revision descriptors и переходит к CompleteRuntimeSecretOperation; парой служит хвост archive claim и начало lease renew. Общими являются return и вызов principal, а работа с secret claimant/materialization и archive fence/generation разная. Объединение не выражает один алгоритм и скрывает exact RPC/owner boundary; сохраняется точная пара окон."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "27cd0b21d3c771cd4330db50ffc3383f9ca2e64fb37c716510f968c0f97d84d1",
+      "count": 1,
+      "reason": "Сопоставлены snapshot и object deletion: формат/digest/размеры снимка не эквивалентны key/version удаления. Общий алгоритм archive completion уже вынесен в executeSessionArchive, lease tuple — в sessionArchiveLeaseInput. Остались конкретные generated response types, exact FullMethodName и command.Kind, которые намеренно видны рядом с конкретными payload fields. Универсальное конструирование ответов потребовало бы reflection или callback только ради четырёх присваиваний и ухудшило бы прослеживаемость переходов. Исключение относится только к этому точному фрагменту и паре путей."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "87ccc796504746b7d579fddcf09b5c6787f5de5c1bc8813c0112c06466908548",
+      "count": 1,
+      "reason": "Сопоставлены snapshot и restore: restoredSourceSha256 и restoredSourceSizeBytes должны оставаться явными. Общий алгоритм archive completion уже вынесен в executeSessionArchive, lease tuple — в sessionArchiveLeaseInput. Остались конкретные generated response types, exact FullMethodName и command.Kind, которые намеренно видны рядом с конкретными payload fields. Универсальное конструирование ответов потребовало бы reflection или callback только ради четырёх присваиваний и ухудшило бы прослеживаемость переходов. Исключение относится только к этому точному фрагменту и паре путей."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "84295b54816bf51331675547bd22beae1f0a9315986c54b988ff7f05960987cd",
+      "count": 1,
+      "reason": "Сопоставлены snapshot и PVC deletion с разными источниками object metadata и PVCName. Общий алгоритм archive completion уже вынесен в executeSessionArchive, lease tuple — в sessionArchiveLeaseInput. Остались конкретные generated response types, exact FullMethodName и command.Kind, которые намеренно видны рядом с конкретными payload fields. Универсальное конструирование ответов потребовало бы reflection или callback только ради четырёх присваиваний и ухудшило бы прослеживаемость переходов. Исключение относится только к этому точному фрагменту и паре путей."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "b681d473de9adea0af25ad0a352ac3d53b9cf53a106fa5e1bd82c71bb4e8aa2a",
+      "count": 1,
+      "reason": "Окно проходит границы restore/PVC deletion и повторяет typed result envelopes, не объединяя storage-операции. Общий алгоритм archive completion уже вынесен в executeSessionArchive, lease tuple — в sessionArchiveLeaseInput. Остались конкретные generated response types, exact FullMethodName и command.Kind, которые намеренно видны рядом с конкретными payload fields. Универсальное конструирование ответов потребовало бы reflection или callback только ради четырёх присваиваний и ухудшило бы прослеживаемость переходов. Исключение относится только к этому точному фрагменту и паре путей."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
+      "fragmentSHA256": "45728137393f75c93c1a6a7efcc38c2d0a1d52baafcbbd67301b776a3e673a6e",
+      "count": 1,
+      "reason": "Сопоставлены хвост restore/PVC deletion и object deletion/failure, где SafeErrorCode является отдельным входом. Общий алгоритм archive completion уже вынесен в executeSessionArchive, lease tuple — в sessionArchiveLeaseInput. Остались конкретные generated response types, exact FullMethodName и command.Kind, которые намеренно видны рядом с конкретными payload fields. Универсальное конструирование ответов потребовало бы reflection или callback только ради четырёх присваиваний и ухудшило бы прослеживаемость переходов. Исключение относится только к этому точному фрагменту и паре путей."
     }
   ]
 }
