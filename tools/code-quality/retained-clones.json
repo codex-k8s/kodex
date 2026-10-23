@@ -5224,6 +5224,14 @@
       "fragmentSHA256": "45728137393f75c93c1a6a7efcc38c2d0a1d52baafcbbd67301b776a3e673a6e",
       "count": 1,
       "reason": "Сопоставлены хвост restore/PVC deletion и object deletion/failure, где SafeErrorCode является отдельным входом. Общий алгоритм archive completion уже вынесен в executeSessionArchive, lease tuple — в sessionArchiveLeaseInput. Остались конкретные generated response types, exact FullMethodName и command.Kind, которые намеренно видны рядом с конкретными payload fields. Универсальное конструирование ответов потребовало бы reflection или callback только ради четырёх присваиваний и ухудшило бы прослеживаемость переходов. Исключение относится только к этому точному фрагменту и паре путей."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/roleimage/service.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/roleimage/service.go",
+      "fragmentSHA256": "3c24bcae72a6b4b95a36a43b0f5286fa09b576089c2cd99a50b8ae44db84ff97",
+      "count": 1,
+      "reason": "Окно сопоставляет окончание AuthorizePromotion и начало CompletePromotion с повтором resolvePrincipal/authorizeKey и typed error return. Сами guards уже общие; оставшиеся permission, PromotionClaim либо AuthorizationToken, проверка promoted reference/readback и repository transitions различны. Универсальный helper с callback скрыл бы разницу разрешения публикации и фиксации её результата ради короткого glue. Сохраняется только эта точная внутрефайловая пара/hash/count, не lifecycle guard и не весь сервис."
     }
   ]
 }

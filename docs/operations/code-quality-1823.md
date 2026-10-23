@@ -4,11 +4,36 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.340.0
+version: 1.341.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 341 — границы сервиса рецептов образов
+
+Прочитан и подробно описан основной `roleimage/service.go`: 69 ранее
+непокрытых объявлений — permissions, regex, зависимости сервиса, project и
+organization paths, build/admission/promotion, leases, recipe validation и
+вспомогательные функции. Комментарии отдельно указывают пределы проверки:
+формат не доказывает authority/admission, простая Dockerfile-проверка не
+заменяет полный parser, digest не исправляет ошибки сериализации.
+
+Одинаковый запрет переданных environment-полей в lifecycle-only действиях
+вынесен в узкий `hasRecipeEnvironmentSelection`; все поля и порядок булевой
+проверки сохранены, нормализация не добавлена. Helper также имеет EN→RU
+комментарий. Остаточная пара AuthorizePromotion/CompletePromotion сохранена
+адресно: общие resolvePrincipal/authorizeKey уже выделены, а разные claim /
+authorization tokens и переходы владельца должны оставаться явными.
+
+PASS LOCAL: roleimage unit, полный `go build ./...` модуля control-plane,
+gofmt/diff-check, tests реестра исключений и адресные ignore guards.
+Свежий scan: 6647 own / 222 excluded, **1791 raw / 774 retained /
+1017 unresolved; Go 15120/21321, missing 6201**. Clone-set SHA256:
+`db032fe600844dcb9c22ca017f1fde4db38209fb71a2daa07b0296c22bf1279f`.
+Generated source не менялся. Прежние незакрытые FAIL/NOT RUN и все итоговые
+критерии задачи остаются открытыми. Следующий шаг — оставшиеся 1017 групп и
+6201 объявление, затем конечные build/unit и полный Go -check.
 
 ## Волна 340 — возобновление после демонстрации 23.10.2026
 
