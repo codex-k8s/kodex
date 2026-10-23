@@ -221,9 +221,9 @@
       "format": "go",
       "firstPath": "services/internal/runtime-controller/internal/callback/provider_completion_diagnostic_test.go",
       "secondPath": "services/internal/runtime-controller/internal/callback/provider_process_test.go",
-      "fragmentSHA256": "0e0aa37ba05c5033b8f658643b8a3bdd823d9e9d3d36e629c5eb980ca80061c9",
+      "fragmentSHA256": "50914c3c1552f1c3d7ac1fbce18b20b8dfcd096b97b2d804b4016c968d9d29cc",
       "count": 1,
-      "reason": "Точное 111-token окно включает конец разных fixtures, два typed RPC spy и начало разных scenario tables. CompleteExecution и ReportExecutionProgress используют разные nominal request/response, отдельные requests slices и методы generated port. Совпадает лишь обязательный before hook перед append и возвратом заданной ошибки. Generic recorder ради трёх строк потребует параметров типов и дополнительной оболочки, а объединённый mock скроет точное разделение completion/cleanup и process-progress authority assertions. Реальные lifecycle сценарии различны. Сохраняется только это окно с точными путями, fragment digest и одним вхождением, не файлы или методы целиком."
+      "reason": "Точное 111-token окно включает конец разных fixtures, два typed RPC spy и начало разных scenario tables. CompleteExecution и ReportExecutionProgress используют разные nominal request/response, отдельные requests slices и методы generated port. Совпадает лишь обязательный before hook перед append и возвратом заданной ошибки. Generic recorder ради трёх строк потребует параметров типов и дополнительной оболочки, а объединённый mock скроет точное разделение completion/cleanup и process-progress authority assertions. Реальные lifecycle сценарии различны. Сохраняется только это окно с точными путями, fragment digest и одним вхождением, не файлы или методы целиком. Повторно прочитано после интеграции #1827: единственное изменение окна — два дополнительных отрицательных/положительных workspace сценария в таблице; различие nominal RPC и причина сохранения прежние."
     },
     {
       "format": "go",
@@ -5232,6 +5232,54 @@
       "fragmentSHA256": "3c24bcae72a6b4b95a36a43b0f5286fa09b576089c2cd99a50b8ae44db84ff97",
       "count": 1,
       "reason": "Окно сопоставляет окончание AuthorizePromotion и начало CompletePromotion с повтором resolvePrincipal/authorizeKey и typed error return. Сами guards уже общие; оставшиеся permission, PromotionClaim либо AuthorizationToken, проверка promoted reference/readback и repository transitions различны. Универсальный helper с callback скрыл бы разницу разрешения публикации и фиксации её результата ради короткого glue. Сохраняется только эта точная внутрефайловая пара/hash/count, не lifecycle guard и не весь сервис."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/access.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
+      "fragmentSHA256": "95bf1585d8d03ea600b8270909d1d0af7afd5bc0be18270f13ea4d14a1a3111d",
+      "count": 1,
+      "reason": "Typed чтение permissions и stored secret revision descriptors делит лишь Query/error/Close/Next/append scaffold. SQL, набор столбцов, возвращаемые типы и последующий commit различны. Callback collector вокруг каждого Scan скроет фиксированный порядок столбцов ради нескольких строк; готовый generic mapper потребовал бы отдельно сохранять классификацию ошибок и пустого результата. Самостоятельного общего предметного алгоритма нет. Сохранены только точные пути/hash/count1, не queries или ревизии целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/access.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
+      "fragmentSHA256": "8567ab7587b7d8e342c9ce485d37bb8c9437836cab202747700e5da9fb0458e3",
+      "count": 1,
+      "reason": "После выноса пяти одинаковых secret operation startup остаётся короткое окно с accessReadTransaction. Последний открывает READ ONLY и сам проверяет access.view/organization с rollback при отказе; secret helper открывает SERIALIZABLE, предметные permissions/locks остаются у команды. Общая transaction factory ради resolveScope/BeginTx скроет разные isolation и владельца authority без выноса общего доменного алгоритма. Исключены только точные пути/hash/count1, не transaction/authorization paths."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/config_overlay_history.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
+      "fragmentSHA256": "0972a78e5ad572f0a581bef615fcea02fb1cc32040601cd2db01e69786ca8a63",
+      "count": 1,
+      "reason": "Конец разных предметных guards и начало readonly repeatable-read metadata calls overlay revision и runtime secret совпадают лишь коротким resolveScope/BeginTx/error/defer. Далее следуют разные resource authorization, typed query/scan и commit error semantics. Callback transaction wrapper ради scaffold затруднит чтение точного scope и ошибок без удаления общего предметного алгоритма. Сохранена лишь эта точная пара путей/hash/count1 с runtime_secrets, не другое совпадение того же hash и не handlers целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/mvp_queries.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
+      "fragmentSHA256": "f86daa7af8a254c16019e4f6faee33d3c3776546a2b6c0dcbfd9835855c449fe",
+      "count": 1,
+      "reason": "Окно соединяет query args tail и начало typed paginated scanners image recipe revisions и secret recovery work. Pagination различна (revision против deadline/ref), SQL/column order и entities разные; общая лишь rows Close/Next/append форма. Callback collector либо reflection не выражает общий предметный алгоритм и скроет проверяемые столбцы/continuation. Сохранена точная пара/hash/count1, не SQL/scanners или recovery authorization целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/prompt_preview_context.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
+      "fragmentSHA256": "1898f4f1b65694ef36a2f3e0185e9348c7355977add1114a59b8c1b63cf675b6",
+      "count": 1,
+      "reason": "Хвост validation и открытие repeatable-read readonly транзакции prompt preview и secret metadata содержат одинаковый короткий resolveScope/BeginTx/error/defer. Permission/resource proof и последующие typed данные различны; полный запрос нельзя объединить без generic dispatcher. Новый helper секретных операций намеренно SERIALIZABLE и не используется для этих чтений. Сохраняется только точное окно путей/hash/count1, не read paths или security guards."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
+      "fragmentSHA256": "6cc71055c8b5b2ce659df00936e2e2d7b80dfa73017592ffb45300223496d9e3",
+      "count": 1,
+      "reason": "Typed fetchers schedules и secrets уже используют общий authorizedCatalog: eligibility, pagination и action processing вынесены. Разные SQL/args, scanSchedule/scanRuntimeSecret и entities должны оставаться явными; повторяется Query/rows/scan/append форма. Ещё один callback wrapper не выделит самостоятельный алгоритм и затруднит видимость row error семантики. Сохранены только точные пути/hash/count1, не catalog helper и не ресурсы целиком."
     }
   ]
 }
