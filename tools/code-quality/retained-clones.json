@@ -5072,6 +5072,78 @@
       "fragmentSHA256": "c6f9897d457b4167f9ec3b1633a81f99bbd20288257093ab41d1015baf3b3b27",
       "count": 1,
       "reason": "Прочитаны целиком castDefinition и castProviderDefinition и примыкающие объявления обоих окон. Совпадает форма двух последовательных typed loops и return после разных metadata literals: integration capabilities/configuration fields против provider authorization methods/models. Поля, входные/выходные типы, enum-преобразования, readiness и версии независимы; общей проверки или бизнес-вычисления не дублируется. Универсальный mapper лишь скроет тривиальные циклы без объединения смыслового поведения; общий каталог provider/integration нарушил бы точность контрактов. Оставлены отдельные casters, исключены только эти пути, точный fragment SHA-256 и count1; другие RPC/caster groups остаются в анализе."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/memory.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "fragmentSHA256": "69791279df89fa15c6adc092ed5a519b8e04d6bae8480848f756cc2b9644edd5",
+      "count": 1,
+      "reason": "Окно историй MemoryRecord и SkillBundle совпадает по форме проверки principal, вызова уже отдельного domain service, PageInfo и обхода результатов. Типы ревизий и их casters различны: память сохраняет provenance/retention, навык дополнительно имеет admission/scan/files. Общий generic list wrapper скрыл бы exact owner query и error conversion ради краткого типизированного glue. Сохранены только эти два пути, точный fragment и count1; другие списки не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/memory.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/memory.go",
+      "fragmentSHA256": "1023a30cba9e62726b179d9411e6adac38d97780d46772a08b11b10d79f2db23",
+      "count": 2,
+      "reason": "Два перекрывающихся окна Create/Revise/Archive MemoryRecord содержат отдельные command kind и full method name, прежний общий execute, прежний castMemoryRecord и разные typed responses. Create несёт project/agent/specification, Revise record/specification, Archive только record; единый dispatch через callback/reflection добавил бы обобщение без общего нового алгоритма и затруднил бы проверку owner transition. Точно эта пара путей и hash с count2; остальные методы остаются в анализе."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/memory.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/memory.go",
+      "fragmentSHA256": "c47cea187478cbdac6b70dfeee14212e33b393737e13f229a5acbf004fc6ab0e",
+      "count": 1,
+      "reason": "Перекрывающееся окно Archive/Restore/Purge MemoryRecord повторяет форму коротких typed wrappers вокруг уже общего execute и castMemoryRecord. У переходов разные lifecycle effects, full RPC methods и command kinds; Purge необратим, поэтому общий lifecycle dispatcher скрыл бы явную границу команд ради нескольких glue-строк. Исключён только точный внутрефайловый fragment/count1, а не функции целиком и не политика владельца."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "fe753318ce851f8d0d919b50ce20cdff300edfedbdd3ee4e547fea9429659570",
+      "count": 1,
+      "reason": "Окно ValidateSkillBundleDraft и ReviewSkillBundleDraft захватывает хвост двух разных typed commands с уже общими execute и castSkillBundle. Validation проверяет admission, Review принимает enum decision и comment; одинаковая форма error-first response не создаёт единого бизнес-перехода. Вынос полного handler в универсальный command adapter скрыл бы method/kind и решение reviewer. Исключена только точная пара путей/fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "fragmentSHA256": "6626fd23087534ea7515ce4ac0e9a18dfa5a8afadc1302ee93c0886cca45163f",
+      "count": 1,
+      "reason": "Окно CreateSkillBundleDraft и SaveSkillBundleDraft содержит уже общий domainSkillSpecification, execute и castSkillBundle, но разные typed request/response и pins: создание по проекту/пакету против сохранения конкретной ревизии. Остаток — явный transport glue; generic dispatch либо reflection ради короткого хвоста скрыл бы обязательную RevisionRef на Save. Сохранён только точный внутрефайловый fragment/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "5c076cd6cfbdde5a0cc92c87b69158d3a444f8dad37bde296d81cf49ee18533e",
+      "count": 1,
+      "reason": "Окно SaveSkillBundleDraft и PublishSkillBundleDraft перекрывает хвост typed Save и начало Publish. Save передаёт replacement specification, Publish точные RevisionRef/ExpectedDigest и является отдельным admission transition. Общие execute и castSkillBundle уже существуют; объединение boundary handlers скрыло бы различие owner commands. Исключён только данный fragment двух путей и count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "cf7e1093e22035d5a2e13571e63b3e9cb475854c4042431090eb4fa55d6b5413",
+      "count": 2,
+      "reason": "Два перекрывающихся окна Review/Publish/Discard SkillBundleDraft повторяют только явные typed wrappers после общего execute и castSkillBundle; Review имеет decision/comment, Publish и Discard закрепляют revision/digest с разными terminal effects. Единый generic lifecycle dispatcher заменил бы номинальные RPC методы и затруднил бы review authority. Сохранён только этот внутрефайловый fragment с count2, не lifecycle операции."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "d5de41b5539c46adb2f9beed55443e26dc78c9112c165f93cc311055fdd65781",
+      "count": 1,
+      "reason": "Окно Publish и Discard SkillBundleDraft отличается owner command kind и ожидаемым эффектом, хотя короткий transport tail использует одни общие execute/castSkillBundle. Универсальная функция ради вызова этих уже общих helpers скроет противоположные решения по жизненному циклу; локальные typed ответы остаются явными. Адресное исключение только данного внутрефайлового fragment/count1, остальные команды не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "ae8b7362857643041c627bdf4f8e8be08758dbbde754652089d5ab39e7604514",
+      "count": 1,
+      "reason": "Перекрывающееся окно Archive/Restore/Purge SkillBundle повторяет форму трёх коротких transport wrappers вокруг общего execute и castSkillBundle. У переходов разные command kinds и lifecycle semantics, включая необратимый Purge; общий dispatcher не устранил бы бизнес-копию, но скрыл бы точные owner methods. Исключены только этот hash и два exact пути с count1; остальные группы остаются видимыми."
     }
   ]
 }

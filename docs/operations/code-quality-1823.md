@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.334.0
+version: 1.335.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,43 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста тридцать пятая волна — единый фильтр состояния памяти и навыков
+
+Предыдущий опубликованный SHA — `5edc586b417199b08c37a76274bc1ca49538f9ea`.
+В `control-plane/internal/transport/grpc` общий package-private
+`domainContextResourceState` заменил два одинаковых разбора protobuf enum
+для списков памяти и навыков. `UNSPECIFIED` по-прежнему даёт пустой фильтр,
+все пять известных значений сохраняют прежние строки, неизвестное число
+закрыто отвергается. Оба handler сначала проверяют точный principal и
+сохраняют собственные сообщения `invalid memory state` / `invalid skill
+state`. Полномочия, typed owner methods, lifecycle commands и response
+casters не объединены. Unit проверяет каждое значение и неизвестный номер;
+полный unit-пакет gRPC и build всего control-plane (`-p 2`) — PASS LOCAL.
+
+Полностью прочитаны `memory.go`, `skill.go` и `skill_lifecycle.go`;
+27 прежних и два новых объявления получили предметные EN→RU комментарии.
+Для `skill_lifecycle.go` AST до/после совпал; у первых двух файлов AST
+ожидаемо меняется из-за общего фильтра. Детектор подтвердил удаление
+одной группы исходных копий без новых групп или изменений вне этих файлов.
+Одиннадцать оставшихся overlapping occurrences трёх файлов разобраны в
+девяти точных решениях `path/fragment SHA/count`; это typed wrappers разных
+owner-команд и проекций поверх уже общих `execute`, `castMemoryRecord`,
+`castSkillBundle` и `domainSkillSpecification`, а не новый общий алгоритм.
+Реестр не исключает файлы или другие команды целиком. Exact registry
+assessment, 17 Node unit, Go checker unit, пять ignore-маркеров,
+`gofmt` и `git diff --check` — PASS LOCAL.
+
+Canonical y7wOvp до коммита: 6647 собственных файлов, 222 исключения,
+1795 raw, 763 retained, 1032 unresolved. Go: 14923/21320
+двуязычных объявлений, непокрыты 6397. Raw report SHA-256
+`f06363619691edfa2ebb07a3c53bf144beab02910908462d4f78fc100d3f3575`,
+clone-set SHA-256
+`8d9727aa5e1bd5fd7d0173098419aed13f96f84a8b0bd5a8c6cb622b8f25d437`.
+Контракты, generated и applied migrations не менялись. Полный Go
+`-check` и разбор 1032 групп открыты; historical FAIL/finding293 не
+закрыты. Browser, live, model, mail, STT, component, deploy и полная
+приёмка — NOT RUN. Issue открыт, PR Draft; до общей приёмки и merge не готов.
 
 ## Триста тридцать четвёртая волна — SQL каталога ролей и привязок
 
