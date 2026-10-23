@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.316.0
+version: 1.317.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,120 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста семнадцатая волна — команды HTTP и ошибки потоковой загрузки
+
+Предыдущий опубликованный SHA — `df9be3dcd2f9ca25d277920090937ab13d55416a`.
+Exact7lO8jf:6640 sources,222 excluded,1800 raw/731 retained/
+1069 unresolved; Go14005/21298,missing7293. Issue open, Draft PR
+head/body316 и push подтверждены GET/remote readback; основной клон чист.
+Предыдущая goal-итерация — progress с66 docs и14 вынесенными read tails.
+
+Полностью прочитан command_endpoints.go1004 исходных строк и повторно
+проверен avatar upload path в mvp_endpoints.go. Все66 прежних declarations,
+включая named interfaces/methods, const/var и private helpers, описаны EN→RU.
+Новые writeArtifactUploadError и unit тоже двуязычны: scope3files101/101,
+общий прирост declarations2 и bilingual68. Generated не менялся.
+
+Реальный повтор133tokens между artifact и avatar uploads устранён:
+writeArtifactUploadError сохраняет точный порядок errors.Is(length),
+errors.Is(read), nonnil RPC failure и nil no-write. Возврат true означает
+попытку error response, не ACK доставки и не stream abort/rollback.
+В обоих callers остаётся ранний return до commit при отказе; metadata,
+chunk forwarding, digest/size, commit и CloseAndRecv порядок прежние.
+Удалён только ставший ненужным errors import mvp-файла.
+
+Inverse разворачивает actual helper body в2 caller sites, восстанавливает
+прежний import и сравнивает целые AST2 с316: PASS LOCAL, //go: прежние.
+Никаких generic mutation dispatchers, новых retries либо owner authority
+из request fields не добавлено.
+
+Комментарии фиксируют реальные ограничения:
+- project trash/restore/purge, memberships, agent capabilities/integrations,
+  instruction impact publish, workflow и run cancel/retry идут отдельными
+  typed owner commands; mutation/version context не заменяет authorization;
+- PurgeProject HTTP202 — acceptance, не завершение безвозвратной очистки;
+- ResolveOwnerGate передаёт explicit decision и проверяет exact gate reply,
+  не создаёт подтверждения из чата и не выполняет внешний effect;
+- workflowDraft выполняет unchecked numeric casts, копирует input options,
+  но RequiredCapabilityKeys сохраняет shallow slice; semantic validation
+  остаётся отдельной. CreateWorkflow прикладывает draft только с steps;
+- Struct conversion errors в launch/schedule/integration mappings по-прежнему
+  игнорируются; документация не выдана за исправление этих paths;
+- credential mutable bytes best-effort очищаются, decoded field сбрасывается;
+  immutable string/decoder copies не объявлены гарантированно стёртыми;
+- upload stream может иметь ранее переданный prefix до ошибки; отдельный
+  abort/CloseSend на ранних возвратах не добавлялся. Известный размер и hash
+  не названы антивирусом, quarantine approval или supply-chain admission;
+- organization stream adapter известные oneof конвертирует, unknown part
+  отправляет пустым message без local reject; owner validation необходима;
+- forwardArtifactBody считает/hashes exact bytes, копирует chunks до64KiB,
+  отказывает oversize до отправки этого chunk и выдаёт digest только при
+  exact EOF/size. Собственный context/deadline/zero-progress bound отсутствует;
+- download до HTTP200 требует metadata-only first frame и bounded total,
+  затем только data chunks; ошибки после headers лишь обрывают output.
+  Не заявлены checksum verification, explicit stream cancel/join или
+  замена уже отправленного response на problem;
+- safeAttachmentFileName — header display sanitizer, не filesystem confinement:
+  dots/Unicode сохраняются, controls и slash удаляются.
+
+Матрица неизменённых сценариев:
+
+| Вход | Authority/владелец состояния | Ответ и частичный исход |
+| --- | --- | --- |
+| project/membership/agent/workflow mutation | verified context -> dedicated typed command + mutation pins -> owner transaction | public projection; статус/ownership/effects не из request |
+| launch/turn/cancel/retry | exact selectors + owner graph/claim/grant state | не прямое создание/убийство pod и не повтор старого grant |
+| owner decision | explicit resolution input + owner gate/version | exact gate reply; no automatic external approval |
+| schedule/integration/grant | named command, policy/impact bindings владельца | parsing не grant и не прямой внешний tool call |
+| upload metadata/chunks/commit | owner stream + exact byte/digest checks | shared error mapping; earlier prefix сохраняется, commit при failure не идёт |
+| current/revision download | exact artifact/revision/purpose -> owner stream | private no-store sandboxed attachment; after-header errors прерывают выдачу |
+| artifact delete/restore/purge/impact | dedicated owner impact/lifecycle commands | display impact не permission; storage не правится напрямую |
+
+Новый unit покрывает nil с nil writer и untouched recorder, wrapped
+sentinels, errors.Join с обеими причинами и RPC status, приоритет length
+перед read и read перед RPC, обычный error и closed status/code.
+Сравнивает прежнюю ветвь по всем headers/status/public fields, а fresh
+correlation UUID отдельно, не подменяя его. Context7 /golang/go и local
+Go1.26.6 go doc errors.Is/Join сверены; новых dependencies нет.
+
+587 верхних/2734 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP. После усиления nil no-write assertion focused unit
+повторно PASS.17 Node unit, Go checker unit, inverse AST2, scope101/101,
+5 addressed ignores, gofmt/git diff --check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Первый canonical scan3dsPYC завершился FAIL на точном existing retained
+hash: новые комментарии изменили межметодное окно command/managed config.
+Ничего не пропускалось: повторно прочитаны оба конца (Trash/RestoreProject
+и RebindSystemSTTConsumers/DetachGitManagedConfiguration), сохранены те же
+paths/count1, reason уточнена, только exact digest заменён на
+`623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa`.
+Checker не ослаблен, новых exclusions/ignore regions нет.
+Последующий полный lCLyvn canonical PASS по этому registry check.
+
+Рабочий lCLyvn:6641 sources,222 excluded,1799 raw/731 retained/
+1068 unresolved; Go14073/21300,missing7227.
+Raw SHA256 `093b616beab28c5fbf38af0700269082495a63edfd68e161a285cf8dc32a5aec`;
+clone-set `1f02298f169c7944cec3e4f0c171d125d77159daee247242c0fde6e9e357bc5e`.
+Raw delta25removed/24added затрагивает только scoped files/их пары и
+включает comment hash shifts, не25 устранённых executable copies.
+Сопоставление fragments без whole-line comments/whitespace показывает
+ровно одно исчезнувшее code window133tokens и ноль новых; это вспомогательная
+диагностика, а неизменность поведения отдельно доказана inverse AST2/unit.
+Registry613/731 сохранён, новых blanket или content exclusions нет.
+
+После commit exact scan/unit/build/push/PR readback повторяются.
+Остаток Go:gateway995,CP6232; общий -check ещё не пройден. Цель active,
+PR Draft, до полной приёмки не доведён. Historical FAIL/finding293 не
+исправлены. Component/browser/real upload/storage/provider/model/STT/mail/
+deploy/full acceptance NOT RUN. Generated/contracts/SQL/migrations и
+живые данные/конфигурация не менялись.
 
 ## Триста шестнадцатая волна — каталоги организации и runtime/provider HTTP
 

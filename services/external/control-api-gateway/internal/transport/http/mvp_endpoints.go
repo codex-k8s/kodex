@@ -2,7 +2,6 @@ package httptransport
 
 import (
 	"crypto/sha256"
-	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -59,16 +58,7 @@ func (server *Server) UploadAgentAvatar(w http.ResponseWriter, r *http.Request, 
 	received, digest, err := forwardArtifactBody(r.Body, r.ContentLength, func(chunk []byte) error {
 		return stream.Send(&controlplanev1.UploadAgentAvatarRequest{Part: &controlplanev1.UploadAgentAvatarRequest_Chunk{Chunk: chunk}})
 	})
-	if errors.Is(err, errArtifactContentLengthMismatch) {
-		writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
-		return
-	}
-	if errors.Is(err, errArtifactBodyRead) {
-		writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
-		return
-	}
-	if err != nil {
-		writeRPCProblem(w, err)
+	if writeArtifactUploadError(w, err) {
 		return
 	}
 	if err = stream.Send(&controlplanev1.UploadAgentAvatarRequest{Part: &controlplanev1.UploadAgentAvatarRequest_Commit{Commit: &controlplanev1.UploadArtifactCommit{

@@ -4365,9 +4365,9 @@
       "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
-      "fragmentSHA256": "8d485596d0ada4dc0a0e952dda6732bdf16db8d46c110830c66b140d3ddc84eb",
+      "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
       "count": 1,
-      "reason": "Окно103 tokens пересекает RestoreProject и начало PurgeProject против хвоста RebindSystemSTTConsumers и начала DetachGitManagedConfiguration. Это разные project lifecycle и managed-ownership commands, с разными номинальными запросами и строгой проверкой detachment reply далее. requireMutation и writeRPCProblem уже вынесены; на границе методов повторены лишь короткие guards/typed calls. Универсальная command/response фабрика не выделит общий бизнесовый алгоритм и ухудшит видимость переходов. Только exact fragment/count1."
+      "reason": "Окно103 tokens пересекает хвост TrashProject и RestoreProject против хвоста RebindSystemSTTConsumers и начала DetachGitManagedConfiguration. Это разные project lifecycle и managed-ownership commands с nominal requests и строгой проверкой detachment reply далее. requireMutation и writeRPCProblem уже общие; повторены короткие guards/typed calls, а универсальный command dispatcher скрыл бы специализированные переходы. Предметные комментарии изменили hash прежнего окна; повторно прочитаны оба конца, scope/count1 не расширены. Сохранены только точные два пути/fragment/count1, не команды или файлы целиком."
     },
     {
       "format": "go",
