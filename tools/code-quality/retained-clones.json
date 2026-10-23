@@ -5181,9 +5181,9 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
-      "fragmentSHA256": "b783c08d624bca2c795a50139bb4d3291630807dd5ee5de5dad49cc6483354c3",
+      "fragmentSHA256": "a45a95c29d8dc6866e87e1f5c46c25944b4b866d89a15eb435271f11cbcadd09",
       "count": 1,
-      "reason": "Окно начинается в хвосте map secret revision descriptors и переходит к CompleteRuntimeSecretOperation; парой служит хвост archive claim и начало lease renew. Общими являются return и вызов principal, а работа с secret claimant/materialization и archive fence/generation разная. Объединение не выражает один алгоритм и скрывает exact RPC/owner boundary; сохраняется точная пара окон."
+      "reason": "Окно начинается в хвосте map secret revision descriptors и переходит к CompleteRuntimeSecretOperation; парой служит хвост archive claim и начало lease renew. Общими являются return и вызов principal, а работа с secret claimant/materialization и archive fence/generation разная. Объединение не выражает один алгоритм и скрывает exact RPC/owner boundary; сохраняется точная пара окон. После подробного EN→RU пояснения CompleteRuntimeSecretOperation окно повторно прочитано: AST прежний, добавлен только предметный комментарий между методами; обновлён только content hash при тех же путях/count1."
     },
     {
       "format": "go",
@@ -5280,6 +5280,70 @@
       "fragmentSHA256": "6cc71055c8b5b2ce659df00936e2e2d7b80dfa73017592ffb45300223496d9e3",
       "count": 1,
       "reason": "Typed fetchers schedules и secrets уже используют общий authorizedCatalog: eligibility, pagination и action processing вынесены. Разные SQL/args, scanSchedule/scanRuntimeSecret и entities должны оставаться явными; повторяется Query/rows/scan/append форма. Ещё один callback wrapper не выделит самостоятельный алгоритм и затруднит видимость row error семантики. Сохранены только точные пути/hash/count1, не catalog helper и не ресурсы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "8c7c17b85d0a4c99c36f00e580cdfc096271c3b8bd2552a385aea44c3d3e006c",
+      "count": 1,
+      "reason": "Окно106 tokens сравнивает хвост разных page DTO loops и начало ListAccessRoles/ListRuntimeSecrets. Общие principal/page/error primitives уже выделены, различны точный full method, service method, nominal request/response и collection caster. Совпадающие return/guards не образуют отдельный общий предметный алгоритм; generic query dispatcher скроет связь RPC с owner method ради нескольких строк. Сохранены только точные пути/fragment/count1, не catalog handlers."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "2d5ca0f3fc9685caaf6a7cef8623531022c5b9f5abfa71a52b955f52cbe83092",
+      "count": 1,
+      "reason": "Окно100 tokens пересекает конец typed collection mapping и начало ExplainAccess/CompleteRuntimeSecretOperation. Первое объясняет решение по subject/permission, второе завершает broker claim с generation/materialization; общими остаются append/return и principal guard. DTO, authority и доменные эффекты различны; общий dispatcher или caster с reflection ради этого scaffold ухудшит проверку границы без общего алгоритма. Исключена только точная пара/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/mvp_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "a90602d8b00c43b354f9e180c14d8f72dfc043487569610e2e844de59cca9f7e",
+      "count": 1,
+      "reason": "Окно100 tokens включает хвост списочного response и начало castScheduleRevision/castRuntimeSecret. Различны nominal schemas, schedule target/version против secret metadata/revision descriptor; общий лишь append/return и литерал результата. Общие timestamp/page/error helpers уже есть; обобщённый entity caster потребовал бы reflection или параметризованный map без выделения самостоятельного общего алгоритма. Сохранены лишь точные пути/hash/count1, не casters целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "2079ed89f3a8babbcd3c755ae897d4b37d2aef7eb6c1695cf4f5a7ce85c62c1a",
+      "count": 1,
+      "reason": "Окно148 tokens сравнивает границы readiness и следующих рабочих RPC provider renewal против credential projection. Общие principal и transportError уже выделены; различны exact full methods, service readiness probe, authorize/resolve payload и proof requirements. Generic work handler скроет эти самостоятельные security contracts без удаления нового предметного алгоритма. Оставлено только данное окно двух путей/hash/count1; readiness и дальнейшие команды не исключены целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "caa17ee602a3f4e27be5cd3aed357cee1a28366db1485005fad58260c2370115",
+      "count": 1,
+      "reason": "Окно175 tokens проходит через конец paged catalog и разные GetProject/GetRuntimeSecret. Principal, page и transportError уже общие; читаются разные доменные ресурсы через точные service methods и nominal wrappers. Generic RPC getter ради short glue потребовал бы callbacks для обоих request/response casters и скрыл owner resource mapping. Сохранены только эти пути/hash/count1, без исключения доступа или полных getters."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "f2a9da95570192efbf108e0419b48df5593c0b628aedf5b0fc591bc2455fbbae",
+      "count": 1,
+      "reason": "Окно217 tokens сравнивает явные typed adapters ListProjectMemberships и ListRuntimeSecrets. Нормализация principal/page/error уже вынесена, но exact RPC и service methods, entity casters и protobuf collections различны. Общий generic dispatcher должен принять весь query/caster/response набор callbacks ради короткого transport glue, ухудшив чтение authoritative boundary без общего бизнесового алгоритма. Исключены только точные пути/hash/count1, не List handlers или проверка eligibility."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "6644bc27894b5175eb135c8bc635b91cde2a168bb2b914d8281423823e4d1c30",
+      "count": 1,
+      "reason": "Внутрифайловое окно114 tokens пересекает разные prepare CREATE/ROTATE DTO и их response wrappers. Общий principal/domain/error/receipt алгоритм уже prepareRuntimeSecret; остаются разные full method, ProjectRef/SecretRef, Name/Description и nominal generated responses. Второй generic helper для двух полей wrapper скроет concrete command mapping без самостоятельного алгоритма. Сохранено лишь это точное окно/hash/count1, не prepare commands или проверки grant."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "0d477efaadce011950b3ca3ff07223cde62aa0afa66be7a5d2cd6da560c94105",
+      "count": 1,
+      "reason": "Окно129 tokens сравнивает завершение и отказ secret operation: общие principal/transportError уже helpers, совпадает краткий exact operation/claim/generation DTO scaffold. Complete передаёт материализацию и возвращает Secret; Fail — закрытую причину и state receipt. Единый command dispatcher смешал бы разные transitions/response authority ради glue без общего предметного алгоритма. Сохранены только эта внутрефайловая пара/hash/count1, не broker commands целиком."
     }
   ]
 }
