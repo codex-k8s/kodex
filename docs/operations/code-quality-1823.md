@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.332.0
+version: 1.333.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,41 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста тридцать третья волна — SQL bootstrap и доказательств полномочий
+
+Предыдущий опубликованный SHA — `18eecd962177fb0bb90f13b2505fd1c5e8e98505`.
+Прочитаны все 44 SQL-файла, встроенные в `queries_repository.go` (607 строк).
+Каждое объявление получило предметный комментарий EN→RU. Разделены создание
+организации/служебного субъекта, фиксация реквизитов через UID/resource
+version/digest, reconcile системных prompt/environment, аудит и проверка
+owner-claim. Для security boundary явно записано, что `LIMIT 1` в чтении
+контракта владельца не фильтрует stable key; поиск системного субъекта не
+проверяет его kind и срок действия binding; отображаемая системная роль не
+является доказательством конкретного разрешения. High-watermark worker grant
+хранится в PostgreSQL и отвергает меньшие generation/revision, принимая
+точный повтор envelope. Комментарии не приписывают записи runtime запуск
+workload и не превращают SQL metadata в реквизиты или авторизацию.
+
+AST Go-файла совпал, все 44 `go:embed` директивы и SQL-байты прежние.
+SHA-256 путей и содержимого SQL:
+`c970fb2d2d77ac9595510fb01d2521973022dfd9b4822676bd4438cbabab8151`.
+Четыре выбранных hermetic unit по credential/grant и полный build
+control-plane (`-p 2`) — PASS LOCAL; это не PostgreSQL component.
+17 Node unit, Go checker unit, AST, 44/44 пар, 5 точных ignore-маркеров,
+`gofmt` и `git diff --check` — PASS LOCAL.
+
+Canonical qvOkl9 до коммита: 6645 собственных файлов, 222 исключения,
+1796 raw, 752 retained, 1044 unresolved. Все 1796 точных
+`format/path/fragment SHA/count` ключей прежние. Go: 14864/21318
+двуязычных объявлений, непокрыты 6454. Raw report SHA-256
+`55f926485e1e23b1e9af4c7344540093be80bb1c1d6262d9b7b0104195de9109`,
+clone-set SHA-256 прежний
+`960f0906e6d8250ec0bc9203c4b2b3b1c5b365060ff5fb3a2d77c2673aa8c8d3`.
+Полный Go `-check` и разбор 1044 групп открыты. Historical
+FAIL/finding293 не закрыты; browser, live, model, mail, STT, component,
+deploy и полная приёмка — NOT RUN. Issue открыт, PR Draft;
+до общей приёмки и merge ещё не готов.
 
 ## Триста тридцать вторая волна — общий разбор тела и контекста изменения доступа
 
