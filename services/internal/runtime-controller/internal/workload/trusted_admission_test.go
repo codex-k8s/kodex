@@ -20,6 +20,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestTrustedAdmissionPreservesTicketAndRejectsCallbackKeys renders the repository
+// policy locally for the trusted profile and evaluates three selected CEL rules
+// on ticket/profile/callback mutations. Eval errors count as rejection; the test
+// neither installs admission policy nor proves a live trusted network boundary.
+// TestTrustedAdmissionPreservesTicketAndRejectsCallbackKeys локально преобразует
+// policy репозитория для trusted profile и проверяет три CEL-правила для мутаций
+// ticket/profile/callback. Ошибка Eval считается отказом; admission policy
+// не устанавливается и live trusted network boundary не доказывается.
 func TestTrustedAdmissionPreservesTicketAndRejectsCallbackKeys(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "..")
 	raw, err := os.ReadFile(filepath.Join(root, "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml"))

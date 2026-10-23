@@ -12,17 +12,25 @@ import (
 	"google.golang.org/grpc"
 )
 
+// assistantResourceSearchClient captures one search request and returns configured results, replacing only that generated RPC for route tests.
+// assistantResourceSearchClient сохраняет поисковый запрос и возвращает заданные результаты, подменяя только этот сгенерированный RPC в тестах маршрутов.
 type assistantResourceSearchClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	request  *controlplanev1.SearchAssistantResourcesRequest
 	response *controlplanev1.SearchAssistantResourcesResponse
 }
 
+// SearchAssistantResources stores the supplied request and returns its fixture response without network, authentication or persistence.
+// SearchAssistantResources сохраняет переданный запрос и возвращает тестовый ответ без сети, аутентификации и сохранения в хранилище.
 func (client *assistantResourceSearchClient) SearchAssistantResources(_ context.Context, request *controlplanev1.SearchAssistantResourcesRequest, _ ...grpc.CallOption) (*controlplanev1.SearchAssistantResourcesResponse, error) {
 	client.request = request
 	return client.response, nil
 }
 
+// TestAssistantResourceSearchUsesOnlyVerifiedLeaseAndReturnsSafeRoutes checks seven result kinds use exact input lease coordinates, trimmed query and canonical links with context hints.
+// Safe activity parameters omit the raw query; the stub does not independently prove server-side lease verification.
+// TestAssistantResourceSearchUsesOnlyVerifiedLeaseAndReturnsSafeRoutes проверяет точные координаты аренды из входа, обрезанный запрос и канонические ссылки с подсказками контекста для семи видов результата.
+// Безопасные параметры активности не содержат исходный запрос; подстановка сама не доказывает серверную проверку аренды.
 func TestAssistantResourceSearchUsesOnlyVerifiedLeaseAndReturnsSafeRoutes(t *testing.T) {
 	t.Parallel()
 	client := &assistantResourceSearchClient{response: &controlplanev1.SearchAssistantResourcesResponse{
@@ -61,6 +69,8 @@ func TestAssistantResourceSearchUsesOnlyVerifiedLeaseAndReturnsSafeRoutes(t *tes
 	}
 }
 
+// TestAssistantResourceSearchRejectsInvalidScopeAndResults checks nine malformed contexts, query shapes and result identities fail rather than returning navigable search results.
+// TestAssistantResourceSearchRejectsInvalidScopeAndResults проверяет отказ без выдачи навигационных результатов для девяти некорректных контекстов, форм запроса и идентичностей результата.
 func TestAssistantResourceSearchRejectsInvalidScopeAndResults(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 1}

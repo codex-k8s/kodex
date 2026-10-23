@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+// TestDecodeAuthorityProofTrustDocumentAcceptsCompleteCanonicalContract
+// verifies that a complete canonical snapshot preserves source provenance
+// and the signer set after decoding.
+// RU: TestDecodeAuthorityProofTrustDocumentAcceptsCompleteCanonicalContract
+// проверяет сохранение provenance источника и набора подписантов при
+// декодировании полного канонического снимка.
 func TestDecodeAuthorityProofTrustDocumentAcceptsCompleteCanonicalContract(t *testing.T) {
 	t.Parallel()
 
@@ -26,6 +32,12 @@ func TestDecodeAuthorityProofTrustDocumentAcceptsCompleteCanonicalContract(t *te
 	}
 }
 
+// TestDecodeAuthorityProofTrustDocumentRejectsSchemaAndHistoryDrift covers
+// unknown fields, missing source digest, gapped predecessor history and
+// ambiguous CURRENT keys without providing a fallback trust snapshot.
+// RU: TestDecodeAuthorityProofTrustDocumentRejectsSchemaAndHistoryDrift
+// покрывает неизвестные поля, отсутствие digest источника, разрыв истории и
+// неоднозначные CURRENT-ключи без запасного trust-снимка.
 func TestDecodeAuthorityProofTrustDocumentRejectsSchemaAndHistoryDrift(t *testing.T) {
 	t.Parallel()
 
@@ -79,6 +91,10 @@ func TestDecodeAuthorityProofTrustDocumentRejectsSchemaAndHistoryDrift(t *testin
 	}
 }
 
+// validAuthorityProofTrustDocument builds a two-revision canonical fixture
+// with one current signer and a matching predecessor history.
+// RU: validAuthorityProofTrustDocument создаёт каноническую fixture с двумя
+// ревизиями, одним текущим подписантом и согласованной историей.
 func validAuthorityProofTrustDocument(t *testing.T) AuthorityProofTrustDocument {
 	t.Helper()
 	key, err := GenerateES256Key("control-plane-proof-g7")
@@ -107,6 +123,10 @@ func validAuthorityProofTrustDocument(t *testing.T) AuthorityProofTrustDocument 
 	}
 }
 
+// mustCanonicalTrustValue encodes a trust fixture canonically and fails the
+// test immediately if encoding itself is invalid.
+// RU: mustCanonicalTrustValue кодирует trust-fixture канонически и сразу
+// прерывает тест при ошибке самого кодирования.
 func mustCanonicalTrustValue(t *testing.T, value any) []byte {
 	t.Helper()
 	raw, err := CanonicalJSON(value)

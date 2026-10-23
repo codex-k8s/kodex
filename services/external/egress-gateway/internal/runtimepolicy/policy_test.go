@@ -9,6 +9,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// TestRuntimePolicyDoesNotTreatGenericBaseDestinationsAsProviderAuthority separates provider routes from user web grants.
+// TestRuntimePolicyDoesNotTreatGenericBaseDestinationsAsProviderAuthority отделяет маршруты провайдера от web-grants пользователя.
 func TestRuntimePolicyDoesNotTreatGenericBaseDestinationsAsProviderAuthority(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "..", "..", "deploy/k8s/base/egress-gateway/policy.json")
 	digest, err := policy.DigestFile(path)

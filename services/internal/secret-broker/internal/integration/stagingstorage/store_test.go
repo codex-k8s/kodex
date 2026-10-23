@@ -19,6 +19,11 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// storageFixture supplies a fake Kubernetes tracker whose create reactor assigns deterministic UID/RV,
+// plus scoped work and synthetic ciphertext; it does not provide API-server enforcement or real
+// encryption.
+// storageFixture предоставляет fake Kubernetes tracker с create reactor, назначающим deterministic UID/RV,
+// scoped work и synthetic ciphertext; API-server enforcement и реального шифрования нет.
 func storageFixture(t *testing.T) (*Store, *fake.Clientset, value.DraftWork, value.EncryptedSecretDraft) {
 	t.Helper()
 	client := fake.NewSimpleClientset()
@@ -40,6 +45,10 @@ func storageFixture(t *testing.T) (*Store, *fake.Clientset, value.DraftWork, val
 	return store, client, work, encrypted
 }
 
+// TestEncryptedStoreReadbackAndExactDelete checks create/lookup/copied reads, exact delete options and
+// idempotent NotFound cleanup with only one delete call on the fake client.
+// TestEncryptedStoreReadbackAndExactDelete проверяет create/lookup/копирование reads, exact delete options
+// и idempotent NotFound cleanup с одним delete call fake client.
 func TestEncryptedStoreReadbackAndExactDelete(t *testing.T) {
 	store, client, work, encrypted := storageFixture(t)
 	descriptor, err := store.Create(t.Context(), work, encrypted)
@@ -82,6 +91,10 @@ func TestEncryptedStoreReadbackAndExactDelete(t *testing.T) {
 	}
 }
 
+// TestRetainedKeyBackupIsNotDraftReadOrCleanupTarget replaces draft purpose labels with backup labels and
+// requires read/lookup/delete refusal with Get-only client actions despite known exact pins.
+// TestRetainedKeyBackupIsNotDraftReadOrCleanupTarget заменяет draft purpose labels на backup labels и
+// требует отказа read/lookup/delete с Get-only client actions даже при известных exact pins.
 func TestRetainedKeyBackupIsNotDraftReadOrCleanupTarget(t *testing.T) {
 	store, client, work, encrypted := storageFixture(t)
 	descriptor, err := store.Create(t.Context(), work, encrypted)
@@ -114,6 +127,10 @@ func TestRetainedKeyBackupIsNotDraftReadOrCleanupTarget(t *testing.T) {
 	}
 }
 
+// TestEncryptedStoreRejectsEveryForeignDescriptorAndBinding mutates each pinned descriptor or binding
+// coordinate, requiring closed read/delete/lookup rejection rather than reuse of another scope's object.
+// TestEncryptedStoreRejectsEveryForeignDescriptorAndBinding меняет каждую pinned descriptor либо binding
+// coordinate, требуя закрытого отказа read/delete/lookup вместо использования объекта иной области.
 func TestEncryptedStoreRejectsEveryForeignDescriptorAndBinding(t *testing.T) {
 	store, _, work, encrypted := storageFixture(t)
 	descriptor, err := store.Create(t.Context(), work, encrypted)
@@ -159,6 +176,12 @@ func TestEncryptedStoreRejectsEveryForeignDescriptorAndBinding(t *testing.T) {
 	}
 }
 
+// TestEncryptedStoreRejectsCorruptionAndReplacement changes
+// immutable/deletion/data/label/UID/RV/key-generation metadata and verifies cleanup refuses each changed
+// object without removing it.
+// TestEncryptedStoreRejectsCorruptionAndReplacement меняет
+// immutable/deletion/data/label/UID/RV/key-generation metadata и проверяет отказ cleanup для каждого
+// изменённого объекта без его удаления.
 func TestEncryptedStoreRejectsCorruptionAndReplacement(t *testing.T) {
 	for _, kind := range []string{"mutable", "deleting", "corrupt-data", "extra-data", "wrong-label", "wrong-uid", "wrong-rv", "wrong-key-generation"} {
 		t.Run(kind, func(t *testing.T) {
@@ -200,6 +223,12 @@ func TestEncryptedStoreRejectsCorruptionAndReplacement(t *testing.T) {
 	}
 }
 
+// TestEncryptedStoreDeleteRaceAndUnknownCreateDoNotRetry injects delete Conflict and then creates
+// different ciphertext at the same name, requiring Conflict and preservation of the existing bytes; it
+// does not simulate an arbitrary lost Create reply.
+// TestEncryptedStoreDeleteRaceAndUnknownCreateDoNotRetry внедряет delete Conflict, затем создаёт иной
+// ciphertext с тем же именем, требуя Conflict и сохранения прежних байтов; произвольную потерю Create
+// reply не моделирует.
 func TestEncryptedStoreDeleteRaceAndUnknownCreateDoNotRetry(t *testing.T) {
 	store, client, work, encrypted := storageFixture(t)
 	descriptor, err := store.Create(t.Context(), work, encrypted)

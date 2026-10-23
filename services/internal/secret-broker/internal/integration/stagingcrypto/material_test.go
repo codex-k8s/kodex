@@ -11,6 +11,10 @@ import (
 	"testing"
 )
 
+// privateMaterialDirectory creates a test-owned temporary directory with explicit 0700 mode for
+// administrative keyring cases.
+// privateMaterialDirectory создаёт принадлежащий тесту временный каталог с явным режимом 0700 для
+// administrative keyring cases.
 func privateMaterialDirectory(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -20,6 +24,10 @@ func privateMaterialDirectory(t *testing.T) string {
 	return dir
 }
 
+// TestMaterialGenerateRotateRetainsEveryReadKey validates initial material/identity/mode, two monotonic
+// rotations, preserved old keys and unchanged input; no runtime key activation occurs.
+// TestMaterialGenerateRotateRetainsEveryReadKey проверяет исходные material/identity/mode, две монотонные
+// rotation, сохранение old keys и неизменность input; runtime key activation не выполняется.
 func TestMaterialGenerateRotateRetainsEveryReadKey(t *testing.T) {
 	dir := privateMaterialDirectory(t)
 	initial := filepath.Join(dir, "first.json")
@@ -69,6 +77,10 @@ func TestMaterialGenerateRotateRetainsEveryReadKey(t *testing.T) {
 	}
 }
 
+// TestMaterialNoOverwriteAndExpectedRevision refuses existing/in-place output and wrong expected revision,
+// requiring no leftover output and unchanged input bytes.
+// TestMaterialNoOverwriteAndExpectedRevision отклоняет existing/in-place output и неверный expected
+// revision, требуя отсутствия остаточного output и неизменности input bytes.
 func TestMaterialNoOverwriteAndExpectedRevision(t *testing.T) {
 	dir := privateMaterialDirectory(t)
 	input := filepath.Join(dir, "input.json")
@@ -94,6 +106,10 @@ func TestMaterialNoOverwriteAndExpectedRevision(t *testing.T) {
 	}
 }
 
+// TestMaterialRejectsUnsafeFilesAndPaths checks rejection of symlink/hardlink/public-mode input, relative
+// output and public or aliased parent directories using disposable files.
+// TestMaterialRejectsUnsafeFilesAndPaths проверяет отказ для symlink/hardlink/public-mode input, relative
+// output и public/aliased parent directories на одноразовых файлах.
 func TestMaterialRejectsUnsafeFilesAndPaths(t *testing.T) {
 	dir := privateMaterialDirectory(t)
 	input := filepath.Join(dir, "input.json")
@@ -152,6 +168,10 @@ func TestMaterialRejectsUnsafeFilesAndPaths(t *testing.T) {
 	}
 }
 
+// TestMaterialRejectsCorruptionCapacityAndOverflow rejects malformed/duplicate/oversized JSON, rotation
+// beyond retained-key capacity and revision overflow without activating generated material.
+// TestMaterialRejectsCorruptionCapacityAndOverflow отклоняет malformed/duplicate/oversized JSON, rotation
+// сверх retained-key capacity и revision overflow без активации созданного материала.
 func TestMaterialRejectsCorruptionCapacityAndOverflow(t *testing.T) {
 	dir := privateMaterialDirectory(t)
 	for name, raw := range map[string][]byte{"malformed": []byte(`{"version":1}`), "duplicate": []byte(`{"version":1,"version":1,"revision":1,"current":"","keys":[]}`), "oversize": bytes.Repeat([]byte("x"), maximumKeyringBytes+1)} {

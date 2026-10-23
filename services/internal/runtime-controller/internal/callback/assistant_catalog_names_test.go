@@ -10,10 +10,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantCatalogNameServer builds a local callback Server around the supplied definition-search stub with a one-second timeout, without starting listeners.
+// assistantCatalogNameServer создаёт локальный Server обратных вызовов вокруг подстановки поиска определений с секундным таймаутом без запуска слушателей.
 func assistantCatalogNameServer(client *assistantDefinitionCatalogClient) *Server {
 	return &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
 }
 
+// TestAssistantCatalogOwnSystemContextNameIsReadable checks six context-name cases translate only the exact own system marker, preserving input metadata and fenced current-configuration lookup.
+// TestAssistantCatalogOwnSystemContextNameIsReadable проверяет в шести случаях названия контекста перевод только точного собственного системного маркера без изменения входных метаданных и запроса текущей конфигурации с ограждением.
 func TestAssistantCatalogOwnSystemContextNameIsReadable(t *testing.T) {
 	for _, test := range []struct {
 		name, kind, ref, label, expected string
@@ -59,6 +63,8 @@ func TestAssistantCatalogOwnSystemContextNameIsReadable(t *testing.T) {
 	}
 }
 
+// TestAssistantCatalogOwnSystemEntryNameIsReadable checks six catalog-name cases preserve references, scope, versions and the authoritative protobuf response while changing only eligible display names.
+// TestAssistantCatalogOwnSystemEntryNameIsReadable проверяет в шести случаях названия каталога сохранение ссылок, области, версий и авторитетного protobuf-ответа с изменением только подходящего отображаемого имени.
 func TestAssistantCatalogOwnSystemEntryNameIsReadable(t *testing.T) {
 	for _, test := range []struct {
 		name, ref, label, expected string

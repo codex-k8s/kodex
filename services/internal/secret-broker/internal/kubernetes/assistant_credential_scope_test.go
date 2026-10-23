@@ -8,6 +8,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// TestScopedAssistantProjectionMaterializesExactOwnerDescriptors exercises system/project trusted
+// profiles, exact replay and source-pin refusal, then verifies projection cleanup preserves the source
+// Secret using synthetic in-memory credentials.
+// TestScopedAssistantProjectionMaterializesExactOwnerDescriptors проверяет system/project trusted
+// профили, точный повтор и отказ неверным source-привязкам, затем сохранение исходного Secret при
+// cleanup проекции с синтетическими учётными данными в памяти.
 func TestScopedAssistantProjectionMaterializesExactOwnerDescriptors(t *testing.T) {
 	for _, scope := range []string{"SYSTEM", "PROJECT"} {
 		t.Run(scope, func(t *testing.T) {

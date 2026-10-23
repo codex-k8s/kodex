@@ -14,6 +14,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// publicationReadFixture creates exact encoded multilingual published source,
+// matching digest, ordinary launch-capable turn input and an isolated catalog fake.
+// No workflow is actually published or executed by this fixture.
+// publicationReadFixture создаёт exact encoded multilingual published source,matching
+// digest,ordinary launch-capable turn input и отдельный catalog fake.
+// Workflow фактически не публикуется и не выполняется.
 func publicationReadFixture(t *testing.T) (*Server, runtimecontract.RunnerInput, *workflowCatalogClient, []byte, string) {
 	t.Helper()
 	model := controlplaneapi.WorkflowPublication{Version: 1, WorkflowRef: "wfl_workflow01", ProjectRef: "prj_project001", PublishedRef: "wfv_workflow01", SpecDigest: strings.Repeat("a", 64), WorkflowVersion: 7, PublishedVersion: 3, Name: "Процесс", CoordinatorAgentRef: "agt_coordinator", Instructions: strings.Repeat("Работа ё🙂 <> ", 2000), Concurrency: 1, TimeoutSeconds: 3600, Steps: []controlplaneapi.WorkflowPublicationStep{{Key: "step-001", Position: 1, AgentRef: "agt_specialist", Instructions: "Инструкция", TimeoutSeconds: 900}}}
@@ -25,9 +31,21 @@ func publicationReadFixture(t *testing.T) (*Server, runtimecontract.RunnerInput,
 	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: runtimecontract.AssistantScopeNone, ProjectRef: model.ProjectRef, Capabilities: []string{"platform.run.launch"}, LeaseRef: "lse_origin001", LeaseFence: "fixture-fence", LeaseGeneration: 7}
 	return &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}, input, client, raw, digest
 }
+
+// publicationPins returns fresh synthetic discovery pins with record version seven,
+// which is distinct from the publication's revision number three.
+// publicationPins возвращает новые synthetic discovery pins с record version семь,
+// отличной от publication revision number три.
 func publicationPins() map[string]any {
 	return map[string]any{"workflow_ref": "wfl_workflow01", "published_ref": "wfv_workflow01", "spec_digest": strings.Repeat("a", 64), "workflow_version": float64(7)}
 }
+
+// TestExecutionWorkflowPublicationUTF8MultiEOF assembles exact multilingual source
+// through local digest-pinned pages, checks continuity/owner mapping and empty exact EOF,
+// and rejects a discovery request receiving the publication-mode response.
+// TestExecutionWorkflowPublicationUTF8MultiEOF собирает exact multilingual source
+// через local digest-pinned pages,проверяет continuity/owner mapping/empty exact EOF
+// и отказ discovery request при publication-mode response.
 func TestExecutionWorkflowPublicationUTF8MultiEOF(t *testing.T) {
 	server, input, client, source, digest := publicationReadFixture(t)
 	selector := publicationPins()
@@ -69,6 +87,13 @@ func TestExecutionWorkflowPublicationUTF8MultiEOF(t *testing.T) {
 		t.Fatal("cross-mode owner response accepted")
 	}
 }
+
+// TestExecutionWorkflowPublicationClosedFailures checks malformed pins/coordinates,
+// mixed modes and corrupt/unknown/missing owner responses are rejected; mixed local
+// selectors must fail before any owner call.
+// TestExecutionWorkflowPublicationClosedFailures проверяет отказ malformed pins/coordinates,
+// mixed modes,corrupt/unknown/missing owner responses; mixed local selectors
+// должны отклоняться до owner call.
 func TestExecutionWorkflowPublicationClosedFailures(t *testing.T) {
 	for name, mutate := range map[string]func(map[string]any){
 		"unknown":                   func(v map[string]any) { v["credential"] = "CANARY" },
@@ -124,9 +149,21 @@ func TestExecutionWorkflowPublicationClosedFailures(t *testing.T) {
 		})
 	}
 }
+
+// activeRunResponse builds one synthetic WAITING_HUMAN root whose actual historical
+// publication differs from the current discovery pins, preserving that distinction.
+// activeRunResponse создаёт synthetic WAITING_HUMAN root с actual historical publication,
+// отличной от current discovery pins, сохраняя это различие.
 func activeRunResponse() *cp.GetExecutionWorkflowCatalogResponse {
 	return &cp.GetExecutionWorkflowCatalogResponse{Read: &cp.GetExecutionWorkflowCatalogResponse_ActiveRuns{ActiveRuns: &cp.ExecutionWorkflowActiveRuns{Pins: &cp.ExecutionWorkflowReadPins{WorkflowRef: "wfl_workflow01", PublishedRef: "wfv_workflow01", SpecDigest: strings.Repeat("a", 64), WorkflowVersion: 7}, Items: []*cp.ExecutionWorkflowActiveRun{{RunRef: "run_workflow01", WorkflowRef: "wfl_workflow01", PublishedRef: "wfv_previous01", SpecDigest: strings.Repeat("c", 64), PublishedVersion: 2, RunVersion: 4, State: "WAITING_HUMAN", Title: "Задача", CreatedAt: timestamppb.New(time.Unix(100, 0))}}}}}
 }
+
+// TestExecutionWorkflowActiveRunsClosedProjection checks advisory actor-visible roots
+// retain historical publication and reject terminal, foreign, duplicate, mismatched-pin,
+// missing-time or excessive rows; it does not prove launch uniqueness.
+// TestExecutionWorkflowActiveRunsClosedProjection проверяет historical publication
+// advisory actor-visible roots и отказ terminal,foreign,duplicate,mismatched-pin,
+// missing-time/excessive rows; launch uniqueness не доказывается.
 func TestExecutionWorkflowActiveRunsClosedProjection(t *testing.T) {
 	server, input, client, _, _ := publicationReadFixture(t)
 	client.response = activeRunResponse()

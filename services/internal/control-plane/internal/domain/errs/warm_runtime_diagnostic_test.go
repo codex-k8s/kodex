@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// TestWarmRuntimeStagePreservesCauseAndClosedDiagnostics checks all twenty warm stages against five error classes, private-message suppression and preservation of an inner stage by outer wrapping. Nil and unknown-stage examples retain safe outcomes; this is an in-memory wrapper test, not runtime reconciliation.
+// TestWarmRuntimeStagePreservesCauseAndClosedDiagnostics проверяет все двадцать этапов тёплого runtime с пятью классами ошибок, скрытие закрытого сообщения и сохранение внутреннего этапа внешней обёрткой. Nil и примеры неизвестных этапов сохраняют безопасные исходы; это тест обёрток в памяти, а не сверка runtime.
 func TestWarmRuntimeStagePreservesCauseAndClosedDiagnostics(t *testing.T) {
 	for _, stage := range []string{WarmReconcileScope, WarmReconcileTransaction, WarmReconcileProviderPolicy,
 		WarmReconcileProviderPolicyRead, WarmReconcileProviderPolicyDecode, WarmReconcileProviderPolicyCatalog,

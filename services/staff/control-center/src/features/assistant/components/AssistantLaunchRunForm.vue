@@ -5,23 +5,22 @@ import {
   operationParameter,
   type EditablePlanOperation,
 } from "@/features/assistant/model";
-import { prepareAssistantWorkflowInput } from "@/features/assistant/run-input";
+import {
+  assistantWorkflowInputDraft,
+  prepareAssistantWorkflowInput,
+} from "@/features/assistant/run-input";
+import { watchAssistantExecutionTarget } from "@/features/assistant/execution-target-readback";
 import { environmentReadinessMessage } from "@/features/runtime/environment-readiness-message";
 import {
   createExecutionTargetPickerLoader,
   isEligibleAgent,
   isEligibleWorkflow,
   selectedExecutionTargetOption,
-  toExecutionTargetOption,
   type ExecutionTargetPickerOption,
   type ExecutionTargetType,
 } from "@/shared/api/execution-target-picker";
 import { requestSignal } from "@/shared/api/client";
-import {
-  getAgent,
-  getAgentRuntimeConfiguration,
-  getWorkflow,
-} from "@/shared/api/generated/openapi/sdk.gen";
+import { getAgentRuntimeConfiguration } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   Agent,
   RuntimeEnvironmentSet,
@@ -87,80 +86,18 @@ const selectedOption = computed(() =>
 watch(
   () => JSON.stringify([props.operation.value.ref, parameter("input")]),
   () => {
-    const input = parameter("input");
-    invalidInitialInputKeys.value = new Set(
-      typeof input === "object" && input !== null && !Array.isArray(input)
-        ? Object.entries(input)
-            .filter(
-              ([, value]) =>
-                value !== null &&
-                typeof value !== "string" &&
-                typeof value !== "number" &&
-                typeof value !== "boolean",
-            )
-            .map(([key]) => key)
-        : [],
-    );
-    rawInput.value =
-      typeof input === "object" && input !== null && !Array.isArray(input)
-        ? Object.fromEntries(
-            Object.entries(input).map(([key, value]) => [key, String(value)]),
-          )
-        : {};
+    const draft = assistantWorkflowInputDraft(parameter("input"));
+    invalidInitialInputKeys.value = draft.invalidKeys;
+    rawInput.value = draft.rawInput;
   },
   { immediate: true },
 );
 
-watch(
+watchAssistantExecutionTarget(
   [() => props.projectRef, targetType, targetRef] as const,
-  ([projectRef, type, ref], _previous, onCleanup) => {
-    if (
-      selected.value?.ref === ref &&
-      selected.value.targetType === type &&
-      selected.value.target.projectRef === projectRef
-    )
-      return;
-    selected.value = undefined;
-    targetProblem.value = false;
-    if (!projectRef || !type || !ref) return;
-    const controller = new AbortController();
-    onCleanup(() => controller.abort());
-    void (async () => {
-      try {
-        const target =
-          type === "AGENT"
-            ? (
-                await unwrap(
-                  getAgent({
-                    path: { agentRef: ref },
-                    signal: requestSignal(controller.signal),
-                  }),
-                )
-              ).data
-            : (
-                await unwrap(
-                  getWorkflow({
-                    path: { workflowRef: ref },
-                    signal: requestSignal(controller.signal),
-                  }),
-                )
-              ).data;
-        if (controller.signal.aborted) return;
-        if (
-          target.ref !== ref ||
-          target.projectRef !== projectRef ||
-          (type === "AGENT"
-            ? !isEligibleAgent(target as Agent)
-            : !isEligibleWorkflow(target as Workflow))
-        )
-          throw new Error("Assistant run target readback mismatch");
-        selected.value = toExecutionTargetOption(type, target);
-      } catch {
-        if (!controller.signal.aborted) targetProblem.value = true;
-      }
-    })();
-  },
-  { immediate: true },
+  selected,
+  targetProblem,
+  "Assistant run target readback mismatch",
 );
 
 watch(

@@ -8,6 +8,10 @@ import (
 	"os"
 )
 
+// main accepts only a canonical single-address IPv4 /32 or IPv6 /128 CIDR
+// for offline release rendering, rejecting networks and host bits.
+// RU: main принимает для offline render только канонический CIDR одного адреса
+// IPv4 /32 или IPv6 /128, отклоняя сети и выставленные host bits.
 func main() {
 	if len(os.Args) != 2 {
 		_, _ = fmt.Fprintln(os.Stderr, "usage: validate-host-cidr <ipv4/32|ipv6/128>")

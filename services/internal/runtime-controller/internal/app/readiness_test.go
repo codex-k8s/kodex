@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+// TestKubernetesReadinessObserverUsesBoundedLastKnownGood advances an injected clock across success, eligible failures and the exact expiry boundary.
+// It checks availability and degradation-change flags without contacting Kubernetes.
+// TestKubernetesReadinessObserverUsesBoundedLastKnownGood переводит заменённые часы через успех, допустимые ошибки и точную границу истечения.
+// Проверяются доступность и признаки смены ухудшения без обращения к Kubernetes.
 func TestKubernetesReadinessObserverUsesBoundedLastKnownGood(t *testing.T) {
 	t.Parallel()
 	startedAt := time.Date(2026, 8, 23, 10, 0, 0, 0, time.UTC)
@@ -37,6 +41,10 @@ func TestKubernetesReadinessObserverUsesBoundedLastKnownGood(t *testing.T) {
 	}
 }
 
+// TestKubernetesReadinessObserverRecoveryStartsFreshWindow records a recovery and verifies a later eligible failure
+// uses the recovered success time rather than the original window.
+// TestKubernetesReadinessObserverRecoveryStartsFreshWindow фиксирует восстановление и проверяет, что последующая допустимая ошибка
+// использует время восстановленного успеха, а не первоначальное окно.
 func TestKubernetesReadinessObserverRecoveryStartsFreshWindow(t *testing.T) {
 	t.Parallel()
 	startedAt := time.Date(2026, 8, 23, 10, 0, 0, 0, time.UTC)
@@ -60,6 +68,10 @@ func TestKubernetesReadinessObserverRecoveryStartsFreshWindow(t *testing.T) {
 	}
 }
 
+// TestKubernetesReadinessObserverRejectsLastKnownGoodForIntegrityOrAuthorizationFailure explicitly disallows fallback despite a previous success.
+// The observer must return unavailable and degraded; error eligibility itself is supplied by the caller, not inferred from the test error text.
+// TestKubernetesReadinessObserverRejectsLastKnownGoodForIntegrityOrAuthorizationFailure явно запрещает запасной путь, несмотря на прежний успех.
+// Наблюдатель должен вернуть недоступность и ухудшение; допустимость ошибки задаёт потребитель, а не текст тестовой ошибки.
 func TestKubernetesReadinessObserverRejectsLastKnownGoodForIntegrityOrAuthorizationFailure(t *testing.T) {
 	t.Parallel()
 	observer := newKubernetesReadinessObserver()

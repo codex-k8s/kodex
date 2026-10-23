@@ -11,6 +11,12 @@ import type {
 import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
 
 const getAgentRuntimeConfigurationMock = vi.hoisted(() => vi.fn());
+const publishAgentRuntimeConfigurationMock = vi.hoisted(() => vi.fn());
+const createConfigOverlayDraftMock = vi.hoisted(() => vi.fn());
+const validateConfigOverlayDraftMock = vi.hoisted(() => vi.fn());
+const publishConfigOverlayDraftMock = vi.hoisted(() => vi.fn());
+const rollbackConfigOverlayMock = vi.hoisted(() => vi.fn());
+const bindAgentRuntimeEnvironmentMock = vi.hoisted(() => vi.fn());
 const listAgentRuntimeConfigurationVersionsMock = vi.hoisted(() => vi.fn());
 const createRuntimeEnvironmentSetMock = vi.hoisted(() => vi.fn());
 const deleteRuntimeEnvironmentMock = vi.hoisted(() => vi.fn());
@@ -60,6 +66,12 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   createRuntimeEnvironmentSet: createRuntimeEnvironmentSetMock,
   deleteRuntimeEnvironment: deleteRuntimeEnvironmentMock,
   getAgentRuntimeConfiguration: getAgentRuntimeConfigurationMock,
+  publishAgentRuntimeConfiguration: publishAgentRuntimeConfigurationMock,
+  createConfigOverlayDraft: createConfigOverlayDraftMock,
+  validateConfigOverlayDraft: validateConfigOverlayDraftMock,
+  publishConfigOverlayDraft: publishConfigOverlayDraftMock,
+  rollbackConfigOverlay: rollbackConfigOverlayMock,
+  bindAgentRuntimeEnvironment: bindAgentRuntimeEnvironmentMock,
   getRuntimeEnvironmentReadiness: getRuntimeEnvironmentReadinessMock,
   getRoleImageRecipe: getRoleImageRecipeMock,
   listRoleImageRecipes: listRoleImageRecipesMock,
@@ -181,6 +193,12 @@ describe("runtime store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     getAgentRuntimeConfigurationMock.mockReset();
+    publishAgentRuntimeConfigurationMock.mockReset();
+    createConfigOverlayDraftMock.mockReset();
+    validateConfigOverlayDraftMock.mockReset();
+    publishConfigOverlayDraftMock.mockReset();
+    rollbackConfigOverlayMock.mockReset();
+    bindAgentRuntimeEnvironmentMock.mockReset();
     listAgentRuntimeConfigurationVersionsMock.mockReset();
     createRuntimeEnvironmentSetMock.mockReset();
     deleteRuntimeEnvironmentMock.mockReset();
@@ -220,6 +238,66 @@ describe("runtime store", () => {
     await oldLoad;
 
     expect(store.agentViews.agent_sales?.configuration.model).toBe("gpt-new");
+  });
+  it("применяет readback каждой команды агента с её собственным маршрутом и OCC", async () => {
+    const store = useRuntimeStore();
+    const updated = view("gpt-updated", 4);
+    const input = {
+      runtimeProfileRef: "runtime_standard",
+      model: "gpt-updated",
+      providerPolicyMode: "FIXED" as const,
+      providerAccounts: [],
+    };
+    const commands = [
+      {
+        mock: publishAgentRuntimeConfigurationMock,
+        call: () => store.saveAgentRuntime("agent_sales", input, 3),
+        body: input,
+      },
+      {
+        mock: createConfigOverlayDraftMock,
+        call: () => store.saveOverlayDraft("agent_sales", "model = 'gpt'", 3),
+        body: { content: "model = 'gpt'" },
+      },
+      {
+        mock: validateConfigOverlayDraftMock,
+        call: () => store.changeOverlay("agent_sales", "VALIDATE", 3),
+      },
+      {
+        mock: publishConfigOverlayDraftMock,
+        call: () => store.changeOverlay("agent_sales", "PUBLISH", 3),
+      },
+      {
+        mock: rollbackConfigOverlayMock,
+        call: () => store.restoreOverlay("agent_sales", "overlay_old", 3),
+        body: { publishedOverlayRef: "overlay_old" },
+      },
+      {
+        mock: bindAgentRuntimeEnvironmentMock,
+        call: () => store.bindEnvironment("agent_sales", "environment_main", 3),
+        body: { environmentRef: "environment_main" },
+      },
+    ];
+    for (const command of commands) {
+      command.mock.mockResolvedValueOnce(response(updated));
+      await expect(command.call()).resolves.toEqual(updated);
+      expect(command.mock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: { agentRef: "agent_sales" },
+          ...(command.body ? { body: command.body } : {}),
+          headers: {
+            "If-Match": '"3"',
+            "Idempotency-Key": "idem_1",
+            "X-CSRF-Token": "csrf_1",
+          },
+        }),
+      );
+    }
+    expect(mutateMock).toHaveBeenCalledTimes(commands.length);
+    expect(mutateMock.mock.calls.every((call) => call[1] === 3)).toBe(true);
+    expect(store.agentViews.agent_sales?.configuration.model).toBe(
+      "gpt-updated",
+    );
   });
   it.each(["readiness", "agents"] as const)(
     "404 %s очищает обе inspector projections и не принимает поздний соседний ответ",

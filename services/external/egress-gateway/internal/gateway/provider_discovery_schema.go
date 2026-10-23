@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 )
 
+// maximumAccountsCheckShapeBytes bounds the untrusted JSON considered by account-shape diagnostics.
+// maximumAccountsCheckShapeBytes ограничивает недоверенный JSON, разбираемый диагностикой формы аккаунтов.
 const maximumAccountsCheckShapeBytes = 1 << 20
 
-// Проверяются только типы backend-client/src/types.rs из openai/codex
-// rust-v0.160.0. Это диагностика decode, а не допуска, выбора workspace или
-// пригодности routing. Значения, ключи аккаунтов и ошибки decoder не выдаются.
+// classifyAccountsCheckShape checks only the pinned Codex backend-client/src/types.rs JSON shape.
+// classifyAccountsCheckShape проверяет только форму JSON из закреплённого backend-client/src/types.rs Codex.
+// It is decode diagnostics, not access or workspace routing; values, account keys, and decoder errors stay private.
+// Это диагностика разбора, не допуск и не выбор workspace; значения, ключи и ошибки decoder не выдаются.
 func classifyAccountsCheckShape(raw []byte) string {
 	if len(raw) > maximumAccountsCheckShapeBytes {
 		return "BOUND_EXCEEDED"
@@ -78,6 +81,8 @@ func classifyAccountsCheckShape(raw []byte) string {
 	}
 }
 
+// accountsCheckListEntry validates the required list-form account identifier and optional fields.
+// accountsCheckListEntry проверяет обязательный идентификатор списковой записи и дополнительные поля.
 func accountsCheckListEntry(raw json.RawMessage) string {
 	fields, ok := accountsCheckStruct(raw, []string{"id", "plan_type", "workspace_backend_origin", "account_routing_override", "name", "profile_picture_url", "structure"}, 4)
 	if !ok {
@@ -89,6 +94,8 @@ func accountsCheckListEntry(raw json.RawMessage) string {
 	return accountsCheckOptionalFields(fields, "plan_type", "workspace_backend_origin", "account_routing_override", "name", "profile_picture_url")
 }
 
+// accountsCheckMapEntry validates the nested account object without retaining its map key.
+// accountsCheckMapEntry проверяет вложенный объект аккаунта, не сохраняя ключ словаря.
 func accountsCheckMapEntry(raw json.RawMessage) string {
 	fields, ok := accountsCheckStruct(raw, []string{"account"}, 1)
 	if !ok {
@@ -101,6 +108,8 @@ func accountsCheckMapEntry(raw json.RawMessage) string {
 	return accountsCheckOptionalFields(account, "account_id", "plan_type", "name", "profile_picture_url")
 }
 
+// accountsCheckOptionalFields validates nullable strings and the nonnullable defaulted structure field.
+// accountsCheckOptionalFields проверяет nullable-строки и ненулевое поле structure со значением по умолчанию.
 func accountsCheckOptionalFields(fields map[string]json.RawMessage, names ...string) string {
 	for _, name := range names {
 		if !accountsCheckOptionalString(fields, name) {
@@ -114,23 +123,31 @@ func accountsCheckOptionalFields(fields map[string]json.RawMessage, names ...str
 	return ""
 }
 
+// accountsCheckOptionalString accepts an absent, null, or JSON string field.
+// accountsCheckOptionalString принимает отсутствующее поле, null или строку JSON.
 func accountsCheckOptionalString(fields map[string]json.RawMessage, name string) bool {
 	raw, exists := fields[name]
 	return !exists || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || accountsCheckString(raw)
 }
 
+// accountsCheckString recognizes a syntactically valid JSON string after the outer JSON validation.
+// accountsCheckString распознаёт строку после предварительной проверки синтаксиса всего JSON.
 func accountsCheckString(raw json.RawMessage) bool {
 	raw = bytes.TrimSpace(raw)
 	return len(raw) > 0 && raw[0] == '"'
 }
 
+// accountsCheckArray decodes only a JSON array into raw entries for bounded shape checks.
+// accountsCheckArray разбирает только массив JSON в сырые элементы для ограниченной проверки формы.
 func accountsCheckArray(raw json.RawMessage, entries *[]json.RawMessage) bool {
 	raw = bytes.TrimSpace(raw)
 	return len(raw) > 0 && raw[0] == '[' && json.Unmarshal(raw, entries) == nil
 }
 
-// serde-derived struct допускает object и positional sequence. Неизвестные
-// object-поля игнорируются, повтор известных полей и лишние sequence-поля — нет.
+// accountsCheckStruct accepts serde object or positional sequence shapes with exact known-field cardinality.
+// accountsCheckStruct принимает serde object или позиционную последовательность с точной кратностью известных полей.
+// Unknown object fields are ignored; duplicate known fields and excess sequence elements are rejected.
+// Неизвестные поля объекта игнорируются; повтор известных и лишние элементы последовательности отклоняются.
 func accountsCheckStruct(raw json.RawMessage, names []string, minimumSequenceFields int) (map[string]json.RawMessage, bool) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 {

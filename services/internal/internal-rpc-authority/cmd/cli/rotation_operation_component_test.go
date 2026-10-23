@@ -13,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testAuthorityNormalRotationOperation checks concurrent exact preparation converges, foreign operations and conflicting phase intents fail, and two disposable DISTRIBUTE/SWITCH/RETIRE operations persist six distinct publications with independent registry/snapshot revisions. It verifies rejoin deadlines and exact predecessor provenance through the repository, rejects corrupted input/digest bindings, and preserves the first retired operation. Admin-seeded readbacks and deadline updates accelerate phase progression; scoped cleanup restores the shared fixture, so this is not an end-to-end real-time rotation or signed-attestor test.
+// testAuthorityNormalRotationOperation проверяет сходимость конкурентной точной подготовки, отказ чужим операциям и конфликтующим намерениям фазы и сохранение шести отдельных публикаций двумя одноразовыми операциями DISTRIBUTE, SWITCH и RETIRE с независимыми ревизиями реестра и снимка. Проверяются сроки после переподключения и точное происхождение предшественника через репозиторий, отклоняются повреждённые привязки входа и дайджестов, сохраняется первая выведенная операция. Созданные администратором readback и обновления сроков ускоряют переходы фаз; ограниченная очистка восстанавливает общий эталон, поэтому это не сквозная ротация на реальном времени и не тест подписанного attestor.
 func testAuthorityNormalRotationOperation(t *testing.T, port uint64) {
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 	defer cancel()
@@ -46,6 +48,8 @@ func testAuthorityNormalRotationOperation(t *testing.T, port uint64) {
 		return status, switchAt, previousAt
 	}
 	load := func() (string, *time.Time, *time.Time) { return loadFrom(publisher) }
+	// concurrentResult carries one publisher connection's preparation status and error through a buffered channel, allowing both concurrent database responses to be checked independently for convergence to DISTRIBUTING.
+	// concurrentResult передаёт статус подготовки и ошибку одного соединения publisher через буферизованный канал, позволяя независимо проверить оба конкурентных ответа БД на сходимость к DISTRIBUTING.
 	type concurrentResult struct {
 		status string
 		err    error

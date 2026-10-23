@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
 import type {
   ManagedConfigurationResult,
   Project,
@@ -55,20 +56,7 @@ async function installBase(
     }
     if (url.pathname === "/config/runtime-config.json") {
       await route.fulfill({
-        json: {
-          revision: "0".repeat(64),
-          environment: "synthetic",
-          apiBaseUrl: "/",
-          realtimeUrl: "/api/v1",
-          requestTimeoutMs: 10_000,
-          oidc: {
-            authority: "https://identity.invalid",
-            clientId: "synthetic",
-            redirectUri: "/auth/callback",
-            postLogoutRedirectUri: "/",
-            scope: "openid",
-          },
-        },
+        json: syntheticRuntimeConfig(),
       });
       return;
     }

@@ -18,12 +18,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// revisionRetentionSeed creates disposable historical and current revisions for the component test.
+// RU: revisionRetentionSeed создаёт одноразовые историческую и текущую версии для component-теста.
 //go:embed testdata/revision_retention_seed.sql
 var revisionRetentionSeed string
 
+// revisionRetentionReadback reads exact lifecycle, receipt and reference counts after each purge.
+// RU: revisionRetentionReadback читает точные состояния lifecycle, receipts и счётчики ссылок после очистки.
 //go:embed testdata/revision_retention_readback.sql
 var revisionRetentionReadback string
 
+// TestRevisionRetentionComponent verifies two exact-version purges, stale-fence denial,
+// retained references and terminal idempotency in a dedicated disposable PostgreSQL instance.
+// RU: TestRevisionRetentionComponent проверяет очистку двух точных версий, отказ старому fence,
+// сохранённые ссылки и идемпотентность терминального состояния в отдельном одноразовом PostgreSQL.
 func TestRevisionRetentionComponent(t *testing.T) {
 	dsn := os.Getenv("KODEX_ARTIFACT_RETENTION_COMPONENT_DSN")
 	if dsn == "" {
@@ -101,6 +109,8 @@ func TestRevisionRetentionComponent(t *testing.T) {
 	}
 }
 
+// assertRevisionRetentionState compares authoritative head, version, content and reference readback.
+// RU: assertRevisionRetentionState сверяет авторитетные head, версии, содержимое и ссылки после чтения.
 func assertRevisionRetentionState(t *testing.T, ctx context.Context, admin *pgx.Conn, terminal bool, wantState string, wantContent, wantRevisions int64) {
 	t.Helper()
 	var state string

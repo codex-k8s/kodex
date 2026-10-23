@@ -10,6 +10,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestImageAdmissionTerminalCasterHasClosedRoundTrip checks four terminal and four live/empty/unknown
+// fixture states, rejecting nonterminal output and preserving accepted enum and pinned fields through
+// protobuf marshal/unmarshal; it performs no real owner read.
+// TestImageAdmissionTerminalCasterHasClosedRoundTrip проверяет четыре terminal и четыре активных,
+// пустых или неизвестных состояния примера, отклоняя не-terminal результат и сохраняя принятый enum и
+// привязки через protobuf marshal/unmarshal; реального чтения владельца не выполняет.
 func TestImageAdmissionTerminalCasterHasClosedRoundTrip(t *testing.T) {
 	for _, state := range []string{"ACCEPTED", "REJECTED", "FAILED", "CANCELLED", "CLAIMED", "PENDING", "", "UNKNOWN"} {
 		t.Run(state, func(t *testing.T) {

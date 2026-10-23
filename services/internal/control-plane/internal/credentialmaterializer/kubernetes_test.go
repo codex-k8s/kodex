@@ -14,6 +14,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestMaterializeCreatesAnExactSecretKeyAndSupportsSafeRetry uses a fake client to check the exact descriptor,
+// preservation of unrelated data and reuse of identical bytes; it does not exercise a live API server.
+// TestMaterializeCreatesAnExactSecretKeyAndSupportsSafeRetry на подставном клиенте проверяет точный дескриптор,
+// сохранение посторонних данных и повторное использование одинаковых байтов; настоящий сервер API не задействован.
 func TestMaterializeCreatesAnExactSecretKeyAndSupportsSafeRetry(t *testing.T) {
 	t.Parallel()
 	client := fake.NewSimpleClientset(&corev1.Secret{
@@ -51,6 +55,10 @@ func TestMaterializeCreatesAnExactSecretKeyAndSupportsSafeRetry(t *testing.T) {
 	}
 }
 
+// TestMaterializeRejectsIdempotencyKeyReuseWithDifferentCredential checks that a second value under the same Secret key
+// returns the domain materialization conflict rather than overwriting the first credential.
+// TestMaterializeRejectsIdempotencyKeyReuseWithDifferentCredential проверяет, что другое значение того же ключа Secret
+// возвращает доменный конфликт размещения, а не перезаписывает первые учётные данные.
 func TestMaterializeRejectsIdempotencyKeyReuseWithDifferentCredential(t *testing.T) {
 	t.Parallel()
 	client := fake.NewSimpleClientset(&corev1.Secret{

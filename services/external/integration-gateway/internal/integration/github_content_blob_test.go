@@ -16,6 +16,8 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// githubBlobFixture builds synthetic Contents/blob objects and a token-bound in-memory SDK transport with the real bounded-response wrapper, without external network access.
+// RU: githubBlobFixture создаёт синтетические Contents/blob объекты и SDK transport в памяти с фиктивным токеном и настоящим bounded-response wrapper без внешней сети.
 func githubBlobFixture(t *testing.T, content string) (*github.Client, *github.RepositoryContent, *github.Blob, *int) {
 	t.Helper()
 	file := githubPageFixtureFile(content, "libs/go/controlplaneapi/gen/controlplane/v1/control_plane.pb.go")
@@ -58,6 +60,8 @@ func githubBlobFixture(t *testing.T, content string) (*github.Client, *github.Re
 	return client, file, blob, &calls
 }
 
+// TestGitHubContentBlobRejectsUnboundMetadataBeforeBlobFetch rejects invalid selectors or metadata with exact zero/one-call expectations, proving no subsequent blob read or partial result.
+// RU: TestGitHubContentBlobRejectsUnboundMetadataBeforeBlobFetch отклоняет неверные параметры либо metadata с точными нулём/одним вызовом, проверяя отсутствие последующего blob-чтения и частичного результата.
 func TestGitHubContentBlobRejectsUnboundMetadataBeforeBlobFetch(t *testing.T) {
 	for _, scenario := range []string{"path", "ref", "expected-sha", "type", "encoding", "none-content", "oversize", "missing-size", "small-none"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -94,6 +98,8 @@ func TestGitHubContentBlobRejectsUnboundMetadataBeforeBlobFetch(t *testing.T) {
 	}
 }
 
+// TestGitHubContentBlobRejectsInvalidFullSource rejects inconsistent blob identity/size/encoding, malformed base64, invalid UTF-8/NUL, wrong content hash and response overflow without a partial page or validation retry.
+// RU: TestGitHubContentBlobRejectsInvalidFullSource отклоняет неверные blob identity/size/encoding, base64, UTF-8/NUL, content hash и response overflow без частичной страницы и повтора проверки.
 func TestGitHubContentBlobRejectsInvalidFullSource(t *testing.T) {
 	for _, scenario := range []string{"sha", "size", "missing-size", "encoding", "missing-content", "base64", "nul", "utf8", "content-hash", "overflow"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -128,6 +134,8 @@ func TestGitHubContentBlobRejectsInvalidFullSource(t *testing.T) {
 	}
 }
 
+// TestGitHubContentBlobBoundaryPinsUTF8AndEOF samples start, last page and exact EOF of an eight-MiB UTF-8 source, preserving source pins, digests and exactly two fake provider reads per sample.
+// RU: TestGitHubContentBlobBoundaryPinsUTF8AndEOF проверяет начало, последнюю страницу и точный EOF восьми-МиБ UTF-8 источника, сохраняя привязки, хеши и ровно два фиктивных provider-чтения на образец.
 func TestGitHubContentBlobBoundaryPinsUTF8AndEOF(t *testing.T) {
 	content := strings.Repeat("Я", maximumGitHubContentSourceBytes/2)
 	client, file, _, calls := githubBlobFixture(t, content)
@@ -150,6 +158,8 @@ func TestGitHubContentBlobBoundaryPinsUTF8AndEOF(t *testing.T) {
 	}
 }
 
+// TestGitHubContentBlobCancellationAndRedirectNeverReturnPage injects cancellation or a foreign-host redirect during blob retrieval and requires safe failure with no page or additional destination call.
+// RU: TestGitHubContentBlobCancellationAndRedirectNeverReturnPage подставляет отмену либо redirect на чужой хост во время blob-чтения и требует безопасный отказ без страницы и вызова нового назначения.
 func TestGitHubContentBlobCancellationAndRedirectNeverReturnPage(t *testing.T) {
 	for _, scenario := range []string{"cancel", "redirect"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -180,6 +190,8 @@ func TestGitHubContentBlobCancellationAndRedirectNeverReturnPage(t *testing.T) {
 	}
 }
 
+// TestGitHubContentBlobReadsActualGeneratedSourceWithinBoundedEnvelope uses generated-file-sized synthetic text, not a real generated repository file, to verify Contents-plus-blob paging and exact delivery pins.
+// RU: TestGitHubContentBlobReadsActualGeneratedSourceWithinBoundedEnvelope использует синтетический текст размера generated-файла, а не реальный generated-исходник репозитория, для проверки Contents-plus-blob страниц и точных привязок доставки.
 func TestGitHubContentBlobReadsActualGeneratedSourceWithinBoundedEnvelope(t *testing.T) {
 	content := strings.Repeat("x", 3590649)
 	client, file, _, calls := githubBlobFixture(t, content)
@@ -195,6 +207,8 @@ func TestGitHubContentBlobReadsActualGeneratedSourceWithinBoundedEnvelope(t *tes
 	}
 }
 
+// TestGitHubContentBlobBudgetIsExactPrivateAndClosesResponses verifies only the sealed exact blob GET gets the expanded cap; invalid intent/binding fails before transport and obtained source bodies close even on overflow.
+// RU: TestGitHubContentBlobBudgetIsExactPrivateAndClosesResponses проверяет расширенный cap только для точного закрытого blob GET; неверный intent/binding отклоняется до transport, а полученное body закрывается и при overflow.
 func TestGitHubContentBlobBudgetIsExactPrivateAndClosesResponses(t *testing.T) {
 	for _, scenario := range []string{"expanded", "ordinary", "error", "overflow", "foreign-repo", "foreign-sha", "method", "query", "host", "scheme", "unknown-intent", "oversize-intent", "small-intent"} {
 		t.Run(scenario, func(t *testing.T) {

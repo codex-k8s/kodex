@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+// TestLimiterBoundsRateAndConcurrency checks fixed-window rollover, global and
+// per-subject slots, safe release and fail-closed eviction at the key limit.
+// TestLimiterBoundsRateAndConcurrency проверяет смену окна, глобальные и
+// персональные слоты, освобождение и закрытый отказ при лимите ключей.
 func TestLimiterBoundsRateAndConcurrency(t *testing.T) {
 	now := time.Date(2026, 8, 4, 12, 0, 0, 0, time.UTC)
 	limiter := New(Config{Window: time.Minute, Limit: 2, MaximumKeys: 2, PreAuthConcurrency: 1, GlobalHTTPConcurrency: 2, PerSubjectHTTPConcurrency: 1, GlobalWebSocketConcurrency: 2, PerSubjectWebSocketConcurrency: 1})

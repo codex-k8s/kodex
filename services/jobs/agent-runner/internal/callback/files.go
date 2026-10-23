@@ -14,8 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
-// ServeCatalogFile не переносит caller headers или URL authority upstream.
-// Controller уже завершил private spool/owner verification до ответа 200.
+// ServeCatalogFile validates the catalog route and enforces a downstream write deadline, then rebuilds a ticket-authenticated upstream request without caller headers or URL authority. After validating metadata it streams and hashes the body, aborting partial responses on mismatch; upstream controller owns spool/owner verification.
+// ServeCatalogFile проверяет маршрут каталога и требует срок записи клиенту, затем заново строит upstream-запрос с ticket без заголовков и URL authority вызывающего. После проверки метаданных передаёт и хеширует тело, прерывая частичный ответ при несовпадении; проверка spool/владельца принадлежит controller.
 func (client *Client) ServeCatalogFile(writer http.ResponseWriter, request *http.Request, input model.Input) {
 	expected, err := filetransfer.CatalogRequest(input, request)
 	if err != nil {

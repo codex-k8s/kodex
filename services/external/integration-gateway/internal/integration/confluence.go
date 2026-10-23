@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// confluencePage decodes the page identity, space, version and storage body needed for scoped reads and versioned updates.
+// Callers must verify the returned space/page identity before exposing body data or issuing follow-up writes.
+// confluencePage декодирует идентичность страницы, пространство, версию и storage body для ограниченного чтения и версионированного обновления.
+// Вызывающий обязан проверить возвращённые пространство и страницу до выдачи тела или последующих записей.
 type confluencePage struct {
 	ID, Title, Status string
 	SpaceID           string `json:"spaceId"`
@@ -29,23 +33,31 @@ type confluencePage struct {
 	} `json:"body"`
 }
 
+// testConfluence validates the pinned definition and probes the configured space with its registered health operation.
+// It returns the provider failure unchanged and creates no page, attachment or authorization grant.
+// testConfluence проверяет закреплённое определение и обращается к настроенному пространству зарегистрированной health-операцией.
+// Ошибка провайдера возвращается без изменения; страницы, вложения и grants полномочий не создаются.
 func (adapter *Adapter) testConfluence(ctx context.Context, request Request, configuration map[string]string) error {
 	definition, err := adapter.validateDefinition(request)
 	if err != nil {
 		return err
 	}
 	capability, _ := definition.Capability(definition.Spec.HealthCheck.Operation)
-	_, err = adapter.confluenceJSON(ctx, request, capability, configuration, http.MethodGet,
+	_, err = adapter.configuredProviderJSON(ctx, request, capability, configuration, http.MethodGet,
 		"/wiki/api/v2/spaces/"+url.PathEscape(configuration["space_id"]), nil, nil, "")
 	return err
 }
 
+// executeConfluence dispatches typed space/page operations and attachment upload, delegating the remaining closed catalog separately.
+// Search validates returned space IDs and extracts only the next cursor, never following a provider-supplied next URL as a network target.
+// executeConfluence направляет типизированные операции пространства и страниц и загрузку вложений, отдельно передавая остальной закрытый каталог.
+// Поиск проверяет возвращённые space IDs и извлекает только курсор, не используя next URL провайдера как сетевое назначение.
 func (adapter *Adapter) executeConfluence(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
 	switch request.Operation {
 	case "confluence.attachment.upload":
 		return adapter.uploadConfluenceAttachment(ctx, request, capability, configuration, canonicalInput)
 	case "confluence.space.read":
-		body, err := adapter.confluenceJSON(ctx, request, capability, configuration, http.MethodGet,
+		body, err := adapter.configuredProviderJSON(ctx, request, capability, configuration, http.MethodGet,
 			"/wiki/api/v2/spaces/"+url.PathEscape(configuration["space_id"]), nil, nil, "")
 		if err != nil {
 			return Result{}, err
@@ -71,7 +83,7 @@ func (adapter *Adapter) executeConfluence(ctx context.Context, request Request, 
 		if input.Cursor != "" {
 			query.Set("cursor", input.Cursor)
 		}
-		body, err := adapter.confluenceJSON(ctx, request, capability, configuration, http.MethodGet, "/wiki/api/v2/pages", query, nil, "")
+		body, err := adapter.configuredProviderJSON(ctx, request, capability, configuration, http.MethodGet, "/wiki/api/v2/pages", query, nil, "")
 		if err != nil {
 			return Result{}, err
 		}
@@ -122,6 +134,10 @@ func (adapter *Adapter) executeConfluence(ctx context.Context, request Request, 
 	}
 }
 
+// createConfluencePage posts a draft with an effect marker in the configured space, first checking any requested parent through scoped read.
+// It validates the returned space and page projection without treating the marker as native idempotency or owner approval.
+// createConfluencePage создаёт черновик с меткой эффекта в настроенном пространстве, предварительно проверяя заданного родителя ограниченным чтением.
+// Проверяются пространство ответа и проекция страницы; метка не считается нативной идемпотентностью или одобрением владельца.
 func (adapter *Adapter) createConfluencePage(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
 	var input struct {
 		Title    string `json:"title"`
@@ -142,7 +158,7 @@ func (adapter *Adapter) createConfluencePage(ctx context.Context, request Reques
 		}
 		payload["parentId"] = input.ParentID
 	}
-	body, err := adapter.confluenceJSON(ctx, request, capability, configuration, http.MethodPost, "/wiki/api/v2/pages", nil, payload, request.EffectKey)
+	body, err := adapter.configuredProviderJSON(ctx, request, capability, configuration, http.MethodPost, "/wiki/api/v2/pages", nil, payload, request.EffectKey)
 	if err != nil {
 		return Result{}, err
 	}
@@ -153,6 +169,10 @@ func (adapter *Adapter) createConfluencePage(ctx context.Context, request Reques
 	return confluencePageResult(request, provider, false)
 }
 
+// updateConfluencePage reads the exact scoped page, checks expected version and preserves omitted title/body before sending version+1.
+// The returned page, space and version must match; authorization and mutation-outcome handling remain outside this helper.
+// updateConfluencePage читает точную страницу пространства, проверяет ожидаемую версию и сохраняет пропущенные title и body перед отправкой версии +1.
+// Возвращённые страница, пространство и версия обязаны совпасть; полномочия и обработка исхода изменения остаются вне помощника.
 func (adapter *Adapter) updateConfluencePage(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
 	var input struct {
 		PageID          string `json:"page_id"`
@@ -180,7 +200,7 @@ func (adapter *Adapter) updateConfluencePage(ctx context.Context, request Reques
 		"body":    map[string]any{"representation": "storage", "value": input.Body},
 		"version": map[string]any{"number": input.ExpectedVersion + 1, "message": "Kodex effect " + request.EffectKey},
 	}
-	body, err := adapter.confluenceJSON(ctx, request, capability, configuration, http.MethodPut,
+	body, err := adapter.configuredProviderJSON(ctx, request, capability, configuration, http.MethodPut,
 		"/wiki/api/v2/pages/"+url.PathEscape(input.PageID), nil, payload, request.EffectKey)
 	if err != nil {
 		return Result{}, err
@@ -192,12 +212,16 @@ func (adapter *Adapter) updateConfluencePage(ctx context.Context, request Reques
 	return confluencePageResult(request, provider, false)
 }
 
+// readConfluencePage accepts a decimal page ID, requests storage body and checks exact page/space plus a positive returned version.
+// It does not use an arbitrary download URL or broaden the configured space when resolving the page.
+// readConfluencePage принимает десятичный page ID, запрашивает storage body и проверяет точные страницу и пространство и положительную версию ответа.
+// Произвольный download URL не используется, а настроенная область пространства при поиске страницы не расширяется.
 func (adapter *Adapter) readConfluencePage(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, pageID string) (confluencePage, error) {
 	if pageID == "" || strings.Trim(pageID, "0123456789") != "" {
 		return confluencePage{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	query := url.Values{"body-format": {"storage"}}
-	body, err := adapter.confluenceJSON(ctx, request, capability, configuration, http.MethodGet,
+	body, err := adapter.configuredProviderJSON(ctx, request, capability, configuration, http.MethodGet,
 		"/wiki/api/v2/pages/"+url.PathEscape(pageID), query, nil, "")
 	if err != nil {
 		return confluencePage{}, err
@@ -209,6 +233,10 @@ func (adapter *Adapter) readConfluencePage(ctx context.Context, request Request,
 	return provider, nil
 }
 
+// confluencePageResult requires nonempty page identity/title/status and positive version, optionally including storage body in the safe projection.
+// It assumes the caller already verified the space; receipt binding is delegated to providerResult.
+// confluencePageResult требует непустые идентичность, title и status страницы и положительную версию, необязательно добавляя storage body в безопасную проекцию.
+// Предполагается предварительная проверка пространства вызывающим; привязка квитанции передаётся providerResult.
 func confluencePageResult(request Request, provider confluencePage, includeBody bool) (Result, error) {
 	if provider.ID == "" || provider.Title == "" || provider.Version.Number < 1 || provider.Status == "" {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
@@ -222,18 +250,16 @@ func confluencePageResult(request Request, provider confluencePage, includeBody 
 	return providerResult(request, "confluence-page:"+provider.ID, projection)
 }
 
-func (adapter *Adapter) confluenceJSON(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, method, path string, query url.Values, body any, effectKey string) ([]byte, error) {
-	return adapter.callProvider(ctx, providerCall{
-		BaseURL: configuration["base_url"], Method: method, Path: path, Query: query, Body: body,
-		AuthScheme: configuration["auth_scheme"], Username: configuration["username"], Credential: request.Credential,
-		EffectKey: effectKey, Capability: capability,
-	})
-}
-
+// confluenceBodyContainsEffect performs a literal storage-body marker lookup for reconciliation, not signature or provenance verification.
+// confluenceBodyContainsEffect буквально ищет метку в storage body для сверки, не проверяя подпись или происхождение.
 func confluenceBodyContainsEffect(page confluencePage, effectKey string) bool {
 	return strings.Contains(page.Body.Storage.Value, "<!-- kodex-effect:"+effectKey+" -->")
 }
 
+// uploadConfluenceAttachment validates selected filename/media/base64 fields, resolves the page in the configured space and posts one multipart file.
+// It requires a single returned attachment with matching filename; transport payload bounds and mutation retry policy remain in callProvider.
+// uploadConfluenceAttachment проверяет выбранные поля имени, media и base64, разрешает страницу в настроенном пространстве и отправляет один multipart-файл.
+// Требуется одно возвращённое вложение с совпадающим именем; пределы payload и политика повторов изменения остаются в callProvider.
 func (adapter *Adapter) uploadConfluenceAttachment(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, raw []byte) (Result, error) {
 	var input struct {
 		PageID    string `json:"page_id"`

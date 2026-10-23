@@ -1,5 +1,5 @@
-// Package projection адаптирует generated RPC владельцев policy и credential
-// к доменным портам STT.
+// Package projection adapts generated owner policy and credential RPCs to STT domain ports while checking exact delegated-authority readback.
+// RU: Пакет projection адаптирует generated RPC владельцев политики и реквизитов к портам домена STT с проверкой точного ответа делегированных полномочий.
 package projection
 
 import (
@@ -17,29 +17,57 @@ import (
 )
 
 const (
+	// credentialProjectionIncomplete provides a fixed diagnostic for missing or incorrectly bound credential response metadata.
+	// RU: credentialProjectionIncomplete задаёт фиксированную диагностику отсутствующих или неверно привязанных метаданных ответа реквизитов.
 	credentialProjectionIncomplete = "transcription credential projection is incomplete"
-	policyProjectionIncomplete     = "transcription policy projection is incomplete"
-	minimumAudioBytes              = uint64(modelprofile.MinimumAudioBytes)
-	maximumAudioBytes              = uint64(modelprofile.MaximumAudioBytes)
-	minimumAudioDurationMillis     = uint64(modelprofile.MinimumAudioDuration / time.Millisecond)
-	maximumAudioDurationMillis     = uint64(modelprofile.MaximumAudioDuration / time.Millisecond)
-	minimumProviderTimeoutMillis   = uint64(modelprofile.MinimumProviderTimeout / time.Millisecond)
-	maximumProviderTimeoutMillis   = uint64(modelprofile.MaximumProviderTimeout / time.Millisecond)
+	// policyProjectionIncomplete provides a fixed diagnostic for invalid policy readback or numeric limits outside the shared model profile.
+	// RU: policyProjectionIncomplete задаёт фиксированную диагностику неверного ответа политики или числовых лимитов вне общего профиля моделей.
+	policyProjectionIncomplete = "transcription policy projection is incomplete"
+	// minimumAudioBytes is the unsigned lower input-size boundary checked before conversion into domain integers.
+	// RU: minimumAudioBytes задаёт беззнаковую нижнюю границу размера ввода до преобразования в доменные целые числа.
+	minimumAudioBytes = uint64(modelprofile.MinimumAudioBytes)
+	// maximumAudioBytes is the shared unsigned upper audio-size boundary, preventing overflow during signed conversion.
+	// RU: maximumAudioBytes задаёт общую беззнаковую верхнюю границу размера аудио, предотвращая переполнение при знаковом преобразовании.
+	maximumAudioBytes = uint64(modelprofile.MaximumAudioBytes)
+	// minimumAudioDurationMillis expresses the shared minimum audio duration in the projection wire unit.
+	// RU: minimumAudioDurationMillis выражает общую минимальную длительность аудио в единице wire-проекции.
+	minimumAudioDurationMillis = uint64(modelprofile.MinimumAudioDuration / time.Millisecond)
+	// maximumAudioDurationMillis caps unsigned duration values before multiplying them into a time.Duration.
+	// RU: maximumAudioDurationMillis ограничивает беззнаковую длительность до её умножения в time.Duration.
+	maximumAudioDurationMillis = uint64(modelprofile.MaximumAudioDuration / time.Millisecond)
+	// minimumProviderTimeoutMillis preserves the shared minimum provider timeout when accepting owner policy.
+	// RU: minimumProviderTimeoutMillis сохраняет общий минимальный timeout провайдера при приёме политики владельца.
+	minimumProviderTimeoutMillis = uint64(modelprofile.MinimumProviderTimeout / time.Millisecond)
+	// maximumProviderTimeoutMillis rejects out-of-range unsigned provider budgets before domain duration conversion.
+	// RU: maximumProviderTimeoutMillis отклоняет чрезмерные беззнаковые бюджеты провайдера до преобразования в доменную длительность.
+	maximumProviderTimeoutMillis = uint64(modelprofile.MaximumProviderTimeout / time.Millisecond)
 )
 
+// DelegatedBinder requires each owner projection to derive outbound authorization from the accepted inbound request rather than payload identity.
+// RU: DelegatedBinder требует выводить исходящую авторизацию каждой owner-проекции из принятого входящего запроса, а не идентичности в payload.
 type DelegatedBinder interface {
+	// BindDelegated validates principal/request binding for the exact method and operation, returning its authorized child context or an error.
+	// RU: BindDelegated проверяет привязку субъекта и запроса к точным методу и операции, возвращая разрешённый дочерний контекст либо ошибку.
 	BindDelegated(context.Context, value.Principal, string, string, string, string) (context.Context, error)
 }
 
+// Policy combines a typed control-plane projection client with the binder that owns delegated request authority.
+// RU: Policy объединяет типизированный клиент проекции control-plane с binder, владеющим делегированными полномочиями запроса.
 type Policy struct {
 	client sttv1.TranscriptionPolicyProjectionServiceClient
 	binder DelegatedBinder
 }
 
+// protectedPathChecker is the optional binder readiness port; lack of it means delegated proof is pending, not ready.
+// RU: protectedPathChecker задаёт необязательный readiness порт binder; его отсутствие означает ожидание delegated proof, а не готовность.
 type protectedPathChecker interface {
+	// Check probes the binder's protected infrastructure path without performing a business transcription.
+	// RU: Check проверяет защищённый инфраструктурный путь binder без выполнения пользовательского распознавания.
 	Check(context.Context) error
 }
 
+// NewPolicy rejects absent RPC/binder dependencies and performs no owner request during construction.
+// RU: NewPolicy отклоняет отсутствующие зависимости RPC/binder и не обращается к владельцу при создании.
 func NewPolicy(client sttv1.TranscriptionPolicyProjectionServiceClient, binder DelegatedBinder) (*Policy, error) {
 	if client == nil || binder == nil {
 		return nil, errors.New("transcription policy projection dependencies are required")
@@ -47,6 +75,8 @@ func NewPolicy(client sttv1.TranscriptionPolicyProjectionServiceClient, binder D
 	return &Policy{client: client, binder: binder}, nil
 }
 
+// Check delegates to the binder's protected-path checker or reports pending proof when that optional port is unavailable.
+// RU: Check вызывает проверку защищённого пути binder либо сообщает ожидание proof при отсутствии необязательного порта.
 func (client *Policy) Check(ctx context.Context) error {
 	checker, ok := client.binder.(protectedPathChecker)
 	if !ok {
@@ -55,6 +85,10 @@ func (client *Policy) Check(ctx context.Context) error {
 	return checker.Check(ctx)
 }
 
+// Resolve binds the exact policy operation, sends one authority locator and verifies its complete echo, expiry shape and bounded unsigned policy limits.
+// RU: Resolve привязывает точную операцию политики, передаёт один authority locator и проверяет его полный повтор в ответе, форму срока и ограниченные беззнаковые лимиты политики.
+// It copies parameter slices into domain values; downstream domain validation still checks semantic policy completeness and current eligibility.
+// RU: Функция копирует срезы параметров в доменные значения; доменная проверка по-прежнему отвечает за смысловую полноту политики и текущий допуск.
 func (client *Policy) Resolve(ctx context.Context, principal value.Principal, requestID, correlationID string) (value.Policy, error) {
 	bound, err := client.binder.BindDelegated(ctx, principal, requestID, correlationID,
 		sttv1.TranscriptionPolicyProjectionService_ResolveTranscriptionPolicy_FullMethodName, "platform.stt.policy.resolve")
@@ -92,11 +126,15 @@ func (client *Policy) Resolve(ctx context.Context, principal value.Principal, re
 	}, nil
 }
 
+// Credential projects short-lived key bytes through the secret-broker client under the same delegated principal and request binding as policy resolution.
+// RU: Credential получает краткоживущие байты ключа через клиент secret-broker с той же делегированной привязкой субъекта и запроса, что у политики.
 type Credential struct {
 	client sttv1.TranscriptionCredentialProjectionServiceClient
 	binder DelegatedBinder
 }
 
+// NewCredential requires both the typed secret projection client and the delegated binder without reading a credential during construction.
+// RU: NewCredential требует типизированный клиент проекции секрета и delegated binder без чтения реквизита при создании.
 func NewCredential(client sttv1.TranscriptionCredentialProjectionServiceClient, binder DelegatedBinder) (*Credential, error) {
 	if client == nil || binder == nil {
 		return nil, errors.New("transcription credential projection dependencies are required")
@@ -104,6 +142,10 @@ func NewCredential(client sttv1.TranscriptionCredentialProjectionServiceClient, 
 	return &Credential{client: client, binder: binder}, nil
 }
 
+// Project binds the credential operation, requests the selected account/generation/config pins and verifies authority echo, config revision and expiry shape.
+// RU: Project привязывает операцию реквизитов, запрашивает выбранные account/generation/config координаты и проверяет authority echo, ревизию конфигурации и форму срока.
+// It copies returned key bytes then clears the RPC buffer; account/generation/digest equality and current expiry are checked again by the domain service.
+// RU: Функция копирует байты ключа и очищает RPC буфер; совпадение account/generation/digest и текущий срок повторно проверяет доменный сервис.
 func (client *Credential) Project(ctx context.Context, principal value.Principal, requestID, correlationID string, policy value.Policy) (value.Credential, error) {
 	bound, err := client.binder.BindDelegated(ctx, principal, requestID, correlationID,
 		sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName, "platform.stt.credential.project")
@@ -135,6 +177,8 @@ func (client *Credential) Project(ctx context.Context, principal value.Principal
 	}, nil
 }
 
+// authorityLocator maps the verified principal's identities, provenance and expiry into an exact request/correlation locator without issuing authority.
+// RU: authorityLocator переносит идентичности, provenance и срок проверенного субъекта в точный request/correlation locator без выдачи полномочий.
 func authorityLocator(principal value.Principal, requestID, correlationID string) *sttv1.DelegatedAuthorityLocator {
 	return &sttv1.DelegatedAuthorityLocator{
 		RequestId: requestID, CorrelationId: correlationID, RootActorId: principal.ActorID,
@@ -145,6 +189,8 @@ func authorityLocator(principal value.Principal, requestID, correlationID string
 	}
 }
 
+// provenance omits an absent domain provenance value and otherwise copies all source/ref/revision/digest fields into the RPC shape.
+// RU: provenance опускает отсутствующее доменное происхождение, иначе копируя все source/ref/revision/digest поля в RPC форму.
 func provenance(input value.AuthorityProvenance) *sttv1.AuthorityIdentityProvenance {
 	if input == (value.AuthorityProvenance{}) {
 		return nil
@@ -155,6 +201,10 @@ func provenance(input value.AuthorityProvenance) *sttv1.AuthorityIdentityProvena
 	}
 }
 
+// sameAuthority compares every mapped identity, request/correlation pin, source revision/digest, optional provenance and expiry instant, rejecting absent locators or expiry.
+// RU: sameAuthority сравнивает все перенесённые идентичности, request/correlation координаты, source revision/digest, необязательные provenance и момент срока, отклоняя отсутствие locator или срока.
+// This echo comparison is not signature verification and does not independently validate timestamp grammar or freshness.
+// RU: Это сравнение ответа, а не проверка подписи; оно самостоятельно не проверяет грамматику timestamp или свежесть.
 func sameAuthority(actual, expected *sttv1.DelegatedAuthorityLocator) bool {
 	if actual == nil || expected == nil || actual.GetExpiresAt() == nil || expected.GetExpiresAt() == nil {
 		return false
@@ -167,6 +217,8 @@ func sameAuthority(actual, expected *sttv1.DelegatedAuthorityLocator) bool {
 		sameProvenance(actual.GetProject(), expected.GetProject()) && actual.GetExpiresAt().AsTime().Equal(expected.GetExpiresAt().AsTime())
 }
 
+// sameProvenance requires matching absence or exact source, reference, revision and digest fields for the two identity provenance records.
+// RU: sameProvenance требует совпадающего отсутствия либо точных source, reference, revision и digest у двух записей происхождения идентичности.
 func sameProvenance(actual, expected *sttv1.AuthorityIdentityProvenance) bool {
 	if actual == nil || expected == nil {
 		return actual == nil && expected == nil
@@ -176,6 +228,8 @@ func sameProvenance(actual, expected *sttv1.AuthorityIdentityProvenance) bool {
 		actual.GetDigestSha256() == expected.GetDigestSha256()
 }
 
+// classifyProjectionError preserves local cancellation, classifies closed owner rejections as grant revocation and hides other RPC details behind a fixed failure.
+// RU: classifyProjectionError сохраняет локальную отмену, классифицирует заданные отказы владельца как отзыв grant и скрывает остальные RPC данные фиксированным отказом.
 func classifyProjectionError(ctx context.Context, err error) error {
 	if ctx != nil && ctx.Err() != nil {
 		return ctx.Err()

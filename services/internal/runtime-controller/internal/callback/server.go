@@ -1,4 +1,7 @@
-// Package callback обслуживает только execution-scoped mTLS+ticket callbacks role runtime.
+// Package callback serves execution-ticket-scoped callbacks and MCP under the
+// configured mTLS/trusted transport profile, without owning durable execution state.
+// Пакет callback обслуживает execution-ticket-scoped callbacks и MCP под выбранным
+// mTLS/trusted transport profile, не владея устойчивым состоянием выполнения.
 package callback
 
 import (
@@ -27,6 +30,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/providerfinancewire"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
@@ -37,15 +41,43 @@ import (
 )
 
 const (
-	maximumRequestBytes                          = 16 << 20
+	// maximumRequestBytes is the general completion-body reader budget; field and
+	// artifact bounds are validated separately rather than implied by this number.
+	// maximumRequestBytes задаёт общий бюджет чтения completion body; ограничения
+	// полей и артефактов проверяются отдельно и не следуют из одного этого числа.
+	maximumRequestBytes = 16 << 20
+	// maximumProviderCredentialRefreshRequestBytes allows Base64 expansion of the
+	// bounded auth blob plus JSON overhead; decoded auth limits remain separate.
+	// maximumProviderCredentialRefreshRequestBytes учитывает расширение ограниченного
+	// auth blob в Base64 и JSON overhead; decoded auth limits остаются отдельными.
 	maximumProviderCredentialRefreshRequestBytes = ((runtimecontract.MaximumProviderAuthBytes + 2) / 3 * 4) + (16 << 10)
-	runtimeProgressRejectionMessage              = "runtime progress callback rejected"
-	runtimeProgressRejectionStage                = "callback_stage"
-	runtimeProgressRejectionCode                 = "callback_code"
+	// runtimeProgressRejectionMessage identifies progress rejection logs, not an
+	// accepted owner state transition or a raw provider diagnostic.
+	// runtimeProgressRejectionMessage обозначает логи отказа progress, не принятый
+	// owner-переход состояния и не сырую диагностику провайдера.
+	runtimeProgressRejectionMessage = "runtime progress callback rejected"
+	// runtimeProgressRejectionStage names the callback's payload/owner/observation
+	// rejection stage dimension rather than copying arbitrary request content.
+	// runtimeProgressRejectionStage именует стадию отказа payload/owner/observation
+	// callback вместо копирования произвольного содержимого запроса.
+	runtimeProgressRejectionStage = "callback_stage"
+	// runtimeProgressRejectionCode names the rejection-code field in progress logs.
+	// runtimeProgressRejectionCode именует поле кода отказа в progress-логах.
+	runtimeProgressRejectionCode = "callback_code"
 )
 
+// progressCodePattern recognizes a bounded uppercase progress token with digits
+// and underscores; matching is syntax, not evidence that work actually ran.
+// progressCodePattern распознаёт ограниченный uppercase progress token с цифрами
+// и подчёркиваниями; форма не доказывает фактическое выполнение работы.
 var progressCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{2,63}$`)
 
+// Config supplies the listener, transport profile, mounted identity paths,
+// request/transfer budgets and private spool location. New validates selected
+// bounds; this value contains locators, not execution authority or secret bytes.
+// Config задаёт listener, transport profile, пути identity mounts, бюджеты
+// запросов/передачи и приватный spool. New проверяет выбранные ограничения;
+// значение содержит locators, не полномочия выполнения и не байты секретов.
 type Config struct {
 	RPCProfile                                                                    string
 	Listen, CertificateFile, PrivateKeyFile, ClientCAFile, ExpectedClientSPIFFEID string
@@ -54,8 +86,12 @@ type Config struct {
 	ArtifactSpoolDirectory                                                        string
 }
 
-// Coordinator связывает leader claim loop с callbacks, не становясь owner store.
-// После restart leases истекают в control-plane и материализуются заново.
+// Coordinator holds process-local warm dispatch, completion channels and
+// provider observations under one mutex, without becoming the lease owner.
+// Restart loses this state; durable leases remain owned by control-plane.
+// Coordinator хранит локальные warm dispatch, каналы завершения и наблюдения
+// провайдера под одним mutex, не становясь владельцем аренды. Restart теряет
+// эти данные; устойчивые leases принадлежат control-plane.
 type Coordinator struct {
 	mu                 sync.Mutex
 	warm               []warmExecution
@@ -64,15 +100,29 @@ type Coordinator struct {
 	providerExecutions map[string]providerProcessExecution
 }
 
+// warmExecution pairs a queued turn input with its supplied compatibility key;
+// neither field is a durable claim or an independently verified owner receipt.
+// warmExecution связывает queued turn input с переданным compatibility key;
+// ни одно поле не является устойчивым claim или отдельной owner receipt.
 type warmExecution struct {
 	input               runtimecontract.RunnerInput
 	compatibilityDigest string
 }
 
+// NewCoordinator allocates empty process-local completion/observation maps and
+// a single-slot wake signal; it starts no worker and restores no durable leases.
+// NewCoordinator создаёт пустые локальные maps завершений/наблюдений и односотовый
+// wake-сигнал, не запуская worker и не восстанавливая устойчивые leases.
 func NewCoordinator() *Coordinator {
 	return &Coordinator{wake: make(chan struct{}, 1), done: make(map[string]chan struct{}), providerExecutions: make(map[string]providerProcessExecution)}
 }
 
+// Register updates local provider-registration state and returns the same open
+// completion channel for an existing lease, or creates one under the mutex.
+// Registration does not validate a fresh owner lease or persist a claim.
+// Register обновляет локальную регистрацию провайдера и под mutex возвращает
+// прежний открытый канал lease либо создаёт новый. Свежая owner lease
+// не проверяется, claim устойчиво не сохраняется.
 func (coordinator *Coordinator) Register(input runtimecontract.RunnerInput) <-chan struct{} {
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
@@ -85,6 +135,12 @@ func (coordinator *Coordinator) Register(input runtimecontract.RunnerInput) <-ch
 	return done
 }
 
+// EnqueueWarm validates a system-assistant turn and a 64-byte compatibility key,
+// deduplicates queued leases, caps the local queue at sixteen and signals waiters
+// without blocking. It checks key length, not its hexadecimal form or authority.
+// EnqueueWarm проверяет системный turn и 64-байтовый compatibility key,
+// исключает queued lease duplicates, ограничивает очередь шестнадцатью и будит
+// ожидающих без блокировки. Проверяется длина ключа, не hex-форма и не полномочие.
 func (coordinator *Coordinator) EnqueueWarm(input runtimecontract.RunnerInput, compatibilityDigest string) error {
 	if input.Mode != runtimecontract.RunnerModeTurn || !input.IsSystemAssistant() || input.Validate() != nil ||
 		len(compatibilityDigest) != sha256.Size*2 {
@@ -108,6 +164,12 @@ func (coordinator *Coordinator) EnqueueWarm(input runtimecontract.RunnerInput, c
 	return nil
 }
 
+// NextWarm removes the first exact-key queued input or waits for a wake/context
+// cancellation. It neither validates owner freshness nor reserves a durable
+// claim; the returned input retains the queued value's reference fields.
+// NextWarm удаляет первый queued input с точным ключом либо ждёт wake/отмены.
+// Свежесть у владельца не проверяется, durable claim не резервируется;
+// возвращаемый input сохраняет ссылочные поля значения в очереди.
 func (coordinator *Coordinator) NextWarm(ctx context.Context, revisionDigest string) (runtimecontract.RunnerInput, bool) {
 	for {
 		coordinator.mu.Lock()
@@ -127,6 +189,12 @@ func (coordinator *Coordinator) NextWarm(ctx context.Context, revisionDigest str
 	}
 }
 
+// Complete removes local process evidence and closes/removes a registered done
+// channel once. It performs no owner transition and does not purge warm-queue
+// entries or delete Kubernetes resources for the lease.
+// Complete удаляет локальные process evidence и однократно закрывает/удаляет
+// зарегистрированный done-канал. Owner-переход, очистка warm-очереди
+// и удаление Kubernetes-ресурсов lease здесь не выполняются.
 func (coordinator *Coordinator) Complete(leaseRef string) {
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
@@ -137,6 +205,12 @@ func (coordinator *Coordinator) Complete(leaseRef string) {
 	}
 }
 
+// Server owns the callback HTTP boundary and private artifact spool while
+// delegating durable state to control-plane and resource operations to Manager.
+// HTTP drain and spool close are separate lifecycle operations.
+// Server владеет callback HTTP boundary и приватным artifact spool, передавая
+// устойчивое состояние control-plane, а операции ресурсов Manager.
+// HTTP drain и закрытие spool являются отдельными lifecycle-операциями.
 type Server struct {
 	config      Config
 	manager     *workload.Manager
@@ -147,6 +221,12 @@ type Server struct {
 	spool       *artifactSpool
 }
 
+// New validates required collaborators and timeout bounds, constructs the
+// selected TLS/trusted transport and opens the private spool before configuring
+// HTTP limits. It does not bind the listener or start serving requests.
+// New проверяет collaborators и timeout bounds, собирает TLS/trusted transport
+// и открывает приватный spool до настройки HTTP limits. Listener
+// не привязывается и обслуживание запросов не запускается.
 func New(config Config, manager *workload.Manager, control *controlplaneclient.Client, coordinator *Coordinator, logger *slog.Logger) (*Server, error) {
 	if manager == nil || control == nil || coordinator == nil || logger == nil || config.Listen == "" ||
 		config.RequestTimeout < time.Second || config.RequestTimeout > 10*time.Second ||
@@ -170,6 +250,12 @@ func New(config Config, manager *workload.Manager, control *controlplaneclient.C
 	return server, nil
 }
 
+// Run serves with the supplied lifecycle context and optional TLS listener.
+// Cancellation gets an independent five-second HTTP drain, forced close on
+// failure and a Serve join; spool ownership remains with the caller's Close.
+// Run обслуживает запросы с переданным lifecycle context и необязательным TLS.
+// При отмене даёт отдельные пять секунд на HTTP drain, принудительно закрывает
+// при ошибке и join-ит Serve; spool закрывает caller через Close.
 func (server *Server) Run(ctx context.Context) error {
 	server.http.BaseContext = func(net.Listener) context.Context { return ctx }
 	listener, err := net.Listen("tcp", server.config.Listen)
@@ -202,6 +288,10 @@ func (server *Server) Run(ctx context.Context) error {
 	}
 }
 
+// Shutdown drains HTTP using the caller's budget and force-closes on failure,
+// returning the drain error without closing the artifact spool itself.
+// Shutdown завершает HTTP в бюджете caller, при ошибке принудительно закрывает
+// и возвращает ошибку drain, не закрывая сам artifact spool.
 func (server *Server) Shutdown(ctx context.Context) error {
 	err := server.http.Shutdown(ctx)
 	if err != nil {
@@ -210,9 +300,24 @@ func (server *Server) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func (server *Server) Close() error                                 { return server.spool.close() }
+// Close releases the private spool; callers must coordinate HTTP shutdown
+// separately so active handlers cannot race this resource cleanup.
+// Close освобождает приватный spool; caller отдельно согласует HTTP shutdown,
+// чтобы активные handlers не конкурировали с очисткой ресурса.
+func (server *Server) Close() error { return server.spool.close() }
+
+// CheckArtifactSpool checks only spool usability under the supplied context,
+// not full callback authorization, owner RPC readiness or artifact provenance.
+// CheckArtifactSpool проверяет лишь доступность spool в переданном контексте,
+// не полную callback authorization, owner RPC readiness и artifact provenance.
 func (server *Server) CheckArtifactSpool(ctx context.Context) error { return server.spool.check(ctx) }
 
+// route sets no-store and dispatches the closed method/path families after
+// trimming outer slashes. Fragments and unsupported queries/methods return 404;
+// artifact queries have their own handlers, and authorization remains per route.
+// route ставит no-store и выбирает закрытые method/path после удаления внешних
+// слешей. Fragment и лишние query/method дают 404; artifact query обрабатываются
+// отдельно, а авторизация остаётся обязанностью конкретного маршрута.
 func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "no-store")
 	if request.URL.Fragment != "" {
@@ -276,6 +381,14 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
+// providerCredentialRefresh resolves the execution ticket, checks predecessor
+// pins, materializes immutable refreshed auth and commits only its locator to
+// the owner, requiring exact successor readback. The accepted auth buffer is
+// cleared on return; failed commit does not itself delete the materialized Secret.
+// providerCredentialRefresh разрешает execution ticket, проверяет predecessor
+// pins, материализует immutable auth и фиксирует у владельца лишь locator
+// с точным successor readback. Принятый auth buffer очищается при возврате;
+// неуспешный commit сам по себе не удаляет материализованный Secret.
 func (server *Server) providerCredentialRefresh(writer http.ResponseWriter, request *http.Request, leaseRef string) {
 	input, ok := server.authorize(request, leaseRef)
 	if !ok {
@@ -317,6 +430,12 @@ func (server *Server) providerCredentialRefresh(writer http.ResponseWriter, requ
 	writer.WriteHeader(http.StatusNoContent)
 }
 
+// providerCredentialRefreshProjection binds the mutation to lease/fence/generation
+// and old/new credential digests, deriving a stable refresh key without sending
+// authentication bytes. The owner still validates lineage and current authority.
+// providerCredentialRefreshProjection связывает mutation с lease/fence/generation
+// и old/new credential digests, выводя стабильный ключ без auth bytes.
+// Lineage и актуальные полномочия по-прежнему проверяет владелец.
 func providerCredentialRefreshProjection(input runtimecontract.RunnerInput, payload runtimecontract.RunnerProviderCredentialRefreshRequest, binding workload.ProviderSecretBinding) *controlplanev1.CommitProviderCredentialRefreshRequest {
 	return &controlplanev1.CommitProviderCredentialRefreshRequest{
 		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "provider-credential-refresh:"+binding.ContentSHA256)},
@@ -330,6 +449,12 @@ func providerCredentialRefreshProjection(input runtimecontract.RunnerInput, payl
 	}
 }
 
+// providerCredentialRefreshReadbackMatches requires the same account, a new
+// nonempty reference, exactly the next revision and exact Secret metadata/digest.
+// Only the digest uses constant-time comparison; matching does not create a grant.
+// providerCredentialRefreshReadbackMatches требует тот же аккаунт, новую
+// непустую ссылку, следующую ревизию и точные Secret metadata/digest. Лишь digest
+// сравнивается за постоянное время; совпадение не создаёт grant.
 func providerCredentialRefreshReadbackMatches(input runtimecontract.RunnerInput, materialized workload.ProviderSecretBinding, actual *controlplanev1.ProviderCredentialBinding) bool {
 	return actual != nil && actual.GetAccountRef() == input.ProviderAccountRef &&
 		actual.GetCredentialRevisionRef() != "" && actual.GetCredentialRevisionRef() != input.ProviderCredentialRef &&
@@ -339,6 +464,12 @@ func providerCredentialRefreshReadbackMatches(input runtimecontract.RunnerInput,
 		subtle.ConstantTimeCompare([]byte(actual.GetContentSha256()), []byte(materialized.ContentSHA256)) == 1
 }
 
+// nativeToolCall authorizes the execution, validates a bounded activity update
+// and sends its lease-bound safe projection to the owner. A nonempty returned
+// event reference is required before acknowledging the callback.
+// nativeToolCall авторизует выполнение, проверяет ограниченное activity update
+// и передаёт lease-bound safe-проекцию владельцу. Подтверждение callback
+// требует непустую ссылку event в ответе.
 func (server *Server) nativeToolCall(writer http.ResponseWriter, request *http.Request, leaseRef string) {
 	input, ok := server.authorize(request, leaseRef)
 	if !ok {
@@ -372,6 +503,14 @@ func (server *Server) nativeToolCall(writer http.ResponseWriter, request *http.R
 	writer.WriteHeader(http.StatusNoContent)
 }
 
+// nativeToolCallProjection validates the lease/revision tuple and native payload,
+// JSON-normalizes safe parameters, adds the Codex item ID and derives stable
+// call/mutation identifiers. It records activity rather than executing the tool;
+// event persistence and authorization stay with the owner.
+// nativeToolCallProjection проверяет lease/revision tuple и native payload,
+// нормализует safe parameters через JSON, добавляет Codex item ID и выводит
+// стабильные call/mutation IDs. Это activity, не запуск инструмента;
+// сохранение event и authorization остаются у владельца.
 func nativeToolCallProjection(input runtimecontract.RunnerInput, payload runtimecontract.RunnerNativeToolCallRequest) (*controlplanev1.RecordRunToolCallRequest, error) {
 	if input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 || payload.Validate() != nil ||
 		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest {
@@ -398,6 +537,12 @@ func nativeToolCallProjection(input runtimecontract.RunnerInput, payload runtime
 	}, nil
 }
 
+// artifact resolves an execution before selecting context/catalog query handling
+// or a revision-pinned input artifact transfer. A matching name alone does not
+// authorize arbitrary storage paths; unmatched references return 404.
+// artifact разрешает выполнение до выбора context/catalog query либо передачи
+// revision-pinned input artifact. Одно совпадение имени не разрешает произвольный
+// storage path; неизвестные ссылки дают 404.
 func (server *Server) artifact(writer http.ResponseWriter, request *http.Request, leaseRef, artifactRef string) {
 	input, ok := server.authorize(request, leaseRef)
 	if !ok {
@@ -423,6 +568,12 @@ func (server *Server) artifact(writer http.ResponseWriter, request *http.Request
 	http.NotFound(writer, request)
 }
 
+// nextWarm resolves the warm ticket with revision headers, computes its shared
+// compatibility key and long-polls only that local queue. Timeout returns 204;
+// dequeuing does not establish a new durable owner claim.
+// nextWarm разрешает warm ticket по revision headers, вычисляет общий
+// compatibility key и long-poll-ит лишь соответствующую локальную очередь.
+// Timeout даёт 204; извлечение не создаёт новый durable owner claim.
 func (server *Server) nextWarm(writer http.ResponseWriter, request *http.Request) {
 	revisionRef := request.Header.Get("X-Kodex-Runtime-Revision")
 	revisionDigest := request.Header.Get("X-Kodex-Runtime-Revision-Digest")
@@ -455,6 +606,14 @@ func (server *Server) nextWarm(writer http.ResponseWriter, request *http.Request
 	_ = json.NewEncoder(writer).Encode(input)
 }
 
+// progress authorizes an exact execution, validates the selected progress/message/
+// financial/process shape and submits the lease-fenced projection to the owner.
+// Local process observation is recorded only after owner acceptance; financial
+// casting preserves measurements without deciding account eligibility.
+// progress авторизует точное выполнение, проверяет выбранную форму progress,
+// message, financial либо process и передаёт lease-fenced проекцию владельцу.
+// Локальное наблюдение процесса записывается лишь после принятия владельцем;
+// перевод financial сохраняет измерения, не решая допустимость аккаунта.
 func (server *Server) progress(writer http.ResponseWriter, request *http.Request, leaseRef string) {
 	input, ok := server.authorize(request, leaseRef)
 	if !ok {
@@ -476,7 +635,7 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	defer cancel()
 	projection := &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration}
 	if payload.Financial != nil {
-		projection.Financial = castFinancialObservation(*payload.Financial)
+		projection.Financial = providerfinancewire.ObservationToProto(*payload.Financial)
 	} else if message := payload.Message; message != nil {
 		digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, "message:"+message.ItemID)))
 		projection.Message = &controlplanev1.RunMessage{Ref: "msg_" + hex.EncodeToString(digest[:16]),
@@ -498,6 +657,14 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	writer.WriteHeader(http.StatusNoContent)
 }
 
+// complete validates completion provenance before a cancellation-independent
+// owner RPC. Nil or AlreadyExists permits local completion and a flushed 204,
+// then bounded resource cleanup; AlreadyExists is not a new diagnostic commit,
+// and cleanup failure is logged without undoing the accepted owner result.
+// complete проверяет provenance до owner RPC независимо от отмены request.
+// Nil либо AlreadyExists допускает локальное завершение и flush 204,
+// затем ограниченную очистку; AlreadyExists не доказывает новый diagnostic
+// commit, а ошибка cleanup логируется без отмены принятого owner result.
 func (server *Server) complete(writer http.ResponseWriter, request *http.Request, leaseRef string) {
 	input, ok := server.authorize(request, leaseRef)
 	if !ok {
@@ -547,6 +714,10 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 	}
 }
 
+// mcpRequest stores the JSON-RPC envelope and raw ID/params for route-specific
+// handling; decoding this shape alone does not validate protocol semantics.
+// mcpRequest хранит JSON-RPC envelope и сырые ID/params для маршрутизации;
+// одно декодирование формы не проверяет семантику протокола.
 type mcpRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`
@@ -554,12 +725,20 @@ type mcpRequest struct {
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
+// mcpToolCallParams separates the selected tool, argument object and optional
+// raw metadata. Metadata is not an authorization source or merged into arguments.
+// mcpToolCallParams разделяет выбранный tool, arguments object и необязательную
+// сырую metadata; она не источник полномочий и не объединяется с arguments.
 type mcpToolCallParams struct {
 	Name      string          `json:"name"`
 	Arguments map[string]any  `json:"arguments"`
 	Metadata  json.RawMessage `json:"_meta,omitempty"`
 }
 
+// mcp resolves the exact execution ticket and headers before handing its trusted
+// input to MCP dispatch; the JSON payload cannot choose a different execution.
+// mcp разрешает точные execution ticket и headers до передачи доверенного input
+// в MCP dispatch; JSON payload не выбирает другое выполнение.
 func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, leaseRef string) {
 	input, ok := server.authorize(request, leaseRef)
 	if !ok {
@@ -569,6 +748,12 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 	server.serveMCP(writer, request, input)
 }
 
+// serveMCP accepts bounded JSON-RPC2 messages, acknowledges notifications and
+// serves initialize/tool-list/tool-call for the already resolved input. It is a
+// deliberately limited MCP surface, not a general remote transport or OAuth client.
+// serveMCP принимает ограниченные JSON-RPC2 messages, подтверждает notifications
+// и обслуживает initialize/tool-list/tool-call для уже разрешённого input.
+// Это ограниченный MCP surface, не общий remote transport или OAuth client.
 func (server *Server) serveMCP(writer http.ResponseWriter, request *http.Request, input runtimecontract.RunnerInput) {
 	var rpc mcpRequest
 	if decode(request, &rpc, 1<<20) != nil || rpc.JSONRPC != "2.0" || rpc.Method == "" {
@@ -600,6 +785,10 @@ func (server *Server) serveMCP(writer http.ResponseWriter, request *http.Request
 	}
 }
 
+// emptyMCPParams accepts omitted params, null or an empty object with EOF;
+// unknown struct fields and additional JSON values fail the empty-shape check.
+// emptyMCPParams принимает отсутствие params, null либо пустой object с EOF;
+// неизвестные поля struct и дополнительный JSON отвергаются.
 func emptyMCPParams(raw json.RawMessage) bool {
 	if len(raw) == 0 {
 		return true
@@ -610,6 +799,12 @@ func emptyMCPParams(raw json.RawMessage) bool {
 	return decoder.Decode(&params) == nil && errors.Is(decoder.Decode(&struct{}{}), io.EOF)
 }
 
+// tools composes the advertised catalog from runtime scope, snapshot/file
+// availability, delegation/workflow targets and integration/MCP grants. Listing
+// a tool is descriptive; invocation still needs its owner-side authorization.
+// tools собирает каталог по runtime scope, snapshot/files, delegation/workflow
+// targets и integration/MCP grants. Наличие tool в списке — описание;
+// вызову по-прежнему нужна owner-side authorization.
 func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
 	if runtimecontract.RuntimeExecutionSnapshotAvailable(input) {
@@ -632,6 +827,10 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	return result
 }
 
+// integrationTool describes the exact grant_ref/input invocation shape and
+// directs the model to read the pinned grant schema; it executes no integration.
+// integrationTool описывает точную форму grant_ref/input и направляет модель
+// к закреплённой grant-схеме, не выполняя интеграцию.
 func integrationTool() map[string]any {
 	return map[string]any{
 		"name": "invoke_integration", "description": "Invoke one exact grant from this RuntimeRevision. First read the compact get_integration_catalog index, then select its grant_ref to read the input schema. Copy that same grant_ref here with an input matching that schema. The server resolves and revalidates the pinned connection, capability, versions and authority.",
@@ -642,7 +841,12 @@ func integrationTool() map[string]any {
 	}
 }
 
-// Locator выбирает только один grant из точной owner RuntimeRevision.
+// integrationGrantForCall requires exactly grant_ref/input keys and selects a
+// nonempty string reference from the immutable runtime catalog. It does not
+// validate input shape or replace fresh owner policy/version checks.
+// integrationGrantForCall требует ровно ключи grant_ref/input и выбирает
+// непустую строковую ссылку immutable-каталога. Форма input здесь не проверяется,
+// свежие owner policy/version checks не заменяются.
 func integrationGrantForCall(input runtimecontract.RunnerInput, arguments map[string]any) (runtimecontract.RunnerIntegrationGrant, bool) {
 	if !onlyKeys(arguments, "grant_ref", "input") || len(arguments) != 2 {
 		return runtimecontract.RunnerIntegrationGrant{}, false
@@ -661,18 +865,36 @@ func integrationGrantForCall(input runtimecontract.RunnerInput, arguments map[st
 	return runtimecontract.RunnerIntegrationGrant{}, false
 }
 
+// integrationCallInputError retains a local input-failure reason separately
+// from the fixed public message and InvalidArgument transport classification.
+// integrationCallInputError хранит локальную причину отдельно от фиксированного
+// публичного текста и transport-классификации InvalidArgument.
 type integrationCallInputError struct{ reason string }
 
+// Error returns fixed input diagnostics without reflecting the stored reason.
+// Error возвращает фиксированную диагностику, не отражая сохранённую причину.
 func (inputErr *integrationCallInputError) Error() string {
 	return "integration call input is invalid"
 }
 
+// GRPCStatus maps this local error to InvalidArgument with the fixed safe text.
+// GRPCStatus переводит локальную ошибку в InvalidArgument с фиксированным текстом.
 func (inputErr *integrationCallInputError) GRPCStatus() *status.Status {
 	return status.New(codes.InvalidArgument, inputErr.Error())
 }
 
+// delegationTargetsDescriptionPrefix marks bounded target metadata in the tool
+// description; descriptive names cannot substitute for server-owned target refs.
+// delegationTargetsDescriptionPrefix отмечает ограниченные target metadata
+// в описании tool; названия не заменяют server-owned target refs.
 const delegationTargetsDescriptionPrefix = "Server-owned targets (metadata only): "
 
+// delegationTool builds enums from pinned targets and bounded descriptive
+// metadata, requiring a step key if any target has one. Separate enums do not
+// prove valid target/step pairs; runtime delegation validation resolves that pair.
+// delegationTool строит enum из pinned targets и ограниченных описаний,
+// требуя step key при его наличии хотя бы у одного target. Раздельные enums
+// не доказывают пару target/step; её разрешает runtime-проверка делегирования.
 func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string]any {
 	targetRefs := make([]string, 0, len(targets))
 	stepKeys := make([]string, 0, len(targets))
@@ -716,6 +938,14 @@ func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string
 	}
 }
 
+// callTool decodes the selection, records a safe running projection before
+// dispatch and records completion afterward, returning bounded recovery guidance
+// for recognized input failures. A final projection error is joined with the
+// operation error; it cannot roll back an external effect already performed.
+// callTool разбирает выбор, записывает безопасную running-проекцию до dispatch
+// и completion после него, выдавая recovery guidance для известных ошибок ввода.
+// Ошибка конечной проекции объединяется с ошибкой операции и не откатывает
+// уже совершённое внешнее действие.
 func (server *Server) callTool(writer http.ResponseWriter, request *http.Request, rpc mcpRequest, input runtimecontract.RunnerInput) {
 	params, err := decodeMCPToolCallParams(rpc.Params)
 	if err != nil {
@@ -901,17 +1131,35 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": structured, "isError": err != nil})
 }
 
+// assistantPlanInputError keeps an internal reason and optional recognized
+// diagnostic separate from the fixed public text used for plan-input recovery.
+// assistantPlanInputError хранит внутреннюю причину и необязательную известную
+// диагностику отдельно от фиксированного публичного текста plan-input recovery.
 type assistantPlanInputError struct {
 	reason     string
 	diagnostic *assistantPlanInvalidDiagnostic
 }
 
+// Error returns fixed plan-input diagnostics without embedding parameters,
+// target contents or the internal failure reason.
+// Error возвращает фиксированную диагностику без parameters, содержимого target
+// и внутренней причины отказа.
 func (planErr *assistantPlanInputError) Error() string { return "assistant plan input is invalid" }
 
+// invalidAssistantPlan constructs a local typed reason without attaching owner
+// metadata or performing any proposal/authorization operation.
+// invalidAssistantPlan создаёт локальную типизированную причину без owner metadata,
+// предложения плана и операции авторизации.
 func invalidAssistantPlan(reason string) error {
 	return &assistantPlanInputError{reason: reason}
 }
 
+// controlFailureClass recognizes selected typed/sentinel/RPC diagnostics and
+// otherwise derives a class from the gRPC code. It does not return arbitrary
+// upstream message text or make an authorization decision from that text.
+// controlFailureClass распознаёт выбранные typed/sentinel/RPC diagnostics,
+// иначе выводит класс из gRPC-кода. Произвольный upstream message не возвращается,
+// решение о полномочиях по этому тексту не принимается.
 func controlFailureClass(err error) string {
 	if class := delegationInputFailureClass(err); class != "" {
 		return class
@@ -970,7 +1218,14 @@ func controlFailureClass(err error) string {
 	}
 }
 
-// Метаданные принимаются только из точного внутреннего RPC и закрытой схемы.
+// assistantPlanFailureDiagnostic accepts recognized local invalid details or
+// one exact Aborted ErrorInfo with a known stage/category and canonical index.
+// Unknown fields, metadata shape or out-of-range indices yield no diagnostic;
+// this classification does not establish the caller's authority.
+// assistantPlanFailureDiagnostic принимает известные local invalid details либо
+// один точный Aborted ErrorInfo с известными stage/category и canonical index.
+// Неизвестные поля, metadata shape и неверный index не дают диагноза;
+// такая классификация не устанавливает полномочия caller.
 func assistantPlanFailureDiagnostic(err error) (string, int) {
 	if diagnostic, ok := assistantPlanInvalidDetails(err); ok {
 		return "assistant_plan_" + diagnostic.stage + "_invalid", diagnostic.index
@@ -1018,6 +1273,14 @@ func assistantPlanFailureDiagnostic(err error) (string, int) {
 	return "assistant_plan_" + stage + "_" + strings.ToLower(category), index
 }
 
+// decodeMCPToolCallParams requires one object with a nonempty tool name and
+// nonnil arguments map, rejecting unknown struct fields and trailing JSON.
+// Optional metadata must decode as an object or null; decoder acceptance does
+// not enforce duplicate-key/case canonicality or the selected tool's schema.
+// decodeMCPToolCallParams требует один object с непустым tool name и ненулевой
+// map arguments, отвергая неизвестные struct fields и лишний JSON. Metadata
+// декодируется как object либо null; это не проверка повторных ключей,
+// canonical case или схемы выбранного инструмента.
 func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
 	var params mcpToolCallParams
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -1035,6 +1298,14 @@ func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
 	return params, nil
 }
 
+// proposeAssistantPlan validates assistant proposal shape and bounded operations,
+// normalizes supported locators, assigns ordinal refs and clears caller versions
+// for owner-hydrated targets before a lease-fenced proposal RPC. Returned plan/
+// conversation refs acknowledge a proposal, not application or human approval.
+// proposeAssistantPlan проверяет форму и ограниченные операции предложения,
+// нормализует locators, назначает ordinal refs и сбрасывает caller versions
+// для owner-hydrated targets до lease-fenced proposal RPC. Plan/conversation refs
+// подтверждают предложение, не применение и не одобрение человеком.
 func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	if !input.IsAssistant() || !onlyKeys(arguments, "summary", "operations") {
 		return nil, invalidAssistantPlan("top_level_shape")
@@ -1170,6 +1441,14 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		"conversation_ref": response.GetConversation().GetRef()}, nil
 }
 
+// assistantPlanControlError sanitizes errors from the owner proposal RPC,
+// converts InvalidArgument into local recoverable input failure and preserves
+// only recognized failure details. It expects an RPC error, not arbitrary local
+// diagnostic objects, and does not retry or apply the plan.
+// assistantPlanControlError очищает ошибки owner proposal RPC, превращает
+// InvalidArgument в локальный recoverable input failure и сохраняет лишь
+// известные failure details. Ожидается RPC-ошибка, не произвольный local object;
+// повтор и применение плана не выполняются.
 func assistantPlanControlError(err error) error {
 	if status.Code(err) == codes.InvalidArgument {
 		planErr := &assistantPlanInputError{reason: "server_validation"}
@@ -1188,6 +1467,14 @@ func assistantPlanControlError(err error) error {
 	return status.Error(status.Code(err), "propose assistant plan")
 }
 
+// normalizeServerHydratedAssistantOperation copies supported operation/parameter
+// maps, resolves accepted aliases, binds selected project-scoped parameters and
+// supplies presentation fields. Unsupported kinds/shapes remain for later guards;
+// this normalization does not resolve current owner versions or permissions.
+// normalizeServerHydratedAssistantOperation копирует поддержанные operation/
+// parameter maps, разрешает принятые aliases, привязывает выбранные project
+// parameters и задаёт presentation fields. Иные kinds/shapes проверяются позже;
+// текущие owner versions и permissions здесь не разрешаются.
 func normalizeServerHydratedAssistantOperation(operation map[string]any, planSummary, projectRef, projectName string) (map[string]any, error) {
 	kind, _ := operation["type"].(string)
 	if kind == "" {
@@ -1232,6 +1519,12 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	return normalized, nil
 }
 
+// assistantEnvironmentVariableNamesValid rejects invalid string names in the
+// recognized env lists/removals. Wrong list/item/name types are deliberately
+// left to later shape validation, so true is not a complete environment verdict.
+// assistantEnvironmentVariableNamesValid отвергает неверные строковые имена
+// в известных env lists/removals. Иные типы list/item/name проверяются позднее,
+// поэтому true не является полным заключением об окружении.
 func assistantEnvironmentVariableNamesValid(parameters map[string]any) bool {
 	for _, field := range []string{"publicValues", "publicValueUpdates", "secretBindings"} {
 		entries, supplied := parameters[field]
@@ -1264,6 +1557,10 @@ func assistantEnvironmentVariableNamesValid(parameters map[string]any) bool {
 	return true
 }
 
+// assistantProjectScopedOperation selects operation kinds whose normalized
+// parameters receive the immutable execution project; it grants no project access.
+// assistantProjectScopedOperation выбирает kinds, получающие проект immutable
+// execution в normalized parameters, не выдавая доступ к проекту.
 func assistantProjectScopedOperation(kind string) bool {
 	switch kind {
 	case "UPDATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
@@ -1273,6 +1570,12 @@ func assistantProjectScopedOperation(kind string) bool {
 	}
 }
 
+// assistantParameterAliases is the explicit accepted name-normalization table
+// for proposal parameter maps. Recursive normalization rejects collisions instead
+// of letting an alias overwrite another value; the table conveys no authority.
+// assistantParameterAliases задаёт явные принятые соответствия имён parameters.
+// Рекурсивная нормализация отвергает collisions вместо перезаписи другого
+// значения alias-ключом; таблица не передаёт полномочий.
 var assistantParameterAliases = map[string]string{
 	"agent_ref": "agentRef", "artifact_refs": "artifactRefs", "avatar_url": "avatarUrl",
 	"file_name": "fileName", "media_type": "mediaType",
@@ -1295,6 +1598,12 @@ var assistantParameterAliases = map[string]string{
 	"workflow_ref": "workflowRef",
 }
 
+// normalizeAssistantParameterNames creates a new map with recognized key aliases,
+// recursively processes supported nested values and rejects normalized-key
+// collisions. Unknown keys remain unchanged for the operation-specific validator.
+// normalizeAssistantParameterNames создаёт новую map с известными key aliases,
+// рекурсивно обрабатывает вложенные значения и отвергает совпадение normalized
+// keys. Неизвестные ключи оставляются operation-specific validator без изменения.
 func normalizeAssistantParameterNames(value map[string]any) (map[string]any, error) {
 	result := make(map[string]any, len(value))
 	for key, item := range value {
@@ -1314,6 +1623,12 @@ func normalizeAssistantParameterNames(value map[string]any) (map[string]any, err
 	return result, nil
 }
 
+// normalizeAssistantParameterValue copies and normalizes map[string]any and
+// []any recursively; other values are returned as-is, not deep-cloned or granted
+// special semantics by normalization.
+// normalizeAssistantParameterValue рекурсивно копирует и нормализует
+// map[string]any и []any; другие значения возвращаются как есть,
+// без deep clone и назначения особой семантики.
 func normalizeAssistantParameterValue(value any) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -1333,6 +1648,12 @@ func normalizeAssistantParameterValue(value any) (any, error) {
 	}
 }
 
+// assistantOperationTitle chooses a Russian operation label and selected
+// name/context/project fallback, trimming and bounding the displayed result.
+// It does not resolve resource identity or validate an otherwise unknown kind.
+// assistantOperationTitle выбирает русский label и name/context/project fallback,
+// обрезая пробелы и длину отображения. Идентичность ресурса не разрешается,
+// неизвестный kind этим не проверяется.
 func assistantOperationTitle(kind string, parameters map[string]any, entityName string) string {
 	name, _ := parameters["name"].(string)
 	if kind == "CREATE_PROJECT_FILE" {
@@ -1380,6 +1701,12 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 	return truncateRunes(fmt.Sprintf("%s «%s»", label, strings.TrimSpace(name)), 200)
 }
 
+// assistantProjectUpdateSummary describes supplied nonblank name/purpose/language
+// updates using a bounded Russian presentation string. It does not read actual
+// previous values or claim the changes have already been committed.
+// assistantProjectUpdateSummary описывает непустые name/purpose/language updates
+// ограниченной русской строкой. Прежние значения не читаются,
+// фиксация изменений не утверждается.
 func assistantProjectUpdateSummary(parameters map[string]any, projectName string) string {
 	changes := make([]string, 0, 3)
 	for _, field := range []struct {
@@ -1400,6 +1727,12 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 	return truncateRunes("Изменить "+project+" — "+strings.Join(changes, "; ")+".", 500)
 }
 
+// assistantServerHydratedOperation identifies kinds whose proposal action,
+// target and selection are constructed locally for owner hydration. It is not
+// an allowlist granting execution or bypassing the owner's version/approval gate.
+// assistantServerHydratedOperation определяет kinds с локальной подготовкой
+// proposal action/target/selection для owner hydration. Это не выдача права
+// выполнения и не обход owner version/approval gate.
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
 	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT", "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
@@ -1411,8 +1744,14 @@ func assistantServerHydratedOperation(kind string) bool {
 	}
 }
 
-// Здесь проверяется форма locator, а не authority: текущие права, профиль,
-// scope, версии и каталог повторно разрешает control-plane в owner-транзакции.
+// assistantConfigurationParametersAllowed performs selected scope/shape checks
+// for known special operations, including self locators, grants and model policy.
+// Other kinds return true for later validation; even a successful local check
+// leaves current ownership, versions, catalog eligibility and approval to CP.
+// assistantConfigurationParametersAllowed выполняет выбранные scope/shape checks
+// специальных операций, включая self locators, grants и model policy. Другие
+// kinds переходят к поздней проверке; true не заменяет текущие ownership,
+// versions, catalog eligibility и approval у CP.
 func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, kind string, parameters map[string]any) bool {
 	if _, supplied := parameters["projectAssistantRef"]; supplied && kind != "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" && kind != "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" {
 		return projectAssistantLocatorParametersAllowed(input, kind, parameters)
@@ -1535,8 +1874,12 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 	}
 }
 
-// Это фильтр подписанного source snapshot, не выдача artifact authority.
-// Текущие права и exact target повторно проверяет владелец control-plane.
+// assistantFileRevisionContextAllowed filters the immutable execution snapshot
+// by assistant/artifact capability, project and allowed operation/context kind.
+// It neither issues artifact authority nor verifies the current target/version.
+// assistantFileRevisionContextAllowed фильтрует immutable execution по assistant/
+// artifact capability, проекту и allowed operation/context kind,
+// не выдавая artifact authority и не проверяя текущие target/version.
 func assistantFileRevisionContextAllowed(input runtimecontract.RunnerInput) bool {
 	context := input.AssistantContext
 	return input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) &&
@@ -1544,6 +1887,12 @@ func assistantFileRevisionContextAllowed(input runtimecontract.RunnerInput) bool
 		(input.AssistantScope == runtimecontract.AssistantScopeProject || input.IsSystemAssistant() && (context.EntityKind == "PROJECT" || context.EntityKind == "FILE"))
 }
 
+// assistantIntegrationGrantPolicyShape checks enabled/approval enum consistency
+// and at most sixteen unique bounded scope strings, requiring scopes only for
+// enabled HUMAN_SCOPED. It does not parse scope-path semantics or grant rights.
+// assistantIntegrationGrantPolicyShape проверяет enabled/approval enum и не более
+// шестнадцати уникальных ограниченных scopes, требуя их лишь для включённого
+// HUMAN_SCOPED. Семантика путей и предоставление прав здесь не проверяются.
 func assistantIntegrationGrantPolicyShape(parameters map[string]any) bool {
 	enabled, ok := parameters["enabled"].(bool)
 	if !ok {
@@ -1574,11 +1923,25 @@ func assistantIntegrationGrantPolicyShape(parameters map[string]any) bool {
 	return true
 }
 
+// projectAssistantLocatorOperation recognizes the three locator-based assistant
+// configuration kinds only when projectAssistantRef is supplied; type, ownership
+// and current profile validity are checked elsewhere.
+// projectAssistantLocatorOperation распознаёт три locator-based kind настройки
+// лишь при наличии projectAssistantRef; тип, принадлежность и актуальность
+// профиля проверяются отдельно.
 func projectAssistantLocatorOperation(kind string, parameters map[string]any) bool {
 	_, supplied := parameters["projectAssistantRef"]
 	return supplied && (kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION")
 }
 
+// projectAssistantLocatorParametersAllowed checks assistant/self locator shape,
+// allowed schema property names and selected instruction/environment requirements.
+// Its revision anyOf check tests presence only, not full JSON Schema semantics;
+// current resource resolution and authorization remain owner operations.
+// projectAssistantLocatorParametersAllowed проверяет assistant/self locator,
+// допустимые schema property names и выбранные instruction/environment поля.
+// Revision anyOf проверяет лишь наличие, не всю JSON Schema;
+// актуальные ресурсы и полномочия разрешает владелец.
 func projectAssistantLocatorParametersAllowed(input runtimecontract.RunnerInput, kind string, parameters map[string]any) bool {
 	ref, ok := parameters["projectAssistantRef"].(string)
 	if !ok || !input.IsAssistant() || input.AgentRef == "" || !validAssistantResourceRef(ref) ||
@@ -1616,6 +1979,12 @@ func projectAssistantLocatorParametersAllowed(input runtimecontract.RunnerInput,
 	return false
 }
 
+// assistantGrantScopePaths accepts []string without copying or converts []any
+// only when every element is a string. Count/path constraints belong to callers,
+// and accepted strings are not interpreted as capabilities.
+// assistantGrantScopePaths принимает []string без копирования либо переводит
+// []any, если каждый элемент строковый. Число и форма путей проверяются caller;
+// принятые строки не интерпретируются как capabilities.
 func assistantGrantScopePaths(raw any) ([]string, bool) {
 	switch values := raw.(type) {
 	case []string:
@@ -1635,6 +2004,10 @@ func assistantGrantScopePaths(raw any) ([]string, bool) {
 	}
 }
 
+// assistantRequiredStrings requires each selected field to be a nonblank string,
+// treating missing or wrong types as failure without altering the stored text.
+// assistantRequiredStrings требует непустую строку для каждого выбранного поля,
+// отвергая отсутствие и неверные типы без изменения сохранённого текста.
 func assistantRequiredStrings(parameters map[string]any, fields ...string) bool {
 	for _, field := range fields {
 		value, ok := parameters[field].(string)
@@ -1645,6 +2018,10 @@ func assistantRequiredStrings(parameters map[string]any, fields ...string) bool 
 	return true
 }
 
+// assistantOptionalStrings permits absent fields but applies the required-string
+// check to every supplied selected field; an explicitly blank value fails.
+// assistantOptionalStrings допускает отсутствие полей, но применяет проверку
+// обязательной строки к переданным; явно пустое значение отвергается.
 func assistantOptionalStrings(parameters map[string]any, fields ...string) bool {
 	for _, field := range fields {
 		if _, exists := parameters[field]; exists && !assistantRequiredStrings(parameters, field) {
@@ -1654,6 +2031,12 @@ func assistantOptionalStrings(parameters map[string]any, fields ...string) bool 
 	return true
 }
 
+// assistantServerAction maps known revision/update/grant kinds to UPDATE and
+// all remaining kinds to CREATE. Kind validation and owner command selection
+// happen separately; this presentation mapping grants no mutation permission.
+// assistantServerAction отображает известные revision/update/grant kinds в UPDATE,
+// остальные — в CREATE. Kind и owner command проверяются отдельно;
+// такое отображение не даёт права изменения.
 func assistantServerAction(kind string) string {
 	if kind == "CREATE_PROJECT_FILE_REVISION" {
 		return "UPDATE"
@@ -1667,8 +2050,12 @@ func assistantServerAction(kind string) string {
 	return "CREATE"
 }
 
-// Контекст самонастройки PROJECT берётся только из immutable execution,
-// параметры остаются locator и повторно проверяются владельцем перед draft.
+// assistantOperationTargetContext derives project-assistant self context only
+// for exact agent/environment locators in the immutable input, otherwise returns
+// the existing context pointer. It constructs target metadata, not fresh authority.
+// assistantOperationTargetContext выводит project-assistant self context лишь
+// по точным agent/environment locators immutable input, иначе возвращает прежний
+// указатель context. Это target metadata, не новое полномочие.
 func assistantOperationTargetContext(input runtimecontract.RunnerInput, kind string, parameters map[string]any) *runtimecontract.RunnerAssistantContext {
 	if input.AssistantScope != runtimecontract.AssistantScopeProject {
 		return input.AssistantContext
@@ -1688,6 +2075,14 @@ func assistantOperationTargetContext(input runtimecontract.RunnerInput, kind str
 	return input.AssistantContext
 }
 
+// assistantServerTarget builds the proposal's kind/name locator from supported
+// parameters and exact supplied context matches, returning nil when required
+// context is absent. It intentionally does not assign current target refs or
+// versions; the owner hydrates and authorizes them before any application.
+// assistantServerTarget собирает proposal kind/name locator по поддержанным
+// parameters и точным context matches, возвращая nil при отсутствии нужного
+// контекста. Текущие target refs и versions не назначаются;
+// владелец разрешает и авторизует их до применения.
 func assistantServerTarget(kind string, parameters map[string]any, context *runtimecontract.RunnerAssistantContext) map[string]any {
 	if kind == "CREATE_PROJECT_FILE_REVISION" {
 		ref, _ := parameters["artifactRef"].(string)
@@ -1806,6 +2201,12 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 	return map[string]any{"kind": targetKind, "name": strings.TrimSpace(name)}
 }
 
+// exactJSONInt64 accepts only integral float64 values from generic JSON decoding,
+// from one through the largest exactly representable safe JSON integer. It does
+// not coerce Go integers, json.Number, numeric strings, zero or negative values.
+// exactJSONInt64 принимает лишь целый float64 из общего JSON-decoding,
+// от единицы до наибольшего безопасного JSON integer. Go integers, json.Number,
+// строковые числа, ноль и отрицательные значения не приводятся.
 func exactJSONInt64(value any) (int64, bool) {
 	number, ok := value.(float64)
 	if !ok || number < 1 || number > 9007199254740991 || number != float64(int64(number)) {
@@ -1814,6 +2215,12 @@ func exactJSONInt64(value any) (int64, bool) {
 	return int64(number), true
 }
 
+// proposeAssistantMetadata validates an assistant title and sends a trimmed,
+// lease-fenced idempotent metadata proposal. It requires a conversation ref and
+// returns its title revision, not an unrestricted conversation-update permission.
+// proposeAssistantMetadata проверяет заголовок помощника и отправляет trimmed,
+// lease-fenced idempotent proposal. Требует conversation ref и возвращает
+// title revision, не неограниченное право изменения диалога.
 func (server *Server) proposeAssistantMetadata(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	if !input.IsAssistant() || !onlyKeys(arguments, "title") {
 		return nil, errors.New("assistant metadata tool is not available")
@@ -1834,6 +2241,12 @@ func (server *Server) proposeAssistantMetadata(ctx context.Context, input runtim
 	return map[string]any{"ok": true, "conversation_ref": response.GetConversation().GetRef(), "title_revision": response.GetConversation().GetTitleRevision()}, nil
 }
 
+// proposeRunMetadata requires title or activity text within rune bounds and
+// submits only trimmed presentation fields with lease fencing/idempotency.
+// An owner run ref is required; task execution and authority are not changed here.
+// proposeRunMetadata требует title либо activity в пределах rune bounds
+// и передаёт trimmed presentation fields с lease fencing/idempotency.
+// Нужна owner run ref; выполнение задачи и полномочия здесь не изменяются.
 func (server *Server) proposeRunMetadata(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	if !onlyKeys(arguments, "title", "activity_summary") {
 		return nil, errors.New("run metadata is invalid")
@@ -1856,6 +2269,10 @@ func (server *Server) proposeRunMetadata(ctx context.Context, input runtimecontr
 	return map[string]any{"ok": true, "run_ref": response.GetRun().GetRef()}, nil
 }
 
+// onlyKeys rejects keys outside the supplied set but does not require any key;
+// nil/empty maps pass, so required fields need separate checks.
+// onlyKeys отвергает ключи вне заданного набора, но не требует ни одного;
+// nil/empty map проходит, обязательные поля проверяются отдельно.
 func onlyKeys(values map[string]any, allowed ...string) bool {
 	known := make(map[string]struct{}, len(allowed))
 	for _, key := range allowed {
@@ -1869,12 +2286,24 @@ func onlyKeys(values map[string]any, allowed ...string) bool {
 	return true
 }
 
+// recordToolCall records revision-two completion activity through the same
+// safe projection path used for the running phase, preserving the tool outcome.
+// recordToolCall записывает revision-two completion activity тем же безопасным
+// путём, что running phase, сохраняя результат инструмента.
 func (server *Server) recordToolCall(ctx context.Context, input runtimecontract.RunnerInput, tool string, arguments map[string]any,
 	result any, toolErr error, callID json.RawMessage, duration time.Duration,
 ) error {
 	return server.recordToolCallPhase(ctx, input, tool, arguments, result, toolErr, callID, duration, 2)
 }
 
+// recordToolCallPhase filters parameters, selects safe result commitments and
+// submits a stable lease-bound activity revision, requiring an owner event ref.
+// Revision one is RUNNING; later status follows toolErr, not business OK inside
+// an integration result. Persistence failure does not undo an external effect.
+// recordToolCallPhase фильтрует parameters, выбирает безопасные commitments
+// и передаёт стабильную lease-bound activity revision с обязательной owner event
+// ref. Первая revision — RUNNING; дальнейший status зависит от toolErr, не business
+// OK внутри integration result. Ошибка записи не отменяет внешний effect.
 func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecontract.RunnerInput, tool string, arguments map[string]any,
 	result any, toolErr error, callID json.RawMessage, duration time.Duration, revision int64,
 ) error {
@@ -1927,6 +2356,14 @@ func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecont
 	return nil
 }
 
+// safeToolCallParameters selects per-tool audit fields and capability/grant
+// locators without copying arbitrary request bodies or search/file contents.
+// Its bool is local projection eligibility; current owner permissions and exact
+// resource checks still apply when recording or invoking the operation.
+// safeToolCallParameters выбирает audit fields и capability/grant locators,
+// не копируя произвольные request bodies и search/file content. Bool означает
+// локальную допустимость проекции; запись и вызов сохраняют owner permission
+// и exact resource checks.
 func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, arguments map[string]any) (map[string]any, string, string, bool) {
 	if runtimecontract.IsRuntimeFileTool(tool) {
 		purpose, _ := arguments["purpose"].(string)
@@ -2015,8 +2452,14 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	return nil, "", "", false
 }
 
-// Только terminal CP result попадает в owner event; исходный ответ провайдера
-// и аргументы инструмента не входят в безопасную проекцию.
+// integrationToolResult carries an owner-observed invocation outcome, including
+// pending approval or unknown external outcome, with private audit commitments.
+// Agent JSON and durable activity use different projections; this value neither
+// approves effects nor proves that every reported state is terminal.
+// integrationToolResult хранит наблюдённый у владельца invocation outcome,
+// включая ожидание approval и неизвестный внешний outcome, с private commitments.
+// Agent JSON и durable activity имеют разные проекции; значение не одобряет
+// effects и не доказывает terminal-состояние каждого результата.
 type integrationToolResult struct {
 	OK                    bool   `json:"ok"`
 	Result                string `json:"result,omitempty"`
@@ -2027,6 +2470,12 @@ type integrationToolResult struct {
 	inputSHA256           string
 }
 
+// MarshalJSON emits result on OK or error_code otherwise, plus invocationRef
+// and optional owner-decision flag. Private state/input digest remain absent;
+// serialization itself does not validate or authorize an invocation.
+// MarshalJSON выдаёт result при OK либо error_code, invocationRef и необязательный
+// owner-decision flag. Private state/input digest не выводятся;
+// сериализация не проверяет и не авторизует invocation.
 func (r integrationToolResult) MarshalJSON() ([]byte, error) {
 	value := map[string]any{"ok": r.OK, "invocationRef": r.InvocationRef}
 	if r.OK {
@@ -2040,6 +2489,10 @@ func (r integrationToolResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal(value)
 }
 
+// safeInvocationRef recognizes an eight-to-128-byte ASCII alphanumeric,
+// underscore/hyphen locator; it does not prove existence, tenant or provenance.
+// safeInvocationRef распознаёт ASCII alphanumeric locator длиной 8..128 bytes
+// с underscore/hyphen, не доказывая существование, tenant и provenance.
 func safeInvocationRef(value string) bool {
 	if len(value) < 8 || len(value) > 128 {
 		return false
@@ -2052,6 +2505,14 @@ func safeInvocationRef(value string) bool {
 	return true
 }
 
+// safeToolCallResult returns fixed failures, selected reference markers or
+// private-evidence commitments rather than raw tool/provider content. Successful
+// file/workflow reads need specialized receipts in recordToolCallPhase; invocation
+// receipts require an exact digest/reference and recognized owner-observed state.
+// safeToolCallResult возвращает фиксированные ошибки, выбранные reference markers
+// либо private-evidence commitments вместо raw tool/provider content. Для file/
+// workflow reads нужны специальные receipts в recordToolCallPhase; invocation
+// receipts требуют точные digest/ref и известное наблюдённое owner-состояние.
 func safeToolCallResult(tool string, result any, toolErr error) string {
 	if toolErr != nil {
 		var planErr *assistantPlanInputError
@@ -2086,8 +2547,7 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 	}
 	if tool == "invoke_integration" || tool == runtimecontract.Context7ResolveTool || tool == runtimecontract.Context7QueryTool {
 		value, ok := result.(integrationToolResult)
-		rawDigest, digestErr := hex.DecodeString(value.inputSHA256)
-		if !ok || !safeInvocationRef(value.InvocationRef) || digestErr != nil || len(rawDigest) != sha256.Size || hex.EncodeToString(rawDigest) != value.inputSHA256 {
+		if !ok || !safeInvocationRef(value.InvocationRef) || !runtimecontract.ValidSHA256Text(value.inputSHA256) {
 			return "TOOL_UNAVAILABLE"
 		}
 		switch value.state {
@@ -2112,6 +2572,12 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 	return tool + ":completed"
 }
 
+// truncateRunes trims outer whitespace and bounds by runes without byte slicing;
+// callers must supply a nonnegative maximum. Converting invalid UTF-8 replaces
+// invalid sequences rather than serving as a strict text validator.
+// truncateRunes удаляет внешние пробелы и ограничивает runes, не байты;
+// caller передаёт неотрицательный maximum. Неверный UTF-8 при переводе
+// заменяется, а не отвергается строгим text validator.
 func truncateRunes(value string, maximum int) string {
 	runes := []rune(strings.TrimSpace(value))
 	if len(runes) <= maximum {
@@ -2120,10 +2586,22 @@ func truncateRunes(value string, maximum int) string {
 	return string(runes[:maximum])
 }
 
+// assistantPlanTextWithinLimit requires nonblank trimmed text but counts the
+// original runes against the maximum. It does not independently validate UTF-8,
+// NUL or domain-specific instruction semantics.
+// assistantPlanTextWithinLimit требует непустой trimmed text, но считает
+// исходные runes. UTF-8, NUL и доменная семантика инструкций
+// самостоятельно не проверяются.
 func assistantPlanTextWithinLimit(value string, maximum int) bool {
 	return strings.TrimSpace(value) != "" && len([]rune(value)) <= maximum
 }
 
+// delegate validates the pinned target/step/task/input pair before a bounded,
+// lease-fenced owner delegation RPC with stable call idempotency. Returned child
+// and callback references are owner response data, not caller-supplied lineage.
+// delegate проверяет pinned target/step/task/input до ограниченного lease-fenced
+// owner delegation RPC со стабильной call idempotency. Child/callback refs
+// приходят от владельца, а не назначают lineage из caller payload.
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	target, stepKey, task, structure, err := validateDelegationInput(input, arguments)
 	if err != nil {
@@ -2138,6 +2616,14 @@ func (server *Server) delegate(ctx context.Context, input runtimecontract.Runner
 	return map[string]any{"ok": true, "child_run_ref": response.GetChildRun().GetRef(), "callback_edge_ref": response.GetCallbackEdgeRef()}, nil
 }
 
+// invoke selects one pinned grant, computes the JSON input digest and resolves
+// an owner invocation with at most one transient retry using the same key.
+// It polls owner state until outcome or caller cancellation, returning pending/
+// unknown states without approving or retrying the external effect itself.
+// invoke выбирает pinned grant, вычисляет input digest и разрешает owner
+// invocation с одним transient retry того же ключа. Ожидает owner state до
+// outcome либо отмены caller, возвращая pending/unknown без одобрения
+// и самостоятельного повторения внешнего effect.
 func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	grant, allowed := integrationGrantForCall(input, arguments)
 	if !allowed {
@@ -2205,6 +2691,12 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 	}
 }
 
+// authorize parses the callback ticket, resolves its execution through Manager
+// and compares exact headers against that trusted input. Header values alone
+// are not authority and cannot select another tenant or lease.
+// authorize разбирает callback ticket, разрешает execution через Manager
+// и сверяет headers с доверенным input. Одни header values
+// не являются полномочием и не выбирают другой tenant либо lease.
 func (server *Server) authorize(request *http.Request, leaseRef string) (runtimecontract.RunnerInput, bool) {
 	token, ok := bearer(request)
 	if !ok {
@@ -2214,6 +2706,12 @@ func (server *Server) authorize(request *http.Request, leaseRef string) (runtime
 	return input, err == nil && executionHeadersMatch(request, input)
 }
 
+// executionHeadersMatch checks the route-derived callback method and exact
+// execution tuple, using constant-time digest comparisons. It assumes Manager
+// already resolved the ticket; matching untrusted headers is not authentication.
+// executionHeadersMatch сверяет callback method из маршрута и exact execution
+// tuple с constant-time digest comparisons. Ticket уже должен быть разрешён
+// Manager; совпадение недоверенных headers не является authentication.
 func executionHeadersMatch(request *http.Request, input runtimecontract.RunnerInput) bool {
 	method := ""
 	parts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
@@ -2233,6 +2731,12 @@ func executionHeadersMatch(request *http.Request, input runtimecontract.RunnerIn
 		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-MCP-Binding-Digest")), []byte(input.MCPBindingDigest)) == 1
 }
 
+// bearer accepts the exact Bearer prefix and 64 hexadecimal characters without
+// trimming or case normalization. This is syntax only; ticket resolution still
+// decides whether the token belongs to the requested execution.
+// bearer принимает точный Bearer prefix и 64 hex characters без trimming
+// и нормализации регистра. Это лишь форма; принадлежность token выполнению
+// определяется при разрешении ticket.
 func bearer(request *http.Request) (string, bool) {
 	header := request.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer ") || len(header) != len("Bearer ")+64 {
@@ -2245,6 +2749,12 @@ func bearer(request *http.Request) (string, bool) {
 	return token, true
 }
 
+// decode closes the body and requires one known-field JSON value plus EOF in a
+// maximum+1 limited reader view. It does not drain/count the complete body or
+// reject duplicate/case-aliased JSON keys; callers own semantic field bounds.
+// decode закрывает body и требует один JSON с известными полями и EOF в
+// maximum+1 limited reader view. Полное body не дочитывается и не подсчитывается,
+// duplicate/case-alias keys не запрещаются; semantic bounds проверяет caller.
 func decode(request *http.Request, target any, maximum int64) error {
 	defer request.Body.Close()
 	decoder := json.NewDecoder(io.LimitReader(request.Body, maximum+1))
@@ -2255,10 +2765,18 @@ func decode(request *http.Request, target any, maximum int64) error {
 	return nil
 }
 
+// stableKey derives a deterministic namespace UUID from NUL-separated inputs;
+// it is an idempotency/correlation locator, not a secret or permission proof.
+// stableKey выводит детерминированный namespace UUID из NUL-разделённых входов;
+// это idempotency/correlation locator, не секрет и не proof полномочий.
 func stableKey(left, right string) string {
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(left+"\x00"+right)).String()
 }
 
+// writeControlError maps selected owner gRPC statuses to fixed HTTP errors,
+// hiding permission/authentication failures as 404 and omitting upstream details.
+// writeControlError переводит выбранные owner gRPC statuses в фиксированные HTTP
+// ошибки, скрывая permission/authentication как 404 без upstream details.
 func writeControlError(writer http.ResponseWriter, err error) {
 	switch status.Code(err) {
 	case codes.InvalidArgument:
@@ -2276,16 +2794,32 @@ func writeControlError(writer http.ResponseWriter, err error) {
 	}
 }
 
+// writeMCPResult writes one JSON-RPC result envelope with the original raw ID;
+// encoder/write errors are intentionally not propagated by this helper.
+// writeMCPResult пишет JSON-RPC result envelope с исходным raw ID;
+// encoder/write errors намеренно не возвращаются этим helper.
 func (server *Server) writeMCPResult(writer http.ResponseWriter, id json.RawMessage, result any) {
 	writer.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 }
 
+// writeMCPError writes the supplied protocol error code/message and raw ID as
+// JSON; callers must provide safe messages because it performs no redaction.
+// writeMCPError пишет заданные protocol error code/message и raw ID в JSON;
+// caller передаёт безопасный message, отдельной redaction здесь нет.
 func (server *Server) writeMCPError(writer http.ResponseWriter, id json.RawMessage, code int, message string) {
 	writer.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": code, "message": message}})
 }
 
+// serverTLS selects explicit trusted-cluster plaintext transport or constructs
+// TLS1.3-only mutual authentication with the configured CA and exact verified
+// leaf URI. Other profiles and material failures reject; trusted mode is an
+// explicit deployment boundary, not fallback after certificate failure.
+// serverTLS выбирает явный trusted-cluster plaintext transport либо TLS1.3 mTLS
+// с настроенным CA и точным URI проверенного leaf. Другие profiles и ошибки
+// материалов отвергаются; trusted mode — отдельная deployment boundary,
+// не fallback после ошибки сертификата.
 func serverTLS(config Config) (*tls.Config, error) {
 	if config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
 		return nil, nil

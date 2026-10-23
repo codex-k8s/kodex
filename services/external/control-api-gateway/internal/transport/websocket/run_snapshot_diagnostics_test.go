@@ -16,6 +16,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// snapshotDiagnosticLogs temporarily replaces the process default logger, restores it on return, rejects private sentinel leakage and decodes JSON rows. Callers must not run these global-logger fixtures in parallel.
+// snapshotDiagnosticLogs временно заменяет общий logger процесса, восстанавливает его при выходе, отвергает утечку закрытого маркера и декодирует JSON-записи. Оснастку общего logger нельзя запускать параллельно.
 func snapshotDiagnosticLogs(t *testing.T, operation func()) []map[string]any {
 	t.Helper()
 	var output bytes.Buffer
@@ -38,6 +40,8 @@ func snapshotDiagnosticLogs(t *testing.T, operation func()) []map[string]any {
 	return rows
 }
 
+// TestRunSnapshotReadDiagnosticClosedFields checks the exact ten-field read log for dependency, wrapped deadline, ordinary error and invalid gRPC code without exposing private error text.
+// TestRunSnapshotReadDiagnosticClosedFields проверяет точные десять полей лога чтения для отказа зависимости, обёрнутого срока, обычной ошибки и неверного gRPC-кода без закрытого текста.
 func TestRunSnapshotReadDiagnosticClosedFields(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -67,6 +71,8 @@ func TestRunSnapshotReadDiagnosticClosedFields(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotReadDiagnosticParentDeadlineAndCancel propagates expired/canceled parent state through fake RPC reads, retaining status, zero expired budget and no transport frames.
+// TestRunSnapshotReadDiagnosticParentDeadlineAndCancel проводит истечение и отмену родителя через тестовые RPC-чтения, сохраняя статус, нулевой истёкший бюджет и отсутствие кадров.
 func TestRunSnapshotReadDiagnosticParentDeadlineAndCancel(t *testing.T) {
 	for _, state := range []string{"DEADLINE_EXCEEDED", "CANCELED"} {
 		t.Run(state, func(t *testing.T) {
@@ -103,6 +109,8 @@ func TestRunSnapshotReadDiagnosticParentDeadlineAndCancel(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotReadDiagnosticDependencyBeforeBudgetExhaustion distinguishes dependency unavailability from exhausted context time and checks the remaining bounded budget without replacing the caller's deadline.
+// TestRunSnapshotReadDiagnosticDependencyBeforeBudgetExhaustion отличает недоступность зависимости от исчерпания срока и проверяет ограниченный остаток без замены срока вызывающей стороны.
 func TestRunSnapshotReadDiagnosticDependencyBeforeBudgetExhaustion(t *testing.T) {
 	parent, cancel := context.WithTimeout(t.Context(), heartbeatWakeTimeout)
 	defer cancel()
@@ -129,6 +137,8 @@ func TestRunSnapshotReadDiagnosticDependencyBeforeBudgetExhaustion(t *testing.T)
 	}
 }
 
+// TestRunSnapshotDiagnosticSuccessAndProjectionFailure keeps valid read/projection silent, then verifies malformed projection emits one redacted contract log and the existing exact RUN_UNAVAILABLE stream problem.
+// TestRunSnapshotDiagnosticSuccessAndProjectionFailure оставляет успешные чтение и проекцию без лога, затем проверяет один скрывающий подробности contract-лог и прежний точный RUN_UNAVAILABLE при неверной проекции.
 func TestRunSnapshotDiagnosticSuccessAndProjectionFailure(t *testing.T) {
 	m, c := platformWakeRaceFixture(t, 8)
 	c.runSnapshot = completeRunSnapshotFixture()

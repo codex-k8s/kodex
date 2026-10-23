@@ -10,33 +10,19 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/runtimepolicy"
 )
 
+// providerProxyFixture establishes an authenticated CONNECT tunnel with synthetic downstream and upstream TLS roots.
+// providerProxyFixture создаёт аутентифицированный CONNECT-туннель с тестовым TLS-доверием клиента и upstream.
 func providerProxyFixture(t *testing.T, host string, access runtimecontract.RuntimeWebAccess, upstreamRoots *x509.CertPool) (*Server, securedReader, *fakeResolver, *fakeDialer, <-chan struct{}) {
 	t.Helper()
-	path := filepath.Join("..", "..", "..", "..", "..", "deploy/k8s/base/egress-gateway/policy.json")
-	digest, err := policy.DigestFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	base, err := policy.LoadFile(path, "2026-09-05.1", digest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	key := []byte(strings.Repeat("synthetic", 8))
-	active, err := runtimepolicy.New(base, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	active, key := authenticatedRuntimePolicyFixture(t)
 	grant, err := runtimecontract.SignRuntimeWebAccessGrant(key, "synthetic-execution", strings.Repeat("a", 64), access)
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +56,21 @@ func providerProxyFixture(t *testing.T, host string, access runtimecontract.Runt
 	return server, securedReader{conn: secured, reader: bufio.NewReader(secured)}, resolver, dialer, done
 }
 
+// providerWebSocketEndpoint prepares the exact provider host, TLS roots, and authenticated client tunnel.
+// providerWebSocketEndpoint готовит точный хост провайдера, TLS-доверие и аутентифицированный клиентский туннель.
+func providerWebSocketEndpoint(t *testing.T, host string) (tls.Certificate, securedReader, *fakeDialer, <-chan struct{}, string) {
+	t.Helper()
+	certificate, roots := serverCertificateFixture(t, host)
+	_, client, _, dialer, done := providerProxyFixture(t, host, runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, roots)
+	path := "/v1/responses"
+	if host == "chatgpt.com" {
+		path = "/backend-api/codex/responses"
+	}
+	return certificate, client, dialer, done, path
+}
+
+// TestProviderPOSTIsIndependentOfUserReadOnlyAndPreservesSSE keeps provider POST available and SSE unbuffered.
+// TestProviderPOSTIsIndependentOfUserReadOnlyAndPreservesSSE сохраняет POST провайдера и потоковую передачу SSE.
 func TestProviderPOSTIsIndependentOfUserReadOnlyAndPreservesSSE(t *testing.T) {
 	logs := captureProviderResponsesLogs(t)
 	access := runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessAllowlistReadOnly, Rules: []runtimecontract.RuntimeWebAccessRule{{DomainPattern: "example.org", Protocol: "HTTPS", Port: 443, HTTPMethods: []string{"GET"}}}}
@@ -138,6 +139,8 @@ func TestProviderPOSTIsIndependentOfUserReadOnlyAndPreservesSSE(t *testing.T) {
 	assertProviderResponsesEvents(t, logs.String(), "HTTP", "event=POLICY outcome=ALLOWED", "event=UPSTREAM outcome=RESPONSE status_class=2XX http_status=200", "event=UPSTREAM_BODY outcome=COMPLETED status_class=2XX http_status=200")
 }
 
+// TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade rejects untrusted TLS and malformed WebSocket upgrades.
+// TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade отклоняет недоверенный TLS и неверный WebSocket upgrade.
 func TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade(t *testing.T) {
 	for _, boundary := range []string{"foreignCA", "foreignAccept", "extensionBinding"} {
 		t.Run(boundary, func(t *testing.T) {
@@ -192,16 +195,13 @@ func TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade(t *testing.T)
 	}
 }
 
+// TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames checks upgrade bytes and opaque traffic both ways.
+// TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames проверяет байты upgrade и двусторонний трафик.
 func TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames(t *testing.T) {
 	for _, host := range []string{"api.openai.com", "chatgpt.com"} {
 		t.Run(host, func(t *testing.T) {
 			logs := captureProviderResponsesLogs(t)
-			certificate, roots := serverCertificateFixture(t, host)
-			_, client, _, dialer, done := providerProxyFixture(t, host, runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, roots)
-			path := "/v1/responses"
-			if host == "chatgpt.com" {
-				path = "/backend-api/codex/responses"
-			}
+			certificate, client, dialer, done, path := providerWebSocketEndpoint(t, host)
 			upstreamResult := make(chan error, 1)
 			go func() {
 				peer := <-dialer.peers
@@ -268,6 +268,8 @@ func TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames(t *testi
 	}
 }
 
+// TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial denies unauthorized paths before upstream access.
+// TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial отклоняет чужие пути до обращения к upstream.
 func TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial(t *testing.T) {
 	for _, mutation := range []string{"foreignpath", "wrongmethod", "protocol", "extensions", "badkey", "foreignupgrade"} {
 		t.Run(mutation, func(t *testing.T) {
@@ -321,6 +323,8 @@ func TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial(t *testi
 	}
 }
 
+// TestProviderResponsesRejectedUpgradePreservesHTTPResponse keeps a rejected upgrade as an ordinary HTTP response.
+// TestProviderResponsesRejectedUpgradePreservesHTTPResponse сохраняет отклонённый upgrade обычным HTTP-ответом.
 func TestProviderResponsesRejectedUpgradePreservesHTTPResponse(t *testing.T) {
 	logs := captureProviderResponsesLogs(t)
 	certificate, roots := serverCertificateFixture(t, "api.openai.com")
@@ -359,6 +363,8 @@ func TestProviderResponsesRejectedUpgradePreservesHTTPResponse(t *testing.T) {
 	assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPSTREAM outcome=RESPONSE status_class=4XX http_status=401", "event=UPGRADE outcome=REJECTED status_class=4XX http_status=401", "event=UPSTREAM_BODY outcome=COMPLETED status_class=4XX http_status=401")
 }
 
+// TestProviderWebSocketPinnedDeflateNegotiationPreservesOpaqueFrames keeps permitted compression frames opaque.
+// TestProviderWebSocketPinnedDeflateNegotiationPreservesOpaqueFrames передаёт разрешённые сжатые кадры без разбора.
 func TestProviderWebSocketPinnedDeflateNegotiationPreservesOpaqueFrames(t *testing.T) {
 	// Exact default offer Codex rust-v0.160.0 / tungstenite fork 4fffad30.
 	const offer = "permessage-deflate; client_max_window_bits"
@@ -373,12 +379,7 @@ func TestProviderWebSocketPinnedDeflateNegotiationPreservesOpaqueFrames(t *testi
 	for _, host := range []string{"api.openai.com", "chatgpt.com"} {
 		t.Run(host, func(t *testing.T) {
 			logs := captureProviderResponsesLogs(t)
-			certificate, roots := serverCertificateFixture(t, host)
-			_, client, _, dialer, done := providerProxyFixture(t, host, runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, roots)
-			path := "/v1/responses"
-			if host == "chatgpt.com" {
-				path = "/backend-api/codex/responses"
-			}
+			certificate, client, dialer, done, path := providerWebSocketEndpoint(t, host)
 			upstreamResult := make(chan error, 1)
 			go func() {
 				peer := <-dialer.peers

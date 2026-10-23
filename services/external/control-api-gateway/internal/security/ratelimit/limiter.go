@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+// Config sets the fixed-window request quota, bounded subject registry and
+// separate global/per-subject concurrency ceilings for each transport.
+// Config задаёт квоту запросов в фиксированном окне, ограниченный реестр
+// субъектов и отдельные глобальные/персональные пределы параллелизма.
 type Config struct {
 	Window                         time.Duration
 	Limit                          uint32
@@ -16,6 +20,10 @@ type Config struct {
 	PerSubjectWebSocketConcurrency int
 }
 
+// bucket stores one subject's request window, last use and currently held HTTP
+// and WebSocket slots; all access is protected by Limiter.mu.
+// bucket хранит окно запросов субъекта, время последнего использования и
+// занятые HTTP/WebSocket-слоты; доступ защищён Limiter.mu.
 type bucket struct {
 	started time.Time
 	count   uint32
@@ -24,6 +32,10 @@ type bucket struct {
 	ws      int
 }
 
+// Limiter combines per-subject fixed-window counts with nonblocking global
+// semaphores and fails closed when its bounded bucket registry is full.
+// Limiter объединяет счётчики субъектов в фиксированных окнах с глобальными
+// неблокирующими семафорами и отклоняет запрос при заполненном реестре.
 type Limiter struct {
 	mu      sync.Mutex
 	config  Config
@@ -34,6 +46,10 @@ type Limiter struct {
 	now     func() time.Time
 }
 
+// New allocates an empty bounded registry and transport semaphores; invalid
+// configuration remains fail-closed at each admission method.
+// New создаёт пустой ограниченный реестр и семафоры транспортов; при
+// недействительной конфигурации каждый метод допуска закрыто отказывает.
 func New(config Config) *Limiter {
 	return &Limiter{
 		config: config, buckets: make(map[string]bucket, config.MaximumKeys),
@@ -43,6 +59,10 @@ func New(config Config) *Limiter {
 	}
 }
 
+// valid requires positive quotas and per-subject concurrency strictly below
+// each matching global limit before admitting any request.
+// valid требует положительные квоты и предел субъекта строго ниже
+// соответствующего глобального предела до допуска любого запроса.
 func (limiter *Limiter) valid() bool {
 	return limiter != nil && limiter.config.Window >= time.Second && limiter.config.Limit > 0 && limiter.config.MaximumKeys > 0 &&
 		limiter.config.PreAuthConcurrency > 0 && limiter.config.GlobalHTTPConcurrency > 0 && limiter.config.PerSubjectHTTPConcurrency > 0 &&
@@ -50,6 +70,10 @@ func (limiter *Limiter) valid() bool {
 		limiter.config.PerSubjectWebSocketConcurrency > 0 && limiter.config.PerSubjectWebSocketConcurrency < limiter.config.GlobalWebSocketConcurrency
 }
 
+// Allow counts a subject's request in its fixed window, resetting an expired
+// window and refusing unknown subjects if no inactive bucket can be evicted.
+// Allow учитывает запрос субъекта в фиксированном окне, сбрасывает истёкшее
+// окно и отклоняет нового субъекта, если нет вытесняемой неактивной записи.
 func (limiter *Limiter) Allow(key string) bool {
 	if !limiter.valid() || key == "" {
 		return false
@@ -74,6 +98,10 @@ func (limiter *Limiter) Allow(key string) bool {
 	return true
 }
 
+// AcquirePreAuth reserves a global pre-authentication slot without waiting and
+// returns an idempotent release callback on success.
+// AcquirePreAuth неблокирующе резервирует глобальный слот до аутентификации и
+// при успехе возвращает идемпотентную функцию освобождения.
 func (limiter *Limiter) AcquirePreAuth() (func(), bool) {
 	if !limiter.valid() {
 		return func() {}, false
@@ -81,14 +109,26 @@ func (limiter *Limiter) AcquirePreAuth() (func(), bool) {
 	return acquireChannel(limiter.preauth)
 }
 
+// AcquireHTTP reserves both global and subject HTTP concurrency for a nonempty
+// key, releasing the global slot if subject admission fails.
+// AcquireHTTP резервирует глобальный и персональный HTTP-параллелизм для
+// непустого ключа и освобождает глобальный слот при отказе субъекту.
 func (limiter *Limiter) AcquireHTTP(key string) (func(), bool) {
 	return limiter.acquireSubject(key, false)
 }
 
+// AcquireWebSocket reserves the distinct WebSocket global/subject limits and
+// returns the same once-only release contract as HTTP admission.
+// AcquireWebSocket резервирует отдельные глобальный и персональный пределы
+// WebSocket и возвращает тот же одноразовый контракт освобождения, что HTTP.
 func (limiter *Limiter) AcquireWebSocket(key string) (func(), bool) {
 	return limiter.acquireSubject(key, true)
 }
 
+// acquireSubject checks the matching global semaphore before the locked
+// subject bucket, then returns a once-only callback that releases both slots.
+// acquireSubject сначала проверяет глобальный семафор, затем защищённую запись
+// субъекта и возвращает функцию однократного освобождения обоих слотов.
 func (limiter *Limiter) acquireSubject(key string, websocket bool) (func(), bool) {
 	if !limiter.valid() || key == "" {
 		return func() {}, false
@@ -145,6 +185,10 @@ func (limiter *Limiter) acquireSubject(key string, websocket bool) (func(), bool
 	}, true
 }
 
+// bucketLocked returns an existing bucket or evicts the oldest expired idle
+// entry; active or recent subjects are never evicted to admit a new key.
+// bucketLocked возвращает запись либо вытесняет самую старую истёкшую
+// неактивную запись; занятые и недавние субъекты не вытесняются.
 func (limiter *Limiter) bucketLocked(key string, now time.Time) (bucket, bool) {
 	if value, ok := limiter.buckets[key]; ok {
 		return value, true
@@ -168,6 +212,10 @@ func (limiter *Limiter) bucketLocked(key string, now time.Time) (bucket, bool) {
 	return bucket{started: now, seen: now}, true
 }
 
+// acquireChannel performs a nonblocking semaphore send and returns an
+// idempotent release callback; a full channel denies admission.
+// acquireChannel неблокирующе занимает семафор и возвращает идемпотентное
+// освобождение; заполненный канал означает отказ в допуске.
 func acquireChannel(channel chan struct{}) (func(), bool) {
 	select {
 	case channel <- struct{}{}:

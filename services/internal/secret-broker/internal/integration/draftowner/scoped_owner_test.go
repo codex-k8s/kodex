@@ -8,6 +8,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/domain/repository/secretdrafts"
 )
 
+// TestOwnerScopedDraftReadbackClosed exercises project/organization consume/complete, then rejects
+// foreign/unknown scope or organization in completion/recovery and unknown scope in native work.
+// TestOwnerScopedDraftReadbackClosed проверяет project/organization consume/complete, затем отклоняет
+// foreign/unknown scope либо organization в completion/recovery и unknown scope в native work.
 func TestOwnerScopedDraftReadbackClosed(t *testing.T) {
 	for _, scope := range []cp.RuntimeResourceScopeKind{cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION} {
 		t.Run(scope.String(), func(t *testing.T) {

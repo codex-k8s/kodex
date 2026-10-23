@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+// managedMCPFixture derives a synthetic Context7 profile from one matched read-only grant pair, exact connection metadata and a version-pinned health proof without credentials.
+// managedMCPFixture выводит синтетический профиль Context7 из согласованной пары прав чтения, точных метаданных подключения и версионного подтверждения работоспособности без реквизитов.
 func managedMCPFixture(t *testing.T) RunnerInput {
 	t.Helper()
 	input := validRunnerInputFixture()
@@ -39,6 +41,8 @@ func managedMCPFixture(t *testing.T) RunnerInput {
 	return input
 }
 
+// TestManagedMCPExactPinsScopeAndReadiness validates agent, system and project profiles, exact health age boundaries and rejection of altered grants, provenance or scope.
+// TestManagedMCPExactPinsScopeAndReadiness проверяет профили сотрудника, системы и проекта, точные границы давности проверки и отклонение изменённых прав, происхождения или области.
 func TestManagedMCPExactPinsScopeAndReadiness(t *testing.T) {
 	base := managedMCPFixture(t)
 	if err := base.Validate(); err != nil {
@@ -102,6 +106,8 @@ func TestManagedMCPExactPinsScopeAndReadiness(t *testing.T) {
 	}
 }
 
+// TestManagedMCPDerivationRejectsMissingAmbiguousAndMixedPairs rejects incomplete or cross-connection grant pairs while keeping valid derivation independent of grant order.
+// TestManagedMCPDerivationRejectsMissingAmbiguousAndMixedPairs отклоняет неполные пары прав и пары разных подключений, сохраняя независимость допустимого вывода от порядка прав.
 func TestManagedMCPDerivationRejectsMissingAmbiguousAndMixedPairs(t *testing.T) {
 	input := managedMCPFixture(t)
 	for _, mode := range []string{"missing", "duplicate", "multiple", "mixed", "package"} {
@@ -134,6 +140,8 @@ func TestManagedMCPDerivationRejectsMissingAmbiguousAndMixedPairs(t *testing.T) 
 	}
 }
 
+// TestManagedMCPCatalogAndCanonicalSchema checks the closed tool catalog, canonical schema digest, rejection of ambiguous schema JSON and credential-free wire round-trip.
+// TestManagedMCPCatalogAndCanonicalSchema проверяет закрытый каталог инструментов, канонический дайджест схемы, запрет неоднозначного JSON и передачу без реквизитов.
 func TestManagedMCPCatalogAndCanonicalSchema(t *testing.T) {
 	input := managedMCPFixture(t)
 	names := RuntimeMCPToolNames(input)

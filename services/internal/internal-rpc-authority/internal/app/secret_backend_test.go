@@ -2,6 +2,8 @@ package app
 
 import "testing"
 
+// TestSelectSecretBackendAcceptsOnlyKubernetes accepts the sole supported discriminator and rejects two removed profile strings using only local selection. It neither reads a Secret nor connects to Kubernetes or an alternate backend.
+// TestSelectSecretBackendAcceptsOnlyKubernetes принимает единственный поддерживаемый селектор и отклоняет две строки удалённых профилей только локальным выбором. Secret не читается, подключения Kubernetes или альтернативного хранилища нет.
 func TestSelectSecretBackendAcceptsOnlyKubernetes(t *testing.T) {
 	t.Parallel()
 

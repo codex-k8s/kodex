@@ -11,8 +11,12 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
+// testFileID is a syntactically valid synthetic attachment ID and does not refer to a real provider object.
+// RU: testFileID задаёт синтаксически допустимый синтетический ID вложения, не ссылаясь на реальный объект провайдера.
 const testFileID = "ffffffffffffffffffffffffff"
 
+// jsonResponse serializes a fixture value into an SDK-compatible in-memory response and fails setup on encoding errors.
+// RU: jsonResponse сериализует значение оснастки в совместимый с SDK ответ в памяти и завершает подготовку при ошибке кодирования.
 func jsonResponse(t *testing.T, status int, value any) *http.Response {
 	t.Helper()
 	body, err := json.Marshal(value)
@@ -22,6 +26,8 @@ func jsonResponse(t *testing.T, status int, value any) *http.Response {
 	return testResponse(status, string(body))
 }
 
+// operationFixture emulates the supported SDK operations in memory, checks exact paths and selected payload fields, and allows targeted response overrides.
+// RU: operationFixture имитирует поддерживаемые SDK операции в памяти, проверяет точные пути и выбранные поля payload и допускает адресную подмену ответа.
 func operationFixture(t *testing.T, intercept func(*http.Request) (*http.Response, bool)) *model.Client4 {
 	t.Helper()
 	post := &model.Post{Id: testPostID, ChannelId: testChannelID, UserId: testUserID, Message: "lead", UpdateAt: 1, FileIds: []string{testFileID}}
@@ -104,6 +110,8 @@ func operationFixture(t *testing.T, intercept func(*http.Request) (*http.Respons
 	}))
 }
 
+// TestEveryCallableMattermostOperationHasTypedExecution executes all 16 shipped agent-callable operations and validates their output schemas and mutation-attempt flags.
+// RU: TestEveryCallableMattermostOperationHasTypedExecution выполняет все 16 поставленных вызываемых агентом операций и проверяет схемы результатов и признаки попытки изменения.
 func TestEveryCallableMattermostOperationHasTypedExecution(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -139,6 +147,8 @@ func TestEveryCallableMattermostOperationHasTypedExecution(t *testing.T) {
 	}
 }
 
+// TestOperationsNeverMutateForeignPost replaces post readback with another channel and proves dependent read/write operations fail before any mutation.
+// RU: TestOperationsNeverMutateForeignPost подменяет перечитанное сообщение другим каналом и доказывает отказ зависимых чтений/записей до любого изменения.
 func TestOperationsNeverMutateForeignPost(t *testing.T) {
 	for _, operation := range []string{"mattermost.post.update", "mattermost.reaction.add", "mattermost.reaction.remove", "mattermost.file.read", "mattermost.thread.read"} {
 		t.Run(operation, func(t *testing.T) {
@@ -160,6 +170,8 @@ func TestOperationsNeverMutateForeignPost(t *testing.T) {
 	}
 }
 
+// TestSearchCannotOverrideChannelAndRejectsForeignResults rejects scope-operator injection before transport and foreign-channel search results after readback.
+// RU: TestSearchCannotOverrideChannelAndRejectsForeignResults отклоняет внедрение операторов области до транспорта и чужие результаты поиска после перечитывания.
 func TestSearchCannotOverrideChannelAndRejectsForeignResults(t *testing.T) {
 	channel := &model.Channel{Id: testChannelID, TeamId: testTeamID, Name: "channel"}
 	for _, query := range []string{"in:other", "lead\" OR in:other", "from:user", "lead\n-in:channel"} {
@@ -182,6 +194,8 @@ func TestSearchCannotOverrideChannelAndRejectsForeignResults(t *testing.T) {
 	}
 }
 
+// TestFileRangeMustMatchRequestedAttachment rejects missing or mismatched Content-Range rather than returning bytes for an unverified attachment range.
+// RU: TestFileRangeMustMatchRequestedAttachment отклоняет отсутствующий или неверный Content-Range вместо выдачи байтов непроверенного диапазона вложения.
 func TestFileRangeMustMatchRequestedAttachment(t *testing.T) {
 	for _, contentRange := range []string{"", "bytes 0-2/5", "bytes 1-3/500"} {
 		t.Run(fmt.Sprintf("range_%s", contentRange), func(t *testing.T) {
@@ -200,6 +214,8 @@ func TestFileRangeMustMatchRequestedAttachment(t *testing.T) {
 	}
 }
 
+// TestAgentCannotModifyHumanGateMessage ensures a bot-authored post carrying gate properties cannot reach the update endpoint through agent execution.
+// RU: TestAgentCannotModifyHumanGateMessage проверяет, что сообщение бота со свойствами gate не достигает endpoint изменения через исполнение агента.
 func TestAgentCannotModifyHumanGateMessage(t *testing.T) {
 	client := operationFixture(t, func(request *http.Request) (*http.Response, bool) {
 		if request.URL.Path == "/api/v4/posts/"+testPostID {

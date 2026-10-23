@@ -16,6 +16,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestTrustedProjectionSelectorRequiresExactServerAdmission rejects raw metadata before middleware
+// admission, accepts only the minimal server selector and denies a mismatched operation under synthetic
+// trusted-profile routing.
+// TestTrustedProjectionSelectorRequiresExactServerAdmission отклоняет raw metadata до middleware
+// admission, принимает лишь minimal server selector и запрещает mismatched operation при synthetic
+// trusted-profile routing.
 func TestTrustedProjectionSelectorRequiresExactServerAdmission(t *testing.T) {
 	method := sb.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName
 	authorizer, err := serviceidentity.NewTrustedCluster(transportprofile.TrustedCluster, secretBrokerSPIFFEID, []serviceidentity.Binding{{
@@ -46,6 +52,12 @@ func TestTrustedProjectionSelectorRequiresExactServerAdmission(t *testing.T) {
 	}
 }
 
+// TestTrustedProjectionManifestUsesOnlyOwnerSnapshot copies owner-supplied actor/profile pins and rejects
+// missing owner, fake proof, wrong generation/profile or missing expiry; empty provider metadata here does
+// not prove store eligibility.
+// TestTrustedProjectionManifestUsesOnlyOwnerSnapshot копирует owner-supplied actor/profile pins и
+// отклоняет missing owner, fake proof, wrong generation/profile и missing expiry; пустые provider metadata
+// здесь не доказывают store eligibility.
 func TestTrustedProjectionManifestUsesOnlyOwnerSnapshot(t *testing.T) {
 	method := sb.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName
 	selector := &cp.CredentialProjectionAuthority{RpcProfile: transportprofile.TrustedCluster,

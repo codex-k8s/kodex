@@ -14,6 +14,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// postgresFixture requires explicit loopback runtime/admin DSNs, creates a random
+// database from the email_bridge template and registers bounded destructive cleanup.
+// It skips without the runtime DSN and never selects a live database as a fallback.
+// postgresFixture требует явные локальные runtime/admin DSN, создаёт случайную БД
+// из шаблона email_bridge и регистрирует ограниченную по времени очистку с удалением.
+// Без runtime DSN тест пропускается; действующая БД не выбирается запасным вариантом.
 func postgresFixture(t *testing.T) *repository.Repository {
 	t.Helper()
 	runtimeDSN := os.Getenv("EMAIL_BRIDGE_TEST_DSN")

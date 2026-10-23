@@ -1,4 +1,5 @@
-// Команда генерирует admission artifact из общего source.
+// This command generates the integration admission artifact from the shared source.
+// Команда генерирует integration admission-артефакт из общего источника.
 package main
 
 import (
@@ -9,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationegresspolicy"
 )
 
+// main emits the exact integration admission resources on stdout.
+// main выдаёт точные integration admission-ресурсы в stdout.
 func main() {
 	if len(os.Args) != 1 {
 		fmt.Fprintln(os.Stderr, "integration admission generator takes no arguments")

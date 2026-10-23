@@ -12,6 +12,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestLargeContinuationPassesExactControllerBindingAndClosedDiagnostics proves
+// a large owner runtime-change notice survives sealing and runner encoding,
+// while an oversized ordinary USER message still fails the shared validator
+// and receives the closed diagnostic instead of inheriting the notice allowance.
+// TestLargeContinuationPassesExactControllerBindingAndClosedDiagnostics
+// проверяет сохранение большого уведомления владельца об изменениях runtime
+// через закрепление и кодирование runner. Обычное слишком длинное USER-сообщение
+// по-прежнему отвергается общим валидатором с закрытым диагностическим кодом.
 func TestLargeContinuationPassesExactControllerBindingAndClosedDiagnostics(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	execution := testExecution(false)

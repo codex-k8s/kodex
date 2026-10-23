@@ -15,15 +15,23 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// webSocketMagic is the RFC 6455 GUID used to validate the server's accept challenge.
+// webSocketMagic — GUID RFC 6455 для проверки ответа сервера на challenge.
 const webSocketMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+// errProviderWebSocketHeaderBound signals that the serialized upgrade exceeded its fixed limit.
+// errProviderWebSocketHeaderBound сообщает о превышении лимита сериализованного upgrade-ответа.
 var errProviderWebSocketHeaderBound = errors.New("websocket response headers exceed bounded serialization limit")
 
+// providerWebSocketHeaderBuffer bounds serialized headers before any downstream bytes are written.
+// providerWebSocketHeaderBuffer ограничивает сериализованные заголовки до записи байтов клиенту.
 type providerWebSocketHeaderBuffer struct {
 	data    []byte
 	maximum int
 }
 
+// Write appends a complete fragment only when it fits the remaining header budget.
+// Write добавляет целый фрагмент лишь при наличии места в оставшемся лимите заголовка.
 func (buffer *providerWebSocketHeaderBuffer) Write(data []byte) (int, error) {
 	if len(data) > buffer.maximum-len(buffer.data) {
 		return 0, errProviderWebSocketHeaderBound
@@ -32,9 +40,10 @@ func (buffer *providerWebSocketHeaderBuffer) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
-// Сериализует прежний 101 без body до первого downstream Write. Один Write
-// убирает tiny TLS records, не переписывая headers или ослабляя SDK AttackCheck.
-// Буфер ограничен действующей policy и SDK bound; credential bytes очищаются.
+// writeProviderWebSocketHandshake serializes a bodyless 101 into one bounded downstream write.
+// writeProviderWebSocketHandshake сериализует 101 без тела в одну ограниченную запись клиенту.
+// It preserves header bytes, avoids tiny TLS records, and clears buffered credentials afterward.
+// Функция сохраняет байты заголовков, избегает мелких TLS-пакетов и затем очищает буфер реквизитов.
 func writeProviderWebSocketHandshake(response *http.Response, writer io.Writer, maximum int) error {
 	if maximum <= 0 {
 		return errProviderWebSocketHeaderBound
@@ -57,6 +66,8 @@ func writeProviderWebSocketHandshake(response *http.Response, writer io.Writer, 
 	return nil
 }
 
+// headerToken compares comma-separated header tokens case-insensitively without matching substrings.
+// headerToken сравнивает разделённые запятыми токены заголовка без учёта регистра и ложных подстрок.
 func headerToken(header http.Header, name, token string) bool {
 	for _, value := range header.Values(name) {
 		for _, part := range strings.Split(value, ",") {
@@ -68,10 +79,14 @@ func headerToken(header http.Header, name, token string) bool {
 	return false
 }
 
+// hasWebSocketUpgrade detects an upgrade attempt in either required HTTP header.
+// hasWebSocketUpgrade обнаруживает попытку upgrade в любом из обязательных HTTP-заголовков.
 func hasWebSocketUpgrade(header http.Header) bool {
 	return len(header.Values("Upgrade")) != 0 || headerToken(header, "Connection", "upgrade")
 }
 
+// validWebSocketRequest accepts only the narrow RFC 6455 handshake shape and allowed extension offer.
+// validWebSocketRequest принимает только строгую форму RFC 6455 и разрешённое предложение расширения.
 func validWebSocketRequest(request *http.Request) bool {
 	key, err := base64.StdEncoding.DecodeString(request.Header.Get("Sec-WebSocket-Key"))
 	return request.Method == http.MethodGet && request.ContentLength == 0 && len(request.TransferEncoding) == 0 &&
@@ -82,6 +97,8 @@ func validWebSocketRequest(request *http.Request) bool {
 		len(request.Header.Values("Sec-WebSocket-Protocol")) == 0 && validWebSocketExtensionOffer(request.Header)
 }
 
+// validWebSocketResponse checks the exact accept challenge, writable body, and permitted extensions.
+// validWebSocketResponse проверяет точный accept challenge, записываемое тело и разрешённые расширения.
 func validWebSocketResponse(response *http.Response, request *http.Request) bool {
 	digest := sha1.Sum([]byte(request.Header.Get("Sec-WebSocket-Key") + webSocketMagic))
 	_, writable := response.Body.(io.ReadWriteCloser)
@@ -92,8 +109,10 @@ func validWebSocketResponse(response *http.Response, request *http.Request) bool
 		len(response.Header.Values("Sec-WebSocket-Protocol")) == 0 && validWebSocketExtensionResponse(response.Header, request.Header)
 }
 
-// Upgraded stream имеет прежние CONNECT/host/SNI/CA проверки. Закрывается при
-// idle, остановке listener либо EOF любого направления; обе pump всегда joined.
+// forwardWebSocket pumps an already authorized upgraded stream until idle, shutdown, EOF, or write failure.
+// forwardWebSocket передаёт уже разрешённый upgraded-поток до простоя, остановки, EOF или ошибки записи.
+// CONNECT, host, SNI, and CA checks precede this call; both pump goroutines join before reporting completion.
+// Проверки CONNECT, host, SNI и CA предшествуют вызову; обе pump-горутины завершаются до отчёта.
 func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, response *http.Response, limits policy.Limits, diagnostic providerResponsesDiagnostic) {
 	upstream := response.Body.(io.ReadWriteCloser)
 	defer upstream.Close()

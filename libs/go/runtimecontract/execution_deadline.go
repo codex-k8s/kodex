@@ -9,8 +9,12 @@ import (
 	"time"
 )
 
+// WorkflowExecutionDeadlinePolicy identifies the pinned wall-clock deadline semantics.
+// WorkflowExecutionDeadlinePolicy обозначает закреплённую семантику срока по реальному времени.
 const WorkflowExecutionDeadlinePolicy = "workflow-wall-clock-v1"
 
+// DecodeRuntimeExecutionDeadline strictly decodes a bounded owner deadline from a generic value.
+// DecodeRuntimeExecutionDeadline строго разбирает ограниченный срок владельца из общего значения.
 func DecodeRuntimeExecutionDeadline(value any) (*RuntimeExecutionDeadline, error) {
 	if value == nil {
 		return nil, nil
@@ -32,8 +36,10 @@ func DecodeRuntimeExecutionDeadline(value any) (*RuntimeExecutionDeadline, error
 	return &deadline, nil
 }
 
-// Часы принадлежат owner Run: очередь до первого claim не входит в срок,
-// но Human Gate, continuation и reclaim не приостанавливают и не сбрасывают его.
+// RuntimeExecutionClock belongs to the owner Run: queue time before the first claim is excluded,
+// while Human Gate, continuation, and reclaim neither pause nor reset the clock.
+// RuntimeExecutionClock принадлежит запуску владельца: очередь до первого claim не входит в срок,
+// а Human Gate, continuation и reclaim не приостанавливают и не сбрасывают часы.
 type RuntimeExecutionClock struct {
 	RunRef                string    `json:"run_ref"`
 	WorkflowVersionRef    string    `json:"workflow_version_ref"`
@@ -44,12 +50,16 @@ type RuntimeExecutionClock struct {
 	DeadlineAt            time.Time `json:"deadline_at"`
 }
 
+// RuntimeExecutionDeadline combines run and step clocks under their earliest effective deadline.
+// RuntimeExecutionDeadline объединяет часы запуска и шагов по самому раннему действующему сроку.
 type RuntimeExecutionDeadline struct {
 	Policy              string                  `json:"policy"`
 	EffectiveDeadlineAt time.Time               `json:"effective_deadline_at"`
 	Clocks              []RuntimeExecutionClock `json:"clocks"`
 }
 
+// Validate checks each unique UTC clock, its exact duration, and the computed earliest deadline.
+// Validate проверяет каждые уникальные UTC-часы, точную длительность и вычисленный ранний срок.
 func (deadline *RuntimeExecutionDeadline) Validate() error {
 	if deadline == nil {
 		return nil
@@ -81,8 +91,10 @@ func (deadline *RuntimeExecutionDeadline) Validate() error {
 	return nil
 }
 
-// Ordinary Agent сохраняет прежний controller fallback. Workflow использует
-// точный owner deadline даже когда его срок больше fallback.
+// BoundExecutionDeadline uses the exact owner workflow deadline when present;
+// ordinary agents retain the controller fallback, which does not shorten workflow runs.
+// BoundExecutionDeadline использует точный срок workflow владельца, когда он задан;
+// обычные агенты сохраняют запасной срок контроллера, который не сокращает workflow-запуск.
 func (input RunnerInput) BoundExecutionDeadline(ctx context.Context, fallback time.Duration) (context.Context, context.CancelFunc) {
 	if input.ExecutionDeadline != nil {
 		return context.WithDeadline(ctx, input.ExecutionDeadline.EffectiveDeadlineAt)

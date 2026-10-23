@@ -2,8 +2,6 @@ package callback
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -14,6 +12,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// assistantWorkflowConfigurationAvailable requires assistant scope, a versioned
+// WORKFLOW native context and snapshot UPDATE_WORKFLOW permission for full source
+// discovery; safe metadata availability has a separate, less context-bound predicate.
+// assistantWorkflowConfigurationAvailable требует assistant scope,versioned WORKFLOW
+// native context и snapshot UPDATE_WORKFLOW permission для full source discovery;
+// safe metadata имеет отдельный predicate без этой привязки к экрану.
 func assistantWorkflowConfigurationAvailable(input runtimecontract.RunnerInput) bool {
 	context := input.AssistantContext
 	if !input.IsAssistant() || context == nil || context.EntityKind != "WORKFLOW" || !validAssistantResourceRef(context.EntityRef) || context.EntityVersion == nil || *context.EntityVersion < 1 {
@@ -27,7 +31,12 @@ func assistantWorkflowConfigurationAvailable(input runtimecontract.RunnerInput) 
 	return false
 }
 
-// Закрытая read-модель сохраняет полную семантику draft, включая dependencies и defaults.
+// assistantWorkflowDraft retains the complete owner draft read semantics, including
+// input defaults, ordered dependency edges, capability ceilings and result schema.
+// It is neither an executable grant nor a replacement for the owner workflow entity.
+// assistantWorkflowDraft сохраняет полную семантику owner draft read, включая input
+// defaults,ordered dependencies,capability ceilings и result schema. Это не executable
+// grant и не замена owner workflow entity.
 type assistantWorkflowDraft struct {
 	Ref, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
 	VersionNumber                                                             int32
@@ -40,12 +49,22 @@ type assistantWorkflowDraft struct {
 	ResultSchema                                                              map[string]any
 }
 
+// assistantWorkflowDraftInput preserves draft field identity, type, options and
+// default value alongside display metadata for exact update readback.
+// assistantWorkflowDraftInput сохраняет draft field identity,type,options,default
+// value и display metadata для точного update readback.
 type assistantWorkflowDraftInput struct {
 	Key, Label, Type, Help, DefaultValue string
 	Required                             bool
 	Options                              []string
 }
 
+// assistantWorkflowDraftStep preserves full draft step identity, positional ordering,
+// dependencies, parallelism, gates and capability ceiling; these fields describe
+// configuration and do not authorize a child execution.
+// assistantWorkflowDraftStep сохраняет draft step identity,position,dependencies,
+// parallelism,gates и capability ceiling; это описание configuration,
+// не авторизация дочернего execution.
 type assistantWorkflowDraftStep struct {
 	Key, Name, AgentRef, Instructions, ExpectedResult string
 	Position, ParallelGroup, TimeoutSeconds           int32
@@ -53,6 +72,12 @@ type assistantWorkflowDraftStep struct {
 	DependsOn, GateDecisions, RequiredCapabilityKeys  []string
 }
 
+// assistantWorkflowReadSnapshot pairs editable top-level workflow/field/step views
+// with their full original draft so semantic consistency can be checked before
+// an owner-reviewed update; it does not represent a running immutable workflow revision.
+// assistantWorkflowReadSnapshot связывает editable workflow/field/step views с полным
+// исходным draft для semantic consistency проверки перед owner-reviewed update;
+// это не running immutable workflow revision.
 type assistantWorkflowReadSnapshot struct {
 	WorkflowRef, ProjectRef, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
 	MaxConcurrency                                                                                int32
@@ -62,12 +87,20 @@ type assistantWorkflowReadSnapshot struct {
 	Draft                                                                                         assistantWorkflowDraft
 }
 
+// assistantWorkflowReadInput contains the editable field projection without its
+// draft-only default; validation compares it to the original draft input.
+// assistantWorkflowReadInput содержит editable field projection без draft-only
+// default; validation сравнивает его с исходным draft input.
 type assistantWorkflowReadInput struct {
 	Key, Label, Description, ValueType string
 	Required                           bool
 	Options                            []string
 }
 
+// assistantWorkflowReadStep contains editable ordered step metadata, gates and
+// capability keys; dependency edges stay in the paired full draft, not this projection.
+// assistantWorkflowReadStep содержит editable ordered step metadata,gates
+// и capability keys; dependency edges находятся в paired full draft, не этой projection.
 type assistantWorkflowReadStep struct {
 	Key, Name, Purpose, AgentRef, ExpectedResult string
 	Parallel, HumanGate                          bool
@@ -75,6 +108,14 @@ type assistantWorkflowReadStep struct {
 	GateDecisions, RequiredCapabilityKeys        []string
 }
 
+// castAssistantWorkflowConfiguration checks the exact versioned native workflow
+// and tenant/project response, then validates digest, closed canonical JSON and
+// full draft/projection consistency. Errors return no snapshot; owner authorization
+// and update/publish effects remain outside this read caster.
+// castAssistantWorkflowConfiguration проверяет exact versioned native workflow
+// и tenant/project response, затем digest,closed canonical JSON и соответствие
+// full draft/projection. При ошибке snapshot не выдаётся; owner authorization
+// и update/publish effects остаются вне read caster.
 func castAssistantWorkflowConfiguration(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant workflow configuration response is invalid")
 	if !assistantWorkflowConfigurationAvailable(input) || request.GetAssistantRef() != input.AgentRef || request.GetEntityKind() != "WORKFLOW" || request.GetEntityRef() != input.AssistantContext.EntityRef || response == nil ||
@@ -88,14 +129,8 @@ func castAssistantWorkflowConfiguration(input runtimecontract.RunnerInput, reque
 		return nil, invalid
 	}
 	raw := configuration.GetConfigurationJson()
-	hash := sha256.Sum256(raw)
-	if hex.EncodeToString(hash[:]) != configuration.GetConfigurationSha256() {
-		return nil, invalid
-	}
 	var typed assistantWorkflowReadSnapshot
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&typed) != nil || typed.WorkflowRef != configuration.GetWorkflowRef() || typed.ProjectRef != configuration.GetProjectRef() || !validAssistantWorkflowReadSnapshot(typed) {
+	if !decodeAssistantConfigurationSnapshot(raw, configuration.GetConfigurationSha256(), &typed) || typed.WorkflowRef != configuration.GetWorkflowRef() || typed.ProjectRef != configuration.GetProjectRef() || !validAssistantWorkflowReadSnapshot(typed) {
 		return nil, invalid
 	}
 	var snapshot map[string]any
@@ -111,6 +146,12 @@ func castAssistantWorkflowConfiguration(input runtimecontract.RunnerInput, reque
 		"workflow_configuration": map[string]any{"workflow_ref": configuration.GetWorkflowRef(), "project_ref": configuration.GetProjectRef(), "version": configuration.GetVersion(), "configuration_sha256": configuration.GetConfigurationSha256(), "configuration": snapshot}}, nil
 }
 
+// closedAssistantWorkflowSnapshot rejects unknown draft keys and requires exact
+// field sets for each present input/step row in both projections. Nil collections
+// are permitted here; required cardinality and semantic equality are checked separately.
+// closedAssistantWorkflowSnapshot отвергает unknown draft keys и требует exact fields
+// каждой присутствующей input/step row обеих projections. Nil collections здесь
+// допускаются; обязательные cardinality и semantic equality проверяются отдельно.
 func closedAssistantWorkflowSnapshot(snapshot map[string]any) bool {
 	draft, ok := snapshot["draft"].(map[string]any)
 	if !ok || !onlyKeys(draft, "Ref", "Name", "Purpose", "CoordinatorAgentRef", "Instructions", "CompletionCriteria", "VersionNumber", "Inputs", "Steps", "AgentRefs", "Concurrency", "TimeoutSeconds", "GateDecisions", "ResultSchema") {
@@ -144,6 +185,14 @@ func closedAssistantWorkflowSnapshot(snapshot map[string]any) bool {
 	return true
 }
 
+// validAssistantWorkflowReadSnapshot compares draft and editable views positionally,
+// checks Unicode text bounds, refs, gates and capability strings, and requires every
+// dependency to refer to an already-seen step. It preserves edges/defaults as read
+// data rather than inferring a new DAG or resolving effective execution permissions.
+// validAssistantWorkflowReadSnapshot позиционно сравнивает draft/editable views,
+// проверяет Unicode bounds,refs,gates,capability strings и требует ссылки dependencies
+// на уже просмотренный step. Edges/defaults сохраняются как read data; новый DAG
+// не выводится и effective execution permissions не разрешаются.
 func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) bool {
 	draft := value.Draft
 	if strings.TrimSpace(value.Name) == "" || utf8.RuneCountInString(value.Name) > 160 || utf8.RuneCountInString(value.Purpose) > 2000 || value.Name != draft.Name || value.Purpose != draft.Purpose || value.CoordinatorAgentRef != draft.CoordinatorAgentRef || !validAssistantResourceRef(value.CoordinatorAgentRef) || value.Instructions != draft.Instructions || value.CompletionCriteria != draft.CompletionCriteria ||

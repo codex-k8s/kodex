@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestSessionVolumeMetadataBindsExactOwner checks canonical projectless metadata, distinct hashes for changed owner tuples and rejection of malformed references.
+// TestSessionVolumeMetadataBindsExactOwner проверяет канонические метаданные без проекта, разные хэши при изменении владельца и отклонение некорректных ссылок.
 func TestSessionVolumeMetadataBindsExactOwner(t *testing.T) {
 	labels, annotations, err := SessionVolumeMetadata("org_abcdefgh", "", "ses_abcdefgh")
 	if err != nil || labels["runtime.kodex.dev/managed"] != "true" || annotations["runtime.kodex.dev/project-hash"] != "e3b0c44298fc1c14" {

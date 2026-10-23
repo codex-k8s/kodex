@@ -11,13 +11,19 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
+// Resolver refreshes authoritative DNS snapshots per integration origin.
+// Resolver обновляет авторитетные DNS-снимки каждого origin интеграции.
 type Resolver interface {
+	// Resolve obtains the current snapshot for one integration origin.
+	// Resolve получает текущий снимок одного origin интеграции.
 	Resolve(context.Context, string) (dnsresolver.Snapshot, error)
+	// Refresh obtains a fresh authoritative snapshot for the same origin.
+	// Refresh получает свежий авторитетный снимок того же origin.
 	Refresh(context.Context, string) (dnsresolver.Snapshot, error)
 }
 
-// Readiness проверяет актуальный DNS snapshot каждого origin отдельно;
-// пустой список закрыт. Не влияет на готовность других listener и корневого Pod.
+// Readiness tracks each integration origin independently and denies an empty set.
+// Readiness отслеживает каждый origin отдельно и отвергает пустой набор.
 type Readiness struct {
 	policy     *Active
 	resolver   Resolver
@@ -26,10 +32,14 @@ type Readiness struct {
 	perHost    map[string]int64
 }
 
+// NewReadiness binds one integration projection to a DNS resolver.
+// NewReadiness связывает одну проекцию интеграций с DNS-resolver.
 func NewReadiness(active *Active, resolver Resolver) *Readiness {
 	return &Readiness{policy: active, resolver: resolver}
 }
 
+// Ready reports listener readiness when at least one origin has a fresh pin.
+// Ready отмечает готовность listener при наличии свежего pin хотя бы одного origin.
 func (r *Readiness) Ready() (bool, string) {
 	if r != nil {
 		r.mu.RLock()
@@ -44,8 +54,8 @@ func (r *Readiness) Ready() (bool, string) {
 	return false, "integration projection is not ready"
 }
 
-// ReadyFor закрывает только недоступный origin, не блокируя остальные
-// независимые интеграции того же listener.
+// ReadyFor denies only the unavailable origin without blocking other origins.
+// ReadyFor отклоняет только недоступный origin, не блокируя остальные.
 func (r *Readiness) ReadyFor(host string) (bool, string) {
 	if r != nil {
 		r.mu.RLock()
@@ -58,6 +68,8 @@ func (r *Readiness) ReadyFor(host string) (bool, string) {
 	return false, "integration destination is not ready"
 }
 
+// setReady replaces the locked per-origin map and records the refresh expiry.
+// setReady заменяет карту origin под блокировкой и записывает срок обновления.
 func (r *Readiness) setReady(ready map[string]int64, earliest int64) {
 	r.mu.Lock()
 	r.perHost = ready
@@ -65,6 +77,8 @@ func (r *Readiness) setReady(ready map[string]int64, earliest int64) {
 	r.validUntil.Store(earliest)
 }
 
+// Check refreshes each origin and retains only fresh public answers overlapping pins.
+// Check обновляет каждый origin и оставляет только свежие публичные ответы с pin.
 func (r *Readiness) Check(ctx context.Context) {
 	if r.policy == nil || !r.policy.Configured() || r.resolver == nil {
 		r.setReady(nil, 0)
@@ -102,6 +116,8 @@ func (r *Readiness) Check(ctx context.Context) {
 	r.setReady(ready, earliest.UnixNano())
 }
 
+// Run periodically refreshes origin readiness and clears it when the worker exits.
+// Run периодически обновляет готовность origin и сбрасывает её при выходе worker.
 func (r *Readiness) Run(interval time.Duration) func(context.Context) error {
 	return func(ctx context.Context) error {
 		defer r.setReady(nil, 0)

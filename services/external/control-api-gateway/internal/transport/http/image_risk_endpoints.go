@@ -16,7 +16,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Проекция использует только отдельные публичные DTO, а не внутренний artifact.
+// imageRiskPublic projects protobuf JSON with normalized shape, strips known enum prefixes only on designated enum fields and rejects fields unknown to the target DTO. Callers must choose dedicated public DTOs rather than internal artifacts; successful conversion is not authorization, admission or signature verification.
+// imageRiskPublic проецирует protobuf JSON с нормализованной формой, убирает известные enum prefixes только в заданных enum-полях и отклоняет неизвестные target DTO поля. Вызывающий обязан выбирать отдельные публичные DTO, не внутренние artifacts; преобразование не является авторизацией, допуском и проверкой подписи.
 func imageRiskPublic[T any](message proto.Message) (T, bool) {
 	var result T
 	raw, err := (protojson.MarshalOptions{EmitUnpopulated: true}).Marshal(message)
@@ -61,6 +62,8 @@ func imageRiskPublic[T any](message proto.Message) (T, bool) {
 	return result, decoder.Decode(&result) == nil
 }
 
+// imageRiskOwner checks the returned resource scope tuple against organization scope or the selected exact project, using the shared scope-shape validator. This checks reply consistency; actor eligibility and organization ownership remain with the authenticated owner service.
+// imageRiskOwner сверяет scope tuple ответа с организационной областью либо точным выбранным проектом через общий scope-shape validator. Это согласованность reply; actor eligibility и владение организацией остаются у аутентифицированного owner service.
 func imageRiskOwner(scope cp.RuntimeResourceScopeKind, org, project, expectedProject string) bool {
 	expectedScope := cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION
 	if expectedProject != "" {
@@ -69,10 +72,14 @@ func imageRiskOwner(scope cp.RuntimeResourceScopeKind, org, project, expectedPro
 	return scope == expectedScope && project == expectedProject && validRuntimeResourceScope(runtimeResourceScopeKind(scope.String()), org, project)
 }
 
+// validImageRiskReason accepts nonempty valid UTF-8 up to 2048 bytes with no outer whitespace or control characters. It checks safe reason representation, not whether the human decision is justified or authorized.
+// validImageRiskReason принимает непустой допустимый UTF-8 до 2048 байт без внешних пробелов и управляющих символов. Проверяет представление reason, не обоснованность и полномочия человеческого решения.
 func validImageRiskReason(reason string) bool {
 	return len(reason) > 0 && len(reason) <= 2048 && strings.TrimSpace(reason) == reason && utf8.ValidString(reason) && !strings.ContainsFunc(reason, unicode.IsControl)
 }
 
+// imageRiskRequest validates closed action, bounded positive version/generation pins, artifact OCC equality, build attempt 1..10 and exact reference/digest syntax before mapping an organization-shaped request. The same validated data feeds the project command; client pins and reason are not authority or a grant to publish an image.
+// imageRiskRequest проверяет закрытый action, bounded positive version/generation pins, равенство artifact OCC, build attempt 1..10 и формат refs/digests до organization-shaped request. Те же проверенные данные используются проектной командой; client pins и reason не являются полномочиями и разрешением публикации образа.
 func imageRiskRequest(body generated.ImageAdmissionRiskDecisionInput, mutation *cp.MutationContext, recipe, artifact string) (*cp.DecideOrganizationImageAdmissionRiskRequest, bool) {
 	if body.ExpectedArtifactVersion < 1 || body.ExpectedArtifactVersion > maximumSafeJSONInteger || body.ExpectedAdmissionRevision < 1 || body.ExpectedRecipeVersion < 1 || body.ExpectedRecipeGeneration < 1 || body.ExpectedBuildAttempt < 1 || body.PolicyRevision < 1 || mutation.GetExpectedVersion() != body.ExpectedArtifactVersion || !validImageRiskReason(body.Reason) {
 		return nil, false
@@ -92,6 +99,8 @@ func imageRiskRequest(body generated.ImageAdmissionRiskDecisionInput, mutation *
 	return &cp.DecideOrganizationImageAdmissionRiskRequest{Mutation: mutation, RecipeRef: recipe, ArtifactRef: artifact, ExpectedArtifactVersion: uint64(body.ExpectedArtifactVersion), ExpectedAdmissionRevision: uint64(body.ExpectedAdmissionRevision), ExpectedRecipeVersion: uint64(body.ExpectedRecipeVersion), ExpectedRecipeGeneration: uint64(body.ExpectedRecipeGeneration), ExpectedBuildRef: body.ExpectedBuildRef, ExpectedBuildAttempt: uint32(body.ExpectedBuildAttempt), ManifestDigest: body.ManifestDigest, VulnerabilityEvidenceSha256: body.VulnerabilityEvidenceSha256, ProjectionSha256: body.ProjectionSha256, PriorAdmissionReceiptSha256: body.PriorAdmissionReceiptSha256, PriorEvidenceManifestDigest: body.PriorEvidenceManifestDigest, PolicyRevision: uint64(body.PolicyRevision), PolicySha256: body.PolicySha256, Action: action, Reason: body.Reason}, true
 }
 
+// DecideOrganizationImageAdmissionRisk decodes an explicit versioned risk decision, validates its selected evidence pins and invokes only the organization owner command. A nil or inconsistent result fails before projection; successful acceptance may enqueue admission but does not locally promote or admit the artifact.
+// DecideOrganizationImageAdmissionRisk декодирует явное versioned risk decision, проверяет выбранные evidence pins и вызывает только организационную owner command. Nil и несогласованный результат отклоняются до проекции; acceptance может поставить admission в очередь, но локально artifact не продвигает и не допускает.
 func (server *Server) DecideOrganizationImageAdmissionRisk(w http.ResponseWriter, r *http.Request, recipe generated.RecipeRef, artifact generated.ArtifactRef, p generated.DecideOrganizationImageAdmissionRiskParams) {
 	body, ok := decodeJSON[generated.ImageAdmissionRiskDecisionInput](w, r)
 	if !ok {
@@ -118,6 +127,8 @@ func (server *Server) DecideOrganizationImageAdmissionRisk(w http.ResponseWriter
 	writeImageRiskDecision(w, result.GetDecision(), result.GetAdmissionAttempt(), result.GetArtifact(), input, "")
 }
 
+// DecideImageAdmissionRisk maps validated risk input into the dedicated project owner command with the selected project, then checks returned decision/artifact metadata against that scope. It retains a separate request and owner method instead of inferring project authority from an organization-shaped input DTO.
+// DecideImageAdmissionRisk переносит проверенный risk input в отдельную проектную owner command с выбранным проектом, затем сверяет decision/artifact metadata с областью. Сохраняет отдельные request и owner method вместо вывода project authority из organization-shaped input DTO.
 func (server *Server) DecideImageAdmissionRisk(w http.ResponseWriter, r *http.Request, project generated.ProjectRef, recipe generated.RecipeRef, artifact generated.ArtifactRef, p generated.DecideImageAdmissionRiskParams) {
 	body, ok := decodeJSON[generated.ImageAdmissionRiskDecisionInput](w, r)
 	if !ok {
@@ -145,6 +156,8 @@ func (server *Server) DecideImageAdmissionRisk(w http.ResponseWriter, r *http.Re
 	writeImageRiskDecision(w, result.GetDecision(), result.GetAdmissionAttempt(), result.GetArtifact(), input, project)
 }
 
+// writeImageRiskDecision checks risk-history shape and the returned artifact/decision's selected scope, identity, version, build, evidence, policy, action and reason pins before public output. ACCEPT_RISK additionally requires the exact artifact admission attempt in PENDING or CLAIMED; other actions cannot return an attempt. ETag reflects artifact metadata, not completed promotion or independently verified signatures.
+// writeImageRiskDecision проверяет форму risk history и выбранные scope, identity, version, build, evidence, policy, action и reason pins artifact/decision до выдачи. ACCEPT_RISK дополнительно требует точную admission attempt artifact в PENDING или CLAIMED; другие actions не могут вернуть attempt. ETag отражает metadata, не завершённую promotion и не независимо проверенные подписи.
 func writeImageRiskDecision(w http.ResponseWriter, d *cp.ImageAdmissionRiskDecision, attempt *cp.ImageAdmissionAttempt, a *cp.ImageArtifact, input *cp.DecideOrganizationImageAdmissionRiskRequest, project string) {
 	invalid := func() { writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false) }
 	if !validImageRiskHistory(a) {
@@ -184,11 +197,13 @@ func writeImageRiskDecision(w http.ResponseWriter, d *cp.ImageAdmissionRiskDecis
 	writeJSON(w, http.StatusOK, out)
 }
 
+// GetOrganizationImageVulnerabilityReport forwards organization recipe/artifact and page/filter/report-digest selectors to the dedicated owner query, rejecting an explicitly unmapped severity before RPC. The shared writer checks returned scope and report shape; this read performs no scan or risk approval.
+// GetOrganizationImageVulnerabilityReport передаёт организационные recipe/artifact и page/filter/report-digest selectors отдельному owner query, отклоняет явно неизвестную severity до RPC. Общий writer проверяет область и форму отчёта; чтение scanner не запускает и риск не подтверждает.
 func (server *Server) GetOrganizationImageVulnerabilityReport(w http.ResponseWriter, r *http.Request, recipe generated.RecipeRef, artifact generated.ArtifactRef, p generated.GetOrganizationImageVulnerabilityReportParams) {
 	input := &cp.GetOrganizationImageVulnerabilityReportRequest{RecipeRef: recipe, ArtifactRef: artifact, Page: page(p.PageSize, p.PageToken), PackageQuery: stringValue(p.PackageQuery), AdvisoryQuery: stringValue(p.AdvisoryQuery), BlockingOnly: p.BlockingOnly, ExpectedReportSha256: stringValue(p.ExpectedReportSha256)}
 	if p.Severity != nil {
-		value := cp.ImageVulnerabilitySeverity(cp.ImageVulnerabilitySeverity_value["IMAGE_VULNERABILITY_SEVERITY_"+string(*p.Severity)])
-		if value == 0 {
+		value, ok := imageRiskSeverity(*p.Severity)
+		if !ok {
 			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 			return
 		}
@@ -206,11 +221,13 @@ func (server *Server) GetOrganizationImageVulnerabilityReport(w http.ResponseWri
 	writeImageVulnerabilityReport(w, response.GetReport(), response.GetFindings(), response.GetPage(), recipe, artifact, "")
 }
 
+// GetImageVulnerabilityReport keeps project selection explicit in its specialized report query and checks severity mapping before RPC. Returned findings use the same public validator with an exact project expectation; the endpoint does not independently authorize the project from query fields.
+// GetImageVulnerabilityReport сохраняет явный project selection в отдельном report query и проверяет severity mapping до RPC. Findings ответа проходят общий публичный validator с точным ожидаемым проектом; endpoint отдельно не авторизует проект по query fields.
 func (server *Server) GetImageVulnerabilityReport(w http.ResponseWriter, r *http.Request, project generated.ProjectRef, recipe generated.RecipeRef, artifact generated.ArtifactRef, p generated.GetImageVulnerabilityReportParams) {
 	input := &cp.GetImageVulnerabilityReportRequest{ProjectRef: project, RecipeRef: recipe, ArtifactRef: artifact, Page: page(p.PageSize, p.PageToken), PackageQuery: stringValue(p.PackageQuery), AdvisoryQuery: stringValue(p.AdvisoryQuery), BlockingOnly: p.BlockingOnly, ExpectedReportSha256: stringValue(p.ExpectedReportSha256)}
 	if p.Severity != nil {
-		value := cp.ImageVulnerabilitySeverity(cp.ImageVulnerabilitySeverity_value["IMAGE_VULNERABILITY_SEVERITY_"+string(*p.Severity)])
-		if value == 0 {
+		value, ok := imageRiskSeverity(*p.Severity)
+		if !ok {
 			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 			return
 		}
@@ -228,6 +245,15 @@ func (server *Server) GetImageVulnerabilityReport(w http.ResponseWriter, r *http
 	writeImageVulnerabilityReport(w, response.GetReport(), response.GetFindings(), response.GetPage(), recipe, artifact, project)
 }
 
+// imageRiskSeverity maps an explicitly supplied severity through the closed protobuf name table, accepting nonzero values only. Optional absence remains the caller's responsibility; a recognized UNKNOWN severity is distinct from unspecified or an unknown string.
+// imageRiskSeverity преобразует явно заданную severity через закрытую protobuf name table, принимает только ненулевые значения. Отсутствие optional поля обрабатывает вызывающий код; известная UNKNOWN отличается от unspecified и неизвестной строки.
+func imageRiskSeverity(input generated.ImageVulnerabilitySeverity) (cp.ImageVulnerabilitySeverity, bool) {
+	value := cp.ImageVulnerabilitySeverity(cp.ImageVulnerabilitySeverity_value["IMAGE_VULNERABILITY_SEVERITY_"+string(input)])
+	return value, value != 0
+}
+
+// writeImageVulnerabilityReport requires exact report refs/scope and bounded rows/cursor, distinguishes explicit UNAVAILABLE from complete READY metadata and validates every public finding before writing the full page. It allocates empty findings and sets artifact-version ETag; it does not run a scanner, recompute whole-report evidence or check cursor advancement.
+// writeImageVulnerabilityReport требует точные report refs/scope и ограниченные rows/cursor, отличает явный UNAVAILABLE от complete READY metadata, проверяет каждый public finding до выдачи полной страницы. Выделяет пустой findings и задаёт ETag версии artifact; scanner не запускает, whole-report evidence не пересчитывает и продвижение cursor не сверяет.
 func writeImageVulnerabilityReport(w http.ResponseWriter, report *cp.ImageVulnerabilityReport, findings []*cp.ImageVulnerabilityFinding, p *cp.PageInfo, recipe, artifact, project string) {
 	invalid := func() { writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false) }
 	if report == nil || report.GetRecipeRef() != recipe || report.GetArtifactRef() != artifact || !imageRiskOwner(report.GetScopeKind(), report.GetOrganizationRef(), report.GetProjectRef(), project) || report.GetArtifactVersion() < 1 || len(findings) > 100 || len(p.GetNextPageToken()) > 512 {
@@ -263,6 +289,8 @@ func writeImageVulnerabilityReport(w http.ResponseWriter, report *cp.ImageVulner
 	writeJSON(w, http.StatusOK, out)
 }
 
+// validImageVulnerabilityPage checks projection/prior-evidence pins and aggregate counts, then rebuilds the selected page for the canonical runtime validator's finding identities, ordered refs, advisory links and count rules. The caller first requires six severity counts; page totals must fit report metadata, but this does not rehash original scanner evidence or reconstruct all report pages.
+// validImageVulnerabilityPage сверяет projection/prior-evidence pins и aggregate counts, затем восстанавливает выбранную страницу для canonical runtime validator: finding identities, порядок refs, advisory links и count rules. Вызывающий заранее требует шесть severity counts; page totals должны укладываться в metadata, но исходный scanner evidence не хешируется заново и все страницы не восстанавливаются.
 func validImageVulnerabilityPage(r *cp.ImageVulnerabilityReport, rows []*cp.ImageVulnerabilityFinding) bool {
 	if !validManagedDigest(r.GetProjectionSha256()) || !validManagedDigest(r.GetPriorAdmissionReceiptSha256()) || !imageRiskManifest(r.GetPriorEvidenceManifestDigest()) || r.GetSourceAdmissionRevision() < 1 || r.GetSourceAdmissionRevision() != r.GetVersion() || r.GetAdmissionRevision() != r.GetSourceAdmissionRevision() {
 		return false
@@ -311,12 +339,18 @@ func validImageVulnerabilityPage(r *cp.ImageVulnerabilityReport, rows []*cp.Imag
 	return page.Validate() == nil
 }
 
+// imageRiskManifest requires the exact sha256 prefix and a lowercase hexadecimal managed digest; it validates syntax only, not manifest bytes, registry origin or an image signature.
+// imageRiskManifest требует точный sha256 prefix и lowercase hexadecimal managed digest; проверяет только формат, не manifest bytes, происхождение registry и подпись образа.
 func imageRiskManifest(value string) bool {
 	return strings.HasPrefix(value, "sha256:") && validManagedDigest(strings.TrimPrefix(value, "sha256:"))
 }
 
+// imageRiskPin accepts a positive unsigned version no greater than the maximum exact JSON integer; it does not compare the version with authoritative owner state.
+// imageRiskPin принимает положительную unsigned версию не выше максимального точного JSON integer; с авторитетным owner state версию не сравнивает.
 func imageRiskPin(value uint64) bool { return value > 0 && value <= uint64(maximumSafeJSONInteger) }
 
+// validImageRiskHistory validates optional decision/attempt metadata, reference prefixes, safe pins, known actions/states and the explicitly compared artifact/decision bindings. An optional nonempty attempt decision ref must match the attached decision; this shape check does not recompute binding digests, verify signatures or establish current actor authority.
+// validImageRiskHistory проверяет optional decision/attempt metadata, ref prefixes, safe pins, известные actions/states и явно сравниваемые artifact/decision bindings. Непустой optional decision ref попытки должен совпасть с приложенным решением; shape check не пересчитывает binding digests, не проверяет подписи и текущие полномочия actor.
 func validImageRiskHistory(a *cp.ImageArtifact) bool {
 	if a == nil {
 		return false

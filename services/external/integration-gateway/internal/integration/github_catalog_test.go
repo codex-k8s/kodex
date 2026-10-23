@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// githubExtendedResponse provides canned extended GitHub catalog replies while asserting repository routes, methods and pagination; it returns false for operations outside this fixture and performs no provider request.
+// RU: githubExtendedResponse выдаёт фиксированные расширенные GitHub catalog ответы с проверкой repository routes, методов и пагинации; возвращает false для чужой операции оснастки и не обращается к провайдеру.
 func githubExtendedResponse(t *testing.T, operation string, r *http.Request) (string, bool) {
 	t.Helper()
 	if !strings.HasPrefix(operation, "github.") {

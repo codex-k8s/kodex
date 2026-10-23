@@ -2,11 +2,8 @@ package component
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
@@ -15,21 +12,17 @@ import (
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
 )
 
-// Тот же mapping используется gateway и producer для immutable input digest.
+// httpsInvoker starts a local mTLS handler and returns a typed catalog caller;
+// commands use the gateway's canonical mapping and synthetic execution headers.
+// httpsInvoker запускает локальный mTLS-обработчик и возвращает типизированный вызов
+// каталога; команды используют каноническое преобразование шлюза и тестовые заголовки выполнения.
 func httpsInvoker(t *testing.T, f *providerFixture, s *mail.Service, current ...func() *mail.Service) func(string, string, map[string]any) api.Result {
 	t.Helper()
 	handler := httptransport.Handler{Service: s}
 	if len(current) == 1 {
 		handler.Current = current[0]
 	}
-	server := httptest.NewUnstartedServer(handler)
-	ca := x509.NewCertPool()
-	ca.AppendCertsFromPEM(f.ca)
-	server.TLS = &tls.Config{Certificates: []tls.Certificate{f.cert}, ClientCAs: ca, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS12}
-	server.StartTLS()
-	t.Cleanup(server.Close)
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: ca, Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12}}}
-	t.Cleanup(httpClient.CloseIdleConnections)
+	server, httpClient := httpsFixture(t, f, handler)
 	client, err := api.NewClient(server.URL, api.WithHTTPClient(httpClient))
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +60,10 @@ func httpsInvoker(t *testing.T, f *providerFixture, s *mail.Service, current ...
 	return invoke
 }
 
+// TestTypedCatalogHTTPS checks POP/SMTP catalog mappings, attachment bytes and
+// scoped receipt lookup/replay, including a lost SMTP reply with no repeated effect.
+// TestTypedCatalogHTTPS проверяет преобразования каталога POP/SMTP, байты вложения
+// и чтение/повтор квитанций, включая потерю ответа SMTP без повторного эффекта.
 func TestTypedCatalogHTTPS(t *testing.T) {
 	f := newFixture(t, "starttls")
 	s, _, _ := service(t, f, "starttls", nil)
@@ -133,6 +130,10 @@ func TestTypedCatalogHTTPS(t *testing.T) {
 	}
 }
 
+// TestPOPReadIdentityHTTPS preserves requested UID and canonical INBOX identity
+// through typed HTTPS reads; attachment listings must expose metadata without bytes.
+// TestPOPReadIdentityHTTPS сохраняет запрошенный UID и канонический INBOX при
+// типизированном чтении HTTPS; список вложений должен выдавать метаданные без байтов.
 func TestPOPReadIdentityHTTPS(t *testing.T) {
 	for _, mode := range []string{"implicit", "starttls"} {
 		t.Run(mode, func(t *testing.T) {
@@ -159,6 +160,10 @@ func TestPOPReadIdentityHTTPS(t *testing.T) {
 	}
 }
 
+// TestTypedIMAPCatalogHTTPS exercises all 21 advertised operations against local
+// IMAP/SMTP fixtures, requiring stable receipt digests when mutations are repeated.
+// TestTypedIMAPCatalogHTTPS выполняет все 21 заявленную операцию на локальных
+// IMAP/SMTP-стендах, требуя стабильного хеша квитанции при повторе изменений.
 func TestTypedIMAPCatalogHTTPS(t *testing.T) {
 	f := newFixture(t, "starttls")
 	_, address := imapFixture(t, f, "starttls")

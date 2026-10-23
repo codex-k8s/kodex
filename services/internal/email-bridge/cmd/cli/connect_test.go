@@ -16,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// TestConnectionRetryClosedClassification checks transient allowlisting, permanent-error precedence in joined errors and redaction of synthetic private network details.
+// TestConnectionRetryClosedClassification проверяет допуск временных отказов, приоритет постоянных причин в joined errors и скрытие синтетических сетевых подробностей.
 func TestConnectionRetryClosedClassification(t *testing.T) {
 	const secret = "SENTINEL_DSN_HOST_PASSWORD"
 	for _, tc := range []struct {
@@ -52,6 +54,8 @@ func TestConnectionRetryClosedClassification(t *testing.T) {
 	}
 }
 
+// TestConnectionTransientThenSuccessRunsMigrationOnce requires three synthetic pings and one apply using the original context and deadline.
+// TestConnectionTransientThenSuccessRunsMigrationOnce требует три синтетических ping и один apply с исходными контекстом и сроком.
 func TestConnectionTransientThenSuccessRunsMigrationOnce(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
@@ -79,6 +83,8 @@ func TestConnectionTransientThenSuccessRunsMigrationOnce(t *testing.T) {
 	}
 }
 
+// TestConnectionExhaustionAndCancellationNeverRunMigration verifies timeout/cancel stop before apply and diagnostics preserve the original refused-connection cause separately.
+// TestConnectionExhaustionAndCancellationNeverRunMigration проверяет остановку до apply по timeout/cancel и отдельное сохранение исходной причины connection-refused в диагностике.
 func TestConnectionExhaustionAndCancellationNeverRunMigration(t *testing.T) {
 	for _, canceled := range []bool{false, true} {
 		t.Run(map[bool]string{false: "deadline", true: "cancel"}[canceled], func(t *testing.T) {
@@ -110,6 +116,10 @@ func TestConnectionExhaustionAndCancellationNeverRunMigration(t *testing.T) {
 	}
 }
 
+// TestPermanentConnectionAndMigrationErrorsAreNotRetried rejects permanent ping failures once and returns apply errors unchanged, even when they look transient.
+// A pre-canceled context must reach neither ping nor Goose; all callbacks here are synthetic.
+// TestPermanentConnectionAndMigrationErrorsAreNotRetried однократно отвергает постоянные отказы ping и возвращает ошибки apply неизменными, даже если они похожи на временные.
+// Заранее отменённый контекст не должен достигнуть ни ping, ни Goose; все callback здесь синтетические.
 func TestPermanentConnectionAndMigrationErrorsAreNotRetried(t *testing.T) {
 	for _, cause := range []error{&pgconn.PgError{Code: "28P01"}, &pgconn.PgError{Code: "42501"}, x509.UnknownAuthorityError{}, &pgconn.ParseConfigError{}, &net.DNSError{IsNotFound: true}} {
 		pings := 0
@@ -131,6 +141,8 @@ func TestPermanentConnectionAndMigrationErrorsAreNotRetried(t *testing.T) {
 	}
 }
 
+// TestDeadlineDuringPingPreservesPreviousNetworkCause expires a second context-aware ping and retains the first reset failure in the safe wait report.
+// TestDeadlineDuringPingPreservesPreviousNetworkCause исчерпывает срок второго соблюдающего контекст ping и сохраняет первый reset в безопасном отчёте ожидания.
 func TestDeadlineDuringPingPreservesPreviousNetworkCause(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Millisecond)
 	defer cancel()

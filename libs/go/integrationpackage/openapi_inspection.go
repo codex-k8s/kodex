@@ -17,14 +17,26 @@ import (
 )
 
 const (
-	maxOpenAPIBytes      = 256 << 10
-	maxOpenAPINodes      = 20000
-	maxOpenAPIDepth      = 64
+	// maxOpenAPIBytes caps the untrusted source before YAML parsing or OpenAPI loading.
+	// maxOpenAPIBytes ограничивает недоверенный источник до разбора YAML и загрузки OpenAPI.
+	maxOpenAPIBytes = 256 << 10
+	// maxOpenAPINodes bounds the total syntax tree traversed before model validation.
+	// maxOpenAPINodes ограничивает общее число узлов синтаксического дерева до проверки модели.
+	maxOpenAPINodes = 20000
+	// maxOpenAPIDepth prevents deeply nested input from exhausting parser resources.
+	// maxOpenAPIDepth не даёт глубоко вложенному вводу исчерпать ресурсы разбора.
+	maxOpenAPIDepth = 64
+	// maxOpenAPIOperations limits the number of candidate operations exposed for review.
+	// maxOpenAPIOperations ограничивает число операций-кандидатов, предъявляемых на проверку.
 	maxOpenAPIOperations = 128
 )
 
+// openAPIOperationID accepts only bounded, stable identifiers suitable for capability keys.
+// openAPIOperationID допускает только ограниченные устойчивые идентификаторы для ключей возможностей.
 var openAPIOperationID = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]{0,127}$`)
 
+// OpenAPIInspection is a local inspection result, not publication or permission to invoke a remote operation.
+// OpenAPIInspection — результат локальной проверки, а не публикация или право вызвать удалённую операцию.
 // OpenAPIInspection описывает импорт, но сама по себе не даёт права на вызов.
 // Публикация definition и сетевой admission выполняются отдельно владельцем.
 type OpenAPIInspection struct {
@@ -34,6 +46,8 @@ type OpenAPIInspection struct {
 	Operations []OpenAPIOperation
 }
 
+// OpenAPIOperation records one visible operation and its closed candidate decision for later admission.
+// OpenAPIOperation хранит видимую операцию и закрытое решение о передаче на последующий допуск.
 type OpenAPIOperation struct {
 	ID, Method, Path, Summary, ServerOrigin string
 	// Candidate означает только, что operation можно передать на следующий
@@ -43,6 +57,8 @@ type OpenAPIOperation struct {
 	Reason          string
 }
 
+// InspectOpenAPI validates a bounded local OpenAPI document without external refs or network access;
+// unsupported operations remain visible but cannot become admission candidates.
 // InspectOpenAPI читает только локальный документ без внешних $ref и сети.
 // Неподдерживаемая операция остаётся видимой с закрытым исходом.
 func InspectOpenAPI(ctx context.Context, raw []byte) (OpenAPIInspection, error) {
@@ -142,6 +158,8 @@ func InspectOpenAPI(ctx context.Context, raw []byte) (OpenAPIInspection, error) 
 		Version: document.Info.Version, Operations: operations}, nil
 }
 
+// openAPIOperationServerOrigin applies OpenAPI server precedence and accepts one literal HTTPS origin.
+// openAPIOperationServerOrigin применяет приоритет серверов OpenAPI и допускает один буквальный HTTPS-origin.
 func openAPIOperationServerOrigin(documentServers, pathServers openapi3.Servers, operationServers *openapi3.Servers) (string, string) {
 	servers := documentServers
 	if len(pathServers) != 0 {
@@ -157,6 +175,10 @@ func openAPIOperationServerOrigin(documentServers, pathServers openapi3.Servers,
 	return servers[0].URL, ""
 }
 
+// unsupportedOpenAPIOperation returns a closed reason for callbacks, non-JSON bodies or responses,
+// and parameters outside the typed scalar path/query contract.
+// unsupportedOpenAPIOperation возвращает причину закрытого отказа для callback,
+// не-JSON тел и ответов, а также параметров вне типизированного скалярного path/query-контракта.
 func unsupportedOpenAPIOperation(path *openapi3.PathItem, operation *openapi3.Operation, method string) string {
 	if len(operation.Callbacks) != 0 {
 		return "CALLBACKS_UNSUPPORTED"
@@ -206,6 +228,8 @@ func unsupportedOpenAPIOperation(path *openapi3.PathItem, operation *openapi3.Op
 	return ""
 }
 
+// supportedOpenAPIMethod admits only the closed HTTP method set implemented by the adapter.
+// supportedOpenAPIMethod допускает только закрытый набор HTTP-методов, реализованный адаптером.
 func supportedOpenAPIMethod(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
@@ -215,6 +239,10 @@ func supportedOpenAPIMethod(method string) bool {
 	}
 }
 
+// validOpenAPIPathTemplate rejects ambiguous paths and permits only bounded literal segments or
+// named placeholders that the managed adapter can bind without changing the destination.
+// validOpenAPIPathTemplate отклоняет неоднозначные пути и допускает лишь ограниченные сегменты
+// либо именованные шаблоны, которые адаптер связывает без смены назначения.
 func validOpenAPIPathTemplate(path string) bool {
 	if len(path) == 0 || len(path) > 512 || path[0] != '/' || strings.HasPrefix(path, "//") || strings.Contains(path, "//") {
 		return false
@@ -233,6 +261,10 @@ func validOpenAPIPathTemplate(path string) bool {
 	return true
 }
 
+// inspectOpenAPIYAML rejects multiple documents, duplicate keys, aliases and excessive complexity
+// before the OpenAPI loader may interpret any part of the untrusted specification.
+// inspectOpenAPIYAML отклоняет несколько документов, повторные ключи, alias и чрезмерную сложность
+// до того, как загрузчик OpenAPI интерпретирует недоверенную спецификацию.
 func inspectOpenAPIYAML(raw []byte) error {
 	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	var document yaml.Node
@@ -243,6 +275,8 @@ func inspectOpenAPIYAML(raw []byte) error {
 	if decoder.Decode(&trailing) != io.EOF {
 		return errors.New("OpenAPI document must contain one document")
 	}
+	// nodeDepth carries one YAML node and its explicit traversal depth for bounded inspection.
+	// nodeDepth хранит узел YAML и его явную глубину для ограниченного обхода.
 	type nodeDepth struct {
 		node  *yaml.Node
 		depth int

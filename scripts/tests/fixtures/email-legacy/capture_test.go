@@ -10,7 +10,12 @@ import (
 	"time"
 )
 
-// Только test overlay exact старого CP; production source и SQL не изменяются.
+// testLegacyEmailGatewayClaim sends a trusted synthetic old-producer claim to a bounded caster
+// test process, requiring a credential in that historical shape. The caller supplies only disposable
+// fixture data and a trusted binary: child env/output are not redacted, and this helper sends no mail.
+// testLegacyEmailGatewayClaim передаёт доверенный synthetic old-producer claim ограниченному caster
+// test process, требуя credential исторической формы. Caller задаёт только disposable fixture data
+// и доверенный binary: child env/output не очищаются; сама функция письмо не отправляет.
 func testLegacyEmailGatewayClaim(t *testing.T, item map[string]any, kind string) {
 	t.Helper()
 	binary := os.Getenv("KODEX_EMAIL_CASTER_TEST_BINARY")

@@ -1,4 +1,5 @@
-// Package natsjetstream реализует eventing.Publisher поверх NATS JetStream.
+// Package natsjetstream implements eventing.Publisher over an exact NATS JetStream contract.
+// Package natsjetstream реализует eventing.Publisher поверх точного контракта NATS JetStream.
 package natsjetstream
 
 import (
@@ -18,12 +19,16 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// maximumRuntimeFileBytes bounds every private TLS or credential file before parsing.
+// maximumRuntimeFileBytes ограничивает каждый закрытый файл TLS или credentials до разбора.
 const maximumRuntimeFileBytes = 1 << 20
 
-// ErrConnect классифицирует отказ initial connection, который допускает bounded retry вызывающей стороной.
+// ErrConnect classifies initial connection failure for bounded caller-side retry.
+// ErrConnect обозначает ошибку первого подключения для ограниченного повтора вызывающей стороной.
 var ErrConnect = errors.New("connect NATS JetStream")
 
-// Config фиксирует точный поток окружения и идентичность TLS.
+// Config pins the stream contract and exact TLS identity of this publisher.
+// Config закрепляет контракт потока и точную TLS-идентичность издателя.
 type Config struct {
 	URL             string
 	TLSServerName   string
@@ -44,6 +49,7 @@ type Config struct {
 	ConnectTimeout  time.Duration
 }
 
+// Publisher owns the NATS connection and synchronous JetStream publication.
 // Publisher владеет соединением NATS и синхронной публикацией JetStream.
 type Publisher struct {
 	connection *nats.Conn
@@ -51,7 +57,8 @@ type Publisher struct {
 	config     Config
 }
 
-// New создаёт TLS-only publisher без изменения stream.
+// New constructs a TLS-only publisher without creating or changing its stream.
+// New создаёт издателя только с TLS, не создавая и не меняя поток.
 func New(config Config) (*Publisher, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
@@ -98,7 +105,8 @@ func New(config Config) (*Publisher, error) {
 	return &Publisher{connection: connection, jetstream: js, config: config}, nil
 }
 
-// Check сверяет точный контракт потока и не создаёт ресурс.
+// Check compares the served stream with the complete expected contract without writes.
+// Check сравнивает действующий поток с полным ожидаемым контрактом без записи.
 func (publisher *Publisher) Check(ctx context.Context) error {
 	stream, err := publisher.jetstream.Stream(ctx, publisher.config.Stream)
 	if err != nil {
@@ -114,8 +122,10 @@ func (publisher *Publisher) Check(ctx context.Context) error {
 	return nil
 }
 
-// EnsureStream создаёт отсутствующий поток, восстанавливает только пустой поток
-// после прерванного bootstrap и закрыто отклоняет расхождение непустого потока.
+// EnsureStream creates an absent stream or repairs only an empty interrupted bootstrap stream.
+// EnsureStream создаёт отсутствующий поток или исправляет только пустой поток после прерванного bootstrap.
+// Drift in a nonempty stream is rejected without modification.
+// Расхождение непустого потока отклоняется без изменений.
 func (publisher *Publisher) EnsureStream(ctx context.Context) error {
 	if stream, err := publisher.jetstream.Stream(ctx, publisher.config.Stream); err == nil {
 		return publisher.reconcileEmptyStream(ctx, stream)
@@ -137,6 +147,8 @@ func (publisher *Publisher) EnsureStream(ctx context.Context) error {
 	return publisher.Check(ctx)
 }
 
+// reconcileEmptyStream updates only a stream with no messages, bytes, or consumers, then reads it back.
+// reconcileEmptyStream обновляет только поток без сообщений, байтов и потребителей, затем проверяет его чтением.
 func (publisher *Publisher) reconcileEmptyStream(ctx context.Context, stream jetstream.Stream) error {
 	info, err := stream.Info(ctx)
 	if err != nil {
@@ -154,8 +166,10 @@ func (publisher *Publisher) reconcileEmptyStream(ctx context.Context, stream jet
 	return publisher.Check(ctx)
 }
 
-// EnsureStreamWithMessageLimitUpgrade принадлежит release bootstrap, не runtime.
-// Непустой поток меняет только MaxMsgSize при exact прежнем контракте.
+// EnsureStreamWithMessageLimitUpgrade belongs to release bootstrap, never ordinary runtime.
+// EnsureStreamWithMessageLimitUpgrade принадлежит release bootstrap, а не обычной работе.
+// It changes only MaxMsgSize after proving the exact previous contract and reading back the new one.
+// Метод меняет только MaxMsgSize после проверки точного прежнего контракта и чтения нового.
 func (publisher *Publisher) EnsureStreamWithMessageLimitUpgrade(ctx context.Context, previous int32) error {
 	if previous <= 0 || previous >= publisher.config.MaxMessageBytes {
 		return errors.New("NATS stream message limit upgrade is invalid")
@@ -187,6 +201,8 @@ func (publisher *Publisher) EnsureStreamWithMessageLimitUpgrade(ctx context.Cont
 	return publisher.Check(ctx)
 }
 
+// expectedStreamConfig builds the immutable stream shape used by bootstrap and readback.
+// expectedStreamConfig создаёт закреплённую форму потока для bootstrap и проверки чтением.
 func expectedStreamConfig(config Config) jetstream.StreamConfig {
 	return jetstream.StreamConfig{
 		Name:              config.Stream,
@@ -206,6 +222,8 @@ func expectedStreamConfig(config Config) jetstream.StreamConfig {
 	}
 }
 
+// streamCompatible rejects storage, limits, subjects, and forbidden JetStream features that drift.
+// streamCompatible отклоняет изменения хранения, лимитов, subject-ов и запрещённых возможностей JetStream.
 func streamCompatible(actual jetstream.StreamConfig, expected Config) bool {
 	actualSubjects := slices.Clone(actual.Subjects)
 	expectedSubjects := slices.Clone(expected.Subjects)
@@ -228,7 +246,8 @@ func streamCompatible(actual jetstream.StreamConfig, expected Config) bool {
 		actual.RePublish == nil && actual.SubjectTransform == nil
 }
 
-// Publish отправляет канонический конверт и проверяет подтверждение точного потока.
+// Publish sends a canonical event envelope and verifies the exact stream acknowledgement.
+// Publish отправляет канонический конверт события и проверяет подтверждение точного потока.
 func (publisher *Publisher) Publish(
 	ctx context.Context,
 	envelope eventing.Envelope,
@@ -254,9 +273,10 @@ func (publisher *Publisher) Publish(
 	}, nil
 }
 
-// PublishRaw публикует уже проверенный контрактом bounded payload в конкретный
-// subject, входящий в закрытый набор stream filters. Метод нужен для AsyncAPI
-// envelope, чья JSON-схема отличается от общего eventing.Envelope.
+// PublishRaw sends an already validated bounded payload only to a registered subject.
+// PublishRaw отправляет уже проверенное ограниченное содержимое только в зарегистрированный subject.
+// It supports AsyncAPI envelopes whose JSON schema differs from eventing.Envelope.
+// Метод поддерживает конверты AsyncAPI, чья JSON-схема отличается от eventing.Envelope.
 func (publisher *Publisher) PublishRaw(
 	ctx context.Context,
 	subject string,
@@ -290,6 +310,8 @@ func (publisher *Publisher) PublishRaw(
 	return eventing.PublishReceipt{Stream: ack.Stream, Sequence: ack.Sequence, Duplicate: ack.Duplicate}, nil
 }
 
+// subjectMatchesFilter accepts exact token matches or one-token wildcards, never broader patterns.
+// subjectMatchesFilter допускает точные совпадения токенов либо однотокенные wildcard, не более широкие шаблоны.
 func subjectMatchesFilter(subject, filter string) bool {
 	subjectTokens, filterTokens := strings.Split(subject, "."), strings.Split(filter, ".")
 	if len(subjectTokens) != len(filterTokens) {
@@ -303,7 +325,8 @@ func subjectMatchesFilter(subject, filter string) bool {
 	return true
 }
 
-// Close ограниченно очищает и закрывает connection.
+// Close drains the connection before closing it and closes on drain failure too.
+// Close осушает соединение перед закрытием и закрывает его также при ошибке осушения.
 func (publisher *Publisher) Close() error {
 	if publisher == nil || publisher.connection == nil {
 		return nil
@@ -316,6 +339,8 @@ func (publisher *Publisher) Close() error {
 	return nil
 }
 
+// validateConfig checks TLS paths, bounded stream limits, and closed subject filters before connection.
+// validateConfig проверяет пути TLS, лимиты потока и закрытые фильтры subject до подключения.
 func validateConfig(config Config) error {
 	if config.URL == "" || config.TLSServerName == "" ||
 		!filepath.IsAbs(config.CAFile) ||
@@ -354,6 +379,8 @@ func validateConfig(config Config) error {
 	return nil
 }
 
+// validSubjectFilter allows only bounded dot-separated tokens and single-token wildcards.
+// validSubjectFilter допускает только ограниченные токены через точку и однотокенные wildcard.
 func validSubjectFilter(subject string) bool {
 	if subject == "" || strings.TrimSpace(subject) != subject || strings.ContainsAny(subject, " \t\r\n") {
 		return false
@@ -373,6 +400,8 @@ func validSubjectFilter(subject string) bool {
 	return true
 }
 
+// loadClientCertificate reads owner-only files and clears their raw bytes after TLS parsing.
+// loadClientCertificate читает файлы владельца и очищает исходные байты после разбора TLS.
 func loadClientCertificate(certificateFile string, privateKeyFile string) (tls.Certificate, error) {
 	certificateRaw, err := securefile.Read(certificateFile, maximumRuntimeFileBytes)
 	if err != nil {
@@ -391,6 +420,8 @@ func loadClientCertificate(certificateFile string, privateKeyFile string) (tls.C
 	return certificate, nil
 }
 
+// loadCertificatePool builds the trusted CA pool from one bounded, owner-only file.
+// loadCertificatePool создаёт доверенный пул CA из одного ограниченного файла владельца.
 func loadCertificatePool(path string) (*x509.CertPool, error) {
 	raw, err := securefile.Read(path, maximumRuntimeFileBytes)
 	if err != nil {

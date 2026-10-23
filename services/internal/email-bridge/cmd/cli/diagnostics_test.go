@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// TestMigrationFailureClosedClassesNeverExposeCause checks exact bounded diagnostic output for typed failures and unknown stages using synthetic sentinel details.
+// TestMigrationFailureClosedClassesNeverExposeCause проверяет точный ограниченный вывод типизированных отказов и неизвестных этапов с синтетическими контрольными подробностями.
 func TestMigrationFailureClosedClassesNeverExposeCause(t *testing.T) {
 	const sentinel = "SENTINEL_DSN_SQL_PASSWORD_PATH"
 	for _, test := range []struct {
@@ -51,6 +53,8 @@ func TestMigrationFailureClosedClassesNeverExposeCause(t *testing.T) {
 	}
 }
 
+// TestMigrationReadFailureAndMalformedDSNStages distinguishes missing/writable protected files, malformed connection settings and unsupported CLI commands before any real database work.
+// TestMigrationReadFailureAndMalformedDSNStages различает отсутствие или writable защищённого файла, неверные настройки соединения и неподдержанные команды до настоящей работы с БД.
 func TestMigrationReadFailureAndMalformedDSNStages(t *testing.T) {
 	previous := os.Args
 	t.Cleanup(func() { os.Args = previous })

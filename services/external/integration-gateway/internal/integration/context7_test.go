@@ -18,6 +18,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// TestContext7WorkingPathAndReadiness exercises both tools over local SDK JSON and SSE servers, checks typed arguments and receipts, and proves readiness lists tools without invoking them.
+// TestContext7WorkingPathAndReadiness проверяет оба инструмента на локальных SDK-серверах JSON и SSE, типизированные аргументы и квитанции, а также отсутствие вызова инструментов при проверке готовности.
 func TestContext7WorkingPathAndReadiness(t *testing.T) {
 	for _, jsonResponse := range []bool{true, false} {
 		t.Run(map[bool]string{true: "JSON", false: "SSE"}[jsonResponse], func(t *testing.T) {
@@ -63,6 +65,8 @@ func TestContext7WorkingPathAndReadiness(t *testing.T) {
 	}
 }
 
+// TestContext7RejectsProviderFailureAndUnsafeContent rejects tool failures, an exact credential echo, oversized text, images and blank output using a local MCP fixture without leaking private error text.
+// TestContext7RejectsProviderFailureAndUnsafeContent отклоняет ошибки инструмента, точное повторение учётных данных, длинный текст, изображения и пустой вывод на локальной MCP-оснастке без утечки закрытого текста ошибки.
 func TestContext7RejectsProviderFailureAndUnsafeContent(t *testing.T) {
 	for name, response := range map[string]*mcp.CallToolResult{
 		"isError":    {IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "provider private error"}}},
@@ -82,6 +86,8 @@ func TestContext7RejectsProviderFailureAndUnsafeContent(t *testing.T) {
 	}
 }
 
+// TestContext7DeadlineAndProtocolFailure verifies cancellation of a stalled local tool within the caller budget and rejection of a malformed MCP readiness response.
+// TestContext7DeadlineAndProtocolFailure проверяет отмену зависшего локального инструмента в пределах срока вызывающего кода и отклонение некорректного MCP-ответа готовности.
 func TestContext7DeadlineAndProtocolFailure(t *testing.T) {
 	stop := make(chan struct{})
 	adapter := context7Fixture(t, true, func(ctx context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -112,6 +118,8 @@ func TestContext7DeadlineAndProtocolFailure(t *testing.T) {
 	}
 }
 
+// TestContext7TransportClosedBoundary inspects exact TLS/proxy settings and rejects alternate URLs, invalid or oversized requests and known/streamed response overflow before unsafe forwarding.
+// TestContext7TransportClosedBoundary проверяет точные настройки TLS и прокси, отклоняет посторонние URL, некорректные или длинные запросы и объявленное либо потоковое переполнение ответа до небезопасной передачи.
 func TestContext7TransportClosedBoundary(t *testing.T) {
 	const integrationProxy = "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083"
 	client, err := newContext7HTTPClient(Config{ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", OpenAPIProxyURL: integrationProxy, Timeout: 10 * time.Second})
@@ -166,6 +174,8 @@ func TestContext7TransportClosedBoundary(t *testing.T) {
 	}
 }
 
+// TestContext7CatalogSchema accepts the required two-string schema and rejects incomplete or malformed required-field lists without claiming full JSON Schema coverage.
+// TestContext7CatalogSchema принимает обязательную схему двух строк и отклоняет неполные либо некорректные списки обязательных полей, не заявляя полное покрытие JSON Schema.
 func TestContext7CatalogSchema(t *testing.T) {
 	valid := map[string]any{"type": "object", "properties": map[string]any{"libraryName": map[string]any{"type": "string"}, "query": map[string]any{"type": "string"}}, "required": []any{"libraryName", "query"}}
 	if !context7Schema(valid, "libraryName") {
@@ -181,6 +191,8 @@ func TestContext7CatalogSchema(t *testing.T) {
 	}
 }
 
+// TestContext7ReadinessRejectsMissingToolAndCredentials removes one required local tool and then the credential, checking that readiness/execution fail without calling a tool.
+// TestContext7ReadinessRejectsMissingToolAndCredentials удаляет обязательный локальный инструмент, затем учётные данные и проверяет отказ готовности и выполнения без вызова инструмента.
 func TestContext7ReadinessRejectsMissingToolAndCredentials(t *testing.T) {
 	var calls atomic.Int32
 	adapter := context7Fixture(t, true, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -204,6 +216,8 @@ func TestContext7ReadinessRejectsMissingToolAndCredentials(t *testing.T) {
 	}
 }
 
+// TestContext7RejectsRedirectAndHTTPFailure injects redirect, authentication, rate-limit and server responses, requiring one request and sanitized errors with no private provider text.
+// TestContext7RejectsRedirectAndHTTPFailure подставляет ответы перенаправления, авторизации, ограничения частоты и сервера, требуя один запрос и безопасные ошибки без закрытого текста провайдера.
 func TestContext7RejectsRedirectAndHTTPFailure(t *testing.T) {
 	for _, status := range []int{http.StatusFound, http.StatusUnauthorized, http.StatusTooManyRequests, http.StatusServiceUnavailable} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
@@ -223,6 +237,8 @@ func TestContext7RejectsRedirectAndHTTPFailure(t *testing.T) {
 	}
 }
 
+// context7Fixture starts a local SDK MCP server with two typed tools and optional catalog mutations, rerouting the fixed authenticated provider request only inside the fixture.
+// context7Fixture запускает локальный SDK MCP-сервер с двумя типизированными инструментами и необязательными изменениями каталога, перенаправляя закреплённый авторизованный запрос провайдера только внутри оснастки.
 func context7Fixture(t *testing.T, jsonResponse bool, handler mcp.ToolHandler, mutations ...func(*mcp.Server)) *Adapter {
 	t.Helper()
 	server := mcp.NewServer(&mcp.Implementation{Name: "context7-fixture", Version: "1.0.0"}, nil)
@@ -251,6 +267,8 @@ func context7Fixture(t *testing.T, jsonResponse bool, handler mcp.ToolHandler, m
 	return adapter
 }
 
+// context7Request builds a synthetic invocation from the shipped Context7 capability, canonical input and scope digests with fixed fixture grant references; it does not issue production authority.
+// context7Request создаёт синтетический вызов из поставляемой возможности Context7, канонического входа и хешей области с тестовыми ссылками гранта; производственных полномочий не выдаёт.
 func context7Request(t *testing.T, adapter *Adapter, operation string, input map[string]any, credential *CredentialRevision) Request {
 	t.Helper()
 	definition := adapter.definitions["context7"]
@@ -275,6 +293,8 @@ func context7Request(t *testing.T, adapter *Adapter, operation string, input map
 	return Request{DefinitionPackage: definitionPackage, DefinitionKey: "context7", DefinitionVersion: definition.Metadata.Version, DefinitionDigest: definition.Digest, ConnectionRef: "int_test", GrantRef: "igr_fixture01", GrantVersion: 1, CapabilityKey: operation, Operation: operation, Risk: "READ", ApprovalPolicy: "NONE", ResourceKind: capability.ResourceScope.Kind, ResourceScope: scope, ResourceScopeDigest: hex.EncodeToString(scopeDigest[:]), EffectKey: "eff_0123456789abcdef0123456789abcdef", InputDigest: hex.EncodeToString(inputDigest[:]), Configuration: map[string]any{"base_url": context7Origin}, Input: input, Credential: credential}
 }
 
+// testContext7CatalogOperation executes one advertised operation against a local MCP server and checks a single tool call, projected text and matching input/effect receipt.
+// testContext7CatalogOperation выполняет одну объявленную операцию на локальном MCP-сервере и проверяет единственный вызов инструмента, текстовую проекцию и соответствие квитанции входу и эффекту.
 func testContext7CatalogOperation(t *testing.T, operation string, input map[string]any) {
 	t.Helper()
 	var calls atomic.Int32

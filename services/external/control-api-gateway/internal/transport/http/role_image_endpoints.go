@@ -10,6 +10,8 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// ListRoleEnvironments reads owner-visible environment templates and maps them to an explicitly allocated public page; it does not build templates or validate every returned enum itself.
+// ListRoleEnvironments читает видимые шаблоны окружений владельца и переносит их в явно созданную публичную страницу; шаблоны не собирает и каждый enum ответа сам не проверяет.
 func (server *Server) ListRoleEnvironments(writer http.ResponseWriter, request *http.Request) {
 	response, err := server.control.RoleImages.ListRoleEnvironments(request.Context(), &controlplanev1.ListRoleEnvironmentsRequest{})
 	if err != nil {
@@ -23,6 +25,8 @@ func (server *Server) ListRoleEnvironments(writer http.ResponseWriter, request *
 	writeJSON(writer, http.StatusOK, result)
 }
 
+// ListRoleImageRecipes binds project context and validates bounded search/state/role/page input, then checks owner count, unique scoped references, lineage/source visibility and advancing cursor before public output. The read does not admit or promote images.
+// ListRoleImageRecipes привязывает проект и проверяет поиск, state/role/page, затем сверяет счётчик, уникальные ссылки области, lineage/source visibility и продвижение cursor до выдачи. Чтение образы не допускает и не продвигает.
 func (server *Server) ListRoleImageRecipes(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.ListRoleImageRecipesParams) {
 	request, ok := withProjectReference(writer, request, projectRef)
 	if !ok {
@@ -47,32 +51,13 @@ func (server *Server) ListRoleImageRecipes(writer http.ResponseWriter, request *
 		writeRPCProblem(writer, err)
 		return
 	}
-	if response == nil || response.GetTotal() < int64(len(response.GetRecipes())) || response.GetTotal() > maximumSafeJSONInteger || len(response.GetRecipes()) > 100 ||
-		parameters.PageSize != nil && len(response.GetRecipes()) > *parameters.PageSize {
-		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	result := generated.RoleImageRecipePage{Items: make([]generated.RoleImageRecipe, 0, len(response.GetRecipes())), Total: response.GetTotal()}
-	seen := make(map[string]bool, len(response.GetRecipes()))
-	for _, recipe := range response.GetRecipes() {
-		if recipe == nil || recipe.GetProjectRef() != projectRef || !effectiveCapabilityRef(recipe.GetRef()) || seen[recipe.GetRef()] ||
-			!validRoleImageLineage(recipe.GetManagedLineage()) || !validRoleImageSource(recipe) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		seen[recipe.GetRef()] = true
-		result.Items = append(result.Items, publicRoleImageRecipe(recipe))
-	}
-	if token := response.GetPage().GetNextPageToken(); token != "" {
-		if !boundedModelText(token, 512) || token == stringValue(parameters.PageToken) || len(result.Items) == 0 {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		result.NextPageToken = &token
-	}
-	writeJSON(writer, http.StatusOK, result)
+	writeRoleImageRecipePage(writer, response, parameters.PageSize, parameters.PageToken, func(recipe *controlplanev1.RoleImageRecipe) bool {
+		return recipe.GetProjectRef() == projectRef
+	})
 }
 
+// GetRoleImageRecipe requires a returned recipe in the route project, validates lineage/source, builds and optional risk history, then maps detail and admission failure with version ETag. Project mismatch is NOT_FOUND; this endpoint's local check does not independently compare recipeRef to the returned recipe ref.
+// GetRoleImageRecipe требует рецепт в проекте маршрута, проверяет lineage/source, builds и необязательную risk history, затем проецирует detail и admission failure с ETag версии. Чужой проект даёт NOT_FOUND; локальная проверка отдельно не сравнивает recipeRef со ссылкой ответа.
 func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, recipeRef generated.RecipeRef) {
 	response, err := server.control.RoleImages.GetRoleImageRecipe(request.Context(), &controlplanev1.GetRoleImageRecipeRequest{RecipeRef: recipeRef})
 	if err != nil {
@@ -124,6 +109,8 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 	writeJSON(writer, http.StatusOK, result)
 }
 
+// validRoleImageLineage accepts absent lineage or the exact shipped-baseline no-pin case, otherwise requiring known management/origin, bounded source text and valid configuration/revision pins. It checks metadata consistency, not source signatures or actor authority.
+// validRoleImageLineage принимает отсутствие lineage либо точный shipped-baseline без pins, иначе требует известные management/origin, ограниченный source text и допустимые configuration/revision pins. Проверяет metadata, а не подписи исходников и полномочия actor.
 func validRoleImageLineage(lineage *controlplanev1.RoleImageManagedLineage) bool {
 	if lineage == nil {
 		return true
@@ -138,6 +125,8 @@ func validRoleImageLineage(lineage *controlplanev1.RoleImageManagedLineage) bool
 	return effectiveCapabilityRef(lineage.GetConfigurationRef()) && effectiveCapabilityRef(lineage.GetRevisionRef()) && validManagedVersion(lineage.GetRevision())
 }
 
+// validRoleImageReceipt checks returned project and optional exact recipe ref, lineage/source, build source/configuration reference and optional image risk history, emitting bad gateway on failure. Organization-specific scope binding is added by its separate wrapper; this predicate does not execute supply-chain admission.
+// validRoleImageReceipt сверяет проект и необязательную точную ссылку рецепта, lineage/source, source/configuration reference сборки и необязательную risk history, выдавая bad gateway при отказе. Организационную область добавляет отдельная обёртка; predicate supply-chain admission не выполняет.
 func validRoleImageReceipt(writer http.ResponseWriter, response *controlplanev1.ManageRoleImageRecipeResponse, projectRef, recipeRef string) bool {
 	recipe := response.GetRecipe()
 	if artifact := response.GetImageArtifact(); artifact != nil && !validImageRiskHistory(artifact) {
@@ -152,6 +141,8 @@ func validRoleImageReceipt(writer http.ResponseWriter, response *controlplanev1.
 	return true
 }
 
+// validRoleImageSource requires an environment, a nonblank Dockerfile when source is available, and no Dockerfile/installation block when unavailable. This visibility consistency check is not Dockerfile safety analysis.
+// validRoleImageSource требует environment и непустой Dockerfile при доступном source, а при недоступном — отсутствие Dockerfile и installation block. Это согласованность видимости, а не анализ безопасности Dockerfile.
 func validRoleImageSource(recipe *controlplanev1.RoleImageRecipe) bool {
 	environment := recipe.GetEnvironment()
 	if recipe == nil || environment == nil {
@@ -163,6 +154,8 @@ func validRoleImageSource(recipe *controlplanev1.RoleImageRecipe) bool {
 	return environment.GetDockerfile() == "" && environment.GetInstallationBlock() == ""
 }
 
+// validRoleImageBuildSource permits no optional build, otherwise requires nonblank source only when marked available and an empty Dockerfile when unavailable.
+// validRoleImageBuildSource допускает отсутствие необязательной сборки, иначе требует непустой source только при доступности и пустой Dockerfile при недоступности.
 func validRoleImageBuildSource(build *controlplanev1.ImageBuild) bool {
 	if build == nil {
 		return true
@@ -173,6 +166,8 @@ func validRoleImageBuildSource(build *controlplanev1.ImageBuild) bool {
 	return build.GetDockerfile() == ""
 }
 
+// CreateRoleImageRecipe binds project context and maps environment selection into the dedicated CREATE action with idempotency, then checks the returned receipt before ETag/HTTP201. It does not directly run a build or accept vulnerability risk.
+// CreateRoleImageRecipe привязывает проект и преобразует environment selection в отдельный CREATE с идемпотентностью, затем проверяет receipt до ETag/HTTP201. Сборку напрямую не запускает и риск уязвимостей не принимает.
 func (server *Server) CreateRoleImageRecipe(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.CreateRoleImageRecipeParams) {
 	body, ok := decodeJSON[generated.RoleImageRecipeCreateInput](writer, request)
 	if !ok {
@@ -202,6 +197,8 @@ func (server *Server) CreateRoleImageRecipe(writer http.ResponseWriter, request 
 	writeJSON(writer, http.StatusCreated, publicRoleImageRecipe(response.GetRecipe()))
 }
 
+// UpdateRoleImageRecipe forwards exact project/recipe, editable name/environment and mutation/version pins to the dedicated owner UPDATE, validating receipt before public projection without detaching managed content implicitly.
+// UpdateRoleImageRecipe передаёт точные project/recipe, имя, environment и mutation/version pins отдельному UPDATE владельца и проверяет receipt до выдачи без неявного detach управляемого содержимого.
 func (server *Server) UpdateRoleImageRecipe(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, recipeRef generated.RecipeRef, parameters generated.UpdateRoleImageRecipeParams) {
 	body, ok := decodeJSON[generated.RoleImageRecipeUpdateInput](writer, request)
 	if !ok {
@@ -231,6 +228,8 @@ func (server *Server) UpdateRoleImageRecipe(writer http.ResponseWriter, request 
 	writeJSON(writer, http.StatusOK, publicRoleImageRecipe(response.GetRecipe()))
 }
 
+// CommandRoleImageRecipe maps the selected action/build under project context and mutation pins to the owner, verifies receipt and projects recipe/build plus reused flag. Owner admission, cancellation and promotion transitions are not inferred from display fields.
+// CommandRoleImageRecipe преобразует action/build с проектом и mutation pins в запрос владельцу, сверяет receipt и проецирует recipe/build и reused. Допуск, отмена и продвижение владельца из отображаемых полей не выводятся.
 func (server *Server) CommandRoleImageRecipe(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, recipeRef generated.RecipeRef, parameters generated.CommandRoleImageRecipeParams) {
 	body, ok := decodeJSON[generated.RoleImageRecipeCommand](writer, request)
 	if !ok {
@@ -275,6 +274,8 @@ func (server *Server) CommandRoleImageRecipe(writer http.ResponseWriter, request
 	writeJSON(writer, http.StatusOK, result)
 }
 
+// roleEnvironmentSelection copies optional package/tool lists and installation text into a fresh typed selection while retaining supplied Dockerfile content unchanged; it performs no execution, catalog lookup or admission.
+// roleEnvironmentSelection копирует необязательные package/tool списки и installation text в новый типизированный selection, сохраняя Dockerfile без изменений; выполнение, поиск каталога и допуск не производятся.
 func roleEnvironmentSelection(input generated.RoleEnvironmentSelection) *controlplanev1.RoleEnvironmentSelection {
 	result := &controlplanev1.RoleEnvironmentSelection{EnvironmentKey: input.EnvironmentKey, Dockerfile: input.Dockerfile}
 	if input.PackageKeys != nil {
@@ -289,6 +290,8 @@ func roleEnvironmentSelection(input generated.RoleEnvironmentSelection) *control
 	return result
 }
 
+// publicRoleEnvironment explicitly maps template metadata, availability hints and platform tuples, preserving optional variant/unavailable fields and copying software message keys. It assumes owner-projected inputs rather than validating templates.
+// publicRoleEnvironment явно преобразует metadata шаблона, availability hints и platform tuples, сохраняя необязательные variant/unavailable и копируя software message keys. Предполагает проекцию владельца, а не проверяет шаблоны.
 func publicRoleEnvironment(input *controlplanev1.RoleEnvironment) generated.RoleEnvironment {
 	result := generated.RoleEnvironment{
 		Key: input.GetKey(), NameMessageKey: input.GetNameMessageKey(),
@@ -315,6 +318,8 @@ func publicRoleEnvironment(input *controlplanev1.RoleEnvironment) generated.Role
 	return result
 }
 
+// publicRoleImageRecipe maps recipe scope/version/lineage and visible environment data, derives promoted readiness from a nonempty reference and preserves optional pins/actions. It omits internal build policy hashes and does not independently validate numeric conversions or ownership.
+// publicRoleImageRecipe преобразует scope/version/lineage и видимый environment, выводит promoted readiness из непустой ссылки и сохраняет optional pins/actions. Внутренние build policy hashes не выдаёт, числовые casts и владение отдельно не проверяет.
 func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.RoleImageRecipe {
 	result := generated.RoleImageRecipe{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), ProjectRef: input.GetProjectRef(),
@@ -363,6 +368,8 @@ func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.Role
 	return result
 }
 
+// publicRoleImageBuild maps public build scope, generation, stage/progress, source availability, configuration pin and optional safe diagnostics. It does not verify the build digest or sanitize arbitrary input diagnostics by itself.
+// publicRoleImageBuild преобразует scope, generation, stage/progress, доступность source, configuration pin и optional safe diagnostics. Digest сборки не проверяет и произвольную диагностику сам не очищает.
 func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageBuild {
 	result := generated.RoleImageBuild{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
@@ -385,6 +392,8 @@ func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageB
 	return result
 }
 
+// publicRoleImageArtifact maps admitted-artifact display metadata, promotion/SBOM/evidence references, declared/observed tools and convertible optional risk records. An optional risk conversion failure is omitted here; callers must validate history before mapping, and display data is not admission authority.
+// publicRoleImageArtifact преобразует metadata файла образа, promotion/SBOM/evidence ссылки, declared/observed tools и преобразуемые optional risk records. Ошибочный optional risk conversion здесь пропускается; историю заранее проверяет caller, отображение не является полномочием допуска.
 func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.RoleImageArtifact {
 	result := generated.RoleImageArtifact{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
@@ -432,6 +441,8 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 	return result
 }
 
+// publicImageToolInventory returns explicit UNAVAILABLE with an empty platform list unless owner metadata says VERIFIED, then copies digests/platform/tool observations into the public shape. This mapper does not itself verify signatures, digests, tool execution or readiness.
+// publicImageToolInventory выдаёт явный UNAVAILABLE с пустыми платформами, если metadata владельца не VERIFIED, иначе копирует digests и наблюдения platform/tool. Сам mapper подписи, digests, выполнение инструментов и readiness не проверяет.
 func publicImageToolInventory(input *controlplanev1.ImageToolInventory) generated.ImageToolInventory {
 	result := generated.ImageToolInventory{Status: generated.ImageToolInventoryStatusUNAVAILABLE, Platforms: []generated.ImagePlatformToolInventory{}}
 	if input == nil || input.GetStatus() != "VERIFIED" {
@@ -448,11 +459,15 @@ func publicImageToolInventory(input *controlplanev1.ImageToolInventory) generate
 	return result
 }
 
+// roleImageRecipeAction performs exact prefixed action enum lookup and reports whether the name exists; it does not apply action-specific permission or lifecycle policy.
+// roleImageRecipeAction точно ищет action enum с префиксом и сообщает наличие имени; права и lifecycle конкретного действия не применяет.
 func roleImageRecipeAction(input generated.RoleImageRecipeCommandAction) (controlplanev1.RoleImageRecipeAction, bool) {
 	value, ok := controlplanev1.RoleImageRecipeAction_value["ROLE_IMAGE_RECIPE_ACTION_"+string(input)]
 	return controlplanev1.RoleImageRecipeAction(value), ok
 }
 
+// protoTime returns zero for a nil interface, otherwise delegates AsTime and converts to UTC without CheckValid. Typed-nil receiver behavior remains that of the supplied implementation rather than a guaranteed zero result.
+// protoTime возвращает ноль для nil interface, иначе вызывает AsTime и приводит к UTC без CheckValid. Поведение typed-nil определяется реализацией получателя, а не гарантированным нулём.
 func protoTime(input interface{ AsTime() time.Time }) time.Time {
 	if input == nil {
 		return time.Time{}
@@ -460,6 +475,8 @@ func protoTime(input interface{ AsTime() time.Time }) time.Time {
 	return input.AsTime().UTC()
 }
 
+// setVersionETag writes a quoted decimal ETag only for positive uint64 versions, leaving any existing header untouched for zero; it does not validate domain version bounds.
+// setVersionETag записывает десятичный ETag в кавычках только положительной uint64-версии, не меняя прежний заголовок для нуля; доменные пределы версии не проверяет.
 func setVersionETag(writer http.ResponseWriter, version uint64) {
 	if version > 0 {
 		writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", version))

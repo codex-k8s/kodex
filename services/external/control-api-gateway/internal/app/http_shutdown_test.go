@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// TestHTTPDrainPreservesAcceptedRequestAfterProcessSignal runs a loopback HTTP server, cancels the process context and proves an accepted request can finish successfully before explicit serving cancellation. It tests graceful local drain, not a real OS signal or downstream service.
+// TestHTTPDrainPreservesAcceptedRequestAfterProcessSignal запускает loopback HTTP server, отменяет process context и доказывает успешное завершение принятого запроса до явной serving cancellation. Проверяется локальный graceful drain, а не реальный OS signal и downstream service.
 func TestHTTPDrainPreservesAcceptedRequestAfterProcessSignal(t *testing.T) {
 	lifecycle, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -76,6 +78,8 @@ func TestHTTPDrainPreservesAcceptedRequestAfterProcessSignal(t *testing.T) {
 	}
 }
 
+// TestHTTPDrainTimeoutClosesActiveRequest holds a loopback handler active, uses a twenty-millisecond drain budget and checks DeadlineExceeded plus eventual request/client termination after forced Close.
+// TestHTTPDrainTimeoutClosesActiveRequest удерживает loopback handler активным, задаёт двадцатимиллисекундный drain budget и проверяет DeadlineExceeded и последующее завершение request и client после принудительного Close.
 func TestHTTPDrainTimeoutClosesActiveRequest(t *testing.T) {
 	lifecycle, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -119,6 +123,8 @@ func TestHTTPDrainTimeoutClosesActiveRequest(t *testing.T) {
 	}
 }
 
+// TestHTTPServingContextPreservesClientCancellation cancels a loopback client's request and checks the server handler context still observes cancellation despite the detached process serving context.
+// TestHTTPServingContextPreservesClientCancellation отменяет запрос loopback client и проверяет сохранение отмены server handler context несмотря на отделённый process serving context.
 func TestHTTPServingContextPreservesClientCancellation(t *testing.T) {
 	requests, stop := servingContext(context.Background())
 	defer stop()

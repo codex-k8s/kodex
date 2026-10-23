@@ -17,6 +17,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/connect"
 )
 
+// captureProviderResponsesLogs isolates process-wide logging for each diagnostic assertion.
+// captureProviderResponsesLogs изолирует общий журнал процесса для каждой проверки диагностики.
 func captureProviderResponsesLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var output bytes.Buffer
@@ -28,6 +30,8 @@ func captureProviderResponsesLogs(t *testing.T) *bytes.Buffer {
 	return &output
 }
 
+// assertProviderResponsesEvents checks closed event fields and rejects private fixture values.
+// assertProviderResponsesEvents проверяет закрытые поля событий и исключает значения закрытых данных.
 func assertProviderResponsesEvents(t *testing.T, output string, mode string, events ...string) {
 	t.Helper()
 	for _, event := range events {
@@ -42,6 +46,8 @@ func assertProviderResponsesEvents(t *testing.T, output string, mode string, eve
 	}
 }
 
+// TestProviderResponsesDiagnosticExactRoutes limits diagnostics to exact provider routes and access.
+// TestProviderResponsesDiagnosticExactRoutes ограничивает диагностику точными маршрутами и правами провайдера.
 func TestProviderResponsesDiagnosticExactRoutes(t *testing.T) {
 	for _, test := range []struct {
 		name, host, path, method, rawPath, upgrade, want string
@@ -80,6 +86,8 @@ func TestProviderResponsesDiagnosticExactRoutes(t *testing.T) {
 	}
 }
 
+// TestProviderResponsesDiagnosticStatusWhitelist maps only approved HTTP codes into log fields.
+// TestProviderResponsesDiagnosticStatusWhitelist пропускает в журнал только разрешённые коды HTTP.
 func TestProviderResponsesDiagnosticStatusWhitelist(t *testing.T) {
 	allowed := map[int]bool{101: true, 200: true, 201: true, 204: true, 400: true, 401: true, 403: true, 404: true, 408: true, 409: true, 413: true, 415: true, 422: true, 426: true, 429: true, 500: true, 502: true, 503: true, 504: true}
 	for status := -1; status <= 1000; status++ {
@@ -95,6 +103,8 @@ func TestProviderResponsesDiagnosticStatusWhitelist(t *testing.T) {
 	}
 }
 
+// TestProviderResponsesPolicyFailureKeepsExistingDenial ensures diagnostics cannot relax request policy.
+// TestProviderResponsesPolicyFailureKeepsExistingDenial исключает ослабление политики запроса диагностикой.
 func TestProviderResponsesPolicyFailureKeepsExistingDenial(t *testing.T) {
 	target := connect.Target{Hostname: "api.openai.com", Port: 443}
 	access := runtimecontract.RuntimeProxyAccess{ProviderAccess: true}
@@ -142,6 +152,8 @@ func TestProviderResponsesPolicyFailureKeepsExistingDenial(t *testing.T) {
 	}
 }
 
+// TestProviderResponsesValidExtensionDoesNotMaskHandshakeFailure retains handshake rejection after valid extensions.
+// TestProviderResponsesValidExtensionDoesNotMaskHandshakeFailure сохраняет отказ handshake при допустимых расширениях.
 func TestProviderResponsesValidExtensionDoesNotMaskHandshakeFailure(t *testing.T) {
 	request := syntheticUpgradeRequest(t, "api.openai.com")
 	request.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; client_max_window_bits")
@@ -153,6 +165,8 @@ func TestProviderResponsesValidExtensionDoesNotMaskHandshakeFailure(t *testing.T
 	}
 }
 
+// TestProviderResponsesDiagnosticNeverLogsExternalValues guards every diagnostic stage against untrusted text.
+// TestProviderResponsesDiagnosticNeverLogsExternalValues защищает все этапы диагностики от недоверенного текста.
 func TestProviderResponsesDiagnosticNeverLogsExternalValues(t *testing.T) {
 	output := captureProviderResponsesLogs(t)
 	diagnostic := providerResponsesDiagnostic{mode: "WSS"}
@@ -192,6 +206,8 @@ func TestProviderResponsesDiagnosticNeverLogsExternalValues(t *testing.T) {
 	}
 }
 
+// TestProviderResponsesHandshakeCountsSerializedLinesWithoutValues checks bounded counts of actual wire headers.
+// TestProviderResponsesHandshakeCountsSerializedLinesWithoutValues проверяет ограниченный подсчёт заголовков на проводе.
 func TestProviderResponsesHandshakeCountsSerializedLinesWithoutValues(t *testing.T) {
 	for _, test := range []struct {
 		name, version, bucket string
@@ -240,12 +256,18 @@ func TestProviderResponsesHandshakeCountsSerializedLinesWithoutValues(t *testing
 	}
 }
 
+// providerHandshakeShortWriter simulates a partial write with an underlying error.
+// providerHandshakeShortWriter имитирует частичную запись с ошибкой нижележащего слоя.
 type providerHandshakeShortWriter struct{ failure error }
 
+// Write returns the partial byte count unchanged so the diagnostic wrapper can be checked.
+// Write возвращает частичное число байтов без изменений для проверки диагностической обёртки.
 func (writer providerHandshakeShortWriter) Write([]byte) (int, error) {
 	return 2, writer.failure
 }
 
+// TestProviderResponsesHandshakeWriterPreservesPartialResultAndBounds checks error propagation and count saturation.
+// TestProviderResponsesHandshakeWriterPreservesPartialResultAndBounds проверяет передачу ошибки и предел счётчика.
 func TestProviderResponsesHandshakeWriterPreservesPartialResultAndBounds(t *testing.T) {
 	failure := errors.New("private-writer-error-sentinel")
 	writer := &providerWebSocketHandshakeWriter{Writer: providerHandshakeShortWriter{failure: failure}}
@@ -263,6 +285,8 @@ func TestProviderResponsesHandshakeWriterPreservesPartialResultAndBounds(t *test
 	}
 }
 
+// TestProviderResponsesPumpDataPresenceClosedSet records only presence bits for bidirectional traffic.
+// TestProviderResponsesPumpDataPresenceClosedSet фиксирует только наличие данных в двустороннем потоке.
 func TestProviderResponsesPumpDataPresenceClosedSet(t *testing.T) {
 	for _, test := range []struct {
 		client, upstream bool

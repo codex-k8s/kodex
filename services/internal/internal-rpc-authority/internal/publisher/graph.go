@@ -3,8 +3,6 @@ package publisher
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -15,10 +13,14 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 )
 
-// GraphConfig задаёт independently rooted входы полного publisher graph.
+// GraphConfig binds the closed delivery registry, durable store and delivery ports to independently
+// rooted manifest signing/trust inputs and policy; private key material must not be logged.
+// GraphConfig связывает закрытый реестр, устойчивое хранилище и порты доставки с независимо укоренёнными
+// материалами подписи и доверия манифеста и политикой; закрытый ключ нельзя журналировать.
 type GraphConfig struct {
 	Registry                   model.DeliveryTargetRegistry
 	Store                      repository.PublisherStore
@@ -32,7 +34,10 @@ type GraphConfig struct {
 	PolicyFile                 string
 }
 
-// Graph публикует auth/proof/manifest/snapshot как единую intent-цепочку.
+// Graph coordinates durable publication intents, key delivery and phase-bound rotation; its mutable
+// phase fields are per-graph execution inputs, not a new owner of persistent state.
+// Graph координирует устойчивые намерения публикации, доставку ключей и фазовую ротацию; изменяемые поля
+// фаз относятся к выполнению графа и не заменяют владельца устойчивого состояния.
 type Graph struct {
 	config            GraphConfig
 	now               func() time.Time
@@ -40,6 +45,10 @@ type Graph struct {
 	rotationOperation model.AuthorityRotationOperation
 }
 
+// rotatingKeySet holds current/next private signing keys with an optional previous public key and their
+// linked generations; the struct is sensitive even when previous is public-only.
+// rotatingKeySet содержит текущий и следующий закрытые ключи, необязательный предыдущий открытый ключ и
+// связанные поколения; структура конфиденциальна, хотя предыдущий ключ только открытый.
 type rotatingKeySet struct {
 	current            internalrpcauth.ES256Key
 	next               internalrpcauth.ES256Key
@@ -49,9 +58,16 @@ type rotatingKeySet struct {
 	previousGeneration uint64
 }
 
+// maximumSnapshotHistoryEntries bounds the predecessor window included when rebuilding a publication; it
+// does not truncate the store's durable history.
+// maximumSnapshotHistoryEntries ограничивает окно предшественников при пересборке публикации, но не
+// обрезает устойчивую историю хранилища.
 const maximumSnapshotHistoryEntries = 32
 
-// NewGraph создаёт полный publisher graph из закрытого registry.
+// NewGraph validates required registry shape, startup targets, ports and manifest inputs before
+// constructing an idle graph with the wall clock; it performs no publication or key generation.
+// NewGraph проверяет форму реестра, обязательные цели запуска, порты и материалы манифеста, затем
+// создаёт неактивный граф с системными часами; публикации и генерации ключей здесь нет.
 func NewGraph(config GraphConfig) (*Graph, error) {
 	if config.Registry.Version != model.ContractVersion ||
 		config.Registry.SourceRevision == 0 ||
@@ -72,7 +88,11 @@ func NewGraph(config GraphConfig) (*Graph, error) {
 	return &Graph{config: config, now: time.Now}, nil
 }
 
-// Publish материализует полный graph и читает каждый опубликованный слой.
+// Publish resolves durable history and rotation state, selects the existing phase or reuses a stored
+// waiting-phase publication, and otherwise executes one phase without skipping readiness-driven
+// advancement.
+// Publish разрешает устойчивую историю и состояние ротации, выбирает фазу либо возвращает сохранённую
+// публикацию ожидающей фазы, иначе выполняет одну фазу без пропуска продвижения по готовности.
 func (graph *Graph) Publish(
 	ctx context.Context,
 ) (model.AuthoritySnapshotPublication, error) {
@@ -146,6 +166,14 @@ func (graph *Graph) Publish(
 	return phaseGraph.publishOne(ctx)
 }
 
+// publishOne checks the write fence and rooted signer, reserves rotation intent
+// before key writes and persists the exact snapshot before trust/snapshot delivery.
+// Rejoin rebuilds stored output; delivered snapshot bindings are checked before
+// recording delivery. These effects are not one transaction or consumer acceptance.
+// publishOne проверяет запрет записи и доверенного подписанта, резервирует намерение
+// ротации до записи ключей и сохраняет точный снимок до доставки доверия и снимка.
+// Повтор восстанавливает сохранённый результат; привязки доставленного снимка
+// сверяются до фиксации доставки. Это не одна транзакция и не принятие потребителями.
 func (graph *Graph) publishOne(
 	ctx context.Context,
 ) (model.AuthoritySnapshotPublication, error) {
@@ -218,7 +246,7 @@ func (graph *Graph) publishOne(
 	}
 	intentID := existing.IntentID
 	if !found {
-		intentID = deterministicUUID(
+		intentID = value.JoinedAuthorityUUID(
 			"authority-rotation-v2",
 			strconv.FormatUint(graph.config.Registry.SourceRevision, 10),
 			graph.config.Registry.SourceDigest,
@@ -410,6 +438,8 @@ func (graph *Graph) publishOne(
 	}
 	// Durable intent precedes external delivery so concurrent replicas and a
 	// restart after partial delivery rebuild the exact signed publication.
+	// Устойчивое намерение предшествует внешней доставке, чтобы параллельные
+	// реплики и перезапуск после частичной доставки восстанавливали точную публикацию.
 	for _, target := range graph.config.Registry.Targets {
 		if _, err := graph.putExact(
 			ctx,
@@ -466,6 +496,10 @@ func (graph *Graph) publishOne(
 	return served, nil
 }
 
+// snapshotHistoryForBuild copies history, requires and removes the exact persisted current tail on
+// rejoin, then retains the latest bounded predecessor window without mutating the input slice.
+// snapshotHistoryForBuild копирует историю, при повторе требует и удаляет точный сохранённый текущий
+// хвост, затем оставляет ограниченное окно последних предшественников, не меняя входной срез.
 func snapshotHistoryForBuild(
 	history []model.RevisionDigest,
 	sourceRevision uint64,
@@ -489,6 +523,10 @@ func snapshotHistoryForBuild(
 	return result, nil
 }
 
+// ensureWritable asks the durable store whether publishing is allowed and maps any refusal to the fixed
+// restore-fence diagnostic before graph effects.
+// ensureWritable спрашивает устойчивое хранилище о допустимости публикации и до эффектов графа заменяет
+// любой отказ фиксированной диагностикой блокировки восстановления.
 func (graph *Graph) ensureWritable(ctx context.Context) error {
 	if err := graph.config.Store.PublisherReady(ctx); err != nil {
 		return errors.New("authority publisher restore fence is active")
@@ -496,7 +534,12 @@ func (graph *Graph) ensureWritable(ctx context.Context) error {
 	return nil
 }
 
-// Ready проверяет durable history, все role readbacks и фактически served Secret.
+// Ready checks publication lifetime, exact served snapshot, required consumer readbacks and delivered
+// materials, then may advance the durable rotation phase; unlike a pure health query it can record phase
+// progress.
+// Ready проверяет срок публикации, точный обслуживаемый снимок, обязательные подтверждения потребителей
+// и доставленные материалы, затем может продвинуть устойчивую фазу ротации; это не чистый запрос
+// здоровья.
 func (graph *Graph) Ready(
 	ctx context.Context,
 	expected model.AuthoritySnapshotPublication,
@@ -552,14 +595,24 @@ func (graph *Graph) Ready(
 	return nil
 }
 
+// rotationOperationID derives the stable normal-rotation identifier from a fixed namespace and registry
+// revision/digest; it neither generates randomness nor authenticates authority.
+// rotationOperationID вычисляет устойчивый идентификатор обычной ротации из фиксированного пространства
+// и ревизии и хеша реестра; случайность и подтверждение полномочий здесь отсутствуют.
 func (graph *Graph) rotationOperationID() string {
-	return deterministicUUID(
+	return value.JoinedAuthorityUUID(
 		"authority-normal-rotation-v3",
 		strconv.FormatUint(graph.config.Registry.SourceRevision, 10),
 		graph.config.Registry.SourceDigest,
 	)
 }
 
+// deliveryReady checks configured delivery references for nonempty versioned material and pins source
+// revision/digest for manifest and proof trust; it does not cryptographically revalidate every secret's
+// contents.
+// deliveryReady проверяет ссылки доставки на непустые версионированные материалы и закрепляет ревизию и
+// хеш источника для доверия манифеста и доказательств; криптографической перепроверки каждого секрета
+// здесь нет.
 func (graph *Graph) deliveryReady(ctx context.Context, sourceRevision uint64) error {
 	for _, target := range graph.config.Registry.Targets {
 		for _, path := range []string{
@@ -588,6 +641,12 @@ func (graph *Graph) deliveryReady(ctx context.Context, sourceRevision uint64) er
 	return nil
 }
 
+// ensureKeySet reads or creates a key set, validates an exact historical predecessor before rotation,
+// applies phase-specific generation changes through CAS and resolves ambiguous writes by readback rather
+// than blindly repeating effects.
+// ensureKeySet читает либо создаёт набор ключей, перед ротацией проверяет точного исторического
+// предшественника, меняет поколения по фазе через CAS и разрешает неопределённые записи чтением вместо
+// слепого повтора эффектов.
 func (graph *Graph) ensureKeySet(
 	ctx context.Context,
 	path string,
@@ -641,9 +700,12 @@ func (graph *Graph) ensureKeySet(
 		!registryDigestPattern.MatchString(predecessorDigest) {
 		return rotatingKeySet{}, err
 	}
-	// Registry digest, publication input и snapshot digest принадлежат разным
-	// доменам. Их exact historical связь разрешается из immutable publication,
-	// а не реконструируется из новых policy/manifest или предполагаемой фазы.
+	// Registry digest, publication input and snapshot digest belong to different
+	// domains; resolve their exact historical binding from immutable publication,
+	// not from new policy/manifest inputs or an assumed phase.
+	// Хеш реестра, вход публикации и хеш снимка принадлежат разным областям;
+	// точная историческая связь разрешается из неизменяемой публикации,
+	// а не из новых политики и манифеста либо предполагаемой фазы.
 	previous, previousFound, previousErr := graph.config.Store.LoadSnapshotPredecessor(
 		ctx,
 		predecessorRevision,
@@ -741,6 +803,11 @@ func (graph *Graph) ensureKeySet(
 	return decodeRotatingKeySet(updated, graph.config.Registry)
 }
 
+// validHistoricalPredecessorPhase allows bootstrap/retired predecessors for DISTRIBUTE, only DISTRIBUTE
+// for SWITCH and only SWITCH for RETIRE; an unphased operation accepts only an unphased predecessor.
+// validHistoricalPredecessorPhase разрешает начального либо завершившего RETIRE предшественника для
+// DISTRIBUTE, только DISTRIBUTE для SWITCH и только SWITCH для RETIRE; операция без фазы принимает лишь
+// предшественника без фазы.
 func validHistoricalPredecessorPhase(current, historical string) bool {
 	switch current {
 	case "DISTRIBUTE":
@@ -754,10 +821,18 @@ func validHistoricalPredecessorPhase(current, historical string) bool {
 	}
 }
 
+// publicationInputDigest computes the canonical registry/manifest/policy input digest without a rotation
+// phase; this identity differs from the built snapshot's content digest.
+// publicationInputDigest вычисляет канонический хеш входных реестра, манифеста и политики без фазы
+// ротации; он отличается от хеша содержимого собранного снимка.
 func publicationInputDigest(registryDigest string, manifestBundle, policyRaw []byte) (string, error) {
 	return publicationInputDigestForPhase(registryDigest, manifestBundle, policyRaw, "")
 }
 
+// publicationInputDigestForPhase hashes exact manifest/policy bytes and the registry digest with an
+// optional phase using canonical JSON; empty phase preserves the unphased representation.
+// publicationInputDigestForPhase хеширует точные байты манифеста и политики и хеш реестра с
+// необязательной фазой через канонический JSON; пустая фаза сохраняет представление без фазы.
 func publicationInputDigestForPhase(registryDigest string, manifestBundle, policyRaw []byte, phase string) (string, error) {
 	return internalrpcauth.CanonicalJSONSHA256(struct {
 		ManifestBundle string `json:"manifest_bundle"`
@@ -772,6 +847,11 @@ func publicationInputDigestForPhase(registryDigest string, manifestBundle, polic
 	})
 }
 
+// keySetData encodes private current/next JWKs, linked generations and registry source pins, adding only
+// the previous public JWK when supplied; the returned map contains secrets.
+// keySetData кодирует текущий и следующий закрытые JWK, связанные поколения и привязки источника
+// реестра, добавляя только открытый JWK предыдущего ключа при его наличии; возвращаемая карта содержит
+// секреты.
 func (graph *Graph) keySetData(
 	current internalrpcauth.ES256Key,
 	next internalrpcauth.ES256Key,
@@ -813,6 +893,12 @@ func (graph *Graph) keySetData(
 	return data, nil
 }
 
+// decodeRotatingKeySet requires exact registry source pins, distinct current/next private keys, adjacent
+// generations and the current-key alias; optional previous public material must have the preceding
+// generation.
+// decodeRotatingKeySet требует точные привязки источника реестра, различные текущий и следующий закрытые
+// ключи, соседние поколения и совпадение псевдонима текущего ключа; необязательный предыдущий открытый
+// ключ должен иметь предшествующее поколение.
 func decodeRotatingKeySet(
 	material repository.SecretMaterial,
 	registry model.DeliveryTargetRegistry,
@@ -880,6 +966,10 @@ func decodeRotatingKeySet(
 	return result, nil
 }
 
+// publisherKeys projects current/next and optional previous keys into public-only signing metadata with
+// caller-supplied issuer, workload, purpose and audiences; it does not assign policy permissions.
+// publisherKeys преобразует текущий, следующий и необязательный предыдущий ключи в открытые метаданные с
+// переданными подписантом, нагрузкой, назначением и аудиториями; прав политики функция не назначает.
 func publisherKeys(
 	issuer string,
 	workloadID string,
@@ -909,6 +999,11 @@ func publisherKeys(
 	return result
 }
 
+// putExact rejoins identical source-bound delivery, rejects same-revision mutation and rollback, and
+// otherwise creates or CAS-updates material with exact content readback on success or uncertain outcome.
+// putExact повторно использует идентичную доставку с привязкой к источнику, отклоняет изменение той же
+// ревизии и откат, иначе создаёт либо меняет материал через CAS с точной сверкой содержимого при успехе
+// и неопределённом исходе.
 func (graph *Graph) putExact(
 	ctx context.Context,
 	path string,
@@ -990,6 +1085,11 @@ func (graph *Graph) putExact(
 	return created, nil
 }
 
+// sameExactMaterial compares map lengths and values for each expected key without normalization; it
+// relies on delivered material using the established nonempty value schema rather than acting as a
+// general map validator.
+// sameExactMaterial сравнивает длины карт и значения ожидаемых ключей без нормализации; функция
+// опирается на принятую схему непустых значений доставки, а не является общей проверкой карт.
 func sameExactMaterial(left, right map[string]string) bool {
 	if len(left) != len(right) {
 		return false
@@ -1002,22 +1102,16 @@ func sameExactMaterial(left, right map[string]string) bool {
 	return true
 }
 
+// readGraphFile applies the shared bounded read-only file checks and returns a fixed safe diagnostic on
+// failure without exposing the path or contents.
+// readGraphFile применяет общие ограниченные проверки файлов только для чтения и при ошибке возвращает
+// фиксированную безопасную диагностику без пути и содержимого.
 func readGraphFile(path string, limit int64) ([]byte, error) {
 	value, err := securefile.Read(path, limit)
 	if err != nil {
 		return nil, errors.New("authority graph file is unsafe")
 	}
 	return value, nil
-}
-
-func deterministicUUID(parts ...string) string {
-	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	value := digest[:16]
-	value[6] = (value[6] & 0x0f) | 0x50
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value)
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32]
 }
 
 var _ repository.AuthorityGraphLifecycle = (*Graph)(nil)

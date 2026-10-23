@@ -17,6 +17,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestEnsureWarmRejectsStaleContextCompatibilityBeforeReplacement proves with a
+// fake Kubernetes client that a mismatched context pin deletes the old warm Pod
+// before a later call creates its replacement; it does not run a real workload.
+// TestEnsureWarmRejectsStaleContextCompatibilityBeforeReplacement проверяет
+// на fake Kubernetes-клиенте удаление прежнего warm Pod при несовпадении контекста
+// до создания замены следующим вызовом; реальная нагрузка не запускается.
 func TestEnsureWarmRejectsStaleContextCompatibilityBeforeReplacement(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -55,6 +61,12 @@ func TestEnsureWarmRejectsStaleContextCompatibilityBeforeReplacement(t *testing.
 	}
 }
 
+// testContextRevision overwrites a revision's skills and memories with synthetic
+// version-pinned records, current scan provenance and a future retention bound.
+// Digests and scan labels are fixtures, not evidence of a real antivirus scan.
+// testContextRevision заменяет навыки и память ревизии синтетическими записями
+// с версиями, текущим происхождением проверки и будущим сроком хранения.
+// Digest и метки проверки являются fixtures, а не результатом антивируса.
 func testContextRevision(revision *cp.RuntimeRevisionSnapshot) {
 	now := timestamppb.New(time.Now().UTC())
 	provenance := &cp.ContextProvenance{ActorRef: "act_abcdefgh", SourceKind: "UI", Digest: strings.Repeat("a", 64), CreatedAt: now}
@@ -67,6 +79,12 @@ func testContextRevision(revision *cp.RuntimeRevisionSnapshot) {
 		RetentionUntil: timestamppb.New(time.Now().Add(time.Hour)), Provenance: provenance}}
 }
 
+// TestHydratesTypedContextAndPublishesOnlyExactRecords checks typed pins,
+// required wire-schema context and dedicated projections, then rejects changes
+// to memory, skills, scope or attempt made without resealing the revision.
+// TestHydratesTypedContextAndPublishesOnlyExactRecords проверяет типизированные
+// привязки, обязательность контекста в wire-схеме и отдельные проекции, затем
+// отвергает изменения памяти, навыков, области и попытки без перепривязки ревизии.
 func TestHydratesTypedContextAndPublishesOnlyExactRecords(t *testing.T) {
 	execution := testExecution(false)
 	testContextRevision(execution.Revision)
@@ -118,6 +136,12 @@ func TestHydratesTypedContextAndPublishesOnlyExactRecords(t *testing.T) {
 	}
 }
 
+// TestContextHydrationRejectsInvalidPinsBeforeMaterialization checks malformed
+// skill/file/provenance data, traversal, oversize and expired memory on fresh
+// inputs, requiring failure without assigning a partial context snapshot.
+// TestContextHydrationRejectsInvalidPinsBeforeMaterialization проверяет
+// некорректные навыки, файлы и происхождение, обход пути, превышение размера
+// и истёкшую память на новых input, требуя отказа без частичного ContextSnapshot.
 func TestContextHydrationRejectsInvalidPinsBeforeMaterialization(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.RuntimeRevisionSnapshot){
 		"nil skill":          func(r *cp.RuntimeRevisionSnapshot) { r.SkillBundles[0] = nil },
@@ -144,6 +168,12 @@ func TestContextHydrationRejectsInvalidPinsBeforeMaterialization(t *testing.T) {
 	}
 }
 
+// TestOwnerSealedContextResumeSurvivesProtoAndProjection verifies that initial,
+// resumed and reset-thread fixtures preserve the owner's presealed session
+// decision through protobuf and fake Pod projection; unsealed overrides fail.
+// TestOwnerSealedContextResumeSurvivesProtoAndProjection проверяет сохранение
+// заранее закреплённого владельцем решения о сессии для первого хода, продолжения
+// и сброса через protobuf и fake-проекцию Pod; незакреплённая подмена отвергается.
 func TestOwnerSealedContextResumeSurvivesProtoAndProjection(t *testing.T) {
 	for _, test := range []struct {
 		name, sessionID string
@@ -202,6 +232,12 @@ func TestOwnerSealedContextResumeSurvivesProtoAndProjection(t *testing.T) {
 	}
 }
 
+// TestContextVolumeSeparatesInitWriterFromRuntimeReaders inspects a generated
+// Pod's bounded disk volume, group and mount layout: only workspace-init writes,
+// runner/provider read, and preparation/credential relay have no context mount.
+// TestContextVolumeSeparatesInitWriterFromRuntimeReaders проверяет ограниченный
+// дисковый том, группу и mounts сформированного Pod: пишет лишь workspace-init,
+// runner/provider читают, подготовка и credential relay не монтируют контекст.
 func TestContextVolumeSeparatesInitWriterFromRuntimeReaders(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	input, binding, err := manager.BuildTurnInput(testExecution(false))

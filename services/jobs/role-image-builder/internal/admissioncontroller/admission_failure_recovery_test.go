@@ -15,6 +15,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestAdmissionFailedReceiptRecoverySurvivesRestart drives failed admit receipts through persisted fake PVC cursors and a new controller.
+// It verifies predecessor UID advancement, cleanup after simulated receipt success and reachability of the next claim without fabricating real owner evidence.
+// TestAdmissionFailedReceiptRecoverySurvivesRestart проводит неуспешные квитанции admit через сохранённые курсоры искусственного PVC и новый контроллер.
+// Проверяются продвижение UID предшественника, очистка после заданного успеха квитанции и доступность следующего claim без фабрикации настоящих доказательств владельца.
 func TestAdmissionFailedReceiptRecoverySurvivesRestart(t *testing.T) {
 	cfg := testConfig()
 	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
@@ -115,6 +119,10 @@ func TestAdmissionFailedReceiptRecoverySurvivesRestart(t *testing.T) {
 	}
 }
 
+// TestRecoveryWorkspaceCELAllowsOnlyClosedCursor evaluates the locally rendered workspace policy for one valid update and ten rejected mutations.
+// It covers scope/actor, identity, metadata, budget and storage constraints through synthetic CEL inputs, not an installed cluster admission hook.
+// TestRecoveryWorkspaceCELAllowsOnlyClosedCursor вычисляет локально сформированную политику тома для одного допустимого обновления и десяти отклоняемых изменений.
+// Область и actor, идентичность, метаданные, бюджет и хранилище проверяются искусственными входами CEL, а не установленным admission hook кластера.
 func TestRecoveryWorkspaceCELAllowsOnlyClosedCursor(t *testing.T) {
 	policies, err := readAdmissionPolicies()
 	if err != nil {

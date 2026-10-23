@@ -18,6 +18,10 @@ import (
 	"github.com/emersion/go-sasl"
 )
 
+// imap opens the validated IMAP endpoint through the bounded tunnel, completes configured TLS before password/OAuth authentication and returns explicit cleanup.
+// Failed setup closes the connection and returns safe readiness reasons rather than private server response text.
+// imap открывает проверенный IMAP endpoint через ограниченный туннель, завершает настроенный TLS до password/OAuth-входа и возвращает явную очистку.
+// Отказ установки закрывает соединение и возвращает безопасную причину готовности вместо закрытого текста сервера.
 func (p *Provider) imap(ctx context.Context, m api.Mailbox) (*imapclient.Client, func(), error) {
 	if m.Imap == nil {
 		return nil, nil, errs.Unsupported
@@ -58,6 +62,8 @@ func (p *Provider) imap(ctx context.Context, m api.Mailbox) (*imapclient.Client,
 	return client, cleanup, nil
 }
 
+// selectIMAP selects the authorized folder, requires nonzero UIDVALIDITY/UIDNEXT and rejects a supplied generation that no longer matches.
+// selectIMAP выбирает разрешённую папку, требует ненулевые UIDVALIDITY/UIDNEXT и отвергает переданное поколение при несовпадении.
 func selectIMAP(c *imapclient.Client, folder string, validity uint32, readOnly bool) (*imap.SelectData, error) {
 	s, err := c.Select(folder, &imap.SelectOptions{ReadOnly: readOnly}).Wait()
 	if err != nil {
@@ -72,6 +78,8 @@ func selectIMAP(c *imapclient.Client, folder string, validity uint32, readOnly b
 	return s, nil
 }
 
+// parseUID accepts only a positive canonical decimal uint32 UID, rejecting alternate encodings such as leading zeros.
+// parseUID допускает только положительный канонический десятичный uint32 UID, отвергая иные представления, включая ведущие нули.
 func parseUID(value string) (imap.UID, error) {
 	n, err := strconv.ParseUint(value, 10, 32)
 	if err != nil || n == 0 || strconv.FormatUint(n, 10) != value {
@@ -80,6 +88,10 @@ func parseUID(value string) (imap.UID, error) {
 	return imap.UID(n), nil
 }
 
+// sourceRaw retrieves the chosen reply/forward source using stable POP UIDL or exact IMAP folder/UIDVALIDITY/UID under read-only selection.
+// The caller has already authorized the command and source folder; this helper does not grant access or inspect content safety.
+// sourceRaw читает выбранный источник ответа или пересылки по устойчивому POP UIDL либо точным IMAP folder/UIDVALIDITY/UID с read-only выбором.
+// Вызывающий уже разрешил команду и папку; helper не выдаёт доступ и не анализирует безопасность содержимого.
 func (p *Provider) sourceRaw(ctx context.Context, m api.Mailbox, cmd api.Command) ([]byte, error) {
 	if m.ReceiveProtocol != "imap" {
 		c, done, err := p.pop(ctx, m)
@@ -105,7 +117,10 @@ func (p *Provider) sourceRaw(ctx context.Context, m api.Mailbox, cmd api.Command
 	return raw, err
 }
 
-// UID FETCH BODY.PEEK не меняет \Seen. Размер проверяется до загрузки literal.
+// imapRaw first checks UID and declared RFC822 size, then fetches a bounded BODY.PEEK literal without setting Seen.
+// The actual payload must match declared size and the requested UID; empty, oversized or mismatched responses fail closed.
+// imapRaw сначала проверяет UID и объявленный RFC822-размер, затем читает ограниченный BODY.PEEK literal без установки Seen.
+// Фактическое тело должно совпасть с объявленным размером и UID; пустой, чрезмерный или несовпавший ответ закрыто отклоняется.
 func imapRaw(c *imapclient.Client, m api.Mailbox, uid imap.UID) ([]byte, *imapclient.FetchMessageBuffer, error) {
 	set := imap.UIDSetNum(uid)
 	meta, err := c.Fetch(set, &imap.FetchOptions{UID: true, Flags: true, RFC822Size: true, Envelope: true}).Collect()
@@ -133,12 +148,16 @@ func imapRaw(c *imapclient.Client, m api.Mailbox, uid imap.UID) ([]byte, *imapcl
 	return raw, meta[0], nil
 }
 
+// imapCursor correlates paging to the query/mailbox configuration, UIDVALIDITY and a decreasing UID upper bound; it is not an authority token.
+// imapCursor связывает страницы с запросом, конфигурацией ящика, UIDVALIDITY и убывающей верхней границей UID; это не токен полномочий.
 type imapCursor struct {
 	Binding  string `json:"binding"`
 	Validity uint32 `json:"validity"`
 	Upper    uint32 `json:"upper"`
 }
 
+// imapAddresses joins nonempty address values from the parsed IMAP envelope without treating display names or From as trusted identity.
+// imapAddresses объединяет непустые адреса разобранного IMAP envelope, не считая display name или From доверенной идентичностью.
 func imapAddresses(a []imap.Address) string {
 	values := make([]string, 0, len(a))
 	for _, address := range a {
@@ -149,6 +168,10 @@ func imapAddresses(a []imap.Address) string {
 	return strings.Join(values, ", ")
 }
 
+// readIMAP lists only authorized folders or routes bounded page/thread/message reads through exact UID-generation checks.
+// Attachment-list output removes bytes, download selects one attachment, and returned content remains untrusted data rather than an admission result.
+// readIMAP перечисляет только разрешённые папки либо направляет ограниченное чтение страниц, цепочек и сообщений через точную проверку UID-поколения.
+// Список вложений не содержит байты, download выбирает одно вложение, а результат остаётся недоверенными данными, не решением допуска.
 func (p *Provider) readIMAP(ctx context.Context, m api.Mailbox, cmd api.Command) (api.Result, error) {
 	c, cleanup, err := p.imap(ctx, m)
 	if err != nil {
@@ -209,6 +232,10 @@ func (p *Provider) readIMAP(ctx context.Context, m api.Mailbox, cmd api.Command)
 	return r, nil
 }
 
+// imapPage validates query-bound cursor generation, limits UID search ranges before expansion and fetches a bounded descending page.
+// Thread search candidates are rechecked against exact message references; body views share an aggregate byte bound and never imply content safety.
+// imapPage проверяет поколение cursor, связанного с запросом, ограничивает диапазоны UID до разворачивания и читает ограниченную убывающую страницу.
+// Кандидаты цепочки повторно сверяются по точным message references; тела имеют общий байтовый предел и не означают безопасность содержимого.
 func imapPage(c *imapclient.Client, m api.Mailbox, cmd api.Command, selected *imap.SelectData) (api.Result, error) {
 	binding := api.Digest(struct {
 		Tenant, Connection, Mailbox, Folder, Query, Thread string

@@ -9,6 +9,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestUnexpectedCodesAreClosed fixes the exact observer code set and ensures
+// expected client and cancellation errors are not counted as server failures.
+// RU: TestUnexpectedCodesAreClosed закрепляет точный набор кодов наблюдения
+// и исключает клиентские ошибки и отмену из серверных сбоев.
 func TestUnexpectedCodesAreClosed(t *testing.T) {
 	for _, code := range []codes.Code{
 		codes.Internal,
@@ -35,6 +39,10 @@ func TestUnexpectedCodesAreClosed(t *testing.T) {
 	}
 }
 
+// TestErrorBoundaryPreservesCanceledContext prevents a late Internal error
+// from overriding cancellation or producing an unexpected-error event.
+// RU: TestErrorBoundaryPreservesCanceledContext не даёт поздней ошибке
+// Internal заменить отмену и породить событие неожиданного сбоя.
 func TestErrorBoundaryPreservesCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -55,6 +63,10 @@ func TestErrorBoundaryPreservesCanceledContext(t *testing.T) {
 	}
 }
 
+// TestStreamErrorBoundaryPreservesDeadlineContext keeps an expired streaming
+// deadline authoritative over a later Unavailable result.
+// RU: TestStreamErrorBoundaryPreservesDeadlineContext сохраняет приоритет
+// истёкшего срока потока над поздним статусом Unavailable.
 func TestStreamErrorBoundaryPreservesDeadlineContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
@@ -77,6 +89,10 @@ func TestStreamErrorBoundaryPreservesDeadlineContext(t *testing.T) {
 	}
 }
 
+// TestErrorBoundaryObservesLiveInternalError verifies one observer callback
+// with the exact method and Internal code while the request is still active.
+// RU: TestErrorBoundaryObservesLiveInternalError проверяет один вызов
+// наблюдателя с точным методом и кодом Internal для активного запроса.
 func TestErrorBoundaryObservesLiveInternalError(t *testing.T) {
 	observed := 0
 	interceptor := ErrorBoundary(ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
@@ -98,11 +114,17 @@ func TestErrorBoundaryObservesLiveInternalError(t *testing.T) {
 	}
 }
 
+// contextServerStream supplies a controlled request context to stream
+// interceptor tests without a live gRPC transport.
+// RU: contextServerStream предоставляет управляемый контекст тестам
+// interceptor потока без действующего транспорта gRPC.
 type contextServerStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
+// Context returns the test-controlled stream context, including cancellation.
+// RU: Context возвращает управляемый тестом контекст потока, включая отмену.
 func (stream *contextServerStream) Context() context.Context {
 	return stream.ctx
 }

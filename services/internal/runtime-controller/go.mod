@@ -6,8 +6,10 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/providerfinancewire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
@@ -98,6 +100,8 @@ replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpse
 replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 
 replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/observability
+
+replace github.com/codex-k8s/kodex/libs/go/providerfinancewire => ../../../libs/go/providerfinancewire
 
 replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
 

@@ -10,8 +10,14 @@ import (
 )
 
 const (
-	RuntimeWorkspaceRoot                = "/workspace"
-	RuntimeWorkspaceWorkingRoot         = RuntimeWorkspaceRoot + "/work"
+	// RuntimeWorkspaceRoot is the fixed root of the agent-visible workspace.
+	// RuntimeWorkspaceRoot — неизменный корень рабочего пространства, видимого агенту.
+	RuntimeWorkspaceRoot = "/workspace"
+	// RuntimeWorkspaceWorkingRoot is the conventional writable work directory.
+	// RuntimeWorkspaceWorkingRoot — стандартная доступная для записи рабочая папка.
+	RuntimeWorkspaceWorkingRoot = RuntimeWorkspaceRoot + "/work"
+	// RuntimeWorkspaceWritableBytes caps owner-configurable writable storage.
+	// RuntimeWorkspaceWritableBytes ограничивает настраиваемый владельцем объём записи.
 	RuntimeWorkspaceWritableBytes int64 = 1 << 30
 	// RuntimeWorkspaceDefaultFiles keeps the default metadata quota unchanged for environments without explicit limits.
 	// RuntimeWorkspaceDefaultFiles сохраняет прежнюю квоту метаданных для окружений без явного лимита.
@@ -20,13 +26,25 @@ const (
 	// RuntimeWorkspaceMaximumFiles ограничивает явно выбранную квоту файлов репозитория, не меняя защищённые пути и лимит байтов.
 	RuntimeWorkspaceMaximumFiles int64 = 100_000
 
-	RuntimeWorkspaceReadOnly             = "READ_ONLY"
-	RuntimeWorkspaceWritable             = "WRITABLE"
-	RuntimeWorkspaceQuotaExceeded        = "QUOTA_EXCEEDED"
+	// RuntimeWorkspaceReadOnly denotes a path protected from agent writes.
+	// RuntimeWorkspaceReadOnly обозначает путь, защищённый от записи агентом.
+	RuntimeWorkspaceReadOnly = "READ_ONLY"
+	// RuntimeWorkspaceWritable denotes a path permitted for agent writes.
+	// RuntimeWorkspaceWritable обозначает путь, доступный агенту для записи.
+	RuntimeWorkspaceWritable = "WRITABLE"
+	// RuntimeWorkspaceQuotaExceeded identifies a rejected resource-limit operation.
+	// RuntimeWorkspaceQuotaExceeded обозначает отказ при превышении ресурсной квоты.
+	RuntimeWorkspaceQuotaExceeded = "QUOTA_EXCEEDED"
+	// RuntimeWorkspacePathOutsideWorkspace identifies a rejected path escape.
+	// RuntimeWorkspacePathOutsideWorkspace обозначает отказ при выходе пути за границу рабочего пространства.
 	RuntimeWorkspacePathOutsideWorkspace = "PATH_OUTSIDE_WORKSPACE"
-	RuntimeWorkspaceIOError              = "RUNTIME_IO_ERROR"
+	// RuntimeWorkspaceIOError identifies a runtime filesystem failure.
+	// RuntimeWorkspaceIOError обозначает сбой файловой системы runtime.
+	RuntimeWorkspaceIOError = "RUNTIME_IO_ERROR"
 )
 
+// runtimeWorkspaceDenialReasons fixes the ordered set exposed by the workspace contract.
+// runtimeWorkspaceDenialReasons закрепляет упорядоченный набор причин отказа в контракте рабочего пространства.
 var runtimeWorkspaceDenialReasons = [...]string{
 	RuntimeWorkspaceReadOnly,
 	RuntimeWorkspaceQuotaExceeded,
@@ -34,6 +52,8 @@ var runtimeWorkspaceDenialReasons = [...]string{
 	RuntimeWorkspaceIOError,
 }
 
+// RuntimeWorkspacePathRule assigns access to one canonical path prefix.
+// RuntimeWorkspacePathRule назначает режим доступа одному каноническому префиксу пути.
 type RuntimeWorkspacePathRule struct {
 	Path   string `json:"path"`
 	Access string `json:"access"`
@@ -48,6 +68,8 @@ type RuntimeWorkspaceLimits struct {
 	MaxFiles int64 `json:"max_files"`
 }
 
+// Validate requires positive quota limits no larger than the platform ceilings.
+// Validate требует положительные квоты не выше платформенных пределов.
 func (limits RuntimeWorkspaceLimits) Validate() error {
 	if limits.MaxBytes < 1 || limits.MaxBytes > RuntimeWorkspaceWritableBytes ||
 		limits.MaxFiles < 1 || limits.MaxFiles > RuntimeWorkspaceMaximumFiles {
@@ -56,6 +78,8 @@ func (limits RuntimeWorkspaceLimits) Validate() error {
 	return nil
 }
 
+// RuntimeWorkspacePolicyWithLimits derives a digest-pinned policy with optional narrower quotas.
+// RuntimeWorkspacePolicyWithLimits создаёт закреплённую дайджестом политику с необязательными меньшими квотами.
 func RuntimeWorkspacePolicyWithLimits(limits *RuntimeWorkspaceLimits) (RuntimeWorkspacePolicy, error) {
 	policy := RuntimeWorkspacePolicyV1()
 	if limits == nil {
@@ -72,6 +96,8 @@ func RuntimeWorkspacePolicyWithLimits(limits *RuntimeWorkspaceLimits) (RuntimeWo
 	return policy, nil
 }
 
+// RuntimeWorkspacePolicy records fixed path rules, bounded quotas, and a canonical digest.
+// RuntimeWorkspacePolicy хранит неизменные правила путей, ограниченные квоты и канонический дайджест.
 type RuntimeWorkspacePolicy struct {
 	Revision             int64                      `json:"revision"`
 	Root                 string                     `json:"root"`
@@ -82,6 +108,8 @@ type RuntimeWorkspacePolicy struct {
 	DenialReasons        []string                   `json:"denial_reasons"`
 }
 
+// RuntimeWorkspacePolicyV1 constructs the platform-owned default path and quota rules.
+// RuntimeWorkspacePolicyV1 создаёт платформенные правила путей и квот по умолчанию.
 func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 	policy := RuntimeWorkspacePolicy{Revision: 1, Root: RuntimeWorkspaceRoot,
 		Rules: []RuntimeWorkspacePathRule{
@@ -99,6 +127,8 @@ func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 	return policy
 }
 
+// Validate rejects changed path authority, quota ceilings, denial reasons, or policy digest.
+// Validate отклоняет изменённые полномочия путей, пределы квот, причины отказа или дайджест политики.
 func (policy RuntimeWorkspacePolicy) Validate() error {
 	if policy.Revision != 1 || policy.Root != RuntimeWorkspaceRoot ||
 		(RuntimeWorkspaceLimits{MaxBytes: policy.MaximumWritableBytes, MaxFiles: policy.MaximumFileCount}).Validate() != nil || len(policy.Rules) != 5 {
@@ -148,9 +178,10 @@ func (policy RuntimeWorkspacePolicy) Validate() error {
 	return nil
 }
 
-// NormalizePath принимает абсолютный либо workspace-relative path, но не
-// разрешает traversal даже тогда, когда filepath.Clean вернул бы путь обратно
-// внутрь workspace.
+// NormalizePath accepts an absolute or workspace-relative path but rejects traversal
+// even when cleaning would place the resulting path back inside the workspace.
+// NormalizePath принимает абсолютный путь или путь относительно рабочего пространства, но
+// отклоняет traversal, даже если очистка вернула бы результат внутрь рабочего пространства.
 func (policy RuntimeWorkspacePolicy) NormalizePath(candidate string) (string, string) {
 	if candidate == "" || strings.ContainsRune(candidate, '\x00') || strings.Contains(candidate, "\\") {
 		return "", RuntimeWorkspacePathOutsideWorkspace
@@ -172,7 +203,8 @@ func (policy RuntimeWorkspacePolicy) NormalizePath(candidate string) (string, st
 	return resolved, ""
 }
 
-// AccessForPath применяет longest-prefix rule к уже нормализованному path.
+// AccessForPath normalizes the candidate and applies the longest matching path rule.
+// AccessForPath нормализует путь и применяет наиболее длинное подходящее правило.
 func (policy RuntimeWorkspacePolicy) AccessForPath(candidate string) (string, string) {
 	resolved, denial := policy.NormalizePath(candidate)
 	if denial != "" {

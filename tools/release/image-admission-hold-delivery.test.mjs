@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {fingerprint} from './scoped-release.mjs';
 import {validateHoldCapability} from './image-admission-hold-capability.mjs';
 import {deletionRequest,executePhase,executeRollbackPhase,inspectHostController,loadDesiredBundle,verifyControllerRuntime} from './image-admission-hold-delivery.mjs';
-import {admissionResourceWithAPIDefaults,buildDeliveryPlan,inspectPhase,mutationFor,phaseAfter,phases,rollbackPhases,validateDeliveryPlan} from './image-admission-hold-delivery-model.mjs';
+import {admissionResourceWithAPIDefaults,buildDeliveryPlan,inspectPhase,inspectRollbackPhase,mutationFor,phaseAfter,phases,rollbackPhases,validateDeliveryPlan} from './image-admission-hold-delivery-model.mjs';
 
 const oldImage=`registry.local.kodex/kodex/image-admission@sha256:${'1'.repeat(64)}`;
 const nextImage=`registry.local.kodex/kodex/image-admission@sha256:${'2'.repeat(64)}`;
@@ -211,6 +211,28 @@ test('UID, resource and neighbor drift are closed before mutation',()=>{
  assert.throws(()=>validateDeliveryPlan(targetChanged,context,true),/HOLD_DELIVERY_PLAN_INVALID/);
  const rollbackChanged=JSON.parse(JSON.stringify(planAndState().plan));rollbackChanged.rollbackTargets['rollback-policy-jobs'].name='foreign';
  assert.throws(()=>validateDeliveryPlan(rollbackChanged,context,true),/HOLD_DELIVERY_PLAN_INVALID/);
+});
+
+test('общая граница снимка закрывает drift во всех прямых и обратных фазах',()=>{
+ const {state,plan}=planAndState();
+ const changes=[
+  [s=>s.clusterUID=nextUID(),'HOLD_DELIVERY_IDENTITY_CHANGED'],
+  [s=>s.namespaceUID=nextUID(),'HOLD_DELIVERY_IDENTITY_CHANGED'],
+  [s=>s.controller.metadata.uid=nextUID(),'HOLD_DELIVERY_IDENTITY_CHANGED'],
+  [s=>s.deployments[1].spec.replicas=3,'NEIGHBOR_DEPLOYMENT_CHANGED'],
+  [s=>s.jobsBinding.metadata.resourceVersion='999','JOBS_BINDING_CHANGED'],
+  [s=>s.parameters.metadata.resourceVersion='999','POLICY_PARAMETERS_CHANGED'],
+  [s=>s.policyConfig.metadata.resourceVersion='999','POLICY_CONFIG_CHANGED'],
+  [s=>s.ownerState.promotedArtifactCount++,'PUBLISHED_PINS_CHANGED'],
+  [s=>s.ownerState.promotedPinsSHA256='9'.repeat(64),'PUBLISHED_PINS_CHANGED'],
+ ];
+ for(const [inspect,allowed] of [[inspectPhase,phases],[inspectRollbackPhase,rollbackPhases]])
+  for(const phase of allowed)for(const [change,code] of changes){
+   const changed=structuredClone(state);change(changed);
+   assert.throws(()=>inspect(plan,changed,phase),error=>error.message===code);
+  }
+ assert.throws(()=>inspectPhase(plan,state,rollbackPhases[0]),/HOLD_DELIVERY_IDENTITY_CHANGED/);
+ assert.throws(()=>inspectRollbackPhase(plan,state,phases[0]),/HOLD_DELIVERY_IDENTITY_CHANGED/);
 });
 
 function fakeRuntime(initial,expectedExecutable=executable) {

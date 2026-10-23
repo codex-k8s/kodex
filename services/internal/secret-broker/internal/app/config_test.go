@@ -2,6 +2,10 @@ package app
 
 import "testing"
 
+// TestConfigSeparatesRuntimeNamespaceFromPodIdentity sets synthetic deployment/Pod variables and checks
+// the fixed runtime namespace is independent of POD_NAMESPACE while claimant uses POD_UID.
+// TestConfigSeparatesRuntimeNamespaceFromPodIdentity задаёт synthetic deployment/Pod variables и проверяет
+// независимость fixed runtime namespace от POD_NAMESPACE, тогда как claimant использует POD_UID.
 func TestConfigSeparatesRuntimeNamespaceFromPodIdentity(t *testing.T) {
 	t.Setenv("DEPLOYMENT_ENVIRONMENT", "staging")
 	t.Setenv("POD_NAMESPACE", "kodex-system")
@@ -16,6 +20,10 @@ func TestConfigSeparatesRuntimeNamespaceFromPodIdentity(t *testing.T) {
 	}
 }
 
+// TestConfigRejectsMissingPodUIDAndForeignRuntimeNamespace refuses an empty claimant and the platform
+// namespace used as runtime target through the real environment parser/validator.
+// TestConfigRejectsMissingPodUIDAndForeignRuntimeNamespace отклоняет пустой claimant и platform namespace
+// вместо runtime target через реальный environment parser/validator.
 func TestConfigRejectsMissingPodUIDAndForeignRuntimeNamespace(t *testing.T) {
 	t.Setenv("DEPLOYMENT_ENVIRONMENT", "staging")
 	t.Setenv("POD_UID", "")

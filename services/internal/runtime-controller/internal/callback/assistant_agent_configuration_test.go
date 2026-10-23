@@ -15,6 +15,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantAgentConfigurationFixture builds a versioned AGENT context with full
+// canonical instruction/binding metadata and matching content/outer digests for
+// local read tests; it contains no real credentials or owner authorization.
+// assistantAgentConfigurationFixture создаёт versioned AGENT context с full canonical
+// instruction/binding metadata и согласованными content/outer digests для local read
+// tests; real credentials и owner authorization отсутствуют.
 func assistantAgentConfigurationFixture(t *testing.T) (runtimecontract.RunnerInput, map[string]any, *controlplanev1.AssistantConfigurationCatalogResponse) {
 	t.Helper()
 	input, arguments, _ := assistantFreshCatalogFixture(runtimecontract.AssistantScopeProject, "AGENT_CONFIGURATION")
@@ -34,6 +40,12 @@ func assistantAgentConfigurationFixture(t *testing.T) (runtimecontract.RunnerInp
 		AgentConfiguration: &controlplanev1.AssistantAgentConfiguration{AgentRef: input.AssistantContext.EntityRef, ProjectRef: input.ProjectRef, Version: version, ConfigurationJson: raw, ConfigurationSha256: hex.EncodeToString(hash[:])}}
 }
 
+// TestAssistantAgentConfigurationNativeFullRead traverses local MCP paging with a
+// fake owner for both assistant scopes, reconstructs exact full source and checks
+// the owner request retains lease/fence/generation and the exact native agent ref.
+// TestAssistantAgentConfigurationNativeFullRead проходит local MCP paging с fake owner
+// обоих assistant scopes, восстанавливает exact full source и проверяет lease/fence/
+// generation и exact native agent ref запроса.
 func TestAssistantAgentConfigurationNativeFullRead(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeProject, runtimecontract.AssistantScopeSystem} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -50,6 +62,12 @@ func TestAssistantAgentConfigurationNativeFullRead(t *testing.T) {
 	}
 }
 
+// TestAssistantAgentConfigurationClosedSelection checks full instruction reads stay
+// bound to versioned AGENT context and eligible operations, reject mixed/query/foreign
+// selectors, and cannot turn CURRENT_CONFIGURATION into a cross-agent read.
+// TestAssistantAgentConfigurationClosedSelection проверяет привязку full instruction reads
+// к versioned AGENT context/eligible operations, отказ mixed/query/foreign selectors
+// и запрет cross-agent read через CURRENT_CONFIGURATION.
 func TestAssistantAgentConfigurationClosedSelection(t *testing.T) {
 	input, arguments, _ := assistantAgentConfigurationFixture(t)
 	selector := arguments["assistant_configuration_catalog"].(map[string]any)
@@ -101,6 +119,12 @@ func TestAssistantAgentConfigurationClosedSelection(t *testing.T) {
 	}
 }
 
+// TestAssistantAgentConfigurationRejectsCorruptionAndMixedFields mutates tenant,
+// project, target, version, proto fields and rehashed JSON to ensure mixed/private,
+// duplicate, missing and inconsistent instruction/binding data never become a snapshot.
+// TestAssistantAgentConfigurationRejectsCorruptionAndMixedFields меняет tenant,project,
+// target,version,proto fields и rehashed JSON, проверяя отказ mixed/private,duplicate,
+// missing и inconsistent instruction/binding data без snapshot.
 func TestAssistantAgentConfigurationRejectsCorruptionAndMixedFields(t *testing.T) {
 	input, arguments, response := assistantAgentConfigurationFixture(t)
 	request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])
@@ -161,6 +185,12 @@ func TestAssistantAgentConfigurationRejectsCorruptionAndMixedFields(t *testing.T
 	}
 }
 
+// TestAssistantAgentConfigurationManagedTemplateSelection checks a large separately
+// digested effective managed template remains valid when the explicit instruction
+// binding is not effective; it tests read shape, not publication or template rendering.
+// TestAssistantAgentConfigurationManagedTemplateSelection проверяет допуск большого
+// effective managed template с собственным digest при неэффективном explicit instruction
+// binding; проверяется read shape, не publication и не template rendering.
 func TestAssistantAgentConfigurationManagedTemplateSelection(t *testing.T) {
 	input, arguments, response := assistantAgentConfigurationFixture(t)
 	request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])

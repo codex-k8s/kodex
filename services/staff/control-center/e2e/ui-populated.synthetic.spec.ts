@@ -17,21 +17,9 @@ import {
 } from "./ui-populated-browser";
 import { syntheticCatalogRun } from "./fixtures/catalog-run";
 import { permittedRequest } from "./ui-acceptance-proof";
+import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
 const project = "project_fixture";
-const runtime = {
-  revision: "0".repeat(64),
-  environment: "synthetic",
-  apiBaseUrl: "/",
-  realtimeUrl: "/api/v1",
-  requestTimeoutMs: 10000,
-  oidc: {
-    authority: "https://identity.invalid",
-    clientId: "synthetic",
-    redirectUri: "/auth/callback",
-    postLogoutRedirectUri: "/",
-    scope: "openid",
-  },
-};
+const runtime = syntheticRuntimeConfig();
 const shell = (body: string) =>
   `<!doctype html><meta charset="UTF-8"><style>body{margin:0}.topbar{height:58px}.app-shell{display:block}</style><div class="app-shell"><div class="topbar"></div><div class="page-header"><h1>Fixture</h1></div>${body}</div>`;
 const conversation = (index = 0) => ({

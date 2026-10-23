@@ -6,7 +6,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ModelCatalog переносит безопасные возможности адаптера без credential data.
+// ModelCatalog converts a dated adapter compatibility snapshot into a safe
+// protobuf catalog. It copies model lists, disables streaming in this surface
+// and omits provider credentials; an empty source version yields no catalog.
+// RU: ModelCatalog преобразует датированный снимок совместимости адаптера в
+// безопасный protobuf-каталог. Списки моделей копируются, streaming для этой
+// поверхности выключен, реквизиты провайдера не передаются; при пустой версии
+// источника каталог не возвращается.
 func ModelCatalog(catalog modelprofile.Catalog) *sttv1.TranscriptionModelCatalog {
 	if catalog.Version == "" {
 		return nil

@@ -11,6 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 )
 
+// TestWebSocketTicketReplicaCASAndIndependentTabs shares memory CAS between two Families values, proves two independent tickets leave family version/sequence unchanged and one concurrent consume wins, then rejects replay. It is not a live multi-Pod or browser handshake test.
+// TestWebSocketTicketReplicaCASAndIndependentTabs использует общий memory CAS двух Families values, доказывает неизменность family version и sequence для двух независимых tickets и единственный concurrent consume, затем отклоняет replay. Это не live multi-Pod и browser handshake test.
 func TestWebSocketTicketReplicaCASAndIndependentTabs(t *testing.T) {
 	families, family, _ := familyFixture(t, refreshFunc(func(context.Context, string) (oidcverifier.BrowserTokens, error) {
 		t.Fatal("unexpected provider call")
@@ -50,6 +52,8 @@ func TestWebSocketTicketReplicaCASAndIndependentTabs(t *testing.T) {
 	}
 }
 
+// TestWebSocketTicketExpiryBindingBoundsAndRevocation rejects expired/wrong-browser/wrong-CSRF/stale-version/revoked tickets, enforces sixteen-entry capacity and frees it after expiry using synthetic state and clock. It does not establish retention or access controls of a real broker.
+// TestWebSocketTicketExpiryBindingBoundsAndRevocation на synthetic state и clock отклоняет expired, wrong-browser, wrong-CSRF, stale-version и revoked tickets, ограничивает capacity шестнадцатью entries и освобождает её после expiry без доказательства retention и access controls настоящего broker.
 func TestWebSocketTicketExpiryBindingBoundsAndRevocation(t *testing.T) {
 	for _, scenario := range []string{"expired", "browser", "csrf", "version", "revoked"} {
 		t.Run(scenario, func(t *testing.T) {

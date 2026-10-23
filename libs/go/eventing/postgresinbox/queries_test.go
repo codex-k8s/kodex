@@ -3,34 +3,59 @@ package postgresinbox
 import (
 	"context"
 	_ "embed"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 )
 
+// testSchemaContract embeds the authoritative DDL to verify marker and readiness coverage.
+// testSchemaContract встраивает исходную DDL для проверки маркера и полноты проверки готовности.
+//
 //go:embed schema.sql
 var testSchemaContract string
 
+// testReceiveSource embeds the receive path to guard the cursor-before-inbox lock order.
+// testReceiveSource встраивает путь приёма для контроля порядка блокировок cursor перед inbox.
+//
 //go:embed receive.go
 var testReceiveSource string
 
+// testClaimSource embeds the claim path to guard the cursor-before-inbox lock order.
+// testClaimSource встраивает путь claim для контроля порядка блокировок cursor перед inbox.
+//
 //go:embed claim.go
 var testClaimSource string
 
+// testApplySource embeds the apply path to guard the cursor-before-inbox lock order.
+// testApplySource встраивает путь применения для контроля порядка блокировок cursor перед inbox.
+//
 //go:embed apply.go
 var testApplySource string
 
+// testRecoverySource embeds recovery source to ensure it uses the shared lock-order helper.
+// testRecoverySource встраивает исходник восстановления для проверки общего helper порядка блокировок.
+//
 //go:embed recovery.go
 var testRecoverySource string
 
+// testMaintenanceSource embeds repair source to ensure it uses the shared lock-order helper.
+// testMaintenanceSource встраивает исходник исправления для проверки общего helper порядка блокировок.
+//
 //go:embed maintenance.go
 var testMaintenanceSource string
 
+// testRepositorySource embeds the shared helper so tests can check its cursor and inbox call order.
+// testRepositorySource встраивает общий helper, чтобы тесты проверяли порядок вызовов cursor и inbox.
+//
 //go:embed repository.go
 var testRepositorySource string
 
+// TestStrictNamedArgumentsMatchEveryProductionQuery checks that SQL placeholders match each exact call-site argument set.
+// TestStrictNamedArgumentsMatchEveryProductionQuery проверяет соответствие SQL-плейсхолдеров точному набору аргументов каждого вызова.
 func TestStrictNamedArgumentsMatchEveryProductionQuery(t *testing.T) {
 	t.Parallel()
 	queries, err := loadQueries()
@@ -87,6 +112,41 @@ func TestStrictNamedArgumentsMatchEveryProductionQuery(t *testing.T) {
 	}
 }
 
+// TestLoadQueriesBindsEachSQLToItsRepositoryField derives the documented SQL
+// name from every querySet field and rejects swapped or unbound SQL targets.
+// RU: TestLoadQueriesBindsEachSQLToItsRepositoryField выводит имя SQL из
+// каждого поля querySet и отклоняет переставленные либо пустые назначения.
+func TestLoadQueriesBindsEachSQLToItsRepositoryField(t *testing.T) {
+	t.Parallel()
+	queries, err := loadQueries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kind, values := reflect.TypeOf(queries), reflect.ValueOf(queries)
+	for index := range kind.NumField() {
+		field := kind.Field(index)
+		var name strings.Builder
+		seenBoundary := false
+		for _, character := range field.Name {
+			if unicode.IsUpper(character) {
+				if seenBoundary {
+					name.WriteByte('_')
+				} else {
+					name.WriteString("__")
+					seenBoundary = true
+				}
+				character = unicode.ToLower(character)
+			}
+			name.WriteRune(character)
+		}
+		if !seenBoundary || !strings.HasPrefix(values.Field(index).String(), "-- name: "+name.String()+" ") {
+			t.Errorf("repository query %s is bound to different SQL", field.Name)
+		}
+	}
+}
+
+// TestSchemaMarkerIsInstalledAfterCompleteContract ensures the version marker follows all required DDL objects and digest.
+// TestSchemaMarkerIsInstalledAfterCompleteContract проверяет, что маркер версии следует за всеми объектами DDL и дайджестом.
 func TestSchemaMarkerIsInstalledAfterCompleteContract(t *testing.T) {
 	t.Parallel()
 	marker := strings.LastIndex(testSchemaContract, "runtime_event_schema_versions")
@@ -99,6 +159,8 @@ func TestSchemaMarkerIsInstalledAfterCompleteContract(t *testing.T) {
 	}
 }
 
+// TestReadinessManifestCoversNamedConstraintsAndIndexes detects DDL objects missing from readiness inspection.
+// TestReadinessManifestCoversNamedConstraintsAndIndexes обнаруживает объекты DDL, пропущенные проверкой готовности.
 func TestReadinessManifestCoversNamedConstraintsAndIndexes(t *testing.T) {
 	t.Parallel()
 	required := requiredSchemaObjects()
@@ -116,6 +178,8 @@ func TestReadinessManifestCoversNamedConstraintsAndIndexes(t *testing.T) {
 	}
 }
 
+// TestReadinessQueriesKeepSecurityBoundaryClosed pins catalog, role, ACL, and search-path checks in embedded SQL.
+// TestReadinessQueriesKeepSecurityBoundaryClosed закрепляет проверки каталога, ролей, ACL и search path во встроенном SQL.
 func TestReadinessQueriesKeepSecurityBoundaryClosed(t *testing.T) {
 	t.Parallel()
 	pathFragments := []string{
@@ -169,6 +233,8 @@ func TestReadinessQueriesKeepSecurityBoundaryClosed(t *testing.T) {
 	}
 }
 
+// TestDeliveryOutcomeQueryDoesNotProjectSensitiveCoordinates guards the public projection and exact consumer scope.
+// TestDeliveryOutcomeQueryDoesNotProjectSensitiveCoordinates защищает публичную проекцию и точную область consumer.
 func TestDeliveryOutcomeQueryDoesNotProjectSensitiveCoordinates(t *testing.T) {
 	t.Parallel()
 	selectEnd := strings.Index(rawDeliveryReadOutcome, "\nFROM ")
@@ -192,6 +258,8 @@ func TestDeliveryOutcomeQueryDoesNotProjectSensitiveCoordinates(t *testing.T) {
 	}
 }
 
+// TestMutatingFlowsUseCanonicalCursorThenInboxLockOrder detects paths that could reverse transactional locks.
+// TestMutatingFlowsUseCanonicalCursorThenInboxLockOrder обнаруживает пути, способные изменить порядок транзакционных блокировок.
 func TestMutatingFlowsUseCanonicalCursorThenInboxLockOrder(t *testing.T) {
 	t.Parallel()
 	for name, source := range map[string]string{
@@ -228,6 +296,8 @@ func TestMutatingFlowsUseCanonicalCursorThenInboxLockOrder(t *testing.T) {
 	}
 }
 
+// manifestHasObjectSuffix finds a readiness object with the required category and exact trailing name.
+// manifestHasObjectSuffix находит объект готовности с нужной категорией и точным окончанием имени.
 func manifestHasObjectSuffix(
 	manifest map[string]string,
 	prefix string,
@@ -241,6 +311,8 @@ func manifestHasObjectSuffix(
 	return false
 }
 
+// named constructs a placeholder set so pgx can reject undeclared or missing SQL arguments in tests.
+// named создаёт набор плейсхолдеров для выявления лишних и отсутствующих аргументов SQL средствами pgx.
 func named(names ...string) pgx.StrictNamedArgs {
 	arguments := make(pgx.StrictNamedArgs, len(names))
 	for _, name := range names {
@@ -249,6 +321,8 @@ func named(names ...string) pgx.StrictNamedArgs {
 	return arguments
 }
 
+// eventNamed supplies the common persisted event fields, optionally including stale-event retention.
+// eventNamed задаёт общие поля сохраняемого события, при необходимости включая срок хранения устаревшего события.
 func eventNamed(includeRetention bool) pgx.StrictNamedArgs {
 	arguments := named(
 		"consumer_name",
@@ -273,6 +347,8 @@ func eventNamed(includeRetention bool) pgx.StrictNamedArgs {
 	return arguments
 }
 
+// withNames extends one test argument set with operation-specific SQL placeholders.
+// withNames дополняет тестовый набор аргументов плейсхолдерами конкретной операции SQL.
 func withNames(arguments pgx.StrictNamedArgs, names ...string) pgx.StrictNamedArgs {
 	for _, name := range names {
 		arguments[name] = nil

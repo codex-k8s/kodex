@@ -1,4 +1,5 @@
-// Package manifest определяет immutable wire format backup и restore drill.
+// Package manifest defines immutable backup, verification, restore intent and drill receipts.
+// RU: Package manifest определяет неизменяемые квитанции копирования, проверки, намерения восстановления и пробного восстановления.
 package manifest
 
 import (
@@ -12,17 +13,31 @@ import (
 )
 
 const (
-	SchemaVersion                = 2
+	// SchemaVersion is the accepted wire version for backup and restore receipts.
+	// RU: SchemaVersion задаёт принимаемую wire-версию квитанций копирования и восстановления.
+	SchemaVersion = 2
+	// BoundedCrashConsistencyModel names the bounded, non-transactional snapshot guarantee.
+	// RU: BoundedCrashConsistencyModel обозначает ограниченную, но не транзакционную согласованность снимка.
 	BoundedCrashConsistencyModel = "BOUNDED_CRASH_CONSISTENT"
 )
 
 var (
-	backupIDPattern      = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$`)
-	operationIDPattern   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+	// backupIDPattern binds receipts to a UTC timestamp and fixed random suffix.
+	// RU: backupIDPattern связывает квитанции с UTC-временем и фиксированным случайным суффиксом.
+	backupIDPattern = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$`)
+	// operationIDPattern restricts logical restore and approval identifiers.
+	// RU: operationIDPattern ограничивает логические идентификаторы восстановления и подтверждения.
+	operationIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+	// serverVersionPattern accepts the declared PostgreSQL major and minor version format.
+	// RU: serverVersionPattern допускает объявленный формат старшей и младшей версии PostgreSQL.
 	serverVersionPattern = regexp.MustCompile(`^(17|18)[0-9]{4}$`)
-	gooseVersionPattern  = regexp.MustCompile(`^goose:[0-9]+$`)
+	// gooseVersionPattern recognizes a numeric Goose migration version.
+	// RU: gooseVersionPattern распознаёт числовую версию миграции Goose.
+	gooseVersionPattern = regexp.MustCompile(`^goose:[0-9]+$`)
 )
 
+// Receipt identifies an exact versioned object and its size and digest for authoritative readback.
+// RU: Receipt определяет точную версию объекта, размер и дайджест для авторитетного перечитывания.
 type Receipt struct {
 	Bucket         string `json:"bucket"`
 	Key            string `json:"key"`
@@ -32,6 +47,8 @@ type Receipt struct {
 	SizeBytes      int64  `json:"sizeBytes"`
 }
 
+// Database records a source schema and the exact dump and schema object receipts within the consistency window.
+// RU: Database фиксирует исходную схему и точные квитанции объектов дампа и схемы в окне согласованности.
 type Database struct {
 	Name             string    `json:"name"`
 	Engine           string    `json:"engine"`
@@ -45,12 +62,16 @@ type Database struct {
 	Schema           Receipt   `json:"schema"`
 }
 
+// PlatformObject pairs one exact source object version with its backup copy receipt.
+// RU: PlatformObject связывает точную исходную версию объекта с квитанцией её резервной копии.
 type PlatformObject struct {
 	StoreName string  `json:"storeName"`
 	Source    Receipt `json:"source"`
 	Backup    Receipt `json:"backup"`
 }
 
+// Manifest is the completed backup snapshot with bounded timing, source counts and exact object receipts.
+// RU: Manifest описывает завершённый снимок с ограниченным окном времени, числом источников и точными квитанциями объектов.
 type Manifest struct {
 	SchemaVersion       int              `json:"schemaVersion"`
 	Kind                string           `json:"kind"`
@@ -69,6 +90,8 @@ type Manifest struct {
 	PlatformObjectCount int              `json:"platformObjectCount"`
 }
 
+// Verification attests to readback of one completed manifest and the expected number of objects.
+// RU: Verification удостоверяет перечитывание одного завершённого манифеста и ожидаемого числа объектов.
 type Verification struct {
 	SchemaVersion int       `json:"schemaVersion"`
 	Kind          string    `json:"kind"`
@@ -78,12 +101,16 @@ type Verification struct {
 	ObjectCount   int       `json:"objectCount"`
 }
 
+// RestoreDatabase records one restored database's schema version and target readback digest.
+// RU: RestoreDatabase фиксирует версию схемы и дайджест перечитывания одной восстановленной БД.
 type RestoreDatabase struct {
 	Name          string `json:"name"`
 	SchemaVersion string `json:"schemaVersion"`
 	TargetDigest  string `json:"targetDigest"`
 }
 
+// RestoreDrill records completed restore readback under one approval, request and target-set digest.
+// RU: RestoreDrill фиксирует завершённое пробное восстановление под одним подтверждением и дайджестами запроса и целей.
 type RestoreDrill struct {
 	SchemaVersion   int               `json:"schemaVersion"`
 	Kind            string            `json:"kind"`
@@ -97,6 +124,8 @@ type RestoreDrill struct {
 	Objects         []Receipt         `json:"objects"`
 }
 
+// RestoreIntent binds the immutable restore command to approval, backup, request and target set before effects.
+// RU: RestoreIntent связывает неизменяемую команду восстановления с подтверждением, копией, запросом и набором целей до побочных эффектов.
 type RestoreIntent struct {
 	SchemaVersion   int       `json:"schemaVersion"`
 	Kind            string    `json:"kind"`
@@ -108,6 +137,8 @@ type RestoreIntent struct {
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
+// Validate rejects incomplete manifests, invalid consistency timing, duplicate sources and non-versioned receipts.
+// RU: Validate отклоняет неполные манифесты, ошибочное окно согласованности, дубли источников и квитанции без версии.
 func (value Manifest) Validate() error {
 	if value.SchemaVersion != SchemaVersion || value.Kind != "kodex-backup" ||
 		!backupIDPattern.MatchString(value.BackupID) || value.State != "complete" ||
@@ -152,6 +183,8 @@ func (value Manifest) Validate() error {
 	return nil
 }
 
+// Validate checks that a verification receipt matches the exact manifest receipt and all expected objects.
+// RU: Validate проверяет соответствие квитанции проверки точному манифесту и всем ожидаемым объектам.
 func (value Verification) Validate(backup Manifest, receipt Receipt) error {
 	if value.SchemaVersion != SchemaVersion || value.Kind != "kodex-backup-verification" ||
 		value.BackupID != backup.BackupID || value.Manifest != receipt || value.VerifiedAt.IsZero() ||
@@ -162,6 +195,8 @@ func (value Verification) Validate(backup Manifest, receipt Receipt) error {
 	return nil
 }
 
+// Matches checks an immutable, well-formed restore intent against the approved command fields.
+// RU: Matches сверяет неизменяемое корректное намерение восстановления с полями подтверждённой команды.
 func (value RestoreIntent) Matches(expected RestoreIntent) bool {
 	return value.SchemaVersion == SchemaVersion && value.Kind == "kodex-restore-intent" &&
 		operationIDPattern.MatchString(value.RestoreID) && operationIDPattern.MatchString(value.ApprovalID) &&
@@ -172,6 +207,8 @@ func (value RestoreIntent) Matches(expected RestoreIntent) bool {
 		value.TargetSetSHA256 == expected.TargetSetSHA256
 }
 
+// Validate checks the drill's approval bindings, database schemas and object readback against the backup.
+// RU: Validate проверяет привязки подтверждения, схемы БД и перечитанные объекты пробного восстановления по копии.
 func (value RestoreDrill) Validate(backup Manifest) error {
 	if value.SchemaVersion != SchemaVersion || value.Kind != "kodex-restore-drill" ||
 		!operationIDPattern.MatchString(value.RestoreID) || !operationIDPattern.MatchString(value.ApprovalID) ||
@@ -203,11 +240,15 @@ func (value RestoreDrill) Validate(backup Manifest) error {
 	return nil
 }
 
+// Valid requires an exact S3 version, nonempty locator and ETag, valid SHA-256 and nonnegative size.
+// RU: Valid требует точную версию S3, непустые адрес и ETag, корректный SHA-256 и неотрицательный размер.
 func (receipt Receipt) Valid() bool {
 	return receipt.Bucket != "" && receipt.Key != "" && receipt.VersionID != "" && receipt.ETag != "" &&
 		validDigest(receipt.ChecksumSHA256) && receipt.SizeBytes >= 0
 }
 
+// Marshal encodes one immutable receipt and returns the SHA-256 digest of those exact JSON bytes.
+// RU: Marshal кодирует неизменяемую квитанцию и возвращает SHA-256 ровно этих JSON-байтов.
 func Marshal(value any) ([]byte, string, error) {
 	payload, err := json.Marshal(value)
 	if err != nil {
@@ -217,6 +258,8 @@ func Marshal(value any) ([]byte, string, error) {
 	return payload, "sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
+// RequestDigest hashes named approval, restore, backup and target fields so swapped positions cannot share a digest.
+// RU: RequestDigest хеширует именованные поля подтверждения, восстановления, копии и целей, различая переставленные значения.
 func RequestDigest(approvalID, restoreID, backupID, targetDigest string) string {
 	payload, _ := json.Marshal(struct {
 		ApprovalID   string `json:"approvalId"`
@@ -228,6 +271,8 @@ func RequestDigest(approvalID, restoreID, backupID, targetDigest string) string 
 	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
+// validDigest accepts only a full hexadecimal SHA-256 with its algorithm prefix.
+// RU: validDigest принимает лишь полный шестнадцатеричный SHA-256 с префиксом алгоритма.
 func validDigest(value string) bool {
 	if len(value) != len("sha256:")+64 || !strings.HasPrefix(value, "sha256:") {
 		return false
@@ -236,6 +281,8 @@ func validDigest(value string) bool {
 	return err == nil
 }
 
+// validSchemaVersion distinguishes a numeric Goose version from a nonempty declared version.
+// RU: validSchemaVersion отличает числовую версию Goose от непустой объявленной версии.
 func validSchemaVersion(kind, value string) bool {
 	if kind == "goose" {
 		return gooseVersionPattern.MatchString(value)

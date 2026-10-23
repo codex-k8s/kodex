@@ -16,9 +16,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Этот test-only профиль проверяет прежний producer/caster/new gateway.
-// Исторический UI/GIT published snapshot создаётся только в disposable БД;
-// UI/Git publication и старый email authorizer здесь не объявляются проверенными.
+// testLegacyManagedEmailProducer runs only as an overlay on the exact historical control-plane tree
+// and disposable database. It checks managed UI/GIT-origin claim production, mailbox READ HumanGate,
+// WRITE Allow and caster compatibility, with best-effort run cancellation. It does not prove real
+// UI/Git publication, the old email authorizer, SMTP delivery or current production compatibility.
+// testLegacyManagedEmailProducer работает лишь как overlay точного исторического control-plane tree
+// и disposable database. Она проверяет managed UI/GIT-origin claims, mailbox READ HumanGate,
+// WRITE Allow и caster compatibility с best-effort отменой run. Реальные UI/Git publication,
+// прежний email authorizer, SMTP delivery и текущая production compatibility этим не проверяются.
 func testLegacyManagedEmailProducer(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, connection entity.IntegrationConnection, config api.Configuration, origin string) {
 	t.Helper()
 	connection = testLegacyManagedEmailFixture(t, ctx, repository, owner, connection, origin)
@@ -138,6 +143,14 @@ func testLegacyManagedEmailProducer(t *testing.T, ctx context.Context, repositor
 	testLegacyEmailGatewayClaim(t, claim, "invocation")
 }
 
+// testLegacyManagedEmailFixture narrows a cloned historical definition, seeds its published managed
+// snapshot/binding transactionally in the caller's disposable database and reads the digest back.
+// Direct test-only SQL does not exercise or authorize production UI/Git publication; the caller must
+// never supply a live repository/database to this historical overlay helper.
+// testLegacyManagedEmailFixture сужает копию исторического definition, транзакционно создаёт published
+// managed snapshot/binding в disposable database caller и сверяет digest чтением.
+// Прямой test-only SQL не проверяет и не разрешает production UI/Git publication; live repository/
+// database этому историческому overlay helper передавать нельзя.
 func testLegacyManagedEmailFixture(t *testing.T, ctx context.Context, repository *Repository, owner value.Principal, connection entity.IntegrationConnection, origin string) entity.IntegrationConnection {
 	t.Helper()
 	resolved, err := repository.ResolvePrincipal(ctx, owner)

@@ -11,8 +11,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// maximumPlatformFrameBytes caps inbound platform wake JSON at 64 KiB before decoding; it is distinct from the outbound full-snapshot byte bound.
+// maximumPlatformFrameBytes ограничивает входной JSON сигнала платформы размером 64 КиБ до разбора; это отдельный предел от полного исходящего снимка.
 const maximumPlatformFrameBytes = 65536
 
+// platformEventNames is the closed event-name to resource-kind mapping for wake decoding; event payloads cannot invent a kind or authorize access to its resources.
+// platformEventNames — закрытая таблица event-name → resource-kind для разбора сигналов; payload события не может выдумать вид или разрешить доступ к ресурсам.
 var platformEventNames = map[string]string{
 	"PROJECT_CHANGED":                "PROJECT",
 	"AGENT_CHANGED":                  "AGENT",
@@ -35,6 +39,8 @@ var platformEventNames = map[string]string{
 	"RUN_CHANGED":                    "RUN",
 }
 
+// platformBusEnvelope models the existing stateless wake wire shape, including optional artifact-revision metadata. It is not a durable inbox record or a signed grant; decoding alone does not prove sender identity or resource eligibility.
+// platformBusEnvelope описывает существующий формат сигнала без устойчивого эффекта, включая необязательные данные версии файла. Это не запись durable inbox и не подписанный grant; разбор не доказывает отправителя или допустимость ресурса.
 type platformBusEnvelope struct {
 	EventID          string    `json:"eventId"`
 	EventName        string    `json:"eventName"`
@@ -59,6 +65,8 @@ type platformBusEnvelope struct {
 	} `json:"data"`
 }
 
+// platformSignal retains only sequence, known event/kind and optional project selector for a fresh owner read; it carries neither payload content nor authority.
+// platformSignal сохраняет только sequence, известные event/kind и необязательный селектор проекта для свежего чтения у владельца; содержимого payload и полномочий здесь нет.
 type platformSignal struct {
 	Sequence   int64
 	EventName  string
@@ -66,6 +74,8 @@ type platformSignal struct {
 	ProjectRef string
 }
 
+// decodePlatformSignal bounds bytes/UTF-8, rejects unknown fields and trailing JSON, then checks event-kind pairing, expected organization, positive versions/sequence, identifiers and optional revision digest shape. It is not a duplicate-key guard, signature verifier, complete metadata validator or permission check; the caller obtains the expected organization from the owner cursor.
+// decodePlatformSignal ограничивает байты и UTF-8, отклоняет неизвестные поля и лишний JSON, затем проверяет пару event-kind, ожидаемую организацию, положительные версии и sequence, идентификаторы и формат необязательного дайджеста версии. Это не защита от повторных ключей, проверка подписи, полная проверка metadata или прав; ожидаемую организацию вызывающий получает из курсора владельца.
 func decodePlatformSignal(payload []byte, organizationRef string) (platformSignal, bool) {
 	if len(payload) == 0 || len(payload) > maximumPlatformFrameBytes || !utf8.Valid(payload) {
 		return platformSignal{}, false

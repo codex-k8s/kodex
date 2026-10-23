@@ -21,23 +21,49 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// ErrMaterialization is the closed input-fetch sentinel used without upstream
+// response bodies, credential bytes or underlying private filesystem diagnostics.
+// ErrMaterialization — закрытый sentinel загрузки входов без upstream response body,
+// реквизитов и исходной закрытой filesystem-диагностики.
 var ErrMaterialization = errors.New("role image input materialization failed")
 
+// maximumManifestBytes caps the accepted OCI manifest bytes, independently of the
+// much larger context/package/tool blob limits; one extra byte detects overflow.
+// maximumManifestBytes ограничивает принятый OCI manifest отдельно от больших
+// context/package/tool blobs; один дополнительный байт обнаруживает превышение.
 const maximumManifestBytes = int64(1 << 20)
 
+// MaterializerConfig fixes the input repository and TLS SNI/CA/client-key paths
+// plus Docker auth file; it does not carry staging push authority or BuildKit auth.
+// MaterializerConfig фиксирует input repository и TLS SNI/CA/client-key пути
+// с Docker auth file; staging push authority и BuildKit auth здесь нет.
 type MaterializerConfig struct {
 	DockerConfig, Repository, TLSServerName string
 	CAFile, CertificateFile, PrivateKeyFile string
 }
 
-// Materializer является trusted fetch boundary. Он получает pull-only mTLS и
-// registry credential, пишет private emptyDir и не передаёт authority BuildKit.
+// Materializer retains a fixed input repository, private pull credentials and
+// authenticated HTTP client to populate a caller-owned isolated workspace. These
+// credentials stay in the fetch boundary, not in generated build context or BuildKit.
+// Materializer хранит фиксированный input repository, закрытые pull credentials
+// и HTTP-клиент для заполнения изолированного workspace вызывающего кода.
+// Реквизиты остаются в fetch boundary, не в build context либо BuildKit.
 type Materializer struct {
 	client                 *http.Client
 	repository, host, path string
 	username, password     string
 }
 
+// newMaterializer validates path/repository/SNI shape, loads the exact client
+// certificate/CA/auth and configures TLS1.3, no environment proxy or redirects,
+// disabled keep-alive, a TCP dial budget and a total HTTP timeout. CA/auth file size
+// checks occur after whole-file reads; this is not bounded-memory private-file I/O.
+// Construction does not contact the registry or prove its operation permissions.
+// newMaterializer проверяет форму path/repository/SNI, загружает точные client
+// certificate/CA/auth и настраивает TLS1.3, отсутствие env proxy/redirect, отключённый
+// keep-alive, TCP dial budget и общий HTTP timeout. Размер CA/auth проверяется после
+// полного чтения; это не bounded-memory private-file I/O. Registry и права операций
+// при создании не проверяются.
 func newMaterializer(config MaterializerConfig) (*Materializer, error) {
 	if !filepath.IsAbs(config.DockerConfig) || !filepath.IsAbs(config.CAFile) ||
 		!filepath.IsAbs(config.CertificateFile) || !filepath.IsAbs(config.PrivateKeyFile) ||
@@ -79,7 +105,12 @@ func newMaterializer(config MaterializerConfig) (*Materializer, error) {
 		username: username, password: password}, nil
 }
 
-// Check выполняет тот же authenticated mTLS registry path, что и materialization.
+// Check requires HTTP200 from authenticated GET /v2/ using the materialization
+// client. It checks that transport/root route, not manifest/blob digest integrity
+// or repository-level download eligibility; all other statuses fail closed.
+// Check требует HTTP200 от authenticated GET /v2/ клиентом materialization.
+// Проверяется transport/root route, не целостность manifest/blob и не допустимость
+// скачивания repository; прочие статусы дают закрытый отказ.
 func (materializer *Materializer) Check(ctx context.Context) error {
 	request, err := materializer.request(ctx, http.MethodGet, "https://"+materializer.host+"/v2/")
 	if err != nil {
@@ -96,6 +127,17 @@ func (materializer *Materializer) Check(ctx context.Context) error {
 	return nil
 }
 
+// Materialize checks input/root/source, downloads the exact archive, invokes the
+// caller's reporting hook before extraction, validates context/source bindings and
+// removes the archive before ordered package/tool downloads. Package digest prefix
+// handling and separate payload directories remain caller-visible; errors retain
+// their stage/reason. Workspace isolation and cleanup of partially written output
+// belong to the caller rather than an implicit rollback in this method.
+// Materialize проверяет input/root/source, скачивает точный архив, вызывает reporting
+// hook до извлечения, проверяет context/source и удаляет архив перед последовательной
+// загрузкой package/tool. Обработка prefix package digest и отдельные каталоги
+// сохранены; ошибки имеют прежние stage/reason. Изоляция workspace и очистка
+// partial output принадлежат вызывающему, не скрытому rollback этого метода.
 func (materializer *Materializer) Materialize(
 	ctx context.Context,
 	root string,
@@ -103,17 +145,17 @@ func (materializer *Materializer) Materialize(
 	beforeContextValidation func() error,
 ) (string, error) {
 	if input == nil {
-		return "INPUT_FETCH_REJECTED", rejectInput(inputReasonOwnerScope, ErrMaterialization)
+		return inputFetchRejectedDiagnostic, rejectInput(inputReasonOwnerScope, ErrMaterialization)
 	}
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
-		return "INPUT_FETCH_REJECTED", rejectInput(inputReasonWorkspaceCreate, ErrMaterialization)
+		return inputFetchRejectedDiagnostic, rejectInput(inputReasonWorkspaceCreate, ErrMaterialization)
 	}
 	if !materializer.allowedRef(input.GetContextRef()) {
-		return "INPUT_FETCH_REJECTED", rejectInput(inputReasonContextRef, ErrMaterialization)
+		return inputFetchRejectedDiagnostic, rejectInput(inputReasonContextRef, ErrMaterialization)
 	}
 	archive := filepath.Join(root, "context.tar")
 	if err := materializer.downloadExact(ctx, input.GetContextRef(), archive, input.GetContextSha256(), maximumContextBytes); err != nil {
-		return "INPUT_DIGEST_MISMATCH", err
+		return inputDigestMismatchDiagnostic, err
 	}
 	if beforeContextValidation == nil {
 		return "CONTEXT_REPORT_REJECTED", ErrMaterialization
@@ -133,32 +175,51 @@ func (materializer *Materializer) Materialize(
 	}
 	for _, item := range input.GetPackages() {
 		digest := strings.TrimPrefix(item.GetDigest(), "sha256:")
-		if !materializer.allowedRef(item.GetSourceRef()) {
-			return "INPUT_FETCH_REJECTED", rejectInput(inputReasonContextRef, ErrMaterialization)
-		}
-		if !plainSHA256(digest) {
-			return "INPUT_FETCH_REJECTED", rejectInput(inputReasonSHASchema, ErrMaterialization)
-		}
-		destination := filepath.Join(contextDirectory, ".kodex", "packages", digest)
-		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, digest, maximumFileBytes); err != nil {
-			return "INPUT_DIGEST_MISMATCH", err
+		if diagnostic, err := materializer.materializePinnedInput(ctx, item.GetSourceRef(), digest, filepath.Join(contextDirectory, ".kodex", "packages")); err != nil {
+			return diagnostic, err
 		}
 	}
 	for _, item := range input.GetTools() {
-		if !materializer.allowedRef(item.GetSourceRef()) {
-			return "INPUT_FETCH_REJECTED", rejectInput(inputReasonContextRef, ErrMaterialization)
-		}
-		if !plainSHA256(item.GetSha256()) {
-			return "INPUT_FETCH_REJECTED", rejectInput(inputReasonSHASchema, ErrMaterialization)
-		}
-		destination := filepath.Join(contextDirectory, ".kodex", "tools", item.GetSha256())
-		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, item.GetSha256(), maximumFileBytes); err != nil {
-			return "INPUT_DIGEST_MISMATCH", err
+		if diagnostic, err := materializer.materializePinnedInput(ctx, item.GetSourceRef(), item.GetSha256(), filepath.Join(contextDirectory, ".kodex", "tools")); err != nil {
+			return diagnostic, err
 		}
 	}
 	return "", nil
 }
 
+// materializePinnedInput preserves the common package/tool sequence: exact source
+// reference first, bare payload SHA second, then bounded download into the caller's
+// fixed directory under that digest. The context archive uses a separate larger
+// budget and callback/extraction path and deliberately does not use this helper.
+// materializePinnedInput сохраняет общий порядок package/tool: точный source ref,
+// затем payload SHA без префикса, затем ограниченное скачивание в заданный каталог
+// под именем хеша. Архив контекста имеет отдельные больший лимит и callback/extraction
+// и намеренно не проходит через этот helper.
+func (materializer *Materializer) materializePinnedInput(ctx context.Context, reference, expectedSHA256, directory string) (string, error) {
+	if !materializer.allowedRef(reference) {
+		return inputFetchRejectedDiagnostic, rejectInput(inputReasonContextRef, ErrMaterialization)
+	}
+	if !plainSHA256(expectedSHA256) {
+		return inputFetchRejectedDiagnostic, rejectInput(inputReasonSHASchema, ErrMaterialization)
+	}
+	if err := materializer.downloadExact(ctx, reference, filepath.Join(directory, expectedSHA256), expectedSHA256, maximumFileBytes); err != nil {
+		return inputDigestMismatchDiagnostic, err
+	}
+	return "", nil
+}
+
+// downloadExact verifies a bounded manifest against its reference digest and exact
+// one-layer media type/payload hash/size, then streams that blob through a bounded
+// file+hash writer. Only matching length/hash is renamed from exclusive 0600 .part;
+// mismatches/rename errors attempt partial cleanup. Rename may replace an existing
+// target and no file/directory fsync is performed, so this is not no-clobber or
+// crash-durable publication and still requires the caller's isolated destination.
+// downloadExact проверяет ограниченный manifest по reference digest и точным
+// one-layer media type/payload hash/size, затем пишет blob через ограниченный
+// file+hash writer. Лишь совпадение длины/хеша публикуется rename из exclusive 0600
+// .part; при mismatch/rename error предпринимается очистка. Rename может заменить
+// существующий target, file/directory fsync нет: это не no-clobber/crash-durable
+// публикация и по-прежнему требует изолированного destination вызывающего кода.
 func (materializer *Materializer) downloadExact(
 	ctx context.Context,
 	reference, destination, expectedSHA256 string,
@@ -237,6 +298,12 @@ func (materializer *Materializer) downloadExact(
 	return nil
 }
 
+// request builds the caller-context request with fixed User-Agent and retained
+// Basic auth. It does not validate target eligibility itself: callers must construct
+// the fixed registry URL before passing it, rather than accept arbitrary payload URLs.
+// request создаёт запрос с caller context, фиксированным User-Agent и сохранённым
+// Basic auth. Допустимость target здесь не проверяется: вызывающий обязан построить
+// фиксированный registry URL, а не передавать произвольный URL из payload.
 func (materializer *Materializer) request(ctx context.Context, method, target string) (*http.Request, error) {
 	request, err := http.NewRequestWithContext(ctx, method, target, nil)
 	if err != nil {
@@ -247,6 +314,10 @@ func (materializer *Materializer) request(ctx context.Context, method, target st
 	return request, nil
 }
 
+// referenceDigest returns the manifest digest only after allowedRef accepts the exact
+// repository URI; this digest is distinct from the single layer's expected payload hash.
+// referenceDigest возвращает manifest digest лишь после проверки точного repository
+// URI в allowedRef; это не ожидаемый payload hash единственного layer.
 func (materializer *Materializer) referenceDigest(reference string) (string, bool) {
 	if !materializer.allowedRef(reference) {
 		return "", false
@@ -255,6 +326,12 @@ func (materializer *Materializer) referenceDigest(reference string) (string, boo
 	return digest, true
 }
 
+// allowedRef requires oci://, the exact configured repository, a single @ with the
+// registered digest grammar and no query/fragment/whitespace. It is lexical input
+// validation, not DNS/IP authorization, registry authentication or proof of ownership.
+// allowedRef требует oci://, точный repository, единственный @ с установленной
+// грамматикой digest и отсутствие query/fragment/whitespace. Это лексическая
+// проверка, не DNS/IP authorization, аутентификация registry и не proof владения.
 func (materializer *Materializer) allowedRef(reference string) bool {
 	value := strings.TrimPrefix(reference, "oci://")
 	return strings.HasPrefix(reference, "oci://") && strings.HasPrefix(value, materializer.repository+"@") &&
@@ -262,6 +339,14 @@ func (materializer *Materializer) allowedRef(reference string) bool {
 		!strings.ContainsAny(value, "?# \r\n\t")
 }
 
+// readRegistryCredential reads a Docker config with exactly one auth entry for host,
+// rejects external credential helpers and decodes nonempty Basic user/password without
+// CR/LF. Whole-file and base64 decoding happen before their size checks, and ordinary
+// JSON unmarshal is not a strict duplicate/unknown-field or private-file validator.
+// readRegistryCredential читает Docker config с одной auth-записью точного host,
+// запрещает внешние credential helpers и получает непустые Basic user/password без
+// CR/LF. Полное чтение/base64 decode предшествуют лимитам; обычный JSON unmarshal
+// не является strict duplicate/unknown-field и private-file проверкой.
 func readRegistryCredential(path, host string) (string, string, error) {
 	value, err := os.ReadFile(path)
 	if err != nil || len(value) == 0 || len(value) > 1<<20 {
@@ -292,12 +377,22 @@ func readRegistryCredential(path, host string) (string, string, error) {
 	return username, password, nil
 }
 
+// boundedWriter tracks accepted byte counts and remaining blob budget around the
+// file+hash writer, flagging an oversized chunk without buffering or truncating it.
+// boundedWriter учитывает принятые байты и остаток blob-бюджета вокруг file+hash
+// writer, отмечая oversized chunk без буферизации либо усечения.
 type boundedWriter struct {
 	writer             io.Writer
 	remaining, written int64
 	exceeded           bool
 }
 
+// Write rejects a chunk larger than the remaining budget before any write; otherwise
+// it delegates once, updates counters by actual bytes and preserves its error/short
+// write result without retry, leaving final integrity checks to downloadExact.
+// Write отклоняет chunk сверх остатка до записи; иначе один раз вызывает writer,
+// обновляет счётчики по фактическим байтам и сохраняет error/short write без повтора.
+// Итоговую целостность проверяет downloadExact.
 func (writer *boundedWriter) Write(value []byte) (int, error) {
 	if int64(len(value)) > writer.remaining {
 		writer.exceeded = true
@@ -309,14 +404,25 @@ func (writer *boundedWriter) Write(value []byte) (int, error) {
 	return n, err
 }
 
+// sha256Hex returns the lowercase bare SHA-256 of the supplied bytes without
+// normalization or an OCI algorithm prefix, for exact manifest/payload comparisons.
+// sha256Hex возвращает строчный SHA-256 точных байтов без нормализации и OCI-prefix
+// для точного сравнения manifest/payload.
 func sha256Hex(value []byte) string {
 	digest := sha256.Sum256(value)
 	return hex.EncodeToString(digest[:])
 }
 
-// netDialer is kept private so callers cannot replace the destination path.
+// netDialer carries only TCP connection timing; it does not independently enforce
+// repository, host or IP allowlists and relies on the caller's fixed request target.
+// netDialer хранит лишь TCP timing, не проверяет repository/host/IP allowlist
+// самостоятельно и полагается на фиксированный request target вызывающего кода.
 type netDialer struct{ timeout time.Duration }
 
+// DialContext accepts nonempty TCP destinations with the configured connect timeout
+// and disabled keep-alive, preserving caller cancellation without a fallback network.
+// DialContext принимает непустой TCP destination с заданным connect timeout
+// и отключённым keep-alive, сохраняя caller cancellation без fallback-сети.
 func (dialer *netDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	if network != "tcp" || address == "" {
 		return nil, ErrMaterialization

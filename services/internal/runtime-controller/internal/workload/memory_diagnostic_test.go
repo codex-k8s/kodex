@@ -6,6 +6,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// TestTerminalContainerMemoryDiagnosticUsesCurrentKnownContainerReason checks
+// OOMKilled only on current states of known init/runtime containers. Exit137,
+// arbitrary reasons, unknown containers and previous OOM states cannot invent
+// a current memory diagnosis or expose private names through a closed code.
+// TestTerminalContainerMemoryDiagnosticUsesCurrentKnownContainerReason проверяет
+// OOMKilled лишь в текущем состоянии известных init/runtime контейнеров. Exit137,
+// произвольные reasons, чужие контейнеры и прошлый OOM не создают текущий диагноз
+// памяти и не раскрывают закрытые имена через диагностический код.
 func TestTerminalContainerMemoryDiagnosticUsesCurrentKnownContainerReason(t *testing.T) {
 	terminated := func(name, reason string, exit int32) corev1.ContainerStatus {
 		return corev1.ContainerStatus{Name: name, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: reason, ExitCode: exit}}}

@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestSystemAssistantSelfGrantCatalogAcrossScreenContexts checks four unrelated screens still allow the system helper's own grant proposal through the owner draft RPC.
+// Changing the same fixture to PROJECT scope removes both advertised and requested SYSTEM grant schemas.
+// TestSystemAssistantSelfGrantCatalogAcrossScreenContexts проверяет, что четыре посторонних экрана не мешают предложению собственного доступа системного помощника через RPC черновика владельца.
+// При переключении той же тестовой конфигурации на проектную область системная схема исчезает и из объявления, и из запрошенного каталога.
 func TestSystemAssistantSelfGrantCatalogAcrossScreenContexts(t *testing.T) {
 	const operation = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
 	for _, screen := range []string{"PROJECT", "AGENT", "ENVIRONMENT", "INTEGRATION_CONNECTION"} {

@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestSkillCallbackUsesExactExecutionAndContextPins checks exact skill query and execution headers, successful bytes, denied/corrupt/size/digest failures and pre-transport rejection of an unbound file revision.
+// TestSkillCallbackUsesExactExecutionAndContextPins проверяет точные skill-query и заголовки исполнения, успешные байты, отказы доступа/повреждения/размера/дайджеста и локальный отказ незакреплённой ревизии файла.
 func TestSkillCallbackUsesExactExecutionAndContextPins(t *testing.T) {
 	for _, mode := range []string{"positive", "denied", "wrong digest", "wrong size", "corrupt body"} {
 		t.Run(mode, func(t *testing.T) {

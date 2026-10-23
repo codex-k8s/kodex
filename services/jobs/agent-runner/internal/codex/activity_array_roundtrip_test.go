@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestProtocolEmptySafeArraysRoundTripThroughBoundBroker sends actual projected tool revisions through
+// writer and bound reader, requiring empty JSON arrays rather than null and no private commands/diffs/paths.
+// It covers completed, failed and declined tools; no command or provider is executed.
+// TestProtocolEmptySafeArraysRoundTripThroughBoundBroker передаёт настоящие проекции ревизий через writer
+// и привязанный reader, требуя пустые JSON-массивы вместо null и сокрытие команд, diff и закрытых путей.
+// Проверяются завершённые, ошибочные и отклонённые инструменты без выполнения команд или модели.
 func TestProtocolEmptySafeArraysRoundTripThroughBoundBroker(t *testing.T) {
 	for _, scenario := range []struct {
 		name string
@@ -84,6 +90,10 @@ func TestProtocolEmptySafeArraysRoundTripThroughBoundBroker(t *testing.T) {
 	}
 }
 
+// TestProtocolEmptyArrayNormalizationKeepsFileChangeGuards ensures array normalization cannot admit
+// unknown change kinds, null paths or unknown fields into public activity publication.
+// TestProtocolEmptyArrayNormalizationKeepsFileChangeGuards проверяет, что нормализация массивов не допускает
+// неизвестные виды изменений, null-пути и лишние поля до публикации публичного события.
 func TestProtocolEmptyArrayNormalizationKeepsFileChangeGuards(t *testing.T) {
 	for _, item := range []string{
 		`{"changes":[{"diff":"PRIVATE_SENTINEL","kind":{"type":"unknown"},"path":"/outside"}],"id":"invalid-file","status":"completed","type":"fileChange"}`,

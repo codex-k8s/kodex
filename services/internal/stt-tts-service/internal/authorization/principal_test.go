@@ -22,17 +22,26 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// principalVerifier returns a supplied synthetic verified context through the real interceptor so tests exercise package-private principal installation.
+// RU: principalVerifier возвращает заданный синтетический проверенный context через настоящий перехватчик для проверки приватной установки субъекта.
 type principalVerifier struct {
 	verified *internalrpcauthorityv1.VerifiedAuthorizationContext
 }
 
+// VerifyAuthorizationContext exposes the fixture context without performing cryptographic verification or contacting an authority process.
+// RU: VerifyAuthorizationContext возвращает context оснастки без криптографической проверки или обращения к authority процессу.
 func (verifier principalVerifier) VerifyAuthorizationContext(context.Context, *internalrpcauthorityv1.VerifyAuthorizationContextRequest, ...grpc.CallOption) (*internalrpcauthorityv1.VerifyAuthorizationContextResponse, error) {
 	return &internalrpcauthorityv1.VerifyAuthorizationContextResponse{Context: verifier.verified}, nil
 }
+
+// CheckReadiness keeps the synthetic verifier ready so principal-mapping tests are independent of local sidecar startup.
+// RU: CheckReadiness сохраняет готовность синтетического verifier, отделяя тесты преобразования субъекта от startup локального sidecar.
 func (principalVerifier) CheckReadiness(context.Context, *internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest, ...grpc.CallOption) (*internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse, error) {
 	return &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse{Ready: true}, nil
 }
 
+// TestPrincipalUsesAuthoritySourceRevision verifies that domain authority preserves source generation and identity provenance rather than policy generation.
+// RU: TestPrincipalUsesAuthoritySourceRevision проверяет сохранение поколения source и происхождения идентичности, а не поколения policy в доменных полномочиях.
 func TestPrincipalUsesAuthoritySourceRevision(t *testing.T) {
 	verified := validVerifiedAuthorizationContext()
 	principal, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_Transcribe_FullMethodName)
@@ -45,6 +54,8 @@ func TestPrincipalUsesAuthoritySourceRevision(t *testing.T) {
 	}
 }
 
+// TestPrincipalRejectsInvalidSourceRevision rejects absent or out-of-range source generations in an otherwise installed verified context.
+// RU: TestPrincipalRejectsInvalidSourceRevision отклоняет отсутствующее или чрезмерное поколение source в остальном установленном проверенном context.
 func TestPrincipalRejectsInvalidSourceRevision(t *testing.T) {
 	for _, revision := range []uint64{0, maximumAuthorityRevision + 1} {
 		verified := validVerifiedAuthorizationContext()
@@ -55,6 +66,8 @@ func TestPrincipalRejectsInvalidSourceRevision(t *testing.T) {
 	}
 }
 
+// TestPrincipalRejectsMissingIdentityProvenance rejects a project identifier that lacks its authoritative provenance tuple.
+// RU: TestPrincipalRejectsMissingIdentityProvenance отклоняет идентификатор проекта без связки авторитетного происхождения.
 func TestPrincipalRejectsMissingIdentityProvenance(t *testing.T) {
 	verified := validVerifiedAuthorizationContext()
 	verified.Authority.Project.Provenance = nil
@@ -63,6 +76,8 @@ func TestPrincipalRejectsMissingIdentityProvenance(t *testing.T) {
 	}
 }
 
+// validVerifiedAuthorizationContext constructs fresh synthetic streamed authority with distinct source/policy revisions and full actor/tenant/project provenance.
+// RU: validVerifiedAuthorizationContext создаёт новые синтетические потоковые полномочия с разными source/policy ревизиями и полным происхождением actor/tenant/project.
 func validVerifiedAuthorizationContext() *internalrpcauthorityv1.VerifiedAuthorizationContext {
 	digest := strings.Repeat("a", 64)
 	identity := func(id string) *internalrpcauthorityv1.AuthorityIdentity {
@@ -83,6 +98,8 @@ func validVerifiedAuthorizationContext() *internalrpcauthorityv1.VerifiedAuthori
 	}
 }
 
+// TestPrincipalExactPermissionMapping accepts only the registered transport permission and maps it to the domain grant without wildcard or similar-name fallback.
+// RU: TestPrincipalExactPermissionMapping принимает только зарегистрированное transport permission и переводит его в доменный grant без wildcard или похожих имён.
 func TestPrincipalExactPermissionMapping(t *testing.T) {
 	for _, permission := range []string{value.TransportPermissionTranscribe, value.PermissionTranscribe, value.ConfigurationCapability, "speech.transcribe", "platform.stt.*", ""} {
 		verified := validVerifiedAuthorizationContext()
@@ -98,6 +115,8 @@ func TestPrincipalExactPermissionMapping(t *testing.T) {
 	}
 }
 
+// TestPrincipalOrganizationWithoutProject preserves an organization-scoped transcription principal without inventing project identity or provenance.
+// RU: TestPrincipalOrganizationWithoutProject сохраняет субъекта распознавания уровня организации без выдуманной идентичности или provenance проекта.
 func TestPrincipalOrganizationWithoutProject(t *testing.T) {
 	verified := validVerifiedAuthorizationContext()
 	verified.Authority.Project = nil
@@ -107,6 +126,10 @@ func TestPrincipalOrganizationWithoutProject(t *testing.T) {
 	}
 }
 
+// verifiedPrincipalContext supplies synthetic TLS peer metadata and a fake verifier to the real boundary interceptor, capturing the accepted handler context.
+// RU: verifiedPrincipalContext передаёт синтетические TLS peer metadata и фиктивный verifier настоящему boundary-перехватчику, сохраняя принятый context handler.
+// It tests mapping rather than a live certificate handshake or token signature.
+// RU: Оснастка проверяет преобразование, а не живой handshake сертификата или подпись токена.
 func verifiedPrincipalContext(t *testing.T, verified *internalrpcauthorityv1.VerifiedAuthorizationContext) context.Context {
 	t.Helper()
 	spiffeID, err := url.Parse("spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway")
@@ -134,6 +157,8 @@ func verifiedPrincipalContext(t *testing.T, verified *internalrpcauthorityv1.Ver
 	return authorized
 }
 
+// TestCatalogPrincipalUsesIndependentOrganizationPermission verifies catalog authority retains organization provenance and cannot be reused for transcription.
+// RU: TestCatalogPrincipalUsesIndependentOrganizationPermission проверяет сохранение происхождения организации полномочиями каталога и невозможность их повторного использования для распознавания.
 func TestCatalogPrincipalUsesIndependentOrganizationPermission(t *testing.T) {
 	verified := validCatalogAuthorizationContext()
 	principal, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_GetModelCatalog_FullMethodName)
@@ -146,6 +171,8 @@ func TestCatalogPrincipalUsesIndependentOrganizationPermission(t *testing.T) {
 	}
 }
 
+// validCatalogAuthorizationContext specializes the streamed fixture into an organization-only unary catalog request with its exact empty-input digest.
+// RU: validCatalogAuthorizationContext превращает потоковую оснастку в unary запрос каталога только организации с точным дайджестом пустого ввода.
 func validCatalogAuthorizationContext() *internalrpcauthorityv1.VerifiedAuthorizationContext {
 	verified := validVerifiedAuthorizationContext()
 	verified.FullMethod = sttv1.SpeechToTextService_GetModelCatalog_FullMethodName
@@ -157,6 +184,8 @@ func validCatalogAuthorizationContext() *internalrpcauthorityv1.VerifiedAuthoriz
 	return verified
 }
 
+// TestCatalogPrincipalRejectsAuthoritySubstitution rejects changed operation, scope, permission, digest, binding mode, provenance or workload and absence of verified context.
+// RU: TestCatalogPrincipalRejectsAuthoritySubstitution отклоняет подмену операции, области, permission, дайджеста, binding mode, provenance или workload и отсутствие проверенного context.
 func TestCatalogPrincipalRejectsAuthoritySubstitution(t *testing.T) {
 	for name, mutate := range map[string]func(*internalrpcauthorityv1.VerifiedAuthorizationContext){
 		"speech permission": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) {

@@ -8,6 +8,14 @@ import (
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
 
+// ObserveModelCatalog ties observation to service/caller lifetime, reads the exact owner-selected
+// credential once and clears that copy, then validates observation time and
+// method/source/failure/capability consistency. It does not grant account access or refresh tokens;
+// invalid or partial results become safe metadata-only failures.
+// ObserveModelCatalog связывает наблюдение со service/caller lifetime, один раз читает точный выбранный
+// владельцем credential и обнуляет копию, затем проверяет время и согласованность
+// method/source/failure/capabilities. Доступ account и token refresh не выдаются; неверный или частичный
+// результат становится безопасным отказом только с metadata.
 func (service *Service) ObserveModelCatalog(ctx context.Context, accountRef string, descriptor kubernetesstore.ProviderCredentialDescriptor, method string) (ModelCatalog, error) {
 	if ctx == nil || service == nil || service.lifecycle.Err() != nil || ctx.Err() != nil {
 		return ModelCatalog{}, errors.New("provider model catalog lifecycle is unavailable")

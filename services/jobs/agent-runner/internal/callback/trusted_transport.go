@@ -12,8 +12,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
-// TransportForInput используется одинаково callback client и MCP readiness.
-// Plaintext разрешён только явно выбранному exact Pod endpoint, без proxy.
+// TransportForInput selects exact TLS for an empty profile; only a validated trusted-cluster profile permits plaintext, with no proxy and dialing restricted to the exact callback host/port over tcp. Ticket and execution checks remain required upstream.
+// TransportForInput выбирает точный TLS при пустом профиле; только проверенный trusted-cluster разрешает открытый транспорт без прокси и dial строго к callback host/port по tcp. Ticket и проверки исполнения по-прежнему обязательны на сервере.
 func TransportForInput(input model.Input) (*http.Transport, error) {
 	if input.CallbackTLS.Profile == "" {
 		return exactTransport(input.CallbackTLS)

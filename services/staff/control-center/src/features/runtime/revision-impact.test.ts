@@ -284,6 +284,54 @@ describe("revision impact adapters", () => {
     ).rejects.toThrow("receipt");
     expect(client.post).toHaveBeenCalledTimes(1);
   });
+  it("сверяет binding с точной целевой ревизией в обоих путях", async () => {
+    client.post.mockResolvedValueOnce(
+      response({ bindings: [{ ...binding, digest: "other" }] }),
+    );
+    await expect(
+      applyEnvironmentRebind(environment, [consumer], "org_synthetic"),
+    ).rejects.toThrow("receipt");
+
+    const selection = {
+      scopeKind: "PROJECT" as const,
+      organizationRef: "org_synthetic",
+      projectRef: "project_synthetic",
+      environmentRef: "environment",
+      expectedEnvironmentVersion: 19,
+      sourceVersionRef: "old-version",
+      consumers: [consumer],
+    };
+    const published = {
+      environmentRef: "environment",
+      environmentVersion: 20,
+      versionRef: "published-version",
+      digest: "b".repeat(64),
+      scopeKind: "PROJECT" as const,
+      organizationRef: "org_synthetic",
+      projectRef: "project_synthetic",
+    };
+    const rebound = {
+      ...binding,
+      versionRef: published.versionRef,
+      digest: published.digest,
+    };
+    client.post.mockResolvedValueOnce(
+      response({ environments: [published], bindings: [rebound] }),
+    );
+    await expect(
+      applySecretRebind(secret, [selection], "org_synthetic"),
+    ).resolves.toMatchObject({ bindings: [rebound] });
+    client.post.mockResolvedValueOnce(
+      response({
+        environments: [published],
+        bindings: [{ ...rebound, versionRef: "other" }],
+      }),
+    );
+    await expect(
+      applySecretRebind(secret, [selection], "org_synthetic"),
+    ).rejects.toThrow("receipt");
+    expect(client.post).toHaveBeenCalledTimes(3);
+  });
   it("проверяет scope и повтор курсора при чтении", async () => {
     client.get.mockResolvedValue(
       response({ ...environment, environmentRef: "other" }),

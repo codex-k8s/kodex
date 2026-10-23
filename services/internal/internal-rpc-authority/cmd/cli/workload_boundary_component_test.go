@@ -14,8 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Проверяется настоящий LOGIN, а не SET SESSION AUTHORIZATION администратора.
-// Порт принадлежит одноразовому контейнеру публичной оснастки.
+// workloadBoundaryConnection opens a fresh real LOGIN session to the fixture's fixed loopback database and optionally selects one sanitized capability role. Test cleanup closes the connection using an independent background context; this is disposable plaintext test transport, not the production TLS path or administrator SET SESSION AUTHORIZATION impersonation.
+// workloadBoundaryConnection открывает новую реальную LOGIN-сессию к фиксированной loopback-БД оснастки и при необходимости выбирает одну экранированную роль возможности. Очистка теста закрывает соединение независимым фоновым контекстом; это одноразовый открытый тестовый транспорт, а не промышленный TLS-путь или имитация через SET SESSION AUTHORIZATION администратора.
 func workloadBoundaryConnection(t *testing.T, ctx context.Context, port uint64, principal, capability string) *pgx.Conn {
 	t.Helper()
 	config, err := pgx.ParseConfig(fmt.Sprintf("host=127.0.0.1 port=%d dbname=internal_rpc_authority user=%s sslmode=disable", port, principal))
@@ -33,6 +33,8 @@ func workloadBoundaryConnection(t *testing.T, ctx context.Context, port uint64, 
 	return connection
 }
 
+// boundaryExec executes one disposable boundary statement with parameters and returns its command tag. On failure it reports only SQLSTATE or a fixed transport category, avoiding PostgreSQL messages that can contain parameter values; it does not infer success from a rejected statement.
+// boundaryExec выполняет один одноразовый запрос границы с параметрами и возвращает command tag. При ошибке выводятся только SQLSTATE либо фиксированная транспортная категория без PostgreSQL-сообщений с возможными значениями параметров; отказ запроса не считается успехом.
 func boundaryExec(t *testing.T, ctx context.Context, connection *pgx.Conn, query string, args ...any) pgconn.CommandTag {
 	t.Helper()
 	tag, err := connection.Exec(ctx, query, args...)
@@ -47,6 +49,8 @@ func boundaryExec(t *testing.T, ctx context.Context, connection *pgx.Conn, query
 	return tag
 }
 
+// boundaryDenied requires the disposable statement to fail specifically with PostgreSQL insufficient_privilege SQLSTATE 42501. A different database/transport error or successful execution fails the test instead of being accepted as an authorization refusal.
+// boundaryDenied требует отказ одноразового запроса именно с PostgreSQL insufficient_privilege SQLSTATE 42501. Иная ошибка БД или транспорта и успешное исполнение проваливают тест, а не считаются отказом авторизации.
 func boundaryDenied(t *testing.T, ctx context.Context, connection *pgx.Conn, query string, args ...any) {
 	t.Helper()
 	_, err := connection.Exec(ctx, query, args...)
@@ -56,6 +60,8 @@ func boundaryDenied(t *testing.T, ctx context.Context, connection *pgx.Conn, que
 	}
 }
 
+// testWorkloadDatabaseBoundary checks real issuer/verifier LOGIN identities, RLS isolation, proof/replay/snapshot ownership, monotonic watermarks and the inability to substitute a caller GUC, disable guards or alter foreign rows. It invokes canonical SQL and published-signer negatives, then verifies retirement waits for an active transaction, removes live-session visibility and reaches NOLOGIN, role revocation and backend termination. Admin fixture writes simulate elapsed proof retention; the helper requires the disposable database and does not alter production credentials.
+// testWorkloadDatabaseBoundary проверяет реальные LOGIN-идентичности issuer и verifier, изоляцию RLS, владение proof, replay и snapshot, монотонные watermarks и невозможность подставить GUC вызывающего, отключить защиты или изменить чужие строки. Вызывает канонический SQL и отрицательные проверки опубликованного подписанта, затем проверяет ожидание активной транзакции при выводе, потерю видимости живой сессией и достижение NOLOGIN, отзыва роли и завершения backend. Администраторские записи оснастки моделируют истёкший retention proof; помощник требует одноразовую БД и не меняет промышленные реквизиты.
 func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 	defer cancel()
@@ -92,6 +98,8 @@ func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 		})
 	}
 
+	// proofInsert is the parameterized disposable proof-reservation fixture used to distinguish own, foreign and retired LOGIN behavior; the SQL text does not itself confer write authority.
+	// proofInsert — параметризованный одноразовый эталон резервирования proof для различения собственного, чужого и выведенного LOGIN; сам SQL-текст не даёт полномочий записи.
 	const proofInsert = `INSERT INTO internal_rpc_authority.authority_proof_reservations
 		(caller_workload_id, jti, canonical_digest_sha256, expires_at)
 		VALUES ($1, $2, repeat('a', 64), clock_timestamp() + interval '1 minute')`
@@ -125,6 +133,8 @@ func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 	}
 	boundaryExec(t, ctx, issuer, `UPDATE internal_rpc_authority.authority_proof_watermarks SET proof_revision = 3, canonical_payload_digest_sha256 = repeat('b', 64)`)
 
+	// replayInsert fixes one synthetic replay identity while varying the target workload, so role/RLS refusals are compared without changing the rest of the insert.
+	// replayInsert фиксирует одну синтетическую идентичность replay при изменяемом target workload, позволяя сравнить отказы роли и RLS без изменения остальной вставки.
 	const replayInsert = `INSERT INTO internal_rpc_authority.authority_replay_reservations
 		(target_workload_id, jti, canonical_digest_sha256, expires_at)
 		VALUES ($1, '10930000-0000-4000-8000-000000000004', repeat('c', 64), clock_timestamp() + interval '1 minute')`
@@ -142,6 +152,8 @@ func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 		t.Fatal("same-workload continuation parent unavailable")
 	}
 
+	// snapshotInsert binds a synthetic watermark to exact workload, revision, digest and receipt parameters; the disposable owner's seeded history supplies the corresponding joins, not a production signed publication.
+	// snapshotInsert связывает синтетический watermark с точными параметрами workload, ревизии, дайджеста и квитанции; соответствующие соединения обеспечивает созданная одноразовым владельцем история, а не промышленная подписанная публикация.
 	const snapshotInsert = `INSERT INTO internal_rpc_authority.authority_snapshot_watermarks
 		(target_workload_id, source_revision, source_digest_sha256, key_set_revision, policy_revision, signer_generation, served_at, readback_attestation_receipt_id)
 		VALUES ($1, $2, $3, 1, 1, 1, clock_timestamp(), $4)`
@@ -199,6 +211,8 @@ func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 	}
 }
 
+// testCanonicalBoundaryQueries loads the actual named authority SQL and checks same-workload proof reservation, replay refusal, out-of-order proof acceptance, exact snapshot activation, context replay and continuation access to its parent. It relies on synthetic owner history/receipts already seeded by the disposable migration fixture; JWS verification is outside this SQL helper.
+// testCanonicalBoundaryQueries загружает реальные именованные SQL authority и проверяет резервирование proof своего workload, отказ replay, допустимый proof не по порядку, точную активацию снимка, replay контекста и доступ продолжения к родителю. Используются синтетические история владельца и квитанции, уже созданные одноразовой миграционной оснасткой; проверка JWS находится за пределами SQL-помощника.
 func testCanonicalBoundaryQueries(t *testing.T, ctx context.Context, issuer, verifier *pgx.Conn) {
 	t.Helper()
 	read := func(name string) string {
@@ -258,6 +272,8 @@ func testCanonicalBoundaryQueries(t *testing.T, ctx context.Context, issuer, ver
 	}
 }
 
+// seedBoundaryAttestations inserts two synthetic owner snapshots, matching rotation intents and three pinned readback intent/challenge/receipt chains into the disposable database, adapting only to the schema's protocol-version column. Public snapshot payloads are synthetic rather than cryptographically verified; the fixtures retain real SQL joins and do not replace production validation functions.
+// seedBoundaryAttestations вставляет два синтетических снимка владельца, соответствующие намерения ротации и три закреплённые цепочки readback intent, challenge и receipt в одноразовую БД, учитывая только наличие столбца protocol-version в схеме. Публичные payload снимков синтетические и не проверяются криптографически; эталоны сохраняют реальные SQL-соединения и не заменяют промышленные функции проверки.
 func seedBoundaryAttestations(t *testing.T, ctx context.Context, admin *pgx.Conn) {
 	t.Helper()
 	// Синтетический owner snapshot и независимые receipts. Не заменяем
@@ -323,8 +339,8 @@ func seedBoundaryAttestations(t *testing.T, ctx context.Context, admin *pgx.Conn
 	}
 }
 
-// Публичный payload синтетической owner publication; криптографический loader
-// проверяется отдельно. Этот fixture не заменяет receipt/history JOIN заглушкой.
+// boundarySnapshotJWS builds a syntactically shaped synthetic compact JWS with an encoded public owner payload and placeholder header/signature, optionally introducing one of eight signer/JSON defects. Manifest signer generation intentionally differs from workload key generation; this fixture targets SQL payload eligibility, not signature verification or trusted publication.
+// boundarySnapshotJWS создаёт компактный синтетический JWS подходящей формы с закодированным публичным payload владельца и заглушками заголовка и подписи, при необходимости вводя один из восьми дефектов подписанта или JSON. Поколение подписанта manifest намеренно отличается от поколения ключа workload; эталон проверяет допустимость SQL-payload, а не подпись или доверенную публикацию.
 func boundarySnapshotJWS(t *testing.T, variant string, revision int64) string {
 	t.Helper()
 	key := map[string]any{"status": "CURRENT", "purpose": "AUTHORIZATION_CONTEXT", "generation": 1}
@@ -360,6 +376,8 @@ func boundarySnapshotJWS(t *testing.T, variant string, revision int64) string {
 	return "synthetic." + base64.RawURLEncoding.EncodeToString(payload) + ".synthetic"
 }
 
+// testSnapshotGenerationUpgradeRejection seeds the disposable boundary state before the signer-boundary forward migration and requires rejection of workload generation one when the old guard incorrectly binds it to independent manifest generation seven. The top-level migration test subsequently upgrades the same fixture; no applied migration bytes are rewritten.
+// testSnapshotGenerationUpgradeRejection создаёт одноразовое состояние границы до прямой миграции границы подписанта и требует отказ поколению workload один, когда старая защита неверно связывает его с независимым поколением manifest семь. Затем верхний миграционный тест обновляет тот же эталон; байты применённых миграций не переписываются.
 func testSnapshotGenerationUpgradeRejection(t *testing.T, port uint64) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
@@ -374,6 +392,8 @@ func testSnapshotGenerationUpgradeRejection(t *testing.T, port uint64) {
 		VALUES ('control-plane', 1093001, repeat('a',64), 1, 1, 1, clock_timestamp(), '10930000-0000-4000-8000-000000000021')`)
 }
 
+// testSnapshotPublishedSignerNegatives substitutes eight malformed or ineligible synthetic owner payloads one at a time and requires the verifier's watermark update to fail with insufficient privilege. It restores the valid synthetic payload and requires success; actual compact-JWS signature verification remains covered separately, not bypassed or proven by this SQL test.
+// testSnapshotPublishedSignerNegatives по одному подставляет восемь некорректных или недопустимых синтетических payload владельца и требует отказ обновлению watermark verifier с insufficient privilege. Затем восстанавливает корректный синтетический payload и требует успех; фактическая проверка подписи компактного JWS проверяется отдельно и этим SQL-тестом не обходится и не доказывается.
 func testSnapshotPublishedSignerNegatives(t *testing.T, ctx context.Context, admin, verifier *pgx.Conn) {
 	t.Helper()
 	for _, variant := range []string{"foreign", "wrong purpose", "wrong generation", "not current", "duplicate key", "duplicate issuer", "missing keys", "malformed JSON"} {

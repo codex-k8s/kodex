@@ -11,15 +11,28 @@ import (
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 )
 
+// Snapshot captures one resolver result together with its expiry; its entire
+// address set must pass validation before any network permission is rendered.
+// RU: Snapshot хранит результат DNS и срок его действия; весь набор адресов
+// проходит проверку до построения сетевого разрешения.
 type Snapshot struct {
 	Addresses []netip.Addr
 	ExpiresAt time.Time
 }
+
+// Resolver supplies a bounded DNS snapshot for one registered hostname.
+// RU: Resolver предоставляет ограниченный снимок DNS для зарегистрированного имени узла.
 type Resolver interface {
+	// Resolve obtains addresses and their expiry, respecting cancellation.
+	// RU: Resolve получает адреса и срок их действия с учётом отмены контекста.
 	Resolve(context.Context, string) (Snapshot, error)
 }
 
-// Produce выводит CNI/runtime pins из единого typed mailbox source, без credential values.
+// Produce derives immutable mail egress pins from enabled typed mailboxes and
+// fresh public DNS snapshots, without exporting credentials or disabled endpoints.
+// RU: Produce выводит неизменяемые почтовые сетевые привязки из включённых
+// типизированных ящиков и свежих публичных DNS-снимков, не раскрывая пароли
+// и не сохраняя выключенные узлы.
 func Produce(ctx context.Context, configuration api.Configuration, gatewayPolicyDigest string, resolver Resolver) (MailDocument, error) {
 	if ctx.Err() != nil || !validDigest(gatewayPolicyDigest) || resolver == nil || api.ValidateConfiguration(configuration) != nil {
 		return MailDocument{}, errors.New("mail projection source is invalid")

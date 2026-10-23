@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+// TestProjectAssistantCanPrepareOnlyProjectSelfConfiguration checks four ordinary self-configuration schemas stay pinned to the project helper or its environment and never expose system-assistant authority.
+// TestProjectAssistantCanPrepareOnlyProjectSelfConfiguration проверяет закрепление четырёх обычных схем собственной настройки за проектным помощником либо его окружением без системных полномочий.
 func TestProjectAssistantCanPrepareOnlyProjectSelfConfiguration(t *testing.T) {
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeProject,
 		AssistantProfileRef: "asstprof_abcdefgh", AgentRef: "agt_project123", ProjectRef: "prj_project123", RuntimeEnvironmentRef: "renv_project123",
@@ -51,16 +53,22 @@ func TestProjectAssistantCanPrepareOnlyProjectSelfConfiguration(t *testing.T) {
 	}
 }
 
+// scopedAssistantPlanClient records local draft proposals and returns fixed synthetic plan/conversation refs; it implements neither approval nor apply.
+// scopedAssistantPlanClient записывает локальные предложения черновиков и возвращает фиксированные синтетические ссылки плана и диалога; подтверждение и применение не реализует.
 type scopedAssistantPlanClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	requests []*controlplanev1.ProposeAssistantPlanRequest
 }
 
+// ProposeAssistantPlan captures the request and returns a revision-one synthetic draft without persistence, owner policy evaluation or external effects.
+// ProposeAssistantPlan сохраняет запрос и возвращает синтетический черновик первой ревизии без устойчивой записи, проверки политики владельца и внешних действий.
 func (client *scopedAssistantPlanClient) ProposeAssistantPlan(_ context.Context, request *controlplanev1.ProposeAssistantPlanRequest, _ ...grpc.CallOption) (*controlplanev1.ProposeAssistantPlanResponse, error) {
 	client.requests = append(client.requests, request)
 	return &controlplanev1.ProposeAssistantPlanResponse{Plan: &controlplanev1.AssistantPlan{Ref: "plan_abcdefgh", Version: 1}, Conversation: &controlplanev1.AssistantConversation{Ref: "acon_abcdefgh"}}, nil
 }
 
+// TestProjectSelfConfigurationTraversesOwnerDraftRPCWithExactLease checks four project-self operations reach one draft RPC each with exact lease coordinates and no systemAssistantRef parameter.
+// TestProjectSelfConfigurationTraversesOwnerDraftRPCWithExactLease проверяет отправку каждой из четырёх собственных проектных операций в один RPC черновика с точными координатами аренды без параметра systemAssistantRef.
 func TestProjectSelfConfigurationTraversesOwnerDraftRPCWithExactLease(t *testing.T) {
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeProject, AssistantProfileRef: "asstprof_abcdefgh",
 		AgentRef: "agt_project123", ProjectRef: "prj_project123", RuntimeEnvironmentRef: "renv_project123",
@@ -102,6 +110,8 @@ func TestProjectSelfConfigurationTraversesOwnerDraftRPCWithExactLease(t *testing
 	}
 }
 
+// TestOnlySystemAssistantCanProposeProjectAssistantCreation checks SYSTEM can propose a project-helper creation draft while PROJECT exposes no creation schema and makes no proposal RPC.
+// TestOnlySystemAssistantCanProposeProjectAssistantCreation проверяет возможность системного помощника предложить черновик создания проектного, тогда как проектная область не объявляет схему создания и не вызывает RPC предложения.
 func TestOnlySystemAssistantCanProposeProjectAssistantCreation(t *testing.T) {
 	parameters := map[string]any{"projectRef": "prj_project123", "name": "Project Kodex", "purpose": "Coordinate project", "instructions": "Approved instruction"}
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
@@ -125,6 +135,8 @@ func TestOnlySystemAssistantCanProposeProjectAssistantCreation(t *testing.T) {
 	}
 }
 
+// TestProjectSelfCatalogPersistsAcrossForeignScreenContexts checks three unrelated screen kinds preserve all four project-self operation schemas without broadening immutable helper/environment locators.
+// TestProjectSelfCatalogPersistsAcrossForeignScreenContexts проверяет сохранение всех четырёх схем собственной проектной настройки на трёх посторонних видах экранов без расширения неизменяемых ссылок помощника и окружения.
 func TestProjectSelfCatalogPersistsAcrossForeignScreenContexts(t *testing.T) {
 	for _, kind := range []string{"AGENT", "ENVIRONMENT", "PROJECT"} {
 		t.Run(kind, func(t *testing.T) {

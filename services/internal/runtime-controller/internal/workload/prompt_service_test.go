@@ -13,6 +13,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// setSemanticPrompt replaces fixture instructions with the required AGENT
+// platform sections, sorted effective capabilities and computed template
+// provenance. It does not reseal the runtime revision or authorize its sections;
+// callers perform fixture sealing separately.
+// setSemanticPrompt заменяет инструкции fixture обязательными AGENT platform
+// sections, сортирует effective capabilities и вычисляет template provenance.
+// Runtime-ревизия не перепривязывается, полномочия sections не выдаются;
+// caller закрепляет fixture отдельно.
 func setSemanticPrompt(revision *controlplanev1.RuntimeRevisionSnapshot) {
 	slots := []string{"PURPOSE", "INPUT", "CONSTRAINTS", "EFFECTIVE_CAPABILITIES", "FILES", "TOOLS", "INTEGRATIONS"}
 	var capabilities []string
@@ -40,6 +48,12 @@ func setSemanticPrompt(revision *controlplanev1.RuntimeRevisionSnapshot) {
 	revision.PromptTargetKind = "AGENT"
 }
 
+// TestWarmAndTurnPromptProvenanceSurvivesControllerBinding reseals synthetic
+// semantic prompts for turn and warm modes, checks exact provenance survives
+// runner decoding, then rejects an unsealed target-kind substitution.
+// TestWarmAndTurnPromptProvenanceSurvivesControllerBinding перепривязывает
+// синтетические semantic prompts в turn/warm modes, проверяет сохранение точной
+// provenance при runner decode и отвергает незакреплённую подмену target kind.
 func TestWarmAndTurnPromptProvenanceSurvivesControllerBinding(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	for _, warm := range []bool{false, true} {

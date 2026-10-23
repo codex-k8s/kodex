@@ -16,6 +16,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantPageHintRecorder counts fresh assistant/conversation/bootstrap reads, applies a configured pre-read callback and can replace the synthetic owner cursor without caching response payloads.
+// assistantPageHintRecorder считает свежие чтения помощника, диалогов и bootstrap, выполняет настроенный callback до чтения и может заменять тестовый owner cursor без кэширования ответов.
 type assistantPageHintRecorder struct {
 	assistantSnapshotSizeRecorder
 	assistantReads, conversationReads, bootstrapReads int
@@ -23,6 +25,8 @@ type assistantPageHintRecorder struct {
 	ownerCursor                                       string
 }
 
+// Invoke counts the response-specific owner read, applies an optional failure/cancellation callback, delegates fixture responses and optionally substitutes only a successful conversation cursor.
+// Invoke считает чтение по типу ответа, применяет необязательный callback отказа или отмены, возвращает ответы оснастки и может заменить только курсор успешного списка диалогов.
 func (c *assistantPageHintRecorder) Invoke(ctx context.Context, method string, request, response any, options ...grpc.CallOption) error {
 	switch response.(type) {
 	case *cp.GetSystemAssistantResponse:
@@ -44,6 +48,8 @@ func (c *assistantPageHintRecorder) Invoke(ctx context.Context, method string, r
 	return err
 }
 
+// assistantPageHintFixture creates forty-two large synthetic conversations and a project multiplexer whose clients all use the counting recorder; no real owner service or socket is opened.
+// assistantPageHintFixture создаёт сорок два больших тестовых диалога и проектный multiplexer с клиентами счётчика; настоящий сервис владельца и сокет не открываются.
 func assistantPageHintFixture(t *testing.T) (*sessionMultiplexer, *assistantPageHintRecorder) {
 	t.Helper()
 	c := &assistantPageHintRecorder{}
@@ -54,6 +60,8 @@ func assistantPageHintFixture(t *testing.T) (*sessionMultiplexer, *assistantPage
 	return m, c
 }
 
+// warmAssistantPageHint sends one synthetic bootstrap, verifies the learned whole-page size and single frame/request, then drains that frame without sharing expected assertions for later wake outcomes.
+// warmAssistantPageHint отправляет один тестовый bootstrap, проверяет выученный размер целой страницы и единственные кадр и запрос, затем извлекает кадр, не подменяя проверки дальнейших обновлений.
 func warmAssistantPageHint(t *testing.T, m *sessionMultiplexer, c *assistantPageHintRecorder) {
 	t.Helper()
 	if _, err := m.sendPlatformBootstrap(); err != nil || m.assistantPageHint.pageSize != 25 {
@@ -65,9 +73,12 @@ func warmAssistantPageHint(t *testing.T, m *sessionMultiplexer, c *assistantPage
 	<-c.frames
 }
 
+// TestAssistantPageHintBootstrapAndWakesStillReadFreshOwnerData mutates the fake owner's version/content/cursor and proves each new wake reads every owner dependency afresh while duplicate signals do not repeat reads.
+// TestAssistantPageHintBootstrapAndWakesStillReadFreshOwnerData меняет тестовые версию, содержимое и курсор владельца и доказывает свежее чтение всех зависимостей при новом событии без повторов чтения для дубликата.
 func TestAssistantPageHintBootstrapAndWakesStillReadFreshOwnerData(t *testing.T) {
 	m, c := assistantPageHintFixture(t)
 	warmAssistantPageHint(t, m, c)
+	// The new version and content become visible only through a fresh owner response.
 	// Новая версия и текст появляются только в новом owner response.
 	c.conversations[0].Version = 9
 	c.conversations[0].Turns[0].Content = "fresh owner content"
@@ -91,6 +102,8 @@ func TestAssistantPageHintBootstrapAndWakesStillReadFreshOwnerData(t *testing.T)
 	}
 }
 
+// TestAssistantPageHintGrowthStillAdaptsAndFailureKeepsClosedStream grows complete conversations beyond the learned page bound, requiring fresh size reduction or the existing closed stream failure without cursor advancement or truncated payload.
+// TestAssistantPageHintGrowthStillAdaptsAndFailureKeepsClosedStream увеличивает целые диалоги сверх известной границы страницы, требуя нового уменьшения либо прежнего закрытого отказа потока без продвижения курсора и усечения данных.
 func TestAssistantPageHintGrowthStillAdaptsAndFailureKeepsClosedStream(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(fmt.Sprint(fail), func(t *testing.T) {
@@ -135,6 +148,8 @@ func TestAssistantPageHintGrowthStillAdaptsAndFailureKeepsClosedStream(t *testin
 	}
 }
 
+// TestAssistantPageHintScopeSocketAndCloseReset rejects cross-project/organization/socket reuse, resets hints on close and disallows sizes outside the fixed ladder.
+// TestAssistantPageHintScopeSocketAndCloseReset запрещает перенос подсказки между проектами, организациями и сокетами, очищает её при закрытии и отклоняет размер вне фиксированной лестницы.
 func TestAssistantPageHintScopeSocketAndCloseReset(t *testing.T) {
 	for _, change := range []string{"project", "organization", "close", "invalid-size", "new-socket"} {
 		t.Run(change, func(t *testing.T) {
@@ -164,6 +179,8 @@ func TestAssistantPageHintScopeSocketAndCloseReset(t *testing.T) {
 	}
 }
 
+// TestAssistantPageHintDenialCancelAndOtherKindsDoNotReuseData proves a size hint never bypasses fresh owner denial or cancellation, emits no partial data and does not change unrelated resource-kind reads.
+// TestAssistantPageHintDenialCancelAndOtherKindsDoNotReuseData доказывает, что подсказка размера не обходит свежий отказ владельца или отмену, не выдаёт частичные данные и не меняет чтения посторонних видов ресурсов.
 func TestAssistantPageHintDenialCancelAndOtherKindsDoNotReuseData(t *testing.T) {
 	for _, condition := range []string{"permission", "cancel", "other-kind"} {
 		t.Run(condition, func(t *testing.T) {
@@ -205,18 +222,11 @@ func TestAssistantPageHintDenialCancelAndOtherKindsDoNotReuseData(t *testing.T) 
 	}
 }
 
+// TestAssistantPageHintStillChecksCurrentFullEnvelope fits the exact bootstrap byte bound, then adds delta metadata and requires a size error without frames or cursor advancement despite the learned page hint.
+// TestAssistantPageHintStillChecksCurrentFullEnvelope заполняет точную байтовую границу bootstrap, затем добавляет delta metadata и требует ошибку размера без кадров и продвижения курсора несмотря на подсказку страницы.
 func TestAssistantPageHintStillChecksCurrentFullEnvelope(t *testing.T) {
-	c := &assistantSnapshotSizeRecorder{conversations: assistantSizeConversations(1, "")}
+	c, m, envelope := assistantSizeBoundaryFixture(t)
 	conversation := c.conversations[0]
-	for i := range 31 {
-		turn := proto.Clone(conversation.Turns[0]).(*cp.AssistantTurn)
-		turn.Ref, turn.Sequence, turn.Content = fmt.Sprintf("trn_fixture_%02d", i), int64(i+2), strings.Repeat("x", 32768)
-		conversation.Turns = append(conversation.Turns, turn)
-	}
-	m := assistantSizeMultiplexer(t, c, "prj_fixture01")
-	envelope := generated.PlatformSnapshotEnvelope{Type: "PLATFORM_SNAPSHOT", RequestRef: m.platformRequestRef,
-		StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: m.platformCursor,
-		Mode: generated.PlatformSnapshotModeBootstrap, Kind: generated.PlatformResourceKindSystemAssistant, ProjectRef: &m.projectRef}
 	initial, err := m.boundedPlatformSnapshot(envelope)
 	if err != nil {
 		t.Fatal("whole-envelope boundary fixture failed")

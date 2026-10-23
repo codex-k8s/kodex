@@ -7,6 +7,8 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestRuntimeOperationsRegistersProviderCredentialRefresh pins the exact runtime RPC for committing credential refresh.
+// TestRuntimeOperationsRegistersProviderCredentialRefresh закрепляет точный runtime RPC фиксации обновления credentials.
 func TestRuntimeOperationsRegistersProviderCredentialRefresh(t *testing.T) {
 	operations := RuntimeOperations()
 	if operations["platform.runtime.provider-credential.refresh.commit"] != controlplanev1.RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName {
@@ -14,6 +16,8 @@ func TestRuntimeOperationsRegistersProviderCredentialRefresh(t *testing.T) {
 	}
 }
 
+// TestProviderCredentialMaterializerOperationsAreExact rejects additions or substitutions in the isolated materializer registry.
+// TestProviderCredentialMaterializerOperationsAreExact отвергает добавления и подмены в реестре изолированного materializer.
 func TestProviderCredentialMaterializerOperationsAreExact(t *testing.T) {
 	t.Parallel()
 	want := map[string]string{
@@ -32,6 +36,8 @@ func TestProviderCredentialMaterializerOperationsAreExact(t *testing.T) {
 	}
 }
 
+// TestImageSupplyChainWorkerOperationsAreExact keeps controller, admission and promotion RPC sets separate and explicit.
+// TestImageSupplyChainWorkerOperationsAreExact сохраняет раздельные точные наборы RPC controller, admission и promotion.
 func TestImageSupplyChainWorkerOperationsAreExact(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

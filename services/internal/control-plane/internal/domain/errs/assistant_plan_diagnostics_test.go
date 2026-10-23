@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestAssistantPlanDiagnosticsPreserveClosedClassAndIndex checks every plan stage across conflict, version and invalid causes, the accepted zero or thirty-two index, rejected stage/index examples and unchanged unrelated errors. Joined private payloads must not reach the wrapper's Error message.
+// TestAssistantPlanDiagnosticsPreserveClosedClassAndIndex проверяет каждый этап плана с причинами конфликта, версии и некорректного ввода, допустимые номера ноль или тридцать два, примеры отклонённых пар и неизменность посторонних ошибок. Присоединённые закрытые данные не должны попадать в сообщение Error обёртки.
 func TestAssistantPlanDiagnosticsPreserveClosedClassAndIndex(t *testing.T) {
 	for _, stage := range []string{AssistantPlanHydrate, AssistantPlanNormalize, AssistantPlanBind, AssistantPlanAuthorize, AssistantPlanEmpty, AssistantPlanCommand} {
 		for _, cause := range []error{ErrConflict, ErrVersionMismatch, ErrInvalid} {
@@ -41,6 +43,8 @@ func TestAssistantPlanDiagnosticsPreserveClosedClassAndIndex(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanInvalidFieldsAreClosedAndPreserveCause checks five allowed field labels through nested stage/field wrappers, cause preservation and sanitized messages. Four unknown or injected labels and a forbidden-error example must not acquire field-diagnostic authority.
+// TestAssistantPlanInvalidFieldsAreClosedAndPreserveCause проверяет пять допустимых меток полей через вложенные обёртки этапа и поля, сохранение причины и очищенные сообщения. Четыре неизвестные либо дополненные текстом метки и пример ошибки запрета не должны получать полномочие диагностики поля.
 func TestAssistantPlanInvalidFieldsAreClosedAndPreserveCause(t *testing.T) {
 	for _, field := range []string{"STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS", "MAX_CONCURRENCY", "STEP_KEY"} {
 		failure := WithAssistantPlanStage(WithAssistantPlanField(errors.Join(ErrInvalid, errors.New("PRIVATE_PAYLOAD")), field), AssistantPlanHydrate, 1)

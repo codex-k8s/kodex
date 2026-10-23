@@ -10,6 +10,12 @@ import (
 	"testing"
 )
 
+// TestReadOwnerStateIsPrivateBoundedAndClosed accepts a canonical private snapshot
+// and rejects final symlinks, public permissions, unknown/duplicate fields, trailing
+// JSON, oversized files and FIFOs. It checks file/encoding rules, not claim authority.
+// TestReadOwnerStateIsPrivateBoundedAndClosed принимает канонический закрытый снимок
+// и отклоняет ссылки, открытые права, неизвестные/повторные поля, дополнительный JSON,
+// превышение размера и FIFO. Проверяются файл и кодирование, а не полномочия claim.
 func TestReadOwnerStateIsPrivateBoundedAndClosed(t *testing.T) {
 	for _, scenario := range []string{"valid", "symlink", "public_mode", "unknown_field", "duplicate_field", "extra_json", "oversized", "fifo"} {
 		t.Run(scenario, func(t *testing.T) {

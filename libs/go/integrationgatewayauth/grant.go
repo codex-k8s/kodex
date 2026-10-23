@@ -1,5 +1,7 @@
-// Package integrationgatewayauth задаёт узкий подписанный контракт server-owned
-// continuation capability integration-gateway.
+// Package integrationgatewayauth signs and verifies server-owned continuation
+// capabilities for the integration gateway, including exact keyset rotation.
+// RU: Пакет integrationgatewayauth подписывает и проверяет назначаемые сервером
+// полномочия продолжения шлюза интеграций с точной ротацией набора ключей.
 package integrationgatewayauth
 
 import (
@@ -18,15 +20,35 @@ import (
 )
 
 const (
-	ProtectedType     = "kodex-integration-continuation-grant+jws"
+	// ProtectedType separates continuation grants from other compact JWS types.
+	// RU: ProtectedType отделяет полномочия продолжения от других типов compact JWS.
+	ProtectedType = "kodex-integration-continuation-grant+jws"
+	// PurposeTransition binds a grant to one continuation transition purpose.
+	// RU: PurposeTransition связывает полномочие с переходом продолжения.
 	PurposeTransition = "CONTINUATION_TRANSITION"
-	maximumFileBytes  = 64 << 10
-	keyStatusCurrent  = "CURRENT"
+	// maximumFileBytes bounds trusted key material loaded from a local file.
+	// RU: maximumFileBytes ограничивает чтение доверенного ключевого файла.
+	maximumFileBytes = 64 << 10
+	// keyStatusCurrent is the sole generation allowed for new signatures.
+	// RU: keyStatusCurrent обозначает единственное поколение для новой подписи.
+	keyStatusCurrent = "CURRENT"
+	// keyStatusPrevious permits verification only until its bounded overlap ends.
+	// RU: keyStatusPrevious разрешает проверку лишь до конца ограниченного периода перекрытия.
 	keyStatusPrevious = "PREVIOUS"
-	keyStatusNext     = "NEXT"
-	keyStatusRetired  = "RETIRED"
+	// keyStatusNext is published but cannot yet verify continuation grants.
+	// RU: keyStatusNext опубликован, но ещё не проверяет полномочия продолжения.
+	keyStatusNext = "NEXT"
+	// keyStatusRetired remains in the snapshot but never verifies a grant.
+	// RU: keyStatusRetired остаётся в снимке, но никогда не проверяет полномочие.
+	keyStatusRetired = "RETIRED"
 )
 
+// Claims pins one signed continuation to its owner, caller, runtime revision,
+// session/turn/attempt, input digest, fencing generation and allowed operations.
+// A field supplied by a caller is not itself proof of authority.
+// RU: Claims закрепляет подписанное продолжение за владельцем, вызывающим,
+// ревизией среды, сессией/ходом/попыткой, дайджестом входа, поколением барьера
+// и разрешёнными операциями. Поле запроса само по себе не доказывает полномочий.
 type Claims struct {
 	Version                int      `json:"v"`
 	Issuer                 string   `json:"iss"`
@@ -57,6 +79,10 @@ type Claims struct {
 	ExpiresAt              int64    `json:"exp"`
 }
 
+// Config contains the locally expected issuer, audience, workload and caller
+// identity, signer generation and maximum lifetime used to validate claims.
+// RU: Config содержит локально ожидаемые издателя, аудиторию, workload и
+// вызывающего, поколение подписи и предельное время жизни для проверки claims.
 type Config struct {
 	Issuer         string
 	Audience       string
@@ -66,8 +92,10 @@ type Config struct {
 	MaximumTTL     time.Duration
 }
 
-// PublicKeySet — единственный доставляемый verifier-side canonical JCS snapshot
-// ротации. Private JWK намеренно не является частью этого формата.
+// PublicKeySet is the canonical verifier-side rotation snapshot; it never
+// transports private JWK material and records the served high-watermark.
+// RU: PublicKeySet является каноническим снимком ротации для проверяющей
+// стороны; он не передаёт private JWK и фиксирует обслуживаемый high-watermark.
 type PublicKeySet struct {
 	Version          int            `json:"version"`
 	Revision         uint64         `json:"revision"`
@@ -76,6 +104,10 @@ type PublicKeySet struct {
 	Keys             []PublicKeyRef `json:"keys"`
 }
 
+// PublicKeyRef pairs a public JWK with its generation, rotation state and
+// optional expiry of PREVIOUS verification overlap.
+// RU: PublicKeyRef связывает public JWK с поколением, состоянием ротации и
+// необязательным окончанием периода проверки PREVIOUS.
 type PublicKeyRef struct {
 	Generation  uint64          `json:"generation"`
 	Status      string          `json:"status"`
@@ -83,8 +115,10 @@ type PublicKeyRef struct {
 	JWK         json.RawMessage `json:"jwk"`
 }
 
-// ServedState связывает readiness и durable verifier high-watermark с exact
-// фактически загруженным snapshot без раскрытия key material.
+// ServedState reports the exact loaded keyset revision, verifier high-watermark,
+// served generation and digest without revealing key material.
+// RU: ServedState сообщает точную загруженную ревизию набора ключей,
+// high-watermark проверяющего, поколение и дайджест без раскрытия ключей.
 type ServedState struct {
 	Revision         uint64
 	HighWatermark    uint64
@@ -92,11 +126,19 @@ type ServedState struct {
 	KeysetSHA256     string
 }
 
+// Signer holds only the current private key after matching it against the
+// independently delivered public keyset.
+// RU: Signer хранит только текущий закрытый ключ после сопоставления с отдельно
+// доставленным набором открытых ключей.
 type Signer struct {
 	config Config
 	key    internalrpcauth.ES256Key
 }
 
+// Verifier keeps accepted public generations and the served snapshot state;
+// PREVIOUS acceptance is checked again at the time of each verification.
+// RU: Verifier хранит допустимые открытые поколения и состояние снимка;
+// период допуска PREVIOUS повторно проверяется при каждой верификации.
 type Verifier struct {
 	config Config
 	keys   map[uint64]verificationKey
@@ -104,12 +146,18 @@ type Verifier struct {
 	now    func() time.Time
 }
 
+// verificationKey holds one parsed public key and its exact rotation window.
+// RU: verificationKey хранит разобранный открытый ключ и точное окно ротации.
 type verificationKey struct {
 	key         internalrpcauth.ES256Key
 	status      string
 	acceptUntil time.Time
 }
 
+// NewSigner validates config and safe key files, then requires the private
+// JWK to match the independently delivered CURRENT public generation.
+// RU: NewSigner проверяет конфигурацию и безопасные файлы ключей, затем требует
+// совпадения закрытого JWK с отдельно доставленным поколением CURRENT.
 func NewSigner(config Config, privateJWKFile, publicKeysetFile string) (*Signer, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
@@ -145,6 +193,10 @@ func NewSigner(config Config, privateJWKFile, publicKeysetFile string) (*Signer,
 	return &Signer{config: config, key: privateKey}, nil
 }
 
+// NewVerifier loads a bounded canonical public keyset and rejects an invalid
+// generation or rotation snapshot before it can verify grants.
+// RU: NewVerifier загружает ограниченный канонический набор открытых ключей и
+// отклоняет неверное поколение либо снимок ротации до проверки полномочий.
 func NewVerifier(config Config, publicKeysetFile string) (*Verifier, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
@@ -160,8 +212,16 @@ func NewVerifier(config Config, publicKeysetFile string) (*Verifier, error) {
 	return &Verifier{config: config, keys: keys, state: state, now: time.Now}, nil
 }
 
+// State returns the snapshot metadata actually loaded by this verifier;
+// callers use it for exact readiness and high-watermark comparisons.
+// RU: State возвращает метаданные фактически загруженного снимка для точной
+// проверки готовности и high-watermark.
 func (verifier *Verifier) State() ServedState { return verifier.state }
 
+// Sign checks cancellation, fixes the configured signer generation, validates
+// claim boundaries, then signs canonical JSON with the protected JWS type.
+// RU: Sign проверяет отмену, закрепляет настроенное поколение подписи,
+// проверяет границы claims и подписывает канонический JSON с защищённым типом JWS.
 func (signer *Signer) Sign(ctx context.Context, claims Claims) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -174,6 +234,10 @@ func (signer *Signer) Sign(ctx context.Context, claims Claims) (string, error) {
 		internalrpcauth.ProtectedHeaderExpectation{Type: ProtectedType, KeyID: signer.key.KeyID})
 }
 
+// Verify rejects malformed compact input and accepts signatures only from
+// CURRENT or an unexpired PREVIOUS key with matching canonical claims.
+// RU: Verify отклоняет неверный compact-ввод и принимает подпись только от
+// CURRENT либо ещё допустимого PREVIOUS ключа с совпадающими каноническими claims.
 func (verifier *Verifier) Verify(ctx context.Context, compact string) (Claims, error) {
 	if err := ctx.Err(); err != nil {
 		return Claims{}, err
@@ -201,6 +265,10 @@ func (verifier *Verifier) Verify(ctx context.Context, compact string) (Claims, e
 	return Claims{}, errors.New("continuation grant signature is invalid")
 }
 
+// validateConfig requires nonempty exact identities, a positive generation and
+// a lifetime between one minute and eight days before key loading.
+// RU: validateConfig требует непустые точные идентификаторы, положительное
+// поколение и время жизни от одной минуты до восьми дней до загрузки ключей.
 func validateConfig(config Config) error {
 	if config.Issuer == "" || config.Audience == "" || config.WorkloadID == "" ||
 		config.CallerSPIFFEID == "" || config.Generation == 0 ||
@@ -210,6 +278,12 @@ func validateConfig(config Config) error {
 	return nil
 }
 
+// validateClaims checks the complete scope and freshness tuple, at most eight
+// distinct operation IDs and bounded clock skew; signing pins the exact key
+// generation whereas verification selects a valid generation from the keyset.
+// RU: validateClaims проверяет полный кортеж области и свежести, не более
+// восьми различных операций и ограниченный сдвиг часов; при подписи поколение
+// фиксируется точно, при проверке выбирается допустимое поколение набора ключей.
 func validateClaims(config Config, claims Claims, now time.Time, exactGeneration bool) error {
 	issued := time.Unix(claims.IssuedAt, 0).UTC()
 	notBefore := time.Unix(claims.NotBefore, 0).UTC()
@@ -235,6 +309,12 @@ func validateClaims(config Config, claims Claims, now time.Time, exactGeneration
 	return nil
 }
 
+// parsePublicKeySet checks a canonical rotation snapshot, unique generations
+// and key IDs, exact CURRENT, bounded PREVIOUS, and non-verifying NEXT/RETIRED.
+// It returns only active verification keys and a digest of loaded source bytes.
+// RU: parsePublicKeySet проверяет канонический снимок, уникальные поколения и
+// key IDs, точный CURRENT, ограниченный PREVIOUS и не проверяющие NEXT/RETIRED;
+// возвращает лишь активные ключи и дайджест загруженных байтов.
 func parsePublicKeySet(config Config, raw []byte, now time.Time) (map[uint64]verificationKey, ServedState, error) {
 	var document PublicKeySet
 	if internalrpcauth.DecodeCanonicalJSON(raw, &document) != nil || document.Version != 1 || document.Revision == 0 || document.HighWatermark == 0 ||
@@ -301,6 +381,10 @@ func parsePublicKeySet(config Config, raw []byte, now time.Time) (map[uint64]ver
 	}, nil
 }
 
+// hasDuplicates rejects empty or repeated operation IDs without reordering the
+// original list that will be signed or verified.
+// RU: hasDuplicates отклоняет пустые или повторные ID операций, не меняя
+// порядок исходного списка при подписи и проверке.
 func hasDuplicates(values []string) bool {
 	seen := make([]string, 0, len(values))
 	for _, value := range values {
@@ -312,6 +396,10 @@ func hasDuplicates(values []string) bool {
 	return false
 }
 
+// read requires an absolute path and uses bounded securefile access; unsafe
+// ownership or permissions cannot be bypassed by a caller-supplied filename.
+// RU: read требует абсолютный путь и ограниченный доступ securefile;
+// небезопасные владелец или права не обходятся именем файла из вызова.
 func read(path string) ([]byte, error) {
 	if !filepath.IsAbs(path) {
 		return nil, errors.New("JWK path is not absolute")

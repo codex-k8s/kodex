@@ -17,24 +17,36 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// allowBinder counts delegation attempts and returns the original test context without generating a real continuation grant.
+// RU: allowBinder считает попытки делегирования и возвращает исходный тестовый контекст без создания настоящего continuation grant.
 type allowBinder struct{ calls int }
 
+// BindDelegated records one synthetic binding and allows the fixture RPC path to proceed unchanged.
+// RU: BindDelegated фиксирует одну синтетическую привязку и разрешает неизменный RPC путь оснастки.
 func (binder *allowBinder) BindDelegated(ctx context.Context, _ value.Principal, _, _, _, _ string) (context.Context, error) {
 	binder.calls++
 	return ctx, nil
 }
 
+// denyBinder models unavailable delegated proof so projection tests can assert rejection before outbound RPC.
+// RU: denyBinder моделирует недоступный delegated proof для проверки отказа до исходящего RPC.
 type denyBinder struct{}
 
+// BindDelegated always returns the pending-proof sentinel and no authorized context.
+// RU: BindDelegated всегда возвращает sentinel ожидания proof без разрешённого контекста.
 func (denyBinder) BindDelegated(context.Context, value.Principal, string, string, string, string) (context.Context, error) {
 	return nil, errs.ErrDelegatedProofPending
 }
 
+// policyClient returns a valid synthetic owner policy with an optional targeted corruption callback and records RPC count.
+// RU: policyClient возвращает допустимую синтетическую политику владельца с необязательной адресной порчей ответа и считает RPC.
 type policyClient struct {
 	calls  int
 	mutate func(*sttv1.ResolveTranscriptionPolicyResponse)
 }
 
+// ResolveTranscriptionPolicy echoes the requested locator in a fresh policy fixture before applying the test's response mutation.
+// RU: ResolveTranscriptionPolicy повторяет запрошенный locator в новой оснастке политики до применения тестовой подмены ответа.
 func (client *policyClient) ResolveTranscriptionPolicy(_ context.Context, request *sttv1.ResolveTranscriptionPolicyRequest, _ ...grpc.CallOption) (*sttv1.ResolveTranscriptionPolicyResponse, error) {
 	client.calls++
 	response := validPolicyResponse(request.GetAuthority())
@@ -44,8 +56,12 @@ func (client *policyClient) ResolveTranscriptionPolicy(_ context.Context, reques
 	return response, nil
 }
 
+// credentialClient records requests and projects only a synthetic key bound to the requested configuration/account metadata.
+// RU: credentialClient считает запросы и проецирует только синтетический ключ, связанный с запрошенными метаданными конфигурации/аккаунта.
 type credentialClient struct{ calls int }
 
+// ProjectTranscriptionCredential copies exact requested pins and cloned authority into a short-lived synthetic credential response without a secret service.
+// RU: ProjectTranscriptionCredential копирует точные запрошенные координаты и authority-копию в краткоживущий синтетический ответ реквизитов без сервиса секретов.
 func (client *credentialClient) ProjectTranscriptionCredential(_ context.Context, request *sttv1.ProjectTranscriptionCredentialRequest, _ ...grpc.CallOption) (*sttv1.ProjectTranscriptionCredentialResponse, error) {
 	client.calls++
 	return &sttv1.ProjectTranscriptionCredentialResponse{
@@ -56,6 +72,8 @@ func (client *credentialClient) ProjectTranscriptionCredential(_ context.Context
 	}, nil
 }
 
+// TestPolicyProjectionRequiresExactAuthorityEcho accepts the exact locator and rejects changed tenant, source, actor provenance or correlation after one binding and RPC.
+// RU: TestPolicyProjectionRequiresExactAuthorityEcho принимает точный locator и отклоняет подмену tenant, source, provenance автора или correlation после одной привязки и RPC.
 func TestPolicyProjectionRequiresExactAuthorityEcho(t *testing.T) {
 	principal := validPrincipal()
 	for _, test := range []struct {
@@ -86,6 +104,8 @@ func TestPolicyProjectionRequiresExactAuthorityEcho(t *testing.T) {
 	}
 }
 
+// TestPolicyProjectionRejectsUnsignedLimitOverflow injects maximum uint64 size, duration and timeout values to prove rejection before signed conversion.
+// RU: TestPolicyProjectionRejectsUnsignedLimitOverflow подставляет максимальные uint64 размера, длительности и timeout для доказательства отказа до знакового преобразования.
 func TestPolicyProjectionRejectsUnsignedLimitOverflow(t *testing.T) {
 	for _, mutate := range []func(*sttv1.ResolveTranscriptionPolicyResponse){
 		func(response *sttv1.ResolveTranscriptionPolicyResponse) { response.MaximumAudioBytes = math.MaxUint64 },
@@ -104,6 +124,8 @@ func TestPolicyProjectionRejectsUnsignedLimitOverflow(t *testing.T) {
 	}
 }
 
+// TestProjectionRequiresDelegatedProofBeforeRPC ensures a denied binder returns pending proof without calling the synthetic policy client.
+// RU: TestProjectionRequiresDelegatedProofBeforeRPC проверяет возврат ожидания proof запрещающим binder без вызова синтетического клиента политики.
 func TestProjectionRequiresDelegatedProofBeforeRPC(t *testing.T) {
 	raw := &policyClient{}
 	client, _ := NewPolicy(raw, denyBinder{})
@@ -113,6 +135,8 @@ func TestProjectionRequiresDelegatedProofBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestCredentialProjectionUsesSameAuthorityLocator checks one delegated binding and RPC with preserved requested credential generation.
+// RU: TestCredentialProjectionUsesSameAuthorityLocator проверяет одну delegated-привязку и RPC с сохранением запрошенного поколения реквизитов.
 func TestCredentialProjectionUsesSameAuthorityLocator(t *testing.T) {
 	principal := validPrincipal()
 	policy := value.Policy{Revision: 7, DigestSHA256: strings.Repeat("b", 64), ProviderAccountRef: "account", ProviderCredentialGeneration: 3}
@@ -124,6 +148,8 @@ func TestCredentialProjectionUsesSameAuthorityLocator(t *testing.T) {
 	}
 }
 
+// validPolicyResponse creates bounded synthetic policy limits and clones the supplied authority so corruption tests do not mutate the request.
+// RU: validPolicyResponse создаёт ограниченные синтетические лимиты политики и копирует authority, чтобы отрицательные тесты не изменяли запрос.
 func validPolicyResponse(authority *sttv1.DelegatedAuthorityLocator) *sttv1.ResolveTranscriptionPolicyResponse {
 	return &sttv1.ResolveTranscriptionPolicyResponse{
 		ConfigRevision: 7, ConfigDigestSha256: strings.Repeat("b", 64), Model: value.DefaultModel, Language: value.DefaultLanguage,
@@ -133,6 +159,8 @@ func validPolicyResponse(authority *sttv1.DelegatedAuthorityLocator) *sttv1.Reso
 	}
 }
 
+// validPrincipal supplies synthetic actor/tenant/project provenance, a request locator and a future expiry for projection mapping tests.
+// RU: validPrincipal задаёт синтетические provenance actor/tenant/project, locator запроса и будущий срок для тестов отображения проекций.
 func validPrincipal() value.Principal {
 	provenance := value.AuthorityProvenance{Source: int32(internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE), Reference: "source", Revision: 2, DigestSHA256: strings.Repeat("a", 64)}
 	return value.Principal{

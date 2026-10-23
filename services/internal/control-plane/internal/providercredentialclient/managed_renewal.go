@@ -2,19 +2,22 @@ package providercredentialclient
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// invalidCredentialRenewal supplies the closed error text for malformed renewal bindings, digests and responses.
+// invalidCredentialRenewal задаёт закрытый текст ошибки неверных привязок, дайджестов и ответов обновления учётных данных.
 const invalidCredentialRenewal = "provider credential renewal binding is invalid"
 
+// credentialRenewalBinding validates task/account/fence/credential/claimant pins, positive bounded versions, prior credential metadata and timestamp syntax.
+// It constructs the exact renewal DTO without checking future expiry or independently granting owner authority.
+// credentialRenewalBinding проверяет привязки задачи/аккаунта/ограждения/учётных данных/заявителя, положительные ограниченные версии, прежние метаданные и синтаксис временной метки.
+// Создаётся точный DTO обновления без проверки срока в будущем или самостоятельной выдачи полномочий владельца.
 func credentialRenewalBinding(task repository.ProviderCredentialRenewalTask) (*cp.ProviderCredentialRenewalBinding, error) {
 	if !validProviderCredentialRef(task.Ref, "pcrt_") || !validProviderCredentialRef(task.AccountRef, "pacc_") ||
 		!validProviderCredentialRef(task.Fence, "prf_") || !validBoundedSafeText(task.CredentialRef, 96) ||
@@ -36,25 +39,30 @@ func credentialRenewalBinding(task repository.ProviderCredentialRenewalTask) (*c
 			SecretUid: task.Previous.SecretUID, SecretResourceVersion: task.Previous.SecretResourceVersion, ContentSha256: task.Previous.ContentSHA256}}, nil
 }
 
+// CredentialRenewalRequestDigests deterministically hashes the exact writer request, then the owner-authorization envelope containing that writer digest.
+// Invalid binding or serialization returns no usable digest pair; hashing does not issue authorization or mutate the task.
+// CredentialRenewalRequestDigests детерминированно хеширует точный запрос записи, затем оболочку авторизации владельца с этим дайджестом.
+// Неверная привязка или сериализация не возвращает пригодную пару дайджестов; хеширование не выдаёт разрешение и не меняет задачу.
 func (client *Client) CredentialRenewalRequestDigests(task repository.ProviderCredentialRenewalTask) (string, string, error) {
 	binding, err := credentialRenewalBinding(task)
 	if err != nil {
 		return "", "", err
 	}
-	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(&cp.RenewManagedProviderCredentialRequest{Binding: binding})
+	writerDigest, err := deterministicRequestDigest(&cp.RenewManagedProviderCredentialRequest{Binding: binding})
 	if err != nil {
 		return "", "", errors.New(invalidCredentialRenewal)
 	}
-	writer := sha256.Sum256(raw)
-	writerDigest := hex.EncodeToString(writer[:])
-	raw, err = (proto.MarshalOptions{Deterministic: true}).Marshal(&cp.AuthorizeProviderCredentialRenewalRequest{Binding: binding, RenewalRequestSha256: writerDigest})
+	ownerDigest, err := deterministicRequestDigest(&cp.AuthorizeProviderCredentialRenewalRequest{Binding: binding, RenewalRequestSha256: writerDigest})
 	if err != nil {
 		return "", "", errors.New(invalidCredentialRenewal)
 	}
-	owner := sha256.Sum256(raw)
-	return writerDigest, hex.EncodeToString(owner[:]), nil
+	return writerDigest, ownerDigest, nil
 }
 
+// RenewManagedProviderCredential validates both pinned request digests before a single renewal RPC and rejects nil/unknown top-level response fields.
+// It converts supported results without retrying an ambiguous external effect.
+// RenewManagedProviderCredential проверяет оба закреплённых дайджеста запроса перед одним RPC обновления и отклоняет nil/неизвестные поля верхнего уровня ответа.
+// Поддержанные результаты преобразуются без повтора неоднозначного внешнего действия.
 func (client *Client) RenewManagedProviderCredential(ctx context.Context, task repository.ProviderCredentialRenewalTask) (repository.ProviderCredentialRenewalResult, error) {
 	binding, err := client.validRenewalTask(task)
 	if err != nil {
@@ -70,6 +78,10 @@ func (client *Client) RenewManagedProviderCredential(ctx context.Context, task r
 	return credentialRenewalResult(response.GetState(), response.GetCredential(), response.GetMaterializerReceiptUid(), response.GetMaterializerReceiptResourceVersion())
 }
 
+// ObserveManagedProviderCredentialRenewal verifies the exact task before observation and applies the same result conversion as renewal.
+// After conversion it marks Recovered even when conversion returns an error; callers must honor that error rather than treating the flag as success.
+// ObserveManagedProviderCredentialRenewal проверяет точную задачу перед наблюдением и применяет то же преобразование результата, что обновление.
+// После преобразования ставится Recovered даже при его ошибке; потребитель обязан учитывать ошибку, а не считать признак успехом.
 func (client *Client) ObserveManagedProviderCredentialRenewal(ctx context.Context, task repository.ProviderCredentialRenewalTask) (repository.ProviderCredentialRenewalResult, error) {
 	binding, err := client.validRenewalTask(task)
 	if err != nil {
@@ -87,6 +99,10 @@ func (client *Client) ObserveManagedProviderCredentialRenewal(ctx context.Contex
 	return result, err
 }
 
+// validRenewalTask recomputes and compares writer and owner-envelope digests, then returns the validated binding.
+// Equality preserves request pins but is not by itself transport identity or owner permission.
+// validRenewalTask заново вычисляет и сравнивает дайджесты записи и оболочки владельца, затем возвращает проверенную привязку.
+// Совпадение сохраняет привязки запроса, но само не является идентичностью транспорта или разрешением владельца.
 func (client *Client) validRenewalTask(task repository.ProviderCredentialRenewalTask) (*cp.ProviderCredentialRenewalBinding, error) {
 	writer, owner, err := client.CredentialRenewalRequestDigests(task)
 	if err != nil || writer != task.RequestDigest || owner != task.OwnerRequestDigest {
@@ -95,6 +111,10 @@ func (client *Client) validRenewalTask(task repository.ProviderCredentialRenewal
 	return credentialRenewalBinding(task)
 }
 
+// credentialRenewalResult accepts success only with valid credential and receipt UID/version metadata; running and unknown outcomes must carry no credential.
+// Those uncertain states remain UNKNOWN_OUTCOME, with receipt fields forwarded without success validation; errors may retain partial receipt metadata and never imply successful renewal.
+// credentialRenewalResult принимает успех только с корректными метаданными учётных данных и UID/версии квитанции; выполнение и неизвестный исход не должны содержать учётные данные.
+// Неопределённые состояния остаются UNKNOWN_OUTCOME, а поля квитанции передаются без проверки успеха; ошибки могут сохранять частичные метаданные и никогда не означают успешное обновление.
 func credentialRenewalResult(state cp.ProviderCredentialRenewalState, credential *cp.ProviderCredentialDescriptor, uid, version string) (repository.ProviderCredentialRenewalResult, error) {
 	result := repository.ProviderCredentialRenewalResult{ReceiptUID: uid, ReceiptVersion: version}
 	switch state {

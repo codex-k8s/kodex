@@ -10,6 +10,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/domain/types/value"
 )
 
+// TestScopedCipherRejectsLegacyV1AndCrossOrganization round-trips PROJECT/ORGANIZATION bindings, denies a
+// foreign organization and rejects ciphertext built with legacy-v1 AAD; the fixture does not add a
+// compatibility decoder.
+// TestScopedCipherRejectsLegacyV1AndCrossOrganization проверяет round-trip PROJECT/ORGANIZATION bindings,
+// отклоняет foreign organization и ciphertext с legacy-v1 AAD; compatibility decoder не добавляется.
 func TestScopedCipherRejectsLegacyV1AndCrossOrganization(t *testing.T) {
 	crypt, keys, binding, plaintext := cryptoFixture(t)
 	for _, scope := range []string{"PROJECT", "ORGANIZATION"} {

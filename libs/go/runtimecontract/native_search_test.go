@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestNativeSearchOverlayCanonicalSafeReadback preserves each search mode and its distinct digest, rejects malformed overrides without input disclosure and does not materialize an absent owner selection.
+// TestNativeSearchOverlayCanonicalSafeReadback сохраняет каждый режим поиска и его отдельный дайджест, отклоняет некорректные настройки без раскрытия входа и не создаёт отсутствующий выбор владельца.
 func TestNativeSearchOverlayCanonicalSafeReadback(t *testing.T) {
 	seen := map[string]bool{}
 	for _, mode := range []string{"disabled", "cached", "indexed", "live"} {

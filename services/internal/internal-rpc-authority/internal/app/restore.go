@@ -38,7 +38,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// RestoreControllerConfig задаёт контроллер координации восстановления.
+// RestoreControllerConfig describes restore coordination listeners, exact database/controller identity, trust/target inputs, publisher and Kubernetes clients, evidence verification locators and readiness/shutdown budgets. Parsed references do not prove the existence of an approved restore, a trusted evidence object or a ready PostgreSQL connection.
+// RestoreControllerConfig описывает listeners координации восстановления, точные идентичности БД и контроллера, входы доверия и целей, клиенты publisher и Kubernetes, адреса проверки evidence и бюджеты готовности и завершения. Разобранные ссылки не доказывают наличие одобренного восстановления, доверенного evidence или готового подключения PostgreSQL.
 type RestoreControllerConfig struct {
 	Listen                   string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_LISTEN"`
 	TechnicalListen          string `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
@@ -70,7 +71,8 @@ type RestoreControllerConfig struct {
 	ShutdownTimeout          time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
-// LoadRestoreControllerConfig читает и проверяет окружение контроллера.
+// LoadRestoreControllerConfig sets the restore-controller defaults and fixed resource locators, parses environment fields and requires valid listener syntax, nonzero controller generation, expected database user and the exact database-cluster ID. It bounds readiness interval/timeout but does not load certificates, verify external trust or prove infrastructure readiness during parsing.
+// LoadRestoreControllerConfig задаёт исходные параметры restore-controller и фиксированные адреса ресурсов, разбирает поля окружения и требует синтаксис listeners, ненулевое поколение контроллера, ожидаемого пользователя БД и точный идентификатор кластера БД. Интервал и срок готовности ограничиваются, но сертификаты, внешнее доверие и готовность инфраструктуры при разборе не проверяются.
 func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 	config := RestoreControllerConfig{
 		Listen:                   ":8443",
@@ -127,7 +129,8 @@ func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 	return config, nil
 }
 
-// RunRestoreController запускает сервер координации и устойчивое ограждение.
+// RunRestoreController composes PostgreSQL fencing, Kubernetes coordination/evidence, the mTLS publisher client, verified restore-role trust and the exact TLS-derived ES256 controller key, then recovers startup state before serving restore RPC. Its monitor reports direct infrastructure readiness; shutdown retains worker/server/publisher/evidence/Kubernetes/database order before telemetry. The caller owns lifecycle and shutdown-base contexts; invoking this runtime can recover durable restore state and is not an ordinary local unit check.
+// RunRestoreController собирает ограждение PostgreSQL, координацию и evidence Kubernetes, mTLS-клиент publisher, проверенное доверие роли восстановления и точный ES256-ключ контроллера из TLS, затем восстанавливает стартовое состояние до обслуживания restore RPC. Монитор сообщает прямую готовность инфраструктуры; завершение сохраняет порядок исполнителей, серверов, publisher, evidence, Kubernetes и БД перед телеметрией. Контексты жизненного цикла и базы завершения принадлежат вызывающему; runtime может восстанавливать устойчивое состояние restore и не является обычной локальной юнит-проверкой.
 func RunRestoreController(
 	lifecycle context.Context,
 	shutdownBase context.Context,
@@ -340,11 +343,7 @@ func RunRestoreController(
 		pool.Close()
 		return errors.New("listen on restore controller technical endpoint")
 	}
-	technicalServer := newRestoreTechnicalServer(
-		readiness,
-		metrics,
-		restoreApplication,
-	)
+	technicalServer := newSnapshotTechnicalServer(readiness, metrics)
 	workers := serviceruntime.StartWorkers(
 		lifecycle,
 		monitorRestoreReadiness(
@@ -378,73 +377,71 @@ func RunRestoreController(
 	metrics.SetReady(false)
 	shutdownErr := serviceruntime.RunShutdown(
 		shutdownBase,
-		serviceruntime.ShutdownOperation{
-			Name:    "workers",
-			Timeout: config.ShutdownTimeout,
-			Run: func(ctx context.Context) error {
-				workers.Stop()
-				return workers.Wait(ctx)
+		telemetry.shutdownOperations(config.ShutdownTimeout,
+			serviceruntime.ShutdownOperation{
+				Name:    "workers",
+				Timeout: config.ShutdownTimeout,
+				Run: func(ctx context.Context) error {
+					workers.Stop()
+					return workers.Wait(ctx)
+				},
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "grpc-server",
-			Timeout: config.ShutdownTimeout,
-			Run:     func(ctx context.Context) error { return stopGRPC(ctx, grpcRuntime) },
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "technical-http",
-			Timeout: config.ShutdownTimeout,
-			Run:     technicalServer.Shutdown,
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "publisher-client",
-			Timeout: config.ShutdownTimeout,
-			Run:     func(context.Context) error { return publisherConnection.Close() },
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "restore-evidence-client",
-			Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				evidence.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name:    "grpc-server",
+				Timeout: config.ShutdownTimeout,
+				Run:     func(ctx context.Context) error { return stopGRPC(ctx, grpcRuntime) },
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "kubernetes-client",
-			Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				coordination.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name:    "technical-http",
+				Timeout: config.ShutdownTimeout,
+				Run:     technicalServer.Shutdown,
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "postgresql",
-			Timeout: config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				pool.Close()
-				return nil
+			serviceruntime.ShutdownOperation{
+				Name:    "publisher-client",
+				Timeout: config.ShutdownTimeout,
+				Run:     func(context.Context) error { return publisherConnection.Close() },
 			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "otel-tracing",
-			Timeout: config.ShutdownTimeout,
-			Run:     telemetry.shutdownTracing,
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "sentry-flush",
-			Timeout: config.ShutdownTimeout,
-			Run:     telemetry.flushSentry,
-		},
+			serviceruntime.ShutdownOperation{
+				Name:    "restore-evidence-client",
+				Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					evidence.Close()
+					return nil
+				},
+			},
+			serviceruntime.ShutdownOperation{
+				Name:    "kubernetes-client",
+				Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					coordination.Close()
+					return nil
+				},
+			},
+			serviceruntime.ShutdownOperation{
+				Name:    "postgresql",
+				Timeout: config.ShutdownTimeout,
+				Run: func(context.Context) error {
+					pool.Close()
+					return nil
+				},
+			},
+		)...,
 	)
 	telemetryFinished = true
 	logger.Info("restore controller stopped")
 	return errors.Join(runtimeErr, shutdownErr)
 }
 
+// restoreStartupReadiness is the application port for a direct startup-eligibility check returning the current restore state under the caller's bounded context. It exposes no generic prepare, approve or completion command to the readiness monitor.
+// restoreStartupReadiness — порт приложения для прямой проверки стартовой допустимости с возвратом текущего состояния restore в ограниченном контексте вызывающего. Универсальные команды подготовки, подтверждения или завершения монитору готовности не предоставляются.
 type restoreStartupReadiness interface {
+	// StartupReady returns restore state or a failure of direct startup eligibility; the monitor consumes only the error and does not treat the returned state as permission to perform a restore.
+	// StartupReady возвращает состояние восстановления либо отказ прямой стартовой допустимости; монитор использует только ошибку и не считает возвращённое состояние разрешением выполнять восстановление.
 	StartupReady(context.Context) (model.RestoreState, error)
 }
 
+// monitorRestoreReadiness constructs a worker that probes immediately and on configured ticks with a separate bounded child context per probe, stopping with ctx.Err on cancellation. Construction itself starts no goroutine and performs no probe; serviceruntime owns the returned worker lifecycle.
+// monitorRestoreReadiness создаёт исполнителя немедленной проверки и проверок по настроенным тикам с отдельным ограниченным дочерним контекстом каждой, завершающегося с ctx.Err при отмене. Само создание не запускает goroutine и не выполняет проверку; жизненный цикл возвращённого исполнителя принадлежит serviceruntime.
 func monitorRestoreReadiness(application restoreStartupReadiness, readiness *serviceruntime.Readiness, metrics *observability.Metrics, logger *slog.Logger, interval, timeout time.Duration) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(interval)
@@ -462,6 +459,8 @@ func monitorRestoreReadiness(application restoreStartupReadiness, readiness *ser
 	}
 }
 
+// refreshRestoreReadiness calls direct StartupReady once, updates the local flag and ready metric, and emits only transition logs with a fixed infrastructure error class. It discards the returned state and never approves, starts or completes a restore.
+// refreshRestoreReadiness однократно вызывает прямой StartupReady, обновляет локальный признак и метрику ready и выводит только смены состояния с фиксированным классом ошибки инфраструктуры. Возвращённое состояние отбрасывается, подтверждение, запуск и завершение восстановления не выполняются.
 func refreshRestoreReadiness(ctx context.Context, application restoreStartupReadiness, readiness *serviceruntime.Readiness, metrics *observability.Metrics, logger *slog.Logger) {
 	_, err := application.StartupReady(ctx)
 	if err != nil {
@@ -477,6 +476,8 @@ func refreshRestoreReadiness(ctx context.Context, application restoreStartupRead
 	metrics.SetReady(true)
 }
 
+// openRestorePostgres reads the bounded DSN, rejects TLS fallback/foreign host or missing CA/SNI/insecure verification, installs the restore capability's exact session setup/acquire checks and a four-connection instrumented pool. Unlike the generic capability constructor, initial DSN user/password shape is not checked here; session identity is checked by its hooks. It retries connectivity within the caller's startup context and closes the pool if that budget fails.
+// openRestorePostgres читает ограниченный DSN, отклоняет запасные TLS-пути, чужой host, отсутствие CA или SNI и небезопасную проверку, устанавливает точную настройку и проверку сессии возможности restore и инструментированный пул четырёх соединений. В отличие от общего конструктора возможности, исходная форма user и password DSN здесь не проверяется; идентичность сессии проверяют hooks. Подключение повторяется в стартовом контексте вызывающего, при неуспехе бюджета пул закрывается.
 func openRestorePostgres(
 	ctx context.Context,
 	config RestoreControllerConfig,
@@ -528,6 +529,8 @@ func openRestorePostgres(
 	return pool, nil
 }
 
+// waitForPostgresConnectivity rejects a nil ping or nonpositive/inverted retry intervals, then retries every ping failure with doubling delay capped at the supplied maximum. The first success returns nil; cancellation while waiting stops the timer and returns ctx.Err rather than exposing the last connection error or creating a background retry.
+// waitForPostgresConnectivity отклоняет nil ping и неположительные либо перевёрнутые интервалы, затем повторяет любую ошибку ping с удвоенной задержкой до переданного максимума. Первый успех возвращает nil; отмена ожидания останавливает таймер и возвращает ctx.Err без раскрытия последней ошибки подключения или фонового повтора.
 func waitForPostgresConnectivity(
 	ctx context.Context,
 	ping func(context.Context) error,
@@ -553,6 +556,8 @@ func waitForPostgresConnectivity(
 	}
 }
 
+// loadControllerSigningKey requires exactly one certificate in the loaded TLS pair, matching ECDSA private/public keys on P-256, and derives a controller key ID from the first twelve bytes of the certificate's SHA-256 digest. It returns the ES256 key for controller signing without verifying certificate expiry, a trust chain or workload authorization itself.
+// loadControllerSigningKey требует ровно один сертификат загруженной TLS-пары, совпадающие приватный и публичный ECDSA-ключи P-256 и выводит идентификатор контроллера из первых двенадцати байтов SHA-256 сертификата. Возвращается ES256-ключ подписания контроллера без собственной проверки срока сертификата, цепочки доверия или полномочий workload.
 func loadControllerSigningKey(
 	certificateFile string,
 	privateKeyFile string,
@@ -588,33 +593,8 @@ func loadControllerSigningKey(
 	}, nil
 }
 
-func newRestoreTechnicalServer(
-	readiness *serviceruntime.Readiness,
-	metrics *observability.Metrics,
-	restoreApplication *application.RestoreController,
-) *http.Server {
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", metrics.PrometheusHandler())
-	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) {
-		_, _ = response.Write([]byte("ok\n"))
-	})
-	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
-		if ready, _ := readiness.Ready(); !ready {
-			http.Error(response, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		_, _ = response.Write([]byte("ready\n"))
-	})
-	return &http.Server{
-		Handler:           mux,
-		ReadHeaderTimeout: 2 * time.Second,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      5 * time.Second,
-		IdleTimeout:       30 * time.Second,
-	}
-}
-
+// normalizeRestoreMethod maps the five registered restore-controller RPC to fixed diagnostic labels and normalizes every other full method to unknown, without granting restore or owner-decision authority.
+// normalizeRestoreMethod сопоставляет пять зарегистрированных RPC restore-controller фиксированным диагностическим меткам и сводит любой другой полный метод к unknown без выдачи полномочий восстановления или решения владельца.
 func normalizeRestoreMethod(method string) string {
 	switch method {
 	case internalrpcauthorityv1.RestoreControllerService_PrepareRestore_FullMethodName:

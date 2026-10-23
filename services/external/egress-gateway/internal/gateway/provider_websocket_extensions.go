@@ -5,8 +5,12 @@ import (
 	"strings"
 )
 
+// maximumWebSocketExtensionBytes caps the complete extension header accepted by the pinned provider profile.
+// maximumWebSocketExtensionBytes ограничивает весь заголовок расширений закреплённого профиля провайдера.
 const maximumWebSocketExtensionBytes = 256
 
+// webSocketDeflateParameters records the bounded offer or response parameters needed for negotiation.
+// webSocketDeflateParameters хранит ограниченные параметры offer или response для согласования.
 type webSocketDeflateParameters struct {
 	present             bool
 	serverNoContext     bool
@@ -15,9 +19,10 @@ type webSocketDeflateParameters struct {
 	clientWindow        uint8
 }
 
-// Закрытый token-only профиль RFC 7692. Закреплённый Codex 0.160.0 предлагает
-// permessage-deflate; client_max_window_bits. Его tungstenite fork поддерживает
-// окна 9..15, а не весь диапазон RFC 8..15. Прокси не распаковывает frames.
+// parseWebSocketDeflate accepts only the pinned RFC 7692 token profile without decompressing frames.
+// parseWebSocketDeflate принимает только закреплённый профиль токенов RFC 7692 без распаковки кадров.
+// The pinned Codex 0.160.0 fork offers client_max_window_bits and supports window sizes 9..15.
+// Закреплённый fork Codex 0.160.0 предлагает client_max_window_bits и поддерживает размеры окна 9..15.
 func parseWebSocketDeflate(header http.Header, response bool) (webSocketDeflateParameters, bool) {
 	var parameters webSocketDeflateParameters
 	values := header.Values("Sec-WebSocket-Extensions")
@@ -79,6 +84,8 @@ func parseWebSocketDeflate(header http.Header, response bool) (webSocketDeflateP
 	return parameters, true
 }
 
+// webSocketDeflateWindow maps only the pinned supported decimal window sizes to numeric values.
+// webSocketDeflateWindow преобразует только поддерживаемые десятичные размеры окна в числа.
 func webSocketDeflateWindow(value string) uint8 {
 	switch value {
 	case "9":
@@ -100,11 +107,15 @@ func webSocketDeflateWindow(value string) uint8 {
 	}
 }
 
+// validWebSocketExtensionOffer rejects unsolicited or malformed client extension offers.
+// validWebSocketExtensionOffer отклоняет неожиданные и неверно оформленные предложения расширений клиента.
 func validWebSocketExtensionOffer(header http.Header) bool {
 	_, valid := parseWebSocketDeflate(header, false)
 	return valid
 }
 
+// validWebSocketExtensionResponse requires a server answer within the client's offered deflate limits.
+// validWebSocketExtensionResponse требует, чтобы ответ сервера не превышал предложенные клиентом пределы deflate.
 func validWebSocketExtensionResponse(response, request http.Header) bool {
 	offer, validOffer := parseWebSocketDeflate(request, false)
 	answer, validAnswer := parseWebSocketDeflate(response, true)
@@ -123,7 +134,7 @@ func validWebSocketExtensionResponse(response, request http.Header) bool {
 	if answer.clientWindowOffered && (!offer.clientWindowOffered || offer.clientWindow != 0 && answer.clientWindow > offer.clientWindow) {
 		return false
 	}
-	// RFC 7692 разрешает серверу дополнительно ограничить оба context takeover
-	// и server window; client window допустим лишь при соответствующем offer.
+	// RFC 7692 lets the server narrow context takeover and its window, but the client window needs an offer.
+	// RFC 7692 разрешает серверу сузить context takeover и своё окно, а окно клиента требует соответствующего offer.
 	return true
 }

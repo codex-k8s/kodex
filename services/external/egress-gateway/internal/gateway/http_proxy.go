@@ -25,14 +25,28 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// errProxyHeaderTooLarge terminates a request before an oversized header is parsed further.
+// errProxyHeaderTooLarge прекращает разбор запроса при превышении лимита заголовка.
 var errProxyHeaderTooLarge = errors.New("runtime proxy request header is too large")
 
+// runtimeProxyProviderDiscoveryLog defines closed diagnostic fields for approved discovery routes.
+// runtimeProxyProviderDiscoveryLog задаёт закрытые поля диагностики разрешённых маршрутов discovery.
 const runtimeProxyProviderDiscoveryLog = "Runtime proxy provider discovery: route=%s event=%s outcome=%s status_class=%s failure=%s"
+
+// runtimeProxyProviderDiscoveryShapeLog records only bounded metadata and a schema class, never account values.
+// runtimeProxyProviderDiscoveryShapeLog записывает лишь ограниченные метаданные и класс схемы без значений аккаунтов.
 const runtimeProxyProviderDiscoveryShapeLog = "Runtime proxy provider discovery: route=ACCOUNTS_CHECK event=RESPONSE_SHAPE content_encoding=%s content_type=%s schema=%s"
+
+// maximumDiscoveryBodyBytes caps diagnostic capture without limiting bytes forwarded to the client.
+// maximumDiscoveryBodyBytes ограничивает диагностический захват, не ограничивая пересылаемое клиенту тело.
 const maximumDiscoveryBodyBytes = 1 << 20
 
+// discoveryBodyCapture retains at most one byte past the limit so overflow remains distinguishable.
+// discoveryBodyCapture хранит не более одного байта сверх лимита, чтобы распознавать превышение.
 type discoveryBodyCapture struct{ body []byte }
 
+// Write records only a bounded prefix while reporting the complete write to preserve streaming.
+// Write сохраняет только ограниченный префикс, подтверждая всю запись ради непрерывной передачи.
 func (capture *discoveryBodyCapture) Write(body []byte) (int, error) {
 	remaining := maximumDiscoveryBodyBytes + 1 - len(capture.body)
 	if remaining > 0 {
@@ -41,11 +55,15 @@ func (capture *discoveryBodyCapture) Write(body []byte) (int, error) {
 	return len(body), nil
 }
 
+// clear zeroes retained response bytes before releasing the diagnostic buffer.
+// clear обнуляет сохранённые байты ответа перед освобождением диагностического буфера.
 func (capture *discoveryBodyCapture) clear() {
 	clear(capture.body)
 	capture.body = nil
 }
 
+// providerDiscoveryEncoding maps only known content encodings to closed diagnostic labels.
+// providerDiscoveryEncoding отображает лишь известные кодировки тела в закрытые диагностические метки.
 func providerDiscoveryEncoding(response *http.Response) string {
 	if response.Uncompressed {
 		return "IDENTITY"
@@ -69,6 +87,8 @@ func providerDiscoveryEncoding(response *http.Response) string {
 	}
 }
 
+// providerDiscoveryContentType classifies one valid media type without retaining private parameters.
+// providerDiscoveryContentType классифицирует один корректный media type без сохранения закрытых параметров.
 func providerDiscoveryContentType(response *http.Response) string {
 	if len(response.Header.Values("Content-Type")) != 1 {
 		return "UNKNOWN"
@@ -89,8 +109,10 @@ func providerDiscoveryContentType(response *http.Response) string {
 	}
 }
 
-// Только известные provider paths преобразуются в закрытую диагностику.
-// Host, URL/query, headers, body и identity запроса не записываются.
+// providerDiscoveryRoute names only exact authorized provider GET paths for closed diagnostics.
+// providerDiscoveryRoute именует в закрытой диагностике только точные разрешённые GET-пути провайдера.
+// It never logs host, URL/query, headers, body, or request identity.
+// Функция не записывает host, URL/query, заголовки, тело или identity запроса.
 func providerDiscoveryRoute(request *http.Request, target connect.Target, access runtimecontract.RuntimeProxyAccess) string {
 	if !access.ProviderAccess || target.Hostname != "chatgpt.com" || target.Port != 443 || request == nil || request.URL == nil || request.URL.RawPath != "" || request.Method != http.MethodGet {
 		return ""
@@ -105,15 +127,25 @@ func providerDiscoveryRoute(request *http.Request, target connect.Target, access
 	}
 }
 
+// proxyUpstreamFailure marks a closed DNS or literal-dial error without exposing an endpoint.
+// proxyUpstreamFailure обозначает закрытую ошибку DNS или IP-соединения без раскрытия точки.
 type proxyUpstreamFailure string
 
 const (
-	proxyUpstreamDNSFailure  proxyUpstreamFailure = "DNS"
+	// proxyUpstreamDNSFailure identifies failed DNS validation before any upstream dial.
+	// proxyUpstreamDNSFailure обозначает ошибку проверки DNS до соединения с upstream.
+	proxyUpstreamDNSFailure proxyUpstreamFailure = "DNS"
+	// proxyUpstreamDialFailure identifies failed connection attempts to validated literal addresses.
+	// proxyUpstreamDialFailure обозначает неудачные соединения с проверенными точными адресами.
 	proxyUpstreamDialFailure proxyUpstreamFailure = "DIAL"
 )
 
+// Error returns a fixed message so wrapped failures cannot reveal private upstream details.
+// Error возвращает постоянный текст, чтобы обёртки не раскрывали детали upstream.
 func (failure proxyUpstreamFailure) Error() string { return "runtime proxy upstream connection failed" }
 
+// providerDiscoveryFailure maps transport and TLS failures to a finite diagnostic vocabulary.
+// providerDiscoveryFailure сводит транспортные и TLS-сбои к конечному набору диагностических меток.
 func providerDiscoveryFailure(err error, tlsFailed bool) string {
 	var upstreamFailure proxyUpstreamFailure
 	if errors.As(err, &upstreamFailure) {
@@ -134,6 +166,8 @@ func providerDiscoveryFailure(err error, tlsFailed bool) string {
 	return "UNKNOWN"
 }
 
+// providerDiscoveryStatusClass reports only a bounded HTTP status family.
+// providerDiscoveryStatusClass сообщает лишь ограниченный класс HTTP-статуса.
 func providerDiscoveryStatusClass(status int) string {
 	switch {
 	case status >= 100 && status < 200:
@@ -151,6 +185,8 @@ func providerDiscoveryStatusClass(status int) string {
 	}
 }
 
+// providerDiscoveryBodyFailure distinguishes cancellation, timeout, and other body I/O failures.
+// providerDiscoveryBodyFailure различает отмену, срок ожидания и прочие ошибки чтения тела.
 func providerDiscoveryBodyFailure(err error) string {
 	if errors.Is(err, context.Canceled) {
 		return "CANCELLED"
@@ -161,12 +197,16 @@ func providerDiscoveryBodyFailure(err error) string {
 	return "IO"
 }
 
+// proxyResponseNeedsChunked selects HTTP/1.1 chunking only when an eligible response body has unknown length.
+// proxyResponseNeedsChunked выбирает HTTP/1.1 chunked лишь для допустимого тела неизвестной длины.
 func proxyResponseNeedsChunked(response *http.Response, method string) bool {
 	return response.ContentLength < 0 && response.Body != nil && response.Body != http.NoBody && method != http.MethodHead &&
 		response.StatusCode >= 200 && response.StatusCode != http.StatusNoContent &&
 		response.StatusCode != http.StatusResetContent && response.StatusCode != http.StatusNotModified
 }
 
+// proxyTLS terminates authenticated CONNECT TLS, validates SNI and one HTTP request, then proxies through pinned DNS.
+// proxyTLS завершает TLS аутентифицированного CONNECT, проверяет SNI и один HTTP-запрос, затем проксирует через закреплённый DNS.
 func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target connect.Target, access runtimecontract.RuntimeProxyAccess, limits policy.Limits) {
 	if reader.Buffered() != 0 || server.interceptCA == nil {
 		server.metrics.Connection("rejected", "proxy", "malformed")
@@ -323,6 +363,8 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 	server.metrics.Connection("completed", "proxy", "none")
 }
 
+// boundedProxyHeaderReader counts header bytes only until the first CRLFCRLF request boundary.
+// boundedProxyHeaderReader считает байты заголовка лишь до первого разделителя CRLFCRLF.
 type boundedProxyHeaderReader struct {
 	source   io.Reader
 	maximum  int
@@ -330,6 +372,8 @@ type boundedProxyHeaderReader struct {
 	matched  int
 }
 
+// Read rejects an over-budget header without imposing the same bound on the request body.
+// Read отклоняет заголовок сверх лимита, не распространяя этот лимит на тело запроса.
 func (reader *boundedProxyHeaderReader) Read(buffer []byte) (int, error) {
 	read, err := reader.source.Read(buffer)
 	for index, value := range buffer[:read] {
@@ -358,6 +402,8 @@ func (reader *boundedProxyHeaderReader) Read(buffer []byte) (int, error) {
 	return read, err
 }
 
+// proxyRequestAllowed is the authoritative request predicate for exact provider paths or scoped user web access.
+// proxyRequestAllowed — авторитетный предикат запроса для точных путей провайдера или ограниченного web-доступа.
 func proxyRequestAllowed(request *http.Request, target connect.Target, access runtimecontract.RuntimeProxyAccess) bool {
 	if request == nil || request.Method == http.MethodConnect || request.URL == nil || request.URL.IsAbs() || request.RequestURI == "" {
 		return false
@@ -385,8 +431,10 @@ func proxyRequestAllowed(request *http.Request, target connect.Target, access ru
 	return runtimecontract.RuntimeWebAccessAllowsRequest(access.WebAccess, host, request.Method) && validProxyWebPath(request.URL)
 }
 
-// WebAccess разрешает host/method, а не path. Escape не выдаёт provider authority;
-// исходный RawPath сохраняется при пересылке без нормализации и второго decode.
+// validProxyWebPath rejects ambiguous or nested escapes while preserving the original upstream path.
+// validProxyWebPath отклоняет неоднозначные и вложенные escape, сохраняя исходный путь для upstream.
+// User WebAccess authorizes host and method, not a path or provider authority.
+// Пользовательский WebAccess разрешает host и method, но не путь и не полномочия провайдера.
 func validProxyWebPath(target *url.URL) bool {
 	if target.Opaque != "" || target.Host != "" || target.User != nil || target.Fragment != "" {
 		return false
@@ -419,6 +467,8 @@ func validProxyWebPath(target *url.URL) bool {
 	return true
 }
 
+// upstreamRequest clones an allowed request for exact HTTPS target routing and removes proxy credentials.
+// upstreamRequest копирует разрешённый запрос для точной HTTPS-цели и удаляет реквизиты прокси.
 func upstreamRequest(request *http.Request, target connect.Target) *http.Request {
 	result := request.Clone(request.Context())
 	result.RequestURI = ""
@@ -432,6 +482,8 @@ func upstreamRequest(request *http.Request, target connect.Target) *http.Request
 	return result
 }
 
+// stripHopByHop removes fixed hop-by-hop fields and those nominated by Connection before forwarding.
+// stripHopByHop удаляет фиксированные и перечисленные в Connection переходные заголовки перед пересылкой.
 func stripHopByHop(header http.Header) {
 	for _, value := range header.Values("Connection") {
 		for _, name := range strings.Split(value, ",") {
@@ -443,6 +495,8 @@ func stripHopByHop(header http.Header) {
 	}
 }
 
+// proxyTransport resolves and validates fresh DNS, dials only literals, and verifies upstream TLS for the exact host.
+// proxyTransport проверяет свежий DNS, соединяется только по IP и проверяет upstream TLS для точного хоста.
 func (server *Server) proxyTransport(target connect.Target, limits policy.Limits) *http.Transport {
 	return &http.Transport{
 		Proxy: nil,
@@ -466,6 +520,8 @@ func (server *Server) proxyTransport(target connect.Target, limits policy.Limits
 	}
 }
 
+// writeProxyError sends a bounded, non-cacheable HTTP error without forwarding upstream details.
+// writeProxyError отправляет ограниченную некэшируемую HTTP-ошибку без деталей upstream.
 func writeProxyError(connection net.Conn, status int, limits policy.Limits) {
 	_ = connection.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds)))
 	response := &http.Response{StatusCode: status, Status: http.StatusText(status), ProtoMajor: 1, ProtoMinor: 1,
@@ -475,6 +531,8 @@ func writeProxyError(connection net.Conn, status int, limits policy.Limits) {
 	_ = response.Write(connection)
 }
 
+// isTimeout recognizes a wrapped network timeout for closed failure classification.
+// isTimeout распознаёт обёрнутый сетевой timeout для закрытой классификации ошибки.
 func isTimeout(err error) bool {
 	var networkError net.Error
 	return errors.As(err, &networkError) && networkError.Timeout()

@@ -15,6 +15,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// sourceOwnerFixture records source claims and finalization while injecting owner errors, foreign identity or a selected receipt state.
+// RU: sourceOwnerFixture записывает получение и финализацию чтения источника, подставляя owner-ошибки, чужую идентичность либо выбранное состояние квитанции.
 type sourceOwnerFixture struct {
 	cp.ManagedConfigurationSourceWorkServiceClient
 	work                        *cp.ManagedConfigurationSourceWork
@@ -25,6 +27,8 @@ type sourceOwnerFixture struct {
 	state                       cp.ManagedConfigurationSourceState
 }
 
+// ClaimManagedConfigurationSourceWork asserts the single-work limit and claimant before returning configured synthetic work or failure.
+// RU: ClaimManagedConfigurationSourceWork проверяет лимит одной работы и claimant до возврата заданной синтетической работы либо ошибки.
 func (owner *sourceOwnerFixture) ClaimManagedConfigurationSourceWork(_ context.Context, request *cp.ClaimManagedConfigurationSourceWorkRequest, _ ...grpc.CallOption) (*cp.ClaimManagedConfigurationSourceWorkResponse, error) {
 	owner.claims++
 	if request.GetLimit() != 1 || request.GetClaimant() != "fixture" {
@@ -33,6 +37,8 @@ func (owner *sourceOwnerFixture) ClaimManagedConfigurationSourceWork(_ context.C
 	return &cp.ClaimManagedConfigurationSourceWorkResponse{Work: []*cp.ManagedConfigurationSourceWork{owner.work}}, owner.claimErr
 }
 
+// receipt projects the claim into a versioned source receipt and can replace its reference to test foreign-response rejection.
+// RU: receipt преобразует работу в версионированную квитанцию источника и может заменить ref для проверки отклонения чужого ответа.
 func (owner *sourceOwnerFixture) receipt() *cp.ManagedConfigurationGitSource {
 	work := owner.work
 	ref := work.GetSourceRef()
@@ -42,12 +48,16 @@ func (owner *sourceOwnerFixture) receipt() *cp.ManagedConfigurationGitSource {
 	return &cp.ManagedConfigurationGitSource{Ref: ref, Version: 1, Generation: work.GetLease().GetSourceGeneration(), ConnectionRef: work.GetConnectionRef(), ProviderKey: work.GetDefinitionKey(), RepositoryRef: work.GetRepositoryRef(), RefName: work.GetRefName(), Path: work.GetPath(), State: owner.state, AcceptedCommitSha: "fixture-commit", AcceptedContentSha256: "fixture-digest"}
 }
 
+// CompleteManagedConfigurationSourceWork clones the request before the application clears its content, then returns a controlled receipt or lost ACK.
+// RU: CompleteManagedConfigurationSourceWork клонирует запрос до очистки содержимого приложением, затем возвращает управляемую квитанцию либо потерянный ACK.
 func (owner *sourceOwnerFixture) CompleteManagedConfigurationSourceWork(_ context.Context, request *cp.CompleteManagedConfigurationSourceWorkRequest, _ ...grpc.CallOption) (*cp.CompleteManagedConfigurationSourceWorkResponse, error) {
 	owner.completes++
 	owner.complete = proto.Clone(request).(*cp.CompleteManagedConfigurationSourceWorkRequest)
 	return &cp.CompleteManagedConfigurationSourceWorkResponse{Source: owner.receipt()}, owner.completeErr
 }
 
+// FailManagedConfigurationSourceWork counts failure reports and rejects changed lease pins or an unspecified failure classification.
+// RU: FailManagedConfigurationSourceWork считает сообщения об ошибке и отклоняет изменённые привязки аренды либо неопределённую классификацию причины.
 func (owner *sourceOwnerFixture) FailManagedConfigurationSourceWork(_ context.Context, request *cp.FailManagedConfigurationSourceWorkRequest, _ ...grpc.CallOption) (*cp.FailManagedConfigurationSourceWorkResponse, error) {
 	owner.failures++
 	if !proto.Equal(request.GetLease(), owner.work.GetLease()) || request.GetFailureCode() == cp.ManagedConfigurationSourceFailure_MANAGED_CONFIGURATION_SOURCE_FAILURE_UNSPECIFIED {
@@ -56,6 +66,8 @@ func (owner *sourceOwnerFixture) FailManagedConfigurationSourceWork(_ context.Co
 	return &cp.FailManagedConfigurationSourceWorkResponse{Source: owner.receipt()}, nil
 }
 
+// sourceAdapterFixture supplies synthetic bytes or a read failure and can cancel the parent to test finalization suppression.
+// RU: sourceAdapterFixture предоставляет синтетические байты либо ошибку чтения и может отменить родителя для проверки запрета финализации.
 type sourceAdapterFixture struct {
 	calls   int
 	raw     []byte
@@ -63,6 +75,8 @@ type sourceAdapterFixture struct {
 	cancel  context.CancelFunc
 }
 
+// ReadConfigurationSource counts reads and returns the original byte slice so tests can observe its later zeroing without provider I/O.
+// RU: ReadConfigurationSource считает чтения и возвращает исходный срез байтов для проверки последующего обнуления без обращения к провайдеру.
 func (adapter *sourceAdapterFixture) ReadConfigurationSource(context.Context, *cp.ManagedConfigurationSourceWork) (integration.ConfigurationSourceResult, error) {
 	adapter.calls++
 	if adapter.cancel != nil {
@@ -74,6 +88,10 @@ func (adapter *sourceAdapterFixture) ReadConfigurationSource(context.Context, *c
 	return integration.ConfigurationSourceResult{Content: adapter.raw, CommitSHA: "fixture-commit", ContentSHA256: "fixture-digest", Ancestry: cp.ManagedConfigurationSourceAncestry_MANAGED_CONFIGURATION_SOURCE_ANCESTRY_INITIAL}, nil
 }
 
+// TestSourceWorkPreservesClaimAndDoesNotRetryLostACK covers completion, blocked or queued failure, invalid receipts, expired claims and cancellation.
+// RU: TestSourceWorkPreservesClaimAndDoesNotRetryLostACK проверяет завершение, blocked или queued отказ, неверные квитанции, просроченные claims и отмену.
+// It asserts single finalization, exact lease/content, no provider access for rejected claims and cleared bytes even after a lost owner ACK.
+// RU: Тест требует единственную финализацию, точные аренду и содержимое, отсутствие provider-вызова для отклонённого claim и очистку байтов даже при потере owner ACK.
 func TestSourceWorkPreservesClaimAndDoesNotRetryLostACK(t *testing.T) {
 	for _, mode := range []string{"complete", "invalid_candidate", "lost_ack", "failure", "retry_queued", "foreign_receipt", "nonterminal_receipt", "false_ready", "expired", "claim_denied", "cancel"} {
 		t.Run(mode, func(t *testing.T) {
@@ -142,6 +160,8 @@ func TestSourceWorkPreservesClaimAndDoesNotRetryLostACK(t *testing.T) {
 	}
 }
 
+// TestWorkHealthRequiresFreshSuccessfulOwnerCycle rejects unobserved, expired, future and subsequently failed observations instead of trusting stale success.
+// RU: TestWorkHealthRequiresFreshSuccessfulOwnerCycle отклоняет отсутствующие, устаревшие, будущие и впоследствии ошибочные наблюдения вместо доверия прежнему успеху.
 func TestWorkHealthRequiresFreshSuccessfulOwnerCycle(t *testing.T) {
 	now := time.Now()
 	health := &workCycleHealth{}

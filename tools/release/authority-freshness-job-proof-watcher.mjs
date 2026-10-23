@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import {execFileSync} from 'node:child_process';
-import {constants,closeSync,fsyncSync,lstatSync,openSync,readFileSync,writeSync} from 'node:fs';
+import {lstatSync,readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
+import {appendPrivateJSONLineSync as appendJournal,createPrivatePrettyJSONSync as privateWrite} from './private-json-write.mjs';
 import {captureFutureJobProof,validateCapturedFutureJobPod,validateFutureJobProof,validateFuturePolicy} from './authority-freshness-job-proof.mjs';
 import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 
@@ -18,11 +19,6 @@ const lstatExists=path=>{try{lstatSync(path);return true;}catch(error){if(error.
 function privateRead(path) {
  const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=1<<20,'PRIVATE_FILE_REQUIRED');
  return JSON.parse(readFileSync(path,'utf8'));
-}
-function privateWrite(path,value) {const fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL,0o600);try{writeSync(fd,JSON.stringify(value,null,2)+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
-function appendJournal(path,record,newFile=false) {
- const flags=newFile?constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL:constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW;
- const fd=openSync(path,flags,0o600);try{writeSync(fd,JSON.stringify(record)+'\n');fsyncSync(fd);}finally{closeSync(fd);}
 }
 function readJournal(path,plan) {
  const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=1<<20,'PRIVATE_JOURNAL_REQUIRED');

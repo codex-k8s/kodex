@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+// TestImageVulnerabilityGrypeExplicitZeroFixStateIsUnknown maps Grype's explicit empty state and
+// empty versions to UNKNOWN while preserving source bytes, counts, suppression, and nonblocking status.
+// TestImageVulnerabilityGrypeExplicitZeroFixStateIsUnknown переводит явные пустые состояние и версии Grype
+// в UNKNOWN, сохраняя байты источника, счётчики, исключения и отсутствие блокирующего признака.
 func TestImageVulnerabilityGrypeExplicitZeroFixStateIsUnknown(t *testing.T) {
 	// Форма воспроизводит Grype v0.117.0; scanner metadata не входит в проекцию.
 	zero := vulnerabilityTestMatch("CVE-2026-12345", "High", "", []string{})
@@ -46,6 +50,10 @@ func TestImageVulnerabilityGrypeExplicitZeroFixStateIsUnknown(t *testing.T) {
 	}
 }
 
+// TestImageVulnerabilityGrypeZeroFixStateRejectsIncompleteOrContradictoryShape rejects missing/null
+// fields and contradictory versions without weakening the canonical fix-state enumeration.
+// TestImageVulnerabilityGrypeZeroFixStateRejectsIncompleteOrContradictoryShape отклоняет отсутствующие
+// или null-поля и противоречащие версии, сохраняя закрытый канонический набор состояний исправления.
 func TestImageVulnerabilityGrypeZeroFixStateRejectsIncompleteOrContradictoryShape(t *testing.T) {
 	for _, name := range []string{"missing state", "null state", "missing fix", "null fix", "missing versions", "null versions", "nonempty versions", "unknown state", "canonical empty state"} {
 		t.Run(name, func(t *testing.T) {

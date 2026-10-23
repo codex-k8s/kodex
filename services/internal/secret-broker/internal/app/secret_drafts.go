@@ -18,6 +18,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// newSecretDrafts obtains in-cluster Kubernetes configuration with a five-second request timeout and
+// delegates explicit draft composition; it neither starts recovery nor opens the keyring during
+// construction.
+// newSecretDrafts получает in-cluster Kubernetes configuration с пятисекундным request timeout и
+// делегирует явную draft composition; при создании не запускает recovery и не открывает keyring.
 func newSecretDrafts(config Config, ownerClient controlplanev1.RuntimeSecretDraftWorkServiceClient, runtimeStore *store.Store,
 	metrics *observability.SecretDrafts) (*secretdraft.Service, error) {
 	apiConfig, err := rest.InClusterConfig()
@@ -32,6 +37,12 @@ func newSecretDrafts(config Config, ownerClient controlplanev1.RuntimeSecretDraf
 	return composeSecretDrafts(config, ownerClient, runtimeStore, metrics, client)
 }
 
+// composeSecretDrafts wires owner, durable guard, file keys, AEAD, isolated ciphertext store, shared
+// runtime store and observer with a bounded value limit; it creates no alternate storage authority and
+// does not run readiness/recovery itself.
+// composeSecretDrafts связывает owner, durable guard, file keys, AEAD, isolated ciphertext store, shared
+// runtime store и observer с bounded value limit; альтернативную storage authority не создаёт,
+// readiness/recovery самостоятельно не выполняет.
 func composeSecretDrafts(config Config, ownerClient controlplanev1.RuntimeSecretDraftWorkServiceClient, runtimeStore *store.Store,
 	metrics *observability.SecretDrafts, client kubernetes.Interface) (*secretdraft.Service, error) {
 	if client == nil || metrics == nil {

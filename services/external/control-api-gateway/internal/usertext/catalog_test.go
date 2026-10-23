@@ -12,8 +12,12 @@ import (
 	"testing"
 )
 
+// controlPlaneMessagePattern extracts literal i18n markers with uppercase/digit/underscore IDs from source bytes for catalog coverage checks; it is not a Go/SQL parser or runtime translation resolver.
+// controlPlaneMessagePattern извлекает literal i18n markers с uppercase, digit и underscore IDs из source bytes для проверки catalog coverage; это не Go и SQL parser и не runtime translation resolver.
 var controlPlaneMessagePattern = regexp.MustCompile(`i18n:([A-Z][A-Z0-9_]*)`)
 
+// TestCatalogContainsTheSameResolvedMessagesForEveryLocale compares sorted catalog key lists and requires each key to resolve to nonblank non-ID text in both embedded locales. It checks resource coverage, not translation quality or every interpolation path.
+// TestCatalogContainsTheSameResolvedMessagesForEveryLocale сравнивает отсортированные catalog key lists и требует разрешения каждого key в непустой отличный от ID текст обоих встроенных locales. Проверяется resource coverage, а не качество перевода и каждый interpolation path.
 func TestCatalogContainsTheSameResolvedMessagesForEveryLocale(t *testing.T) {
 	t.Parallel()
 
@@ -36,6 +40,8 @@ func TestCatalogContainsTheSameResolvedMessagesForEveryLocale(t *testing.T) {
 	}
 }
 
+// TestCatalogContainsEveryStaticControlPlaneMessage locates the repository from the test file, scans control-plane Go/SQL source bytes for literal markers and reports sorted IDs absent from the embedded English catalog. It does not run SQL, interpret dynamic IDs or read runtime credentials.
+// TestCatalogContainsEveryStaticControlPlaneMessage находит repository относительно test file, сканирует control-plane Go и SQL source bytes на literal markers и сообщает отсортированные IDs, отсутствующие во встроенном English catalog. SQL не исполняется, dynamic IDs не интерпретируются и runtime credentials не читаются.
 func TestCatalogContainsEveryStaticControlPlaneMessage(t *testing.T) {
 	t.Parallel()
 
@@ -78,6 +84,8 @@ func TestCatalogContainsEveryStaticControlPlaneMessage(t *testing.T) {
 	}
 }
 
+// catalogKeys scans an embedded catalog for unindented colon-terminated uppercase/digit/underscore keys, rejects invalid candidates and returns a sorted list without deduplication. This unit helper is not a general YAML parser.
+// catalogKeys сканирует встроенный catalog на неотступленные uppercase, digit и underscore keys с завершающим двоеточием, отклоняет неверные candidates и возвращает отсортированный список без deduplication. Этот unit helper не является общим YAML parser.
 func catalogKeys(t *testing.T, path string) []string {
 	t.Helper()
 	raw, err := messages.ReadFile(path)
@@ -104,6 +112,8 @@ func catalogKeys(t *testing.T, path string) []string {
 	return keys
 }
 
+// stringSet copies strings into a fresh membership map, naturally collapsing duplicates while preserving exact spelling without normalization.
+// stringSet копирует строки в новую membership map, естественно объединяя повторы и сохраняя точное написание без нормализации.
 func stringSet(values []string) map[string]struct{} {
 	result := make(map[string]struct{}, len(values))
 	for _, value := range values {

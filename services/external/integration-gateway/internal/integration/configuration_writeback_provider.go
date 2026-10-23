@@ -13,6 +13,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// providerJSON performs one GitHub/GitLab writeback API call with the execution credential, selected repository endpoint and bounded request/response JSON.
+// RU: providerJSON выполняет один GitHub/GitLab writeback API-вызов с credential исполнения, выбранным repository endpoint и ограниченным JSON запроса/ответа.
+// It requires the existing GET-200 or POST-201 status semantics, decodes one JSON document, clears byte buffers and makes no application-level retry.
+// RU: Функция сохраняет требования GET-200 либо POST-201, разбирает один JSON-документ, очищает байтовые буферы и не делает прикладной повтор.
+// Unknown fields are not rejected here; exact effect and repository evidence is validated by the higher-level operation.
+// RU: Неизвестные поля здесь не запрещаются; точные доказательства эффекта и репозитория проверяет операция более высокого уровня.
 func (execution *ConfigurationWriteBackExecution) providerJSON(ctx context.Context, method, path string, query url.Values, input, output any) error {
 	base, client := execution.adapter.githubBaseURL, execution.adapter.githubHTTPClient
 	if execution.definition.Spec.Adapter == "GITLAB" {
@@ -78,6 +84,10 @@ func (execution *ConfigurationWriteBackExecution) providerJSON(ctx context.Conte
 	return nil
 }
 
+// VerifyBranch reads back exact candidate content/commit and its single base parent, additionally checking GitHub tree identity, within the execution deadline.
+// RU: VerifyBranch сверяет точные содержимое/commit кандидата и единственного базового родителя, дополнительно GitHub tree, в пределах срока исполнения.
+// PR read-only recovery reads the immutable commit when the proposal branch may have been deleted after merge; returned content is cleared on exit.
+// RU: PR read-only recovery читает неизменяемый commit, если proposal-ветка могла исчезнуть после merge; полученные байты очищаются при выходе.
 func (execution *ConfigurationWriteBackExecution) VerifyBranch(ctx context.Context, candidate ConfigurationWriteBackCandidate) error {
 	ctx, cancel := context.WithDeadline(ctx, execution.deadline)
 	defer cancel()
@@ -144,13 +154,20 @@ func (execution *ConfigurationWriteBackExecution) VerifyBranch(ctx context.Conte
 	return nil
 }
 
+// githubRoot builds the exact escaped GitHub repository prefix from the already validated execution configuration, not from a provider redirect.
+// RU: githubRoot строит точный экранированный GitHub repository-prefix из проверенной конфигурации исполнения, а не provider redirect.
 func (execution *ConfigurationWriteBackExecution) githubRoot() string {
 	return "/repos/" + url.PathEscape(execution.configuration["owner"]) + "/" + url.PathEscape(execution.configuration["repository"])
 }
+
+// gitlabRoot escapes the whole configured project path as one GitLab project identifier, preserving namespace separators inside that identifier.
+// RU: gitlabRoot экранирует весь настроенный project path как один GitLab project ID, сохраняя namespace-разделители внутри идентификатора.
 func (execution *ConfigurationWriteBackExecution) gitlabRoot() string {
 	return "/api/v4/projects/" + url.PathEscape(execution.configuration["project_path"])
 }
 
+// githubWriteBackPR decodes the provider fields required to prove exact repository, branch, candidate commit, effect marker and canonical pull-request URL.
+// RU: githubWriteBackPR разбирает provider-поля для доказательства точных repository, branch, candidate commit, effect marker и канонического URL pull request.
 type githubWriteBackPR struct {
 	Number int64  `json:"number"`
 	URL    string `json:"html_url"`
@@ -169,6 +186,9 @@ type githubWriteBackPR struct {
 		} `json:"repo"`
 	} `json:"base"`
 }
+
+// gitlabWriteBackPR decodes merge-request evidence including same-project identity and full repository reference, rather than trusting an IID alone.
+// RU: gitlabWriteBackPR разбирает merge-request доказательства, включая совпадение project ID и полную repository-ссылку, а не доверяет одному IID.
 type gitlabWriteBackPR struct {
 	IID           int64  `json:"iid"`
 	URL           string `json:"web_url"`
@@ -183,6 +203,8 @@ type gitlabWriteBackPR struct {
 	} `json:"references"`
 }
 
+// githubPR accepts only a positive PR number with exact marker body, source/head commit, base branch, both repository names and canonical GitHub URL.
+// RU: githubPR принимает только положительный номер PR с точными marker body, source/head commit, base-веткой, обоими repository-именами и каноническим GitHub URL.
 func (execution *ConfigurationWriteBackExecution) githubPR(value githubWriteBackPR, commit string) (ConfigurationWriteBackPullRequest, error) {
 	p := execution.work.GetProposal()
 	ref := strconv.FormatInt(value.Number, 10)
@@ -191,6 +213,9 @@ func (execution *ConfigurationWriteBackExecution) githubPR(value githubWriteBack
 	}
 	return ConfigurationWriteBackPullRequest{Ref: ref, URL: value.URL}, nil
 }
+
+// gitlabPR requires the exact marker, branches, candidate SHA, same positive source/target project, full reference and configured-origin canonical URL.
+// RU: gitlabPR требует точные marker, ветки, candidate SHA, одинаковый положительный source/target project, полную ссылку и канонический URL настроенного origin.
 func (execution *ConfigurationWriteBackExecution) gitlabPR(value gitlabWriteBackPR, commit string) (ConfigurationWriteBackPullRequest, error) {
 	p := execution.work.GetProposal()
 	ref := strconv.FormatInt(value.IID, 10)
@@ -201,6 +226,10 @@ func (execution *ConfigurationWriteBackExecution) gitlabPR(value gitlabWriteBack
 	return ConfigurationWriteBackPullRequest{Ref: ref, URL: value.URL}, nil
 }
 
+// FindPullRequest scans at most ten hundred-item filtered pages and validates every exact-marker candidate against the expected provider identity and commit.
+// RU: FindPullRequest просматривает не более десяти фильтрованных страниц по сто элементов и проверяет каждого кандидата с точным маркером по ожидаемым provider identity и commit.
+// Duplicates, oversized pages or exhausted pagination fail closed; only a short final page proves absence or one exact match.
+// RU: Дубликаты, слишком большие страницы и исчерпанный бюджет закрыто отклоняются; только последняя короткая страница доказывает отсутствие либо одно точное совпадение.
 func (execution *ConfigurationWriteBackExecution) FindPullRequest(ctx context.Context, commit string) (ConfigurationWriteBackPullRequest, bool, error) {
 	ctx, cancel := context.WithDeadline(ctx, execution.deadline)
 	defer cancel()
@@ -266,6 +295,10 @@ func (execution *ConfigurationWriteBackExecution) FindPullRequest(ctx context.Co
 	return found, false, errWriteBackGit
 }
 
+// CreatePullRequest rejects read-only recovery, validates the server-derived PR/MR payload and performs one creation attempt followed by exact response validation.
+// RU: CreatePullRequest отклоняет read-only recovery, проверяет выведенный сервером PR/MR payload и выполняет одну попытку создания с точной проверкой ответа.
+// The caller must already validate owner begin and later reconcile by readback; this method neither grants approval nor blindly retries an uncertain creation.
+// RU: Вызывающий уже обязан проверить owner begin и позже согласовать результат через readback; метод не выдаёт одобрение и не повторяет неопределённое создание вслепую.
 func (execution *ConfigurationWriteBackExecution) CreatePullRequest(ctx context.Context, commit string) (ConfigurationWriteBackPullRequest, error) {
 	ctx, cancel := context.WithDeadline(ctx, execution.deadline)
 	defer cancel()

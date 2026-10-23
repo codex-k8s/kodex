@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { assistantLaunchedRunTarget } from "@/features/assistant/model";
+import { watchAssistantReadback } from "@/features/assistant/readback-lifecycle";
 import { usePlatformStore } from "@/features/platform/store";
 import { requestSignal } from "@/shared/api/client";
 import { getRun } from "@/shared/api/generated/openapi/sdk.gen";
@@ -30,7 +31,6 @@ const run = computed(() => {
 const loading = ref(false);
 const stopping = ref(false);
 const problem = ref(false);
-let refresh: (() => Promise<void>) | undefined;
 
 async function readExactRun(
   projectRef: string,
@@ -54,50 +54,29 @@ async function readExactRun(
   return current;
 }
 
-watch(
-  target,
-  (value, _previous, onCleanup) => {
+const refresh = watchAssistantReadback(target, {
+  loading,
+  problem,
+  reset: () => {
     readback.value = undefined;
-    loading.value = false;
-    problem.value = false;
-    if (!value) return;
-    const controller = new AbortController();
-    onCleanup(() => {
-      controller.abort();
-      refresh = undefined;
-    });
-    refresh = async () => {
-      if (controller.signal.aborted) return;
-      loading.value = true;
-      try {
-        const current = await readExactRun(
-          value.projectRef,
-          value.runRef,
-          controller.signal,
-        );
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (controller.signal.aborted) return;
-        readback.value = current;
-        platform.runs[current.ref] = current;
-        problem.value = false;
-      } catch {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) problem.value = true;
-      } finally {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) loading.value = false;
-      }
-    };
+  },
+  read: (value, signal) => readExactRun(value.projectRef, value.runRef, signal),
+  apply: (_value, current) => {
+    readback.value = current;
+    platform.runs[current.ref] = current;
+  },
+  restore: (value) => {
     const cached = platform.runs[value.runRef];
     if (
       cached?.projectRef === value.projectRef &&
       cached.source === "SYSTEM_ASSISTANT"
-    )
+    ) {
       readback.value = cached;
-    else void refresh();
+      return true;
+    }
+    return false;
   },
-  { immediate: true },
-);
+});
 
 async function stopRun(): Promise<void> {
   const exact = target.value;
@@ -165,7 +144,7 @@ async function stopRun(): Promise<void> {
         class="button"
         type="button"
         :disabled="loading || stopping"
-        @click="refresh?.()"
+        @click="refresh()"
       >
         {{ $t("common.refresh") }}
       </button>

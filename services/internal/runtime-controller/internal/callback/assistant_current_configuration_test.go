@@ -13,6 +13,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantOwnCurrentFixture builds intentionally different fresh settings and
+// immutable turn pins, adds private execution sentinels and optional SYSTEM-only
+// instruction fields for local separation/redaction tests, without real credentials.
+// assistantOwnCurrentFixture создаёт намеренно разные fresh settings/immutable turn
+// pins,private execution sentinels и optional SYSTEM-only instruction fields
+// для local separation/redaction tests без real credentials.
 func assistantOwnCurrentFixture(scope runtimecontract.AssistantScope) (runtimecontract.RunnerInput, map[string]any, *controlplanev1.SearchAssistantResourcesResponse) {
 	input, _, response := assistantFreshCatalogFixture(scope, "CURRENT_CONFIGURATION")
 	input.RunRef, input.NodeRef, input.SessionRef, input.TurnRef, input.Attempt = "run_owned123", "node_owned123", "ses_owned123", "turn_owned123", 2
@@ -47,6 +53,14 @@ func assistantOwnCurrentFixture(scope runtimecontract.AssistantScope) (runtimeco
 	return input, map[string]any{"assistant_configuration_catalog": map[string]any{"kind": "CURRENT_CONFIGURATION", "assistant_ref": input.AgentRef}}, response
 }
 
+// TestAssistantOwnCurrentConfigurationTraversesMCPWithoutAuthorityOrHistoryLeak checks
+// fresh settings stay distinct from immutable turn data for both scopes, while
+// private execution/credential fields do not escape into local MCP or tool history.
+// It verifies fake request/projection shape, not durable owner commits.
+// TestAssistantOwnCurrentConfigurationTraversesMCPWithoutAuthorityOrHistoryLeak проверяет
+// различие fresh settings/immutable turn data обоих scopes и отсутствие private
+// execution/credential fields в local MCP/tool history. Проверяется форма fake
+// request/projection, не durable owner commits.
 func TestAssistantOwnCurrentConfigurationTraversesMCPWithoutAuthorityOrHistoryLeak(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -87,6 +101,12 @@ func TestAssistantOwnCurrentConfigurationTraversesMCPWithoutAuthorityOrHistoryLe
 	}
 }
 
+// TestAssistantOwnCurrentConfigurationDoesNotInventBootstrapImageBinding checks only
+// SYSTEM accepts a wholly unset current image, keeps historical actual image separate
+// and rejects a partial identity rather than filling current configuration from turn pins.
+// TestAssistantOwnCurrentConfigurationDoesNotInventBootstrapImageBinding проверяет допуск
+// полностью unset current image лишь SYSTEM, отделение historical actual image
+// и отказ partial identity вместо подстановки turn pins в current configuration.
 func TestAssistantOwnCurrentConfigurationDoesNotInventBootstrapImageBinding(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input, arguments, response := assistantOwnCurrentFixture(scope)
@@ -112,6 +132,12 @@ func TestAssistantOwnCurrentConfigurationDoesNotInventBootstrapImageBinding(t *t
 	}
 }
 
+// TestAssistantImageToolInventoryRemainsSeparateFromCapabilities checks truthful
+// MISSING observations and explicit UNAVAILABLE are valid read states, while invented
+// VERIFIED metadata, foreign image binding and absent DTO fail; no live probe runs.
+// TestAssistantImageToolInventoryRemainsSeparateFromCapabilities проверяет допустимость
+// MISSING observations и explicit UNAVAILABLE, отказ invented VERIFIED metadata,
+// foreign image binding и absent DTO; live probe не запускается.
 func TestAssistantImageToolInventoryRemainsSeparateFromCapabilities(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	image := &controlplanev1.RuntimeEnvironmentImage{ArtifactRef: "imgart_owned123", Digest: "sha256:" + digest}
@@ -140,6 +166,12 @@ func TestAssistantImageToolInventoryRemainsSeparateFromCapabilities(t *testing.T
 	}
 }
 
+// TestAssistantOwnCurrentConfigurationRejectsUnboundOrCrossTargetSelectors checks
+// foreign helpers, extra selectors and missing lease/revision/attempt/turn bindings
+// fail before owner RPC for SYSTEM and PROJECT rather than becoming own-current reads.
+// TestAssistantOwnCurrentConfigurationRejectsUnboundOrCrossTargetSelectors проверяет отказ
+// foreign helpers,extra selectors,missing lease/revision/attempt/turn bindings
+// до owner RPC SYSTEM/PROJECT вместо превращения в own-current reads.
 func TestAssistantOwnCurrentConfigurationRejectsUnboundOrCrossTargetSelectors(t *testing.T) {
 	for _, mutate := range []struct {
 		name  string
@@ -168,6 +200,12 @@ func TestAssistantOwnCurrentConfigurationRejectsUnboundOrCrossTargetSelectors(t 
 	}
 }
 
+// TestAssistantOwnCurrentConfigurationRejectsMalformedTypedResponse checks mismatched
+// owner fields, unknown proto/enums, invalid versions, duplicate variables and
+// per-field/list/aggregate limits fail without reflecting private diagnostics.
+// TestAssistantOwnCurrentConfigurationRejectsMalformedTypedResponse проверяет отказ
+// mismatched owner fields,unknown proto/enums,invalid versions,duplicate variables
+// и per-field/list/aggregate limits без отражения private diagnostics.
 func TestAssistantOwnCurrentConfigurationRejectsMalformedTypedResponse(t *testing.T) {
 	for _, mutate := range []struct {
 		name  string

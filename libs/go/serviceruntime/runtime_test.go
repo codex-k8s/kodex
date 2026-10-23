@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+// TestWorkersCancelAndJoin verifies that parent cancellation reaches the worker
+// and its ordinary cancellation does not become a group failure after joining.
+// TestWorkersCancelAndJoin проверяет доставку отмены родителя worker и отсутствие
+// ошибки группы после join при обычном context.Canceled.
 func TestWorkersCancelAndJoin(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	group := StartWorkers(ctx, func(workerContext context.Context) error {
@@ -21,6 +25,10 @@ func TestWorkersCancelAndJoin(t *testing.T) {
 	}
 }
 
+// TestShutdownUsesIndependentContexts preserves the first cleanup error while
+// requiring the next callback to receive a new, still-live context.
+// TestShutdownUsesIndependentContexts сохраняет первую cleanup-ошибку и требует
+// нового ещё живого контекста для следующего callback.
 func TestShutdownUsesIndependentContexts(t *testing.T) {
 	first := errors.New("first")
 	secondRan := false
@@ -47,6 +55,10 @@ func TestShutdownUsesIndependentContexts(t *testing.T) {
 	}
 }
 
+// TestReadinessSnapshotAndTransitionEdge checks the initial closed state,
+// one true transition edge and suppression of an unchanged repeated snapshot.
+// TestReadinessSnapshotAndTransitionEdge проверяет начальную неготовность,
+// единственный edge изменения и подавление повторного неизменённого снимка.
 func TestReadinessSnapshotAndTransitionEdge(t *testing.T) {
 	t.Parallel()
 

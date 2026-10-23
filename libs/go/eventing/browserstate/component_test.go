@@ -13,8 +13,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Тест запускается поддерживаемым script entrypoint на disposable loopback NATS.
-// В обычном unit suite внешняя среда не предполагается.
+// TestBrowserStateComponent verifies durable CAS and readiness against a disposable loopback NATS.
+// TestBrowserStateComponent проверяет постоянный CAS и готовность на одноразовом локальном NATS.
+// The supported script starts this component test; ordinary unit runs do not require the server.
+// Поддерживаемый скрипт запускает компонентный тест; обычные unit-тесты не требуют сервера.
 func TestBrowserStateComponent(t *testing.T) {
 	endpoint := os.Getenv("KODEX_BROWSER_STATE_TEST_URL")
 	if endpoint == "" {
@@ -125,8 +127,12 @@ func TestBrowserStateComponent(t *testing.T) {
 	}
 }
 
+// lostComponentACK commits a real write but hides its broker acknowledgement.
+// lostComponentACK выполняет настоящую запись, но скрывает подтверждение брокера.
 type lostComponentACK struct{ next publisher }
 
+// PublishMsg preserves the committed write while simulating a lost response.
+// PublishMsg сохраняет выполненную запись, имитируя потерянный ответ.
 func (p lostComponentACK) PublishMsg(ctx context.Context, message *nats.Msg, options ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
 	if _, err := p.next.PublishMsg(ctx, message, options...); err != nil {
 		return nil, err

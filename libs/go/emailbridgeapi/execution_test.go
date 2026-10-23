@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+// TestExecutionHeaderExactBinding verifies roundtrip, mutually exclusive
+// source refs, bounded lease generation and rejection of expired or malformed headers.
+// RU: TestExecutionHeaderExactBinding проверяет передачу привязки, единственность
+// источника, предел поколения и отказ для истёкших либо ошибочных заголовков.
 func TestExecutionHeaderExactBinding(t *testing.T) {
 	for _, source := range []string{"invocation", "connection-test"} {
 		t.Run(source, func(t *testing.T) {
@@ -42,6 +46,10 @@ func TestExecutionHeaderExactBinding(t *testing.T) {
 	}
 }
 
+// TestExecutionBindingDoesNotChangeSemanticDigest checks that attaching a
+// transport binding leaves the command's semantic input hash unchanged.
+// RU: TestExecutionBindingDoesNotChangeSemanticDigest проверяет, что
+// транспортная привязка не меняет смысловой дайджест входной команды.
 func TestExecutionBindingDoesNotChangeSemanticDigest(t *testing.T) {
 	command := Command{Operation: OperationSend, MailboxId: "mailbox", EffectKey: "effect"}
 	before := Digest(command)

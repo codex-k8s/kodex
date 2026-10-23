@@ -10,8 +10,16 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// errDraftMetadata is the closed response-casting failure, excluding timestamps, scope refs and values.
+// errDraftMetadata — закрытая response-casting ошибка без timestamps, scope refs и значений.
 var errDraftMetadata = errors.New("secret draft metadata is invalid")
 
+// SecretDraft validates scope, required identifiers/versions, generated enum membership and required
+// protobuf timestamps before returning public metadata. It does not authorize the draft, validate
+// free-form name/description or impose chronological ordering on the three timestamps.
+// SecretDraft проверяет scope, обязательные identifiers/versions, generated enum membership и
+// protobuf timestamps перед выдачей публичных metadata. Draft authority, свободные name/description
+// и хронологический порядок трёх timestamps здесь не проверяются.
 func SecretDraft(draft value.SecretDraft) (*secretbrokerv1.RuntimeSecretDraftMetadata, error) {
 	typeNumber, typeOK := secretbrokerv1.RuntimeSecretValueType_value["RUNTIME_SECRET_VALUE_TYPE_"+draft.ValueType]
 	stateNumber, stateOK := secretbrokerv1.RuntimeSecretDraftState_value["RUNTIME_SECRET_DRAFT_STATE_"+draft.State]
@@ -19,11 +27,7 @@ func SecretDraft(draft value.SecretDraft) (*secretbrokerv1.RuntimeSecretDraftMet
 		!typeOK || typeNumber == 0 || !stateOK || stateNumber == 0 || draft.PublishedRevision < 0 {
 		return nil, errDraftMetadata
 	}
-	created, err := timestamp(draft.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	updated, err := timestamp(draft.UpdatedAt)
+	created, updated, err := metadataTimestamps(draft.CreatedAt, draft.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -38,6 +42,10 @@ func SecretDraft(draft value.SecretDraft) (*secretbrokerv1.RuntimeSecretDraftMet
 		PublishedRevision: draft.PublishedRevision, SecretVersion: draft.SecretVersion, CreatedAt: created, UpdatedAt: updated, ExpiresAt: expires}, nil
 }
 
+// PublishedSecret rejects nil or malformed scoped/versioned metadata and converts generated enums
+// and required timestamps without plaintext or display hints; owner confirmation is a caller precondition.
+// PublishedSecret отвергает nil или неверные scoped/versioned metadata и переводит generated enums
+// и обязательные timestamps без plaintext/display hints; owner confirmation обязан обеспечить caller.
 func PublishedSecret(secret *value.PublishedSecret) (*secretbrokerv1.RuntimeSecretMetadata, error) {
 	if secret == nil {
 		return nil, errDraftMetadata
@@ -47,11 +55,7 @@ func PublishedSecret(secret *value.PublishedSecret) (*secretbrokerv1.RuntimeSecr
 	if secret.Ref == "" || runtimesecret.ValidateScope(secret.ScopeKind, secret.OrganizationRef, secret.ProjectRef) != nil || secret.Version < 1 || secret.Revision < 1 || !typeOK || typeNumber == 0 || !stateOK || stateNumber == 0 {
 		return nil, errDraftMetadata
 	}
-	created, err := timestamp(secret.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	updated, err := timestamp(secret.UpdatedAt)
+	created, updated, err := metadataTimestamps(secret.CreatedAt, secret.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +65,26 @@ func PublishedSecret(secret *value.PublishedSecret) (*secretbrokerv1.RuntimeSecr
 		Version: secret.Version, Revision: uint64(secret.Revision), CreatedAt: created, UpdatedAt: updated}, nil
 }
 
+// metadataTimestamps validates creation before update using the existing required-time boundary;
+// an invalid member returns no partial pair and the same closed metadata error.
+// metadataTimestamps проверяет creation перед update существующей required-time boundary;
+// неверный элемент возвращает пустую пару и ту же закрытую ошибку metadata.
+func metadataTimestamps(createdAt, updatedAt time.Time) (*timestamppb.Timestamp, *timestamppb.Timestamp, error) {
+	created, err := timestamp(createdAt)
+	if err != nil {
+		return nil, nil, err
+	}
+	updated, err := timestamp(updatedAt)
+	if err != nil {
+		return nil, nil, err
+	}
+	return created, updated, nil
+}
+
+// timestamp rejects Go's zero instant, then validates the protobuf range after conversion;
+// protobuf's year-one lower bound does not make a missing Go zero timestamp acceptable here.
+// timestamp отвергает нулевой Go instant, затем проверяет protobuf range после преобразования;
+// нижняя protobuf граница первого года здесь не разрешает отсутствующий Go zero timestamp.
 func timestamp(value time.Time) (*timestamppb.Timestamp, error) {
 	if value.IsZero() {
 		return nil, errDraftMetadata

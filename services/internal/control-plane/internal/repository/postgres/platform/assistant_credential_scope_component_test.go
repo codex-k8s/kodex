@@ -10,10 +10,8 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -21,13 +19,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryAssistantCredentialScopeReadback reads owner, organization, project and
+// assistant scope from the claimed lease for exact credential-scope assertions.
+// RU: queryAssistantCredentialScopeReadback читает owner, организацию, проект
+// и scope помощника из lease для точной проверки области credential.
+//
 //go:embed testdata/sql/assistant_credential_scope_readback.sql
 var queryAssistantCredentialScopeReadback string
 
+// queryAssistantCredentialScopeDisableActor disables the exact initiating
+// actor of a lease to test that subsequent credential resolution fails closed.
+// RU: queryAssistantCredentialScopeDisableActor отключает точного actor,
+// начавшего lease, для проверки закрытого отказа при разрешении credential.
+//
 //go:embed testdata/sql/assistant_credential_scope_disable_actor.sql
 var queryAssistantCredentialScopeDisableActor string
 
-// Только disposable PostgreSQL: реальные provider и runtime агенты не запускаются.
+// TestAssistantCredentialScopesComponent checks system/project assistant
+// credential provenance against a disposable PostgreSQL owner, without
+// starting real provider or runtime agent work.
+// RU: TestAssistantCredentialScopesComponent проверяет происхождение
+// credential системного и проектного помощника в disposable PostgreSQL,
+// не запуская настоящий provider или runtime агента.
 func TestAssistantCredentialScopesComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
@@ -37,55 +50,7 @@ func TestAssistantCredentialScopesComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	newRepository := func() *Repository {
-		t.Helper()
-		repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
-			SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
-			SecretResourceVersion: "1", ContentSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.ConfigureRoleImages(RoleImageConfig{
-			PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-			BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-			StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-			DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-		}); err != nil {
-			t.Fatal(err)
-		}
-		return repository
-	}
-	repository := newRepository()
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
-	prepareObservedWarmFixture(t, ctx, repository)
-	principal := func(workload, operation, actor, tenant string) value.Principal {
-		t.Helper()
-		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-			ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation,
-		}, workload)
-	}
-	owner := principal("control-api-gateway", "platform.assistant.turns.add", "20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002")
-	worker := principal("runtime-controller", "platform.runtime.execution.claim", "kodex-system-subject", "kodex-installation")
-	warmWorker := principal("runtime-controller", "platform.runtime.warm.report", "kodex-system-subject", "kodex-installation")
-	service, err := platformservice.New(repository)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
-		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	repository, service, owner, worker, _ := newReadyAssistantComponentService(t, ctx, pool)
 	execute := func(kind command.Kind, actor value.Principal, key string, version *int64, payload any) command.Result {
 		t.Helper()
 		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor,
@@ -107,7 +72,10 @@ func TestAssistantCredentialScopesComponent(t *testing.T) {
 	if len(claims) != 2 {
 		t.Fatal("both scoped assistant executions were not claimed")
 	}
-	broker := principal("secret-broker", "platform.credential-projections.runtime.resolve", "kodex-system-subject", "kodex-installation")
+	broker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "secret-broker", Operation: "platform.credential-projections.runtime.resolve",
+	}, "secret-broker")
 	broker, err = repository.ResolvePrincipal(ctx, broker)
 	if err != nil {
 		t.Fatal(err)

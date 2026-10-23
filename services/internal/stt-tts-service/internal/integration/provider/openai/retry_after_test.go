@@ -13,6 +13,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
+// TestRetryAfterPreservesOnlyBoundedMinimum checks seconds, HTTP dates, rounding, duplicates, and invalid or out-of-budget hints against a fixed clock.
+// TestRetryAfterPreservesOnlyBoundedMinimum проверяет секунды, HTTP-даты, округление, повторы и недопустимые либо чрезмерные подсказки с фиксированным временем.
 func TestRetryAfterPreservesOnlyBoundedMinimum(t *testing.T) {
 	now := time.Date(2026, 9, 6, 10, 0, 0, 500000000, time.UTC)
 	for _, test := range []struct {
@@ -31,6 +33,10 @@ func TestRetryAfterPreservesOnlyBoundedMinimum(t *testing.T) {
 	}
 }
 
+// TestProvider429IsTypedAndNeverRetriesOrReadsPrivateBody verifies a typed bounded hint, one provider effect, and no private body in the returned error.
+// The synthetic body is not instrumented for reads; this test does not independently count body-read attempts.
+// TestProvider429IsTypedAndNeverRetriesOrReadsPrivateBody проверяет типизированную ограниченную подсказку, один вызов и отсутствие приватного тела в ошибке.
+// Чтения синтетического тела не инструментированы; тест отдельно не считает попытки чтения тела.
 func TestProvider429IsTypedAndNeverRetriesOrReadsPrivateBody(t *testing.T) {
 	calls := 0
 	client, err := NewWithHTTPClient(doerFunc(func(request *http.Request) (*http.Response, error) {

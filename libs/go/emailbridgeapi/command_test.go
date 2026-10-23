@@ -2,6 +2,10 @@ package emailbridgeapi
 
 import "testing"
 
+// TestIntegrationInputBoundary rejects ambiguous receipts and untyped mail
+// fields while keeping distinct recipient lists in the typed command.
+// RU: TestIntegrationInputBoundary отклоняет неоднозначные квитанции и
+// нетипизированные поля письма, сохраняя раздельные списки получателей.
 func TestIntegrationInputBoundary(t *testing.T) {
 	for _, raw := range []string{`{}`, `{"message_id":"id","effect_key":"effect"}`} {
 		if _, err := CommandForIntegration("email.message.status.read", "box", "sender@example.test", "unrelated", []byte(raw)); err == nil {

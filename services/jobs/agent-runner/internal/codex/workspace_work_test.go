@@ -16,11 +16,17 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// workingInputFixture allocates an isolated temporary root and delegates complete source setup.
+// workingInputFixture выделяет изолированный временный root и передаёт создание источника helper.
 func workingInputFixture(t *testing.T) (model.Input, string, string) {
 	t.Helper()
 	return workingInputAtRoot(t, t.TempDir())
 }
 
+// workingInputAtRoot creates deterministic INPUT bytes and the minimal runtime directories under
+// a caller-selected disposable root, returning descriptor/source/copy paths with current process ownership.
+// workingInputAtRoot создаёт детерминированные INPUT bytes и минимальные runtime directories под
+// выбранным disposable root, возвращая descriptor/source/copy paths с owner текущего процесса.
 func workingInputAtRoot(t *testing.T, root string) (model.Input, string, string) {
 	t.Helper()
 	input, source, target := workingInputDescriptor(root)
@@ -36,6 +42,10 @@ func workingInputAtRoot(t *testing.T, root string) (model.Input, string, string)
 	return input, source, target
 }
 
+// workingInputDescriptor constructs synthetic attachment metadata and exact payload digest plus
+// canonical source/working-copy paths without creating files or proving external attachment provenance.
+// workingInputDescriptor строит synthetic attachment metadata, точный payload digest и
+// канонические source/working-copy paths без создания файлов и доказательства внешнего происхождения.
 func workingInputDescriptor(root string) (model.Input, string, string) {
 	payload := []byte("bounded task input\n")
 	digest := sha256.Sum256(payload)
@@ -51,7 +61,12 @@ func workingInputDescriptor(root string) (model.Input, string, string) {
 	return input, source, filepath.Join(root, "work", relative)
 }
 
-// Запускается только в отдельном network-none container с tmpfs /workspace.
+// TestWorkingDirectoryTwoUIDFixture is opt-in for disposable tmpfs /workspace and a read-only root:
+// root SETUP assigns ownership and launches UID10002/GID10001 COPY to edit copies, deny originals and reset.
+// Without the fixture mode it explicitly skips; ordinary unit success does not prove this UID boundary.
+// TestWorkingDirectoryTwoUIDFixture — opt-in для disposable tmpfs /workspace и read-only root:
+// root SETUP назначает owner и запускает UID10002/GID10001 COPY для правки копий, запрета оригинала и сброса.
+// Без fixture mode она явно пропускается; обычный unit PASS не доказывает эту UID boundary.
 func TestWorkingDirectoryTwoUIDFixture(t *testing.T) {
 	mode := os.Getenv("KODEX_WORKING_UID_FIXTURE")
 	if mode == "" {
@@ -125,6 +140,12 @@ func TestWorkingDirectoryTwoUIDFixture(t *testing.T) {
 	}
 }
 
+// TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs checks independent writable copies, unchanged
+// originals, recreated guides and removal of stale scratch/symlink entries without following them outside work.
+// It excludes session/knowledge material from editable copies under the current test UID.
+// TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs проверяет независимые writable copies, неизменные
+// originals, восстановление guide и удаление stale scratch/symlink без выхода по ссылке из work.
+// Session/knowledge material исключены из editable copies при текущем тестовом UID.
 func TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs(t *testing.T) {
 	input, source, target := workingInputFixture(t)
 	knowledge := runtimecontract.RunnerInputArtifact{Ref: "artifact_knowledge", FileName: "policy.md", MediaType: "text/markdown", Digest: "sha256:" + strings.Repeat("b", 64), SizeBytes: 1, Revision: 1, Version: 1, Scope: runtimecontract.AttachmentScopeKnowledge, Position: 1, Source: "KNOWLEDGE_SOURCE", AttachmentPurpose: "PROJECT_KNOWLEDGE", Provenance: "PROJECT_BINDING"}
@@ -192,6 +213,10 @@ func TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs(t *testing.T) {
 	}
 }
 
+// TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota requires navigation even with no
+// attachments, checks its key instructions and rejects guide-byte or guide-plus-input count overflow.
+// TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota требует справочник даже без
+// attachments, проверяет ключевые инструкции и отвергает переполнение guide bytes или guide-plus-input count.
 func TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota(t *testing.T) {
 	input, _, _ := workingInputFixture(t)
 	input.InputArtifacts, input.AttachmentSets, input.AttachmentSetRef = nil, nil, ""
@@ -225,6 +250,10 @@ func TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota(t *testing.T)
 	}
 }
 
+// TestWorkspaceGuideDescribesIssuedLimitsWithoutChangingPolicy checks issued byte/file limits and
+// artifact constraints in both prose and materialized file without mutating the policy object.
+// TestWorkspaceGuideDescribesIssuedLimitsWithoutChangingPolicy проверяет выданные byte/file limits
+// и artifact constraints в тексте и записанном файле, не меняя policy object.
 func TestWorkspaceGuideDescribesIssuedLimitsWithoutChangingPolicy(t *testing.T) {
 	input, _, _ := workingInputFixture(t)
 	policy, err := runtimecontract.RuntimeWorkspacePolicyWithLimits(&runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 1048576, MaxFiles: 256})
@@ -250,6 +279,10 @@ func TestWorkspaceGuideDescribesIssuedLimitsWithoutChangingPolicy(t *testing.T) 
 	}
 }
 
+// TestWorkingDirectoryRejectsSourceTamperingAndUnsafeRoot rejects digest/link/owner/work-root
+// tampering and quota failure; the quota case also proves no working copy was created before refusal.
+// TestWorkingDirectoryRejectsSourceTamperingAndUnsafeRoot отвергает подмены digest/link/owner/work-root
+// и отказ квоты; для квоты дополнительно проверяется отсутствие рабочей копии до отказа.
 func TestWorkingDirectoryRejectsSourceTamperingAndUnsafeRoot(t *testing.T) {
 	for _, mutation := range []string{"digest", "hardlink", "symlink", "owner", "root-symlink", "quota"} {
 		t.Run(mutation, func(t *testing.T) {

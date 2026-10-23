@@ -20,63 +20,111 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jws"
 )
 
-// Поддерживаемый алгоритм, критический header и ограничения контракта.
 const (
-	AlgorithmES256                    = "ES256"
-	CriticalHeader                    = "mcxv"
-	ContractVersion                   = 1
-	AuthorityABIVersion               = 2
-	RequestBindingUnary               = "UNARY_PROTO_SHA256"
-	RequestBindingStream              = "STREAM_SESSION"
-	ProfileBindingRequired            = "REQUIRED"
-	ProfileBindingForbidden           = "FORBIDDEN"
-	MaxCompactJWSBytes                = 8192
+	// AlgorithmES256 pins the only accepted JWS signing algorithm for this RPC contract.
+	// RU: AlgorithmES256 закрепляет единственный допустимый алгоритм подписи JWS.
+	AlgorithmES256 = "ES256"
+	// CriticalHeader names the mandatory protected contract-version header.
+	// RU: CriticalHeader называет обязательный защищённый header версии контракта.
+	CriticalHeader = "mcxv"
+	// ContractVersion is the supported value of the critical JWS header.
+	// RU: ContractVersion — поддерживаемое значение критического JWS header.
+	ContractVersion = 1
+	// AuthorityABIVersion pins the expected authority request/response ABI.
+	// RU: AuthorityABIVersion закрепляет ожидаемый ABI authority-запросов и ответов.
+	AuthorityABIVersion = 2
+	// RequestBindingUnary binds a unary call to the hash of its exact protobuf request.
+	// RU: RequestBindingUnary связывает unary-вызов с хешем точного protobuf-запроса.
+	RequestBindingUnary = "UNARY_PROTO_SHA256"
+	// RequestBindingStream binds a streaming call to its server-owned session.
+	// RU: RequestBindingStream связывает потоковый вызов с серверной сессией.
+	RequestBindingStream = "STREAM_SESSION"
+	// ProfileBindingRequired requires a profile field in the signed authority contract.
+	// RU: ProfileBindingRequired требует поле профиля в подписанном authority-контракте.
+	ProfileBindingRequired = "REQUIRED"
+	// ProfileBindingForbidden rejects a profile field that the contract does not allow.
+	// RU: ProfileBindingForbidden отклоняет поле профиля, запрещённое контрактом.
+	ProfileBindingForbidden = "FORBIDDEN"
+	// MaxCompactJWSBytes bounds the ordinary compact token before parsing it.
+	// RU: MaxCompactJWSBytes ограничивает обычный compact-токен до его разбора.
+	MaxCompactJWSBytes = 8192
+	// AuthorizationContextProtectedType separates authorization-context JWS from other signed kinds.
+	// RU: AuthorizationContextProtectedType отличает JWS контекста авторизации от иных подписанных видов.
 	AuthorizationContextProtectedType = "kodex-internal-rpc-auth+jws"
-	AuthorityProofProtectedType       = "kodex-internal-rpc-authority-proof+jws"
+	// AuthorityProofProtectedType separates short-lived authority proofs from authorization contexts.
+	// RU: AuthorityProofProtectedType отличает короткоживущий authority proof от контекста авторизации.
+	AuthorityProofProtectedType = "kodex-internal-rpc-authority-proof+jws"
 )
 
-// Канонические причины отклонения JWS/JWK.
 var (
-	ErrMalformedJWS     = errors.New("malformed compact JWS")
-	ErrProtectedHeader  = errors.New("invalid protected header")
-	ErrSignature        = errors.New("invalid JWS signature")
+	// ErrMalformedJWS classifies a structurally invalid or oversized compact token.
+	// RU: ErrMalformedJWS обозначает неверную структуру или размер compact-токена.
+	ErrMalformedJWS = errors.New("malformed compact JWS")
+	// ErrProtectedHeader classifies a noncanonical, unknown or mismatched protected header.
+	// RU: ErrProtectedHeader обозначает неканонический, неизвестный либо несовпадающий защищённый header.
+	ErrProtectedHeader = errors.New("invalid protected header")
+	// ErrSignature classifies a failed ES256 signature verification.
+	// RU: ErrSignature обозначает неудачную проверку подписи ES256.
+	ErrSignature = errors.New("invalid JWS signature")
+	// ErrCanonicalPayload classifies payload JSON that fails strict JCS validation.
+	// RU: ErrCanonicalPayload обозначает payload JSON, не прошедший строгую проверку JCS.
 	ErrCanonicalPayload = errors.New("non-canonical JWS payload")
-	ErrKey              = errors.New("invalid ES256 key")
+	// ErrKey classifies malformed, mismatched or unusable ES256 key material.
+	// RU: ErrKey обозначает неверный, несовпадающий либо непригодный ключ ES256.
+	ErrKey = errors.New("invalid ES256 key")
 )
 
-// ProtectedHeaderExpectation задаёт ожидаемые typ и kid.
+// ProtectedHeaderExpectation pins the exact typ and kid that a signer or
+// verifier accepts independently of any values supplied by a token.
+// RU: ProtectedHeaderExpectation закрепляет точные typ и kid для подписи или
+// проверки независимо от значений, переданных самим токеном.
 type ProtectedHeaderExpectation struct {
 	Type  string
 	KeyID string
 }
 
-// ProtectedHeader содержит строго разобранные typ и kid.
+// ProtectedHeader contains strictly parsed typ and kid for trusted-key
+// selection only; parsing this header does not verify the signature.
+// RU: ProtectedHeader хранит строго разобранные typ и kid только для выбора
+// доверенного ключа; разбор header не подтверждает подпись.
 type ProtectedHeader struct {
 	Type  string
 	KeyID string
 }
 
-// VerifiedJWS содержит проверенный канонический payload и kid.
+// VerifiedJWS carries canonical payload bytes and kid only after protected
+// header, ES256 signature and strict JCS validation succeed.
+// RU: VerifiedJWS содержит канонические байты payload и kid лишь после
+// успешной проверки защищённого header, подписи ES256 и строгого JCS.
 type VerifiedJWS struct {
 	CanonicalPayload []byte
 	KeyID            string
 }
 
-// ES256Key связывает kid с публичной и необязательной приватной частью P-256.
+// ES256Key associates one kid with a P-256 public key and optional private
+// signer; private material must not be exposed to verification consumers.
+// RU: ES256Key связывает kid с публичным ключом P-256 и необязательным
+// приватным подписантом; приватные байты не выдаются verifier-потребителям.
 type ES256Key struct {
 	KeyID   string
 	Public  *ecdsa.PublicKey
 	Private *ecdsa.PrivateKey
 }
 
-// PublicOnly возвращает копию без приватного материала.
+// PublicOnly returns a verifier-facing key value without the private signer;
+// it shares the public-key pointer, so callers must not mutate that key.
+// RU: PublicOnly возвращает ключ для verifier без приватного подписанта;
+// указатель на публичный ключ общий, поэтому caller не должен его изменять.
 func (key ES256Key) PublicOnly() ES256Key {
 	return ES256Key{KeyID: key.KeyID, Public: key.Public}
 }
 
-// KeyGeneration возвращает положительное поколение из канонического суффикса
-// kid вида "<identity>-g<N>". Поколение связывает credential с ключом и не
-// меняется при штатном обновлении короткоживущего токена.
+// KeyGeneration parses the positive canonical generation suffix of a kid
+// shaped <identity>-g<N>; it binds credentials to a key across ordinary
+// short-lived token renewal without accepting leading zeroes or overflow.
+// RU: KeyGeneration извлекает положительное каноническое поколение из kid
+// вида <identity>-g<N>; оно связывает credential с ключом при обновлении
+// краткоживущего токена, не допуская ведущий ноль и переполнение.
 func KeyGeneration(keyID string) (uint64, error) {
 	separator := strings.LastIndex(keyID, "-g")
 	if separator < 1 || separator+2 >= len(keyID) {
@@ -95,7 +143,10 @@ func KeyGeneration(keyID string) (uint64, error) {
 	return generation, nil
 }
 
-// SignCanonicalJSON канонизирует JSON и создаёт compact ES256 JWS.
+// SignCanonicalJSON canonicalizes the input and signs a compact ES256 JWS
+// under the ordinary token size limit and an exact protected typ/kid.
+// RU: SignCanonicalJSON канонизирует вход и подписывает compact ES256 JWS
+// с обычным лимитом размера и точными защищёнными typ/kid.
 func SignCanonicalJSON(
 	value any,
 	key ES256Key,
@@ -104,8 +155,12 @@ func SignCanonicalJSON(
 	return SignCanonicalJSONWithLimit(value, key, expect, MaxCompactJWSBytes)
 }
 
-// SignCanonicalJSONWithLimit создаёт compact JWS с явным закрытым лимитом для
-// крупных служебных документов.
+// SignCanonicalJSONWithLimit signs JCS bytes using the validated private key,
+// required critical header and an explicit compact-size ceiling for larger
+// service documents; exceeding the ceiling fails after serialization.
+// RU: SignCanonicalJSONWithLimit подписывает байты JCS проверенным приватным
+// ключом с обязательным критическим header и явным пределом размера для
+// служебного документа; превышение закрыто отклоняется после сериализации.
 func SignCanonicalJSONWithLimit(
 	value any,
 	key ES256Key,
@@ -155,7 +210,10 @@ func SignCanonicalJSONWithLimit(
 	return compact, nil
 }
 
-// VerifyCanonicalJSON строго проверяет header, подпись и JCS payload.
+// VerifyCanonicalJSON verifies header, signature and JCS payload of a compact
+// token within the ordinary size limit before exposing verified bytes.
+// RU: VerifyCanonicalJSON проверяет header, подпись и JCS payload compact
+// токена в обычном лимите до выдачи проверенных байтов.
 func VerifyCanonicalJSON(
 	compact string,
 	key ES256Key,
@@ -164,8 +222,12 @@ func VerifyCanonicalJSON(
 	return VerifyCanonicalJSONWithLimit(compact, key, expect, MaxCompactJWSBytes)
 }
 
-// VerifyCanonicalJSONWithLimit проверяет крупный служебный JWS с явно
-// заданным лимитом.
+// VerifyCanonicalJSONWithLimit first pins the strict protected typ/kid, then
+// verifies ES256 and canonical object payload within the explicit size limit;
+// no claim is consumed before these checks succeed.
+// RU: VerifyCanonicalJSONWithLimit сначала закрепляет строгие typ/kid,
+// затем проверяет ES256 и канонический объект payload в заданном лимите;
+// ни один claim не используется до успешного завершения проверок.
 func VerifyCanonicalJSONWithLimit(
 	compact string,
 	key ES256Key,
@@ -201,15 +263,22 @@ func VerifyCanonicalJSONWithLimit(
 	return VerifiedJWS{CanonicalPayload: payload, KeyID: header.KeyID}, nil
 }
 
-// ParseProtectedHeader строго разбирает только канонический защищённый header.
-// Результат не подтверждает подпись и используется лишь для выбора заранее
-// доверенного ключа перед VerifyCanonicalJSON.
+// ParseProtectedHeader parses a canonical protected header under the ordinary
+// size limit only to select a previously trusted key; it never authenticates
+// the token until VerifyCanonicalJSON succeeds.
+// RU: ParseProtectedHeader разбирает канонический защищённый header в обычном
+// лимите лишь для выбора заранее доверенного ключа; токен не аутентифицирован
+// до успешного VerifyCanonicalJSON.
 func ParseProtectedHeader(compact string) (ProtectedHeader, error) {
 	return ParseProtectedHeaderWithLimit(compact, MaxCompactJWSBytes)
 }
 
-// ParseProtectedHeaderWithLimit разбирает header крупного служебного JWS с
-// явным лимитом; результат не подтверждает подпись.
+// ParseProtectedHeaderWithLimit checks compact structure, explicit size,
+// required critical version, ES256 and canonical header encoding; the
+// returned typ/kid remain untrusted until signature verification.
+// RU: ParseProtectedHeaderWithLimit проверяет структуру, размер, критическую
+// версию, ES256 и каноническую кодировку header; возвращённые typ/kid
+// остаются недоверенными до проверки подписи.
 func ParseProtectedHeaderWithLimit(compact string, maxCompactBytes int) (ProtectedHeader, error) {
 	if maxCompactBytes <= 0 || len(compact) == 0 || len(compact) > maxCompactBytes {
 		return ProtectedHeader{}, ErrMalformedJWS
@@ -241,8 +310,12 @@ func ParseProtectedHeaderWithLimit(compact string, maxCompactBytes int) (Protect
 	return ProtectedHeader{Type: header.Type, KeyID: header.KeyID}, nil
 }
 
-// DecodeCanonicalJSON декодирует уже проверенный JWS payload и повторно
-// подтверждает строгий JSON/JCS boundary перед использованием claims.
+// DecodeCanonicalJSON decodes a previously verified JWS payload into the
+// expected shape while rechecking strict JSON and exact JCS bytes before
+// exposing claims to the caller.
+// RU: DecodeCanonicalJSON декодирует ранее проверенный JWS payload в
+// ожидаемую форму с повторной строгой проверкой JSON и точных байтов JCS
+// перед выдачей claims вызывающей стороне.
 func DecodeCanonicalJSON(data []byte, target any) error {
 	if err := decodeStrictJSON(data, target); err != nil {
 		return err
@@ -257,8 +330,10 @@ func DecodeCanonicalJSON(data []byte, target any) error {
 	return nil
 }
 
-// CanonicalJSON возвращает JCS-представление JSON для устойчивого хранения
-// подписываемого или сравниваемого состояния.
+// CanonicalJSON serializes a value to stable JCS bytes for signing or digest
+// comparison; callers still decide the authoritative shape and purpose.
+// RU: CanonicalJSON сериализует значение в устойчивые байты JCS для подписи
+// или сравнения digest; авторитетную форму и назначение определяет caller.
 func CanonicalJSON(value any) ([]byte, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -271,7 +346,10 @@ func CanonicalJSON(value any) ([]byte, error) {
 	return canonical, nil
 }
 
-// CanonicalJSONSHA256 вычисляет SHA-256 канонического JSON.
+// CanonicalJSONSHA256 returns a lowercase SHA-256 hex digest of canonical
+// JSON bytes, not of the original input representation.
+// RU: CanonicalJSONSHA256 возвращает SHA-256 hex в нижнем регистре от
+// канонических байтов JSON, а не от исходного представления.
 func CanonicalJSONSHA256(value any) (string, error) {
 	canonical, err := CanonicalJSON(value)
 	if err != nil {
@@ -284,17 +362,26 @@ func CanonicalJSONSHA256(value any) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
-// ParsePublicJWK строго разбирает публичный ES256 JWK.
+// ParsePublicJWK strictly parses verifier-only ES256 JWK material, rejecting
+// fields or key operations that would widen it into a signer.
+// RU: ParsePublicJWK строго разбирает публичный ES256 JWK для verifier,
+// отклоняя поля либо операции, расширяющие его до signer.
 func ParsePublicJWK(data []byte) (ES256Key, error) {
 	return parseJWK(data, false)
 }
 
-// ParsePrivateJWK строго разбирает приватный ES256 JWK.
+// ParsePrivateJWK strictly parses an ES256 signing JWK and checks that its
+// private scalar derives the declared public point.
+// RU: ParsePrivateJWK строго разбирает ES256 JWK для подписи и проверяет,
+// что приватный скаляр даёт заявленную публичную точку.
 func ParsePrivateJWK(data []byte) (ES256Key, error) {
 	return parseJWK(data, true)
 }
 
-// GenerateES256Key создаёт новый P-256 ключ с заданным kid.
+// GenerateES256Key creates a fresh P-256 signing key under a bounded kid;
+// generation or naming policy beyond this size check belongs to its caller.
+// RU: GenerateES256Key создаёт новый ключ P-256 с ограниченным kid;
+// поколение и политику имени сверх размера задаёт вызывающая сторона.
 func GenerateES256Key(keyID string) (ES256Key, error) {
 	if keyID == "" || len(keyID) > 64 {
 		return ES256Key{}, ErrKey
@@ -310,17 +397,26 @@ func GenerateES256Key(keyID string) (ES256Key, error) {
 	}, nil
 }
 
-// MarshalPublicJWK возвращает канонический публичный JWK.
+// MarshalPublicJWK emits canonical verifier-only JWK bytes after validating
+// the public point and kid, without serializing private material.
+// RU: MarshalPublicJWK выдаёт канонический JWK только для verifier после
+// проверки публичной точки и kid, не сериализуя приватный материал.
 func MarshalPublicJWK(key ES256Key) ([]byte, error) {
 	return marshalJWK(key, false)
 }
 
-// MarshalPrivateJWK возвращает канонический приватный JWK.
+// MarshalPrivateJWK emits canonical signing JWK bytes only when the private
+// scalar matches the public point, setting the output key operation to sign.
+// RU: MarshalPrivateJWK выдаёт канонический JWK для подписи лишь при
+// совпадении приватного скаляра с публичной точкой и задаёт операцию sign.
 func MarshalPrivateJWK(key ES256Key) ([]byte, error) {
 	return marshalJWK(key, true)
 }
 
-// PublicJWKThumbprintSHA256 вычисляет RFC 7638 thumbprint публичного ключа.
+// PublicJWKThumbprintSHA256 hashes the canonical RFC 7638 public-key members
+// only, excluding kid, private scalar and usage metadata.
+// RU: PublicJWKThumbprintSHA256 хеширует только канонические публичные поля
+// RFC 7638, исключая kid, приватный скаляр и metadata использования.
 func PublicJWKThumbprintSHA256(key ES256Key) (string, error) {
 	if err := validateES256Key(key, key.KeyID, false); err != nil {
 		return "", err
@@ -344,6 +440,10 @@ func PublicJWKThumbprintSHA256(key ES256Key) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
+// marshalJWK validates key material and writes canonical public or private
+// ES256 JWK with mutually exclusive verify/sign key operations.
+// RU: marshalJWK проверяет ключ и пишет канонический публичный либо приватный
+// ES256 JWK с взаимоисключающими key operations verify/sign.
 func marshalJWK(key ES256Key, includePrivate bool) ([]byte, error) {
 	if err := validateES256Key(key, key.KeyID, includePrivate); err != nil {
 		return nil, err
@@ -379,7 +479,12 @@ func marshalJWK(key ES256Key, includePrivate bool) ([]byte, error) {
 	return canonical, nil
 }
 
-// ValidateTimes проверяет точный TTL, future iat, nbf, exp и bounded skew.
+// ValidateTimes enforces exact issued/not-before/expiry relationships and
+// fixed TTL after second normalization, rejecting future issuance and tokens
+// outside the bounded clock-skew window.
+// RU: ValidateTimes после нормализации до секунд проверяет точные связи
+// issued/not-before/expiry и фиксированный TTL, отклоняя будущую выдачу и
+// токены вне ограниченного окна расхождения часов.
 func ValidateTimes(now time.Time, issuedAt, notBefore, expiresAt time.Time, maxTTL, skew time.Duration) error {
 	now = now.UTC().Truncate(time.Second)
 	issuedAt = issuedAt.UTC().Truncate(time.Second)
@@ -402,6 +507,10 @@ func ValidateTimes(now time.Time, issuedAt, notBefore, expiresAt time.Time, maxT
 	return nil
 }
 
+// strictProtectedHeader is the closed JSON shape of the protected JWS header;
+// unknown or duplicate fields fail during strict decoding.
+// RU: strictProtectedHeader задаёт закрытую JSON-форму защищённого JWS
+// header; неизвестные и повторные поля отклоняет строгий декодер.
 type strictProtectedHeader struct {
 	Alg      string   `json:"alg"`
 	Type     string   `json:"typ"`
@@ -410,6 +519,10 @@ type strictProtectedHeader struct {
 	Version  int      `json:"mcxv"`
 }
 
+// encodedJWK is the closed JSON shape shared by public verification and
+// private signing keys, with the private scalar omitted from public output.
+// RU: encodedJWK задаёт закрытую JSON-форму публичного verifier-ключа и
+// приватного signer-ключа; в публичном выводе скаляр отсутствует.
 type encodedJWK struct {
 	KTY    string   `json:"kty"`
 	Curve  string   `json:"crv"`
@@ -422,6 +535,10 @@ type encodedJWK struct {
 	D      string   `json:"d,omitempty"`
 }
 
+// parseJWK strictly decodes the expected public or private key operation,
+// checks the P-256 point and, for signers, verifies the private/public match.
+// RU: parseJWK строго декодирует ожидаемую публичную либо приватную
+// операцию, проверяет точку P-256 и для подписанта — соответствие частей ключа.
 func parseJWK(data []byte, requirePrivate bool) (ES256Key, error) {
 	var encoded encodedJWK
 	if err := decodeStrictJSON(data, &encoded); err != nil {
@@ -471,6 +588,10 @@ func parseJWK(data []byte, requirePrivate bool) (ES256Key, error) {
 	return result, nil
 }
 
+// validateES256Key requires the expected kid, P-256 public point and,
+// when signing, a valid private scalar that derives the same public point.
+// RU: validateES256Key требует ожидаемый kid, публичную точку P-256 и при
+// подписи корректный приватный скаляр с той же публичной точкой.
 func validateES256Key(key ES256Key, expectedKeyID string, requirePrivate bool) error {
 	if key.Public == nil || key.Public.Curve != elliptic.P256() ||
 		key.KeyID != expectedKeyID || key.KeyID == "" {

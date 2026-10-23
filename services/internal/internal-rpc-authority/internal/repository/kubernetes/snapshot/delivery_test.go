@@ -15,12 +15,18 @@ import (
 	authoritysnapshot "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 )
 
+// roundTripFunc adapts an in-memory callback to HTTP transport so delivery units exercise request/response code without a network server or Kubernetes credentials.
+// roundTripFunc адаптирует callback в памяти к HTTP transport, чтобы unit доставки выполняли код запроса и ответа без сетевого сервера и Kubernetes credentials.
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
+// RoundTrip delegates the exact request to the fixture callback and returns its response/error unchanged; TLS, authentication and a real API are not exercised.
+// RoundTrip передаёт точный запрос callback эталона и возвращает ответ и ошибку без изменения; TLS, аутентификация и реальный API не выполняются.
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return function(request)
 }
 
+// TestPublishAcceptsFullPublisherSnapshot sends a synthetic nine-KiB compact value through fake GET/PUT responses and checks exact bytes, returned resource version and two calls. It proves adapter size handling, not valid JWS signing or live Secret CAS.
+// TestPublishAcceptsFullPublisherSnapshot проводит синтетическое девяти-КиБ compact-значение через фиктивные GET и PUT, проверяя байты, возвращённую resource version и два вызова. Доказывается обработка размера адаптером, а не корректная подпись JWS и реальный CAS Secret.
 func TestPublishAcceptsFullPublisherSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -70,6 +76,8 @@ func TestPublishAcceptsFullPublisherSnapshot(t *testing.T) {
 	}
 }
 
+// TestReadAcceptsFullPublisherSnapshot returns a synthetic nine-KiB Base64 value from a fake GET and checks it survives the read path beyond the former eight-KiB bound. No real signature, token authorization or Kubernetes API is involved.
+// TestReadAcceptsFullPublisherSnapshot возвращает синтетическое девяти-КиБ Base64-значение фиктивным GET и проверяет путь чтения сверх прежней границы восемь КиБ. Реальные подпись, авторизация токена и Kubernetes API не используются.
 func TestReadAcceptsFullPublisherSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -111,6 +119,8 @@ func TestReadAcceptsFullPublisherSnapshot(t *testing.T) {
 	}
 }
 
+// writeTokenFile creates a fixed synthetic token in the test-owned temporary directory with mode 0600 and fails the unit on write error; no real credential is read or copied.
+// writeTokenFile создаёт фиксированный синтетический токен в принадлежащем тесту временном каталоге с mode 0600 и останавливает unit при ошибке записи; реальный credential не читается и не копируется.
 func writeTokenFile(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "token")
@@ -120,6 +130,8 @@ func writeTokenFile(t *testing.T) string {
 	return path
 }
 
+// validEnvelope constructs fresh maps for a synthetic Opaque Secret with the adapter's fixed name/namespace and nonempty UID/resourceVersion; snapshot annotations and bytes are filled by each unit.
+// validEnvelope создаёт новые карты синтетического Opaque Secret с фиксированными именем и namespace адаптера и непустыми UID и resourceVersion; annotations и байты снимка задаёт каждый unit.
 func validEnvelope() secretEnvelope {
 	envelope := secretEnvelope{
 		APIVersion: "v1",
@@ -135,6 +147,8 @@ func validEnvelope() secretEnvelope {
 	return envelope
 }
 
+// jsonResponse JSON-encodes the supplied fixture and wraps it in an HTTP 200 response with a closable in-memory body, failing the unit on encoding error.
+// jsonResponse кодирует переданный эталон в JSON и оборачивает его HTTP-ответом 200 с закрываемым телом в памяти, останавливая unit при ошибке кодирования.
 func jsonResponse(t *testing.T, value any) *http.Response {
 	t.Helper()
 	raw, err := json.Marshal(value)

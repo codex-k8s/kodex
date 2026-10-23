@@ -14,6 +14,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestCleanupRecoveryOriginIsBoundToVerifiedRequest changes recovery origin/range after hashing or removes
+// bearer metadata, requiring middleware refusal before the synthetic handler; verifier/peer are fixtures,
+// not real signatures.
+// TestCleanupRecoveryOriginIsBoundToVerifiedRequest меняет recovery origin/range после хеширования либо
+// удаляет bearer metadata, требуя middleware refusal до synthetic handler; verifier/peer подменены, не
+// реальные signatures.
 func TestCleanupRecoveryOriginIsBoundToVerifiedRequest(t *testing.T) {
 	for _, scenario := range []string{"allowed", "missing bearer", "changed origin", "changed legacy range"} {
 		t.Run(scenario, func(t *testing.T) {

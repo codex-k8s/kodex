@@ -7,8 +7,11 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
-// VerifyProofSigner связывает обслуживаемый private key с exact CURRENT
-// записью independently delivered proof trust для того же снимка.
+// VerifyProofSigner binds a mounted private key to exact CURRENT proof trust for the expected issuer,
+// audience, source revision/digest and generation, comparing public points without generating a proof.
+// VerifyProofSigner связывает монтируемый закрытый ключ с точным CURRENT доверия доказательств по
+// ожидаемым подписанту, аудитории, ревизии, хешу и поколению, сравнивая открытые точки без выпуска
+// доказательства.
 func VerifyProofSigner(
 	privateJWKFile string,
 	proofTrustJWKFile string,

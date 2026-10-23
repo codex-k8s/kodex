@@ -20,6 +20,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// workspaceAccessFixture creates a private temporary setgid work root and returns a cleanup-owned
+// open descriptor with the current UID/GID; synthetic tests may choose distinct provider identity inputs.
+// workspaceAccessFixture создаёт временный setgid work root и возвращает очищаемый при завершении
+// открытый дескриптор с текущими UID/GID; тесты могут отдельно задать идентичность провайдера.
 func workspaceAccessFixture(t *testing.T) (string, *os.File, uint32, uint32) {
 	t.Helper()
 	path := t.TempDir()
@@ -34,6 +38,10 @@ func workspaceAccessFixture(t *testing.T) (string, *os.File, uint32, uint32) {
 	return path, directory, uint32(os.Geteuid()), uint32(os.Getegid())
 }
 
+// TestProviderWorkspaceAccessNormalizesDirectoriesNotPrivateFiles requires nested provider directories
+// to become group-traversable while the private file keeps its inode, mode, size and modification time.
+// TestProviderWorkspaceAccessNormalizesDirectoriesNotPrivateFiles требует group-доступа вложенным каталогам
+// провайдера при сохранении inode, mode, размера и времени изменения приватного файла.
 func TestProviderWorkspaceAccessNormalizesDirectoriesNotPrivateFiles(t *testing.T) {
 	path, directory, uid, group := workspaceAccessFixture(t)
 	private := filepath.Join(path, "private", "nested")
@@ -56,6 +64,10 @@ func TestProviderWorkspaceAccessNormalizesDirectoriesNotPrivateFiles(t *testing.
 	}
 }
 
+// TestProviderWorkspaceAccessPreservesRunnerMaterializedInput separates runner/provider IDs in the
+// fixture and requires already-readable runner input directories to retain their mode and modification time.
+// TestProviderWorkspaceAccessPreservesRunnerMaterializedInput разделяет идентичности runner/provider
+// и требует сохранения mode и времени изменения уже доступных каталогов входных данных runner.
 func TestProviderWorkspaceAccessPreservesRunnerMaterializedInput(t *testing.T) {
 	path, directory, uid, group := workspaceAccessFixture(t)
 	input := filepath.Join(path, "input", "aset", "files")
@@ -72,6 +84,10 @@ func TestProviderWorkspaceAccessPreservesRunnerMaterializedInput(t *testing.T) {
 	}
 }
 
+// TestProviderWorkspaceAccessRejectsUnsafeTree exercises links, FIFO, identity/mode/group, quotas,
+// cancellation and policy corruption, requiring the exact typed guard reason without private path disclosure.
+// TestProviderWorkspaceAccessRejectsUnsafeTree проверяет ссылки, FIFO, identity/mode/group, квоты,
+// отмену и повреждённую policy с требованием точной причины guard без раскрытия приватного пути.
 func TestProviderWorkspaceAccessRejectsUnsafeTree(t *testing.T) {
 	for _, kind := range []string{"symlink", "hardlink", "fifo", "foreign owner", "runner private directory", "root mode", "root group", "count", "bytes", "cancelled", "invalid policy"} {
 		t.Run(kind, func(t *testing.T) {
@@ -135,6 +151,10 @@ func TestProviderWorkspaceAccessRejectsUnsafeTree(t *testing.T) {
 	}
 }
 
+// TestProviderWorkspaceAccessRejectsReplacedDirectory replaces a child pathname after opening the old
+// inode, requiring metadata-change denial and no permission change on the newly substituted directory.
+// TestProviderWorkspaceAccessRejectsReplacedDirectory подменяет путь после открытия прежнего inode,
+// требуя metadata-change отказа без изменения прав нового подставленного каталога.
 func TestProviderWorkspaceAccessRejectsReplacedDirectory(t *testing.T) {
 	path, directory, uid, group := workspaceAccessFixture(t)
 	if os.Mkdir(filepath.Join(path, "child"), 0o700) != nil {
@@ -157,7 +177,12 @@ func TestProviderWorkspaceAccessRejectsReplacedDirectory(t *testing.T) {
 	}
 }
 
-// Только отдельный root fixture executable; production никогда не меняет UID.
+// TestProviderWorkspaceAccessKernel is an explicit opt-in disposable root fixture, not a production UID
+// switch. It runs the copied test ELF under runner/provider IDs across denial/normalization/readback stages,
+// checks private-file unreadability and compares original file metadata/content hashes. Without opt-in it skips.
+// TestProviderWorkspaceAccessKernel является явно включаемой одноразовой root fixture, а не production-сменой UID.
+// Она запускает копию test ELF под UID runner/provider для отказа, нормализации и чтения результата,
+// проверяет закрытость приватного файла и исходные метаданные/хеши. Без opt-in тест пропускается.
 func TestProviderWorkspaceAccessKernel(t *testing.T) {
 	if child := os.Getenv("KODEX_WORKSPACE_ACCESS_KERNEL_CHILD"); child != "" {
 		workspaceAccessKernelChild(t, child)
@@ -200,6 +225,10 @@ func TestProviderWorkspaceAccessKernel(t *testing.T) {
 	if os.WriteFile(original, []byte("immutable source copy"), 0o440) != nil || os.Chown(original, 10001, 29000) != nil {
 		t.Fatal("prepare read-only original fixture")
 	}
+	// snapshot stores independent pre-normalization inode metadata and content hash for each protected
+	// fixture file; the later readback must match both rather than trusting a successful cleanup return.
+	// snapshot хранит исходные inode metadata и хеш содержимого каждого защищённого fixture файла;
+	// последующее чтение сверяет оба значения, не полагаясь на один успешный возврат cleanup.
 	type snapshot struct {
 		stat unix.Stat_t
 		sum  [sha256.Size]byte
@@ -266,6 +295,12 @@ func TestProviderWorkspaceAccessKernel(t *testing.T) {
 	}
 }
 
+// workspaceAccessKernelChild executes only a named stage against the inherited disposable fixture fd.
+// It checks its expected UID before resets/normalization/canaries and rejects unknown runner stages;
+// it is not a general command runner or a way to change the production process identity.
+// workspaceAccessKernelChild исполняет лишь именованный этап относительно унаследованного disposable fd.
+// Она сверяет ожидаемый UID до reset, нормализации и canary, отвергая неизвестные этапы runner;
+// это не общий запуск команд и не способ смены production identity.
 func workspaceAccessKernelChild(t *testing.T, mode string) {
 	root := "/proc/self/fd/3/root"
 	if mode == "RESET_PRIVATE" {

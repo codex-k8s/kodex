@@ -17,11 +17,15 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// appAuthorityFixture counts synthetic catalog-authority resolutions without opening an owner service connection.
+// RU: appAuthorityFixture считает синтетические разрешения catalog authority без соединения с сервисом-владельцем.
 type appAuthorityFixture struct {
 	sttv1.TranscriptionAuthorityServiceClient
 	calls int
 }
 
+// ResolveTranscriptionCatalogAuthority returns a short-lived synthetic system-configuration principal for composition interceptor tests.
+// RU: ResolveTranscriptionCatalogAuthority возвращает краткоживущего синтетического субъекта системной конфигурации для тестов композиции перехватчиков.
 func (client *appAuthorityFixture) ResolveTranscriptionCatalogAuthority(context.Context, *sttv1.ResolveTranscriptionCatalogAuthorityRequest, ...grpc.CallOption) (*sttv1.ResolveTranscriptionCatalogAuthorityResponse, error) {
 	client.calls++
 	return &sttv1.ResolveTranscriptionCatalogAuthorityResponse{Authority: &sttv1.TrustedTranscriptionAuthority{
@@ -31,6 +35,8 @@ func (client *appAuthorityFixture) ResolveTranscriptionCatalogAuthority(context.
 	}}, nil
 }
 
+// TestTrustedRPCCompositionHasNoSocketOrTLSDependency proves trusted composition still resolves an owner principal and rejects wrong callers, missing sessions or unbound methods before owner I/O.
+// RU: TestTrustedRPCCompositionHasNoSocketOrTLSDependency доказывает разрешение субъекта владельцем в trusted композиции и отказ чужому caller, отсутствующей сессии или непривязанному методу до owner I/O.
 func TestTrustedRPCCompositionHasNoSocketOrTLSDependency(t *testing.T) {
 	connection, err := dialProfileAuthority(t.Context(), transportprofile.TrustedCluster, authorityclient.LocalConfig{})
 	if err != nil || connection.Issuer() != nil || connection.Verifier() != nil || connection.Close() != nil {

@@ -18,11 +18,19 @@ import (
 )
 
 const (
+	// archiveCleanupTimeout bounds predecessor joining and detached attempt cleanup.
+	// RU: archiveCleanupTimeout ограничивает ожидание предшественников и независимую очистку попытки.
 	archiveCleanupTimeout = 30 * time.Second
-	archiveRenewTimeout   = 10 * time.Second
+	// archiveRenewTimeout bounds each owner-authority renewal before a cleanup effect.
+	// RU: archiveRenewTimeout ограничивает каждое продление полномочий владельца перед эффектом очистки.
+	archiveRenewTimeout = 10 * time.Second
+	// maximumArchiveAttempt bounds the predecessor scan for one archive task.
+	// RU: maximumArchiveAttempt ограничивает обход предшествующих попыток одного задания архива.
 	maximumArchiveAttempt = 5
 )
 
+// renewAuthority requires a live context and a successful bounded renewal before further task effects.
+// RU: renewAuthority требует живой контекст и успешное ограниченное продление до следующих эффектов задания.
 func renewAuthority(ctx context.Context, renew func(context.Context) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -38,8 +46,8 @@ func renewAuthority(ctx context.Context, renew func(context.Context) error) erro
 	return call.Err()
 }
 
-// Только новый claim владельца разрешает завершить прежние попытки той же
-// задачи. Startup/readiness не удаляют ресурсы других реплик и сессий.
+// cleanupPredecessors uses the current owner claim to validate and join only earlier attempts of this task generation.
+// RU: cleanupPredecessors использует текущий claim владельца для проверки и завершения лишь прежних попыток этого поколения задания.
 func (controller *Controller) cleanupPredecessors(ctx context.Context, task model.Task, renew func(context.Context) error) error {
 	if task.Attempt < 1 || task.Attempt > maximumArchiveAttempt {
 		return errors.New("session archive attempt is invalid")
@@ -87,7 +95,11 @@ func (controller *Controller) cleanupPredecessors(ctx context.Context, task mode
 	return renewAuthority(ctx, renew)
 }
 
+// decodeAttemptInput strictly decodes one bounded immutable task document before validating its owner pins.
+// RU: decodeAttemptInput строго декодирует ограниченный неизменяемый документ задания до проверки его привязок владельца.
 func decodeAttemptInput(input *corev1.ConfigMap) (model.Task, error) {
+	// wireTask bypasses Task.UnmarshalJSON so the outer decoder can enforce unknown-field rejection.
+	// RU: wireTask обходит Task.UnmarshalJSON, позволяя внешнему decoder отклонять неизвестные поля.
 	type wireTask model.Task
 	var decoded wireTask
 	raw := input.Data["task.json"]
@@ -107,6 +119,8 @@ func decodeAttemptInput(input *corev1.ConfigMap) (model.Task, error) {
 	return task, task.Validate()
 }
 
+// validPredecessorInput checks exact ConfigMap identity and equal owner pins, allowing only server-reassigned attempt fields.
+// RU: validPredecessorInput проверяет точную идентичность ConfigMap и равенство привязок владельца, допуская лишь переназначенные поля попытки.
 func validPredecessorInput(current model.Task, attempt int32, input *corev1.ConfigMap) bool {
 	if input == nil || input.Namespace != exactWorkerNamespace || input.UID == "" || input.ResourceVersion == "" ||
 		input.Name != workloadName(current.TaskRef, current.ContentGeneration, attempt) ||
@@ -127,6 +141,8 @@ func validPredecessorInput(current model.Task, attempt int32, input *corev1.Conf
 	return reflect.DeepEqual(previous, current)
 }
 
+// jobUsesInput requires exactly one task volume referring to the expected immutable ConfigMap name.
+// RU: jobUsesInput требует ровно один том задания со ссылкой на ожидаемое имя неизменяемой ConfigMap.
 func jobUsesInput(job *batchv1.Job, name string) bool {
 	count := 0
 	for _, volume := range job.Spec.Template.Spec.Volumes {
@@ -137,8 +153,8 @@ func jobUsesInput(job *batchv1.Job, name string) bool {
 	return count == 1
 }
 
-// UID и resourceVersion запрещают удаление подменённого объекта. Foreground
-// плюс отдельное чтение Pods не допускают нового writer до join прежнего.
+// cleanupAttempt deletes with UID/resourceVersion preconditions and joins the exact Job and owned Pods before removing input.
+// RU: cleanupAttempt удаляет с предусловиями UID/resourceVersion и дожидается точной Job и принадлежащих ей Pods до удаления входа.
 func (controller *Controller) cleanupAttempt(ctx context.Context, input *corev1.ConfigMap, job *batchv1.Job, renew func(context.Context) error) error {
 	if input == nil || input.UID == "" || input.ResourceVersion == "" {
 		return errors.New("session archive cleanup input identity is missing")

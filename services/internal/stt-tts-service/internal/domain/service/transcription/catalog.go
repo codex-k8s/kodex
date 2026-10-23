@@ -8,8 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
-// GetModelCatalog читает возможности adapter без policy, credential, decoder
-// и provider probe. Административное право не выдаёт право на транскрипцию.
+// GetModelCatalog reads the adapter's bounded local catalog for a current
+// system-configuration administrator without resolving policy or credential,
+// decoding audio or probing the provider; this does not grant transcription.
+// RU: GetModelCatalog читает ограниченный локальный каталог адаптера для
+// действующего администратора системной конфигурации без получения политики,
+// реквизита, декодирования аудио и проверки провайдера; право распознавания не выдаётся.
 func (service *Service) GetModelCatalog(ctx context.Context, principal value.Principal) (modelprofile.Catalog, error) {
 	if ctx == nil || principal.Permission != value.PermissionManageConfiguration || principal.ActorID == "" || principal.TenantID == "" ||
 		principal.ProjectID != "" || principal.Project != (value.AuthorityProvenance{}) || principal.RequestID == "" ||

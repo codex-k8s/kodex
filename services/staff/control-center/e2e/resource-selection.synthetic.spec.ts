@@ -1,3 +1,4 @@
+import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { expect, test, type Locator } from "@playwright/test";
 import type {
   Project,
@@ -152,30 +153,7 @@ for (const width of [390, 2900]) {
     };
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
-      if (url.origin !== "https://kodex.test") {
-        errors.push("Unexpected origin");
-        await route.abort();
-        return;
-      }
-      if (url.pathname === "/config/runtime-config.json") {
-        await route.fulfill({
-          json: {
-            revision: "0".repeat(64),
-            environment: "synthetic",
-            apiBaseUrl: "/",
-            realtimeUrl: "/api/v1",
-            requestTimeoutMs: 10000,
-            oidc: {
-              authority: "https://identity.invalid",
-              clientId: "synthetic",
-              redirectUri: "/auth/callback",
-              postLogoutRedirectUri: "/",
-              scope: "openid",
-            },
-          },
-        });
-        return;
-      }
+      if (await handleSyntheticRuntimeRequest(route, url, errors)) return;
       if (url.pathname === "/e2e/fixtures/resource-selection.json") {
         await route.fulfill({ json: { project, connection, run } });
         return;

@@ -16,6 +16,8 @@ import (
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
+// TestEnvironmentCanaryProcessFixture is inert without its explicit mode; a controlled child probes only the fixed synthetic workspace and declared disk/memory volumes, prints a closed result token and exits. Parent setup supplies actual mounts; this helper does not create them or start a model.
+// TestEnvironmentCanaryProcessFixture неактивен без явного mode; управляемый child проверяет лишь фиксированный synthetic workspace и объявленные disk/memory volumes, печатает закрытый result token и выходит. Настоящие mounts готовит parent; helper не создаёт их и не запускает модель.
 func TestEnvironmentCanaryProcessFixture(t *testing.T) {
 	mode := os.Getenv("KODEX_ENVIRONMENT_CANARY_TEST")
 	if mode == "" {
@@ -46,6 +48,8 @@ func TestEnvironmentCanaryProcessFixture(t *testing.T) {
 	os.Exit(0)
 }
 
+// TestEnvironmentCanaryNativeMountProcess runs six bounded bwrap cases with isolated user/network/mount views and synthetic disk/tmpfs inputs, requiring correct mount-policy outcomes, reaped children and untouched sentinels. Disk fixtures stay on the worktree filesystem rather than assuming /tmp is disk-backed.
+// TestEnvironmentCanaryNativeMountProcess выполняет шесть ограниченных bwrap-случаев с изолированными user/network/mount views и synthetic disk/tmpfs, требуя верные mount-policy outcomes, завершённые children и неизменные sentinels. Disk fixtures находятся на ФС worktree, не предполагая disk-backed /tmp.
 func TestEnvironmentCanaryNativeMountProcess(t *testing.T) {
 	bwrap, err := exec.LookPath("bwrap")
 	if err != nil {

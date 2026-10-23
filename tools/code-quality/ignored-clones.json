@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "path": "libs/go/controlplaneclient/client.go",
+      "maxLines": 22,
+      "sha256": "a44522ee1bf6f05337581fd7086d03ddda613690c84a5ff68beb3b8399816780",
+      "reason": "Перечень разных типизированных конструкторов generated service clients на одном соединении; общего исполняемого алгоритма здесь нет."
+    },
+    {
+      "path": "services/external/control-api-gateway/internal/transport/websocket/server.go",
+      "maxLines": 84,
+      "sha256": "e9205cb4ca231dc6e8040c385e2feec010143f203446305f1475655339e9e362",
+      "reason": "Интерфейс сохраняет разные точные generated RPC-сигнатуры; универсальный dispatcher стёр бы типы запросов и ответов."
+    },
+    {
+      "path": "services/staff/control-center/e2e/console-error-diagnostics.ts",
+      "maxLines": 20,
+      "sha256": "7f7af3852fd9e85bd8d726047525c4e826f23bf13cb4b658e6b629828115548f",
+      "reason": "Короткая типизированная обёртка связывает console-проекцию с журналом; происхождение browser-reported location остаётся явным."
+    },
+    {
+      "path": "services/staff/control-center/e2e/page-error-diagnostics.ts",
+      "maxLines": 20,
+      "sha256": "667dc6aa0e3b2d4c5114e7945e0eb10842c78f750365a6ab79aba6c53ab6d24e",
+      "reason": "Короткая типизированная обёртка связывает pageerror-проекцию с журналом; недоверенный stack остаётся отдельным источником."
+    },
+    {
+      "path": "services/staff/control-center/src/features/access/store.ts",
+      "maxLines": 60,
+      "sha256": "a49be70dd543bc875ea9e237c662b23ec13a8f1bc94ddc07cd02163d6a123a46",
+      "reason": "Исключён один декларативный return-перечень Pinia store; detector сравнивал имена его полей с импортами и полями иных store."
+    }
+  ]
+}

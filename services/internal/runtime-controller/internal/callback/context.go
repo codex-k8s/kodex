@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// contextArtifact selects a valid immutable skill-file pin for the already
+// authorized input and delegates its exact bytes/revision transfer, returning
+// 404 on selection failure. The caller must establish execution authority first.
+// contextArtifact выбирает immutable skill-file pin уже авторизованного input
+// и передаёт точные bytes/revision в transfer; ошибка выбора даёт 404.
+// Execution authority заранее устанавливает caller.
 func (server *Server) contextArtifact(writer http.ResponseWriter, request *http.Request, input runtimecontract.RunnerInput, artifactRef string) {
 	_, pin, ok := contextArtifactPin(input, artifactRef, request.URL.RawQuery, time.Now())
 	if !ok {
@@ -19,8 +25,14 @@ func (server *Server) contextArtifact(writer http.ResponseWriter, request *http.
 		digest: pin.Digest, size: pin.SizeBytes, revision: pin.ArtifactRevision}, "application/octet-stream")
 }
 
-// contextArtifactPin разрешает только точный файл immutable snapshot активной
-// execution. Query выбирает запись, но не выдаёт полномочия на её чтение.
+// contextArtifactPin requires a context snapshot valid at now and exactly five
+// single-valued selectors, a canonical positive artifact revision and safe skill
+// path, then matches bundle/revision/path/artifact membership. Query values are
+// locators only; owner eligibility and bytes remain the transfer boundary's job.
+// contextArtifactPin требует актуальный на now context snapshot и ровно пять
+// однозначных selectors, canonical positive artifact revision и safe skill path,
+// затем сверяет bundle/revision/path/artifact membership. Query — лишь locators;
+// owner eligibility и bytes проверяются на transfer boundary.
 func contextArtifactPin(input runtimecontract.RunnerInput, artifactRef, rawQuery string, now time.Time) (runtimecontract.RuntimeSkillBundle, runtimecontract.RuntimeSkillFile, bool) {
 	snapshot, err := input.RequiredContextSnapshot(now)
 	if err != nil || len(rawQuery) > 2048 {

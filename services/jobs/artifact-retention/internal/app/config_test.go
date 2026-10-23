@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// validConfig supplies a bounded production-shaped baseline for negative validation tests.
+// RU: validConfig задаёт ограниченную production-подобную основу для отрицательных тестов валидации.
 func validConfig() Config {
 	return Config{
 		Environment: "production", TechnicalListen: ":9090", InstanceID: "retention-0",
@@ -16,6 +18,8 @@ func validConfig() Config {
 	}
 }
 
+// TestConfigRejectsInsecureObjectStorageWithoutExplicitLocalOverride denies implicit HTTP transport.
+// RU: TestConfigRejectsInsecureObjectStorageWithoutExplicitLocalOverride запрещает неявный HTTP transport.
 func TestConfigRejectsInsecureObjectStorageWithoutExplicitLocalOverride(t *testing.T) {
 	config := validConfig()
 	config.ObjectStorageEndpoint = "http://s3.example"
@@ -24,6 +28,8 @@ func TestConfigRejectsInsecureObjectStorageWithoutExplicitLocalOverride(t *testi
 	}
 }
 
+// TestConfigRequiresLeaseLongerThanOperation ensures cleanup cannot outlive its claim lease.
+// RU: TestConfigRequiresLeaseLongerThanOperation проверяет, что очистка не переживает срок своего claim.
 func TestConfigRequiresLeaseLongerThanOperation(t *testing.T) {
 	config := validConfig()
 	config.ClaimLease = config.OperationTimeout

@@ -17,6 +17,16 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed checks nine fake-Pod
+// completion cases permit one read only after a new failed owner commit, distinguish
+// current OOMKilled from exit137/history and keep unavailable/mismatched evidence
+// explicit. Success, rejected owner commit and replay add no read/log; private canaries
+// never enter diagnostics. No real cluster or resource limit is changed.
+// TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed проверяет девять fake-Pod
+// completion cases с одним read лишь после нового failed owner commit,отличает current
+// OOMKilled от exit137/history и явно сохраняет unavailable/mismatched evidence.
+// Success,rejected owner commit/replay не дают read/log,private canaries не попадают
+// в diagnostics. Реальный cluster/resource limit не меняется.
 func TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed(t *testing.T) {
 	for _, scenario := range []string{"current OOM", "exit137", "previous OOM", "revision mismatch", "missing Pod", "read failure", "success", "owner failure", "replay"} {
 		t.Run(scenario, func(t *testing.T) {

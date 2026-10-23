@@ -1,4 +1,5 @@
 # GitHub сворачивает воспроизводимые результаты codegen в diff Pull Request.
+docs/operations/code-quality-1823-*.gen.json linguist-generated=true
 contracts/email-bridge/v1/configuration.schema.json linguist-generated=true
 libs/go/controlplaneapi/gen/** linguist-generated=true
 libs/go/emailbridgeapi/api.gen.go linguist-generated=true

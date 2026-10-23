@@ -10,7 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// Первый вариант union сохраняет прежнюю точную экранную привязку.
+// assistantOrdinaryParametersSchema returns the first known oneOf test branch or the supplied schema, preserving the ordinary screen-bound variant for assertions.
+// The helper assumes a nonempty typed branch list and does not validate arbitrary schemas.
+// assistantOrdinaryParametersSchema возвращает первую известную тестовую ветвь oneOf либо переданную схему, сохраняя обычный экранный вариант для проверок.
+// Функция предполагает непустой типизированный список ветвей и не проверяет произвольные схемы.
 func assistantOrdinaryParametersSchema(schema map[string]any) map[string]any {
 	if branches, ok := schema["oneOf"].([]map[string]any); ok {
 		return branches[0]
@@ -18,6 +21,10 @@ func assistantOrdinaryParametersSchema(schema map[string]any) map[string]any {
 	return schema
 }
 
+// TestProjectAssistantLocatorSchemasAreExclusiveAndPersistAcrossScreens checks both scopes and four screens retain three unique closed project-helper locator schemas without caller owner fields.
+// PROJECT self refs stay exact and environment preparation may leave binding resolution to the owner.
+// TestProjectAssistantLocatorSchemasAreExclusiveAndPersistAcrossScreens проверяет сохранение трёх уникальных закрытых схем ссылки проектного помощника в обеих областях на четырёх экранах без полей владельца из запроса.
+// Собственные проектные ссылки остаются точными, подготовка окружения может оставить разрешение привязки владельцу.
 func TestProjectAssistantLocatorSchemasAreExclusiveAndPersistAcrossScreens(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, screen := range []string{"PROJECT", "AGENT", "ENVIRONMENT", "FILE"} {
@@ -67,6 +74,10 @@ func TestProjectAssistantLocatorSchemasAreExclusiveAndPersistAcrossScreens(t *te
 	}
 }
 
+// TestProjectAssistantLocatorTraversesFencedOwnerDraftWithoutScreenRebind checks three helper operations retain exact lease/scoped locators while dropping caller target, expectedVersion and before/after authority.
+// Derived and explicit environment locators route only to a local owner-draft stub and do not rebind the FILE screen.
+// TestProjectAssistantLocatorTraversesFencedOwnerDraftWithoutScreenRebind проверяет сохранение точных аренды и ссылок области для трёх операций помощника с удалением цели, expectedVersion и полномочий before/after вызывающей стороны.
+// Вычисляемые и явные ссылки окружения направляются только в локальную подстановку черновика владельца без перепривязки экрана FILE.
 func TestProjectAssistantLocatorTraversesFencedOwnerDraftWithoutScreenRebind(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, kind := range []string{"CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION"} {
@@ -121,6 +132,8 @@ func TestProjectAssistantLocatorTraversesFencedOwnerDraftWithoutScreenRebind(t *
 	}
 }
 
+// TestProjectAssistantLocatorRejectsMixedAuthorityBeforeRPC checks mixed owner/secret/OCC locators, foreign PROJECT self, ordinary scope and incomplete parameters fail before any draft RPC.
+// TestProjectAssistantLocatorRejectsMixedAuthorityBeforeRPC проверяет отказ до RPC черновика для смешанных ссылок владельца, секрета и OCC, чужой проектной ссылки, обычной области и неполных параметров.
 func TestProjectAssistantLocatorRejectsMixedAuthorityBeforeRPC(t *testing.T) {
 	for _, kind := range []string{"CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION"} {
 		for _, forbidden := range []string{"agentRef", "systemAssistantRef", "projectRef", "organizationRef", "assistantProfileRef", "ownerRef", "expectedVersion", "secretValue"} {

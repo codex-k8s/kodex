@@ -21,12 +21,20 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// managedDraftCase pairs one synthetic HTTP path with its exact expected typed command, kind/format
+// and save-or-discard semantics.
+// managedDraftCase связывает один синтетический HTTP-путь с точной ожидаемой типизированной командой,
+// видом, форматом и смыслом сохранения либо удаления черновика.
 type managedDraftCase struct {
 	path, method, format string
 	kind                 cp.ManagedConfigurationKind
 	save                 bool
 }
 
+// managedDraftCases enumerates save/discard routes for four closed configuration kinds using fixed
+// fixture references; it is a test matrix, not a runtime command registry.
+// managedDraftCases перечисляет маршруты сохранения и удаления четырёх закрытых видов конфигурации с
+// фиксированными ссылками; это тестовая матрица, не runtime-реестр команд.
 func managedDraftCases() []managedDraftCase {
 	var result []managedDraftCase
 	for _, kind := range []struct {
@@ -45,6 +53,10 @@ func managedDraftCases() []managedDraftCase {
 	return result
 }
 
+// managedDraftRecorder captures a cloned typed RPC request and can inject owner failure or receipt
+// corruption into the in-memory HTTP fixture; it is not a real domain owner.
+// managedDraftRecorder записывает копию типизированного RPC-запроса и может добавить ошибку владельца
+// или повреждённый ответ в HTTP-пример в памяти; реальным доменным владельцем не является.
 type managedDraftRecorder struct {
 	grpc.ClientConnInterface
 	test    managedDraftCase
@@ -54,6 +66,12 @@ type managedDraftRecorder struct {
 	corrupt func(*cp.ManagedConfigurationSet, *cp.ManagedConfigurationRevision)
 }
 
+// Invoke requires the expected full command method, clones the request and constructs a typed
+// synthetic receipt with existing normalization, optionally corrupting it before populating the
+// response. It performs no durable mutation or external RPC.
+// Invoke требует ожидаемый полный метод команды, копирует запрос и строит типизированный синтетический
+// ответ с прежней нормализацией, при необходимости повреждая его перед заполнением результата.
+// Устойчивых изменений и внешнего RPC нет.
 func (client *managedDraftRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	client.method, client.request = method, proto.Clone(request.(proto.Message))
 	if client.failure != nil {
@@ -99,6 +117,10 @@ func (client *managedDraftRecorder) Invoke(_ context.Context, method string, req
 	return nil
 }
 
+// TestIntegrationDraftSaveAcceptsCanonicalNormalization checks shipped integration-source
+// normalization and rejection of changed canonical receipt content using in-memory command fixtures.
+// TestIntegrationDraftSaveAcceptsCanonicalNormalization проверяет нормализацию встроенного исходника
+// интеграции и отказ при изменённом каноническом тексте ответа на командных примерах в памяти.
 func TestIntegrationDraftSaveAcceptsCanonicalNormalization(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -135,14 +157,30 @@ func TestIntegrationDraftSaveAcceptsCanonicalNormalization(t *testing.T) {
 	}
 }
 
+// managedDraftHandler wires generated HTTP routes to a server with a fake typed command client only;
+// authentication middleware and a live control plane are outside this fixture.
+// managedDraftHandler связывает generated HTTP-маршруты с сервером, имеющим лишь подставной
+// типизированный командный клиент; аутентификационный middleware и живой control plane за пределами
+// примера.
 func managedDraftHandler(client *managedDraftRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Command: cp.NewPlatformCommandServiceClient(client)}})
 }
+
+// managedSaveBody encodes the fixture's two string input fields as JSON; its error is intentionally
+// ignored because these values have an infallible standard encoding.
+// managedSaveBody кодирует два строковых поля примера в JSON; ошибка намеренно опущена, поскольку
+// стандартное кодирование этих значений не имеет ошибочной ветви.
 func managedSaveBody(format, content string) string {
 	body, _ := json.Marshal(map[string]string{"contentFormat": format, "content": content})
 	return string(body)
 }
 
+// TestManagedDraftExactCommands checks all eight HTTP-to-typed-RPC mappings, mutation pins,
+// no-store/ETag response and exact save lineage versus discard behavior; it proves no live database
+// transition.
+// TestManagedDraftExactCommands проверяет все восемь соответствий HTTP типизированным RPC, привязки
+// изменения, no-store и ETag и точное происхождение сохранения против удаления; реальный переход БД не
+// доказывает.
 func TestManagedDraftExactCommands(t *testing.T) {
 	for _, tc := range managedDraftCases() {
 		t.Run(tc.method, func(t *testing.T) {
@@ -182,7 +220,15 @@ func TestManagedDraftExactCommands(t *testing.T) {
 	}
 }
 
+// TestManagedDraftOpenAPIImportCanonicalReadback checks canonical integration create/save receipts,
+// rejects altered content/format and disallows import format for the other kinds without invoking a
+// command.
+// TestManagedDraftOpenAPIImportCanonicalReadback проверяет канонические ответы создания и сохранения
+// интеграции, отклоняет изменённые текст и формат и запрещает формат импорта другим видам до вызова
+// команды.
 func TestManagedDraftOpenAPIImportCanonicalReadback(t *testing.T) {
+	// source is a local OpenAPI fixture; its example URL is not a requested endpoint.
+	// source — локальный пример OpenAPI; его URL не является запрошенным endpoint.
 	const source = `openapi: 3.1.0
 info: {title: Заявки, version: 1.0.0}
 servers: [{url: https://api.example.test}]
@@ -258,6 +304,10 @@ paths:
 	}
 }
 
+// TestManagedDraftEmptyAndByteBoundary permits empty/whitespace and exact 256 KiB multibyte UTF-8
+// draft source for every save kind, preserving editor support for unfinished content.
+// TestManagedDraftEmptyAndByteBoundary разрешает пустой текст, пробелы и ровно 256 КиБ многобайтового
+// UTF-8 исходника для каждого вида сохранения, сохраняя поддержку незавершённого текста редактора.
 func TestManagedDraftEmptyAndByteBoundary(t *testing.T) {
 	for _, tc := range managedDraftCases() {
 		if !tc.save {
@@ -274,6 +324,10 @@ func TestManagedDraftEmptyAndByteBoundary(t *testing.T) {
 	}
 }
 
+// TestManagedDraftDiscardedReadPaths retains discarded revision content in history while requiring the
+// catalog summary to omit source content.
+// TestManagedDraftDiscardedReadPaths сохраняет текст удалённой ревизии в истории, требуя отсутствия
+// исходного текста в кратком каталоге.
 func TestManagedDraftDiscardedReadPaths(t *testing.T) {
 	client := &managedRPCRecorder{revisionState: cp.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DISCARDED}
 	w := httptest.NewRecorder()
@@ -295,6 +349,10 @@ func TestManagedDraftDiscardedReadPaths(t *testing.T) {
 	}
 }
 
+// TestManagedDraftRejectsInvalidRequests rejects malformed references/OCC/idempotency and invalid or
+// forged save inputs before the fake command client is invoked.
+// TestManagedDraftRejectsInvalidRequests отклоняет неверные ссылки, OCC и идемпотентность и
+// некорректный либо подделанный ввод сохранения до вызова подставного командного клиента.
 func TestManagedDraftRejectsInvalidRequests(t *testing.T) {
 	for _, tc := range managedDraftCases() {
 		body := ""
@@ -346,6 +404,10 @@ func TestManagedDraftRejectsInvalidRequests(t *testing.T) {
 	}
 }
 
+// TestManagedDraftOwnerErrorsRemainClosed checks six domain RPC failure mappings across eight
+// operations and requires private upstream message text to stay out of HTTP responses.
+// TestManagedDraftOwnerErrorsRemainClosed проверяет преобразование шести ошибок доменного RPC для
+// восьми операций и отсутствие приватного текста upstream в HTTP-ответах.
 func TestManagedDraftOwnerErrorsRemainClosed(t *testing.T) {
 	for _, tc := range managedDraftCases() {
 		for _, code := range []codes.Code{codes.PermissionDenied, codes.NotFound, codes.Aborted, codes.FailedPrecondition, codes.AlreadyExists, codes.Unavailable} {
@@ -364,6 +426,11 @@ func TestManagedDraftOwnerErrorsRemainClosed(t *testing.T) {
 	}
 }
 
+// TestManagedDraftRejectsWrongOwnerResult corrupts set identity/version/kind/UI ownership, revision
+// state/content/lineage and published-head metadata, requiring gateway rejection instead of success.
+// TestManagedDraftRejectsWrongOwnerResult повреждает личность, версию, вид и UI-владение набором,
+// состояние, текст, происхождение ревизии и метаданные опубликованной головы, требуя отказа шлюза
+// вместо успеха.
 func TestManagedDraftRejectsWrongOwnerResult(t *testing.T) {
 	for _, tc := range managedDraftCases() {
 		corruptions := []struct {

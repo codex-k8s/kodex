@@ -19,11 +19,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// planDiagnosticError constructs a synthetic owner status with one ErrorInfo and a private canary payload for closed diagnostic classification tests.
+// planDiagnosticError создаёт синтетический статус владельца с одним ErrorInfo и частным контрольным содержимым для тестов закрытой диагностической классификации.
 func planDiagnosticError(code codes.Code, reason string, metadata map[string]string) error {
 	value, _ := status.New(code, "PRIVATE_OPERATION_PAYLOAD").WithDetails(&errdetails.ErrorInfo{Domain: "kodex.control-plane", Reason: reason, Metadata: metadata})
 	return value.Err()
 }
 
+// TestAssistantPlanDiagnosticsRejectNonCanonicalDetails checks five plan stages and two categories preserve valid bounded metadata, while unknown, foreign, duplicate or wrong-code details retain generic fallbacks.
+// TestAssistantPlanDiagnosticsRejectNonCanonicalDetails проверяет сохранение корректных ограниченных метаданных для пяти стадий плана и двух категорий, а для неизвестных, чужих, повторных деталей и неверного кода — общей классификации.
 func TestAssistantPlanDiagnosticsRejectNonCanonicalDetails(t *testing.T) {
 	for _, stage := range []string{"HYDRATE", "NORMALIZE", "BIND", "AUTHORIZE", "EMPTY"} {
 		for _, category := range []string{"CONFLICT", "VERSION"} {
@@ -60,15 +64,23 @@ func TestAssistantPlanDiagnosticsRejectNonCanonicalDetails(t *testing.T) {
 	}
 }
 
+// assistantPlanDiagnosticClient returns a configured plan-proposal error while inheriting local MCP activity recording, without creating or applying a real plan.
+// assistantPlanDiagnosticClient возвращает заданную ошибку предложения плана, наследуя локальную запись активности MCP, без создания и применения настоящего плана.
 type assistantPlanDiagnosticClient struct {
 	*assistantFreshCatalogMCPClient
 	failure error
 }
 
+// ProposeAssistantPlan returns the configured failure without a response or owner-side mutation, regardless of the synthetic request.
+// ProposeAssistantPlan возвращает заданную ошибку без ответа и изменений у владельца независимо от синтетического запроса.
 func (client *assistantPlanDiagnosticClient) ProposeAssistantPlan(context.Context, *controlplanev1.ProposeAssistantPlanRequest, ...grpc.CallOption) (*controlplanev1.ProposeAssistantPlanResponse, error) {
 	return nil, client.failure
 }
 
+// TestAssistantPlanDiagnosticsPreservePublicFailureAndSafeOperationTypes checks failed MCP/activity projection retains four validated operation types and exactly two bounded diagnostic logs without private data.
+// Unknown operation names or an oversized operation list must not enter safe public history.
+// TestAssistantPlanDiagnosticsPreservePublicFailureAndSafeOperationTypes проверяет сохранение в неуспешной проекции MCP и активности четырёх проверенных видов операции и ровно двух ограниченных диагностических логов без частных данных.
+// Неизвестные имена операций и слишком длинный список не должны попадать в безопасную публичную историю.
 func TestAssistantPlanDiagnosticsPreservePublicFailureAndSafeOperationTypes(t *testing.T) {
 	input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
 	operations := []any{}

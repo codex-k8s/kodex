@@ -14,6 +14,11 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// renewalIdentityFixture builds a synthetic control-plane renewal identity with a valid previous
+// credential descriptor and one-minute future expiry; it performs no account authorization or network
+// call.
+// renewalIdentityFixture строит синтетическую control-plane renewal identity с корректным предыдущим
+// credential descriptor и будущим сроком на минуту; авторизация аккаунта и сетевые вызовы отсутствуют.
 func renewalIdentityFixture() ProviderRenewalIdentity {
 	_, previous := providerCleanupFixture(providerSecretBrokerManager)
 	return ProviderRenewalIdentity{TaskRef: "pcrt_renewal123456", AccountRef: providerCleanupAccountRef,
@@ -22,6 +27,12 @@ func renewalIdentityFixture() ProviderRenewalIdentity {
 		ExpiresAt: time.Now().UTC().Add(time.Minute), Previous: previous}
 }
 
+// TestProviderRenewalDurableSingleWinnerAndReadRecovery verifies sequential duplicate reservation
+// refusal, read-only recovery, completion replay and absence of token bytes in the fake receipt; it is
+// not a real multi-replica concurrency test.
+// TestProviderRenewalDurableSingleWinnerAndReadRecovery проверяет запрет последовательного повторного
+// резервирования, read-only recovery, повтор завершения и отсутствие байтов токена в fake квитанции;
+// реальная межрепличная конкуренция не проверяется.
 func TestProviderRenewalDurableSingleWinnerAndReadRecovery(t *testing.T) {
 	store, client := newAuthorizationCleanupStore(t)
 	identity := renewalIdentityFixture()
@@ -64,6 +75,12 @@ func TestProviderRenewalDurableSingleWinnerAndReadRecovery(t *testing.T) {
 	}
 }
 
+// TestProviderRenewalRejectsChangedIdentityAndStaleCompletion changes version, generation, prior digest,
+// expiry and request digest to ensure none reuse a reservation, then rejects stale CAS pins and the
+// previous credential as the new result.
+// TestProviderRenewalRejectsChangedIdentityAndStaleCompletion меняет version, generation, прежний
+// digest, срок и request digest, проверяя запрет повторного использования резервирования, затем
+// отклоняет устаревшие CAS-привязки и прежний credential как новый результат.
 func TestProviderRenewalRejectsChangedIdentityAndStaleCompletion(t *testing.T) {
 	store, _ := newAuthorizationCleanupStore(t)
 	identity := renewalIdentityFixture()
@@ -97,6 +114,11 @@ func TestProviderRenewalRejectsChangedIdentityAndStaleCompletion(t *testing.T) {
 	}
 }
 
+// TestProviderRenewalLostCreateACKDoesNotAuthorizeRetry commits a reservation to the fake tracker but
+// returns an error, then verifies that readback of the existing RUNNING record never yields
+// created=true.
+// TestProviderRenewalLostCreateACKDoesNotAuthorizeRetry записывает резервирование в fake tracker, но
+// возвращает ошибку, затем проверяет, что чтение существующей RUNNING записи не выдаёт created=true.
 func TestProviderRenewalLostCreateACKDoesNotAuthorizeRetry(t *testing.T) {
 	store, client := newAuthorizationCleanupStore(t)
 	identity := renewalIdentityFixture()
@@ -122,6 +144,10 @@ func TestProviderRenewalLostCreateACKDoesNotAuthorizeRetry(t *testing.T) {
 	}
 }
 
+// TestProviderRenewalRejectsMalformedDurableReceipt rejects a foreign manager, trailing JSON, a
+// duplicate field and an extra data key through direct canonical receipt parsing.
+// TestProviderRenewalRejectsMalformedDurableReceipt отклоняет другого manager, хвост JSON, duplicate
+// поле и дополнительный ключ Data через прямой канонический разбор квитанции.
 func TestProviderRenewalRejectsMalformedDurableReceipt(t *testing.T) {
 	for _, mutate := range []func(*corev1.Secret){
 		func(s *corev1.Secret) { s.Labels[providerManagedByLabel] = "foreign" },

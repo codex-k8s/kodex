@@ -13,17 +13,19 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// maximumAssistantPlanDraftJSONBody selects the nominal two-MiB draft-plan decoder budget; the shared limited-reader decoder still has its documented duplicate-key/length limitations.
+// maximumAssistantPlanDraftJSONBody задаёт номинальный бюджет decoder черновика плана в два МиБ; ограничения общего limited-reader decoder по повторным ключам и длине сохраняются.
 const maximumAssistantPlanDraftJSONBody = 2 << 20
 
+// GetSystemAssistant reads the owner-visible system assistant and uses the common public projection without starting a conversation or provider turn.
+// GetSystemAssistant читает видимого системного помощника у владельца и использует общую публичную проекцию без начала диалога и хода провайдера.
 func (server *Server) GetSystemAssistant(w http.ResponseWriter, r *http.Request) {
 	response, err := server.control.Assistant.GetSystemAssistant(r.Context(), &controlplanev1.GetSystemAssistantRequest{})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "assistant", "")
+	writeReadRPCResult(w, response, err, "assistant", "")
 }
 
+// GetProjectAssistant checks opaque project syntax and derived project context, then requires a valid exact-project profile before public output; syntax and profile metadata are not an execution grant.
+// GetProjectAssistant проверяет формат проекта и производный контекст, затем требует допустимый профиль точного проекта до выдачи; формат и metadata не являются grant выполнения.
 func (server *Server) GetProjectAssistant(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef) {
 	if !opaqueHTTPReference.MatchString(projectRef) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -45,6 +47,8 @@ func (server *Server) GetProjectAssistant(w http.ResponseWriter, r *http.Request
 	writeMessage(w, http.StatusOK, response, "profile", "")
 }
 
+// CreateProjectAssistant validates project/name/purpose and nonblank UTF-8 instructions up to32768runes, then sends create mutation context and exact project to the owner. It requires a valid returned project profile and responds HTTP201 without launching an agent.
+// CreateProjectAssistant проверяет проект, имя, цель и непустые UTF-8 инструкции до32768рун, затем передаёт create mutation и точный проект владельцу. Требует допустимый профиль ответа и выдаёт HTTP201 без запуска сотрудника.
 func (server *Server) CreateProjectAssistant(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateProjectAssistantParams) {
 	body, ok := decodeJSON[generated.CreateProjectAssistantJSONBody](w, r)
 	if !ok {
@@ -78,6 +82,8 @@ func (server *Server) CreateProjectAssistant(w http.ResponseWriter, r *http.Requ
 	writeMessage(w, http.StatusCreated, response, "profile", "")
 }
 
+// validProjectAssistantProfile checks profile/agent reference prefixes and syntax, exact project, positive safe version, bounded name, valid timestamps and closed state. It checks returned shape, not actor authorization or current runtime readiness.
+// validProjectAssistantProfile проверяет префиксы и формат профиля и сотрудника, точный проект, безопасную версию, имя, timestamps и закрытое состояние. Это форма ответа, а не авторизация actor и готовность runtime.
 func validProjectAssistantProfile(profile *controlplanev1.ProjectAssistantProfile, projectRef string) bool {
 	return profile != nil && strings.HasPrefix(profile.Ref, "asstp_") && opaqueHTTPReference.MatchString(profile.Ref) &&
 		profile.ProjectRef == projectRef && strings.HasPrefix(profile.AgentRef, "agt_") && opaqueHTTPReference.MatchString(profile.AgentRef) &&
@@ -85,10 +91,14 @@ func validProjectAssistantProfile(profile *controlplanev1.ProjectAssistantProfil
 		(profile.State == "ACTIVE" || profile.State == "DISABLED" || profile.State == "ARCHIVED")
 }
 
+// assistantScopeInput maps the prefixed public assistant scope to protobuf with zero fallback; callers must validate scope semantics before relying on the result.
+// assistantScopeInput преобразует публичную область помощника с префиксом в protobuf с нулевым запасным значением; семантику области заранее проверяет вызывающий.
 func assistantScopeInput(scope generated.AssistantScope) controlplanev1.AssistantScope {
 	return controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+string(scope)])
 }
 
+// ListAssistantConversations validates catalog/state/scope/ref selectors and optionally matches the localized default title, then verifies nonnil bounded pages, UTF-8 cursor and every requested project/state/assistant pin before projection. Owner visibility is not reconstructed from client filters.
+// ListAssistantConversations проверяет каталог, state/scope/ref и при необходимости локализованное исходное имя, затем сверяет ненулевую ограниченную страницу, UTF-8 cursor и все запрошенные project/state/assistant pins. Видимость владельца из клиентских фильтров не восстанавливается.
 func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.Request, p generated.ListAssistantConversationsParams) {
 	state := controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE
 	if !validSearchText(stringValue(p.Query), 0, 200) || p.State != nil && !p.State.Valid() ||
@@ -135,6 +145,8 @@ func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.
 	writeMessage(w, http.StatusOK, response, "", "conversations")
 }
 
+// ArchiveAssistantConversation requires a syntactic reference and mandatory versioned mutation, then checks the owner's exact conversation/version and ARCHIVED outcome before public output.
+// ArchiveAssistantConversation требует формат ссылки и обязательную versioned mutation, затем сверяет точный диалог, версию и ARCHIVED владельца до выдачи.
 func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.ArchiveAssistantConversationParams) {
 	if !opaqueHTTPReference.MatchString(ref) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -149,13 +161,11 @@ func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *htt
 		writeRPCProblem(w, err)
 		return
 	}
-	conversation := response.GetConversation()
-	if conversation == nil || conversation.Ref != ref || !validManagedVersion(conversation.Version) || conversation.State != controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ARCHIVED {
-		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "conversation", "")
+	writeAssistantConversationState(w, response, ref, controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ARCHIVED)
 }
+
+// RestoreAssistantConversation requires exact reference/versioned mutation and validates the returned conversation identity, version and ACTIVE state rather than optimistically restoring client data.
+// RestoreAssistantConversation требует точную ссылку и versioned mutation и проверяет identity, версию и ACTIVE ответа вместо оптимистического восстановления клиентских данных.
 func (server *Server) RestoreAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.RestoreAssistantConversationParams) {
 	if !opaqueHTTPReference.MatchString(ref) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -170,13 +180,11 @@ func (server *Server) RestoreAssistantConversation(w http.ResponseWriter, r *htt
 		writeRPCProblem(w, err)
 		return
 	}
-	conversation := response.GetConversation()
-	if conversation == nil || conversation.Ref != ref || !validManagedVersion(conversation.Version) || conversation.State != controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE {
-		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "conversation", "")
+	writeAssistantConversationState(w, response, ref, controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE)
 }
+
+// PurgeAssistantConversation invokes the dedicated owner purge with versioned mutation and requires its exact conversation reference before HTTP204; it does not directly erase history or claim unrelated resources are removed.
+// PurgeAssistantConversation вызывает отдельный purge владельца с versioned mutation и требует точную ссылку ответа до HTTP204; историю напрямую не стирает и удаление посторонних ресурсов не утверждает.
 func (server *Server) PurgeAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.PurgeAssistantConversationParams) {
 	if !opaqueHTTPReference.MatchString(ref) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -197,6 +205,9 @@ func (server *Server) PurgeAssistantConversation(w http.ResponseWriter, r *http.
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// MoveAssistantConversationToProject decodes the target project under a mandatory versioned mutation and checks the exact returned conversation/project/version. Destination eligibility and ownership transfer remain owner decisions.
+// MoveAssistantConversationToProject разбирает целевой проект с обязательной versioned mutation и сверяет точные conversation/project/version ответа. Допуск назначения и перенос владения остаются решениями владельца.
 func (server *Server) MoveAssistantConversationToProject(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.MoveAssistantConversationToProjectParams) {
 	if !opaqueHTTPReference.MatchString(ref) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -224,6 +235,9 @@ func (server *Server) MoveAssistantConversationToProject(w http.ResponseWriter, 
 	}
 	writeMessage(w, http.StatusOK, response, "conversation", "")
 }
+
+// CreateAssistantConversation requires a valid public scope and a project selector for PROJECT, maps optional context and sends create idempotency to the owner. Context fields and requested scope do not create actor authority.
+// CreateAssistantConversation требует допустимую область и project selector для PROJECT, преобразует необязательный context и передаёт идемпотентный create владельцу. Поля context и область полномочия actor не создают.
 func (server *Server) CreateAssistantConversation(w http.ResponseWriter, r *http.Request, p generated.CreateAssistantConversationParams) {
 	body, ok := decodeJSON[generated.CreateAssistantConversationJSONBody](w, r)
 	if !ok {
@@ -244,6 +258,9 @@ func (server *Server) CreateAssistantConversation(w http.ResponseWriter, r *http
 	}
 	writeMessage(w, http.StatusCreated, response, "conversation", "")
 }
+
+// UpdateAssistantConversationTitle forwards decoded title, exact conversation and mutation/version pins to the owner without generating or assigning title revision locally.
+// UpdateAssistantConversationTitle передаёт разобранное имя, точный диалог и mutation/version pins владельцу без локальной генерации и назначения title revision.
 func (server *Server) UpdateAssistantConversationTitle(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.UpdateAssistantConversationTitleParams) {
 	body, ok := decodeJSON[generated.UpdateAssistantConversationTitleJSONBody](w, r)
 	if !ok {
@@ -260,6 +277,9 @@ func (server *Server) UpdateAssistantConversationTitle(w http.ResponseWriter, r 
 	}
 	writeMessage(w, http.StatusOK, response, "conversation", "")
 }
+
+// AddAssistantTurn first reads and checks actual bounded UTF-8 bytes, then closed-decodes and validates shared turn content. It defaults to QUEUE unless INTERRUPT_ACTIVE is explicitly selected and returns HTTP202 after owner admission; it neither runs the model nor declares the turn completed.
+// AddAssistantTurn сначала читает и проверяет фактические ограниченные UTF-8 байты, затем закрыто разбирает и проверяет content общим контрактом. По умолчанию выбирает QUEUE, кроме явного INTERRUPT_ACTIVE, и выдаёт HTTP202 после допуска владельца; модель не запускает и завершение хода не объявляет.
 func (server *Server) AddAssistantTurn(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.AddAssistantTurnParams) {
 	raw, err := io.ReadAll(io.LimitReader(r.Body, maximumJSONBody+1))
 	if err != nil || len(raw) > maximumJSONBody || !utf8.Valid(raw) {
@@ -287,6 +307,9 @@ func (server *Server) AddAssistantTurn(w http.ResponseWriter, r *http.Request, r
 	}
 	writeMessage(w, http.StatusAccepted, response, "conversation", "")
 }
+
+// CancelAssistantTurn requires valid conversation syntax/versioned mutation and checks exact returned conversation plus cancelled/run-ref consistency. Cancellation graph, claims and provider interruption belong to the owner, not this transport.
+// CancelAssistantTurn требует формат диалога и versioned mutation и сверяет диалог и согласованность cancelled/run-ref ответа. Граф отмены, claims и прерывание провайдера принадлежат владельцу, а не transport.
 func (server *Server) CancelAssistantTurn(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.CancelAssistantTurnParams) {
 	if !opaqueHTTPReference.MatchString(ref) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -307,6 +330,9 @@ func (server *Server) CancelAssistantTurn(w http.ResponseWriter, r *http.Request
 	}
 	writeMessage(w, http.StatusOK, response, "", "")
 }
+
+// ApplyAssistantPlan forwards explicit plan revision with mutation/version context to owner apply, without treating edited parameters or a chat acknowledgement as approval authority.
+// ApplyAssistantPlan передаёт явную ревизию плана с mutation/version context применению владельца без принятия изменённых параметров и подтверждения в чате за полномочия.
 func (server *Server) ApplyAssistantPlan(w http.ResponseWriter, r *http.Request, ref generated.PlanRef, p generated.ApplyAssistantPlanParams) {
 	body, decoded := decodeJSON[generated.ApplyAssistantPlanJSONBody](w, r)
 	if !decoded {
@@ -323,6 +349,9 @@ func (server *Server) ApplyAssistantPlan(w http.ResponseWriter, r *http.Request,
 	}
 	writeMessage(w, http.StatusOK, response, "", "")
 }
+
+// UpdateAssistantPlanDraft uses the larger nominal decoder budget, maps proposed operations and mutation pins, then delegates draft update to the owner; mapped before/after data is not trusted execution state.
+// UpdateAssistantPlanDraft использует больший номинальный бюджет decoder, преобразует предлагаемые операции и mutation pins и поручает update черновика владельцу; before/after не являются доверенным состоянием исполнения.
 func (server *Server) UpdateAssistantPlanDraft(w http.ResponseWriter, r *http.Request, ref generated.PlanRef, p generated.UpdateAssistantPlanDraftParams) {
 	body, ok := decodeJSONWithLimit[generated.UpdateAssistantPlanDraftJSONBody](w, r, maximumAssistantPlanDraftJSONBody)
 	if !ok {
@@ -339,6 +368,9 @@ func (server *Server) UpdateAssistantPlanDraft(w http.ResponseWriter, r *http.Re
 	}
 	writeMessage(w, http.StatusOK, response, "plan", "")
 }
+
+// ValidateAssistantPlan forwards exact plan/revision and mutation context to the owner validation command, returning its public plan without applying changes.
+// ValidateAssistantPlan передаёт точные plan/revision и mutation context проверке владельца, возвращая публичный план без применения изменений.
 func (server *Server) ValidateAssistantPlan(w http.ResponseWriter, r *http.Request, ref generated.PlanRef, p generated.ValidateAssistantPlanParams) {
 	body, ok := decodeJSON[generated.ValidateAssistantPlanJSONBody](w, r)
 	if !ok {
@@ -355,6 +387,9 @@ func (server *Server) ValidateAssistantPlan(w http.ResponseWriter, r *http.Reque
 	}
 	writeMessage(w, http.StatusOK, response, "plan", "")
 }
+
+// RejectAssistantPlan sends explicit plan revision and mutation/version pins to owner rejection; terminal/delegation effects remain in the owner transaction.
+// RejectAssistantPlan передаёт явную ревизию плана и mutation/version pins отклонению владельца; terminal и delegation effects остаются в его транзакции.
 func (server *Server) RejectAssistantPlan(w http.ResponseWriter, r *http.Request, ref generated.PlanRef, p generated.RejectAssistantPlanParams) {
 	body, ok := decodeJSON[generated.RejectAssistantPlanJSONBody](w, r)
 	if !ok {
@@ -372,6 +407,8 @@ func (server *Server) RejectAssistantPlan(w http.ResponseWriter, r *http.Request
 	writeMessage(w, http.StatusOK, response, "", "")
 }
 
+// assistantContextInput preserves absent context and maps route/resource/version plus requested operation enums, allocating a new operation slice but retaining the optional version pointer. This is an untrusted selection descriptor, not actor eligibility.
+// assistantContextInput сохраняет отсутствие context и преобразует route/resource/version и запрошенные operation enums, создавая новый список операций, но сохраняя pointer версии. Это непроверенный descriptor выбора, а не допуск actor.
 func assistantContextInput(input *generated.AssistantContextDescriptor) *controlplanev1.AssistantContextDescriptor {
 	if input == nil {
 		return nil
@@ -385,6 +422,8 @@ func assistantContextInput(input *generated.AssistantContextDescriptor) *control
 	return result
 }
 
+// assistantPlanOperationsInput maps proposed typed operations/targets and JSON before/after/parameters while preserving ignored Struct conversion errors and optional version pointers. It does not validate, approve or execute the proposed operations.
+// assistantPlanOperationsInput преобразует предлагаемые операции, targets и JSON before/after/parameters с прежним игнорированием Struct-ошибок и сохранением pointers версий. Операции не проверяет, не подтверждает и не выполняет.
 func assistantPlanOperationsInput(items []generated.AssistantPlanOperationInput) []*controlplanev1.AssistantPlanOperation {
 	result := make([]*controlplanev1.AssistantPlanOperation, 0, len(items))
 	for _, item := range items {
@@ -405,6 +444,9 @@ func assistantPlanOperationsInput(items []generated.AssistantPlanOperationInput)
 	}
 	return result
 }
+
+// UpdateSystemAssistantOwnerInstructions decodes owner instructions and mutation pins for the dedicated owner update, without editing immutable platform instructions or bypassing confirmation policy.
+// UpdateSystemAssistantOwnerInstructions разбирает owner instructions и mutation pins отдельного update владельца без изменения неизменяемых платформенных инструкций и обхода политики подтверждения.
 func (server *Server) UpdateSystemAssistantOwnerInstructions(w http.ResponseWriter, r *http.Request, p generated.UpdateSystemAssistantOwnerInstructionsParams) {
 	body, ok := decodeJSON[generated.UpdateSystemAssistantOwnerInstructionsJSONBody](w, r)
 	if !ok {
@@ -421,6 +463,9 @@ func (server *Server) UpdateSystemAssistantOwnerInstructions(w http.ResponseWrit
 	}
 	writeMessage(w, http.StatusOK, response, "assistant", "")
 }
+
+// CommandSystemAssistant accepts only RECOVER and forwards mutation/version pins to the dedicated owner recovery command; it does not restart arbitrary workloads or bypass account readiness.
+// CommandSystemAssistant принимает только RECOVER и передаёт mutation/version pins отдельному восстановлению владельца; произвольные workloads не перезапускает и readiness аккаунта не обходит.
 func (server *Server) CommandSystemAssistant(w http.ResponseWriter, r *http.Request, p generated.CommandSystemAssistantParams) {
 	body, ok := decodeJSON[generated.CommandSystemAssistantJSONBody](w, r)
 	if !ok {

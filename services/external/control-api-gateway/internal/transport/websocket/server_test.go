@@ -15,16 +15,24 @@ import (
 	"google.golang.org/grpc"
 )
 
+// streamLocalizingRecorder adds deterministic locale selection to an in-memory HTTP recorder; it does not provide production translation or a socket.
+// streamLocalizingRecorder добавляет детерминированный выбор языка к HTTP-рекордеру в памяти без промышленного перевода и сокета.
 type streamLocalizingRecorder struct{ *httptest.ResponseRecorder }
 
+// Localize prefixes the code with the request language header for assertions without translating or validating that header.
+// Localize добавляет к коду префикс заголовка языка для проверок без перевода и проверки самого заголовка.
 func (recorder *streamLocalizingRecorder) Localize(messageID string) string {
 	return "accept-language:" + messageID
 }
 
+// LocalizeFor returns the selected locale and code as assertion text without loading a real translation catalog.
+// LocalizeFor возвращает выбранный язык и код как проверочный текст без загрузки настоящего каталога переводов.
 func (recorder *streamLocalizingRecorder) LocalizeFor(locale, messageID string) string {
 	return locale + ":" + messageID
 }
 
+// TestStreamLocalizerUsesBoundedSelectedLocale checks supported Russian selection and fallback for an unknown locale, keeping arbitrary input out of the chosen locale.
+// TestStreamLocalizerUsesBoundedSelectedLocale проверяет выбор русского и запасной вариант для неизвестного языка без переноса произвольного ввода в выбранный язык.
 func TestStreamLocalizerUsesBoundedSelectedLocale(t *testing.T) {
 	writer := &streamLocalizingRecorder{ResponseRecorder: httptest.NewRecorder()}
 	request := httptest.NewRequest(http.MethodGet, "https://owner.example.test/api/v1/session/stream?locale=ru", nil)
@@ -37,6 +45,8 @@ func TestStreamLocalizerUsesBoundedSelectedLocale(t *testing.T) {
 	}
 }
 
+// TestRequestedProtocolsRequiresExactBaseAndSingleCSRF accepts the exact v2 protocol with one CSRF and ticket offer and rejects duplicate CSRF or unknown protocol offers; binding verification is outside this parser test.
+// TestRequestedProtocolsRequiresExactBaseAndSingleCSRF принимает точный протокол v2 с одним CSRF и билетом и отклоняет повторный CSRF либо неизвестный протокол; проверка привязки находится вне этого теста parser.
 func TestRequestedProtocolsRequiresExactBaseAndSingleCSRF(t *testing.T) {
 	request := httptest.NewRequest("GET", "https://owner.example.test/api/v1/session/stream", nil)
 	request.Header.Add("Sec-WebSocket-Protocol", "kodex.session.v2, csrf.token-value, ticket."+strings.Repeat("t", 43))
@@ -55,6 +65,8 @@ func TestRequestedProtocolsRequiresExactBaseAndSingleCSRF(t *testing.T) {
 	}
 }
 
+// TestWebSocketProtocolTransitionHasAbsoluteRetirement uses a synthetic clock to restrict the existing v1 path to its explicit cutoff, keep it off by default, and require a ticket for v2 without downgrading.
+// TestWebSocketProtocolTransitionHasAbsoluteRetirement по тестовым часам ограничивает существующий путь v1 явным сроком, оставляет его выключенным по умолчанию и требует билет v2 без понижения протокола.
 func TestWebSocketProtocolTransitionHasAbsoluteRetirement(t *testing.T) {
 	now := time.Now().UTC()
 	server := &Server{legacyUntil: now.Add(time.Hour)}
@@ -79,6 +91,8 @@ func TestWebSocketProtocolTransitionHasAbsoluteRetirement(t *testing.T) {
 	}
 }
 
+// TestValidateSessionResumeRejectsDuplicatesAndBounds checks a valid resume, duplicate roots, excessive subscriptions and a negative platform cursor; it does not establish ownership of referenced resources.
+// TestValidateSessionResumeRejectsDuplicatesAndBounds проверяет допустимое возобновление, повторные корни, лишние подписки и отрицательный курсор платформы без доказательства владения указанными ресурсами.
 func TestValidateSessionResumeRejectsDuplicatesAndBounds(t *testing.T) {
 	valid := generated.SessionResumeEnvelope{
 		Type: "SESSION_RESUME", RequestRef: "request_0001", PlatformAfterSequence: 7,
@@ -107,6 +121,8 @@ func TestValidateSessionResumeRejectsDuplicatesAndBounds(t *testing.T) {
 	}
 }
 
+// TestNeedsPlatformBootstrap distinguishes an exact complete cursor from incomplete, behind, ahead and initial resume states that require bootstrap.
+// TestNeedsPlatformBootstrap отличает точный полный курсор от неполного, отстающего, опережающего и начального состояний, которым нужен bootstrap.
 func TestNeedsPlatformBootstrap(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -131,6 +147,8 @@ func TestNeedsPlatformBootstrap(t *testing.T) {
 	}
 }
 
+// TestPlatformReadyAvailabilityPresenceDistinguishesBootstrapAndResume preserves the wire distinction between an explicitly empty availability list during bootstrap and an omitted list on resume, avoiding unintended cache replacement.
+// TestPlatformReadyAvailabilityPresenceDistinguishesBootstrapAndResume сохраняет различие между явно пустым списком доступности при bootstrap и отсутствующим списком при возобновлении без нежелательной замены кэша.
 func TestPlatformReadyAvailabilityPresenceDistinguishesBootstrapAndResume(t *testing.T) {
 	emptyKinds := []generated.PlatformResourceKind{}
 	fullBootstrap, err := json.Marshal(generated.PlatformReadyEnvelope{
@@ -156,6 +174,8 @@ func TestPlatformReadyAvailabilityPresenceDistinguishesBootstrapAndResume(t *tes
 	}
 }
 
+// TestDecodeSessionCommandIsClosedAndTyped checks typed subscribe decoding and rejection of unknown fields, trailing documents and unknown commands; duplicate JSON keys are not covered.
+// TestDecodeSessionCommandIsClosedAndTyped проверяет типизированный разбор подписки и отказ при неизвестных полях, дополнительных документах и неизвестных командах; повторные JSON-ключи здесь не проверяются.
 func TestDecodeSessionCommandIsClosedAndTyped(t *testing.T) {
 	command, err := decodeSessionCommand([]byte(`{"type":"SUBSCRIBE_RUN","requestRef":"request_0001","runRef":"run_root0001","afterSequence":4}`))
 	if err != nil {
@@ -177,6 +197,8 @@ func TestDecodeSessionCommandIsClosedAndTyped(t *testing.T) {
 	}
 }
 
+// TestDecodePlatformSignalRedactsPayloadAndRejectsMismatch requires the expected organization and matching known kind, exposing a reduced wake instead of forwarding the source payload.
+// TestDecodePlatformSignalRedactsPayloadAndRejectsMismatch требует ожидаемую организацию и соответствующий известный вид, выдавая сокращённый сигнал вместо исходного payload.
 func TestDecodePlatformSignalRedactsPayloadAndRejectsMismatch(t *testing.T) {
 	payload := []byte(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"INTEGRATION_CONNECTION_CHANGED","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"icon_example001","aggregateVersion":2,"sequence":8,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"INTEGRATION_CONNECTION","safeSummary":"i18n:INTEGRATION_CONNECTION_TEST_COMPLETED"}}`)
 	signal, ok := decodePlatformSignal(payload, "org_example0001")
@@ -192,6 +214,8 @@ func TestDecodePlatformSignalRedactsPayloadAndRejectsMismatch(t *testing.T) {
 	}
 }
 
+// TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs accepts the known run invalidation and checks its reduced sequence, event and kind without exposing aggregate references or body.
+// TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs принимает известную инвалидацию запуска и проверяет сокращённые номер, событие и вид без передачи ссылок агрегата и тела.
 func TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs(t *testing.T) {
 	payload := []byte(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"RUN_CHANGED","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"run_example0001","aggregateVersion":3,"sequence":9,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"RUN","safeSummary":"i18n:RUN_UPDATED"}}`)
 	signal, ok := decodePlatformSignal(payload, "org_example0001")
@@ -200,6 +224,8 @@ func TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs(t *test
 	}
 }
 
+// platformSignalBoundFixture marshals a synthetic platform envelope with a caller-selected summary and fixed owner, references and sequence; it is not an authenticated event producer.
+// platformSignalBoundFixture сериализует тестовую оболочку платформы с заданной сводкой и фиксированными владельцем, ссылками и номером без аутентифицированного producer событий.
 func platformSignalBoundFixture(t *testing.T, summary string) []byte {
 	t.Helper()
 	payload := platformBusEnvelope{
@@ -216,6 +242,8 @@ func platformSignalBoundFixture(t *testing.T, summary string) []byte {
 	return encoded
 }
 
+// TestDecodePlatformSignalUnicodeSummaryBound verifies the one-thousand-rune summary limit for ASCII, Cyrillic and emoji independently of UTF-8 byte length.
+// TestDecodePlatformSignalUnicodeSummaryBound проверяет предел сводки в тысячу рун для ASCII, кириллицы и emoji независимо от длины UTF-8 в байтах.
 func TestDecodePlatformSignalUnicodeSummaryBound(t *testing.T) {
 	for name, character := range map[string]string{"ASCII": "a", "Cyrillic": "я", "emoji": "😀"} {
 		for _, count := range []int{1000, 1001} {
@@ -230,6 +258,8 @@ func TestDecodePlatformSignalUnicodeSummaryBound(t *testing.T) {
 	}
 }
 
+// TestDecodePlatformSignalExactByteBoundAndMalformed checks the exact platform byte cap and malformed encoding, shape, ownership and event metadata while retaining the separate run cap; it does not test every JSON ambiguity.
+// TestDecodePlatformSignalExactByteBoundAndMalformed проверяет точный байтовый предел платформы и неверные кодировку, структуру, владельца и metadata события, сохраняя отдельный предел запуска; все неоднозначности JSON не охватываются.
 func TestDecodePlatformSignalExactByteBoundAndMalformed(t *testing.T) {
 	base := platformSignalBoundFixture(t, "safe-summary")
 	for _, size := range []int{65536, 65537} {
@@ -262,6 +292,8 @@ func TestDecodePlatformSignalExactByteBoundAndMalformed(t *testing.T) {
 	}
 }
 
+// TestDecodePlatformSignalAcceptsRoleImageLifecycleEvents accepts only the fixture's known role-image lifecycle event names with the matching aggregate kind.
+// TestDecodePlatformSignalAcceptsRoleImageLifecycleEvents проверяет известные в оснастке имена событий жизненного цикла образа роли с соответствующим видом агрегата.
 func TestDecodePlatformSignalAcceptsRoleImageLifecycleEvents(t *testing.T) {
 	for index, eventName := range []string{"ROLE_IMAGE_PROMOTION_REQUESTED", "ROLE_IMAGE_PROMOTED"} {
 		payload := []byte(fmt.Sprintf(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"%s","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"rimg_example001","aggregateVersion":2,"sequence":%d,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"ROLE_IMAGE_RECIPE","safeSummary":"i18n:ROLE_IMAGE_RECIPE_CHANGED"}}`, eventName, index+10))
@@ -272,6 +304,8 @@ func TestDecodePlatformSignalAcceptsRoleImageLifecycleEvents(t *testing.T) {
 	}
 }
 
+// TestPlatformSignalOutsideScope keeps global, organization and project-catalog wakes in scope while excluding unrelated project-specific noncatalog wakes.
+// TestPlatformSignalOutsideScope сохраняет глобальные, организационные и каталожные проектные сигналы в области, исключая некаталожные сигналы другого проекта.
 func TestPlatformSignalOutsideScope(t *testing.T) {
 	t.Parallel()
 	if platformSignalOutsideScope(platformSignal{Kind: "SYSTEM_ASSISTANT", ProjectRef: "prj_other0001"}, "") {
@@ -288,11 +322,15 @@ func TestPlatformSignalOutsideScope(t *testing.T) {
 	}
 }
 
+// catchUpQueryClient embeds the unused generated methods and supplies an ordered synthetic event list for catch-up assertions without a real RPC client or event store.
+// catchUpQueryClient встраивает неиспользуемые generated-методы и задаёт упорядоченные тестовые события для проверок догоняющего чтения без настоящего RPC-клиента и event store.
 type catchUpQueryClient struct {
 	controlplanev1.PlatformQueryServiceClient
 	events []*controlplanev1.RunEvent
 }
 
+// ListRunEvents filters the fixture events after the requested sequence and reports their maximum as complete, ignoring context, root and limit; it does not emulate authorization or real pagination.
+// ListRunEvents отбирает тестовые события после заданного номера и сообщает их максимум как полный результат, игнорируя контекст, корень и предел; авторизация и настоящая пагинация не моделируются.
 func (client *catchUpQueryClient) ListRunEvents(_ context.Context, request *controlplanev1.ListRunEventsRequest, _ ...grpc.CallOption) (*controlplanev1.ListRunEventsResponse, error) {
 	result := make([]*controlplanev1.RunEvent, 0, len(client.events))
 	current := int64(0)
@@ -307,6 +345,8 @@ func (client *catchUpQueryClient) ListRunEvents(_ context.Context, request *cont
 	return &controlplanev1.ListRunEventsResponse{Events: result, CurrentSequence: current, Complete: true}, nil
 }
 
+// TestReadCatchUpRestoresMissingEventsInOrder consumes synthetic sequences two through four after cursor one and verifies exact order and the resulting cursor.
+// TestReadCatchUpRestoresMissingEventsInOrder принимает тестовые номера со второго по четвёртый после курсора один и сверяет точный порядок и итоговый курсор.
 func TestReadCatchUpRestoresMissingEventsInOrder(t *testing.T) {
 	client := &catchUpQueryClient{events: []*controlplanev1.RunEvent{
 		{Sequence: 1}, {Sequence: 2}, {Sequence: 3}, {Sequence: 4},
@@ -324,6 +364,8 @@ func TestReadCatchUpRestoresMissingEventsInOrder(t *testing.T) {
 	}
 }
 
+// TestReadCatchUpRejectsDurableGap rejects the synthetic gap from sequence one to three without advancing the cursor; despite its name it does not exercise a durable event store.
+// TestReadCatchUpRejectsDurableGap отклоняет тестовый разрыв между первым и третьим номерами без продвижения курсора; несмотря на имя, устойчивый event store не проверяется.
 func TestReadCatchUpRejectsDurableGap(t *testing.T) {
 	client := &catchUpQueryClient{events: []*controlplanev1.RunEvent{{Sequence: 1}, {Sequence: 3}}}
 	latest, err := readCatchUp(context.Background(), client, "run_root0001", 1, func(*controlplanev1.RunEvent) error { return nil })

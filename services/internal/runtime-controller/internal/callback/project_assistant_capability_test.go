@@ -10,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestProjectAssistantSelfCapabilityDiscovery checks PROJECT and self-AGENT screens expose only the immutable source helper in CHANGE_CAPABILITY schema and omit caller OCC fields.
+// TestProjectAssistantSelfCapabilityDiscovery проверяет, что экраны проекта и собственного сотрудника объявляют в схеме CHANGE_CAPABILITY только неизменяемого исходного помощника без поля OCC от вызывающей стороны.
 func TestProjectAssistantSelfCapabilityDiscovery(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeProject)
 	input.DelegationTargets = []runtimecontract.RunnerDelegationTarget{{Ref: "agt_employee123", Name: "Employee"}}
@@ -39,6 +41,10 @@ func TestProjectAssistantSelfCapabilityDiscovery(t *testing.T) {
 	}
 }
 
+// TestProjectAssistantSelfCapabilityDraftBoundary checks eight self-capability proposal cases preserve exact lease pins and reject foreign identities, caller authority and malformed values.
+// The ordinary screen-bound employee command remains separate; the stub proves draft routing rather than applied capability changes.
+// TestProjectAssistantSelfCapabilityDraftBoundary проверяет в восьми случаях предложения собственных полномочий точные привязки аренды и отказ для чужих идентичностей, полномочий вызывающего и некорректных значений.
+// Обычная экранная команда сотрудника остаётся отдельной; подстановка доказывает маршрут черновика, а не применение изменения.
 func TestProjectAssistantSelfCapabilityDraftBoundary(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeProject)
 	input.AssistantProfileRef = "asstprof_exact123"

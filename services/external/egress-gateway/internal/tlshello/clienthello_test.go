@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// TestReadAndVerifyAcceptsFragmentedExactSNI preserves record bytes across a split handshake.
+// TestReadAndVerifyAcceptsFragmentedExactSNI сохраняет байты записей при разделённом handshake.
 func TestReadAndVerifyAcceptsFragmentedExactSNI(t *testing.T) {
 	handshake := buildClientHello("api.openai.com", false, false)
 	records := append(tlsRecord(handshake[:2]), tlsRecord(handshake[2:])...)
@@ -21,6 +23,8 @@ func TestReadAndVerifyAcceptsFragmentedExactSNI(t *testing.T) {
 	}
 }
 
+// TestReadAndVerifyRejectsSNIAndECHFailures checks missing, duplicate, foreign, and encrypted names.
+// TestReadAndVerifyRejectsSNIAndECHFailures проверяет отсутствующие, повторные, чужие и скрытые имена.
 func TestReadAndVerifyRejectsSNIAndECHFailures(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -44,6 +48,8 @@ func TestReadAndVerifyRejectsSNIAndECHFailures(t *testing.T) {
 	}
 }
 
+// TestReadAndVerifyRejectsMalformedAndOversized enforces structural and byte limits before forwarding.
+// TestReadAndVerifyRejectsMalformedAndOversized соблюдает структурные и байтовые лимиты до передачи.
 func TestReadAndVerifyRejectsMalformedAndOversized(t *testing.T) {
 	malformed := tlsRecord([]byte{clientHelloType, 0, 0, 50, 3})
 	if _, err := readHello(t, malformed, "api.openai.com", 1024); err == nil {
@@ -61,6 +67,8 @@ func TestReadAndVerifyRejectsMalformedAndOversized(t *testing.T) {
 	}
 }
 
+// readHello feeds a synthetic TLS record stream through an in-memory connection.
+// readHello передаёт тестовый поток TLS-записей через соединение в памяти.
 func readHello(t *testing.T, value []byte, expected string, maximum int) ([]byte, error) {
 	t.Helper()
 	server, client := net.Pipe()
@@ -69,6 +77,8 @@ func readHello(t *testing.T, value []byte, expected string, maximum int) ([]byte
 	return ReadAndVerify(server, bufio.NewReader(server), maximum, time.Second, expected)
 }
 
+// buildClientHello constructs exact fixture bytes for SNI and ECH rejection cases.
+// buildClientHello создаёт точные тестовые байты для случаев отказа по SNI и ECH.
 func buildClientHello(hostname string, duplicateSNI, ech bool) []byte {
 	body := make([]byte, 0, 256)
 	body = append(body, 3, 3)
@@ -92,6 +102,8 @@ func buildClientHello(hostname string, duplicateSNI, ech bool) []byte {
 	return append(handshake, body...)
 }
 
+// sniExtension encodes one DNS name in a server-name extension fixture.
+// sniExtension кодирует одно имя DNS в тестовом расширении server-name.
 func sniExtension(hostname string) []byte {
 	name := []byte(hostname)
 	listLength := 3 + len(name)
@@ -101,6 +113,8 @@ func sniExtension(hostname string) []byte {
 	return append(extension, value...)
 }
 
+// tlsRecord wraps handshake bytes in a TLS record with an exact payload length.
+// tlsRecord оборачивает байты handshake в TLS-запись с точной длиной содержимого.
 func tlsRecord(payload []byte) []byte {
 	value := []byte{handshakeRecordType, 3, 3, 0, 0}
 	binary.BigEndian.PutUint16(value[3:], uint16(len(payload)))

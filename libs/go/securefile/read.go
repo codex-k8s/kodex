@@ -1,5 +1,9 @@
-// Package securefile читает bounded read-only files внутри точной mount
-// boundary без раскрытия пути или содержимого в ошибках.
+// Package securefile reads bounded regular files inside an explicitly chosen
+// mount boundary, checking resolved paths, exact read-only modes and size.
+// Its errors contain neither file paths nor file contents.
+// RU: Пакет securefile читает ограниченные обычные файлы в заданной границе
+// mount, проверяя разрешённые пути, точные read-only режимы и размер.
+// Ошибки не содержат путей и содержимого файлов.
 package securefile
 
 import (
@@ -12,27 +16,49 @@ import (
 )
 
 var (
+	// errInvalidBoundary rejects missing paths and nonpositive size limits.
+	// RU: errInvalidBoundary отклоняет пустые пути и неположительный лимит размера.
 	errInvalidBoundary = errors.New("secure file boundary is invalid")
-	errUnavailable     = errors.New("secure file is unavailable")
-	errUnsafe          = errors.New("secure file is unsafe")
+	// errUnavailable hides filesystem errors that could reveal path details.
+	// RU: errUnavailable скрывает ошибки файловой системы, раскрывающие детали пути.
+	errUnavailable = errors.New("secure file is unavailable")
+	// errUnsafe rejects path escape, file type, mode and content-size violations.
+	// RU: errUnsafe отклоняет выход за корень и нарушение типа, режима или размера файла.
+	errUnsafe = errors.New("secure file is unsafe")
 )
 
-// Read читает файл, разрешая symlink только внутри его исходного каталога.
+// Read selects the file's original directory as its boundary, so a resolved
+// symlink may stay inside that tree but cannot escape the chosen root path.
+// RU: Read считает исходный каталог файла границей: разрешённая symlink
+// может остаться внутри него, но не выйти за выбранный корневой путь.
 func Read(path string, maximumBytes int64) ([]byte, error) {
 	return ReadWithin(filepath.Dir(path), path, maximumBytes)
 }
 
-// ReadProjectedServiceAccountToken читает Kubernetes projected token с
-// отдельной проверкой root-owned либо process-owned read-only mount режима.
+// ReadProjectedServiceAccountToken applies the usual file checks and the
+// narrow Kubernetes 0640 exception: a non-root process may read a root-owned
+// token, or its own token only when the mount rejects writes with EROFS.
+// RU: ReadProjectedServiceAccountToken применяет обычные проверки и узкое
+// исключение для Kubernetes 0640: non-root процесс может читать root-owned
+// токен либо свой токен только если mount отклоняет запись с EROFS.
 func ReadProjectedServiceAccountToken(path string, maximumBytes int64) ([]byte, error) {
 	return readWithin(filepath.Dir(path), path, maximumBytes, true)
 }
 
-// ReadWithin читает файл, разрешая symlink только внутри root.
+// ReadWithin resolves the supplied root and file, rejects paths outside that
+// root and reads only bounded regular files with an approved read-only mode.
+// RU: ReadWithin разрешает корень и файл, отклоняет путь за пределами корня
+// и читает лишь ограниченный обычный файл с допустимым read-only режимом.
 func ReadWithin(root, path string, maximumBytes int64) ([]byte, error) {
 	return readWithin(root, path, maximumBytes, false)
 }
 
+// readWithin performs the shared path, mode, size and exact-byte-count checks.
+// The projected-token flag changes only the narrow 0640 ownership/mount rule;
+// no credential format is interpreted and no result is cached.
+// RU: readWithin выполняет общие проверки пути, режима, размера и точного
+// числа байтов. Флаг projected token меняет только узкое правило для 0640,
+// владельца и mount; формат credential не разбирается, результат не кэшируется.
 func readWithin(root, path string, maximumBytes int64, allowProjectedToken bool) ([]byte, error) {
 	if root == "" || path == "" || maximumBytes < 1 {
 		return nil, errInvalidBoundary
@@ -83,6 +109,10 @@ func readWithin(root, path string, maximumBytes int64, allowProjectedToken bool)
 	return value, nil
 }
 
+// isSafeMode admits exact read-only modes, or a projected 0640 token for a
+// non-root process when ownership and the tested mount state permit it.
+// RU: isSafeMode допускает точные read-only режимы либо projected-токен 0640
+// для non-root процесса при подходящем владельце и проверенном состоянии mount.
 func isSafeMode(
 	info os.FileInfo,
 	allowProjectedToken bool,
@@ -102,6 +132,10 @@ func isSafeMode(
 	return stat.Uid == 0 || stat.Uid == uint32(effectiveUID) && readOnlyMount
 }
 
+// projectedTokenMountIsReadOnly probes only the exceptional 0640 token path;
+// it treats EROFS on a write-open attempt as proof of a read-only mount.
+// RU: projectedTokenMountIsReadOnly проверяет только исключительный токен 0640;
+// EROFS при попытке открыть на запись подтверждает read-only mount.
 func projectedTokenMountIsReadOnly(
 	path string,
 	info os.FileInfo,
@@ -118,7 +152,10 @@ func projectedTokenMountIsReadOnly(
 	return errors.Is(err, syscall.EROFS)
 }
 
-// IsReadOnlyMode возвращает true только для утвержденных exact permissions.
+// IsReadOnlyMode accepts only 0400, 0440 and 0444, with owner read access and
+// no write or execute bits for any class; other modes fail closed.
+// RU: IsReadOnlyMode допускает только 0400, 0440 и 0444: владелец может читать,
+// а права записи и выполнения отсутствуют у всех; прочие режимы отклоняются.
 func IsReadOnlyMode(mode os.FileMode) bool {
 	switch mode.Perm() {
 	case 0o400, 0o440, 0o444:

@@ -12,10 +12,16 @@ import (
 )
 
 const (
-	serviceName      = "artifact-retention"
+	// serviceName identifies this deployable in telemetry and control-plane references.
+	// RU: serviceName обозначает этот deployable в telemetry и ссылках control plane.
+	serviceName = "artifact-retention"
+	// metricsSubsystem keeps its Prometheus metric names in one bounded namespace.
+	// RU: metricsSubsystem удерживает имена Prometheus-метрик в одном ограниченном пространстве.
 	metricsSubsystem = "artifact_retention"
 )
 
+// Config holds the bounded process, PostgreSQL, object-storage and cleanup settings.
+// RU: Config хранит ограниченные настройки процесса, PostgreSQL, объектного хранилища и очистки.
 type Config struct {
 	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	TechnicalListen                string        `env:"ARTIFACT_RETENTION_TECHNICAL_LISTEN"`
@@ -40,6 +46,8 @@ type Config struct {
 	BatchSize                      int           `env:"ARTIFACT_RETENTION_BATCH_SIZE"`
 }
 
+// loadConfig applies documented defaults, parses environment overrides and rejects invalid deployment settings.
+// RU: loadConfig применяет исходные значения, читает переопределения окружения и отклоняет неверные настройки deploy.
 func loadConfig() (Config, error) {
 	config := Config{
 		TechnicalListen:            ":9090",
@@ -70,6 +78,8 @@ func loadConfig() (Config, error) {
 	return config, nil
 }
 
+// validate closes on unsafe transport, nonabsolute protected paths, unbounded timeouts or claim sizes.
+// RU: validate отклоняет небезопасный transport, нестрогие защищённые пути, чрезмерные сроки и размеры claim.
 func (config Config) validate() error {
 	if config.Environment != "staging" && config.Environment != "production" {
 		return errors.New("artifact-retention environment is invalid")

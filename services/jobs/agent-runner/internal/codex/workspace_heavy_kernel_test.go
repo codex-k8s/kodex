@@ -15,7 +15,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
-// Только дочерний процесс disposable kernel fixture, без provider или сети.
+// TestProviderHeavyWorkspaceKernel is an opt-in UID10002 child restricted to the disposable heavy
+// fixture root. BUILD prepares synthetic files; FINISH checks publication and quota/type normalization,
+// retaining closed failure outcomes. Without a stage it skips instead of testing privileged isolation.
+// TestProviderHeavyWorkspaceKernel — opt-in UID10002 child под disposable heavy fixture root.
+// BUILD готовит synthetic files; FINISH проверяет публикацию и quota/type normalization,
+// сохраняя закрытые failure outcomes. Без stage она пропускается, не проверяя privileged isolation.
 func TestProviderHeavyWorkspaceKernel(t *testing.T) {
 	stage := os.Getenv("KODEX_HEAVY_FIXTURE_STAGE")
 	if stage == "" {
@@ -86,6 +91,12 @@ func TestProviderHeavyWorkspaceKernel(t *testing.T) {
 	}
 }
 
+// buildHeavyWorkspaceFixture prepares disposable local Git/worktree data, private sparse cache
+// entries for count/byte/type cases and seven bounded outbox files. Git has no remote and receives no
+// inherited credentials; the caller must supply the isolated owned fixture root.
+// buildHeavyWorkspaceFixture готовит disposable local Git/worktree data, private sparse cache
+// для count/byte/type случаев и семь bounded outbox files. У Git нет remote и унаследованных
+// credentials; caller обязан передать изолированный принадлежащий fixture root.
 func buildHeavyWorkspaceFixture(t *testing.T, root, kind string) {
 	t.Helper()
 	work := filepath.Join(root, "work")

@@ -18,6 +18,10 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey verifies unchanged synthetic API-key auth
+// requires no relay commit, preserves the result and removes the temporary auth snapshot.
+// TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey проверяет отсутствие relay commit для неизменного
+// синтетического API key, сохранение результата и удаление временного auth.
 func TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey(t *testing.T) {
 	input, authPath := providerTurnFixture(t, []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"test-key"}`))
 	called := false
@@ -37,6 +41,10 @@ func TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey(t *testing.T) {
 	assertRemoved(t, authPath)
 }
 
+// TestProviderIndependentlyEnforcesPinnedWorkflowDeadline requires the provider executor to observe
+// the exact immutable workflow deadline and return DeadlineExceeded without a separate controller stop.
+// TestProviderIndependentlyEnforcesPinnedWorkflowDeadline требует передачи исполнителю точного неизменяемого
+// срока workflow и возврата DeadlineExceeded без отдельной остановки контроллером.
 func TestProviderIndependentlyEnforcesPinnedWorkflowDeadline(t *testing.T) {
 	input, authPath := providerTurnFixture(t, []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"test-key"}`))
 	started := time.Now().UTC().Add(-900 * time.Millisecond)
@@ -61,6 +69,10 @@ func TestProviderIndependentlyEnforcesPinnedWorkflowDeadline(t *testing.T) {
 	assertRemoved(t, authPath)
 }
 
+// TestExecuteProviderTurnRejectsChangedAPIKeyWithoutRelay replaces auth during the synthetic execution
+// and requires the fixed denial before any OAuth credential relay callback can run.
+// TestExecuteProviderTurnRejectsChangedAPIKeyWithoutRelay подменяет auth в синтетическом исполнении
+// и требует фиксированного отказа до возможности вызвать OAuth credential relay.
 func TestExecuteProviderTurnRejectsChangedAPIKeyWithoutRelay(t *testing.T) {
 	original := []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"old-key"}`)
 	changed := []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"new-key"}`)
@@ -85,6 +97,10 @@ func TestExecuteProviderTurnRejectsChangedAPIKeyWithoutRelay(t *testing.T) {
 	assertRemoved(t, authPath)
 }
 
+// TestExecuteProviderTurnCommitsChangedAuthenticationAfterSafeFailure requires rotated OAuth auth
+// and exact previous revision/digest pins to reach the committer even when the turn outcome is FAILED.
+// TestExecuteProviderTurnCommitsChangedAuthenticationAfterSafeFailure требует передачи обновлённого OAuth auth
+// с точными прежними revision/digest в committer даже при Outcome FAILED.
 func TestExecuteProviderTurnCommitsChangedAuthenticationAfterSafeFailure(t *testing.T) {
 	original := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"old","refresh_token":"old"}}`)
 	rotated := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"new","refresh_token":"new"}}`)
@@ -113,6 +129,10 @@ func TestExecuteProviderTurnCommitsChangedAuthenticationAfterSafeFailure(t *test
 	assertRemoved(t, authPath)
 }
 
+// TestExecuteProviderTurnCommitsRefreshAfterExecutionError requires a changed credential to be committed
+// while the original executor error remains discoverable and the temporary auth file is removed.
+// TestExecuteProviderTurnCommitsRefreshAfterExecutionError требует сохранения обновлённых реквизитов,
+// доступности исходной ошибки исполнителя и удаления временного auth файла.
 func TestExecuteProviderTurnCommitsRefreshAfterExecutionError(t *testing.T) {
 	original := []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"old"}}`)
 	rotated := []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"new"}}`)
@@ -135,6 +155,10 @@ func TestExecuteProviderTurnCommitsRefreshAfterExecutionError(t *testing.T) {
 	assertRemoved(t, authPath)
 }
 
+// TestExecuteProviderTurnFailsClosedWhenRelayFails injects commit denial after a successful synthetic
+// turn and requires the safe commit error rather than reporting transport success.
+// TestExecuteProviderTurnFailsClosedWhenRelayFails подставляет отказ commit после успешного синтетического
+// хода и требует безопасную ошибку сохранения вместо сообщения об успешном транспорте.
 func TestExecuteProviderTurnFailsClosedWhenRelayFails(t *testing.T) {
 	original := []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"old"}}`)
 	rotated := []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"new"}}`)
@@ -154,6 +178,10 @@ func TestExecuteProviderTurnFailsClosedWhenRelayFails(t *testing.T) {
 	assertRemoved(t, authPath)
 }
 
+// TestProviderBrokerFailurePreservesSafeClass verifies each supported error class round-trips to
+// its stable sentinel; an arbitrary transport error remains a nonnil generic provider failure.
+// TestProviderBrokerFailurePreservesSafeClass проверяет восстановление устойчивого маркера каждого
+// поддержанного класса; произвольная транспортная ошибка остаётся ненулевым отказом провайдера.
 func TestProviderBrokerFailurePreservesSafeClass(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -183,6 +211,10 @@ func TestProviderBrokerFailurePreservesSafeClass(t *testing.T) {
 	}
 }
 
+// TestProviderSafeFailureClassDoesNotExposeDiagnostics distinguishes schema/auth classes without
+// incorporating an arbitrary private diagnostic into the returned coarse category.
+// TestProviderSafeFailureClassDoesNotExposeDiagnostics различает schema/auth классы без включения
+// произвольной приватной диагностики в возвращаемую укрупнённую категорию.
 func TestProviderSafeFailureClassDoesNotExposeDiagnostics(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -202,12 +234,44 @@ func TestProviderSafeFailureClassDoesNotExposeDiagnostics(t *testing.T) {
 	}
 }
 
-func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
-	var response bytes.Buffer
+// captureProviderDiagnostic redirects the standard logger to a private buffer and restores its previous
+// writer at test cleanup. Tests using it must not run in parallel with other global logger mutations.
+// captureProviderDiagnostic направляет стандартный logger в приватный буфер и восстанавливает прежний
+// writer при очистке теста. Такие тесты не запускаются параллельно с другими изменениями общего logger.
+func captureProviderDiagnostic(t *testing.T) *bytes.Buffer {
+	t.Helper()
 	var diagnostic bytes.Buffer
 	previous := log.Writer()
 	log.SetOutput(&diagnostic)
 	t.Cleanup(func() { log.SetOutput(previous) })
+	return &diagnostic
+}
+
+// TestProviderDiagnosticCaptureRestoresWriter checks that the local fixture actually captures a
+// synthetic log message and restores the outer writer after the nested test's cleanup.
+// TestProviderDiagnosticCaptureRestoresWriter проверяет захват синтетического сообщения локальной
+// fixture и восстановление внешнего writer после очистки вложенного теста.
+func TestProviderDiagnosticCaptureRestoresWriter(t *testing.T) {
+	previous := log.Writer()
+	t.Run("capture", func(t *testing.T) {
+		diagnostic := captureProviderDiagnostic(t)
+		log.Print("synthetic diagnostic capture")
+		if !strings.Contains(diagnostic.String(), "synthetic diagnostic capture") {
+			t.Fatal("diagnostic fixture did not capture the message")
+		}
+	})
+	if log.Writer() != previous {
+		t.Fatal("diagnostic fixture did not restore the logger")
+	}
+}
+
+// TestProviderBrokerEarlyFailureLogsOnlySafeStage checks both captured log and actual terminal JSON
+// omit the private cause while retaining the expected stage and coarse failed-envelope class.
+// TestProviderBrokerEarlyFailureLogsOnlySafeStage проверяет отсутствие приватной причины в журнале
+// и настоящем terminal JSON при сохранении ожидаемого этапа и укрупнённого класса отказа.
+func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
+	var response bytes.Buffer
+	diagnostic := captureProviderDiagnostic(t)
 
 	secret := errors.New("sensitive-provider-detail")
 	if err := writeProviderBrokerFailureAtStage(&response, providerStageHomePrepare, secret); err != nil {
@@ -225,11 +289,12 @@ func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
 	}
 }
 
+// TestProviderSafeFailureDetailsRemainClosed exercises correlated RPC codes and notification/account
+// classifiers, requiring unknown or injected details to collapse to safe categories without disclosure.
+// TestProviderSafeFailureDetailsRemainClosed проверяет коды связанного RPC и notification/account
+// классификаторы, требуя безопасные категории без утечки для неизвестных или подставленных деталей.
 func TestProviderSafeFailureDetailsRemainClosed(t *testing.T) {
-	var diagnostic bytes.Buffer
-	previous := log.Writer()
-	log.SetOutput(&diagnostic)
-	t.Cleanup(func() { log.SetOutput(previous) })
+	diagnostic := captureProviderDiagnostic(t)
 	for _, test := range []struct {
 		name string
 		err  error
@@ -258,11 +323,12 @@ func TestProviderSafeFailureDetailsRemainClosed(t *testing.T) {
 	}
 }
 
+// TestTokenUsageFailureLogsRemainClosed preserves registered usage reasons only for their matching
+// notification, rejecting arbitrary reason text and a known reason attached to the wrong method.
+// TestTokenUsageFailureLogsRemainClosed сохраняет зарегистрированные причины usage лишь для своего
+// уведомления, отвергая произвольный текст и известную причину у неподходящего метода.
 func TestTokenUsageFailureLogsRemainClosed(t *testing.T) {
-	var diagnostic bytes.Buffer
-	previous := log.Writer()
-	log.SetOutput(&diagnostic)
-	t.Cleanup(func() { log.SetOutput(previous) })
+	diagnostic := captureProviderDiagnostic(t)
 	for _, reason := range []tokenUsageFailureReason{
 		tokenUsageStructure, tokenUsageRequiredMissing, tokenUsageRequiredNull, tokenUsageRequiredType,
 		tokenUsageOptionalNull, tokenUsageOptionalType, tokenUsageNegative, tokenUsageTotalArithmetic,
@@ -288,6 +354,10 @@ func TestTokenUsageFailureLogsRemainClosed(t *testing.T) {
 	}
 }
 
+// providerTurnFixture writes synthetic auth beneath a private temporary home and returns its content
+// pin with minimal execution metadata; it is not a fully admitted runtime input or a live account.
+// providerTurnFixture записывает синтетический auth во временный приватный home и возвращает digest
+// с минимальными данными исполнения; это не полностью допущенный runtime input и не живой аккаунт.
 func providerTurnFixture(t *testing.T, authentication []byte) (model.Input, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -310,6 +380,10 @@ func providerTurnFixture(t *testing.T, authentication []byte) (model.Input, stri
 	}, authPath
 }
 
+// assertRemoved requires the path to be absent rather than accepting permission or other Stat errors
+// as proof of successful credential cleanup.
+// assertRemoved требует отсутствия пути, не принимая ошибку доступа или другую ошибку Stat
+// за доказательство успешной очистки реквизитов.
 func assertRemoved(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {

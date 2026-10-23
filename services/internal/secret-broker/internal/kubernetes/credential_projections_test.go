@@ -20,8 +20,18 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// projectionNamespace uses the validator's fixed runtime namespace in fake projection tests, without
+// contacting an existing cluster.
+// projectionNamespace задаёт фиксированный runtime namespace validator для fake тестов проекции без
+// обращения к существующему кластеру.
 const projectionNamespace = "kodex-runtime"
 
+// TestTrustedProjectionManifestRequiresExactExecutionSnapshot accepts the trusted execution snapshot and
+// rejects fake proof JTI, divergent generation/digest and unsupported profiles; it tests structure, not
+// a signed transport.
+// TestTrustedProjectionManifestRequiresExactExecutionSnapshot допускает trusted execution snapshot и
+// отклоняет подставленный proof JTI, другие generation/digest и неподдерживаемые профили; проверяется
+// структура, не подписанный транспорт.
 func TestTrustedProjectionManifestRequiresExactExecutionSnapshot(t *testing.T) {
 	manifest := projectionManifest(
 		ProviderCredentialDescriptor{SecretName: "provider-trusted", SecretUID: "provider-uid", SecretResourceVersion: "41", ContentSHA256: stringsOfHex('d')},
@@ -50,6 +60,12 @@ func TestTrustedProjectionManifestRequiresExactExecutionSnapshot(t *testing.T) {
 	}
 }
 
+// TestRuntimeCredentialProjectionMaterializesExactSourcesAndDeletesWithReadback creates synthetic
+// provider/runtime sources, checks projected bytes and idempotent retries, then verifies metadata
+// listing and deletion absence in a fake client.
+// TestRuntimeCredentialProjectionMaterializesExactSourcesAndDeletesWithReadback создаёт синтетические
+// provider/runtime источники, проверяет байты проекции и идемпотентный повтор, затем список metadata и
+// отсутствие после удаления в fake клиенте.
 func TestRuntimeCredentialProjectionMaterializesExactSourcesAndDeletesWithReadback(t *testing.T) {
 	t.Parallel()
 	store, client := newCredentialProjectionTestStore(t)
@@ -92,6 +108,12 @@ func TestRuntimeCredentialProjectionMaterializesExactSourcesAndDeletesWithReadba
 	}
 }
 
+// TestRuntimeCredentialProjectionRejectsChangedExactBinding verifies conflict when a deterministic
+// projection name is reused with another workload and refusal of a stale provider resourceVersion before
+// reuse.
+// TestRuntimeCredentialProjectionRejectsChangedExactBinding проверяет конфликт повторного использования
+// детерминированного имени проекции другим workload и отказ при устаревшем provider resourceVersion до
+// повторного использования.
 func TestRuntimeCredentialProjectionRejectsChangedExactBinding(t *testing.T) {
 	t.Parallel()
 	store, _ := newCredentialProjectionTestStore(t)
@@ -121,6 +143,10 @@ func TestRuntimeCredentialProjectionRejectsChangedExactBinding(t *testing.T) {
 	}
 }
 
+// TestRuntimeCredentialProjectionListsExpiredRevisionForCleanup seeds an expired immutable projection to
+// verify recovery listing still works while new materialization with that manifest is rejected.
+// TestRuntimeCredentialProjectionListsExpiredRevisionForCleanup заранее помещает просроченную immutable
+// проекцию и проверяет доступность списка recovery при отказе новой materialization с тем же manifest.
 func TestRuntimeCredentialProjectionListsExpiredRevisionForCleanup(t *testing.T) {
 	t.Parallel()
 	store, client := newCredentialProjectionTestStore(t)
@@ -152,6 +178,12 @@ func TestRuntimeCredentialProjectionListsExpiredRevisionForCleanup(t *testing.T)
 	}
 }
 
+// projectionManifest constructs synthetic signed-profile provenance, one provider binding and one
+// CRM_TOKEN runtime binding with a short future expiry; it is data for validators, not a real verified
+// proof.
+// projectionManifest строит синтетическое происхождение signed-профиля, одну provider-привязку и одну
+// runtime-привязку CRM_TOKEN с коротким будущим сроком; это данные для validator, не реальный
+// проверенный proof.
 func projectionManifest(provider ProviderCredentialDescriptor, runtimeSecret Materialization) CredentialProjectionManifest {
 	now := time.Now().UTC()
 	return CredentialProjectionManifest{
@@ -179,6 +211,12 @@ func projectionManifest(provider ProviderCredentialDescriptor, runtimeSecret Mat
 	}
 }
 
+// newCredentialProjectionTestStore creates an in-memory client whose create reactor assigns synthetic
+// object pins. Its local version counter assumes sequential use and the tracker does not enforce real
+// API validation or immutability.
+// newCredentialProjectionTestStore создаёт клиент в памяти, чей create reactor назначает синтетические
+// привязки объекта. Локальный счётчик версий предполагает последовательное использование; tracker не
+// обеспечивает реальные проверки API или immutability.
 func newCredentialProjectionTestStore(t *testing.T) (*Store, *fake.Clientset) {
 	t.Helper()
 	client := fake.NewSimpleClientset()
@@ -198,6 +236,10 @@ func newCredentialProjectionTestStore(t *testing.T) (*Store, *fake.Clientset) {
 	return store, client
 }
 
+// stringsOfHex repeats the supplied byte across SHA-256-sized input and hex-encodes it to produce a
+// deterministic digest-shaped fixture, not a hash of real credential data.
+// stringsOfHex повторяет заданный байт во входе размера SHA-256 и кодирует его в hex для
+// детерминированной fixture формы digest, а не хеша реальных учётных данных.
 func stringsOfHex(value byte) string {
 	raw := make([]byte, sha256.Size)
 	for index := range raw {
@@ -206,6 +248,10 @@ func stringsOfHex(value byte) string {
 	return hex.EncodeToString(raw)
 }
 
+// sortedDataKeys collects data-map keys for failure diagnostics without sorting them; callers must not
+// rely on a stable order despite the historical helper name.
+// sortedDataKeys собирает ключи Data map для диагностики отказа без сортировки; несмотря на историческое
+// имя helper, устойчивый порядок не гарантируется.
 func sortedDataKeys(data map[string][]byte) []string {
 	result := make([]string, 0, len(data))
 	for key := range data {

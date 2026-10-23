@@ -11,20 +11,28 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// fakeStream supplies controlled stream metadata and revocation read results.
+// fakeStream предоставляет управляемые метаданные потока и результаты чтения отзыва.
 type fakeStream struct {
 	info    *jetstream.StreamInfo
 	message *jetstream.RawStreamMsg
 	err     error
 }
 
+// Info returns the configured stream snapshot or failure.
+// Info возвращает заданный снимок потока либо ошибку.
 func (stream *fakeStream) Info(context.Context, ...jetstream.StreamInfoOpt) (*jetstream.StreamInfo, error) {
 	return stream.info, stream.err
 }
 
+// GetLastMsgForSubject returns the configured latest record or failure.
+// GetLastMsgForSubject возвращает заданную последнюю запись либо ошибку.
 func (stream *fakeStream) GetLastMsgForSubject(context.Context, string) (*jetstream.RawStreamMsg, error) {
 	return stream.message, stream.err
 }
 
+// fakeJetStream captures one publication while forbidding unexpected stream lookup.
+// fakeJetStream сохраняет одну публикацию и запрещает неожиданное открытие потока.
 type fakeJetStream struct {
 	ack     *jetstream.PubAck
 	err     error
@@ -33,10 +41,14 @@ type fakeJetStream struct {
 	header  nats.Header
 }
 
+// Stream fails if a test unexpectedly attempts a runtime stream lookup.
+// Stream сообщает об ошибке при неожиданной попытке открыть поток в тесте.
 func (stream *fakeJetStream) Stream(context.Context, string) (jetstream.Stream, error) {
 	return nil, errors.New("unexpected stream lookup")
 }
 
+// PublishMsg records the exact subject, payload, and headers before returning a configured ACK.
+// PublishMsg фиксирует точные subject, содержимое и заголовки до возврата заданного ACK.
 func (stream *fakeJetStream) PublishMsg(_ context.Context, message *nats.Msg, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
 	stream.subject = message.Subject
 	stream.payload = append([]byte(nil), message.Data...)
@@ -47,6 +59,8 @@ func (stream *fakeJetStream) PublishMsg(_ context.Context, message *nats.Msg, _ 
 	return stream.ack, stream.err
 }
 
+// TestRevocationStreamContractIsExact rejects per-subject history and retention drift.
+// TestRevocationStreamContractIsExact отклоняет историю внутри subject и изменение срока хранения.
 func TestRevocationStreamContractIsExact(t *testing.T) {
 	t.Parallel()
 	connection := natsjetstream.Config{URL: "tls://nats.example.test:4222", Replicas: 1}
@@ -71,6 +85,8 @@ func TestRevocationStreamContractIsExact(t *testing.T) {
 	}
 }
 
+// TestRevokeAndReadUseAuthoritativeStream checks the exact durable marker and subject.
+// TestRevokeAndReadUseAuthoritativeStream проверяет точный постоянный маркер и subject.
 func TestRevokeAndReadUseAuthoritativeStream(t *testing.T) {
 	t.Parallel()
 	sessionID := "4e5785f6-6bc6-4e8c-b6a1-ec4f8d2ab238"
@@ -89,6 +105,8 @@ func TestRevokeAndReadUseAuthoritativeStream(t *testing.T) {
 	}
 }
 
+// TestRevocationReadFailsClosed rejects unavailable storage and malformed records.
+// TestRevocationReadFailsClosed отклоняет недоступное хранилище и повреждённые записи.
 func TestRevocationReadFailsClosed(t *testing.T) {
 	t.Parallel()
 	sessionID := "4e5785f6-6bc6-4e8c-b6a1-ec4f8d2ab238"
@@ -102,6 +120,8 @@ func TestRevocationReadFailsClosed(t *testing.T) {
 	}
 }
 
+// TestUnknownSessionIsNotRevoked distinguishes an absent marker from a failed read.
+// TestUnknownSessionIsNotRevoked отличает отсутствующий маркер от неудачного чтения.
 func TestUnknownSessionIsNotRevoked(t *testing.T) {
 	t.Parallel()
 	store := &Store{jetstream: &fakeJetStream{}, stream: &fakeStream{err: jetstream.ErrMsgNotFound}, replicas: 1, timeout: time.Second}
@@ -110,6 +130,8 @@ func TestUnknownSessionIsNotRevoked(t *testing.T) {
 	}
 }
 
+// TestConsumeOnceUsesSubjectCASAndRejectsReplay permits one winner and rejects a later consume.
+// TestConsumeOnceUsesSubjectCASAndRejectsReplay допускает одного победителя и отклоняет повторное потребление.
 func TestConsumeOnceUsesSubjectCASAndRejectsReplay(t *testing.T) {
 	t.Parallel()
 	sessionID := "4e5785f6-6bc6-4e8c-b6a1-ec4f8d2ab238"

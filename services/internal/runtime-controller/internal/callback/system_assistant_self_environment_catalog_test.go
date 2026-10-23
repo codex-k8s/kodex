@@ -10,6 +10,10 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
+// selfEnvironmentCatalogSchema requires exactly one environment-revision operation, marshals its parameter schema and resolves it for local JSON Schema assertions.
+// It does not resolve network references or create a runtime environment.
+// selfEnvironmentCatalogSchema требует ровно одну операцию ревизии окружения, сериализует её схему параметров и разрешает её для локальных проверок JSON Schema.
+// Сетевые ссылки не разрешаются, окружение выполнения не создаётся.
 func selfEnvironmentCatalogSchema(t *testing.T, input runtimecontract.RunnerInput) *jsonschema.Resolved {
 	t.Helper()
 	var parameters map[string]any
@@ -39,6 +43,10 @@ func selfEnvironmentCatalogSchema(t *testing.T, input runtimecontract.RunnerInpu
 	return resolved
 }
 
+// TestSystemAssistantSelfEnvironmentCatalogPreservesClosedScreenUnion checks four own/screen-binding cases keep SYSTEM self and permitted ordinary screen branches distinct, rejecting mixed locators and caller authority.
+// The own proposal reaches a local draft stub with unchanged binding; PROJECT cannot use the system branch.
+// TestSystemAssistantSelfEnvironmentCatalogPreservesClosedScreenUnion проверяет в четырёх случаях собственных и экранных привязок разделение системной собственной ветви и разрешённой обычной экранной, отказ для смешанных ссылок и полномочий вызывающего.
+// Собственное предложение достигает локальной подстановки черновика с неизменной привязкой; проектная область не использует системную ветвь.
 func TestSystemAssistantSelfEnvironmentCatalogPreservesClosedScreenUnion(t *testing.T) {
 	for _, screenRef := range []string{"renv_foreign123", "renv_own12345"} {
 		for _, screenAllowed := range []bool{false, true} {

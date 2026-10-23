@@ -18,6 +18,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestContextMountAdmissionEvaluatesGeneratedPodAndRejectsDrift compiles the
+// four selected repository CEL admission expressions and evaluates generated
+// turn/warm Pods plus mount, container and preparation mutations locally. This
+// proves expression behavior, not installation of admission policy in a cluster.
+// TestContextMountAdmissionEvaluatesGeneratedPodAndRejectsDrift локально
+// компилирует четыре выбранных CEL-выражения admission из репозитория и проверяет
+// turn/warm Pods с мутациями mounts, контейнеров и подготовки. Это проверка
+// поведения выражений, а не установки admission policy в кластер.
 func TestContextMountAdmissionEvaluatesGeneratedPodAndRejectsDrift(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "deploy", "k8s", "base", "runtime-controller", "runtime-materialization-admission.yaml"))
 	if err != nil {

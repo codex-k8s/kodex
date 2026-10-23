@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// openAPIPackageFixture builds a local managed read/write package with pinned source and server for policy tests.
+// openAPIPackageFixture создаёт локальный управляемый пакет чтения и записи с закреплёнными источником и сервером.
 func openAPIPackageFixture(t *testing.T) Package {
 	t.Helper()
 	shipped, err := LoadShipped()
@@ -53,6 +55,8 @@ func openAPIPackageFixture(t *testing.T) Package {
 	return base
 }
 
+// TestOpenAPIPackageScopedApprovalRequiresManagedPins permits scoped write approval only on the managed route.
+// TestOpenAPIPackageScopedApprovalRequiresManagedPins допускает ограниченное подтверждение записи лишь на управляемом маршруте.
 func TestOpenAPIPackageScopedApprovalRequiresManagedPins(t *testing.T) {
 	candidate := openAPIPackageFixture(t)
 	raw, err := json.Marshal(candidate)
@@ -86,6 +90,8 @@ func TestOpenAPIPackageScopedApprovalRequiresManagedPins(t *testing.T) {
 	}
 }
 
+// TestOpenAPIPackageRejectsUnsafeWriteBinding blocks ungated writes, unsafe retries and destination changes.
+// TestOpenAPIPackageRejectsUnsafeWriteBinding блокирует запись без шлюза, небезопасный повтор и смену назначения.
 func TestOpenAPIPackageRejectsUnsafeWriteBinding(t *testing.T) {
 	for name, mutate := range map[string]func(*Package){
 		"write without approval":     func(value *Package) { value.Spec.Capabilities[1].ApprovalPolicy = string(ApprovalNone) },
@@ -103,6 +109,8 @@ func TestOpenAPIPackageRejectsUnsafeWriteBinding(t *testing.T) {
 	}
 }
 
+// TestOpenAPIReadyRevisionPinsSourceAndServer requires a source digest and exact HTTPS origin for ready revisions.
+// TestOpenAPIReadyRevisionPinsSourceAndServer требует дайджест источника и точный HTTPS-origin готовой версии.
 func TestOpenAPIReadyRevisionPinsSourceAndServer(t *testing.T) {
 	candidate := openAPIPackageFixture(t)
 	candidate.Spec.Readiness = "READY"
@@ -137,6 +145,8 @@ func TestOpenAPIReadyRevisionPinsSourceAndServer(t *testing.T) {
 	}
 }
 
+// TestOpenAPIManagedRevisionMayAddOnlyTypedBoundOperations rejects adapter, destination or config expansion.
+// TestOpenAPIManagedRevisionMayAddOnlyTypedBoundOperations отклоняет расширение адаптера, назначения и конфигурации.
 func TestOpenAPIManagedRevisionMayAddOnlyTypedBoundOperations(t *testing.T) {
 	candidate := openAPIPackageFixture(t)
 	baseline := candidate
@@ -176,6 +186,8 @@ func TestOpenAPIManagedRevisionMayAddOnlyTypedBoundOperations(t *testing.T) {
 	}
 }
 
+// parseOpenAPITestPackage round-trips a test package through the production canonical parser and digest.
+// parseOpenAPITestPackage пропускает тестовый пакет через промышленный канонический парсер и дайджест.
 func parseOpenAPITestPackage(t *testing.T, value Package) Package {
 	t.Helper()
 	raw, err := json.Marshal(value)

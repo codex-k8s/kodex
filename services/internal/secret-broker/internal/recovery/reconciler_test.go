@@ -13,6 +13,10 @@ import (
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
 
+// fakeOwner records recovery, expired-claim and projection decisions under a mutex with injectable errors.
+// It substitutes authoritative storage, so its recorded calls do not prove real owner transactions.
+// fakeOwner фиксирует recovery, expired-claim и projection decisions под mutex с подставляемыми ошибками.
+// Она заменяет authoritative storage; записанные calls не доказывают реальные owner transactions.
 type fakeOwner struct {
 	mu                 sync.Mutex
 	decisions          map[string]controlplanev1.RuntimeSecretRecoveryAction
@@ -28,6 +32,8 @@ type fakeOwner struct {
 	projectionCalls    []string
 }
 
+// failedClaim captures the exact original claim coordinates and closed failure code requested by recovery.
+// failedClaim сохраняет точные исходные claim coordinates и закрытый failure code запроса recovery.
 type failedClaim struct {
 	operationRef    string
 	claimantID      string
@@ -35,6 +41,10 @@ type failedClaim struct {
 	failureCode     controlplanev1.RuntimeSecretFailureCode
 }
 
+// Recover records the operation ref, then returns configured action/state or an injected failure;
+// the materialization argument is intentionally not verified by this simple owner stub.
+// Recover записывает operation ref, затем возвращает настроенные action/state либо failure;
+// materialization argument намеренно не проверяется этим простым owner stub.
 func (owner *fakeOwner) Recover(_ context.Context, operationRef string, _ *controlplanev1.RuntimeSecretMaterialization) (*controlplanev1.RecoverRuntimeSecretMaterializationResponse, error) {
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
@@ -47,12 +57,18 @@ func (owner *fakeOwner) Recover(_ context.Context, operationRef string, _ *contr
 	}, nil
 }
 
+// ListRecoveryWork returns a copy of the outer work slice plus the injected error, not a deep snapshot proof.
+// ListRecoveryWork возвращает копию внешнего work slice с подставленной ошибкой, не deep snapshot proof.
 func (owner *fakeOwner) ListRecoveryWork(context.Context) ([]RecoveryWork, error) {
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
 	return append([]RecoveryWork(nil), owner.work...), owner.workError
 }
 
+// FailExpiredClaim records ref/claimant/generation/code even when reporting fails, allowing retry
+// observations without pretending the failure receipt committed in a real owner.
+// FailExpiredClaim записывает ref/claimant/generation/code даже при reporting failure, позволяя
+// наблюдать retry без утверждения о commit failure receipt настоящим owner.
 func (owner *fakeOwner) FailExpiredClaim(_ context.Context, operationRef, claimantID string, generation int64, code controlplanev1.RuntimeSecretFailureCode) error {
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
@@ -62,6 +78,10 @@ func (owner *fakeOwner) FailExpiredClaim(_ context.Context, operationRef, claima
 	return owner.failError
 }
 
+// ValidateRuntimeCredentialProjection records the lease selector and returns configured eligibility;
+// missing selectors default false, without a real authoritative lookup.
+// ValidateRuntimeCredentialProjection фиксирует lease selector и возвращает заданную eligibility;
+// отсутствующий selector даёт false без настоящего authoritative lookup.
 func (owner *fakeOwner) ValidateRuntimeCredentialProjection(_ context.Context, request *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (bool, error) {
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
@@ -69,6 +89,10 @@ func (owner *fakeOwner) ValidateRuntimeCredentialProjection(_ context.Context, r
 	return owner.projectionValidity[request.GetLeaseRef()], owner.projectionError
 }
 
+// fakeStore supplies independent managed-effect/projection snapshots and records attempted deletions.
+// Configured errors can accompany observations; no Kubernetes transport or ownership check is emulated.
+// fakeStore предоставляет отдельные managed-effect/projection snapshots и фиксирует попытки удаления.
+// Настроенные ошибки могут сопровождать observations; Kubernetes transport и ownership checks не имитируются.
 type fakeStore struct {
 	items                 []kubernetesstore.Materialization
 	deleted               []string
@@ -82,32 +106,48 @@ type fakeStore struct {
 	projectionDeleteError error
 }
 
+// LookupExpectedEffect returns the injected exact-effect observation/error without deriving it from input.
+// LookupExpectedEffect возвращает подставленные exact-effect observation/error без вычисления из input.
 func (store *fakeStore) LookupExpectedEffect(context.Context, kubernetesstore.MaterializationEffect) (kubernetesstore.Materialization, error) {
 	return store.lookup, store.lookupError
 }
 
+// ListManaged copies the outer metadata slice so recovery cannot change its membership by append.
+// ListManaged копирует внешний metadata slice, не позволяя recovery менять его состав через append.
 func (store *fakeStore) ListManaged(context.Context) ([]kubernetesstore.Materialization, error) {
 	return append([]kubernetesstore.Materialization(nil), store.items...), store.listError
 }
 
+// ReadbackExact echoes the requested metadata with an injected error instead of reading an object.
+// ReadbackExact возвращает запрошенные metadata с подставленной ошибкой вместо чтения объекта.
 func (store *fakeStore) ReadbackExact(_ context.Context, materialization kubernetesstore.Materialization) (kubernetesstore.Materialization, error) {
 	return materialization, store.readError
 }
 
+// DeleteExact records every operation-ref attempt before returning the injected failure, including retries.
+// DeleteExact записывает каждую operation-ref попытку до возврата подставленного отказа, включая retries.
 func (store *fakeStore) DeleteExact(_ context.Context, materialization kubernetesstore.Materialization) error {
 	store.deleted = append(store.deleted, materialization.OperationRef)
 	return store.deleteError
 }
 
+// ListRuntimeCredentialProjections returns an outer copy of the configured projection metadata.
+// ListRuntimeCredentialProjections возвращает внешнюю копию заданных projection metadata.
 func (store *fakeStore) ListRuntimeCredentialProjections(context.Context) ([]kubernetesstore.CredentialProjection, error) {
 	return append([]kubernetesstore.CredentialProjection(nil), store.projections...), nil
 }
 
+// DeleteRuntimeCredentialProjection records the exact requested name even when its injected delete fails.
+// DeleteRuntimeCredentialProjection записывает точное запрошенное имя даже при подставленном delete failure.
 func (store *fakeStore) DeleteRuntimeCredentialProjection(_ context.Context, projection kubernetesstore.CredentialProjection) error {
 	store.deletedProjections = append(store.deletedProjections, projection.SecretName)
 	return store.projectionDeleteError
 }
 
+// TestCredentialProjectionRecoveryDeletesRevokedOrChangedBinding retains the owner-approved lease projection
+// and deletes the rejected one after checking both bindings through the fake owner.
+// TestCredentialProjectionRecoveryDeletesRevokedOrChangedBinding сохраняет owner-approved lease projection
+// и удаляет отклонённую после проверки обеих bindings через fake owner.
 func TestCredentialProjectionRecoveryDeletesRevokedOrChangedBinding(t *testing.T) {
 	t.Parallel()
 	keep := kubernetesstore.CredentialProjection{SecretName: "projection-keep", Manifest: kubernetesstore.CredentialProjectionManifest{LeaseRef: "lease-keep"}}
@@ -126,6 +166,10 @@ func TestCredentialProjectionRecoveryDeletesRevokedOrChangedBinding(t *testing.T
 	}
 }
 
+// TestRecoveryCompletesOrphanAndDeletesRejectedMaterialization checks distinct KEEP/DELETE decisions,
+// exact cleanup selection and readiness after a successful complete snapshot scan.
+// TestRecoveryCompletesOrphanAndDeletesRejectedMaterialization проверяет разные KEEP/DELETE decisions,
+// точный выбор очистки и readiness после успешного полного snapshot scan.
 func TestRecoveryCompletesOrphanAndDeletesRejectedMaterialization(t *testing.T) {
 	t.Parallel()
 	keep := recoveryMaterialization("secop_keep", 1)
@@ -153,6 +197,10 @@ func TestRecoveryCompletesOrphanAndDeletesRejectedMaterialization(t *testing.T) 
 	}
 }
 
+// TestFailedDeleteIsRecoveredByNextScan keeps recovery unhealthy after deletion failure and requires
+// the next scan to retry the same observed effect once the injected outage clears.
+// TestFailedDeleteIsRecoveredByNextScan сохраняет unhealthy recovery после deletion failure и требует
+// повторить тот же observed effect следующим scan после снятия подставленного outage.
 func TestFailedDeleteIsRecoveredByNextScan(t *testing.T) {
 	t.Parallel()
 	item := recoveryMaterialization("secop_retry_delete", 3)
@@ -177,6 +225,8 @@ func TestFailedDeleteIsRecoveredByNextScan(t *testing.T) {
 	}
 }
 
+// TestRecoveryRejectsIncompleteOwnerDecision rejects a KEEP action without a corresponding operation state.
+// TestRecoveryRejectsIncompleteOwnerDecision отвергает KEEP action без соответствующего operation state.
 func TestRecoveryRejectsIncompleteOwnerDecision(t *testing.T) {
 	t.Parallel()
 	item := recoveryMaterialization("secop_incomplete", 4)
@@ -189,14 +239,13 @@ func TestRecoveryRejectsIncompleteOwnerDecision(t *testing.T) {
 	}
 }
 
+// TestExpiredCreateWithoutMaterializationFailsOriginalFence reports an absent effect as reconciliation
+// failure using the old claimant/generation, not the current worker identity.
+// TestExpiredCreateWithoutMaterializationFailsOriginalFence сообщает отсутствие эффекта как reconciliation
+// failure с прежними claimant/generation, не identity текущего worker.
 func TestExpiredCreateWithoutMaterializationFailsOriginalFence(t *testing.T) {
 	t.Parallel()
-	owner := &fakeOwner{work: []RecoveryWork{recoveryWork(controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_CREATE)}}
-	store := &fakeStore{lookupError: kubernetesstore.ErrMaterializationNotFound}
-	reconciler := newTestReconciler(t, owner, store)
-	if err := reconciler.EnableExpiredClaimRecovery(owner, store, "kodex-runtime"); err != nil {
-		t.Fatal(err)
-	}
+	reconciler, owner, _ := expiredRecoveryFixture(t, controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_CREATE, kubernetesstore.ErrMaterializationNotFound)
 	if err := reconciler.ReconcileOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -206,6 +255,10 @@ func TestExpiredCreateWithoutMaterializationFailsOriginalFence(t *testing.T) {
 	}
 }
 
+// TestExpiredCreateWithExactEffectFallsThroughToManagedRecovery routes a matching observed effect to
+// normal owner recovery rather than failing the expired claim without considering its materialization.
+// TestExpiredCreateWithExactEffectFallsThroughToManagedRecovery передаёт совпавший observed effect в
+// обычный owner recovery вместо failure просроченного claim без учёта materialization.
 func TestExpiredCreateWithExactEffectFallsThroughToManagedRecovery(t *testing.T) {
 	t.Parallel()
 	work := recoveryWork(controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_CREATE)
@@ -232,14 +285,13 @@ func TestExpiredCreateWithExactEffectFallsThroughToManagedRecovery(t *testing.T)
 	}
 }
 
+// TestExpiredCreateConflictFailsClaimAndKeepsObject retains an object on exact-effect conflict,
+// reports the closed conflict code and keeps reconciliation unhealthy rather than deleting uncertain data.
+// TestExpiredCreateConflictFailsClaimAndKeepsObject сохраняет объект при exact-effect conflict,
+// сообщает закрытый conflict code и оставляет reconciliation unhealthy без удаления неопределённых данных.
 func TestExpiredCreateConflictFailsClaimAndKeepsObject(t *testing.T) {
 	t.Parallel()
-	owner := &fakeOwner{work: []RecoveryWork{recoveryWork(controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_ROTATE)}}
-	store := &fakeStore{lookupError: kubernetesstore.ErrMaterializationConflict}
-	reconciler := newTestReconciler(t, owner, store)
-	if err := reconciler.EnableExpiredClaimRecovery(owner, store, "kodex-runtime"); err != nil {
-		t.Fatal(err)
-	}
+	reconciler, owner, store := expiredRecoveryFixture(t, controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_ROTATE, kubernetesstore.ErrMaterializationConflict)
 	if err := reconciler.ReconcileOnce(context.Background()); err == nil {
 		t.Fatal("materialization conflict должен оставить recovery unhealthy до ручной проверки")
 	}
@@ -248,6 +300,10 @@ func TestExpiredCreateConflictFailsClaimAndKeepsObject(t *testing.T) {
 	}
 }
 
+// TestExpiredRevealAndRevokeFailWithoutMaterialization checks both no-create kinds receive the
+// closed reconciliation failure instead of inventing a materialization effect.
+// TestExpiredRevealAndRevokeFailWithoutMaterialization проверяет закрытый reconciliation failure
+// для обоих no-create kinds вместо выдуманного materialization effect.
 func TestExpiredRevealAndRevokeFailWithoutMaterialization(t *testing.T) {
 	t.Parallel()
 	owner := &fakeOwner{work: []RecoveryWork{
@@ -272,6 +328,10 @@ func TestExpiredRevealAndRevokeFailWithoutMaterialization(t *testing.T) {
 	}
 }
 
+// TestWorkerStopsOnLifecycleCancellation cancels the synthetic worker context and observes a joined
+// context.Canceled result within one second; it is not a live workload termination test.
+// TestWorkerStopsOnLifecycleCancellation отменяет synthetic worker context и наблюдает joined
+// context.Canceled результат за секунду; это не проверка остановки живого workload.
 func TestWorkerStopsOnLifecycleCancellation(t *testing.T) {
 	t.Parallel()
 	reconciler := newTestReconciler(t, &fakeOwner{}, &fakeStore{})
@@ -289,6 +349,25 @@ func TestWorkerStopsOnLifecycleCancellation(t *testing.T) {
 	}
 }
 
+// expiredRecoveryFixture wires one synthetic expired work item and the caller-selected lookup
+// failure; it never runs reconciliation, so success/failure expectations remain in each test.
+// expiredRecoveryFixture связывает synthetic expired work item с выбранной caller lookup failure;
+// reconciliation не запускается, ожидаемые success/failure остаются в каждом тесте.
+func expiredRecoveryFixture(t *testing.T, kind controlplanev1.RuntimeSecretOperationKind, lookupError error) (*Reconciler, *fakeOwner, *fakeStore) {
+	t.Helper()
+	owner := &fakeOwner{work: []RecoveryWork{recoveryWork(kind)}}
+	store := &fakeStore{lookupError: lookupError}
+	reconciler := newTestReconciler(t, owner, store)
+	if err := reconciler.EnableExpiredClaimRecovery(owner, store, "kodex-runtime"); err != nil {
+		t.Fatal(err)
+	}
+	return reconciler, owner, store
+}
+
+// newTestReconciler wires fresh metrics, a discarded logger and one-second scan budgets around
+// caller-selected fake ports, without starting its worker.
+// newTestReconciler связывает отдельные metrics, discarded logger и секундные scan budgets
+// с выбранными fake ports без запуска worker.
 func newTestReconciler(t *testing.T, owner Owner, store Store) *Reconciler {
 	t.Helper()
 	result, err := New(owner, store, time.Second, time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), NewMetrics())
@@ -298,6 +377,8 @@ func newTestReconciler(t *testing.T, owner Owner, store Store) *Reconciler {
 	return result
 }
 
+// recoveryMaterialization creates deterministic immediate-effect metadata with fixed synthetic object pins.
+// recoveryMaterialization создаёт детерминированные immediate-effect metadata с фиксированными synthetic object pins.
 func recoveryMaterialization(operationRef string, generation int64) kubernetesstore.Materialization {
 	return kubernetesstore.Materialization{
 		WorkKind:  kubernetesstore.WorkKindImmediate,
@@ -307,6 +388,10 @@ func recoveryMaterialization(operationRef string, generation int64) kubernetesst
 	}
 }
 
+// recoveryWork builds one expired-work fixture with original claimant/generation and a supplied kind;
+// its fixed metadata is not a runtime credential or a grant.
+// recoveryWork строит expired-work fixture с исходными claimant/generation и переданным kind;
+// фиксированные metadata не являются runtime credential или grant.
 func recoveryWork(kind controlplanev1.RuntimeSecretOperationKind) RecoveryWork {
 	return RecoveryWork{
 		OperationRef: "secop_expired", Kind: kind, ClaimantID: "old-pod-uid", ClaimGeneration: 17,

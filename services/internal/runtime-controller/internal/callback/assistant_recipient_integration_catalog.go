@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// assistantRecipientIntegrationCatalogAvailable requires assistant scope, a versioned AGENT/WORKFLOW context and snapshot CHANGE_INTEGRATION_GRANT operation.
+// This availability predicate does not verify the lease or authorize a current grant change.
+// assistantRecipientIntegrationCatalogAvailable требует область помощника, версионированный контекст AGENT либо WORKFLOW и операцию CHANGE_INTEGRATION_GRANT в снимке.
+// Предикат доступности не проверяет аренду и не разрешает актуальное изменение доступа.
 func assistantRecipientIntegrationCatalogAvailable(input runtimecontract.RunnerInput) bool {
 	context := input.AssistantContext
 	if !input.IsAssistant() || context == nil || (context.EntityKind != "AGENT" && context.EntityKind != "WORKFLOW") || !validAssistantResourceRef(context.EntityRef) || context.EntityVersion == nil || *context.EntityVersion < 1 {
@@ -22,6 +26,12 @@ func assistantRecipientIntegrationCatalogAvailable(input runtimecontract.RunnerI
 	return false
 }
 
+// castAssistantRecipientIntegrationCatalog validates the closed owner response, organization binding, project/context versions and recipient identity before projecting grant candidates and exact pins.
+// An explicitly selected agent is allowed only through eligible workflow context; pagination, unique connection/capability pairs and schema provenance are checked.
+// It preserves unavailable-package metadata and stored grant state without enabling a grant or applying any configuration.
+// castAssistantRecipientIntegrationCatalog проверяет закрытый ответ владельца, привязку организации, версии проекта и контекста, идентичность получателя до проекции кандидатов доступа и точных привязок.
+// Явный выбор сотрудника допускается только через подходящий контекст процесса; проверяются страницы, уникальность пар подключение/операция и происхождение схемы.
+// Метаданные недоступного пакета и сохранённое состояние доступа не меняются; доступ не включается, конфигурация не применяется.
 func castAssistantRecipientIntegrationCatalog(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant recipient integration catalog response is invalid")
 	if !assistantRecipientIntegrationCatalogAvailable(input) || request.GetAssistantRef() != input.AgentRef || response == nil || !validAssistantCurrentReadMessage(response.ProtoReflect(), 0) ||

@@ -18,34 +18,76 @@ import (
 )
 
 const (
-	RunnerInputSchemaV9       = "kodex.agent-runner-input.v9"
-	RunnerModeTurn            = "TURN"
-	RunnerModeWarm            = "WARM"
-	MaximumRunnerInputBytes   = 2 << 20
+	// RunnerInputSchemaV9 pins the closed wire layout materialized for agent execution.
+	// RunnerInputSchemaV9 закрепляет закрытую wire-структуру материализованного входа агента.
+	RunnerInputSchemaV9 = "kodex.agent-runner-input.v9"
+	// RunnerModeTurn selects an exact leased execution attempt with task and callback bindings.
+	// RunnerModeTurn выбирает точную арендованную попытку исполнения с задачей и callback-привязками.
+	RunnerModeTurn = "TURN"
+	// RunnerModeWarm selects a system assistant runtime without per-turn execution authority.
+	// RunnerModeWarm выбирает runtime системного помощника без полномочий конкретного хода.
+	RunnerModeWarm = "WARM"
+	// MaximumRunnerInputBytes bounds the complete serialized execution input.
+	// MaximumRunnerInputBytes ограничивает полный сериализованный вход исполнения.
+	MaximumRunnerInputBytes = 2 << 20
+	// MaximumInputArtifactBytes bounds one declared immutable input artifact.
+	// MaximumInputArtifactBytes ограничивает один объявленный неизменяемый входной артефакт.
 	MaximumInputArtifactBytes = 512 << 20
+	// MaximumInputArtifactTotal bounds the combined declared size of the input artifact catalog.
+	// MaximumInputArtifactTotal ограничивает общий объявленный размер каталога входных артефактов.
 	MaximumInputArtifactTotal = 512 << 20
-	MaximumCompletionBytes    = 16 << 20
-	MaximumCompletionFiles    = 32
+	// MaximumCompletionBytes caps all inline completion artifacts together.
+	// MaximumCompletionBytes ограничивает суммарный объём встроенных артефактов завершения.
+	MaximumCompletionBytes = 16 << 20
+	// MaximumCompletionFiles caps the number of artifacts returned by one completion.
+	// MaximumCompletionFiles ограничивает количество артефактов одного завершения.
+	MaximumCompletionFiles = 32
+	// MaximumSessionSourceBytes bounds the declared source session archive size.
+	// MaximumSessionSourceBytes ограничивает объявленный размер исходного архива сессии.
 	MaximumSessionSourceBytes = 64 << 20
-	MaximumProgressTextBytes  = 2 << 10
-	MaximumProviderAuthBytes  = 1 << 20
-	ArtifactCapability        = "platform.artifact.manage"
+	// MaximumProgressTextBytes bounds the safe progress text published by a runner.
+	// MaximumProgressTextBytes ограничивает безопасный текст прогресса, публикуемый runner.
+	MaximumProgressTextBytes = 2 << 10
+	// MaximumProviderAuthBytes bounds refreshed managed authentication bytes on the isolated relay path.
+	// MaximumProviderAuthBytes ограничивает обновлённые байты авторизации на изолированном relay-пути.
+	MaximumProviderAuthBytes = 1 << 20
+	// ArtifactCapability names managed artifact write/catalog access, not an implicit input-file read grant.
+	// ArtifactCapability называет право записи и каталога артефактов, а не неявное чтение входного файла.
+	ArtifactCapability = "platform.artifact.manage"
 )
 
+// opaqueReferencePattern requires a bounded kind-prefixed reference without interpreting it as authority.
+// opaqueReferencePattern требует ограниченную ссылку с префиксом вида, не трактуя её как полномочие.
 var opaqueReferencePattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$`)
 
-// RuntimeSelection.ref — stable_key профиля, а не prefixed ID агрегата.
-// Границы совпадают с действующим внешним контрактом RuntimeSelection/OpaqueRef.
+// runtimeProfileKeyPattern validates the stable profile key used by RuntimeSelection.ref,
+// whose external contract is distinct from a kind-prefixed aggregate reference.
+// runtimeProfileKeyPattern проверяет постоянный ключ профиля RuntimeSelection.ref,
+// внешний контракт которого отличается от ссылки агрегата с префиксом вида.
 var runtimeProfileKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 
+// validRuntimeProfileKey applies the stable profile-key contract without coercing it to an aggregate ID.
+// validRuntimeProfileKey проверяет постоянный ключ профиля без преобразования в идентификатор агрегата.
 func validRuntimeProfileKey(value string) bool { return runtimeProfileKeyPattern.MatchString(value) }
 
+// imageDigestPattern requires an immutable sha256-prefixed lowercase image digest.
+// imageDigestPattern требует неизменный строчный дайджест образа с префиксом sha256.
 var imageDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
+// systemRuntimeRevisionPattern admits only the registered system-assistant revision naming forms.
+// systemRuntimeRevisionPattern допускает лишь зарегистрированные формы имён версии системного помощника.
 var systemRuntimeRevisionPattern = regexp.MustCompile(`^system-assistant-(?:core-v[1-9][0-9]*|runtime-[a-f0-9]{64})$`)
+
+// workflowStepKeyPattern bounds optional delegation step locators to the workflow key alphabet.
+// workflowStepKeyPattern ограничивает необязательные ссылки шага делегирования алфавитом workflow-ключа.
 var workflowStepKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$`)
+
+// integrationDefinitionVersionPattern requires a positive semantic major with explicit minor and patch components.
+// integrationDefinitionVersionPattern требует положительную основную версию с явными minor и patch.
 var integrationDefinitionVersionPattern = regexp.MustCompile(`^[1-9][0-9]*\.[0-9]+\.[0-9]+$`)
 
-// RuntimeTLSBinding описывает точную mTLS-границу callback runtime-controller.
+// RuntimeTLSBinding pins the callback transport profile, exact server name, and mounted TLS files.
+// RuntimeTLSBinding закрепляет профиль callback-транспорта, точное имя сервера и смонтированные TLS-файлы.
 type RuntimeTLSBinding struct {
 	Profile         string `json:"profile,omitempty"`
 	ServerName      string `json:"server_name"`
@@ -54,13 +96,17 @@ type RuntimeTLSBinding struct {
 	PrivateKeyFile  string `json:"private_key_file"`
 }
 
-// RunnerSessionMessage — bounded часть авторитетной истории Session.
+// RunnerSessionMessage carries a bounded role/content entry from authoritative session history.
+// RunnerSessionMessage содержит ограниченную запись роли и текста авторитетной истории сессии.
 type RunnerSessionMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// RunnerDelegationTarget — закрытый server-owned каталог доступных дочерних агентов.
+// RunnerDelegationTarget describes one owner-selected child agent and optional workflow step;
+// its locator does not independently authorize delegation.
+// RunnerDelegationTarget описывает выбранного владельцем дочернего агента и необязательный шаг workflow;
+// сама ссылка не разрешает делегирование.
 type RunnerDelegationTarget struct {
 	Ref              string `json:"ref"`
 	Name             string `json:"name"`
@@ -72,7 +118,10 @@ type RunnerDelegationTarget struct {
 	ExpectedResult   string `json:"expected_result,omitempty"`
 }
 
-// RunnerIntegrationGrant — безопасная проекция одной типизированной capability.
+// RunnerIntegrationGrant pins one typed capability to exact connection/definition/schema versions
+// with a declared risk and approval policy, excluding integration credential values.
+// RunnerIntegrationGrant закрепляет типизированную возможность за версиями подключения, определения и схемы,
+// указывает риск и подтверждение, исключая значения учётных данных интеграции.
 type RunnerIntegrationGrant struct {
 	Ref                   string `json:"ref"`
 	GrantVersion          int64  `json:"grant_version"`
@@ -92,8 +141,10 @@ type RunnerIntegrationGrant struct {
 	InputSchemaSHA256     string `json:"input_schema_sha256"`
 }
 
-// RunnerAssistantContext — безопасный route/resource snapshot, который
-// определяет доступный набор plan operations для одного assistant turn.
+// RunnerAssistantContext records the safe route/resource snapshot and owner-resolved plan operations
+// for one assistant turn without granting authority through the selected screen.
+// RunnerAssistantContext хранит безопасный снимок экрана и ресурса и разрешённые владельцем операции плана
+// одного хода помощника, не выдавая полномочий через выбранный экран.
 type RunnerAssistantContext struct {
 	Route             string   `json:"route"`
 	EntityKind        string   `json:"entity_kind"`
@@ -103,8 +154,10 @@ type RunnerAssistantContext struct {
 	AllowedOperations []string `json:"allowed_operations"`
 }
 
-// RunnerAttachmentSet связывает один finalized set с его точным местом в
-// RuntimeRevision. Scope и provenance назначаются control-plane.
+// RunnerAttachmentSet binds one finalized set to its exact place in RuntimeRevision;
+// scope, provenance, and turn association are supplied by the control plane.
+// RunnerAttachmentSet связывает завершённый набор с точным местом в RuntimeRevision;
+// область, происхождение и связь с ходом назначает control plane.
 type RunnerAttachmentSet struct {
 	Ref            string `json:"ref"`
 	ManifestDigest string `json:"manifest_digest"`
@@ -114,8 +167,10 @@ type RunnerAttachmentSet struct {
 	TurnRef        string `json:"turn_ref,omitempty"`
 }
 
-// RunnerInputArtifact описывает exact версию входного либо knowledge artifact.
-// Байты передаются отдельно через execution-scoped callback и сверяются runner.
+// RunnerInputArtifact pins an input or knowledge artifact's exact revision, content, and provenance;
+// bytes are delivered separately through the execution-scoped callback and verified by the runner.
+// RunnerInputArtifact закрепляет точные версию, содержимое и происхождение входного или справочного артефакта;
+// байты передаются отдельно через callback исполнения и проверяются runner.
 type RunnerInputArtifact struct {
 	Ref               string `json:"ref"`
 	FileName          string `json:"file_name"`
@@ -132,8 +187,10 @@ type RunnerInputArtifact struct {
 	Provenance        string `json:"provenance"`
 }
 
-// RunnerInput — immutable contract одного turn либо always-hot system runtime.
-// В нём нет actor/organization authority и secret values.
+// RunnerInput is the immutable materialization of one turn or warm system runtime, binding configuration,
+// context, environment, provider, and callback pins; resource references are not bearer authority or secret values.
+// RunnerInput — неизменная материализация хода или warm runtime со связями конфигурации, контекста,
+// окружения, провайдера и callback; ссылки ресурсов не являются bearer-полномочиями или значениями секретов.
 type RunnerInput struct {
 	Schema                            string                    `json:"schema"`
 	Mode                              string                    `json:"mode"`
@@ -237,10 +294,10 @@ type RunnerInput struct {
 	CodexHome                         string                    `json:"codex_home"`
 }
 
-// RunnerProviderCredentialRefreshRequest передает обновленный managed OAuth
-// snapshot от provider к изолированному credential relay по UDS, а затем по
-// execution-scoped mTLS callback. Control-plane получает исключительно
-// метаданные созданной runtime-controller immutable Secret.
+// RunnerProviderCredentialRefreshRequest carries refreshed managed authentication through the isolated
+// UDS relay and execution callback; the control plane receives only metadata of the controller-created Secret.
+// RunnerProviderCredentialRefreshRequest передаёт обновлённую управляемую авторизацию через изолированный
+// UDS relay и callback исполнения; control plane получает лишь метаданные Secret, созданного контроллером.
 type RunnerProviderCredentialRefreshRequest struct {
 	RuntimeRevisionDigest         string `json:"runtime_revision_digest"`
 	PreviousCredentialRevisionRef string `json:"previous_credential_revision_ref"`
@@ -248,6 +305,8 @@ type RunnerProviderCredentialRefreshRequest struct {
 	Authentication                []byte `json:"authentication"`
 }
 
+// Validate checks exact revision pins and bounded nonempty JSON-object authentication bytes before relay use.
+// Validate проверяет точные версии и ограниченные непустые JSON-байты объекта авторизации до использования relay.
 func (request RunnerProviderCredentialRefreshRequest) Validate() error {
 	trimmed := bytes.TrimSpace(request.Authentication)
 	if !sha256Pattern.MatchString(request.RuntimeRevisionDigest) ||
@@ -260,6 +319,10 @@ func (request RunnerProviderCredentialRefreshRequest) Validate() error {
 	return nil
 }
 
+// Validate checks the complete materialization: scope, immutable pins, prompt/context, environment,
+// callback, grants, and mode-specific execution identity. Current owner eligibility is verified separately.
+// Validate проверяет полную материализацию: область, неизменные привязки, prompt и контекст, окружение,
+// callback, разрешения и идентичность режима. Текущую допустимость владельца проверяют отдельно.
 func (input RunnerInput) Validate() error {
 	if input.validateAssistantScope() != nil {
 		return errors.New("runner assistant scope binding is invalid")
@@ -428,12 +491,16 @@ func (input RunnerInput) Validate() error {
 	return nil
 }
 
-// Human-text maxLength считает Unicode-символы; optional пустые поля и отдельные
-// byte budgets сохраняются. Некорректный UTF-8 и NUL не нормализуются.
+// validRunnerHumanText counts Unicode code points while preserving empty optional values;
+// invalid UTF-8 and NUL fail without normalization, independently of outer byte budgets.
+// validRunnerHumanText считает Unicode-символы, сохраняя пустые необязательные значения;
+// неверный UTF-8 и NUL отклоняются без нормализации независимо от внешних байтовых лимитов.
 func validRunnerHumanText(text string, maximumCharacters int) bool {
 	return utf8.ValidString(text) && !strings.ContainsRune(text, 0) && utf8.RuneCountInString(text) <= maximumCharacters
 }
 
+// containsString performs exact membership comparison without sorting or modifying the caller's slice.
+// containsString проверяет точное вхождение без сортировки или изменения среза вызывающего кода.
 func containsString(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {
@@ -443,11 +510,17 @@ func containsString(values []string, expected string) bool {
 	return false
 }
 
+// validSessionContext applies the authoritative history/continuation shape validator as a boolean guard.
+// validSessionContext применяет валидатор формы истории и продолжения как булеву проверку.
 func validSessionContext(input RunnerInput) bool {
 	_, err := ValidateRuntimeSessionContext(input)
 	return err == nil
 }
 
+// validIntegrationGrants checks exact grant/schema pins, risk/approval compatibility, and unique
+// grant identities and connection/capability pairs without resolving current owner permissions.
+// validIntegrationGrants проверяет версии разрешений и схем, совместимость риска и подтверждения,
+// уникальность разрешений и пар подключения и возможности без разрешения текущих прав владельца.
 func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
 	refs := make(map[string]struct{}, len(grants))
 	bindings := make(map[string]struct{}, len(grants))
@@ -480,6 +553,10 @@ func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
 	return true
 }
 
+// validIntegrationInputSchema bounds valid JSON, requires a closed object-root declaration,
+// and compares the exact supplied schema bytes with their pinned digest.
+// validIntegrationInputSchema ограничивает корректный JSON, требует объявление закрытого корневого объекта
+// и сравнивает точные переданные байты схемы с закреплённым дайджестом.
 func validIntegrationInputSchema(raw, expectedDigest string) bool {
 	if len(raw) == 0 || len(raw) > 64<<10 || !json.Valid([]byte(raw)) {
 		return false
@@ -494,6 +571,8 @@ func validIntegrationInputSchema(raw, expectedDigest string) bool {
 	return hex.EncodeToString(digest[:]) == expectedDigest
 }
 
+// validCapabilities limits count and byte length and rejects empty or duplicate capability keys.
+// validCapabilities ограничивает количество и длину, отклоняя пустые или повторные ключи возможностей.
 func validCapabilities(capabilities []string) bool {
 	if len(capabilities) > 256 {
 		return false
@@ -511,10 +590,14 @@ func validCapabilities(capabilities []string) bool {
 	return true
 }
 
+// validArtifactFileName accepts a bounded basename without separators, dot traversal names, or control delimiters.
+// validArtifactFileName допускает ограниченное базовое имя без разделителей, имён перехода через точки и управляющих разделителей.
 func validArtifactFileName(value string) bool {
 	return value != "" && len(value) <= 255 && value != "." && value != ".." && !strings.ContainsAny(value, "/\\\x00\r\n")
 }
 
+// EncodeRunnerInput serializes only a fully validated immutable execution materialization.
+// EncodeRunnerInput сериализует лишь полностью проверенную неизменную материализацию исполнения.
 func EncodeRunnerInput(input RunnerInput) ([]byte, error) {
 	if err := input.Validate(); err != nil {
 		return nil, err
@@ -522,6 +605,8 @@ func EncodeRunnerInput(input RunnerInput) ([]byte, error) {
 	return json.Marshal(input)
 }
 
+// DecodeRunnerInput bounds input bytes, rejects unknown fields and trailing values, then validates all bindings.
+// DecodeRunnerInput ограничивает входные байты, отклоняет неизвестные поля и лишние значения и проверяет все привязки.
 func DecodeRunnerInput(raw []byte) (RunnerInput, error) {
 	if len(raw) == 0 || len(raw) > MaximumRunnerInputBytes {
 		return RunnerInput{}, errors.New("runner input size is invalid")
@@ -535,9 +620,10 @@ func DecodeRunnerInput(raw []byte) (RunnerInput, error) {
 	return input, nil
 }
 
-// WarmCompatibilityDigest связывает always-hot runtime только с полями,
-// которые определяют его неизменяемое окружение и session boundary. Turn и
-// execution input остаются частью полного RuntimeRevisionDigest.
+// WarmCompatibilityDigest pins a system runtime's immutable environment and session boundary;
+// turn-specific execution input remains part of the separate complete RuntimeRevision digest.
+// WarmCompatibilityDigest закрепляет неизменное окружение системного runtime и границу сессии;
+// вход конкретного хода остаётся частью отдельного полного дайджеста RuntimeRevision.
 func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 	if !input.IsSystemAssistant() || input.validateAssistantScope() != nil {
 		return "", errors.New("warm runtime compatibility requires system assistant")
@@ -647,6 +733,10 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// validate requires a cluster DNS server name and mounted secret paths, allowing only the CA file
+// to come from the fixed configuration mount subtree.
+// validate требует кластерное DNS-имя сервера и пути смонтированных секретов, допуская лишь CA-файл
+// из фиксированной папки смонтированной конфигурации.
 func (binding RuntimeTLSBinding) validate() error {
 	if binding.ServerName == "" || len(binding.ServerName) > 253 || net.ParseIP(binding.ServerName) != nil ||
 		!strings.HasSuffix(binding.ServerName, ".svc.cluster.local") {
@@ -660,6 +750,8 @@ func (binding RuntimeTLSBinding) validate() error {
 	return nil
 }
 
+// validCallbackURL checks the HTTPS callback origin and explicit port without userinfo, path, query, or fragment.
+// validCallbackURL проверяет HTTPS-origin callback и явный порт без userinfo, пути, query и fragment.
 func validCallbackURL(raw, serverName string) bool {
 	parsed, err := url.Parse(raw)
 	host := parsed.Hostname()
@@ -667,17 +759,23 @@ func validCallbackURL(raw, serverName string) bool {
 		parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == "" && parsed.Path == ""
 }
 
+// validSecretFile restricts credential locators to bounded clean absolute paths in registered secret mounts.
+// validSecretFile ограничивает ссылки учётных данных чистыми абсолютными путями внутри известных secret-mount.
 func validSecretFile(path string) bool {
 	return len(path) <= 512 && !strings.ContainsAny(path, "\x00\r\n") && filepath.IsAbs(path) && filepath.Clean(path) == path &&
 		(strings.HasPrefix(path, "/var/run/secrets/") || strings.HasPrefix(path, "/run/secrets/"))
 }
 
+// validPinnedImage requires an immutable image reference ending in the exact canonical digest without template syntax.
+// validPinnedImage требует неизменную ссылку образа с точным каноническим дайджестом без синтаксиса шаблонов.
 func validPinnedImage(reference, digest string) bool {
 	return len(reference) >= 73 && len(reference) <= 512 && !strings.ContainsAny(reference, " \t\r\n") &&
 		imageDigestPattern.MatchString(digest) && strings.HasSuffix(reference, "@"+digest) &&
 		!strings.Contains(reference, "$") && !strings.Contains(reference, "{") && !strings.Contains(reference, "}")
 }
 
+// RunnerProgressRequest binds safe progress and optional typed observations to one runtime revision digest.
+// RunnerProgressRequest связывает безопасный прогресс и необязательные типизированные наблюдения с дайджестом runtime.
 type RunnerProgressRequest struct {
 	RuntimeRevisionDigest string                        `json:"runtime_revision_digest"`
 	Progress              string                        `json:"progress"`
@@ -686,6 +784,8 @@ type RunnerProgressRequest struct {
 	Financial             *ProviderFinancialObservation `json:"financial,omitempty"`
 }
 
+// RunnerArtifact carries one inline completion artifact with a basename, media type, and exact content digest.
+// RunnerArtifact содержит встроенный артефакт завершения с базовым именем, типом и точным дайджестом содержимого.
 type RunnerArtifact struct {
 	FileName  string `json:"file_name"`
 	MediaType string `json:"media_type"`
@@ -693,9 +793,10 @@ type RunnerArtifact struct {
 	Content   []byte `json:"content"`
 }
 
-// TokenUsage — измеренный provider runtime расход одного turn.
-// Cached/cache-write/reasoning входят соответственно в input/output и не
-// прибавляются к total повторно.
+// TokenUsage records measured per-turn provider usage; cached/cache-write input and reasoning output
+// are subsets of input/output counters and are not added to the total again.
+// TokenUsage хранит измеренный расход провайдера за ход; cached/cache-write и reasoning являются
+// подмножествами input/output и не прибавляются к общему расходу повторно.
 type TokenUsage struct {
 	TotalTokens           int64 `json:"total_tokens"`
 	InputTokens           int64 `json:"input_tokens"`
@@ -706,6 +807,8 @@ type TokenUsage struct {
 	ModelContextWindow    int64 `json:"model_context_window"`
 }
 
+// Validate requires nonnegative counters, exact input-plus-output total, and bounded subcounters.
+// Validate требует неотрицательные счётчики, точную сумму input и output и ограниченные подсчётчики.
 func (usage TokenUsage) Validate() error {
 	if usage.TotalTokens < 0 || usage.InputTokens < 0 || usage.CachedInputTokens < 0 ||
 		usage.CacheWriteInputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 ||
@@ -717,6 +820,10 @@ func (usage TokenUsage) Validate() error {
 	return nil
 }
 
+// RunnerCompletionRequest binds outcome, usage, inline artifacts, optional archive, and failure diagnostic
+// to one exact runtime revision and attempt.
+// RunnerCompletionRequest связывает исход, расход, встроенные артефакты, необязательный архив и диагностику
+// ошибки с точной версией runtime и попыткой.
 type RunnerCompletionRequest struct {
 	RuntimeRevisionDigest string                     `json:"runtime_revision_digest"`
 	Attempt               int32                      `json:"attempt"`
@@ -732,6 +839,10 @@ type RunnerCompletionRequest struct {
 	ProviderDiagnostic    *ProviderFailureDiagnostic `json:"provider_diagnostic,omitempty"`
 }
 
+// Validate checks outcome/diagnostic consistency, token accounting, complete optional archive identity,
+// artifact digests and names, and the aggregate completion byte budget.
+// Validate проверяет согласованность исхода и диагностики, расход токенов, полную необязательную привязку архива,
+// дайджесты и имена артефактов и общий байтовый бюджет завершения.
 func (request RunnerCompletionRequest) Validate() error {
 	if request.ProviderDiagnostic != nil && (request.Success || request.ProviderDiagnostic.Validate() != nil ||
 		request.ProviderDiagnostic.RuntimeRevisionDigest != request.RuntimeRevisionDigest || request.ProviderDiagnostic.Attempt != request.Attempt ||
@@ -766,8 +877,8 @@ func (request RunnerCompletionRequest) Validate() error {
 	return nil
 }
 
-// SessionPVCName является единственным каноническим преобразованием opaque
-// Session ref в имя принадлежащего runtime PVC.
+// SessionPVCName canonically derives the runtime-owned PVC name from a valid opaque session reference.
+// SessionPVCName канонически выводит имя PVC runtime из корректной непрозрачной ссылки сессии.
 func SessionPVCName(sessionRef string) (string, error) {
 	if !opaqueReferencePattern.MatchString(sessionRef) {
 		return "", errors.New("session reference is invalid")
@@ -776,6 +887,8 @@ func SessionPVCName(sessionRef string) (string, error) {
 	return "runtime-session-" + hex.EncodeToString(digest[:8]), nil
 }
 
+// sha256Sum returns the unprefixed lowercase SHA-256 digest of the exact supplied bytes.
+// sha256Sum возвращает строчный SHA-256 без префикса для точных переданных байтов.
 func sha256Sum(value []byte) string {
 	digest := sha256.New()
 	_, _ = digest.Write(value)

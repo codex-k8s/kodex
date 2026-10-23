@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestClosedModelCompatibility accepts known fixed profiles, rejects unknown
+// model names and invalid hints, and checks fresh catalog slice allocation.
+// RU: TestClosedModelCompatibility принимает известные профили, отклоняет
+// неизвестные модели и неверные подсказки и проверяет новые срезы каталога.
 func TestClosedModelCompatibility(t *testing.T) {
 	for _, profile := range OpenAICatalog().Models {
 		if err := Validate(profile.Model, "ru", Parameters{}); err != nil {
@@ -46,6 +50,10 @@ func TestClosedModelCompatibility(t *testing.T) {
 	}
 }
 
+// TestDocumentedMiniSnapshotsKeepExactCompatibility pins the two dated mini
+// snapshots, their legacy marker and the exclusion of new-model language hints.
+// RU: TestDocumentedMiniSnapshotsKeepExactCompatibility закрепляет два
+// датированных mini-snapshot, legacy-признак и запрет новых языковых подсказок.
 func TestDocumentedMiniSnapshotsKeepExactCompatibility(t *testing.T) {
 	for _, snapshot := range []string{"gpt-4o-mini-transcribe-2025-12-15", "gpt-4o-mini-transcribe-2025-03-20"} {
 		profile, ok := Lookup(snapshot)

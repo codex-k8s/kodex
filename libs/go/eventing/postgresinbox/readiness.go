@@ -9,7 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Check сверяет точный schema contract и рабочий runtime principal path.
+// Check verifies exact schema, grants, registered effects, and a working runtime-principal query path.
+// Check проверяет точную схему, права, зарегистрированные эффекты и рабочий запрос runtime-учётной записи.
 func (processor *Processor) Check(ctx context.Context) (err error) {
 	if err := processor.enter(); err != nil {
 		return err
@@ -86,6 +87,8 @@ func (processor *Processor) Check(ctx context.Context) (err error) {
 	return err
 }
 
+// validateSchemaObjects rejects missing or changed required objects and all unexpected non-extension objects.
+// validateSchemaObjects отклоняет отсутствующие и изменённые обязательные объекты и все лишние объекты вне разрешённых индексов.
 func validateSchemaObjects(actual map[string]string) error {
 	for key, expected := range requiredSchemaObjects() {
 		if actual[key] != expected {
@@ -101,6 +104,8 @@ func validateSchemaObjects(actual map[string]string) error {
 	return nil
 }
 
+// schemaMismatch preserves programmatic cause matching while hiding database diagnostics from display.
+// schemaMismatch сохраняет программное сопоставление причины, скрывая диагностику базы при отображении.
 func schemaMismatch(cause error) error {
 	if cause == nil {
 		return ErrSchemaMismatch
@@ -108,6 +113,8 @@ func schemaMismatch(cause error) error {
 	return wrapSafe(errorTextSchemaMismatch, errors.Join(ErrSchemaMismatch, cause))
 }
 
+// requiredSchemaObjects pins the migration marker, function, table, privilege, and structure signatures.
+// requiredSchemaObjects закрепляет сигнатуры маркера миграции, функции, таблиц, прав и структуры.
 func requiredSchemaObjects() map[string]string {
 	required := map[string]string{
 		"marker/postgresinbox": strconv.Itoa(schemaVersion) + "|" + schemaDigestHex,
@@ -144,6 +151,8 @@ func requiredSchemaObjects() map[string]string {
 	return required
 }
 
+// addRequiredColumns pins each inbox column's type, nullability, generation, and default.
+// addRequiredColumns закрепляет тип, обязательность, генерацию и значение по умолчанию каждого столбца inbox.
 func addRequiredColumns(required map[string]string) {
 	columns := map[string]string{
 		"runtime_event_schema_versions.component":     columnSignature("text", true, "-", "-"),
@@ -218,6 +227,8 @@ func addRequiredColumns(required map[string]string) {
 	}
 }
 
+// columnSignature serializes one expected column into the inspection query's exact field order.
+// columnSignature кодирует ожидаемый столбец в точном порядке полей диагностического запроса.
 func columnSignature(typeName string, notNull bool, generated, defaultExpression string) string {
 	notNullValue := "0"
 	if notNull {
@@ -226,6 +237,8 @@ func columnSignature(typeName string, notNull bool, generated, defaultExpression
 	return strings.Join([]string{typeName, notNullValue, "-", generated, defaultExpression}, "|")
 }
 
+// addRequiredConstraints pins keys and check clauses that enforce inbox ordering and lease invariants.
+// addRequiredConstraints закрепляет ключи и проверки, поддерживающие порядок и ограничения аренды inbox.
 func addRequiredConstraints(required map[string]string) {
 	constraints := map[string]string{
 		"runtime_event_schema_versions.runtime_event_schema_versions_pkey":            "p|1|0|0|1|PRIMARYKEYcomponent",
@@ -284,6 +297,8 @@ func addRequiredConstraints(required map[string]string) {
 	}
 }
 
+// addRequiredIndexes pins exact bounded claim, lease, ordering, retention, and repair access paths.
+// addRequiredIndexes закрепляет точные пути выборки для захвата, аренды, порядка, хранения и исправления.
 func addRequiredIndexes(required map[string]string) {
 	indexes := map[string]string{
 		"runtime_inbox_events_claim_idx": indexSignature(
@@ -328,6 +343,8 @@ func addRequiredIndexes(required map[string]string) {
 	}
 }
 
+// indexSignature serializes required readiness flags, key counts, predicate, and canonical definition.
+// indexSignature кодирует обязательные флаги готовности, число ключей, предикат и каноническое определение.
 func indexSignature(keyCount int, keys, predicate, definition string) string {
 	return strings.Join([]string{
 		"0", // unique

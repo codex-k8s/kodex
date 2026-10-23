@@ -9,6 +9,8 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
+// TestGateDeliveryCarriesExactTupleWithoutNumericPrecisionLoss roundtrips a gate version above JavaScript's exact integer range as canonical string props.
+// RU: TestGateDeliveryCarriesExactTupleWithoutNumericPrecisionLoss передаёт версию gate выше точного целого диапазона JavaScript строковыми свойствами без потери точности.
 func TestGateDeliveryCarriesExactTupleWithoutNumericPrecisionLoss(t *testing.T) {
 	gate := &gateContext{ref: "gate_fixture", runRef: "run_fixture", version: 9007199254740993}
 	client := testAPI(roundTripFunc(func(request *http.Request) (*http.Response, error) {
@@ -31,6 +33,8 @@ func TestGateDeliveryCarriesExactTupleWithoutNumericPrecisionLoss(t *testing.T) 
 	}
 }
 
+// TestGateReadbackMustMatchDelivery rejects changed gate/run/version or numeric version props after dispatch without declaring no-effect retry safety.
+// RU: TestGateReadbackMustMatchDelivery отклоняет изменённые gate/run/version или числовую версию после отправки, не объявляя безопасный повтор без эффекта.
 func TestGateReadbackMustMatchDelivery(t *testing.T) {
 	gate := &gateContext{ref: "gate_fixture", runRef: "run_fixture", version: 1}
 	for _, mutate := range []func(*model.Post){
@@ -56,6 +60,8 @@ func TestGateReadbackMustMatchDelivery(t *testing.T) {
 	}
 }
 
+// TestGateReplyReadsRootAndRequiresBotAuthor checks exact root lookup, bot authorship, channel binding and canonical version text before returning correlation.
+// RU: TestGateReplyReadsRootAndRequiresBotAuthor проверяет точное чтение корня, авторство бота, привязку канала и канонический текст версии до возврата корреляции.
 func TestGateReplyReadsRootAndRequiresBotAuthor(t *testing.T) {
 	gate := &gateContext{ref: "gate_fixture", runRef: "run_fixture", version: 7}
 	for _, tc := range []struct {
@@ -97,6 +103,8 @@ func TestGateReplyReadsRootAndRequiresBotAuthor(t *testing.T) {
 	}
 }
 
+// TestGateClaimsRejectIncompleteAndUnexpectedTuple rejects partial gate claims and stray gate fields while permitting an ordinary notification with only run context.
+// RU: TestGateClaimsRejectIncompleteAndUnexpectedTuple отклоняет неполные gate claim и лишние поля gate, допуская обычное уведомление только с контекстом запуска.
 func TestGateClaimsRejectIncompleteAndUnexpectedTuple(t *testing.T) {
 	for _, claim := range []*controlplanev1.InteractionDeliveryClaim{
 		{CapabilityKey: "mattermost.gate_decisions"},

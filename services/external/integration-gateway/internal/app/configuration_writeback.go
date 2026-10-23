@@ -11,20 +11,43 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// maximumConfigurationWriteBackOperation caps provider execution before reserved owner-finalization time is deducted from lease and work deadlines.
+// RU: maximumConfigurationWriteBackOperation ограничивает provider-исполнение до вычета owner-финализации из сроков аренды и работы.
 const maximumConfigurationWriteBackOperation = 30 * time.Second
 
+// errConfigurationWriteBack hides malformed owner-response details while rejecting an unprovable writeback lifecycle transition.
+// RU: errConfigurationWriteBack скрывает детали неверного owner-ответа и отклоняет неподтверждённый переход жизненного цикла записи.
 var errConfigurationWriteBack = errors.New("configuration writeback owner response is invalid")
 
+// writeBackExecution separates preparation, external effects and readback so the application can require owner receipts before mutation.
+// RU: writeBackExecution разделяет подготовку, внешние эффекты и readback, позволяя приложению требовать owner-квитанции до изменения.
 type writeBackExecution interface {
+	// Close releases execution-owned resources; the application defers it after every successful open.
+	// RU: Close освобождает ресурсы исполнения; приложение откладывает вызов после каждого успешного открытия.
 	Close()
+	// PrepareCandidate produces exact commit, tree and blob pins for the owner's begin-effect request.
+	// RU: PrepareCandidate формирует точные привязки commit, tree и blob для owner-запроса начала эффекта.
 	PrepareCandidate(context.Context) (integration.ConfigurationWriteBackCandidate, error)
+	// PushCandidate publishes the candidate only after the caller validates a fresh begin-effect receipt permitting execution.
+	// RU: PushCandidate публикует кандидата только после проверки вызывающим свежей begin-effect квитанции, разрешающей исполнение.
 	PushCandidate(context.Context, integration.ConfigurationWriteBackCandidate) error
+	// VerifyBranch reads back the pinned candidate without using a failed push as permission to resend it.
+	// RU: VerifyBranch сверяет закреплённого кандидата, не используя ошибку push как разрешение повторной отправки.
 	VerifyBranch(context.Context, integration.ConfigurationWriteBackCandidate) error
+	// FindPullRequest locates the claimed candidate's pull request and distinguishes confirmed absence from a failed lookup.
+	// RU: FindPullRequest ищет pull request назначенного кандидата и отличает подтверждённое отсутствие от ошибки поиска.
 	FindPullRequest(context.Context, string) (integration.ConfigurationWriteBackPullRequest, bool, error)
+	// CreatePullRequest performs creation without replacing the caller's mandatory subsequent readback.
+	// RU: CreatePullRequest выполняет создание, не заменяя обязательный последующий readback вызывающего кода.
 	CreatePullRequest(context.Context, string) (integration.ConfigurationWriteBackPullRequest, error)
 }
+
+// writeBackOpen binds an execution to one owner-claimed item and its operation context, not to authority inferred from caller-supplied identifiers.
+// RU: writeBackOpen связывает исполнение с одной назначенной owner-работой и контекстом операции, а не с полномочиями из переданных идентификаторов.
 type writeBackOpen func(context.Context, *cp.ManagedConfigurationGitWriteBackWork) (writeBackExecution, error)
 
+// processConfigurationWriteBackWork opens the concrete provider execution with effect metrics and delegates the owner-controlled lifecycle to processWriteBack.
+// RU: processConfigurationWriteBackWork открывает конкретное provider-исполнение с метриками эффектов и передаёт owner-жизненный цикл в processWriteBack.
 func processConfigurationWriteBackWork(ctx context.Context, control cp.ManagedConfigurationGitWriteBackWorkServiceClient, adapter *integration.Adapter, metrics *businessmetrics.Metrics, config Config) (int, error) {
 	return processWriteBack(ctx, control, func(ctx context.Context, work *cp.ManagedConfigurationGitWriteBackWork) (writeBackExecution, error) {
 		execution, err := adapter.OpenConfigurationWriteBack(ctx, work)
@@ -35,22 +58,37 @@ func processConfigurationWriteBackWork(ctx context.Context, control cp.ManagedCo
 	}, config)
 }
 
+// observedWriteBack decorates only external push and pull-request creation attempts, keeping preparation, readback and owner completion separate.
+// RU: observedWriteBack учитывает только внешние попытки push и создания pull request, отделяя подготовку, readback и owner completion.
 type observedWriteBack struct {
 	writeBackExecution
 	metrics *businessmetrics.Metrics
 }
 
+// PushCandidate records the attempted branch effect after the provider returns, independently of later readback or owner finalization.
+// RU: PushCandidate учитывает попытку изменения ветки после возврата провайдера независимо от последующего readback и owner-финализации.
 func (execution *observedWriteBack) PushCandidate(ctx context.Context, candidate integration.ConfigurationWriteBackCandidate) error {
 	err := execution.writeBackExecution.PushCandidate(ctx, candidate)
 	execution.metrics.ConfigurationWriteBack(true, err == nil)
 	return err
 }
+
+// CreatePullRequest records the attempted effect and preserves both provider result and error for subsequent reconciliation.
+// RU: CreatePullRequest учитывает попытку эффекта и сохраняет результат и ошибку провайдера для последующего согласования.
 func (execution *observedWriteBack) CreatePullRequest(ctx context.Context, commit string) (integration.ConfigurationWriteBackPullRequest, error) {
 	result, err := execution.writeBackExecution.CreatePullRequest(ctx, commit)
 	execution.metrics.ConfigurationWriteBack(false, err == nil)
 	return result, err
 }
 
+// processWriteBack claims one item and reserves two owner-request budgets before lease expiry and work deadline; successful open always receives deferred Close.
+// RU: processWriteBack получает одну работу и резервирует два owner-запроса до конца аренды и срока работы; успешное открытие всегда получает отложенный Close.
+// Branch and pull-request effects require an exact begin receipt; read-only recovery or AlreadyStarted suppresses new provider mutations.
+// RU: Эффекты ветки и pull request требуют точной begin-квитанции; read-only восстановление либо AlreadyStarted запрещают новые provider-изменения.
+// Push and creation acknowledgements are reconciled by readback, never blind resend; owner RPC errors return without hidden retries.
+// RU: Подтверждения push и создания согласуются через readback, а не слепой повтор; ошибки owner RPC возвращаются без скрытых повторов.
+// A count of one means an owner-confirmed completion or failure report, not necessarily a successful proposal.
+// RU: Счётчик один означает подтверждённый владельцем отчёт о завершении либо ошибке, а не обязательно успешное предложение.
 func processWriteBack(ctx context.Context, control cp.ManagedConfigurationGitWriteBackWorkServiceClient, open writeBackOpen, config Config) (int, error) {
 	if control == nil {
 		return 0, errConfigurationWriteBack
@@ -148,6 +186,10 @@ func processWriteBack(ctx context.Context, control cp.ManagedConfigurationGitWri
 	return completeWriteBack(ctx, control, work, config, candidate, found)
 }
 
+// beginWriteBack submits cloned lease, candidate and approved-content pins, then requires a matching EFFECT_STARTED owner receipt.
+// RU: beginWriteBack передаёт копию аренды, привязки кандидата и одобренного содержимого, затем требует совпадающую owner-квитанцию EFFECT_STARTED.
+// Its boolean is AlreadyStarted, requiring readback rather than a repeated effect; an uncertain owner RPC is not retried here.
+// RU: Возвращаемый boolean — AlreadyStarted, требующий readback вместо повтора эффекта; неопределённый owner RPC здесь не повторяется.
 func beginWriteBack(ctx context.Context, control cp.ManagedConfigurationGitWriteBackWorkServiceClient, work *cp.ManagedConfigurationGitWriteBackWork, config Config, candidate integration.ConfigurationWriteBackCandidate) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, config.RequestTimeout)
 	defer cancel()
@@ -161,6 +203,10 @@ func beginWriteBack(ctx context.Context, control cp.ManagedConfigurationGitWrite
 	return response.GetAlreadyStarted(), nil
 }
 
+// failWriteBack reports a classified cause once unless the parent is cancelled, preserving exact lease pins within the owner-request timeout.
+// RU: failWriteBack однократно сообщает классифицированную причину, если родитель не отменён, сохраняя точные привязки аренды в пределах owner-таймаута.
+// Only matching QUEUED, FAILED or UNKNOWN_OUTCOME receipts count as processed; failure reporting never fabricates a successful effect.
+// RU: Только совпадающие квитанции QUEUED, FAILED либо UNKNOWN_OUTCOME считаются обработанными; сообщение об ошибке не выдумывает успешный эффект.
 func failWriteBack(ctx context.Context, control cp.ManagedConfigurationGitWriteBackWorkServiceClient, work *cp.ManagedConfigurationGitWriteBackWork, config Config, cause error) (int, error) {
 	if ctx.Err() != nil {
 		return 0, ctx.Err()
@@ -182,6 +228,10 @@ func failWriteBack(ctx context.Context, control cp.ManagedConfigurationGitWriteB
 	}
 }
 
+// completeWriteBack reports the read-back effect with exact lease, commit, approved content and pull-request pins, without retrying a lost ACK.
+// RU: completeWriteBack сообщает проверенный readback эффект с точными арендой, commit, одобренным содержимым и привязками pull request без повтора потерянного ACK.
+// Branch receipts require confirmation time and QUEUED or FAILED state; pull requests also require SUCCEEDED, exact ref/URL and confirmation time.
+// RU: Квитанции ветки требуют времени подтверждения и состояния QUEUED либо FAILED; pull request дополнительно требует SUCCEEDED, точных ref/URL и времени подтверждения.
 func completeWriteBack(ctx context.Context, control cp.ManagedConfigurationGitWriteBackWorkServiceClient, work *cp.ManagedConfigurationGitWriteBackWork, config Config, candidate integration.ConfigurationWriteBackCandidate, pullRequest integration.ConfigurationWriteBackPullRequest) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, config.RequestTimeout)
 	defer cancel()
@@ -206,6 +256,12 @@ func completeWriteBack(ctx context.Context, control cp.ManagedConfigurationGitWr
 	return 1, nil
 }
 
+// validWriteBackReceipt requires a newer known-field proposal preserving exact configuration, source, connection, repository, approval and content pins.
+// RU: validWriteBackReceipt требует новую версию предложения без неизвестных полей с сохранением точных привязок конфигурации, источника, подключения, репозитория, одобрения и содержимого.
+// Kind, format, base-content hash and creation/expiry/approval times must remain exact, and the failure enum must be known.
+// RU: Kind, format, хеш исходного содержимого и времена создания, истечения и одобрения должны совпадать точно, а failure enum должен быть известен.
+// Callers separately validate transition state and effect evidence; identity matching alone never authorizes a write.
+// RU: Вызывающий отдельно проверяет состояние перехода и доказательства эффекта; совпадение идентичности само по себе не разрешает запись.
 func validWriteBackReceipt(p *cp.ManagedConfigurationGitWriteBack, work *cp.ManagedConfigurationGitWriteBackWork) bool {
 	previous := work.GetProposal()
 	if p == nil || p.GetKind() != previous.GetKind() || p.GetContentFormat() != previous.GetContentFormat() || p.GetBaseContentSha256() != previous.GetBaseContentSha256() || !proto.Equal(p.GetCreatedAt(), previous.GetCreatedAt()) || !proto.Equal(p.GetExpiresAt(), previous.GetExpiresAt()) || !proto.Equal(p.GetApprovedAt(), previous.GetApprovedAt()) {

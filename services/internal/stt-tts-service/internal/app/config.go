@@ -13,16 +13,34 @@ import (
 )
 
 const (
-	policyTarget     = "dns:///control-plane.kodex-system.svc:8443"
-	policySNI        = "control-plane.kodex-system.svc.cluster.local"
+	// policyTarget pins the sole control-plane endpoint used for owner policy and trusted-authority resolution.
+	// RU: policyTarget закрепляет единственный адрес control-plane для разрешения политики владельца и trusted authority.
+	policyTarget = "dns:///control-plane.kodex-system.svc:8443"
+	// policySNI pins the policy dependency's certificate hostname in the protected RPC profile.
+	// RU: policySNI закрепляет имя сертификата зависимости политики в защищённом RPC профиле.
+	policySNI = "control-plane.kodex-system.svc.cluster.local"
+	// credentialTarget pins the sole secret-broker endpoint for managed STT credential projection.
+	// RU: credentialTarget закрепляет единственный адрес secret-broker для управляемой проекции реквизитов STT.
 	credentialTarget = "dns:///secret-broker.kodex-system.svc:8443"
-	credentialSNI    = "secret-broker.kodex-system.svc.cluster.local"
-	requestTimeout   = 20 * time.Second
-	startupTimeout   = 30 * time.Second
+	// credentialSNI pins the secret-broker certificate hostname independently of the policy service identity.
+	// RU: credentialSNI закрепляет имя сертификата secret-broker отдельно от идентичности сервиса политики.
+	credentialSNI = "secret-broker.kodex-system.svc.cluster.local"
+	// requestTimeout fixes the complete STT request ceiling; shorter caller or authority deadlines still apply.
+	// RU: requestTimeout фиксирует верхний срок полного STT запроса; более короткие сроки клиента или полномочий сохраняются.
+	requestTimeout = 20 * time.Second
+	// startupTimeout bounds process dependency construction and the initial local readiness barrier.
+	// RU: startupTimeout ограничивает создание зависимостей процесса и первоначальный локальный readiness barrier.
+	startupTimeout = 30 * time.Second
+	// readinessTimeout fixes the per-check authority, connection and protected-path diagnostic budget.
+	// RU: readinessTimeout фиксирует бюджет отдельной проверки authority, соединения и диагностики защищённого пути.
 	readinessTimeout = 5 * time.Second
-	shutdownTimeout  = 30 * time.Second
+	// shutdownTimeout records the fixed shutdown configuration accepted by this service's deployment contract.
+	// RU: shutdownTimeout задаёт фиксированную настройку shutdown, принимаемую контрактом развёртывания сервиса.
+	shutdownTimeout = 30 * time.Second
 )
 
+// Config holds typed egress expectations, listener/spool locations, profile-dependent RPC credential paths and fixed lifecycle budgets, not provider secret values.
+// RU: Config содержит типизированные ожидания egress, listener/spool, профильные пути реквизитов RPC и фиксированные бюджеты жизненного цикла, а не значения секретов провайдера.
 type Config struct {
 	RPCProfile              string `env:"KODEX_RPC_PROFILE"`
 	Egress                  openai.EgressConfig
@@ -51,6 +69,8 @@ type Config struct {
 	ShutdownTimeout         time.Duration `env:"STT_SHUTDOWN_TIMEOUT"`
 }
 
+// loadConfig parses environment overrides over canonical deployment defaults and validates the full configuration before dependency construction.
+// RU: loadConfig разбирает переменные окружения поверх канонических настроек развёртывания и проверяет конфигурацию до создания зависимостей.
 func loadConfig() (Config, error) {
 	config := Config{
 		GRPCListen: ":8443", TechnicalListen: ":9090", SpoolDirectory: "/var/lib/kodex/stt-spool",
@@ -75,6 +95,10 @@ func loadConfig() (Config, error) {
 	return config, config.validate()
 }
 
+// validate enforces the closed RPC profile, egress revision/digest, exact owner endpoints, fixed timeouts and canonical spool/credential paths.
+// RU: validate проверяет закрытый RPC профиль, egress revision/digest, точные адреса владельцев, фиксированные timeout и канонические spool/credential пути.
+// Only the explicit trusted-cluster profile omits local TLS/authority-file requirements; it does not relax endpoint or egress pins.
+// RU: Только явный trusted-cluster профиль исключает требования локальных TLS/authority файлов, не ослабляя координаты адресов или egress.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("STT RPC profile is unsupported")

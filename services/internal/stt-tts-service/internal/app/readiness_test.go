@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
-	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	"os"
 	"testing"
 	"time"
@@ -11,19 +9,22 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
-	transcriptionservice "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
-	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/transcriptiontest"
 	transportgrpc "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/transport/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// readinessVerifier supplies a mutable local verifier-ready flag for testing propagation into one shared readiness snapshot.
+// RU: readinessVerifier задаёт изменяемый локальный флаг готовности verifier для проверки его передачи в единый readiness снимок.
 type readinessVerifier struct {
 	internalrpcauthorityv1.AuthorizationVerifierServiceClient
 	ready bool
 }
 
+// CheckReadiness returns the configured synthetic flag without requiring an authority socket or verifier workload.
+// RU: CheckReadiness возвращает настроенный синтетический флаг без authority сокета или verifier workload.
 func (verifier *readinessVerifier) CheckReadiness(
 	context.Context,
 	*internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest,
@@ -32,35 +33,23 @@ func (verifier *readinessVerifier) CheckReadiness(
 	return &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse{Ready: verifier.ready}, nil
 }
 
+// readinessMetric records the most recently published local ready gauge without registering Prometheus collectors.
+// RU: readinessMetric сохраняет последнюю опубликованную локальную метрику готовности без регистрации Prometheus collector.
 type readinessMetric struct{ ready bool }
 
+// SetReady updates only the fixture gauge for comparison with the authoritative readiness snapshot.
+// RU: SetReady обновляет только метрику оснастки для сравнения с авторитетным readiness снимком.
 func (metric *readinessMetric) SetReady(ready bool) { metric.ready = ready }
 
-type readinessService struct{}
-
-func (readinessService) Catalog() modelprofile.Catalog { return modelprofile.OpenAICatalog() }
-
-func (readinessService) GetModelCatalog(context.Context, value.Principal) (modelprofile.Catalog, error) {
-	return modelprofile.OpenAICatalog(), nil
-}
-
-func (readinessService) CheckAvailability(context.Context, value.Principal, string) (transcriptionservice.Availability, error) {
-	return transcriptionservice.Availability{}, errors.New("unavailable")
-}
-
-func (readinessService) Transcribe(context.Context, transcriptionservice.Input) (value.TranscriptionResult, error) {
-	return value.TranscriptionResult{}, nil
-}
-func (readinessService) CheckLocal(context.Context) error         { return nil }
-func (readinessService) CheckProtectedPath(context.Context) error { return errors.New("pending") }
-
+// TestGRPCReadinessUsesSameSnapshotForVerifierAndSpoolDegradation checks consistent metric, local snapshot and RPC results across verifier failure and removed spool.
+// RU: TestGRPCReadinessUsesSameSnapshotForVerifierAndSpoolDegradation проверяет согласованность метрики, локального снимка и RPC при отказе verifier и удалённом spool.
 func TestGRPCReadinessUsesSameSnapshotForVerifierAndSpoolDegradation(t *testing.T) {
 	spool := t.TempDir()
 	verifier := &readinessVerifier{ready: true}
 	checks := []checker{verifierReadiness{verifier}, spoolReadiness{spool}}
 	readiness := serviceruntime.NewReadiness()
 	metric := &readinessMetric{}
-	server, err := transportgrpc.New(readinessService{}, spool, readiness, time.Second)
+	server, err := transportgrpc.New(transcriptiontest.Service{}, spool, readiness, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

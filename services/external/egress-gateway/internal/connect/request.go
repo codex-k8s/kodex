@@ -1,4 +1,5 @@
-// Package connect разбирает ограниченный bodyless HTTP CONNECT.
+// Package connect parses a bounded, bodyless HTTP CONNECT request.
+// Package connect разбирает ограниченный HTTP CONNECT без тела.
 package connect
 
 import (
@@ -15,58 +16,92 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// maximumCredentialBytes bounds the decoded runtime credential before policy evaluation.
+// maximumCredentialBytes ограничивает размер декодированного credential до проверки политики.
 const maximumCredentialBytes = 24 << 10
 
-// Reason — закрытый набор причин отказа CONNECT parser.
+// Reason enumerates closed, non-secret rejection categories for CONNECT parsing.
+// Reason перечисляет закрытые категории отказа разбора CONNECT без секретных данных.
 type Reason string
 
 const (
-	ReasonMalformed              Reason = "malformed"
-	ReasonMethod                 Reason = "method"
-	ReasonAuthority              Reason = "authority"
-	ReasonBody                   Reason = "body"
-	ReasonCredentials            Reason = "credentials"
+	// ReasonMalformed identifies invalid HTTP request framing.
+	// ReasonMalformed обозначает неверное обрамление HTTP-запроса.
+	ReasonMalformed Reason = "malformed"
+	// ReasonMethod identifies a method outside CONNECT or the exact readiness request.
+	// ReasonMethod обозначает метод вне CONNECT или точного запроса готовности.
+	ReasonMethod Reason = "method"
+	// ReasonAuthority identifies a malformed or mismatched destination and Host header.
+	// ReasonAuthority обозначает неверный адресат или несовпадение с заголовком Host.
+	ReasonAuthority Reason = "authority"
+	// ReasonBody identifies forbidden request-body framing or buffered body bytes.
+	// ReasonBody обозначает запрещённое обрамление тела или уже прочитанные байты тела.
+	ReasonBody Reason = "body"
+	// ReasonCredentials identifies an invalid or unexpected credential header.
+	// ReasonCredentials обозначает неверный или неожиданный заголовок credential.
+	ReasonCredentials Reason = "credentials"
+	// ReasonAuthenticationRequired identifies a CONNECT request without its required proxy credential.
+	// ReasonAuthenticationRequired обозначает CONNECT без обязательного proxy credential.
 	ReasonAuthenticationRequired Reason = "authentication_required"
-	ReasonOversized              Reason = "oversized"
-	ReasonPolicy                 Reason = "policy"
+	// ReasonOversized identifies a request exceeding its byte or header-count limits.
+	// ReasonOversized обозначает превышение лимита байтов или числа заголовков.
+	ReasonOversized Reason = "oversized"
+	// ReasonPolicy identifies a parsed destination denied by the active policy.
+	// ReasonPolicy обозначает разобранный адресат, отклонённый активной политикой.
+	ReasonPolicy Reason = "policy"
 )
 
-// Error не содержит недоверенные request values.
+// Error carries only a closed rejection reason, never untrusted request values.
+// Error содержит только закрытую причину отказа, без недоверенных значений запроса.
 type Error struct{ Reason Reason }
 
+// Error returns a stable diagnostic string built only from the closed reason.
+// Error возвращает устойчивую диагностику только из закрытой причины.
 func (err *Error) Error() string { return "CONNECT request rejected: " + string(err.Reason) }
 
-// Kind — закрытый набор допустимых запросов listener.
+// Kind distinguishes the only request forms accepted by this listener.
+// Kind различает единственные формы запросов, допускаемые этим listener.
 type Kind uint8
 
 const (
+	// KindConnect denotes a validated tunnel request.
+	// KindConnect обозначает проверенный запрос туннеля.
 	KindConnect Kind = iota + 1
+	// KindReadiness denotes the exact compatibility readiness request.
+	// KindReadiness обозначает точный совместимый запрос готовности.
 	KindReadiness
 )
 
-// Target — проверенный exact CONNECT destination.
+// Target holds the normalized, exact CONNECT destination after authority checks.
+// Target содержит нормализованный точный адресат CONNECT после проверки authority.
 type Target struct {
 	Hostname string
 	Port     int
 }
 
-// Request — проверенный CONNECT либо compatibility readiness request.
+// Request holds a validated CONNECT or compatibility readiness request.
+// Request содержит проверенный CONNECT либо совместимый запрос готовности.
 type Request struct {
 	Kind   Kind
 	Target Target
 }
 
-// Parse bounded-читает request, проверяет authority/Host и сохраняет reader для ClientHello.
+// Parse reads a bounded request, checks authority against Host, and retains the reader for ClientHello.
+// Parse ограниченно читает запрос, сверяет authority с Host и сохраняет reader для ClientHello.
 func Parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows func(string, int) bool) (Request, *bufio.Reader, error) {
 	return parse(connection, maximumBytes, timeout, allows, nil)
 }
 
-// ParseAuthenticated принимает только Basic credential служебного runtime
-// proxy. Credential передаётся проверяющей policy и не сохраняется в Request.
+// ParseAuthenticated accepts only the runtime proxy's Basic credential and passes it to policy.
+// ParseAuthenticated принимает только Basic credential служебного proxy и передаёт его политике.
+// The credential is not retained in the returned Request.
+// Credential не сохраняется в возвращаемом Request.
 func ParseAuthenticated(connection net.Conn, maximumBytes int, timeout time.Duration, allows func(string, int, string) bool) (Request, *bufio.Reader, error) {
 	return parse(connection, maximumBytes, timeout, nil, allows)
 }
 
+// parse enforces framing, headers, credentials, and active policy before returning a tunnel target.
+// parse проверяет обрамление, заголовки, credential и активную политику до возврата адресата.
 func parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows func(string, int) bool, allowsAuthenticated func(string, int, string) bool) (Request, *bufio.Reader, error) {
 	if connection == nil || maximumBytes < 1024 || timeout <= 0 || (allows == nil) == (allowsAuthenticated == nil) {
 		return Request{}, nil, &Error{Reason: ReasonMalformed}
@@ -175,6 +210,8 @@ func parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows 
 	return request, reader, nil
 }
 
+// parseProxyCredential decodes only the bounded Basic form reserved for runtime proxy grants.
+// parseProxyCredential декодирует только ограниченную форму Basic для runtime proxy grants.
 func parseProxyCredential(value string) (string, error) {
 	const prefix = "Basic "
 	if !strings.HasPrefix(value, prefix) {
@@ -191,6 +228,8 @@ func parseProxyCredential(value string) (string, error) {
 	return credential, nil
 }
 
+// parseAuthority normalizes a CONNECT host and admits only registered tunnel ports.
+// parseAuthority нормализует узел CONNECT и допускает только зарегистрированные порты туннеля.
 func parseAuthority(value string) (Target, error) {
 	if value == "" || strings.TrimSpace(value) != value || strings.Contains(value, "@") {
 		return Target{}, &Error{Reason: ReasonAuthority}
@@ -210,6 +249,8 @@ func parseAuthority(value string) (Target, error) {
 	return Target{Hostname: hostname, Port: port}, nil
 }
 
+// parseReadinessAuthority admits only service readiness ports and a normalized host.
+// parseReadinessAuthority допускает только служебные порты готовности и нормализованный узел.
 func parseReadinessAuthority(value string) (Target, error) {
 	if value == "" || strings.TrimSpace(value) != value || strings.Contains(value, "@") {
 		return Target{}, &Error{Reason: ReasonAuthority}
@@ -226,6 +267,8 @@ func parseReadinessAuthority(value string) (Target, error) {
 	return Target{Hostname: hostname, Port: port}, nil
 }
 
+// readLine requires CRLF and counts every consumed byte against the request limit.
+// readLine требует CRLF и учитывает каждый прочитанный байт в лимите запроса.
 func readLine(reader *bufio.Reader, total *int, maximum int) (string, error) {
 	value, err := reader.ReadSlice('\n')
 	*total += len(value)
@@ -244,6 +287,8 @@ func readLine(reader *bufio.Reader, total *int, maximum int) (string, error) {
 	return string(value[:len(value)-2]), nil
 }
 
+// validHeaderName accepts only lowercase HTTP token characters after name normalization.
+// validHeaderName допускает только символы HTTP token после нормализации имени в нижний регистр.
 func validHeaderName(value string) bool {
 	if value == "" {
 		return false
@@ -256,6 +301,8 @@ func validHeaderName(value string) bool {
 	return true
 }
 
+// validHeaderValue rejects control characters that could alter request framing.
+// validHeaderValue отклоняет управляющие символы, способные изменить обрамление запроса.
 func validHeaderValue(value string) bool {
 	for _, character := range value {
 		if character < 0x20 && character != '\t' || character == 0x7f {

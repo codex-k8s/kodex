@@ -8,12 +8,16 @@ import (
 	"time"
 )
 
+// deadlineFixture creates a deterministic one-day workflow clock with synthetic version pins for isolated deadline checks.
+// deadlineFixture создаёт детерминированные суточные часы процесса с синтетическими версиями для изолированных проверок срока исполнения.
 func deadlineFixture() *RuntimeExecutionDeadline {
 	start := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
 	clock := RuntimeExecutionClock{RunRef: "run_fixture01", WorkflowVersionRef: "wfv_fixture01", WorkflowVersionDigest: strings.Repeat("a", 64), TimeoutSeconds: 86400, StartedAt: start, DeadlineAt: start.Add(24 * time.Hour)}
 	return &RuntimeExecutionDeadline{Policy: WorkflowExecutionDeadlinePolicy, EffectiveDeadlineAt: clock.DeadlineAt, Clocks: []RuntimeExecutionClock{clock}}
 }
 
+// TestExecutionDeadlineValidationAndImmutableDigest rejects inconsistent clocks, binds valid deadlines into revision digests and prevents assistant scopes from accepting workflow clocks.
+// TestExecutionDeadlineValidationAndImmutableDigest отклоняет несогласованные часы, включает допустимый срок в дайджест ревизии и запрещает областям помощника принимать часы процесса.
 func TestExecutionDeadlineValidationAndImmutableDigest(t *testing.T) {
 	d := deadlineFixture()
 	if err := d.Validate(); err != nil {
@@ -60,6 +64,8 @@ func TestExecutionDeadlineValidationAndImmutableDigest(t *testing.T) {
 	}
 }
 
+// TestExecutionDeadlineDoesNotUseControllerFallbackOrReset preserves the durable absolute deadline across calls, immediately expires past deadlines and retains the ordinary fallback.
+// TestExecutionDeadlineDoesNotUseControllerFallbackOrReset сохраняет устойчивый абсолютный срок между вызовами, сразу завершает просроченное исполнение и оставляет обычный запасной лимит.
 func TestExecutionDeadlineDoesNotUseControllerFallbackOrReset(t *testing.T) {
 	d := deadlineFixture()
 	d.Clocks[0].StartedAt = time.Now().UTC()
@@ -88,6 +94,8 @@ func TestExecutionDeadlineDoesNotUseControllerFallbackOrReset(t *testing.T) {
 	}
 }
 
+// TestExecutionDeadlineClosedDecoderAndMinimum accepts the earlier stage deadline as the effective minimum and rejects unknown caller-supplied authority fields.
+// TestExecutionDeadlineClosedDecoderAndMinimum принимает более ранний срок этапа как действующий минимум и отклоняет неизвестные поля полномочий, переданные вызывающим.
 func TestExecutionDeadlineClosedDecoderAndMinimum(t *testing.T) {
 	deadline := deadlineFixture()
 	clock := deadline.Clocks[0]

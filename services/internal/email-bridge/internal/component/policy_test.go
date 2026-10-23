@@ -9,6 +9,10 @@ import (
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
 )
 
+// TestMailboxPolicyProfiles exercises read/send combinations of Allow and
+// HumanGate, requiring the fixture approval before credentials and exactly one send.
+// TestMailboxPolicyProfiles проверяет сочетания Allow и HumanGate для чтения/отправки,
+// требуя тестовое подтверждение до реквизитов и ровно одну отправку.
 func TestMailboxPolicyProfiles(t *testing.T) {
 	for _, profile := range []string{"read-allow-send-gate", "all-gate", "all-allow"} {
 		t.Run(profile, func(t *testing.T) {
@@ -46,6 +50,10 @@ func TestMailboxPolicyProfiles(t *testing.T) {
 	}
 }
 
+// TestConfigurationTransportAndScope rejects plaintext, wildcard/IP targets,
+// wrong SNI/folders, invalid generations and incomplete or unknown operation policies.
+// TestConfigurationTransportAndScope отклоняет открытый транспорт, wildcard/IP,
+// неверные SNI/папки, поколения и неполные либо неизвестные политики операций.
 func TestConfigurationTransportAndScope(t *testing.T) {
 	for name, mutate := range map[string]func(*api.Configuration){
 		"plaintext":         func(c *api.Configuration) { c.Mailboxes[0].Smtp.TlsMode = "none" },
@@ -68,6 +76,10 @@ func TestConfigurationTransportAndScope(t *testing.T) {
 	}
 }
 
+// TestTLSUpgradeRefusalHasNoPlaintextFallback makes the local server refuse TLS
+// upgrades and checks no unencrypted authentication, send or deletion follows.
+// TestTLSUpgradeRefusalHasNoPlaintextFallback заставляет локальный сервер отказать
+// в повышении до TLS и проверяет отсутствие открытого входа, отправки и удаления.
 func TestTLSUpgradeRefusalHasNoPlaintextFallback(t *testing.T) {
 	f := newFixture(t, "starttls")
 	f.rejectUpgrade.Store(true)

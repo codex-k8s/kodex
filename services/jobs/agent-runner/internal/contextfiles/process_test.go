@@ -15,6 +15,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// TestContextProcessFixture is the opt-in non-root child fixture: verifies the read-only context and exercises allowed workspace writes or rejected protected writes.
+// Without its mode variable it returns immediately; that return alone does not prove mount isolation and starts no AI agent.
+// TestContextProcessFixture является явно включаемым дочерним образцом без root: проверяет read-only контекст и допустимые записи рабочей области либо запрещённые защищённые записи.
+// Без переменной режима сразу возвращается; такой возврат сам по себе не доказывает изоляцию монтирования и не запускает ИИ-агента.
 func TestContextProcessFixture(t *testing.T) {
 	mode := os.Getenv("KODEX_CONTEXT_PROCESS_TEST")
 	if mode == "" {
@@ -71,6 +75,10 @@ func TestContextProcessFixture(t *testing.T) {
 	}
 }
 
+// TestContextReadOnlyMountAndWritableWorkspaceProcesses runs six synthetic test-binary modes in bounded bwrap user namespaces with explicit writable workspace and read-only context mounts.
+// Checks successful workspace I/O, denied direct/symlink/traversal context writes and unchanged context afterward; no model or cluster is involved.
+// TestContextReadOnlyMountAndWritableWorkspaceProcesses запускает шесть синтетических режимов тестового бинарника в ограниченных пространствах пользователя bwrap с явно записываемой рабочей областью и read-only контекстом.
+// Проверяет успешный ввод-вывод рабочей области, запрет прямой записи, через ссылки и выход по пути в контекст, его неизменность после; модель и кластер не используются.
 func TestContextReadOnlyMountAndWritableWorkspaceProcesses(t *testing.T) {
 	for _, mode := range []string{"writable-workspace", "skill", "memory", "new context", "symlink", "traversal"} {
 		t.Run(mode, func(t *testing.T) {

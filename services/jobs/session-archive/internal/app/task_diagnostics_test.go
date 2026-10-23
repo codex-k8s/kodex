@@ -22,6 +22,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestArchiveRPCObservationClosedCodesAndStages checks every canonical gRPC code and specialized stage without leaking wrapped errors.
+// RU: TestArchiveRPCObservationClosedCodesAndStages проверяет каждый канонический gRPC-код и специализированный этап без утечки обёрнутых ошибок.
 func TestArchiveRPCObservationClosedCodesAndStages(t *testing.T) {
 	task := model.Task{TaskRef: "sat_public_fixture", SessionRef: "ses_public_fixture", Kind: "SNAPSHOT", ContentGeneration: 3, Attempt: 4}
 	for _, stage := range []archiveRPCStage{archiveRPCRenew, archiveRPCFail, archiveRPCCompleteSnapshot,
@@ -53,20 +55,28 @@ func TestArchiveRPCObservationClosedCodesAndStages(t *testing.T) {
 	}
 }
 
+// archiveRPCFailureFixture accepts renewal but rejects the expected owner failure command for diagnostic assertions.
+// RU: archiveRPCFailureFixture допускает продление, но отклоняет ожидаемую owner-команду отказа для проверки диагностики.
 type archiveRPCFailureFixture struct {
 	controlplanev1.SessionArchiveWorkServiceClient
 	called bool
 }
 
+// RenewSessionArchiveTask keeps synthetic authority valid so the fixture reaches its terminal failure path.
+// RU: RenewSessionArchiveTask сохраняет синтетические полномочия действующими, чтобы оснастка дошла до конечного отказа.
 func (client *archiveRPCFailureFixture) RenewSessionArchiveTask(_ context.Context, _ *controlplanev1.RenewSessionArchiveTaskRequest, _ ...grpc.CallOption) (*controlplanev1.RenewSessionArchiveTaskResponse, error) {
 	return &controlplanev1.RenewSessionArchiveTaskResponse{}, nil
 }
 
+// FailSessionArchiveTask records the expected missing-PVC code and returns a private PermissionDenied error.
+// RU: FailSessionArchiveTask фиксирует ожидаемый код отсутствия PVC и возвращает закрытую ошибку PermissionDenied.
 func (client *archiveRPCFailureFixture) FailSessionArchiveTask(_ context.Context, request *controlplanev1.FailSessionArchiveTaskRequest, _ ...grpc.CallOption) (*controlplanev1.FailSessionArchiveTaskResponse, error) {
 	client.called = request.GetSafeErrorCode() == model.SafeErrorPVCMissing
 	return nil, status.Error(codes.PermissionDenied, "SENTINEL_PRIVATE_RPC_ERROR")
 }
 
+// TestArchiveProcessObservesOwnerFailureWithoutErrorText keeps the owner failure outcome and excludes private claim and error data from logs.
+// RU: TestArchiveProcessObservesOwnerFailureWithoutErrorText сохраняет исход owner-отказа и исключает закрытые данные claim и ошибки из журнала.
 func TestArchiveProcessObservesOwnerFailureWithoutErrorText(t *testing.T) {
 	kube, err := controller.New(fake.NewClientset(), controller.Config{WorkerNamespace: "kodex-runtime", Environment: "local",
 		WorkerImage: "registry.invalid/archive@sha256:" + strings.Repeat("a", 64), WorkerServiceAccount: "synthetic-worker",
@@ -104,6 +114,8 @@ func TestArchiveProcessObservesOwnerFailureWithoutErrorText(t *testing.T) {
 	}
 }
 
+// TestArchiveRPCObservationRejectsUnboundedDiagnostics normalizes forged identifiers, stages and codes to bounded fallbacks.
+// RU: TestArchiveRPCObservationRejectsUnboundedDiagnostics нормализует поддельные идентификаторы, этапы и коды в ограниченные запасные значения.
 func TestArchiveRPCObservationRejectsUnboundedDiagnostics(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))

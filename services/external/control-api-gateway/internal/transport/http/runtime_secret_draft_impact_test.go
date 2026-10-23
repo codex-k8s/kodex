@@ -18,13 +18,20 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// secretPlanFixture returns a fresh prepared owner-plan snapshot with bounded versions/count and an expiry one hour ahead for local transport tests. It contains no secret value and is not a persisted or approved plan.
+// secretPlanFixture возвращает новый prepared owner-plan snapshot с ограниченными versions/count и expiry через час для локальных transport tests. Значения секрета не содержит и сохранённым либо подтверждённым планом не является.
 func secretPlanFixture() *cp.RuntimeSecretDraftImpactPlan {
 	return &cp.RuntimeSecretDraftImpactPlan{Ref: "sdip_fixture01", DraftRef: "sdft_fixture01", DraftVersion: 3, SecretRef: "sec_fixture01", SecretVersion: 7, SourceRevision: 2, Digest: strings.Repeat("a", 64), Total: 3, ExpiresAt: timestamppb.New(time.Now().Add(time.Hour)), State: cp.RuntimeSecretDraftImpactState_RUNTIME_SECRET_DRAFT_IMPACT_STATE_PREPARED}
 }
+
+// secretPlanItemFixture returns a fresh pending project consumer with explicit environment, agent and binding lineage plus two secret revision refs. These are synthetic metadata pins, not actual secret contents or runtime grants.
+// secretPlanItemFixture возвращает новый pending project consumer с явными environment, agent и binding lineage и двумя secret revision refs. Это synthetic metadata pins, не содержимое секретов и не runtime grants.
 func secretPlanItemFixture() *cp.RuntimeSecretDraftImpactItem {
 	return &cp.RuntimeSecretDraftImpactItem{Ref: "sdit_fixture01", Outcome: cp.RuntimeSecretDraftImpactOutcome_RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_PENDING, Consumer: &cp.RuntimeSecretImpactConsumer{EnvironmentRef: "renv_fixture01", EnvironmentVersion: 4, EnvironmentVersionRef: "renvv_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", ProjectRef: "prj_fixture01", SecretRevisions: []int64{1, 2}, Consumer: &cp.RuntimeEnvironmentConsumer{ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", VersionRef: "renvv_fixture01", AgentRef: "agt_fixture01", AgentVersion: 5, BindingRef: "renvb_fixture01", BindingVersion: 6}}}
 }
 
+// secretPlanRecorder records a cloned request/method and produces controllable in-memory plan replies or an injected failure. It supports only the tested prepare/query response shapes and does not connect to an owner database or broker.
+// secretPlanRecorder фиксирует клонированный request/method и создаёт управляемые in-memory plan replies либо заданный отказ. Поддерживает только проверяемые prepare/query response shapes, к owner database и broker не подключается.
 type secretPlanRecorder struct {
 	grpc.ClientConnInterface
 	request proto.Message
@@ -33,6 +40,8 @@ type secretPlanRecorder struct {
 	mutate  func(*cp.GetRuntimeSecretDraftImpactResponse)
 }
 
+// Invoke captures request identity before failure handling, optionally mutates a fresh fixture and fills the selected typed prepare/query reply. It simulates transport responses, not owner authorization, expiry reconciliation or state transitions.
+// Invoke сохраняет request identity до обработки отказа, необязательно меняет новый fixture и заполняет выбранный typed prepare/query reply. Имитирует transport responses, не owner authorization, expiry reconciliation и state transitions.
 func (c *secretPlanRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	c.request = proto.Clone(request.(proto.Message))
 	c.method = method
@@ -51,10 +60,15 @@ func (c *secretPlanRecorder) Invoke(_ context.Context, method string, request, r
 	}
 	return nil
 }
+
+// secretPlanHandler constructs the generated HTTP router with query/command clients bound to the in-memory recorder, keeping route and request conversion real while excluding live service calls.
+// secretPlanHandler создаёт generated HTTP router с query/command clients на in-memory recorder, сохраняя настоящий route и request conversion без live service calls.
 func secretPlanHandler(c *secretPlanRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: cp.NewPlatformQueryServiceClient(c), Command: cp.NewPlatformCommandServiceClient(c)}})
 }
 
+// TestSecretDraftImpactPreservesPlanAndServerFiltering pins prepare draft/version/idempotency, exact query/page forwarding and separate immutable-plan versus filtered totals with no-store output. This is synthetic route/metadata coverage, not execution of the owner's plan transaction or environment replacement.
+// TestSecretDraftImpactPreservesPlanAndServerFiltering закрепляет prepare draft/version/idempotency, точную передачу query/page и различие immutable-plan и filtered totals с no-store output. Это synthetic route/metadata coverage, не исполнение owner plan transaction и не замена окружения.
 func TestSecretDraftImpactPreservesPlanAndServerFiltering(t *testing.T) {
 	c := &secretPlanRecorder{}
 	w := httptest.NewRecorder()
@@ -75,6 +89,8 @@ func TestSecretDraftImpactPreservesPlanAndServerFiltering(t *testing.T) {
 	}
 }
 
+// TestSecretDraftImpactFinalOutcomesAndBindingPins covers environment-only and agent-bound applied results plus conflict/forbidden/not-selected outcomes, preserving terminal versus prepared-state rules. Synthetic result pins exercise the public mapper without changing a real environment or binding.
+// TestSecretDraftImpactFinalOutcomesAndBindingPins проверяет environment-only и agent-bound applied results, conflict/forbidden/not-selected outcomes и различие terminal и prepared-state rules. Synthetic result pins проверяют public mapper без изменения реального environment и binding.
 func TestSecretDraftImpactFinalOutcomesAndBindingPins(t *testing.T) {
 	for _, applied := range []bool{false, true} {
 		item := secretPlanItemFixture()
@@ -116,6 +132,8 @@ func TestSecretDraftImpactFinalOutcomesAndBindingPins(t *testing.T) {
 	}
 }
 
+// TestSecretDraftImpactRejectsBrokenOwnerSnapshot rejects malformed plan refs/versions/digest/size/state, unknown or duplicate items, excessive filtered totals and inconsistent effect/binding results with 502. It mutates independent fixture replies, not authoritative plan state.
+// TestSecretDraftImpactRejectsBrokenOwnerSnapshot отклоняет неверные plan refs/versions/digest/size/state, unknown и duplicate items, чрезмерные filtered totals и несогласованные effect/binding results с 502. Меняет независимые fixture replies, не авторитетное состояние плана.
 func TestSecretDraftImpactRejectsBrokenOwnerSnapshot(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.GetRuntimeSecretDraftImpactResponse){
 		"missing plan":            func(r *cp.GetRuntimeSecretDraftImpactResponse) { r.Plan = nil },
@@ -157,6 +175,8 @@ func TestSecretDraftImpactRejectsBrokenOwnerSnapshot(t *testing.T) {
 	}
 }
 
+// TestSecretDraftImpactRejectsStaleCursorAndAuthorityWithoutFilteringLocally preserves mapped owner denials for stale-cursor requests, rejects unbounded query/page before RPC and detects a changed prepare draft-version pin. The recorder injects owner errors; the test does not itself implement cursor signing or actor authorization.
+// TestSecretDraftImpactRejectsStaleCursorAndAuthorityWithoutFilteringLocally сохраняет mapping owner denials для stale-cursor requests, отклоняет unbounded query/page до RPC и обнаруживает изменённый prepare draft-version pin. Recorder задаёт owner errors; сам тест cursor signing и actor authorization не реализует.
 func TestSecretDraftImpactRejectsStaleCursorAndAuthorityWithoutFilteringLocally(t *testing.T) {
 	for code, expected := range map[codes.Code]int{codes.InvalidArgument: 400, codes.NotFound: 404, codes.PermissionDenied: 403, codes.Aborted: 412, codes.Unavailable: 503} {
 		c := &secretPlanRecorder{failure: status.Error(code, "private owner detail")}
@@ -182,6 +202,8 @@ func TestSecretDraftImpactRejectsStaleCursorAndAuthorityWithoutFilteringLocally(
 	}
 }
 
+// TestSecretDraftPublishRejectsCallerInventedOrDuplicatePlanItems blocks absent plan refs, nil selections and malformed/duplicate selected refs before owner RPC, while preserving explicit empty selection for no-replacement publication. It checks transport selection semantics, not live publication or plan item membership in storage.
+// TestSecretDraftPublishRejectsCallerInventedOrDuplicatePlanItems блокирует отсутствие plan ref, nil selections и неверные/повторные selected refs до owner RPC, сохраняет явный пустой набор для no-replacement publication. Проверяет transport selection semantics, не live publication и принадлежность items плану в хранилище.
 func TestSecretDraftPublishRejectsCallerInventedOrDuplicatePlanItems(t *testing.T) {
 	for _, body := range []string{
 		`{"expectedSecretVersion":7,"selectedItemRefs":[]}`,

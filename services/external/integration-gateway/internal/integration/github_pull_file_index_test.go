@@ -13,23 +13,36 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// githubIndexHead pins the synthetic pull-request head commit used by full-read and file-page fixtures.
+// RU: githubIndexHead закрепляет синтетический head commit pull request для оснасток полного чтения и file-страниц.
 const githubIndexHead = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+// githubIndexBase pins a distinct synthetic base commit so head/base drift cannot be mistaken for a stable file snapshot.
+// RU: githubIndexBase закрепляет отдельный синтетический base commit, чтобы head/base drift не выглядел устойчивым снимком файлов.
 const githubIndexBase = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
+// githubIndexPull creates a complete synthetic pull-request read with exact head/base and an explicit caller-selected changed-file total.
+// RU: githubIndexPull создаёт полный синтетический PR-read с точными head/base и явно выбранным числом изменённых файлов.
 func githubIndexPull(total int) *github.PullRequest {
 	return &github.PullRequest{Number: github.Ptr(3), Title: github.Ptr("Title"), Body: github.Ptr("Полное описание"), State: github.Ptr("open"),
 		Head: &github.PullRequestBranch{Ref: github.Ptr("feature"), SHA: github.Ptr(githubIndexHead)}, Base: &github.PullRequestBranch{Ref: github.Ptr("main"), SHA: github.Ptr(githubIndexBase)},
 		ChangedFiles: github.Ptr(total), HTMLURL: github.Ptr("https://github.com/acme/repo/pull/3")}
 }
 
+// githubIndexFile creates regular modified-file metadata with consistent counters; individual tests deliberately mutate fields or attach an oversized patch.
+// RU: githubIndexFile создаёт metadata обычного изменённого файла с согласованными счётчиками; отдельные тесты меняют поля либо добавляют большой patch.
 func githubIndexFile(name string) *github.CommitFile {
 	return &github.CommitFile{Filename: github.Ptr(name), SHA: github.Ptr(githubIndexHead), Status: github.Ptr("modified"), Additions: github.Ptr(1), Deletions: github.Ptr(2), Changes: github.Ptr(3)}
 }
 
+// githubIndexInput supplies the exact required PR number, head/base commits and expected total while leaving page defaults to the typed adapter.
+// RU: githubIndexInput задаёт точные обязательные PR number, head/base commits и expected total, оставляя page defaults типизированному адаптеру.
 func githubIndexInput(total int) map[string]any {
 	return map[string]any{"pull_request_number": 3, "expected_head_sha": githubIndexHead, "expected_base_sha": githubIndexBase, "expected_changed_files": total}
 }
 
+// githubIndexFixture controls successive PR snapshots, file pages and provider next links while recording call counts and maximum raw response size.
+// RU: githubIndexFixture управляет последовательными PR-снимками, file-страницами и provider next links, учитывая число вызовов и максимальный размер сырого ответа.
 type githubIndexFixture struct {
 	pull                 func(int) *github.PullRequest
 	files                func(int, int) []*github.CommitFile
@@ -38,6 +51,8 @@ type githubIndexFixture struct {
 	maximumRaw           int
 }
 
+// githubIndexAdapter installs an in-memory GitHub transport that enforces exact repository/method/token and bounded file-page query parameters, including synthetic Link pagination.
+// RU: githubIndexAdapter устанавливает GitHub transport в памяти с проверкой точных repository/method/token и ограниченных file-page параметров, включая синтетический Link pagination.
 func githubIndexAdapter(t *testing.T, fixture *githubIndexFixture) (*Adapter, *CredentialRevision) {
 	t.Helper()
 	adapter := testAdapter(t)
@@ -78,6 +93,8 @@ func githubIndexAdapter(t *testing.T, fixture *githubIndexFixture) (*Adapter, *C
 	return adapter, credential
 }
 
+// githubIndexExecute runs the full typed file-index operation, decodes its nested metadata rows and rejects any leaked patch or oversized safe summary.
+// RU: githubIndexExecute запускает полную типизированную file-index операцию, разбирает вложенные metadata-строки и отклоняет выданный patch либо слишком большую безопасную сводку.
 func githubIndexExecute(t *testing.T, adapter *Adapter, credential *CredentialRevision, input map[string]any) (githubPullFilePage, []map[string]any) {
 	t.Helper()
 	result, err := adapter.Execute(t.Context(), invocationRequest(t, adapter.definitions["github"], "github.pull_request.file.list", input, credential))
@@ -94,6 +111,8 @@ func githubIndexExecute(t *testing.T, adapter *Adapter, credential *CredentialRe
 	return page, rows
 }
 
+// TestGitHubPullFileIndexPreservesPinnedPagesWithoutPatches reconstructs two pinned metadata pages from larger raw patch responses, requiring exact offsets/count/next/EOF and no duplicate names.
+// RU: TestGitHubPullFileIndexPreservesPinnedPagesWithoutPatches восстанавливает две закреплённые metadata-страницы из больших raw patch ответов с точными offsets/count/next/EOF и без повторных имён.
 func TestGitHubPullFileIndexPreservesPinnedPagesWithoutPatches(t *testing.T) {
 	fixture := &githubIndexFixture{pull: func(int) *github.PullRequest { return githubIndexPull(5) }, files: func(page, limit int) []*github.CommitFile {
 		result := []*github.CommitFile{}
@@ -131,6 +150,8 @@ func TestGitHubPullFileIndexPreservesPinnedPagesWithoutPatches(t *testing.T) {
 	}
 }
 
+// TestGitHubPullFileIndexEmptyAndExactProviderCap exercises empty and 3000-file boundary pages with two PR pin reads and one file read per request, without declaring unvisited pages complete.
+// RU: TestGitHubPullFileIndexEmptyAndExactProviderCap проверяет пустые страницы и границу 3000 файлов с двумя PR pin чтениями и одним file-чтением, не объявляя непросмотренные страницы завершёнными.
 func TestGitHubPullFileIndexEmptyAndExactProviderCap(t *testing.T) {
 	for _, total := range []int{0, 3000} {
 		for _, cursor := range []int{1, max(1, total/4)} {
@@ -157,6 +178,8 @@ func TestGitHubPullFileIndexEmptyAndExactProviderCap(t *testing.T) {
 	}
 }
 
+// TestGitHubPullFileIndexWorstCaseRenameEnvelope measures the safe summary for four maximally escaped rename rows and maximum safe counters; this is not an unconditional native RPC wire-size proof.
+// RU: TestGitHubPullFileIndexWorstCaseRenameEnvelope измеряет безопасную сводку четырёх максимально escaped rename строк и безопасных предельных счётчиков, не доказывая безусловный размер native RPC wire.
 func TestGitHubPullFileIndexWorstCaseRenameEnvelope(t *testing.T) {
 	files := []*github.CommitFile{}
 	for i := 0; i < 4; i++ {
@@ -178,6 +201,8 @@ func TestGitHubPullFileIndexWorstCaseRenameEnvelope(t *testing.T) {
 	t.Logf("maximum_rename_envelope_bytes=%d", len(encoded))
 }
 
+// TestGitHubPullFileIndexRenameDeletionAndNullableBlobSHA preserves a rename's prior filename and a deleted file's explicit null SHA rather than inventing blob identity.
+// RU: TestGitHubPullFileIndexRenameDeletionAndNullableBlobSHA сохраняет прежнее имя переименованного файла и явный null SHA удалённого файла вместо выдуманного blob ID.
 func TestGitHubPullFileIndexRenameDeletionAndNullableBlobSHA(t *testing.T) {
 	rename := githubIndexFile("src/новое🙂.txt")
 	rename.Status = github.Ptr("renamed")
@@ -196,6 +221,8 @@ func TestGitHubPullFileIndexRenameDeletionAndNullableBlobSHA(t *testing.T) {
 	}
 }
 
+// TestGitHubPullFileIndexRejectsDriftAndBrokenPagination injects PR pin drift, invalid totals, missing/extra rows and incorrect next links, requiring safe failure with exact read cardinality and no partial index.
+// RU: TestGitHubPullFileIndexRejectsDriftAndBrokenPagination подставляет PR pin drift, неверные totals, пропавшие/лишние строки и next links, требуя безопасный отказ с точным числом чтений без частичного индекса.
 func TestGitHubPullFileIndexRejectsDriftAndBrokenPagination(t *testing.T) {
 	for _, tc := range []struct {
 		name                 string
@@ -254,6 +281,8 @@ func TestGitHubPullFileIndexRejectsDriftAndBrokenPagination(t *testing.T) {
 	}
 }
 
+// TestGitHubPullFileIndexRejectsInvalidMetadata rejects malformed paths, SHA/status/rename fields, absent or unsafe counters, inconsistent arithmetic and nil/duplicate rows as a whole page.
+// RU: TestGitHubPullFileIndexRejectsInvalidMetadata отклоняет неверные paths, SHA/status/rename, отсутствующие либо небезопасные счётчики, несогласованную арифметику и nil/duplicate строки всей страницей.
 func TestGitHubPullFileIndexRejectsInvalidMetadata(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -285,6 +314,8 @@ func TestGitHubPullFileIndexRejectsInvalidMetadata(t *testing.T) {
 	}
 }
 
+// TestGitHubPullFileIndexRejectsInvalidPinsBeforeProvider requires malformed/missing expected pins, unsupported page sizes and past-EOF selectors to fail before any provider transport call.
+// RU: TestGitHubPullFileIndexRejectsInvalidPinsBeforeProvider требует отказа для неверных/отсутствующих expected pins, неподдерживаемых page sizes и past-EOF параметров до provider transport вызова.
 func TestGitHubPullFileIndexRejectsInvalidPinsBeforeProvider(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")
@@ -327,6 +358,8 @@ func TestGitHubPullFileIndexRejectsInvalidPinsBeforeProvider(t *testing.T) {
 	}
 }
 
+// TestGitHubPullIndexDoesNotChangeCommitPatchOrMutationReply preserves dedicated commit-read patches and full PR mutation body/state without imposing the stronger read-only source-pin fields on mutation replies.
+// RU: TestGitHubPullIndexDoesNotChangeCommitPatchOrMutationReply сохраняет patch отдельного commit-read и полный PR mutation body/state без навязывания mutation-ответам усиленных read-only source-pin полей.
 func TestGitHubPullIndexDoesNotChangeCommitPatchOrMutationReply(t *testing.T) {
 	file := githubIndexFile("a")
 	file.Patch = github.Ptr("whole commit patch")
@@ -360,6 +393,8 @@ func TestGitHubPullIndexDoesNotChangeCommitPatchOrMutationReply(t *testing.T) {
 	}
 }
 
+// TestGitHubPullReadPreservesBodyStateAndAddsExactSourcePins retains full PR text/state and head/base/changed-file metadata even when the total exceeds the separate file-index cap.
+// RU: TestGitHubPullReadPreservesBodyStateAndAddsExactSourcePins сохраняет полный PR text/state и head/base/changed-file metadata даже при total выше отдельного file-index cap.
 func TestGitHubPullReadPreservesBodyStateAndAddsExactSourcePins(t *testing.T) {
 	fixture := &githubIndexFixture{pull: func(int) *github.PullRequest {
 		p := githubIndexPull(3001)
@@ -374,6 +409,8 @@ func TestGitHubPullReadPreservesBodyStateAndAddsExactSourcePins(t *testing.T) {
 	}
 }
 
+// TestGitHubPullFileIndexOversizedRawPatchDoesNotBecomeComplete requires oversized upstream patches to fail once before any successful metadata page or completion claim.
+// RU: TestGitHubPullFileIndexOversizedRawPatchDoesNotBecomeComplete требует однократный отказ для слишком большого upstream patch до успешной metadata-страницы либо заявления о полноте.
 func TestGitHubPullFileIndexOversizedRawPatchDoesNotBecomeComplete(t *testing.T) {
 	file := githubIndexFile("a")
 	file.Patch = github.Ptr(strings.Repeat("x", maximumGitHubProviderResponseBytes))

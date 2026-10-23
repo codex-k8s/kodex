@@ -18,19 +18,27 @@ import (
 	"github.com/google/uuid"
 )
 
+// fakeOIDCVerifier returns configured principals/errors without inspecting or cryptographically validating input, isolating middleware control-flow tests.
+// fakeOIDCVerifier возвращает настроенные principal и ошибки без анализа и криптографической проверки входа, изолируя тесты порядка middleware.
 type fakeOIDCVerifier struct {
 	principal oidcauth.Principal
 	err       error
 }
 
+// VerifyAuthorization returns the configured principal/error and a fixed synthetic bearer, independently of the authorization input.
+// VerifyAuthorization возвращает настроенные principal и ошибку с фиксированным тестовым bearer независимо от входного заголовка.
 func (verifier *fakeOIDCVerifier) VerifyAuthorization(context.Context, string) (oidcauth.Principal, string, error) {
 	return verifier.principal, "bearer", verifier.err
 }
 
+// VerifyToken returns the configured principal/error without checking the supplied token, making binding failures explicit test inputs.
+// VerifyToken возвращает настроенные principal и ошибку без проверки токена, позволяя явно задавать ошибки привязок.
 func (verifier *fakeOIDCVerifier) VerifyToken(context.Context, string) (oidcauth.Principal, error) {
 	return verifier.principal, verifier.err
 }
 
+// fakeSessionStore holds configured cookie claims/results and issue/renew counters; it simulates the SessionStore port without crypto, expiry enforcement or persistence.
+// fakeSessionStore хранит настроенные claims, результаты и счётчики выдачи и обновления; имитирует SessionStore без шифрования, контроля срока и сохранения.
 type fakeSessionStore struct {
 	claims              session.Claims
 	openErr             error
@@ -46,27 +54,37 @@ type fakeSessionStore struct {
 	renewedCode         string
 }
 
+// Issue increments ordinary issuance count and returns configured claims, encoded value, CSRF and error without validating arguments.
+// Issue увеличивает счётчик обычной выдачи и возвращает настроенные claims, код, CSRF и ошибку без проверки аргументов.
 func (store *fakeSessionStore) Issue(string, string, string, uint64, string, time.Time) (session.Claims, string, string, error) {
 	store.issueCalls++
 	return store.issued, store.issuedCode, store.issuedCSRF, store.issueErr
 
 }
 
+// IssueWithElevation records the supplied elevation pointer and increments its dedicated counter before returning configured issuance results.
+// IssueWithElevation запоминает указатель переданного повышения, увеличивает отдельный счётчик и возвращает настроенный результат выдачи.
 func (store *fakeSessionStore) IssueWithElevation(_ string, _ string, _ string, _ uint64, _ string, _ time.Time, elevation *session.Elevation) (session.Claims, string, string, error) {
 	store.elevationIssueCalls++
 	store.elevation = elevation
 	return store.issued, store.issuedCode, store.issuedCSRF, store.issueErr
 }
 
+// Open returns configured claims and openErr regardless of the encoded cookie; real cookie verification is covered by other tests.
+// Open возвращает настроенные claims и openErr независимо от закодированной cookie; реальное шифрование проверяется другими тестами.
 func (store *fakeSessionStore) Open(string) (session.Claims, error) {
 	return store.claims, store.openErr
 }
 
+// Renew counts calls and always reports a configured successful renewal; it does not model renewal timing or bearer expiry checks.
+// Renew считает вызовы и всегда сообщает настроенное успешное обновление; время обновления и срок bearer не моделируются.
 func (store *fakeSessionStore) Renew(session.Claims, time.Time) (session.Claims, string, bool, error) {
 	store.renewCalls++
 	return store.renewed, store.renewedCode, true, nil
 }
 
+// fakeRevocationStore records exact revoke/read/consume identifiers and configured outcomes, without atomic concurrency or durable one-use semantics.
+// fakeRevocationStore запоминает точные идентификаторы отзыва, чтения и расхода и настроенные результаты без атомарной конкуренции и устойчивой одноразовости.
 type fakeRevocationStore struct {
 	revoked       bool
 	revokedErr    error
@@ -78,6 +96,8 @@ type fakeRevocationStore struct {
 	consumed      string
 }
 
+// Revoke records the identifier and marks fixture state revoked only when no configured persistence error is returned.
+// Revoke запоминает идентификатор и отмечает отзыв в оснастке только при отсутствии настроенной ошибки сохранения.
 func (store *fakeRevocationStore) Revoke(_ context.Context, sessionID string) error {
 	store.revokedRecord = sessionID
 	if store.revokeErr == nil {
@@ -86,16 +106,22 @@ func (store *fakeRevocationStore) Revoke(_ context.Context, sessionID string) er
 	return store.revokeErr
 }
 
+// Revoked records the queried identifier and returns the configured revoked/error pair without per-session storage.
+// Revoked запоминает запрошенный идентификатор и возвращает настроенную пару отзыва и ошибки без отдельного хранения по сессиям.
 func (store *fakeRevocationStore) Revoked(_ context.Context, sessionID string) (bool, error) {
 	store.checked = sessionID
 	return store.revoked, store.revokedErr
 }
 
+// ConsumeOnce records the identifier and returns configured win/error values; tests explicitly change consumeWon to simulate replay rejection.
+// ConsumeOnce запоминает идентификатор и возвращает настроенные победу и ошибку; для имитации повтора тесты явно меняют consumeWon.
 func (store *fakeRevocationStore) ConsumeOnce(_ context.Context, sessionID string) (bool, error) {
 	store.consumed = sessionID
 	return store.consumeWon, store.consumeErr
 }
 
+// TestAuthenticationProblemPreservesSigningKeyOutage distinguishes retryable 503 for signing-key unavailability from nonretryable 401 for an ordinary invalid bearer.
+// TestAuthenticationProblemPreservesSigningKeyOutage отличает повторяемый 503 при недоступности ключей подписи от неповторяемого 401 для обычного неверного bearer.
 func TestAuthenticationProblemPreservesSigningKeyOutage(t *testing.T) {
 	statusCode, code, retryable := authenticationProblem(oidcauth.ErrSigningKeysUnavailable)
 	if statusCode != http.StatusServiceUnavailable || code != "UNAVAILABLE" || !retryable {
@@ -107,6 +133,8 @@ func TestAuthenticationProblemPreservesSigningKeyOutage(t *testing.T) {
 	}
 }
 
+// TestCredentialedPreflightAllowsExactOwnerHeaders checks approved credentialed CORS headers, rejects a caller authority header and verifies exact origin/credentials/Vary without entering the handler.
+// TestCredentialedPreflightAllowsExactOwnerHeaders проверяет разрешённые CORS-заголовки с credentials, отвергает заголовок полномочий вызывающего и сверяет origin, credentials и Vary без входа в обработчик.
 func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	request := httptest.NewRequest(http.MethodOptions, "https://control-api.kodex.local/api/v1/session", nil)
 	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
@@ -144,9 +172,13 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	}
 }
 
+// TestProjectReferenceBinding independently exercises header/path reconciliation, invalid references, collection exceptions and organization-scoped purge recovery; it checks transport binding, not domain membership.
+// TestProjectReferenceBinding независимо проверяет согласование заголовка и пути, неверные ссылки, исключения коллекций и организационную область purge recovery; проверяется транспортная привязка, а не доменное членство.
 func TestProjectReferenceBinding(t *testing.T) {
 	t.Parallel()
 
+	// projectID is a syntactically valid synthetic selector for route-binding tests, not a database resource or authority claim.
+	// projectID — синтаксически допустимый тестовый селектор маршрута, а не ресурс базы данных или источник полномочий.
 	const projectID = "prj_AQIDBAUGBwgJCgsMDQ4PEBES"
 	tests := []struct {
 		name      string
@@ -193,6 +225,8 @@ func TestProjectReferenceBinding(t *testing.T) {
 	}
 }
 
+// TestRealtimePathClassification accepts only the exact session stream and rejects extra suffixes, historical streams and ordinary HTTP paths.
+// TestRealtimePathClassification принимает только точный поток сессии и отклоняет суффиксы, прежние потоки и обычные HTTP-пути.
 func TestRealtimePathClassification(t *testing.T) {
 	if !isRealtimePath("/api/v1/session/stream") {
 		t.Fatal("session stream was not classified as realtime")
@@ -210,6 +244,8 @@ func TestRealtimePathClassification(t *testing.T) {
 	}
 }
 
+// TestSessionRenewalRunsOnlyAfterCompleteSecurityBoundary proves explicit session PUT updates identity/cookies, while ordinary mutations, reads, realtime and rejected security contexts never invoke ordinary renewal.
+// TestSessionRenewalRunsOnlyAfterCompleteSecurityBoundary доказывает обновление личности и cookies явным PUT сессии; обычные изменения, чтение, realtime и отклонённые контексты обычное обновление не вызывают.
 func TestSessionRenewalRunsOnlyAfterCompleteSecurityBoundary(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	csrf := strings.Repeat("c", 43)
@@ -324,6 +360,8 @@ func TestSessionRenewalRunsOnlyAfterCompleteSecurityBoundary(t *testing.T) {
 	}
 }
 
+// TestRevokedBrowserSessionIsRejected ensures a revoked exact browser-session identifier returns 401 without reaching the protected handler.
+// TestRevokedBrowserSessionIsRejected проверяет ответ 401 для отозванного точного идентификатора браузерной сессии без допуска защищённого обработчика.
 func TestRevokedBrowserSessionIsRejected(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	csrf := strings.Repeat("c", 43)
@@ -351,6 +389,8 @@ func TestRevokedBrowserSessionIsRejected(t *testing.T) {
 	}
 }
 
+// TestRevocationStoreFailureRejectsBrowserSession ensures an unavailable revocation lookup produces 503 and never treats missing validation as successful authentication.
+// TestRevocationStoreFailureRejectsBrowserSession проверяет ответ 503 при недоступности поиска отзыва, не позволяя считать отсутствие проверки успешным входом.
 func TestRevocationStoreFailureRejectsBrowserSession(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	csrf := strings.Repeat("c", 43)
@@ -375,6 +415,8 @@ func TestRevocationStoreFailureRejectsBrowserSession(t *testing.T) {
 	}
 }
 
+// TestRevokeSessionPersistsBrowserSessionID verifies the exact browser-session ID is passed to the revocation port; fake storage does not prove durable persistence.
+// TestRevokeSessionPersistsBrowserSessionID проверяет передачу точного browser-session ID порту отзывов; тестовое хранилище устойчивое сохранение не доказывает.
 func TestRevokeSessionPersistsBrowserSessionID(t *testing.T) {
 	revocations := &fakeRevocationStore{}
 	security := testBoundaryWithRevocations(t, &fakeOIDCVerifier{}, &fakeSessionStore{}, revocations)
@@ -387,6 +429,8 @@ func TestRevokeSessionPersistsBrowserSessionID(t *testing.T) {
 	}
 }
 
+// TestLogoutRevocationWinsOverConcurrentRenewedCookie reuses revoked claims to prove 401 before renewal. It models the resulting ordering, not concurrent goroutines or broker transactions.
+// TestLogoutRevocationWinsOverConcurrentRenewedCookie повторно использует отозванные claims и доказывает ответ 401 до обновления. Моделируется итоговый порядок, а не конкурирующие goroutines или транзакции брокера.
 func TestLogoutRevocationWinsOverConcurrentRenewedCookie(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	csrf := strings.Repeat("c", 43)
@@ -416,6 +460,8 @@ func TestLogoutRevocationWinsOverConcurrentRenewedCookie(t *testing.T) {
 	}
 }
 
+// TestIssueSessionRequiresFreshAuthenticationOnlyForTypedPurpose permits ordinary login without auth_time, rejects absent/stale/future authentication for secret elevation and checks exact valid purpose/expiry.
+// TestIssueSessionRequiresFreshAuthenticationOnlyForTypedPurpose допускает обычный вход без auth_time, отклоняет отсутствующий, старый или будущий вход для раскрытия секрета и сверяет точную допустимую цель и срок.
 func TestIssueSessionRequiresFreshAuthenticationOnlyForTypedPurpose(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	principal := oidcauth.Principal{
@@ -468,6 +514,8 @@ func TestIssueSessionRequiresFreshAuthenticationOnlyForTypedPurpose(t *testing.T
 	}
 }
 
+// TestRuntimeSecretRevealElevationIsExactAndOneUse rejects a different secret before consumption, fails closed on store error, issues one ordinary cookie pair for a win and rejects a configured replay loss.
+// TestRuntimeSecretRevealElevationIsExactAndOneUse отклоняет другой секрет до расхода, закрыто отказывает при ошибке хранилища, выдаёт одну обычную пару cookies при победе и отвергает настроенную потерю при повторе.
 func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	original := session.Claims{
@@ -523,6 +571,8 @@ func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
 	}
 }
 
+// TestExpiredRuntimeSecretRevealElevationIsRejectedBeforeStore rejects absent or expired elevation without accessing the one-use store.
+// TestExpiredRuntimeSecretRevealElevationIsRejectedBeforeStore отклоняет отсутствующее либо истёкшее повышение без обращения к одноразовому хранилищу.
 func TestExpiredRuntimeSecretRevealElevationIsRejectedBeforeStore(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	elevation := &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ScopeKind: "PROJECT", OrganizationRef: "org_fixture01", ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(-time.Second).Unix()}
@@ -544,11 +594,15 @@ func TestExpiredRuntimeSecretRevealElevationIsRejectedBeforeStore(t *testing.T) 
 	}
 }
 
+// testBoundary constructs the shared synthetic boundary with a fresh fake revocation store; caller-supplied verifier/session doubles determine outcomes.
+// testBoundary создаёт общую тестовую границу с новым фиктивным хранилищем отзывов; результаты задают переданные заглушки verifier и session.
 func testBoundary(t *testing.T, verifier OIDCVerifier, sessions SessionStore) *Boundary {
 	t.Helper()
 	return testBoundaryWithRevocations(t, verifier, sessions, &fakeRevocationStore{})
 }
 
+// testBoundaryWithRevocations wires exact fixture origin, supplied ports, bounded limiter capacities and a five-second request timeout, failing the test on construction error.
+// testBoundaryWithRevocations связывает точный тестовый origin, переданные порты, ограниченные ёмкости limiter и timeout запроса пять секунд, завершая тест при ошибке создания.
 func testBoundaryWithRevocations(t *testing.T, verifier OIDCVerifier, sessions SessionStore, revocations RevocationStore) *Boundary {
 	t.Helper()
 	security, err := New(Config{
@@ -565,6 +619,8 @@ func testBoundaryWithRevocations(t *testing.T, verifier OIDCVerifier, sessions S
 	return security
 }
 
+// authenticatedRequest builds a synthetic request with the approved origin and fixed session cookie; non-GET methods also receive the supplied CSRF header matching its cookie.
+// authenticatedRequest создаёт тестовый запрос с допустимым origin и фиксированной session-cookie; все методы кроме GET дополнительно получают CSRF-заголовок, совпадающий с переданной cookie.
 func authenticatedRequest(method, csrf string) *http.Request {
 	request := httptest.NewRequest(method, "https://control.example.test/api/v1/projects", nil)
 	request.Header.Set("Origin", "https://control.example.test")

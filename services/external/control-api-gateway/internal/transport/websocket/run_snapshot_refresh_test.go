@@ -16,6 +16,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// runRefreshRecorder tracks started refs, active/maximum concurrency and child deadlines under a mutex, delegating each graph read to a configurable synthetic callback.
+// runRefreshRecorder под mutex считает начатые ссылки, текущую и максимальную параллельность и сроки дочерних запросов, передавая чтение настраиваемому тестовому callback.
 type runRefreshRecorder struct {
 	grpc.ClientConnInterface
 	mu                    sync.Mutex
@@ -25,6 +27,8 @@ type runRefreshRecorder struct {
 	read                  func(context.Context, string) (*cp.GetRunGraphResponse, error)
 }
 
+// Invoke accepts only complete GetRunGraph requests/responses, records concurrency/deadline evidence and merges successful synthetic data; deferred accounting runs after the callback returns, not merely after context cancellation.
+// Invoke принимает только полные GetRunGraph request/response, запоминает параллельность и срок и объединяет успешные тестовые данные; отложенный учёт выполняется после возврата callback, а не только отмены контекста.
 func (c *runRefreshRecorder) Invoke(ctx context.Context, _ string, request, response any, _ ...grpc.CallOption) error {
 	input, ok := request.(*cp.GetRunGraphRequest)
 	out, responseOK := response.(*cp.GetRunGraphResponse)
@@ -46,6 +50,8 @@ func (c *runRefreshRecorder) Invoke(ctx context.Context, _ string, request, resp
 	return err
 }
 
+// refreshSnapshot returns an independent complete fixture retargeted to the supplied root while preserving graph/run/session bindings for its child.
+// refreshSnapshot возвращает независимый полный тестовый снимок с переданным корнем и сохранёнными привязками графа, запуска и сессии ребёнка.
 func refreshSnapshot(ref string) *cp.GetRunGraphResponse {
 	value := completeRunSnapshotFixture()
 	value.Run.Ref, value.Run.RootRunRef, value.Graph.RunRef = ref, ref, ref
@@ -54,6 +60,8 @@ func refreshSnapshot(ref string) *cp.GetRunGraphResponse {
 	return value
 }
 
+// runRefreshFixture creates a fake query client and the requested number of registered root subscriptions with fixed cursors and buffered frames; it opens no real RPC connection.
+// runRefreshFixture создаёт фиктивный query client и запрошенное число зарегистрированных корневых подписок с фиксированными курсорами и буфером кадров без настоящего RPC-соединения.
 func runRefreshFixture(t *testing.T, count int) (*sessionMultiplexer, *runRefreshRecorder, *platformWakeRaceRecorder) {
 	t.Helper()
 	m, frames := platformWakeRaceFixture(t, 8)
@@ -66,6 +74,8 @@ func runRefreshFixture(t *testing.T, count int) (*sessionMultiplexer, *runRefres
 	return m, c, frames
 }
 
+// runRefreshFrameCounts counts complete run envelopes and only RUN_UNAVAILABLE stream problems, ignoring unrelated frame kinds for these assertions.
+// runRefreshFrameCounts считает полные конверты запусков и только stream problems RUN_UNAVAILABLE, игнорируя посторонние виды кадров в этих проверках.
 func runRefreshFrameCounts(frames []any) (snapshots, problems int) {
 	for _, frame := range frames {
 		switch value := frame.(type) {
@@ -80,6 +90,8 @@ func runRefreshFrameCounts(frames []any) (snapshots, problems int) {
 	return
 }
 
+// TestRunSnapshotRefreshParallelSharedBudget requires two synthetic slow reads to overlap under the exact earlier parent deadline, publish two snapshots and leave no active worker after refresh returns.
+// TestRunSnapshotRefreshParallelSharedBudget требует перекрытия двух медленных тестовых чтений с точным ранним сроком родителя, выдачи двух снимков и отсутствия активных работников после возврата.
 func TestRunSnapshotRefreshParallelSharedBudget(t *testing.T) {
 	m, c, frames := runRefreshFixture(t, 2)
 	parent, cancel := context.WithTimeout(m.ctx, 250*time.Millisecond)
@@ -109,6 +121,8 @@ func TestRunSnapshotRefreshParallelSharedBudget(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotRefreshExpiredParentDoesNotStartRPC starts with an expired parent and requires zero owner RPCs plus one closed problem per registered root, preserving transport success semantics.
+// TestRunSnapshotRefreshExpiredParentDoesNotStartRPC начинает с истёкшего родителя и требует ноль owner RPC и одну закрытую ошибку каждому корню, сохраняя семантику успешного транспорта.
 func TestRunSnapshotRefreshExpiredParentDoesNotStartRPC(t *testing.T) {
 	m, c, frames := runRefreshFixture(t, 3)
 	parent, cancel := context.WithDeadline(m.ctx, time.Now().Add(-time.Second))
@@ -122,6 +136,8 @@ func TestRunSnapshotRefreshExpiredParentDoesNotStartRPC(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotRefreshRoundRobinDeadlineFairness uses four short-budget rounds to ensure the two-worker starting pair rotates through sorted roots, all unfinished roots fail closed and no worker remains active.
+// TestRunSnapshotRefreshRoundRobinDeadlineFairness четырьмя раундами короткого бюджета проверяет смену стартовой пары двух работников по отсортированным корням, закрытый отказ непрочитанным корням и отсутствие активных работников.
 func TestRunSnapshotRefreshRoundRobinDeadlineFairness(t *testing.T) {
 	m, c, frames := runRefreshFixture(t, 4)
 	c.read = func(ctx context.Context, _ string) (*cp.GetRunGraphResponse, error) {
@@ -153,11 +169,15 @@ func TestRunSnapshotRefreshRoundRobinDeadlineFairness(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotRefreshCancellationJoinsWorkers exercises parent and socket cancellation through the shared join assertion rather than merely observing context.Done.
+// TestRunSnapshotRefreshCancellationJoinsWorkers проверяет отмену родителя и сокета через общую проверку ожидания работников, а не только наблюдение context.Done.
 func TestRunSnapshotRefreshCancellationJoinsWorkers(t *testing.T) {
 	t.Run("parent", func(t *testing.T) { assertRunRefreshCancellationJoined(t, false) })
 	t.Run("socket", func(t *testing.T) { assertRunRefreshCancellationJoined(t, true) })
 }
 
+// assertRunRefreshCancellationJoined holds cooperative callbacks after they observe cancellation, proves refresh cannot return before their explicit release, then requires joined workers, false transport outcome and no frames.
+// assertRunRefreshCancellationJoined удерживает кооперативные callbacks после наблюдения отмены, доказывает невозможность возврата до явного освобождения, затем требует завершённых работников, false транспорта и отсутствие кадров.
 func assertRunRefreshCancellationJoined(t *testing.T, cancelSocket bool) {
 	t.Helper()
 	m, c, frames := runRefreshFixture(t, 4)
@@ -210,6 +230,8 @@ func assertRunRefreshCancellationJoined(t *testing.T, cancelSocket bool) {
 	}
 }
 
+// TestRunSnapshotRefreshClosedOwnerResults injects denial or malformed root/completeness/cursor into one of two reads, requiring that root to fail closed while its independent sibling still publishes successfully.
+// TestRunSnapshotRefreshClosedOwnerResults подставляет запрет либо неверные корень, полноту или курсор одному из двух чтений, требуя закрытого отказа этому корню при успешной публикации независимого соседа.
 func TestRunSnapshotRefreshClosedOwnerResults(t *testing.T) {
 	for _, condition := range []string{"denied", "wrong-root", "incomplete", "wrong-cursor"} {
 		t.Run(condition, func(t *testing.T) {
@@ -241,6 +263,8 @@ func TestRunSnapshotRefreshClosedOwnerResults(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotRefreshFreshReadsAndBounds refreshes the maximum subscription set twice, checking per-RPC deadlines, two-worker concurrency and fresh reads, then rejects an excess subscription before any further RPC.
+// TestRunSnapshotRefreshFreshReadsAndBounds дважды обновляет максимальный набор подписок, проверяя сроки RPC, параллельность двух работников и свежие чтения, затем отклоняет лишнюю подписку до следующего RPC.
 func TestRunSnapshotRefreshFreshReadsAndBounds(t *testing.T) {
 	m, c, frames := runRefreshFixture(t, maximumRunSubscriptions)
 	c.read = func(ctx context.Context, ref string) (*cp.GetRunGraphResponse, error) {
@@ -268,6 +292,8 @@ func TestRunSnapshotRefreshFreshReadsAndBounds(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotRefreshAlreadyCancelledNoRPC starts with canceled parent or socket context and requires immediate false without owner reads or published frames.
+// TestRunSnapshotRefreshAlreadyCancelledNoRPC начинает с отменённым родителем либо контекстом сокета и требует немедленный false без чтений владельца и кадров.
 func TestRunSnapshotRefreshAlreadyCancelledNoRPC(t *testing.T) {
 	for _, cancelSocket := range []bool{false, true} {
 		t.Run(fmt.Sprint(cancelSocket), func(t *testing.T) {
@@ -284,6 +310,8 @@ func TestRunSnapshotRefreshAlreadyCancelledNoRPC(t *testing.T) {
 	}
 }
 
+// TestRunSnapshotRefreshBackpressureCancelsAndJoins forces outbound admission failure while another owner read is active, requiring cancellation and worker joining before false is returned.
+// TestRunSnapshotRefreshBackpressureCancelsAndJoins создаёт отказ исходящей очереди при другом активном чтении владельца и требует отмену и ожидание работников до возврата false.
 func TestRunSnapshotRefreshBackpressureCancelsAndJoins(t *testing.T) {
 	m, c, _ := runRefreshFixture(t, 2)
 	m.outbound = make(chan outboundFrame)

@@ -11,6 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// validAuthorizationCleanupIdentity checks bounded task/account/authorization references and a positive generation,
+// then requires the exact materializer locator derived from the attempt/account pair; it does not authorize cleanup.
+// validAuthorizationCleanupIdentity проверяет ограниченные ссылки задачи/аккаунта/авторизации и положительное поколение,
+// затем требует точный указатель размещения, выведенный из пары попытки и аккаунта; очистка этим не авторизуется.
 func validAuthorizationCleanupIdentity(target entity.ProviderAuthorizationCleanupTarget) bool {
 	digest := sha256.Sum256([]byte(target.AuthorizationAttemptRef + "\x00" + target.AccountRef))
 	return validProviderCredentialRef(target.TaskRef, "pcct_") &&
@@ -19,6 +23,10 @@ func validAuthorizationCleanupIdentity(target entity.ProviderAuthorizationCleanu
 		target.MaterializerAttemptRef == "pmat_"+hex.EncodeToString(digest[:16])
 }
 
+// ObserveAuthorizationCleanup sends a metadata-only request with exact owner pins and rejects mixed pending/absence identities or ordinary authorization fields.
+// It distinguishes present, unfenced absence and confirmed absence, returning validated metadata and any separately produced credential descriptor without deleting it.
+// ObserveAuthorizationCleanup отправляет запрос только метаданных с точными привязками владельца и отклоняет смешанные идентичности наличия/отсутствия или обычные поля авторизации.
+// Различаются наличие, неограждённое и подтверждённое отсутствие; возвращаются проверенные метаданные и отдельно созданный дескриптор учётных данных без его удаления.
 func (client *Client) ObserveAuthorizationCleanup(ctx context.Context, target entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupObservation, error) {
 	var result entity.ProviderAuthorizationCleanupObservation
 	if !validAuthorizationCleanupIdentity(target) || target.UID != "" || target.ResourceVersion != "" || target.Kind != "" {
@@ -72,6 +80,10 @@ func (client *Client) ObserveAuthorizationCleanup(ctx context.Context, target en
 	return result, nil
 }
 
+// CleanupAuthorization validates the target identity, optional recovery and kind-specific UID/version or absence pins before one broker RPC.
+// It returns bounded terminal-receipt text and any valid produced-credential descriptor; retries, signature verification and deletion of that produced credential are not performed here.
+// CleanupAuthorization проверяет идентичность цели, необязательное восстановление и привязки UID/версии либо отсутствия по виду перед одним RPC брокера.
+// Возвращаются ограниченный текст итоговой квитанции и корректный дескриптор созданных учётных данных; повторы, проверка подписи и удаление этих учётных данных здесь не выполняются.
 func (client *Client) CleanupAuthorization(ctx context.Context, target entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupResult, error) {
 	var result entity.ProviderAuthorizationCleanupResult
 	if !validAuthorizationCleanupIdentity(target) {
@@ -119,6 +131,10 @@ func (client *Client) CleanupAuthorization(ctx context.Context, target entity.Pr
 	return result, nil
 }
 
+// cleanupRecoveryIdentity preserves nil or maps a validated recovery task/generation and bounded historical generation range.
+// A nonzero historical range requires generation one; this serialization check is not proof of recovery lineage or an owner grant.
+// cleanupRecoveryIdentity сохраняет nil либо преобразует проверенные задачу/поколение восстановления и ограниченный исторический диапазон поколений.
+// Ненулевой исторический диапазон требует первого поколения; проверка сериализации не доказывает происхождение восстановления или разрешение владельца.
 func cleanupRecoveryIdentity(value *entity.ProviderCleanupRecoveryIdentity) (*controlplanev1.ProviderCredentialCleanupRecoveryIdentity, error) {
 	if value == nil {
 		return nil, nil

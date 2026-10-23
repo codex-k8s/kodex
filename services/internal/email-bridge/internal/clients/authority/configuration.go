@@ -10,7 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
 )
 
-// ReportConfigurationReadback подтверждает durable приём, не состояние provider.
+// ReportConfigurationReadback validates a positive revision and canonical digest, then requires a bounded owner acknowledgement without retries.
+// The acknowledgement reports durable configuration acceptance, not provider health, mail delivery or an echoed remote configuration snapshot.
+// ReportConfigurationReadback проверяет положительную ревизию и канонический дайджест, затем требует ограниченное подтверждение владельца без повторов.
+// Подтверждается устойчивый приём конфигурации, не готовность провайдера, доставка почты или возвращённый удалённый снимок настроек.
 func (c *Client) ReportConfigurationReadback(ctx context.Context, revision int64, digest string) error {
 	decoded, err := hex.DecodeString(digest)
 	if c == nil || c.API == nil || revision <= 0 || err != nil || len(decoded) != 32 || strings.ToLower(digest) != digest {

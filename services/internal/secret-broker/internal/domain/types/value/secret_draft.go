@@ -9,13 +9,22 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimesecret"
 )
 
-// Kubernetes ограничивает весь data payload одним MiB, включая nonce/tag.
+// MaximumDraftValueBytes reserves 28 bytes for the configured AEAD nonce/tag within a one-MiB data budget;
+// it is not the full Kubernetes object or RPC envelope size limit.
+// MaximumDraftValueBytes резервирует 28 байт configured AEAD nonce/tag в one-MiB data budget;
+// это не предел полного Kubernetes object или RPC envelope.
 const MaximumDraftValueBytes = (1 << 20) - 28
 
+// ErrDraftBindingInvalid is the fixed binding/associated-data failure without private input details.
+// ErrDraftBindingInvalid — фиксированная binding/associated-data ошибка без приватных input details.
 var ErrDraftBindingInvalid = errors.New("secret draft binding is invalid")
 
-// SecretDraftBinding строится только из проверенного ответа владельца intent.
-// Версия содержимого не меняется при validate/publish той же immutable revision.
+// SecretDraftBinding is derived from verified owner intent and binds scope, resource, generation,
+// value type and content hash for AEAD. Validate checks shape, not owner provenance or plaintext bytes;
+// validate/publish of the same immutable content must preserve this binding.
+// SecretDraftBinding выводится из проверенного owner intent и связывает scope, resource, generation,
+// value type и content hash для AEAD. Validate проверяет форму, не owner provenance или plaintext bytes;
+// validate/publish того же immutable content должны сохранять эту binding.
 type SecretDraftBinding struct {
 	ScopeKind       runtimesecret.ScopeKind `json:"scope_kind"`
 	OrganizationRef string                  `json:"organization_ref"`
@@ -27,6 +36,10 @@ type SecretDraftBinding struct {
 	ContentSHA256   string                  `json:"content_sha256"`
 }
 
+// Validate checks scope, bounded printable-ASCII resource refs, positive generation, lowercase hex
+// SHA-256 and the STRING/BINARY/JSON type set. It neither computes that digest nor checks a live grant.
+// Validate проверяет scope, ограниченные printable-ASCII resource refs, положительную generation,
+// lowercase hex SHA-256 и STRING/BINARY/JSON. Digest не вычисляется, live grant не проверяется.
 func (binding SecretDraftBinding) Validate() error {
 	if runtimesecret.ValidateScope(binding.ScopeKind, binding.OrganizationRef, binding.ProjectRef) != nil {
 		return ErrDraftBindingInvalid
@@ -56,7 +69,10 @@ func (binding SecretDraftBinding) Validate() error {
 	}
 }
 
-// AssociatedData привязывает ciphertext к одному владельцу и содержимому.
+// AssociatedData validates the binding and returns its fixed-field JSON behind the AEAD-v2 domain prefix.
+// The bytes are authenticated context, not ciphertext or a universal canonical-JSON/authority proof.
+// AssociatedData проверяет binding и возвращает fixed-field JSON после AEAD-v2 domain prefix.
+// Это аутентифицируемый контекст, не ciphertext и не универсальный canonical-JSON/authority proof.
 func (binding SecretDraftBinding) AssociatedData() ([]byte, error) {
 	if err := binding.Validate(); err != nil {
 		return nil, err
@@ -68,18 +84,26 @@ func (binding SecretDraftBinding) AssociatedData() ([]byte, error) {
 	return append([]byte("kodex.secret-draft.aead.v2\x00"), encoded...), nil
 }
 
+// DraftEncryptionKey identifies a versioned key without carrying its secret material or validating itself.
+// DraftEncryptionKey обозначает versioned key без secret material и самостоятельной проверки.
 type DraftEncryptionKey struct {
 	ID         string
 	Generation int64
 }
 
+// EncryptedSecretDraft pairs key identity with ciphertext bytes; the mutable slice is not copied or
+// cleared by this plain data type, so its lifetime remains the caller's responsibility.
+// EncryptedSecretDraft связывает key identity с ciphertext bytes; изменяемый slice не копируется
+// и не обнуляется этим типом данных, поэтому его lifetime остаётся ответственностью caller.
 type EncryptedSecretDraft struct {
 	Key        DraftEncryptionKey
 	Ciphertext []byte
 }
 
-// DraftKeyManifest не содержит material; его digest канонически связывает
-// только проверенные идентичности всех ключей и выбранный write key.
+// DraftKeyManifest carries key identities, the chosen write key, revision and digest without key material.
+// Guard/crypto adapters validate its canonical membership and digest; public fields alone prove nothing.
+// DraftKeyManifest переносит key identities, выбранный write key, revision и digest без key material.
+// Guard/crypto adapters проверяют canonical membership и digest; одних публичных полей недостаточно.
 type DraftKeyManifest struct {
 	Revision int64                `json:"revision"`
 	Current  DraftEncryptionKey   `json:"current"`

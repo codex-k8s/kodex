@@ -6,6 +6,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// executionSnapshotTool advertises one closed no-argument own-execution read with
+// thirteen safe fields and distinct UNKNOWN/OBSERVED provider-process shapes.
+// Image inventory and client version are explicitly not serving-process evidence.
+// executionSnapshotTool публикует closed no-argument own-execution read с тринадцатью
+// safe fields и отдельными UNKNOWN/OBSERVED provider-process shapes. Image inventory
+// и client version явно не являются serving-process evidence.
 func executionSnapshotTool() map[string]any {
 	properties := map[string]any{
 		"run_ref": opaqueRefSchema(), "node_ref": opaqueRefSchema(), "session_ref": opaqueRefSchema(), "turn_ref": opaqueRefSchema(),
@@ -35,8 +41,14 @@ func executionSnapshotTool() map[string]any {
 	}
 }
 
-// Вызывается только между двумя существующими fresh owner RecordRunToolCall
-// проверками. Immutable input назначен сервером; caller не выбирает координаты.
+// executionSnapshot projects only the eligible immutable input's runtime/image/model
+// pins and the coordinator's exactly bound process observation, rejecting all caller
+// selectors. It runs between fresh owner activity checks; it neither chooses foreign
+// history nor independently reauthorizes the execution or invents a process version.
+// executionSnapshot проецирует лишь eligible immutable runtime/image/model pins input
+// и exact-bound process observation coordinator,отвергая caller selectors. Выполняется
+// между fresh owner activity checks,не выбирает foreign history,сам не переавторизует
+// execution и не придумывает process version.
 func (server *Server) executionSnapshot(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
 	if len(arguments) != 0 || !runtimecontract.RuntimeExecutionSnapshotAvailable(input) ||
 		!assistantCatalogModelPattern.MatchString(input.Model) || len(input.EffectiveReasoningEffort) > 32 {

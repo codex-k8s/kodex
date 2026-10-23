@@ -17,10 +17,16 @@ import (
 )
 
 const (
+	// lastKnownGoodWindow limits how long previously verified keys remain usable after a transient refresh failure.
+	// lastKnownGoodWindow ограничивает использование ранее проверенных ключей после временного сбоя обновления.
 	lastKnownGoodWindow = 2 * time.Minute
-	maximumJWKSBytes    = 1 << 20
+	// maximumJWKSBytes bounds the entire remote JWKS response before parsing.
+	// maximumJWKSBytes ограничивает полный ответ удалённого JWKS до разбора.
+	maximumJWKSBytes = 1 << 20
 )
 
+// boundedKeySet retains the verified signing snapshot and rollback history under a lock; fatal failures block it.
+// boundedKeySet хранит проверенный снимок ключей и историю отката под блокировкой; критический отказ блокирует его.
 type boundedKeySet struct {
 	client   *http.Client
 	endpoint string
@@ -35,10 +41,14 @@ type boundedKeySet struct {
 	blocked     bool
 }
 
+// newBoundedKeySet creates an empty, fail-closed snapshot with a fresh digest history.
+// newBoundedKeySet создаёт пустой закрытый снимок со своей историей дайджестов.
 func newBoundedKeySet(client *http.Client, endpoint string) *boundedKeySet {
 	return &boundedKeySet{client: client, endpoint: endpoint, now: time.Now, seenDigests: make(map[string]struct{})}
 }
 
+// Refresh fetches a bounded snapshot and atomically updates keys, degradation or permanent block state.
+// Refresh получает ограниченный снимок и атомарно обновляет ключи, деградацию либо состояние блокировки.
 func (set *boundedKeySet) Refresh(ctx context.Context) error {
 	keys, digest, fatal, err := set.fetch(ctx)
 	set.mutex.Lock()
@@ -68,6 +78,8 @@ func (set *boundedKeySet) Refresh(ctx context.Context) error {
 	return nil
 }
 
+// fetch accepts a bounded, complete JWKS response and returns its canonical supported-key digest and failure class.
+// fetch принимает ограниченный полный JWKS и возвращает дайджест поддерживаемых ключей и класс отказа.
 func (set *boundedKeySet) fetch(ctx context.Context) (jose.JSONWebKeySet, string, bool, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, set.endpoint, nil)
 	if err != nil {
@@ -108,6 +120,8 @@ func (set *boundedKeySet) fetch(ctx context.Context) (jose.JSONWebKeySet, string
 	return keys, hex.EncodeToString(digest[:]), false, nil
 }
 
+// supportedSigningKeySet selects unique RS256 public signing keys and rejects malformed or expired supported keys.
+// supportedSigningKeySet отбирает уникальные открытые ключи подписи RS256 и отвергает некорректные или просроченные.
 func supportedSigningKeySet(keys jose.JSONWebKeySet, now time.Time) (jose.JSONWebKeySet, bool) {
 	if len(keys.Keys) == 0 || len(keys.Keys) > 16 {
 		return jose.JSONWebKeySet{}, false
@@ -142,6 +156,8 @@ func supportedSigningKeySet(keys jose.JSONWebKeySet, now time.Time) (jose.JSONWe
 	return jose.JSONWebKeySet{Keys: signingKeys}, true
 }
 
+// reusedKeyID detects a changed key published under an existing identifier; an unchanged overlap is allowed.
+// reusedKeyID находит изменённый ключ под прежним идентификатором; неизменённое пересечение разрешено.
 func reusedKeyID(previous, next jose.JSONWebKeySet) bool {
 	for _, oldKey := range previous.Keys {
 		values := next.Key(oldKey.KeyID)
@@ -157,6 +173,8 @@ func reusedKeyID(previous, next jose.JSONWebKeySet) bool {
 	return false
 }
 
+// VerifySignature checks snapshot availability, the exact RS256 key and current certificate validity before verification.
+// VerifySignature проверяет доступность снимка, точный ключ RS256 и срок сертификата до проверки подписи.
 func (set *boundedKeySet) VerifySignature(_ context.Context, raw string) ([]byte, error) {
 	set.mutex.RLock()
 	keys := set.keys
@@ -187,6 +205,8 @@ func (set *boundedKeySet) VerifySignature(_ context.Context, raw string) ([]byte
 	return payload, nil
 }
 
+// verificationError reports missing, permanently blocked or expired degraded key material before token verification.
+// verificationError сообщает об отсутствии, блокировке либо истечении периода деградации ключей до проверки токена.
 func (set *boundedKeySet) verificationError() error {
 	set.mutex.RLock()
 	defer set.mutex.RUnlock()
@@ -196,6 +216,8 @@ func (set *boundedKeySet) verificationError() error {
 	return nil
 }
 
+// validKeyTime accepts only keys whose attached certificates are all valid at the supplied instant.
+// validKeyTime принимает ключ, только если все его сертификаты действуют в указанный момент.
 func validKeyTime(key jose.JSONWebKey, now time.Time) bool {
 	for _, certificate := range key.Certificates {
 		if certificate == nil || now.Before(certificate.NotBefore) || !now.Before(certificate.NotAfter) {
@@ -205,6 +227,8 @@ func validKeyTime(key jose.JSONWebKey, now time.Time) bool {
 	return true
 }
 
+// DegradedDeadline returns the last successful refresh deadline and whether verification is degraded or blocked.
+// DegradedDeadline возвращает срок от последнего успешного обновления и признак деградации либо блокировки.
 func (set *boundedKeySet) DegradedDeadline() (time.Time, bool) {
 	set.mutex.RLock()
 	defer set.mutex.RUnlock()

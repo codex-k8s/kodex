@@ -1,4 +1,5 @@
 import { syntheticNetworkJournal } from "./synthetic-network-journal";
+import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
 import {
   syntheticJourneyProfiles,
   includesJourneySection,
@@ -415,20 +416,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       }
       if (url.pathname === "/config/runtime-config.json") {
         await route.fulfill({
-          json: {
-            revision: "0".repeat(64),
-            environment: "synthetic",
-            apiBaseUrl: "/",
-            realtimeUrl: "/api/v1",
-            requestTimeoutMs: 10_000,
-            oidc: {
-              authority: "https://identity.invalid",
-              clientId: "synthetic",
-              redirectUri: "/auth/callback",
-              postLogoutRedirectUri: "/",
-              scope: "openid",
-            },
-          },
+          json: syntheticRuntimeConfig(),
         });
         return;
       }

@@ -8,6 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// deliveryOutcomeRow holds exact durable inbox and cursor evidence before it is classified.
+// deliveryOutcomeRow хранит точные устойчивые данные inbox и курсора до классификации.
 type deliveryOutcomeRow struct {
 	EventDigest    []byte
 	State          string
@@ -19,7 +21,8 @@ type deliveryOutcomeRow struct {
 	LeaseActive    bool
 }
 
-// ReadDeliveryOutcome авторитетно читает exact durable delivery evidence.
+// ReadDeliveryOutcome authorizes and reads durable evidence for one exact event and digest.
+// ReadDeliveryOutcome авторизует и читает устойчивые данные одного точного события и дайджеста.
 func (processor *Processor) ReadDeliveryOutcome(
 	ctx context.Context,
 	request DeliveryOutcomeRequest,
@@ -68,6 +71,8 @@ func (processor *Processor) ReadDeliveryOutcome(
 	return classifyDeliveryOutcome(request.EventDigest, row)
 }
 
+// classifyDeliveryOutcome chooses a broker action only after validating row shape and event digest.
+// classifyDeliveryOutcome выбирает действие брокера только после проверки строки и дайджеста события.
 func classifyDeliveryOutcome(
 	expectedDigest [sha256.Size]byte,
 	row deliveryOutcomeRow,
@@ -119,6 +124,8 @@ func classifyDeliveryOutcome(
 	return decision, nil
 }
 
+// validDeliveryOutcomeRow enforces the bounded inbox state, sequence, and attempt domain.
+// validDeliveryOutcomeRow проверяет ограниченные состояния inbox, номера и число попыток.
 func validDeliveryOutcomeRow(row deliveryOutcomeRow) bool {
 	return len(row.EventDigest) == sha256.Size &&
 		row.EventSequence > 0 && row.MaxAttempts > 0 &&
@@ -128,6 +135,8 @@ func validDeliveryOutcomeRow(row deliveryOutcomeRow) bool {
 			row.State == stateStale || row.State == stateDeadLetter)
 }
 
+// hasSequenceGap detects a missing predecessor without overflowing the unsigned sequence range.
+// hasSequenceGap находит отсутствующего предшественника без переполнения беззнакового номера.
 func hasSequenceGap(sequence, cursor uint64) bool {
 	return sequence > cursor && sequence-cursor > 1
 }

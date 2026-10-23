@@ -10,11 +10,12 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
+// maxOpenAPIInputSchemaBytes caps executable input schemas before compilation and runtime use.
+// maxOpenAPIInputSchemaBytes ограничивает размер исполняемой схемы до компиляции и применения.
 const maxOpenAPIInputSchemaBytes = 64 << 10
 
-// validateOpenAPIInputSchema закрыто проверяет исполняемую схему. Внешние
-// ссылки и смена dialect не допускаются в package, даже если исходный
-// OpenAPI-документ использовал локальные components.
+// validateOpenAPIInputSchema compiles a bounded closed-object schema without external references or dialect changes.
+// validateOpenAPIInputSchema компилирует ограниченную схему закрытого объекта без внешних ссылок и смены диалекта.
 func validateOpenAPIInputSchema(candidate map[string]any) ([]byte, *jsonschema.Schema, error) {
 	if candidate["type"] != "object" || candidate["additionalProperties"] != false {
 		return nil, nil, errors.New("OpenAPI input schema root must be a closed object")
@@ -23,6 +24,8 @@ func validateOpenAPIInputSchema(candidate map[string]any) ([]byte, *jsonschema.S
 	if err != nil || len(encoded) == 0 || len(encoded) > maxOpenAPIInputSchemaBytes {
 		return nil, nil, errors.New("OpenAPI input schema size is invalid")
 	}
+	// item pairs one schema node with traversal depth so complexity limits apply before compilation.
+	// item связывает узел схемы с глубиной обхода для проверки сложности до компиляции.
 	type item struct {
 		value any
 		depth int
@@ -39,8 +42,8 @@ func validateOpenAPIInputSchema(candidate map[string]any) ([]byte, *jsonschema.S
 		}
 		switch value := current.value.(type) {
 		case map[string]any:
-			// Вложенный JSON object тоже должен быть закрыт: иначе одна
-			// выбранная операция фактически принимает произвольные поля body.
+			// A nested JSON object must also be closed; otherwise one selected operation accepts arbitrary body fields.
+			// Вложенный JSON-объект тоже закрыт, иначе выбранная операция примет произвольные поля тела.
 			if value["type"] == "object" && value["additionalProperties"] != false {
 				return nil, nil, errors.New("OpenAPI input object schema must be closed")
 			}
@@ -83,6 +86,8 @@ func validateOpenAPIInputSchema(candidate map[string]any) ([]byte, *jsonschema.S
 	return encoded, compiled, nil
 }
 
+// validateOpenAPIInput accepts one bounded object against the compiled schema and returns canonical JSON bytes.
+// validateOpenAPIInput принимает один ограниченный объект по скомпилированной схеме и возвращает канонические байты JSON.
 func validateOpenAPIInput(raw []byte, compiled *jsonschema.Schema) ([]byte, error) {
 	if len(raw) == 0 || len(raw) > maxObjectBytes || compiled == nil {
 		return nil, errors.New("OpenAPI input is invalid")

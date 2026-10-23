@@ -15,6 +15,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
+	github.com/codex-k8s/kodex/libs/go/providerfinancewire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimesecret v0.0.0
@@ -167,6 +168,8 @@ replace github.com/codex-k8s/kodex/libs/go/oidcidentity => ../../../libs/go/oidc
 replace github.com/codex-k8s/kodex/libs/go/oidcverifier => ../../../libs/go/oidcverifier
 
 replace github.com/codex-k8s/kodex/libs/go/objectstorage => ../../../libs/go/objectstorage
+
+replace github.com/codex-k8s/kodex/libs/go/providerfinancewire => ../../../libs/go/providerfinancewire
 
 replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
 

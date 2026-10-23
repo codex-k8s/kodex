@@ -11,6 +11,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument accepts synthetic API mode and rejects OAuth mode,
+// extra fields, a second JSON value and edge-whitespace keys; it does not cover duplicate-key rejection.
+// TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument принимает synthetic API mode и отклоняет OAuth mode,
+// extra fields, второй JSON value и keys с edge whitespace; duplicate-key rejection не проверяет.
 func TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument(t *testing.T) {
 	t.Parallel()
 	key, err := projectedAPIKey([]byte(`{"OPENAI_API_KEY":"synthetic-key","auth_mode":"apikey"}`))
@@ -31,6 +35,10 @@ func TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument(t *testing.T) {
 	}
 }
 
+// TestDelegatedAuthorityLocatorRequiresExactVerifiedBinding mutates project/source revision/provenance or
+// shortens the parent below verified expiry and requires comparison refusal without verifying a signature.
+// TestDelegatedAuthorityLocatorRequiresExactVerifiedBinding меняет project/source revision/provenance либо
+// сокращает parent ниже verified expiry и требует отказа сравнения без проверки signature.
 func TestDelegatedAuthorityLocatorRequiresExactVerifiedBinding(t *testing.T) {
 	t.Parallel()
 	verified, locator := projectionAuthorityFixtures()
@@ -54,6 +62,10 @@ func TestDelegatedAuthorityLocatorRequiresExactVerifiedBinding(t *testing.T) {
 	}
 }
 
+// TestDelegatedAuthorityLocatorAcceptsBoundedContinuation permits a shortened verified expiry with or
+// without project and rejects missing/invalid/past/extended continuation timestamps.
+// TestDelegatedAuthorityLocatorAcceptsBoundedContinuation допускает shortened verified expiry с project
+// либо без него и отклоняет missing/invalid/past/extended continuation timestamps.
 func TestDelegatedAuthorityLocatorAcceptsBoundedContinuation(t *testing.T) {
 	t.Parallel()
 	for _, projectScoped := range []bool{false, true} {
@@ -81,6 +93,10 @@ func TestDelegatedAuthorityLocatorAcceptsBoundedContinuation(t *testing.T) {
 	}
 }
 
+// TestOrganizationProjectionScopeIsMethodSpecific rejects orphan project provenance and checks the
+// runtime/assistant/STT absent-versus-present project matrix on synthetic identities.
+// TestOrganizationProjectionScopeIsMethodSpecific отклоняет orphan project provenance и проверяет
+// runtime/assistant/STT матрицу absent/present project на synthetic identities.
 func TestOrganizationProjectionScopeIsMethodSpecific(t *testing.T) {
 	verified, locator := projectionAuthorityFixtures()
 	project := verified.Authority.Project
@@ -107,6 +123,10 @@ func TestOrganizationProjectionScopeIsMethodSpecific(t *testing.T) {
 	}
 }
 
+// projectionAuthorityFixtures creates matching synthetic identities/provenance/locator with a short future
+// parent expiry; it does not create a middleware-verified proof or sign a token.
+// projectionAuthorityFixtures создаёт совпадающие synthetic identities/provenance/locator с коротким
+// future parent expiry; middleware-verified proof и подпись token не создаёт.
 func projectionAuthorityFixtures() (*internalrpcauthorityv1.VerifiedAuthorizationContext, *sttv1.DelegatedAuthorityLocator) {
 	expiresAt := time.Now().UTC().Add(time.Minute).Truncate(time.Second)
 	actor := projectionIdentity("c20ac176-c0ca-499f-91a4-6fc65c4ef30e", "actor-reference", 'a')
@@ -125,6 +145,10 @@ func projectionAuthorityFixtures() (*internalrpcauthorityv1.VerifiedAuthorizatio
 	}
 }
 
+// projectionIdentity builds one caller-selected synthetic identity with DOMAIN_STATE provenance and a
+// repeated-character digest, not a domain lookup.
+// projectionIdentity создаёт одну caller-selected synthetic identity с DOMAIN_STATE provenance и
+// repeated-character digest, не выполняя domain lookup.
 func projectionIdentity(id, reference string, digestCharacter byte) *internalrpcauthorityv1.AuthorityIdentity {
 	return &internalrpcauthorityv1.AuthorityIdentity{Id: id, Provenance: &internalrpcauthorityv1.AuthorityProvenance{
 		Source:    internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE,
@@ -132,11 +156,19 @@ func projectionIdentity(id, reference string, digestCharacter byte) *internalrpc
 	}}
 }
 
+// projectionLocatorProvenance copies identity provenance fields into the STT locator DTO without signing
+// or validating them.
+// projectionLocatorProvenance копирует identity provenance fields в STT locator DTO без подписи и
+// проверки.
 func projectionLocatorProvenance(identity *internalrpcauthorityv1.AuthorityIdentity) *sttv1.AuthorityIdentityProvenance {
 	value := identity.GetProvenance()
 	return &sttv1.AuthorityIdentityProvenance{Source: int32(value.GetSource()), Reference: value.GetReference(), Revision: value.GetRevision(), DigestSha256: value.GetDigestSha256()}
 }
 
+// projectionHex repeats a supplied byte 64 times for fixtures; callers choose hexadecimal bytes where a
+// valid digest shape is required.
+// projectionHex повторяет переданный byte 64 раза для fixtures; caller выбирает hexadecimal bytes, когда
+// нужна valid digest shape.
 func projectionHex(character byte) string {
 	value := make([]byte, 64)
 	for index := range value {

@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// TestRuntimeFileCatalogBindsSnapshotAndPreservesLegacyShape keeps an absent optional catalog out of JSON and binds every supplied snapshot field while rejecting invalid purpose sets.
+// TestRuntimeFileCatalogBindsSnapshotAndPreservesLegacyShape не включает отсутствующий необязательный каталог в JSON и связывает каждое поле заданного снимка, отклоняя некорректные наборы назначений.
 func TestRuntimeFileCatalogBindsSnapshotAndPreservesLegacyShape(t *testing.T) {
 	input := validRunnerInputFixture()
 	source := RuntimeRevisionCredentialSource{SecretName: "fixture", SecretUID: "fixture-uid", SecretResourceVersion: "1"}

@@ -32,22 +32,52 @@ import (
 )
 
 const (
-	ProviderSocketPath           = "/run/kodex/provider/provider.sock"
-	maximumBrokerBytes           = 4 << 20
+	// ProviderSocketPath fixes the shared Unix socket through which runner contacts the isolated provider.
+	// ProviderSocketPath задаёт общий Unix-сокет обращения runner к изолированному провайдеру.
+	ProviderSocketPath = "/run/kodex/provider/provider.sock"
+	// maximumBrokerBytes caps the scanned request frame; prompt bytes have a separate smaller limit.
+	// maximumBrokerBytes ограничивает считываемый кадр запроса; байты prompt имеют отдельный меньший лимит.
+	maximumBrokerBytes = 4 << 20
+	// providerRefreshCommitTimeout bounds credential commit independently of a cancelled execution context.
+	// providerRefreshCommitTimeout ограничивает сохранение реквизитов независимо от отменённого контекста исполнения.
 	providerRefreshCommitTimeout = 40 * time.Second
-	providerSandboxProbeTimeout  = 5 * time.Second
-	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
-	providerWriterUID            = 10002
-	rolloutCaptureSchema         = "kodex.provider-rollout-capture.v1"
-	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s; notification_error: %s; stream_error: %s"
+	// providerSandboxProbeTimeout bounds the startup bubblewrap availability probe, not an agent turn.
+	// providerSandboxProbeTimeout ограничивает стартовую проверку bubblewrap, а не ход агента.
+	providerSandboxProbeTimeout = 5 * time.Second
+	// providerResultDeliveryGrace budgets process termination, credential commit and final response reading
+	// after cancellation; it does not extend the immutable execution deadline.
+	// providerResultDeliveryGrace отводит время остановке процесса, сохранению реквизитов и чтению итога
+	// после отмены; неизменяемый срок исполнения этим не продлевается.
+	providerResultDeliveryGrace = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
+	// providerWriterUID is the required kernel peer UID for provider responses, not a payload identity.
+	// providerWriterUID задаёт обязательный UID peer из ядра для ответов провайдера, а не идентичность из payload.
+	providerWriterUID = 10002
+	// rolloutCaptureSchema pins the private proof envelope relating archive evidence to a single execution.
+	// rolloutCaptureSchema закрепляет формат приватного доказательства связи архива с одним исполнением.
+	rolloutCaptureSchema = "kodex.provider-rollout-capture.v1"
+	// providerSafeFailureLog formats safe stage/category fields and a correlated numeric RPC code;
+	// callers must classify first instead of interpolating the original error or provider body.
+	// providerSafeFailureLog форматирует безопасные этапы, категории и числовой код связанного RPC;
+	// вызывающий код сначала классифицирует отказ, не подставляя исходную ошибку или тело провайдера.
+	providerSafeFailureLog = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s; notification_error: %s; stream_error: %s"
 )
 
 var (
-	ErrProviderAuthentication        = errors.New("Codex provider authentication is unavailable")
+	// ErrProviderAuthentication is the stable missing/invalid-auth sentinel without credential details.
+	// ErrProviderAuthentication является устойчивым маркером отсутствующих или неверных реквизитов без их деталей.
+	ErrProviderAuthentication = errors.New("Codex provider authentication is unavailable")
+	// errProviderBrokerResponseInvalid marks a rejected response shape or peer without echoing untrusted input.
+	// errProviderBrokerResponseInvalid отмечает отклонённую структуру ответа или peer без вывода недоверенного ввода.
 	errProviderBrokerResponseInvalid = errors.New("isolated Codex provider response is invalid")
-	errProviderBrokerFailed          = errors.New("isolated Codex provider failed")
+	// errProviderBrokerFailed represents provider/transport failure separately from a malformed response.
+	// errProviderBrokerFailed обозначает отказ провайдера или транспорта отдельно от повреждённого ответа.
+	errProviderBrokerFailed = errors.New("isolated Codex provider failed")
 )
 
+// brokerRequest transfers one versioned execution snapshot, prompt and local MCP capability over UDS.
+// Its fields are not authority by themselves: peer, input, context and credential pins are checked on receipt.
+// brokerRequest переносит версию, снимок исполнения, prompt и локальную MCP capability через UDS.
+// Поля сами не дают полномочий: получатель проверяет peer, input, context и привязки реквизитов.
 type brokerRequest struct {
 	Version       int         `json:"version"`
 	Input         model.Input `json:"input"`
@@ -56,6 +86,10 @@ type brokerRequest struct {
 	MCPProxyToken string      `json:"mcp_proxy_token"`
 }
 
+// brokerResponse separates transport/execution failure class from the Result outcome and optional
+// bound diagnostic/capture evidence. The strict terminal consumer enforces admissible combinations.
+// brokerResponse отделяет класс отказа транспорта или исполнения от Outcome результата и необязательных
+// привязанных доказательств диагностики и архива. Допустимые сочетания проверяет строгий читатель итога.
 type brokerResponse struct {
 	Result         Result                                     `json:"result"`
 	Failure        providerBrokerFailure                      `json:"failure,omitempty"`
@@ -64,8 +98,10 @@ type brokerResponse struct {
 	Diagnostic     *runtimecontract.ProviderFailureDiagnostic `json:"diagnostic,omitempty"`
 }
 
-// Подтверждение создаётся только чтением настоящего источника. Exported поля
-// Result сами по себе не подтверждают происхождение и никогда его не заменяют.
+// rolloutCaptureProof records exact execution/attempt/session/turn and captured archive metadata.
+// The private sealed flag is not decoded from JSON; exported Result fields alone cannot establish proof.
+// rolloutCaptureProof хранит точные привязки исполнения, попытки, сессии, хода и метаданные захваченного архива.
+// Приватный sealed не читается из JSON; одни публичные поля Result не устанавливают доказательство.
 type rolloutCaptureProof struct {
 	Schema                 string `json:"schema"`
 	ExecutionBindingDigest string `json:"execution_binding_digest"`
@@ -81,6 +117,10 @@ type rolloutCaptureProof struct {
 	sealed                 bool
 }
 
+// bound checks the proof's schema, canonical digests, exact execution tuple, archive identity/size and
+// canonical workspace/home relationship. It neither reads archive bytes nor checks the private seal.
+// bound проверяет схему, канонические digest, точную привязку исполнения, имя и размер архива,
+// а также каноническую связь workspace/home. Байты архива и приватный seal здесь не проверяются.
 func (proof *rolloutCaptureProof) bound(input model.Input) bool {
 	return proof != nil && proof.Schema == rolloutCaptureSchema && input.Mode == runtimecontract.RunnerModeTurn &&
 		validCaptureDigest(input.ExecutionBindingDigest) && validCaptureDigest(input.RuntimeRevisionDigest) && validCaptureDigest(input.InputDigest) &&
@@ -91,11 +131,17 @@ func (proof *rolloutCaptureProof) bound(input model.Input) bool {
 		filepath.IsAbs(input.WorkspaceRoot) && filepath.Clean(input.WorkspaceRoot) == input.WorkspaceRoot && input.CodexHome == filepath.Join(input.WorkspaceRoot, ".kodex/state/codex-home")
 }
 
+// validCaptureDigest accepts only a lowercase canonical hexadecimal SHA-256 digest of exactly 32 bytes.
+// validCaptureDigest принимает только канонический SHA-256 из ровно32 байтов в нижнем шестнадцатеричном регистре.
 func validCaptureDigest(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == sha256.Size && hex.EncodeToString(decoded) == value
 }
 
+// withRolloutCapture attaches a sealed proof and its public metadata to a value copy of Result.
+// It does not independently verify input binding, file bytes or the final absolute archive path.
+// withRolloutCapture прикрепляет закрытое доказательство и его публичные метаданные к копии Result.
+// Она самостоятельно не проверяет привязку input, байты файла или окончательный абсолютный путь архива.
 func withRolloutCapture(result Result, proof *rolloutCaptureProof) Result {
 	if proof == nil || !proof.sealed {
 		return result
@@ -105,15 +151,28 @@ func withRolloutCapture(result Result, proof *rolloutCaptureProof) Result {
 	return result
 }
 
+// matchesCapture compares only public session/relative-path/digest/size metadata to the supplied proof.
+// It is not a file read, input-binding check or seal validation.
+// matchesCapture сравнивает только публичные session, относительный путь, digest и размер с доказательством.
+// Она не читает файл и не проверяет input binding или seal.
 func (result Result) matchesCapture(proof *rolloutCaptureProof) bool {
 	return proof != nil && result.SessionID == proof.SessionID && result.ArchiveRelativePath == proof.RelativePath && result.ArchiveSHA256 == proof.SHA256 && result.ArchiveSizeBytes == proof.SizeBytes
 }
 
-// HasVerifiedRollout не принимает tuple, восстановленный из произвольного JSON.
+// HasVerifiedRollout requires a private sealed, input-bound proof, matching public metadata and the
+// exact workspace-relative absolute path. It cannot be reconstructed from arbitrary Result JSON
+// and does not re-read or re-hash a file that may subsequently change.
+// HasVerifiedRollout требует приватное закрытое доказательство, привязку к input, совпадение метаданных
+// и точный абсолютный путь внутри workspace. Его нельзя восстановить из произвольного JSON Result;
+// последующие изменения файла здесь не проверяются повторным чтением или хешированием.
 func (result Result) HasVerifiedRollout(input model.Input) bool {
 	return result.rolloutCapture != nil && result.rolloutCapture.sealed && result.rolloutCapture.bound(input) && result.matchesCapture(result.rolloutCapture) && result.ArchivePath == filepath.Join(input.WorkspaceRoot, filepath.FromSlash(result.ArchiveRelativePath))
 }
 
+// brokerPeerUID obtains Linux SO_PEERCRED only from a real UnixConn under RawConn.Control.
+// Transport, descriptor and credential failures collapse to a safe sentinel; the caller checks the expected UID.
+// brokerPeerUID получает Linux SO_PEERCRED только у настоящего UnixConn внутри RawConn.Control.
+// Ошибки транспорта, дескриптора и реквизитов сводятся к безопасному маркеру; ожидаемый UID сверяет вызывающий код.
 func brokerPeerUID(connection net.Conn) (uint32, error) {
 	peer, ok := connection.(*net.UnixConn)
 	if !ok {
@@ -133,27 +192,52 @@ func brokerPeerUID(connection net.Conn) (uint32, error) {
 	return credential.Uid, nil
 }
 
+// providerBrokerFailure names the closed coarse wire failures, independently of business Result outcomes.
+// providerBrokerFailure задаёт закрытые укрупнённые wire-классы отказов отдельно от Outcome результата.
 type providerBrokerFailure string
 
 const (
+	// providerBrokerFailureAuthentication carries only the authentication failure class, never credentials.
+	// providerBrokerFailureAuthentication переносит только класс отказа авторизации, но не реквизиты.
 	providerBrokerFailureAuthentication providerBrokerFailure = "AUTHENTICATION"
-	providerBrokerFailureAuthority      providerBrokerFailure = "AUTHORITY"
-	providerBrokerFailureMCP            providerBrokerFailure = "MCP"
-	providerBrokerFailureConfiguration  providerBrokerFailure = "CONFIGURATION"
-	providerBrokerFailureProvider       providerBrokerFailure = "PROVIDER"
+	// providerBrokerFailureAuthority identifies an unsupported authority request without granting that authority.
+	// providerBrokerFailureAuthority обозначает неподдерживаемый запрос полномочий, не выдавая их.
+	providerBrokerFailureAuthority providerBrokerFailure = "AUTHORITY"
+	// providerBrokerFailureMCP reports an unavailable required MCP path rather than optional degradation.
+	// providerBrokerFailureMCP сообщает о недоступном обязательном пути MCP, а не необязательном ухудшении.
+	providerBrokerFailureMCP providerBrokerFailure = "MCP"
+	// providerBrokerFailureConfiguration represents a rejected immutable runtime selection/profile.
+	// providerBrokerFailureConfiguration обозначает отклонённый неизменяемый выбор или профиль исполнения.
+	providerBrokerFailureConfiguration providerBrokerFailure = "CONFIGURATION"
+	// providerBrokerFailureProvider is the safe fallback class for other provider or execution failures.
+	// providerBrokerFailureProvider является безопасным общим классом остальных отказов провайдера или исполнения.
+	providerBrokerFailureProvider providerBrokerFailure = "PROVIDER"
 )
 
+// providerAuthenticationSnapshot decodes only the mode and credential-bearing fields needed for local
+// shape checks; it is not a strict unknown-field/duplicate-key validator or an external authentication probe.
+// providerAuthenticationSnapshot читает лишь режим и поля реквизитов для локальной проверки структуры;
+// это не строгий валидатор лишних полей или повторных ключей и не внешняя проверка авторизации.
 type providerAuthenticationSnapshot struct {
 	AuthMode     string          `json:"auth_mode"`
 	OpenAIAPIKey *string         `json:"OPENAI_API_KEY"`
 	Tokens       json.RawMessage `json:"tokens"`
 }
 
+// providerExecutor runs one prepared turn and may return measured partial Result together with an error.
+// providerExecutor исполняет один подготовленный ход и может вернуть частичные измерения Result вместе с ошибкой.
 type providerExecutor func(context.Context, model.Input, []byte, string) (Result, error)
+
+// providerCredentialRefreshCommitter submits refreshed auth with exact previous revision/digest pins;
+// the relay/domain owner, not this function type, authorizes and commits the durable update.
+// providerCredentialRefreshCommitter отправляет обновлённый auth с точными прежними revision/digest;
+// разрешает и фиксирует устойчивое изменение relay или владелец домена, а не этот тип функции.
 type providerCredentialRefreshCommitter func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error
 
-// ExecuteViaBroker передаёт provider-only данные отдельному UID по UDS.
-// Ни app-server, ни запускаемый им shell не получают authority mounts runner.
+// ExecuteViaBroker requires a live activity consumer and delegates provider-only data through UDS.
+// The UID and mount separation is completed by the deployment and receiver checks, not this call alone.
+// ExecuteViaBroker требует потребителя текущих событий и передаёт данные провайдера через UDS.
+// Разделение UID и mount обеспечивают развёртывание и проверки получателя, а не один этот вызов.
 func ExecuteViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error) (Result, error) {
 	if onActivity == nil {
 		return Result{}, errProviderBrokerResponseInvalid
@@ -161,6 +245,12 @@ func ExecuteViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 	return executeViaBroker(ctx, input, prompt, mcpSocket, mcpProxyToken, onActivity)
 }
 
+// readProviderAuthentication checks the protected regular source and pinned digest before returning
+// raw auth to its authorized caller. ReadFile occurs before payload-size validation; this is not an
+// allocation-bounded/no-race file opener and the caller owns clearing the returned bytes.
+// readProviderAuthentication проверяет защищённый обычный файл и закреплённый digest перед выдачей
+// сырого auth уполномоченному коду. ReadFile предшествует проверке размера; это не ограничивающее
+// выделение памяти или исключающее гонки открытие, а очисткой возвращённых байтов владеет вызывающий код.
 func readProviderAuthentication(input model.Input) ([]byte, error) {
 	if err := security.VerifyProtectedRegular(input.ProviderAuthFile, false); err != nil {
 		return nil, ErrProviderAuthentication
@@ -173,6 +263,10 @@ func readProviderAuthentication(input model.Input) ([]byte, error) {
 	return auth, nil
 }
 
+// validateProviderAuthenticationPayload combines local auth-shape checks with exact SHA-256 pin equality,
+// without contacting a provider or proving credential freshness at the remote service.
+// validateProviderAuthenticationPayload объединяет локальную проверку auth с точным совпадением SHA-256,
+// не обращаясь к провайдеру и не доказывая актуальность реквизитов на внешнем сервисе.
 func validateProviderAuthenticationPayload(auth []byte, expectedSHA256 string) error {
 	if validateProviderAuthentication(auth) != nil {
 		return ErrProviderAuthentication
@@ -184,11 +278,17 @@ func validateProviderAuthenticationPayload(auth []byte, expectedSHA256 string) e
 	return nil
 }
 
+// validateProviderAuthentication exposes only the mode parser's validity result, not raw credential fields.
+// validateProviderAuthentication возвращает лишь результат проверки режима, а не исходные поля реквизитов.
 func validateProviderAuthentication(auth []byte) error {
 	_, err := providerAuthenticationMode(auth)
 	return err
 }
 
+// providerAuthenticationMode bounds and parses an object, then accepts supported credential shapes.
+// It intentionally uses ordinary JSON decoding; valid local structure is not successful remote login.
+// providerAuthenticationMode ограничивает и разбирает объект, затем принимает поддерживаемые формы реквизитов.
+// Здесь намеренно обычный JSON decode; корректная локальная структура не означает успешного внешнего входа.
 func providerAuthenticationMode(auth []byte) (string, error) {
 	trimmed := bytes.TrimSpace(auth)
 	if len(auth) == 0 || len(auth) > 1<<20 || len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
@@ -201,6 +301,10 @@ func providerAuthenticationMode(auth []byte) (string, error) {
 	return snapshot.AuthMode, nil
 }
 
+// supportedProviderAuthentication requires nonempty token objects for chatgpt modes or a nonempty API
+// key for apikey mode. It does not validate token claims, expiry or individual OAuth token fields.
+// supportedProviderAuthentication требует непустой объект tokens для chatgpt либо непустой API key
+// для apikey. Claims, срок действия и отдельные OAuth-поля токенов здесь не проверяются.
 func supportedProviderAuthentication(mode string, apiKey *string, tokens json.RawMessage) bool {
 	switch mode {
 	case "chatgpt", "chatgptAuthTokens":
@@ -213,6 +317,12 @@ func supportedProviderAuthentication(mode string, apiKey *string, tokens json.Ra
 	}
 }
 
+// executeViaBroker retries failed dials within a timer window while each dial uses the caller context,
+// requires the kernel provider UID, installs cancellation/read-grace handling, sends one request and
+// reads the exact input-bound response. It never replays an already-sent request after an uncertain result.
+// executeViaBroker повторяет неудачные подключения в пределах окна таймера, передавая context каждой попытке,
+// требует kernel UID провайдера, связывает отмену и срок чтения, отправляет один запрос и читает
+// привязанный к input ответ. Уже отправленный запрос при неопределённом результате не повторяется.
 func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error) (Result, error) {
 	dialer := net.Dialer{}
 	var connection net.Conn
@@ -247,8 +357,12 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 	return readBoundProviderBrokerResponse(connection, &input, providerWriterUID, onActivity)
 }
 
-// После отмены больше не посылаем request, но даём изолированному процессу
-// ограниченное время остановиться, завершить credential callback и вернуть Usage.
+// bindBrokerConnectionContext applies caller write/read deadlines with separate final-result grace
+// and registers an interrupt on cancellation. Its returned cleanup stops that registration or waits
+// for an already-started callback; it does not itself close the connection and must be called once.
+// bindBrokerConnectionContext задаёт сроки записи и чтения с отдельным резервом итога и регистрирует
+// прерывание при отмене. Возвращённая очистка снимает регистрацию либо ждёт начавшийся callback;
+// само соединение она не закрывает и должна вызываться однократно.
 func bindBrokerConnectionContext(ctx context.Context, connection net.Conn) func() {
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = connection.SetWriteDeadline(deadline)
@@ -266,6 +380,10 @@ func bindBrokerConnectionContext(ctx context.Context, connection net.Conn) func(
 	}
 }
 
+// interruptBrokerRequest expires writes and half-closes a Unix connection's write side while retaining
+// a bounded final-result read period. Deadline/half-close errors are deliberately best effort.
+// interruptBrokerRequest прекращает запись и закрывает пишущую сторону Unix-соединения, сохраняя
+// ограниченный период чтения итога. Ошибки deadline и half-close намеренно обрабатываются как best effort.
 func interruptBrokerRequest(connection net.Conn) {
 	_ = connection.SetWriteDeadline(time.Now())
 	if unixConnection, ok := connection.(*net.UnixConn); ok {
@@ -274,6 +392,12 @@ func interruptBrokerRequest(connection net.Conn) {
 	_ = connection.SetReadDeadline(time.Now().Add(providerResultDeliveryGrace))
 }
 
+// validateBrokerTerminal checks usage, closed completeness, absence of batched calls and final-text size.
+// A valid failed envelope keeps only failed-result projection and a typed error; an OK envelope still
+// requires a supported outcome. Peer, sequence and proof validation belong to the surrounding reader.
+// validateBrokerTerminal проверяет usage, полноту, отсутствие пакета вызовов и размер итогового текста.
+// Корректный отказ сохраняет только проекцию измерений с типизированной ошибкой; конверт OK требует
+// допустимого Outcome. Peer, порядок и доказательства проверяет окружающий читатель.
 func validateBrokerTerminal(response brokerResponse) (Result, error) {
 	if response.Result.Usage.Validate() != nil || response.Result.UsageCompleteness > UsageComplete || len(response.Result.ToolCalls) != 0 || len(response.Result.FinalMessage) > maximumFinalBytes {
 		return Result{}, errProviderBrokerResponseInvalid
@@ -293,6 +417,8 @@ func validateBrokerTerminal(response brokerResponse) (Result, error) {
 	return response.Result, nil
 }
 
+// providerBrokerError maps a closed wire class back to its stable sentinel; unknown classes fail closed.
+// providerBrokerError восстанавливает устойчивый маркер по закрытому wire-классу; неизвестный класс отклоняется.
 func providerBrokerError(failure providerBrokerFailure) error {
 	switch failure {
 	case providerBrokerFailureAuthentication:
@@ -310,6 +436,10 @@ func providerBrokerError(failure providerBrokerFailure) error {
 	}
 }
 
+// classifyProviderBrokerFailure uses errors.Is in priority order and defaults to PROVIDER without
+// serializing arbitrary error text; it does not decide whether a result is successful.
+// classifyProviderBrokerFailure проверяет errors.Is в заданном порядке и иначе выбирает PROVIDER без
+// сериализации произвольного текста ошибки; успешность результата эта функция не определяет.
 func classifyProviderBrokerFailure(err error) providerBrokerFailure {
 	switch {
 	case errors.Is(err, ErrProviderAuthentication):
@@ -325,8 +455,10 @@ func classifyProviderBrokerFailure(err error) providerBrokerFailure {
 	}
 }
 
-// Закрытая диагностическая классификация не передаёт исходный ответ,
-// аккаунт, credential или текст ошибки внешнего провайдера в логи.
+// providerSafeFailureClass preserves the distinct account-response schema class and otherwise returns
+// only the coarse safe broker class, excluding external bodies, account identity and credential values.
+// providerSafeFailureClass сохраняет отдельный класс схемы ответа аккаунта, иначе возвращая лишь
+// безопасный укрупнённый класс broker без внешних тел, идентичности аккаунта и значений реквизитов.
 func providerSafeFailureClass(err error) string {
 	if errors.Is(err, errAccountReadResponseInvalid) {
 		return "ACCOUNT_RESPONSE_SCHEMA"
@@ -334,11 +466,21 @@ func providerSafeFailureClass(err error) string {
 	return string(classifyProviderBrokerFailure(err))
 }
 
+// logProviderSafeFailure emits classified stage/detail/notification/stream fields, never err.Error().
+// The numeric code is retained only by the correlated RPC-error projection in providerFailureDetails.
+// logProviderSafeFailure выводит классифицированные stage/detail/notification/stream, но не err.Error().
+// Числовой код сохраняет только проекция связанного RPC-отказа внутри providerFailureDetails.
 func logProviderSafeFailure(stage providerExecutionStage, err error) {
 	diagnostic, code := providerFailureDetails(stage, err)
 	log.Printf(providerSafeFailureLog, stage, diagnostic.Class, diagnostic.Detail, code, diagnostic.Notification, diagnostic.AccountRead, diagnostic.NotificationError, safeAppServerStreamFailureReason(err))
 }
 
+// providerFailureDetails projects typed resume/call failures into allowlisted detail, notification and
+// account/token categories, retaining an RPC code only for RPC_ERROR. Returned diagnostics are unbound;
+// bindProviderDiagnostic must add execution pins and validate before wire delivery.
+// providerFailureDetails переводит типизированные resume/call отказы в разрешённые detail, notification
+// и account/token категории, сохраняя RPC-код только для RPC_ERROR. Диагностика ещё не привязана:
+// bindProviderDiagnostic должна добавить привязки исполнения и проверить её перед wire-доставкой.
 func providerFailureDetails(stage providerExecutionStage, err error) (runtimecontract.ProviderFailureDiagnostic, int64) {
 	detail, code := "NONE", int64(0)
 	notification := "NONE"
@@ -383,6 +525,10 @@ func providerFailureDetails(stage providerExecutionStage, err error) (runtimecon
 		AccountRead: accountRead, NotificationError: notificationError}, code
 }
 
+// bindProviderDiagnostic assigns schema and exact execution pins, narrows notification values and
+// returns nil if the resulting diagnostic is invalid. It does not authenticate caller-supplied input.
+// bindProviderDiagnostic назначает схему и точные привязки исполнения, сужает notification
+// и возвращает nil при неверной диагностике. Подлинность переданного input она сама не устанавливает.
 func bindProviderDiagnostic(input model.Input, value runtimecontract.ProviderFailureDiagnostic) *runtimecontract.ProviderFailureDiagnostic {
 	value.Schema, value.RuntimeRevisionDigest, value.InputDigest = runtimecontract.ProviderFailureDiagnosticSchema, input.RuntimeRevisionDigest, input.InputDigest
 	value.ExecutionBindingDigest, value.SessionRef, value.TurnRef, value.Attempt = input.ExecutionBindingDigest, input.SessionRef, input.TurnRef, input.Attempt
@@ -397,8 +543,10 @@ func bindProviderDiagnostic(input model.Input, value runtimecontract.ProviderFai
 	return &value
 }
 
-// Дополнительные методы Codex 0.160.0 разрешены только для закрытой диагностики,
-// а не для исполнения notification или расширения authority.
+// safeNotificationMethod returns registered notification names plus a closed diagnostic-only set;
+// recognizing a name here neither executes it nor expands the protocol's allowed notification methods.
+// safeNotificationMethod возвращает зарегистрированные имена уведомлений и закрытое диагностическое дополнение;
+// узнавание имени не исполняет уведомление и не расширяет методы, разрешённые протоколом.
 func safeNotificationMethod(method string) string {
 	if _, allowed := serverNotificationMethods[method]; allowed {
 		return method
@@ -415,8 +563,14 @@ func safeNotificationMethod(method string) string {
 	}
 }
 
-// ServeProviderBroker запускается только в container UID 10002 без Kubernetes
-// token, application grants, mTLS keys, MCP bearer и handoff signing key.
+// ServeProviderBroker requires UID10002, disables dumpability, probes bubblewrap and serves the protected
+// UDS one connection at a time. Context cancellation closes the listener; request failures are safely
+// logged before accepting the next peer. Absence of runner authority mounts is a deployment invariant,
+// not inspected here, and this routine does not claim to join its listener-cancellation goroutine.
+// ServeProviderBroker требует UID10002, отключает dumpability, проверяет bubblewrap и обслуживает
+// защищённый UDS по одному соединению. Отмена закрывает listener; отказ запроса безопасно логируется
+// перед следующим peer. Отсутствие authority mounts runner обеспечивает развёртывание, а не эта функция;
+// она не заявляет ожидания своей goroutine отмены listener.
 func ServeProviderBroker(ctx context.Context) error {
 	proofObserver := providerInputProofLogger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	if os.Geteuid() != 10002 {
@@ -458,6 +612,10 @@ func ServeProviderBroker(ctx context.Context) error {
 	}
 }
 
+// verifyProviderSandbox runs the fixed read-only bubblewrap probe with a minimal environment and
+// bounded context through the supplied executor. An injected successful executor is not live sandbox proof.
+// verifyProviderSandbox запускает фиксированную read-only проверку bubblewrap с минимальным окружением
+// и ограниченным context через переданный executor. Подставленный успешный executor не доказывает живой sandbox.
 func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) error {
 	if execute == nil {
 		return errors.New("Codex provider sandbox probe is unavailable")
@@ -475,6 +633,14 @@ func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) e
 	return nil
 }
 
+// serveBrokerRequest accepts only a UID10001 Unix peer, validates the bounded request and runtime/context
+// snapshot, binds peer cancellation/deadline, verifies auth and MCP capability, then prepares the bridge
+// and executes one turn with credential relay. Failures retain measured usage and safe provenance;
+// normalization follows completed execution. This path does not accept authority from request IDs alone.
+// serveBrokerRequest принимает только Unix peer с UID10001, проверяет ограниченный запрос и runtime/context,
+// связывает отмену и срок, проверяет auth и MCP capability, затем готовит bridge и исполняет один ход
+// с credential relay. Отказы сохраняют измерения и безопасное происхождение; нормализация следует
+// после исполнения. Одни идентификаторы запроса не дают этому пути полномочий.
 func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver providerInputProofObserver) error {
 	unixConnection, ok := connection.(*net.UnixConn)
 	if !ok {
@@ -569,17 +735,25 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	return frames.finish(brokerResponse{Result: result, OK: true, Diagnostic: diagnostic})
 }
 
+// writeProviderBrokerFailure sends an empty failed-result envelope using the safe classification of err.
+// writeProviderBrokerFailure отправляет пустой конверт отказа, используя безопасную классификацию err.
 func writeProviderBrokerFailure(connection io.Writer, err error) error {
 	return writeProviderBrokerResultFailure(connection, Result{}, err)
 }
 
+// writeProviderBrokerFailureAtStage logs only safe stage metadata, then writes a stage-wrapped failure.
+// writeProviderBrokerFailureAtStage логирует только безопасные данные этапа и пишет отказ с привязкой к этапу.
 func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecutionStage, err error) error {
 	logProviderSafeFailure(stage, err)
 	return writeProviderBrokerFailure(connection, atProviderStage(stage, err))
 }
 
-// Ошибка не подтверждает итог или credential effect. Измеренный расход и
-// безопасная native timeline сохраняются независимо от этого исхода.
+// failedProviderResult drops unconfirmed outcome/final text while retaining measured usage, completeness,
+// activity facts and private diagnostics. Matching sealed capture metadata is retained without a new
+// file read; slices/pointers are not deep-copied and no credential effect is confirmed by this projection.
+// failedProviderResult убирает неподтверждённые Outcome и итоговый текст, сохраняя измерения, полноту,
+// факты событий и приватную диагностику. Совпадающий закрытый захват сохраняется без нового чтения файла;
+// slice/pointer не копируются глубоко, а подтверждения credential effect эта проекция не выдаёт.
 func failedProviderResult(result Result) Result {
 	failed := Result{Usage: result.Usage, UsageCompleteness: result.UsageCompleteness, ToolCalls: result.ToolCalls, providerDiagnostic: result.providerDiagnostic}
 	if result.rolloutCapture != nil && result.rolloutCapture.sealed && result.matchesCapture(result.rolloutCapture) {
@@ -589,6 +763,12 @@ func failedProviderResult(result Result) Result {
 	return failed
 }
 
+// writeProviderBrokerResultFailure keeps the failed-result measurement projection and adds a validated
+// input-bound diagnostic only when the supplied writer carries that input. Terminal framing removes
+// already-published tool calls; no raw underlying error is serialized.
+// writeProviderBrokerResultFailure сохраняет проекцию измерений отказа и добавляет проверенную привязанную
+// диагностику только при наличии input у writer. Кадр итога исключает уже переданные вызовы;
+// исходная вложенная ошибка не сериализуется.
 func writeProviderBrokerResultFailure(connection io.Writer, result Result, err error) error {
 	var diagnostic *runtimecontract.ProviderFailureDiagnostic
 	if frames, ok := connection.(*brokerFrameWriter); ok && frames.input != nil {
@@ -603,6 +783,14 @@ func writeProviderBrokerResultFailure(connection io.Writer, result Result, err e
 	})
 }
 
+// executeProviderTurn validates the pinned deadline, then executes once with a deferred attempt to remove
+// the temporary auth file. Refreshed credentials use an independent commit timeout even after execution failure;
+// refresh/commit errors keep the measured Result. Successful non-assistant artifact-capable turns
+// publish their outbox, converting publication failure into a failed outcome without inventing success.
+// executeProviderTurn проверяет закреплённый срок, затем исполняет один раз с отложенной попыткой удалить
+// временный auth. Обновлённые реквизиты сохраняются с независимым timeout даже после отказа исполнения;
+// ошибки refresh/commit сохраняют измеренный Result. Успешный ход не-помощника с artifact capability
+// публикует outbox, а отказ публикации даёт ошибочный Outcome вместо выдуманного успеха.
 func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string,
 	execute providerExecutor, commit providerCredentialRefreshCommitter,
 ) (Result, error) {
@@ -642,6 +830,12 @@ func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, 
 	return result, executionErr
 }
 
+// readProviderCredentialRefresh opens the workspace-confined protected auth file, bounds metadata and
+// actual read size, validates its mode and compares the content pin. Changed API-key auth is rejected;
+// invalid buffers are cleared, while callers must clear a successfully returned OAuth/auth buffer.
+// readProviderCredentialRefresh открывает защищённый auth внутри workspace, ограничивает метаданные
+// и фактическое чтение, проверяет режим и сравнивает digest. Изменившийся API-key auth отклоняется;
+// ошибочные буферы очищаются, а успешно возвращённый auth обязан очистить вызывающий код.
 func readProviderCredentialRefresh(input model.Input, path string) ([]byte, bool, error) {
 	file, info, err := openProtectedFile(input.WorkspaceRoot, path)
 	if err != nil {
@@ -670,6 +864,10 @@ func readProviderCredentialRefresh(input model.Input, path string) ([]byte, bool
 	return authentication, changed, nil
 }
 
+// providerMCPBridge owns the loopback HTTP server, UDS-only upstream transport and serve completion channel.
+// Its URL is local provider access, not a new public endpoint or authority grant.
+// providerMCPBridge владеет loopback HTTP server, транспортом upstream только через UDS и каналом завершения.
+// Его URL даёт локальную точку доступа провайдера, а не публичный endpoint или новые полномочия.
 type providerMCPBridge struct {
 	server    *http.Server
 	transport *http.Transport
@@ -677,6 +875,14 @@ type providerMCPBridge struct {
 	url       string
 }
 
+// startProviderMCPBridge requires the provider UID and fixed authority socket, then exposes bearer-checked
+// MCP methods and catalog-bound file GETs on loopback. The proxy dials only that UDS, strips incoming
+// cookie/forwarding headers and bounds file-response context/write time. Authorization stays with the
+// upstream authority; token-length checks here are not independent token authenticity verification.
+// startProviderMCPBridge требует UID провайдера и фиксированный authority socket, открывая на loopback
+// MCP-методы с bearer-проверкой и привязанные к каталогу file GET. Proxy ходит только в этот UDS,
+// удаляет входящие cookie/forwarding заголовки и ограничивает context/запись файлового ответа.
+// Авторизация остаётся у upstream; одна проверка длины токена здесь не доказывает его подлинность.
 func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, input model.Input) (*providerMCPBridge, error) {
 	if os.Geteuid() != 10002 || socketPath != "/run/kodex/provider/mcp-authority.sock" || len(localToken) != 64 {
 		return nil, errors.New("provider MCP bridge binding is invalid")
@@ -736,8 +942,14 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, 
 	return bridge, nil
 }
 
+// URL returns the bridge's loopback MCP address without performing readiness or network checks.
+// URL возвращает loopback адрес MCP bridge без проверки готовности или сетевого запроса.
 func (bridge *providerMCPBridge) URL() string { return bridge.url }
 
+// Close abruptly closes the HTTP server, releases idle upstream connections and waits at most one second
+// for Serve to return. It is not graceful request draining and timeout does not prove the goroutine joined.
+// Close немедленно закрывает HTTP server, освобождает idle upstream connections и ждёт Serve максимум секунду.
+// Это не graceful drain запросов, а timeout не доказывает завершение goroutine.
 func (bridge *providerMCPBridge) Close() {
 	_ = bridge.server.Close()
 	bridge.transport.CloseIdleConnections()
@@ -749,15 +961,25 @@ func (bridge *providerMCPBridge) Close() {
 	}
 }
 
+// decodeEOF accepts only an immediate EOF after decoding; a second value or malformed suffix is rejected.
+// decodeEOF принимает только немедленный EOF; второе значение или повреждённый хвост отклоняются.
 func decodeEOF(decoder *json.Decoder) bool {
 	return errors.Is(decoder.Decode(&struct{}{}), io.EOF)
 }
 
+// boundedReader tracks a caller-supplied byte budget across reads without allocating a full response.
+// Exhaustion produces an error rather than pretending the input ended cleanly.
+// boundedReader отслеживает переданный байтовый бюджет чтений без выделения полного ответа.
+// Исчерпание даёт ошибку, а не притворяется корректным концом ввода.
 type boundedReader struct {
 	reader    io.Reader
 	remaining int64
 }
 
+// Read truncates the requested buffer to the remaining budget and decrements it by actual bytes read.
+// A subsequent read at zero budget fails even if the underlying reader would otherwise return EOF.
+// Read ограничивает буфер оставшимся бюджетом и уменьшает его на реально прочитанные байты.
+// Следующее чтение при нулевом бюджете завершается ошибкой, даже если исходный reader вернул бы EOF.
 func (reader *boundedReader) Read(value []byte) (int, error) {
 	if reader.remaining <= 0 {
 		return 0, errors.New("provider broker request exceeded its bound")

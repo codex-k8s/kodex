@@ -8,6 +8,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestRuntimeInitializerHasExactDeclaredEnvironmentMounts inspects turn/warm
+// Pod-generation modes for one exact writable mount per declared volume in
+// initializer/role/provider, no aliases/propagation and no preparation/relay mount.
+// It changes fixture policy without claiming a new authoritative runtime seal.
+// TestRuntimeInitializerHasExactDeclaredEnvironmentMounts проверяет modes генерации
+// turn/warm Pod: по одному точному writable mount каждого тома у initializer,
+// role и provider, без aliases/propagation и mounts у preparation/relay.
+// Изменение fixture policy не объявляется новым авторитетным runtime seal.
 func TestRuntimeInitializerHasExactDeclaredEnvironmentMounts(t *testing.T) {
 	for _, mode := range []string{"turn", "warm"} {
 		t.Run(mode, func(t *testing.T) {

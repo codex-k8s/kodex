@@ -12,10 +12,18 @@ import (
 )
 
 const (
+	// testThreadID identifies the synthetic thread shared by protocol fixtures; it grants no session access.
+	// testThreadID обозначает синтетический thread protocol fixtures и не даёт доступ к сессии.
 	testThreadID = "01980000-0000-7000-8000-000000000001"
-	testTurnID   = "01980000-0000-7000-8000-000000000002"
+	// testTurnID identifies a distinct synthetic turn so fixtures can detect thread/turn binding mistakes.
+	// testTurnID обозначает отдельный синтетический ход для выявления ошибок thread/turn binding.
+	testTurnID = "01980000-0000-7000-8000-000000000002"
 )
 
+// TestProtocolAcceptsStructuredSuccess binds a start, final item and terminal notification to
+// one tuple, verifying the resulting success/text without creating a full captured execution.
+// TestProtocolAcceptsStructuredSuccess связывает start, final item и terminal с одним tuple,
+// проверяя успех и текст без создания полного захваченного исполнения.
 func TestProtocolAcceptsStructuredSuccess(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
@@ -39,6 +47,10 @@ func TestProtocolAcceptsStructuredSuccess(t *testing.T) {
 	}
 }
 
+// TestCurrentRawResponseNotificationsAreAcceptedWithoutReadingPayload accepts a discarded raw item
+// and a null-usage receipt; it does not assert deep validation or publication of the raw item body.
+// TestCurrentRawResponseNotificationsAreAcceptedWithoutReadingPayload принимает отбрасываемый raw item
+// и null-usage receipt; глубокая проверка или публикация сырого item body этим не доказываются.
 func TestCurrentRawResponseNotificationsAreAcceptedWithoutReadingPayload(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
@@ -53,6 +65,10 @@ func TestCurrentRawResponseNotificationsAreAcceptedWithoutReadingPayload(t *test
 	}
 }
 
+// TestTurnStartedNotificationMayPrecedeTurnResponse permits an early start notification followed
+// by a matching RPC result, preserving one start and the same bound turn ID.
+// TestTurnStartedNotificationMayPrecedeTurnResponse допускает раннее start notification перед
+// совпадающим RPC result, сохраняя один start и тот же связанный turn ID.
 func TestTurnStartedNotificationMayPrecedeTurnResponse(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
@@ -71,6 +87,10 @@ func TestTurnStartedNotificationMayPrecedeTurnResponse(t *testing.T) {
 	}
 }
 
+// TestTurnStartOrderingRejectsIdentityMismatch rejects a turn response that disagrees with the
+// turn ID already established by an earlier start notification.
+// TestTurnStartOrderingRejectsIdentityMismatch отвергает turn response с ID, отличным от
+// уже установленного ранним start notification.
 func TestTurnStartOrderingRejectsIdentityMismatch(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
@@ -87,6 +107,10 @@ func TestTurnStartOrderingRejectsIdentityMismatch(t *testing.T) {
 	}
 }
 
+// TestNativeToolItemsProduceBoundedRedactedTimelineWithoutMCPDuplicates projects seven synthetic
+// native kinds in order, deduplicates completion, omits raw sentinels/outside paths and ignores MCP audit.
+// TestNativeToolItemsProduceBoundedRedactedTimelineWithoutMCPDuplicates проецирует семь synthetic
+// native kinds по порядку, убирает повтор completion, raw sentinels/внешние пути и не дублирует MCP audit.
 func TestNativeToolItemsProduceBoundedRedactedTimelineWithoutMCPDuplicates(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.workspaceRoot = "/workspace"
@@ -158,6 +182,10 @@ func TestNativeToolItemsProduceBoundedRedactedTimelineWithoutMCPDuplicates(t *te
 	}
 }
 
+// TestWorkspaceScopeAcceptsExactRootAndUnifiedExecStartup classifies the exact workspace root and
+// unifiedExecStartup source in a safe shell summary; no command or filesystem authorization runs.
+// TestWorkspaceScopeAcceptsExactRootAndUnifiedExecStartup классифицирует корень workspace и
+// источник unifiedExecStartup в безопасной shell summary; команда и файловая авторизация не выполняются.
 func TestWorkspaceScopeAcceptsExactRootAndUnifiedExecStartup(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.workspaceRoot = "/workspace"
@@ -177,6 +205,10 @@ func TestWorkspaceScopeAcceptsExactRootAndUnifiedExecStartup(t *testing.T) {
 	}
 }
 
+// TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID maps a nonzero shell exit to failure
+// under its item ID and rejects an unknown provider status.
+// TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID отображает ненулевой shell exit в ошибку
+// под его item ID и отвергает неизвестный provider status.
 func TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.workspaceRoot = "/workspace"
@@ -194,6 +226,10 @@ func TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID(t *testing.T) {
 	}
 }
 
+// TestCodex160WebSearchLifecycleAcceptsEmptyStartedQuery accepts empty start metadata, then checks
+// completed action/count/duration, final success, deduplication and omission of private search content.
+// TestCodex160WebSearchLifecycleAcceptsEmptyStartedQuery принимает пустые start metadata, затем
+// проверяет action/count/duration, final success, отсутствие дублей и приватного search content.
 func TestCodex160WebSearchLifecycleAcceptsEmptyStartedQuery(t *testing.T) {
 	// rust-v0.160.0/ext/web-search/src/tool.rs сначала публикует query="",
 	// action=null и results=null; итоговые сведения появляются при completed.
@@ -252,6 +288,10 @@ func TestCodex160WebSearchLifecycleAcceptsEmptyStartedQuery(t *testing.T) {
 	}
 }
 
+// TestCodex160WebSearchRejectsInvalidMetadataAndTuple rejects missing, mistyped, oversized or
+// unknown search/action fields and notifications belonging to a different thread or turn.
+// TestCodex160WebSearchRejectsInvalidMetadataAndTuple отвергает отсутствующие, неверно типизированные,
+// слишком большие или неизвестные search/action fields и чужие thread/turn notifications.
 func TestCodex160WebSearchRejectsInvalidMetadataAndTuple(t *testing.T) {
 	valid := map[string]any{"id": "web-run-1", "type": "webSearch", "query": "", "action": nil, "results": nil}
 	for _, test := range []struct {
@@ -294,6 +334,10 @@ func TestCodex160WebSearchRejectsInvalidMetadataAndTuple(t *testing.T) {
 	}
 }
 
+// reflectStringSlice compares only a concrete []string with the expected ordered values;
+// a different dynamic type or length fails, while nil and empty []string of equal length compare equal.
+// reflectStringSlice сравнивает только конкретный []string с ожидаемыми значениями по порядку;
+// другой динамический тип/длина дают отказ, nil и пустой []string одинаковой длины равны.
 func reflectStringSlice(value any, expected []string) bool {
 	items, ok := value.([]string)
 	if !ok || len(items) != len(expected) {
@@ -307,6 +351,10 @@ func reflectStringSlice(value any, expected []string) bool {
 	return true
 }
 
+// TestThreadBindingAcceptsCurrentAppServerOptionalFields accepts the recorded optional envelope
+// shape while matching model, cwd and approval; it is not a live CLI compatibility probe.
+// TestThreadBindingAcceptsCurrentAppServerOptionalFields принимает сохранённую optional envelope
+// shape при совпадении model, cwd и approval; это не проверка совместимости с живым CLI.
 func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 	state := newProtocolState("")
 	response := raw(`{
@@ -327,6 +375,10 @@ func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 	}
 }
 
+// codex160ThreadFixture returns a fresh mutable pinned-schema thread map with synthetic identity,
+// metadata and rollout path; it neither reads nor creates the referenced file.
+// codex160ThreadFixture возвращает отдельную изменяемую thread map закреплённой схемы с synthetic
+// identity, metadata и rollout path; указанный файл она не читает и не создаёт.
 func codex160ThreadFixture(t *testing.T) map[string]any {
 	t.Helper()
 	return map[string]any{
@@ -337,6 +389,10 @@ func codex160ThreadFixture(t *testing.T) map[string]any {
 	}
 }
 
+// marshalProtocolFixture serializes trusted test data or fatally stops the calling test
+// without including its payload in the diagnostic; it performs no protocol validation.
+// marshalProtocolFixture сериализует доверенные тестовые данные либо останавливает тест
+// без payload в диагностике; protocol validation она не выполняет.
 func marshalProtocolFixture(t *testing.T, value any) json.RawMessage {
 	t.Helper()
 	encoded, err := json.Marshal(value)
@@ -346,6 +402,10 @@ func marshalProtocolFixture(t *testing.T, value any) json.RawMessage {
 	return encoded
 }
 
+// TestThreadResumeAcceptsCodex160CollaborationModeMetadata accepts null/default/plan metadata
+// without changing thread/workspace authority or exposing discarded developer instructions in Result.
+// TestThreadResumeAcceptsCodex160CollaborationModeMetadata принимает null/default/plan metadata,
+// не меняя thread/workspace authority и не выдавая отброшенные developer instructions в Result.
 func TestThreadResumeAcceptsCodex160CollaborationModeMetadata(t *testing.T) {
 	for _, metadata := range []any{nil,
 		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "reasoning_effort": nil, "developer_instructions": nil}},
@@ -362,6 +422,10 @@ func TestThreadResumeAcceptsCodex160CollaborationModeMetadata(t *testing.T) {
 	}
 }
 
+// TestThreadResumeRejectsInvalidCollaborationModeMetadata rejects invalid mode/settings shapes
+// before assigning a thread or public session ID.
+// TestThreadResumeRejectsInvalidCollaborationModeMetadata отвергает неверные mode/settings shapes
+// до назначения thread или публичного session ID.
 func TestThreadResumeRejectsInvalidCollaborationModeMetadata(t *testing.T) {
 	for _, metadata := range []any{1, "private", []any{},
 		map[string]any{"mode": "unknown", "settings": map[string]any{"model": "codex"}},
@@ -380,6 +444,10 @@ func TestThreadResumeRejectsInvalidCollaborationModeMetadata(t *testing.T) {
 	}
 }
 
+// TestCodex160ThreadMetadataIsTypedAndDiscarded exercises nullable and typed metadata across
+// bind/start/read paths, retaining the original binding/path without leaking metadata-only values.
+// TestCodex160ThreadMetadataIsTypedAndDiscarded проверяет nullable и typed metadata в
+// bind/start/read, сохраняя исходные binding/path без выдачи metadata-only значений.
 func TestCodex160ThreadMetadataIsTypedAndDiscarded(t *testing.T) {
 	for _, nullable := range []bool{false, true} {
 		thread := codex160ThreadFixture(t)
@@ -410,7 +478,13 @@ func TestCodex160ThreadMetadataIsTypedAndDiscarded(t *testing.T) {
 	}
 }
 
+// TestCodex160ThreadMetadataRejectsWrongTypesBoundsAndUnknownFields rejects invalid plugin,
+// environment and thread metadata without exposing its sentinel or partially assigning authority.
+// TestCodex160ThreadMetadataRejectsWrongTypesBoundsAndUnknownFields отвергает неверные plugin,
+// environment и thread metadata без выдачи sentinel и частичного назначения authority.
 func TestCodex160ThreadMetadataRejectsWrongTypesBoundsAndUnknownFields(t *testing.T) {
+	// private marks discarded thread metadata whose reflection would leak raw input into an error.
+	// private отмечает отбрасываемые thread metadata, выдача которых раскрыла бы raw input в ошибке.
 	const private = "private-metadata-sentinel"
 	for _, test := range []struct {
 		name, target, field string
@@ -460,6 +534,10 @@ func TestCodex160ThreadMetadataRejectsWrongTypesBoundsAndUnknownFields(t *testin
 	}
 }
 
+// TestRequiredMCPStatusBindsThreadCatalogBeforeTurn establishes readiness from an exact synthetic
+// tool inventory, then requires a bound startup degradation to return ErrRequiredMCPUnavailable.
+// TestRequiredMCPStatusBindsThreadCatalogBeforeTurn устанавливает готовность по точному synthetic
+// tool inventory и требует ErrRequiredMCPUnavailable после связанного ухудшения startup status.
 func TestRequiredMCPStatusBindsThreadCatalogBeforeTurn(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
@@ -480,6 +558,10 @@ func TestRequiredMCPStatusBindsThreadCatalogBeforeTurn(t *testing.T) {
 	}
 }
 
+// TestRequiredMCPStatusWaitsOnlyForStartupStates keeps starting pending and rejects the listed
+// authentication/failure/cancellation/disabled states as unavailable instead of ready.
+// TestRequiredMCPStatusWaitsOnlyForStartupStates оставляет starting в ожидании и отвергает
+// перечисленные authentication/failure/cancellation/disabled состояния как unavailable, не ready.
 func TestRequiredMCPStatusWaitsOnlyForStartupStates(t *testing.T) {
 	required := []string{"propose_run_metadata"}
 	state := newProtocolState(testThreadID)
@@ -495,6 +577,10 @@ func TestRequiredMCPStatusWaitsOnlyForStartupStates(t *testing.T) {
 	}
 }
 
+// TestRequiredMCPStatusRejectsCatalogDrift rejects a connected inventory missing one required
+// tool; a connected transport alone cannot establish runtime readiness.
+// TestRequiredMCPStatusRejectsCatalogDrift отвергает connected inventory без обязательного
+// инструмента; одного connected transport недостаточно для runtime readiness.
 func TestRequiredMCPStatusRejectsCatalogDrift(t *testing.T) {
 	required := []string{"propose_run_metadata", "get_configuration_catalog"}
 	state := newProtocolState(testThreadID)
@@ -504,7 +590,13 @@ func TestRequiredMCPStatusRejectsCatalogDrift(t *testing.T) {
 	}
 }
 
+// TestCodex160MCPStatusMetadataIsBoundedAndNonAuthoritative accepts varied discarded capability
+// metadata while preserving the exact tool catalog requirement and excluding private values from Result.
+// TestCodex160MCPStatusMetadataIsBoundedAndNonAuthoritative принимает разные отбрасываемые capability
+// metadata, сохраняя точный tool catalog и исключая приватные значения из Result.
 func TestCodex160MCPStatusMetadataIsBoundedAndNonAuthoritative(t *testing.T) {
+	// private detects capability metadata escaping the safe provider Result.
+	// private выявляет выдачу capability metadata в безопасный provider Result.
 	const private = "private-mcp-status-sentinel"
 	for _, capabilities := range []any{nil, map[string]any{"tools": map[string]any{"listChanged": true}, "private": private}, private, []any{true, private}, false} {
 		var response map[string]any
@@ -526,7 +618,13 @@ func TestCodex160MCPStatusMetadataIsBoundedAndNonAuthoritative(t *testing.T) {
 	}
 }
 
+// TestCodex160MCPStatusMetadataFailsClosed rejects malformed/bounded metadata, non-null tool
+// errors, auth mismatch, duplicate fields and duplicate required entries before readiness can be bound.
+// TestCodex160MCPStatusMetadataFailsClosed отвергает неверные/избыточные metadata, non-null tool
+// errors, auth mismatch, повторные поля и required entries до назначения готовности.
 func TestCodex160MCPStatusMetadataFailsClosed(t *testing.T) {
+	// private marks invalid MCP metadata that must not appear in returned errors.
+	// private отмечает неверные MCP metadata, которые не должны попадать в возвращаемые ошибки.
 	const private = "private-mcp-status-sentinel"
 	for _, test := range []struct {
 		name, field string
@@ -582,7 +680,13 @@ func TestCodex160MCPStatusMetadataFailsClosed(t *testing.T) {
 	}
 }
 
+// TestCodex160MCPAppUiIsTypedDiscardedAndTupleBound accepts known UI shapes without emitting
+// native activity or private Result data, then rejects the same item under a different turn.
+// TestCodex160MCPAppUiIsTypedDiscardedAndTupleBound принимает известные UI shapes без
+// native activity и приватных данных Result, затем отвергает тот же item с другим turn.
 func TestCodex160MCPAppUiIsTypedDiscardedAndTupleBound(t *testing.T) {
+	// private marks UI resources, arguments and results that must remain outside public projection.
+	// private отмечает UI resources, arguments и results вне публичной проекции.
 	const private = "private-mcp-ui-sentinel"
 	for _, ui := range []any{nil, map[string]any{"resourceUri": private, "preferredModelDisplayMode": "inline"}, map[string]any{"resourceUri": private, "preferredModelDisplayMode": "fullscreen"}} {
 		state := newProtocolState(testThreadID)
@@ -601,7 +705,13 @@ func TestCodex160MCPAppUiIsTypedDiscardedAndTupleBound(t *testing.T) {
 	}
 }
 
+// TestCodex160MCPAppUiRejectsUnknownTypesAndBounds rejects invalid UI types, missing/null fields,
+// oversized resource URIs and unknown display modes/keys without reflecting its private sentinel.
+// TestCodex160MCPAppUiRejectsUnknownTypesAndBounds отвергает неверные UI types, missing/null fields,
+// слишком длинные resource URI и неизвестные display modes/keys без вывода приватного sentinel.
 func TestCodex160MCPAppUiRejectsUnknownTypesAndBounds(t *testing.T) {
+	// private detects reflection of untrusted UI metadata in parser diagnostics.
+	// private выявляет выдачу недоверенных UI metadata в parser diagnostics.
 	const private = "private-mcp-ui-sentinel"
 	for _, ui := range []any{
 		private, []any{}, true, map[string]any{},
@@ -622,6 +732,10 @@ func TestCodex160MCPAppUiRejectsUnknownTypesAndBounds(t *testing.T) {
 	}
 }
 
+// TestMCPStartupNotificationValidatesStructuredFailure records a structured reauthentication failure
+// before readiness and rejects an unknown reason; accepting the notification does not imply readiness.
+// TestMCPStartupNotificationValidatesStructuredFailure сохраняет structured reauthentication failure
+// до готовности и отвергает неизвестную причину; принятие notification не означает готовность.
 func TestMCPStartupNotificationValidatesStructuredFailure(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	valid := raw(`{"error":"","failureReason":"reauthenticationRequired","name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
@@ -637,6 +751,10 @@ func TestMCPStartupNotificationValidatesStructuredFailure(t *testing.T) {
 	}
 }
 
+// mcpStatusResponse builds a synthetic unpaginated bearer-token MCP inventory from trusted tool names;
+// fixed-shape JSON encoding failure panics because it indicates an invalid fixture, not a provider error.
+// mcpStatusResponse строит synthetic unpaginated bearer-token MCP inventory из доверенных имён;
+// ошибка JSON encoding фиксированной формы вызывает panic как дефект fixture, не provider error.
 func mcpStatusResponse(runtimeStatus string, tools []string) json.RawMessage {
 	catalog := make(map[string]map[string]any, len(tools))
 	for _, name := range tools {
@@ -657,6 +775,10 @@ func mcpStatusResponse(runtimeStatus string, tools []string) json.RawMessage {
 	return encoded
 }
 
+// TestTokenUsageNotificationDoesNotChargeRestoredThread permits restored display counters before
+// baseline, but returns only the current response receipt plus the display context-window hint.
+// TestTokenUsageNotificationDoesNotChargeRestoredThread допускает restored display counters до
+// baseline, но возвращает лишь текущий response receipt и подсказку context window из display.
 func TestTokenUsageNotificationDoesNotChargeRestoredThread(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
@@ -696,6 +818,10 @@ func TestTokenUsageNotificationDoesNotChargeRestoredThread(t *testing.T) {
 	}
 }
 
+// TestTokenUsageDisplayResetDoesNotInventMeasurement accepts decreasing display totals while
+// keeping measured usage UNKNOWN, rather than claiming a confirmed numeric zero.
+// TestTokenUsageDisplayResetDoesNotInventMeasurement принимает уменьшающиеся display totals,
+// сохраняя измеренный usage UNKNOWN вместо заявления о подтверждённом числовом нуле.
 func TestTokenUsageDisplayResetDoesNotInventMeasurement(t *testing.T) {
 	state := measuredUsageState(t)
 	for _, total := range []int64{100, 90} {
@@ -709,6 +835,10 @@ func TestTokenUsageDisplayResetDoesNotInventMeasurement(t *testing.T) {
 	}
 }
 
+// TestTokenUsageNotificationRejectsInconsistentBreakdown rejects cached input greater than input
+// in a display notification; it does not submit or bill any external response.
+// TestTokenUsageNotificationRejectsInconsistentBreakdown отвергает cached input выше input
+// в display notification; внешний response не отправляется и не оплачивается.
 func TestTokenUsageNotificationRejectsInconsistentBreakdown(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
@@ -718,6 +848,10 @@ func TestTokenUsageNotificationRejectsInconsistentBreakdown(t *testing.T) {
 	}
 }
 
+// tokenUsageNotification constructs trusted display metadata with equal last/total counters and
+// a fixed context window; numeric formatting is safe, but the interpolated turn ID is not escaped.
+// tokenUsageNotification строит доверенные display metadata с равными last/total counters и
+// фиксированным context window; числа форматируются безопасно, подставляемый turn ID не экранируется.
 func tokenUsageNotification(turnID string, total, input, cached, cacheWrite, output, reasoning int64) json.RawMessage {
 	return raw(`{"threadId":"` + testThreadID + `","turnId":"` + turnID + `","tokenUsage":{"total":{"totalTokens":` +
 		itoa(total) + `,"inputTokens":` + itoa(input) + `,"cachedInputTokens":` + itoa(cached) +
@@ -730,6 +864,10 @@ func tokenUsageNotification(turnID string, total, input, cached, cacheWrite, out
 		`,"reasoningOutputTokens":` + itoa(reasoning) + `},"modelContextWindow":200000}}`)
 }
 
+// TestTokenUsageAllowsUnknownContextWindow accepts an omitted or explicit null context window
+// as unknown zero while retaining a valid optional cache-write counter.
+// TestTokenUsageAllowsUnknownContextWindow принимает отсутствующий или null context window
+// как неизвестный ноль, сохраняя корректный optional cache-write counter.
 func TestTokenUsageAllowsUnknownContextWindow(t *testing.T) {
 	for _, input := range []json.RawMessage{
 		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2}}`),
@@ -742,8 +880,14 @@ func TestTokenUsageAllowsUnknownContextWindow(t *testing.T) {
 	}
 }
 
+// itoa formats signed fixture counters in base ten without locale-dependent separators.
+// itoa форматирует знаковые fixture counters по основанию десять без локализованных разделителей.
 func itoa(value int64) string { return strconv.FormatInt(value, 10) }
 
+// TestOnlyServerOverloadedIsCapacity distinguishes overload from quota/auth/policy and malformed
+// provider error variants, checking both their closed classification and the capacity predicate.
+// TestOnlyServerOverloadedIsCapacity отличает перегрузку от quota/auth/policy и неверных
+// provider error variants, проверяя закрытую классификацию и capacity predicate.
 func TestOnlyServerOverloadedIsCapacity(t *testing.T) {
 	for _, test := range []struct {
 		info     string
@@ -764,6 +908,10 @@ func TestOnlyServerOverloadedIsCapacity(t *testing.T) {
 	}
 }
 
+// TestFailedTurnWithoutTypedErrorRemainsOwnerVisible maps missing typed error information to
+// provider_error_info_invalid and the blocked-failure predicate, not a fabricated provider diagnosis.
+// TestFailedTurnWithoutTypedErrorRemainsOwnerVisible отображает отсутствие typed error в
+// provider_error_info_invalid и blocked-failure predicate, не выдумывая provider diagnosis.
 func TestFailedTurnWithoutTypedErrorRemainsOwnerVisible(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID, state.turnID, state.result.SessionID = testThreadID, testTurnID, testThreadID
@@ -780,6 +928,10 @@ func TestFailedTurnWithoutTypedErrorRemainsOwnerVisible(t *testing.T) {
 	}
 }
 
+// TestUnknownTypedErrorNotificationWaitsForSafeTerminal accepts an advisory unknown error, then
+// derives a closed fallback code only from the subsequent failed terminal.
+// TestUnknownTypedErrorNotificationWaitsForSafeTerminal принимает advisory unknown error, затем
+// выводит закрытый fallback code только из последующего failed terminal.
 func TestUnknownTypedErrorNotificationWaitsForSafeTerminal(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID, state.turnID, state.result.SessionID = testThreadID, testTurnID, testThreadID
@@ -800,6 +952,10 @@ func TestUnknownTypedErrorNotificationWaitsForSafeTerminal(t *testing.T) {
 	}
 }
 
+// TestCodex160ErrorNotificationAllowsDiscardedMisalignment accepts bounded nullable metadata without
+// treating suggested steer text as activity or lifecycle authority, preserving the transport terminal code.
+// TestCodex160ErrorNotificationAllowsDiscardedMisalignment принимает bounded nullable metadata,
+// не считая steer text activity или lifecycle authority, сохраняя transport terminal code.
 func TestCodex160ErrorNotificationAllowsDiscardedMisalignment(t *testing.T) {
 	for _, metadata := range []string{`null`, `{}`, `{"errorType":null,"detailedExplanation":null,"steer":null}`,
 		`{"errorType":"private-sentinel","detailedExplanation":"private-sentinel","steer":{"message":"private-sentinel"}}`,
@@ -822,6 +978,10 @@ func TestCodex160ErrorNotificationAllowsDiscardedMisalignment(t *testing.T) {
 	}
 }
 
+// TestCodex160ErrorMisalignmentRejectsTypesBoundsAndUnknownFields rejects the malformed metadata
+// corpus, duplicate/unknown keys and size violations without private text or terminal transitions.
+// TestCodex160ErrorMisalignmentRejectsTypesBoundsAndUnknownFields отвергает корпус неверных metadata,
+// duplicate/unknown keys и превышение размера без приватного текста или terminal transitions.
 func TestCodex160ErrorMisalignmentRejectsTypesBoundsAndUnknownFields(t *testing.T) {
 	for _, metadata := range []string{`true`, `[]`, `"private-sentinel"`,
 		`{"errorType":false}`, `{"detailedExplanation":{}}`, `{"steer":false}`, `{"steer":{}}`,
@@ -842,6 +1002,10 @@ func TestCodex160ErrorMisalignmentRejectsTypesBoundsAndUnknownFields(t *testing.
 	}
 }
 
+// TestCodex160ErrorNotificationKeepsBindingAndBooleanClosed rejects foreign thread/turn values,
+// non-boolean willRetry and unknown error fields without emitting terminal state or private diagnostics.
+// TestCodex160ErrorNotificationKeepsBindingAndBooleanClosed отвергает чужие thread/turn,
+// не-boolean willRetry и неизвестные error fields без terminal state или приватной диагностики.
 func TestCodex160ErrorNotificationKeepsBindingAndBooleanClosed(t *testing.T) {
 	for _, mutation := range []string{
 		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"other","turnId":"` + testTurnID + `","willRetry":false}`,
@@ -859,6 +1023,10 @@ func TestCodex160ErrorNotificationKeepsBindingAndBooleanClosed(t *testing.T) {
 	}
 }
 
+// TestWireParserRejectsUnknownAndDuplicateFields rejects unknown/duplicate outer keys and a mixed
+// notification/result envelope; the selected fixtures do not prove recursive payload validation.
+// TestWireParserRejectsUnknownAndDuplicateFields отвергает unknown/duplicate outer keys и смешанный
+// notification/result envelope; выбранные fixtures не доказывают recursive payload validation.
 func TestWireParserRejectsUnknownAndDuplicateFields(t *testing.T) {
 	for _, value := range []string{
 		`{"id":1,"result":{},"authority":"payload"}`,
@@ -871,6 +1039,10 @@ func TestWireParserRejectsUnknownAndDuplicateFields(t *testing.T) {
 	}
 }
 
+// TestWireParserAcceptsCurrentNotificationTimestampEnvelope accepts a nonnegative integer timestamp
+// on a notification without promoting that timestamp or opaque params to authoritative application state.
+// TestWireParserAcceptsCurrentNotificationTimestampEnvelope принимает неотрицательный целый timestamp
+// notification, не превращая его или opaque params в авторитетное состояние приложения.
 func TestWireParserAcceptsCurrentNotificationTimestampEnvelope(t *testing.T) {
 	message, err := parseWireMessage([]byte(`{"method":"remoteControl/status/changed","params":{"installationId":"installation","serverName":"server","status":"disabled"},"emittedAtMs":1788254519388}`))
 	if err != nil {
@@ -881,6 +1053,10 @@ func TestWireParserAcceptsCurrentNotificationTimestampEnvelope(t *testing.T) {
 	}
 }
 
+// TestWireParserRejectsNotificationTimestampOutsideEnvelopeContract rejects negative/fractional/string
+// timestamps and any emittedAtMs on a server request or response.
+// TestWireParserRejectsNotificationTimestampOutsideEnvelopeContract отвергает negative/fractional/string
+// timestamps и любой emittedAtMs в server request или response.
 func TestWireParserRejectsNotificationTimestampOutsideEnvelopeContract(t *testing.T) {
 	for _, value := range []string{
 		`{"method":"remoteControl/status/changed","params":{},"emittedAtMs":-1}`,
@@ -896,6 +1072,10 @@ func TestWireParserRejectsNotificationTimestampOutsideEnvelopeContract(t *testin
 	}
 }
 
+// TestServerRequestSetIsClosed checks a known approval method and one unknown method against
+// the parser registry; registry membership is not execution permission or an owner decision.
+// TestServerRequestSetIsClosed проверяет известный approval method и один неизвестный method
+// по parser registry; наличие в нём не является execution permission или owner decision.
 func TestServerRequestSetIsClosed(t *testing.T) {
 	if _, ok := serverRequestMethods["item/commandExecution/requestApproval"]; !ok {
 		t.Fatal("approval request method is missing")
@@ -905,6 +1085,10 @@ func TestServerRequestSetIsClosed(t *testing.T) {
 	}
 }
 
+// TestNotificationSchemasCoverExactClosedMethodSet checks bidirectional name coverage between
+// notification methods and schemas, not the semantic completeness of each method's handler.
+// TestNotificationSchemasCoverExactClosedMethodSet проверяет двустороннее покрытие имён между
+// notification methods и schemas, не семантическую полноту обработчика каждого method.
 func TestNotificationSchemasCoverExactClosedMethodSet(t *testing.T) {
 	if len(serverNotificationMethods) != len(notificationSchemas) {
 		t.Fatalf("notification schema count mismatch: methods=%d schemas=%d", len(serverNotificationMethods), len(notificationSchemas))
@@ -921,6 +1105,10 @@ func TestNotificationSchemasCoverExactClosedMethodSet(t *testing.T) {
 	}
 }
 
+// TestTerminalPresentationKeepsCapacityQuotaAndPolicySeparate checks explicit outcome/action
+// mappings for overload, quota, auth, policy and invalid info, requiring nonempty presentation text.
+// TestTerminalPresentationKeepsCapacityQuotaAndPolicySeparate проверяет явные outcome/action
+// mappings перегрузки, quota, auth, policy и invalid info с непустым presentation text.
 func TestTerminalPresentationKeepsCapacityQuotaAndPolicySeparate(t *testing.T) {
 	tests := []struct {
 		code, outcome, action string
@@ -939,6 +1127,10 @@ func TestTerminalPresentationKeepsCapacityQuotaAndPolicySeparate(t *testing.T) {
 	}
 }
 
+// TestTerminalPresentationCoversEveryParsedProviderFailure requires explicit presentation and an
+// action for the enumerated closed failure codes; it does not exercise external provider failures.
+// TestTerminalPresentationCoversEveryParsedProviderFailure требует явные presentation и action
+// для перечисленных закрытых failure codes; внешние provider failures здесь не воспроизводятся.
 func TestTerminalPresentationCoversEveryParsedProviderFailure(t *testing.T) {
 	for _, code := range []string{
 		"context_window_exceeded", "session_budget_exceeded", "usage_limit_exceeded",
@@ -953,6 +1145,8 @@ func TestTerminalPresentationCoversEveryParsedProviderFailure(t *testing.T) {
 	}
 }
 
+// raw converts a trusted literal to RawMessage without parsing or validating its bytes.
+// raw преобразует доверенный литерал в RawMessage без разбора и проверки его байтов.
 func raw(value string) json.RawMessage {
 	return json.RawMessage(value)
 }

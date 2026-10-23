@@ -1,4 +1,5 @@
-// Package integration содержит закрытый реестр типизированных adapter-ов.
+// Package integration validates owner-claimed integration operations and dispatches them through a closed registry of typed provider adapters.
+// RU: Пакет integration проверяет назначенные владельцем операции интеграций и направляет их через закрытый реестр типизированных provider-адаптеров.
 package integration
 
 import (
@@ -26,14 +27,30 @@ import (
 )
 
 const (
-	maximumResponseBytes            = 64 << 10
-	githubAPIBaseURL                = "https://api.github.com/"
-	syntheticServiceHost            = "integration-synthetic.kodex-system.svc.cluster.local"
-	exactCredentialSecretPrefix     = "kodex-system/kodex-integration-credentials#"
-	credentialReadRetryInterval     = 250 * time.Millisecond
+	// maximumResponseBytes bounds safe projections, generic provider bodies and serialized generic request payloads, not every raw SDK response.
+	// RU: maximumResponseBytes ограничивает безопасные проекции, обычные provider-ответы и сериализованные запросы, но не все сырые ответы SDK.
+	maximumResponseBytes = 64 << 10
+	// githubAPIBaseURL fixes the production GitHub REST origin; tests replace the parsed adapter field with an isolated local endpoint.
+	// RU: githubAPIBaseURL закрепляет production-адрес GitHub REST; тесты заменяют разобранное поле адаптера изолированным локальным адресом.
+	githubAPIBaseURL = "https://api.github.com/"
+	// syntheticServiceHost pins the only synthetic service accepted by the production constructor.
+	// RU: syntheticServiceHost закрепляет единственный синтетический сервис, допустимый production-конструктором.
+	syntheticServiceHost = "integration-synthetic.kodex-system.svc.cluster.local"
+	// exactCredentialSecretPrefix confines credential references to the managed integration-credential secret namespace before key reads.
+	// RU: exactCredentialSecretPrefix ограничивает ссылки управляемым secret-пространством credentials интеграций до чтения ключа.
+	exactCredentialSecretPrefix = "kodex-system/kodex-integration-credentials#"
+	// credentialReadRetryInterval spaces projected-file read retries while the caller's operation context limits the total wait.
+	// RU: credentialReadRetryInterval задаёт паузу повторов чтения спроецированного файла, а контекст операции ограничивает общее ожидание.
+	credentialReadRetryInterval = 250 * time.Millisecond
+	// credentialProjectionPendingCode reports a transient credential read timeout only through the connection health-test path.
+	// RU: credentialProjectionPendingCode сообщает временное истечение чтения credential только через путь проверки подключения.
 	credentialProjectionPendingCode = "INTEGRATION_CREDENTIAL_PROJECTION_PENDING"
 )
 
+// Config supplies exact gateway proxies, mounted credential locations, optional local OpenAPI TLS and provider operation budgets, never raw secrets.
+// RU: Config задаёт точные proxy шлюза, расположение credential-файлов, необязательный локальный OpenAPI TLS и бюджеты операций, но не сырые секреты.
+// New validates these process settings; owner package revisions and operation policy are validated separately for each request.
+// RU: New проверяет настройки процесса; owner-ревизии пакетов и политика операций проверяются отдельно для каждого запроса.
 type Config struct {
 	RPCProfile                                                       string
 	CredentialDirectory, ProxyURL, OpenAPIProxyURL, SyntheticBaseURL string
@@ -42,11 +59,19 @@ type Config struct {
 	Timeout                                                          time.Duration
 }
 
+// CredentialRevision identifies the owner-selected credential revision and expected projected content without carrying its secret value.
+// RU: CredentialRevision обозначает выбранную владельцем ревизию credential и ожидаемое спроецированное содержимое без самого секрета.
+// readCredential validates metadata shape and the exact trimmed-content digest; these identifiers alone do not authorize an operation.
+// RU: readCredential проверяет форму метаданных и точный хеш очищенного по краям содержимого; сами идентификаторы не разрешают операцию.
 type CredentialRevision struct {
 	Ref, SecretRef, SecretUID, SecretResourceVersion, ContentSHA256 string
 	Revision                                                        int64
 }
 
+// Request carries the owner claim's definition, capability, scope, input, grant and credential pins to typed provider execution.
+// RU: Request передаёт привязки определения, возможности, области, входа, grant и credential из owner claim в типизированное provider-исполнение.
+// The private healthCheck flag is set only by Test; transported identifiers and digests are checked against the parsed executable package, not treated as authority.
+// RU: Закрытый healthCheck задаёт только Test; переданные идентификаторы и хеши сверяются с исполняемым пакетом, а не считаются источником полномочий.
 type Request struct {
 	healthCheck                                                       bool
 	DefinitionPackage                                                 []byte
@@ -61,30 +86,46 @@ type Request struct {
 	GrantVersion                                                      int64
 }
 
+// Receipt binds an execution projection to the claimed effect, canonical input and provider reference with a digest of the safe response bytes.
+// RU: Receipt связывает проекцию исполнения с назначенным эффектом, каноническим входом и provider-ссылкой через хеш безопасных байтов ответа.
+// It is evidence submitted to owner completion, not a replacement for owner validation or a new approval.
+// RU: Это доказательство для owner completion, а не замена owner-проверки либо новое одобрение.
 type Receipt struct {
 	EffectKey, InputDigest, ProviderEffectRef, ResponseDigest string
 }
 
+// Result carries a provider projection, optional safe health detail and effect receipt; validateExecutionResult must check the summary before ordinary execution returns it.
+// RU: Result передаёт provider-проекцию, необязательные безопасные сведения здоровья и квитанцию эффекта; validateExecutionResult проверяет сводку до возврата обычного исполнения.
 type Result struct {
 	HealthSummary string
 	Summary       string
 	Receipt       Receipt
 }
 
+// SafeError carries a classified caller-facing code, optional safe health summary and credential-read transient flag without wrapping provider diagnostics.
+// RU: SafeError хранит классифицированный внешний код, необязательную безопасную сводку здоровья и признак временной ошибки чтения credential без исходной provider-диагностики.
 type SafeError struct {
 	Code          string
 	HealthSummary string
 	Transient     bool
 }
 
+// Error exposes only the safe code, keeping auxiliary health metadata and provider details out of ordinary error strings.
+// RU: Error возвращает только безопасный код, не включая вспомогательные сведения здоровья и provider-данные в строку ошибки.
 func (err *SafeError) Error() string { return err.Code }
 
+// UnknownOutcomeError marks a potentially applied external mutation whose outcome cannot be proven; its private stage is diagnostic, not retry permission.
+// RU: UnknownOutcomeError отмечает возможно выполненное внешнее изменение с недоказанным результатом; закрытый stage служит диагностикой, а не разрешением повтора.
 type UnknownOutcomeError struct{ stage string }
 
+// Error returns the same closed public code for every unknown stage, without disclosing transport or provider payloads.
+// RU: Error возвращает один закрытый внешний код для любого неизвестного этапа, не раскрывая transport либо provider payload.
 func (*UnknownOutcomeError) Error() string { return "INTEGRATION_OUTCOME_UNKNOWN" }
 
-// UnknownOutcomeStage возвращает только закрытый диагностический класс без URL,
-// входных данных или учётных данных. Он не меняет внешний код UNKNOWN_OUTCOME.
+// UnknownOutcomeStage unwraps an unknown outcome into a closed diagnostic class, mapping an unrecognized stage to unclassified and other errors to not_unknown.
+// RU: UnknownOutcomeStage извлекает закрытый диагностический класс, заменяя неизвестный stage на unclassified, а другую ошибку — на not_unknown.
+// It never changes the public outcome code or permits URL, input or credential details in a log label.
+// RU: Функция не меняет внешний код результата и не допускает URL, входные данные либо credentials в диагностическую метку.
 func UnknownOutcomeStage(err error) string {
 	var unknown *UnknownOutcomeError
 	if !errors.As(err, &unknown) {
@@ -98,11 +139,17 @@ func UnknownOutcomeStage(err error) string {
 	}
 }
 
+// IsUnknownOutcome recognizes wrapped unknown-outcome errors without classifying unrelated failures as evidence of a completed or repeatable effect.
+// RU: IsUnknownOutcome распознаёт обёрнутую ошибку неопределённости, не превращая другие ошибки в доказательство выполненного либо повторяемого эффекта.
 func IsUnknownOutcome(err error) bool {
 	var unknown *UnknownOutcomeError
 	return errors.As(err, &unknown)
 }
 
+// Adapter owns shipped executable definitions, a projected credential reader and purpose-specific HTTP clients for typed provider operations.
+// RU: Adapter владеет поставляемыми исполняемыми определениями, чтением спроецированных credentials и специализированными HTTP-клиентами типизированных операций.
+// Request validation and effect receipts remain separate from transport; the adapter does not create owner grants or make HumanGate decisions.
+// RU: Проверка запросов и квитанции эффектов отделены от транспорта; адаптер не создаёт owner grants и не принимает решения HumanGate.
 type Adapter struct {
 	proxyURL            string
 	credentials         *credentialfs.Store
@@ -120,6 +167,12 @@ type Adapter struct {
 	timeout             time.Duration
 }
 
+// New checks the local writeback runtime and exact proxy/synthetic endpoints, then loads shipped definitions and builds separate bounded provider clients.
+// RU: New проверяет локальную среду записи и точные proxy/synthetic адреса, загружает поставляемые определения и создаёт отдельные ограниченные provider-клиенты.
+// GitHub uses a fixed SNI and TLS 1.3; generic and OpenAPI transports retain distinct proxies, and all constructed HTTP clients reject redirects.
+// RU: GitHub использует фиксированный SNI и TLS 1.3; обычный и OpenAPI transport сохраняют разные proxy, все создаваемые HTTP-клиенты запрещают redirects.
+// Optional local OpenAPI, email TLS and Context7 transports are delegated to their own constructors; no provider operation is executed here.
+// RU: Необязательные локальный OpenAPI, email TLS и Context7 transport передаются своим конструкторам; provider-операция здесь не выполняется.
 func New(config Config) (*Adapter, error) {
 	if err := checkWriteBackRuntime(); err != nil {
 		return nil, err
@@ -199,6 +252,10 @@ func New(config Config) (*Adapter, error) {
 	}, nil
 }
 
+// RequestFromTest maps an owner connection-test claim, copying package bytes and carrying credential metadata and exact email lease binding without reading secrets.
+// RU: RequestFromTest преобразует owner claim проверки подключения, копируя пакет и передавая credential-метаданные с точной email-арендой без чтения секретов.
+// It does not set the private health bypass itself; Test validates and constructs the health capability before Execute.
+// RU: Функция не задаёт закрытый обход health-проверки; Test проверяет и формирует health capability до Execute.
 func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Request {
 	configuration := map[string]any{}
 	if claim.GetPublicConfiguration() != nil {
@@ -213,6 +270,10 @@ func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Reque
 	}
 }
 
+// RequestFromInvocation maps owner-assigned capability, scope, input, effect, grant and email-execution pins while copying definition-package bytes.
+// RU: RequestFromInvocation преобразует назначенные владельцем привязки capability, scope, input, effect, grant и email-исполнения, копируя байты пакета определения.
+// It converts transport enums to canonical adapter names without authorizing the invocation; validateInvocation remains mandatory before dispatch.
+// RU: Функция переводит transport enum в канонические имена адаптера, не авторизуя вызов; перед отправкой обязательна validateInvocation.
 func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Request {
 	configuration, input := map[string]any{}, map[string]any{}
 	if claim.GetPublicConfiguration() != nil {
@@ -243,6 +304,8 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 	}
 }
 
+// credentialFromProto copies revision and projected-secret metadata, preserving absence as nil and never loading the credential value.
+// RU: credentialFromProto копирует метаданные ревизии и спроецированного секрета, сохраняя отсутствие как nil и не загружая значение credential.
 func credentialFromProto(value *controlplanev1.IntegrationCredentialRevision) *CredentialRevision {
 	if value == nil {
 		return nil
@@ -254,6 +317,8 @@ func credentialFromProto(value *controlplanev1.IntegrationCredentialRevision) *C
 	}
 }
 
+// Outcome classifies success, wrapped safe errors and unknown effects into owner-completion fields, replacing all other diagnostics with INTEGRATION_UNAVAILABLE.
+// RU: Outcome преобразует успех, обёрнутые безопасные ошибки и неопределённые эффекты в поля owner completion, заменяя прочую диагностику на INTEGRATION_UNAVAILABLE.
 func Outcome(err error) (bool, string) {
 	if err == nil {
 		return true, ""
@@ -268,6 +333,12 @@ func Outcome(err error) (bool, string) {
 	return false, "INTEGRATION_UNAVAILABLE"
 }
 
+// Test validates the definition and configuration, selects only its READ/NONE health capability and derives exact empty-input and resource-scope digests.
+// RU: Test проверяет определение и конфигурацию, выбирает только health capability READ/NONE и выводит точные хеши пустого входа и области ресурсов.
+// Context7 has a dedicated probe; other providers run through Execute with reduced health budgets and a private test flag, never a general grant bypass.
+// RU: Context7 имеет отдельную проверку; другие провайдеры проходят Execute с сокращёнными health-бюджетами и закрытым флагом теста, а не общим обходом grant.
+// Only transient credential-read failure becomes projection-pending; email health may return its own safe summary alongside a not-ready error.
+// RU: Только временная ошибка чтения credential становится projection-pending; email health может вернуть свою безопасную сводку вместе с not-ready ошибкой.
 func (adapter *Adapter) Test(ctx context.Context, request Request) (string, error) {
 	definition, err := adapter.validateDefinition(request)
 	if err != nil {
@@ -314,6 +385,8 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	return "i18n:INTEGRATION_TEST_SUCCEEDED", err
 }
 
+// healthCredentialError maps only a transient credential-unavailable error to the health-test pending code, preserving all other errors unchanged.
+// RU: healthCredentialError заменяет только временную credential-unavailable ошибку на код ожидания health-теста, сохраняя остальные ошибки без изменений.
 func healthCredentialError(err error) error {
 	var safe *SafeError
 	if errors.As(err, &safe) && safe.Code == "INTEGRATION_CREDENTIAL_UNAVAILABLE" && safe.Transient {
@@ -324,6 +397,10 @@ func healthCredentialError(err error) error {
 	return err
 }
 
+// Execute validates claim/package/capability bindings before dispatching one bounded operation through the closed provider registry and validating its result.
+// RU: Execute проверяет привязки claim, пакета и capability до одной ограниченной операции закрытого provider-реестра и проверки её результата.
+// Email receives only its managed execution binding, not the already-checked legacy credential metadata; unknown adapter kinds fail closed.
+// RU: Email получает управляемую привязку исполнения, а не уже проверенные legacy credential-метаданные; неизвестный вид адаптера закрыто отклоняется.
 func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, error) {
 	definition, capability, canonicalInput, configuration, err := adapter.validateInvocation(request)
 	if err != nil {
@@ -359,8 +436,10 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	return validateExecutionResult(capability, request, result, err)
 }
 
-// Recover выполняет только доказуемое чтение ранее возможного эффекта.
-// Неподдержанный provider остаётся UNKNOWN и не получает повторный mutation.
+// Recover validates the original invocation and performs only synthetic journal-write readback within the capability deadline.
+// RU: Recover проверяет исходный вызов и выполняет только readback записи синтетического журнала в пределах срока capability.
+// Every unsupported provider or operation remains UNKNOWN without receiving a repeated mutation; normal output and receipt validation still applies.
+// RU: Любой неподдерживаемый провайдер либо операция остаётся UNKNOWN без повторного изменения; обычная проверка выхода и квитанции сохраняется.
 func (adapter *Adapter) Recover(ctx context.Context, request Request) (Result, error) {
 	definition, capability, canonicalInput, configuration, err := adapter.validateInvocation(request)
 	if err != nil {
@@ -375,6 +454,10 @@ func (adapter *Adapter) Recover(ctx context.Context, request Request) (Result, e
 	return validateExecutionResult(capability, request, result, err)
 }
 
+// validateExecutionResult canonicalizes output through the capability schema, rehashes it and verifies operation, effect, input and provider-reference bindings.
+// RU: validateExecutionResult канонизирует выход схемой capability, пересчитывает хеш и сверяет привязки операции, эффекта, входа и provider-ссылки.
+// Invalid READ output returns a safe error; invalid non-READ output or receipt, and selected unavailable errors, remain UNKNOWN rather than implying no effect.
+// RU: Неверный READ-выход даёт безопасную ошибку; неверный non-READ выход либо квитанция и выбранные unavailable-ошибки остаются UNKNOWN, не означая отсутствия эффекта.
 func validateExecutionResult(capability integrationpackage.Capability, request Request, result Result, err error) (Result, error) {
 	if err != nil {
 		var safe *SafeError
@@ -405,6 +488,10 @@ func validateExecutionResult(capability integrationpackage.Capability, request R
 	return result, nil
 }
 
+// validateDefinition parses a bounded pinned package and compares its executable revision, identity and digest with the shipped definition.
+// RU: validateDefinition разбирает ограниченный закреплённый пакет и сверяет исполняемую ревизию, идентичность и хеш с поставляемым определением.
+// Required shipped destinations except github_git, managed-MCP gateway ownership and the credential-presence contract must match before execution.
+// RU: До исполнения должны совпадать обязательные поставляемые назначения кроме github_git, принадлежность gateway маршрута managed-MCP и договор наличия credential.
 func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.Package, error) {
 	shipped, exists := adapter.definitions[request.DefinitionKey]
 	if !exists || len(request.DefinitionPackage) == 0 || len(request.DefinitionPackage) > 256<<10 {
@@ -431,6 +518,12 @@ func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.
 	return definition, nil
 }
 
+// validateInvocation requires ordinary claim grant pins and exact capability, policy, resource-scope and canonical-input digests from the executable definition.
+// RU: validateInvocation требует grant-привязки обычного claim и точные capability, policy, scope и хеш канонического входа из исполняемого определения.
+// It rejects unsupported configuration and repository path/ref inputs, checks dynamic approval policy and workflow inputs, and caps private health-test budgets.
+// RU: Функция отклоняет неподдерживаемую конфигурацию и repository path/ref, проверяет динамическую approval policy и workflow inputs, сокращает бюджеты закрытого health-теста.
+// This is consistency checking of server-provided claim data, not independent authorization of arbitrary caller-supplied grant identifiers.
+// RU: Это проверка согласованности серверного claim, а не самостоятельная авторизация произвольно переданных grant-идентификаторов.
 func (adapter *Adapter) validateInvocation(request Request) (
 	integrationpackage.Package,
 	integrationpackage.Capability,
@@ -495,6 +588,10 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	return definition, capability, canonicalInput, configuration, nil
 }
 
+// executeSynthetic reads or writes the configured journal and reconciles an uncertain write only by an effect-key-bound GET, never another POST.
+// RU: executeSynthetic читает либо изменяет настроенный журнал и согласует неопределённую запись только GET с привязкой effect key, а не новым POST.
+// It rejects unknown or trailing JSON and mismatched journal/effect identity, then projects the operation-specific summary and sequence reference.
+// RU: Функция отклоняет неизвестный либо дополнительный JSON и несовпадающие journal/effect, затем формирует сводку операции и ссылку с номером записи.
 func (adapter *Adapter) executeSynthetic(ctx context.Context, request Request, configuration map[string]string, canonicalInput []byte, recoverOnly bool) (Result, error) {
 	journal := configuration["journal"]
 	path := "/v1/journals/" + url.PathEscape(journal)
@@ -547,6 +644,10 @@ func (adapter *Adapter) executeSynthetic(ctx context.Context, request Request, c
 	return successfulResult(string(summary), request, providerRef), nil
 }
 
+// callSynthetic sends one request to the fixed synthetic origin with optional effect and JSON headers and reads a bounded successful body.
+// RU: callSynthetic отправляет один запрос фиксированному synthetic-адресу с необязательными effect/JSON заголовками и читает ограниченное успешное тело.
+// Mutations disable transport replay and retain transport or server errors as unknown outcomes; this helper does not retry or perform reconciliation.
+// RU: Изменения отключают transport replay и сохраняют transport либо server-ошибки как неопределённость; helper не повторяет и не согласует операцию.
 func (adapter *Adapter) callSynthetic(ctx context.Context, method, path, effectKey string, body []byte) ([]byte, error) {
 	endpoint := *adapter.syntheticBaseURL
 	endpoint.Path = path
@@ -585,6 +686,10 @@ func (adapter *Adapter) callSynthetic(ctx context.Context, method, path, effectK
 	return readBoundedResponse(response.Body)
 }
 
+// executeGitHub opens a credential-bound SDK client, reads exact repository metadata or dispatches issue/catalog operations using the validated owner and repository.
+// RU: executeGitHub открывает SDK-клиент с credential, читает точные метаданные репозитория либо направляет issue/catalog операции в проверенные owner и repository.
+// Metadata must identify the selected repository; deferred cleanup clears the loaded credential byte slice after every dispatch outcome.
+// RU: Метаданные обязаны обозначать выбранный репозиторий; отложенная очистка обнуляет загруженный срез credential при любом исходе.
 func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
 	client, cleanup, err := adapter.githubClient(ctx, request.Credential)
 	if err != nil {
@@ -627,6 +732,10 @@ func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, capa
 	}
 }
 
+// createGitHubIssue first searches the repository for its exact effect marker, then creates at most once with the marker appended to the body.
+// RU: createGitHubIssue сначала ищет точный effect-маркер в репозитории, затем создаёт не более одного issue с маркером в конце body.
+// An uncertain creation receives read-only marker reconciliation, not another create; a found or newly created issue passes the same result projection.
+// RU: Неопределённое создание получает read-only поиск маркера, а не новое создание; найденный либо созданный issue проходит одну и ту же проекцию результата.
 func (adapter *Adapter) createGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, capability integrationpackage.Capability, canonicalInput []byte) (Result, error) {
 	var input struct{ Title, Body string }
 	if json.Unmarshal(canonicalInput, &input) != nil {
@@ -655,6 +764,10 @@ func (adapter *Adapter) createGitHubIssue(ctx context.Context, client *github.Cl
 	return githubIssueResult(issue, request, false)
 }
 
+// updateGitHubIssue validates the issue number and requested nonempty fields, reads the selected issue and rejects pull requests before one edit attempt.
+// RU: updateGitHubIssue проверяет номер issue и заданные непустые поля, читает выбранный issue и отклоняет pull request до единственной попытки изменения.
+// An uncertain edit is accepted only after readback matches requested fields; there is no provider-version CAS or blind edit retry in this helper.
+// RU: Неопределённое изменение принимается только после совпадения запрошенных полей при readback; provider-version CAS и слепого повтора здесь нет.
 func (adapter *Adapter) updateGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, capability integrationpackage.Capability, canonicalInput []byte) (Result, error) {
 	var input struct {
 		IssueNumber int64  `json:"issue_number"`
@@ -700,6 +813,10 @@ func (adapter *Adapter) updateGitHubIssue(ctx context.Context, client *github.Cl
 	return githubIssueResult(issue, request, false)
 }
 
+// githubIssueResult requires a real issue ID/number rather than a pull request and projects number, title, state and optionally nonempty body.
+// RU: githubIssueResult требует настоящий ID/номер issue, а не pull request, и проецирует number, title, state и необязательно непустой body.
+// The provider reference uses the issue number and is bound to the current effect/input by providerResult.
+// RU: Provider-ссылка использует номер issue и связывается с текущими effect/input через providerResult.
 func githubIssueResult(issue *github.Issue, request Request, includeBody bool) (Result, error) {
 	if issue == nil || issue.GetNumber() < 1 || issue.GetID() == 0 || issue.IsPullRequest() {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
@@ -711,6 +828,10 @@ func githubIssueResult(issue *github.Issue, request Request, includeBody bool) (
 	return providerResult(request, "github-issue:"+strconv.Itoa(issue.GetNumber()), projection)
 }
 
+// githubClient reads the pinned credential and copies the configured HTTP client, adding bounded SDK transport, token authentication and the adapter's API base.
+// RU: githubClient читает закреплённый credential и копирует настроенный HTTP-клиент, добавляя ограниченный SDK transport, token-аутентификацию и API base адаптера.
+// Its cleanup clears only the loaded byte slice, not token strings copied into SDK authentication state; callers must not claim stronger erasure.
+// RU: Очистка обнуляет только загруженный срез байтов, а не строковые копии токена в SDK; вызывающий не должен заявлять более сильное стирание.
 func (adapter *Adapter) githubClient(ctx context.Context, credential *CredentialRevision) (*github.Client, func(), error) {
 	value, err := adapter.readCredential(ctx, credential)
 	if err != nil {
@@ -727,6 +848,12 @@ func (adapter *Adapter) githubClient(ctx context.Context, credential *Credential
 	return client, func() { clear(value) }, nil
 }
 
+// readCredential validates revision metadata and the managed secret prefix, then reads the projected key and requires its exact trimmed-content SHA-256.
+// RU: readCredential проверяет метаданные ревизии и управляемый secret-prefix, затем читает спроецированный ключ и требует точного SHA-256 очищенного по краям содержимого.
+// Empty or mismatched content fails immediately; file-read failures wait in bounded intervals until caller cancellation yields a transient safe error.
+// RU: Пустое либо несовпавшее содержимое отклоняется сразу; ошибки чтения файла ожидаются с паузами до отмены вызывающего, дающей временную безопасную ошибку.
+// Successful bytes remain caller-owned and require cleanup; UUID/resource-version shape checks are not a readback of Kubernetes Secret metadata.
+// RU: Успешно прочитанные байты принадлежат вызывающему и требуют очистки; проверка формы UUID/resource-version не является чтением метаданных Kubernetes Secret.
 func (adapter *Adapter) readCredential(ctx context.Context, credential *CredentialRevision) ([]byte, error) {
 	if credential == nil || credential.Ref == "" || credential.Revision < 1 || uuid.Validate(credential.SecretUID) != nil ||
 		credential.SecretResourceVersion == "" || len(credential.SecretResourceVersion) > 128 ||
@@ -757,6 +884,8 @@ func (adapter *Adapter) readCredential(ctx context.Context, credential *Credenti
 	}
 }
 
+// successfulResult builds effect/input bindings and the exact summary-byte digest without performing output-schema or provider-reference validation itself.
+// RU: successfulResult формирует привязки effect/input и хеш точных байтов summary, самостоятельно не проверяя output schema либо provider-ссылку.
 func successfulResult(summary string, request Request, providerRef string) Result {
 	digest := sha256.Sum256([]byte(summary))
 	return Result{Summary: summary, Receipt: Receipt{
@@ -765,6 +894,8 @@ func successfulResult(summary string, request Request, providerRef string) Resul
 	}}
 }
 
+// githubError preserves wrapped safe errors and maps failed SDK responses to closed status classes, hiding raw provider diagnostics.
+// RU: githubError сохраняет обёрнутые безопасные ошибки и переводит ошибки SDK-ответов в закрытые классы статуса, скрывая сырую provider-диагностику.
 func githubError(response *github.Response, err error) error {
 	if err == nil {
 		return nil
@@ -779,6 +910,8 @@ func githubError(response *github.Response, err error) error {
 	return statusError(response.StatusCode)
 }
 
+// statusError maps authentication, throttling and selected invalid-request HTTP statuses to safe integration codes, treating all remaining statuses as unavailable.
+// RU: statusError переводит аутентификацию, лимиты и выбранные HTTP-ошибки запроса в безопасные integration-коды, считая остальные статусы недоступностью.
 func statusError(code int) error {
 	switch code {
 	case http.StatusUnauthorized, http.StatusForbidden:
@@ -792,6 +925,8 @@ func statusError(code int) error {
 	}
 }
 
+// readBoundedResponse reads at most one byte beyond the projection budget and rejects both I/O failure and oversize content without returning partial data.
+// RU: readBoundedResponse читает не более одного байта сверх бюджета проекции и отклоняет I/O-ошибку либо превышение без возврата частичных данных.
 func readBoundedResponse(reader io.Reader) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(reader, maximumResponseBytes+1))
 	if err != nil || len(body) > maximumResponseBytes {
@@ -800,6 +935,8 @@ func readBoundedResponse(reader io.Reader) ([]byte, error) {
 	return body, nil
 }
 
+// normalizeStringMap copies only actual string values into configuration storage, rejecting implicit conversions and returning an empty map for nil input.
+// RU: normalizeStringMap копирует только настоящие строки в конфигурацию, отклоняя неявные преобразования и возвращая пустую map для nil-входа.
 func normalizeStringMap(values map[string]any) (map[string]string, error) {
 	result := make(map[string]string, len(values))
 	for key, raw := range values {
@@ -812,6 +949,8 @@ func normalizeStringMap(values map[string]any) (map[string]string, error) {
 	return result, nil
 }
 
+// equalStringMap compares cardinality and retrieved values for each left key; it does not separately distinguish an absent right key from an empty value.
+// RU: equalStringMap сравнивает размеры и извлечённые значения для ключей слева, отдельно не отличая отсутствующий правый ключ от пустого значения.
 func equalStringMap(left, right map[string]string) bool {
 	if len(left) != len(right) {
 		return false
@@ -824,6 +963,8 @@ func equalStringMap(left, right map[string]string) bool {
 	return true
 }
 
+// mustURL parses a compile-time adapter URL and panics on programmer error; it must not be used to validate untrusted provider input.
+// RU: mustURL разбирает статический URL адаптера и паникует при ошибке программиста; его нельзя использовать для проверки недоверенного provider-входа.
 func mustURL(raw string) *url.URL {
 	parsed, err := url.Parse(raw)
 	if err != nil {

@@ -13,8 +13,14 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
+// errorDomain pins structured STT error details to the shared canonical domain rather than arbitrary provider diagnostics.
+// RU: errorDomain закрепляет структурированные ошибки STT за общим каноническим доменом, а не произвольной диагностикой провайдера.
 const errorDomain = errorprofile.Domain
 
+// transportError preserves cancellation, maps known domain failures to safe gRPC statuses and exposes only a validated whole-second rate-limit hint.
+// RU: transportError сохраняет отмену, отображает известные доменные отказы в безопасные gRPC статусы и выдаёт только проверенную целосекундную подсказку ограничения частоты.
+// Unknown or joined provider errors never expose raw payloads through the returned status text.
+// RU: Неизвестные или объединённые ошибки провайдера не раскрывают сырые payload через возвращаемый текст статуса.
 func transportError(err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -49,6 +55,8 @@ func transportError(err error) error {
 	}
 }
 
+// statusError adds closed ErrorInfo reason/domain details to a safe status and falls back to that base status if detail serialization fails.
+// RU: statusError добавляет закрытые ErrorInfo reason/domain к безопасному статусу и возвращает базовый статус при отказе сериализации деталей.
 func statusError(code codes.Code, message, reason string) error {
 	base := status.New(code, message)
 	withDetails, err := base.WithDetails(&errdetails.ErrorInfo{Reason: reason, Domain: errorDomain})

@@ -13,6 +13,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
+// TestContinuationGrantRoundTripAndDeterministicTamperRejection exercises a
+// valid signed continuation and rejects changed signature bytes and expiry.
+// RU: TestContinuationGrantRoundTripAndDeterministicTamperRejection проверяет
+// допустимое подписанное продолжение и отказ после подмены подписи и истечения срока.
 func TestContinuationGrantRoundTripAndDeterministicTamperRejection(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	key := testKey(t, 3)
@@ -62,6 +66,10 @@ func TestContinuationGrantRoundTripAndDeterministicTamperRejection(t *testing.T)
 	}
 }
 
+// TestVerifierRotationClosedStates accepts PREVIOUS only during overlap and
+// rejects NEXT, RETIRED, unknown and expired generations.
+// RU: TestVerifierRotationClosedStates принимает PREVIOUS лишь в период
+// перекрытия и отклоняет NEXT, RETIRED, неизвестное и просроченное поколения.
 func TestVerifierRotationClosedStates(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	previous, current, next, retired := testKey(t, 2), testKey(t, 3), testKey(t, 4), testKey(t, 1)
@@ -100,6 +108,10 @@ func TestVerifierRotationClosedStates(t *testing.T) {
 	}
 }
 
+// TestVerifierRejectsRollbackSnapshot proves a verifier configured for a newer
+// generation does not load an older served keyset.
+// RU: TestVerifierRejectsRollbackSnapshot проверяет, что конфигурация нового
+// поколения не принимает старый обслуживаемый набор ключей.
 func TestVerifierRejectsRollbackSnapshot(t *testing.T) {
 	key := testKey(t, 2)
 	rollback := writeKeyset(t, PublicKeySet{
@@ -111,6 +123,10 @@ func TestVerifierRejectsRollbackSnapshot(t *testing.T) {
 	}
 }
 
+// signForGeneration builds a matching keyset and signs one fixture grant for
+// rotation tests; it never reuses a different generation's private key.
+// RU: signForGeneration создаёт соответствующий набор ключей и подписывает
+// fixture для тестов ротации без подмены поколения закрытого ключа.
 func signForGeneration(t *testing.T, key internalrpcauth.ES256Key, generation uint64, now time.Time) string {
 	t.Helper()
 	keyset := writeKeyset(t, PublicKeySet{
@@ -128,6 +144,10 @@ func signForGeneration(t *testing.T, key internalrpcauth.ES256Key, generation ui
 	return token
 }
 
+// testConfig provides exact test identities and an eight-day maximum grant
+// lifetime for a selected signer generation.
+// RU: testConfig задаёт точные тестовые идентификаторы и предельный срок
+// полномочия в восемь дней для выбранного поколения подписи.
 func testConfig(generation uint64) Config {
 	return Config{
 		Issuer:   "https://control-plane.test/authority/integration-continuation",
@@ -137,6 +157,10 @@ func testConfig(generation uint64) Config {
 	}
 }
 
+// testClaims pins a fixture to one session, turn, attempt, runtime revision and
+// operation with a one-hour expiry; tests can vary the key generation.
+// RU: testClaims закрепляет fixture за сессией, ходом, попыткой, ревизией среды
+// и операцией со сроком в один час; тесты могут менять поколение ключа.
 func testClaims(config Config, now time.Time) Claims {
 	return Claims{
 		Version: 1, Issuer: config.Issuer, Audience: config.Audience,
@@ -151,6 +175,10 @@ func testClaims(config Config, now time.Time) Claims {
 	}
 }
 
+// testKey generates a fresh ES256 key with a generation-labelled key ID for
+// one rotation fixture; its material stays inside the test process.
+// RU: testKey создаёт новый ключ ES256 с ID выбранного поколения для fixture
+// ротации; его материал остаётся внутри тестового процесса.
 func testKey(t *testing.T, generation uint64) internalrpcauth.ES256Key {
 	t.Helper()
 	key, err := internalrpcauth.GenerateES256Key("integration-continuation-g" + string(rune('0'+generation)))
@@ -160,6 +188,8 @@ func testKey(t *testing.T, generation uint64) internalrpcauth.ES256Key {
 	return key
 }
 
+// publicRaw serializes only the public JWK of a fixture key for the keyset.
+// RU: publicRaw сериализует для набора ключей лишь открытый JWK тестового ключа.
 func publicRaw(t *testing.T, key internalrpcauth.ES256Key) json.RawMessage {
 	t.Helper()
 	raw, err := internalrpcauth.MarshalPublicJWK(key.PublicOnly())
@@ -169,6 +199,10 @@ func publicRaw(t *testing.T, key internalrpcauth.ES256Key) json.RawMessage {
 	return raw
 }
 
+// writePrivate serializes a fixture private JWK into a restricted temporary
+// file to exercise the production secure-file loader.
+// RU: writePrivate записывает закрытый JWK fixture во временный файл с
+// ограниченными правами, чтобы проверить штатную безопасную загрузку.
 func writePrivate(t *testing.T, key internalrpcauth.ES256Key) string {
 	t.Helper()
 	raw, err := internalrpcauth.MarshalPrivateJWK(key)
@@ -178,6 +212,10 @@ func writePrivate(t *testing.T, key internalrpcauth.ES256Key) string {
 	return writeTestFile(t, "private.jwk", raw)
 }
 
+// writeKeyset stores a canonical public-key snapshot as a restricted temporary
+// file, preserving the same decoder boundary used by production.
+// RU: writeKeyset сохраняет канонический снимок открытых ключей во временном
+// файле с ограниченными правами и проверяет тот же декодер, что и production.
 func writeKeyset(t *testing.T, keyset PublicKeySet) string {
 	t.Helper()
 	raw, err := internalrpcauth.CanonicalJSON(keyset)
@@ -187,6 +225,10 @@ func writeKeyset(t *testing.T, keyset PublicKeySet) string {
 	return writeTestFile(t, "public-keyset.json", raw)
 }
 
+// writeTestFile writes one fixture below a new test-owned temporary directory
+// with read-only permissions and fails the test on an I/O error.
+// RU: writeTestFile записывает fixture в новый временный каталог теста с
+// правами только на чтение и завершает тест при ошибке ввода-вывода.
 func writeTestFile(t *testing.T, name string, raw []byte) string {
 	t.Helper()
 	file := filepath.Join(t.TempDir(), name)
@@ -196,6 +238,10 @@ func writeTestFile(t *testing.T, name string, raw []byte) string {
 	return file
 }
 
+// digest64 repeats a fixture character 64 times to make a SHA-256-shaped
+// input value; it does not calculate a cryptographic digest.
+// RU: digest64 повторяет символ fixture 64 раза для значения формы SHA-256;
+// криптографический дайджест эта функция не вычисляет.
 func digest64(symbol string) string {
 	value := ""
 	for range 64 {

@@ -11,14 +11,28 @@ import (
 )
 
 const (
-	FormatVersion              = 1
-	MaximumTaskBytes           = 64 << 10
-	MaximumSourceBytes   int64 = 64 << 20
-	MaximumObjectBytes   int64 = 68 << 20
-	SafeErrorPVCMissing        = "SESSION_ARCHIVE_PVC_MISSING"
-	SafeErrorPVCReplaced       = "SESSION_ARCHIVE_PVC_REPLACED"
+	// FormatVersion identifies the supported archive manifest and payload layout.
+	// RU: FormatVersion определяет поддерживаемый формат манифеста и содержимого архива.
+	FormatVersion = 1
+	// MaximumTaskBytes limits accepted task files and embedded archive manifest bytes.
+	// RU: MaximumTaskBytes ограничивает принимаемые файлы заданий и байты встроенного манифеста архива.
+	MaximumTaskBytes = 64 << 10
+	// MaximumSourceBytes bounds the source session file accepted by a task.
+	// RU: MaximumSourceBytes ограничивает размер исходного файла сессии, принимаемого заданием.
+	MaximumSourceBytes int64 = 64 << 20
+	// MaximumObjectBytes reserves bounded TAR overhead above the source-file budget.
+	// RU: MaximumObjectBytes оставляет ограниченный запас TAR сверх бюджета исходного файла.
+	MaximumObjectBytes int64 = 68 << 20
+	// SafeErrorPVCMissing names the closed failure for an absent session volume.
+	// RU: SafeErrorPVCMissing задаёт закрытый код отказа при отсутствии тома сессии.
+	SafeErrorPVCMissing = "SESSION_ARCHIVE_PVC_MISSING"
+	// SafeErrorPVCReplaced names the closed failure when a volume no longer matches its binding.
+	// RU: SafeErrorPVCReplaced задаёт закрытый код отказа при несовпадении тома с его привязкой.
+	SafeErrorPVCReplaced = "SESSION_ARCHIVE_PVC_REPLACED"
 )
 
+// ArchiveBinding carries the archive object receipt and original source metadata pinned by its owner.
+// RU: ArchiveBinding переносит квитанцию объекта архива и метаданные исходного файла, закреплённые владельцем.
 type ArchiveBinding struct {
 	ArchiveRef         string `json:"archive_ref"`
 	FormatVersion      uint32 `json:"format_version"`
@@ -32,6 +46,8 @@ type ArchiveBinding struct {
 	SourceSizeBytes    int64  `json:"source_size_bytes"`
 }
 
+// Task binds one archive action to its session, runtime revision, content generation, input and attempt.
+// RU: Task связывает действие архива с сессией, runtime-ревизией, поколением содержимого, входом и попыткой.
 type Task struct {
 	TaskRef, Kind, OrganizationRef, ProjectRef, SessionRef string
 	ProviderAccountRef, RuntimeRevisionRef                 string
@@ -45,11 +61,20 @@ type Task struct {
 	Archive                                                *ArchiveBinding
 }
 
+// wireTask preserves Task's JSON field layout without recursively calling its custom codec methods.
+// RU: wireTask сохраняет JSON-поля Task, не вызывая рекурсивно его собственные методы кодирования.
 type wireTask Task
 
-func (task Task) MarshalJSON() ([]byte, error)    { return json.Marshal(wireTask(task)) }
+// MarshalJSON serializes the task's wire fields without changing the bound values.
+// RU: MarshalJSON сериализует wire-поля задания без изменения закреплённых значений.
+func (task Task) MarshalJSON() ([]byte, error) { return json.Marshal(wireTask(task)) }
+
+// UnmarshalJSON decodes the task wire layout; callers separately apply Validate before use.
+// RU: UnmarshalJSON декодирует wire-поля задания; до использования вызывающая сторона отдельно применяет Validate.
 func (task *Task) UnmarshalJSON(raw []byte) error { return json.Unmarshal(raw, (*wireTask)(task)) }
 
+// FromProto maps the closed RPC task kinds and optional archive receipt, then validates the resulting binding.
+// RU: FromProto преобразует закрытые виды RPC-заданий и необязательную квитанцию архива, затем проверяет привязку.
 func FromProto(input *controlplanev1.SessionArchiveTask) (Task, error) {
 	if input == nil {
 		return Task{}, errors.New("session archive task is missing")
@@ -78,6 +103,8 @@ func FromProto(input *controlplanev1.SessionArchiveTask) (Task, error) {
 	return task, task.Validate()
 }
 
+// DecodeFile rejects empty or oversized task bytes and validates the decoded task before returning it.
+// RU: DecodeFile отклоняет пустые либо чрезмерные байты задания и до возврата проверяет декодированное задание.
 func DecodeFile(path string) (Task, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil || len(raw) == 0 || len(raw) > MaximumTaskBytes {
@@ -90,6 +117,8 @@ func DecodeFile(path string) (Task, error) {
 	return task, nil
 }
 
+// Validate checks required identities, size and generation bounds, canonical session path and kind-specific fields.
+// RU: Validate проверяет обязательные идентичности, размеры, поколения, канонический путь сессии и поля вида задания.
 func (task Task) Validate() error {
 	for _, required := range []string{task.TaskRef, task.Kind, task.OrganizationRef, task.SessionRef,
 		task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionDigest, task.CodexSessionID,
@@ -131,6 +160,8 @@ func (task Task) Validate() error {
 	return nil
 }
 
+// Validate checks the supported format, required receipt fields and source/object size and digest shapes.
+// RU: Validate проверяет поддерживаемый формат, обязательные поля квитанции, размеры и форму дайджестов источника и объекта.
 func (binding ArchiveBinding) Validate() error {
 	if binding.ArchiveRef == "" || binding.FormatVersion != FormatVersion || binding.ObjectKey == "" ||
 		binding.ObjectETag == "" || !strings.HasPrefix(binding.ObjectDigest, "sha256:") ||
@@ -142,16 +173,30 @@ func (binding ArchiveBinding) Validate() error {
 	return nil
 }
 
+// FailureStage is a closed diagnostic stage independent of provider error text.
+// RU: FailureStage представляет закрытый этап диагностики, независимый от текста ошибки провайдера.
 type FailureStage string
 
 const (
-	FailureStageUnknown        FailureStage = "UNKNOWN"
+	// FailureStageUnknown represents failures without a recognized internal archive sentinel.
+	// RU: FailureStageUnknown обозначает отказ без распознанной внутренней ошибки-маркера архива.
+	FailureStageUnknown FailureStage = "UNKNOWN"
+	// FailureStageSourceIdentity identifies a mismatch in the observed source file identity.
+	// RU: FailureStageSourceIdentity обозначает несовпадение наблюдаемой идентичности исходного файла.
 	FailureStageSourceIdentity FailureStage = "SOURCE_IDENTITY"
-	FailureStageSourceDigest   FailureStage = "SOURCE_DIGEST"
-	FailureStageObjectWrite    FailureStage = "OBJECT_WRITE"
+	// FailureStageSourceDigest identifies mismatched source bytes or their declared size.
+	// RU: FailureStageSourceDigest обозначает несовпадение исходных байтов либо объявленного размера.
+	FailureStageSourceDigest FailureStage = "SOURCE_DIGEST"
+	// FailureStageObjectWrite identifies failure to persist an archive object.
+	// RU: FailureStageObjectWrite обозначает отказ сохранения объекта архива.
+	FailureStageObjectWrite FailureStage = "OBJECT_WRITE"
+	// FailureStageObjectReadback identifies archive-object readback or receipt mismatch.
+	// RU: FailureStageObjectReadback обозначает отказ перечитывания архива либо несовпадение квитанции.
 	FailureStageObjectReadback FailureStage = "OBJECT_READBACK"
 )
 
+// NormalizeFailureStage maps unknown diagnostic input to the single bounded fallback.
+// RU: NormalizeFailureStage отображает неизвестный диагностический ввод в единственное ограниченное запасное значение.
 func NormalizeFailureStage(stage FailureStage) FailureStage {
 	switch stage {
 	case FailureStageSourceIdentity, FailureStageSourceDigest, FailureStageObjectWrite, FailureStageObjectReadback:
@@ -161,6 +206,8 @@ func NormalizeFailureStage(stage FailureStage) FailureStage {
 	}
 }
 
+// Result reports a closed outcome and the archive/source receipt values observed by the worker.
+// RU: Result сообщает закрытый исход и значения квитанций архива и источника, наблюдавшиеся worker.
 type Result struct {
 	Success         bool         `json:"success"`
 	SafeErrorCode   string       `json:"safe_error_code,omitempty"`

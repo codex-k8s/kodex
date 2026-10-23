@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+// TestProviderDeviceFailureIsTypedRetryableAndRedacted verifies both transient status variants retain the public code/retry hint without private text, while permission denial remains nonretryable 403.
+// TestProviderDeviceFailureIsTypedRetryableAndRedacted проверяет публичный код и подсказку повтора без закрытого текста для обоих временных статусов; отказ в разрешении остаётся неповторяемым 403.
 func TestProviderDeviceFailureIsTypedRetryableAndRedacted(t *testing.T) {
 	for _, code := range []codes.Code{codes.Unavailable, codes.DeadlineExceeded} {
 		response := httptest.NewRecorder()

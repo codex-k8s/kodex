@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowInputField } from "@/shared/api/generated/openapi/types.gen";
-import { prepareAssistantWorkflowInput } from "./run-input";
+import {
+  assistantWorkflowInputDraft,
+  prepareAssistantWorkflowInput,
+} from "./run-input";
 
 function field(
   key: string,
@@ -13,6 +16,41 @@ function field(
 }
 
 describe("входные данные запуска процесса через помощника", () => {
+  it("сохраняет скалярный ввод и помечает сложные значения черновика", () => {
+    expect(
+      assistantWorkflowInputDraft({
+        text: " исходный ",
+        count: 2,
+        enabled: false,
+        empty: null,
+        nested: { value: 1 },
+        list: [1],
+        missing: undefined,
+      }),
+    ).toEqual({
+      rawInput: {
+        text: " исходный ",
+        count: "2",
+        enabled: "false",
+        empty: "null",
+        nested: "[object Object]",
+        list: "1",
+        missing: "undefined",
+      },
+      invalidKeys: new Set(["nested", "list", "missing"]),
+    });
+  });
+
+  it.each([undefined, null, "text", 5, ["value"]])(
+    "не принимает %j за объект начального ввода",
+    (input) => {
+      expect(assistantWorkflowInputDraft(input)).toEqual({
+        rawInput: {},
+        invalidKeys: new Set(),
+      });
+    },
+  );
+
   it("нормализует типы и обязательные поля", () => {
     expect(
       prepareAssistantWorkflowInput(

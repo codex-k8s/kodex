@@ -406,9 +406,11 @@ function requirePolicies(plan,snapshot,phase) {
  return {primary,release,binding};
 }
 
-export function inspectPhase(plan,snapshot,phase,{requireExecutable=true}={}) {
+// Общая read-only граница снимка. Реестры фаз передаются только внутренними
+// прямым/обратным сценариями; их порядок и проверки work/idle остаются ниже.
+function requireDeliverySnapshot(plan,snapshot,phase,allowedPhases) {
  validateDeliveryPlan(plan,plan.context,plan.k3sSudo);
- requireValue(phases.includes(phase)&&snapshot.clusterUID===plan.clusterUID&&snapshot.namespaceUID===plan.namespaceUID&&
+ requireValue(allowedPhases.includes(phase)&&snapshot.clusterUID===plan.clusterUID&&snapshot.namespaceUID===plan.namespaceUID&&
   snapshot.controller.metadata.uid===plan.controllerUID,'HOLD_DELIVERY_IDENTITY_CHANGED');
  exactNeighbors(plan.guards.neighbors,snapshot);
  exactPinned(snapshot.jobsBinding,plan.guards.jobsBinding,'JOBS_BINDING_CHANGED');
@@ -416,6 +418,10 @@ export function inspectPhase(plan,snapshot,phase,{requireExecutable=true}={}) {
  requireValue(snapshot.policyConfig.metadata.uid===plan.guards.policyConfig.uid&&snapshot.policyConfig.metadata.resourceVersion===plan.guards.policyConfig.resourceVersion&&
   fingerprint(snapshot.policyConfig.data)===plan.guards.policyConfig.specSHA256,'POLICY_CONFIG_CHANGED');
  ownerUnchanged(plan.guards.ownerState,snapshot.ownerState);
+}
+
+export function inspectPhase(plan,snapshot,phase,{requireExecutable=true}={}) {
+ requireDeliverySnapshot(plan,snapshot,phase,phases);
  workCompatible(plan.guards.initialWork,snapshot);
  const reader=controllerPodState(snapshot);
  const target=plan.phaseTargets[phase],controllerDigest=fingerprint(snapshot.controller.spec),policies=requirePolicies(plan,snapshot,phase);
@@ -467,15 +473,8 @@ function rollbackPolicies(plan,snapshot) {
 }
 
 export function inspectRollbackPhase(plan,snapshot,phase,{requireExecutable=true}={}) {
- validateDeliveryPlan(plan,plan.context,plan.k3sSudo);
- requireValue(rollbackPhases.includes(phase)&&snapshot.clusterUID===plan.clusterUID&&snapshot.namespaceUID===plan.namespaceUID&&
-  snapshot.controller.metadata.uid===plan.controllerUID,'HOLD_DELIVERY_IDENTITY_CHANGED');
- exactNeighbors(plan.guards.neighbors,snapshot);
- exactPinned(snapshot.jobsBinding,plan.guards.jobsBinding,'JOBS_BINDING_CHANGED');
- exactPinned(snapshot.parameters,plan.guards.parameters,'POLICY_PARAMETERS_CHANGED');
- requireValue(snapshot.policyConfig.metadata.uid===plan.guards.policyConfig.uid&&snapshot.policyConfig.metadata.resourceVersion===plan.guards.policyConfig.resourceVersion&&
-  fingerprint(snapshot.policyConfig.data)===plan.guards.policyConfig.specSHA256,'POLICY_CONFIG_CHANGED');
- ownerUnchanged(plan.guards.ownerState,snapshot.ownerState);idle(snapshot);workCompatible(plan.guards.initialWork,snapshot);
+ requireDeliverySnapshot(plan,snapshot,phase,rollbackPhases);
+ idle(snapshot);workCompatible(plan.guards.initialWork,snapshot);
  const reader=controllerPodState(snapshot),policies=rollbackPolicies(plan,snapshot),target=plan.rollbackTargets[phase];
  let resource;
  if(phase==='rollback-policy-jobs')resource=snapshot.jobsPolicy;

@@ -1,3 +1,4 @@
+import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 import { providerUsageFixture } from "../src/test-utils/provider-usage-fixture";
 
@@ -59,20 +60,7 @@ for (const width of [1440, 390]) {
           }
           if (url.pathname === "/config/runtime-config.json") {
             await route.fulfill({
-              json: {
-                revision: "0".repeat(64),
-                environment: "synthetic",
-                apiBaseUrl: "/",
-                realtimeUrl: "/api/v1",
-                requestTimeoutMs: 10000,
-                oidc: {
-                  authority: "https://identity.invalid",
-                  clientId: "synthetic",
-                  redirectUri: "/auth/callback",
-                  postLogoutRedirectUri: "/",
-                  scope: "openid",
-                },
-              },
+              json: syntheticRuntimeConfig(),
             });
             return;
           }
@@ -230,20 +218,7 @@ for (const width of [1440, 390]) {
           }
           if (url.pathname === "/config/runtime-config.json") {
             await route.fulfill({
-              json: {
-                revision: "0".repeat(64),
-                environment: "synthetic",
-                apiBaseUrl: "/",
-                realtimeUrl: "/api/v1",
-                requestTimeoutMs: 10000,
-                oidc: {
-                  authority: "https://identity.invalid",
-                  clientId: "synthetic",
-                  redirectUri: "/auth/callback",
-                  postLogoutRedirectUri: "/",
-                  scope: "openid",
-                },
-              },
+              json: syntheticRuntimeConfig(),
             });
             return;
           }

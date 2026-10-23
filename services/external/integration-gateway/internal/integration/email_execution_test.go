@@ -9,6 +9,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestEmailExecutionClaimMapping checks lease-field preservation and exclusive invocation/test references in synthetic claim mapping, rejecting absent claims and an ambiguous binding.
+// TestEmailExecutionClaimMapping проверяет сохранение полей аренды и взаимоисключающие ссылки вызова и проверки при преобразовании синтетического claim, отклоняя отсутствующие claim и неоднозначную привязку.
 func TestEmailExecutionClaimMapping(t *testing.T) {
 	lease := &cp.WorkLease{Ref: "lease_fixture01", Fence: "fixture-fence", Generation: 7, ExpiresAt: timestamppb.New(time.Now().Add(time.Minute))}
 	invocation := RequestFromInvocation(&cp.IntegrationInvocationClaim{InvocationRef: "inv_fixture01", Lease: lease}).EmailExecution

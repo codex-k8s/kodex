@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestHealthSummaryClosedAndLegacy exercises canonical protocol summaries,
+// bounded legacy reason defaults and rejection of injected provider fields.
+// RU: TestHealthSummaryClosedAndLegacy проверяет канонический отчёт протоколов,
+// ограниченную подстановку прежней причины и отказ для внедрённых полей провайдера.
 func TestHealthSummaryClosedAndLegacy(t *testing.T) {
 	legacy := &ProtocolReadiness{Smtp: "ready", Imap: "not_configured", Pop3: "not_ready"}
 	summary, err := HealthSummary("not_ready", legacy)

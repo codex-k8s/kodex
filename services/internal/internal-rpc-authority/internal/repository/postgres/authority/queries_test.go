@@ -9,6 +9,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
+// TestSnapshotActivationAllowsFreshReceiptForExactSnapshot checks required SQL fragments for receipt refresh and nonregressing exact-snapshot activation, rejecting an old receipt-equality spelling. It is a source assertion, not a real restart or database execution.
+// TestSnapshotActivationAllowsFreshReceiptForExactSnapshot проверяет обязательные фрагменты SQL обновления квитанции и неоткатываемой активации точного снимка, отклоняя старую форму равенства квитанций. Это проверка исходника, а не реальный перезапуск или исполнение БД.
 func TestSnapshotActivationAllowsFreshReceiptForExactSnapshot(t *testing.T) {
 	query := verifierActivateSnapshotSQL
 	for _, required := range []string{
@@ -28,6 +30,8 @@ func TestSnapshotActivationAllowsFreshReceiptForExactSnapshot(t *testing.T) {
 	}
 }
 
+// TestContextAcceptanceUsesExactSnapshotReceiptArguments rewrites exact named arguments locally and checks separate exact/advanced snapshot paths and receipt refresh fragments. It does not open PostgreSQL or prove concurrency behavior.
+// TestContextAcceptanceUsesExactSnapshotReceiptArguments локально переписывает точные именованные аргументы и проверяет раздельные пути точного и продвинутого снимка и фрагменты обновления квитанции. PostgreSQL не открывается, конкурентное поведение не доказывается.
 func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 	state := repository.SnapshotState{
 		AttestationReceiptID: "00000000-0000-4000-8000-000000000001",
@@ -73,6 +77,8 @@ func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 	}
 }
 
+// TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor checks both embedded activation/acceptance statements for the first-watermark branch and signed-predecessor conditions. It does not verify a signature or insert a bootstrap snapshot.
+// TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor проверяет оба встроенных statement активации и принятия на ветвь первой отметки и условия подписанного предшественника. Подпись не проверяется и исходный снимок не вставляется.
 func TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor(t *testing.T) {
 	queries := map[string]string{
 		"activation": verifierActivateSnapshotSQL,
@@ -100,6 +106,8 @@ func TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor(t *testing.
 	}
 }
 
+// TestProofReservationAllowsConcurrentOutOfOrderProofs pins the SQL's nonregressing watermark branches, equal-revision digest check and one-use reservation conflict handling. No concurrent goroutines or real transactions are exercised.
+// TestProofReservationAllowsConcurrentOutOfOrderProofs закрепляет SQL-ветви неоткатываемой отметки, проверку дайджеста равной ревизии и конфликт одноразовой reservation. Конкурентные goroutines и реальные транзакции не проверяются.
 func TestProofReservationAllowsConcurrentOutOfOrderProofs(t *testing.T) {
 	for _, required := range []string{
 		"authority_proof_watermarks.proof_revision < EXCLUDED.proof_revision",
@@ -121,6 +129,8 @@ func TestProofReservationAllowsConcurrentOutOfOrderProofs(t *testing.T) {
 	}
 }
 
+// TestContinuationReservationAtomicallyRequiresAcceptedParent locally rewrites parent/child arguments and checks the statement's parent digest/expiry and child-insertion structure. It does not commit a parent or child reservation.
+// TestContinuationReservationAtomicallyRequiresAcceptedParent локально переписывает аргументы родителя и ребёнка и проверяет структуру statement с дайджестом и сроком родителя и вставкой ребёнка. Reservation родителя или ребёнка не фиксируется.
 func TestContinuationReservationAtomicallyRequiresAcceptedParent(t *testing.T) {
 	parent := repository.Reservation{
 		ScopeID: "stt-tts-service", JTI: "00000000-0000-4000-8000-000000000001",
@@ -149,6 +159,8 @@ func TestContinuationReservationAtomicallyRequiresAcceptedParent(t *testing.T) {
 	}
 }
 
+// TestReadinessReservationUsesModeSpecificWritePath selects issuer proof versus verifier context SQL under a fixed clock and checks named argument rewriting with no connection. It does not prove that either role can write live replay storage.
+// TestReadinessReservationUsesModeSpecificWritePath при фиксированных часах выбирает SQL issuer proof либо verifier context и проверяет переписывание именованных аргументов без подключения. Возможность роли писать в живое replay-хранилище не доказывается.
 func TestReadinessReservationUsesModeSpecificWritePath(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
@@ -183,6 +195,8 @@ func TestReadinessReservationUsesModeSpecificWritePath(t *testing.T) {
 	}
 }
 
+// mustLoadQueriesForTest loads the real embedded authority query set and fails the calling unit immediately on header-validation error; it performs no SQL execution or fixture database setup.
+// mustLoadQueriesForTest загружает настоящий встроенный набор authority и немедленно завершает вызывающий unit при ошибке заголовков; SQL не исполняется и эталонная БД не создаётся.
 func mustLoadQueriesForTest(t *testing.T) querySet {
 	t.Helper()
 	queries, err := loadQueries()
@@ -192,6 +206,8 @@ func mustLoadQueriesForTest(t *testing.T) querySet {
 	return queries
 }
 
+// TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt rewrites the readiness arguments and asserts use of the stored workload receipt instead of a replica-provided receipt parameter. It checks source/argument shape, not receipt freshness at runtime.
+// TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt переписывает аргументы готовности и требует сохранённую квитанцию workload вместо параметра квитанции реплики. Проверяется форма исходника и аргументов, а не runtime-свежесть квитанции.
 func TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt(t *testing.T) {
 	args := snapshotReadinessArgs("workload", repository.SnapshotState{})
 	if _, _, err := args.RewriteQuery(

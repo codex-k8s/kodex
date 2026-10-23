@@ -14,24 +14,36 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// diagnosticSecret is a sentinel that must never escape local diagnostics.
+// RU: diagnosticSecret — маркер, который не должен выходить за локальную диагностику.
 const diagnosticSecret = "PRIVATE-credential-SQL-JWS-sentinel"
 
+// rejectedDiagnosticIssuer records calls and fails both issuance operations.
+// RU: rejectedDiagnosticIssuer считает вызовы и отклоняет обе операции выпуска.
 type rejectedDiagnosticIssuer struct {
 	api.AuthorizationIssuerServiceClient
 	err   error
 	calls int
 }
 
+// IssueAuthorizationContext rejects the initial context without returning data.
+// RU: IssueAuthorizationContext отклоняет первичный контекст, не возвращая данные.
 func (issuer *rejectedDiagnosticIssuer) IssueAuthorizationContext(context.Context, *api.IssueAuthorizationContextRequest, ...grpc.CallOption) (*api.IssueAuthorizationContextResponse, error) {
 	issuer.calls++
 	return nil, issuer.err
 }
 
+// IssueContinuationAuthorizationContext rejects continuation issuance likewise.
+// RU: IssueContinuationAuthorizationContext также отклоняет выпуск продолжения.
 func (issuer *rejectedDiagnosticIssuer) IssueContinuationAuthorizationContext(context.Context, *api.IssueContinuationAuthorizationContextRequest, ...grpc.CallOption) (*api.IssueContinuationAuthorizationContextResponse, error) {
 	issuer.calls++
 	return nil, issuer.err
 }
 
+// TestAuthorityDiagnosticCoversStreamAndContinuationBoundaries verifies that
+// proof and issuer failures stop stream effects and continuation invocation.
+// RU: TestAuthorityDiagnosticCoversStreamAndContinuationBoundaries проверяет,
+// что отказ proof или issuer не допускает эффектов stream и вызова продолжения.
 func TestAuthorityDiagnosticCoversStreamAndContinuationBoundaries(t *testing.T) {
 	for _, bound := range []bool{false, true} {
 		for _, issuerFailure := range []bool{false, true} {
@@ -82,6 +94,10 @@ func TestAuthorityDiagnosticCoversStreamAndContinuationBoundaries(t *testing.T) 
 	}
 }
 
+// TestAuthorityDiagnosticDistinguishesProviderAndIssuerWithoutEffects checks
+// each closed failure stage and redaction without invoking the target RPC.
+// RU: TestAuthorityDiagnosticDistinguishesProviderAndIssuerWithoutEffects
+// проверяет закрытые стадии отказа и очистку без вызова целевого RPC.
 func TestAuthorityDiagnosticDistinguishesProviderAndIssuerWithoutEffects(t *testing.T) {
 	for _, stage := range []DiagnosticStage{StageProofOperation, StageGrantMissing, StageGrantRead, StageProofResolve, StageProofResponse, StageContextIssue} {
 		t.Run(string(stage), func(t *testing.T) {
@@ -114,6 +130,10 @@ func TestAuthorityDiagnosticDistinguishesProviderAndIssuerWithoutEffects(t *test
 	}
 }
 
+// TestAuthorityDiagnosticSanitizesDetailsAndUnknownEnums checks the exact
+// issuer-detail allowlist and normalization of unknown enum values.
+// RU: TestAuthorityDiagnosticSanitizesDetailsAndUnknownEnums проверяет точный
+// список допустимых issuer details и нормализацию неизвестных enum-значений.
 func TestAuthorityDiagnosticSanitizesDetailsAndUnknownEnums(t *testing.T) {
 	for _, invalid := range []bool{false, true} {
 		detail := &api.AuthorizationErrorDetail{Reason: api.AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED, Stage: api.AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_REPLAY, CorrelationId: diagnosticSecret}
@@ -143,6 +163,10 @@ func TestAuthorityDiagnosticSanitizesDetailsAndUnknownEnums(t *testing.T) {
 	}
 }
 
+// TestDiagnosticProofFailurePreservesBoundedRetry ensures diagnostic wrapping
+// does not alter the existing one-retry policy for transient provider codes.
+// RU: TestDiagnosticProofFailurePreservesBoundedRetry подтверждает, что
+// диагностическая обёртка не меняет прежний однократный повтор для временных кодов.
 func TestDiagnosticProofFailurePreservesBoundedRetry(t *testing.T) {
 	for _, code := range []codes.Code{codes.Canceled, codes.Unavailable, codes.DeadlineExceeded} {
 		provider := &scriptedProofProvider{errors: []error{NewProofFailure(StageProofResolve, status.Error(code, diagnosticSecret))}}
@@ -153,6 +177,10 @@ func TestDiagnosticProofFailurePreservesBoundedRetry(t *testing.T) {
 	}
 }
 
+// TestAuthorityDiagnosticRejectsUnknownAndAmbiguousDetails ensures malformed,
+// multiple, and foreign details never cross the local error boundary.
+// RU: TestAuthorityDiagnosticRejectsUnknownAndAmbiguousDetails проверяет, что
+// повреждённые, множественные и чужие details не проходят локальную границу ошибок.
 func TestAuthorityDiagnosticRejectsUnknownAndAmbiguousDetails(t *testing.T) {
 	for _, shape := range []string{"unknown_fields", "multiple", "foreign"} {
 		detail := &api.AuthorizationErrorDetail{Reason: api.AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED, Stage: api.AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_REPLAY}

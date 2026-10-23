@@ -9,13 +9,29 @@ import (
 )
 
 const (
-	fileReadReceiptKind                 = "read_file_page"
-	maximumFileReadReceiptBytes         = 2000
+	// fileReadReceiptKind identifies safe metadata for one completely verified read_file
+	// page, not an acknowledgement that the model provider received or used its content.
+	// fileReadReceiptKind обозначает safe metadata одной полностью verified read_file page,
+	// не acknowledgement получения/использования content провайдером модели.
+	fileReadReceiptKind = "read_file_page"
+	// maximumFileReadReceiptBytes bounds the fifteen-field safe receipt to two thousand
+	// encoded bytes separately from page, source and public MCP response budgets.
+	// maximumFileReadReceiptBytes ограничивает fifteen-field safe receipt двумя тысячами
+	// encoded bytes отдельно от page,source и public MCP response budgets.
+	maximumFileReadReceiptBytes = 2000
+	// maximumFileReadReceiptInteger caps persisted revision/version coordinates at the
+	// largest exactly representable JavaScript integer to avoid JSON numeric ambiguity.
+	// maximumFileReadReceiptInteger ограничивает persisted revision/version coordinates
+	// наибольшим точно представимым JavaScript integer против JSON numeric ambiguity.
 	maximumFileReadReceiptInteger int64 = 9007199254740991
 )
 
-// Квитанция описывает проверенную страницу, но не ACK её получения provider.
-// Поля закрыты whitelist; file/source descriptions и содержимое не сохраняются.
+// fileReadReceipt stores only exact catalog/file/purpose/version/digest/page metadata
+// for a verified source page. Names, descriptions, body text, download details and
+// transport credentials are excluded; it is not provider delivery acknowledgement.
+// fileReadReceipt хранит лишь exact catalog/file/purpose/version/digest/page metadata
+// verified source page. Names,descriptions,body text,download details/transport credentials
+// исключены; это не provider delivery acknowledgement.
 type fileReadReceipt struct {
 	Version         int    `json:"version"`
 	Kind            string `json:"kind"`
@@ -34,6 +50,12 @@ type fileReadReceipt struct {
 	ChunkDigest     string `json:"chunk_digest"`
 }
 
+// fileReadEvidence keeps private lease/fence/generation provenance alongside the
+// validated receipt. It is local trusted-code state, not JSON-reconstructible, signed
+// or independently sufficient to authorize a new owner read.
+// fileReadEvidence хранит private lease/fence/generation provenance с validated receipt.
+// Это local trusted-code state,не JSON-reconstructible,не signed и само
+// не авторизует новый owner read.
 type fileReadEvidence struct {
 	leaseRef   string
 	fence      string
@@ -41,16 +63,35 @@ type fileReadEvidence struct {
 	receipt    fileReadReceipt
 }
 
+// fileReadToolResult couples the original mutable public wire map to private page
+// evidence. Later checks bind selected page/file fields, not every unrelated wire
+// property; private evidence is deliberately absent from marshaled public JSON.
+// fileReadToolResult связывает исходную mutable public wire map с private page evidence.
+// Поздние checks связывают выбранные page/file fields,не каждое постороннее wire
+// property; private evidence намеренно отсутствует в public JSON.
 type fileReadToolResult struct {
 	wire     map[string]any
 	evidence *fileReadEvidence
 }
 
-// Сохраняется точная прежняя MCP форма; private evidence не входит в ответ.
+// MarshalJSON emits only the unchanged public wire shape, excluding private receipt
+// provenance, and propagates encoding errors without claiming a successful audit write.
+// MarshalJSON выдаёт лишь неизменную public wire shape без private receipt provenance
+// и возвращает encoding errors,не утверждая успешную audit write.
 func (result fileReadToolResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal(result.wire)
 }
 
+// safeFileReadReceipt requires the private typed result and matches current catalog/
+// purpose/lease binding, exact request pins, safe integer/size/EOF bounds and selected
+// wire file/page fields, including the digest of actual page text. It returns bounded
+// whitelisted JSON without body/name/transport details; arbitrary extra wire properties
+// are not copied into the receipt, and local success does not prove audit persistence.
+// safeFileReadReceipt требует private typed result и сверяет current catalog/purpose/
+// lease binding,exact request pins,safe integer/size/EOF bounds и selected wire file/page
+// fields с digest actual page text. Возвращает bounded whitelist JSON без body/name/
+// transport details; extra wire properties не копируются в receipt,а local success
+// не доказывает audit persistence.
 func safeFileReadReceipt(input runtimecontract.RunnerInput, arguments map[string]any, result any) (string, error) {
 	value, ok := result.(fileReadToolResult)
 	if !ok || value.evidence == nil || input.FileCatalog == nil || !onlyKeys(arguments, "purpose", "entry_ref", "artifact_ref", "revision", "digest", "offset_bytes", "maximum_bytes") {
@@ -72,8 +113,7 @@ func safeFileReadReceipt(input runtimecontract.RunnerInput, arguments map[string
 		!runtimeFileDigestPattern.MatchString(receipt.SourceDigest) || !runtimeFileDigestPattern.MatchString(receipt.ChunkDigest) {
 		return "", errRuntimeFileReply
 	}
-	catalogDigest, err := hex.DecodeString(receipt.CatalogDigest)
-	if err != nil || len(catalogDigest) != sha256.Size || hex.EncodeToString(catalogDigest) != receipt.CatalogDigest {
+	if !runtimecontract.ValidSHA256Text(receipt.CatalogDigest) {
 		return "", errRuntimeFileReply
 	}
 	entry, _ := arguments["entry_ref"].(string)

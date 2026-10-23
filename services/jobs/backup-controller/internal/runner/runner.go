@@ -1,4 +1,5 @@
-// Package runner оркестрирует полный backup, verification, retention и restore drill.
+// Package runner orchestrates backup, independent verification, retention and owner-gated restore drills.
+// RU: Package runner координирует копирование, независимую проверку, хранение и пробное восстановление с подтверждением владельца.
 package runner
 
 import (
@@ -20,16 +21,34 @@ import (
 	"github.com/google/uuid"
 )
 
+// Observer records completed business effects and authoritative readback timestamps.
+// RU: Observer учитывает завершённые бизнес-действия и времена авторитетного перечитывания.
 type Observer interface {
+	// BackupFinished records the final outcome of one backup attempt.
+	// RU: BackupFinished фиксирует итог одной попытки копирования.
 	BackupFinished(outcome string)
+	// DatabaseCompleted counts a completed backup or restore database action.
+	// RU: DatabaseCompleted учитывает завершённое действие с БД при копировании либо восстановлении.
 	DatabaseCompleted(operation, outcome string)
+	// ObjectCompleted counts a completed immutable object action, including partial work before failure.
+	// RU: ObjectCompleted учитывает завершённое действие с неизменяемым объектом, включая частичный успех до ошибки.
 	ObjectCompleted(operation, outcome string)
+	// RetentionFinished records one cleanup evaluation and its already-deleted count.
+	// RU: RetentionFinished учитывает одну оценку хранения и число уже удалённых копий.
 	RetentionFinished(outcome string, deleted int)
+	// RestoreFinished records the final outcome of one owner-gated restore drill.
+	// RU: RestoreFinished фиксирует итог одного подтверждённого пробного восстановления.
 	RestoreFinished(outcome string)
+	// SetLastSuccessfulBackup publishes the most recent independently verified backup time.
+	// RU: SetLastSuccessfulBackup публикует время последней независимо проверенной копии.
 	SetLastSuccessfulBackup(time.Time)
+	// SetLastVerifiedRestore publishes the latest successful restore-drill time.
+	// RU: SetLastVerifiedRestore публикует время последнего успешного пробного восстановления.
 	SetLastVerifiedRestore(time.Time)
 }
 
+// Runner binds PostgreSQL, versioned S3, protected credentials, workspace and a business observer.
+// RU: Runner связывает PostgreSQL, версионированный S3, защищённые реквизиты, workspace и бизнес-наблюдатель.
 type Runner struct {
 	postgres          *postgresbackup.Manager
 	repository        *s3backup.Repository
@@ -41,17 +60,27 @@ type Runner struct {
 	now               func() time.Time
 }
 
+// Policy sets a minimum backup age and count to keep before retention may delete anything.
+// RU: Policy задаёт минимальный возраст и количество сохраняемых копий до возможного удаления.
 type Policy struct {
 	MinimumAge time.Duration
 	Keep       int
 }
 
 const (
-	operationLockTTL                  = 25 * time.Hour
-	operationLockReleaseTimeout       = 90 * time.Second
+	// operationLockTTL bounds the controller's cross-operation S3 lock lifetime.
+	// RU: operationLockTTL ограничивает срок общей S3-блокировки операций контроллера.
+	operationLockTTL = 25 * time.Hour
+	// operationLockReleaseTimeout bounds detached cleanup after cancellation of the parent operation.
+	// RU: operationLockReleaseTimeout ограничивает независимую очистку после отмены основной операции.
+	operationLockReleaseTimeout = 90 * time.Second
+	// operationLockReleaseRetryInterval spaces bounded lock-release retries.
+	// RU: operationLockReleaseRetryInterval задаёт паузу между ограниченными попытками освобождения блокировки.
 	operationLockReleaseRetryInterval = time.Second
 )
 
+// attemptDocument records an immutable start marker for an in-progress backup.
+// RU: attemptDocument фиксирует неизменяемую метку начала выполняемой копии.
 type attemptDocument struct {
 	SchemaVersion int       `json:"schemaVersion"`
 	Kind          string    `json:"kind"`
@@ -59,6 +88,8 @@ type attemptDocument struct {
 	StartedAt     time.Time `json:"startedAt"`
 }
 
+// failureDocument records a coarse failure class without exposing source credentials or raw errors.
+// RU: failureDocument фиксирует общий класс отказа без раскрытия исходных реквизитов и сырых ошибок.
 type failureDocument struct {
 	SchemaVersion int       `json:"schemaVersion"`
 	Kind          string    `json:"kind"`
@@ -67,6 +98,8 @@ type failureDocument struct {
 	FailedAt      time.Time `json:"failedAt"`
 }
 
+// New rejects missing dependencies and creates one runner with a UTC clock for operation receipts.
+// RU: New отклоняет отсутствие зависимостей и создаёт runner с UTC-часами для квитанций операций.
 func New(postgres *postgresbackup.Manager, repository *s3backup.Repository, credentials configspec.Credentials,
 	workDirectory, controllerVersion, releaseRevision string, observer Observer) (*Runner, error) {
 	if postgres == nil || repository == nil || observer == nil || workDirectory == "" ||
@@ -78,6 +111,8 @@ func New(postgres *postgresbackup.Manager, repository *s3backup.Repository, cred
 		releaseRevision: releaseRevision, observer: observer, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
+// Check validates the destination and all declared S3 and PostgreSQL sources before work.
+// RU: Check проверяет назначение и все объявленные S3/PostgreSQL-источники до начала работы.
 func (runner *Runner) Check(ctx context.Context) error {
 	if err := runner.repository.Check(ctx, runner.credentials.ObjectStores); err != nil {
 		return err
@@ -85,6 +120,8 @@ func (runner *Runner) Check(ctx context.Context) error {
 	return runner.postgres.Check(ctx, runner.credentials.Databases)
 }
 
+// Backup locks the repository, snapshots each source, copies exact objects and publishes verification after readback.
+// RU: Backup блокирует репозиторий, снимает копии источников и публикует проверку только после точного перечитывания.
 func (runner *Runner) Backup(ctx context.Context) (backupID string, resultErr error) {
 	startedAt := runner.now()
 	backupID = newBackupID(startedAt)
@@ -187,6 +224,8 @@ func (runner *Runner) Backup(ctx context.Context) (backupID string, resultErr er
 	return backupID, nil
 }
 
+// Verify rechecks a manifest and all versioned payloads before ensuring its independent verification receipt.
+// RU: Verify повторно сверяет манифест и все версионированные данные до записи независимой квитанции проверки.
 func (runner *Runner) Verify(ctx context.Context, backupID string) (resultErr error) {
 	lock, err := runner.repository.AcquireOperationLock(ctx, "verify", backupID, runner.now(), operationLockTTL)
 	if err != nil {
@@ -206,6 +245,8 @@ func (runner *Runner) Verify(ctx context.Context, backupID string) (resultErr er
 	return runner.repository.EnsureVerification(ctx, value, receipt, verification)
 }
 
+// Retain deletes only policy-selected backups after a successful restore point exists, counting partial deletions.
+// RU: Retain удаляет лишь выбранные политикой копии при наличии проверенной точки восстановления и учитывает частичные удаления.
 func (runner *Runner) Retain(ctx context.Context, policy Policy) (resultErr error) {
 	lock, err := runner.repository.AcquireOperationLock(ctx, "retention", newBackupID(runner.now()),
 		runner.now(), operationLockTTL)
@@ -249,6 +290,8 @@ func (runner *Runner) Retain(ctx context.Context, policy Policy) (resultErr erro
 	return nil
 }
 
+// RestoreDrill binds targets to owner approval, refuses prior terminal failures and verifies isolated restored data.
+// RU: RestoreDrill связывает цели с подтверждением владельца, отклоняет прежние terminal-отказы и проверяет восстановленные данные.
 func (runner *Runner) RestoreDrill(ctx context.Context, approval configspec.RestoreApproval, targets configspec.RestoreTargets) (resultErr error) {
 	defer func() {
 		if resultErr == nil {
@@ -365,6 +408,8 @@ func (runner *Runner) RestoreDrill(ctx context.Context, approval configspec.Rest
 	return nil
 }
 
+// Due compares the newest verified backup completion with the configured interval.
+// RU: Due сравнивает завершение последней проверенной копии с заданным интервалом.
 func (runner *Runner) Due(ctx context.Context, interval time.Duration) (bool, error) {
 	values, _, err := runner.repository.Catalog(ctx)
 	if err != nil {
@@ -377,6 +422,8 @@ func (runner *Runner) Due(ctx context.Context, interval time.Duration) (bool, er
 	return !runner.now().Before(values[0].CompletedAt.Add(interval)), nil
 }
 
+// Readback derives latest backup and drill times from the verified repository catalog.
+// RU: Readback выводит времена последних копии и восстановления из проверенного каталога репозитория.
 func (runner *Runner) Readback(ctx context.Context) (string, time.Time, time.Time, error) {
 	values, drilled, err := runner.repository.Catalog(ctx)
 	if err != nil {
@@ -396,17 +443,23 @@ func (runner *Runner) Readback(ctx context.Context) (string, time.Time, time.Tim
 	return backupID, lastBackup, lastRestore, nil
 }
 
+// newBackupID combines a UTC timestamp with a random eight-byte UUID prefix.
+// RU: newBackupID соединяет UTC-время со случайными первыми восемью байтами UUID.
 func newBackupID(now time.Time) string {
 	id := uuid.New()
 	return now.UTC().Format("20060102T150405Z") + "-" + fmt.Sprintf("%x", id[:8])
 }
 
+// releaseOperationLock detaches bounded lock cleanup from a potentially cancelled operation context.
+// RU: releaseOperationLock отделяет ограниченную очистку блокировки от возможной отмены контекста операции.
 func releaseOperationLock(ctx context.Context, lock *s3backup.OperationLock) error {
 	releaseContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), operationLockReleaseTimeout)
 	defer cancel()
 	return retryOperationLockRelease(releaseContext, operationLockReleaseRetryInterval, lock.Release)
 }
 
+// retryOperationLockRelease repeats release until success or deadline and preserves the final observed error.
+// RU: retryOperationLockRelease повторяет освобождение до успеха либо срока и сохраняет последнюю наблюдаемую ошибку.
 func retryOperationLockRelease(ctx context.Context, retryInterval time.Duration,
 	release func(context.Context) error) error {
 	if release == nil || retryInterval <= 0 {

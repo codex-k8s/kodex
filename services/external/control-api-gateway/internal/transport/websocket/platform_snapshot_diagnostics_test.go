@@ -15,6 +15,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestPlatformSnapshotDiagnosticClosedFields checks the exact fourteen-field log shape, bounded kind/code normalization and zeroed unrelated page context while rejecting a private sentinel in captured output.
+// TestPlatformSnapshotDiagnosticClosedFields проверяет точный набор четырнадцати полей, нормализацию вида и кода, обнуление постороннего контекста страницы и отсутствие закрытого маркера в логе.
 func TestPlatformSnapshotDiagnosticClosedFields(t *testing.T) {
 	for _, tc := range []struct {
 		kind, wantKind string
@@ -44,6 +46,8 @@ func TestPlatformSnapshotDiagnosticClosedFields(t *testing.T) {
 	}
 }
 
+// TestPlatformSnapshotDiagnosticStagePreservesClosedMapping exercises known and unknown stage/kind combinations, retaining errors.Is and gRPC status while logging only compatible stage labels; wrapping nil remains nil.
+// TestPlatformSnapshotDiagnosticStagePreservesClosedMapping проверяет известные и неизвестные пары этапа и вида, сохраняя errors.Is и gRPC-статус при записи только совместимых обозначений; оборачивание nil остаётся nil.
 func TestPlatformSnapshotDiagnosticStagePreservesClosedMapping(t *testing.T) {
 	for _, stage := range []platformSnapshotReadStage{
 		platformSnapshotAssistantGetStage, platformSnapshotConversationListStage,
@@ -79,6 +83,8 @@ func TestPlatformSnapshotDiagnosticStagePreservesClosedMapping(t *testing.T) {
 	}
 }
 
+// platformSnapshotStageRecorder decorates the assistant-size RPC fixture with an exact parent deadline, call counters and one selected stage failure or malformed bootstrap response.
+// platformSnapshotStageRecorder дополняет тестовую RPC-оснастку размеров помощника точным родительским сроком, счётчиками и отказом выбранного этапа либо некорректным bootstrap-ответом.
 type platformSnapshotStageRecorder struct {
 	assistantSnapshotSizeRecorder
 	failStage        platformSnapshotReadStage
@@ -89,6 +95,8 @@ type platformSnapshotStageRecorder struct {
 	failOnCall       int
 }
 
+// Invoke requires the original deadline, identifies assistant/list/bootstrap response types and injects only the configured failure before delegating normal synthetic responses.
+// Invoke требует исходный срок, различает типы ответов помощника, списка и bootstrap и подставляет только настроенный отказ перед обычными тестовыми ответами.
 func (c *platformSnapshotStageRecorder) Invoke(ctx context.Context, method string, request, response any, options ...grpc.CallOption) error {
 	deadline, bounded := ctx.Deadline()
 	if !bounded || !deadline.Equal(c.deadline) {
@@ -113,6 +121,8 @@ func (c *platformSnapshotStageRecorder) Invoke(ctx context.Context, method strin
 	return c.assistantSnapshotSizeRecorder.Invoke(ctx, method, request, response, options...)
 }
 
+// TestPlatformSnapshotSystemAssistantReadStageAttribution checks real snapshot orchestration against fake owner RPCs, retaining the exact failed stage, error, call order, cursor and no partial frames under the original parent deadline.
+// TestPlatformSnapshotSystemAssistantReadStageAttribution проверяет настоящую оркестрацию снимка с фиктивными owner RPC, сохраняя точные этап отказа, ошибку, порядок вызовов и курсор без частичных кадров при исходном сроке родителя.
 func TestPlatformSnapshotSystemAssistantReadStageAttribution(t *testing.T) {
 	for _, tc := range []struct {
 		stage platformSnapshotReadStage
@@ -149,6 +159,8 @@ func TestPlatformSnapshotSystemAssistantReadStageAttribution(t *testing.T) {
 	}
 }
 
+// TestPlatformSnapshotSystemAssistantSuccessDoesNotLogStage requires a complete assistant/conversation/bootstrap bundle from exactly three owner-fixture reads with no failure log or parent cancellation.
+// TestPlatformSnapshotSystemAssistantSuccessDoesNotLogStage требует полный набор помощника, диалогов и bootstrap ровно из трёх тестовых чтений без лога отказа и отмены родителя.
 func TestPlatformSnapshotSystemAssistantSuccessDoesNotLogStage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), heartbeatWakeTimeout)
 	defer cancel()
@@ -168,6 +180,8 @@ func TestPlatformSnapshotSystemAssistantSuccessDoesNotLogStage(t *testing.T) {
 	}
 }
 
+// TestPlatformSnapshotDiagnosticPageLadderIsClosed independently enumerates valid halving sizes and bounded attempts, rejecting unrelated kinds and malformed or excessive page contexts.
+// TestPlatformSnapshotDiagnosticPageLadderIsClosed независимо перечисляет допустимые размеры деления и номера попыток, отклоняя посторонние виды и некорректный либо чрезмерный контекст страницы.
 func TestPlatformSnapshotDiagnosticPageLadderIsClosed(t *testing.T) {
 	for index, size := range []int32{50, 25, 12, 6, 3, 1} {
 		for number := 1; number <= index+1; number++ {
@@ -194,6 +208,8 @@ func TestPlatformSnapshotDiagnosticPageLadderIsClosed(t *testing.T) {
 	}
 }
 
+// TestPlatformSnapshotDiagnosticIdentifiesOversizedRetry forces growth beyond the frame bound followed by a fake owner failure, checking the reduced page's attempt/stage and absence of partial frames.
+// TestPlatformSnapshotDiagnosticIdentifiesOversizedRetry создаёт превышение размера кадра и последующий тестовый отказ владельца, сверяя попытку и этап уменьшенной страницы без частичных кадров.
 func TestPlatformSnapshotDiagnosticIdentifiesOversizedRetry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), heartbeatWakeTimeout)
 	defer cancel()
@@ -218,6 +234,8 @@ func TestPlatformSnapshotDiagnosticIdentifiesOversizedRetry(t *testing.T) {
 	}
 }
 
+// TestPlatformSnapshotDiagnosticExpiredParentAndSuccess distinguishes an expired parent deadline with zero remaining budget from a successful nil error that must not be logged.
+// TestPlatformSnapshotDiagnosticExpiredParentAndSuccess отличает истёкший срок родителя с нулевым остатком от успешного nil, который не должен записываться.
 func TestPlatformSnapshotDiagnosticExpiredParentAndSuccess(t *testing.T) {
 	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 	defer cancel()

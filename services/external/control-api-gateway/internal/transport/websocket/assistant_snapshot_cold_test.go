@@ -7,6 +7,8 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
 )
 
+// TestAssistantColdPageBootstrapSkipAndRejoinStartAt25 checks cold bootstrap, skipped-bootstrap wake and a new socket after a smaller old hint all start at twenty-five whole conversations with fresh owner reads/cursors, without truncation or borrowed state.
+// TestAssistantColdPageBootstrapSkipAndRejoinStartAt25 проверяет старт с двадцати пяти целых диалогов для холодного bootstrap, события после пропуска bootstrap и нового сокета после меньшей прежней подсказки со свежими чтениями и курсорами без усечения и чужого состояния.
 func TestAssistantColdPageBootstrapSkipAndRejoinStartAt25(t *testing.T) {
 	for _, path := range []string{"bootstrap", "bootstrap-skipped", "new-socket-rejoin"} {
 		t.Run(path, func(t *testing.T) {
@@ -26,6 +28,7 @@ func TestAssistantColdPageBootstrapSkipAndRejoinStartAt25(t *testing.T) {
 					t.Fatal("cold bootstrap failed")
 				}
 			} else {
+				// initializePlatform uses the same predicate when the browser already has the complete cache.
 				// Тот же predicate используется initializePlatform при полном browser cache.
 				if needsPlatformBootstrap(m.platformCursor, m.platformCursor, false) {
 					t.Fatal("exact cached rejoin unexpectedly requires bootstrap")

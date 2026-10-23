@@ -11,10 +11,16 @@ import (
 )
 
 const (
-	serviceName      = "backup-controller"
+	// serviceName identifies the controller in runtime configuration and diagnostics.
+	// RU: serviceName определяет контроллер в runtime-настройках и диагностике.
+	serviceName = "backup-controller"
+	// metricsSubsystem names its bounded business metrics under the shared namespace.
+	// RU: metricsSubsystem задаёт имя ограниченных бизнес-метрик в общем пространстве имён.
 	metricsSubsystem = "backup_controller"
 )
 
+// Config holds command-specific paths, timing bounds, retention and resource limits.
+// RU: Config содержит пути, временные границы, политику хранения и лимиты ресурсов для команды.
 type Config struct {
 	Environment               string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	TechnicalListen           string        `env:"BACKUP_CONTROLLER_TECHNICAL_LISTEN"`
@@ -36,6 +42,8 @@ type Config struct {
 	MaximumDatabaseBytes      int64         `env:"BACKUP_CONTROLLER_MAXIMUM_DATABASE_BYTES"`
 }
 
+// loadConfig applies bounded defaults, parses environment values and validates the selected command.
+// RU: loadConfig задаёт ограниченные значения по умолчанию, читает окружение и проверяет выбранную команду.
 func loadConfig(command string) (Config, error) {
 	config := Config{
 		TechnicalListen: ":9090", CredentialsFile: "/var/run/secrets/kodex/backup-controller/credentials.json",
@@ -56,6 +64,8 @@ func loadConfig(command string) (Config, error) {
 	return config, nil
 }
 
+// validate rejects unknown commands, unsafe paths and out-of-range runtime or retention policy values.
+// RU: validate отклоняет неизвестные команды, небезопасные пути и настройки runtime или retention вне границ.
 func (config Config) validate(command string) error {
 	switch command {
 	case "serve", "backup", "verify", "retain", "restore-drill", "fingerprint-targets":

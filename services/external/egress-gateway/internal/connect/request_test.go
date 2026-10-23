@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// TestParseAcceptsOnlyExactBodylessConnect accepts an authorized tunnel without request-body framing.
+// TestParseAcceptsOnlyExactBodylessConnect допускает разрешённый туннель без обрамления тела запроса.
 func TestParseAcceptsOnlyExactBodylessConnect(t *testing.T) {
 	request, _, err := parseRequest(t, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\nUser-Agent: test\r\n\r\n", 4096)
 	if err != nil || request.Kind != KindConnect || request.Target.Hostname != "api.openai.com" || request.Target.Port != 443 {
@@ -16,6 +18,8 @@ func TestParseAcceptsOnlyExactBodylessConnect(t *testing.T) {
 	}
 }
 
+// TestParseAcceptsOnlyExactBodylessCompatibilityReadiness limits readiness to the exact path and ports.
+// TestParseAcceptsOnlyExactBodylessCompatibilityReadiness ограничивает готовность точным путём и портами.
 func TestParseAcceptsOnlyExactBodylessCompatibilityReadiness(t *testing.T) {
 	for _, port := range []string{"8080", "8081", "8082", "8083"} {
 		request, _, err := parseRequest(t, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:"+port+"\r\nConnection: close\r\n\r\n", 4096)
@@ -35,6 +39,8 @@ func TestParseAcceptsOnlyExactBodylessCompatibilityReadiness(t *testing.T) {
 	}
 }
 
+// TestParseRejectsHostileInputs checks closed reasons for malformed requests before policy work.
+// TestParseRejectsHostileInputs проверяет закрытые причины отказа для неверных запросов до работы политики.
 func TestParseRejectsHostileInputs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -65,6 +71,8 @@ func TestParseRejectsHostileInputs(t *testing.T) {
 	}
 }
 
+// TestParseRejectsOversizedHeaders enforces the aggregate request byte budget.
+// TestParseRejectsOversizedHeaders проверяет общий лимит байтов запроса.
 func TestParseRejectsOversizedHeaders(t *testing.T) {
 	request := "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\nX-Fill: " + strings.Repeat("a", 2048) + "\r\n\r\n"
 	_, _, err := parseRequest(t, request, 1024)
@@ -74,6 +82,8 @@ func TestParseRejectsOversizedHeaders(t *testing.T) {
 	}
 }
 
+// TestAuthenticatedConnectChallengesOnlyAbsentCredentials separates missing credentials from malformed grants.
+// TestAuthenticatedConnectChallengesOnlyAbsentCredentials различает отсутствующий credential и неверный grant.
 func TestAuthenticatedConnectChallengesOnlyAbsentCredentials(t *testing.T) {
 	const envelope = "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n"
 	valid := "Proxy-Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("kodex:fixture")) + "\r\n"
@@ -115,6 +125,8 @@ func TestAuthenticatedConnectChallengesOnlyAbsentCredentials(t *testing.T) {
 	}
 }
 
+// parseRequest sends a synthetic request over an in-memory connection to the bounded parser.
+// parseRequest отправляет тестовый запрос через соединение в памяти ограниченному парсеру.
 func parseRequest(t *testing.T, request string, maximum int) (Request, any, error) {
 	t.Helper()
 	server, client := net.Pipe()

@@ -16,6 +16,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// TestWriteRPCProblemMapsOnlyTrustedFreshAuthenticationReason independently checks exact trusted ErrorInfo mapping and rejects cross-domain or wrong-status reuse of the fresh-login reason.
+// TestWriteRPCProblemMapsOnlyTrustedFreshAuthenticationReason независимо проверяет точное доверенное отображение ErrorInfo и отвергает использование причины свежего входа из другого домена либо с другим статусом.
 func TestWriteRPCProblemMapsOnlyTrustedFreshAuthenticationReason(t *testing.T) {
 	t.Parallel()
 
@@ -73,6 +75,8 @@ func TestWriteRPCProblemMapsOnlyTrustedFreshAuthenticationReason(t *testing.T) {
 	}
 }
 
+// TestWriteRPCProblemMapsTrustedResourceInUseReason keeps RESOURCE_IN_USE only for the trusted domain and leaves an untrusted identical reason as ordinary STATE_CONFLICT.
+// TestWriteRPCProblemMapsTrustedResourceInUseReason сохраняет RESOURCE_IN_USE только доверенному домену, оставляя совпадающую недоверенную причину обычным STATE_CONFLICT.
 func TestWriteRPCProblemMapsTrustedResourceInUseReason(t *testing.T) {
 	t.Parallel()
 
@@ -102,6 +106,8 @@ func TestWriteRPCProblemMapsTrustedResourceInUseReason(t *testing.T) {
 	}
 }
 
+// TestWriteRPCProblemDistinguishesLocalAuthorityTransientFromAuthRejection creates real interceptor error wrapping with synthetic proof failure and checks 503 versus 401 versus bare cancellation 408 without opening a downstream RPC.
+// TestWriteRPCProblemDistinguishesLocalAuthorityTransientFromAuthRejection создаёт настоящее оборачивание ошибки interceptor с тестовым отказом proof и различает 503, 401 и обычную отмену 408 без открытия downstream RPC.
 func TestWriteRPCProblemDistinguishesLocalAuthorityTransientFromAuthRejection(t *testing.T) {
 	t.Parallel()
 
@@ -145,6 +151,8 @@ func TestWriteRPCProblemDistinguishesLocalAuthorityTransientFromAuthRejection(t 
 	}
 }
 
+// TestWriteRPCProblemAlwaysReturnsLocalizedStrictProblem checks mapped status/code, localized title and present correlation fields while excluding raw upstream details for representative gRPC failures.
+// TestWriteRPCProblemAlwaysReturnsLocalizedStrictProblem проверяет status/code, локализованный заголовок и наличие полей корреляции без сырых внешних подробностей для характерных gRPC-ошибок.
 func TestWriteRPCProblemAlwaysReturnsLocalizedStrictProblem(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -175,21 +183,33 @@ func TestWriteRPCProblemAlwaysReturnsLocalizedStrictProblem(t *testing.T) {
 	}
 }
 
+// testOperationResolver is an exact method-to-operation fixture used to enter the authority interceptor path without a real permission registry.
+// testOperationResolver — точная тестовая таблица method-to-operation для входа в authority interceptor без настоящего реестра разрешений.
 type testOperationResolver map[string]string
 
+// OperationID returns the fixture map lookup unchanged, including its presence flag, without inferring operation names.
+// OperationID без изменений возвращает результат поиска и признак наличия в тестовой таблице, не выводя имена операций.
 func (resolver testOperationResolver) OperationID(method string) (string, bool) {
 	operation, ok := resolver[method]
 	return operation, ok
 }
 
+// testProofProvider injects a synthetic authority-proof failure with a fixed correlation identifier and no real grant or network access.
+// testProofProvider подставляет тестовый отказ authority proof с фиксированным correlation ID без настоящего grant и сети.
 type testProofProvider struct{ err error }
 
+// AuthorityProof returns an empty proof, fixed correlation and configured error, ignoring input to isolate local-authority error mapping.
+// AuthorityProof возвращает пустое доказательство, фиксированную корреляцию и настроенную ошибку, игнорируя вход для изоляции отображения локальной ошибки полномочий.
 func (provider testProofProvider) AuthorityProof(context.Context, string, string) (string, string, error) {
 	return "", "correlation", provider.err
 }
 
+// localAuthorityFailure runs the real unary interceptor with a known method and injected issuer failure; reaching the downstream invoker fails the test.
+// localAuthorityFailure запускает настоящий unary interceptor с известным методом и подставленным отказом issuer; достижение downstream invoker завершает тест ошибкой.
 func localAuthorityFailure(t *testing.T, code codes.Code) error {
 	t.Helper()
+	// method is a synthetic exact registry entry used only to exercise proof-error wrapping, not a real downstream operation.
+	// method — точная тестовая запись реестра только для оборачивания ошибки proof, а не настоящая downstream-операция.
 	const method = "/example.v1.Service/Method"
 	interceptor := authorityclient.IssuerUnaryClientInterceptor(nil, testOperationResolver{method: "example.read"}, testProofProvider{
 		err: status.Error(code, "authority failure"),
@@ -202,6 +222,8 @@ func localAuthorityFailure(t *testing.T, code codes.Code) error {
 	)
 }
 
+// rpcStatusWithErrorInfo constructs a typed synthetic gRPC ErrorInfo with explicit domain/reason and fails test setup if details cannot be attached.
+// rpcStatusWithErrorInfo создаёт типизированный тестовый gRPC ErrorInfo с явными domain/reason и завершает подготовку ошибкой, если details не добавляются.
 func rpcStatusWithErrorInfo(t *testing.T, code codes.Code, domain, reason string) error {
 	t.Helper()
 	value, err := status.New(code, "rpc failure").WithDetails(&errdetails.ErrorInfo{Domain: domain, Reason: reason})

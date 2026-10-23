@@ -14,6 +14,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/mail"
 )
 
+// projectMailbox writes synthetic credentials/configuration into a new revision
+// directory, atomically switches the ..data symlink and loads the resulting snapshot.
+// projectMailbox записывает искусственные реквизиты/конфигурацию в каталог ревизии,
+// атомарно переключает ссылку ..data и загружает получившийся снимок.
 func projectMailbox(t *testing.T, root string, value api.Configuration, ca []byte) *projection.Snapshot {
 	t.Helper()
 	name := "..revision-" + strconv.FormatInt(value.Revision, 10)
@@ -43,6 +47,10 @@ func projectMailbox(t *testing.T, root string, value api.Configuration, ca []byt
 	return snapshot
 }
 
+// TestMailboxProjectionReloadHTTPS requires disposable PostgreSQL and checks new
+// requests see an atomically swapped snapshot while old/same-revision substitutions fail.
+// TestMailboxProjectionReloadHTTPS требует временный PostgreSQL и проверяет новый
+// снимок для новых запросов при запрете отката и подмены содержимого той же ревизии.
 func TestMailboxProjectionReloadHTTPS(t *testing.T) {
 	store := postgresFixture(t)
 	f := newFixture(t, "starttls")

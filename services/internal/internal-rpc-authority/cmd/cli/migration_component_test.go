@@ -13,8 +13,8 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// TestAuthorityBaselineGooseComponent использует только порт одноразового
-// контейнера публичной оснастки; произвольный DSN тест не принимает.
+// TestAuthorityBaselineGooseComponent is the opt-in disposable PostgreSQL entry, accepting only a positive sixteen-bit loopback port from the named test environment key and skipping when absent. Within a hundred-second context it applies the published baseline, checks generation rejection before upgrade, seeds provenance, applies the forward history twice and checks stable version/row IDs, then invokes rotation, provenance, workload and real-time freshness subtests. It does not accept an arbitrary DSN and is not an ordinary unit or staging/production acceptance.
+// TestAuthorityBaselineGooseComponent — явно включаемая точка входа одноразового PostgreSQL: принимает только положительный шестнадцатибитный loopback-порт из именованной тестовой переменной и пропускается при её отсутствии. В контексте ста секунд применяет опубликованную исходную миграцию, проверяет отказ поколения до обновления, создаёт происхождение, дважды применяет прямую историю и проверяет неизменные версию и ID строк, затем вызывает проверки ротации, происхождения, workload и свежести на реальном времени. Произвольный DSN не принимается; это не обычный юнит и не приёмка staging или production.
 func TestAuthorityBaselineGooseComponent(t *testing.T) {
 	rawPort := os.Getenv("KODEX_AUTHORITY_MIGRATION_TEST_PORT")
 	if rawPort == "" {

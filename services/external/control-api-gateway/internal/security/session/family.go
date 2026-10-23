@@ -3,7 +3,6 @@ package session
 import (
 	"bytes"
 	"context"
-	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -19,30 +18,56 @@ import (
 )
 
 const (
-	familyActive        = "ACTIVE"
-	familyRefreshing    = "REFRESHING"
-	familyTerminal      = "TERMINAL"
+	// familyActive denotes a usable encrypted owner record with access/refresh tokens and no in-progress refresh attempt; current expiry and browser bindings are checked on access.
+	// familyActive обозначает пригодную encrypted owner record с access и refresh tokens без текущей refresh attempt; актуальные expiry и browser bindings проверяются при доступе.
+	familyActive = "ACTIVE"
+	// familyRefreshing marks the CAS-reserved external refresh attempt. Another caller may observe pending state but must not reuse its refresh token after an uncertain or expired attempt.
+	// familyRefreshing обозначает зарезервированную через CAS external refresh attempt. Другой caller может наблюдать pending state, но не должен повторять refresh token после uncertain либо expired attempt.
+	familyRefreshing = "REFRESHING"
+	// familyTerminal is the persisted closed family state with access/refresh credentials cleared; reads reject it rather than rebuilding a live family from a cookie.
+	// familyTerminal — сохранённое закрытое family state с очищенными access и refresh credentials; чтения отклоняют его без восстановления живого family из cookie.
+	familyTerminal = "TERMINAL"
+	// absoluteSSOLifetime caps a family at twelve hours from the authenticated principal's original authentication time, additionally bounded by refresh-token expiry. It does not configure the identity provider's own session policy.
+	// absoluteSSOLifetime ограничивает family двенадцатью часами от исходного authentication time principal, дополнительно сроком refresh token. Политика сессий identity provider этой константой не настраивается.
 	absoluteSSOLifetime = 12 * time.Hour
-	refreshBudget       = 15 * time.Second
-	refreshAdvance      = 2 * time.Minute
+	// refreshBudget bounds the reserved attempt's deadline and each independent lifecycle-owned refresh/commit/termination context to fifteen seconds; it is not permission to retry an uncertain external effect.
+	// refreshBudget ограничивает deadline зарезервированной attempt и каждый независимый lifecycle-owned refresh, commit и termination context пятнадцатью секундами; это не разрешение повторять uncertain external effect.
+	refreshBudget = 15 * time.Second
+	// refreshAdvance schedules access-token renewal up to two minutes before expiry when that credential expires before the immutable absolute family ceiling.
+	// refreshAdvance планирует access-token renewal за две минуты до expiry, когда credential истекает раньше immutable absolute family ceiling.
+	refreshAdvance = 2 * time.Minute
 )
 
 var (
+	// ErrReauthentication is the closed-session sentinel used for absent/expired/invalid family data and unsafe or failed refresh outcomes, without exposing credentials or provider details.
+	// ErrReauthentication — closed-session sentinel отсутствующих, expired и invalid family data и unsafe либо failed refresh outcomes без раскрытия credentials и provider details.
 	ErrReauthentication = errors.New("session reauthentication is required")
-	ErrRenewalPending   = errors.New("session renewal is in progress")
+	// ErrRenewalPending signals an existing refresh attempt, bounded CAS contention or ticket capacity exhaustion; it grants no right to repeat an externally consumed credential.
+	// ErrRenewalPending обозначает существующую refresh attempt, ограниченную CAS contention либо исчерпание ticket capacity без права повторять внешне потреблённый credential.
+	ErrRenewalPending = errors.New("session renewal is in progress")
 )
 
+// FamilyStorage is the owner-record port for opaque ciphertext and storage sequence CAS; logical family Version is separate from its storage Sequence. Implementations own durability, replication and access control.
+// FamilyStorage — owner-record port непрозрачного ciphertext и storage sequence CAS; логическая family Version отличается от storage Sequence. Durability, replication и access control обеспечивает реализация.
 type FamilyStorage interface {
+	// Read returns the exact record for the caller-selected owner key or a typed storage error; this port does not infer user authority from the key alone.
+	// Read возвращает точную record выбранного caller owner key либо typed storage error; порт не выводит user authority из одного ключа.
 	Read(context.Context, string) (browserstate.Record, error)
+	// CompareAndSwap atomically replaces a record only at the expected storage sequence, with zero used for creation, and returns the resulting sequence or conflict. It does not interpret encrypted family/login/ticket contents.
+	// CompareAndSwap атомарно заменяет record лишь при ожидаемом storage sequence, используя ноль для создания, и возвращает результирующий sequence либо conflict. Зашифрованные family, login и ticket contents не интерпретируются.
 	CompareAndSwap(context.Context, string, uint64, []byte) (browserstate.Record, error)
 }
 
+// TokenRefresher supplies the external OIDC refresh operation; the trusted provider adapter owns token-response verification, while Families owns attempt reservation, immutable identity checks and commit.
+// TokenRefresher предоставляет внешнюю OIDC refresh operation; доверенный provider adapter проверяет token response, а Families владеет attempt reservation, immutable identity checks и commit.
 type TokenRefresher interface {
+	// Refresh exchanges one supplied refresh token under the caller's bounded context and returns tokens or an error. This interface alone does not make an uncertain exchange safe to repeat.
+	// Refresh обменивает один переданный refresh token с ограниченным контекстом caller и возвращает tokens либо ошибку. Сам интерфейс не делает повтор uncertain exchange безопасным.
 	Refresh(context.Context, string) (oidcverifier.BrowserTokens, error)
 }
 
-// Family никогда не сериализуется в HTTP или cookie. Tokens существуют только
-// в зашифрованной owner-записи; Version и Sequence имеют разные назначения.
+// Family holds server-side identity/tokens, immutable absolute and idle bounds, attempt state and optional elevation inside an encrypted owner record. It is never a public cookie payload; Version tracks logical changes and Sequence tracks storage CAS.
+// Family хранит server-side identity и tokens, immutable absolute и idle bounds, attempt state и optional elevation в encrypted owner record. Это не публичный cookie payload; Version отражает логические изменения, Sequence — storage CAS.
 type Family struct {
 	ID                string
 	BrowserSessionID  string
@@ -62,6 +87,8 @@ type Family struct {
 	Sequence          uint64 `json:"-"`
 }
 
+// Families coordinates encrypted owner records with the token adapter and process lifecycle, using a replaceable clock. It creates no background worker and relies on CAS rather than process-local serialization across replicas.
+// Families согласует encrypted owner records с token adapter и process lifecycle, используя заменяемые часы. Фоновый worker не создаётся; межрепличная сериализация основана на CAS, а не process-local lock.
 type Families struct {
 	store     FamilyStorage
 	tokens    TokenRefresher
@@ -70,6 +97,8 @@ type Families struct {
 	now       func() time.Time
 }
 
+// NewFamilies requires lifecycle, storage, token adapter and a current encryption key and records them without reading storage or contacting the identity provider.
+// NewFamilies требует lifecycle, storage, token adapter и current encryption key и сохраняет их без чтения storage и обращения к identity provider.
 func NewFamilies(lifecycle context.Context, store FamilyStorage, tokens TokenRefresher, keys *Store) (*Families, error) {
 	if lifecycle == nil || store == nil || tokens == nil || keys == nil || keys.current == nil {
 		return nil, errors.New("session family configuration is invalid")
@@ -77,6 +106,8 @@ func NewFamilies(lifecycle context.Context, store FamilyStorage, tokens TokenRef
 	return &Families{store: store, tokens: tokens, keys: keys, lifecycle: lifecycle, now: time.Now}, nil
 }
 
+// Create checks authentication/access/refresh times, derives the immutable twelve-hour ceiling clipped by refresh expiry and creates an ACTIVE record with fresh family/browser IDs. write enforces record shape; supplied tokens, CSRF hash and elevation remain trusted caller inputs rather than independently authenticated here.
+// Create проверяет authentication, access и refresh times, выводит immutable twelve-hour ceiling с ограничением refresh expiry и создаёт ACTIVE record со свежими family и browser IDs. write проверяет форму record; переданные tokens, CSRF hash и elevation остаются доверенным вводом caller без независимой аутентификации здесь.
 func (families *Families) Create(ctx context.Context, tokens oidcverifier.BrowserTokens, csrfHash string, elevation *Elevation) (Family, error) {
 	now := families.now().UTC()
 	absolute := tokens.Principal.AuthenticatedAt.Add(absoluteSSOLifetime)
@@ -94,6 +125,8 @@ func (families *Families) Create(ctx context.Context, tokens oidcverifier.Browse
 	return families.write(ctx, family)
 }
 
+// CreateWithCSRF generates a random encoded CSRF value, hashes it and delegates family creation, returning the value alongside the result/error. The CSRF value alone cannot establish a usable family after a failed write.
+// CreateWithCSRF создаёт random encoded CSRF value, хеширует её и передаёт создание family, возвращая значение вместе с результатом и ошибкой. Одна CSRF value не создаёт пригодное family после failed write.
 func (families *Families) CreateWithCSRF(ctx context.Context, tokens oidcverifier.BrowserTokens, elevation *Elevation) (Family, string, error) {
 	csrf, err := randomOpaque()
 	if err != nil {
@@ -104,8 +137,11 @@ func (families *Families) CreateWithCSRF(ctx context.Context, tokens oidcverifie
 	return family, csrf, err
 }
 
+// RenewAfter chooses the earliest genuinely useful idle/access renewal boundary or absolute expiry and clamps a past result to now. It does not validate the supplied family, mutate state or invoke the provider.
+// RenewAfter выбирает ближайшую действительно полезную idle и access renewal boundary либо absolute expiry и ограничивает прошлый результат текущим временем. Переданное family не проверяется, state не меняется и provider не вызывается.
 func (families *Families) RenewAfter(family Family) time.Time {
-	// Срок, уже упершийся в абсолютную границу, больше не продлевается.
+	// An idle deadline already at the absolute ceiling cannot be renewed later.
+	// Idle deadline у absolute ceiling не допускает дальнейшего продления.
 	renew := family.AbsoluteExpiresAt
 	if family.IdleExpiresAt.Before(family.AbsoluteExpiresAt) {
 		renew = earlier(renew, family.IdleExpiresAt.Add(-families.keys.ttl/3))
@@ -119,6 +155,8 @@ func (families *Families) RenewAfter(family Family) time.Time {
 	return renew
 }
 
+// Read maps absent storage to reauthentication, decrypts and validates the exact owner record and rejects terminal or expired idle/absolute state. A still-live REFRESHING record may be returned for the caller to classify as pending.
+// Read переводит отсутствие storage в reauthentication, расшифровывает и проверяет точную owner record и отклоняет terminal либо expired idle и absolute state. Ещё живой REFRESHING record может возвращаться для классификации caller как pending.
 func (families *Families) Read(ctx context.Context, id string) (Family, error) {
 	record, err := families.store.Read(ctx, id)
 	if errors.Is(err, browserstate.ErrNotFound) {
@@ -138,7 +176,8 @@ func (families *Families) Read(ctx context.Context, id string) (Family, error) {
 	return family, nil
 }
 
-// Cookie несёт ссылку и browser binding, но не токены OIDC.
+// Cookie validates an active unexpired family and seals only identity/family/browser/CSRF bindings, omitting OIDC tokens and dropping expired elevation from the returned cookie. It does not persist that projection or alter the server record.
+// Cookie проверяет active unexpired family и шифрует лишь identity, family, browser и CSRF bindings без OIDC tokens, исключая expired elevation из возвращаемой cookie. Проекция не сохраняется и server record не меняется.
 func (families *Families) Cookie(family Family) (Claims, string, error) {
 	now := families.now().UTC()
 	if !validFamily(family) || family.State != familyActive || !family.IdleExpiresAt.After(now) || !family.AbsoluteExpiresAt.After(now) {
@@ -156,8 +195,8 @@ func (families *Families) Cookie(family Family) (Claims, string, error) {
 	return claims, encoded, err
 }
 
-// ConsumeElevation сохраняет refresh family, атомарно заменяя browser session
-// и CSRF. Старый cookie перестаёт соответствовать текущему owner snapshot.
+// ConsumeElevation requires the supplied browser ID, active family and present elevation, then CAS-rotates browser/CSRF bindings and clears elevation within three attempts. The HTTP/domain caller must already check its exact purpose, resource and current freshness; this method does not revalidate those fields.
+// ConsumeElevation требует переданный browser ID, active family и наличие elevation, затем в пределах трёх попыток CAS заменяет browser и CSRF bindings и очищает elevation. HTTP и domain caller предварительно проверяет exact purpose, resource и current freshness — метод повторно их не проверяет.
 func (families *Families) ConsumeElevation(ctx context.Context, id, browserID string) (Family, string, error) {
 	for range 3 {
 		family, err := families.Read(ctx, id)
@@ -186,8 +225,8 @@ func (families *Families) ConsumeElevation(ctx context.Context, id, browserID st
 	return Family{}, "", browserstate.ErrConflict
 }
 
-// Renew получает право внешнего effect только после durable REFRESHING.
-// Истёкшая attempt не захватывается повторно: rotation могла пройти у IdP.
+// Renew validates browser/CSRF binding, performs no-op or idle-only renewal when possible, otherwise CAS-reserves REFRESHING before one lifecycle-bounded IdP exchange and commits only matching identity and live deadlines. Uncertain/expired attempts require reauthentication; late commit can fail after the external effect and is not blindly replayed.
+// Renew проверяет browser и CSRF binding, при возможности выполняет no-op либо idle-only renewal, иначе через CAS резервирует REFRESHING до одного lifecycle-bounded IdP exchange и сохраняет лишь matching identity и live deadlines. Uncertain и expired attempts требуют reauthentication; поздний commit может отказать после external effect без слепого повтора.
 func (families *Families) Renew(ctx context.Context, id, browserID, csrfHash string) (Family, error) {
 	family, err := families.Read(ctx, id)
 	if err != nil {
@@ -227,8 +266,10 @@ func (families *Families) Renew(ctx context.Context, id, browserID, csrfHash str
 	if err != nil {
 		return Family{}, err
 	}
-	// Независимый bounded context завершает захваченную attempt даже после
-	// закрытия browser request. Shutdown не создаёт новый корневой context.
+	// The process lifecycle, not the browser request, bounds the reserved effect;
+	// shutdown cancellation still applies and no new root context is created.
+	// Зарезервированный effect ограничен process lifecycle, а не browser request;
+	// отмена shutdown сохраняется, новый root context не создаётся.
 	effect, cancel := context.WithTimeout(families.lifecycle, refreshBudget)
 	defer cancel()
 	tokens, err := families.tokens.Refresh(effect, family.RefreshToken)
@@ -250,6 +291,8 @@ func (families *Families) Renew(ctx context.Context, id, browserID, csrfHash str
 	return families.write(commit, family)
 }
 
+// Revoke retries up to three CAS conflicts, treats absent or already terminal records as success and persists termination without calling IdP logout. It reads raw owner state so expired families can still be closed.
+// Revoke повторяет до трёх CAS conflicts, считает отсутствующие и уже terminal records успешными и сохраняет termination без IdP logout. Читается raw owner state, позволяя закрыть и expired families.
 func (families *Families) Revoke(ctx context.Context, id string) error {
 	for range 3 {
 		record, err := families.store.Read(ctx, id)
@@ -274,6 +317,8 @@ func (families *Families) Revoke(ctx context.Context, id string) error {
 	return browserstate.ErrConflict
 }
 
+// terminate clears access/refresh credentials and attempt fields, advances the logical version and writes TERMINAL using an independent bounded lifecycle context. Other bindings remain as tombstone data; a storage failure is returned rather than assumed committed.
+// terminate очищает access и refresh credentials и attempt fields, увеличивает logical version и пишет TERMINAL с независимым ограниченным lifecycle context. Остальные bindings сохраняются как tombstone data; storage failure возвращается, а commit не предполагается.
 func (families *Families) terminate(family Family) (Family, error) {
 	family.State, family.AccessToken, family.RefreshToken = familyTerminal, "", ""
 	family.AttemptID, family.RefreshDeadline = "", time.Time{}
@@ -283,6 +328,8 @@ func (families *Families) terminate(family Family) (Family, error) {
 	return families.write(bounded, family)
 }
 
+// write validates family shape, JSON-encodes it without storage Sequence, encrypts with the current key and exact family-ID AAD, then CAS-writes at the supplied sequence. Returned storage Sequence is assigned only after success; signing/OIDC and domain eligibility are outside this adapter.
+// write проверяет family shape, кодирует JSON без storage Sequence, шифрует current key с exact family-ID AAD и пишет CAS по переданному sequence. Возвращённый storage Sequence назначается лишь после успеха; signing, OIDC и domain eligibility за пределами адаптера.
 func (families *Families) write(ctx context.Context, family Family) (Family, error) {
 	if !validFamily(family) {
 		return Family{}, ErrReauthentication
@@ -291,11 +338,10 @@ func (families *Families) write(ctx context.Context, family Family) (Family, err
 	if err != nil {
 		return Family{}, ErrReauthentication
 	}
-	nonce := make([]byte, families.keys.current.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return Family{}, browserstate.ErrUnavailable
+	sealed, err := families.keys.sealState(plain, "browser-family-v1:"+family.ID)
+	if err != nil {
+		return Family{}, err
 	}
-	sealed := families.keys.current.Seal(nonce, nonce, plain, []byte("browser-family-v1:"+family.ID))
 	record, err := families.store.CompareAndSwap(ctx, family.ID, family.Sequence, sealed)
 	if err != nil {
 		return Family{}, err
@@ -304,17 +350,10 @@ func (families *Families) write(ctx context.Context, family Family) (Family, err
 	return family, nil
 }
 
+// decode authenticates current/previous-key ciphertext under the selected family ID, rejects unknown/trailing JSON and mismatched identity/shape or zero sequence, then adopts the storage sequence. Expiry-at-now is checked by Read; duplicate JSON keys are not rejected here.
+// decode аутентифицирует current и previous-key ciphertext выбранным family ID, отклоняет unknown и trailing JSON, несовпадение identity и shape и нулевой sequence, затем принимает storage sequence. Expiry относительно now проверяет Read; duplicate JSON keys здесь не отклоняются.
 func (families *Families) decode(id string, record browserstate.Record) (Family, error) {
-	decrypt := func(key cipher.AEAD) ([]byte, error) {
-		if key == nil || len(record.Ciphertext) < key.NonceSize()+key.Overhead() {
-			return nil, ErrReauthentication
-		}
-		return key.Open(nil, record.Ciphertext[:key.NonceSize()], record.Ciphertext[key.NonceSize():], []byte("browser-family-v1:"+id))
-	}
-	plain, err := decrypt(families.keys.current)
-	if err != nil {
-		plain, err = decrypt(families.keys.previous)
-	}
+	plain, err := families.keys.openState(record.Ciphertext, "browser-family-v1:"+id)
 	if err != nil {
 		return Family{}, ErrReauthentication
 	}
@@ -328,6 +367,8 @@ func (families *Families) decode(id string, record browserstate.Record) (Family,
 	return family, nil
 }
 
+// validFamily checks UUID/identity/revision/time-bound shape and closed ACTIVE/REFRESHING/TERMINAL credential-attempt combinations. It does not validate JWT signatures, every CSRF/elevation field or whether the record is currently unexpired.
+// validFamily проверяет форму UUID, identity, revision и time bounds и закрытые сочетания credentials и attempt для ACTIVE, REFRESHING и TERMINAL. JWT signatures и каждое CSRF и elevation field не проверяются; истечение срока относительно текущего времени проверяется отдельно.
 func validFamily(f Family) bool {
 	if uuid.Validate(f.ID) != nil || uuid.Validate(f.BrowserSessionID) != nil || uuid.Validate(f.Principal.Subject) != nil || uuid.Validate(f.Principal.OrganizationID) != nil ||
 		uuid.Validate(f.Principal.SessionID) != nil || f.Principal.SessionRevision == 0 || f.Principal.Issuer == "" || f.Version == 0 ||
@@ -347,11 +388,15 @@ func validFamily(f Family) bool {
 	}
 }
 
+// sameSession requires exact issuer, subject, organization, OIDC session ID/revision and original authentication time across refresh. Access-token expiry is intentionally allowed to change.
+// sameSession требует exact issuer, subject, organization, OIDC session ID и revision и исходное authentication time при refresh. Access-token expiry намеренно может меняться.
 func sameSession(old, fresh oidcverifier.Principal) bool {
 	return old.Issuer == fresh.Issuer && old.Subject == fresh.Subject && old.OrganizationID == fresh.OrganizationID &&
 		old.SessionID == fresh.SessionID && old.SessionRevision == fresh.SessionRevision && old.AuthenticatedAt.Equal(fresh.AuthenticatedAt)
 }
 
+// earlier returns the earlier timestamp without normalization; equal instants return the second value, preserving its representation.
+// earlier возвращает более раннюю timestamp без нормализации; при одинаковых моментах возвращается второе значение с сохранением его представления.
 func earlier(a, b time.Time) time.Time {
 	if a.Before(b) {
 		return a

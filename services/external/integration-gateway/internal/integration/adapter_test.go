@@ -23,6 +23,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integrationfixture"
 )
 
+// TestNewUsesOnlyExactProviderEndpoints accepts the production proxy/synthetic settings and rejects substituted endpoints without invoking a provider operation.
+// RU: TestNewUsesOnlyExactProviderEndpoints принимает production proxy/synthetic настройки и отклоняет подменённые адреса без выполнения provider-операции.
 func TestNewUsesOnlyExactProviderEndpoints(t *testing.T) {
 	t.Parallel()
 	adapter, err := New(Config{
@@ -46,6 +48,10 @@ func TestNewUsesOnlyExactProviderEndpoints(t *testing.T) {
 	}
 }
 
+// TestSyntheticHTTPJournalWriteIsIdempotentAndReadable checks two explicit same-effect writes produce one journal entry and read-only recovery adds no POST.
+// RU: TestSyntheticHTTPJournalWriteIsIdempotentAndReadable проверяет одну запись журнала после двух явных вызовов с одним effect и отсутствие POST при read-only восстановлении.
+// A local synthetic server also exercises read, update and delete with sequence pins; it does not prove remote-provider exactly-once behavior.
+// RU: Локальный synthetic-сервер также проверяет чтение, изменение и удаление с номерами версий; это не доказательство exactly-once внешнего провайдера.
 func TestSyntheticHTTPJournalWriteIsIdempotentAndReadable(t *testing.T) {
 	t.Parallel()
 	fixture := integrationfixture.NewHandler(integrationfixture.NewStore())
@@ -95,6 +101,10 @@ func TestSyntheticHTTPJournalWriteIsIdempotentAndReadable(t *testing.T) {
 	}
 }
 
+// TestGitHubMetadataCreateRetryAndUpdateStayInsideRepository confines a local GitHub fixture to the selected repository and expected fake bearer token.
+// RU: TestGitHubMetadataCreateRetryAndUpdateStayInsideRepository ограничивает локальную GitHub-оснастку выбранным репозиторием и ожидаемым фиктивным bearer token.
+// It verifies metadata projection, marker-based reuse across two explicit creates and one issue update without contacting GitHub.
+// RU: Тест проверяет проекцию метаданных, повторное использование по маркеру при двух явных созданиях и одно изменение issue без обращения к GitHub.
 func TestGitHubMetadataCreateRetryAndUpdateStayInsideRepository(t *testing.T) {
 	t.Parallel()
 	var mutex sync.Mutex
@@ -162,6 +172,8 @@ func TestGitHubMetadataCreateRetryAndUpdateStayInsideRepository(t *testing.T) {
 	}
 }
 
+// TestCredentialRevisionDigestMismatchFailsClosed rejects a mismatched projected digest immediately as nontransient instead of treating it as projection lag.
+// RU: TestCredentialRevisionDigestMismatchFailsClosed сразу отклоняет неверный хеш проекции как постоянную ошибку, а не задержку появления credential.
 func TestCredentialRevisionDigestMismatchFailsClosed(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
@@ -177,6 +189,8 @@ func TestCredentialRevisionDigestMismatchFailsClosed(t *testing.T) {
 	}
 }
 
+// TestMissingProjectedCredentialIsTransientOnlyUntilReadDeadline uses a short context to verify a missing mounted key yields only the safe transient credential error.
+// RU: TestMissingProjectedCredentialIsTransientOnlyUntilReadDeadline коротким контекстом проверяет безопасную временную credential-ошибку при отсутствии смонтированного ключа.
 func TestMissingProjectedCredentialIsTransientOnlyUntilReadDeadline(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
@@ -195,6 +209,10 @@ func TestMissingProjectedCredentialIsTransientOnlyUntilReadDeadline(t *testing.T
 	}
 }
 
+// TestCredentialReadWaitsForProjectedSecretKey asynchronously creates a temporary fake projection and requires the credential reader to wait for matching content.
+// RU: TestCredentialReadWaitsForProjectedSecretKey асинхронно создаёт временную фиктивную проекцию и требует ожидания совпадающего содержимого credential.
+// It builds and cleans up an SDK client but performs no provider request or Kubernetes Secret mutation.
+// RU: Тест создаёт и очищает SDK-клиент, но не выполняет provider-запрос и не меняет Kubernetes Secret.
 func TestCredentialReadWaitsForProjectedSecretKey(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
@@ -227,6 +245,10 @@ func TestCredentialReadWaitsForProjectedSecretKey(t *testing.T) {
 	}
 }
 
+// TestHealthProjectionPendingIsReadTestOnly permits projection-pending only for GitHub/Context7 health probes, never normal READ/WRITE calls or invalid credentials.
+// RU: TestHealthProjectionPendingIsReadTestOnly допускает projection-pending только для GitHub/Context7 health-проверок, но не обычных READ/WRITE вызовов и неверных credentials.
+// Unrelated auth or provider errors must retain their identity rather than being disguised as a retryable projection delay.
+// RU: Другие auth/provider ошибки обязаны сохраняться, а не маскироваться под повторяемую задержку проекции.
 func TestHealthProjectionPendingIsReadTestOnly(t *testing.T) {
 	t.Parallel()
 	for _, key := range []string{"github", "context7"} {
@@ -286,6 +308,8 @@ func TestHealthProjectionPendingIsReadTestOnly(t *testing.T) {
 	}
 }
 
+// TestOutcomeExposesOnlySafeCode checks that raw provider text never escapes outcome codes or closed unknown-stage labels.
+// RU: TestOutcomeExposesOnlySafeCode проверяет, что сырой provider-текст не попадает во внешние коды и закрытые метки этапа неопределённости.
 func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 	t.Parallel()
 	success, code := Outcome(errors.New("raw provider response"))
@@ -305,6 +329,10 @@ func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 	}
 }
 
+// TestEmailTypedMailboxAndEffect inspects synthetic managed-email health/send requests for exact mailbox, execution header, fence and effect binding.
+// RU: TestEmailTypedMailboxAndEffect проверяет фиктивные managed-email health/send запросы на точные mailbox, execution header, fence и effect-привязку.
+// Its fake transport verifies safe projections and package risk/policy metadata, not actual SMTP delivery or server-owned HumanGate authorization.
+// RU: Фиктивный transport проверяет безопасные проекции и risk/policy метаданные пакета, а не SMTP-доставку либо серверную авторизацию HumanGate.
 func TestEmailTypedMailboxAndEffect(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
@@ -348,6 +376,8 @@ func TestEmailTypedMailboxAndEffect(t *testing.T) {
 	}
 }
 
+// TestEmailReceiptReadByEffectKey verifies one fake readback request preserves the original effect and mailbox while projecting an unknown receipt unchanged.
+// RU: TestEmailReceiptReadByEffectKey проверяет сохранение исходных effect и mailbox в одном фиктивном readback и неизменную проекцию квитанции unknown.
 func TestEmailReceiptReadByEffectKey(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
@@ -369,6 +399,8 @@ func TestEmailReceiptReadByEffectKey(t *testing.T) {
 	}
 }
 
+// TestGitLabMetadataUsesExactProjectScope requires a GET to the configured host and exactly escaped group/project path before accepting projected metadata.
+// RU: TestGitLabMetadataUsesExactProjectScope требует GET настроенному хосту и точно экранированному пути group/project до принятия проекции метаданных.
 func TestGitLabMetadataUsesExactProjectScope(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
@@ -388,8 +420,12 @@ func TestGitLabMetadataUsesExactProjectScope(t *testing.T) {
 	}
 }
 
+// testDefinitions caches shipped-package loading and its error across parallel unit fixtures; it does not fetch definitions or modify installed configuration.
+// RU: testDefinitions кеширует загрузку поставляемых пакетов и её ошибку для параллельных unit-оснасток, не загружая определения по сети и не меняя установленную конфигурацию.
 var testDefinitions = sync.OnceValues(integrationpackage.LoadShipped)
 
+// testAdapter constructs an adapter with temporary credential storage and shipped definitions; callers replace provider clients or URLs with their fixture transports.
+// RU: testAdapter создаёт адаптер с временным credential-хранилищем и поставляемыми определениями; вызывающие заменяют provider-клиенты либо URL transport-оснасткой.
 func testAdapter(t *testing.T) *Adapter {
 	t.Helper()
 	root := t.TempDir()
@@ -410,6 +446,10 @@ func testAdapter(t *testing.T) *Adapter {
 	}
 }
 
+// invocationRequest derives canonical input/scope digests and provider-specific public settings from a shipped capability for isolated adapter tests.
+// RU: invocationRequest выводит канонические input/scope хеши и публичные provider-настройки из поставляемой capability для изолированных тестов адаптера.
+// Its grant, lease and execution identifiers are synthetic test data, not owner-issued authorization or a substitute for an approved live invocation.
+// RU: Grant, lease и execution идентификаторы — синтетические тестовые данные, а не owner-авторизация либо замена одобренного живого вызова.
 func invocationRequest(t *testing.T, definition integrationpackage.Package, capabilityKey string, input map[string]any, credential *CredentialRevision) Request {
 	t.Helper()
 	capability, ok := definition.Capability(capabilityKey)
@@ -470,6 +510,8 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 	}
 }
 
+// testCredential replaces the fixture's credential store with a temporary fake token file and returns matching digest and syntactically valid revision metadata.
+// RU: testCredential заменяет credential-хранилище оснастки временным файлом фиктивного токена и возвращает совпадающий хеш с синтаксически верными метаданными ревизии.
 func testCredential(t *testing.T, adapter *Adapter, value string) *CredentialRevision {
 	t.Helper()
 	root := t.TempDir()
@@ -490,6 +532,8 @@ func testCredential(t *testing.T, adapter *Adapter, value string) *CredentialRev
 	}
 }
 
+// mustParseURL fails the test on URL syntax errors; unlike production destination validation, it intentionally permits local fixture addresses.
+// RU: mustParseURL завершает тест при синтаксической ошибке URL; в отличие от production-проверки назначений он намеренно допускает локальные адреса оснастки.
 func mustParseURL(t *testing.T, raw string) *url.URL {
 	t.Helper()
 	parsed, err := url.Parse(raw)
@@ -499,8 +543,12 @@ func mustParseURL(t *testing.T, raw string) *url.URL {
 	return parsed
 }
 
+// roundTripFunc turns a unit-owned request callback into an HTTP transport for inspecting commands without opening a network connection.
+// RU: roundTripFunc превращает callback теста в HTTP transport для проверки команд без открытия сетевого соединения.
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
+// RoundTrip delegates the exact request to the fixture callback and returns its synthetic response or failure unchanged.
+// RU: RoundTrip передаёт точный запрос callback оснастки и возвращает его синтетический ответ либо ошибку без изменений.
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return function(request)
 }

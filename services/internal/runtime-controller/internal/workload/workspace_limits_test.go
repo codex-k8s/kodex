@@ -9,6 +9,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestWorkspaceLimitsConsumerPreservesExactQuotaAndResourceDigest projects
+// explicit byte/file quotas, checks exact resource/digest preservation and
+// rejects changed or excessive limits rather than silently using defaults.
+// TestWorkspaceLimitsConsumerPreservesExactQuotaAndResourceDigest переносит
+// явные квоты bytes/files, проверяет точное сохранение resources/digest
+// и отвергает подменённые или чрезмерные лимиты вместо неявных defaults.
 func TestWorkspaceLimitsConsumerPreservesExactQuotaAndResourceDigest(t *testing.T) {
 	base := runtimecontract.DefaultRuntimeEnvironmentPolicy()
 	base.Resources.WorkspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}
@@ -32,6 +38,12 @@ func TestWorkspaceLimitsConsumerPreservesExactQuotaAndResourceDigest(t *testing.
 	}
 }
 
+// TestWorkspaceLimitsWarmAndTurnImmutableMaterialization reseals warm and turn
+// fixtures with identical quotas, checks both consume the same workspace policy,
+// then rejects a freshly sealed default workspace conflicting with bounded resources.
+// TestWorkspaceLimitsWarmAndTurnImmutableMaterialization закрепляет warm и turn
+// с одинаковыми квотами, проверяет общую workspace policy и отвергает даже заново
+// закреплённый default workspace, противоречащий ограниченным resources.
 func TestWorkspaceLimitsWarmAndTurnImmutableMaterialization(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	turn := testExecution(true)

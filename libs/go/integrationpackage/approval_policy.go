@@ -5,9 +5,12 @@ import (
 	"errors"
 )
 
+// errApprovalPolicy is the safe refusal for a selected policy or invocation that exceeds package authority.
+// errApprovalPolicy — безопасный отказ выбранной политике или вызову, выходящим за полномочия пакета.
 var errApprovalPolicy = errors.New("integration approval policy is not allowed")
 
-// AllowsApprovalPolicy проверяет выбранную policy, не подменяя её package default.
+// AllowsApprovalPolicy checks the exact selected policy against the capability's closed allowed set.
+// AllowsApprovalPolicy проверяет точную выбранную политику по закрытому списку разрешений возможности.
 func (capability Capability) AllowsApprovalPolicy(selected string) bool {
 	if !validApprovalPolicy(selected) {
 		return false
@@ -20,7 +23,8 @@ func (capability Capability) AllowsApprovalPolicy(selected string) bool {
 	return false
 }
 
-// CollaborativeWrite имеет закрытый реестр; чужой package не наследует GitHub authority.
+// CollaborativeWrite recognizes only listed GitHub write operations from the exact managed adapter and repository scope.
+// CollaborativeWrite признаёт только перечисленные операции записи GitHub с точным управляемым адаптером и областью репозитория.
 func (definition Package) CollaborativeWrite(capability Capability) bool {
 	if definition.Metadata.Key != "github" || definition.Spec.Adapter != string(AdapterGitHub) ||
 		definition.Spec.AdapterOwner != string(OwnerIntegrationGateway) || definition.Spec.ExecutionRoute != string(RouteManagedMCP) ||
@@ -37,7 +41,8 @@ func (definition Package) CollaborativeWrite(capability Capability) bool {
 	}
 }
 
-// ValidateInvocationApprovalPolicy сохраняет ограничения payload до чтения credential и effect.
+// ValidateInvocationApprovalPolicy rejects unauthorized selections and allows autonomous review only for COMMENT input.
+// ValidateInvocationApprovalPolicy отклоняет неразрешённый выбор и допускает автономное ревью лишь с входным событием COMMENT.
 func (definition Package) ValidateInvocationApprovalPolicy(capability Capability, selected string, canonicalInput []byte) error {
 	if !capability.AllowsApprovalPolicy(selected) {
 		return errApprovalPolicy
@@ -53,6 +58,8 @@ func (definition Package) ValidateInvocationApprovalPolicy(capability Capability
 	return nil
 }
 
+// validCapabilityApprovalPolicies enforces bounded, nonduplicate choices with stricter read and write rules per adapter.
+// validCapabilityApprovalPolicies обеспечивает ограниченный выбор без дублей и отдельные правила чтения и записи по адаптеру.
 func validCapabilityApprovalPolicies(definition *Package, capability Capability) bool {
 	if !validApprovalPolicy(capability.ApprovalPolicy) || len(capability.AllowedApprovalPolicies) < 1 ||
 		len(capability.AllowedApprovalPolicies) > 3 || !capability.AllowsApprovalPolicy(capability.ApprovalPolicy) {
@@ -83,6 +90,8 @@ func validCapabilityApprovalPolicies(definition *Package, capability Capability)
 	return true
 }
 
+// narrowApprovalPolicies accepts only a nonempty duplicate-free subset of an existing approved policy set.
+// narrowApprovalPolicies принимает только непустое множество без дублей внутри ранее утверждённого набора политик.
 func narrowApprovalPolicies(candidate, baseline []string) bool {
 	allowed := map[string]bool{}
 	for _, policy := range baseline {

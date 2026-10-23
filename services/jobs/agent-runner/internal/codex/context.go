@@ -10,9 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
-// contextInputItems сохраняет server prompt отдельным input item. Skills имеют
-// нативный тип skill; память передаётся отдельной типизированной проекцией данных,
-// а не AGENTS.md либо неустойчивым внутренним форматом Codex memories.
+// contextInputItems validates the immutable snapshot and returns the exact server prompt, native skill items and a bounded JSON memory projection with current revision pins. Even empty memory is explicit on resume; roles remain contextual data, and this mapper does not itself verify mounted bytes or grant authority.
+// contextInputItems проверяет immutable snapshot и возвращает точный server prompt, native skill items и ограниченную JSON memory projection с current revision pins. Даже пустая память явна при resume; роли остаются contextual data, mapper сам не проверяет mounted bytes и не даёт полномочий.
 func contextInputItems(input model.Input, snapshot runtimecontract.RuntimeContextSnapshot, prompt []byte, now time.Time) ([]map[string]any, error) {
 	if snapshot.ValidateFor(input, now) != nil {
 		return nil, runtimecontract.ErrRuntimeContext
@@ -22,8 +21,8 @@ func contextInputItems(input model.Input, snapshot runtimecontract.RuntimeContex
 		items = append(items, map[string]any{"type": "skill", "name": skill.Name,
 			"path": path.Join(runtimecontract.RuntimeContextRoot, "skills", skill.BundleRef, "SKILL.md")})
 	}
-	// Явный пустой набор необходим и после resume: он не означает разрешение
-	// снова использовать память из предыдущей attempt или локального профиля.
+	// memoryFile pairs one immutable memory record with its deterministic read-only projection path; it contains metadata, not the memory file body or a new permission.
+	// memoryFile связывает immutable memory record с определённым read-only projection path; содержит metadata, не тело memory file и не новое permission.
 	type memoryFile struct {
 		Record runtimecontract.RuntimeMemoryRecord `json:"record"`
 		Path   string                              `json:"path"`
@@ -47,6 +46,8 @@ func contextInputItems(input model.Input, snapshot runtimecontract.RuntimeContex
 	return items, nil
 }
 
+// verifyProviderContext delegates mounted context verification to the shared contextfiles boundary, keeping one authority-aware implementation for exact snapshot/file readback.
+// verifyProviderContext передаёт проверку mounted context общей contextfiles boundary, сохраняя единую authority-aware реализацию точного snapshot/file readback.
 func verifyProviderContext(input model.Input, snapshot runtimecontract.RuntimeContextSnapshot) error {
 	return contextfiles.Verify(input, snapshot)
 }

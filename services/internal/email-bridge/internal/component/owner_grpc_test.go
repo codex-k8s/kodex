@@ -23,6 +23,10 @@ import (
 	"sync/atomic"
 )
 
+// ownerGRPCFixture records the latest synthetic authorization request and can
+// revoke subsequent authorization/report calls; it is not a full owner service.
+// ownerGRPCFixture хранит последний искусственный запрос полномочий и умеет
+// отозвать последующие запросы/отчёты; это не полная реализация сервиса владельца.
 type ownerGRPCFixture struct {
 	cp.UnimplementedRuntimeWorkServiceServer
 	revoked atomic.Bool
@@ -30,6 +34,10 @@ type ownerGRPCFixture struct {
 	last    *cp.ResolveEmailAuthorizationRequest
 }
 
+// ResolveEmailAuthorization stores the request under a mutex and returns a
+// short-lived fixture decision bound to its input and execution, unless revoked.
+// ResolveEmailAuthorization сохраняет запрос под мьютексом и, если нет отзыва,
+// возвращает краткоживущее тестовое решение с привязкой к вводу и выполнению.
 func (s *ownerGRPCFixture) ResolveEmailAuthorization(_ context.Context, r *cp.ResolveEmailAuthorizationRequest) (*cp.ResolveEmailAuthorizationResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -41,6 +49,10 @@ func (s *ownerGRPCFixture) ResolveEmailAuthorization(_ context.Context, r *cp.Re
 	return &cp.ResolveEmailAuthorizationResponse{Allowed: true, ActorRef: "actor", AgentRef: "agent", OrganizationRef: "tenant", ConnectionRef: "connection", MailboxRef: r.MailboxRef, GrantRef: "grant", Operation: r.Operation, SemanticInputDigest: r.SemanticInputDigest, EffectKey: r.EffectKey, ConfigurationRevision: r.ConfigurationRevision, CredentialGeneration: 1, Policy: cp.EmailApprovalPolicy_EMAIL_APPROVAL_POLICY_ALLOW, GateApproved: true, UserScope: scope, AgentScope: scope, ConnectionScope: scope, ResourceScope: scope, ExpiresAt: timestamppb.New(time.Now().Add(30 * time.Second)), Binding: r.Binding}, nil
 }
 
+// ReportEmailEffectReceipt checks the latest fixture request's input digest
+// and invocation before echoing a synthetic owner receipt; revocation always denies.
+// ReportEmailEffectReceipt проверяет хеш ввода и вызов последнего тестового запроса
+// перед выдачей искусственной квитанции владельца; отзыв всегда запрещает отчёт.
 func (s *ownerGRPCFixture) ReportEmailEffectReceipt(_ context.Context, r *cp.ReportEmailEffectReceiptRequest) (*cp.ReportEmailEffectReceiptResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -50,11 +62,19 @@ func (s *ownerGRPCFixture) ReportEmailEffectReceipt(_ context.Context, r *cp.Rep
 	return &cp.ReportEmailEffectReceiptResponse{Receipt: &cp.EmailEffectReceipt{Ref: "receipt_fixture01", Version: 1, InvocationRef: r.Binding.GetInvocationRef(), ExternalReceiptRef: r.ExternalReceiptRef, ExternalReceiptDigest: r.ExternalReceiptDigest, SemanticInputDigest: r.SemanticInputDigest, EffectKey: s.last.EffectKey, MailboxRef: s.last.MailboxRef, ConnectionRef: "connection", ConfigurationRevision: s.last.ConfigurationRevision, Outcome: r.Outcome}}, nil
 }
 
+// executionFixture creates a synthetic invocation and one-minute generation-one
+// lease; its dummy fence is not a credential for the running platform.
+// executionFixture создаёт искусственный вызов и минутную аренду первого поколения;
+// её условный ограничитель не является реквизитом действующей платформы.
 func executionFixture() *api.ExecutionBinding {
 	ref := "inv_fixture01"
 	return &api.ExecutionBinding{InvocationRef: &ref, Lease: api.ExecutionLease{Ref: "lease_fixture01", Fence: "fixture-fence", Generation: 1, ExpiresAt: time.Now().Add(time.Minute)}}
 }
 
+// TestOwnerGRPCClient drives the real authority adapter through a loopback TLS 1.3
+// gRPC fixture and verifies that revocation stops the next send before credential reads.
+// TestOwnerGRPCClient вызывает настоящий адаптер полномочий через локальный gRPC
+// с TLS 1.3 и проверяет остановку следующей отправки отзывом до чтения реквизитов.
 func TestOwnerGRPCClient(t *testing.T) {
 	f := newFixture(t, "implicit")
 	roots := x509.NewCertPool()

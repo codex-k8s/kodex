@@ -9,17 +9,37 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// systemPackageSource supplies exact executable-package pins and connection configuration shared by source and delivery claims.
+// RU: systemPackageSource передаёт точные координаты исполняемого пакета и настройки подключения, общие для claim источника и доставки.
 type systemPackageSource interface {
+	// GetDefinitionPackage returns the bounded managed package bytes for executable-baseline validation.
+	// RU: GetDefinitionPackage возвращает ограниченные байты управляемого пакета для проверки исполняемой основы.
 	GetDefinitionPackage() []byte
+	// GetDefinitionKey returns the expected package kind, which must remain Mattermost at this executor.
+	// RU: GetDefinitionKey возвращает ожидаемый вид пакета, который у этого исполнителя должен оставаться Mattermost.
 	GetDefinitionKey() string
+	// GetDefinitionVersion returns the exact managed version that must match the decoded package.
+	// RU: GetDefinitionVersion возвращает точную управляемую версию, обязанную совпасть с декодированным пакетом.
 	GetDefinitionVersion() string
+	// GetDefinitionDigest returns the package digest checked against the decoded executable revision.
+	// RU: GetDefinitionDigest возвращает дайджест пакета, сверяемый с декодированной исполняемой ревизией.
 	GetDefinitionDigest() string
+	// GetConnectionVersion returns a positive owner snapshot pin required before system operations.
+	// RU: GetConnectionVersion возвращает положительную координату снимка владельца, обязательную до системных операций.
 	GetConnectionVersion() int64
+	// GetBaseUrl supplies the configured origin for package validation and later exact-host transport checks.
+	// RU: GetBaseUrl задаёт адрес подключения для проверки пакета и последующих проверок точного узла транспорта.
 	GetBaseUrl() string
+	// GetTeamName supplies the configured team name used by package validation and exact provider resolution.
+	// RU: GetTeamName задаёт имя команды для проверки пакета и точного разрешения у провайдера.
 	GetTeamName() string
+	// GetChannelName supplies the configured channel name without granting authority to external message identifiers.
+	// RU: GetChannelName задаёт имя канала, не выдавая полномочий внешним идентификаторам сообщений.
 	GetChannelName() string
 }
 
+// systemPackage verifies exact managed package pins, a positive connection version and the supplied public connection configuration.
+// RU: systemPackage проверяет точные координаты управляемого пакета, положительную версию подключения и его публичную конфигурацию.
 func (adapter *Adapter) systemPackage(source systemPackageSource) (integrationpackage.Package, error) {
 	definition, err := adapter.claimDefinition(source.GetDefinitionPackage(), source.GetDefinitionKey(), source.GetDefinitionVersion(), source.GetDefinitionDigest())
 	if err != nil || source.GetConnectionVersion() < 1 || definition.ValidateConfiguration(map[string]string{
@@ -30,6 +50,8 @@ func (adapter *Adapter) systemPackage(source systemPackageSource) (integrationpa
 	return definition, nil
 }
 
+// sourceCapability permits only the exact inbound READ/NONE or gate-decision SENSITIVE/HUMAN_EACH_EFFECT system capability profile.
+// RU: sourceCapability допускает только точный системный профиль входящих READ/NONE либо решений gate SENSITIVE/HUMAN_EACH_EFFECT.
 func sourceCapability(definition integrationpackage.Package, key string) (integrationpackage.Capability, bool) {
 	capability, ok := definition.Capability(key)
 	if !ok || capability.Operation != key {
@@ -40,6 +62,8 @@ func sourceCapability(definition integrationpackage.Package, key string) (integr
 	return capability, valid
 }
 
+// sourceBudget validates one or two distinct enabled source capabilities and chooses the smallest adapter/capability operation timeout.
+// RU: sourceBudget проверяет одну или две различные включённые capability источника и выбирает наименьший timeout адаптера и capabilities.
 func (adapter *Adapter) sourceBudget(source *cp.InteractionSource) (time.Duration, error) {
 	definition, err := adapter.systemPackage(source)
 	if err != nil || len(source.GetEnabledCapabilities()) == 0 || len(source.GetEnabledCapabilities()) > 2 {
@@ -58,6 +82,10 @@ func (adapter *Adapter) sourceBudget(source *cp.InteractionSource) (time.Duratio
 	return budget, nil
 }
 
+// validateSourceInput validates the system capability's exact input schema, including gate reference and decision text when required.
+// RU: validateSourceInput проверяет точную схему ввода системной capability, включая ссылку gate и текст решения при необходимости.
+// Schema-valid correlation is not an owner approval; authoritative message acceptance remains a separate RPC.
+// RU: Соответствие корреляции схеме не является одобрением владельца; авторитетный приём сообщения остаётся отдельным RPC.
 func (adapter *Adapter) validateSourceInput(source *cp.InteractionSource, key, gateRef string, decision cp.OwnerGateDecision) error {
 	definition, err := adapter.systemPackage(source)
 	if err != nil {
@@ -82,6 +110,10 @@ func (adapter *Adapter) validateSourceInput(source *cp.InteractionSource, key, g
 	return nil
 }
 
+// deliveryCapability distinguishes system acknowledgements/gate messages from notification/mirror writes and checks each profile's exact source and gate pins.
+// RU: deliveryCapability различает системные подтверждения/сообщения gate и записи уведомления/зеркала, проверяя точные source и gate координаты каждого профиля.
+// It rejects detached or unresolved approval fields before provider I/O without creating or approving a human decision itself.
+// RU: Функция отклоняет несвязанные или неразрешённые поля подтверждения до I/O провайдера, сама не создавая и не одобряя человеческое решение.
 func (adapter *Adapter) deliveryCapability(claim *cp.InteractionDeliveryClaim) (integrationpackage.Capability, error) {
 	definition, err := adapter.systemPackage(claim)
 	if err != nil {

@@ -13,17 +13,25 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/audio/ffmpeg"
 )
 
+// catalogProvider counts local catalog reads separately from model and network calls.
+// catalogProvider считает локальные чтения каталога отдельно от вызовов модели и сети.
 type catalogProvider struct {
 	fakeProvider
 	catalog      modelprofile.Catalog
 	catalogCalls int
 }
 
+// Catalog returns the synthetic adapter snapshot and records that this path was used.
+// Catalog возвращает снимок тестового адаптера и отмечает использование этого пути.
 func (provider *catalogProvider) Catalog() modelprofile.Catalog {
 	provider.catalogCalls++
 	return provider.catalog
 }
 
+// TestGetModelCatalogBeforeConfigurationHasNoRemoteEffect proves catalog reads
+// need no policy or credential and do not confer microphone permission.
+// RU: TestGetModelCatalogBeforeConfigurationHasNoRemoteEffect доказывает, что
+// чтение каталога не требует политики или реквизита и не даёт права микрофона.
 func TestGetModelCatalogBeforeConfigurationHasNoRemoteEffect(t *testing.T) {
 	policies, credentials := &fakePolicy{err: errs.ErrPolicyUnavailable}, &fakeCredential{err: errs.ErrCredentialUnavailable}
 	provider := &catalogProvider{catalog: modelprofile.OpenAICatalog()}
@@ -45,6 +53,10 @@ func TestGetModelCatalogBeforeConfigurationHasNoRemoteEffect(t *testing.T) {
 	}
 }
 
+// TestGetModelCatalogRejectsAuthorityExpiryAndCancellation rejects stale,
+// wrong-scope or cancelled administration before reading the adapter catalog.
+// RU: TestGetModelCatalogRejectsAuthorityExpiryAndCancellation отклоняет
+// устаревшее, чужое по области или отменённое администрирование до чтения каталога.
 func TestGetModelCatalogRejectsAuthorityExpiryAndCancellation(t *testing.T) {
 	provider := &catalogProvider{catalog: modelprofile.OpenAICatalog()}
 	service, _ := New(&fakePolicy{}, &fakeCredential{}, provider, &observed{}, time.Second, ffmpeg.New(t.TempDir()))
@@ -79,6 +91,10 @@ func TestGetModelCatalogRejectsAuthorityExpiryAndCancellation(t *testing.T) {
 	}
 }
 
+// TestPolicyProviderTimeoutUsesAdapterLimit accepts the exact adapter maximum
+// while rejecting every tested timeout that would outlive its bound.
+// RU: TestPolicyProviderTimeoutUsesAdapterLimit принимает точный предел адаптера
+// и отклоняет проверяемые сроки, выходящие за эту границу.
 func TestPolicyProviderTimeoutUsesAdapterLimit(t *testing.T) {
 	policy := validPolicy(time.Now())
 	policy.ProviderTimeout = modelprofile.MaximumProviderTimeout

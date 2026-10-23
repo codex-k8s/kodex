@@ -19,8 +19,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Broker проверяет transport и форму snapshot. Полномочия принадлежат CP:
-// owner повторно проверяет opaque credential и actor/tenant до чтения Secret.
+// transcriptionProjectionAuthority matches sidecar-verified delegation or exact trusted STT admission plus
+// a short-lived locator and one explicit bearer. Trusted context relays only that opaque application
+// credential for CP to recheck actor/tenant before Secret access; locator shape/hash alone grants nothing.
+// transcriptionProjectionAuthority сверяет sidecar-verified delegation либо exact trusted STT admission с
+// short-lived locator и одним explicit bearer. Trusted context передаёт лишь этот opaque application
+// credential для повторной проверки actor/tenant в CP до Secret access; locator shape/hash сами ничего не
+// разрешают.
 func transcriptionProjectionAuthority(ctx context.Context, locator *sttv1.DelegatedAuthorityLocator) (*cp.CredentialProjectionAuthority, context.Context, error) {
 	method := sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName
 	admission, trusted := serviceidentity.FromContext(ctx)
@@ -56,6 +61,12 @@ func transcriptionProjectionAuthority(ctx context.Context, locator *sttv1.Delega
 	}, bound, nil
 }
 
+// validTrustedSTTLocator checks organization-only locator shape, UUID/correlation/revision bounds and
+// expiry within 30 seconds, then recomputes the deterministic protobuf snapshot digest. This hash is not a
+// signature, owner eligibility proof or cross-version canonical serialization.
+// validTrustedSTTLocator проверяет organization-only locator shape, UUID/correlation/revision bounds и
+// expiry в пределах 30 секунд, затем пересчитывает deterministic protobuf snapshot digest. Этот hash не
+// является signature, owner eligibility proof и cross-version canonical serialization.
 func validTrustedSTTLocator(locator *sttv1.DelegatedAuthorityLocator) bool {
 	now := time.Now()
 	if locator == nil || uuid.Validate(locator.GetRequestId()) != nil || uuid.Validate(locator.GetRootActorId()) != nil || uuid.Validate(locator.GetTenantId()) != nil ||

@@ -14,14 +14,24 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 )
 
+// errStopReadinessMonitor terminates injected test waits deterministically without sleeping or changing production cancellation rules.
+// errStopReadinessMonitor детерминированно завершает подставленные тестовые ожидания без сна или изменения правил отмены production.
 var errStopReadinessMonitor = errors.New("stop readiness monitor")
 
+// infrastructureCheckerFunc replaces the external infrastructure probe with a context-observing unit callback.
+// infrastructureCheckerFunc заменяет внешнюю проверку инфраструктуры unit-обработчиком, наблюдающим контекст.
 type infrastructureCheckerFunc func(context.Context) error
 
+// Check delegates the exact supplied context and preserves the callback's error without real registry/BuildKit access.
+// Check передаёт точный контекст и сохраняет ошибку обработчика без доступа к настоящим реестру или BuildKit.
 func (check infrastructureCheckerFunc) Check(ctx context.Context) error {
 	return check(ctx)
 }
 
+// TestStartupInfrastructureAllowsColdCheckBeyondInitializationBudget uses virtual time to exhaust short initialization but complete a fresh cold check.
+// It verifies the separate readiness budget and cancellation of the successful probe's child context, not live image pulling.
+// TestStartupInfrastructureAllowsColdCheckBeyondInitializationBudget виртуальным временем исчерпывает короткую инициализацию, но завершает новую холодную проверку.
+// Проверяются отдельный бюджет готовности и отмена дочернего контекста успешной проверки, а не получение настоящего образа.
 func TestStartupInfrastructureAllowsColdCheckBeyondInitializationBudget(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		config := Config{StartupTimeout: 30 * time.Second, ReadinessTimeout: 3 * time.Minute}
@@ -51,6 +61,10 @@ func TestStartupInfrastructureAllowsColdCheckBeyondInitializationBudget(t *testi
 	})
 }
 
+// TestStartupInfrastructureCancelsAndWaitsForCheckCleanup covers own timeout, lifecycle cancellation and an earlier parent deadline in virtual time.
+// Each case delays synthetic cleanup after cancellation and requires synchronous join before the helper returns the original context error.
+// TestStartupInfrastructureCancelsAndWaitsForCheckCleanup проверяет свой таймаут, отмену lifecycle и более ранний срок родителя виртуальным временем.
+// В каждом случае искусственная очистка задерживается после отмены; помощник обязан синхронно дождаться её и вернуть исходную ошибку контекста.
 func TestStartupInfrastructureCancelsAndWaitsForCheckCleanup(t *testing.T) {
 	for _, test := range []struct {
 		name           string
@@ -95,6 +109,8 @@ func TestStartupInfrastructureCancelsAndWaitsForCheckCleanup(t *testing.T) {
 	}
 }
 
+// TestStartupInfrastructurePreservesFailureAndReleasesContext checks exact error propagation and release of the allocated probe context on failure.
+// TestStartupInfrastructurePreservesFailureAndReleasesContext проверяет точную передачу ошибки и освобождение выделенного контекста проверки при сбое.
 func TestStartupInfrastructurePreservesFailureAndReleasesContext(t *testing.T) {
 	checkFailure := errors.New("synthetic infrastructure failure")
 	var infrastructure context.Context
@@ -107,6 +123,10 @@ func TestStartupInfrastructurePreservesFailureAndReleasesContext(t *testing.T) {
 	}
 }
 
+// TestReadinessMonitorUsesInfrastructureBudget checks the long infrastructure deadline rather than the short RPC budget and restores readiness.
+// A supplied waiter captures the normal interval and stops after one successful synthetic probe without real sleeping or networking.
+// TestReadinessMonitorUsesInfrastructureBudget проверяет длинный срок инфраструктуры вместо короткого RPC-бюджета и восстановление готовности.
+// Подставленное ожидание фиксирует обычный интервал и завершает одну успешную искусственную проверку без настоящего сна или сети.
 func TestReadinessMonitorUsesInfrastructureBudget(t *testing.T) {
 	t.Parallel()
 	var infrastructureBudget time.Duration
@@ -143,6 +163,8 @@ func TestReadinessMonitorUsesInfrastructureBudget(t *testing.T) {
 	}
 }
 
+// TestReadinessMonitorClosesForBuildKitFailure supplies a synthetic infrastructure error and requires readiness to close before the injected stop.
+// TestReadinessMonitorClosesForBuildKitFailure задаёт искусственную ошибку инфраструктуры и требует закрытия готовности до подставленной остановки.
 func TestReadinessMonitorClosesForBuildKitFailure(t *testing.T) {
 	t.Parallel()
 	state := readinessTestState()
@@ -164,6 +186,10 @@ func TestReadinessMonitorClosesForBuildKitFailure(t *testing.T) {
 	}
 }
 
+// TestLoadConfigEnforcesColdPathReadinessBudget checks defaults and exact accepted/rejected initialization/readiness bounds via synthetic environment.
+// It preserves the seven-minute maximum combined budget without starting the application, subprocesses or a real startup probe.
+// TestLoadConfigEnforcesColdPathReadinessBudget проверяет умолчания и точные принимаемые и отклоняемые пределы запуска и готовности искусственным окружением.
+// Сохраняется максимальный общий бюджет семь минут без запуска приложения, дочерних процессов или настоящей startup probe.
 func TestLoadConfigEnforcesColdPathReadinessBudget(t *testing.T) {
 	t.Setenv("DEPLOYMENT_ENVIRONMENT", "staging")
 	t.Setenv("ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256", strings.Repeat("a", 64))
@@ -199,6 +225,8 @@ func TestLoadConfigEnforcesColdPathReadinessBudget(t *testing.T) {
 	}
 }
 
+// readinessTestState creates isolated in-memory readiness/metrics and a discard logger without worker, RPC or telemetry runtime initialization.
+// readinessTestState создаёт изолированные готовность и метрики в памяти и отбрасывающий logger без инициализации workers, RPC или telemetry runtime.
 func readinessTestState() *runtimeState {
 	return &runtimeState{
 		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -207,6 +235,8 @@ func readinessTestState() *runtimeState {
 	}
 }
 
+// remainingBudget requires a context deadline and returns its remaining duration using the current real or synctest clock.
+// remainingBudget требует срок контекста и возвращает оставшуюся длительность по текущим настоящим либо synctest-часам.
 func remainingBudget(t *testing.T, ctx context.Context) time.Duration {
 	t.Helper()
 	deadline, ok := ctx.Deadline()

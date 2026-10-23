@@ -21,8 +21,8 @@ import (
 	clienttesting "k8s.io/client-go/testing"
 )
 
-// Fake API назначает identity и проверяет delete preconditions как apiserver.
-// Его GC имитирует только exact Job → Pod owner UID, не label-based удаление.
+// newArchiveClient assigns fixture identity, enforces UID/version delete preconditions and collects only exact Job-owned Pods.
+// RU: newArchiveClient назначает идентичность оснастки, соблюдает UID/version предусловия удаления и очищает лишь Pods точного Job-владельца.
 func newArchiveClient(objects ...runtime.Object) *fake.Clientset {
 	client := fake.NewSimpleClientset(objects...)
 	client.PrependReactor("create", "*", func(action clienttesting.Action) (bool, runtime.Object, error) {
@@ -58,6 +58,8 @@ func newArchiveClient(objects ...runtime.Object) *fake.Clientset {
 	return client
 }
 
+// fullArchiveTask expands the minimal task into consistent owner, runtime, session-path and PVC bindings.
+// RU: fullArchiveTask дополняет минимальное задание согласованными привязками владельца, runtime, пути сессии и PVC.
 func fullArchiveTask() model.Task {
 	task := testSnapshotTask()
 	task.OrganizationRef, task.SessionRef = "org_fixture01", "ses_fixture01"
@@ -70,6 +72,8 @@ func fullArchiveTask() model.Task {
 	return task
 }
 
+// attemptResources creates validated immutable input and a matching worker Job with explicit fixture UID and version.
+// RU: attemptResources создаёт проверенный неизменяемый вход и соответствующую Job worker с явными UID и версией оснастки.
 func attemptResources(t *testing.T, controller *Controller, task model.Task) (*corev1.ConfigMap, *batchv1.Job) {
 	t.Helper()
 	raw, err := json.Marshal(task)
@@ -84,6 +88,8 @@ func attemptResources(t *testing.T, controller *Controller, task model.Task) (*c
 	return input, job
 }
 
+// TestSecondArchiveReplicaCheckNeverDeletesActiveWork proves a replica's readiness probe only lists resources.
+// RU: TestSecondArchiveReplicaCheckNeverDeletesActiveWork доказывает, что проверка готовности реплики лишь читает список ресурсов.
 func TestSecondArchiveReplicaCheckNeverDeletesActiveWork(t *testing.T) {
 	t.Parallel()
 	client := newArchiveClient()
@@ -102,6 +108,8 @@ func TestSecondArchiveReplicaCheckNeverDeletesActiveWork(t *testing.T) {
 	}
 }
 
+// TestArchiveRetryCleansOnlyProvenPreviousAttempt requires fresh authority and exact deletion while preserving another task.
+// RU: TestArchiveRetryCleansOnlyProvenPreviousAttempt требует свежих полномочий и точного удаления, сохраняя другое задание.
 func TestArchiveRetryCleansOnlyProvenPreviousAttempt(t *testing.T) {
 	t.Parallel()
 	client := newArchiveClient()
@@ -138,6 +146,8 @@ func TestArchiveRetryCleansOnlyProvenPreviousAttempt(t *testing.T) {
 	}
 }
 
+// TestArchiveRetryRejectsExpiredAuthorityAndForeignInput forbids mutations for invalid leases, owner pins or predecessor resources.
+// RU: TestArchiveRetryRejectsExpiredAuthorityAndForeignInput запрещает изменения при неверных lease, привязках владельца или ресурсах предшественника.
 func TestArchiveRetryRejectsExpiredAuthorityAndForeignInput(t *testing.T) {
 	t.Parallel()
 	for _, scenario := range []string{"expired", "renew lost", "foreign owner", "same attempt", "foreign job", "missing input"} {
@@ -185,6 +195,8 @@ func TestArchiveRetryRejectsExpiredAuthorityAndForeignInput(t *testing.T) {
 	}
 }
 
+// TestArchiveCleanupWaitsForPodJoinAndPreservesReplacedUID keeps task input when Pods remain or resource identity changed.
+// RU: TestArchiveCleanupWaitsForPodJoinAndPreservesReplacedUID сохраняет вход задания при оставшихся Pods либо смене идентичности ресурса.
 func TestArchiveCleanupWaitsForPodJoinAndPreservesReplacedUID(t *testing.T) {
 	t.Parallel()
 	for _, scenario := range []string{"pending pod", "replaced input", "replaced job"} {
@@ -223,6 +235,8 @@ func TestArchiveCleanupWaitsForPodJoinAndPreservesReplacedUID(t *testing.T) {
 	}
 }
 
+// TestArchiveExpiredClaimHasNoPVCOrWorkerEffects rejects every task kind before contacting Kubernetes after lease failure.
+// RU: TestArchiveExpiredClaimHasNoPVCOrWorkerEffects отклоняет любой вид задания до обращения к Kubernetes при отказе lease.
 func TestArchiveExpiredClaimHasNoPVCOrWorkerEffects(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []string{"SNAPSHOT", "RESTORE", "DELETE_PVC", "DELETE_OBJECT"} {
@@ -239,6 +253,8 @@ func TestArchiveExpiredClaimHasNoPVCOrWorkerEffects(t *testing.T) {
 	}
 }
 
+// TestParallelArchiveReplicasKeepOtherSessionAlive isolates worker cleanup and completion across two concurrent sessions.
+// RU: TestParallelArchiveReplicasKeepOtherSessionAlive изолирует очистку worker и завершение двух параллельных сессий.
 func TestParallelArchiveReplicasKeepOtherSessionAlive(t *testing.T) {
 	t.Parallel()
 	client := newArchiveClient()
@@ -275,6 +291,8 @@ func TestParallelArchiveReplicasKeepOtherSessionAlive(t *testing.T) {
 	}
 }
 
+// TestUnknownArchiveJobCreateIsPreservedUntilFencedRetry preserves an accepted Job after a lost response until a proven retry.
+// RU: TestUnknownArchiveJobCreateIsPreservedUntilFencedRetry сохраняет принятую Job после потери ответа до доказанного повтора.
 func TestUnknownArchiveJobCreateIsPreservedUntilFencedRetry(t *testing.T) {
 	t.Parallel()
 	task := fullArchiveTask()

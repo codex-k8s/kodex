@@ -19,6 +19,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// delegationRecoveryClient records local delegation/audit calls and injects an owner
+// error or selected audit-phase failure, without creating real runs or durable events.
+// delegationRecoveryClient записывает local delegation/audit calls и подставляет owner
+// error либо выбранный audit-phase failure без real runs и durable events.
 type delegationRecoveryClient struct {
 	cp.RuntimeWorkServiceClient
 	requests                  []*cp.DelegateExecutionRequest
@@ -27,6 +31,10 @@ type delegationRecoveryClient struct {
 	projectionFailureRevision int64
 }
 
+// DelegateExecution records the exact request pointer and returns an injected error
+// or fixed child/callback refs; it does not authenticate, deduplicate or create a child.
+// DelegateExecution записывает exact request pointer и возвращает injected error
+// либо fixed child/callback refs, не аутентифицируя,не deduplicating и не создавая child.
 func (c *delegationRecoveryClient) DelegateExecution(_ context.Context, request *cp.DelegateExecutionRequest, _ ...grpc.CallOption) (*cp.DelegateExecutionResponse, error) {
 	c.requests = append(c.requests, request)
 	if c.ownerError != nil {
@@ -35,6 +43,10 @@ func (c *delegationRecoveryClient) DelegateExecution(_ context.Context, request 
 	return &cp.DelegateExecutionResponse{ChildRun: &cp.Run{Ref: "run_childfixture"}, CallbackEdgeRef: "edg_callbackfixture"}, nil
 }
 
+// RecordRunToolCall records each activity and may fail one configured revision
+// with a private canary; successful synthetic event refs do not prove durable audit.
+// RecordRunToolCall записывает activity и может отклонить заданную revision
+// с private canary; synthetic event refs не доказывают durable audit.
 func (c *delegationRecoveryClient) RecordRunToolCall(_ context.Context, request *cp.RecordRunToolCallRequest, _ ...grpc.CallOption) (*cp.RecordRunToolCallResponse, error) {
 	c.projections = append(c.projections, request)
 	if request.Revision == c.projectionFailureRevision {
@@ -43,6 +55,10 @@ func (c *delegationRecoveryClient) RecordRunToolCall(_ context.Context, request 
 	return &cp.RecordRunToolCallResponse{Event: &cp.RunEvent{Ref: "evt_fixture"}}, nil
 }
 
+// delegationRecoveryInput creates two exact synthetic target/step pairs and private
+// execution canaries with fixed lease generation for local recovery boundary tests.
+// delegationRecoveryInput создаёт две exact synthetic target/step pairs и private
+// execution canaries с fixed lease generation для local recovery boundary tests.
 func delegationRecoveryInput() runtimecontract.RunnerInput {
 	return runtimecontract.RunnerInput{LeaseRef: "lea_fixture", LeaseFence: "PRIVATE_FENCE", LeaseGeneration: 7,
 		Instructions: "PRIVATE_INSTRUCTIONS", Task: "PRIVATE_ROOT_TASK", DelegationTargets: []runtimecontract.RunnerDelegationTarget{
@@ -51,10 +67,20 @@ func delegationRecoveryInput() runtimecontract.RunnerInput {
 		}}
 }
 
+// delegationRecoveryArguments returns fresh valid target/step/task/input maps with
+// private canaries that must not be reflected in error wire or diagnostic logs.
+// delegationRecoveryArguments возвращает новые valid target/step/task/input maps
+// с private canaries, которые не должны отражаться в error wire/logs.
 func delegationRecoveryArguments() map[string]any {
 	return map[string]any{"target_agent_ref": "agt_architectfixture", "workflow_step_key": "step-002", "task": "PRIVATE_CHILD_TASK", "input": map[string]any{"data": "PRIVATE_INPUT"}}
 }
 
+// delegationRecoveryCall invokes local MCP dispatch with a recording fake, captures
+// wire/logs, rejects private canary disclosure and checks textual/structured recovery
+// codes agree before returning the structured projection and captured diagnostics.
+// delegationRecoveryCall вызывает local MCP dispatch с recording fake, собирает
+// wire/logs,проверяет отсутствие private canaries и согласие textual/structured
+// recovery codes, возвращая structured projection и captured diagnostics.
 func delegationRecoveryCall(t *testing.T, client *delegationRecoveryClient, input runtimecontract.RunnerInput, arguments map[string]any) (map[string]any, string) {
 	t.Helper()
 	var logs bytes.Buffer
@@ -90,6 +116,12 @@ func delegationRecoveryCall(t *testing.T, client *delegationRecoveryClient, inpu
 	return response.Result.Structured, logs.String()
 }
 
+// TestDelegationInputRecoveryRejectsWithoutOwnerEffect exercises twelve malformed
+// shape/pair/task/input cases, checking no delegate RPC, bounded retry guidance,
+// closed failure labels and failed audit shape rather than a success receipt.
+// TestDelegationInputRecoveryRejectsWithoutOwnerEffect проверяет двенадцать malformed
+// shape/pair/task/input cases: нет delegate RPC, есть bounded retry guidance,closed
+// failure labels и failed audit shape вместо success receipt.
 func TestDelegationInputRecoveryRejectsWithoutOwnerEffect(t *testing.T) {
 	for _, fixture := range []struct {
 		name, reason string
@@ -124,6 +156,12 @@ func TestDelegationInputRecoveryRejectsWithoutOwnerEffect(t *testing.T) {
 	}
 }
 
+// TestDelegationInputRecoveryPreservesOwnerAndProjectionFailures checks seven owner
+// status classes and either failed audit phase never become locally retryable input
+// or trigger another delegation attempt.
+// TestDelegationInputRecoveryPreservesOwnerAndProjectionFailures проверяет, что семь owner
+// status classes и отказ любой audit phase не становятся locally retryable input
+// и не вызывают ещё одну delegation attempt.
 func TestDelegationInputRecoveryPreservesOwnerAndProjectionFailures(t *testing.T) {
 	for _, code := range []codes.Code{codes.Unknown, codes.Unavailable, codes.PermissionDenied, codes.Unauthenticated, codes.FailedPrecondition, codes.Aborted, codes.DeadlineExceeded} {
 		t.Run(code.String(), func(t *testing.T) {
@@ -145,6 +183,12 @@ func TestDelegationInputRecoveryPreservesOwnerAndProjectionFailures(t *testing.T
 	}
 }
 
+// TestDelegationInputRecoveryKeepsCurrentPairAndExecutionPins checks one corrected
+// snapshot pair sends exactly one request with original lease/idempotency/task/input,
+// a removed pair stays rejected, and ordinary targets may omit step/input.
+// TestDelegationInputRecoveryKeepsCurrentPairAndExecutionPins проверяет один corrected
+// snapshot pair и ровно один request с исходными lease/idempotency/task/input,
+// отказ удалённой пары и optional step/input обычного target.
 func TestDelegationInputRecoveryKeepsCurrentPairAndExecutionPins(t *testing.T) {
 	input := delegationRecoveryInput()
 	client := &delegationRecoveryClient{}
@@ -174,6 +218,12 @@ func TestDelegationInputRecoveryKeepsCurrentPairAndExecutionPins(t *testing.T) {
 	}
 }
 
+// TestDelegationInputClassificationIsClosedAndPrivate checks matching error text
+// and unknown private reasons cannot acquire a local failure class, while an
+// unsupported protobuf value returns the fixed registered input failure.
+// TestDelegationInputClassificationIsClosedAndPrivate проверяет отсутствие local failure
+// class у matching error text/unknown private reason и fixed registered input failure
+// для неподдерживаемого protobuf value.
 func TestDelegationInputClassificationIsClosedAndPrivate(t *testing.T) {
 	for _, err := range []error{errors.New("delegation input is invalid"), status.Error(codes.Unknown, "delegation input is invalid"), &delegationInputError{reason: "PRIVATE_INPUT"}} {
 		if delegationInputFailureClass(err) != "" {

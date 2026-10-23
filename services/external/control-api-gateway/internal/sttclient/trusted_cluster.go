@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// dialTrustedCluster validates the explicit profile and fixed speech target, installs trusted unary and stream interceptors and creates a plaintext gRPC client with fixed message limits. It does not read ordinary TLS/issuer files or validate their unused budget/ownership fields.
+// dialTrustedCluster проверяет явный profile и фиксированный speech target, устанавливает trusted unary и stream interceptors и создаёт plaintext gRPC client с фиксированными message limits. Обычные TLS и issuer files не читаются, их неиспользуемые budget и ownership fields не проверяются.
 func dialTrustedCluster(config Config) (*Client, error) {
 	if config.RPCProfile != "trusted-cluster" || strings.TrimPrefix(config.Target, "dns:///") != "stt-tts-service.kodex-system.svc:8443" {
 		return nil, errors.New("trusted STT target or profile rejected")

@@ -8,17 +8,24 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
-// Policy является отдельной конфигурацией target. Revision приложения не
-// участвует в допуске; доставка файла принадлежит владельцу target policy.
+// Policy is the target-owned, versioned document of exact service RPC grants;
+// application revision does not authorize transport, and file delivery remains
+// the responsibility of the target policy owner.
+// RU: Policy — версионированный документ target с точными допусками service
+// RPC; revision приложения не даёт транспортных прав, а доставкой файла
+// управляет владелец политики target.
 type Policy struct {
 	Version        int       `json:"version"`
 	TargetSPIFFEID string    `json:"target_spiffe_id"`
 	Bindings       []Binding `json:"bindings"`
 }
 
-// FromPolicy принимает только полный документ выбранного target. Неизвестные
-// поля, дубликаты ключей, wildcard/повторные bindings закрыто отклоняются.
-// Digest используется в release evidence, но не обязан совпадать у соседей.
+// FromPolicy decodes the complete document for the expected target, rejects
+// unknown or duplicate keys and invalid bindings, then returns its exact-byte
+// digest for release evidence rather than a cross-target revision check.
+// RU: FromPolicy декодирует полный документ ожидаемого target, отклоняет
+// неизвестные/повторные ключи и недопустимые bindings, затем возвращает digest
+// точных байтов для release evidence, а не сверки ревизий разных target.
 func FromPolicy(raw []byte, expectedTarget string, revocations RevocationBoundary) (*Authorizer, string, error) {
 	if len(raw) == 0 || len(raw) > 1<<20 {
 		return nil, "", errors.New("service policy size rejected")

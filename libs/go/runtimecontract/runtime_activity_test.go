@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestRuntimeActivityAcceptsOnlyPublishedBoundedMessage accepts a bounded public commentary message while rejecting private phases, invalid text and empty or competing activity variants.
+// TestRuntimeActivityAcceptsOnlyPublishedBoundedMessage принимает ограниченное публичное промежуточное сообщение, отклоняя частные фазы, некорректный текст и пустые либо конкурирующие варианты активности.
 func TestRuntimeActivityAcceptsOnlyPublishedBoundedMessage(t *testing.T) {
 	valid := RuntimeAgentMessage{ItemID: "message-1", Phase: RuntimeMessageCommentary, Revision: 1, Text: "Проверяю доступные файлы"}
 	if (RuntimeActivity{Message: &valid}).Validate() != nil {
@@ -32,6 +34,8 @@ func TestRuntimeActivityAcceptsOnlyPublishedBoundedMessage(t *testing.T) {
 	}
 }
 
+// TestRuntimeActivityFinancialVariantStaysExclusiveWithProcessObservation accepts a standalone financial observation but rejects its combination with messages, tool calls or process observations.
+// TestRuntimeActivityFinancialVariantStaysExclusiveWithProcessObservation принимает отдельное финансовое наблюдение, но отклоняет его сочетание с сообщениями, инструментами или наблюдениями процесса.
 func TestRuntimeActivityFinancialVariantStaysExclusiveWithProcessObservation(t *testing.T) {
 	financial := ProviderFinancialObservation{Sequence: 1, State: "UNAVAILABLE"}
 	if err := (RuntimeActivity{Financial: &financial}).Validate(); err != nil {

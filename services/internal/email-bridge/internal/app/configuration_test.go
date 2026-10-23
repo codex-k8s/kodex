@@ -14,6 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/mail"
 )
 
+// TestConfigurationDeploymentPins checks empty bootstrap provenance and exact managed pins while rejecting hybrid, missing or mismatched settings.
+// TestConfigurationDeploymentPins проверяет происхождение пустого bootstrap и точные managed-привязки, отвергая смешанные, отсутствующие и несовпавшие настройки.
 func TestConfigurationDeploymentPins(t *testing.T) {
 	seed := api.Configuration{Version: "email-bridge/v1", Revision: 1, ManagedBy: "git", Source: "release-bootstrap", Mailboxes: []api.Mailbox{}}
 	for _, name := range []string{"bootstrap", "managed", "unknown", "unpinned", "negative-revision", "uppercase-digest", "bootstrap-pin", "bootstrap-source", "bootstrap-revision", "bootstrap-owner", "bootstrap-mailbox", "managed-revision", "managed-digest"} {
@@ -53,6 +55,10 @@ func TestConfigurationDeploymentPins(t *testing.T) {
 	}
 }
 
+// TestManagedReadbackFailureRetainsLocalConfigurationAndRecovers distinguishes remote acknowledgement failure from local pin rejection.
+// Retrying readback preserves the valid local service, while an unapproved generation clears selection without mutating the old in-flight snapshot.
+// TestManagedReadbackFailureRetainsLocalConfigurationAndRecovers различает отказ удалённого подтверждения и локальный отказ привязок.
+// Повтор readback сохраняет допустимый сервис, а неодобренное поколение очищает выбор, не меняя старый исполняемый снимок.
 func TestManagedReadbackFailureRetainsLocalConfigurationAndRecovers(t *testing.T) {
 	root := t.TempDir()
 	mountConfiguration(t, root, "..first", 7)
@@ -92,6 +98,8 @@ func TestManagedReadbackFailureRetainsLocalConfigurationAndRecovers(t *testing.T
 	}
 }
 
+// TestLocalRefreshDoesNotDependOnOwnerReadback publishes valid synthetic local configuration without calling a deliberately failing owner reporter.
+// TestLocalRefreshDoesNotDependOnOwnerReadback публикует допустимую синтетическую локальную конфигурацию без вызова намеренно отказного отчёта владельцу.
 func TestLocalRefreshDoesNotDependOnOwnerReadback(t *testing.T) {
 	root := t.TempDir()
 	mountConfiguration(t, root, "..first", 1)
@@ -112,6 +120,8 @@ func TestLocalRefreshDoesNotDependOnOwnerReadback(t *testing.T) {
 	}
 }
 
+// mountConfiguration writes a read-only empty synthetic configuration generation and switches ..data atomically within the test directory.
+// mountConfiguration записывает read-only поколение пустой синтетической конфигурации и атомарно меняет ..data внутри тестовой папки.
 func mountConfiguration(t *testing.T, root, name string, revision int64) {
 	t.Helper()
 	directory := filepath.Join(root, name)
@@ -134,6 +144,10 @@ func mountConfiguration(t *testing.T, root, name string, revision int64) {
 	}
 }
 
+// TestConfigurationPublicationRequiresWatermark pauses durable acceptance to verify no early publication and immutable old service selection.
+// Its in-memory acceptance fixture also rejects rollback across a simulated runtime restart and permits recovery at a newer revision.
+// TestConfigurationPublicationRequiresWatermark приостанавливает устойчивый приём для проверки отсутствия ранней публикации и сохранности старого сервиса.
+// Заглушка приёма в памяти также отвергает откат при имитации перезапуска и допускает восстановление на новой ревизии.
 func TestConfigurationPublicationRequiresWatermark(t *testing.T) {
 	root := t.TempDir()
 	var revision int64
@@ -194,6 +208,8 @@ func TestConfigurationPublicationRequiresWatermark(t *testing.T) {
 	}
 }
 
+// TestConfigurationCancellationJoinsRefresh blocks the context-aware accept callback and verifies cancellation returns before service construction.
+// TestConfigurationCancellationJoinsRefresh блокирует соблюдающий контекст callback приёма и проверяет возврат по отмене до создания сервиса.
 func TestConfigurationCancellationJoinsRefresh(t *testing.T) {
 	root := t.TempDir()
 	mountConfiguration(t, root, "..first", 1)

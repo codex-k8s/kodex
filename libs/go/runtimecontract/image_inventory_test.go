@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// inventoryFixture creates a digest-consistent platform inventory with every tool explicitly missing.
+// inventoryFixture создаёт согласованный по дайджестам реестр платформы, где каждый инструмент явно отсутствует.
 func inventoryFixture() ImageToolInventory {
 	digest := strings.Repeat("a", 64)
 	manifest := ImageToolManifest{Schema: ImageInventorySchema, SpecSHA256: digest, ImmutableBuildSHA256: digest, RuntimeContractSHA256: digest, Platform: "linux/amd64"}
@@ -16,6 +18,10 @@ func inventoryFixture() ImageToolInventory {
 	return ImageToolInventory{Schema: ImageInventoryBindingSchema, ImageDigest: "sha256:" + digest, ProvenanceSHA256: digest, Platforms: []ImagePlatformInventory{{PlatformDigest: "sha256:" + digest, ManifestSHA256: ImageInventorySHA256(raw), Manifest: manifest}}}
 }
 
+// TestGoimportsProbeUsesSuccessfulFormattingReadinessNotUsage prevents a usage-error exit from
+// standing in for the required successful empty-input formatting probe.
+// TestGoimportsProbeUsesSuccessfulFormattingReadinessNotUsage не допускает подмены успешной
+// проверки форматирования пустого входа завершением с ошибкой справки.
 func TestGoimportsProbeUsesSuccessfulFormattingReadinessNotUsage(t *testing.T) {
 	for _, probe := range ImageToolProbes() {
 		if probe.Name != "goimports" {
@@ -29,6 +35,10 @@ func TestGoimportsProbeUsesSuccessfulFormattingReadinessNotUsage(t *testing.T) {
 	t.Fatal("required goimports probe is absent")
 }
 
+// TestChromiumProbeObservesNativeExecutableBeforeDistributionWrapper pins the native version probe
+// ahead of distribution wrappers that may need unavailable rootfs resources.
+// TestChromiumProbeObservesNativeExecutableBeforeDistributionWrapper закрепляет проверку версии
+// нативной программы перед обёртками дистрибутива, которым могут требоваться отсутствующие ресурсы rootfs.
 func TestChromiumProbeObservesNativeExecutableBeforeDistributionWrapper(t *testing.T) {
 	for _, probe := range ImageToolProbes() {
 		if probe.Name == "chromium" {
@@ -41,6 +51,10 @@ func TestChromiumProbeObservesNativeExecutableBeforeDistributionWrapper(t *testi
 	t.Fatal("required Chromium probe is absent")
 }
 
+// TestImageToolInventoryClosedSchemaAndBinding rejects forged probe metadata, duplicate platforms,
+// malformed JSON, and broken digests while ensuring error text does not disclose submitted values.
+// TestImageToolInventoryClosedSchemaAndBinding отклоняет поддельные метаданные, повторные платформы,
+// неверный JSON и дайджесты, проверяя отсутствие переданных значений в тексте ошибки.
 func TestImageToolInventoryClosedSchemaAndBinding(t *testing.T) {
 	value := inventoryFixture()
 	raw, _ := json.Marshal(value)
@@ -90,6 +104,8 @@ func TestImageToolInventoryClosedSchemaAndBinding(t *testing.T) {
 	}
 }
 
+// TestImageToolManifestExactCanonicalBytes rejects even a trailing newline that changes manifest bytes.
+// TestImageToolManifestExactCanonicalBytes отклоняет даже конечный перевод строки, меняющий байты манифеста.
 func TestImageToolManifestExactCanonicalBytes(t *testing.T) {
 	manifest := inventoryFixture().Platforms[0].Manifest
 	raw, _ := json.Marshal(manifest)

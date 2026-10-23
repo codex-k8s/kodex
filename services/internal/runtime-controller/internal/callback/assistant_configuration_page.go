@@ -10,19 +10,44 @@ import (
 )
 
 const (
-	maximumAssistantConfigurationPageBytes   = 16 << 10
+	// maximumAssistantConfigurationPageBytes caps one raw configuration chunk at 16 KiB;
+	// the encoded MCP envelope has a separate budget that may shrink a requested chunk.
+	// maximumAssistantConfigurationPageBytes ограничивает raw configuration chunk 16 KiB;
+	// у encoded MCP envelope отдельный budget, способный уменьшить chunk.
+	maximumAssistantConfigurationPageBytes = 16 << 10
+	// assistantConfigurationPageInvalidMessage is the fixed non-reflecting diagnostic
+	// for malformed page coordinates, source shape, byte bounds or digest mismatch.
+	// assistantConfigurationPageInvalidMessage — фиксированная диагностика без отражения
+	// данных при неверных coordinates, source shape, byte bounds и digest mismatch.
 	assistantConfigurationPageInvalidMessage = "assistant configuration page is invalid"
 )
 
+// errAssistantConfigurationPage provides one comparable failure for rejected page
+// selection/projection without including source text, selectors or owner data.
+// errAssistantConfigurationPage даёт сравнимую ошибку отказа page selection/projection
+// без source text, selectors и owner data.
 var errAssistantConfigurationPage = errors.New(assistantConfigurationPageInvalidMessage)
 
+// assistantConfigurationPageRequest holds local byte offset/chunk limit and an
+// optional expected source digest. It does not carry authority and is not sent
+// to the owner, whose full eligible read remains independent of page selection.
+// assistantConfigurationPageRequest хранит локальные byte offset/chunk limit и optional
+// expected source digest. Authority не переносится; owner получает полный eligible
+// read независимо от page selection, а не эти координаты.
 type assistantConfigurationPageRequest struct {
 	offset  int64
 	maximum int64
 	digest  string
 }
 
-// Координаты страницы не передаются владельцу и не изменяют его полный read.
+// parseAssistantConfigurationPage accepts only known selector keys, permits page
+// fields for four configuration read kinds and validates bounded integral coordinates.
+// Nonzero continuation requires a canonical digest; defaults are offset zero/16 KiB.
+// It does not resolve resources or change the owner's full read.
+// parseAssistantConfigurationPage допускает известные selector keys, page fields
+// лишь четырёх configuration read kinds и bounded integral coordinates. Продолжение
+// с ненулевого offset требует canonical digest; defaults — zero/16 KiB.
+// Ресурсы не разрешаются, полный owner read не меняется.
 func parseAssistantConfigurationPage(selector map[string]any, kind string) (assistantConfigurationPageRequest, error) {
 	page := assistantConfigurationPageRequest{maximum: maximumAssistantConfigurationPageBytes}
 	if !onlyKeys(selector, "kind", "assistant_ref", "query", "offset", "account_ref", "runtime_profile_ref", "entity_kind", "entity_ref", "configuration_offset_bytes", "maximum_bytes", "configuration_sha256") {
@@ -52,6 +77,12 @@ func parseAssistantConfigurationPage(selector map[string]any, kind string) (assi
 	return page, nil
 }
 
+// assistantConfigurationPageInteger accepts int, int64 or finite integral float64
+// within zero through maximum; absent keys use fallback without revalidation.
+// Other numeric representations, fractions and special float values are rejected.
+// assistantConfigurationPageInteger принимает int,int64 или finite integral float64
+// от нуля до maximum; отсутствующий key даёт fallback без перепроверки.
+// Другие numeric representations, fractions и special float values отвергаются.
 func assistantConfigurationPageInteger(selector map[string]any, key string, fallback, maximum int64) (int64, bool) {
 	raw, supplied := selector[key]
 	if !supplied {
@@ -74,7 +105,16 @@ func assistantConfigurationPageInteger(selector map[string]any, key string, fall
 	return value, value >= 0 && value <= maximum
 }
 
-// Вызывается только после полного owner/caster read; исходная модель не меняется.
+// pageAssistantConfigurationSnapshot runs after the full owner/caster read, verifies
+// the selected source shape, marshaled-byte digest and continuation pin, then slices
+// without splitting UTF-8 runes. Exact EOF is an empty final page; invalid offsets
+// return no projection. New outer/inner maps omit full configuration but retain other
+// nested references, leaving the source untouched rather than deeply copying it.
+// pageAssistantConfigurationSnapshot вызывается после полного owner/caster read, проверяет
+// source shape, digest сериализованных bytes и continuation pin, режет без разрыва
+// UTF-8 runes. Точный EOF даёт пустую final page; неверный offset — без projection.
+// Новые outer/inner maps не содержат полной configuration, остальные nested references
+// общие; исходник не меняется, но deep copy не выполняется.
 func pageAssistantConfigurationSnapshot(configuration map[string]any, page assistantConfigurationPageRequest) (map[string]any, error) {
 	if page.offset < 0 || page.offset > maximumAssistantCurrentConfigurationBytes || page.maximum < utf8.UTFMax || page.maximum > maximumAssistantConfigurationPageBytes || page.offset > 0 && page.digest == "" || page.digest != "" && !validAssistantCatalogDigest(page.digest) {
 		return nil, errAssistantConfigurationPage
@@ -141,7 +181,12 @@ func pageAssistantConfigurationSnapshot(configuration map[string]any, page assis
 	return result, nil
 }
 
-// json.Marshal заменяет недопустимый UTF-8; до сериализации это закрыто запрещено.
+// validAssistantConfigurationPageText recursively checks UTF-8 for strings, keys
+// and values in map[string]any/[]any before JSON replacement could hide invalid bytes.
+// Other dynamic types pass here and remain subject to subsequent marshal validation.
+// validAssistantConfigurationPageText рекурсивно проверяет UTF-8 strings,keys/values
+// map[string]any/[]any до JSON replacement невалидных bytes. Другие dynamic types
+// здесь допускаются и остаются предметом последующей marshal validation.
 func validAssistantConfigurationPageText(value any) bool {
 	switch item := value.(type) {
 	case string:

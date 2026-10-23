@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+// TestMaterializeRuntimeEgressTrustFilesCombinesSystemAndProxyRoots generates two disposable CA certificates and verifies both subjects survive publication with exact mode 0440; no live endpoint or private credential is contacted.
+// TestMaterializeRuntimeEgressTrustFilesCombinesSystemAndProxyRoots создаёт два одноразовых CA-сертификата и проверяет сохранение обоих subjects после публикации с точным режимом 0440; живые endpoints и приватные реквизиты не используются.
 func TestMaterializeRuntimeEgressTrustFilesCombinesSystemAndProxyRoots(t *testing.T) {
 	directory := t.TempDir()
 	systemPath, proxyPath := filepath.Join(directory, "system.pem"), filepath.Join(directory, "proxy.pem")
@@ -44,6 +46,8 @@ func TestMaterializeRuntimeEgressTrustFilesCombinesSystemAndProxyRoots(t *testin
 	}
 }
 
+// poolContainsSubject compares a synthetic certificate's raw subject against pool subjects for unit assertions; it is not a certificate-chain or hostname verifier.
+// poolContainsSubject сравнивает raw subject синтетического сертификата с subjects пула для unit-проверок; не проверяет certificate chain или hostname.
 func poolContainsSubject(pool *x509.CertPool, subject []byte) bool {
 	for _, current := range pool.Subjects() {
 		if bytes.Equal(current, subject) {
@@ -53,6 +57,8 @@ func poolContainsSubject(pool *x509.CertPool, subject []byte) bool {
 	return false
 }
 
+// testRootCertificate creates and parses a short-lived self-signed P-256 test CA, returning public PEM and certificate metadata while keeping its key only in local test memory.
+// testRootCertificate создаёт и разбирает краткоживущий self-signed P-256 тестовый CA, возвращая публичный PEM и метаданные сертификата; ключ остаётся лишь в памяти теста.
 func testRootCertificate(t *testing.T, name string, serial int64) ([]byte, *x509.Certificate) {
 	t.Helper()
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

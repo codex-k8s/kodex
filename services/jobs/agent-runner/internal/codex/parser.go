@@ -21,26 +21,55 @@ import (
 )
 
 const (
-	maximumJSONLLineBytes   = 1 << 20
-	maximumJSONLMessages    = 100_000
-	maximumFinalBytes       = 480_000
-	maximumDiagnosticBytes  = 16 << 10
+	// maximumJSONLLineBytes bounds selected semantic command/diff/result strings, not the larger transport frame.
+	// maximumJSONLLineBytes ограничивает отдельные смысловые строки command/diff/result, а не больший транспортный кадр.
+	maximumJSONLLineBytes = 1 << 20
+	// maximumJSONLMessages limits accepted JSONL event count independently of frame size or tool-call quotas.
+	// maximumJSONLMessages ограничивает число JSONL событий отдельно от размера кадров и квот вызовов инструментов.
+	maximumJSONLMessages = 100_000
+	// maximumFinalBytes caps parsed agent text in UTF-8 bytes; published activity has its own tighter limit.
+	// maximumFinalBytes ограничивает разобранный agent text в UTF-8 байтах; публичное событие имеет отдельный меньший лимит.
+	maximumFinalBytes = 480_000
+	// maximumDiagnosticBytes bounds parsed provider diagnostics without making their original text safe to publish.
+	// maximumDiagnosticBytes ограничивает разобранную диагностику провайдера, не делая её исходный текст безопасным для публикации.
+	maximumDiagnosticBytes = 16 << 10
+	// maximumResponseReceipts caps the in-memory response-ID replay fence for one protocol execution.
+	// maximumResponseReceipts ограничивает хранимые response-ID квитанции защиты от повторов одного исполнения.
 	maximumResponseReceipts = 10_000
 )
 
+// nativeToolCallIDPattern permits only bounded ASCII tool identifiers suitable for stable item correlation.
+// nativeToolCallIDPattern допускает ограниченные ASCII идентификаторы для устойчивой связи событий инструмента.
 var nativeToolCallIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$`)
+
+// nativeSafeLabelPattern limits native labels to a bounded technical alphabet, not an authority registry
+// or semantic guarantee that every matching string is non-sensitive.
+// nativeSafeLabelPattern ограничивает native labels техническим алфавитом и длиной, но не является реестром
+// полномочий или смысловой гарантией отсутствия чувствительных данных в любой подходящей строке.
 var nativeSafeLabelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`)
 
-// Полнота относится только к наблюдениям этого процесса; callback передаёт
-// подтверждённый subtotal, а не счёт провайдера за весь ход.
+// UsageCompleteness describes numeric response observations seen by this process, not the provider's
+// entire bill or a successful execution. Zero is UNKNOWN and remains optional in Result JSON.
+// UsageCompleteness описывает числовые response наблюдения этого процесса, не полный счёт провайдера
+// и не успех исполнения. Нулевое UNKNOWN остаётся необязательным полем JSON Result.
 type UsageCompleteness uint8
 
 const (
+	// UsageUnknown means no numeric response observation has been accepted, even if display estimates exist.
+	// UsageUnknown означает отсутствие принятых числовых response наблюдений, даже при наличии display оценок.
 	UsageUnknown UsageCompleteness = iota
+	// UsagePartial records some numeric observations without a sole terminal or with a missing response usage.
+	// UsagePartial отмечает часть числовых наблюдений без единственного terminal либо при пропущенном response usage.
 	UsagePartial
+	// UsageComplete requires numeric observations, exactly one observed terminal and no missing usage;
+	// it does not certify provider billing completeness or independently validate the execution outcome.
+	// UsageComplete требует числовые наблюдения, один отмеченный terminal и отсутствие пропущенного usage;
+	// она не подтверждает полный биллинг провайдера и самостоятельно не проверяет исход исполнения.
 	UsageComplete
 )
 
+// MarshalJSON emits only the closed UNKNOWN/PARTIAL/COMPLETE spelling and rejects unsupported numeric values.
+// MarshalJSON выдаёт только закрытые UNKNOWN/PARTIAL/COMPLETE и отвергает неподдержанные числовые значения.
 func (quality UsageCompleteness) MarshalJSON() ([]byte, error) {
 	switch quality {
 	case UsageUnknown:
@@ -54,6 +83,8 @@ func (quality UsageCompleteness) MarshalJSON() ([]byte, error) {
 	}
 }
 
+// UnmarshalJSON accepts only exact closed string values and assigns the nonnil receiver after validation.
+// UnmarshalJSON принимает лишь точные закрытые строки и назначает ненулевой receiver после проверки.
 func (quality *UsageCompleteness) UnmarshalJSON(raw []byte) error {
 	var value string
 	if strictDecode(raw, &value) != nil {
@@ -72,6 +103,12 @@ func (quality *UsageCompleteness) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
+// Result carries the public outcome, safe native facts, measured usage and archive metadata by value.
+// Private capture/diagnostic pointers establish additional provenance that arbitrary exported fields or
+// JSON cannot recreate; public metadata alone is not proof of a completed or captured execution.
+// Result переносит публичный исход, безопасные native факты, измеренный usage и метаданные архива.
+// Приватные capture/diagnostic указатели дают дополнительное происхождение, не восстанавливаемое из
+// публичных полей или JSON; одни метаданные не доказывают завершение или захват исполнения.
 type Result struct {
 	SessionID           string
 	FinalMessage        string
@@ -88,8 +125,10 @@ type Result struct {
 	providerDiagnostic  *runtimecontract.ProviderFailureDiagnostic
 }
 
-// Только проверенный private IPC terminal назначает diagnostic; JSON Result
-// или произвольные caller fields не могут создать этот внутренний маркер.
+// ProviderDiagnostic returns a copy only of the private diagnostic matching the exact input binding;
+// it cannot manufacture provenance from caller-assigned public Result fields or decoded JSON.
+// ProviderDiagnostic возвращает копию лишь приватной диагностики с точной привязкой к input;
+// из публичных полей Result или декодированного JSON происхождение не создаётся.
 func (result Result) ProviderDiagnostic(input model.Input) *runtimecontract.ProviderFailureDiagnostic {
 	if result.providerDiagnostic == nil || !result.providerDiagnostic.Matches(input) {
 		return nil
@@ -110,15 +149,29 @@ func (result Result) WithWorkspaceDiagnostic(input model.Input, stage, reason st
 	return result
 }
 
+// messageKind distinguishes private RPC response/error/notification/request shapes after wire parsing.
+// messageKind различает приватные RPC response/error/notification/request структуры после разбора wire.
 type messageKind uint8
 
 const (
+	// messageResponse marks an ID-correlated result, not an unsolicited lifecycle or activity notification.
+	// messageResponse отмечает связанный по ID результат, а не самостоятельное lifecycle или activity уведомление.
 	messageResponse messageKind = iota + 1
+	// messageError marks a structurally validated RPC failure whose private message is not public output.
+	// messageError отмечает структурно проверенный RPC отказ, приватный message которого не является публичным выводом.
 	messageError
+	// messageNotification marks a method/params envelope without an RPC ID; payload semantics are checked later.
+	// messageNotification отмечает method/params конверт без RPC ID; смысл payload проверяется отдельно.
 	messageNotification
+	// messageRequest marks a server-originated request with an ID, not authorization to execute its method.
+	// messageRequest отмечает запрос сервера с ID, но не разрешение исполнить его метод.
 	messageRequest
 )
 
+// wireMessage retains raw ID/payload with the parsed envelope kind; it is private transport state,
+// not a redacted runtime activity or a validated nested payload by itself.
+// wireMessage сохраняет raw ID/payload с разобранным kind; это приватное транспортное состояние,
+// а не очищенное runtime событие или само по себе проверенное вложенное содержимое.
 type wireMessage struct {
 	kind    messageKind
 	id      json.RawMessage
@@ -126,11 +179,17 @@ type wireMessage struct {
 	payload json.RawMessage
 }
 
+// objectSchema describes allowed and required immediate object keys; value types and nested schemas
+// are the consuming parser's responsibility, not implied by required-key presence.
+// objectSchema описывает допустимые и обязательные ключи текущего объекта; типы значений и вложенные
+// схемы проверяет потребитель, а не само наличие обязательного ключа.
 type objectSchema struct {
 	allowed  map[string]struct{}
 	required map[string]struct{}
 }
 
+// schema builds independent key sets for a closed object shape without validating payload values.
+// schema создаёт независимые наборы ключей закрытого объекта без проверки значений payload.
 func schema(required []string, allowed ...string) objectSchema {
 	value := objectSchema{allowed: make(map[string]struct{}, len(allowed)), required: make(map[string]struct{}, len(required))}
 	for _, field := range allowed {
@@ -142,6 +201,12 @@ func schema(required []string, allowed ...string) objectSchema {
 	return value
 }
 
+// parseWireMessage rejects unknown/duplicate outer keys and incompatible RPC shapes, validates IDs
+// and optional notification timestamps, and keeps nested payload raw for its method-specific consumer.
+// It neither dispatches server requests nor treats a parsed response as execution authority.
+// parseWireMessage отвергает лишние или повторные внешние ключи и несовместимые RPC формы, проверяет ID
+// и optional timestamp уведомления, оставляя payload для потребителя метода. Она не исполняет server
+// request и не считает разобранный response полномочиями исполнения.
 func parseWireMessage(raw []byte) (wireMessage, error) {
 	fields, err := decodeObject(raw, schema(nil, "id", "method", "params", "result", "error", "trace", "emittedAtMs"))
 	if err != nil {
@@ -188,6 +253,10 @@ func parseWireMessage(raw []byte) (wireMessage, error) {
 	return wireMessage{kind: messageResponse, id: id, payload: result}, nil
 }
 
+// validRequestID accepts a bounded non-null int64-compatible ID or a nonempty bounded string;
+// it is the general envelope predicate, not the positive correlation check for runner-issued RPCs.
+// validRequestID принимает ограниченный не-null JSON ID в форме int64 либо непустой строки;
+// это общая проверка конверта, не положительный correlation ID запросов runner.
 func validRequestID(raw json.RawMessage) bool {
 	if len(raw) == 0 || len(raw) > 256 || bytes.Equal(raw, []byte("null")) {
 		return false
@@ -203,6 +272,8 @@ func validRequestID(raw json.RawMessage) bool {
 	return err == nil
 }
 
+// numericRequestID requires one complete json.Number-compatible positive int64 for response correlation.
+// numericRequestID требует одно полное положительное int64, совместимое с json.Number, для связи ответа.
 func numericRequestID(raw json.RawMessage) (int64, error) {
 	var number json.Number
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -217,6 +288,10 @@ func numericRequestID(raw json.RawMessage) (int64, error) {
 	return value, nil
 }
 
+// decodeRPCError validates the closed code/message/data envelope and bounded message but returns
+// only the numeric code. Data remains opaque; its presence does not make it safe to log or execute.
+// decodeRPCError проверяет закрытый code/message/data конверт и длину message, возвращая лишь код.
+// Data остаётся непрозрачным; наличие поля не делает его безопасным для лога или исполнения.
 func decodeRPCError(raw json.RawMessage) (int64, error) {
 	fields, err := decodeObject(raw, schema([]string{"code", "message"}, "code", "message", "data"))
 	if err != nil {
@@ -232,6 +307,12 @@ func decodeRPCError(raw json.RawMessage) (int64, error) {
 	return code, nil
 }
 
+// protocolState owns one serialized thread/turn's bindings, lifecycle, safe projections and response
+// usage receipts. Display counters and measured usage stay separate. Parsing can mutate state before
+// a later error, so callers must stop normal execution on error rather than reuse a partially valid state.
+// protocolState владеет привязками, lifecycle, безопасными проекциями и usage квитанциями одного
+// последовательного thread/turn. Display и измерения разделены. Разбор может изменить состояние до
+// последующей ошибки: вызывающий код прекращает обычное исполнение, не используя частичную модель как корректную.
 type protocolState struct {
 	processVersion           string
 	financialExpectedAccount string
@@ -269,17 +350,29 @@ type protocolState struct {
 	startedToolCalls         map[string]runtimecontract.NativeToolCall
 }
 
+// agentMessage stores completed text/phase for exact replay comparison and final/fallback selection;
+// recording a final phase does not itself complete the turn.
+// agentMessage хранит готовые text/phase для точной сверки повтора и выбора final/fallback;
+// запись финальной фазы сама по себе ход не завершает.
 type agentMessage struct {
 	text  string
 	phase string
 }
 
+// newProtocolState initializes independent per-execution maps and the expected resume session without
+// inventing a thread, turn, baseline or successful outcome.
+// newProtocolState создаёт независимые карты исполнения и ожидаемую resume сессию без выдуманных
+// thread, turn, baseline или успешного исхода.
 func newProtocolState(expectedSessionID string) *protocolState {
 	return &protocolState{expectedSessionID: expectedSessionID, agentMessages: make(map[string]agentMessage),
 		responseReceipts: make(map[string][sha256.Size]byte),
 		toolCalls:        make(map[string]runtimecontract.NativeToolCall), itemStartedAtMS: make(map[string]int64), startedToolCalls: make(map[string]runtimecontract.NativeToolCall)}
 }
 
+// captureUsageBaseline marks the pre-turn boundary exactly once before a turn ID is bound;
+// it does not convert or subtract display estimates to manufacture measured charges.
+// captureUsageBaseline однократно отмечает границу до привязки turn ID;
+// она не превращает display оценки в измеренный расход и не вычитает их ради выдуманного начисления.
 func (state *protocolState) captureUsageBaseline() error {
 	if state.baselineCaptured || state.turnID != "" {
 		return errors.New("Codex app-server token usage baseline is invalid")
@@ -288,6 +381,10 @@ func (state *protocolState) captureUsageBaseline() error {
 	return nil
 }
 
+// initialize binds the exact home and Linux/unix initialize shape, then records one parsed process
+// version. Reported user-agent metadata is checked, not independently attested as executable provenance.
+// initialize связывает точный home с Linux/unix схемой, затем однократно сохраняет разобранную версию
+// процесса. Проверяются заявленные метаданные user-agent, а не независимая аттестация бинаря.
 func (state *protocolState) initialize(raw json.RawMessage, expectedHome string) error {
 	fields, err := decodeObject(raw, schema([]string{"codexHome", "platformFamily", "platformOs", "userAgent"},
 		"codexHome", "platformFamily", "platformOs", "userAgent"))
@@ -310,6 +407,12 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 	return nil
 }
 
+// bindThread validates the closed response and exact current model/cwd/approval, then reconciles
+// thread identity with expected session, MCP and held resume source before assigning state. Optional
+// metadata never substitutes the immutable current-turn selection or execution authority.
+// bindThread проверяет закрытый ответ и точные model/cwd/approval, затем связывает thread с ожидаемой
+// сессией, MCP и удерживаемым resume source до назначения состояния. Optional metadata не заменяют
+// неизменяемый выбор текущего хода или полномочия исполнения.
 func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expectedWorkspace, expectedApproval string) error {
 	fields, err := decodeObject(raw, schema([]string{"approvalPolicy", "approvalsReviewer", "cwd", "model", "modelProvider", "sandbox", "thread"},
 		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "collaborationMode", "cwd", "disabledPluginIds", "initialTurnsPage", "instructionSources", "itemsBackwardsCursor",
@@ -344,9 +447,12 @@ func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expec
 	return nil
 }
 
-// ThreadResumeResponse rust-v0.160.0 добавляет nullable collaborationMode.
-// Проверенные метаданные не подменяют immutable выбор модели, reasoning,
-// инструкций или полномочий текущего хода и не попадают в результат/логи.
+// validThreadCollaborationMetadata accepts null or a bounded closed mode/settings object from the
+// pinned response schema and discards it; model/reasoning/developer metadata here cannot override the
+// current immutable instructions, selection or permissions.
+// validThreadCollaborationMetadata принимает null либо ограниченный закрытый mode/settings объект
+// закреплённой схемы и отбрасывает его; model/reasoning/developer metadata не подменяют текущие
+// неизменяемые инструкции, выбор или права.
 func validThreadCollaborationMetadata(raw json.RawMessage) bool {
 	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return true
@@ -379,6 +485,10 @@ func validThreadCollaborationMetadata(raw json.RawMessage) bool {
 	return true
 }
 
+// bindThreadRead requires the final read to match the current thread and a nonempty path consistent
+// with any held resume source; filesystem/provenance validation is performed by the capture path.
+// bindThreadRead требует текущий thread и непустой путь, совпадающий с удерживаемым resume source;
+// файловую проверку и происхождение обеспечивает путь capture.
 func (state *protocolState) bindThreadRead(raw json.RawMessage) error {
 	threadID, path, err := parseThreadRead(raw)
 	if err != nil || threadID != state.threadID || path == "" ||
@@ -389,6 +499,8 @@ func (state *protocolState) bindThreadRead(raw json.RawMessage) error {
 	return nil
 }
 
+// parseThreadRead accepts only the closed single-thread response and delegates its nested validation.
+// parseThreadRead принимает только закрытый ответ с thread и передаёт вложенную проверку parseThread.
 func parseThreadRead(raw json.RawMessage) (string, string, error) {
 	fields, err := decodeObject(raw, schema([]string{"thread"}, "thread"))
 	if err != nil {
@@ -397,6 +509,12 @@ func parseThreadRead(raw json.RawMessage) (string, string, error) {
 	return parseThread(fields["thread"])
 }
 
+// parseThread validates required key presence, selected identity/selection fields and discarded
+// metadata, rejects ephemeral sessions and returns only thread ID/optional path. Not every opaque
+// required field is semantically interpreted, and a returned path is not yet a filesystem permission.
+// parseThread проверяет обязательные ключи, используемые identity/selection поля и отбрасываемые
+// метаданные, отвергает ephemeral сессии и выдаёт лишь ID/optional path. Не каждое непрозрачное
+// обязательное поле смыслово разбирается, а путь ещё не является файловым разрешением.
 func parseThread(raw json.RawMessage) (string, string, error) {
 	fields, err := decodeObject(raw, schema([]string{"cliVersion", "createdAt", "cwd", "ephemeral", "id", "modelProvider",
 		"preview", "sessionId", "source", "status", "turns", "updatedAt"}, "agentNickname", "agentRole", "canAcceptDirectInput",
@@ -433,8 +551,10 @@ func parseThread(raw json.RawMessage) (string, string, error) {
 	return id, path, nil
 }
 
-// Метаданные rust-v0.160.0 проверяются по типам и отбрасываются: они не
-// назначают identity, authority, workspace или разрешения текущей attempt.
+// validThreadDiscardedMetadata type-checks bounded optional daybreak/originator/environment metadata
+// without promoting its IDs, roots or cwd into current execution identity, workspace or permissions.
+// validThreadDiscardedMetadata проверяет типы и пределы optional daybreak/originator/environment metadata,
+// не превращая их ID, roots или cwd в identity, workspace или права текущего исполнения.
 func validThreadDiscardedMetadata(fields map[string]json.RawMessage) bool {
 	if value, present := fields["daybreakEnabled"]; present && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 		var enabled bool
@@ -462,12 +582,20 @@ func validThreadDiscardedMetadata(fields map[string]json.RawMessage) bool {
 	return true
 }
 
+// validThreadMetadataString permits an empty or nonempty bounded UTF-8 JSON string, unlike the
+// nonempty semantic-string decoder; it does not interpret its content as instructions or a URL.
+// validThreadMetadataString допускает пустую или непустую ограниченную UTF-8 JSON строку, в отличие
+// от непустого semantic decoder; содержимое не трактуется как инструкции или URL.
 func validThreadMetadataString(raw json.RawMessage, maximum int) bool {
 	value := bytes.TrimSpace(raw)
 	var text string
 	return len(value) > 0 && value[0] == '"' && utf8.Valid(value) && strictDecode(value, &text) == nil && len(text) <= maximum
 }
 
+// validThreadMetadataStrings requires a bounded JSON array of bounded metadata strings, including
+// empty entries when validThreadMetadataString permits them, without exposing the decoded values.
+// validThreadMetadataStrings требует ограниченный JSON массив ограниченных metadata строк, включая
+// пустые элементы по правилам validThreadMetadataString, без выдачи декодированных значений.
 func validThreadMetadataStrings(raw json.RawMessage, maximumEntries, maximumBytes int) bool {
 	value := bytes.TrimSpace(raw)
 	var entries []json.RawMessage
@@ -482,6 +610,10 @@ func validThreadMetadataStrings(raw json.RawMessage, maximumEntries, maximumByte
 	return true
 }
 
+// bindTurn binds only an inProgress turn without error and with a compatible prior turn ID,
+// then consumes its items as non-authoritative starts rather than terminal completion.
+// bindTurn связывает лишь inProgress ход без ошибки с совместимым прежним turn ID,
+// затем обрабатывает items как неитоговые начала, а не завершение.
 func (state *protocolState) bindTurn(raw json.RawMessage) error {
 	fields, err := decodeObject(raw, schema([]string{"turn"}, "turn"))
 	if err != nil {
@@ -496,6 +628,14 @@ func (state *protocolState) bindTurn(raw json.RawMessage) error {
 	return state.consumeItems(turn.items, false, 0)
 }
 
+// notification accepts only registered outer schemas and applies method-specific tuple/lifecycle,
+// usage, message and tool checks. Financial notifications only wake reads. Known unhandled payloads
+// remain unprojected; sticky activity failure stops later delivery. Errors may follow partial state
+// updates and must not be ignored as a valid terminal or permission expansion.
+// notification принимает лишь зарегистрированные внешние схемы и применяет tuple/lifecycle, usage,
+// message и tool проверки метода. Financial уведомления лишь пробуждают чтение. Известные необрабатываемые
+// payload не проецируются; sticky activity failure останавливает доставку. После частичных изменений
+// ошибку нельзя игнорировать как корректный итог или расширение прав.
 func (state *protocolState) notification(method string, raw json.RawMessage) error {
 	if state.activityErr != nil {
 		return state.activityErr
@@ -633,6 +773,8 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 	return nil
 }
 
+// allowedMCPStartupStatus accepts only starting/ready/failed/cancelled labels, not evidence of tool readiness.
+// allowedMCPStartupStatus принимает лишь starting/ready/failed/cancelled, не доказательство готовности инструментов.
 func allowedMCPStartupStatus(status string) bool {
 	switch status {
 	case "starting", "ready", "failed", "cancelled":
@@ -642,6 +784,14 @@ func allowedMCPStartupStatus(status string) bool {
 	}
 }
 
+// bindRequiredMCPStatus requires a complete unpaginated inventory with one Kodex server, connected
+// runtime, bearer auth and exactly the expected unique tool names. Startup states may wait; missing,
+// failed, duplicate or drifted authority fails closed. Optional origin/capability metadata is bounded
+// but cannot redirect requests or create capabilities.
+// bindRequiredMCPStatus требует полный inventory без продолжения страницы, один Kodex server, connected
+// runtime, bearer auth и точные ожидаемые имена инструментов. Startup может ожидаться; отсутствие,
+// отказ, повтор или дрейф дают закрытый отказ. Optional origin/capability metadata ограничены,
+// но не перенаправляют запросы и не создают полномочия.
 func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredTools []string) (bool, error) {
 	fields, err := decodeObject(raw, schema([]string{"data"}, "data", "nextCursor"))
 	if err != nil {
@@ -725,6 +875,10 @@ func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredT
 	return connected, nil
 }
 
+// decodeDynamicObjectKeys extracts bounded unique immediate keys, rejecting duplicate/empty keys
+// and trailing JSON. Values remain opaque valid JSON; nested object uniqueness is not checked here.
+// decodeDynamicObjectKeys извлекает ограниченные уникальные ключи текущего объекта без пустых ключей,
+// повторов или лишнего JSON. Значения остаются непрозрачным JSON; вложенная уникальность здесь не проверяется.
 func decodeDynamicObjectKeys(raw json.RawMessage, maximum int) ([]string, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	token, err := decoder.Token()
@@ -755,6 +909,12 @@ func decodeDynamicObjectKeys(raw json.RawMessage, maximum int) ([]string, error)
 	return keys, nil
 }
 
+// sameStringSet checks equal length, unique nonempty expected entries and actual membership.
+// Actual entries must already be unique, as supplied by decodeDynamicObjectKeys; this is not general
+// set equality for arbitrary duplicate-containing actual slices.
+// sameStringSet проверяет длину, уникальные непустые expected и принадлежность actual. Уникальность
+// actual заранее обеспечивает decodeDynamicObjectKeys; для произвольных actual с повторами это
+// не универсальное сравнение множеств.
 func sameStringSet(actual, expected []string) bool {
 	if len(actual) != len(expected) {
 		return false
@@ -777,6 +937,10 @@ func sameStringSet(actual, expected []string) bool {
 	return true
 }
 
+// validateUsageTuple binds display usage to the exact thread and a valid turn UUID, tolerating a
+// not-yet-bound current turn ID without charging that notification as numeric response usage.
+// validateUsageTuple связывает display usage с точным thread и корректным turn UUID, допуская ещё
+// не привязанный текущий turn ID без начисления этого уведомления как числового response usage.
 func (state *protocolState) validateUsageTuple(fields map[string]json.RawMessage) error {
 	threadID, threadErr := decodeBoundedString(fields["threadId"], 128)
 	turnID, turnErr := decodeBoundedString(fields["turnId"], 128)
@@ -787,30 +951,69 @@ func (state *protocolState) validateUsageTuple(fields map[string]json.RawMessage
 	return nil
 }
 
+// tokenUsageFailureReason names internal accounting/parser failures; arbitrary strings require
+// normalization before becoming closed diagnostics.
+// tokenUsageFailureReason задаёт внутренние ошибки учёта и разбора; произвольная строка требует
+// нормализации до использования в закрытой диагностике.
 type tokenUsageFailureReason string
 
 const (
-	tokenUsageStructure            tokenUsageFailureReason = "TOKEN_USAGE_STRUCTURE"
-	tokenUsageRequiredMissing      tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_MISSING"
-	tokenUsageRequiredNull         tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_NULL"
-	tokenUsageRequiredType         tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_TYPE"
-	tokenUsageOptionalNull         tokenUsageFailureReason = "TOKEN_USAGE_OPTIONAL_NULL"
-	tokenUsageOptionalType         tokenUsageFailureReason = "TOKEN_USAGE_OPTIONAL_TYPE"
-	tokenUsageNegative             tokenUsageFailureReason = "TOKEN_USAGE_NEGATIVE"
-	tokenUsageTotalArithmetic      tokenUsageFailureReason = "TOKEN_USAGE_TOTAL_ARITHMETIC"
-	tokenUsageCacheInputBound      tokenUsageFailureReason = "TOKEN_USAGE_CACHE_INPUT_BOUND"
+	// tokenUsageStructure marks a rejected object shape rather than a valid partial numeric observation.
+	// tokenUsageStructure отмечает отклонённую структуру объекта, а не корректное частичное числовое наблюдение.
+	tokenUsageStructure tokenUsageFailureReason = "TOKEN_USAGE_STRUCTURE"
+	// tokenUsageRequiredMissing distinguishes an absent required counter from a present zero.
+	// tokenUsageRequiredMissing отличает отсутствующий обязательный счётчик от присутствующего нуля.
+	tokenUsageRequiredMissing tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_MISSING"
+	// tokenUsageRequiredNull rejects explicit null instead of defaulting a required counter to zero.
+	// tokenUsageRequiredNull отвергает явный null вместо обнуления обязательного счётчика.
+	tokenUsageRequiredNull tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_NULL"
+	// tokenUsageRequiredType marks a required counter or response identifier that fails its typed decoder.
+	// tokenUsageRequiredType отмечает обязательный счётчик или response identifier, не прошедший typed decoder.
+	tokenUsageRequiredType tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_TYPE"
+	// tokenUsageOptionalNull rejects null where only omission gives the optional counter its default.
+	// tokenUsageOptionalNull отвергает null там, где значение optional счётчика по умолчанию даёт лишь отсутствие поля.
+	tokenUsageOptionalNull tokenUsageFailureReason = "TOKEN_USAGE_OPTIONAL_NULL"
+	// tokenUsageOptionalType records invalid present optional counters, metadata amount or context-window types.
+	// tokenUsageOptionalType фиксирует неверный тип присутствующего optional счётчика, metadata amount или context window.
+	tokenUsageOptionalType tokenUsageFailureReason = "TOKEN_USAGE_OPTIONAL_TYPE"
+	// tokenUsageNegative rejects negative counters/window sizes before accepting an observation.
+	// tokenUsageNegative отвергает отрицательные счётчики или window size до принятия наблюдения.
+	tokenUsageNegative tokenUsageFailureReason = "TOKEN_USAGE_NEGATIVE"
+	// tokenUsageTotalArithmetic marks failed measured total arithmetic, not an approximate display estimate.
+	// tokenUsageTotalArithmetic отмечает неверную арифметику измеренного total, а не приблизительную display оценку.
+	tokenUsageTotalArithmetic tokenUsageFailureReason = "TOKEN_USAGE_TOTAL_ARITHMETIC"
+	// tokenUsageCacheInputBound rejects a cached/write-cache component exceeding its input counter.
+	// tokenUsageCacheInputBound отвергает cached/write-cache компонент выше счётчика input.
+	tokenUsageCacheInputBound tokenUsageFailureReason = "TOKEN_USAGE_CACHE_INPUT_BOUND"
+	// tokenUsageReasoningOutputBound rejects reasoning output exceeding the associated output count.
+	// tokenUsageReasoningOutputBound отвергает reasoning output выше соответствующего output.
 	tokenUsageReasoningOutputBound tokenUsageFailureReason = "TOKEN_USAGE_REASONING_OUTPUT_BOUND"
-	tokenUsageLastExceedsTotal     tokenUsageFailureReason = "TOKEN_USAGE_LAST_EXCEEDS_TOTAL"
-	tokenUsageReceiptConflict      tokenUsageFailureReason = "TOKEN_USAGE_RECEIPT_CONFLICT"
-	tokenUsageReceiptLimit         tokenUsageFailureReason = "TOKEN_USAGE_RECEIPT_LIMIT"
-	tokenUsageOverflow             tokenUsageFailureReason = "TOKEN_USAGE_OVERFLOW"
+	// tokenUsageLastExceedsTotal marks a last display component above its cumulative counterpart.
+	// tokenUsageLastExceedsTotal отмечает last display компонент выше соответствующего накопленного значения.
+	tokenUsageLastExceedsTotal tokenUsageFailureReason = "TOKEN_USAGE_LAST_EXCEEDS_TOTAL"
+	// tokenUsageReceiptConflict rejects reusing one response ID for a changed pinned payload.
+	// tokenUsageReceiptConflict отвергает повторное использование response ID с изменившимся закреплённым payload.
+	tokenUsageReceiptConflict tokenUsageFailureReason = "TOKEN_USAGE_RECEIPT_CONFLICT"
+	// tokenUsageReceiptLimit fails closed when the bounded response-receipt ledger is full.
+	// tokenUsageReceiptLimit даёт закрытый отказ при заполнении ограниченного реестра response receipts.
+	tokenUsageReceiptLimit tokenUsageFailureReason = "TOKEN_USAGE_RECEIPT_LIMIT"
+	// tokenUsageOverflow rejects int64 arithmetic overflow before committing new measured counters.
+	// tokenUsageOverflow отвергает переполнение int64 до фиксации новых измеренных счётчиков.
+	tokenUsageOverflow tokenUsageFailureReason = "TOKEN_USAGE_OVERFLOW"
 )
 
-// Ошибка содержит только закрытую причину, без поля, значения или исходного JSON.
+// tokenUsageFailure carries only a reason with fixed Error text, never a counter value or provider JSON.
+// The closed diagnostic selector still rejects unregistered reason strings.
+// tokenUsageFailure переносит лишь причину с фиксированным Error без счётчика или provider JSON.
+// Закрытая диагностическая проекция дополнительно отвергает неизвестные строки причины.
 type tokenUsageFailure struct{ reason tokenUsageFailureReason }
 
+// Error emits the constant token-usage failure message without dereferencing or formatting the reason.
+// Error выдаёт постоянное сообщение отказа usage без разыменования или форматирования причины.
 func (*tokenUsageFailure) Error() string { return "Codex app-server token usage is invalid" }
 
+// safeTokenUsageFailureReason maps only registered reason values to public-safe labels, otherwise UNKNOWN.
+// safeTokenUsageFailureReason выдаёт безопасные labels лишь зарегистрированным причинам, иначе UNKNOWN.
 func safeTokenUsageFailureReason(reason tokenUsageFailureReason) string {
 	switch reason {
 	case tokenUsageStructure, tokenUsageRequiredMissing, tokenUsageRequiredNull, tokenUsageRequiredType,
@@ -823,15 +1026,25 @@ func safeTokenUsageFailureReason(reason tokenUsageFailureReason) string {
 	}
 }
 
-// Display counters CLI включают оценки истории и заполнения context window.
-// Их арифметика не является арифметикой измеренного billable расхода.
+// providerUsageCounters holds CLI display/history/context estimates separately from validated measured
+// response charges; its totals are not required to follow billable total arithmetic.
+// providerUsageCounters хранит display/history/context оценки CLI отдельно от проверенных измерений
+// ответа; его total не обязан следовать арифметике измеренного расхода.
 type providerUsageCounters runtimecontract.TokenUsage
 
+// providerDisplayUsage pairs cumulative and last display counters with an optional model context window;
+// none of these observations alone increments measured response usage.
+// providerDisplayUsage объединяет накопленные и последние display счётчики с optional context window;
+// ни одно такое наблюдение само не увеличивает измеренный response usage.
 type providerDisplayUsage struct {
 	Total, Last        providerUsageCounters
 	ModelContextWindow int64
 }
 
+// parseTokenUsage validates required display last/total structures, optional context-window type and
+// component bounds, without asserting billable sum arithmetic or charging restored history.
+// parseTokenUsage проверяет обязательные display last/total, тип optional context window и пределы
+// компонентов без утверждения billing арифметики или начисления восстановленной истории.
 func parseTokenUsage(raw json.RawMessage) (providerDisplayUsage, error) {
 	fields, err := decodeObject(raw, schema(nil, "last", "modelContextWindow", "total"))
 	if err != nil {
@@ -871,6 +1084,10 @@ func parseTokenUsage(raw json.RawMessage) (providerDisplayUsage, error) {
 	return providerDisplayUsage{Total: total, Last: last, ModelContextWindow: contextWindow}, nil
 }
 
+// parseTokenUsageBreakdown converts validated counters into measured TokenUsage only after overflow
+// and exact total-arithmetic checks; display-only compatibility is not sufficient here.
+// parseTokenUsageBreakdown превращает проверенные счётчики в измеренный TokenUsage лишь после
+// проверки overflow и точной total арифметики; одной совместимости display здесь недостаточно.
 func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtimecontract.TokenUsage, error) {
 	counters, err := decodeProviderUsageBreakdown(raw, contextWindow)
 	if err != nil {
@@ -886,6 +1103,10 @@ func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtime
 	return usage, nil
 }
 
+// decodeProviderUsageBreakdown validates closed counter types/nullability and nonnegative cache/reasoning
+// bounds. Missing cacheWriteInputTokens alone defaults to zero; display totals may differ from input+output.
+// decodeProviderUsageBreakdown проверяет закрытые типы, nullability и неотрицательные cache/reasoning
+// пределы. Только отсутствие cacheWriteInputTokens даёт ноль; display total может отличаться от input+output.
 func decodeProviderUsageBreakdown(raw json.RawMessage, contextWindow int64) (providerUsageCounters, error) {
 	fields, err := decodeObject(raw, schema(
 		nil,
@@ -937,6 +1158,14 @@ func decodeProviderUsageBreakdown(raw json.RawMessage, contextWindow int64) (pro
 	return usage, nil
 }
 
+// observeResponseUsage accepts only the current nonterminal turn's correlated response observation,
+// validates numeric usage and opaque metadata shape, and pins a UseNumber/remarshaled payload digest
+// per response ID. Exact replay is ignored; changed receipts, limits and overflow reject before new
+// measurements commit. Null usage marks missing evidence, never zero measured cost; metadata is not billing.
+// observeResponseUsage принимает лишь связанное response наблюдение текущего незавершённого хода,
+// проверяет numeric usage и форму metadata, закрепляя digest UseNumber/remarshal payload по response ID.
+// Точный повтор игнорируется; подмена, лимит и overflow дают отказ до новых измерений. Null отмечает
+// недостающее доказательство, а не нулевой расход; metadata не используется как биллинг.
 func (state *protocolState) observeResponseUsage(fields map[string]json.RawMessage) error {
 	if state.turnID == "" || state.terminals != 0 || state.validateTurnTuple(fields) != nil {
 		return errors.New("Codex app-server response usage tuple is invalid")
@@ -1022,6 +1251,10 @@ func (state *protocolState) observeResponseUsage(fields map[string]json.RawMessa
 	return nil
 }
 
+// usageCompleteness derives UNKNOWN/PARTIAL/COMPLETE from accepted numeric responses, missing evidence
+// and terminal count, independently of whether the execution outcome succeeded.
+// usageCompleteness выводит UNKNOWN/PARTIAL/COMPLETE из принятых numeric responses, пропущенных данных
+// и числа terminal независимо от успешности исполнения.
 func (state *protocolState) usageCompleteness() UsageCompleteness {
 	if state.measuredResponses == 0 {
 		return UsageUnknown
@@ -1032,6 +1265,8 @@ func (state *protocolState) usageCompleteness() UsageCompleteness {
 	return UsageComplete
 }
 
+// validateTurnTuple requires exact bound thread and turn strings before accepting a scoped notification.
+// validateTurnTuple требует точные привязанные thread и turn до принятия уведомления их области.
 func (state *protocolState) validateTurnTuple(fields map[string]json.RawMessage) error {
 	threadID, threadErr := decodeBoundedString(fields["threadId"], 128)
 	turnID, turnErr := decodeBoundedString(fields["turnId"], 128)
@@ -1041,6 +1276,10 @@ func (state *protocolState) validateTurnTuple(fields map[string]json.RawMessage)
 	return nil
 }
 
+// parsedTurn retains the validated identity/status and raw items/error for later lifecycle consumption;
+// constructing it does not commit terminal state or authorize item execution.
+// parsedTurn хранит проверенные identity/status и raw items/error для последующей lifecycle обработки;
+// его создание не фиксирует terminal и не разрешает выполнение items.
 type parsedTurn struct {
 	id         string
 	status     string
@@ -1048,6 +1287,10 @@ type parsedTurn struct {
 	errorValue json.RawMessage
 }
 
+// parseTurn checks the closed envelope, UUID/status and bounded items array, retaining a non-null raw
+// error for later classification. Optional opaque fields are not all semantically interpreted here.
+// parseTurn проверяет закрытый конверт, UUID/status и ограниченный массив items, сохраняя non-null raw
+// error для классификации. Не все optional непрозрачные поля здесь смыслово разбираются.
 func parseTurn(raw json.RawMessage) (parsedTurn, error) {
 	fields, err := decodeObject(raw, schema([]string{"id", "items", "status"}, "completedAt", "durationMs", "error", "id",
 		"items", "itemsView", "startedAt", "status"))
@@ -1070,6 +1313,10 @@ func parseTurn(raw json.RawMessage) (parsedTurn, error) {
 	return parsedTurn{id: id, status: status, items: items, errorValue: errorValue}, nil
 }
 
+// consumeItems applies items in source order and stops at the first error without rolling back
+// already observed state/activity; callers must not treat that partial parse as a successful snapshot.
+// consumeItems обрабатывает items по порядку до первой ошибки без отката уже наблюдённого состояния
+// или activity; частичный разбор нельзя считать успешным snapshot.
 func (state *protocolState) consumeItems(items []json.RawMessage, authoritative bool, timestampMS int64) error {
 	for _, item := range items {
 		if err := state.consumeItem(item, authoritative, timestampMS); err != nil {
@@ -1079,6 +1326,14 @@ func (state *protocolState) consumeItems(items []json.RawMessage, authoritative 
 	return nil
 }
 
+// consumeItem validates a registered tagged shape, projects supported native starts/completions and
+// completed agent messages, and suppresses MCP duplication/reasoning or unsupported projections.
+// Exact completed replays are ignored, mutations rejected and final text selected only after turn completion.
+// Empty/absent phase is not guessed as public activity, though an unphased message may become final fallback.
+// consumeItem проверяет зарегистрированную tagged форму, проецирует native start/completion и готовые
+// agent messages, не дублируя MCP и не публикуя reasoning или неподдержанные проекции. Точные повторы
+// игнорируются, подмена отвергается, final выбирается лишь после terminal. Фаза не угадывается;
+// сообщение без неё может стать fallback итога, но не фазированным публичным событием.
 func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool, timestampMS int64) error {
 	base, err := decodeObject(raw, schema([]string{"id", "type"}, itemFieldUniverse...))
 	if err != nil {
@@ -1191,6 +1446,10 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 	return nil
 }
 
+// validMCPAppUi validates null or a bounded closed UI metadata object and inline/fullscreen mode,
+// without fetching its resource URI, rendering the app or granting MCP authority.
+// validMCPAppUi проверяет null либо ограниченный закрытый UI объект и inline/fullscreen режим,
+// не обращаясь по resource URI, не отображая app и не выдавая MCP полномочия.
 func validMCPAppUi(raw json.RawMessage) bool {
 	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return true
@@ -1206,6 +1465,14 @@ func validMCPAppUi(raw json.RawMessage) bool {
 	return err == nil && (mode == "inline" || mode == "fullscreen")
 }
 
+// parseNativeToolCall maps supported item fields into bounded safe metadata, not raw commands, diffs,
+// queries or result bodies. Starts use revision1/running/zero duration; completions use revision2 and
+// validated closed status, optional explicit duration or observed timestamp delta. Validation does
+// not execute a tool or grant its capability, and the optional running override is caller-internal.
+// parseNativeToolCall переводит поддержанные items в ограниченные метаданные без исходных команд,
+// diff, queries или result bodies. Start получает revision1/running/нулевую длительность, completion —
+// revision2 и закрытый status с явной duration либо дельтой timestamp. Проверка не исполняет инструмент
+// и не выдаёт capability; optional running override является внутренним параметром.
 func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[string]json.RawMessage, completedAtMS int64, running ...bool) (runtimecontract.NativeToolCall, bool, error) {
 	call := runtimecontract.NativeToolCall{CallID: id, Revision: 2}
 	var durationPresent bool
@@ -1348,6 +1615,12 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 	return call, call.State != runtimecontract.NativeToolStateRunning, nil
 }
 
+// recordNativeToolCall requires stable kind and completed payload, tolerating a newly supplied missing
+// duration without emitting another activity. New completions are bounded and stored in first-seen order;
+// recording before callback delivery does not prove that the consumer received the fact.
+// recordNativeToolCall требует неизменных kind и готового payload, допуская дополнение отсутствующей
+// duration без нового activity. Новые completion ограничены и сохраняют порядок первого появления;
+// запись до callback сама не доказывает получение факта потребителем.
 func (state *protocolState) recordNativeToolCall(call runtimecontract.NativeToolCall) error {
 	if started, exists := state.startedToolCalls[call.CallID]; exists && started.Kind != call.Kind {
 		return errors.New("Codex app-server native tool kind changed")
@@ -1372,6 +1645,12 @@ func (state *protocolState) recordNativeToolCall(call runtimecontract.NativeTool
 	return state.publishActivity(runtimecontract.RuntimeActivity{ToolCall: &call})
 }
 
+// publishActivity validates the public shape and makes the first callback failure sticky with fixed
+// safe text; later calls do not retry delivery. A missing optional callback is a local no-op, not
+// external delivery proof or an exactly-once transport guarantee.
+// publishActivity проверяет публичную форму и сохраняет первый отказ callback фиксированным безопасным
+// текстом; дальнейшие вызовы не повторяют доставку. Отсутствующий optional callback — локальный no-op,
+// а не доказательство внешней доставки или транспортная exactly-once гарантия.
 func (state *protocolState) publishActivity(activity runtimecontract.RuntimeActivity) error {
 	if state.activityErr != nil {
 		return state.activityErr
@@ -1386,11 +1665,17 @@ func (state *protocolState) publishActivity(activity runtimecontract.RuntimeActi
 	return nil
 }
 
+// safeActionSummary retains command-action count and sorted unique closed kinds, never raw command/query text.
+// safeActionSummary хранит число command actions и отсортированные уникальные закрытые kinds без raw command/query.
 type safeActionSummary struct {
 	count int
 	kinds []string
 }
 
+// safeCommandActions validates bounded action objects, discards command/name/path/query values and
+// returns only total count plus sorted unique registered action kinds, preserving an empty array.
+// safeCommandActions проверяет ограниченные action объекты, отбрасывает command/name/path/query и
+// возвращает лишь число и отсортированные уникальные зарегистрированные kinds с сохранением пустого массива.
 func safeCommandActions(raw json.RawMessage) (safeActionSummary, error) {
 	var items []json.RawMessage
 	if strictDecode(raw, &items) != nil || len(items) > 256 {
@@ -1427,6 +1712,10 @@ func safeCommandActions(raw json.RawMessage) (safeActionSummary, error) {
 	return result, nil
 }
 
+// safeFileChangeSummary carries total change count, sorted kinds and at most20 projected paths;
+// truncated marks the output cap rather than asserting every outside path was included.
+// safeFileChangeSummary хранит общее число изменений, сортированные kinds и максимум20 проекций путей;
+// truncated отмечает предел вывода, а не полноту включения всех внешних путей.
 type safeFileChangeSummary struct {
 	count     int
 	kinds     []string
@@ -1434,6 +1723,12 @@ type safeFileChangeSummary struct {
 	truncated bool
 }
 
+// safeFileChanges validates bounded diff/kind/path objects and update-only move metadata, discards
+// raw diffs and returns sorted kind labels plus capped lexical workspace-relative paths. Counts include
+// validly shaped outside entries; path projection neither reads files nor authorizes their access.
+// safeFileChanges проверяет ограниченные diff/kind/path и move metadata лишь для update, отбрасывает
+// diff и выдаёт kinds с ограниченными лексическими относительными путями. Счётчик включает структурно
+// верные внешние записи; проекция не читает файлы и не разрешает доступ к ним.
 func (state *protocolState) safeFileChanges(raw json.RawMessage) (safeFileChangeSummary, error) {
 	var items []json.RawMessage
 	if strictDecode(raw, &items) != nil || len(items) > 10_000 {
@@ -1481,6 +1776,12 @@ func (state *protocolState) safeFileChanges(raw json.RawMessage) (safeFileChange
 	return result, nil
 }
 
+// safeWebSearch validates bounded search/action metadata, allowing the pinned empty started query,
+// but returns only closed action and query count. URLs, patterns and query strings are not emitted
+// or fetched, and parsing them does not create web-access authority.
+// safeWebSearch проверяет ограниченные search/action metadata, допуская закреплённую пустую started query,
+// но выдаёт лишь закрытый action и число queries. URL, pattern и query не публикуются и не загружаются;
+// их разбор не даёт сетевых полномочий.
 func safeWebSearch(fields map[string]json.RawMessage) (string, int, error) {
 	// rust-v0.160.0 начинает webSearch с пустой отображаемой query; Other
 	// также может завершиться без неё. Эти данные не назначают полномочия.
@@ -1530,6 +1831,12 @@ func safeWebSearch(fields map[string]json.RawMessage) (string, int, error) {
 	return action, count, nil
 }
 
+// safeArgumentShape decodes one JSON value with UseNumber and returns only its top-level kind/cardinality
+// under array/object count limits. It does not expose argument bodies, recursively enforce schemas
+// or reject every nested duplicate key; surrounding transport owns the byte budget.
+// safeArgumentShape декодирует одно JSON значение с UseNumber и выдаёт лишь верхний вид и число элементов
+// в пределах array/object count. Она не раскрывает arguments, не проверяет рекурсивные схемы или все
+// вложенные duplicate keys; байтовый предел задаёт окружающий transport.
 func safeArgumentShape(raw json.RawMessage) (string, int, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -1555,6 +1862,10 @@ func safeArgumentShape(raw json.RawMessage) (string, int, error) {
 	}
 }
 
+// safeNativeLabel requires a bounded nonempty JSON string matching the technical label alphabet;
+// it is syntactic filtering, not proof of a registered tool, capability or semantic redaction.
+// safeNativeLabel требует ограниченную непустую JSON строку технического алфавита;
+// это синтаксический фильтр, не доказательство регистрации инструмента, capability или смыслового сокрытия.
 func safeNativeLabel(raw json.RawMessage) (string, error) {
 	value, err := decodeBoundedString(raw, 128)
 	if err != nil || !nativeSafeLabelPattern.MatchString(value) {
@@ -1563,6 +1874,10 @@ func safeNativeLabel(raw json.RawMessage) (string, error) {
 	return value, nil
 }
 
+// safeCommandSource maps only registered command-origin strings to closed labels without retaining
+// arbitrary source text or assigning a new execution permission.
+// safeCommandSource переводит лишь зарегистрированные command origins в закрытые labels без сохранения
+// произвольного source text или выдачи нового разрешения исполнения.
 func safeCommandSource(raw json.RawMessage) (string, error) {
 	value, err := decodeBoundedString(raw, 64)
 	mapped := map[string]string{"agent": "AGENT", "userShell": "USER_SHELL", "unifiedExecStartup": "UNIFIED_EXEC_STARTUP", "unifiedExecInteraction": "UNIFIED_EXEC_INTERACTION"}[value]
@@ -1572,6 +1887,10 @@ func safeCommandSource(raw json.RawMessage) (string, error) {
 	return mapped, nil
 }
 
+// terminalNativeState maps the closed status set to running/completed/failed/declined projections;
+// an explicit false success downgrades completed, while unknown statuses return no valid projection.
+// terminalNativeState переводит закрытые status в running/completed/failed/declined;
+// явный false success понижает completed, а неизвестный status не даёт корректной проекции.
 func terminalNativeState(statusValue string, success *bool) (string, string, bool, error) {
 	switch statusValue {
 	case "inProgress":
@@ -1590,6 +1909,10 @@ func terminalNativeState(statusValue string, success *bool) (string, string, boo
 	}
 }
 
+// optionalDuration distinguishes absent/null duration from a present nonnegative millisecond value
+// bounded to one day; malformed or oversized values are rejected rather than guessed.
+// optionalDuration отличает отсутствующую/null duration от присутствующих неотрицательных миллисекунд
+// с пределом сутки; неверное или чрезмерное значение отвергается, а не угадывается.
 func optionalDuration(fields map[string]json.RawMessage, key string) (int64, bool, error) {
 	raw, present := fields[key]
 	if !present || bytes.Equal(raw, []byte("null")) {
@@ -1602,6 +1925,10 @@ func optionalDuration(fields map[string]json.RawMessage, key string) (int64, boo
 	return value, true, nil
 }
 
+// workspaceScope classifies exact cwd root and lexically contained paths as WORKSPACE, otherwise
+// OUTSIDE_WORKSPACE. Unlike file projection it permits the root; no filesystem/symlink check or grant occurs.
+// workspaceScope относит точный cwd root и лексически вложенные пути к WORKSPACE, остальные — к OUTSIDE_WORKSPACE.
+// В отличие от файловой проекции root допустим; файловой проверки, symlink resolution или выдачи прав нет.
 func (state *protocolState) workspaceScope(pathValue string) string {
 	// filepath.Rel возвращает "." для точного корня workspace. Для cwd это
 	// допустимая граница, хотя safeWorkspacePath отклоняет корень как путь файла.
@@ -1621,6 +1948,12 @@ func (state *protocolState) workspaceScope(pathValue string) string {
 	return "OUTSIDE_WORKSPACE"
 }
 
+// safeWorkspacePath returns a bounded UTF-8 relative slash path excluding root/parent escapes and NUL.
+// It is a lexical display projection only: symlinks, mounts, inode identity and access permission are
+// not checked, and the current workspace root must already come from trusted execution state.
+// safeWorkspacePath выдаёт ограниченный UTF-8 относительный slash path без root/parent escape и NUL.
+// Это лишь лексическая проекция: symlink, mount, inode и доступ не проверяются, а текущий workspace root
+// уже должен происходить из доверенного состояния исполнения.
 func (state *protocolState) safeWorkspacePath(pathValue string) (string, bool) {
 	if state.workspaceRoot == "" || pathValue == "" || !utf8.ValidString(pathValue) {
 		return "", false
@@ -1641,6 +1974,12 @@ func (state *protocolState) safeWorkspacePath(pathValue string) (string, bool) {
 	return relative, true
 }
 
+// complete requires one turn-start observation, then accepts success only without error, unfinished
+// native tools or a missing final/fallback message. Failed/interrupted turns retain a closed code
+// rather than promoting final-phase text to success; unsupported terminal statuses are rejected.
+// complete требует один turn-start, затем допускает успех лишь без ошибки, незавершённых native tools
+// и отсутствующего final/fallback. Failed/interrupted сохраняют закрытый code вместо превращения
+// финального текста в успех; неподдержанный terminal status отвергается.
 func (state *protocolState) complete(turn parsedTurn) error {
 	if state.turnStarted != 1 {
 		return errors.New("Codex app-server turn lifecycle is incomplete")
@@ -1686,10 +2025,18 @@ func (state *protocolState) complete(turn parsedTurn) error {
 	return nil
 }
 
+// parsedTurnError retains only raw typed error-info for later closed classification, not the private
+// provider message/details or suggested continuation metadata.
+// parsedTurnError сохраняет лишь raw typed error-info для последующей закрытой классификации,
+// не приватные message/details провайдера или предложенное продолжение.
 type parsedTurnError struct {
 	codexErrorInfo json.RawMessage
 }
 
+// parseTurnError validates the closed error envelope and bounded message/details, discards optional
+// misalignment metadata after shape checks and retains only non-null error-info for classification.
+// parseTurnError проверяет закрытый error конверт и длины message/details, отбрасывает optional
+// misalignment после проверки формы и сохраняет лишь non-null error-info для классификации.
 func parseTurnError(raw json.RawMessage) (parsedTurnError, error) {
 	fields, err := decodeObject(raw, schema([]string{"message"}, "additionalDetails", "codexErrorInfo", "message", "misalignment"))
 	if err != nil {
@@ -1713,8 +2060,10 @@ func parseTurnError(raw json.RawMessage) (parsedTurnError, error) {
 	return parsedTurnError{codexErrorInfo: info}, nil
 }
 
-// Пояснение и предлагаемое SDK продолжение проверяются по типу и отбрасываются:
-// они не назначают authority, не публикуются и не запускают следующий turn.
+// validMisalignmentMetadata accepts bounded nullable explanation/steer shapes only as discarded data;
+// it never publishes their text, executes suggested instructions or schedules a continuation turn.
+// validMisalignmentMetadata принимает ограниченные nullable explanation/steer лишь как отбрасываемые данные;
+// она не публикует текст, не исполняет предложения и не назначает продолжение хода.
 func validMisalignmentMetadata(raw json.RawMessage) bool {
 	value := bytes.TrimSpace(raw)
 	if bytes.Equal(value, []byte("null")) {
@@ -1741,6 +2090,8 @@ func validMisalignmentMetadata(raw json.RawMessage) bool {
 	return true
 }
 
+// classifyCodexErrorInfo returns the closed parsed provider code or the fixed unverifiable-error fallback.
+// classifyCodexErrorInfo возвращает закрытый код провайдера либо фиксированный fallback непроверяемой ошибки.
 func classifyCodexErrorInfo(raw json.RawMessage) string {
 	code, valid := parseCodexErrorInfo(raw)
 	if !valid {
@@ -1749,6 +2100,12 @@ func classifyCodexErrorInfo(raw json.RawMessage) string {
 	return code
 }
 
+// parseCodexErrorInfo accepts only pinned string variants or one registered tagged transport/steering
+// error object with its exact nested fields. Arbitrary provider messages and unknown variants do not
+// become lifecycle codes or user-facing diagnostics.
+// parseCodexErrorInfo принимает лишь закреплённые строки либо один зарегистрированный tagged transport/
+// steering объект с точными вложенными полями. Произвольные сообщения и неизвестные варианты не
+// становятся lifecycle codes или пользовательской диагностикой.
 func parseCodexErrorInfo(raw json.RawMessage) (string, bool) {
 	if len(raw) == 0 {
 		return "", false
@@ -1812,6 +2169,12 @@ func parseCodexErrorInfo(raw json.RawMessage) (string, bool) {
 	return "", false
 }
 
+// terminalResult requires one terminal, bound session/path, an outcome and a captured baseline before
+// assembling measured usage/completeness and ordered tool facts. It does not itself capture archive
+// bytes or prove their private sealed provenance.
+// terminalResult требует один terminal, session/path, исход и baseline перед сборкой измеренного
+// usage, полноты и упорядоченных tool facts. Она сама не захватывает байты архива и не доказывает
+// их приватное закрытое происхождение.
 func (state *protocolState) terminalResult() (Result, error) {
 	if state.terminals != 1 || state.result.SessionID == "" || state.result.Outcome == "" || state.threadPath == "" || !state.baselineCaptured {
 		return Result{}, errors.New("Codex app-server lifecycle is incomplete")
@@ -1826,8 +2189,12 @@ func (state *protocolState) terminalResult() (Result, error) {
 	return state.result, nil
 }
 
-// Измерения подтверждены отдельными валидными notification. Ошибка следующего
-// сообщения не разрешает использовать его модель или заявлять успешный terminal.
+// measuredResult returns only prior validated response usage and valid stored tool facts after the
+// baseline/turn boundary, without inventing a terminal outcome or accepting a later malformed observation.
+// Usage quality describes the observations, not successful delivery, execution or provider billing.
+// measuredResult выдаёт лишь прежний проверенный response usage и корректные tool facts после baseline/
+// turn boundary без выдуманного terminal исхода или принятия следующего повреждённого наблюдения.
+// Полнота описывает наблюдения, а не успешную доставку, исполнение или биллинг провайдера.
 func (state *protocolState) measuredResult() Result {
 	if !state.baselineCaptured || state.turnID == "" {
 		return Result{}
@@ -1844,10 +2211,18 @@ func (state *protocolState) measuredResult() Result {
 	return result
 }
 
+// closedTurnStatus recognizes only the pinned inProgress/completed/interrupted/failed lifecycle labels.
+// closedTurnStatus узнаёт только закреплённые inProgress/completed/interrupted/failed статусы lifecycle.
 func closedTurnStatus(value string) bool {
 	return value == "completed" || value == "interrupted" || value == "failed" || value == "inProgress"
 }
 
+// decodeObject rejects duplicate/unknown immediate keys, missing required keys and trailing JSON,
+// returning raw values for typed/nested validation. Required presence does not reject null by itself;
+// errors may contain an untrusted key name and must be wrapped/classified before outward logging.
+// decodeObject отвергает повторные или лишние текущие ключи, отсутствие обязательных и лишний JSON,
+// возвращая raw values для typed/nested проверки. Наличие ключа само не запрещает null; ошибка может
+// содержать недоверенное имя поля и требует обёртки или классификации перед внешним логом.
 func decodeObject(raw []byte, expected objectSchema) (map[string]json.RawMessage, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	token, err := decoder.Token()
@@ -1887,6 +2262,12 @@ func decodeObject(raw []byte, expected objectSchema) (map[string]json.RawMessage
 	return fields, nil
 }
 
+// strictDecode requires one complete JSON value and disallows unknown struct fields, but ordinary
+// encoding/json semantics still apply to nulls, maps and duplicate keys. Use explicit object/recursive
+// checks where that boundary requires uniqueness or non-null values.
+// strictDecode требует одно полное JSON значение и запрещает неизвестные struct fields, но сохраняет
+// обычные правила encoding/json для null, map и duplicate keys. Требуемую границей уникальность
+// или non-null обеспечивают отдельные object/recursive проверки.
 func strictDecode(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -1896,6 +2277,8 @@ func strictDecode(raw []byte, target any) error {
 	return ensureEOF(decoder)
 }
 
+// ensureEOF requires the decoder's next value to be EOF, rejecting another value or malformed suffix.
+// ensureEOF требует EOF следующим значением decoder, отвергая второй объект или повреждённый хвост.
 func ensureEOF(decoder *json.Decoder) error {
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return errors.New("JSON value has trailing data")
@@ -1903,6 +2286,10 @@ func ensureEOF(decoder *json.Decoder) error {
 	return nil
 }
 
+// decodeBoundedString accepts only a complete nonempty decoded UTF-8 string within the byte limit;
+// it does not cap allocation before JSON decoding or interpret content as authority.
+// decodeBoundedString принимает лишь полную непустую декодированную UTF-8 строку в байтовом лимите;
+// она не ограничивает выделение до JSON decode и не трактует содержимое как полномочия.
 func decodeBoundedString(raw []byte, maximum int) (string, error) {
 	var value string
 	if strictDecode(raw, &value) != nil || value == "" || len(value) > maximum || !utf8.ValidString(value) {
@@ -1911,16 +2298,28 @@ func decodeBoundedString(raw []byte, maximum int) (string, error) {
 	return value, nil
 }
 
+// notificationSchema returns the registered immediate-key schema; callers must check method membership
+// rather than treating the zero map value for an unknown method as an authorized empty schema.
+// notificationSchema возвращает зарегистрированную схему текущих ключей; caller обязан проверить метод,
+// а не считать нулевое значение карты неизвестного метода разрешённой пустой схемой.
 func notificationSchema(method string) objectSchema {
 	return notificationSchemas[method]
 }
 
+// CapacityFailure classifies only server_overloaded as capacity, never quota, policy, authentication
+// or every provider failure that happens to have a retry-later presentation.
+// CapacityFailure считает capacity лишь server_overloaded, не квоту, policy, auth или любой
+// provider failure с отображением retry-later.
 func CapacityFailure(code string) bool {
 	return code == "server_overloaded"
 }
 
-// TerminalPresentation is a closed mapping from typed app-server outcome.
-// Provider diagnostics never participate in a lifecycle transition or user text.
+// TerminalPresentation maps typed closed codes to fixed outcome/i18n/action triples; raw provider
+// diagnostics never become user text or authority. Unknown codes remain failed with a safe fallback,
+// and presentation alone is not the complete admission/retry policy.
+// TerminalPresentation переводит закрытые typed codes в фиксированные outcome/i18n/action; исходная
+// диагностика не становится текстом пользователя или полномочиями. Неизвестный code даёт безопасный
+// failed fallback, а одно отображение не является полной admission/retry policy.
 func TerminalPresentation(code string) (outcome, markdown, nextAction string) {
 	switch code {
 	case "unauthorized", "authentication_required", "authentication_expired":
@@ -1950,6 +2349,10 @@ func TerminalPresentation(code string) (outcome, markdown, nextAction string) {
 	}
 }
 
+// BlockedFailure is the caller's closed blocked-code predicate, separate from CapacityFailure and
+// not a general equivalence to the outcome string returned by TerminalPresentation.
+// BlockedFailure задаёт закрытый blocked-code предикат вызывающего кода отдельно от CapacityFailure;
+// это не универсальный эквивалент outcome строки из TerminalPresentation.
 func BlockedFailure(code string) bool {
 	switch code {
 	case "unauthorized", "cyber_policy", "usage_limit_exceeded", "provider_error_info_invalid",
@@ -1960,6 +2363,10 @@ func BlockedFailure(code string) bool {
 	}
 }
 
+// serverNotificationMethods enumerates known notification names; recognition permits outer-schema
+// validation, not execution of nested payload, arbitrary methods or new capabilities.
+// serverNotificationMethods перечисляет известные имена уведомлений; узнавание допускает проверку
+// внешней схемы, не исполнение вложенного payload, произвольные методы или новые capabilities.
 var serverNotificationMethods = stringSet(
 	"error", "thread/started", "thread/status/changed", "thread/archived", "thread/deleted", "thread/unarchived",
 	"thread/closed", "skills/changed", "thread/name/updated", "thread/goal/updated", "thread/goal/cleared",
@@ -1981,12 +2388,20 @@ var serverNotificationMethods = stringSet(
 	"windows/worldWritableWarning", "windowsSandbox/setupCompleted", "account/login/completed",
 )
 
+// serverRequestMethods recognizes server-request shapes for explicit handling/rejection; membership
+// does not authorize shell, permission, token-refresh or user-input requests from the model.
+// serverRequestMethods узнаёт server requests для явной обработки или отказа; наличие в наборе
+// не разрешает модели shell, permission, token-refresh или пользовательский ввод.
 var serverRequestMethods = stringSet(
 	"item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/tool/requestUserInput",
 	"mcpServer/elicitation/request", "item/permissions/requestApproval", "item/tool/call",
 	"account/chatgptAuthTokens/refresh", "attestation/generate", "applyPatchApproval", "execCommandApproval",
 )
 
+// stringSet builds a private membership map from trusted registry literals, silently coalescing duplicates;
+// it is not a validator for caller-owned lists or authorization grants.
+// stringSet строит приватную карту принадлежности из доверенных literals, объединяя повторы;
+// она не проверяет внешние списки и не выдаёт authorization grants.
 func stringSet(values ...string) map[string]struct{} {
 	result := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -1995,6 +2410,10 @@ func stringSet(values ...string) map[string]struct{} {
 	return result
 }
 
+// itemFieldUniverse bounds first-pass item keys before the type-specific schema is selected.
+// A field being in this superset does not make it legal for every item tag or safe to publish.
+// itemFieldUniverse ограничивает ключи первого прохода до выбора схемы типа;
+// наличие поля в общем списке не делает его допустимым любому tag или безопасным для публикации.
 var itemFieldUniverse = []string{
 	"action", "agentPath", "agentThreadId", "agentsStates", "aggregatedOutput", "appContext", "arguments", "changes", "clientId",
 	"command", "commandActions", "content", "contentItems", "cwd", "delivery", "durationMs", "error", "exitCode", "failure", "fragments", "id",
@@ -2003,6 +2422,12 @@ var itemFieldUniverse = []string{
 	"senderThreadId", "source", "status", "success", "summary", "text", "tool", "transparentBackground", "type",
 }
 
+// notificationSchemas pins immediate required/allowed keys for every known notification, including
+// intentionally discarded events. Nested types/lifecycle are validated only by the matching handlers;
+// this registry alone neither deeply validates every value nor dispatches an action.
+// notificationSchemas закрепляет текущие required/allowed ключи всех известных уведомлений, включая
+// отбрасываемые события. Вложенные типы и lifecycle проверяет соответствующий handler; сам реестр
+// не проверяет глубоко каждое значение и не запускает действие.
 var notificationSchemas = map[string]objectSchema{
 	"error":                                     schema([]string{"error", "threadId", "turnId", "willRetry"}, "error", "threadId", "turnId", "willRetry"),
 	"thread/started":                            schema([]string{"thread"}, "thread"),
@@ -2076,6 +2501,10 @@ var notificationSchemas = map[string]objectSchema{
 	"account/login/completed":                   schema([]string{"success"}, "error", "loginId", "success"),
 }
 
+// threadItemSchemas pins per-tag required/allowed item keys. Recognition does not execute an item,
+// make every opaque nested field authoritative or substitute the separate native projection checks.
+// threadItemSchemas закрепляет required/allowed ключи каждого tag. Узнавание не исполняет item,
+// не делает непрозрачные вложенные поля авторитетными и не заменяет отдельную native проекцию.
 var threadItemSchemas = map[string]objectSchema{
 	"userMessage":         schema([]string{"content", "id", "type"}, "clientId", "content", "id", "type"),
 	"hookPrompt":          schema([]string{"fragments", "id", "type"}, "fragments", "id", "type"),
@@ -2097,6 +2526,10 @@ var threadItemSchemas = map[string]objectSchema{
 	"contextCompaction":   schema([]string{"id", "type"}, "id", "type"),
 }
 
+// nativeToolItemKinds selects only native item kinds eligible for safe timeline projection;
+// MCP and delegated/collaborative items retain their separate runtime-controller authority/audit paths.
+// nativeToolItemKinds выбирает лишь native виды для безопасной timeline проекции;
+// MCP и delegated/collaborative items сохраняют отдельные authority/audit пути runtime-controller.
 var nativeToolItemKinds = stringSet(
 	"commandExecution", "fileChange", "dynamicToolCall", "webSearch", "imageView", "sleep", "imageGeneration",
 )

@@ -17,6 +17,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// organizationSnapshotRecorder records cloned generated requests and simulates separate project/organization recipe/secret listings with configurable failures; it is not an authorization service or persistent secret store.
+// organizationSnapshotRecorder запоминает копии generated-запросов и имитирует отдельные проектные и организационные списки рецептов и секретов с настраиваемыми ошибками; это не сервис авторизации и не устойчивое хранилище секретов.
 type organizationSnapshotRecorder struct {
 	grpc.ClientConnInterface
 	calls    []string
@@ -26,6 +28,8 @@ type organizationSnapshotRecorder struct {
 	failure  error
 }
 
+// organizationSnapshotSecret builds synthetic active secret metadata in organization or project scope with fixed versions/timestamps and no secret value.
+// organizationSnapshotSecret создаёт тестовую metadata активного секрета в организационной либо проектной области с фиксированными версиями и временем без значения секрета.
 func organizationSnapshotSecret(project bool) *cp.RuntimeSecret {
 	now := timestamppb.New(time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC))
 	s := &cp.RuntimeSecret{ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION, OrganizationRef: "org_fixture01", Ref: "sec_orgfixture01", Name: "TOKEN", State: "ACTIVE", ValueType: cp.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, Version: 1, CurrentRevision: 1, CreatedAt: now, UpdatedAt: now}
@@ -35,6 +39,8 @@ func organizationSnapshotSecret(project bool) *cp.RuntimeSecret {
 	return s
 }
 
+// organizationSnapshotRecipe builds a synthetic active organization/project image recipe with a fixed environment selection, not an admitted or built image artifact.
+// organizationSnapshotRecipe создаёт тестовый активный организационный либо проектный рецепт образа с фиксированным окружением, а не собранный и допущенный артефакт образа.
 func organizationSnapshotRecipe(project bool) *cp.RoleImageRecipe {
 	now := timestamppb.New(time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC))
 	r := &cp.RoleImageRecipe{ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION, OrganizationRef: "org_fixture01", Ref: "imgrec_orgfixture01", Name: "Image", State: "ACTIVE", Version: 1, Generation: 1, CreatedAt: now, UpdatedAt: now, Environment: &cp.RoleEnvironmentSelection{EnvironmentKey: "standard"}}
@@ -44,6 +50,8 @@ func organizationSnapshotRecipe(project bool) *cp.RoleImageRecipe {
 	return r
 }
 
+// Invoke records the exact method and cloned request, supplies typed synthetic owner responses/cursors or the configured organizational failure, and denies unsupported reads without network access.
+// Invoke запоминает точный метод и копию запроса, возвращает типизированные тестовые ответы и курсоры либо настроенный организационный отказ и запрещает неподдерживаемые чтения без сети.
 func (c *organizationSnapshotRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	c.calls = append(c.calls, method)
 	c.requests = append(c.requests, proto.Clone(request.(proto.Message)))
@@ -76,10 +84,14 @@ func (c *organizationSnapshotRecorder) Invoke(_ context.Context, method string, 
 	return nil
 }
 
+// organizationSnapshotServer wires generated query/role-image/assistant/access clients to the same synthetic recorder without creating transport credentials or real connections.
+// organizationSnapshotServer связывает generated query/role-image/assistant/access clients с одним тестовым recorder без транспортных credentials и настоящих соединений.
 func organizationSnapshotServer(c *organizationSnapshotRecorder) *Server {
 	return &Server{query: cp.NewPlatformQueryServiceClient(c), roleImages: cp.NewRoleImageServiceClient(c), assistant: cp.NewSystemAssistantServiceClient(c), access: cp.NewAccessServiceClient(c)}
 }
 
+// TestOrganizationSnapshotKeepsSeparateScopedCatalogsAndOwnerPages verifies project/organization lists and cursors stay separate, wire scopes are normalized, each organization endpoint is called once with fifty items and no caller-supplied authority fields.
+// TestOrganizationSnapshotKeepsSeparateScopedCatalogsAndOwnerPages проверяет раздельные проектные и организационные списки с курсорами, нормализацию wire scopes, единственный вызов организационного endpoint с пятьюдесятью элементами и без входных полей полномочий.
 func TestOrganizationSnapshotKeepsSeparateScopedCatalogsAndOwnerPages(t *testing.T) {
 	for _, kind := range []string{"ROLE_IMAGE_RECIPE", "RUNTIME_SECRET"} {
 		t.Run(kind, func(t *testing.T) {
@@ -134,6 +146,8 @@ func TestOrganizationSnapshotKeepsSeparateScopedCatalogsAndOwnerPages(t *testing
 	}
 }
 
+// TestOrganizationSnapshotRevokedOwnerClearsOnlyOrganizationCatalog simulates NotFound/PermissionDenied from the organizational owner and requires only that catalog/page to empty while project items remain.
+// TestOrganizationSnapshotRevokedOwnerClearsOnlyOrganizationCatalog имитирует NotFound/PermissionDenied организационного владельца и требует очистить только этот каталог со страницей, сохранив проектные элементы.
 func TestOrganizationSnapshotRevokedOwnerClearsOnlyOrganizationCatalog(t *testing.T) {
 	for _, kind := range []string{"ROLE_IMAGE_RECIPE", "RUNTIME_SECRET"} {
 		for _, code := range []codes.Code{codes.PermissionDenied, codes.NotFound} {
@@ -153,6 +167,8 @@ func TestOrganizationSnapshotRevokedOwnerClearsOnlyOrganizationCatalog(t *testin
 	}
 }
 
+// TestOrganizationSnapshotRejectsMalformedAndCrossScopeOwnerReadback rejects unknown/project scope, project locators, absent or inconsistent organization refs, nil items and over-budget lists. It checks response consistency, not real owner authorization.
+// TestOrganizationSnapshotRejectsMalformedAndCrossScopeOwnerReadback отклоняет неизвестную или проектную область, проектные ссылки, отсутствующие или несогласованные организации, nil-элементы и превышение списка. Проверяется согласованность ответа, а не настоящая авторизация владельца.
 func TestOrganizationSnapshotRejectsMalformedAndCrossScopeOwnerReadback(t *testing.T) {
 	for _, kind := range []string{"ROLE_IMAGE_RECIPE", "RUNTIME_SECRET"} {
 		for _, defect := range []string{"unspecified", "unknown", "project", "project locator", "missing organization", "foreign organization", "nil", "oversized"} {
@@ -188,6 +204,8 @@ func TestOrganizationSnapshotRejectsMalformedAndCrossScopeOwnerReadback(t *testi
 	}
 }
 
+// TestOrganizationSnapshotDependencyFailureIsNotAnEmptySuccessfulCatalog preserves Unavailable instead of interpreting a dependency outage as revocation or a successful empty catalog.
+// TestOrganizationSnapshotDependencyFailureIsNotAnEmptySuccessfulCatalog сохраняет Unavailable, не превращая отказ зависимости в отзыв доступа или успешный пустой каталог.
 func TestOrganizationSnapshotDependencyFailureIsNotAnEmptySuccessfulCatalog(t *testing.T) {
 	for _, kind := range []string{"ROLE_IMAGE_RECIPE", "RUNTIME_SECRET"} {
 		c := &organizationSnapshotRecorder{failure: status.Error(codes.Unavailable, "synthetic dependency offline")}
@@ -197,6 +215,8 @@ func TestOrganizationSnapshotDependencyFailureIsNotAnEmptySuccessfulCatalog(t *t
 	}
 }
 
+// TestOrganizationSnapshotBootstrapWithoutProjectIncludesBothScopedCatalogs runs a synthetic projectless bootstrap and preserves both organization-capable resource kinds without attaching a selected-project envelope field.
+// TestOrganizationSnapshotBootstrapWithoutProjectIncludesBothScopedCatalogs запускает тестовый bootstrap без проекта и сохраняет оба вида с организационными каталогами без поля выбранного проекта в конверте.
 func TestOrganizationSnapshotBootstrapWithoutProjectIncludesBothScopedCatalogs(t *testing.T) {
 	c := &organizationSnapshotRecorder{}
 	outbound := make(chan outboundFrame, len(platformBootstrapKinds))

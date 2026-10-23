@@ -1,4 +1,5 @@
-// Package app содержит единственный composition root role-image-builder.
+// Package app owns composition and explicit startup/shutdown for the image builder and admission controller commands.
+// Пакет app управляет композицией и явным запуском и остановкой команд сборщика образов и контроллера допуска.
 package app
 
 import (
@@ -18,6 +19,10 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/runner"
 )
 
+// runtimeState owns initialized builder dependencies so partial startup can share the same ordered shutdown path.
+// Readiness/workers are process-local; authoritative claims and build state remain in the control plane.
+// runtimeState владеет созданными зависимостями сборщика, позволяя частичному запуску использовать тот же порядок остановки.
+// Готовность и workers локальны процессу; авторитетные claims и состояние сборки остаются в управляющем сервисе.
 type runtimeState struct {
 	config       Config
 	logger       *slog.Logger
@@ -29,6 +34,10 @@ type runtimeState struct {
 	controlPlane *controlplane.Client
 }
 
+// Run loads builder configuration, initializes telemetry/RPC/executor and checks local infrastructure before listening and starting workers.
+// It blocks on cancellation or serving/worker failure and joins cleanup errors using a noncancelled shutdown base; no root context is created here.
+// Run загружает конфигурацию сборщика, создаёт telemetry, RPC и executor и проверяет локальную инфраструктуру до listener и workers.
+// Он ждёт отмены либо ошибки сервера или worker и объединяет ошибки очистки с неотменённой базой остановки; корневой контекст здесь не создаётся.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
@@ -129,6 +138,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 }
 
+// runBuildLoop calls one build cycle immediately, then waits for poll ticks, logging/capturing only the first degraded transition.
+// Recovery is logged once; cycle errors do not stop polling, while cancellation is returned by the post-cycle wait.
+// runBuildLoop сразу вызывает один цикл сборки, затем ждёт poll ticks, записывая и отправляя только первый переход к ошибкам.
+// Восстановление записывается один раз; ошибка цикла не останавливает опрос, а отмена возвращается при ожидании после цикла.
 func runBuildLoop(run func(context.Context) error, state *runtimeState, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.PollInterval)
@@ -153,21 +166,30 @@ func runBuildLoop(run func(context.Context) error, state *runtimeState, config C
 	}
 }
 
+// localInfrastructureChecker abstracts the executor's direct registry/BuildKit readiness operation without querying owner work.
+// localInfrastructureChecker выделяет прямую проверку готовности реестра и BuildKit без запроса работы владельца.
 type localInfrastructureChecker interface {
+	// Check performs a synchronous caller-bounded infrastructure probe and returns only after its own cleanup completes.
+	// Check выполняет синхронную проверку инфраструктуры с бюджетом вызывающего и возвращается после собственной очистки.
 	Check(context.Context) error
 }
 
+// checkStartupInfrastructure gives the cold infrastructure check its own readiness budget derived from lifecycle, not telemetry/RPC startup.
+// It waits synchronously for Check and releases the child context before returning, without opening listeners or starting workers.
+// checkStartupInfrastructure выделяет холодной проверке свой бюджет готовности от lifecycle, а не бюджет запуска telemetry и RPC.
+// Он синхронно ждёт Check и освобождает дочерний контекст до возврата, не открывая listener и не запуская workers.
 func checkStartupInfrastructure(lifecycle context.Context, executor localInfrastructureChecker, config Config) error {
-	// Холодный pull/solve использует тот же ограниченный бюджет, что и readiness,
-	// независимо от короткой инициализации telemetry/RPC. Check синхронно
-	// завершает дочерние процессы до открытия listeners и запуска workers.
 	infrastructure, cancelInfrastructure := context.WithTimeout(lifecycle, config.ReadinessTimeout)
 	defer cancelInfrastructure()
 	return executor.Check(infrastructure)
 }
 
+// readinessIntervalWaiter abstracts the cancellable interval between completed readiness checks for deterministic unit tests.
+// readinessIntervalWaiter выделяет отменяемую паузу между завершёнными проверками готовности для детерминированных unit-тестов.
 type readinessIntervalWaiter func(context.Context, time.Duration) error
 
+// monitorLocalReadiness creates the worker using the normal cancellable timer; it does not start the worker itself.
+// monitorLocalReadiness создаёт worker с обычным отменяемым таймером, но сам worker не запускает.
 func monitorLocalReadiness(
 	executor localInfrastructureChecker,
 	state *runtimeState,
@@ -176,6 +198,10 @@ func monitorLocalReadiness(
 	return monitorLocalReadinessWithWait(executor, state, config, waitReadinessInterval)
 }
 
+// monitorLocalReadinessWithWait runs one bounded infrastructure check at a time, updates readiness/metrics and logs state transitions.
+// The injected wait controls the interval after each check; any wait error ends the worker without changing dependencies.
+// monitorLocalReadinessWithWait выполняет по одной ограниченной проверке инфраструктуры, обновляет готовность и метрики и пишет переходы состояния.
+// Подставленное ожидание управляет паузой после проверки; любая его ошибка завершает worker без изменения зависимостей.
 func monitorLocalReadinessWithWait(
 	executor localInfrastructureChecker,
 	state *runtimeState,
@@ -205,6 +231,8 @@ func monitorLocalReadinessWithWait(
 	}
 }
 
+// waitReadinessInterval waits for its one-shot timer or caller cancellation and stops the timer on every return.
+// waitReadinessInterval ждёт одноразовый таймер либо отмену вызывающего и останавливает таймер при любом возврате.
 func waitReadinessInterval(ctx context.Context, interval time.Duration) error {
 	timer := time.NewTimer(interval)
 	defer timer.Stop()
@@ -216,6 +244,10 @@ func waitReadinessInterval(ctx context.Context, interval time.Duration) error {
 	}
 }
 
+// shutdown closes readiness, cancels workers and attempts bounded worker join before closing RPC/HTTP and flushing telemetry.
+// Each registered cleanup has its own budget; failed or timed-out cleanup is reported, not proof that every worker actually joined.
+// shutdown закрывает готовность, отменяет workers и пытается ограниченно дождаться их до закрытия RPC и HTTP и сброса telemetry.
+// У каждой операции очистки свой бюджет; сбой или таймаут сообщается, а не считается доказательством завершения всех workers.
 func (state *runtimeState) shutdown(base context.Context) error {
 	if state.readiness != nil {
 		state.readiness.Set(false, "stopping")

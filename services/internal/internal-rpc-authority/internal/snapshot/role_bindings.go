@@ -2,8 +2,12 @@ package snapshot
 
 import "errors"
 
-// Родительская binding нужна issuer только для проверки принятого контекста.
-// Право подписи ограничено собственным issuer в доменном Issue/IssueContinuation.
+// selectRoleBindings rejects duplicate IDs and selects role-owned operations, adding the exact parent
+// binding needed for an issuer child's later context verification while preserving source order; it does
+// not grant signing rights for that parent.
+// selectRoleBindings отклоняет повторные ID и выбирает операции роли, добавляя точную привязку родителя
+// для последующей проверки контекста дочернего issuer с сохранением исходного порядка; права подписи для
+// родителя не выдаются.
 func selectRoleBindings(role Role, workloadID string, bindings []operationBinding) ([]operationBinding, error) {
 	if (role != RoleIssuer && role != RoleVerifier) || workloadID == "" {
 		return nil, errors.New("authority binding selector identity is invalid")

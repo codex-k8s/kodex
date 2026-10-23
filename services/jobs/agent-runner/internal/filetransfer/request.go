@@ -1,4 +1,5 @@
-// Package filetransfer проверяет узкий relative descriptor без выдачи authority.
+// Package filetransfer validates narrow relative descriptors and configures bounded file HTTP clients.
+// Пакет filetransfer проверяет узкие относительные дескрипторы и настраивает ограниченные файловые HTTP-клиенты.
 package filetransfer
 
 import (
@@ -15,16 +16,32 @@ import (
 )
 
 const (
+	// HeaderTimeout allows one artifact-transfer budget plus fifteen seconds to receive headers, separate from ordinary callback command deadlines.
+	// HeaderTimeout выделяет бюджет передачи артефакта плюс пятнадцать секунд на получение заголовков отдельно от таймаутов обычных команд обратного вызова.
 	HeaderTimeout = runtimecontract.MaximumArtifactTransferDuration + 15*time.Second
-	TotalTimeout  = 2*runtimecontract.MaximumArtifactTransferDuration + 30*time.Second
+	// TotalTimeout bounds the complete file HTTP exchange to two artifact-transfer budgets plus thirty seconds, including header and body time.
+	// TotalTimeout ограничивает полный файловый HTTP-обмен двумя бюджетами передачи артефакта плюс тридцать секунд с учётом заголовков и тела.
+	TotalTimeout = 2*runtimecontract.MaximumArtifactTransferDuration + 30*time.Second
 )
 
+// reference recognizes the typed lowercase-prefix/opaque-suffix descriptor locator syntax; it proves neither existence nor access.
+// reference распознаёт синтаксис ссылки дескриптора с типизированным префиксом нижнего регистра и непрозрачным суффиксом; существование и доступ не доказываются.
 var reference = regexp.MustCompile(`^[a-z][a-z0-9]*_[A-Za-z0-9_-]{8,80}$`)
+
+// digest accepts only a sha256-prefixed lowercase 64-hex digest in the descriptor, not a proof that response bytes match it.
+// digest принимает в дескрипторе только дайджест с префиксом sha256 и 64 шестнадцатеричными символами нижнего регистра, не доказывая соответствие байтов ответа.
 var digest = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
+// errDescriptor provides fixed rejection text for invalid local descriptor syntax or turn/catalog binding without copying rejected request data.
+// errDescriptor задаёт фиксированный текст отказа для неверного синтаксиса локального дескриптора либо привязки хода и каталога без копирования отклонённых данных запроса.
 var errDescriptor = errors.New("runtime file descriptor is invalid")
 
-// CatalogRequest проверяет только форму и immutable RuntimeRevision scope.
-// Текущие права и exact entry/revision разрешает controller через владельца.
+// CatalogRequest checks a relative GET descriptor against the immutable turn/lease and valid file catalog, with exactly four single-valued query selectors.
+// Requires canonical positive revision, listed purpose and typed entry/artifact refs, then returns the expected sha256 digest.
+// Current access and exact file revision belong to the controller/owner; this does not fetch bytes or verify their content.
+// CatalogRequest проверяет относительный GET-дескриптор относительно неизменяемых хода, аренды и корректного каталога файлов с ровно четырьмя однозначными параметрами запроса.
+// Требует каноническую положительную ревизию, перечисленную цель, типизированные ссылки элемента и артефакта, затем возвращает ожидаемый дайджест sha256.
+// Актуальный доступ и точная ревизия файла принадлежат контроллеру и владельцу; байты не загружаются, их содержимое не проверяется.
 func CatalogRequest(input runtimecontract.RunnerInput, request *http.Request) (string, error) {
 	u := request.URL
 	if request.Method != http.MethodGet || request.ContentLength > 0 || len(request.TransferEncoding) > 0 || u == nil || u.IsAbs() || u.Host != "" || u.User != nil || u.Fragment != "" || u.RawPath != "" || len(u.RawQuery) > 1024 ||
@@ -55,6 +72,10 @@ func CatalogRequest(input runtimecontract.RunnerInput, request *http.Request) (s
 	return q.Get("digest"), nil
 }
 
+// NewClient clones the supplied non-nil HTTP transport, applies file-specific header/total budgets and a 16-KiB response-header cap, and refuses redirects.
+// TLS/auth/proxy behavior comes from that transport; no weaker fallback or new authority is introduced.
+// NewClient копирует переданный непустой HTTP-транспорт, задаёт файловые бюджеты заголовков и полного обмена, предел заголовков ответа 16 КиБ и запрещает перенаправления.
+// Поведение TLS, авторизации и прокси наследуется от транспорта; ослабленного обходного пути или новых полномочий нет.
 func NewClient(transport *http.Transport) *http.Client {
 	fileTransport := transport.Clone()
 	fileTransport.ResponseHeaderTimeout = HeaderTimeout

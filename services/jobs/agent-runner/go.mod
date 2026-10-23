@@ -6,6 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
+	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
 	go.yaml.in/yaml/v2 v2.4.3
 	golang.org/x/sys v0.47.0
@@ -55,3 +56,5 @@ replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/obs
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
+
+replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime

@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+// TestCatalogCleanupPreservesPrimaryFailureAndRejectsSuccess preserves classified primary failures and
+// cancellation while turning apparent success into metadata-only unavailability when cleanup fails.
+// TestCatalogCleanupPreservesPrimaryFailureAndRejectsSuccess сохраняет классифицированные первичные
+// отказы и отмену, заменяя видимый успех на metadata-only недоступность при ошибке cleanup.
 func TestCatalogCleanupPreservesPrimaryFailureAndRejectsSuccess(t *testing.T) {
 	cleanup := errors.New("synthetic-private-cleanup")
 	for _, failure := range []ModelCatalogFailure{CatalogFailureAuthorization, CatalogFailureUnverified, CatalogFailureUnavailable} {
@@ -31,6 +35,12 @@ func TestCatalogCleanupPreservesPrimaryFailureAndRejectsSuccess(t *testing.T) {
 	}
 }
 
+// TestCatalogDiagnosticProcessStagesAndCleanup runs fake app-server responses for login, schema,
+// identity and missing-cache failures and verifies the exact safe stage plus removal of temporary
+// private state.
+// TestCatalogDiagnosticProcessStagesAndCleanup запускает fake app-server ответы с ошибками login, схемы,
+// identity и отсутствующего cache и проверяет точный безопасный stage с удалением временного приватного
+// состояния.
 func TestCatalogDiagnosticProcessStagesAndCleanup(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
@@ -64,6 +74,12 @@ func TestCatalogDiagnosticProcessStagesAndCleanup(t *testing.T) {
 	}
 }
 
+// TestCatalogDiagnosticCacheBoundaries mutates synthetic cache schema, version, time, identity and
+// capabilities to verify closed stage classification, while explicitly accepting the pinned null-default
+// conversion.
+// TestCatalogDiagnosticCacheBoundaries меняет схему, версию, время, identity и capabilities
+// синтетического cache для проверки закрытой stage классификации и отдельно допускает закреплённое
+// преобразование null-default.
 func TestCatalogDiagnosticCacheBoundaries(t *testing.T) {
 	now := time.Now().UTC()
 	for _, test := range []struct {
@@ -114,6 +130,10 @@ func TestCatalogDiagnosticCacheBoundaries(t *testing.T) {
 	}
 }
 
+// TestCatalogDiagnosticDoesNotExposeCauseOrUnknownStage checks fixed public error text, preservation of
+// the precise inner stage and unknown fallback for arbitrary private stage strings.
+// TestCatalogDiagnosticDoesNotExposeCauseOrUnknownStage проверяет фиксированный публичный error текст,
+// сохранение точного внутреннего stage и unknown fallback произвольных private stage строк.
 func TestCatalogDiagnosticDoesNotExposeCauseOrUnknownStage(t *testing.T) {
 	err := atCatalogStage(catalogStageCacheRead, errors.New("synthetic-private-payload"))
 	if strings.Contains(err.Error(), "synthetic") {

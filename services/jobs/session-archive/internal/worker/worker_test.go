@@ -19,6 +19,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
 
+// TestFailureResultPreservesClosedArchiveStageWithoutPrivateCause checks safe result JSON across real sentinel and forged-text failures.
+// RU: TestFailureResultPreservesClosedArchiveStageWithoutPrivateCause проверяет безопасный JSON-результат при настоящих ошибках-маркерах и поддельном тексте.
 func TestFailureResultPreservesClosedArchiveStageWithoutPrivateCause(t *testing.T) {
 	t.Parallel()
 	for _, stage := range []model.FailureStage{model.FailureStageSourceIdentity, model.FailureStageSourceDigest,
@@ -58,11 +60,15 @@ func TestFailureResultPreservesClosedArchiveStageWithoutPrivateCause(t *testing.
 	}
 }
 
+// failureStageStore injects storage failures at selected archive stages while delegating other operations to memory.
+// RU: failureStageStore подставляет отказы хранилища на выбранных этапах архива, делегируя прочие операции памяти.
 type failureStageStore struct {
 	*objectstoragetest.Store
 	stage model.FailureStage
 }
 
+// Put injects a private SDK-like error only for the object-write fixture stage.
+// RU: Put подставляет закрытую SDK-подобную ошибку лишь на тестовом этапе записи объекта.
 func (store *failureStageStore) Put(ctx context.Context, input objectstorage.PutInput) (objectstorage.Receipt, error) {
 	if store.stage == model.FailureStageObjectWrite {
 		return objectstorage.Receipt{}, errors.New("SENTINEL_PRIVATE_SDK")
@@ -70,6 +76,8 @@ func (store *failureStageStore) Put(ctx context.Context, input objectstorage.Put
 	return store.Store.Put(ctx, input)
 }
 
+// Get injects a private SDK-like error only for the object-readback fixture stage.
+// RU: Get подставляет закрытую SDK-подобную ошибку лишь на тестовом этапе перечитывания объекта.
 func (store *failureStageStore) Get(ctx context.Context, key, version string) (objectstorage.Object, error) {
 	if store.stage == model.FailureStageObjectReadback {
 		return objectstorage.Object{}, errors.New("SENTINEL_PRIVATE_SDK")
@@ -77,6 +85,8 @@ func (store *failureStageStore) Get(ctx context.Context, key, version string) (o
 	return store.Store.Get(ctx, key, version)
 }
 
+// TestValidateConfigAllowsOnlyExplicitExactLocalObjectStorage permits the exact staging exception and rejects other plaintext hosts.
+// RU: TestValidateConfigAllowsOnlyExplicitExactLocalObjectStorage допускает точное staging-исключение и отклоняет другие открытые адреса.
 func TestValidateConfigAllowsOnlyExplicitExactLocalObjectStorage(t *testing.T) {
 	t.Parallel()
 
@@ -103,7 +113,9 @@ func TestValidateConfigAllowsOnlyExplicitExactLocalObjectStorage(t *testing.T) {
 	}
 }
 
-func TestValidateConfigRejectsLocalExceptionInProduction(t *testing.T) {
+// TestValidateConfigRejectsLocalExceptionOutsideStaging rejects plaintext storage in local and production even with the opt-in flag set.
+// RU: TestValidateConfigRejectsLocalExceptionOutsideStaging отклоняет открытый транспорт хранилища в local и production даже при включённом флаге.
+func TestValidateConfigRejectsLocalExceptionOutsideStaging(t *testing.T) {
 	t.Parallel()
 
 	value := config{
@@ -111,7 +123,10 @@ func TestValidateConfigRejectsLocalExceptionInProduction(t *testing.T) {
 		Endpoint: "http://seaweedfs-s3.kodex-system.svc.cluster.local:8333", Region: "us-east-1", Bucket: "archives",
 		AccessKeyFile: "/access-key", SecretKeyFile: "/secret-key", AllowInsecureLocal: true, Timeout: time.Minute,
 	}
-	if err := validateConfig(value); err == nil {
-		t.Fatal("worker accepted the local plaintext exception in production")
+	for _, environment := range []string{"local", "production"} {
+		value.Environment = environment
+		if err := validateConfig(value); err == nil {
+			t.Fatalf("worker accepted the plaintext exception in %s", environment)
+		}
 	}
 }

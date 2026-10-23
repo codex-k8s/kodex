@@ -18,17 +18,37 @@ import (
 )
 
 const (
-	providerInputProofMessage  = "Codex provider input acknowledged"
+	// providerInputProofMessage fixes the diagnostic message for an acknowledged turn/start projection.
+	// providerInputProofMessage фиксирует diagnostic message подтверждённой проекции turn/start.
+	providerInputProofMessage = "Codex provider input acknowledged"
+	// providerInputProofEventKey names the structured event field rather than deriving it from payload.
+	// providerInputProofEventKey задаёт имя структурированного event field, не получая его из payload.
 	providerInputProofEventKey = "event"
-	providerInputProofEvent    = "PROVIDER_INPUT_ACKNOWLEDGED"
-	providerInputProofKey      = "proof"
-	proofEqual                 = "EQUAL"
-	proofDifferent             = "DIFFERENT"
-	proofUnavailable           = "UNAVAILABLE"
+	// providerInputProofEvent identifies the bounded input-acknowledgement record, not turn completion.
+	// providerInputProofEvent обозначает ограниченную запись input acknowledgement, не завершение хода.
+	providerInputProofEvent = "PROVIDER_INPUT_ACKNOWLEDGED"
+	// providerInputProofKey names the structured projection field in the privileged diagnostic record.
+	// providerInputProofKey задаёт имя поля проекции в привилегированной diagnostic record.
+	providerInputProofKey = "proof"
+	// proofEqual means the bounded file bytes equal the supplied expected bytes at this read.
+	// proofEqual означает равенство ограниченных байтов файла переданным expected bytes при этом чтении.
+	proofEqual = "EQUAL"
+	// proofDifferent means a readable bounded file differs from the expected byte sequence.
+	// proofDifferent означает отличие прочитанного ограниченного файла от expected byte sequence.
+	proofDifferent = "DIFFERENT"
+	// proofUnavailable reports an unreadable or rejected comparison source without its path or OS error.
+	// proofUnavailable отмечает недоступный или отклонённый источник сравнения без пути и OS error.
+	proofUnavailable = "UNAVAILABLE"
 )
 
-// Закрытая проекция actual turn/start, не сериализация RunnerInput либо wire body.
-// Hashes предназначены для привилегированного QA read, не для публичного каталога.
+// providerInputProof is a closed privileged diagnostic projection of prepared TURN input and the
+// actual first text/model/effort parameters acknowledged by the provider path. Hashes and identifiers
+// are not public-catalog data; the record is not cryptographic provider attestation, full wire-body
+// serialization, a grant, or proof that the turn completed or its files were published.
+// providerInputProof — закрытая привилегированная diagnostic projection подготовленного TURN input
+// и фактических first text/model/effort parameters, подтверждённых provider path. Hashes и identifiers
+// не предназначены для публичного каталога; запись не является криптографической аттестацией provider,
+// полной сериализацией wire body, grant или доказательством завершения хода и публикации файлов.
 type providerInputProof struct {
 	RunRef                      string               `json:"run_ref"`
 	NodeRef                     string               `json:"node_ref"`
@@ -84,11 +104,19 @@ type providerInputProof struct {
 	Capabilities                []string             `json:"capabilities"`
 }
 
+// providerProofTool retains a configured tool name/command, excluding its description and call arguments;
+// the diagnostic itself does not authorize executing that command.
+// providerProofTool сохраняет настроенные tool name/command без description и call arguments;
+// сама диагностика не разрешает выполнение этой команды.
 type providerProofTool struct {
 	Name    string `json:"name"`
 	Command string `json:"command"`
 }
 
+// providerProofGrant projects grant/connection versions, capability and policy for privileged diagnosis;
+// it contains no credential and cannot replace the authoritative runtime grant.
+// providerProofGrant проецирует grant/connection versions, capability и policy для приватной диагностики;
+// credential в ней нет, и авторитетный runtime grant она не заменяет.
 type providerProofGrant struct {
 	Ref               string `json:"ref"`
 	Version           int64  `json:"version"`
@@ -98,8 +126,16 @@ type providerProofGrant struct {
 	ApprovalPolicy    string `json:"approval_policy"`
 }
 
+// providerInputProofObserver receives the prepared projection synchronously after a valid start ACK;
+// it has no error return, delivery acknowledgement or retry contract.
+// providerInputProofObserver синхронно получает подготовленную проекцию после корректного start ACK;
+// error return, delivery acknowledgement и retry contract отсутствуют.
 type providerInputProofObserver func(context.Context, providerInputProof)
 
+// providerInputProofLogger adapts a nonnil trusted logger to the observer using fixed event fields.
+// It logs the supplied closed projection as-is, not arbitrary payloads through a general redactor.
+// providerInputProofLogger адаптирует ненулевой доверенный logger к observer с фиксированными event fields.
+// Переданная закрытая проекция пишется как есть; это не общий redactor произвольных payloads.
 func providerInputProofLogger(logger *slog.Logger) providerInputProofObserver {
 	return func(ctx context.Context, proof providerInputProof) {
 		logger.LogAttrs(ctx, slog.LevelInfo, providerInputProofMessage,
@@ -107,8 +143,12 @@ func providerInputProofLogger(logger *slog.Logger) providerInputProofObserver {
 	}
 }
 
-// Даже warm consumer использует здесь текущий verified in-memory TURN, а не
-// mounted WARM runtime.json. Receipt появляется только после успешного ACK.
+// startTurnWithInputProof derives current turn parameters and, when requested, a projection from
+// verified in-memory input rather than mounted WARM state. It emits only after turn/start succeeds
+// and binds an in-progress turn; an ACK is not completion, billing or durable log-delivery proof.
+// startTurnWithInputProof строит текущие turn parameters и необязательную проекцию из проверенного
+// in-memory input, не mounted WARM state. Выдача происходит лишь после успешного turn/start
+// и binding in-progress turn; ACK не доказывает завершение, биллинг или устойчивую доставку лога.
 func (server *appServer) startTurnWithInputProof(ctx context.Context, state *protocolState, input model.Input, prompt []byte, observer providerInputProofObserver) error {
 	params, err := turnStartParams(input, state.threadID, prompt)
 	if err != nil {
@@ -134,6 +174,14 @@ func (server *appServer) startTurnWithInputProof(ctx context.Context, state *pro
 	return nil
 }
 
+// newProviderInputProof expects already verified input and bounds/checks the first text item,
+// exact model and supported reasoning effort. It hashes that text and supplied instructions, tests
+// task byte inclusion, compares two fixed files and copies diagnostic metadata. It does not validate
+// every input field/additional item, authenticate the provider or prove semantic task execution.
+// newProviderInputProof требует уже проверенный input и ограничивает/проверяет первый text item,
+// точную model и поддержанный reasoning effort. Она хеширует text и переданные instructions, проверяет
+// включение байтов task, сравнивает два фиксированных файла и копирует diagnostic metadata. Все
+// input fields/additional items, provider authentication и смысловое выполнение задачи не проверяются.
 func newProviderInputProof(input model.Input, params map[string]any) (providerInputProof, error) {
 	invalid := errors.New("provider input proof is invalid")
 	items, ok := params["input"].([]map[string]any)
@@ -185,11 +233,19 @@ func newProviderInputProof(input model.Input, params map[string]any) (providerIn
 	return proof, nil
 }
 
+// providerProofSHA computes the lowercase SHA-256 hex of exact bytes, including an empty input;
+// a digest identifies content but does not authenticate its origin.
+// providerProofSHA вычисляет lowercase SHA-256 hex точных байтов, включая пустой input;
+// digest обозначает содержимое, но не подтверждает его происхождение.
 func providerProofSHA(raw []byte) string {
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:])
 }
 
+// compareProviderProofFile hashes a successfully read fixed file and returns EQUAL/DIFFERENT;
+// any read-policy failure becomes an empty digest plus UNAVAILABLE, never false equality.
+// compareProviderProofFile хеширует прочитанный фиксированный файл и возвращает EQUAL/DIFFERENT;
+// отказ read policy даёт пустой digest и UNAVAILABLE, не ложное равенство.
 func compareProviderProofFile(root, relative string, expected []byte) (string, string) {
 	raw, err := readProviderProofFile(root, relative)
 	if err != nil {
@@ -202,8 +258,14 @@ func compareProviderProofFile(root, relative string, expected []byte) (string, s
 	return providerProofSHA(raw), comparison
 }
 
-// Только два фиксированных пути, каждый компонент O_NOFOLLOW; никаких env,
-// credential files, произвольных путей либо symlink aliases в debug reader.
+// readProviderProofFile permits only AGENTS.md and the inbox prompt beneath a clean absolute root.
+// The root leaf and relative directory/file components use O_NOFOLLOW; a bounded regular file is
+// read through its fd and checked for size/mtime changes. This diagnostic reader does not validate
+// owner/link count, all root ancestors, mounts or future mutations, and grants no publication authority.
+// readProviderProofFile разрешает лишь AGENTS.md и inbox prompt под чистым абсолютным root.
+// Root leaf и относительные directory/file components открываются с O_NOFOLLOW; bounded regular file
+// читается через fd с проверкой size/mtime. Diagnostic reader не проверяет owner/link count,
+// все предки root, mounts или будущие изменения и не выдаёт publication authority.
 func readProviderProofFile(root, relative string) ([]byte, error) {
 	invalid := errors.New("provider proof file is unavailable")
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || (relative != "AGENTS.md" && relative != ".kodex/inbox/prompt.md") {

@@ -17,8 +17,11 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/testfixture"
 )
 
+// capturedRolloutFixture prepares a disposable two-record source, pins synthetic execution fields and invokes the actual capture verifier before returning a successful result with measured usage; it does not manufacture capture proof from a tuple.
+// capturedRolloutFixture готовит одноразовый источник из двух записей, закрепляет synthetic execution fields и вызывает настоящий capture verifier до возврата успешного результата с usage; не создаёт capture proof из tuple.
 func capturedRolloutFixture(t *testing.T, input model.Input) (model.Input, Result) {
 	t.Helper()
 	if input.WorkspaceRoot == "" {
@@ -30,18 +33,7 @@ func capturedRolloutFixture(t *testing.T, input model.Input) (model.Input, Resul
 	input.ExecutionBindingDigest, input.RuntimeRevisionDigest, input.InputDigest = strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
 	relative := ".kodex/state/codex-home/sessions/2026/10/07/rollout-00000000-0000-4000-8000-000000000001.jsonl"
 	path := filepath.Join(input.WorkspaceRoot, relative)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o640)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, writeErr := file.WriteString("{\"type\":\"session_meta\"}\n{\"type\":\"event_msg\"}\n")
-	syncErr, closeErr := file.Sync(), file.Close()
-	if writeErr != nil || syncErr != nil || closeErr != nil {
-		t.Fatal("fixture source was not durably closed")
-	}
+	testfixture.WriteRolloutSource(t, path)
 	result, err := CaptureStoppedRollout(input, "00000000-0000-4000-8000-000000000001", path)
 	if err != nil {
 		t.Fatal("actual source capture failed")
@@ -51,6 +43,8 @@ func capturedRolloutFixture(t *testing.T, input model.Input) (model.Input, Resul
 	return input, result
 }
 
+// TestBrokerCapturePreservesVerifiedSourceOnSuccessAndFailure exercises synthetic execution/refresh/activity failures and terminal framing, requiring verified source and usage to survive while failed terminal presentation is cleared.
+// TestBrokerCapturePreservesVerifiedSourceOnSuccessAndFailure проверяет synthetic execution/refresh/activity failures и terminal framing, требуя сохранение verified source и usage при очистке failed terminal presentation.
 func TestBrokerCapturePreservesVerifiedSourceOnSuccessAndFailure(t *testing.T) {
 	for _, mode := range []string{"success", "execution", "refresh read", "refresh commit", "activity"} {
 		t.Run(mode, func(t *testing.T) {
@@ -108,6 +102,8 @@ func TestBrokerCapturePreservesVerifiedSourceOnSuccessAndFailure(t *testing.T) {
 	}
 }
 
+// TestBrokerCaptureRejectsForeignMalformedAndChangedProof independently changes proof bindings, owner, source bytes/mode/link topology and frame schema, including missing/unknown/duplicate/null fields; the strict consumer must return no verified capture, session or usage.
+// TestBrokerCaptureRejectsForeignMalformedAndChangedProof отдельно меняет proof bindings, owner, source bytes/mode/link topology и frame schema, включая missing/unknown/duplicate/null fields; strict consumer не должен вернуть verified capture, session или usage.
 func TestBrokerCaptureRejectsForeignMalformedAndChangedProof(t *testing.T) {
 	for _, mode := range []string{"plain tuple", "unknown schema", "foreign binding", "foreign revision", "foreign input", "foreign attempt", "foreign session", "foreign turn", "foreign source", "changed digest", "changed bytes", "wrong owner", "wrong mode", "symlink", "hardlink", "legacy", "missing field", "unknown field", "duplicate field", "null proof", "missing input"} {
 		t.Run(mode, func(t *testing.T) {
@@ -190,6 +186,8 @@ func TestBrokerCaptureRejectsForeignMalformedAndChangedProof(t *testing.T) {
 	}
 }
 
+// TestArchiveDigestRejectsSameInodeMutation appends to an already opened synthetic archive inode and requires digesting against its previous stat to reject the mutation.
+// TestArchiveDigestRejectsSameInodeMutation дописывает уже открытый synthetic archive inode и требует отказ digesting по прежнему stat при изменении.
 func TestArchiveDigestRejectsSameInodeMutation(t *testing.T) {
 	input, result := capturedRolloutFixture(t, model.Input{})
 	file, info, err := openProtectedFile(input.WorkspaceRoot, result.ArchivePath)
@@ -211,6 +209,8 @@ func TestArchiveDigestRejectsSameInodeMutation(t *testing.T) {
 	}
 }
 
+// TestCaptureCannotBeIssuedFromTupleOrModifiedResult changes the public digest tuple and requests capture for a foreign session, requiring both paths to lose or reject source authority.
+// TestCaptureCannotBeIssuedFromTupleOrModifiedResult меняет public digest tuple и запрашивает capture чужой session, требуя утраты или отказа source authority в обоих случаях.
 func TestCaptureCannotBeIssuedFromTupleOrModifiedResult(t *testing.T) {
 	input, result := capturedRolloutFixture(t, model.Input{})
 	result.ArchiveSHA256 = strings.Repeat("d", 64)
@@ -222,7 +222,8 @@ func TestCaptureCannotBeIssuedFromTupleOrModifiedResult(t *testing.T) {
 	}
 }
 
-// Отдельная kernel-fixture, без provider, cluster либо постоянных каталогов.
+// TestBrokerCaptureNativeUIDBoundary is a root-only disposable kernel test for success/failure delivery between provider UID 10002 and consumer UID 10001; non-root runs skip rather than claim this boundary was exercised.
+// TestBrokerCaptureNativeUIDBoundary — root-only одноразовый kernel test success/failure доставки между provider UID 10002 и consumer UID 10001; non-root пропускает, не объявляя boundary проверенной.
 func TestBrokerCaptureNativeUIDBoundary(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("native UID fixture requires disposable root test process")
@@ -232,6 +233,8 @@ func TestBrokerCaptureNativeUIDBoundary(t *testing.T) {
 	}
 }
 
+// runBrokerCaptureNativeUIDBoundary owns a temporary workspace and copied test binary, launches bounded producer/consumer child identities and waits for synthetic Unix-socket capture transfer before cleanup. No actual provider, cluster or persistent workspace participates.
+// runBrokerCaptureNativeUIDBoundary владеет временным workspace и копией тестового бинаря, запускает ограниченные producer/consumer child identities и ждёт synthetic Unix-socket capture transfer до очистки. Настоящие provider, cluster и persistent workspace не участвуют.
 func runBrokerCaptureNativeUIDBoundary(t *testing.T, outcome string) {
 	root, err := os.MkdirTemp("", "kodex-provider-capture-")
 	if err != nil {
@@ -294,6 +297,8 @@ func runBrokerCaptureNativeUIDBoundary(t *testing.T, outcome string) {
 	}
 }
 
+// TestBrokerCaptureNativeUIDFixture is inert without explicit fixture mode and validates its temporary path/UID before producing or consuming synthetic capture frames. The consumer checks peer UID, verified source/usage and unchanged inode ownership/mode/ctime, not a live model session.
+// TestBrokerCaptureNativeUIDFixture неактивен без явного fixture mode и проверяет временный path/UID до создания или чтения synthetic capture frames. Consumer сверяет peer UID, verified source/usage и неизменные inode ownership/mode/ctime, не живую model session.
 func TestBrokerCaptureNativeUIDFixture(t *testing.T) {
 	mode, root := os.Getenv("KODEX_NATIVE_CAPTURE_FIXTURE"), os.Getenv("KODEX_NATIVE_CAPTURE_WORKSPACE")
 	outcome := os.Getenv("KODEX_NATIVE_CAPTURE_OUTCOME")

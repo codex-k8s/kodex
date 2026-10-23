@@ -17,6 +17,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestAssistantPlanInvalidDetailsAreClosed checks all five stages and seventeen
+// registered fields, rejecting noncanonical indices, unknown metadata, duplicate/foreign/
+// unknown-proto details and matching raw error text as diagnostic provenance.
+// TestAssistantPlanInvalidDetailsAreClosed проверяет пять stages/семнадцать registered
+// fields и отказ noncanonical indices,unknown metadata,duplicate/foreign/unknown-proto
+// details и matching raw error text как diagnostic provenance.
 func TestAssistantPlanInvalidDetailsAreClosed(t *testing.T) {
 	for _, stage := range []string{"HYDRATE", "NORMALIZE", "COMMAND", "BIND", "AUTHORIZE"} {
 		for _, field := range []string{"WORKFLOW_SHAPE", "WORKFLOW_REF", "WORKFLOW_VERSION", "WORKFLOW_BINDING", "MAX_CONCURRENCY", "TIMEOUT_SECONDS", "WORKFLOW_TEXT", "INPUT_FIELDS", "STEPS", "INPUT_FIELD_KEY", "STEP_SHAPE", "STEP_KEY", "STEPS_GRAPH", "WORKFLOW_DRAFT", "STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS"} {
@@ -52,6 +58,14 @@ func TestAssistantPlanInvalidDetailsAreClosed(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanInvalidDiagnosticKeepsFailedReceiptAndGuidance checks local MCP
+// preserves failed activity and bounded correction for verified owner invalid details,
+// logs only closed stage/field labels and exposes no prompt/ref/credential canaries.
+// A bare InvalidArgument invents no field and cannot change another tool's result.
+// TestAssistantPlanInvalidDiagnosticKeepsFailedReceiptAndGuidance проверяет failed
+// activity/bounded correction local MCP для verified owner invalid details,только closed
+// stage/field labels в logs и отсутствие prompt/ref/credential canaries. Bare
+// InvalidArgument не создаёт field и не меняет result другого tool.
 func TestAssistantPlanInvalidDiagnosticKeepsFailedReceiptAndGuidance(t *testing.T) {
 	input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
 	arguments := map[string]any{"summary": "PRIVATE_SUMMARY", "operations": []any{map[string]any{"type": "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "parameters": map[string]any{"systemAssistantRef": input.AgentRef, "instructions": "PRIVATE_CONTENT"}}}}

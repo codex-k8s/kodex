@@ -12,6 +12,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestBrokerResponseFailureCategoryKeepsSentinelAndRedactsJoinedCause exercises every known category with joined sentinels/context/private causes, preserving errors.Is and primary classification while requiring fixed text, empty JSON fields and safe unknown/typed-nil fallback.
+// TestBrokerResponseFailureCategoryKeepsSentinelAndRedactsJoinedCause проверяет все известные категории с joined sentinels/context/private causes, сохраняя errors.Is и primary classification и требуя fixed text, empty JSON fields и safe unknown/typed-nil fallback.
 func TestBrokerResponseFailureCategoryKeepsSentinelAndRedactsJoinedCause(t *testing.T) {
 	for _, category := range []brokerResponseFailureCategory{
 		brokerResponseCallbacks, brokerResponsePostTerminal, brokerResponseFrameLimit,
@@ -51,6 +53,8 @@ func TestBrokerResponseFailureCategoryKeepsSentinelAndRedactsJoinedCause(t *test
 	}
 }
 
+// TestBrokerResponseReadFailureCategories feeds malformed and out-of-order synthetic streams, replay/lifecycle/terminal/archive errors and callback failures to the real reader, requiring the exact closed category and original sentinel without private text.
+// TestBrokerResponseReadFailureCategories передаёт real reader malformed/out-of-order synthetic streams, replay/lifecycle/terminal/archive errors и callback failures, требуя точную closed category и исходный sentinel без private text.
 func TestBrokerResponseReadFailureCategories(t *testing.T) {
 	frame := func(sequence uint64, kind string, activity *runtimecontract.RuntimeActivity, terminal *brokerResponse) string {
 		t.Helper()

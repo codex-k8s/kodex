@@ -586,6 +586,9 @@ export const useAccessStore = defineStore("access", () => {
     clearDecision();
   }
 
+  // jscpd:ignore-start
+  // Явный интерфейс Pinia store: одноимённые поля другого store и его импорты
+  // не представляют общего исполняемого алгоритма. Исключён только перечень.
   return {
     permissions,
     subjects,
@@ -641,3 +644,4 @@ export const useAccessStore = defineStore("access", () => {
     clearOwnerState,
   };
 });
+// jscpd:ignore-end

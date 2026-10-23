@@ -17,25 +17,35 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// effectRuntime injects report/reconciliation owner RPC behavior while leaving all unrelated client methods outside the test fixture.
+// effectRuntime внедряет поведение owner RPC отчёта и сверки, оставляя прочие методы клиента вне тестовой оснастки.
 type effectRuntime struct {
 	cp.RuntimeWorkServiceClient
 	report    func(context.Context, *cp.ReportEmailEffectReceiptRequest) (*cp.ReportEmailEffectReceiptResponse, error)
 	reconcile func(context.Context, *cp.ResolveEmailReconciliationRequest) (*cp.ResolveEmailReconciliationResponse, error)
 }
 
+// ReportEmailEffectReceipt forwards the exact request and bounded context to the synthetic report responder.
+// ReportEmailEffectReceipt передаёт точный запрос и ограниченный контекст синтетическому обработчику отчёта.
 func (f effectRuntime) ReportEmailEffectReceipt(ctx context.Context, r *cp.ReportEmailEffectReceiptRequest, _ ...grpc.CallOption) (*cp.ReportEmailEffectReceiptResponse, error) {
 	return f.report(ctx, r)
 }
 
+// ResolveEmailReconciliation exposes receipt and decision pins to the case-specific owner-response assertion.
+// ResolveEmailReconciliation передаёт привязки квитанции и решения проверке ответа владельца конкретного сценария.
 func (f effectRuntime) ResolveEmailReconciliation(ctx context.Context, r *cp.ResolveEmailReconciliationRequest, _ ...grpc.CallOption) (*cp.ResolveEmailReconciliationResponse, error) {
 	return f.reconcile(ctx, r)
 }
 
+// effectFixture creates matching domain/Proto unknown-effect receipts with a live synthetic invocation binding and valid opaque identities.
+// effectFixture создаёт совпадающие доменную и Proto-квитанции неопределённого эффекта с живым синтетическим binding и допустимыми opaque-идентификаторами.
 func effectFixture() (receipt.Report, *cp.EmailEffectReceipt) {
 	r := receipt.OwnerReceipt{Invocation: "inv_fixture01", ExternalRef: strings.Repeat("a", 32), ExternalDigest: strings.Repeat("b", 64), InputDigest: strings.Repeat("c", 64), EffectKey: "effect:with/slashes", Mailbox: "mailbox01", Connection: "connection01", ConfigurationRevision: 7, Outcome: receipt.Unknown}
 	return receipt.Report{Binding: fixtureRequest().ExecutionBinding, Receipt: r, IdempotencyKey: "report_fixture01"}, &cp.EmailEffectReceipt{Ref: "receipt_fixture01", Version: 1, InvocationRef: r.Invocation, ExternalReceiptRef: r.ExternalRef, ExternalReceiptDigest: r.ExternalDigest, SemanticInputDigest: r.InputDigest, EffectKey: r.EffectKey, MailboxRef: r.Mailbox, ConnectionRef: r.Connection, ConfigurationRevision: r.ConfigurationRevision, Outcome: cp.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_UNKNOWN_OUTCOME}
 }
 
+// TestReportEmailReceiptExactReadback verifies one exact bounded report call and rejects changed owner identity, correlations, outcome or unknown enums.
+// TestReportEmailReceiptExactReadback проверяет один точный ограниченный вызов отчёта и отвергает изменённые identity, связи, исход и неизвестные enum.
 func TestReportEmailReceiptExactReadback(t *testing.T) {
 	for _, field := range []string{"valid", "nil", "ref", "version", "invocation", "external-ref", "digest", "input", "key", "mailbox", "connection", "configuration", "outcome", "unknown-enum"} {
 		t.Run(field, func(t *testing.T) {
@@ -85,6 +95,8 @@ func TestReportEmailReceiptExactReadback(t *testing.T) {
 	}
 }
 
+// TestReportEmailReceiptInputAndDeadline rejects invalid inputs before RPC, preserves safe error classes and requires caller deadline cancellation.
+// TestReportEmailReceiptInputAndDeadline отвергает неверный вход до RPC, сохраняет безопасные классы ошибок и требует отмену по сроку вызывающего.
 func TestReportEmailReceiptInputAndDeadline(t *testing.T) {
 	for _, name := range []string{"nil-binding", "expired", "test-source", "invocation", "prefixed-digest", "uppercase", "short-ref", "outcome", "idempotency"} {
 		t.Run(name, func(t *testing.T) {
@@ -150,6 +162,10 @@ func TestReportEmailReceiptInputAndDeadline(t *testing.T) {
 	}
 }
 
+// TestReportRecoveryUsesOriginalExpiredBinding requires replay to retain original fence/idempotency while using a fresh bounded context after lease expiry.
+// Revoked/unavailable owner responses remain failures, and marking a still-live binding as recovery is rejected before RPC.
+// TestReportRecoveryUsesOriginalExpiredBinding требует сохранения исходных fence/idempotency при replay и нового ограниченного контекста после истечения lease.
+// Ответы revoked/unavailable остаются ошибками, а recovery с ещё живым binding отвергается до RPC.
 func TestReportRecoveryUsesOriginalExpiredBinding(t *testing.T) {
 	for _, mode := range []string{"stored", "revoked", "unavailable", "live"} {
 		t.Run(mode, func(t *testing.T) {
@@ -182,6 +198,10 @@ func TestReportRecoveryUsesOriginalExpiredBinding(t *testing.T) {
 	}
 }
 
+// TestReconcileEmailReceiptExactDecision checks receipt/version/input pins, exact requested decision, actor/grant and valid decision time bounds.
+// Only conclusive effect/no-effect outcomes succeed; malformed, expired, future-created or unknown-enum responses remain unavailable.
+// TestReconcileEmailReceiptExactDecision проверяет привязки квитанции, версии и входа, точное решение, actor/grant и допустимые сроки решения.
+// Успешны лишь определённые effect/no-effect; неверные, истёкшие, созданные в будущем и неизвестные enum-ответы остаются unavailable.
 func TestReconcileEmailReceiptExactDecision(t *testing.T) {
 	for _, field := range []string{"valid", "no-effect", "nil", "receipt", "digest", "version", "decision", "decision-version", "decision-receipt", "decision-digest", "decision-receipt-version", "invocation", "grant", "actor", "expired", "created", "unknown", "unknown-enum"} {
 		t.Run(field, func(t *testing.T) {

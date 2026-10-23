@@ -13,11 +13,26 @@ import (
 )
 
 const (
-	operationTimeout   = 10 * time.Second
-	recoveryPageSize   = 100
+	// operationTimeout caps each owner RPC/list operation at ten seconds, shortened by caller cancellation or
+	// an earlier deadline.
+	// operationTimeout ограничивает каждую owner RPC/list operation десятью секундами с учётом caller
+	// cancellation и более раннего deadline.
+	operationTimeout = 10 * time.Second
+	// recoveryPageSize requests at most 100 draft recovery works per page and is checked against returned page
+	// length.
+	// recoveryPageSize запрашивает до 100 draft recovery works на страницу и сверяется с длиной возвращённой
+	// страницы.
+	recoveryPageSize = 100
+	// recoveryPageBudget limits one traversal batch to ten pages before saving its internal continuation hint.
+	// recoveryPageBudget ограничивает один traversal batch десятью страницами до сохранения внутреннего
+	// continuation hint.
 	recoveryPageBudget = 10
 )
 
+// Owner translates protected draft-work RPCs into domain ports with strict metadata and bounded error
+// mapping; only recovery listing is locally serialized, and authority remains server-owned.
+// Owner переводит защищённые draft-work RPC в domain ports со strict metadata и bounded error mapping;
+// локально сериализует лишь recovery listing, authority остаётся server-owned.
 type Owner struct {
 	client         cp.RuntimeSecretDraftWorkServiceClient
 	claimantID     string
@@ -28,6 +43,10 @@ type Owner struct {
 
 var _ secretdrafts.Owner = (*Owner)(nil)
 
+// New checks a nonnil generated client interface and bounded claimant reference, initializes recovery
+// serialization and does not call readiness or detect typed nils.
+// New проверяет nonnil generated client interface и bounded claimant reference, создаёт recovery
+// serialization без readiness call и проверки typed nil.
 func New(client cp.RuntimeSecretDraftWorkServiceClient, claimantID string) (*Owner, error) {
 	if client == nil || !reference(claimantID) {
 		return nil, secretdrafts.ErrInvalid
@@ -35,6 +54,10 @@ func New(client cp.RuntimeSecretDraftWorkServiceClient, claimantID string) (*Own
 	return &Owner{client: client, claimantID: claimantID, recoveryReader: make(chan struct{}, 1)}, nil
 }
 
+// Check refuses cancelled context, makes a bounded readiness RPC and accepts only Ready; provider
+// diagnostics are mapped to domain sentinels.
+// Check отклоняет cancelled context, выполняет bounded readiness RPC и принимает лишь Ready; provider
+// diagnostics отображает в domain sentinels.
 func (owner *Owner) Check(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -51,6 +74,10 @@ func (owner *Owner) Check(ctx context.Context) error {
 	return nil
 }
 
+// Consume bounds the opaque grant, forwards configured claimant, validates native work and requires the
+// returned claimant to match; this adapter does not itself own grant issuance or lease renewal.
+// Consume ограничивает opaque grant, передаёт настроенный claimant, проверяет native work и совпадение
+// returned claimant; выдачей grants и продлением lease adapter не владеет.
 func (owner *Owner) Consume(ctx context.Context, grant string) (value.DraftWork, error) {
 	if err := ctx.Err(); err != nil {
 		return value.DraftWork{}, err
@@ -71,6 +98,10 @@ func (owner *Owner) Consume(ctx context.Context, grant string) (value.DraftWork,
 	return work, nil
 }
 
+// Complete validates supplied work/descriptors, forwards that exact claim tuple and checks the
+// command-specific result; it does not retry uncertain completion or perform a storage effect.
+// Complete проверяет supplied work/descriptors, передаёт exact claim tuple и проверяет command-specific
+// result; неопределённую completion не повторяет, storage effect не выполняет.
 func (owner *Owner) Complete(ctx context.Context, work value.DraftWork, encrypted *value.DraftEncryptedDescriptor, materialized *value.DraftMaterialization) (value.DraftResult, error) {
 	if err := ctx.Err(); err != nil {
 		return value.DraftResult{}, err
@@ -88,6 +119,10 @@ func (owner *Owner) Complete(ctx context.Context, work value.DraftWork, encrypte
 	return castResult(response.GetDraft(), response.GetSecret(), work)
 }
 
+// Fail sends fixed RECONCILIATION_FAILED for validated claimed work and requires matching draft/FAILED
+// operation plus the kind-specific draft state; it uses the work's claimant, not a replacement claimant.
+// Fail передаёт fixed RECONCILIATION_FAILED для проверенной claimed work и требует matching draft/FAILED
+// operation с kind-specific draft state; использует claimant из work, не replacement claimant.
 func (owner *Owner) Fail(ctx context.Context, work value.DraftWork) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -126,6 +161,12 @@ func (owner *Owner) Fail(ctx context.Context, work value.DraftWork) error {
 	return nil
 }
 
+// ListRecovery bounds/serializes only list traversal, validates each recovery work and rejects
+// duplicates/cycles without partial results. Errors after slot acquisition reset progress; cancellation
+// before acquiring it leaves the hint unchanged, and a full traversal wraps.
+// ListRecovery ограничивает/сериализует лишь list traversal, проверяет каждую recovery work и отклоняет
+// duplicates/cycles без partial results. Ошибки после получения slot сбрасывают progress; отмена до slot
+// не меняет hint, полный обход возвращается в начало.
 func (owner *Owner) ListRecovery(ctx context.Context) (work []value.DraftWork, resultErr error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -188,6 +229,10 @@ func (owner *Owner) ListRecovery(ctx context.Context) (work []value.DraftWork, r
 	return result, nil
 }
 
+// Recover validates recovery work/descriptors, forwards the original zero or claimed tuple and accepts
+// only matching draft, terminal operation and independently known KEEP/DELETE actions.
+// Recover проверяет recovery work/descriptors, передаёт original zero либо claimed tuple и принимает лишь
+// matching draft, terminal operation и раздельно известные KEEP/DELETE actions.
 func (owner *Owner) Recover(ctx context.Context, work value.DraftWork, encrypted *value.DraftEncryptedDescriptor, materialized *value.DraftMaterialization) (value.DraftRecoveryDecision, error) {
 	if err := ctx.Err(); err != nil {
 		return value.DraftRecoveryDecision{}, err
@@ -211,6 +256,10 @@ func (owner *Owner) Recover(ctx context.Context, work value.DraftWork, encrypted
 	return value.DraftRecoveryDecision{EncryptedAction: encryptedAction, MaterializationAction: materializedAction}, nil
 }
 
+// CompleteCleanup validates exact recovery descriptors, sends their original claim tuple and requires
+// Completed; descriptor/RPC/response failures get bounded CleanupAckError stages without raw diagnostics.
+// CompleteCleanup проверяет exact recovery descriptors, отправляет original claim tuple и требует
+// Completed; descriptor/RPC/response failures получают bounded CleanupAckError stages без raw diagnostics.
 func (owner *Owner) CompleteCleanup(ctx context.Context, work value.DraftWork, encrypted *value.DraftEncryptedDescriptor, materialized *value.DraftMaterialization) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -231,6 +280,8 @@ func (owner *Owner) CompleteCleanup(ctx context.Context, work value.DraftWork, e
 	return nil
 }
 
+// recoveryAction maps only KEEP/DELETE to domain actions and explicitly rejects every other enum value.
+// recoveryAction отображает лишь KEEP/DELETE в domain actions и явно отклоняет остальные enum values.
 func recoveryAction(action cp.RuntimeSecretRecoveryAction) (value.DraftRecoveryAction, bool) {
 	switch action {
 	case cp.RuntimeSecretRecoveryAction_RUNTIME_SECRET_RECOVERY_ACTION_KEEP:
@@ -241,6 +292,11 @@ func recoveryAction(action cp.RuntimeSecretRecoveryAction) (value.DraftRecoveryA
 		return "", false
 	}
 }
+
+// rpcError maps RPC failure codes to fixed domain sentinels, preferring current cancellation; it is used
+// on failure paths and hides arbitrary upstream diagnostics, not a nil-success pass-through.
+// rpcError отображает RPC failure codes в fixed domain sentinels с приоритетом current cancellation;
+// применяется при отказе и скрывает arbitrary upstream diagnostics, не является nil-success pass-through.
 func rpcError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()

@@ -15,6 +15,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestNewRequestUUIDReturnsDistinctVersionFourIdentifiers checks formatting, version, variant and no repetition across thirty-two locally generated identifiers. It is not a statistical entropy proof or durable uniqueness test.
+// TestNewRequestUUIDReturnsDistinctVersionFourIdentifiers проверяет формат, версию, вариант и отсутствие повторов среди тридцати двух локальных идентификаторов. Это не статистическое доказательство энтропии или тест устойчивой уникальности.
 func TestNewRequestUUIDReturnsDistinctVersionFourIdentifiers(t *testing.T) {
 	t.Parallel()
 
@@ -36,6 +38,8 @@ func TestNewRequestUUIDReturnsDistinctVersionFourIdentifiers(t *testing.T) {
 	}
 }
 
+// TestSecretAttestorReusesTransportAcrossRefreshes uses a local ES256 key, an in-memory delivery map and a fake API to verify one open, two exchanges, four reads and one close. It exercises local signing but not real gRPC, Kubernetes, TLS or server-side evidence verification.
+// TestSecretAttestorReusesTransportAcrossRefreshes использует локальный ES256-ключ, карту доставки в памяти и поддельный API для проверки одного открытия, двух обменов, четырёх чтений и одного закрытия. Проверяется локальная подпись, но не реальные gRPC, Kubernetes, TLS или серверная проверка доказательства.
 func TestSecretAttestorReusesTransportAcrossRefreshes(t *testing.T) {
 	t.Parallel()
 
@@ -111,6 +115,8 @@ func TestSecretAttestorReusesTransportAcrossRefreshes(t *testing.T) {
 	}
 }
 
+// testSecretConfig assembles synthetic workload and generation bindings with a TLS server name and pass-through interceptor for the fake transport. No endpoint is dialled and no production credential is loaded.
+// testSecretConfig собирает синтетические привязки workload и поколений с именем TLS-сервера и сквозным interceptor для поддельного транспорта. Подключений к endpoint и загрузки production-credentials нет.
 func testSecretConfig(reader SecretReader) SecretConfig {
 	return SecretConfig{
 		Address:                 "dns:///readback-attestor.test:8443",
@@ -138,11 +144,15 @@ func testSecretConfig(reader SecretReader) SecretConfig {
 	}
 }
 
+// secretReaderStub stores fixture material by path and counts reads for transport-reuse assertions. It does not emulate Kubernetes identity, access control or delivery-version validation.
+// secretReaderStub хранит эталонный материал по пути и считает чтения для проверки переиспользования транспорта. Идентичность Kubernetes, контроль доступа и проверка версии доставки не эмулируются.
 type secretReaderStub struct {
 	materials map[string]repository.SecretMaterial
 	calls     int
 }
 
+// ReadVersioned increments the fixture counter and returns the exact map entry with its presence flag and no error; it performs no remote read or version validation.
+// ReadVersioned увеличивает счётчик и возвращает точную запись карты с признаком присутствия без ошибки; удалённого чтения и проверки версии нет.
 func (reader *secretReaderStub) ReadVersioned(
 	_ context.Context,
 	path string,
@@ -152,11 +162,15 @@ func (reader *secretReaderStub) ReadVersioned(
 	return material, found, nil
 }
 
+// attestorAPIStub counts the two attestation RPC kinds and generates minimal successful responses for a local transport test; it is not an authorization or replay verifier.
+// attestorAPIStub считает два вида RPC аттестации и создаёт минимальные успешные ответы для локального теста транспорта; это не проверяющий авторизации или повторов.
 type attestorAPIStub struct {
 	challengeCalls   int
 	attestationCalls int
 }
 
+// IssueAttestationChallenge derives a fixture challenge ID from the request key, hashes its exact credential bytes and returns fixed generation bindings plus current timestamps. It does not verify the supplied credential or persist a one-use challenge.
+// IssueAttestationChallenge получает идентификатор эталонного challenge из ключа запроса, хеширует точные байты credential и возвращает фиксированные поколения с текущими временными метками. Переданный credential не проверяется и одноразовый challenge не сохраняется.
 func (api *attestorAPIStub) IssueAttestationChallenge(
 	_ context.Context,
 	request *internalrpcauthorityv1.IssueAttestationChallengeRequest,
@@ -181,6 +195,8 @@ func (api *attestorAPIStub) IssueAttestationChallenge(
 	}, nil
 }
 
+// AttestServedState returns a future-dated fixture receipt linked to the challenge and increments its counter without verifying the JWS, evidence digest or server-side idempotency.
+// AttestServedState возвращает эталонную квитанцию с будущим сроком, связанную с challenge, и увеличивает счётчик без проверки JWS, дайджеста доказательства или серверной идемпотентности.
 func (api *attestorAPIStub) AttestServedState(
 	_ context.Context,
 	request *internalrpcauthorityv1.AttestServedStateRequest,

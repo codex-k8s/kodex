@@ -18,7 +18,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
-// ManifestResolverConfig закрепляет exact CNPG Backup и его source Cluster.
+// ManifestResolverConfig pins the in-cluster API/TLS boundary, selected Backup, fixed source Cluster, Barman object/server and bounded request timeout. File paths identify mounted credentials rather than embedded secret values.
+// ManifestResolverConfig закрепляет внутрикластерные API и TLS boundary, выбранный Backup, фиксированный source Cluster, объект и сервер Barman и ограниченный timeout. Пути обозначают смонтированные credentials, а не содержат секретные значения.
 type ManifestResolverConfig struct {
 	Address          string
 	TLSServerName    string
@@ -32,7 +33,8 @@ type ManifestResolverConfig struct {
 	Timeout          time.Duration
 }
 
-// BackupManifest — канонический readback фактически выбранного CNPG backup.
+// BackupManifest records the selected Backup and source Cluster identities, versions, provider/WAL metadata and recovery target for canonical hashing. DigestSHA256 is excluded from its own encoding; the manifest is an observed snapshot, not a signature or atomic multi-resource read.
+// BackupManifest фиксирует идентичности и версии выбранных Backup и source Cluster, provider и WAL metadata и recovery target для canonical hashing. DigestSHA256 исключён из собственного кодирования; манифест является наблюдённым снимком, а не подписью и атомарным чтением нескольких ресурсов.
 type BackupManifest struct {
 	Version                      int    `json:"v"`
 	BackupName                   string `json:"backup_name"`
@@ -60,7 +62,8 @@ type BackupManifest struct {
 	DigestSHA256                 string `json:"-"`
 }
 
-// ManifestResolver читает authoritative Backup/Cluster из Kubernetes API.
+// ManifestResolver owns an HTTP client and fixed Backup/Cluster URLs, plus a clock for recovery-window validation. It reads API metadata but does not retrieve backup objects or execute recovery.
+// ManifestResolver владеет HTTP-клиентом и фиксированными URL Backup и Cluster и часами проверки recovery window. Читаются метаданные API, но объекты резервной копии не загружаются и восстановление не выполняется.
 type ManifestResolver struct {
 	config      ManifestResolverConfig
 	client      *http.Client
@@ -69,6 +72,8 @@ type ManifestResolver struct {
 	now         func() time.Time
 }
 
+// backupEnvelope models the Backup identity, plugin binding and completion/provider metadata consumed by Resolve. Ordinary JSON decoding permits unmodeled fields; explicit resolver checks establish required values.
+// backupEnvelope описывает идентичность Backup, plugin binding и используемые Resolve completion и provider metadata. Обычный JSON-декодер допускает неописанные поля; необходимые значения устанавливают явные проверки resolver.
 type backupEnvelope struct {
 	APIVersion string         `json:"apiVersion"`
 	Kind       string         `json:"kind"`
@@ -98,6 +103,8 @@ type backupEnvelope struct {
 	} `json:"status"`
 }
 
+// sourceClusterEnvelope keeps source Cluster identity separate from raw spec bytes so Resolve can validate the plugin and canonically hash the full observed spec.
+// sourceClusterEnvelope отделяет идентичность source Cluster от исходных spec-байтов, позволяя Resolve проверить plugin и канонически хешировать весь наблюдённый spec.
 type sourceClusterEnvelope struct {
 	APIVersion string          `json:"apiVersion"`
 	Kind       string          `json:"kind"`
@@ -105,6 +112,8 @@ type sourceClusterEnvelope struct {
 	Spec       json.RawMessage `json:"spec"`
 }
 
+// sourceClusterSpec exposes plugin names, WAL-archiver flags and parameter maps used to require one correctly bound Barman plugin while allowing other plugin entries.
+// sourceClusterSpec раскрывает имена plugins, признаки WAL archiver и карты параметров для требования одного правильно привязанного Barman plugin при допустимости других plugins.
 type sourceClusterSpec struct {
 	Plugins []struct {
 		Name          string            `json:"name"`
@@ -113,7 +122,8 @@ type sourceClusterSpec struct {
 	} `json:"plugins"`
 }
 
-// NewManifestResolver создаёт resolver с exact TLS и projected token.
+// NewManifestResolver validates the fixed API/TLS/namespace/source/server and nonempty Backup/object names, loads the CA and configures TLS 1.3, timeout and redirect rejection. It builds exact escaped URLs without reading a token or making an API call.
+// NewManifestResolver проверяет фиксированные API, TLS, namespace, source и server и непустые имена Backup и object, загружает CA и задаёт TLS 1.3, timeout и запрет redirect. Точные URL с экранированием строятся без чтения токена и вызова API.
 func NewManifestResolver(config ManifestResolverConfig) (*ManifestResolver, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
@@ -159,12 +169,14 @@ func NewManifestResolver(config ManifestResolverConfig) (*ManifestResolver, erro
 	}, nil
 }
 
-// Close закрывает простаивающие Kubernetes API connections.
+// Close closes idle resolver HTTP connections without cancelling active caller contexts, deleting a Backup or changing source Cluster state.
+// Close закрывает простаивающие HTTP-соединения resolver без отмены активных контекстов вызывающих, удаления Backup и изменения состояния source Cluster.
 func (resolver *ManifestResolver) Close() {
 	resolver.client.CloseIdleConnections()
 }
 
-// Resolve связывает immutable Backup, source Cluster и recovery target.
+// Resolve sequentially reads the selected Backup and source Cluster, validates their identities, completed plugin metadata and one shared nonzero WAL timeline, bounds the second-truncated recovery target, and canonically hashes the resulting manifest. It does not lock both resources, read WAL bytes or cryptographically sign the result.
+// Resolve последовательно читает выбранные Backup и source Cluster, проверяет идентичности, completed plugin metadata и общий ненулевой WAL timeline, ограничивает recovery target с точностью секунды и канонически хеширует манифест. Оба ресурса не блокируются, байты WAL не читаются и результат криптографически не подписывается.
 func (resolver *ManifestResolver) Resolve(
 	ctx context.Context,
 	recoveryTarget time.Time,
@@ -257,6 +269,8 @@ func (resolver *ManifestResolver) Resolve(
 	return manifest, nil
 }
 
+// read loads the current safe projected token, performs one authenticated GET to a resolver-owned URL and requires HTTP 200 with a nonempty bounded body. It closes the body and rejects transport/read/size errors without retrying or following redirects.
+// read загружает текущий безопасный projected token, выполняет один аутентифицированный GET принадлежащего resolver URL и требует HTTP 200 с непустым ограниченным телом. Тело закрывается; transport, read и size errors отклоняются без повтора и перехода по redirect.
 func (resolver *ManifestResolver) read(ctx context.Context, endpoint string) ([]byte, error) {
 	token, err := readToken(resolver.config.TokenFile)
 	if err != nil {
@@ -280,6 +294,8 @@ func (resolver *ManifestResolver) read(ctx context.Context, endpoint string) ([]
 	return raw, nil
 }
 
+// validObjectMetadata requires the configured name/namespace, an eight-to-128-byte UID, positive decimal resource version and nonzero generation; it does not authenticate an arbitrary metadata object.
+// validObjectMetadata требует настроенные имя и namespace, UID от восьми до 128 байт, положительную десятичную resource version и ненулевую generation; произвольный metadata object не аутентифицируется.
 func validObjectMetadata(metadata objectMetadata, name string, namespace string) bool {
 	return metadata.Name == name &&
 		metadata.Namespace == namespace &&
@@ -289,6 +305,8 @@ func validObjectMetadata(metadata objectMetadata, name string, namespace string)
 		metadata.Generation > 0
 }
 
+// hasExactBarmanPlugin requires exactly one Barman-named plugin with WAL archiving enabled and the exact object parameter. Other plugin names are ignored, but a malformed or duplicate Barman entry rejects the spec.
+// hasExactBarmanPlugin требует ровно один plugin с именем Barman, включённым WAL archiving и точным object parameter. Другие имена plugins игнорируются, но неверная либо повторная Barman entry отклоняет spec.
 func hasExactBarmanPlugin(spec sourceClusterSpec, objectName string) bool {
 	matches := 0
 	for _, plugin := range spec.Plugins {
@@ -304,6 +322,8 @@ func hasExactBarmanPlugin(spec sourceClusterSpec, objectName string) bool {
 	return matches == 1
 }
 
+// exactWALTimeline requires two 24-character hexadecimal WAL names sharing the same nonzero first-eight-digit timeline, case-insensitively. It does not compare segment order, validate LSN values or prove WAL archive availability.
+// exactWALTimeline требует два 24-символьных hex-имени WAL с одинаковым ненулевым timeline первых восьми цифр без учёта регистра. Порядок сегментов, значения LSN и доступность архива WAL не проверяются.
 func exactWALTimeline(beginWAL string, endWAL string) (uint64, error) {
 	if len(beginWAL) != 24 || len(endWAL) != 24 {
 		return 0, errors.New("CNPG WAL identity is invalid")

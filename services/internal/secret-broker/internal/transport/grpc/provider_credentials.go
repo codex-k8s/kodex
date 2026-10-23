@@ -14,27 +14,46 @@ import (
 )
 
 const (
-	providerCleanupErrorDomain      = "kodex.provider_credential_cleanup"
+	// providerMaterializerUnavailableMessage keeps absent-capability and unexpected materializer failures on the same fixed public diagnostic.
+	// providerMaterializerUnavailableMessage сохраняет одну fixed public diagnostic для absent capability и unexpected materializer failures.
+	providerMaterializerUnavailableMessage = "provider credential materializer is unavailable"
+	// providerCleanupErrorDomain is the fixed ErrorInfo domain for the cleanup CAS-change signal, not
+	// caller-provided diagnostic metadata.
+	// providerCleanupErrorDomain — фиксированный ErrorInfo domain для cleanup CAS-change signal, не diagnostic
+	// metadata по выбору caller.
+	providerCleanupErrorDomain = "kodex.provider_credential_cleanup"
+	// providerCleanupCASChangedReason identifies a rejected pre-fence snapshot change; generic conflicts,
+	// arbitrary matching text and uncertain writes must not acquire this no-effect signal.
+	// providerCleanupCASChangedReason обозначает отклонённое pre-fence snapshot change; generic conflicts,
+	// совпавший произвольный текст и uncertain writes не должны получать этот no-effect signal.
 	providerCleanupCASChangedReason = "CAS_SNAPSHOT_CHANGED"
 )
 
+// CheckProviderCredentialMaterializerReadiness requires a configured materializer and its Check success,
+// returning Ready=false plus fixed Unavailable otherwise; it does not start authorization.
+// CheckProviderCredentialMaterializerReadiness требует настроенный materializer и успешный Check, иначе
+// возвращает Ready=false с fixed Unavailable; authorization не запускает.
 func (server *Server) CheckProviderCredentialMaterializerReadiness(
 	ctx context.Context,
 	_ *controlplanev1.CheckProviderCredentialMaterializerReadinessRequest,
 ) (*controlplanev1.CheckProviderCredentialMaterializerReadinessResponse, error) {
 	if server.providerCredentials == nil || server.providerCredentials.Check(ctx) != nil {
 		return &controlplanev1.CheckProviderCredentialMaterializerReadinessResponse{Ready: false},
-			status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+			status.Error(codes.Unavailable, providerMaterializerUnavailableMessage)
 	}
 	return &controlplanev1.CheckProviderCredentialMaterializerReadinessResponse{Ready: true}, nil
 }
 
+// StartDeviceAuthorization forwards the exact attempt/account to the configured materializer and returns
+// its device-flow locator/code/expiry/object pins, mapping failures without exposing credential bytes.
+// StartDeviceAuthorization передаёт exact attempt/account настроенному materializer и возвращает
+// device-flow locator/code/expiry/object pins, отображая failures без выдачи credential bytes.
 func (server *Server) StartDeviceAuthorization(
 	ctx context.Context,
 	request *controlplanev1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest,
 ) (*controlplanev1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error) {
 	if server.providerCredentials == nil {
-		return nil, status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+		return nil, status.Error(codes.Unavailable, providerMaterializerUnavailableMessage)
 	}
 	result, err := server.providerCredentials.StartDeviceAuthorization(ctx, request.GetAttemptRef(), request.GetAccountRef())
 	if err != nil {
@@ -50,12 +69,18 @@ func (server *Server) StartDeviceAuthorization(
 	}, nil
 }
 
+// ObserveDeviceAuthorization separates metadata-only cleanup observation from POLL; mixed/unknown poll
+// fields are refused. Metadata mode returns presence/absence pins and optional produced credential
+// descriptor, never polling state or account diagnostics.
+// ObserveDeviceAuthorization отделяет metadata-only cleanup observation от POLL и отклоняет mixed/unknown
+// poll fields. Metadata mode возвращает presence/absence pins и optional produced credential descriptor,
+// не polling state и не account diagnostics.
 func (server *Server) ObserveDeviceAuthorization(
 	ctx context.Context,
 	request *controlplanev1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest,
 ) (*controlplanev1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse, error) {
 	if server.providerCredentials == nil {
-		return nil, status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+		return nil, status.Error(codes.Unavailable, providerMaterializerUnavailableMessage)
 	}
 	if request.GetMode() == controlplanev1.ProviderAuthorizationObservationMode_PROVIDER_AUTHORIZATION_OBSERVATION_MODE_METADATA_ONLY {
 		target := kubernetesstore.ProviderAuthorizationCleanupTarget{TaskRef: request.GetTaskRef(), AccountRef: request.GetAccountRef(),
@@ -102,12 +127,16 @@ func (server *Server) ObserveDeviceAuthorization(
 	}, nil
 }
 
+// MaterializeAPIKey copies the request key for the materializer, clears that private copy on return and
+// emits only descriptor/masked account; it does not clear the caller's original request slice itself.
+// MaterializeAPIKey копирует request key для materializer, очищает private copy при return и выдаёт лишь
+// descriptor/masked account; исходный request slice caller самостоятельно не очищает.
 func (server *Server) MaterializeAPIKey(
 	ctx context.Context,
 	request *controlplanev1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest,
 ) (*controlplanev1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse, error) {
 	if server.providerCredentials == nil {
-		return nil, status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+		return nil, status.Error(codes.Unavailable, providerMaterializerUnavailableMessage)
 	}
 	apiKey := append([]byte(nil), request.GetApiKey()...)
 	defer clear(apiKey)
@@ -120,12 +149,16 @@ func (server *Server) MaterializeAPIKey(
 	}, nil
 }
 
+// DiscardProviderCredentialMaterialization copies the supplied attempt and optional exact credential pins
+// into a typed discard request, delegates once and returns Discarded only after port success.
+// DiscardProviderCredentialMaterialization копирует attempt и optional exact credential pins в typed
+// discard request, однократно делегирует и возвращает Discarded лишь после port success.
 func (server *Server) DiscardProviderCredentialMaterialization(
 	ctx context.Context,
 	request *controlplanev1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest,
 ) (*controlplanev1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse, error) {
 	if server.providerCredentials == nil {
-		return nil, status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+		return nil, status.Error(codes.Unavailable, providerMaterializerUnavailableMessage)
 	}
 	target := providercredential.DiscardMaterialization{
 		AttemptRef: request.GetAttemptRef(), AccountRef: request.GetAccountRef(),
@@ -145,12 +178,18 @@ func (server *Server) DiscardProviderCredentialMaterialization(
 	return &controlplanev1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse{Discarded: true}, nil
 }
 
+// CleanupProviderCredential validates recovery identity and exactly one typed credential/pending/absence
+// target, then forwards the original task/account/generation and exact pins. The materializer owns
+// fencing/effects/receipt provenance; this wrapper only maps its result/error.
+// CleanupProviderCredential проверяет recovery identity и ровно один typed credential/pending/absence
+// target, затем передаёт original task/account/generation и exact pins. Fencing/effects/receipt provenance
+// принадлежат materializer; wrapper лишь отображает result/error.
 func (server *Server) CleanupProviderCredential(
 	ctx context.Context,
 	request *controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest,
 ) (*controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse, error) {
 	if server.providerCredentials == nil {
-		return nil, status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+		return nil, status.Error(codes.Unavailable, providerMaterializerUnavailableMessage)
 	}
 	var result kubernetesstore.ProviderCredentialCleanupResult
 	var err error
@@ -201,6 +240,10 @@ func (server *Server) CleanupProviderCredential(
 	}, nil
 }
 
+// providerAuthorizationState maps only PENDING/AUTHORIZED/EXPIRED/FAILED strings and returns UNSPECIFIED
+// for every other materializer state.
+// providerAuthorizationState отображает лишь PENDING/AUTHORIZED/EXPIRED/FAILED и возвращает UNSPECIFIED
+// для остальных materializer states.
 func providerAuthorizationState(state string) controlplanev1.ProviderAuthorizationState {
 	switch state {
 	case "PENDING":
@@ -216,6 +259,10 @@ func providerAuthorizationState(state string) controlplanev1.ProviderAuthorizati
 	}
 }
 
+// providerCredentialDescriptor preserves nil or copies exact name/UID/RV/digest metadata into protobuf
+// without reading values or independently validating the descriptor.
+// providerCredentialDescriptor сохраняет nil либо копирует exact name/UID/RV/digest metadata в protobuf
+// без чтения values и самостоятельной проверки descriptor.
 func providerCredentialDescriptor(value *kubernetesstore.ProviderCredentialDescriptor) *controlplanev1.ProviderCredentialDescriptor {
 	if value == nil {
 		return nil
@@ -226,6 +273,10 @@ func providerCredentialDescriptor(value *kubernetesstore.ProviderCredentialDescr
 	}
 }
 
+// providerCredentialError maps known invalid/not-found/conflict sentinels to fixed gRPC statuses and every
+// other failure to Unavailable, never interpolating upstream text; it is not a nil-success helper.
+// providerCredentialError отображает known invalid/not-found/conflict sentinels в fixed gRPC statuses,
+// остальные failures — в Unavailable без upstream text; nil-success helper не является.
 func providerCredentialError(err error) error {
 	switch {
 	case errors.Is(err, providercredential.ErrInvalidInput),
@@ -238,10 +289,16 @@ func providerCredentialError(err error) error {
 		errors.Is(err, kubernetesstore.ErrProviderCredentialConflict):
 		return status.Error(codes.Aborted, "provider credential materialization conflicts with stored state")
 	default:
-		return status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+		return status.Error(codes.Unavailable, providerMaterializerUnavailableMessage)
 	}
 }
 
+// providerCredentialCleanupError attaches one fixed ErrorInfo only for the exact snapshot-changed
+// sentinel, falling back to plain FailedPrecondition if details fail. Other invalid/conflict/unknown
+// failures remain closed statuses without a fabricated no-effect receipt.
+// providerCredentialCleanupError добавляет один fixed ErrorInfo лишь для exact snapshot-changed sentinel,
+// при отказе details возвращая plain FailedPrecondition. Прочие invalid/conflict/unknown failures остаются
+// closed statuses без выдуманного no-effect receipt.
 func providerCredentialCleanupError(err error) error {
 	switch {
 	case errors.Is(err, kubernetesstore.ErrProviderAuthorizationCleanupSnapshotChanged):

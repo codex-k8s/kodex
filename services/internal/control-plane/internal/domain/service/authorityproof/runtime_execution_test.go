@@ -8,6 +8,10 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
 
+// runtimeProofFixture builds synthetic owner authority and immutable execution metadata for actor-scope
+// tests, without credentials, lease storage or a real runtime revision.
+// runtimeProofFixture создаёт синтетические полномочия владельца и метаданные неизменяемого выполнения
+// для тестов области исполнителя без учётных данных, хранилища lease и настоящей runtime-ревизии.
 func runtimeProofFixture() platformrepo.ProofAuthority {
 	return platformrepo.ProofAuthority{
 		ActorID:        "10000000-0000-4000-8000-000000000001",
@@ -20,6 +24,11 @@ func runtimeProofFixture() platformrepo.ProofAuthority {
 	}
 }
 
+// TestRuntimeExecutionActorUsesOwnerProvenance requires project and system-assistant materialization to
+// preserve the owner's actor identity and exact runtime revision/generation/digest rather than a generic
+// workload actor.
+// TestRuntimeExecutionActorUsesOwnerProvenance требует сохранения личности владельца и точных ревизии,
+// поколения и хеша выполнения при материализации проекта и помощника вместо общего исполнителя нагрузки.
 func TestRuntimeExecutionActorUsesOwnerProvenance(t *testing.T) {
 	for _, assistant := range []bool{false, true} {
 		resolved := runtimeProofFixture()
@@ -38,6 +47,10 @@ func TestRuntimeExecutionActorUsesOwnerProvenance(t *testing.T) {
 	}
 }
 
+// TestRuntimeExecutionActorRejectsInvalidAuthority mutates missing/foreign/malformed owner lineage and
+// scope inputs, requiring rejection before any proof is signed.
+// TestRuntimeExecutionActorRejectsInvalidAuthority меняет отсутствующее, чужое или повреждённое
+// происхождение и область владельца, требуя отказа до подписи доказательства.
 func TestRuntimeExecutionActorRejectsInvalidAuthority(t *testing.T) {
 	mutations := map[string]func(*platformrepo.ProofAuthority){
 		"missing-execution":       func(value *platformrepo.ProofAuthority) { value.RuntimeExecution = nil },
@@ -69,6 +82,10 @@ func TestRuntimeExecutionActorRejectsInvalidAuthority(t *testing.T) {
 	}
 }
 
+// TestRuntimeExecutionProofExpiryIsBounded covers producer/lease/grant minimums, expiry and subsecond
+// truncation so an invalid or exhausted upstream window cannot become fresh proof lifetime.
+// TestRuntimeExecutionProofExpiryIsBounded проверяет минимумы производителя, lease и grant, истечение и
+// усечение долей секунды, чтобы неверное или исчерпанное окно не стало новым сроком доказательства.
 func TestRuntimeExecutionProofExpiryIsBounded(t *testing.T) {
 	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
 	for _, test := range []struct {

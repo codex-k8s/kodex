@@ -14,6 +14,78 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// recordingOutcomeObserver captures one closed operation/outcome pair from a processor call.
+// recordingOutcomeObserver сохраняет одну закрытую пару операции и исхода вызова процессора.
+type recordingOutcomeObserver struct {
+	operation Operation
+	outcome   Outcome
+	calls     int
+}
+
+// Observe records the classified outcome without accessing event data.
+// Observe записывает классифицированный исход без доступа к данным события.
+func (observer *recordingOutcomeObserver) Observe(operation Operation, outcome Outcome) {
+	observer.operation, observer.outcome = operation, outcome
+	observer.calls++
+}
+
+// recordingOutcomeTracer returns a controlled span for lifecycle outcome assertions.
+// recordingOutcomeTracer возвращает управляемый span для проверки исходов жизненного цикла.
+type recordingOutcomeTracer struct{ span *recordingOutcomeSpan }
+
+// Start preserves the caller context and exposes the configured recording span.
+// Start сохраняет контекст вызывающего и возвращает заданный записывающий span.
+func (tracer recordingOutcomeTracer) Start(ctx context.Context, _ Operation) (context.Context, Span) {
+	return ctx, tracer.span
+}
+
+// recordingOutcomeSpan counts terminal reports from the observed processor call.
+// recordingOutcomeSpan подсчитывает итоговые сообщения наблюдаемого вызова процессора.
+type recordingOutcomeSpan struct {
+	outcome Outcome
+	calls   int
+}
+
+// End captures the closed outcome and counts the completed span.
+// End сохраняет закрытый исход и учитывает завершённый span.
+func (span *recordingOutcomeSpan) End(outcome Outcome) {
+	span.outcome = outcome
+	span.calls++
+}
+
+// TestObserveResultOperationPreservesOutcomePrecedence checks success, cancellation, and durable-result priority.
+// TestObserveResultOperationPreservesOutcomePrecedence проверяет успех, отмену и приоритет устойчивого результата.
+func TestObserveResultOperationPreservesOutcomePrecedence(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		operation Operation
+		result    Result
+		err       error
+		want      Outcome
+	}{
+		{"error", OperationProcess, Result{}, errors.New("synthetic failure"), OutcomeError},
+		{"canceled", OperationApply, Result{}, context.Canceled, OutcomeCanceled},
+		{"durable-result", OperationProcess, Result{Outcome: OutcomeProcessed}, context.Canceled, OutcomeProcessed},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			observer := &recordingOutcomeObserver{}
+			span := &recordingOutcomeSpan{}
+			processor := &Processor{observer: observer, tracer: recordingOutcomeTracer{span: span}}
+			result, err := test.result, test.err
+			_, finish := processor.observeResultOperation(t.Context(), test.operation, &result, &err)
+			finish()
+			if span.calls != 1 || span.outcome != test.want || observer.calls != 1 ||
+				observer.operation != test.operation || observer.outcome != test.want {
+				t.Fatalf("observed outcome = span:%s/%d observer:%s/%s/%d, want %s",
+					span.outcome, span.calls, observer.operation, observer.outcome, observer.calls, test.want)
+			}
+		})
+	}
+}
+
+// TestOrderingKeyAndDigestAreDeterministic protects canonical ordering and payload-sensitive event digests.
+// TestOrderingKeyAndDigestAreDeterministic защищает канонический порядок и зависимость дайджеста события от данных.
 func TestOrderingKeyAndDigestAreDeterministic(t *testing.T) {
 	t.Parallel()
 	envelope := validEnvelope()
@@ -46,6 +118,8 @@ func TestOrderingKeyAndDigestAreDeterministic(t *testing.T) {
 	}
 }
 
+// TestEventSnapshotDoesNotShareMutablePayload rejects aliases between caller bytes and durable event decisions.
+// TestEventSnapshotDoesNotShareMutablePayload исключает общую память байтов вызывающего и устойчивого решения о событии.
 func TestEventSnapshotDoesNotShareMutablePayload(t *testing.T) {
 	t.Parallel()
 	envelope := validEnvelope()
@@ -81,6 +155,8 @@ func TestEventSnapshotDoesNotShareMutablePayload(t *testing.T) {
 	}
 }
 
+// TestClassifyExistingUsesDurableOrderingEvidence distinguishes duplicates, digest conflicts, and sequence gaps.
+// TestClassifyExistingUsesDurableOrderingEvidence различает дубликаты, конфликт дайджеста и пропуски последовательности.
 func TestClassifyExistingUsesDurableOrderingEvidence(t *testing.T) {
 	t.Parallel()
 	record, err := newEventRecord(validEnvelope())
@@ -121,6 +197,8 @@ func TestClassifyExistingUsesDurableOrderingEvidence(t *testing.T) {
 	}
 }
 
+// TestClaimFenceRejectsStaleGeneration requires both lease generation and fence to match the stored claim.
+// TestClaimFenceRejectsStaleGeneration требует совпадения поколения аренды и барьера с сохранённым claim.
 func TestClaimFenceRejectsStaleGeneration(t *testing.T) {
 	t.Parallel()
 	digest := sha256.Sum256([]byte("event"))
@@ -162,6 +240,8 @@ func TestClaimFenceRejectsStaleGeneration(t *testing.T) {
 	}
 }
 
+// TestBackoffIsBounded verifies exponential retry growth stops at the configured maximum.
+// TestBackoffIsBounded проверяет остановку экспоненциального роста задержки на заданном максимуме.
 func TestBackoffIsBounded(t *testing.T) {
 	t.Parallel()
 	processor := Processor{config: Config{
@@ -185,6 +265,8 @@ func TestBackoffIsBounded(t *testing.T) {
 	}
 }
 
+// TestDurationValidationIsOverflowSafe rejects overflow and timeout budgets that meet or exceed a lease.
+// TestDurationValidationIsOverflowSafe отклоняет переполнение и бюджет тайм-аутов не меньше срока аренды.
 func TestDurationValidationIsOverflowSafe(t *testing.T) {
 	t.Parallel()
 	config := validConfig()
@@ -207,6 +289,8 @@ func TestDurationValidationIsOverflowSafe(t *testing.T) {
 	}
 }
 
+// TestEffectOperationIsSchemaBoundAndOpaque rejects unsafe schemas and admits only one registered opaque function call.
+// TestEffectOperationIsSchemaBoundAndOpaque отклоняет небезопасные схемы и допускает один зарегистрированный непрозрачный вызов функции.
 func TestEffectOperationIsSchemaBoundAndOpaque(t *testing.T) {
 	t.Parallel()
 	operation, err := NewEffectOperation("apply_projection", "consumer_service", "apply_projection")
@@ -248,6 +332,8 @@ func TestEffectOperationIsSchemaBoundAndOpaque(t *testing.T) {
 	}
 }
 
+// TestReadinessRejectsBehaviorChangingExtras allows safe indexes but rejects hidden defaults and unsafe uniqueness.
+// TestReadinessRejectsBehaviorChangingExtras допускает безопасные индексы, но отклоняет скрытые defaults и опасную уникальность.
 func TestReadinessRejectsBehaviorChangingExtras(t *testing.T) {
 	t.Parallel()
 	manifest := requiredSchemaObjects()
@@ -267,6 +353,8 @@ func TestReadinessRejectsBehaviorChangingExtras(t *testing.T) {
 	}
 }
 
+// TestLifecycleStopsAdmissionAndJoinsWithoutWorker checks cancellation, admission closure, and bounded join waiting.
+// TestLifecycleStopsAdmissionAndJoinsWithoutWorker проверяет отмену, закрытие допуска и ограниченное ожидание Join.
 func TestLifecycleStopsAdmissionAndJoinsWithoutWorker(t *testing.T) {
 	t.Parallel()
 	processor, err := New(failingBeginner{}, validConfig())
@@ -291,6 +379,8 @@ func TestLifecycleStopsAdmissionAndJoinsWithoutWorker(t *testing.T) {
 	}
 }
 
+// TestEffectFailureDoesNotExposeCause keeps sensitive error text private while preserving causal classification.
+// TestEffectFailureDoesNotExposeCause скрывает чувствительный текст ошибки, сохраняя причинную классификацию.
 func TestEffectFailureDoesNotExposeCause(t *testing.T) {
 	t.Parallel()
 	cause := errors.New("sensitive provider detail")
@@ -303,6 +393,8 @@ func TestEffectFailureDoesNotExposeCause(t *testing.T) {
 	}
 }
 
+// TestRepairDigestBindsFenceAndEvidence verifies that repair scope and immutable evidence affect the digest.
+// TestRepairDigestBindsFenceAndEvidence проверяет включение области исправления и неизменяемого доказательства в дайджест.
 func TestRepairDigestBindsFenceAndEvidence(t *testing.T) {
 	t.Parallel()
 	eventDigest := sha256.Sum256([]byte("event"))
@@ -339,6 +431,8 @@ func TestRepairDigestBindsFenceAndEvidence(t *testing.T) {
 	}
 }
 
+// TestRepairDigestUsesAuthorizedDurableScope excludes the caller key while binding the authorized project.
+// TestRepairDigestUsesAuthorizedDurableScope исключает ключ клиента, сохраняя привязку к разрешённому проекту.
 func TestRepairDigestUsesAuthorizedDurableScope(t *testing.T) {
 	t.Parallel()
 	request := RepairRequest{
@@ -363,6 +457,36 @@ func TestRepairDigestUsesAuthorizedDurableScope(t *testing.T) {
 	}
 }
 
+// TestOperatorRequestDigestSeparatesActions keeps recovery and repair receipts in distinct digest domains.
+// TestOperatorRequestDigestSeparatesActions сохраняет разные домены дайджестов для восстановления и исправления.
+func TestOperatorRequestDigestSeparatesActions(t *testing.T) {
+	t.Parallel()
+	authority := validOperatorAuthority("repair")
+	eventID := uuid.NewString()
+	eventDigest := sha256.Sum256([]byte("event"))
+	evidenceDigest := sha256.Sum256([]byte("evidence"))
+	repair := RepairRequest{
+		Consumer: Consumer{Name: "consumer", Scope: "v1"}, EventID: eventID,
+		EventDigest: eventDigest, ExpectedGeneration: 3, ExpectedFence: 9,
+		Reason: "cause removed", EvidenceDigest: evidenceDigest,
+	}
+	recovery := RecoveryRequest{
+		Consumer: repair.Consumer, EventID: repair.EventID, EventDigest: repair.EventDigest,
+		ExpectedGeneration: repair.ExpectedGeneration, ExpectedFence: repair.ExpectedFence,
+		Reason: repair.Reason, EvidenceDigest: repair.EvidenceDigest,
+	}
+	first := recoveryRequestDigest(recovery, authority)
+	if first == repairRequestDigest(repair, authority) {
+		t.Fatal("recovery and repair digests share an action domain")
+	}
+	recovery.IdempotencyKey = "untrusted-caller-key"
+	if first != recoveryRequestDigest(recovery, authority) {
+		t.Fatal("caller key changed the server-owned recovery digest")
+	}
+}
+
+// TestRecoveryDecisionKeepsPredecessorBlocking preserves sequence ordering during recovery.
+// TestRecoveryDecisionKeepsPredecessorBlocking сохраняет порядок последовательности при восстановлении.
 func TestRecoveryDecisionKeepsPredecessorBlocking(t *testing.T) {
 	t.Parallel()
 	row := inboxRow{State: stateRetry, EventSequence: 3, Attempts: 1, MaxAttempts: 3, AvailableNow: true}
@@ -387,6 +511,8 @@ func TestRecoveryDecisionKeepsPredecessorBlocking(t *testing.T) {
 	}
 }
 
+// TestDeliveryOutcomeSurvivesRestartFromDurableState derives ACK decisions from persisted evidence after restart.
+// TestDeliveryOutcomeSurvivesRestartFromDurableState выводит решение ACK из сохранённых данных после перезапуска.
 func TestDeliveryOutcomeSurvivesRestartFromDurableState(t *testing.T) {
 	t.Parallel()
 	digest := sha256.Sum256([]byte("immutable event"))
@@ -429,6 +555,8 @@ func TestDeliveryOutcomeSurvivesRestartFromDurableState(t *testing.T) {
 	}
 }
 
+// TestDeliveryOutcomeKeepsNonterminalStatesDistinct preserves gap, active lease, backoff, replay, and dead-letter directives.
+// TestDeliveryOutcomeKeepsNonterminalStatesDistinct сохраняет разные директивы для пропуска, аренды, задержки, повтора и dead letter.
 func TestDeliveryOutcomeKeepsNonterminalStatesDistinct(t *testing.T) {
 	t.Parallel()
 	digest := sha256.Sum256([]byte("immutable event"))
@@ -483,6 +611,8 @@ func TestDeliveryOutcomeKeepsNonterminalStatesDistinct(t *testing.T) {
 	}
 }
 
+// TestDeliveryOutcomeAuthorizationReceivesExactIdentity checks that the authorizer sees the event and consumer, not caller fences.
+// TestDeliveryOutcomeAuthorizationReceivesExactIdentity проверяет передачу authorizer точного события и consumer без навязанных caller fence.
 func TestDeliveryOutcomeAuthorizationReceivesExactIdentity(t *testing.T) {
 	t.Parallel()
 	authorizer := &capturingOperatorAuthorizer{
@@ -510,6 +640,8 @@ func TestDeliveryOutcomeAuthorizationReceivesExactIdentity(t *testing.T) {
 	}
 }
 
+// TestCanonicalMutationLockOrder pins cursor-before-inbox ordering for mutating transactions.
+// TestCanonicalMutationLockOrder закрепляет порядок cursor перед inbox в изменяющих транзакциях.
 func TestCanonicalMutationLockOrder(t *testing.T) {
 	t.Parallel()
 	if canonicalMutationLockOrder != ([2]mutationLockResource{
@@ -520,6 +652,8 @@ func TestCanonicalMutationLockOrder(t *testing.T) {
 	}
 }
 
+// TestBlockagePaginationIsBounded rejects oversized pages and malformed continuation cursors.
+// TestBlockagePaginationIsBounded отклоняет слишком большие страницы и некорректные курсоры продолжения.
 func TestBlockagePaginationIsBounded(t *testing.T) {
 	t.Parallel()
 	request, err := (BlockageListRequest{}).validate()
@@ -536,6 +670,8 @@ func TestBlockagePaginationIsBounded(t *testing.T) {
 	}
 }
 
+// TestRecoveryCoordinatesAreFencedAsPair permits initial zero coordinates but rejects asymmetric generation and fence.
+// TestRecoveryCoordinatesAreFencedAsPair допускает начальную нулевую пару, но отклоняет несовпадение поколения и барьера.
 func TestRecoveryCoordinatesAreFencedAsPair(t *testing.T) {
 	t.Parallel()
 	request := RecoveryRequest{
@@ -557,6 +693,79 @@ func TestRecoveryCoordinatesAreFencedAsPair(t *testing.T) {
 	}
 }
 
+// TestOperatorRequestEvidenceValidationPreservesActionRules checks shared input rejection and distinct fence policies.
+// TestOperatorRequestEvidenceValidationPreservesActionRules проверяет общий отказ входных данных и разные правила fence.
+func TestOperatorRequestEvidenceValidationPreservesActionRules(t *testing.T) {
+	t.Parallel()
+	repair := RepairRequest{
+		Consumer:           Consumer{Name: "consumer", Scope: "v1"},
+		IdempotencyKey:     "operator-key-1",
+		EventID:            uuid.NewString(),
+		EventDigest:        sha256.Sum256([]byte("event")),
+		ExpectedGeneration: 3,
+		ExpectedFence:      9,
+		Reason:             "durable evidence inspected",
+		EvidenceDigest:     sha256.Sum256([]byte("evidence")),
+	}
+	recovery := RecoveryRequest{
+		Consumer: repair.Consumer, IdempotencyKey: repair.IdempotencyKey,
+		EventID: repair.EventID, EventDigest: repair.EventDigest,
+		ExpectedGeneration: repair.ExpectedGeneration, ExpectedFence: repair.ExpectedFence,
+		Reason: repair.Reason, EvidenceDigest: repair.EvidenceDigest,
+	}
+	if err := repair.validate(); err != nil {
+		t.Fatalf("valid repair rejected: %v", err)
+	}
+	if err := recovery.validate(); err != nil {
+		t.Fatalf("valid recovery rejected: %v", err)
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*RepairRequest, *RecoveryRequest)
+	}{
+		{"short-key", func(r *RepairRequest, v *RecoveryRequest) { r.IdempotencyKey, v.IdempotencyKey = "short", "short" }},
+		{"long-key", func(r *RepairRequest, v *RecoveryRequest) {
+			value := strings.Repeat("a", maximumIdempotencyKeyLength+1)
+			r.IdempotencyKey, v.IdempotencyKey = value, value
+		}},
+		{"event-id", func(r *RepairRequest, v *RecoveryRequest) { r.EventID, v.EventID = "not-a-uuid", "not-a-uuid" }},
+		{"event-digest", func(r *RepairRequest, v *RecoveryRequest) {
+			r.EventDigest, v.EventDigest = [sha256.Size]byte{}, [sha256.Size]byte{}
+		}},
+		{"evidence-digest", func(r *RepairRequest, v *RecoveryRequest) {
+			r.EvidenceDigest, v.EvidenceDigest = [sha256.Size]byte{}, [sha256.Size]byte{}
+		}},
+		{"reason", func(r *RepairRequest, v *RecoveryRequest) { r.Reason, v.Reason = " padded ", " padded " }},
+		{"generation-overflow", func(r *RepairRequest, v *RecoveryRequest) {
+			r.ExpectedGeneration, v.ExpectedGeneration = math.MaxInt64+1, math.MaxInt64+1
+		}},
+		{"fence-overflow", func(r *RepairRequest, v *RecoveryRequest) {
+			r.ExpectedFence, v.ExpectedFence = math.MaxInt64+1, math.MaxInt64+1
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			changedRepair, changedRecovery := repair, recovery
+			test.mutate(&changedRepair, &changedRecovery)
+			if err := changedRepair.validate(); !errors.Is(err, ErrInvalidRepair) {
+				t.Fatalf("repair error = %v", err)
+			}
+			if err := changedRecovery.validate(); !errors.Is(err, ErrInvalidRecovery) {
+				t.Fatalf("recovery error = %v", err)
+			}
+		})
+	}
+	repair.ExpectedGeneration, repair.ExpectedFence = 0, 0
+	recovery.ExpectedGeneration, recovery.ExpectedFence = 0, 0
+	if err := repair.validate(); !errors.Is(err, ErrInvalidRepair) {
+		t.Fatalf("unfenced repair error = %v", err)
+	}
+	if err := recovery.validate(); err != nil {
+		t.Fatalf("initial unclaimed recovery rejected: %v", err)
+	}
+}
+
+// TestRepairDeniedWithoutAuthorizer ensures no repair can reach storage without operator authority.
+// TestRepairDeniedWithoutAuthorizer гарантирует, что исправление не достигнет хранилища без полномочия оператора.
 func TestRepairDeniedWithoutAuthorizer(t *testing.T) {
 	t.Parallel()
 	processor, err := New(failingBeginner{}, validConfig())
@@ -580,6 +789,8 @@ func TestRepairDeniedWithoutAuthorizer(t *testing.T) {
 	}
 }
 
+// validOperatorAuthority supplies stable server-scoped authority for operator request tests.
+// validOperatorAuthority задаёт стабильное серверное полномочие для тестов операторских запросов.
 func validOperatorAuthority(operation string) OperatorAuthority {
 	return OperatorAuthority{
 		Actor:        "operator",
@@ -590,6 +801,8 @@ func validOperatorAuthority(operation string) OperatorAuthority {
 	}
 }
 
+// validConfig supplies a bounded lease, timeout, retry, retention, and repair profile for processor tests.
+// validConfig задаёт ограниченные сроки аренды, тайм-аутов, повторов, хранения и исправления для тестов процессора.
 func validConfig() Config {
 	return Config{
 		Schema:           "consumer_service",
@@ -606,6 +819,8 @@ func validConfig() Config {
 	}
 }
 
+// validEnvelope creates a fresh event identity with valid timestamps and JSON for each test.
+// validEnvelope создаёт новый идентификатор события с корректным временем и JSON для каждого теста.
 func validEnvelope() eventing.Envelope {
 	return eventing.Envelope{
 		EventID:          uuid.NewString(),
@@ -622,17 +837,25 @@ func validEnvelope() eventing.Envelope {
 	}
 }
 
+// failingBeginner prevents tests of pre-transaction boundaries from opening a real database transaction.
+// failingBeginner не даёт тестам предтранзакционных границ открыть настоящую транзакцию базы данных.
 type failingBeginner struct{}
 
+// BeginTx fails deterministically so tests can assert the preceding validation and authorization path.
+// BeginTx детерминированно завершается ошибкой для проверки предшествующих валидации и авторизации.
 func (failingBeginner) BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error) {
 	return nil, errors.New("transaction unavailable")
 }
 
+// capturingOperatorAuthorizer records the exact authorization target requested by a processor call.
+// capturingOperatorAuthorizer записывает точный объект авторизации, запрошенный вызовом процессора.
 type capturingOperatorAuthorizer struct {
 	target    OperatorTarget
 	authority OperatorAuthority
 }
 
+// AuthorizeOperator returns controlled test authority after capturing the server-built target.
+// AuthorizeOperator возвращает заданное тестовое полномочие после сохранения составленного сервером объекта.
 func (authorizer *capturingOperatorAuthorizer) AuthorizeOperator(
 	_ context.Context,
 	target OperatorTarget,

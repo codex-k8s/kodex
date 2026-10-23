@@ -21,6 +21,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// executionSnapshotClient records synthetic own-read activity requests, checks exact
+// lease/tool/empty-parameter binding and optionally rejects a selected revision.
+// It models two-phase refusal, not durable owner storage or authentication.
+// executionSnapshotClient записывает synthetic own-read activity requests,проверяет
+// exact lease/tool/empty-parameter binding и при настройке отвергает revision.
+// Моделирует two-phase refusal,не durable owner storage и не authentication.
 type executionSnapshotClient struct {
 	cp.RuntimeWorkServiceClient
 	input          runtimecontract.RunnerInput
@@ -28,6 +34,10 @@ type executionSnapshotClient struct {
 	rejectRevision int64
 }
 
+// RecordRunToolCall records the original request and refuses mismatched binding
+// or configured phase, otherwise returning a synthetic event ref without granting access.
+// RecordRunToolCall сохраняет исходный request и отвергает mismatched binding/
+// configured phase,иначе выдаёт synthetic event ref без выдачи доступа.
 func (client *executionSnapshotClient) RecordRunToolCall(_ context.Context, request *cp.RecordRunToolCallRequest, _ ...grpc.CallOption) (*cp.RecordRunToolCallResponse, error) {
 	client.requests = append(client.requests, request)
 	if request.LeaseRef != client.input.LeaseRef || request.Fence != client.input.LeaseFence || request.Generation != client.input.LeaseGeneration ||
@@ -40,6 +50,14 @@ func (client *executionSnapshotClient) RecordRunToolCall(_ context.Context, requ
 	return &cp.RecordRunToolCallResponse{Event: &cp.RunEvent{Ref: "event_fixture123"}}, nil
 }
 
+// TestExecutionSnapshotCheckedOwnReadAndClosedFailure checks ten local HTTP scenarios
+// keep exact own pins, require both owner activity phases and accept only a bound
+// current initialize observation. Missing/foreign/completed observations stay UNKNOWN;
+// invalid scope or owner terminal refusal exposes no snapshot or private configuration.
+// TestExecutionSnapshotCheckedOwnReadAndClosedFailure проверяет десять local HTTP scenarios
+// с exact own pins,двумя owner activity phases и лишь bound current initialize observation.
+// Missing/foreign/completed observations остаются UNKNOWN; invalid scope/owner terminal
+// refusal не выдаёт snapshot и private configuration.
 func TestExecutionSnapshotCheckedOwnReadAndClosedFailure(t *testing.T) {
 	for _, scenario := range []string{"observed", "unknown", "foreign observation", "completed observation", "owner cancelled", "owner terminal race",
 		"caller selector", "unknown alias", "stale turn", "wrong ticket"} {
@@ -145,6 +163,12 @@ func TestExecutionSnapshotCheckedOwnReadAndClosedFailure(t *testing.T) {
 	}
 }
 
+// TestExecutionSnapshotProducerSchemaMatchesConsumerRegistry checks ordinary runtime
+// tool names match the shared registry and the no-argument/thirteen-field own snapshot
+// schema stays closed without exposing the privileged assistant catalog.
+// TestExecutionSnapshotProducerSchemaMatchesConsumerRegistry проверяет совпадение ordinary
+// tool names/shared registry и closed no-argument/thirteen-field own snapshot schema
+// без выдачи privileged assistant catalog.
 func TestExecutionSnapshotProducerSchemaMatchesConsumerRegistry(t *testing.T) {
 	input := providerProcessCurrentInput()
 	input.Mode, input.AssistantScope, input.AssistantProfileRef = runtimecontract.RunnerModeTurn, runtimecontract.AssistantScopeNone, ""

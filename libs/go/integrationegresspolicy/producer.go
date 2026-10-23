@@ -10,17 +10,31 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
+// Snapshot carries one resolver result and its expiry; a producer must reject
+// expired or non-public/mixed addresses before publishing a policy document.
+// RU: Snapshot содержит результат DNS и срок действия; producer обязан
+// отклонить просроченные и непубличные/смешанные адреса до публикации политики.
 type Snapshot struct {
 	Addresses []netip.Addr
 	ExpiresAt time.Time
 }
 
+// Resolver is the DNS read boundary for exact hostnames from the owner path.
+// RU: Resolver является границей DNS-чтения для точных имён из owner path.
 type Resolver interface {
+	// Resolve returns one timestamped address snapshot for a hostname.
+	// RU: Resolve возвращает один снимок адресов с временем действия для имени узла.
 	Resolve(context.Context, string) (Snapshot, error)
 }
 
-// Produce принимает hostnames только от проверенного owner read path.
-// Вся DNS-картина проверяется до публикации одного сетевого допуска.
+// Produce accepts hostnames only from a verified owner read path, sorts and
+// validates the full origin list, then checks every live DNS snapshot before
+// producing one document. It does not publish Kubernetes resources or turn
+// caller-supplied names into authority.
+// RU: Produce принимает имена только из проверенного owner read path,
+// сортирует и проверяет весь список origins, затем проверяет каждый действующий
+// DNS-снимок до создания одного документа. Она не публикует ресурсы Kubernetes
+// и не превращает переданные вызывающим имена в полномочия.
 func Produce(ctx context.Context, hostnames []string, generation int64, gatewayPolicyDigest string, resolver Resolver) (Document, error) {
 	invalid := errors.New("integration egress source is invalid")
 	if ctx.Err() != nil || !validDigest(gatewayPolicyDigest) || resolver == nil || generation < 1 ||

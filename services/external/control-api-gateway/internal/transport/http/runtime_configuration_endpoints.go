@@ -9,6 +9,8 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// GetAgentRuntimeConfiguration checks opaque reference syntax, reads the owner configuration and uses exact-agent/version/binding validation before public output; syntax alone does not grant access.
+// GetAgentRuntimeConfiguration проверяет формат opaque-ссылки, читает конфигурацию владельца и перед выдачей сверяет сотрудника, версию и bindings; сам формат доступ не выдаёт.
 func (server *Server) GetAgentRuntimeConfiguration(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef) {
 	if !opaqueHTTPReference.MatchString(agentRef) {
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -22,17 +24,17 @@ func (server *Server) GetAgentRuntimeConfiguration(writer http.ResponseWriter, r
 	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
+// ListAgentRuntimeConfigurationVersions forwards agent and page selectors to the owner and projects historical configuration metadata without activating any version.
+// ListAgentRuntimeConfigurationVersions передаёт сотрудника и страницу владельцу и проецирует историческую metadata конфигураций без активации версии.
 func (server *Server) ListAgentRuntimeConfigurationVersions(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.ListAgentRuntimeConfigurationVersionsParams) {
 	response, err := server.control.Query.ListAgentRuntimeConfigurationVersions(request.Context(), &controlplanev1.ListAgentRuntimeConfigurationVersionsRequest{
 		AgentRef: agentRef, Page: page(parameters.PageSize, parameters.PageToken),
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "", "configurations")
+	writeReadRPCResult(writer, response, err, "", "configurations")
 }
 
+// PublishAgentRuntimeConfiguration decodes the body and mutation pins, validates distinct weighted provider candidates with exact catalog pins, then invokes the dedicated owner command and validates the returned agent view. Candidate display data is not an execution grant.
+// PublishAgentRuntimeConfiguration разбирает тело и mutation pins, проверяет различные взвешенные аккаунты с точными pins каталога, вызывает отдельную команду владельца и проверяет представление сотрудника. Данные кандидатов не являются grant выполнения.
 func (server *Server) PublishAgentRuntimeConfiguration(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.PublishAgentRuntimeConfigurationParams) {
 	body, ok := decodeJSON[generated.AgentRuntimeConfigurationInput](writer, request)
 	if !ok {
@@ -58,6 +60,8 @@ func (server *Server) PublishAgentRuntimeConfiguration(writer http.ResponseWrite
 	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
+// CreateConfigOverlayDraft decodes content and mutation context, delegates draft creation to the owner and returns a validated exact-agent view with HTTP201; it does not publish the overlay.
+// CreateConfigOverlayDraft разбирает content и mutation context, поручает создание черновика владельцу и возвращает проверенное представление сотрудника с HTTP201; overlay не публикуется.
 func (server *Server) CreateConfigOverlayDraft(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.CreateConfigOverlayDraftParams) {
 	body, ok := decodeJSON[generated.ConfigOverlayDraftInput](writer, request)
 	if !ok {
@@ -75,6 +79,8 @@ func (server *Server) CreateConfigOverlayDraft(writer http.ResponseWriter, reque
 	writeAgentRuntimeConfiguration(writer, http.StatusCreated, response.GetRuntimeConfiguration(), agentRef)
 }
 
+// ValidateConfigOverlayDraft forwards mutation pins to the dedicated owner validation command and checks the returned agent configuration; local parsing is not a substitute for owner validation.
+// ValidateConfigOverlayDraft передаёт mutation pins отдельной команде проверки владельца и сверяет возвращённую конфигурацию; локальный разбор проверку владельца не заменяет.
 func (server *Server) ValidateConfigOverlayDraft(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.ValidateConfigOverlayDraftParams) {
 	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
@@ -88,6 +94,8 @@ func (server *Server) ValidateConfigOverlayDraft(writer http.ResponseWriter, req
 	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
+// PublishConfigOverlayDraft invokes the dedicated owner publish command with mutation/version context, then projects the exact-agent view; this handler does not itself materialize runtime files.
+// PublishConfigOverlayDraft вызывает отдельную команду публикации владельца с mutation/version context, затем проецирует точного сотрудника; runtime-файлы сам handler не материализует.
 func (server *Server) PublishConfigOverlayDraft(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.PublishConfigOverlayDraftParams) {
 	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
@@ -101,6 +109,8 @@ func (server *Server) PublishConfigOverlayDraft(writer http.ResponseWriter, requ
 	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
+// RollbackConfigOverlay decodes a selected published overlay and mutation context for the specialized owner rollback, preserving owner-side history/version policy and validated response identity.
+// RollbackConfigOverlay разбирает выбранный опубликованный overlay и mutation context для специального rollback владельца, сохраняя его политику истории и версий и проверяемую identity ответа.
 func (server *Server) RollbackConfigOverlay(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.RollbackConfigOverlayParams) {
 	body, ok := decodeJSON[generated.ConfigOverlayRollbackInput](writer, request)
 	if !ok {
@@ -118,6 +128,8 @@ func (server *Server) RollbackConfigOverlay(writer http.ResponseWriter, request 
 	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
+// BindAgentRuntimeEnvironment sends the selected environment and mutation pins to the dedicated owner binding command, returning an exact-agent validated configuration without inferring authority from the environment reference.
+// BindAgentRuntimeEnvironment передаёт выбранное окружение и mutation pins отдельной команде привязки владельца и выдаёт проверенную конфигурацию точного сотрудника без вывода полномочий из ссылки окружения.
 func (server *Server) BindAgentRuntimeEnvironment(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.BindAgentRuntimeEnvironmentParams) {
 	body, ok := decodeJSON[generated.RuntimeEnvironmentBindingInput](writer, request)
 	if !ok {
@@ -135,6 +147,8 @@ func (server *Server) BindAgentRuntimeEnvironment(writer http.ResponseWriter, re
 	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
+// writeAgentRuntimeConfiguration requires a view with a valid agent version, exact configuration agent, at most128 combined context bindings and unique valid binding/resource references before common projection. Validation of returned metadata does not itself issue binding grants.
+// writeAgentRuntimeConfiguration требует представление с допустимой версией, точным сотрудником конфигурации, не более128 общих context bindings и уникальными допустимыми ссылками bindings и ресурсов до общей проекции. Проверка metadata сама grants не выдаёт.
 func writeAgentRuntimeConfiguration(writer http.ResponseWriter, statusCode int, view *controlplanev1.AgentRuntimeConfigurationView, agentRef string) {
 	if view == nil || !validManagedVersion(view.GetAgentVersion()) || view.GetConfiguration().GetAgentRef() != agentRef || len(view.GetSkillBindings())+len(view.GetMemoryBindings()) > 128 {
 		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
@@ -153,6 +167,8 @@ func writeAgentRuntimeConfiguration(writer http.ResponseWriter, statusCode int, 
 	writeMessage(writer, statusCode, view, "", "")
 }
 
+// ListRuntimeEnvironmentSets derives route-project context and forwards query/page to the owner catalog without publishing or selecting an environment.
+// ListRuntimeEnvironmentSets выводит контекст проекта маршрута и передаёт поиск и страницу каталогу владельца без публикации и выбора окружения.
 func (server *Server) ListRuntimeEnvironmentSets(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.ListRuntimeEnvironmentSetsParams) {
 	request, ok := withProjectReference(writer, request, projectRef)
 	if !ok {
@@ -161,33 +177,27 @@ func (server *Server) ListRuntimeEnvironmentSets(writer http.ResponseWriter, req
 	response, err := server.control.Query.ListRuntimeEnvironmentSets(request.Context(), &controlplanev1.ListRuntimeEnvironmentSetsRequest{
 		ProjectRef: projectRef, Query: stringValue(parameters.Query), Page: page(parameters.PageSize, parameters.PageToken),
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "", "environments")
+	writeReadRPCResult(writer, response, err, "", "environments")
 }
 
+// GetRuntimeEnvironmentSet resolves one selected environment through owner policy and emits public metadata, not mounted values or secret material.
+// GetRuntimeEnvironmentSet разрешает выбранное окружение по политике владельца и выдаёт публичную metadata, а не смонтированные значения и секреты.
 func (server *Server) GetRuntimeEnvironmentSet(writer http.ResponseWriter, request *http.Request, environmentRef generated.RuntimeEnvironmentRef) {
 	response, err := server.control.Query.GetRuntimeEnvironmentSet(request.Context(), &controlplanev1.GetRuntimeEnvironmentSetRequest{EnvironmentRef: environmentRef})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "environment", "")
+	writeReadRPCResult(writer, response, err, "environment", "")
 }
 
+// ListRuntimeEnvironmentVersions reads exact-environment historical metadata with owner pagination without promoting or rolling back a version.
+// ListRuntimeEnvironmentVersions читает историческую metadata точного окружения с пагинацией владельца без продвижения и отката версии.
 func (server *Server) ListRuntimeEnvironmentVersions(writer http.ResponseWriter, request *http.Request, environmentRef generated.RuntimeEnvironmentRef, parameters generated.ListRuntimeEnvironmentVersionsParams) {
 	response, err := server.control.Query.ListRuntimeEnvironmentVersions(request.Context(), &controlplanev1.ListRuntimeEnvironmentVersionsRequest{
 		EnvironmentRef: environmentRef, Page: page(parameters.PageSize, parameters.PageToken),
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "", "versions")
+	writeReadRPCResult(writer, response, err, "", "versions")
 }
 
+// CreateRuntimeEnvironmentSet binds route-project context, decodes the body, validates secret revision pins and policy, then sends a specialized idempotent owner create and projects HTTP201. Secret values are neither revealed nor substituted here.
+// CreateRuntimeEnvironmentSet привязывает проект маршрута, разбирает тело, проверяет pins ревизий секретов и политику, затем отправляет отдельный идемпотентный create владельцу и проецирует HTTP201. Значения секретов здесь не раскрываются и не подставляются.
 func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.CreateRuntimeEnvironmentSetParams) {
 	request, ok := withProjectReference(writer, request, projectRef)
 	if !ok {
@@ -223,6 +233,8 @@ func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, re
 	writeMessage(writer, http.StatusCreated, response, "environment", "")
 }
 
+// PublishRuntimeEnvironmentVersion validates body, secret revision bounds, mutation pins and typed policy before the dedicated owner publication. Resource admission, image validation and materialization remain owner responsibilities rather than effects of this mapper.
+// PublishRuntimeEnvironmentVersion проверяет тело, пределы ревизий секретов, mutation pins и типизированную политику до отдельной публикации владельца. Допуск ресурсов, проверка образа и материализация остаются ответственностью владельца, а не эффектами mapper.
 func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWriter, request *http.Request, environmentRef generated.RuntimeEnvironmentRef, parameters generated.PublishRuntimeEnvironmentVersionParams) {
 	body, ok := decodeJSON[generated.RuntimeEnvironmentInput](writer, request)
 	if !ok {
@@ -254,6 +266,8 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 	writeMessage(writer, http.StatusOK, response, "environment", "")
 }
 
+// RollbackRuntimeEnvironment forwards the selected published-version reference and mutation context to the owner rollback and projects the environment without rewriting version history locally.
+// RollbackRuntimeEnvironment передаёт выбранную опубликованную версию и mutation context rollback владельца и проецирует окружение без локального переписывания истории.
 func (server *Server) RollbackRuntimeEnvironment(writer http.ResponseWriter, request *http.Request, environmentRef generated.RuntimeEnvironmentRef, parameters generated.RollbackRuntimeEnvironmentParams) {
 	body, ok := decodeJSON[generated.RuntimeEnvironmentRollbackInput](writer, request)
 	if !ok {
@@ -271,10 +285,14 @@ func (server *Server) RollbackRuntimeEnvironment(writer http.ResponseWriter, req
 	writeMessage(writer, http.StatusOK, response, "environment", "")
 }
 
+// ListTemplateVariables adapts route-project and optional agent/runtime/query/source/page selectors to the shared template-variable endpoint implementation without evaluating a template.
+// ListTemplateVariables передаёт проект маршрута и необязательные селекторы сотрудника, runtime, поиска, источника и страницы общей реализации каталога переменных без вычисления шаблона.
 func (server *Server) ListTemplateVariables(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.ListTemplateVariablesParams) {
 	server.listTemplateVariables(writer, request, projectRef, stringValue(parameters.AgentRef), stringValue(parameters.RuntimeRevisionRef), stringValue(parameters.Query), stringValue(parameters.Source), parameters.PageSize, parameters.PageToken)
 }
 
+// providerAccountCandidates requires one to thirty-two distinct pacc references, weights1..100, a valid provider key and exact mcat_/digest pairing, returning typed candidates in input order. It does not select an account, fetch a catalog or assign default reasoning effort.
+// providerAccountCandidates требует от одного до тридцати двух различных pacc-ссылок, веса1..100, допустимый provider key и точную пару mcat_/digest, сохраняя порядок. Аккаунт не выбирает, каталог не читает и default reasoning effort не назначает.
 func providerAccountCandidates(input []generated.ProviderAccountCandidateInput) ([]*controlplanev1.ProviderAccountCandidate, bool) {
 	result := make([]*controlplanev1.ProviderAccountCandidate, 0, len(input))
 	seen := map[string]bool{}
@@ -288,6 +306,8 @@ func providerAccountCandidates(input []generated.ProviderAccountCandidateInput) 
 	return result, len(input) > 0 && len(input) <= 32
 }
 
+// runtimeEnvironmentValues copies names and nonsecret values into a fresh typed slice, preserving order/empty strings without validating names, uniqueness or expanding templates.
+// runtimeEnvironmentValues копирует имена и несекретные значения в новый типизированный slice с сохранением порядка и пустых строк без проверки имён, уникальности и раскрытия шаблонов.
 func runtimeEnvironmentValues(input []generated.RuntimeEnvironmentValue) []*controlplanev1.RuntimeEnvironmentValue {
 	result := make([]*controlplanev1.RuntimeEnvironmentValue, 0, len(input))
 	for _, item := range input {
@@ -296,6 +316,8 @@ func runtimeEnvironmentValues(input []generated.RuntimeEnvironmentValue) []*cont
 	return result
 }
 
+// runtimeSecretBindings copies binding metadata and optional revision pins, representing absence as zero and rejecting negative or browser-unsafe revisions with INVALID_REQUEST. It does not read secrets or validate resource ownership.
+// runtimeSecretBindings копирует metadata привязок и необязательные ревизии, обозначая отсутствие нулём и отклоняя отрицательные и небезопасные для браузера ревизии с INVALID_REQUEST. Секреты и владение ресурсами не проверяются.
 func runtimeSecretBindings(w http.ResponseWriter, input []generated.RuntimeSecretBinding) ([]*controlplanev1.RuntimeSecretBinding, bool) {
 	result := make([]*controlplanev1.RuntimeSecretBinding, 0, len(input))
 	for _, item := range input {
@@ -312,6 +334,8 @@ func runtimeSecretBindings(w http.ResponseWriter, input []generated.RuntimeSecre
 	return result, true
 }
 
+// runtimeEnvironmentTools copies tool name, command, description and usage into a fresh typed slice without executing commands or admitting tools.
+// runtimeEnvironmentTools копирует имя, команду, описание и способ применения инструментов в новый slice без выполнения команд и допуска инструментов.
 func runtimeEnvironmentTools(input []generated.RuntimeEnvironmentTool) []*controlplanev1.RuntimeEnvironmentTool {
 	result := make([]*controlplanev1.RuntimeEnvironmentTool, 0, len(input))
 	for _, item := range input {
@@ -320,6 +344,8 @@ func runtimeEnvironmentTools(input []generated.RuntimeEnvironmentTool) []*contro
 	return result
 }
 
+// runtimeEnvironmentPolicyInput maps resources, web rules and closed Kubernetes/volume/destination enums, enforcing optional workspace bounds1..1GiB and1..10000files. It returns no result on its checked failures; copied CPU/memory, web rules and other fields still require authoritative owner validation and network enforcement.
+// runtimeEnvironmentPolicyInput преобразует ресурсы, web rules и закрытые Kubernetes/volume/destination enum, проверяя необязательные пределы workspace1..1ГиБ и1..10000файлов. При своих отказах результат не выдаёт; скопированные CPU/memory, web rules и другие поля ещё требуют проверки владельца и сетевого исполнения.
 func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput) (*controlplanev1.RuntimeEnvironmentPolicyInput, bool) {
 	if !input.KubernetesAccess.Valid() {
 		return nil, false
@@ -363,6 +389,8 @@ func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput
 	return result, true
 }
 
+// runtimeWebAccessMode maps four known public web modes and returns unspecified for an unknown string, without validating rules or granting egress.
+// runtimeWebAccessMode преобразует четыре известных публичных web-режима, возвращая unspecified неизвестной строке без проверки правил и выдачи egress.
 func runtimeWebAccessMode(value string) controlplanev1.RuntimeWebAccessMode {
 	switch value {
 	case "NONE":
@@ -378,6 +406,8 @@ func runtimeWebAccessMode(value string) controlplanev1.RuntimeWebAccessMode {
 	}
 }
 
+// runtimeVolumeKind maps disk/memory ephemeral kinds to typed enums and unknown input to unspecified without provisioning storage.
+// runtimeVolumeKind преобразует временные дисковый и memory виды в enum, неизвестный ввод — в unspecified, не создавая хранилище.
 func runtimeVolumeKind(value string) controlplanev1.RuntimeVolumeKind {
 	switch value {
 	case "EPHEMERAL_DISK":
@@ -389,6 +419,8 @@ func runtimeVolumeKind(value string) controlplanev1.RuntimeVolumeKind {
 	}
 }
 
+// runtimeNetworkDestination maps only DNS, callback and provider-proxy destination names; unspecified fallback is not a wildcard network grant.
+// runtimeNetworkDestination преобразует только имена DNS, callback и provider-proxy; unspecified не является wildcard сетевым grant.
 func runtimeNetworkDestination(value string) controlplanev1.RuntimeNetworkDestination {
 	switch value {
 	case "DNS":
@@ -402,6 +434,8 @@ func runtimeNetworkDestination(value string) controlplanev1.RuntimeNetworkDestin
 	}
 }
 
+// runtimeKubernetesAccessKind recognizes only NONE and returns unspecified for any other input; it does not issue Kubernetes credentials or permissions.
+// runtimeKubernetesAccessKind распознаёт только NONE, возвращая unspecified для другого ввода; Kubernetes credentials и права не выдаёт.
 func runtimeKubernetesAccessKind(value string) controlplanev1.RuntimeKubernetesAccessKind {
 	switch value {
 	case "NONE":

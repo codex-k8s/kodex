@@ -19,34 +19,67 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
 const (
-	directiveType        = "kodex-internal-rpc-restore-directive+jws"
-	ackType              = "kodex-internal-rpc-restore-quiescence-ack+jws"
-	workloadAudience     = "urn:kodex:internal-rpc-authority-restore-workload"
-	controllerAudience   = "urn:kodex:internal-rpc-authority-restore-controller"
-	controllerIssuer     = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"
+	// directiveType pins the protected JWS type of a controller-signed role-bound restore directive, separate from ACK and role-credential types.
+	// directiveType закрепляет защищённый тип JWS подписанной контроллером ролевой директивы восстановления отдельно от ACK и role credential.
+	directiveType = "kodex-internal-rpc-restore-directive+jws"
+	// ackType pins the protected JWS type of the workload's quiescence ACK; signing it does not itself persist the controller's acceptance receipt.
+	// ackType закрепляет защищённый тип JWS подтверждения дренирования от workload; его подпись сама не сохраняет квитанцию принятия контроллером.
+	ackType = "kodex-internal-rpc-restore-quiescence-ack+jws"
+	// workloadAudience is the exact audience required in a restore directive targeted at this workload, not a caller-selected routing value.
+	// workloadAudience — точная требуемая аудитория директивы восстановления для workload, а не выбираемое вызывающим значение маршрутизации.
+	workloadAudience = "urn:kodex:internal-rpc-authority-restore-workload"
+	// controllerAudience is the fixed audience for role credentials and outgoing workload ACKs accepted by the restore controller.
+	// controllerAudience — фиксированная аудитория role credentials и исходящих подтверждений workload, принимаемых контроллером восстановления.
+	controllerAudience = "urn:kodex:internal-rpc-authority-restore-controller"
+	// controllerIssuer pins the expected controller workload SPIFFE identity in directive claims; TLS transport and application authorization remain separate checks.
+	// controllerIssuer закрепляет ожидаемую SPIFFE-идентичность workload контроллера в claims директивы; TLS-транспорт и прикладная авторизация остаются отдельными проверками.
+	controllerIssuer = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"
+	// roleCredentialIssuer is the fixed publisher SPIFFE identity required in verified restore-role credential claims, independently of a signer's key ID.
+	// roleCredentialIssuer — фиксированная SPIFFE-идентичность издателя, требуемая в проверенных claims restore-role credential независимо от идентификатора ключа подписанта.
 	roleCredentialIssuer = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
-	roleCredentialType   = "kodex-internal-rpc-restore-role-credential+jws"
-	boundedTTL           = 30 * time.Second
-	clockSkew            = 5 * time.Second
+	// roleCredentialType distinguishes the publisher's restore-role credential JWS from controller directives and workload ACKs during header validation.
+	// roleCredentialType отличает JWS restore-role credential издателя от директив контроллера и подтверждений workload при проверке заголовка.
+	roleCredentialType = "kodex-internal-rpc-restore-role-credential+jws"
+	// boundedTTL limits directive time validation and newly signed ACK lifetime to thirty seconds; it is not the five-minute role-credential bound.
+	// boundedTTL ограничивает проверку времени директивы и срок нового подписанного ACK тридцатью секундами; это не пятиминутный предел role credential.
+	boundedTTL = 30 * time.Second
+	// clockSkew permits five seconds of skew in role-credential and directive time checks without changing the required issuer, audience or generation bindings.
+	// clockSkew допускает пять секунд расхождения часов при проверке времени role credential и директивы без изменения привязок издателя, аудитории или поколений.
+	clockSkew = 5 * time.Second
 )
 
-// AuthorityAdmission управляет приёмом запросов и дренированием workload.
+// AuthorityAdmission exposes the workload's admission, in-flight drain and served-state boundary to the restore agent. Implementations own synchronization and request accounting; the interface does not implement the restore controller.
+// AuthorityAdmission предоставляет агенту восстановления границу допуска workload, дренирования текущих запросов и обслуживаемого состояния. Синхронизацией и учётом запросов владеет реализация; контроллер восстановления здесь не реализован.
 type AuthorityAdmission interface {
+	// SetAvailable changes the workload's availability flag; the caller coordinates it with the independent restore-blocked flag and verified external phase.
+	// SetAvailable меняет флаг доступности workload; вызывающий согласует его с независимым флагом блокировки восстановления и проверенной внешней фазой.
 	SetAvailable(bool)
+	// SetRestoreBlocked controls the restore-specific admission fence without replacing general availability or automatically proving that in-flight work has drained.
+	// SetRestoreBlocked управляет ограждением допуска для восстановления, не заменяя общую доступность и не доказывая автоматическое дренирование текущей работы.
 	SetRestoreBlocked(bool)
+	// WaitDrained waits under the supplied context for existing requests to finish; Poll additionally checks the in-flight count before producing an ACK.
+	// WaitDrained ожидает завершения текущих запросов под переданным контекстом; Poll дополнительно проверяет их счётчик перед созданием ACK.
 	WaitDrained(context.Context) error
+	// Inflight reports the current request count used to refuse an incomplete drain even after WaitDrained returns successfully.
+	// Inflight сообщает число текущих запросов, позволяя отклонить неполное дренирование даже после успешного возврата WaitDrained.
 	Inflight() int64
+	// SnapshotState supplies the workload's served snapshot binding for the signed ACK, not a new activation or authoritative controller transition.
+	// SnapshotState предоставляет привязку обслуживаемого снимка workload для подписанного ACK, а не новую активацию или авторитетный переход контроллера.
 	SnapshotState() model.SnapshotState
+	// ServedStateReady verifies the workload's served-state readiness before a safe no-directive poll can clear the restore fence and reopen availability.
+	// ServedStateReady проверяет готовность обслуживаемого состояния workload до снятия ограждения восстановления и открытия доступности безопасным poll без директивы.
 	ServedStateReady(context.Context) error
 }
 
-// Config задаёт идентичность, доверие и материал роли восстановления.
+// Config pins controller transport, delivered role/ACK material, mounted trust files, workload identity and three generations. Secret access belongs to Delivery and configuration presence alone is not proof of authority.
+// Config закрепляет транспорт контроллера, доставленный материал role/ACK, смонтированные файлы доверия, идентичность workload и три поколения. Доступом к секретам владеет Delivery; наличие конфигурации само не доказывает полномочия.
 type Config struct {
 	Address                    string
 	TLS                        *tls.Config
@@ -67,12 +100,16 @@ type Config struct {
 	UnaryInterceptor           grpc.UnaryClientInterceptor
 }
 
-// SecretReader читает версионированный материал из Kubernetes Secret.
+// SecretReader supplies versioned restore material through the delivery abstraction; the agent does not receive a general Kubernetes API client.
+// SecretReader предоставляет версионированный материал восстановления через абстракцию доставки; общий клиент Kubernetes API агенту не выдаётся.
 type SecretReader interface {
+	// ReadVersioned reads one exact delivery path and distinguishes absence from failure; callers decide whether missing role material permits a discovery request or requires refusal.
+	// ReadVersioned читает один точный путь доставки и отличает отсутствие от ошибки; вызывающий решает, допускает ли отсутствие role material запрос обнаружения или требует отказа.
 	ReadVersioned(context.Context, string) (repository.SecretMaterial, bool, error)
 }
 
-// Agent обрабатывает директиву и отправляет одноразовое подтверждение.
+// Agent tracks the last observed coordination revision and a local quiescing flag while polling the external restore controller. Its injected clock and optional poll fetcher support local tests; neither atomic field is durable restore authority.
+// Agent хранит последнюю наблюдённую ревизию координации и локальный флаг дренирования при опросе внешнего контроллера. Внедрённые часы и необязательный источник poll служат локальным тестам; атомарные поля не являются устойчивыми полномочиями восстановления.
 type Agent struct {
 	config           Config
 	observed         atomic.Uint64
@@ -81,7 +118,8 @@ type Agent struct {
 	directiveFetcher func(context.Context) (*internalrpcauthorityv1.GetRestoreDirectiveResponse, string, error)
 }
 
-// New создаёт агент только из полностью связанной конфигурации.
+// New rejects incomplete identity, generation, material-path and interceptor configuration and TLS without verified server naming, then installs the real clock. It does not load trust files, fetch secrets or contact the controller yet.
+// New отклоняет неполную конфигурацию идентичности, поколений, путей материала и interceptor, а также TLS без проверяемого имени сервера, затем устанавливает реальные часы. Файлы доверия и секреты ещё не читаются, связи с контроллером нет.
 func New(config Config) (*Agent, error) {
 	if config.Address == "" ||
 		config.TLS == nil ||
@@ -107,7 +145,8 @@ func New(config Config) (*Agent, error) {
 	return &Agent{config: config, now: time.Now}, nil
 }
 
-// Poll выполняет один цикл обнаружения, остановки, дренирования и подтверждения.
+// Poll preserves existing admission while fetching the controller state. A verified safe no-directive response plus ready served state clears the fence; a valid directive sets the restore fence, drains work, validates the ACK key, signs an ACK and checks its receipt binding. Errors return without automatically reopening admission or rolling back prior fence effects.
+// Poll сохраняет текущий допуск во время получения состояния контроллера. Проверенный безопасный ответ без директивы и готовое обслуживаемое состояние снимают ограждение; допустимая директива ставит его, дренирует работу, проверяет ключ ACK, подписывает подтверждение и проверяет привязку квитанции. Ошибки возвращаются без автоматического открытия допуска или отката уже установленного ограждения.
 func (agent *Agent) Poll(
 	ctx context.Context,
 	admission AuthorityAdmission,
@@ -258,8 +297,8 @@ func (agent *Agent) Poll(
 	return nil
 }
 
-// VerifyStartup синхронно доказывает безопасную внешнюю restore-фазу, не
-// открывая admission. Метод обязан завершиться до активации snapshot и bind.
+// VerifyStartup synchronously sets restore-blocked and unavailable before querying the real controller and requiring a verified safe no-directive transition. Success records the observed revision but deliberately does not reopen admission; callers must run it before activation and bind.
+// VerifyStartup синхронно ставит restore-blocked и недоступность перед запросом реального контроллера и требованием проверенного безопасного перехода без директивы. Успех сохраняет наблюдённую ревизию, но намеренно не открывает допуск; вызывающий выполняет это до активации и bind.
 func (agent *Agent) VerifyStartup(
 	ctx context.Context,
 	admission AuthorityAdmission,
@@ -287,6 +326,8 @@ func (agent *Agent) VerifyStartup(
 	return nil
 }
 
+// getDirective reads the role delivery, rejects a present empty credential but permits absence for discovery, opens a per-call connection and polls with the observed revision and deterministic correlation ID. It closes the connection on return without verifying a returned directive locally in this method.
+// getDirective читает доставку роли, отклоняет присутствующий пустой credential, но допускает отсутствие для обнаружения, открывает соединение на вызов и опрашивает с наблюдённой ревизией и детерминированной корреляцией. Соединение закрывается при возврате; локальной проверки возвращённой директивы в этом методе нет.
 func (agent *Agent) getDirective(
 	ctx context.Context,
 ) (*internalrpcauthorityv1.GetRestoreDirectiveResponse, string, error) {
@@ -329,6 +370,8 @@ func (agent *Agent) getDirective(
 	return response, roleCompact, nil
 }
 
+// newConnection creates a gRPC connection with cloned controller TLS settings and the required unary interceptor. It does not prove remote readiness, and each caller owns closing the returned connection.
+// newConnection создаёт соединение gRPC с копией настроек TLS контроллера и обязательным unary interceptor. Удалённая готовность не доказывается; закрытием возвращённого соединения владеет вызывающий.
 func (agent *Agent) newConnection() (*grpc.ClientConn, error) {
 	connection, err := grpc.NewClient(
 		agent.config.Address,
@@ -341,6 +384,8 @@ func (agent *Agent) newConnection() (*grpc.ClientConn, error) {
 	return connection, nil
 }
 
+// verifySafeNoDirective requires nonzero coordination/epoch/anchor fields, matching epochs and a sixty-four-character evidence digest, then accepts OPEN without a safe-window timestamp or COMPLETED after its valid safe-window time. It checks digest length rather than hexadecimal content or signature and rejects all other phases.
+// verifySafeNoDirective требует ненулевые поля координации, эпохи и опорной ревизии, совпадение эпох и дайджест доказательства длиной шестьдесят четыре символа, затем принимает OPEN без времени безопасного окна либо COMPLETED после корректного времени окна. Проверяется длина дайджеста, а не hex-содержимое или подпись; остальные фазы отклоняются.
 func (agent *Agent) verifySafeNoDirective(
 	result *internalrpcauthorityv1.NoRestoreDirective,
 	transition *internalrpcauthorityv1.RestoreTransition,
@@ -374,11 +419,14 @@ func (agent *Agent) verifySafeNoDirective(
 	return nil
 }
 
-// Quiescing сообщает, действует ли сейчас ограждение восстановления.
+// Quiescing reports only the local atomic flag set after a verified directive and cleared after a successful safe poll; it is not the external phase or the startup admission-fence state.
+// Quiescing сообщает только локальный атомарный флаг, устанавливаемый после проверенной директивы и снимаемый успешным безопасным poll; это не внешняя фаза и не состояние ограждения допуска при запуске.
 func (agent *Agent) Quiescing() bool {
 	return agent.quiescing.Load()
 }
 
+// verifyRoleCredential loads restore-role trust, requires a current signer with the exact purpose and protected type, verifies canonical JWS and validates five-minute timing plus configured workload/role/generation bindings. It returns decoded claims and the exact compact digest without reserving controller state.
+// verifyRoleCredential загружает доверие restore-role, требует текущего подписанта с точными назначением и защищённым типом, проверяет канонический JWS, пятиминутное время и настроенные привязки workload, роли и поколений. Возвращаются разобранные claims и дайджест точного compact без резервирования состояния контроллера.
 func (agent *Agent) verifyRoleCredential(
 	compact string,
 ) (model.RestoreRoleCredentialClaims, string, error) {
@@ -449,6 +497,8 @@ func (agent *Agent) verifyRoleCredential(
 	return claims, compactDigest(compact), nil
 }
 
+// verifyDirective uses one pinned mounted certificate's P-256 key to verify the directive JWS and checks timing, identity, role-credential digest and restore coordination with mandatory stop/drain claims. It does not validate a certificate chain here; the existing implementation dereferences the parse result before checking a DER parsing error.
+// verifyDirective использует ключ P-256 одного закреплённого смонтированного сертификата для проверки JWS директивы и проверяет время, идентичность, дайджест role credential и координацию восстановления с обязательными stop/drain claims. Цепочка сертификата здесь не проверяется; существующая реализация обращается к результату разбора до проверки ошибки DER.
 func (agent *Agent) verifyDirective(
 	compact string,
 	credential model.RestoreRoleCredentialClaims,
@@ -525,25 +575,25 @@ func (agent *Agent) verifyDirective(
 	return claims, nil
 }
 
+// compactDigest hashes the exact compact JWS bytes as lowercase SHA-256 hex for credential binding; hashing is neither signature verification nor canonical JSON decoding.
+// compactDigest хеширует точные байты compact JWS в строчный hex SHA-256 для привязки credential; хеширование не является проверкой подписи или разбором канонического JSON.
 func compactDigest(compact string) string {
 	digest := sha256.Sum256([]byte(compact))
 	return hex.EncodeToString(digest[:])
 }
 
+// deterministicUUID delegates restore ACK and request identities to the shared
+// NUL-terminated encoding without changing namespaces or tuple bytes. The ID
+// is deterministic SHA-256 truncation, not randomness or proof of authority.
+// deterministicUUID передаёт идентичности restore ACK и запросов общему
+// кодированию с завершающим NUL, не меняя пространства имён и байты кортежа.
+// ID — детерминированное усечение SHA-256, а не случайность или полномочие.
 func deterministicUUID(parts ...string) string {
-	digest := sha256.New()
-	for _, part := range parts {
-		_, _ = digest.Write([]byte(part))
-		_, _ = digest.Write([]byte{0})
-	}
-	value := digest.Sum(nil)[:16]
-	value[6] = (value[6] & 0x0f) | 0x50
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value)
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32]
+	return value.TerminatedAuthorityUUID(parts...)
 }
 
+// readMountedValue reads through the bounded secure-file boundary, trims whitespace and rejects unsafe or empty material with fixed diagnostics. The returned string is not explicitly erased.
+// readMountedValue читает через ограниченную безопасную файловую границу, обрезает пробелы и отклоняет небезопасный или пустой материал фиксированной диагностикой. Возвращённая строка явно не стирается.
 func readMountedValue(path string, maximum int) (string, error) {
 	raw, err := securefile.Read(path, int64(maximum))
 	if err != nil {

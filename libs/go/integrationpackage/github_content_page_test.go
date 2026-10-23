@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+// TestGitHubContentReadSeparatesSourceAndPageBudgets pins the eight-MiB source offset independently
+// of the 16-KiB page and checks both input and output bounds at EOF and intermediate pages.
+// TestGitHubContentReadSeparatesSourceAndPageBudgets закрепляет восьмимебибайтную границу источника
+// независимо от страницы в 16 КиБ и проверяет ввод и вывод на промежуточных страницах и EOF.
 func TestGitHubContentReadSeparatesSourceAndPageBudgets(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {
@@ -114,6 +118,10 @@ func TestGitHubContentReadSeparatesSourceAndPageBudgets(t *testing.T) {
 	t.Logf("canonical GitHub source package version=%s digest=%s", definition.Metadata.Version, definition.Digest)
 }
 
+// TestGitHubLargeSourceProtocolDoesNotExposeBlobSelectorOrExpandAuthority rejects caller-selected
+// blob locators and confirms that pagination did not add network destinations or change ownership.
+// TestGitHubLargeSourceProtocolDoesNotExposeBlobSelectorOrExpandAuthority отклоняет выбранные
+// вызывающим кодом адреса blob и подтверждает отсутствие новых назначений или прав из-за пагинации.
 func TestGitHubLargeSourceProtocolDoesNotExposeBlobSelectorOrExpandAuthority(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {

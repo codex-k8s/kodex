@@ -11,12 +11,16 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// fakeManagedStream serves controlled stream metadata to release and bootstrap tests.
+// fakeManagedStream возвращает управляемые метаданные потока в тестах выпуска и bootstrap.
 type fakeManagedStream struct {
 	jetstream.Stream
 	info    jetstream.StreamInfo
 	infoErr error
 }
 
+// TestReleaseMessageLimitUpgradeIsExactAndForwardOnly rejects unrelated drift and reverse upgrades.
+// TestReleaseMessageLimitUpgradeIsExactAndForwardOnly отклоняет посторонние расхождения и обратное изменение лимита.
 func TestReleaseMessageLimitUpgradeIsExactAndForwardOnly(t *testing.T) {
 	config := Config{Stream: "CONTROL_PLANE", Subjects: []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"}, Replicas: 1, MaxMessageBytes: 256 << 10, MaxMessages: 1000, MaxBytes: 32 << 20, MaxPerSubject: 100, MaxAge: time.Hour, DuplicateWindow: time.Minute}
 	previous := config
@@ -69,6 +73,8 @@ func TestReleaseMessageLimitUpgradeIsExactAndForwardOnly(t *testing.T) {
 	}
 }
 
+// Info returns a detached snapshot or the configured read error.
+// Info возвращает отдельный снимок состояния либо заданную ошибку чтения.
 func (stream *fakeManagedStream) Info(context.Context, ...jetstream.StreamInfoOpt) (*jetstream.StreamInfo, error) {
 	if stream.infoErr != nil {
 		return nil, stream.infoErr
@@ -77,6 +83,8 @@ func (stream *fakeManagedStream) Info(context.Context, ...jetstream.StreamInfoOp
 	return &info, nil
 }
 
+// fakeJetStream records stream updates and simulates authoritative readback.
+// fakeJetStream записывает обновления потока и имитирует авторитетное повторное чтение.
 type fakeJetStream struct {
 	jetstream.JetStream
 	stream        *fakeManagedStream
@@ -88,6 +96,8 @@ type fakeJetStream struct {
 	updatedConfig jetstream.StreamConfig
 }
 
+// Stream returns the configured stream or lookup failure.
+// Stream возвращает заданный поток либо ошибку поиска.
 func (manager *fakeJetStream) Stream(context.Context, string) (jetstream.Stream, error) {
 	if manager.streamErr != nil {
 		return nil, manager.streamErr
@@ -95,10 +105,14 @@ func (manager *fakeJetStream) Stream(context.Context, string) (jetstream.Stream,
 	return manager.stream, nil
 }
 
+// CreateStream exposes the configured creation failure to bootstrap tests.
+// CreateStream передаёт заданную ошибку создания в тесты bootstrap.
 func (manager *fakeJetStream) CreateStream(context.Context, jetstream.StreamConfig) (jetstream.Stream, error) {
 	return nil, manager.createErr
 }
 
+// UpdateStream records a requested config and optionally keeps the old state for readback tests.
+// UpdateStream записывает запрошенную конфигурацию и может сохранить прежнее состояние для проверки чтением.
 func (manager *fakeJetStream) UpdateStream(_ context.Context, config jetstream.StreamConfig) (jetstream.Stream, error) {
 	manager.updateCalls++
 	manager.updatedConfig = config
@@ -111,6 +125,8 @@ func (manager *fakeJetStream) UpdateStream(_ context.Context, config jetstream.S
 	return manager.stream, nil
 }
 
+// TestReleaseMessageLimitUpgradeRequiresExactReadback rejects missing reads, failed writes, and unchanged state.
+// TestReleaseMessageLimitUpgradeRequiresExactReadback отклоняет ошибки чтения и записи, а также неизменённое состояние.
 func TestReleaseMessageLimitUpgradeRequiresExactReadback(t *testing.T) {
 	config := Config{Stream: "CONTROL_PLANE", Subjects: []string{"control_plane.platform.*.events"}, Replicas: 1, MaxMessageBytes: 256 << 10, MaxMessages: 1000, MaxBytes: 32 << 20, MaxPerSubject: 100, MaxAge: time.Hour, DuplicateWindow: time.Minute}
 	previous := config
@@ -132,6 +148,8 @@ func TestReleaseMessageLimitUpgradeRequiresExactReadback(t *testing.T) {
 	}
 }
 
+// TestExpectedStreamContract checks the expected shape and rejects capacity or storage drift.
+// TestExpectedStreamContract проверяет ожидаемую форму и отклоняет изменение ёмкости или хранения.
 func TestExpectedStreamContract(t *testing.T) {
 	t.Parallel()
 	config := Config{
@@ -160,6 +178,8 @@ func TestExpectedStreamContract(t *testing.T) {
 	}
 }
 
+// TestBoundedSubjectFilters accepts registered token patterns and rejects broader subjects.
+// TestBoundedSubjectFilters допускает зарегистрированные шаблоны токенов и отклоняет более широкие subject-ы.
 func TestBoundedSubjectFilters(t *testing.T) {
 	for _, value := range []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"} {
 		if !validSubjectFilter(value) {
@@ -173,6 +193,8 @@ func TestBoundedSubjectFilters(t *testing.T) {
 	}
 }
 
+// TestEnsureStreamReconcilesOnlyEmptyStream repairs an empty stream with contract drift.
+// TestEnsureStreamReconcilesOnlyEmptyStream исправляет расхождение контракта только у пустого потока.
 func TestEnsureStreamReconcilesOnlyEmptyStream(t *testing.T) {
 	t.Parallel()
 	config := Config{
@@ -192,6 +214,8 @@ func TestEnsureStreamReconcilesOnlyEmptyStream(t *testing.T) {
 	}
 }
 
+// TestEnsureStreamRejectsNonEmptyContractDrift leaves a populated stream unchanged.
+// TestEnsureStreamRejectsNonEmptyContractDrift оставляет наполненный поток без изменений.
 func TestEnsureStreamRejectsNonEmptyContractDrift(t *testing.T) {
 	t.Parallel()
 	config := Config{
@@ -214,6 +238,8 @@ func TestEnsureStreamRejectsNonEmptyContractDrift(t *testing.T) {
 	}
 }
 
+// TestEnsureStreamPreservesCreateFailure keeps the original stream creation error inspectable.
+// TestEnsureStreamPreservesCreateFailure сохраняет исходную ошибку создания потока для проверки.
 func TestEnsureStreamPreservesCreateFailure(t *testing.T) {
 	t.Parallel()
 	createErr := errors.New("insufficient storage resources")

@@ -23,6 +23,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestTaskSessionOwnerRPCDiagnosticPreservesSanitizedCode checks recognized remote
+// codes survive while unknown numeric codes become Unknown, with fixed text and no
+// remote details/unwrap chain; no terminal success or retry authority is invented.
+// TestTaskSessionOwnerRPCDiagnosticPreservesSanitizedCode проверяет сохранение recognized
+// remote codes и замену unknown numeric на Unknown с fixed text без remote details/
+// unwrap chain; terminal success и retry authority не создаются.
 func TestTaskSessionOwnerRPCDiagnosticPreservesSanitizedCode(t *testing.T) {
 	input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
 	for _, code := range []codes.Code{codes.Aborted, codes.NotFound, codes.PermissionDenied, codes.Unauthenticated, codes.Unavailable, codes.DeadlineExceeded, codes.Canceled, codes.Internal, codes.Unknown, codes.Code(123)} {
@@ -45,11 +51,21 @@ func TestTaskSessionOwnerRPCDiagnosticPreservesSanitizedCode(t *testing.T) {
 	}
 }
 
+// taskDiagnosticCursor encodes a synthetic versioned source/binding/offset cursor
+// for progress/mismatch tests; base64 text is not a signed owner capability.
+// taskDiagnosticCursor кодирует synthetic versioned source/binding/offset cursor
+// для progress/mismatch tests; base64 text не является signed owner capability.
 func taskDiagnosticCursor(source, binding string, offset int) string {
 	raw, _ := json.Marshal(controlplaneapi.TaskSessionCursor{Version: 1, Binding: binding, Source: source, Offset: offset})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
+// TestTaskSessionDiagnosticClosedStagesAndGuards exercises eleven guard/projection/
+// binding/cursor failure paths and expected owner-call counts, checks local codes stay
+// Unknown and rejects unknown/plain/typed-nil markers without private reflection.
+// TestTaskSessionDiagnosticClosedStagesAndGuards проверяет одиннадцать guard/projection/
+// binding/cursor failure paths и owner-call counts,Unknown local codes и отказ unknown/
+// plain/typed-nil markers без private reflection.
 func TestTaskSessionDiagnosticClosedStagesAndGuards(t *testing.T) {
 	input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeProject)
 	input.ProjectRef = callbackTaskSessionPage().ProjectRef
@@ -119,6 +135,12 @@ func TestTaskSessionDiagnosticClosedStagesAndGuards(t *testing.T) {
 	}
 }
 
+// TestTaskSessionDiagnosticPreservesPagedSuccess checks both assistant scopes and
+// terminal/continuation pages preserve exact public JSON and forwarded cursor after
+// adding sanitized failure diagnostics; all owner responses remain synthetic.
+// TestTaskSessionDiagnosticPreservesPagedSuccess проверяет прежние exact public JSON
+// и forwarded cursor обоих assistant scopes/terminal-continuation pages при sanitized
+// failure diagnostics; owner responses синтетические.
 func TestTaskSessionDiagnosticPreservesPagedSuccess(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input, _, _ := assistantOwnCurrentFixture(scope)
@@ -146,6 +168,12 @@ func TestTaskSessionDiagnosticPreservesPagedSuccess(t *testing.T) {
 	}
 }
 
+// TestTaskSessionDiagnosticCannotLogUnverifiedPins checks invalid refs/digests/attempt
+// yield only UNAVAILABLE provenance and do not expose canaries or run refs in logs.
+// It tests structural fallback, not proof that arbitrary caller input is authenticated.
+// TestTaskSessionDiagnosticCannotLogUnverifiedPins проверяет лишь UNAVAILABLE provenance
+// invalid refs/digests/attempt без canaries/run refs в logs. Проверяется structural
+// fallback,не аутентификация произвольного caller input.
 func TestTaskSessionDiagnosticCannotLogUnverifiedPins(t *testing.T) {
 	input := runtimecontract.RunnerInput{RunRef: "PRIVATE_INVALID_REF!", NodeRef: "nod_fixture123", SessionRef: "ses_fixture123", TurnRef: "trn_fixture123", Attempt: 1,
 		LeaseRef: "PRIVATE_FENCE", RuntimeRevisionDigest: strings.Repeat("a", 64), InputDigest: strings.Repeat("b", 64), ExecutionBindingDigest: strings.Repeat("c", 64)}
@@ -167,11 +195,19 @@ func TestTaskSessionDiagnosticCannotLogUnverifiedPins(t *testing.T) {
 	}
 }
 
+// taskDiagnosticMCPClient adds injectable activity rejection to the search fake so
+// tests distinguish authorization/audit failure from actual task-session handler work.
+// taskDiagnosticMCPClient добавляет injectable activity rejection к search fake
+// для различения authorization/audit failure и task-session handler work.
 type taskDiagnosticMCPClient struct {
 	*assistantSearchDiagnosticClient
 	rejectRecorder bool
 }
 
+// RecordRunToolCall either returns a private-canary Unavailable or records the
+// request and supplies a synthetic event locator; it does not commit durable audit.
+// RecordRunToolCall возвращает private-canary Unavailable либо записывает request
+// и выдаёт synthetic event locator без durable audit commit.
 func (client *taskDiagnosticMCPClient) RecordRunToolCall(_ context.Context, request *cp.RecordRunToolCallRequest, _ ...grpc.CallOption) (*cp.RecordRunToolCallResponse, error) {
 	if client.rejectRecorder {
 		return nil, status.Error(codes.Unavailable, "PRIVATE_RECORDER_MESSAGE")
@@ -180,6 +216,14 @@ func (client *taskDiagnosticMCPClient) RecordRunToolCall(_ context.Context, requ
 	return &cp.RecordRunToolCallResponse{Event: &cp.RunEvent{Ref: "evt_synthetic123"}}, nil
 }
 
+// TestTaskSessionDiagnosticAuthenticatedMCPBoundary checks local ticket/header/audit
+// guards precede the handler, success adds no failure logs and one owner error produces
+// only closed sanitized provenance tied to the activity call, without private cursor/
+// selected-run/ticket/fence disclosure or corrective retry permission.
+// TestTaskSessionDiagnosticAuthenticatedMCPBoundary проверяет local ticket/header/audit
+// guards до handler,отсутствие failure logs успеха и closed sanitized provenance одного
+// owner error с привязкой к activity call без private cursor/selected-run/ticket/fence
+// disclosure и corrective retry permission.
 func TestTaskSessionDiagnosticAuthenticatedMCPBoundary(t *testing.T) {
 	for _, scenario := range []string{"owner", "unauthorized", "foreign header", "projection failed", "success"} {
 		t.Run(scenario, func(t *testing.T) {

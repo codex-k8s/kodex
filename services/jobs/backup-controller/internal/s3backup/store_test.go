@@ -21,11 +21,15 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
 
+// fakeObject keeps exact body, digest metadata, ETag and version for isolated S3 tests.
+// RU: fakeObject хранит точные тело, метаданные дайджеста, ETag и версию для изолированных S3-тестов.
 type fakeObject struct {
 	body, checksum, etag, version string
 	metadata                      map[string]string
 }
 
+// fakeS3 models conditional writes, exact-version reads and uncertain delete responses without network IO.
+// RU: fakeS3 моделирует условную запись, чтение точной версии и неопределённый ответ удаления без сети.
 type fakeS3 struct {
 	objects             map[string]fakeObject
 	lastIfNoMatch       string
@@ -36,18 +40,26 @@ type fakeS3 struct {
 	deleteResponseLost  bool
 }
 
+// newFakeS3 starts an isolated empty versioned fixture with deterministic version numbering.
+// RU: newFakeS3 создаёт изолированную пустую оснастку с детерминированной нумерацией версий.
 func newFakeS3() *fakeS3 {
 	return &fakeS3{objects: map[string]fakeObject{}, nextVersion: 1}
 }
 
+// HeadBucket reports the synthetic bucket as reachable for repository readiness tests.
+// RU: HeadBucket сообщает о доступности синтетического бакета при проверке готовности репозитория.
 func (fake *fakeS3) HeadBucket(context.Context, *s3.HeadBucketInput, ...func(*s3.Options)) (*s3.HeadBucketOutput, error) {
 	return &s3.HeadBucketOutput{}, nil
 }
 
+// GetBucketVersioning reports enabled versioning required by immutable backup receipts.
+// RU: GetBucketVersioning сообщает о включённом версионировании для неизменяемых квитанций копий.
 func (fake *fakeS3) GetBucketVersioning(context.Context, *s3.GetBucketVersioningInput, ...func(*s3.Options)) (*s3.GetBucketVersioningOutput, error) {
 	return &s3.GetBucketVersioningOutput{Status: types.BucketVersioningStatusEnabled}, nil
 }
 
+// ListObjectVersions returns sorted latest fixture versions within the requested prefix.
+// RU: ListObjectVersions возвращает отсортированные последние версии оснастки под заданным префиксом.
 func (fake *fakeS3) ListObjectVersions(_ context.Context, input *s3.ListObjectVersionsInput, _ ...func(*s3.Options)) (*s3.ListObjectVersionsOutput, error) {
 	keys := make([]string, 0, len(fake.objects))
 	for key := range fake.objects {
@@ -65,6 +77,8 @@ func (fake *fakeS3) ListObjectVersions(_ context.Context, input *s3.ListObjectVe
 	return &s3.ListObjectVersionsOutput{Versions: versions, IsTruncated: aws.Bool(false)}, nil
 }
 
+// HeadObject returns metadata only for the requested exact fixture version.
+// RU: HeadObject возвращает метаданные лишь для запрошенной точной версии оснастки.
 func (fake *fakeS3) HeadObject(_ context.Context, input *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
 	object, exists := fake.objects[aws.ToString(input.Key)]
 	if !exists || object.version != aws.ToString(input.VersionId) {
@@ -74,6 +88,8 @@ func (fake *fakeS3) HeadObject(_ context.Context, input *s3.HeadObjectInput, _ .
 		VersionId: aws.String(object.version), ChecksumSHA256: aws.String(object.checksum), Metadata: object.metadata}, nil
 }
 
+// GetObject returns exact-version fixture bytes with matching receipt metadata.
+// RU: GetObject возвращает байты точной версии оснастки с соответствующими метаданными квитанции.
 func (fake *fakeS3) GetObject(_ context.Context, input *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 	object, exists := fake.objects[aws.ToString(input.Key)]
 	if !exists || object.version != aws.ToString(input.VersionId) {
@@ -84,6 +100,8 @@ func (fake *fakeS3) GetObject(_ context.Context, input *s3.GetObjectInput, _ ...
 		VersionId: aws.String(object.version), ChecksumSHA256: aws.String(object.checksum)}, nil
 }
 
+// PutObject enforces If-None-Match and stores an incremented exact version for conflict tests.
+// RU: PutObject соблюдает If-None-Match и сохраняет новую точную версию для проверки конфликтов.
 func (fake *fakeS3) PutObject(_ context.Context, input *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	key := aws.ToString(input.Key)
 	fake.lastIfNoMatch = aws.ToString(input.IfNoneMatch)
@@ -102,6 +120,8 @@ func (fake *fakeS3) PutObject(_ context.Context, input *s3.PutObjectInput, _ ...
 	return &s3.PutObjectOutput{ETag: aws.String(etag), VersionId: aws.String(version)}, nil
 }
 
+// DeleteObject applies exact-version or If-Match conditions and can simulate a lost response after deletion.
+// RU: DeleteObject применяет условие точной версии либо If-Match и может имитировать потерянный ответ после удаления.
 func (fake *fakeS3) DeleteObject(_ context.Context, input *s3.DeleteObjectInput, _ ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
 	key := aws.ToString(input.Key)
 	object, exists := fake.objects[key]
@@ -129,11 +149,15 @@ func (fake *fakeS3) DeleteObject(_ context.Context, input *s3.DeleteObjectInput,
 	return &s3.DeleteObjectOutput{}, nil
 }
 
+// responseError wraps a selected HTTP status in the SDK's response error type for mapping tests.
+// RU: responseError оборачивает выбранный HTTP-статус в ошибку SDK для проверки классификации.
 func responseError(status int) error {
 	return &smithyhttp.ResponseError{Response: &smithyhttp.Response{Response: &http.Response{StatusCode: status}},
 		Err: errors.New("fake S3 response")}
 }
 
+// testRepository binds an isolated fake S3 client to the backup repository namespace.
+// RU: testRepository связывает изолированный поддельный S3-клиент с пространством репозитория копий.
 func testRepository(t *testing.T) (*Repository, *fakeS3) {
 	t.Helper()
 	fake := newFakeS3()
@@ -145,6 +169,8 @@ func testRepository(t *testing.T) (*Repository, *fakeS3) {
 	return repository, fake
 }
 
+// TestOperationLockIsExclusiveAndExactlyReleased checks conditional acquisition and precise release.
+// RU: TestOperationLockIsExclusiveAndExactlyReleased проверяет условное получение и точное освобождение блокировки.
 func TestOperationLockIsExclusiveAndExactlyReleased(t *testing.T) {
 	t.Parallel()
 	repository, fake := testRepository(t)
@@ -171,6 +197,8 @@ func TestOperationLockIsExclusiveAndExactlyReleased(t *testing.T) {
 	}
 }
 
+// TestOperationLockReleaseAcceptsLostResponseAfterExactDeletion resolves a lost delete response by readback.
+// RU: TestOperationLockReleaseAcceptsLostResponseAfterExactDeletion разрешает потерянный ответ удаления перечитыванием.
 func TestOperationLockReleaseAcceptsLostResponseAfterExactDeletion(t *testing.T) {
 	t.Parallel()
 	repository, fake := testRepository(t)
@@ -188,6 +216,8 @@ func TestOperationLockReleaseAcceptsLostResponseAfterExactDeletion(t *testing.T)
 	}
 }
 
+// TestOperationLockReplacesOnlyExpiredExactVersion prevents a stale holder from deleting its replacement.
+// RU: TestOperationLockReplacesOnlyExpiredExactVersion не даёт прежнему держателю удалить новую блокировку.
 func TestOperationLockReplacesOnlyExpiredExactVersion(t *testing.T) {
 	t.Parallel()
 	repository, fake := testRepository(t)
@@ -226,6 +256,8 @@ func TestOperationLockReplacesOnlyExpiredExactVersion(t *testing.T) {
 	}
 }
 
+// TestOperationLockExpiredReplacementLosesRaceSafely preserves a competing lock created during replacement.
+// RU: TestOperationLockExpiredReplacementLosesRaceSafely сохраняет конкурирующую блокировку, созданную при замене.
 func TestOperationLockExpiredReplacementLosesRaceSafely(t *testing.T) {
 	t.Parallel()
 	repository, fake := testRepository(t)
@@ -257,6 +289,8 @@ func TestOperationLockExpiredReplacementLosesRaceSafely(t *testing.T) {
 	}
 }
 
+// TestCatalogExposesOnlyVerifiedBackupsAndValidDrills excludes unverified manifests until exact receipts exist.
+// RU: TestCatalogExposesOnlyVerifiedBackupsAndValidDrills скрывает непроверенные манифесты до появления точных квитанций.
 func TestCatalogExposesOnlyVerifiedBackupsAndValidDrills(t *testing.T) {
 	t.Parallel()
 	repository, _ := testRepository(t)

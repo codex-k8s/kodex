@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"log/slog"
-	"strconv"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -11,11 +10,19 @@ import (
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
 )
 
+// invocationExecutor separates exact integration execution and connection probing from owner-managed work claims and receipts.
+// RU: invocationExecutor отделяет точное исполнение интеграции и проверку подключения от управляемых владельцем claim и квитанций.
 type invocationExecutor interface {
+	// Execute performs one claimed integration operation and returns its effect receipt without completing the owner's invocation.
+	// RU: Execute выполняет одну арендованную операцию интеграции и возвращает квитанцию эффекта без завершения invocation у владельца.
 	Execute(context.Context, *controlplanev1.IntegrationInvocationClaim) (*controlplanev1.IntegrationEffectReceipt, error)
+	// TestConnection probes the claimed connection and returns a safe summary or an error for owner-side completion.
+	// RU: TestConnection проверяет арендованное подключение и возвращает безопасное резюме либо ошибку для завершения у владельца.
 	TestConnection(context.Context, *controlplanev1.IntegrationConnectionTestClaim) (string, error)
 }
 
+// runInvocationLoop bounds each polling cycle, reports degradation transitions without raw dependency errors and stops on cancellation.
+// RU: runInvocationLoop ограничивает каждый цикл опроса, сообщает переходы деградации без сырых ошибок зависимостей и останавливается по отмене.
 func runInvocationLoop(control controlplanev1.RuntimeWorkServiceClient, adapter invocationExecutor, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.PollInterval)
@@ -41,13 +48,14 @@ func runInvocationLoop(control controlplanev1.RuntimeWorkServiceClient, adapter 
 	}
 }
 
+// processIntegrationWork claims at most one connection test and one invocation per iteration, completing each before another claim of its kind.
+// RU: processIntegrationWork получает не более одной проверки подключения и одного вызова за итерацию, завершая каждый до следующего claim того же вида.
+// An idle response ends polling; malformed responses, cancellation or insufficient operation budget prevent further claims.
+// RU: Пустой ответ завершает опрос; неверные ответы, отмена или недостаточный бюджет операции предотвращают следующие claim.
 func processIntegrationWork(ctx context.Context, control controlplanev1.RuntimeWorkServiceClient, adapter invocationExecutor, config Config) error {
 	for index := int32(0); index < config.ClaimLimit; index++ {
-		if err := ctx.Err(); err != nil {
+		if available, err := claimBudgetAvailable(ctx, config.RequestTimeout); err != nil || !available {
 			return err
-		}
-		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= 2*config.RequestTimeout+time.Second {
-			return nil
 		}
 		query, cancel := context.WithTimeout(ctx, config.RequestTimeout)
 		tests, err := control.ClaimIntegrationConnectionTests(query, &controlplanev1.ClaimIntegrationConnectionTestsRequest{WorkloadInstance: config.InstanceID, Limit: 1})
@@ -85,6 +93,10 @@ func processIntegrationWork(ctx context.Context, control controlplanev1.RuntimeW
 	return nil
 }
 
+// processConnectionTest validates the Mattermost claim and lease, probes within its deadline and reports exact lease pins to the owner.
+// RU: processConnectionTest проверяет Mattermost claim и аренду, выполняет проверку в её срок и передаёт точные координаты аренды владельцу.
+// Completion must read back the same connection; a probe error is preserved after successful completion reporting.
+// RU: Ответ завершения должен ссылаться на то же подключение; ошибка проверки сохраняется после успешной передачи результата.
 func processConnectionTest(ctx context.Context, control controlplanev1.RuntimeWorkServiceClient, adapter invocationExecutor, claim *controlplanev1.IntegrationConnectionTestClaim, config Config) error {
 	if claim.GetTestRef() == "" || claim.GetConnectionRef() == "" || claim.GetDefinitionKey() != "mattermost" {
 		return errDeliveryResponse
@@ -100,7 +112,7 @@ func processConnectionTest(ctx context.Context, control controlplanev1.RuntimeWo
 	completion, cancelCompletion := context.WithTimeout(ctx, config.RequestTimeout)
 	defer cancelCompletion()
 	response, err := control.CompleteIntegrationConnectionTest(completion, &controlplanev1.CompleteIntegrationConnectionTestRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: integrationCompletionKey(claim.GetTestRef(), lease)},
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: workCompletionKey(claim.GetTestRef(), lease)},
 		TestRef:  claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(),
 		Success: success, SafeErrorCode: code, ResultSummary: summary,
 	})
@@ -113,6 +125,10 @@ func processConnectionTest(ctx context.Context, control controlplanev1.RuntimeWo
 	return operationErr
 }
 
+// processInvocation validates and executes one leased Mattermost operation, checking receipt identity and required result fields before reporting success.
+// RU: processInvocation проверяет и выполняет одну арендованную Mattermost-операцию, сверяя идентичность квитанции и обязательные поля результата до передачи успеха.
+// Invalid write receipts become unknown outcomes; completion uses a separate bounded context and never attaches a rejected receipt.
+// RU: Неверные квитанции записи становятся неизвестным исходом; завершение использует отдельный ограниченный контекст и не прикладывает отклонённую квитанцию.
 func processInvocation(ctx context.Context, control controlplanev1.RuntimeWorkServiceClient, adapter invocationExecutor, claim *controlplanev1.IntegrationInvocationClaim, config Config) error {
 	if claim.GetInvocationRef() == "" || claim.GetDefinitionKey() != "mattermost" {
 		return errDeliveryResponse
@@ -132,7 +148,7 @@ func processInvocation(ctx context.Context, control controlplanev1.RuntimeWorkSe
 	}
 	lease := claim.GetLease()
 	request := &controlplanev1.CompleteIntegrationInvocationRequest{
-		Mutation:      &controlplanev1.MutationContext{IdempotencyKey: integrationCompletionKey(claim.GetInvocationRef(), lease)},
+		Mutation:      &controlplanev1.MutationContext{IdempotencyKey: workCompletionKey(claim.GetInvocationRef(), lease)},
 		InvocationRef: claim.GetInvocationRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(),
 		Success: success, SafeErrorCode: code, UnknownOutcome: unknown,
 	}
@@ -152,8 +168,4 @@ func processInvocation(ctx context.Context, control controlplanev1.RuntimeWorkSe
 		return errDeliveryResponse
 	}
 	return operationErr
-}
-
-func integrationCompletionKey(reference string, lease *controlplanev1.WorkLease) string {
-	return stableKey(reference, lease.GetRef()+":"+strconv.FormatInt(lease.GetGeneration(), 10)+":complete")
 }

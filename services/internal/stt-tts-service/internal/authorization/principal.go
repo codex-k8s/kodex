@@ -1,4 +1,5 @@
-// Package authorization преобразует только проверенный internal RPC context.
+// Package authorization maps accepted protected RPC or owner-resolved trusted context into method-bound STT domain principals.
+// RU: Пакет authorization преобразует принятый защищённый RPC либо разрешённый владельцем trusted context в субъекта домена STT с привязкой к методу.
 package authorization
 
 import (
@@ -16,15 +17,35 @@ import (
 )
 
 const (
-	expectedAudience          = "urn:kodex:internal-rpc:stt-tts-service"
-	expectedWorkloadID        = "stt-tts-service"
-	expectedCaller            = "control-api-gateway"
-	transcribeOperation       = "platform.stt.transcribe"
-	modelCatalogOperation     = "platform.stt.model-catalog.get"
+	// expectedAudience pins verified tokens to this service rather than another internal RPC audience.
+	// RU: expectedAudience закрепляет проверенные токены за этим сервисом, а не иной аудиторией внутреннего RPC.
+	expectedAudience = "urn:kodex:internal-rpc:stt-tts-service"
+	// expectedWorkloadID identifies the only target workload accepted by protected principal mapping.
+	// RU: expectedWorkloadID задаёт единственный целевой workload, принимаемый защищённым преобразованием субъекта.
+	expectedWorkloadID = "stt-tts-service"
+	// expectedCaller limits the protected STT entrypoint to the registered control API gateway workload.
+	// RU: expectedCaller ограничивает защищённый вход STT зарегистрированным workload control API gateway.
+	expectedCaller = "control-api-gateway"
+	// transcribeOperation names the exact streamed user operation and does not match catalog or wildcard permissions.
+	// RU: transcribeOperation задаёт точную потоковую пользовательскую операцию, не совпадая с правом каталога или wildcard.
+	transcribeOperation = "platform.stt.transcribe"
+	// modelCatalogOperation names the separate organization-level configuration read operation.
+	// RU: modelCatalogOperation задаёт отдельную операцию чтения конфигурации уровня организации.
+	modelCatalogOperation = "platform.stt.model-catalog.get"
+	// emptyCatalogRequestSHA256 binds protected catalog authority to the canonical empty protobuf request bytes.
+	// RU: emptyCatalogRequestSHA256 связывает защищённые полномочия каталога с каноническими пустыми байтами protobuf запроса.
 	emptyCatalogRequestSHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	maximumAuthorityRevision  = uint64(1<<53 - 1)
+	// maximumAuthorityRevision bounds source and provenance generations to the exact integer range used by the shared authority contract.
+	// RU: maximumAuthorityRevision ограничивает поколения source и provenance точным целым диапазоном общего authority контракта.
+	maximumAuthorityRevision = uint64(1<<53 - 1)
 )
 
+// Principal accepts only a private trusted principal for the same live method or the verifier-installed protected context with exact workload/operation/permission pins.
+// RU: Principal принимает только приватного trusted-субъекта того же живого метода либо установленный verifier защищённый context с точными workload/operation/permission координатами.
+// Protected catalog access has no project or continuation and requires an empty-request digest; cryptographic verification belongs to the earlier interceptor.
+// RU: Защищённый доступ к каталогу не имеет проекта или continuation и требует дайджест пустого запроса; криптографическая проверка принадлежит предыдущему перехватчику.
+// Protected expiry shape is checked here and current request eligibility is rechecked downstream; callers must supply a nonnil context.
+// RU: Здесь проверяется форма защищённого срока, а текущий допуск запроса повторно проверяется ниже; вызывающая сторона обязана передать ненулевой контекст.
 func Principal(ctx context.Context, fullMethod string) (value.Principal, error) {
 	if resolved, ok := ctx.Value(trustedPrincipalKey{}).(trustedPrincipal); ok {
 		if resolved.method != fullMethod || ctx.Err() != nil || !resolved.principal.ExpiresAt.After(time.Now()) {
@@ -83,11 +104,15 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 	}, nil
 }
 
+// verifiedIdentity pairs an owner identity with its complete source provenance instead of treating the bare identifier as authority.
+// RU: verifiedIdentity связывает идентичность владельца с полным происхождением источника, не считая один идентификатор полномочием.
 type verifiedIdentity struct {
 	id         string
 	provenance value.AuthorityProvenance
 }
 
+// identity trims identity/reference text and validates known provenance source, nonzero bounded revision and lowercase SHA-256 before domain mapping.
+// RU: identity обрезает пробелы идентичности/ссылки и проверяет известный source происхождения, ненулевую ограниченную ревизию и строчный SHA-256 до доменного преобразования.
 func identity(input *internalrpcauthorityv1.AuthorityIdentity) (verifiedIdentity, error) {
 	if input == nil || input.GetProvenance() == nil {
 		return verifiedIdentity{}, errors.New("authority identity is incomplete")
@@ -105,6 +130,8 @@ func identity(input *internalrpcauthorityv1.AuthorityIdentity) (verifiedIdentity
 	}}, nil
 }
 
+// validSHA256 accepts exactly 64 lowercase hexadecimal characters without hashing input or proving snapshot provenance itself.
+// RU: validSHA256 принимает ровно 64 строчных шестнадцатеричных символа без хеширования ввода или самостоятельного доказательства происхождения снимка.
 func validSHA256(input string) bool {
 	if len(input) != 64 {
 		return false

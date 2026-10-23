@@ -13,14 +13,26 @@ import (
 )
 
 const (
-	AttachmentManifestSchema  = "kodex.workspace-input-manifest"
+	// AttachmentManifestSchema identifies the read-only workspace input catalog format.
+	// AttachmentManifestSchema обозначает формат каталога входов рабочего пространства только для чтения.
+	AttachmentManifestSchema = "kodex.workspace-input-manifest"
+	// AttachmentManifestVersion pins the manifest layout used for canonical serialization.
+	// AttachmentManifestVersion закрепляет структуру манифеста для канонической сериализации.
 	AttachmentManifestVersion = 1
 
-	AttachmentScopeInput     = "INPUT"
-	AttachmentScopeSession   = "SESSION"
+	// AttachmentScopeInput denotes attachments supplied to the current input.
+	// AttachmentScopeInput обозначает вложения текущего входного сообщения.
+	AttachmentScopeInput = "INPUT"
+	// AttachmentScopeSession denotes attachments retained from earlier session turns.
+	// AttachmentScopeSession обозначает вложения предыдущих ходов сессии.
+	AttachmentScopeSession = "SESSION"
+	// AttachmentScopeKnowledge denotes project-bound reference material.
+	// AttachmentScopeKnowledge обозначает справочные материалы, привязанные к проекту.
 	AttachmentScopeKnowledge = "KNOWLEDGE"
 )
 
+// attachmentContexts closes the allowed owner-defined attachment purposes for input sets.
+// attachmentContexts задаёт закрытый набор назначений входных вложений, определяемых владельцем.
 var attachmentContexts = []string{
 	"ASSISTANT_MESSAGE",
 	"SESSION_TURN",
@@ -29,8 +41,10 @@ var attachmentContexts = []string{
 	"OWNER_GATE_MESSAGE",
 }
 
-// AttachmentManifestFile описывает один неизменяемый файл ровно в том виде,
-// в котором он будет доступен runtime внутри read-only workspace.
+// AttachmentManifestFile describes one immutable file exactly as exposed in the read-only workspace,
+// including its artifact revision, content digest, provenance, and computed absolute path.
+// AttachmentManifestFile описывает неизменяемый файл в том виде, как он доступен в workspace только для чтения,
+// включая версию артефакта, дайджест содержимого, происхождение и вычисленный абсолютный путь.
 type AttachmentManifestFile struct {
 	ArtifactRef string `json:"artifactRef"`
 	Revision    int64  `json:"revision"`
@@ -46,8 +60,10 @@ type AttachmentManifestFile struct {
 	Path        string `json:"path"`
 }
 
-// AttachmentManifest является единым каталогом входов для control plane и
-// runtime. Digest связывает канонический payload без самого поля digest.
+// AttachmentManifest is the shared control-plane/runtime input catalog;
+// its digest covers the canonical payload with the digest field omitted.
+// AttachmentManifest — общий каталог входов control plane и runtime;
+// его дайджест охватывает канонический payload без самого поля digest.
 type AttachmentManifest struct {
 	Schema            string                   `json:"schema"`
 	Version           int                      `json:"version"`
@@ -57,13 +73,16 @@ type AttachmentManifest struct {
 	Digest            string                   `json:"digest"`
 }
 
-// CanonicalAttachmentManifest содержит детерминированный JSON и его digest.
+// CanonicalAttachmentManifest carries the typed catalog, deterministic JSON bytes, and payload digest.
+// CanonicalAttachmentManifest хранит типизированный каталог, детерминированные байты JSON и дайджест payload.
 type CanonicalAttachmentManifest struct {
 	Manifest AttachmentManifest
 	Bytes    []byte
 	Digest   string
 }
 
+// WorkspaceAttachmentSet pins one admitted input set, its provenance, and an optional session turn.
+// WorkspaceAttachmentSet закрепляет один допущенный набор входов, его происхождение и необязательный ход сессии.
 type WorkspaceAttachmentSet struct {
 	Ref            string `json:"attachmentSetRef"`
 	ManifestDigest string `json:"manifestDigest"`
@@ -73,6 +92,8 @@ type WorkspaceAttachmentSet struct {
 	TurnRef        string `json:"turnRef,omitempty"`
 }
 
+// WorkspaceAttachmentManifest combines current, historical, and knowledge files for one runtime revision.
+// WorkspaceAttachmentManifest объединяет текущие, исторические и справочные файлы одной версии runtime.
 type WorkspaceAttachmentManifest struct {
 	Schema         string                   `json:"schema"`
 	Version        int                      `json:"version"`
@@ -80,11 +101,15 @@ type WorkspaceAttachmentManifest struct {
 	Files          []AttachmentManifestFile `json:"files"`
 }
 
+// CanonicalWorkspaceAttachmentManifest pairs the combined typed catalog with its deterministic JSON bytes.
+// CanonicalWorkspaceAttachmentManifest связывает общий типизированный каталог с детерминированными байтами JSON.
 type CanonicalWorkspaceAttachmentManifest struct {
 	Manifest WorkspaceAttachmentManifest
 	Bytes    []byte
 }
 
+// attachmentManifestPayload excludes the digest field when hashing one attachment-set manifest.
+// attachmentManifestPayload исключает поле дайджеста при хешировании манифеста одного набора вложений.
 type attachmentManifestPayload struct {
 	Schema            string                   `json:"schema"`
 	Version           int                      `json:"version"`
@@ -93,8 +118,10 @@ type attachmentManifestPayload struct {
 	Files             []AttachmentManifestFile `json:"files"`
 }
 
-// BuildAttachmentManifest строит единственное каноническое представление.
-// Caller передаёт только server-owned metadata; путь и purpose вычисляются здесь.
+// BuildAttachmentManifest validates server-owned metadata, sorts files, computes paths and purposes,
+// and builds one canonical representation with a payload digest; it does not grant artifact access.
+// BuildAttachmentManifest проверяет серверные метаданные, сортирует файлы, вычисляет пути и назначения,
+// создаёт каноническое представление с дайджестом payload; права на артефакты он не выдаёт.
 func BuildAttachmentManifest(attachmentSetRef, attachmentContext string, artifacts []RunnerInputArtifact) (CanonicalAttachmentManifest, error) {
 	hasInput, err := validateRunnerInputArtifacts(artifacts)
 	if err != nil {
@@ -175,7 +202,34 @@ func BuildAttachmentManifest(attachmentSetRef, attachmentContext string, artifac
 	return CanonicalAttachmentManifest{Manifest: manifest, Bytes: rawManifest, Digest: digest}, nil
 }
 
-// ArtifactWorkspacePath вычисляет абсолютный путь без доверия имени файла.
+// BuildAttachmentSetManifest selects one exact set from an already validated runtime catalog,
+// copies its files into the original INPUT representation and delegates canonical encoding.
+// It does not validate runtime provenance, compare the expected digest or grant artifact access;
+// callers retain those checks before materialization, and the supplied catalog is not mutated.
+// BuildAttachmentSetManifest выбирает точный набор из уже проверенного каталога runtime,
+// копирует его файлы в исходное представление INPUT и делегирует каноническое кодирование.
+// Происхождение runtime, ожидаемый хеш и права на артефакты здесь не проверяются;
+// эти проверки до материализации остаются у вызывающего кода, исходный каталог не изменяется.
+func BuildAttachmentSetManifest(set RunnerAttachmentSet, artifacts []RunnerInputArtifact) (CanonicalAttachmentManifest, error) {
+	selected := make([]RunnerInputArtifact, 0)
+	for _, artifact := range artifacts {
+		if artifact.AttachmentSetRef != set.Ref {
+			continue
+		}
+		canonical := artifact
+		canonical.Scope = AttachmentScopeInput
+		canonical.AttachmentSetRef = ""
+		canonical.AttachmentPurpose = ""
+		canonical.Provenance = ""
+		selected = append(selected, canonical)
+	}
+	return BuildAttachmentManifest(set.Ref, set.Purpose, selected)
+}
+
+// ArtifactWorkspacePath builds an absolute input or knowledge path from a validated filename,
+// position, and set reference, replacing unsafe basename characters before joining.
+// ArtifactWorkspacePath строит абсолютный путь входа или знаний по проверенным имени, позиции
+// и ссылке набора, заменяя недопустимые символы базового имени до объединения пути.
 func ArtifactWorkspacePath(attachmentSetRef string, artifact RunnerInputArtifact) (string, error) {
 	if !validArtifactFileName(artifact.FileName) || artifact.Position < 1 {
 		return "", errors.New("workspace artifact path is invalid")
@@ -198,8 +252,10 @@ func ArtifactWorkspacePath(attachmentSetRef string, artifact RunnerInputArtifact
 	}
 }
 
-// BuildWorkspaceAttachmentManifest строит общий read-only каталог всех sets и
-// knowledge files, уже разрешённых одной RuntimeRevision.
+// BuildWorkspaceAttachmentManifest validates and deterministically orders all sets and knowledge files
+// already authorized by one RuntimeRevision, rejecting colliding paths before serialization.
+// BuildWorkspaceAttachmentManifest проверяет и детерминированно упорядочивает наборы и справочные файлы,
+// уже разрешённые одной RuntimeRevision, отклоняя совпадающие пути до сериализации.
 func BuildWorkspaceAttachmentManifest(sets []RunnerAttachmentSet, artifacts []RunnerInputArtifact) (CanonicalWorkspaceAttachmentManifest, error) {
 	if _, err := validateRunnerAttachmentSets(sets, artifacts); err != nil {
 		return CanonicalWorkspaceAttachmentManifest{}, err
@@ -263,6 +319,10 @@ func BuildWorkspaceAttachmentManifest(sets []RunnerAttachmentSet, artifacts []Ru
 	return CanonicalWorkspaceAttachmentManifest{Manifest: manifest, Bytes: raw}, nil
 }
 
+// validateRunnerInputArtifacts enforces metadata and byte bounds plus unique references and
+// scope/position pairs, and reports whether a current-input artifact requires a set binding.
+// validateRunnerInputArtifacts проверяет метаданные, объём, уникальные ссылки и пары область/позиция,
+// а также сообщает, требуется ли привязка набора для артефакта текущего входа.
 func validateRunnerInputArtifacts(artifacts []RunnerInputArtifact) (bool, error) {
 	artifactRefs := make(map[string]struct{}, len(artifacts))
 	artifactPositions := make(map[string]struct{}, len(artifacts))
@@ -295,6 +355,10 @@ func validateRunnerInputArtifacts(artifacts []RunnerInputArtifact) (bool, error)
 	return hasInput, nil
 }
 
+// validateRunnerAttachmentSets checks set provenance, exact artifact membership, per-catalog uniqueness,
+// and aggregate byte limits, returning at most one current-turn set and rejecting empty sets.
+// validateRunnerAttachmentSets проверяет происхождение наборов, принадлежность файлов, уникальность
+// внутри каталога и общий объём, возвращая не более одного текущего набора и отклоняя пустые наборы.
 func validateRunnerAttachmentSets(sets []RunnerAttachmentSet, artifacts []RunnerInputArtifact) (*RunnerAttachmentSet, error) {
 	byRef := make(map[string]RunnerAttachmentSet, len(sets))
 	itemCounts := make(map[string]int, len(sets))
@@ -371,6 +435,8 @@ func validateRunnerAttachmentSets(sets []RunnerAttachmentSet, artifacts []Runner
 	return current, nil
 }
 
+// attachmentPurpose derives stable purposes for historical and knowledge files, preserving current input context.
+// attachmentPurpose назначает постоянные назначения историческим и справочным файлам, сохраняя контекст текущего входа.
 func attachmentPurpose(attachmentContext, scope string) string {
 	switch scope {
 	case AttachmentScopeSession:
@@ -382,6 +448,8 @@ func attachmentPurpose(attachmentContext, scope string) string {
 	}
 }
 
+// attachmentScopeRank orders current input before session history and project knowledge.
+// attachmentScopeRank располагает текущие входы перед историей сессии и знаниями проекта.
 func attachmentScopeRank(scope string) int {
 	switch scope {
 	case AttachmentScopeInput:
@@ -393,6 +461,10 @@ func attachmentScopeRank(scope string) int {
 	}
 }
 
+// normalizedWorkspaceBaseName limits names to 160 ASCII bytes, replaces unsupported characters,
+// trims edge dots, and supplies a fallback when no usable basename remains.
+// normalizedWorkspaceBaseName ограничивает имя 160 ASCII-байтами, заменяет неподдерживаемые символы,
+// удаляет точки по краям и возвращает запасное имя, если пригодного имени не осталось.
 func normalizedWorkspaceBaseName(value string) string {
 	var builder strings.Builder
 	for _, character := range value {

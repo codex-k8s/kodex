@@ -10,6 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
 )
 
+// TestBootstrapRootMetadataIsCanonical parses both committed bootstrap root metadata fixtures through
+// the canonical decoder; it does not verify a live root's provenance or mount policy.
+// TestBootstrapRootMetadataIsCanonical разбирает оба корневых файла оснастки из репозитория каноническим
+// декодером; происхождение живого корня и правила монтирования не проверяются.
 func TestBootstrapRootMetadataIsCanonical(t *testing.T) {
 	for _, name := range []string{"manifest-root", "readback-root"} {
 		path := filepath.Join("..", "bootstrap", name, "bootstrap-metadata.json")
@@ -24,6 +28,10 @@ func TestBootstrapRootMetadataIsCanonical(t *testing.T) {
 	}
 }
 
+// TestReadRegularFileAcceptsExactGroupReadableSecret checks acceptance of a synthetic regular file with
+// exact 0440 mode under the shared reader's size budget.
+// TestReadRegularFileAcceptsExactGroupReadableSecret проверяет принятие синтетического обычного файла с
+// точным режимом 0440 в бюджете размера общего чтения.
 func TestReadRegularFileAcceptsExactGroupReadableSecret(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "private.jwk")
 	if err := os.WriteFile(path, []byte(`{"kty":"EC"}`), 0o440); err != nil {
@@ -34,6 +42,10 @@ func TestReadRegularFileAcceptsExactGroupReadableSecret(t *testing.T) {
 	}
 }
 
+// TestReadRegularFileAcceptsReadOnlyContainerScopedMaterial checks exact 0444 file acceptance; the
+// fixture is not proof of a deployed container's isolation.
+// TestReadRegularFileAcceptsReadOnlyContainerScopedMaterial проверяет принятие точного режима 0444;
+// оснастка не доказывает изоляцию развёрнутого контейнера.
 func TestReadRegularFileAcceptsReadOnlyContainerScopedMaterial(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "private.jwk")
 	if err := os.WriteFile(path, []byte(`{"kty":"EC"}`), 0o444); err != nil {
@@ -44,6 +56,10 @@ func TestReadRegularFileAcceptsReadOnlyContainerScopedMaterial(t *testing.T) {
 	}
 }
 
+// TestReadRegularFileRejectsWritableMaterial requires a synthetic 0600 writable file to fail the
+// read-only material contract.
+// TestReadRegularFileRejectsWritableMaterial требует отказа для синтетического записываемого файла 0600
+// по контракту материалов только для чтения.
 func TestReadRegularFileRejectsWritableMaterial(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "private.jwk")
 	if err := os.WriteFile(path, []byte(`{"kty":"EC"}`), 0o600); err != nil {
@@ -54,6 +70,10 @@ func TestReadRegularFileRejectsWritableMaterial(t *testing.T) {
 	}
 }
 
+// TestReadRegularFileRejectsEscapingSymlink checks rejection when a synthetic projected-path symlink
+// escapes its parent mount root.
+// TestReadRegularFileRejectsEscapingSymlink проверяет отказ для синтетической ссылки проецируемого пути,
+// выходящей за родительский корень монтирования.
 func TestReadRegularFileRejectsEscapingSymlink(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(t.TempDir(), "snapshot.jws")
@@ -69,6 +89,10 @@ func TestReadRegularFileRejectsEscapingSymlink(t *testing.T) {
 	}
 }
 
+// TestValidateHistoryAllowsBoundedCatchUp permits a contiguous suffix shorter than full history when its
+// last revision and digest match the required predecessor.
+// TestValidateHistoryAllowsBoundedCatchUp разрешает непрерывный суффикс короче полной истории, если
+// последняя ревизия и хеш совпадают с обязательным предшественником.
 func TestValidateHistoryAllowsBoundedCatchUp(t *testing.T) {
 	history := []revisionDigest{
 		{Revision: 8, DigestSHA256: repeatedDigest("8")},
@@ -83,6 +107,10 @@ func TestValidateHistoryAllowsBoundedCatchUp(t *testing.T) {
 	}
 }
 
+// TestValidateHistoryRejectsGapMutationAndMissingPredecessor rejects gapped, duplicated or
+// tail-digest-mutated predecessor histories without persistence or network access.
+// TestValidateHistoryRejectsGapMutationAndMissingPredecessor отклоняет разрывы, повторы и подмену хеша
+// хвоста истории без хранилища и сети.
 func TestValidateHistoryRejectsGapMutationAndMissingPredecessor(t *testing.T) {
 	for name, history := range map[string][]revisionDigest{
 		"gap": {
@@ -110,6 +138,10 @@ func TestValidateHistoryRejectsGapMutationAndMissingPredecessor(t *testing.T) {
 	}
 }
 
+// TestBuildPolicySnapshotUsesCurrentWorkloadKeyGeneration pins domain signer generation to the current
+// workload key even when the outer manifest generation differs.
+// TestBuildPolicySnapshotUsesCurrentWorkloadKeyGeneration закрепляет доменное поколение подписанта за
+// текущим ключом нагрузки, даже если поколение внешнего манифеста отличается.
 func TestBuildPolicySnapshotUsesCurrentWorkloadKeyGeneration(t *testing.T) {
 	key, err := internalrpcauth.GenerateES256Key("issuer-g2")
 	if err != nil {
@@ -132,6 +164,10 @@ func TestBuildPolicySnapshotUsesCurrentWorkloadKeyGeneration(t *testing.T) {
 	}
 }
 
+// repeatedDigest repeats a nonempty fixture string and truncates it to 64 bytes; tests supply safe ASCII
+// inputs and the helper does not validate digest syntax.
+// repeatedDigest повторяет непустую строку оснастки и усекает до 64 байтов; тесты передают безопасный
+// ASCII, а синтаксис хеша помощник не проверяет.
 func repeatedDigest(value string) string {
 	result := ""
 	for len(result) < 64 {

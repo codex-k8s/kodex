@@ -20,6 +20,8 @@ import (
 	"time"
 )
 
+// TestEmailExactTLSAndRedirectBoundary creates temporary certificates and a local mutual-TLS server, accepting only the exact name/CA/client certificate and rejecting redirects; it does not test live cluster trust.
+// TestEmailExactTLSAndRedirectBoundary создаёт временные сертификаты и локальный сервер взаимного TLS, принимает только точные имя, CA и клиентский сертификат, отклоняет перенаправления; доверие живого кластера не проверяет.
 func TestEmailExactTLSAndRedirectBoundary(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

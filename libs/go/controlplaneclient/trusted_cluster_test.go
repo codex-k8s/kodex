@@ -9,6 +9,8 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// TestTrustedClusterDialHasNoCertificateSocketOrProofDependency checks exact internal targets and no inherited proof machinery.
+// TestTrustedClusterDialHasNoCertificateSocketOrProofDependency проверяет точные внутренние адреса и отсутствие унаследованного proof.
 func TestTrustedClusterDialHasNoCertificateSocketOrProofDependency(t *testing.T) {
 	config := Config{RPCProfile: "trusted-cluster", CallerWorkload: "control-api-gateway",
 		Target: "dns:///control-plane.kodex-system.svc:8443", DialTimeout: time.Second,
@@ -41,6 +43,8 @@ func TestTrustedClusterDialHasNoCertificateSocketOrProofDependency(t *testing.T)
 	}
 }
 
+// TestTrustedClusterMetadataUsesConfiguredCallerAndExplicitUserCredential checks stale authority headers are replaced per call.
+// TestTrustedClusterMetadataUsesConfiguredCallerAndExplicitUserCredential проверяет замену старых заголовков полномочий на вызове.
 func TestTrustedClusterMetadataUsesConfiguredCallerAndExplicitUserCredential(t *testing.T) {
 	const method = "/example.v1.Service/Read"
 	const caller = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"

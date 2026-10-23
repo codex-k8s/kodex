@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// vulnerabilityTestBinding supplies synthetic owner/build/policy pins without precomputing scanner results.
+// vulnerabilityTestBinding задаёт синтетические привязки владельца, сборки и политики без готовых результатов сканера.
 func vulnerabilityTestBinding() ImageVulnerabilityReport {
 	return ImageVulnerabilityReport{ArtifactRef: "imgart_abcdefgh", ImageDigest: "sha256:" + strings.Repeat("a", 64),
 		SBOMSHA256: strings.Repeat("b", 64), ScopeKind: "ORGANIZATION", OrganizationRef: "org_abcdefgh",
@@ -14,6 +16,8 @@ func vulnerabilityTestBinding() ImageVulnerabilityReport {
 		BuildVersion: 3, BuildAttempt: 1, PolicyRevision: 4, PolicySHA256: strings.Repeat("c", 64)}
 }
 
+// vulnerabilityTestMatch includes private scanner-only fields to detect accidental projection leakage.
+// vulnerabilityTestMatch включает закрытые поля сканера для выявления их случайной утечки в проекцию.
 func vulnerabilityTestMatch(id, severity, state string, versions []string) map[string]any {
 	return map[string]any{
 		"artifact":      map[string]any{"name": "example/pkg", "version": "v1.2.3", "type": "go-module", "locations": []any{map[string]any{"path": "/private-do-not-copy"}}},
@@ -21,6 +25,8 @@ func vulnerabilityTestMatch(id, severity, state string, versions []string) map[s
 	}
 }
 
+// vulnerabilityTestSource serializes source matches and explicit policy counters with discarded metadata.
+// vulnerabilityTestSource сериализует находки, явные счётчики политики и отбрасываемые метаданные источника.
 func vulnerabilityTestSource(t *testing.T, matches, ignored []any, high, blocking, noFix int) []byte {
 	t.Helper()
 	value := map[string]any{"matches": matches, "ignoredMatches": ignored, "descriptor": map[string]any{"privateMetadata": "do-not-copy"},
@@ -33,6 +39,8 @@ func vulnerabilityTestSource(t *testing.T, matches, ignored []any, high, blockin
 	return raw
 }
 
+// vulnerabilityTestReport projects a mixed fixture covering grouped, suppressed, fixable, and unresolved findings.
+// vulnerabilityTestReport строит смешанную проекцию с группировкой, исключениями, исправимыми и неустранёнными находками.
 func vulnerabilityTestReport(t *testing.T) ImageVulnerabilityReport {
 	t.Helper()
 	fixed := vulnerabilityTestMatch("CVE-2026-12345", "High", "fixed", []string{"v1.3.0", "v1.3.0"})
@@ -50,6 +58,10 @@ func vulnerabilityTestReport(t *testing.T) ImageVulnerabilityReport {
 	return report
 }
 
+// TestImageVulnerabilityProjectionCompleteSafeAndCanonical checks all occurrence counts, safe links,
+// suppression boundaries, metadata removal, and an exact canonical round trip.
+// TestImageVulnerabilityProjectionCompleteSafeAndCanonical проверяет все счётчики, безопасные ссылки,
+// границы исключений, удаление метаданных и точный канонический цикл сериализации.
 func TestImageVulnerabilityProjectionCompleteSafeAndCanonical(t *testing.T) {
 	report := vulnerabilityTestReport(t)
 	if report.MatchCount != 8 || report.UniqueAdvisoryCount != 6 || report.BlockingMatchCount != 2 ||
@@ -82,6 +94,10 @@ func TestImageVulnerabilityProjectionCompleteSafeAndCanonical(t *testing.T) {
 	}
 }
 
+// TestImageVulnerabilityReportRejectsIncompleteOrTamperedData rejects changed pins, totals, findings,
+// advisory links, duplicate/unknown keys, noncanonical bytes, and oversized report input.
+// TestImageVulnerabilityReportRejectsIncompleteOrTamperedData отклоняет изменённые привязки, счётчики,
+// находки и ссылки, повторные и неизвестные ключи, неканонические байты и превышение размера.
 func TestImageVulnerabilityReportRejectsIncompleteOrTamperedData(t *testing.T) {
 	mutations := map[string]func(*ImageVulnerabilityReport){
 		"missing scope":       func(v *ImageVulnerabilityReport) { v.OrganizationRef = "" },
@@ -126,6 +142,10 @@ func TestImageVulnerabilityReportRejectsIncompleteOrTamperedData(t *testing.T) {
 	}
 }
 
+// TestImageVulnerabilitySourceRejectsUnknownStateAndPolicyMismatch checks closed scanner states,
+// exact source/policy binding, duplicate-key rejection, and a valid explicitly empty report.
+// TestImageVulnerabilitySourceRejectsUnknownStateAndPolicyMismatch проверяет закрытые состояния сканера,
+// точную привязку источника и политики, отказ повторным ключам и корректный явно пустой отчёт.
 func TestImageVulnerabilitySourceRejectsUnknownStateAndPolicyMismatch(t *testing.T) {
 	for name, match := range map[string]map[string]any{
 		"unknown fix":           vulnerabilityTestMatch("CVE-2026-12345", "High", "custom", []string{}),
@@ -164,6 +184,10 @@ func TestImageVulnerabilitySourceRejectsUnknownStateAndPolicyMismatch(t *testing
 	}
 }
 
+// TestImageVulnerabilityScannerMetadataDepthIsBoundedIndependently allows bounded external metadata
+// deeper than prompt sections while rejecting input beyond the scanner-specific depth limit.
+// TestImageVulnerabilityScannerMetadataDepthIsBoundedIndependently допускает ограниченные внешние метаданные
+// глубже разделов prompt, отклоняя превышение отдельного лимита сканера.
 func TestImageVulnerabilityScannerMetadataDepthIsBoundedIndependently(t *testing.T) {
 	raw := vulnerabilityTestSource(t, []any{}, []any{}, 0, 0, 0)
 	for _, depth := range []int{12, maximumImageVulnerabilityJSONDepth + 2} {

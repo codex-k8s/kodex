@@ -2,6 +2,8 @@ package app
 
 import "github.com/prometheus/client_golang/prometheus"
 
+// archiveMetrics groups reconciliation, terminal owner-command, worker-duration and processed-byte collectors.
+// RU: archiveMetrics объединяет метрики сверки, конечных owner-команд, длительности worker и обработанных байтов.
 type archiveMetrics struct {
 	cycles   *prometheus.CounterVec
 	tasks    *prometheus.CounterVec
@@ -10,6 +12,8 @@ type archiveMetrics struct {
 	bytes    *prometheus.CounterVec
 }
 
+// newArchiveMetrics creates unregistered business collectors for the controller composition root.
+// RU: newArchiveMetrics создаёт незарегистрированные бизнес-метрики для composition root контроллера.
 func newArchiveMetrics() *archiveMetrics {
 	return &archiveMetrics{
 		cycles:   prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "cycles_total", Help: "Total number of session archive reconciliation cycles."}, []string{"outcome"}),
@@ -20,6 +24,8 @@ func newArchiveMetrics() *archiveMetrics {
 	}
 }
 
+// collectors returns the exact collector set registered once in this controller's shared registry.
+// RU: collectors возвращает точный набор метрик для однократной регистрации в общем реестре этого контроллера.
 func (metrics *archiveMetrics) collectors() []prometheus.Collector {
 	return []prometheus.Collector{metrics.cycles, metrics.tasks, metrics.duration, metrics.active, metrics.bytes}
 }

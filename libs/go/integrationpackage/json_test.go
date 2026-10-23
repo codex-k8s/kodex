@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestPackageJSONMatchesYAMLAndRejectsAmbiguousDocuments checks shipped digests and duplicate, case-folded, trailing, or truncated inputs.
+// TestPackageJSONMatchesYAMLAndRejectsAmbiguousDocuments проверяет дайджесты поставляемых пакетов и отказ дублям, смене регистра, хвосту и обрыву данных.
 func TestPackageJSONMatchesYAMLAndRejectsAmbiguousDocuments(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {

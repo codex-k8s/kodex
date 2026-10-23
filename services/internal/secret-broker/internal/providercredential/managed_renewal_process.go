@@ -11,10 +11,24 @@ import (
 	"time"
 )
 
+// errManagedRenewalUnknown marks an unproven managed OAuth outcome, including publication or cleanup
+// uncertainty; callers may observe durable state but must not infer permission to refresh again.
+// errManagedRenewalUnknown обозначает недоказанный managed OAuth исход, включая неопределённость
+// публикации или cleanup; вызывающий может наблюдать durable состояние, но не выводить разрешение
+// повторного refresh.
 var errManagedRenewalUnknown = errors.New("managed provider credential renewal outcome is unknown")
 
+// ManagedRenewalOutcomeUnknown recognizes the unknown-outcome sentinel through wrapped or joined errors
+// without inspecting potentially sensitive error text.
+// ManagedRenewalOutcomeUnknown распознаёт sentinel неопределённого исхода через wrapped или joined
+// ошибки без анализа потенциально чувствительного текста.
 func ManagedRenewalOutcomeUnknown(err error) bool { return errors.Is(err, errManagedRenewalUnknown) }
 
+// managedRenewalAuth decodes the stable managed ChatGPT auth-file fields needed for refresh validation;
+// token strings are private process data, not a transport response or a general canonical JSON schema.
+// managedRenewalAuth разбирает стабильные поля managed ChatGPT auth-файла для проверки refresh; token
+// strings являются приватными данными процесса, не transport ответом и не общей схемой канонического
+// JSON.
 type managedRenewalAuth struct {
 	Mode   string `json:"auth_mode"`
 	APIKey string `json:"OPENAI_API_KEY"`
@@ -26,6 +40,12 @@ type managedRenewalAuth struct {
 	LastRefresh time.Time `json:"last_refresh"`
 }
 
+// parseManagedRenewalAuth bounds input and requires managed chatgpt mode, no API key, complete bounded
+// token fields and nonzero last_refresh. Standard JSON decoding accepts unknown fields and duplicates;
+// freshness is checked only against the produced result later.
+// parseManagedRenewalAuth ограничивает вход и требует managed chatgpt mode, отсутствие API key, полные
+// ограниченные token поля и ненулевой last_refresh. Обычный JSON decoder допускает неизвестные и
+// duplicate поля; актуальность позже проверяется по произведённому результату.
 func parseManagedRenewalAuth(raw []byte) (managedRenewalAuth, error) {
 	var auth managedRenewalAuth
 	if len(raw) < 1 || len(raw) > maximumAuthJSONBytes || json.Unmarshal(raw, &auth) != nil ||
@@ -38,10 +58,15 @@ func parseManagedRenewalAuth(raw []byte) (managedRenewalAuth, error) {
 	return auth, nil
 }
 
-// Отдельный kernel для WRITE-задачи владельца credential; observer его не вызывает.
-// До входа task owner обязан durable-зафиксировать одноразовое разрешение эффекта.
-// persist сохраняет произведённые bytes до удаления private home; неизвестный
-// исход после запуска никогда не разрешает повтор OAuth со старым refresh token.
+// renewManagedCredential runs only after the owner has durably reserved one effect. It seeds a private
+// no-follow auth file, initializes the isolated process with experimental API disabled, requests refresh
+// and stops the writer before exact result read. Account continuity, a changed access token and refresh
+// time are verified before persist; post-start or cleanup uncertainty never permits replay.
+// renewManagedCredential запускается только после durable резервирования одного эффекта владельцем. Он
+// создаёт приватный auth-файл без следования symlink, инициализирует изолированный процесс с выключенным
+// experimental API, запрашивает refresh и останавливает writer до точного чтения результата. До persist
+// проверяются тот же account, смена access token и время refresh; неопределённость после запуска или
+// cleanup не разрешает повтор.
 func (process *AppServerProcess) renewManagedCredential(ctx context.Context, original []byte, persist func(context.Context, []byte) error) (resultErr error) {
 	if ctx == nil || persist == nil || ctx.Err() != nil {
 		return ErrInvalidInput

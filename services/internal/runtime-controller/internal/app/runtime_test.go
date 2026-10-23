@@ -20,6 +20,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// runtimeWorkClientStub records deep-copied completion attempts under a mutex and allows synthetic renewal/completion failures.
+// Its successful responses do not represent network delivery or durable owner commits.
+// runtimeWorkClientStub сохраняет глубокие копии попыток завершения под мьютексом и позволяет задавать синтетические ошибки продления/завершения.
+// Успешные ответы не означают сетевую доставку или устойчивую фиксацию владельцем.
 type runtimeWorkClientStub struct {
 	controlplanev1.RuntimeWorkServiceClient
 	mu       sync.Mutex
@@ -28,16 +32,24 @@ type runtimeWorkClientStub struct {
 	renew    func() error
 }
 
+// claimBatchClient records the requested batch limit and returns no executions, isolating claim-size tests from materialization.
+// claimBatchClient сохраняет запрошенный размер пакета и возвращает пустой список выполнений, отделяя проверку размера заявки от размещения.
 type claimBatchClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	limit int32
 }
 
+// ClaimExecution captures only the limit and returns an empty synthetic response without changing capacity or issuing authority.
+// ClaimExecution сохраняет только лимит и возвращает пустой синтетический ответ без изменения ёмкости или выдачи полномочий.
 func (client *claimBatchClient) ClaimExecution(_ context.Context, request *controlplanev1.ClaimExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.ClaimExecutionResponse, error) {
 	client.limit = request.Limit
 	return &controlplanev1.ClaimExecutionResponse{}, nil
 }
 
+// TestClaimSeparatesCatalogTransactionsWithoutSerializingTrackers checks the observed request limit across five capacity occupancies.
+// Each nonfull case requests one execution while the existing 16-slot capacity and occupied entries remain unchanged; no trackers are launched.
+// TestClaimSeparatesCatalogTransactionsWithoutSerializingTrackers проверяет наблюдаемый лимит запроса при пяти вариантах занятой ёмкости.
+// При неполной ёмкости запрашивается одно выполнение, а имеющиеся 16 мест и занятые элементы сохраняются; отслеживающие работники не запускаются.
 func TestClaimSeparatesCatalogTransactionsWithoutSerializingTrackers(t *testing.T) {
 	for _, occupied := range []int{0, 1, 9, 15, 16} {
 		client := &claimBatchClient{}
@@ -58,6 +70,10 @@ func TestClaimSeparatesCatalogTransactionsWithoutSerializingTrackers(t *testing.
 	}
 }
 
+// RenewExecution applies an optional synthetic failure before returning a lease with the exact request pins and an expiry one minute ahead.
+// It neither records a real owner lease nor performs a gRPC call.
+// RenewExecution применяет необязательную синтетическую ошибку перед возвратом аренды с точными привязками запроса и сроком на минуту вперёд.
+// Настоящая аренда владельца не сохраняется, вызов gRPC не выполняется.
 func (client *runtimeWorkClientStub) RenewExecution(_ context.Context, request *controlplanev1.RenewExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.RenewExecutionResponse, error) {
 	if client.renew != nil {
 		if err := client.renew(); err != nil {
@@ -67,15 +83,25 @@ func (client *runtimeWorkClientStub) RenewExecution(_ context.Context, request *
 	return renewalTestResponse(request, time.Now().Add(time.Minute)), nil
 }
 
+// renewalTestResponse copies lease reference, fence and generation into a synthetic response with the supplied protobuf expiry.
+// It is a mapping fixture, not a signed authorization receipt.
+// renewalTestResponse копирует ссылку аренды, ограждение и поколение в синтетический ответ с переданным сроком protobuf.
+// Это образец преобразования, а не подписанная квитанция полномочий.
 func renewalTestResponse(request *controlplanev1.RenewExecutionRequest, expiry time.Time) *controlplanev1.RenewExecutionResponse {
 	return &controlplanev1.RenewExecutionResponse{Lease: &controlplanev1.WorkLease{Ref: request.LeaseRef, Fence: request.Fence,
 		Generation: request.Generation, ExpiresAt: timestamppb.New(expiry)}}
 }
 
+// ReportExecutionProgress returns an empty successful synthetic acknowledgement without persisting or inspecting progress.
+// ReportExecutionProgress возвращает пустое успешное синтетическое подтверждение без сохранения или проверки прогресса.
 func (client *runtimeWorkClientStub) ReportExecutionProgress(context.Context, *controlplanev1.ReportExecutionProgressRequest, ...grpc.CallOption) (*controlplanev1.ReportExecutionProgressResponse, error) {
 	return &controlplanev1.ReportExecutionProgressResponse{}, nil
 }
 
+// CompleteExecution stores an independent protobuf copy before applying the failure callback with the one-based attempt number.
+// Failed calls remain in the request count; a successful empty response does not mutate a real owner execution.
+// CompleteExecution сохраняет независимую копию protobuf до вызова функции ошибки с номером попытки, начиная с единицы.
+// Неуспешные вызовы остаются в счётчике запросов; пустой успешный ответ не меняет настоящее выполнение владельца.
 func (client *runtimeWorkClientStub) CompleteExecution(_ context.Context, request *controlplanev1.CompleteExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.CompleteExecutionResponse, error) {
 	client.mu.Lock()
 	client.requests = append(client.requests, proto.Clone(request).(*controlplanev1.CompleteExecutionRequest))
@@ -89,12 +115,18 @@ func (client *runtimeWorkClientStub) CompleteExecution(_ context.Context, reques
 	return &controlplanev1.CompleteExecutionResponse{}, nil
 }
 
+// count returns the number of recorded completion attempts while holding the request mutex, including failed deliveries.
+// count возвращает число записанных попыток завершения под мьютексом запросов, включая неуспешные доставки.
 func (client *runtimeWorkClientStub) count() int {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	return len(client.requests)
 }
 
+// turnLifecycleStub supplies one configured Pod observation and atomic stop/delete counters for local tracker tests.
+// Optional channels signal observation or stop; no Kubernetes object is read or changed.
+// turnLifecycleStub задаёт одно настроенное наблюдение Pod и атомарные счётчики остановки/удаления для локальных тестов отслеживания.
+// Необязательные каналы сигнализируют наблюдение или остановку; объекты Kubernetes не читаются и не меняются.
 type turnLifecycleStub struct {
 	observation workload.TurnPodObservation
 	observed    chan struct{}
@@ -104,6 +136,10 @@ type turnLifecycleStub struct {
 	stopped     chan struct{}
 }
 
+// StopTurn increments the synthetic stop count and closes the optional stopped channel before succeeding.
+// A configured channel assumes one stop call; this stub does not implement an idempotent real workload stop.
+// StopTurn увеличивает синтетический счётчик остановок и перед успехом закрывает необязательный канал stopped.
+// Настроенный канал предполагает один вызов остановки; идемпотентная остановка настоящей нагрузки не реализована.
 func (turns *turnLifecycleStub) StopTurn(context.Context, string) error {
 	turns.stops.Add(1)
 	if turns.stopped != nil {
@@ -112,6 +148,10 @@ func (turns *turnLifecycleStub) StopTurn(context.Context, string) error {
 	return nil
 }
 
+// TestTrackShutdownWaitsForReceiptWithoutDeletingCallbackMaterial cancels tracking, waits for the stop signal and then completes the local callback.
+// Before and after that callback, no fallback completion or deletion may replace the successful result, and the tracker must join.
+// TestTrackShutdownWaitsForReceiptWithoutDeletingCallbackMaterial отменяет отслеживание, ждёт сигнал остановки и затем завершает локальный обратный вызов.
+// До и после него запасное завершение или удаление не должны подменять успешный результат, а отслеживающий работник должен завершиться.
 func TestTrackShutdownWaitsForReceiptWithoutDeletingCallbackMaterial(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()
@@ -139,6 +179,10 @@ func TestTrackShutdownWaitsForReceiptWithoutDeletingCallbackMaterial(t *testing.
 	}
 }
 
+// TestTrackDrainHonorsOwnerRenewalDenial injects PermissionDenied during the canceled tracker's drain renewal.
+// The local cleanup counter must advance without creating a synthetic owner completion.
+// TestTrackDrainHonorsOwnerRenewalDenial задаёт PermissionDenied при продлении во время завершения отменённого отслеживания.
+// Локальный счётчик очистки должен увеличиться без создания синтетического завершения владельца.
 func TestTrackDrainHonorsOwnerRenewalDenial(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()
@@ -156,6 +200,10 @@ func TestTrackDrainHonorsOwnerRenewalDenial(t *testing.T) {
 	}
 }
 
+// TestDrainDoesNotStopAlreadyCompletedWarmTurn closes the local callback before drain begins.
+// No stop, delete or failure-completion attempt may be introduced for that already completed turn.
+// TestDrainDoesNotStopAlreadyCompletedWarmTurn закрывает локальный обратный вызов до начала завершения работы.
+// Для уже завершённого хода не должны добавляться остановка, удаление или попытка завершения с ошибкой.
 func TestDrainDoesNotStopAlreadyCompletedWarmTurn(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()
@@ -170,6 +218,10 @@ func TestDrainDoesNotStopAlreadyCompletedWarmTurn(t *testing.T) {
 	}
 }
 
+// ObserveTurnPod closes the optional first-observation signal once and returns the fixed observation unchanged.
+// It does not validate execution identity or call a Kubernetes API.
+// ObserveTurnPod один раз закрывает необязательный сигнал первого наблюдения и возвращает заданное наблюдение без изменения.
+// Идентичность выполнения не проверяется, API Kubernetes не вызывается.
 func (turns *turnLifecycleStub) ObserveTurnPod(context.Context, runtimecontract.RunnerInput, bool) (workload.TurnPodObservation, error) {
 	if turns.observed != nil {
 		turns.once.Do(func() { close(turns.observed) })
@@ -177,11 +229,17 @@ func (turns *turnLifecycleStub) ObserveTurnPod(context.Context, runtimecontract.
 	return turns.observation, nil
 }
 
+// DeleteTurn increments the local deletion counter and succeeds without deleting files, Pods, Secrets or volumes.
+// DeleteTurn увеличивает локальный счётчик удалений и сообщает успех без удаления файлов, Pod, Secret или томов.
 func (turns *turnLifecycleStub) DeleteTurn(context.Context, string) error {
 	turns.deletions.Add(1)
 	return nil
 }
 
+// TestTrackAcceptsCallbackDuringTerminalGrace supplies a terminal Pod observation, then completes the callback on its first inspection signal.
+// The tracker must release capacity without fallback completion or cleanup during the configured grace period.
+// TestTrackAcceptsCallbackDuringTerminalGrace задаёт завершающее наблюдение Pod и завершает обратный вызов по сигналу первой проверки.
+// Отслеживание должно освободить ёмкость без запасного завершения или очистки в настроенном периоде ожидания.
 func TestTrackAcceptsCallbackDuringTerminalGrace(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()
@@ -210,6 +268,10 @@ func TestTrackAcceptsCallbackDuringTerminalGrace(t *testing.T) {
 	}
 }
 
+// TestTrackRetriesFailureCompletionBeforeCleanup makes the first two completion deliveries unavailable and accepts the third.
+// It checks three attempts, one cleanup and the unchanged idempotency key and lease/fence/generation tuple across retries.
+// TestTrackRetriesFailureCompletionBeforeCleanup задаёт недоступность первых двух доставок завершения и принимает третью.
+// Проверяются три попытки, одна очистка и неизменные ключ идемпотентности и набор аренды/ограждения/поколения при повторах.
 func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()
@@ -243,6 +305,10 @@ func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 	}
 }
 
+// TestFailureOwnerDenialWithoutDeadlineClosesRevokedPod removes the execution deadline and rejects completion with PermissionDenied.
+// One synthetic request must lead to one stop/delete pair and local callback completion without retrying the denied operation.
+// TestFailureOwnerDenialWithoutDeadlineClosesRevokedPod убирает срок выполнения и отклоняет завершение с PermissionDenied.
+// Один синтетический запрос должен привести к одной паре остановки/удаления и завершению локального обратного вызова без повтора запрещённой операции.
 func TestFailureOwnerDenialWithoutDeadlineClosesRevokedPod(t *testing.T) {
 	input := runtimeTrackingInput()
 	input.ExecutionDeadline = nil
@@ -262,6 +328,10 @@ func TestFailureOwnerDenialWithoutDeadlineClosesRevokedPod(t *testing.T) {
 	}
 }
 
+// TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup injects a memory-failure observation rather than causing a real OOM.
+// It checks one completion/deletion, the exact lease tuple and the existing public safe code versus memory-specific summary.
+// TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup задаёт наблюдение ошибки памяти, а не вызывает настоящий OOM.
+// Проверяются одно завершение/удаление, точный набор аренды и существующий публичный безопасный код отдельно от специального сообщения о памяти.
 func TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()
@@ -281,6 +351,10 @@ func TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
 	}
 }
 
+// TestCompleteFailureDistinguishesInvalidInputFromUnsupportedProfile checks safe-code and summary mapping for invalid input, stale profile and a synthetic unknown diagnostic.
+// Every case preserves the exact failure key and lease pins and reaches local cleanup; it does not claim that arbitrary summary text is redacted.
+// TestCompleteFailureDistinguishesInvalidInputFromUnsupportedProfile проверяет безопасные коды и сообщения для неверного входа, устаревшего профиля и синтетической неизвестной диагностики.
+// Каждый случай сохраняет точный ключ ошибки и привязки аренды и доходит до локальной очистки; очистка произвольного текста сообщения этим не заявляется.
 func TestCompleteFailureDistinguishesInvalidInputFromUnsupportedProfile(t *testing.T) {
 	tests := []struct {
 		code, safeCode, summary string
@@ -320,6 +394,10 @@ func TestCompleteFailureDistinguishesInvalidInputFromUnsupportedProfile(t *testi
 	}
 }
 
+// TestCompleteFailureKeepsRuntimeUntilDurableCommit returns an unresolved unavailable response with retry delays disabled.
+// The test requires one attempted delivery, no deletion and an open coordinator channel; no real database commit is exercised.
+// TestCompleteFailureKeepsRuntimeUntilDurableCommit возвращает неразрешённую ошибку недоступности при отключённых задержках повторов.
+// Требуются одна попытка доставки, отсутствие удаления и открытый канал координатора; настоящая фиксация БД не проверяется.
 func TestCompleteFailureKeepsRuntimeUntilDurableCommit(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()
@@ -346,6 +424,10 @@ func TestCompleteFailureKeepsRuntimeUntilDurableCommit(t *testing.T) {
 	}
 }
 
+// TestWarmFileProjectionEligibilityFailsClosed accepts absent turn files but rejects either an attachment set or an input artifact.
+// This exercises only the local file-projection eligibility predicate, not full runner-input validation or authority.
+// TestWarmFileProjectionEligibilityFailsClosed принимает отсутствие файлов хода, но отклоняет наличие набора вложений или входного артефакта.
+// Проверяется только локальная допустимость проекции файлов, а не полная проверка входа исполнителя или полномочий.
 func TestWarmFileProjectionEligibilityFailsClosed(t *testing.T) {
 	if !warmFileProjectionEligible(runtimecontract.RunnerInput{}) {
 		t.Fatal("empty immutable file projection was rejected")
@@ -362,6 +444,10 @@ func TestWarmFileProjectionEligibilityFailsClosed(t *testing.T) {
 	}
 }
 
+// trackingRuntime creates a synthetic tracker with one already occupied capacity slot, discard logging and short inspection/grace/retry delays.
+// Owner and workload behavior come from the supplied stubs; no service or runner is started by construction.
+// trackingRuntime создаёт синтетическое отслеживание с одним уже занятым местом ёмкости, отбрасываемым журналом и короткими задержками наблюдения/ожидания/повторов.
+// Поведение владельца и нагрузки задаётся переданными заглушками; создание не запускает сервис или исполнителя.
 func trackingRuntime(client controlplanev1.RuntimeWorkServiceClient, turns turnLifecycle, coordinator *callback.Coordinator) *runtime {
 	capacity := make(chan struct{}, 1)
 	capacity <- struct{}{}
@@ -382,6 +468,10 @@ func trackingRuntime(client controlplanev1.RuntimeWorkServiceClient, turns turnL
 	}
 }
 
+// runtimeTrackingInput supplies only synthetic lease reference, fence and generation for local lifecycle tests.
+// It is not a complete validated runner input or an issued owner grant.
+// runtimeTrackingInput задаёт только синтетические ссылку аренды, ограждение и поколение для локальных тестов жизненного цикла.
+// Это не полный проверенный вход исполнителя и не выданное владельцем разрешение.
 func runtimeTrackingInput() runtimecontract.RunnerInput {
 	return runtimecontract.RunnerInput{
 		LeaseRef:        "lease_runtime_tracking_abcdefgh",
@@ -390,6 +480,10 @@ func runtimeTrackingInput() runtimecontract.RunnerInput {
 	}
 }
 
+// TestTrackPinnedWorkflowDeadlineDoesNotUseShorterFallback gives the fixture a far pinned deadline and a much shorter configured fallback.
+// After a short wait, local callback completion must join the tracker without a stop or synthetic failure request.
+// TestTrackPinnedWorkflowDeadlineDoesNotUseShorterFallback задаёт образцу далёкий закреплённый срок и гораздо более короткий настроенный запасной срок.
+// После короткого ожидания локальный обратный вызов должен завершить отслеживание без остановки или синтетического запроса ошибки.
 func TestTrackPinnedWorkflowDeadlineDoesNotUseShorterFallback(t *testing.T) {
 	input := runtimeTrackingInput()
 	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{EffectiveDeadlineAt: time.Now().Add(time.Hour)}
@@ -413,6 +507,10 @@ func TestTrackPinnedWorkflowDeadlineDoesNotUseShorterFallback(t *testing.T) {
 	}
 }
 
+// TestTrackExpiredWorkflowDeadlineClosesWithTimeoutAndJoins supplies an already elapsed execution deadline.
+// The local path must stop/delete once and send one failure request preserving the explicit runtime-timeout safe code.
+// TestTrackExpiredWorkflowDeadlineClosesWithTimeoutAndJoins задаёт уже истёкший срок выполнения.
+// Локальный путь должен один раз остановить/удалить нагрузку и отправить один запрос ошибки с сохранением явного безопасного кода таймаута выполнения.
 func TestTrackExpiredWorkflowDeadlineClosesWithTimeoutAndJoins(t *testing.T) {
 	input := runtimeTrackingInput()
 	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{EffectiveDeadlineAt: time.Now().Add(-time.Second)}
@@ -429,6 +527,10 @@ func TestTrackExpiredWorkflowDeadlineClosesWithTimeoutAndJoins(t *testing.T) {
 	}
 }
 
+// TestWorkflowDeadlineOwnerDenialClosesRevokedPodWithoutRetry combines an expired deadline with a denied completion response.
+// It checks one request, the existing two-stop/one-delete cleanup and local callback closure without retrying authority.
+// TestWorkflowDeadlineOwnerDenialClosesRevokedPodWithoutRetry сочетает истёкший срок с отказом в ответе завершения.
+// Проверяются один запрос, существующая очистка с двумя остановками и одним удалением и закрытие локального обратного вызова без повтора полномочий.
 func TestWorkflowDeadlineOwnerDenialClosesRevokedPodWithoutRetry(t *testing.T) {
 	input := runtimeTrackingInput()
 	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{EffectiveDeadlineAt: time.Now().UTC().Add(-time.Second)}

@@ -10,6 +10,7 @@ require (
 	github.com/aws/smithy-go v1.28.1
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
@@ -65,6 +66,8 @@ require (
 )
 
 replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
+
+replace github.com/codex-k8s/kodex/libs/go/objectstorage => ../../../libs/go/objectstorage
 
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 

@@ -16,7 +16,10 @@ describe("дружественная форма плана запуска", () =
     expect(source).toContain("createExecutionTargetPickerLoader");
     expect(source).toContain("isEligibleAgent");
     expect(source).toContain("isEligibleWorkflow");
-    expect(source).toContain("target.projectRef !== projectRef");
+    expect(source).toContain("watchAssistantExecutionTarget(");
+    expect(source).toContain(
+      "[() => props.projectRef, targetType, targetRef] as const",
+    );
     expect(source).toContain("getAgentRuntimeConfiguration");
     expect(source).toContain("selectedEnvironment.readinessBlockers");
     expect(source).toContain("<AsyncEntityPicker");

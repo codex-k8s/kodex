@@ -1,4 +1,5 @@
-// Package retention выбирает backup, допустимые к точному удалению.
+// Package retention selects old backups for exact deletion while protecting a verified restore point.
+// RU: Package retention выбирает старые копии для точного удаления, сохраняя проверенную точку восстановления.
 package retention
 
 import (
@@ -7,14 +8,20 @@ import (
 	"time"
 )
 
+// ErrNoVerifiedRestorePoint prevents deletion when no backup has a successful restore drill.
+// RU: ErrNoVerifiedRestorePoint запрещает удаление, если ни одна копия не прошла пробное восстановление.
 var ErrNoVerifiedRestorePoint = errors.New("no verified restore point is available")
 
+// Candidate records a completed backup and whether a restore drill verified it.
+// RU: Candidate фиксирует завершённую копию и факт её проверки пробным восстановлением.
 type Candidate struct {
 	BackupID    string
 	CompletedAt time.Time
 	Drilled     bool
 }
 
+// Select returns only backups older than the cutoff and outside keep, never deleting the newest drilled point.
+// RU: Select возвращает лишь копии старше порога и вне keep, не удаляя последнюю проверенную восстановлением точку.
 func Select(candidates []Candidate, now time.Time, minimumAge time.Duration, keep int) ([]string, error) {
 	if minimumAge <= 0 || keep < 1 {
 		return nil, errors.New("retention policy is invalid")

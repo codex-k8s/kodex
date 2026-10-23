@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestManagedRevisionPreservesShippedAndRestrictsExecution accepts exact shipped definitions and
+// owner-managed revisions that only remove effects or tighten their execution limits.
+// TestManagedRevisionPreservesShippedAndRestrictsExecution допускает точные поставленные определения
+// и управляемые владельцем версии, лишь удаляющие эффекты или сужающие лимиты исполнения.
 func TestManagedRevisionPreservesShippedAndRestrictsExecution(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {
@@ -47,6 +51,10 @@ func TestManagedRevisionPreservesShippedAndRestrictsExecution(t *testing.T) {
 	}
 }
 
+// TestManagedRevisionRejectsContractExpansionAndStaleDigest blocks changes to adapter, credential,
+// destination, operation, scope or effect policy and rejects stale or caller-selected shipped identity.
+// TestManagedRevisionRejectsContractExpansionAndStaleDigest блокирует смену адаптера, реквизита,
+// назначения, операции, области и политики эффекта, а также устаревшую или выбранную caller идентичность.
 func TestManagedRevisionRejectsContractExpansionAndStaleDigest(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {
@@ -105,6 +113,10 @@ func TestManagedRevisionRejectsContractExpansionAndStaleDigest(t *testing.T) {
 	}
 }
 
+// TestManagedFieldsOnlyNarrow admits tighter string and integer ranges but not relaxed requirements,
+// changed formats, new values or removal of finite upper bounds.
+// TestManagedFieldsOnlyNarrow допускает более узкие строковые и числовые границы, но не ослабление
+// обязательности, смену формата, новые значения или удаление конечного верхнего лимита.
 func TestManagedFieldsOnlyNarrow(t *testing.T) {
 	base := []Field{{Key: "value", Type: "STRING", Format: "PLAIN", Required: true, MaximumLength: 120, AllowedValues: []string{"a", "b"}}}
 	narrow := []Field{{Key: "value", Type: "STRING", Format: "PLAIN", Required: true, MaximumLength: 10, AllowedValues: []string{"a"}}}
@@ -133,6 +145,8 @@ func TestManagedFieldsOnlyNarrow(t *testing.T) {
 	}
 }
 
+// reparseManaged canonicalizes a test revision through the production parser before comparing contracts.
+// reparseManaged канонизирует тестовую версию через промышленный парсер до сравнения контрактов.
 func reparseManaged(t *testing.T, value Package) Package {
 	t.Helper()
 	raw, err := json.Marshal(value)

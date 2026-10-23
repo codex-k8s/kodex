@@ -18,8 +18,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 )
 
+// emailOrigin fixes the logical HTTPS origin used by mailbox commands independently of the selected internal transport profile.
+// emailOrigin закрепляет логический HTTPS-источник почтовых команд независимо от выбранного профиля внутреннего транспорта.
 const emailOrigin = "https://email-bridge.kodex-system.svc.cluster.local"
 
+// emailExecutionBinding copies a valid lease timestamp and optional invocation or connection-test references into the bridge binding; serialization separately rejects ambiguous references.
+// emailExecutionBinding переносит корректную временную метку аренды и необязательные ссылки вызова или проверки соединения в привязку моста; неоднозначные ссылки отдельно отклоняются при сериализации.
 func emailExecutionBinding(invocation, test string, lease *cp.WorkLease) *api.ExecutionBinding {
 	if lease == nil || lease.ExpiresAt == nil || lease.ExpiresAt.CheckValid() != nil {
 		return nil
@@ -34,6 +38,8 @@ func emailExecutionBinding(invocation, test string, lease *cp.WorkLease) *api.Ex
 	return b
 }
 
+// newEmailClient selects the explicit trusted-cluster transport or reads the full CA/client-keypair configuration for exact-SNI TLS 1.2 or newer; an entirely absent ordinary configuration disables this client.
+// newEmailClient выбирает явный транспорт trusted-cluster либо читает полную конфигурацию CA и клиентской пары для TLS 1.2 или новее с точным SNI; полностью отсутствующая обычная конфигурация отключает клиент.
 func newEmailClient(config Config) (*http.Client, error) {
 	if config.RPCProfile != "" {
 		if config.RPCProfile != transportprofile.TrustedCluster {
@@ -69,12 +75,18 @@ func newEmailClient(config Config) (*http.Client, error) {
 	}
 	return &http.Client{Timeout: config.Timeout, Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: "email-bridge.kodex-system.svc.cluster.local", RootCAs: roots, Certificates: []tls.Certificate{pair}}, TLSHandshakeTimeout: 5 * time.Second, MaxConnsPerHost: 8, MaxResponseHeaderBytes: 16384}, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("email redirect forbidden") }}, nil
 }
+
+// testEmail substitutes the fixed health operation and executes it through the mailbox adapter using the supplied execution binding, without authorizing a mailbox mutation.
+// testEmail подставляет закреплённую операцию готовности и выполняет её через почтовый адаптер с переданной привязкой выполнения, не разрешая изменение ящика.
 func (adapter *Adapter) testEmail(ctx context.Context, request Request, configuration map[string]string) error {
 	request.Operation = "email.delivery.health.read"
 	capability, _ := adapter.definitions["email"].Capability(request.Operation)
 	_, e := adapter.executeEmail(ctx, request, capability, configuration, []byte("{}"))
 	return e
 }
+
+// executeEmail builds a typed command for the configured mailbox, requires a live execution lease and sends its fence to the bridge under that deadline; it never retries uncertain mutations or grants human approval itself.
+// executeEmail создаёт типизированную команду заданного ящика, требует действующую аренду выполнения и передаёт её fence мосту в пределах срока; неопределённые изменения не повторяет и человеческое подтверждение самостоятельно не выдаёт.
 func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, input []byte) (Result, error) {
 	if request.Credential != nil || configuration["base_url"] != emailOrigin || adapter.emailHTTPClient == nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
@@ -183,6 +195,8 @@ func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capab
 	return providerResult(request, "email-mailbox:"+command.MailboxId, map[string]any{"result_json": string(encoded)})
 }
 
+// validEmailReadback checks the requested UID and any supplied folder or UIDVALIDITY for message operations, or the thread ID for thread reads; other operation shapes are validated elsewhere.
+// validEmailReadback проверяет запрошенный UID и переданные папку либо UIDVALIDITY для операций с письмом или идентификатор цепочки для её чтения; остальные формы операций проверяются отдельно.
 func validEmailReadback(command api.Command, result api.Result) bool {
 	switch command.Operation {
 	case api.OperationFetch, api.OperationDownload, api.OperationAttachments:

@@ -19,11 +19,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// assistantCatalogInputDiagnosticClient adds an optional revision-one authorization-recording failure to nested in-memory search and terminal-projection stubs.
+// assistantCatalogInputDiagnosticClient добавляет необязательную ошибку записи авторизации первой ревизии к вложенным подстановкам поиска и итоговой проекции в памяти.
 type assistantCatalogInputDiagnosticClient struct {
 	*assistantSearchRecoveryClient
 	authorizationFailure bool
 }
 
+// RecordRunToolCall rejects revision one when authorization failure is enabled; otherwise preserves the inherited terminal-recording behavior.
+// RecordRunToolCall отклоняет первую ревизию при включённой ошибке авторизации, иначе сохраняет унаследованное поведение итоговой записи.
 func (client *assistantCatalogInputDiagnosticClient) RecordRunToolCall(ctx context.Context, request *controlplanev1.RecordRunToolCallRequest, options ...grpc.CallOption) (*controlplanev1.RecordRunToolCallResponse, error) {
 	if client.authorizationFailure && request.GetRevision() == 1 {
 		return nil, status.Error(codes.PermissionDenied, "PRIVATE_AUTHORIZATION_ERROR")
@@ -31,6 +35,8 @@ func (client *assistantCatalogInputDiagnosticClient) RecordRunToolCall(ctx conte
 	return client.assistantSearchRecoveryClient.RecordRunToolCall(ctx, request, options...)
 }
 
+// newAssistantCatalogInputDiagnosticClient assembles fresh nested activity/search stubs around the supplied catalog response, keeping call counts isolated per test.
+// newAssistantCatalogInputDiagnosticClient собирает новые вложенные подстановки активности и поиска вокруг переданного ответа каталога, изолируя счётчики вызовов между тестами.
 func newAssistantCatalogInputDiagnosticClient(response *controlplanev1.AssistantConfigurationCatalogResponse) *assistantCatalogInputDiagnosticClient {
 	return &assistantCatalogInputDiagnosticClient{assistantSearchRecoveryClient: &assistantSearchRecoveryClient{
 		assistantSearchDiagnosticClient: &assistantSearchDiagnosticClient{
@@ -40,6 +46,10 @@ func newAssistantCatalogInputDiagnosticClient(response *controlplanev1.Assistant
 	}}
 }
 
+// assistantCatalogDiagnosticWire executes a local get_configuration_catalog MCP call and requires its structured error response, returning safe fields plus captured wire/log text.
+// The helper uses httptest and stubs only; it opens no server listener or real owner connection.
+// assistantCatalogDiagnosticWire выполняет локальный вызов MCP get_configuration_catalog и требует структурированный ответ ошибки, возвращая безопасные поля и записанные ответ с логом.
+// Используются только httptest и подстановки; серверный слушатель или настоящее соединение с владельцем не открываются.
 func assistantCatalogDiagnosticWire(t *testing.T, input runtimecontract.RunnerInput, arguments map[string]any, client *assistantCatalogInputDiagnosticClient) (map[string]any, string, string) {
 	t.Helper()
 	var logs bytes.Buffer
@@ -62,6 +72,10 @@ func assistantCatalogDiagnosticWire(t *testing.T, input runtimecontract.RunnerIn
 	return wire.Result.Structured, recorder.Body.String(), logs.String()
 }
 
+// assertAssistantCatalogDiagnosticPrivacy rejects known private canaries and execution/context pins in captured MCP/log text; its fixture requires a non-nil assistant context.
+// This bounded assertion is not a general-purpose secret detector.
+// assertAssistantCatalogDiagnosticPrivacy отклоняет известные частные контрольные значения и привязки выполнения и контекста в записанных MCP-ответе и логе; образец требует непустой контекст помощника.
+// Эта ограниченная проверка не является универсальным детектором секретов.
 func assertAssistantCatalogDiagnosticPrivacy(t *testing.T, input runtimecontract.RunnerInput, wire, logs string) {
 	t.Helper()
 	for _, private := range []string{"PRIVATE_SENTINEL", "PRIVATE_OWNER_ERROR", "PRIVATE_PROJECTION_ERROR", "PRIVATE_AUTHORIZATION_ERROR", input.LeaseFence, input.ProviderCredentialSHA256, input.Instructions, input.Task, input.AssistantContext.EntityRef} {
@@ -71,6 +85,10 @@ func assertAssistantCatalogDiagnosticPrivacy(t *testing.T, input runtimecontract
 	}
 }
 
+// TestAssistantCatalogLocalInputWireRecoveryIsProjectionBound checks malformed workflow selectors in both scopes keep closed local classes, zero search RPCs and failed activity receipts.
+// After a terminal recording failure the same input must lose retry guidance and remain TOOL_UNAVAILABLE.
+// TestAssistantCatalogLocalInputWireRecoveryIsProjectionBound проверяет, что некорректные селекторы процесса в обеих областях сохраняют закрытые локальные классы, отсутствие поисковых RPC и квитанции неуспешной активности.
+// После ошибки итоговой записи тот же ввод должен лишиться подсказки повтора и остаться TOOL_UNAVAILABLE.
 func TestAssistantCatalogLocalInputWireRecoveryIsProjectionBound(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, test := range []struct {
@@ -148,6 +166,8 @@ func TestAssistantCatalogLocalInputWireRecoveryIsProjectionBound(t *testing.T) {
 	}
 }
 
+// TestAssistantCatalogIndexAndDefinitionInputRecovery checks invalid index/definition filters and a missing MODELS account yield local corrective guidance without searching the owner.
+// TestAssistantCatalogIndexAndDefinitionInputRecovery проверяет локальную подсказку исправления без поиска у владельца для некорректных фильтров индекса и определений, а также отсутствующего аккаунта MODELS.
 func TestAssistantCatalogIndexAndDefinitionInputRecovery(t *testing.T) {
 	for _, arguments := range []map[string]any{
 		{"agent_query": 7}, {"agent_query": strings.Repeat("я", 81)}, {"agent_offset": -1}, {"agent_offset": 129}, {"agent_offset": 0.5}, {"agent_offset": "PRIVATE_SENTINEL"},
@@ -171,6 +191,10 @@ func TestAssistantCatalogIndexAndDefinitionInputRecovery(t *testing.T) {
 	}
 }
 
+// TestAssistantCatalogInputRecoveryDoesNotClassifyAuthorityOrSnapshotFailures checks absent trusted context/lease, foreign identity and malformed or stale owner snapshots never become retryable input errors.
+// Expected search counts distinguish local refusal from failures discovered after one owner RPC in both scopes.
+// TestAssistantCatalogInputRecoveryDoesNotClassifyAuthorityOrSnapshotFailures проверяет, что отсутствие доверенного контекста или аренды, чужая идентичность, некорректный либо устаревший снимок владельца не становятся исправимыми ошибками ввода.
+// Ожидаемые счётчики поиска различают локальный отказ и ошибки после одного RPC владельца в обеих областях.
 func TestAssistantCatalogInputRecoveryDoesNotClassifyAuthorityOrSnapshotFailures(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, test := range []struct {
@@ -250,6 +274,10 @@ func TestAssistantCatalogInputRecoveryDoesNotClassifyAuthorityOrSnapshotFailures
 	}
 }
 
+// TestAssistantCatalogInputMarkerDoesNotTrustRemoteTextOrUnregisteredClass checks forged error text, unknown local wrappers and owner status codes cannot acquire local retry classification.
+// An authorization-recording refusal also prevents recovery and search, even when the selector itself is malformed.
+// TestAssistantCatalogInputMarkerDoesNotTrustRemoteTextOrUnregisteredClass проверяет, что подставной текст ошибки, неизвестные локальные оболочки и коды владельца не получают локальную классификацию повтора.
+// Отказ записи авторизации также запрещает восстановление и поиск, даже если сам селектор некорректен.
 func TestAssistantCatalogInputMarkerDoesNotTrustRemoteTextOrUnregisteredClass(t *testing.T) {
 	for _, err := range []error{errors.New(assistantCatalogInputFailureMessage), errAssistantConfigurationPage,
 		status.Error(codes.InvalidArgument, assistantCatalogInputFailureMessage),
@@ -282,6 +310,10 @@ func TestAssistantCatalogInputMarkerDoesNotTrustRemoteTextOrUnregisteredClass(t 
 	}
 }
 
+// TestAssistantCatalogAgentAndCurrentInputKeepExactOwnership checks ten agent/current-read cases in both scopes separate fixable page/query syntax from foreign identities, revoked context and missing runtime revision.
+// Every case rejects before search and preserves the correct retry/privacy boundary.
+// TestAssistantCatalogAgentAndCurrentInputKeepExactOwnership проверяет десять случаев чтения сотрудника и текущей конфигурации в обеих областях, отделяя исправимый синтаксис страницы и запроса от чужой идентичности, отозванного контекста и отсутствующей ревизии выполнения.
+// Каждый случай отклоняется до поиска с сохранением правильной границы повтора и приватности.
 func TestAssistantCatalogAgentAndCurrentInputKeepExactOwnership(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, scenario := range []string{"agent page", "agent query", "agent missing entity", "agent foreign helper", "agent foreign entity", "agent revoked", "current query", "current missing revision", "current foreign helper", "page on current"} {
@@ -335,6 +367,8 @@ func TestAssistantCatalogAgentAndCurrentInputKeepExactOwnership(t *testing.T) {
 	}
 }
 
+// TestAssistantCatalogInputRecoveryPreservesFullConfigurationReads reassembles successful workflow/agent configuration pages through EOF in both scopes, checking repeated exact lease pins and final successful activity.
+// TestAssistantCatalogInputRecoveryPreservesFullConfigurationReads собирает успешные страницы конфигурации процесса и сотрудника до конца в обеих областях, проверяя повторные точные привязки аренды и итоговую успешную активность.
 func TestAssistantCatalogInputRecoveryPreservesFullConfigurationReads(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, kind := range []string{"WORKFLOW_CONFIGURATION", "AGENT_CONFIGURATION"} {
@@ -359,6 +393,8 @@ func TestAssistantCatalogInputRecoveryPreservesFullConfigurationReads(t *testing
 	}
 }
 
+// TestAssistantWorkflowUpdateSchemaExplainsDependencyRetentionWithoutNewFields checks workflow-update guidance retains dependency edges, parallelism, result schema and defaults without exposing editable dependsOn/draft fields.
+// TestAssistantWorkflowUpdateSchemaExplainsDependencyRetentionWithoutNewFields проверяет сохранение в подсказке изменения процесса зависимостей, параллельности, схемы результата и значений по умолчанию без объявления редактируемых полей dependsOn или draft.
 func TestAssistantWorkflowUpdateSchemaExplainsDependencyRetentionWithoutNewFields(t *testing.T) {
 	schema := workflowUpdateInputSchema("wfl_fixture123")
 	steps := schema["properties"].(map[string]any)["steps"].(map[string]any)

@@ -13,10 +13,18 @@ import (
 )
 
 const (
-	serviceName      = "interaction-gateway"
+	// serviceName identifies the workload to telemetry and the protected control-plane operation profile.
+	// RU: serviceName определяет workload для telemetry и защищённого профиля операций control-plane.
+	serviceName = "interaction-gateway"
+	// metricsSubsystem names this process's technical metrics without using external connection identifiers as labels.
+	// RU: metricsSubsystem задаёт имя технических метрик процесса без внешних идентификаторов подключений в метках.
 	metricsSubsystem = "interaction_gateway"
 )
 
+// Config carries RPC credential paths, the exact egress proxy and bounded polling, claim and process lifecycle settings.
+// RU: Config передаёт пути реквизитов RPC, точный egress proxy и ограниченные настройки опроса, claim и жизненного цикла процесса.
+// Secret contents are not loaded into this configuration; the adapter resolves connection credentials separately.
+// RU: Содержимое секретов в эти настройки не загружается; адаптер отдельно разрешает реквизиты подключений.
 type Config struct {
 	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
@@ -41,6 +49,8 @@ type Config struct {
 	ClaimLimit                  int32         `env:"INTERACTION_GATEWAY_CLAIM_LIMIT"`
 }
 
+// loadConfig overlays environment values on deployment defaults and rejects invalid configuration before constructing dependencies.
+// RU: loadConfig накладывает переменные окружения на настройки развёртывания по умолчанию и отклоняет неверную конфигурацию до создания зависимостей.
 func loadConfig() (Config, error) {
 	config := Config{
 		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.kodex-system.svc:8443",
@@ -65,6 +75,10 @@ func loadConfig() (Config, error) {
 	return config, nil
 }
 
+// validate checks the RPC profile, supported environment, exact proxy, canonical paths and lifecycle bounds without opening files or sockets.
+// RU: validate проверяет профиль RPC, поддерживаемую среду, точный proxy, канонические пути и пределы жизненного цикла без открытия файлов или сокетов.
+// Syntactic TLS-name validation here does not replace the RPC client's certificate and application-grant verification.
+// RU: Синтаксическая проверка TLS-имени здесь не заменяет проверку сертификата и application grant в RPC клиенте.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("interaction-gateway RPC profile is invalid")

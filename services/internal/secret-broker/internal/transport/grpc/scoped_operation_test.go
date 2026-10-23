@@ -9,6 +9,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestImmediateSecretScopeClosedBeforeStorageAndAfterCompletion covers PROJECT/ORGANIZATION
+// CREATE/REVEAL/REVOKE with malformed input scope and foreign completion, requiring early refusal or
+// closed results without deletion; canonical fixtures succeed on fake owner/store.
+// TestImmediateSecretScopeClosedBeforeStorageAndAfterCompletion проверяет PROJECT/ORGANIZATION
+// CREATE/REVEAL/REVOKE с malformed input scope и foreign completion, требуя early refusal либо closed
+// results без удаления; canonical fixtures успешны на fake owner/store.
 func TestImmediateSecretScopeClosedBeforeStorageAndAfterCompletion(t *testing.T) {
 	for _, scope := range []cp.RuntimeResourceScopeKind{cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION} {
 		t.Run(scope.String(), func(t *testing.T) {

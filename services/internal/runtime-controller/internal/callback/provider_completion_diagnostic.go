@@ -8,10 +8,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 )
 
+// providerCompletionDiagnosticLog identifies a failure observation after a
+// newly accepted owner completion, not an independent durable receipt.
+// providerCompletionDiagnosticLog обозначает наблюдение ошибки после нового
+// принятого владельцем завершения, а не отдельную устойчивую квитанцию.
 const providerCompletionDiagnosticLog = "runtime provider failure observation after owner completion"
 
-// Только nil owner error подтверждает новый completion. AlreadyExists не
-// становится доказательством commit этой диагностики; cleanup не меняется.
+// logCommittedProviderDiagnostic records a failed completion only after a nil
+// owner error; AlreadyExists is not new-commit evidence. Exact matching provider
+// diagnostics and a bounded Pod-memory read precede caller-owned cleanup;
+// missing evidence stays unavailable and the completion payload is unchanged.
+// logCommittedProviderDiagnostic пишет ошибочное завершение лишь после nil ошибки
+// владельца; AlreadyExists не доказывает новый commit. Точная диагностика
+// провайдера и ограниченное чтение памяти Pod предшествуют очистке caller;
+// отсутствие данных остаётся недоступностью, payload завершения не меняется.
 func (server *Server) logCommittedProviderDiagnostic(ctx context.Context, input runtimecontract.RunnerInput, payload runtimecontract.RunnerCompletionRequest, ownerError error) {
 	if ownerError != nil || payload.Success || server.logger == nil {
 		return
@@ -33,8 +43,14 @@ func (server *Server) logCommittedProviderDiagnostic(ctx context.Context, input 
 		"input_digest", input.InputDigest, "execution_binding_digest", input.ExecutionBindingDigest)
 }
 
-// Read после нового owner commit и до cleanup не меняет semantic intent
-// callback. История warm Pod не приписывается завершённому cold execution.
+// committedPodMemoryObservation makes a one-second cancellation-independent
+// read of the exact cold-turn Pod before cleanup, recognizing only its memory
+// failure code. Missing manager, mismatches and read failures stay unavailable;
+// warm-Pod history is not attributed to this execution.
+// committedPodMemoryObservation за одну секунду независимо от отмены caller
+// читает точный Pod холодного хода до очистки, распознавая лишь код ошибки памяти.
+// Отсутствие manager, несовпадения и ошибки чтения остаются недоступностью;
+// история warm Pod этому выполнению не приписывается.
 func (server *Server) committedPodMemoryObservation(ctx context.Context, input runtimecontract.RunnerInput) (string, string) {
 	if server.manager == nil {
 		return "UNAVAILABLE", "UNKNOWN"

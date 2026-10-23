@@ -26,21 +26,42 @@ import (
 )
 
 const (
+	// runtimeSecretOperationTTL bounds each newly issued or reissued operation grant to one minute; claiming has its own shorter lease.
+	// runtimeSecretOperationTTL ограничивает каждый выданный или повторно выданный grant операции одной минутой; захват имеет отдельную более короткую аренду.
 	runtimeSecretOperationTTL = time.Minute
-	runtimeSecretClaimLease   = 30 * time.Second
+	// runtimeSecretClaimLease bounds the broker claim lease used for completion and recovery; it is not a secret revision lifetime.
+	// runtimeSecretClaimLease ограничивает аренду захвата брокера для завершения и восстановления; это не срок жизни ревизии секрета.
+	runtimeSecretClaimLease = 30 * time.Second
+	// runtimeSecretRevealMaxAge requires recent credential authentication when preparing REVEAL, independently of ordinary session validity.
+	// runtimeSecretRevealMaxAge требует недавнюю аутентификацию учётными данными при подготовке REVEAL независимо от обычной действительности сессии.
 	runtimeSecretRevealMaxAge = 5 * time.Minute
-	runtimeSecretKey          = "value"
+	// runtimeSecretKey fixes the single Kubernetes data key in operation and materialization descriptors; the value itself is not stored here.
+	// runtimeSecretKey закрепляет единственный ключ данных Kubernetes в дескрипторах операции и материализации; само значение здесь не хранится.
+	runtimeSecretKey = "value"
+	// runtimeSecretRecoveryPage provides the recovery work page size when the trusted broker omits an explicit size.
+	// runtimeSecretRecoveryPage задаёт размер страницы работ восстановления, когда доверенный брокер не указал его явно.
 	runtimeSecretRecoveryPage = int32(50)
-	runtimeSecretRecoveryMax  = int32(100)
+	// runtimeSecretRecoveryMax caps each recovery query page; the extra fetched row is used only to determine continuation.
+	// runtimeSecretRecoveryMax ограничивает страницу запроса восстановления; дополнительная строка нужна лишь для определения продолжения.
+	runtimeSecretRecoveryMax = int32(100)
 )
 
+// runtimeSecretRecoveryCursorVersion versions the deadline/ref cursor encoding so a different wire shape is rejected rather than guessed.
+// runtimeSecretRecoveryCursorVersion версионирует кодирование курсора deadline/ref, чтобы другая форма отклонялась без догадок.
 const runtimeSecretRecoveryCursorVersion = "v1"
+
+// runtimeSecretListCursorVersion versions the filtered secret-list cursor independently of the recovery work cursor.
+// runtimeSecretListCursorVersion версионирует курсор фильтрованного списка секретов отдельно от курсора работ восстановления.
 const runtimeSecretListCursorVersion = "v1"
 
+// runtimeSecretListCursor carries a format version, filter digest and last secret ref; it conveys pagination position, not authority.
+// runtimeSecretListCursor содержит версию формата, digest фильтра и последнюю ссылку секрета; передаёт позицию страницы, а не полномочия.
 type runtimeSecretListCursor struct {
 	Version, FilterDigest, Ref string
 }
 
+// lockedRuntimeSecret holds the SQL-locked secret metadata and revision counters used by commands; it contains no plaintext secret material.
+// lockedRuntimeSecret хранит заблокированные в SQL метаданные секрета и счётчики ревизий для команд; открытого значения секрета не содержит.
 type lockedRuntimeSecret struct {
 	scopeKind, organizationRef                                                     string
 	id, ref, projectID, projectRef, name, description, valueType, state, namespace string
@@ -48,6 +69,8 @@ type lockedRuntimeSecret struct {
 	createdAt, updatedAt                                                           time.Time
 }
 
+// lockedRuntimeSecretOperation joins a locked operation with current secret metadata, expected versions, claimant generation, deadlines and terminal receipt for exact transition checks; raw secret content is absent.
+// lockedRuntimeSecretOperation объединяет заблокированную операцию с текущими метаданными секрета, ожидаемыми версиями, поколением захвата, сроками и итоговой квитанцией для точных проверок перехода; исходного содержимого секрета нет.
 type lockedRuntimeSecretOperation struct {
 	scopeKind, organizationRef                                         string
 	id, ref, kind, state, projectID, secretID, actorID, correlationRef string
@@ -61,6 +84,8 @@ type lockedRuntimeSecretOperation struct {
 	terminalSnapshot                                                   []byte
 }
 
+// ListRuntimeSecrets requires secret.view, resolves the verified scope and lists either organization or authorized project metadata with bounded filters and action hints. Neither a list item nor its nextActions authorizes revealing a value.
+// ListRuntimeSecrets требует secret.view, разрешает проверенную область и выдаёт метаданные организации либо разрешённых проектов с ограниченными фильтрами и подсказками действий. Элемент списка и его nextActions не разрешают раскрытие значения.
 func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RuntimeSecret, string, error) {
 	if principal.Permission != "secret.view" {
 		return nil, "", errs.ErrForbidden
@@ -108,6 +133,8 @@ func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal 
 		})
 }
 
+// runtimeSecretActions returns permitted rotate/reveal/revoke presentation hints only for ACTIVE metadata; mutation paths must recheck access and current state.
+// runtimeSecretActions возвращает разрешённые подсказки rotate/reveal/revoke только для ACTIVE; пути изменения повторно проверяют доступ и текущее состояние.
 func runtimeSecretActions(item entity.RuntimeSecret, allowed func(string) bool) []string {
 	actions := make([]string, 0, 3)
 	if item.State != "ACTIVE" {
@@ -125,11 +152,15 @@ func runtimeSecretActions(item entity.RuntimeSecret, allowed func(string) bool) 
 	return actions
 }
 
+// runtimeSecretListFilterDigest hashes the project/query pair with an unambiguous separator to bind pagination to the same filter; this unkeyed digest is not a signature.
+// runtimeSecretListFilterDigest хеширует пару project/query с однозначным разделителем для привязки страницы к прежнему фильтру; этот digest без ключа не является подписью.
 func runtimeSecretListFilterDigest(projectRef, queryValue string) string {
 	digest := sha256.Sum256([]byte(projectRef + "\x00" + queryValue))
 	return hex.EncodeToString(digest[:])
 }
 
+// encodeRuntimeSecretListCursor encodes the bounded secret ref with its filter digest as URL-safe JSON; invalid ref shape fails before encoding and ownership remains a query concern.
+// encodeRuntimeSecretListCursor кодирует ограниченную ссылку секрета с digest фильтра как URL-safe JSON; неверная форма отклоняется до кодирования, а владение проверяется запросом.
 func encodeRuntimeSecretListCursor(projectRef, queryValue, ref string) (string, error) {
 	if !strings.HasPrefix(ref, "sec_") || len(ref) > 96 {
 		return "", errs.ErrInvalid
@@ -142,6 +173,8 @@ func encodeRuntimeSecretListCursor(projectRef, queryValue, ref string) (string, 
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
+// decodeRuntimeSecretListCursor accepts an empty initial cursor or decodes a bounded versioned cursor whose filter/ref match the request. It validates pagination syntax and binding, not tenant access or a cryptographic proof.
+// decodeRuntimeSecretListCursor принимает пустой начальный курсор либо разбирает ограниченный версионированный курсор с совпадающими filter/ref. Проверяет синтаксис и привязку страницы, а не доступ арендатора или криптографическое доказательство.
 func decodeRuntimeSecretListCursor(token, projectRef, queryValue string) (runtimeSecretListCursor, error) {
 	if token == "" {
 		return runtimeSecretListCursor{}, nil
@@ -162,6 +195,8 @@ func decodeRuntimeSecretListCursor(token, projectRef, queryValue string) (runtim
 	return cursor, nil
 }
 
+// GetRuntimeSecret reads metadata in a repeatable-read transaction, hides foreign or unauthorized resources as NotFound and derives action hints from current organization/project access. It never returns the secret value.
+// GetRuntimeSecret читает метаданные в repeatable-read транзакции, скрывает чужие или недоступные ресурсы как NotFound и выводит подсказки действий из текущего доступа организации/проекта. Значение секрета не возвращает.
 func (repository *Repository) GetRuntimeSecret(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeSecret, error) {
 	if principal.Permission != "secret.view" {
 		return entity.RuntimeSecret{}, errs.ErrForbidden
@@ -219,6 +254,8 @@ func (repository *Repository) GetRuntimeSecret(ctx context.Context, principal va
 	return item, nil
 }
 
+// PrepareRuntimeSecretOperation accepts only the gateway command with its matching permission, validates reveal freshness, locks an authorized target and checks actor-scoped idempotency before preparing a short-lived grant. Creation/rotation reserve the next revision; this transaction does not materialize secret bytes.
+// PrepareRuntimeSecretOperation принимает только команду шлюза с соответствующим полномочием, проверяет свежесть reveal, блокирует разрешённую цель и проверяет идемпотентность в области actor перед подготовкой короткого grant. Создание/ротация резервируют следующую ревизию; транзакция не материализует байты секрета.
 func (repository *Repository) PrepareRuntimeSecretOperation(ctx context.Context, principal value.Principal, input platformrepo.RuntimeSecretPrepareInput) (platformrepo.RuntimeSecretPrepareResult, error) {
 	expectedPermission := map[string]string{"CREATE": "secret.create", "ROTATE": "secret.rotate", "REVEAL": "secret.reveal", "REVOKE": "secret.revoke"}[input.Kind]
 	if principal.CallerWorkload != "control-api-gateway" || principal.Permission != expectedPermission || input.Mutation.Validate() != nil || !validRuntimeSecretPrepare(input) {
@@ -228,13 +265,9 @@ func (repository *Repository) PrepareRuntimeSecretOperation(ctx context.Context,
 	if input.Kind == "REVEAL" && (principal.CredentialAuthenticatedAt.IsZero() || principal.CredentialAuthenticatedAt.After(now.Add(30*time.Second)) || now.Sub(principal.CredentialAuthenticatedAt) > runtimeSecretRevealMaxAge) {
 		return platformrepo.RuntimeSecretPrepareResult{}, errs.ErrUnauthorized
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.runtimeSecretOperationTransaction(ctx, principal)
 	if err != nil {
 		return platformrepo.RuntimeSecretPrepareResult{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return platformrepo.RuntimeSecretPrepareResult{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -302,6 +335,22 @@ func (repository *Repository) PrepareRuntimeSecretOperation(ctx context.Context,
 	}, nil
 }
 
+// runtimeSecretOperationTransaction resolves the verified principal's scope before opening a serializable secret-operation transaction. It maps only BeginTx failure to Unavailable; callers retain permission checks, rollback, locks, owner revalidation, audit and commit.
+// runtimeSecretOperationTransaction разрешает область проверенного principal перед открытием сериализуемой транзакции операции секрета. Только отказ BeginTx заменяется на Unavailable; проверки полномочий, rollback, блокировки, повторная проверка владельца, аудит и commit остаются у вызывающих методов.
+func (repository *Repository) runtimeSecretOperationTransaction(ctx context.Context, principal value.Principal) (scope, pgx.Tx, error) {
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return scope{}, nil, err
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return scope{}, nil, errs.ErrUnavailable
+	}
+	return current, tx, nil
+}
+
+// prepareRuntimeSecretTarget locks or creates the metadata target within the resolved organization/project and checks action-specific access before returning it. CREATE may insert PROVISIONING metadata; existing secret refs and caller project scope never independently confer authority.
+// prepareRuntimeSecretTarget блокирует или создаёт метаданные цели внутри разрешённой организации/проекта и проверяет доступ для конкретного действия. CREATE может вставить PROVISIONING; существующая ссылка секрета и область проекта вызывающего сами по себе не дают полномочий.
 func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx pgx.Tx, current scope, principal value.Principal, input platformrepo.RuntimeSecretPrepareInput) (lockedRuntimeSecret, error) {
 	var secret lockedRuntimeSecret
 	var err error
@@ -369,6 +418,8 @@ func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx
 	return secret, nil
 }
 
+// validateNewRuntimeSecretOperation checks active/provisioning state, expected versions and value type, rejects concurrent publishing or mutation and fails an expired prepared predecessor in the same transaction. REVOKE additionally requires no retained references.
+// validateNewRuntimeSecretOperation проверяет active/provisioning, ожидаемые версии и тип значения, отклоняет параллельную публикацию или изменение и завершает просроченного подготовленного предшественника в той же транзакции. REVOKE дополнительно требует отсутствия удерживающих ссылок.
 func (repository *Repository) validateNewRuntimeSecretOperation(ctx context.Context, tx pgx.Tx, organizationID string, secret lockedRuntimeSecret, input platformrepo.RuntimeSecretPrepareInput, now time.Time) error {
 	if input.Kind == "CREATE" {
 		if secret.state != "PROVISIONING" || secret.description != input.Description || secret.valueType != input.ValueType || secret.namespace != repository.runtimeSecretNamespace {
@@ -412,6 +463,8 @@ func (repository *Repository) validateNewRuntimeSecretOperation(ctx context.Cont
 	return nil
 }
 
+// retryRuntimeSecretOperation replays a completed non-reveal metadata receipt or a failed result, rejects claimed/unknown states and reissues only an unchanged PREPARED operation. A reissued grant replaces its digest and expiry instead of creating a second operation.
+// retryRuntimeSecretOperation повторно выдаёт итоговую квитанцию метаданных кроме reveal либо результат ошибки, отклоняет claimed/неизвестные состояния и перевыдаёт лишь неизменённую PREPARED операцию. Новый grant заменяет digest и срок, не создавая вторую операцию.
 func (repository *Repository) retryRuntimeSecretOperation(ctx context.Context, tx pgx.Tx, operation lockedRuntimeSecretOperation, now time.Time) (platformrepo.RuntimeSecretPrepareResult, error) {
 	result := platformrepo.RuntimeSecretPrepareResult{OperationRef: operation.ref, State: operation.state, ValueType: operation.valueType, FailureCode: operation.failureCode}
 	switch operation.state {
@@ -451,6 +504,8 @@ func (repository *Repository) retryRuntimeSecretOperation(ctx context.Context, t
 	return result, nil
 }
 
+// lockActiveRuntimeSecretMutation locks the active mutation selected for one secret, distinguishes absence from query failure and leaves expiry/state decisions to its caller.
+// lockActiveRuntimeSecretMutation блокирует выбранное активное изменение одного секрета, различает отсутствие и ошибку запроса, оставляя решение по сроку/состоянию вызывающему.
 func (repository *Repository) lockActiveRuntimeSecretMutation(ctx context.Context, tx pgx.Tx, secretID string) (lockedRuntimeSecretOperation, bool, error) {
 	operation, err := repository.scanRuntimeSecretOperation(tx.QueryRow(ctx, queryRuntimeSecretHasActiveOperation, pgx.StrictNamedArgs{"secret_id": secretID}))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -462,18 +517,16 @@ func (repository *Repository) lockActiveRuntimeSecretMutation(ctx context.Contex
 	return operation, true, nil
 }
 
+// ConsumeRuntimeSecretOperation requires the exact broker consume identity, resolves a grant by its digest, rechecks preparation expiry/current secret/owner access and atomically assigns claimant generation plus lease. Returned names/descriptors guide broker work without exposing secret bytes.
+// ConsumeRuntimeSecretOperation требует точную consume identity брокера, разрешает grant по digest, повторно проверяет срок подготовки, текущий секрет и доступ владельца, атомарно назначая поколение захвата и аренду. Возвращённые имена/дескрипторы направляют работу брокера без раскрытия байтов секрета.
 func (repository *Repository) ConsumeRuntimeSecretOperation(ctx context.Context, principal value.Principal, input platformrepo.RuntimeSecretConsumeInput) (entity.RuntimeSecretOperation, error) {
 	if principal.CallerWorkload != "secret-broker" || principal.Permission != "platform.runtime-secrets.operations.consume" ||
 		len(input.OperationGrant) < 32 || len(input.OperationGrant) > 256 || strings.TrimSpace(input.OperationGrant) != input.OperationGrant || !validRuntimeSecretClaimant(input.ClaimantID) {
 		return entity.RuntimeSecretOperation{}, errs.ErrForbidden
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.runtimeSecretOperationTransaction(ctx, principal)
 	if err != nil {
 		return entity.RuntimeSecretOperation{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return entity.RuntimeSecretOperation{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	digest := sha256.Sum256([]byte(input.OperationGrant))
@@ -522,6 +575,8 @@ func (repository *Repository) ConsumeRuntimeSecretOperation(ctx context.Context,
 	}, nil
 }
 
+// ListRuntimeSecretRecoveryWork requires the broker recovery permission and returns an organization-scoped bounded keyset page of operation metadata after the deadline/ref cursor. The extra row detects a next page; returned work still requires recovery-time validation.
+// ListRuntimeSecretRecoveryWork требует полномочие восстановления брокера и возвращает ограниченную keyset-страницу метаданных операций организации после курсора deadline/ref. Дополнительная строка определяет следующую страницу; сама работа ещё требует проверки при восстановлении.
 func (repository *Repository) ListRuntimeSecretRecoveryWork(ctx context.Context, principal value.Principal, page platformrepo.RuntimeSecretRecoveryPage) ([]entity.RuntimeSecretRecoveryWork, string, error) {
 	if !validRuntimeSecretWorkPrincipal(principal, "platform.runtime-secrets.operations.recover") {
 		return nil, "", errs.ErrForbidden
@@ -572,17 +627,15 @@ func (repository *Repository) ListRuntimeSecretRecoveryWork(ctx context.Context,
 	return items, next, nil
 }
 
+// CompleteRuntimeSecretOperation requires the broker completion identity, exact claimant generation and live lease, revalidates owner access and commits secret revision, operation receipt, audit and change event together. A completed replay is accepted only for the same claimant/generation.
+// CompleteRuntimeSecretOperation требует completion identity брокера, точное поколение захвата и действующую аренду, повторно проверяет доступ владельца и совместно фиксирует ревизию, квитанцию операции, аудит и событие. Повтор завершения принимается лишь для прежних claimant/generation.
 func (repository *Repository) CompleteRuntimeSecretOperation(ctx context.Context, principal value.Principal, input platformrepo.RuntimeSecretCompleteInput) (entity.RuntimeSecret, error) {
 	if !validRuntimeSecretWorkPrincipal(principal, "platform.runtime-secrets.operations.complete") || input.OperationRef == "" || !validRuntimeSecretClaimant(input.ClaimantID) || input.ClaimGeneration < 1 {
 		return entity.RuntimeSecret{}, errs.ErrForbidden
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.runtimeSecretOperationTransaction(ctx, principal)
 	if err != nil {
 		return entity.RuntimeSecret{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return entity.RuntimeSecret{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	locked, err := repository.lockRuntimeSecretOperation(ctx, tx, current.organizationID, input.OperationRef)
@@ -621,18 +674,16 @@ func (repository *Repository) CompleteRuntimeSecretOperation(ctx context.Context
 	return secret, nil
 }
 
+// FailRuntimeSecretOperation records a closed broker failure only for the matching claimed generation, with an exact already-failed replay and transactional audit. It deliberately does not require an unexpired lease as successful completion does.
+// FailRuntimeSecretOperation фиксирует закрытую ошибку брокера только для совпадающего поколения захвата, с точным повтором уже завершённой ошибки и транзакционным аудитом. В отличие от успешного завершения намеренно не требует непросроченную аренду.
 func (repository *Repository) FailRuntimeSecretOperation(ctx context.Context, principal value.Principal, input platformrepo.RuntimeSecretFailInput) (platformrepo.RuntimeSecretFailureResult, error) {
 	if !validRuntimeSecretWorkPrincipal(principal, "platform.runtime-secrets.operations.fail") || input.OperationRef == "" ||
 		!validRuntimeSecretClaimant(input.ClaimantID) || input.ClaimGeneration < 1 || !validRuntimeSecretFailureCode(input.FailureCode) {
 		return platformrepo.RuntimeSecretFailureResult{}, errs.ErrForbidden
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.runtimeSecretOperationTransaction(ctx, principal)
 	if err != nil {
 		return platformrepo.RuntimeSecretFailureResult{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return platformrepo.RuntimeSecretFailureResult{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	locked, err := repository.lockRuntimeSecretOperation(ctx, tx, current.organizationID, input.OperationRef)
@@ -660,17 +711,15 @@ func (repository *Repository) FailRuntimeSecretOperation(ctx context.Context, pr
 	return platformrepo.RuntimeSecretFailureResult{OperationRef: locked.ref, State: "FAILED", FailureCode: input.FailureCode}, nil
 }
 
+// RecoverRuntimeSecretMaterialization reconciles a broker-observed versioned materialization under its locked operation: default DELETE remains unless a matching retained completion, live claim or recoverable expired claim proves KEEP. Owner revocation/stale versions fail the operation; recovered completion emits the same change event atomically.
+// RecoverRuntimeSecretMaterialization согласует наблюдаемую брокером версионированную материализацию с заблокированной операцией: DELETE сохраняется, пока совпадающее удержанное завершение, живая аренда или восстанавливаемый просроченный захват не докажут KEEP. Отзыв доступа/устаревшие версии завершают операцию ошибкой; восстановленное завершение атомарно пишет то же событие изменения.
 func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Context, principal value.Principal, input platformrepo.RuntimeSecretRecoveryInput) (platformrepo.RuntimeSecretRecoveryResult, error) {
 	if !validRuntimeSecretWorkPrincipal(principal, "platform.runtime-secrets.operations.recover") || input.OperationRef == "" || !validRuntimeSecretMaterialization(&input.Materialization) {
 		return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrForbidden
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.runtimeSecretOperationTransaction(ctx, principal)
 	if err != nil {
 		return platformrepo.RuntimeSecretRecoveryResult{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	locked, err := repository.lockRuntimeSecretOperation(ctx, tx, current.organizationID, input.OperationRef)
@@ -755,6 +804,8 @@ func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Co
 	return result, nil
 }
 
+// completeLockedRuntimeSecretOperation applies a still-current CLAIMED operation to metadata: create/rotate insert a bound immutable descriptor, reveal selects the current descriptor and revoke rechecks references. It writes terminal receipt and audit inside the caller transaction; the outer command owns event publication and commit.
+// completeLockedRuntimeSecretOperation применяет актуальную CLAIMED операцию к метаданным: create/rotate вставляют привязанный неизменяемый дескриптор, reveal выбирает текущий, revoke повторно проверяет ссылки. Итоговая квитанция и аудит пишутся в транзакции вызывающего; внешняя команда владеет событием и commit.
 func (repository *Repository) completeLockedRuntimeSecretOperation(ctx context.Context, tx pgx.Tx, organizationID string, locked lockedRuntimeSecretOperation, materialization *entity.RuntimeSecretMaterialization) (entity.RuntimeSecret, error) {
 	if locked.state != "CLAIMED" || !repository.runtimeSecretOperationMatchesCurrent(locked) {
 		return entity.RuntimeSecret{}, errs.ErrConflict
@@ -850,6 +901,8 @@ func (repository *Repository) completeLockedRuntimeSecretOperation(ctx context.C
 	return secret, nil
 }
 
+// failLockedRuntimeSecretOperation conditionally marks the exact operation/claim generation failed and inserts a failure audit in the caller transaction; a missing update is a conflict and no external Kubernetes deletion occurs here.
+// failLockedRuntimeSecretOperation условно завершает ошибкой точную операцию/поколение захвата и вставляет аудит в транзакции вызывающего; отсутствие обновления означает конфликт, внешнее удаление Kubernetes здесь не выполняется.
 func (repository *Repository) failLockedRuntimeSecretOperation(ctx context.Context, tx pgx.Tx, organizationID string, locked lockedRuntimeSecretOperation, failureCode string) error {
 	tag, err := tx.Exec(ctx, queryRuntimeSecretOperationFail, pgx.StrictNamedArgs{
 		"operation_id": locked.id, "claimant_id": locked.claimantID,
@@ -861,6 +914,8 @@ func (repository *Repository) failLockedRuntimeSecretOperation(ctx context.Conte
 	return repository.insertRuntimeSecretAudit(ctx, tx, organizationID, locked, "FAILED", "i18n:RUNTIME_SECRET_OPERATION_FAILED")
 }
 
+// insertRuntimeSecretAudit inserts operation/action/outcome/correlation metadata with a newly generated audit ref, without including secret content or the operation grant.
+// insertRuntimeSecretAudit вставляет метаданные операции/действия/результата/корреляции с новой ссылкой аудита, не включая содержимое секрета и grant операции.
 func (repository *Repository) insertRuntimeSecretAudit(ctx context.Context, tx pgx.Tx, organizationID string, locked lockedRuntimeSecretOperation, outcome, summary string) error {
 	auditRef, err := newRef("aud")
 	if err != nil {
@@ -877,6 +932,8 @@ func (repository *Repository) insertRuntimeSecretAudit(ctx context.Context, tx p
 	return nil
 }
 
+// lockRuntimeSecret locks organization-scoped metadata by secret ref and scans the canonical projection, mapping absent rows to NotFound and other query/scan failures to Unavailable. It does not by itself authorize the requesting actor.
+// lockRuntimeSecret блокирует метаданные организации по ссылке секрета и читает каноническую проекцию, заменяя отсутствие на NotFound, остальные ошибки запроса/чтения на Unavailable. Самостоятельно доступ actor не разрешает.
 func (repository *Repository) lockRuntimeSecret(ctx context.Context, tx pgx.Tx, organizationID, ref string) (lockedRuntimeSecret, error) {
 	var result lockedRuntimeSecret
 	err := tx.QueryRow(ctx, queryRuntimeSecretLock, pgx.StrictNamedArgs{"organization_id": organizationID, "secret_ref": ref}).Scan(
@@ -893,6 +950,8 @@ func (repository *Repository) lockRuntimeSecret(ctx context.Context, tx pgx.Tx, 
 	return result, nil
 }
 
+// lockRuntimeSecretByName locks secret metadata by the exact organization/project/name tuple and preserves the same absence/error mapping as ref lookup; the prepared command already owns project authorization.
+// lockRuntimeSecretByName блокирует метаданные по точной тройке organization/project/name и сохраняет различение отсутствия/ошибки как при поиске по ref; авторизацией проекта владеет подготовленная команда.
 func (repository *Repository) lockRuntimeSecretByName(ctx context.Context, tx pgx.Tx, organizationID, projectID, name string) (lockedRuntimeSecret, error) {
 	var result lockedRuntimeSecret
 	err := tx.QueryRow(ctx, queryRuntimeSecretLockByName, pgx.StrictNamedArgs{
@@ -909,6 +968,8 @@ func (repository *Repository) lockRuntimeSecretByName(ctx context.Context, tx pg
 	return result, nil
 }
 
+// lockRuntimeSecretOperation locks one operation under the current organization, scanning its joined secret state and translating row absence separately from infrastructure failure.
+// lockRuntimeSecretOperation блокирует одну операцию текущей организации, читает связанное состояние секрета и отдельно классифицирует отсутствие строки и инфраструктурную ошибку.
 func (repository *Repository) lockRuntimeSecretOperation(ctx context.Context, tx pgx.Tx, organizationID, operationRef string) (lockedRuntimeSecretOperation, error) {
 	operation, err := repository.scanRuntimeSecretOperation(tx.QueryRow(ctx, queryRuntimeSecretOperationLock, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "operation_ref": operationRef,
@@ -922,6 +983,8 @@ func (repository *Repository) lockRuntimeSecretOperation(ctx context.Context, tx
 	return operation, nil
 }
 
+// lockRuntimeSecretOperationByIdempotency finds the locked operation in the organization/actor/kind/idempotency-key scope, returning found=false only for NoRows. The caller must still compare target and intent digest before replay.
+// lockRuntimeSecretOperationByIdempotency находит заблокированную операцию в области organization/actor/kind/idempotency-key, возвращая found=false лишь при NoRows. Перед повтором вызывающий ещё сравнивает цель и digest намерения.
 func (repository *Repository) lockRuntimeSecretOperationByIdempotency(ctx context.Context, tx pgx.Tx, organizationID, actorID, kind, key string) (lockedRuntimeSecretOperation, bool, error) {
 	operation, err := repository.scanRuntimeSecretOperation(tx.QueryRow(ctx, queryRuntimeSecretOperationLockIdempotency, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "actor_id": actorID, "kind": kind, "idempotency_key": key,
@@ -935,6 +998,8 @@ func (repository *Repository) lockRuntimeSecretOperationByIdempotency(ctx contex
 	return operation, true, nil
 }
 
+// scanRuntimeSecretOperation decodes the fixed joined SQL column order into operation and current-secret metadata while preserving the scanner error; it does not validate a lifecycle transition or read Kubernetes secret content.
+// scanRuntimeSecretOperation читает фиксированный порядок SQL-столбцов операции и текущих метаданных секрета, сохраняя ошибку scanner; не проверяет переход состояния и не читает содержимое секрета Kubernetes.
 func (repository *Repository) scanRuntimeSecretOperation(scanner rowScanner) (lockedRuntimeSecretOperation, error) {
 	var operation lockedRuntimeSecretOperation
 	err := scanner.Scan(
@@ -951,6 +1016,8 @@ func (repository *Repository) scanRuntimeSecretOperation(scanner rowScanner) (lo
 	return operation, err
 }
 
+// runtimeSecretOperationDescriptors selects the exact broker descriptors required by the operation kind: prospective version name for create/rotate, one current revision for reveal or all stored revisions for revoke. Unknown kinds fail closed.
+// runtimeSecretOperationDescriptors выбирает точные дескрипторы брокера по виду операции: будущее имя версии для create/rotate, текущую ревизию для reveal либо все сохранённые для revoke. Неизвестный вид закрыто отклоняется.
 func (repository *Repository) runtimeSecretOperationDescriptors(ctx context.Context, tx pgx.Tx, operation lockedRuntimeSecretOperation) ([]entity.RuntimeSecretRevisionDescriptor, error) {
 	switch operation.kind {
 	case "CREATE", "ROTATE":
@@ -975,6 +1042,8 @@ func (repository *Repository) runtimeSecretOperationDescriptors(ctx context.Cont
 	}
 }
 
+// runtimeSecretRevision reads one stored revision descriptor for an already resolved secret ID; row absence is NotFound and scan/query failures are Unavailable, with no secret bytes returned.
+// runtimeSecretRevision читает один сохранённый дескриптор ревизии уже разрешённого ID секрета; отсутствие означает NotFound, ошибка чтения/запроса — Unavailable, байты секрета не возвращаются.
 func (repository *Repository) runtimeSecretRevision(ctx context.Context, tx pgx.Tx, secretID string, revision int64) (entity.RuntimeSecretRevisionDescriptor, error) {
 	var item entity.RuntimeSecretRevisionDescriptor
 	err := tx.QueryRow(ctx, queryRuntimeSecretRevisionGet, pgx.StrictNamedArgs{"secret_id": secretID, "revision": revision}).Scan(
@@ -990,6 +1059,8 @@ func (repository *Repository) runtimeSecretRevision(ctx context.Context, tx pgx.
 	return item, nil
 }
 
+// runtimeSecretRevisions lists stored revision descriptors in SQL order for broker revocation, closes rows and rejects scan/iteration failure without returning a partial successful list.
+// runtimeSecretRevisions перечисляет сохранённые дескрипторы в порядке SQL для отзыва брокером, закрывает rows и отклоняет ошибку чтения/итерации без выдачи частично успешного списка.
 func (repository *Repository) runtimeSecretRevisions(ctx context.Context, tx pgx.Tx, secretID string) ([]entity.RuntimeSecretRevisionDescriptor, error) {
 	rows, err := tx.Query(ctx, queryRuntimeSecretRevisionList, pgx.StrictNamedArgs{"secret_id": secretID})
 	if err != nil {
@@ -1010,6 +1081,8 @@ func (repository *Repository) runtimeSecretRevisions(ctx context.Context, tx pgx
 	return items, nil
 }
 
+// ensureRuntimeSecretUnreferenced asks the owner query whether any retained reference prevents revocation, returning ResourceInUse on a positive result and Unavailable on a query failure.
+// ensureRuntimeSecretUnreferenced через запрос владельца проверяет удерживающие ссылки перед отзывом, возвращая ResourceInUse при наличии и Unavailable при ошибке запроса.
 func (repository *Repository) ensureRuntimeSecretUnreferenced(ctx context.Context, tx pgx.Tx, organizationID, secretRef string) error {
 	var referenced bool
 	if err := tx.QueryRow(ctx, queryRuntimeSecretIsReferenced, pgx.StrictNamedArgs{
@@ -1023,6 +1096,8 @@ func (repository *Repository) ensureRuntimeSecretUnreferenced(ctx context.Contex
 	return nil
 }
 
+// runtimeSecretOperationMatchesCurrent compares namespace, current version/revision and kind-specific active/provisioning requirements against the prepared operation; it does not check actor access, grant expiry or claim lease.
+// runtimeSecretOperationMatchesCurrent сверяет namespace, текущую версию/ревизию и зависящие от вида active/provisioning с подготовленной операцией; не проверяет доступ actor, срок grant и аренду захвата.
 func (repository *Repository) runtimeSecretOperationMatchesCurrent(operation lockedRuntimeSecretOperation) bool {
 	if operation.namespace != repository.runtimeSecretNamespace || operation.secretVersion != operation.expectedSecretVersion || operation.secretCurrentRevision != operation.expectedCurrentRevision {
 		return false
@@ -1036,6 +1111,8 @@ func (repository *Repository) runtimeSecretOperationMatchesCurrent(operation loc
 	return operation.secretState == "ACTIVE" && operation.targetRevision == operation.expectedCurrentRevision
 }
 
+// materializationMatchesOperation binds non-nil materialization to the configured namespace, fixed data key, expected digest and deterministic versioned name. Kubernetes UID/resourceVersion validation is handled by the materialization/descriptor checks, not inferred here.
+// materializationMatchesOperation привязывает непустую материализацию к настроенному namespace, фиксированному ключу, ожидаемому digest и детерминированному имени версии. Проверка UID/resourceVersion Kubernetes относится к проверкам материализации/дескриптора и здесь не подразумевается.
 func (repository *Repository) materializationMatchesOperation(operation lockedRuntimeSecretOperation, materialization *entity.RuntimeSecretMaterialization) bool {
 	if materialization == nil || operation.expectedContentSHA256 == "" || materialization.Namespace != repository.runtimeSecretNamespace ||
 		materialization.Namespace != operation.namespace || materialization.SecretKey != runtimeSecretKey ||
@@ -1046,6 +1123,8 @@ func (repository *Repository) materializationMatchesOperation(operation lockedRu
 	return err == nil && materialization.SecretName == name
 }
 
+// runtimeSecret projects only the joined secret metadata from a locked operation into its public entity; display hints, revision descriptor and action hints are added by the appropriate completion/read path.
+// runtimeSecret переносит лишь связанные метаданные секрета заблокированной операции в публичную сущность; display hints, дескриптор ревизии и действия добавляет соответствующий путь завершения/чтения.
 func (operation lockedRuntimeSecretOperation) runtimeSecret() entity.RuntimeSecret {
 	return entity.RuntimeSecret{
 		ScopeKind: operation.scopeKind, OrganizationRef: operation.organizationRef,
@@ -1056,6 +1135,8 @@ func (operation lockedRuntimeSecretOperation) runtimeSecret() entity.RuntimeSecr
 	}
 }
 
+// scanRuntimeSecret decodes metadata and the optional revision descriptor, omits empty display hints and distinguishes absence from scan failure. It returns no plaintext value and performs no access decision.
+// scanRuntimeSecret читает метаданные и необязательный дескриптор ревизии, пропускает пустые display hints и различает отсутствие и ошибку чтения. Открытое значение не возвращает и решений о доступе не принимает.
 func scanRuntimeSecret(scanner rowScanner) (entity.RuntimeSecret, error) {
 	var item entity.RuntimeSecret
 	var prefix, suffix string
@@ -1078,6 +1159,8 @@ func scanRuntimeSecret(scanner rowScanner) (entity.RuntimeSecret, error) {
 	return item, nil
 }
 
+// validRuntimeSecretPrepare checks kind-specific field combinations, bounded metadata, value type and expected content digest shape. This is syntactic input validation; scope ownership and operation state are checked separately.
+// validRuntimeSecretPrepare проверяет сочетания полей по виду, ограничения метаданных, тип значения и форму ожидаемого digest. Это синтаксическая проверка входа; владение областью и состояние операции проверяются отдельно.
 func validRuntimeSecretPrepare(input platformrepo.RuntimeSecretPrepareInput) bool {
 	switch input.Kind {
 	case "CREATE":
@@ -1093,10 +1176,14 @@ func validRuntimeSecretPrepare(input platformrepo.RuntimeSecretPrepareInput) boo
 	}
 }
 
+// validRuntimeSecretValueType accepts only the three supported metadata value types STRING, BINARY and JSON; it does not inspect or parse a secret value.
+// validRuntimeSecretValueType принимает лишь поддержанные типы метаданных STRING, BINARY и JSON; значение секрета не просматривает и не разбирает.
 func validRuntimeSecretValueType(value string) bool {
 	return value == "STRING" || value == "BINARY" || value == "JSON"
 }
 
+// validRuntimeSecretMaterialization checks required names/key, bounded UID/resourceVersion, canonical digest and optional short hints. Expected operation ownership, namespace/name equality and actual Kubernetes readback are separate checks.
+// validRuntimeSecretMaterialization проверяет обязательные имена/ключ, ограничения UID/resourceVersion, канонический digest и необязательные короткие подсказки. Владение операцией, равенство namespace/name и фактическое чтение Kubernetes проверяются отдельно.
 func validRuntimeSecretMaterialization(value *entity.RuntimeSecretMaterialization) bool {
 	if value == nil || value.Namespace == "" || value.SecretName == "" || value.SecretKey != runtimeSecretKey ||
 		len(value.SecretUID) < 1 || len(value.SecretUID) > 128 || len(value.SecretResourceVersion) < 1 || len(value.SecretResourceVersion) > 128 ||
@@ -1109,6 +1196,8 @@ func validRuntimeSecretMaterialization(value *entity.RuntimeSecretMaterializatio
 	return true
 }
 
+// validRuntimeSecretClaimant allows a nonempty bounded printable-ASCII claimant without whitespace/control characters; shape validation is not a workload identity proof.
+// validRuntimeSecretClaimant разрешает непустой ограниченный claimant из печатного ASCII без пробелов/управляющих символов; проверка формы не доказывает identity workload.
 func validRuntimeSecretClaimant(value string) bool {
 	if len(value) < 1 || len(value) > 128 || strings.TrimSpace(value) != value {
 		return false
@@ -1121,10 +1210,14 @@ func validRuntimeSecretClaimant(value string) bool {
 	return true
 }
 
+// validRuntimeSecretWorkPrincipal matches the verified caller workload and exact operation permission required by the broker command; organization scope is resolved separately.
+// validRuntimeSecretWorkPrincipal сверяет проверенный workload вызывающего и точное полномочие команды брокера; область организации разрешается отдельно.
 func validRuntimeSecretWorkPrincipal(principal value.Principal, permission string) bool {
 	return principal.CallerWorkload == "secret-broker" && principal.Permission == permission
 }
 
+// validRuntimeSecretFailureCode restricts broker-submitted failure reasons to the supported closed set; internal expiry failures are assigned by owner logic rather than accepted from this input.
+// validRuntimeSecretFailureCode ограничивает переданные брокером причины закрытым набором; внутренние ошибки истечения назначает логика владельца, а не этот вход.
 func validRuntimeSecretFailureCode(value string) bool {
 	switch value {
 	case "KUBERNETES_UNAVAILABLE", "MATERIALIZATION_CONFLICT", "MATERIALIZATION_INVALID", "STALE_SECRET_VERSION", "RECONCILIATION_FAILED":
@@ -1134,6 +1227,8 @@ func validRuntimeSecretFailureCode(value string) bool {
 	}
 }
 
+// boundedRuntimeSecretRecoveryPage rejects negative sizes, supplies the default for zero and caps oversized positive requests at the recovery maximum.
+// boundedRuntimeSecretRecoveryPage отклоняет отрицательный размер, подставляет значение по умолчанию для нуля и ограничивает слишком большой положительный запрос максимумом восстановления.
 func boundedRuntimeSecretRecoveryPage(size int32) (int32, error) {
 	if size < 0 {
 		return 0, errs.ErrInvalid
@@ -1147,11 +1242,15 @@ func boundedRuntimeSecretRecoveryPage(size int32) (int32, error) {
 	return size, nil
 }
 
+// encodeRuntimeSecretRecoveryCursor encodes version, UTC microsecond deadline and operation ref as a URL-safe keyset position without including credentials or claiming authorization.
+// encodeRuntimeSecretRecoveryCursor кодирует версию, срок UTC в микросекундах и ссылку операции как URL-safe позицию keyset без учётных данных и без назначения полномочий.
 func encodeRuntimeSecretRecoveryCursor(deadline time.Time, operationRef string) string {
 	payload := fmt.Sprintf("%s\n%d\n%s", runtimeSecretRecoveryCursorVersion, deadline.UTC().UnixMicro(), operationRef)
 	return base64.RawURLEncoding.EncodeToString([]byte(payload))
 }
 
+// decodeRuntimeSecretRecoveryCursor accepts an empty initial position or validates a bounded versioned deadline/ref token with a positive timestamp. It reconstructs UTC position only; broker/organization eligibility is enforced by the query path.
+// decodeRuntimeSecretRecoveryCursor принимает пустую начальную позицию либо проверяет ограниченный версионированный deadline/ref с положительным временем. Восстанавливает лишь позицию UTC; доступ брокера/организации проверяет путь запроса.
 func decodeRuntimeSecretRecoveryCursor(token string) (*time.Time, string, error) {
 	if token == "" {
 		return nil, "", nil
@@ -1175,6 +1274,8 @@ func decodeRuntimeSecretRecoveryCursor(token string) (*time.Time, string, error)
 	return &deadline, parts[2], nil
 }
 
+// validRuntimeSecretSHA256 requires exactly 64 lowercase hexadecimal characters, rejecting alternate encodings before materialization comparison.
+// validRuntimeSecretSHA256 требует ровно 64 строчных шестнадцатеричных символа, отклоняя другие кодирования до сравнения материализации.
 func validRuntimeSecretSHA256(value string) bool {
 	if len(value) != sha256.Size*2 {
 		return false
@@ -1187,18 +1288,24 @@ func validRuntimeSecretSHA256(value string) bool {
 	return true
 }
 
+// runtimeSecretDigestsEqual decodes both hexadecimal digests, requires SHA-256 byte lengths and uses constant-time comparison for the equal-length decoded values.
+// runtimeSecretDigestsEqual декодирует оба шестнадцатеричных digest, требует длину SHA-256 и сравнивает декодированные значения одинаковой длины за постоянное время.
 func runtimeSecretDigestsEqual(left, right string) bool {
 	leftBytes, leftErr := hex.DecodeString(left)
 	rightBytes, rightErr := hex.DecodeString(right)
 	return leftErr == nil && rightErr == nil && len(leftBytes) == sha256.Size && len(rightBytes) == sha256.Size && subtle.ConstantTimeCompare(leftBytes, rightBytes) == 1
 }
 
+// runtimeSecretMaterializationMatchesDescriptor compares the full namespace/name/key/UID/resourceVersion tuple and content digest with one stored descriptor, without performing a Kubernetes fetch or owner access check.
+// runtimeSecretMaterializationMatchesDescriptor сравнивает полную комбинацию namespace/name/key/UID/resourceVersion и digest содержимого с сохранённым дескриптором без запроса Kubernetes и проверки доступа владельца.
 func runtimeSecretMaterializationMatchesDescriptor(materialization entity.RuntimeSecretMaterialization, descriptor entity.RuntimeSecretRevisionDescriptor) bool {
 	return materialization.Namespace == descriptor.Namespace && materialization.SecretName == descriptor.SecretName &&
 		materialization.SecretKey == descriptor.SecretKey && materialization.SecretUID == descriptor.SecretUID &&
 		materialization.SecretResourceVersion == descriptor.SecretResourceVersion && runtimeSecretDigestsEqual(materialization.ContentSHA256, descriptor.ContentSHA256)
 }
 
+// decodeRuntimeSecretSnapshot decodes a nonempty terminal metadata receipt and requires its ref, namespace and valid organization/project scope; this shape check does not replace the locked operation/claim replay checks.
+// decodeRuntimeSecretSnapshot разбирает непустую итоговую квитанцию метаданных и требует ref, namespace и корректную область организации/проекта; проверка формы не заменяет проверку заблокированной операции/поколения при повторе.
 func decodeRuntimeSecretSnapshot(raw []byte) (entity.RuntimeSecret, error) {
 	var result entity.RuntimeSecret
 	if len(raw) == 0 || json.Unmarshal(raw, &result) != nil || result.Ref == "" || result.Namespace == "" || runtimesecret.ValidateScope(runtimesecret.ScopeKind(result.ScopeKind), result.OrganizationRef, result.ProjectRef) != nil {
@@ -1207,6 +1314,8 @@ func decodeRuntimeSecretSnapshot(raw []byte) (entity.RuntimeSecret, error) {
 	return result, nil
 }
 
+// newRuntimeSecretGrant generates 32 cryptographically random bytes, returns the URL-safe grant once alongside its SHA-256 digest and maps entropy failure to Unavailable. Only the digest is intended for persistent operation lookup.
+// newRuntimeSecretGrant генерирует 32 криптографически случайных байта, возвращает URL-safe grant с digest SHA-256 и заменяет отказ энтропии на Unavailable. Для постоянного поиска операции предназначен лишь digest.
 func newRuntimeSecretGrant() (string, string, error) {
 	buffer := make([]byte, 32)
 	if _, err := rand.Read(buffer); err != nil {
@@ -1217,6 +1326,8 @@ func newRuntimeSecretGrant() (string, string, error) {
 	return grant, hex.EncodeToString(digest[:]), nil
 }
 
+// runtimeSecretAuditSummary maps supported operation kinds to fixed localization keys; unknown kinds produce an empty key and must already have been rejected by the command path.
+// runtimeSecretAuditSummary сопоставляет поддержанные виды операций фиксированным ключам локализации; неизвестный вид даёт пустой ключ и должен быть ранее отклонён командой.
 func runtimeSecretAuditSummary(kind string) string {
 	return map[string]string{
 		"CREATE": "i18n:RUNTIME_SECRET_CREATED", "ROTATE": "i18n:RUNTIME_SECRET_ROTATED",

@@ -8,21 +8,55 @@ import (
 )
 
 const (
-	completionRejectionLog             = "runtime completion rejected"
-	completionStageKey                 = "completion_stage"
-	completionReasonKey                = "completion_reason"
-	completionCodeKey                  = "grpc_code"
-	completionPayloadStage             = "PAYLOAD"
-	completionOwnerRPCStage            = "OWNER_RPC"
-	completionDecodeReason             = "DECODE"
-	completionValidateReason           = "VALIDATE"
-	completionProvenanceReason         = "PROVENANCE"
+	// completionRejectionLog identifies rejected completion diagnostics, not a
+	// committed terminal transition or a successful cleanup.
+	// completionRejectionLog обозначает диагностику отвергнутого завершения,
+	// а не подтверждённый terminal-переход или успешную очистку.
+	completionRejectionLog = "runtime completion rejected"
+	// completionStageKey names the bounded payload-versus-owner-RPC log dimension.
+	// completionStageKey именует закрытый признак стадии payload либо owner RPC в логе.
+	completionStageKey = "completion_stage"
+	// completionReasonKey names a closed rejection reason, never raw error details.
+	// completionReasonKey именует закрытую причину отказа, не сырые подробности ошибки.
+	completionReasonKey = "completion_reason"
+	// completionCodeKey names the normalized canonical gRPC rejection code.
+	// completionCodeKey именует нормализованный канонический gRPC-код отказа.
+	completionCodeKey = "grpc_code"
+	// completionPayloadStage classifies local decoding, validation or binding
+	// rejection and forces InvalidArgument regardless of a supplied gRPC code.
+	// completionPayloadStage обозначает локальный отказ декодирования, проверки
+	// или привязки и задаёт InvalidArgument независимо от переданного gRPC-кода.
+	completionPayloadStage = "PAYLOAD"
+	// completionOwnerRPCStage classifies a rejecting owner RPC without asserting
+	// that its remote state changed or exposing remote error text.
+	// completionOwnerRPCStage обозначает отказ owner RPC, не утверждая изменение
+	// удалённого состояния и не раскрывая текст удалённой ошибки.
+	completionOwnerRPCStage = "OWNER_RPC"
+	// completionDecodeReason identifies a payload rejected by the decoder.
+	// completionDecodeReason обозначает payload, отвергнутый декодером.
+	completionDecodeReason = "DECODE"
+	// completionValidateReason identifies a decoded payload rejected semantically.
+	// completionValidateReason обозначает смысловой отказ для декодированного payload.
+	completionValidateReason = "VALIDATE"
+	// completionProvenanceReason identifies a mismatch with the trusted execution.
+	// completionProvenanceReason обозначает несовпадение с доверенным выполнением.
+	completionProvenanceReason = "PROVENANCE"
+	// completionProviderDiagnosticReason identifies a rejected provider diagnostic
+	// binding, separately from the provider's reported failure itself.
+	// completionProviderDiagnosticReason обозначает отказ привязки диагностики
+	// провайдера, отдельно от самой сообщённой ошибки провайдера.
 	completionProviderDiagnosticReason = "PROVIDER_DIAGNOSTIC"
-	completionRPCRejectedReason        = "RPC_REJECTED"
+	// completionRPCRejectedReason is the only reason accepted for the owner-RPC stage.
+	// completionRPCRejectedReason является единственной причиной стадии owner RPC.
+	completionRPCRejectedReason = "RPC_REJECTED"
 )
 
-// Tuple берётся только после authorize из server-owned workload mapping.
-// Ни payload, ни текст/details удалённой ошибки не передаются в logger.
+// logCompletionRejection emits only allowed stage/reason combinations, normalized
+// gRPC codes and execution pins already resolved by authorization. It never logs
+// the payload or remote error text and performs no completion or cleanup itself.
+// logCompletionRejection пишет только допустимые пары стадии и причины,
+// нормализованные gRPC-коды и привязки, уже полученные при авторизации. Payload
+// и удалённая ошибка не логируются; завершение и очистка здесь не выполняются.
 func (server *Server) logCompletionRejection(ctx context.Context, input runtimecontract.RunnerInput, stage, reason string, code codes.Code) {
 	if server.logger == nil {
 		return

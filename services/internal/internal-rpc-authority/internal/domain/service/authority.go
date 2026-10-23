@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -16,24 +15,44 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types/value"
 )
 
 const (
-	contextKeyPurpose              = "AUTHORIZATION_CONTEXT"
-	proofKeyPurpose                = "AUTHORITY_PROOF"
-	keyStatusCurrent               = "CURRENT"
-	keyStatusPrevious              = "PREVIOUS"
-	maxProofTTL                    = 15 * time.Second
+	// contextKeyPurpose restricts context-verification records to authorization-context signing use, distinct from proof keys or possession of a public key alone.
+	// contextKeyPurpose ограничивает записи проверки контекста назначением подписи authorization context отдельно от proof keys или одного наличия публичного ключа.
+	contextKeyPurpose = "AUTHORIZATION_CONTEXT"
+	// proofKeyPurpose marks the trusted upstream authority-proof signer purpose required before issuing a fresh context; it does not authorize an operation independently of its binding.
+	// proofKeyPurpose обозначает назначение доверенного upstream-подписанта authority proof до выдачи свежего контекста; операция без своей привязки не разрешается.
+	proofKeyPurpose = "AUTHORITY_PROOF"
+	// keyStatusCurrent is the active signer status required for issuing from a proof and for the policy signer; verification may separately allow previous context keys.
+	// keyStatusCurrent — активный статус подписанта для выдачи по proof и подписанта политики; проверка контекста отдельно может допускать предыдущие ключи.
+	keyStatusCurrent = "CURRENT"
+	// keyStatusPrevious permits explicitly retained verification keys on the context-read path, not new issuance from a previous proof signer.
+	// keyStatusPrevious допускает явно сохранённые ключи проверки на пути чтения контекста, но не новую выдачу от предыдущего подписанта proof.
+	keyStatusPrevious = "PREVIOUS"
+	// maxProofTTL bounds upstream proof claims to fifteen seconds during issuance time validation; authorization-context lifetime is governed separately by the operation binding.
+	// maxProofTTL ограничивает claims upstream proof пятнадцатью секундами при проверке времени выдачи; срок authorization context отдельно задаётся привязкой операции.
+	maxProofTTL = 15 * time.Second
+	// authorizationMetadataLKGWindow caps an accepted database-observed metadata lease remainder at thirty seconds. It does not permit offline issuance when the authoritative freshness read fails.
+	// authorizationMetadataLKGWindow ограничивает принимаемый остаток наблюдённой БД аренды метаданных тридцатью секундами. При отказе авторитетного чтения свежести автономная выдача не разрешается.
 	authorizationMetadataLKGWindow = 30 * time.Second
 )
 
 var (
+	// operationPattern accepts the lowercase dotted/hyphenated operation grammar used in policy and continuation lineage; matching text is not registration or permission.
+	// operationPattern допускает строчную грамматику operation с точками и дефисами для политики и происхождения continuation; совпадение текста не означает регистрацию и разрешение.
 	operationPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$`)
-	digestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
-	uuidPattern      = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	// digestPattern accepts exactly sixty-four lowercase hexadecimal characters for SHA-256-shaped bindings without computing or authenticating the referenced digest.
+	// digestPattern допускает ровно шестьдесят четыре строчных hex-символа привязки вида SHA-256 без вычисления или аутентификации указанного дайджеста.
+	digestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	// uuidPattern accepts lowercase RFC-variant UUID-shaped identifiers with version digits one through eight; resource existence and ownership are checked elsewhere.
+	// uuidPattern допускает строчные UUID-подобные идентификаторы с вариантом RFC и цифрой версии от одного до восьми; существование и владение ресурсом проверяются отдельно.
+	uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
-// Authority выпускает и проверяет контекст авторизации по снимку политики.
+// Authority holds one policy/key snapshot and durable-store port for context issuance, continuation and verification. Its mutex protects local activation/lease bookkeeping, not durable replay authority or the store's transaction lifecycle.
+// Authority хранит снимок политики и ключей и порт устойчивого хранилища для выдачи, continuation и проверки контекста. Mutex защищает локальный учёт активации и аренды, а не устойчивые полномочия replay или жизненный цикл транзакций store.
 type Authority struct {
 	policy               model.PolicySnapshot
 	bindings             map[string]model.OperationBinding
@@ -48,14 +67,16 @@ type Authority struct {
 	metadataReceiptID    string
 }
 
-// KeyMaterial объединяет ключ подписи и доверенные ключи проверки.
+// KeyMaterial supplies an optional private context signer and purpose-scoped verification/proof records. NewAuthority validates their policy relationship and stores public-only verification views.
+// KeyMaterial предоставляет необязательный закрытый подписант контекста и записи проверки и proof с назначениями. NewAuthority проверяет связь с политикой и сохраняет публичные представления проверяющих ключей.
 type KeyMaterial struct {
 	SigningKey       internalrpcauth.ES256Key
 	VerificationKeys map[string]VerificationKeyRecord
 	ProofKeys        map[string]VerificationKeyRecord
 }
 
-// VerificationKeyRecord связывает ключ с назначением и жизненным циклом.
+// VerificationKeyRecord binds one key to issuer, generation, lifecycle status, purpose, audiences and validity interval. The record is configuration evidence, not an independently authenticated request actor.
+// VerificationKeyRecord связывает ключ с издателем, поколением, статусом, назначением, аудиториями и сроком. Запись является материалом конфигурации, а не самостоятельно аутентифицированным actor запроса.
 type VerificationKeyRecord struct {
 	Key        internalrpcauth.ES256Key
 	Issuer     string
@@ -67,7 +88,8 @@ type VerificationKeyRecord struct {
 	NotAfter   time.Time
 }
 
-// NewAuthority создаёт authority только из согласованного снимка и ключей.
+// NewAuthority validates contract/ABI, DENY policy, bounded lifetimes, source/predecessor pins, current policy signer and distinct operation bindings. It requires proof keys when private signing is enabled and clones public verification/audience views; it does not activate the snapshot or query durable freshness.
+// NewAuthority проверяет контракт и ABI, политику DENY, ограниченные сроки, привязки источника и предшественника, текущего подписанта политики и уникальные привязки операций. При закрытой подписи требуются proof keys; копируются публичные представления проверки и аудиторий, но снимок не активируется и устойчивая свежесть не читается.
 func NewAuthority(
 	policy model.PolicySnapshot,
 	keys KeyMaterial,
@@ -150,7 +172,8 @@ func NewAuthority(
 	}, nil
 }
 
-// Issue выпускает контекст авторизации после проверки доказательства caller.
+// Issue requires fresh metadata, verifies a current purpose-bound proof and its request/caller/authority bindings, then reserves that proof before creating, signing and registering a fresh context. Later failure does not undo the proof reservation and returns no usable token; this path uses binding TTL rather than continuation's parent-expiry clamp.
+// Issue требует свежие метаданные, проверяет текущий proof с назначением и его привязки запроса, caller и authority, затем резервирует proof до создания, подписи и регистрации свежего контекста. Поздний отказ не отменяет reservation и не выдаёт пригодный токен; используется TTL привязки, а не ограничение сроком родителя continuation.
 func (authority *Authority) Issue(
 	ctx context.Context,
 	operationID string,
@@ -355,7 +378,8 @@ func (authority *Authority) Issue(
 	return compact, claims, nil
 }
 
-// IssueContinuation выпускает child context только из принятого parent JWS.
+// IssueContinuation verifies a configured parent JWS, inherits its root authority and credential authentication, bounds expiry by metadata and parent, and derives the child JTI from parent/operation/request. It signs, requires durable accepted-parent/child reservation and registers the exact parent digest before returning; any failure returns no token without a new identity retry.
+// IssueContinuation проверяет настроенный parent JWS, наследует корневые полномочия и credential authentication, ограничивает срок метаданными и родителем и выводит child JTI из parent, operation и request. После подписи требуются устойчивые accepted-parent и child reservation и регистрация точного дайджеста родителя; при отказе токен не выдаётся и новая идентичность не создаётся.
 func (authority *Authority) IssueContinuation(
 	ctx context.Context,
 	operationID, parentCompact, requestID, correlationID, requestDigest string,
@@ -429,6 +453,8 @@ func (authority *Authority) IssueContinuation(
 	return compact, claims, nil
 }
 
+// decodeContinuationParent verifies canonical context JWS, configured key/purpose/status/audience, claim lifetime and exact operation/policy/provenance bindings, returning claims plus compact-byte digest. It does not consume the parent replay reservation; the continuation store path proves prior acceptance.
+// decodeContinuationParent проверяет канонический context JWS, настроенные ключ, назначение, статус и аудиторию, время claims и точные привязки операции, политики и происхождения, возвращая claims и дайджест compact-байтов. Replay reservation родителя не потребляется; прежнее принятие доказывает путь continuation store.
 func (authority *Authority) decodeContinuationParent(compact string, now time.Time) (model.AuthorizationClaims, model.OperationBinding, string, error) {
 	header, err := internalrpcauth.ParseProtectedHeader(compact)
 	if err != nil || header.Type != internalrpcauth.AuthorizationContextProtectedType {
@@ -466,6 +492,8 @@ func (authority *Authority) decodeContinuationParent(compact string, now time.Ti
 	return claims, binding, hex.EncodeToString(digest[:]), nil
 }
 
+// validCredentialAuthentication accepts absent optional metadata; present metadata requires HUMAN, nonfuture positive authentication time, bounded trimmed ACR and distinct nonempty bounded AMR entries. It validates supplied shape, not an OIDC session or MFA event.
+// validCredentialAuthentication допускает отсутствие необязательных метаданных; присутствующие требуют HUMAN, положительное не-будущее время входа, ограниченный ACR без внешних пробелов и уникальные непустые ограниченные AMR. Проверяется форма, а не OIDC-сессия или событие MFA.
 func validCredentialAuthentication(value *model.CredentialAuthentication, actorKind string, now time.Time, clockSkew time.Duration) bool {
 	if value == nil {
 		return true
@@ -487,7 +515,8 @@ func validCredentialAuthentication(value *model.CredentialAuthentication, actorK
 	return true
 }
 
-// Verify проверяет контекст, peer, RPC, разрешение и защиту от повтора.
+// Verify requires fresh durable metadata, validates canonical JWS/key/time and exact operation/request/policy/caller/target bindings, then atomically accepts the snapshot and reserves replay through the store. Observed peer is compared to claims.Caller despite the parameter name; no claims are returned on persistence or replay refusal.
+// Verify требует свежие устойчивые метаданные, проверяет канонический JWS, ключ, время и точные привязки операции, запроса, политики, caller и target, затем атомарно принимает снимок и резервирует replay через store. Наблюдённый peer сравнивается с claims.Caller вопреки имени параметра; при отказе хранения или replay claims не возвращаются.
 func (authority *Authority) Verify(
 	ctx context.Context,
 	compact string,
@@ -626,6 +655,8 @@ func (authority *Authority) Verify(
 	return claims, nil
 }
 
+// matchesObservedCaller compares the transport-observed SPIFFE identity exactly with the signed caller SPIFFE identity, never with the token's target workload.
+// matchesObservedCaller точно сравнивает наблюдённую транспортом SPIFFE-идентичность с подписанной SPIFFE-идентичностью caller, а не target workload токена.
 func matchesObservedCaller(
 	claims model.AuthorizationClaims,
 	observedSPIFFEID string,
@@ -633,6 +664,8 @@ func matchesObservedCaller(
 	return claims.Caller.SPIFFEID == observedSPIFFEID
 }
 
+// validateKeyRecords rejects mismatched IDs, absent public or present private material, wrong purpose/status, empty audience sets and invalid validity intervals. An empty registry passes this loop; constructor-level requirements decide whether one is allowed.
+// validateKeyRecords отклоняет несовпавшие ID, отсутствие публичного или наличие закрытого материала, неверные назначение и статус, пустые аудитории и неверные интервалы срока. Пустой реестр проходит цикл; допустимость пустоты определяет конструктор.
 func validateKeyRecords(
 	records map[string]VerificationKeyRecord,
 	expectedPurpose string,
@@ -658,6 +691,8 @@ func validateKeyRecords(
 	return nil
 }
 
+// publicKeyRecords copies the registry entries into a fresh map, strips private-key references via PublicOnly and clones each audience map. It does not regenerate keys or cryptographically authenticate the records.
+// publicKeyRecords копирует записи реестра в новую карту, убирает закрытые ссылки через PublicOnly и копирует каждую карту аудиторий. Ключи не генерируются заново и записи криптографически не аутентифицируются.
 func publicKeyRecords(
 	values map[string]VerificationKeyRecord,
 ) map[string]VerificationKeyRecord {
@@ -674,12 +709,15 @@ func publicKeyRecords(
 	return result
 }
 
+// keyAllowsAudience performs exact membership lookup in the record's audience set; it neither normalizes audience strings nor validates other key properties.
+// keyAllowsAudience точно проверяет членство аудитории в наборе записи без нормализации строки и проверки остальных свойств ключа.
 func keyAllowsAudience(record VerificationKeyRecord, audience string) bool {
 	_, ok := record.Audiences[audience]
 	return ok
 }
 
-// ActivateSnapshot активирует снимок только по независимому подтверждению.
+// ActivateSnapshot validates receipt shape and persists exact snapshot activation before updating the local receipt under a mutex and refreshing metadata. A failed refresh can follow a successful durable activation; it does not roll that state back.
+// ActivateSnapshot проверяет форму квитанции и сохраняет активацию точного снимка до обновления локальной квитанции под mutex и чтения свежести. Отказ refresh может следовать за успешной устойчивой активацией и не откатывает её.
 func (authority *Authority) ActivateSnapshot(
 	ctx context.Context,
 	attestationReceiptID string,
@@ -713,7 +751,8 @@ func (authority *Authority) ActivateSnapshot(
 	return err
 }
 
-// SnapshotState возвращает фактически обслуживаемое состояние снимка.
+// SnapshotState combines fixed policy/history pins with the mutex-protected local receipt ID in a new repository value. It does not query the database or assert that the returned receipt remains fresh.
+// SnapshotState объединяет фиксированные привязки политики и истории с локальным ID квитанции под mutex в новом repository value. БД не опрашивается и актуальная свежесть квитанции не утверждается.
 func (authority *Authority) SnapshotState() repository.SnapshotState {
 	authority.activationMu.RLock()
 	receiptID := authority.attestationReceiptID
@@ -731,6 +770,8 @@ func (authority *Authority) SnapshotState() repository.SnapshotState {
 	}
 }
 
+// repositoryHistory copies revision/digest pairs into a fresh ordered repository slice, preserving empty-as-nonnil and input order without validating a signed history chain.
+// repositoryHistory копирует пары ревизии и дайджеста в новый упорядоченный repository slice, сохраняя пустой результат как ненулевой срез и исходный порядок без проверки подписанной цепочки истории.
 func repositoryHistory(values []model.RevisionDigest) []repository.RevisionDigest {
 	result := make([]repository.RevisionDigest, 0, len(values))
 	for _, value := range values {
@@ -742,6 +783,8 @@ func repositoryHistory(values []model.RevisionDigest) []repository.RevisionDiges
 	return result
 }
 
+// validateAuthority checks the closed actor kinds, UUID-shaped identities/references, bounded positive provenance revisions/digests, allowed sources and exact project-presence policy. It checks signed provenance structure, not a fresh lookup of each domain-owned identity.
+// validateAuthority проверяет закрытые actor kinds, UUID-подобные идентичности и ссылки, ограниченные положительные ревизии и дайджесты происхождения, разрешённые источники и точную политику наличия проекта. Проверяется структура подписанного происхождения, а не свежее чтение каждой доменной идентичности.
 func validateAuthority(authority model.Authority, binding model.OperationBinding) error {
 	allowedActor := map[string]struct{}{
 		"HUMAN": {}, "AGENT": {}, "SERVICE": {}, "AUTOMATION": {},
@@ -781,6 +824,8 @@ func validateAuthority(authority model.Authority, binding model.OperationBinding
 	return nil
 }
 
+// validRequestProfile accepts only unary/stream modes and required/forbidden selectors for resource, version, attempt and idempotency. It does not bind a concrete request's values.
+// validRequestProfile допускает только режимы unary и stream и селекторы required либо forbidden для resource, version, attempt и idempotency. Значения конкретного запроса не привязываются.
 func validRequestProfile(value model.RequestProfile) bool {
 	if value.Mode != model.RequestBindingUnary && value.Mode != model.RequestBindingStream {
 		return false
@@ -793,6 +838,8 @@ func validRequestProfile(value model.RequestProfile) bool {
 	return true
 }
 
+// validRequestDigest requires an empty digest for streams and lowercase SHA-256-shaped text otherwise. Mode registration is a separate policy-profile check, not performed here.
+// validRequestDigest требует пустой дайджест для stream, иначе текст вида строчного SHA-256. Регистрация режима проверяется профилем политики отдельно, не здесь.
 func validRequestDigest(mode, digest string) bool {
 	if mode == model.RequestBindingStream {
 		return digest == ""
@@ -800,6 +847,8 @@ func validRequestDigest(mode, digest string) bool {
 	return digestPattern.MatchString(digest)
 }
 
+// validateAuthorizationTimes rejects already expired claims, uses binding TTL for fresh contexts and a positive shortened TTL capped by the binding for continuations, then applies common time/skew validation.
+// validateAuthorizationTimes отклоняет уже просроченные claims, использует TTL привязки для свежих контекстов и положительный сокращённый TTL не выше привязки для continuation, затем применяет общую проверку времени и расхождения часов.
 func validateAuthorizationTimes(
 	now time.Time,
 	claims model.AuthorizationClaims,
@@ -828,6 +877,8 @@ func validateAuthorizationTimes(
 	)
 }
 
+// validContinuation checks root/parent/request UUID shapes, configured parent operation/method, root provenance and bounded nonempty correlation. It does not by itself authenticate a parent JWS or prove a delegation edge.
+// validContinuation проверяет форму root, parent и request UUID, настроенные operation и method родителя, корневое происхождение и ограниченную непустую корреляцию. Самостоятельно parent JWS не аутентифицируется и ребро делегирования не доказывается.
 func validContinuation(value model.ContinuationLineage, binding model.OperationBinding) bool {
 	return binding.Continuation != nil && uuidPattern.MatchString(value.RootJTI) &&
 		uuidPattern.MatchString(value.ParentJTI) && uuidPattern.MatchString(value.RequestID) &&
@@ -837,15 +888,14 @@ func validContinuation(value model.ContinuationLineage, binding model.OperationB
 		digestPattern.MatchString(value.RootSourceDigestSHA256) && value.CorrelationID != "" && len(value.CorrelationID) <= 128
 }
 
+// deterministicContinuationJTI preserves SHA-256 of exactly parent, operation and request joined by NUL without a trailing separator, with version-five/RFC-variant formatting. It is stable correlation, not randomness, a grant or standard SHA-1 UUIDv5.
+// deterministicContinuationJTI сохраняет SHA-256 ровно parent, operation и request, соединённых NUL без завершающего разделителя, с форматом версии пять и варианта RFC. Это устойчивая корреляция, а не случайность, grant или стандартный SHA-1 UUIDv5.
 func deterministicContinuationJTI(parentJTI, operationID, requestID string) string {
-	digest := sha256.Sum256([]byte(parentJTI + "\x00" + operationID + "\x00" + requestID))
-	digest[6] = (digest[6] & 0x0f) | 0x50
-	digest[8] = (digest[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(digest[:16])
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:32]
+	return value.JoinedAuthorityUUID(parentJTI, operationID, requestID)
 }
 
-// Ready подтверждает готовность хранилища и активированного снимка.
+// Ready first requires fresh authoritative metadata, then checks the store's exact snapshot/readiness path. A previously cached lease is not a fallback for a failed freshness read.
+// Ready сначала требует свежие авторитетные метаданные, затем проверяет точный путь снимка и готовности store. Прежняя кешированная аренда не заменяет отказавшее чтение свежести.
 func (authority *Authority) Ready(ctx context.Context) error {
 	if _, err := authority.freshMetadataDeadline(ctx); err != nil {
 		return err
@@ -853,6 +903,8 @@ func (authority *Authority) Ready(ctx context.Context) error {
 	return authority.store.Ready(ctx, authority.SnapshotState())
 }
 
+// freshMetadataDeadline always reads durable freshness for an activated snapshot, bounds the DB remainder to thirty seconds and starts the local deadline before the network call. The same receipt cannot extend its cached deadline; local receipt/lease fields are updated under lock before a final expiry check, and store failure is not an offline success.
+// freshMetadataDeadline всегда читает устойчивую свежесть активированного снимка, ограничивает остаток БД тридцатью секундами и начинает локальный срок до сетевого вызова. Та же квитанция не продлевает кешированный срок; поля квитанции и аренды обновляются под блокировкой до финальной проверки срока, а отказ store не превращается в автономный успех.
 func (authority *Authority) freshMetadataDeadline(ctx context.Context) (time.Time, error) {
 	started := authority.now()
 	state := authority.SnapshotState()
@@ -888,6 +940,8 @@ func (authority *Authority) freshMetadataDeadline(ctx context.Context) (time.Tim
 	return deadline, nil
 }
 
+// authorizationExpiry chooses the earlier metadata deadline or now-plus-TTL; only the TTL-selected branch is UTC second-truncated, preserving the existing metadata-deadline precision.
+// authorizationExpiry выбирает более ранние срок метаданных или now плюс TTL; только ветвь TTL обрезается до секунды UTC, сохраняя прежнюю точность срока метаданных.
 func authorizationExpiry(now time.Time, ttl time.Duration, validUntil time.Time) time.Time {
 	expiresAt := now.Add(ttl)
 	if validUntil.Before(expiresAt) {
@@ -896,18 +950,18 @@ func authorizationExpiry(now time.Time, ttl time.Duration, validUntil time.Time)
 	return expiresAt.UTC().Truncate(time.Second)
 }
 
+// newUUID supplies a fresh server-generated authorization-context JTI using
+// the shared cryptographic version-four encoder. It does not register the
+// issued context, reserve replay state or grant authority on its own.
+// newUUID выдаёт свежий назначенный сервером JTI контекста авторизации через
+// общий криптографический кодировщик версии четыре. Самостоятельно контекст
+// не регистрируется, replay state не резервируется и полномочия не выдаются.
 func newUUID() (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return "", err
-	}
-	value[6] = (value[6] & 0x0f) | 0x40
-	value[8] = (value[8] & 0x3f) | 0x80
-	encoded := hex.EncodeToString(value[:])
-	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
-		encoded[16:20] + "-" + encoded[20:32], nil
+	return value.NewAuthorityUUID()
 }
 
+// registerIssuedContext hashes exact compact bytes, records caller/target/time and optional parent lineage against the current snapshot, and maps store failure to unavailable. It does not issue another JTI or return a token before registration succeeds.
+// registerIssuedContext хеширует точные compact-байты, записывает caller, target, время и необязательное происхождение родителя для текущего снимка и переводит отказ store в unavailable. Другой JTI не выдаётся и токен до успешной регистрации не возвращается.
 func (authority *Authority) registerIssuedContext(ctx context.Context, compact string, claims model.AuthorizationClaims, parentDigest string) error {
 	digest := sha256.Sum256([]byte(compact))
 	binding := repository.IssuedContextBinding{JTI: claims.JTI, Digest: hex.EncodeToString(digest[:]), CallerWorkloadID: claims.Caller.WorkloadID, TargetWorkloadID: claims.Target.WorkloadID, IssuedAt: time.Unix(claims.IssuedAt, 0), ExpiresAt: claims.ExpiryTime(), ParentDigest: parentDigest}

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -12,40 +10,21 @@ import (
 	"time"
 )
 
+// TestRegistryProxyTimeoutsBoundLargeBlobStreams pins this command's header, active-stream and idle budgets.
+// Shared constructor/mTLS/redirect mechanics are tested once in httpserver/streamproxy, not copied here.
+// TestRegistryProxyTimeoutsBoundLargeBlobStreams закрепляет бюджеты заголовков, активного потока и простоя этой команды.
+// Общие конструкторы, mTLS и перенаправления проверяются один раз в httpserver/streamproxy, без копии здесь.
 func TestRegistryProxyTimeoutsBoundLargeBlobStreams(t *testing.T) {
 	t.Parallel()
-	client := newRegistryProxyClient()
-	if client.Timeout != 15*time.Minute {
-		t.Fatalf("client timeout = %s, want 15m", client.Timeout)
-	}
-	if client.CheckRedirect == nil {
-		t.Fatal("redirect rejection is not configured")
-	}
-	if err := client.CheckRedirect(&http.Request{}, nil); err == nil {
-		t.Fatal("redirect was accepted")
-	}
-
-	pool := x509.NewCertPool()
-	server := newRegistryProxyServer(":0", http.NotFoundHandler(), pool)
-	if server.ReadHeaderTimeout != 5*time.Second ||
-		server.ReadTimeout != 15*time.Minute ||
-		server.WriteTimeout != 15*time.Minute ||
-		server.IdleTimeout != 30*time.Second {
-		t.Fatalf(
-			"server timeouts = header:%s read:%s write:%s idle:%s",
-			server.ReadHeaderTimeout,
-			server.ReadTimeout,
-			server.WriteTimeout,
-			server.IdleTimeout,
-		)
-	}
-	if server.TLSConfig == nil || server.TLSConfig.MinVersion != tls.VersionTLS13 ||
-		server.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert ||
-		server.TLSConfig.ClientCAs != pool {
-		t.Fatal("mTLS boundary changed while configuring stream timeouts")
+	if registryHeaderTimeout != 5*time.Second || registryStreamTimeout != 15*time.Minute || registryIdleTimeout != 30*time.Second {
+		t.Fatal("registry transfer budgets changed")
 	}
 }
 
+// TestAllowedRegistryWriteIsClosed accepts representative staging upload paths
+// and rejects foreign/nested repositories, tags, catalog and deletion.
+// TestAllowedRegistryWriteIsClosed допускает примеры staging-загрузок и запрещает
+// чужие/вложенные репозитории, теги, каталог и удаление.
 func TestAllowedRegistryWriteIsClosed(t *testing.T) {
 	t.Parallel()
 	for _, request := range []struct{ method, path string }{
@@ -73,6 +52,10 @@ func TestAllowedRegistryWriteIsClosed(t *testing.T) {
 	}
 }
 
+// TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository separates
+// admission writes from promotion reads and denies foreign identities or targets.
+// TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository разделяет
+// запись допуска и чтение продвижения, запрещая чужие идентичности и назначения.
 func TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository(t *testing.T) {
 	t.Parallel()
 	sequence := []struct{ method, path string }{
@@ -103,6 +86,10 @@ func TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository(t *testing.T
 	}
 }
 
+// TestEvidenceApplicationCredentialIsExact injects dummy files and requires the
+// canonical case-sensitive Basic value, rejecting missing or altered credentials.
+// TestEvidenceApplicationCredentialIsExact подставляет условные файлы и требует
+// канонический регистрозависимый Basic, отклоняя отсутствующие и изменённые реквизиты.
 func TestEvidenceApplicationCredentialIsExact(t *testing.T) {
 	t.Parallel()
 	reader := func(path string) ([]byte, error) {
@@ -138,6 +125,10 @@ func TestEvidenceApplicationCredentialIsExact(t *testing.T) {
 	}
 }
 
+// TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential checks
+// the 401 challenge versus 403 refusal and the same non-sensitive response body.
+// TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential проверяет
+// различие 401 с запросом реквизитов и 403, а также одинаковый безопасный текст ответа.
 func TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -176,6 +167,10 @@ func TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential(t *t
 	}
 }
 
+// TestNormalizeMethodHasBoundedCardinality maps arbitrary/newline input to OTHER
+// while preserving GET, preventing uncontrolled diagnostic method values.
+// TestNormalizeMethodHasBoundedCardinality заменяет произвольный ввод/перенос строки
+// на OTHER, сохраняя GET и не допуская неограниченных диагностических методов.
 func TestNormalizeMethodHasBoundedCardinality(t *testing.T) {
 	t.Parallel()
 	if normalizeMethod("UNBOUNDED\nINPUT") != "OTHER" {

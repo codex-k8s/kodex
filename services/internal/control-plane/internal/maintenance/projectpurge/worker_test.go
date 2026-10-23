@@ -21,6 +21,8 @@ import (
 	ktesting "k8s.io/client-go/testing"
 )
 
+// sourceFixture provides explicit synthetic inventory/ownership answers and records finalization for purge unit tests; it performs no SQL work or authorization.
+// sourceFixture задаёт явные синтетические ответы inventory/ownership и записывает финализацию в unit-тестах очистки; SQL и авторизацию не выполняет.
 type sourceFixture struct {
 	items                                []platform.ProjectPurgeExternalItem
 	shared, finalized                    bool
@@ -28,35 +30,66 @@ type sourceFixture struct {
 	subjectArtifactOwned, globalPVCOwned bool
 }
 
+// ClaimProjectPurgeRecovery returns no recovery work in ordinary purge tests so storage/PVC scenarios are isolated from the recovery queue.
+// ClaimProjectPurgeRecovery возвращает пустую очередь восстановления в обычных тестах очистки для изоляции object/PVC сценариев.
 func (*sourceFixture) ClaimProjectPurgeRecovery(context.Context, string, int32) ([]platform.ProjectPurgeRecoveryClaim, error) {
 	return nil, nil
 }
+
+// PinProjectPurgeRecovery is a no-op default fixture implementation; tests of durable recovery pinning override it in recoverySourceFixture.
+// PinProjectPurgeRecovery является пустой реализацией fixture по умолчанию; тесты устойчивого recovery pin переопределяют её в recoverySourceFixture.
 func (*sourceFixture) PinProjectPurgeRecovery(context.Context, string, platform.ProjectPurgeRecoveryClaim, objectstorage.Receipt) error {
 	return nil
 }
+
+// FinishProjectPurgeRecovery is the unused successful recovery receipt stub for ordinary purge tests, not evidence of an actual owner commit.
+// FinishProjectPurgeRecovery является неиспользуемой успешной заглушкой квитанции восстановления в обычных тестах, а не доказательством реального commit владельца.
 func (*sourceFixture) FinishProjectPurgeRecovery(context.Context, string, platform.ProjectPurgeRecoveryClaim, string) error {
 	return nil
 }
 
+// PromoteDueProjectPurges returns success without altering fixture candidates; these tests invoke the candidate processor directly.
+// PromoteDueProjectPurges возвращает успех без изменения кандидатов fixture; эти тесты вызывают обработчик кандидата напрямую.
 func (*sourceFixture) PromoteDueProjectPurges(context.Context, int32) error { return nil }
+
+// ListPendingProjectPurges returns an empty candidate page because each unit test supplies its exact candidate directly to process.
+// ListPendingProjectPurges возвращает пустую страницу кандидатов, поскольку каждый unit-тест передаёт точного кандидата прямо в process.
 func (*sourceFixture) ListPendingProjectPurges(context.Context, int32) ([]platform.ProjectPurgeCandidate, error) {
 	return nil, nil
 }
+
+// ProjectPurgeInventory returns the fixture-owned inventory slice unchanged so the test can assert exactly which objects/PVCs were processed.
+// ProjectPurgeInventory возвращает принадлежащий fixture срез inventory без изменения для проверки точного набора обработанных объектов/PVC.
 func (source *sourceFixture) ProjectPurgeInventory(context.Context, platform.ProjectPurgeCandidate) ([]platform.ProjectPurgeExternalItem, error) {
 	return source.items, nil
 }
+
+// ProjectPurgeObjectIsShared returns the configured shared-object answer without inferring it from key prefixes or object names.
+// ProjectPurgeObjectIsShared возвращает настроенный ответ об общем объекте без вывода из префикса ключа и имени объекта.
 func (source *sourceFixture) ProjectPurgeObjectIsShared(context.Context, platform.ProjectPurgeCandidate, string) (bool, error) {
 	return source.shared, nil
 }
+
+// ProjectPurgeArchiveIsOwned returns the explicit archive-lineage fixture answer, keeping archive-store ownership separate from project key syntax.
+// ProjectPurgeArchiveIsOwned возвращает явный ответ fixture об архивном lineage, отделяя владение архивным хранилищем от синтаксиса ключа проекта.
 func (source *sourceFixture) ProjectPurgeArchiveIsOwned(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (bool, error) {
 	return source.archiveOwned, nil
 }
+
+// ProjectPurgeSubjectArtifactIsOwned returns the explicit moved-subject-artifact lineage answer used to test the fail-closed ownership path.
+// ProjectPurgeSubjectArtifactIsOwned возвращает явный ответ о lineage перенесённого артефакта субъекта для проверки закрытого отказа по владению.
 func (source *sourceFixture) ProjectPurgeSubjectArtifactIsOwned(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (bool, error) {
 	return source.subjectArtifactOwned, nil
 }
+
+// ProjectPurgeGlobalPVCIsOwned returns the configured moved-system-session ownership answer independently of PVC metadata hashes.
+// ProjectPurgeGlobalPVCIsOwned возвращает настроенный ответ о владении перенесённой системной сессией независимо от хешей метаданных PVC.
 func (source *sourceFixture) ProjectPurgeGlobalPVCIsOwned(context.Context, platform.ProjectPurgeCandidate, string) (bool, error) {
 	return source.globalPVCOwned, nil
 }
+
+// FinalizeProjectPurge rejects a changed inventory length and records that finalization was reached; the fixture does not emulate the production transaction or compare every inventory field.
+// FinalizeProjectPurge отклоняет изменение длины inventory и записывает достижение финализации; fixture не имитирует production-транзакцию и не сравнивает каждое поле inventory.
 func (source *sourceFixture) FinalizeProjectPurge(_ context.Context, _ platform.ProjectPurgeCandidate, items []platform.ProjectPurgeExternalItem) error {
 	if len(items) != len(source.items) {
 		return errors.New("project purge inventory changed")
@@ -65,6 +98,8 @@ func (source *sourceFixture) FinalizeProjectPurge(_ context.Context, _ platform.
 	return nil
 }
 
+// TestProcessorDeletesExactExternalResources checks removal of the exact object version and marked session PVC before the fake owner finalizes the project.
+// TestProcessorDeletesExactExternalResources проверяет удаление точной версии объекта и помеченного PVC сессии до финализации проекта подставным владельцем.
 func TestProcessorDeletesExactExternalResources(t *testing.T) {
 	ctx := t.Context()
 	candidate := platform.ProjectPurgeCandidate{OrganizationRef: "org_fixture", ProjectRef: "prj_fixture"}
@@ -100,6 +135,8 @@ func TestProcessorDeletesExactExternalResources(t *testing.T) {
 	}
 }
 
+// TestProcessorRejectsSharedObjectAndForeignPVC proves that shared objects and differently owned PVCs survive and block finalization under synthetic object storage/Kubernetes clients.
+// TestProcessorRejectsSharedObjectAndForeignPVC доказывает сохранение общих объектов и чужих PVC с блокировкой финализации на синтетических клиентах хранилища/Kubernetes.
 func TestProcessorRejectsSharedObjectAndForeignPVC(t *testing.T) {
 	ctx := t.Context()
 	candidate := platform.ProjectPurgeCandidate{OrganizationRef: "org_fixture", ProjectRef: "prj_fixture"}
@@ -134,6 +171,8 @@ func TestProcessorRejectsSharedObjectAndForeignPVC(t *testing.T) {
 	}
 }
 
+// TestProcessorWaitsForPodEvenWhenPVCIsAbsent ensures a nonterminal Pod referencing an inventory PVC blocks cleanup even when the Kubernetes PVC itself is absent.
+// TestProcessorWaitsForPodEvenWhenPVCIsAbsent проверяет блокировку очистки неитоговым Pod, ссылающимся на PVC inventory, даже если сам PVC Kubernetes отсутствует.
 func TestProcessorWaitsForPodEvenWhenPVCIsAbsent(t *testing.T) {
 	ctx := t.Context()
 	candidate := platform.ProjectPurgeCandidate{OrganizationRef: "org_fixture", ProjectRef: "prj_fixture"}
@@ -150,6 +189,8 @@ func TestProcessorWaitsForPodEvenWhenPVCIsAbsent(t *testing.T) {
 	}
 }
 
+// TestArchiveCleanupUsesExactArchiveStoreAndServerLineage checks project/system archive keys with required server lineage and an actual archive store, verifies idempotent replay and proves the same key in the artifact store remains untouched.
+// TestArchiveCleanupUsesExactArchiveStoreAndServerLineage проверяет project/system архивные ключи с обязательным серверным lineage и архивным хранилищем, идемпотентный повтор и сохранение одноимённого ключа в хранилище артефактов.
 func TestArchiveCleanupUsesExactArchiveStoreAndServerLineage(t *testing.T) {
 	ctx := t.Context()
 	candidate := platform.ProjectPurgeCandidate{OrganizationRef: "org_fixture", ProjectRef: "prj_fixture"}
@@ -191,6 +232,8 @@ func TestArchiveCleanupUsesExactArchiveStoreAndServerLineage(t *testing.T) {
 	}
 }
 
+// TestPVCConsumerInventoryIsReadOnceBeforeAnyDeletion counts one Pod-list snapshot for multiple inventory PVCs and one exact PVC GET per absent item, guarding against per-session list fanout.
+// TestPVCConsumerInventoryIsReadOnceBeforeAnyDeletion считает один снимок списка Pods для нескольких PVC inventory и один точный GET PVC для отсутствующего элемента, защищая от отдельного обхода Pods для каждой сессии.
 func TestPVCConsumerInventoryIsReadOnceBeforeAnyDeletion(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	var items []platform.ProjectPurgeExternalItem
@@ -219,6 +262,8 @@ func TestPVCConsumerInventoryIsReadOnceBeforeAnyDeletion(t *testing.T) {
 	}
 }
 
+// TestPVCConsumerPaginationBlocksBeforeObjectDeletion puts an active PVC consumer on the second fake Pod page and proves the cursor is followed before an earlier inventory object can be deleted.
+// TestPVCConsumerPaginationBlocksBeforeObjectDeletion помещает активного потребителя PVC на вторую подставную страницу Pods и доказывает проход курсора до удаления предшествующего объекта inventory.
 func TestPVCConsumerPaginationBlocksBeforeObjectDeletion(t *testing.T) {
 	ctx := t.Context()
 	session := "ses_fixture_paged"
@@ -258,6 +303,8 @@ func TestPVCConsumerPaginationBlocksBeforeObjectDeletion(t *testing.T) {
 	}
 }
 
+// TestPVCReplacementIsNeverDeleted requires the original UID deletion precondition, replaces the PVC during Delete and proves cleanup fails without a second delete or finalization.
+// TestPVCReplacementIsNeverDeleted требует UID precondition исходного удаления, подменяет PVC во время Delete и доказывает отказ очистки без второго удаления и финализации.
 func TestPVCReplacementIsNeverDeleted(t *testing.T) {
 	session := "ses_fixture_replacement"
 	name, _ := runtimecontract.SessionPVCName(session)
@@ -288,6 +335,8 @@ func TestPVCReplacementIsNeverDeleted(t *testing.T) {
 	}
 }
 
+// TestFailureLogOmitsUnderlyingObjectAndProviderDetails checks that joined stage failures retain safe stage/project fields while synthetic object keys and credential-like cause text are absent from JSON logs.
+// TestFailureLogOmitsUnderlyingObjectAndProviderDetails проверяет сохранение безопасных stage/project полей объединённого отказа при отсутствии синтетических ключей объектов и похожего на credential текста причины в JSON-журнале.
 func TestFailureLogOmitsUnderlyingObjectAndProviderDetails(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
@@ -298,6 +347,8 @@ func TestFailureLogOmitsUnderlyingObjectAndProviderDetails(t *testing.T) {
 	}
 }
 
+// TestMovedSystemSessionPVCRequiresServerLineage tests both outcomes of the server lineage proof for a PVC carrying the empty-project hash and checks that only the confirmed moved session is removed.
+// TestMovedSystemSessionPVCRequiresServerLineage проверяет оба исхода серверного lineage для PVC с хешем пустого проекта и удаление лишь подтверждённой перенесённой сессии.
 func TestMovedSystemSessionPVCRequiresServerLineage(t *testing.T) {
 	for _, owned := range []bool{false, true} {
 		candidate := platform.ProjectPurgeCandidate{OrganizationRef: "org_fixture", ProjectRef: "prj_fixture"}
@@ -317,6 +368,8 @@ func TestMovedSystemSessionPVCRequiresServerLineage(t *testing.T) {
 	}
 }
 
+// TestMovedSubjectArtifactRequiresExactServerLineage rejects an unconfirmed subject-prefixed object without deleting it, then accepts the explicitly confirmed moved artifact and its replay.
+// TestMovedSubjectArtifactRequiresExactServerLineage отклоняет неподтверждённый объект с префиксом субъекта без удаления, затем принимает явно подтверждённый перенесённый артефакт и повтор очистки.
 func TestMovedSubjectArtifactRequiresExactServerLineage(t *testing.T) {
 	ctx := t.Context()
 	key := "organizations/org_fixture/subjects/act_fixture/artifacts/art_fixture/digest"

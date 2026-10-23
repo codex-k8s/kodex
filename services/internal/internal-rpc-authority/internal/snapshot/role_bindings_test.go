@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
+// TestSTTIssuerLoadsExactParentFromCanonicalPolicy checks the committed STT continuation edge and
+// required child bindings, rejects unrelated issuer operations and keeps verifier projection
+// target-scoped; no STT model or transport is invoked.
+// TestSTTIssuerLoadsExactParentFromCanonicalPolicy проверяет каноническое ребро продолжения STT и
+// обязательные дочерние операции, отсутствие посторонних операций issuer и ограничение verifier целевой
+// стороной; модель STT и транспорт не вызываются.
 func TestSTTIssuerLoadsExactParentFromCanonicalPolicy(t *testing.T) {
 	raw, err := os.ReadFile("../../../../../deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json")
 	if err != nil {
@@ -43,6 +49,10 @@ func TestSTTIssuerLoadsExactParentFromCanonicalPolicy(t *testing.T) {
 	}
 }
 
+// TestContinuationSelectorRejectsBrokenParentEdges rejects missing, mismatched, foreign or duplicated
+// parent bindings and accepts the exact synthetic edge, without issuing real contexts.
+// TestContinuationSelectorRejectsBrokenParentEdges отклоняет отсутствующего, несовпадающего, чужого или
+// повторного родителя и принимает точное синтетическое ребро без выпуска настоящих контекстов.
 func TestContinuationSelectorRejectsBrokenParentEdges(t *testing.T) {
 	parent := operationBinding{OperationID: "platform.parent", CallerWorkloadID: "gateway", TargetWorkloadID: "worker", TargetSPIFFEID: "spiffe://example/worker", FullMethod: "/example.Parent/Run"}
 	child := operationBinding{OperationID: "platform.child", CallerWorkloadID: "worker", CallerSPIFFEID: "spiffe://example/worker", TargetWorkloadID: "owner", FullMethod: "/example.Child/Run", Continuation: &continuationProfile{ParentOperationID: parent.OperationID, ParentFullMethod: parent.FullMethod}}

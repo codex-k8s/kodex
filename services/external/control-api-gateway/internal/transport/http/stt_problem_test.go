@@ -19,6 +19,8 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
+// TestSpeechRoutesDoNotReplayRateLimitedTranscription exercises project and organization handlers with synthetic multipart bytes and a fake rate-limited stream, proving one upstream call and the exact retry hint without real audio/provider use.
+// TestSpeechRoutesDoNotReplayRateLimitedTranscription проверяет обработчики проекта и организации с тестовыми multipart-байтами и ограниченным фиктивным stream, доказывая один внешний вызов и точную подсказку без настоящих аудио и провайдера.
 func TestSpeechRoutesDoNotReplayRateLimitedTranscription(t *testing.T) {
 	upstream, err := status.New(codes.ResourceExhausted, "private provider response").WithDetails(&errdetails.ErrorInfo{Domain: errorprofile.Domain, Reason: errorprofile.TranscriptionRateLimited}, &errdetails.RetryInfo{RetryDelay: &durationpb.Duration{Seconds: 17}})
 	if err != nil {
@@ -56,6 +58,8 @@ func TestSpeechRoutesDoNotReplayRateLimitedTranscription(t *testing.T) {
 	}
 }
 
+// TestSpeechRateLimitPreservesBoundedHintWithoutRetry tests direct and early-send error paths for trusted domain, absent/oversized/negative/fractional/duplicate hints and redaction; an unrelated domain retains the generic 429 policy.
+// TestSpeechRateLimitPreservesBoundedHintWithoutRetry проверяет прямой и ранний send-error пути: доверенный домен, отсутствие, чрезмерность, отрицательность, дробность и дубли подсказок, скрытие подробностей; чужой домен сохраняет общую политику 429.
 func TestSpeechRateLimitPreservesBoundedHintWithoutRetry(t *testing.T) {
 	for _, tc := range []struct {
 		name       string

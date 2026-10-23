@@ -13,6 +13,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// TestWritePromptProblemPreservesOnlyBoundedDiagnostics retains approved position/variable/code fields and localization references while excluding both private upstream and diagnostic messages.
+// TestWritePromptProblemPreservesOnlyBoundedDiagnostics сохраняет допустимые позицию, переменную, код и ссылку локализации, исключая закрытые тексты внешней ошибки и диагностики.
 func TestWritePromptProblemPreservesOnlyBoundedDiagnostics(t *testing.T) {
 	base := status.New(codes.InvalidArgument, "private upstream message")
 	upstream, err := base.WithDetails(&cp.PromptTemplateErrorDetail{Diagnostics: []*cp.PromptTemplateDiagnostic{{
@@ -42,6 +44,8 @@ func TestWritePromptProblemPreservesOnlyBoundedDiagnostics(t *testing.T) {
 	}
 }
 
+// TestWritePromptProblemRejectsMalformedTypedDetail rejects empty or oversized typed diagnostics as invalid upstream responses while leaving an unrelated detail on ordinary InvalidArgument mapping.
+// TestWritePromptProblemRejectsMalformedTypedDetail отклоняет пустую либо чрезмерную типизированную диагностику как некорректный внешний ответ, оставляя посторонний detail в обычном отображении InvalidArgument.
 func TestWritePromptProblemRejectsMalformedTypedDetail(t *testing.T) {
 	for name, detail := range map[string]*cp.PromptTemplateErrorDetail{
 		"empty":            {},

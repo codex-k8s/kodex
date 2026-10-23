@@ -17,6 +17,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// workflowCatalogInputClient wraps a catalog fake with injectable owner/audit errors
+// and activity recording to distinguish local-input recovery from remote failures.
+// workflowCatalogInputClient дополняет catalog fake injectable owner/audit errors
+// и activity recording для различения local-input recovery и remote failures.
 type workflowCatalogInputClient struct {
 	*workflowCatalogClient
 	activities []*cp.RecordRunToolCallRequest
@@ -24,6 +28,10 @@ type workflowCatalogInputClient struct {
 	failPhase  int64
 }
 
+// GetExecutionWorkflowCatalog records an injected owner failure as one call, otherwise
+// delegates unchanged context/request/options to the underlying catalog fake.
+// GetExecutionWorkflowCatalog записывает injected owner failure как один call, иначе
+// передаёт неизменные context/request/options исходному catalog fake.
 func (c *workflowCatalogInputClient) GetExecutionWorkflowCatalog(ctx context.Context, request *cp.GetExecutionWorkflowCatalogRequest, options ...grpc.CallOption) (*cp.GetExecutionWorkflowCatalogResponse, error) {
 	if c.ownerError != nil {
 		c.calls++
@@ -33,6 +41,10 @@ func (c *workflowCatalogInputClient) GetExecutionWorkflowCatalog(ctx context.Con
 	return c.workflowCatalogClient.GetExecutionWorkflowCatalog(ctx, request, options...)
 }
 
+// RecordRunToolCall records activity pointers and optionally fails the selected
+// phase with a private audit canary; no actual persistent event is written.
+// RecordRunToolCall записывает activity pointers и при настройке отклоняет выбранную
+// phase с private audit canary; persistent event фактически не записывается.
 func (c *workflowCatalogInputClient) RecordRunToolCall(_ context.Context, request *cp.RecordRunToolCallRequest, _ ...grpc.CallOption) (*cp.RecordRunToolCallResponse, error) {
 	c.activities = append(c.activities, request)
 	if request.Revision == c.failPhase {
@@ -41,6 +53,10 @@ func (c *workflowCatalogInputClient) RecordRunToolCall(_ context.Context, reques
 	return &cp.RecordRunToolCallResponse{Event: &cp.RunEvent{Ref: "evt_fixture01"}}, nil
 }
 
+// workflowCatalogInputFixture wraps a fresh publication fixture in the recovery fake
+// and returns exact publication pins, isolating mutable state for each scenario.
+// workflowCatalogInputFixture оборачивает новую publication fixture recovery fake
+// и возвращает exact publication pins с отдельным mutable state каждого сценария.
 func workflowCatalogInputFixture(t *testing.T) (*Server, runtimecontract.RunnerInput, *workflowCatalogInputClient, map[string]any) {
 	t.Helper()
 	server, input, owner, _, _ := publicationReadFixture(t)
@@ -49,6 +65,12 @@ func workflowCatalogInputFixture(t *testing.T) (*Server, runtimecontract.RunnerI
 	return server, input, client, map[string]any{"publication_read": publicationPins()}
 }
 
+// workflowCatalogInputCall drives local MCP, captures logs, checks textual/structured
+// error and retry fields agree and verifies private input/owner/audit/response canaries
+// are absent before returning structured content; it installs a per-call test logger.
+// workflowCatalogInputCall выполняет local MCP,собирает logs,проверяет согласие textual/
+// structured error/retry fields и отсутствие private input/owner/audit/response canaries
+// до возврата structured content; каждый call получает test logger.
 func workflowCatalogInputCall(t *testing.T, server *Server, input runtimecontract.RunnerInput, args map[string]any) map[string]any {
 	t.Helper()
 	var logs bytes.Buffer
@@ -88,6 +110,12 @@ func workflowCatalogInputCall(t *testing.T, server *Server, input runtimecontrac
 	return response.Result.Structured
 }
 
+// TestWorkflowCatalogInputRecoveryLocalShape checks thirteen malformed mode/pin/page
+// selectors never call the owner, retain one-correction guidance and produce existing
+// RUNNING/FAILED safe activity semantics without validated-mode metadata.
+// TestWorkflowCatalogInputRecoveryLocalShape проверяет тринадцать malformed mode/pin/page
+// selectors без owner call,с one-correction guidance и прежней RUNNING/FAILED safe
+// activity semantics без validated-mode metadata.
 func TestWorkflowCatalogInputRecoveryLocalShape(t *testing.T) {
 	for name, change := range map[string]func(map[string]any){
 		"unnested pins":                   func(a map[string]any) { delete(a, "publication_read"); a["workflow_ref"] = "wfl_workflow01" },
@@ -128,6 +156,12 @@ func TestWorkflowCatalogInputRecoveryLocalShape(t *testing.T) {
 	}
 }
 
+// TestWorkflowCatalogInputRecoveryOwnerFailuresClosed checks ten owner status codes
+// and corrupt/missing/mixed provenance responses cannot acquire corrective input guidance,
+// including a remote typed local marker or matching/joined error text.
+// TestWorkflowCatalogInputRecoveryOwnerFailuresClosed проверяет отсутствие corrective
+// input guidance у десяти owner status codes и corrupt/missing/provenance responses,
+// включая remote typed local marker и matching/joined error text.
 func TestWorkflowCatalogInputRecoveryOwnerFailuresClosed(t *testing.T) {
 	for _, code := range []codes.Code{codes.PermissionDenied, codes.Unauthenticated, codes.NotFound, codes.Aborted, codes.FailedPrecondition, codes.InvalidArgument, codes.Unavailable, codes.Unknown, codes.DataLoss, codes.DeadlineExceeded} {
 		t.Run(code.String(), func(t *testing.T) {
@@ -172,6 +206,10 @@ func TestWorkflowCatalogInputRecoveryOwnerFailuresClosed(t *testing.T) {
 	}
 }
 
+// TestWorkflowCatalogInputRecoveryRequiresAcceptedAudit checks failure of either
+// audit phase suppresses local corrective guidance even when the input itself is invalid.
+// TestWorkflowCatalogInputRecoveryRequiresAcceptedAudit проверяет запрет local corrective
+// guidance при отказе любой audit phase, даже если input сам неверен.
 func TestWorkflowCatalogInputRecoveryRequiresAcceptedAudit(t *testing.T) {
 	for _, phase := range []int64{1, 2} {
 		server, input, client, args := workflowCatalogInputFixture(t)
@@ -184,6 +222,12 @@ func TestWorkflowCatalogInputRecoveryRequiresAcceptedAudit(t *testing.T) {
 	}
 }
 
+// TestWorkflowCatalogInputRecoveryPreservesValidModes checks all three valid read
+// modes keep one owner query, two successful-path activity phases and exact safe mode
+// metadata through local dispatch; it does not establish a durable owner commit.
+// TestWorkflowCatalogInputRecoveryPreservesValidModes проверяет один owner query,две
+// successful-path activity phases и exact safe mode metadata трёх valid read modes
+// через local dispatch, не доказывая durable owner commit.
 func TestWorkflowCatalogInputRecoveryPreservesValidModes(t *testing.T) {
 	for _, mode := range []string{workflowModeDiscovery, workflowModePublication, workflowModeActiveRuns} {
 		t.Run(mode, func(t *testing.T) {
@@ -202,6 +246,10 @@ func TestWorkflowCatalogInputRecoveryPreservesValidModes(t *testing.T) {
 	}
 }
 
+// TestWorkflowCatalogInputRecoveryRejectsJoinedMarker checks joined local markers,
+// matching plain text and specialized read errors yield no corrective input guidance.
+// TestWorkflowCatalogInputRecoveryRejectsJoinedMarker проверяет отсутствие corrective
+// input guidance у joined local markers,matching plain text и specialized read errors.
 func TestWorkflowCatalogInputRecoveryRejectsJoinedMarker(t *testing.T) {
 	for _, err := range []error{
 		errors.Join(&workflowCatalogInputError{}, errors.New("PRIVATE_AUDIT_CANARY")),

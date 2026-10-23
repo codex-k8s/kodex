@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestEmailElevationSealedBindingAndKeyRotation checks exact receipt binding survives source mutation and previous-key decryption, rejects altered ciphertext and removes expired elevation on renewal. All credentials and receipts are synthetic.
+// TestEmailElevationSealedBindingAndKeyRotation проверяет сохранение точной receipt binding после source mutation и previous-key decryption, отклоняет изменённый ciphertext и снимает expired elevation при renewal. Все credentials и receipts синтетические.
 func TestEmailElevationSealedBindingAndKeyRotation(t *testing.T) {
 	first, second := filepath.Join(t.TempDir(), "first.hex"), filepath.Join(t.TempDir(), "second.hex")
 	writeKey(t, first, strings.Repeat("11", 32))
@@ -55,6 +57,8 @@ func TestEmailElevationSealedBindingAndKeyRotation(t *testing.T) {
 	}
 }
 
+// TestEmailElevationRejectsInvalidBindings covers malformed/oversized receipt refs, unsafe versions, digest syntax, mixed purposes and lifetime limits, then accepts the largest safe version. It exercises local validation, not a durable human decision or external mail effect.
+// TestEmailElevationRejectsInvalidBindings охватывает malformed и oversized receipt refs, unsafe versions, digest syntax, mixed purposes и lifetime limits, затем принимает наибольшую safe version. Проверяется local validation, а не durable human decision и внешний mail effect.
 func TestEmailElevationRejectsInvalidBindings(t *testing.T) {
 	key := filepath.Join(t.TempDir(), "key.hex")
 	writeKey(t, key, strings.Repeat("33", 32))

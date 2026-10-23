@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+// mailboxValue dereferences an optional DTO value or returns its type's zero value; slices and other reference-bearing values retain their backing storage. Absence handling is representation mapping, not validation or secret resolution.
+// mailboxValue разыменовывает необязательное DTO value либо возвращает zero value типа; срезы и другие ссылочные значения сохраняют общее хранилище. Это mapping отсутствия, не проверка и не разрешение секрета.
 func mailboxValue[T any](v *T) T {
 	if v != nil {
 		return *v
@@ -14,13 +16,22 @@ func mailboxValue[T any](v *T) T {
 	var zero T
 	return zero
 }
+
+// mailboxPointer returns a fresh pointer to a value copy for explicit public-field presence; any nested slices or pointers remain shared unless a caller copied them first.
+// mailboxPointer возвращает новый pointer на копию значения для явного присутствия публичного поля; вложенные slices и pointers остаются общими, если вызывающий код заранее их не скопировал.
 func mailboxPointer[T any](v T) *T { return &v }
 
+// mailboxEnum constrains public mailbox string enums to their generated validity predicate, keeping format conversion separate from owner policy and authorization.
+// mailboxEnum ограничивает публичные mailbox string enums их generated validity predicate, отделяя преобразование формата от owner policy и авторизации.
 type mailboxEnum interface {
 	~string
+	// Valid reports membership in the generated public enum's closed set; it does not authorize the represented operation or establish runtime readiness.
+	// Valid сообщает принадлежность закрытому набору generated public enum; представленную операцию не разрешает и runtime readiness не доказывает.
 	Valid() bool
 }
 
+// mailboxEnumInput maps absent optional enums to zero and present values only when both the supplied protobuf map and public validity predicate agree on a nonzero value. Unknown or explicitly unspecified values fail instead of becoming a default.
+// mailboxEnumInput преобразует отсутствие optional enum в zero, а заданное значение — только при согласии protobuf map и public validity predicate на ненулевое значение. Неизвестное и явно unspecified отклоняются, а не становятся default.
 func mailboxEnumInput[T mailboxEnum](v *T, values map[string]int32, prefix string) (int32, bool) {
 	if v == nil {
 		return 0, true
@@ -28,6 +39,9 @@ func mailboxEnumInput[T mailboxEnum](v *T, values map[string]int32, prefix strin
 	n, ok := values[prefix+string(*v)]
 	return n, ok && (*v).Valid() && n != 0
 }
+
+// mailboxEnumView maps protobuf zero to an absent public enum, otherwise looks up its name, removes the supplied prefix and checks public validity. The boolean must be honored even though a pointer is returned on an invalid mapped value.
+// mailboxEnumView преобразует protobuf zero в отсутствие public enum, иначе ищет имя, убирает заданный prefix и проверяет public validity. Boolean обязателен для обработки, даже если при неверном значении возвращён pointer.
 func mailboxEnumView[T mailboxEnum](v int32, names map[int32]string, prefix string) (*T, bool) {
 	if v == 0 {
 		return nil, true
@@ -37,6 +51,8 @@ func mailboxEnumView[T mailboxEnum](v int32, names map[int32]string, prefix stri
 	return &result, ok && result.Valid()
 }
 
+// mailboxContentInput requires exactly one of specification or YAML, caps YAML at 256 KiB, and maps structured content through its bounded converter. It does not parse YAML or approve mailbox settings; callers must honor the boolean before sending the possibly invalid structured result.
+// mailboxContentInput требует ровно одно из specification и YAML, ограничивает YAML 256 КиБ и преобразует структуру через bounded converter. YAML не разбирает и настройки не допускает; вызывающий обязан проверить boolean до отправки возможно неверного structured result.
 func mailboxContentInput(v generated.EmailMailboxDraftContent) (*cp.EmailMailboxDraftContent, bool) {
 	if (v.Specification == nil) == (v.Yaml == nil) {
 		return nil, false
@@ -51,6 +67,8 @@ func mailboxContentInput(v generated.EmailMailboxDraftContent) (*cp.EmailMailbox
 	return &cp.EmailMailboxDraftContent{Content: &cp.EmailMailboxDraftContent_Specification{Specification: spec}}, ok
 }
 
+// mailboxCredentialReferenceInput preserves absent references and maps only name/generation metadata with a nonnegative safe generation bound. It neither validates the name here nor reads or mounts any credential value.
+// mailboxCredentialReferenceInput сохраняет отсутствие reference и переносит только name/generation metadata с неотрицательным safe generation bound. Имя здесь не проверяет, credential value не читает и не монтирует.
 func mailboxCredentialReferenceInput(v *generated.EmailMailboxCredentialReference) (*cp.EmailMailboxCredentialReference, bool) {
 	if v == nil {
 		return nil, true
@@ -64,6 +82,8 @@ func mailboxCredentialReferenceInput(v *generated.EmailMailboxCredentialReferenc
 	return result, true
 }
 
+// mailboxCredentialReferenceView builds explicit public name/generation pointers from owner metadata after a safe-generation check; it exposes a reference, not a credential value or proof that the reference is currently resolvable.
+// mailboxCredentialReferenceView создаёт явные публичные name/generation pointers из owner metadata с safe-generation check; выдаёт reference, не credential value и не proof текущей разрешимости reference.
 func mailboxCredentialReferenceView(v *cp.EmailMailboxCredentialReference) (*generated.EmailMailboxCredentialReference, bool) {
 	if v == nil {
 		return nil, true
@@ -77,6 +97,8 @@ func mailboxCredentialReferenceView(v *cp.EmailMailboxCredentialReference) (*gen
 	return result, true
 }
 
+// mailboxLimitsInput copies optional mailbox limits and rejects negative or unsafe attachment/message byte limits. Other count, port-independent and timeout semantics remain with owner validation; this mapper does not enforce effective runtime quotas.
+// mailboxLimitsInput копирует optional mailbox limits и отклоняет отрицательные либо unsafe attachment/message byte limits. Семантика остальных counts и timeout остаётся owner validation; effective runtime quotas mapper не применяет.
 func mailboxLimitsInput(v *generated.EmailMailboxLimits) (*cp.EmailMailboxLimits, bool) {
 	if v == nil {
 		return nil, true
@@ -95,6 +117,8 @@ func mailboxLimitsInput(v *generated.EmailMailboxLimits) (*cp.EmailMailboxLimits
 	return result, true
 }
 
+// mailboxLimitsView projects each present owner's limits field as an explicit pointer while checking only attachment/message byte integer bounds locally. It does not infer defaults, validate all count ranges or prove runtime enforcement.
+// mailboxLimitsView проецирует каждое поле owner limits как явный pointer, локально сверяет только integer bounds attachment/message bytes. Defaults не выводит, все count ranges не проверяет и runtime enforcement не доказывает.
 func mailboxLimitsView(v *cp.EmailMailboxLimits) (*generated.EmailMailboxLimits, bool) {
 	if v == nil {
 		return nil, true
@@ -113,6 +137,8 @@ func mailboxLimitsView(v *cp.EmailMailboxLimits) (*generated.EmailMailboxLimits,
 	return result, true
 }
 
+// mailboxEndpointInput maps optional host/port/SNI metadata, closed TLS/auth enums and three credential references, failing on invalid enum/reference conversions. Network destination authorization, DNS, certificate checks and credential loading belong to the trusted owner/runtime path.
+// mailboxEndpointInput переносит optional host/port/SNI metadata, закрытые TLS/auth enums и три credential references, отклоняет неверные преобразования enum/reference. Network destination authorization, DNS, проверка сертификата и загрузка credentials принадлежат trusted owner/runtime path.
 func mailboxEndpointInput(v *generated.EmailMailboxEndpoint) (*cp.EmailMailboxEndpoint, bool) {
 	if v == nil {
 		return nil, true
@@ -149,6 +175,8 @@ func mailboxEndpointInput(v *generated.EmailMailboxEndpoint) (*cp.EmailMailboxEn
 	return result, true
 }
 
+// mailboxEndpointView converts an optional owner endpoint to explicit host/port/SNI fields, validated public TLS/auth enums and reference-only credentials. Conversion is not a network dial, endpoint allowlist or proof of a successful TLS handshake.
+// mailboxEndpointView преобразует optional owner endpoint в явные host/port/SNI, проверенные публичные TLS/auth enums и reference-only credentials. Преобразование не выполняет dial, не является endpoint allowlist и не доказывает TLS handshake.
 func mailboxEndpointView(v *cp.EmailMailboxEndpoint) (*generated.EmailMailboxEndpoint, bool) {
 	if v == nil {
 		return nil, true
@@ -185,6 +213,8 @@ func mailboxEndpointView(v *cp.EmailMailboxEndpoint) (*generated.EmailMailboxEnd
 	return result, true
 }
 
+// mailboxOperationPolicyInput maps optional operation/approval enums and at most 100 folder entries; the folder slice may remain shared with the input DTO. It describes requested policy, not a server-owned send approval or authorization decision.
+// mailboxOperationPolicyInput переносит optional operation/approval enums и не более 100 folders; срез folders может остаться общим с input DTO. Это описание requested policy, не server-owned send approval и не authorization decision.
 func mailboxOperationPolicyInput(v *generated.EmailMailboxOperationPolicy) (*cp.EmailMailboxOperationPolicy, bool) {
 	if v == nil {
 		return nil, true
@@ -207,6 +237,8 @@ func mailboxOperationPolicyInput(v *generated.EmailMailboxOperationPolicy) (*cp.
 	return result, true
 }
 
+// mailboxOperationPolicyView projects validated operation/approval enums with a fresh, explicitly allocated folder slice and the 100-entry bound. The public policy describes metadata and does not create approval authority.
+// mailboxOperationPolicyView проецирует проверенные operation/approval enums с новым явно выделенным срезом folders и ограничением 100 элементов. Публичная policy описывает metadata и не создаёт approval authority.
 func mailboxOperationPolicyView(v *cp.EmailMailboxOperationPolicy) (*generated.EmailMailboxOperationPolicy, bool) {
 	if v == nil {
 		return nil, true
@@ -229,6 +261,8 @@ func mailboxOperationPolicyView(v *cp.EmailMailboxOperationPolicy) (*generated.E
 	return result, true
 }
 
+// mailboxSpecificationInput maps optional settings, endpoints, limits and ordered operation policies, checking enum conversions, 100 folders, 1000 recipients, 21 policies and the 256-KiB marshaled size. Selected input slices remain shared; transport syntax checks are not full mailbox or permission validation.
+// mailboxSpecificationInput переносит optional settings, endpoints, limits и порядок operation policies, проверяет enum conversions, 100 folders, 1000 recipients, 21 policies и размер marshaled result 256 КиБ. Часть input slices остаётся общей; transport syntax checks не заменяют полную проверку ящика и полномочий.
 func mailboxSpecificationInput(v *generated.EmailMailboxSpecification) (*cp.EmailMailboxSpecification, bool) {
 	if v == nil {
 		return nil, true
@@ -287,6 +321,8 @@ func mailboxSpecificationInput(v *generated.EmailMailboxSpecification) (*cp.Emai
 	return result, true
 }
 
+// mailboxSpecificationView projects optional owner settings with explicit scalar pointers, copied folder/recipient lists and ordered policy views, preserving collection and 256-KiB JSON limits. It validates representability, not provider connectivity, delivery admission or a decision to send mail.
+// mailboxSpecificationView проецирует optional owner settings с явными scalar pointers, копиями folder/recipient lists и порядком policy views, сохраняя collection limits и JSON 256 КиБ. Проверяет представимость, не provider connectivity, delivery admission и решение отправить письмо.
 func mailboxSpecificationView(v *cp.EmailMailboxSpecification) (*generated.EmailMailboxSpecification, bool) {
 	if v == nil {
 		return nil, true

@@ -9,21 +9,18 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"strings"
 )
 
+// ListSkillBundles authenticates the exact list method, maps the optional shared resource-state filter and projects paged bundles; project and agent eligibility remain with the owner service.
+// ListSkillBundles проверяет вызов точного метода списка, преобразует необязательный общий фильтр состояния и проецирует страницы пакетов; доступность проекта и агента остаётся у сервиса-владельца.
 func (server *Server) ListSkillBundles(ctx context.Context, request *controlplanev1.ListSkillBundlesRequest) (*controlplanev1.ListSkillBundlesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListSkillBundles_FullMethodName)
 	if err != nil {
 		return nil, err
 	}
-	state := ""
-	if request.GetState() != controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_UNSPECIFIED {
-		name, ok := controlplanev1.ContextResourceState_name[int32(request.GetState())]
-		if !ok {
-			return nil, status.Error(codes.InvalidArgument, "invalid skill state")
-		}
-		state = strings.TrimPrefix(name, "CONTEXT_RESOURCE_STATE_")
+	state, ok := domainContextResourceState(request.GetState())
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "invalid skill state")
 	}
 	items, total, next, err := server.service.ListSkillBundles(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetAgentRef(), Query: request.GetQuery(), State: state, Page: page(request.GetPage())})
 	if err != nil {
@@ -40,6 +37,8 @@ func (server *Server) ListSkillBundles(ctx context.Context, request *controlplan
 	return response, nil
 }
 
+// ListSkillBundleRevisions authenticates the history query and projects paged revisions of one bundle, preserving caster errors rather than returning partial history.
+// ListSkillBundleRevisions проверяет вызов истории и проецирует страницы ревизий одного пакета, сохраняя ошибки преобразования вместо частичной выдачи истории.
 func (server *Server) ListSkillBundleRevisions(ctx context.Context, request *controlplanev1.ListSkillBundleRevisionsRequest) (*controlplanev1.ListSkillBundleRevisionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListSkillBundleRevisions_FullMethodName)
 	if err != nil {
@@ -60,6 +59,8 @@ func (server *Server) ListSkillBundleRevisions(ctx context.Context, request *con
 	return response, nil
 }
 
+// domainSkillSpecification copies requested skill metadata and each path/artifact revision into domain input without treating submitted file refs as admitted content.
+// domainSkillSpecification переносит метаданные навыка и каждую ссылку пути и версии артефакта в доменный ввод, не считая переданные ссылки допущенным содержимым.
 func domainSkillSpecification(input *controlplanev1.SkillBundleSpecification) entity.SkillBundleSpecification {
 	result := entity.SkillBundleSpecification{Name: input.GetName(), Description: input.GetDescription()}
 	for _, file := range input.GetFiles() {
@@ -68,6 +69,8 @@ func domainSkillSpecification(input *controlplanev1.SkillBundleSpecification) en
 	return result
 }
 
+// ValidateSkillBundleDraft sends exact bundle/revision/digest pins to the owner validation command and projects its result; the transport does not perform scanning itself.
+// ValidateSkillBundleDraft передаёт точные пакет, ревизию и дайджест команде проверки владельца и проецирует результат; транспорт самостоятельно не сканирует файлы.
 func (server *Server) ValidateSkillBundleDraft(ctx context.Context, request *controlplanev1.ValidateSkillBundleDraftRequest) (*controlplanev1.ValidateSkillBundleDraftResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ValidateSkillBundleDraft_FullMethodName, command.ValidateSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{BundleRef: request.GetBundleRef(), RevisionRef: request.GetRevisionRef(), ExpectedDigest: request.GetExpectedDigest()})
 	if err != nil {
@@ -80,6 +83,8 @@ func (server *Server) ValidateSkillBundleDraft(ctx context.Context, request *con
 	return &controlplanev1.ValidateSkillBundleDraftResponse{Bundle: bundle}, nil
 }
 
+// castSkillRevision preserves an absent revision, rejects unknown lifecycle or scan states and projects exact provenance, diagnostics and artifact file descriptors.
+// castSkillRevision сохраняет отсутствие ревизии, отклоняет неизвестные состояния жизненного цикла и сканирования и проецирует точные происхождение, диагностику и описатели файлов.
 func castSkillRevision(input *entity.SkillBundleRevision) (*controlplanev1.SkillBundleRevision, error) {
 	if input == nil {
 		return nil, nil
@@ -103,6 +108,8 @@ func castSkillRevision(input *entity.SkillBundleRevision) (*controlplanev1.Skill
 	return result, nil
 }
 
+// castSkillBundle requires a complete bundle identity/version and one of the closed public states before projecting current and draft revisions; it does not authorize access.
+// castSkillBundle требует полные идентификатор и версию пакета и одно из закрытого набора публичных состояний до проекции текущей и черновой ревизий; доступ не проверяет.
 func castSkillBundle(input *entity.SkillBundle) (*controlplanev1.SkillBundle, error) {
 	if input == nil || input.Ref == "" || input.Version < 1 {
 		return nil, status.Error(codes.Internal, "skill bundle result is incomplete")
@@ -122,6 +129,8 @@ func castSkillBundle(input *entity.SkillBundle) (*controlplanev1.SkillBundle, er
 	return &controlplanev1.SkillBundle{Ref: input.Ref, Version: input.Version, ProjectRef: input.ProjectRef, State: controlplanev1.ContextResourceState(state), CurrentRevision: current, DraftRevision: draft, CreatedAt: timestamppb.New(input.CreatedAt), UpdatedAt: timestamppb.New(input.UpdatedAt)}, nil
 }
 
+// GetSkillBundle authenticates the single-bundle query, requests the exact ref from the owner service and fails closed on an invalid projected bundle.
+// GetSkillBundle проверяет вызов чтения одного пакета, запрашивает точную ссылку у сервиса-владельца и закрыто отказывает при недопустимой проекции пакета.
 func (server *Server) GetSkillBundle(ctx context.Context, request *controlplanev1.GetSkillBundleRequest) (*controlplanev1.GetSkillBundleResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetSkillBundle_FullMethodName)
 	if err != nil {
@@ -138,6 +147,8 @@ func (server *Server) GetSkillBundle(ctx context.Context, request *controlplanev
 	return &controlplanev1.GetSkillBundleResponse{Bundle: result}, nil
 }
 
+// CreateSkillBundleDraft passes project, optional bundle ref and specification with mutation context to the distinct owner create command, then projects the returned bundle.
+// CreateSkillBundleDraft передаёт проект, необязательную ссылку пакета и спецификацию с контекстом изменения отдельной команде создания владельца, затем проецирует пакет.
 func (server *Server) CreateSkillBundleDraft(ctx context.Context, request *controlplanev1.CreateSkillBundleDraftRequest) (*controlplanev1.CreateSkillBundleDraftResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateSkillBundleDraft_FullMethodName, command.CreateSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{ProjectRef: request.GetProjectRef(), BundleRef: request.GetBundleRef(), Specification: domainSkillSpecification(request.GetSpecification())})
 	if err != nil {
@@ -150,6 +161,8 @@ func (server *Server) CreateSkillBundleDraft(ctx context.Context, request *contr
 	return &controlplanev1.CreateSkillBundleDraftResponse{Bundle: bundle}, nil
 }
 
+// SaveSkillBundleDraft passes the exact bundle/revision refs and replacement specification with mutation context to the owner save command; this transport does not publish the draft.
+// SaveSkillBundleDraft передаёт точные ссылки пакета и ревизии и новую спецификацию с контекстом изменения команде сохранения владельца; транспорт не публикует черновик.
 func (server *Server) SaveSkillBundleDraft(ctx context.Context, request *controlplanev1.SaveSkillBundleDraftRequest) (*controlplanev1.SaveSkillBundleDraftResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SaveSkillBundleDraft_FullMethodName, command.SaveSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{BundleRef: request.GetBundleRef(), RevisionRef: request.GetRevisionRef(), Specification: domainSkillSpecification(request.GetSpecification())})
 	if err != nil {

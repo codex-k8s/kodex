@@ -158,6 +158,7 @@ import {
   unwrap,
 } from "@/shared/api/problem";
 import { readWithRetry } from "@/shared/api/read-retry";
+import { saveVersionedResource } from "./save-versioned-resource";
 import {
   assertOwnerRequest,
   ownerRequestSignal,
@@ -1399,33 +1400,31 @@ export const usePlatformStore = defineStore("platform", () => {
     input: ProjectMembershipCreateInput & { active: boolean },
     current?: Membership,
   ): Promise<Membership> {
-    const result = current
-      ? await mutate(
-          (headers) =>
-            changeProjectMembership({
-              path: { projectRef, membershipRef: current.ref },
-              body: {
-                permissions: [...input.permissions],
-                active: input.active,
-              } satisfies ProjectMembershipChangeInput,
-              headers: versionedHeaders(headers),
-              signal: requestSignal(),
-            }),
-          current.version,
-        )
-      : await mutate((headers) =>
-          addProjectMembership({
-            path: { projectRef },
-            body: {
-              userRef: input.userRef,
-              permissions: [...input.permissions],
-            } satisfies ProjectMembershipCreateInput,
-            headers: mutationHeaders(headers),
-            signal: requestSignal(),
-          }),
-        );
-    memberships[result.data.ref] = result.data;
-    return result.data;
+    const value = await saveVersionedResource(
+      current,
+      (existing, headers) =>
+        changeProjectMembership({
+          path: { projectRef, membershipRef: existing.ref },
+          body: {
+            permissions: [...input.permissions],
+            active: input.active,
+          } satisfies ProjectMembershipChangeInput,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      (headers) =>
+        addProjectMembership({
+          path: { projectRef },
+          body: {
+            userRef: input.userRef,
+            permissions: [...input.permissions],
+          } satisfies ProjectMembershipCreateInput,
+          headers: mutationHeaders(headers),
+          signal: requestSignal(),
+        }),
+    );
+    memberships[value.ref] = value;
+    return value;
   }
 
   async function loadPlatformMembers(): Promise<void> {
@@ -1467,32 +1466,30 @@ export const usePlatformStore = defineStore("platform", () => {
     input: PlatformMembershipCreateInput & { active: boolean },
     current?: Membership,
   ): Promise<Membership> {
-    const result = current
-      ? await mutate(
-          (headers) =>
-            changePlatformMembership({
-              path: { membershipRef: current.ref },
-              body: {
-                platformRole: input.platformRole,
-                active: input.active,
-              } satisfies PlatformMembershipChangeInput,
-              headers: versionedHeaders(headers),
-              signal: requestSignal(),
-            }),
-          current.version,
-        )
-      : await mutate((headers) =>
-          addPlatformMembership({
-            body: {
-              userRef: input.userRef,
-              platformRole: input.platformRole,
-            } satisfies PlatformMembershipCreateInput,
-            headers: mutationHeaders(headers),
-            signal: requestSignal(),
-          }),
-        );
-    platformMemberships[result.data.ref] = result.data;
-    return result.data;
+    const value = await saveVersionedResource(
+      current,
+      (existing, headers) =>
+        changePlatformMembership({
+          path: { membershipRef: existing.ref },
+          body: {
+            platformRole: input.platformRole,
+            active: input.active,
+          } satisfies PlatformMembershipChangeInput,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      (headers) =>
+        addPlatformMembership({
+          body: {
+            userRef: input.userRef,
+            platformRole: input.platformRole,
+          } satisfies PlatformMembershipCreateInput,
+          headers: mutationHeaders(headers),
+          signal: requestSignal(),
+        }),
+    );
+    platformMemberships[value.ref] = value;
+    return value;
   }
 
   async function revokePlatformMembership(
@@ -1674,26 +1671,24 @@ export const usePlatformStore = defineStore("platform", () => {
     input: ProjectInput,
     current?: Project,
   ): Promise<Project> {
-    const result = current
-      ? await mutate(
-          (headers) =>
-            updateProject({
-              path: { projectRef: current.ref },
-              body: input,
-              headers: versionedHeaders(headers),
-              signal: requestSignal(),
-            }),
-          current.version,
-        )
-      : await mutate((headers) =>
-          createProject({
-            body: input,
-            headers: mutationHeaders(headers),
-            signal: requestSignal(),
-          }),
-        );
-    projects[result.data.ref] = result.data;
-    return result.data;
+    const value = await saveVersionedResource(
+      current,
+      (existing, headers) =>
+        updateProject({
+          path: { projectRef: existing.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      (headers) =>
+        createProject({
+          body: input,
+          headers: mutationHeaders(headers),
+          signal: requestSignal(),
+        }),
+    );
+    projects[value.ref] = value;
+    return value;
   }
 
   async function saveAgent(
@@ -1701,27 +1696,25 @@ export const usePlatformStore = defineStore("platform", () => {
     input: AgentInput,
     current?: Agent,
   ): Promise<Agent> {
-    const result = current
-      ? await mutate(
-          (headers) =>
-            updateAgent({
-              path: { agentRef: current.ref },
-              body: input,
-              headers: versionedHeaders(headers),
-              signal: requestSignal(),
-            }),
-          current.version,
-        )
-      : await mutate((headers) =>
-          createAgent({
-            path: { projectRef },
-            body: input,
-            headers: mutationHeaders(headers),
-            signal: requestSignal(),
-          }),
-        );
-    agents[result.data.ref] = result.data;
-    return result.data;
+    const value = await saveVersionedResource(
+      current,
+      (existing, headers) =>
+        updateAgent({
+          path: { agentRef: existing.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      (headers) =>
+        createAgent({
+          path: { projectRef },
+          body: input,
+          headers: mutationHeaders(headers),
+          signal: requestSignal(),
+        }),
+    );
+    agents[value.ref] = value;
+    return value;
   }
 
   async function readAgent(agentRef: string): Promise<Agent> {
@@ -1756,27 +1749,25 @@ export const usePlatformStore = defineStore("platform", () => {
     environment: RoleEnvironmentSelection,
     current?: RoleImageRecipe,
   ): Promise<RoleImageRecipe> {
-    const result = current
-      ? await mutate(
-          (headers) =>
-            updateRoleImageRecipe({
-              path: { projectRef, recipeRef: current.ref },
-              body: { name, environment },
-              headers: versionedHeaders(headers),
-              signal: requestSignal(),
-            }),
-          current.version,
-        )
-      : await mutate((headers) =>
-          createRoleImageRecipe({
-            path: { projectRef },
-            body: { roleDefinitionRef, name, environment },
-            headers: mutationHeaders(headers),
-            signal: requestSignal(),
-          }),
-        );
-    upsert(roleImageRecipes, [result.data]);
-    return result.data;
+    const value = await saveVersionedResource(
+      current,
+      (existing, headers) =>
+        updateRoleImageRecipe({
+          path: { projectRef, recipeRef: existing.ref },
+          body: { name, environment },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      (headers) =>
+        createRoleImageRecipe({
+          path: { projectRef },
+          body: { roleDefinitionRef, name, environment },
+          headers: mutationHeaders(headers),
+          signal: requestSignal(),
+        }),
+    );
+    upsert(roleImageRecipes, [value]);
+    return value;
   }
 
   async function changeRoleImageRecipe(
@@ -1840,27 +1831,25 @@ export const usePlatformStore = defineStore("platform", () => {
     input: WorkflowInput,
     current?: Workflow,
   ): Promise<Workflow> {
-    const result = current
-      ? await mutate(
-          (headers) =>
-            updateWorkflowDraft({
-              path: { workflowRef: current.ref },
-              body: input,
-              headers: versionedHeaders(headers),
-              signal: requestSignal(),
-            }),
-          current.version,
-        )
-      : await mutate((headers) =>
-          createWorkflow({
-            path: { projectRef },
-            body: input,
-            headers: mutationHeaders(headers),
-            signal: requestSignal(),
-          }),
-        );
-    workflows[result.data.ref] = result.data;
-    return result.data;
+    const value = await saveVersionedResource(
+      current,
+      (existing, headers) =>
+        updateWorkflowDraft({
+          path: { workflowRef: existing.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      (headers) =>
+        createWorkflow({
+          path: { projectRef },
+          body: input,
+          headers: mutationHeaders(headers),
+          signal: requestSignal(),
+        }),
+    );
+    workflows[value.ref] = value;
+    return value;
   }
 
   async function changeWorkflow(
@@ -2001,27 +1990,25 @@ export const usePlatformStore = defineStore("platform", () => {
     input: ScheduleInput,
     current?: Schedule,
   ): Promise<Schedule> {
-    const result = current
-      ? await mutate(
-          (headers) =>
-            updateSchedule({
-              path: { scheduleRef: current.ref },
-              body: input,
-              headers: versionedHeaders(headers),
-              signal: requestSignal(),
-            }),
-          current.version,
-        )
-      : await mutate((headers) =>
-          createSchedule({
-            path: { projectRef },
-            body: input,
-            headers: mutationHeaders(headers),
-            signal: requestSignal(),
-          }),
-        );
-    schedules[result.data.ref] = result.data;
-    return result.data;
+    const value = await saveVersionedResource(
+      current,
+      (existing, headers) =>
+        updateSchedule({
+          path: { scheduleRef: existing.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      (headers) =>
+        createSchedule({
+          path: { projectRef },
+          body: input,
+          headers: mutationHeaders(headers),
+          signal: requestSignal(),
+        }),
+    );
+    schedules[value.ref] = value;
+    return value;
   }
 
   async function changeSchedule(

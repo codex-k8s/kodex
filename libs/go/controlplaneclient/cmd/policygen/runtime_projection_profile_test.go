@@ -6,6 +6,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 )
 
+// TestRuntimeProjectionProjectScopeIsOperationSpecific requires project scope only for materialization.
+// TestRuntimeProjectionProjectScopeIsOperationSpecific требует проект только для материализации.
 func TestRuntimeProjectionProjectScopeIsOperationSpecific(t *testing.T) {
 	operations := controlplaneclient.RuntimeCredentialProjectionOperations()
 	profile := delegatedTargetedWorker(

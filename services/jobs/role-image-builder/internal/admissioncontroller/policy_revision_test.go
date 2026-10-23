@@ -16,6 +16,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// versionedTestPolicy derives a fresh complete fixture, hashes its policy data excluding revision/digest and assigns a digest-suffixed name.
+// This creates synthetic local policy data, not an owner decision or a deployed immutable ConfigMap.
+// versionedTestPolicy создаёт новую полную фикстуру, хеширует данные политики без ревизии и дайджеста и назначает имя с суффиксом дайджеста.
+// Создаются искусственные локальные данные политики, а не решение владельца или развёрнутый immutable ConfigMap.
 func versionedTestPolicy(t *testing.T) *corev1.ConfigMap {
 	t.Helper()
 	p := completeTestPolicy()
@@ -35,6 +39,10 @@ func versionedTestPolicy(t *testing.T) *corev1.ConfigMap {
 	return p
 }
 
+// TestVersionedPolicyRequiresExactConfiguredNameAndCompleteDigest accepts the exact configured fixture and rejects nine binding mutations.
+// It also rejects malformed configured names and records the existing fixed-name acceptance without adding a compatibility path.
+// TestVersionedPolicyRequiresExactConfiguredNameAndCompleteDigest принимает точную настроенную фикстуру и отклоняет девять изменений привязки.
+// Дополнительно отклоняются неверные настроенные имена и фиксируется существующее принятие фиксированного имени без добавления пути совместимости.
 func TestVersionedPolicyRequiresExactConfiguredNameAndCompleteDigest(t *testing.T) {
 	p := versionedTestPolicy(t)
 	if _, err := validatePolicy(p, p.Name); err != nil {
@@ -73,6 +81,10 @@ func TestVersionedPolicyRequiresExactConfiguredNameAndCompleteDigest(t *testing.
 	}
 }
 
+// TestPauseNewRunsDrainsExistingChainWithoutCreatingAnotherCycle pauses a fake active chain while advancing its phases and clock.
+// It requires readiness, full workspace drain, no extra admission cycle during pause and a new cycle after explicit resume.
+// TestPauseNewRunsDrainsExistingChainWithoutCreatingAnotherCycle приостанавливает искусственную активную цепочку, продвигая этапы и часы.
+// Требуются готовность, полная очистка рабочего тома, отсутствие лишнего цикла допуска при паузе и новый цикл после явного возобновления.
 func TestPauseNewRunsDrainsExistingChainWithoutCreatingAnotherCycle(t *testing.T) {
 	policy := versionedTestPolicy(t)
 	client := fake.NewClientset(policy)

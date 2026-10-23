@@ -17,6 +17,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestArtifactGETSpoolCapacityStillReturns503BeforeBody occupies both transfer slots
+// and checks GET returns 503 without source bytes, digest header or owner stream call.
+// TestArtifactGETSpoolCapacityStillReturns503BeforeBody занимает оба transfer slots
+// и проверяет GET 503 без source bytes,digest header и owner stream call.
 func TestArtifactGETSpoolCapacityStillReturns503BeforeBody(t *testing.T) {
 	fixture := newFileReadFixture(t, []byte("private-source"), "")
 	for range maximumConcurrentArtifactTransfers {
@@ -41,8 +45,16 @@ func TestArtifactGETSpoolCapacityStillReturns503BeforeBody(t *testing.T) {
 	}
 }
 
+// transferPatternReader generates a deterministic repeating 251-byte pattern by
+// offset and remaining count, avoiding a whole large-file buffer in transfer tests.
+// transferPatternReader создаёт deterministic repeating 251-byte pattern по offset/
+// remaining count без полного large-file buffer в transfer tests.
 type transferPatternReader struct{ remaining, offset int64 }
 
+// Read fills only the bounded remaining prefix, advances offset/count and returns
+// EOF on the following exhausted read; it does not allocate a copy of the whole source.
+// Read заполняет лишь bounded remaining prefix,меняет offset/count и возвращает EOF
+// при последующем исчерпанном read,не выделяя copy всего source.
 func (reader *transferPatternReader) Read(buffer []byte) (int, error) {
 	if reader.remaining == 0 {
 		return 0, io.EOF
@@ -56,7 +68,17 @@ func (reader *transferPatternReader) Read(buffer []byte) (int, error) {
 	return n, nil
 }
 
+// TestArtifactTransferSpoolsLargeFileBeforeSuccessfulReturn streams more than 33 MiB
+// in over 512 synthetic chunks through a private file, verifies full readback hash
+// after Complete/EOF and checks release closes the descriptor; no owner network runs.
+// TestArtifactTransferSpoolsLargeFileBeforeSuccessfulReturn передаёт более 33 MiB
+// свыше 512 synthetic chunks через private file,проверяет full readback hash
+// после Complete/EOF и closed descriptor при release; owner network не используется.
 func TestArtifactTransferSpoolsLargeFileBeforeSuccessfulReturn(t *testing.T) {
+	// size fixes a synthetic transfer just above 33 MiB so tests exceed historical
+	// small-buffer assumptions and cover a nonaligned final chunk.
+	// size задаёт synthetic transfer чуть больше 33 MiB для выхода за прежние
+	// small-buffer assumptions и проверки nonaligned final chunk.
 	const size = int64(33<<20) + 7
 	hash := sha256.New()
 	if _, err := io.Copy(hash, &transferPatternReader{remaining: size}); err != nil {
@@ -108,6 +130,12 @@ func TestArtifactTransferSpoolsLargeFileBeforeSuccessfulReturn(t *testing.T) {
 	}
 }
 
+// TestArtifactTransferRejectsMissingTerminalCorruptionAndUnexpectedFrames exercises
+// fourteen metadata/chunk/terminal/transport/disk/cancel failures and verifies the
+// test caller releases the failed private file and capacity, with no accepted stream.
+// TestArtifactTransferRejectsMissingTerminalCorruptionAndUnexpectedFrames проверяет
+// четырнадцать metadata/chunk/terminal/transport/disk/cancel failures и освобождение
+// test caller ошибочного private file/capacity без принятого stream.
 func TestArtifactTransferRejectsMissingTerminalCorruptionAndUnexpectedFrames(t *testing.T) {
 	for _, scenario := range []string{"metadata mismatch", "duplicate metadata", "empty chunk", "oversize chunk", "extra bytes", "short bytes", "corrupt bytes", "missing complete", "complete mismatch", "after complete", "unknown frame", "receiver error", "disk failure", "canceled"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -180,6 +208,12 @@ func TestArtifactTransferRejectsMissingTerminalCorruptionAndUnexpectedFrames(t *
 	}
 }
 
+// TestArtifactTransferMissingEOFCannotOutliveDeadline uses a context-aware fake recv
+// that stalls after Complete and returns on a twenty-millisecond deadline; missing EOF
+// must fail, not accept the transfer. It does not make arbitrary recv functions cancelable.
+// TestArtifactTransferMissingEOFCannotOutliveDeadline использует context-aware fake recv,
+// зависающий после Complete до twenty-millisecond deadline; missing EOF даёт отказ.
+// Произвольные recv functions этим не становятся cancelable.
 func TestArtifactTransferMissingEOFCannotOutliveDeadline(t *testing.T) {
 	sum := sha256.Sum256(nil)
 	pin := artifactTransferPin{ref: "art_emptyfixture", project: "prj_fixture", revision: 1, digest: "sha256:" + hex.EncodeToString(sum[:])}

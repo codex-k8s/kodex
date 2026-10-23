@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// checkCatalogFixture serves a synthetic initialize/initialized/catalog sequence over a local temporary HTTP listener and invokes the real readiness validator.
+// Unexpected methods fail the test; no owner service or model endpoint is contacted.
+// checkCatalogFixture обслуживает синтетическую последовательность initialize, initialized и каталога на временном локальном HTTP-слушателе, вызывает настоящий валидатор готовности.
+// Неожиданные методы завершают тест ошибкой; сервис владельца и endpoint модели не вызываются.
 func checkCatalogFixture(t *testing.T, catalog []byte, names []string, inputs ...runtimecontract.RunnerInput) error {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +47,10 @@ func checkCatalogFixture(t *testing.T, catalog []byte, names []string, inputs ..
 	return checkMCP(t.Context(), server.Client(), endpoint, "synthetic-capability", names, inputs...)
 }
 
+// TestRuntimeMCPCatalogWireConsumer consumes sixteen explicitly provided controller-produced wire fixtures and verifies all scope/file/delegation/launch combinations through readiness.
+// Missing fixture-path configuration skips this producer-dependent check rather than proving wire compatibility.
+// TestRuntimeMCPCatalogWireConsumer читает шестнадцать явно переданных wire-образцов producer контроллера и проверяет сочетания области, файлов, делегирования и запуска через readiness.
+// Отсутствующий путь образца пропускает зависимую от producer проверку, а не доказывает wire-совместимость.
 func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {
 	path := os.Getenv("KODEX_RUNTIME_MCP_CATALOG_FIXTURE")
 	if path == "" {
@@ -88,6 +96,8 @@ func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {
 	}
 }
 
+// TestMCPOutputSchemaCompatibilityAndClosedFailures checks optional/object output schemas remain readable while null/non-object/malformed schemas or unknown descriptor fields fail at CATALOG_SCHEMA.
+// TestMCPOutputSchemaCompatibilityAndClosedFailures проверяет читаемость отсутствующей и объектной выходных схем и отказ на CATALOG_SCHEMA для null, не-объектных и некорректных схем либо неизвестных полей описания.
 func TestMCPOutputSchemaCompatibilityAndClosedFailures(t *testing.T) {
 	for name, extra := range map[string]string{
 		"legacy": "", "object": `,"outputSchema":{"type":"object","properties":{"ok":{"type":"boolean"}}}`,
@@ -107,6 +117,8 @@ func TestMCPOutputSchemaCompatibilityAndClosedFailures(t *testing.T) {
 	}
 }
 
+// TestMCPWorkflowLaunchCatalogStillRequiresExactBinding checks both missing-authorized and extra-unauthorized launch tools fail at CATALOG_BINDING before any workflow launch.
+// TestMCPWorkflowLaunchCatalogStillRequiresExactBinding проверяет отказ на CATALOG_BINDING при отсутствии разрешённого либо наличии неразрешённого инструмента запуска до любого запуска процесса.
 func TestMCPWorkflowLaunchCatalogStillRequiresExactBinding(t *testing.T) {
 	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: runtimecontract.AssistantScopeNone, ProjectRef: "prj_fixture"}
 	for _, launch := range []bool{false, true} {
@@ -132,6 +144,8 @@ func TestMCPWorkflowLaunchCatalogStillRequiresExactBinding(t *testing.T) {
 	}
 }
 
+// TestMCPStartupFailsClosedBeforeDiscoveryOnTLSOrCancellation checks an untrusted local TLS fixture and an already canceled context fail at INITIALIZE with zero server-handler calls.
+// TestMCPStartupFailsClosedBeforeDiscoveryOnTLSOrCancellation проверяет отказ на INITIALIZE с нулём вызовов серверного обработчика для недоверенного локального TLS-образца и уже отменённого контекста.
 func TestMCPStartupFailsClosedBeforeDiscoveryOnTLSOrCancellation(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(200) }))

@@ -17,6 +17,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// managedMCPCallbackFixture creates minimal synthetic execution identifiers,
+// two pinned Context7 grant schemas and a derived profile with a past health
+// receipt. It does not authenticate a real workload or probe Context7.
+// managedMCPCallbackFixture создаёт минимальные synthetic execution IDs,
+// две pinned Context7 grant-схемы и derived profile с прошлой health receipt,
+// не авторизуя реальную нагрузку и не выполняя Context7 probe.
 func managedMCPCallbackFixture(t *testing.T) runtimecontract.RunnerInput {
 	t.Helper()
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeNone,
@@ -47,6 +53,12 @@ func managedMCPCallbackFixture(t *testing.T) runtimecontract.RunnerInput {
 	return input
 }
 
+// TestManagedMCPCatalogUsesOnlyExactGrantSchemas checks alias order and schema
+// digests against pinned grants, omission of raw transport/credential fields and
+// inclusion in the local tools catalog; no external tools/list is performed.
+// TestManagedMCPCatalogUsesOnlyExactGrantSchemas проверяет порядок aliases,
+// digest их схем относительно grants, отсутствие raw transport/credential fields
+// и включение в локальный каталог; внешний tools/list не вызывается.
 func TestManagedMCPCatalogUsesOnlyExactGrantSchemas(t *testing.T) {
 	input := managedMCPCallbackFixture(t)
 	available := managedMCPTools(input)
@@ -84,6 +96,14 @@ func TestManagedMCPCatalogUsesOnlyExactGrantSchemas(t *testing.T) {
 	}
 }
 
+// TestManagedMCPAliasesResolveExactOwnerConnectionAndProjectSafeActivity invokes
+// direct local tool dispatch with fake owner success, checking exact connection/
+// capability/input and terminal audit linkage without persisting query/result
+// contents in safe activity. It does not exercise real MCP or transport auth.
+// TestManagedMCPAliasesResolveExactOwnerConnectionAndProjectSafeActivity вызывает
+// локальный tool dispatch с fake owner success, проверяя connection/capability/
+// input и audit linkage без query/result content в safe activity.
+// Реальные MCP и transport auth не проверяются.
 func TestManagedMCPAliasesResolveExactOwnerConnectionAndProjectSafeActivity(t *testing.T) {
 	for index, tool := range []string{runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool} {
 		t.Run(tool, func(t *testing.T) {
@@ -126,6 +146,12 @@ func TestManagedMCPAliasesResolveExactOwnerConnectionAndProjectSafeActivity(t *t
 	}
 }
 
+// TestManagedMCPRejectsUnboundHealthBeforeAnyOwnerCall mutates grant/profile/
+// health bindings and future time, requiring local rejection before fake owner
+// resolve/read/activity calls and no private-query reflection in the response.
+// TestManagedMCPRejectsUnboundHealthBeforeAnyOwnerCall меняет grant/profile/health
+// bindings и future time, требуя отказа до fake owner resolve/read/activity
+// и отсутствия private query в ответе.
 func TestManagedMCPRejectsUnboundHealthBeforeAnyOwnerCall(t *testing.T) {
 	base := managedMCPCallbackFixture(t)
 	for name, mutate := range map[string]func(*runtimecontract.RunnerInput){
@@ -170,6 +196,12 @@ func TestManagedMCPRejectsUnboundHealthBeforeAnyOwnerCall(t *testing.T) {
 	}
 }
 
+// rederiveManagedMCPCallback replaces a fixture's first profile with a digest
+// recomputed from its current scope, grants and health, failing invalid setup;
+// this local reseal does not produce a real owner health receipt.
+// rederiveManagedMCPCallback заменяет первый fixture profile пересчитанным
+// по текущим scope/grants/health digest и завершает тест при неверной подготовке;
+// локальный reseal не создаёт реальную owner health receipt.
 func rederiveManagedMCPCallback(t *testing.T, input *runtimecontract.RunnerInput) {
 	t.Helper()
 	profile := input.ManagedMCPProfiles[0]
@@ -180,6 +212,12 @@ func rederiveManagedMCPCallback(t *testing.T, input *runtimecontract.RunnerInput
 	input.ManagedMCPProfiles[0] = derived
 }
 
+// TestManagedMCPImmutableOldReceiptDefersFreshnessToOwner proves the local guard
+// accepts an old internally consistent receipt without rewriting it or blocking
+// the later owner check. It does not itself test a live owner's freshness verdict.
+// TestManagedMCPImmutableOldReceiptDefersFreshnessToOwner проверяет принятие старой
+// согласованной receipt локальным guard без её изменения и блокировки следующей
+// owner-проверки; сам live-вердикт владельца о свежести здесь не проверяется.
 func TestManagedMCPImmutableOldReceiptDefersFreshnessToOwner(t *testing.T) {
 	input := managedMCPCallbackFixture(t)
 	input.ManagedMCPProfiles[0].Health.CheckedAt = time.Now().UTC().Add(-time.Hour)
@@ -196,6 +234,12 @@ func TestManagedMCPImmutableOldReceiptDefersFreshnessToOwner(t *testing.T) {
 	}
 }
 
+// TestManagedMCPClosedInputGuardPrecedesOwnerMutation checks exact Unicode limits
+// and rejects absent/wrong/oversized/invalid-UTF-8 fields or caller-supplied
+// transport locators before fake owner effects, preserving private inputs.
+// TestManagedMCPClosedInputGuardPrecedesOwnerMutation проверяет Unicode limits
+// и отвергает missing/wrong/oversized/invalid-UTF-8 поля и transport locators
+// caller до fake owner effects, не раскрывая private inputs.
 func TestManagedMCPClosedInputGuardPrecedesOwnerMutation(t *testing.T) {
 	input := managedMCPCallbackFixture(t)
 	for index, tool := range []string{runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool} {

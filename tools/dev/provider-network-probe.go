@@ -15,8 +15,14 @@ import (
 	"time"
 )
 
+// probeProxy is the sole in-cluster CONNECT proxy used by this transport probe.
+// RU: probeProxy — единственный внутрикластерный CONNECT-прокси этой проверки транспорта.
 const probeProxy = "http://egress-gateway.kodex-system.svc.cluster.local:8080"
 
+// probeResult reports only bounded transport evidence and a closed failure
+// class; it never includes credentials or raw network errors.
+// RU: probeResult содержит только ограниченные признаки транспорта и закрытый
+// класс отказа, не включая удостоверения или исходные сетевые ошибки.
 type probeResult struct {
 	Host          string `json:"host"`
 	ConnectStatus int    `json:"connectStatus"`
@@ -26,6 +32,10 @@ type probeResult struct {
 	Failure       string `json:"failure"`
 }
 
+// probeFailure maps network and certificate errors to closed public codes
+// without returning upstream messages or hostnames from those errors.
+// RU: probeFailure переводит сетевые и сертификатные ошибки в закрытые коды,
+// не возвращая сообщения upstream или имена хостов из ошибок.
 func probeFailure(err error) string {
 	var dns *net.DNSError
 	var certificate *tls.CertificateVerificationError
@@ -46,6 +56,10 @@ func probeFailure(err error) string {
 	}
 }
 
+// probeHost permits only the two fixed OAuth transport hosts, verifies an
+// exact proxy CONNECT target and TLS identity, and refuses redirects.
+// RU: probeHost допускает лишь два фиксированных хоста OAuth-транспорта,
+// проверяет точную цель CONNECT и TLS-идентичность и запрещает перенаправления.
 func probeHost(ctx context.Context, host string) probeResult {
 	result := probeResult{Host: host, Failure: "NONE"}
 	if host != "chatgpt.com" && host != "auth.openai.com" {
@@ -95,6 +109,10 @@ func probeHost(ctx context.Context, host string) probeResult {
 	return result
 }
 
+// main runs bounded unauthenticated transport checks for the fixed hosts and
+// emits one JSON result per host without attempting inference or login.
+// RU: main выполняет ограниченные неавторизованные проверки транспорта для
+// фиксированных хостов и выдаёт по одному JSON-результату без inference и входа.
 func main() {
 	if len(os.Args) != 1 {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"failure": "ARGUMENTS_REJECTED"})

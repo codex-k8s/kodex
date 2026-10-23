@@ -14,8 +14,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// Client maps mail-domain authority operations to the configured owner RPC client; transport authentication is composed outside this adapter.
+// Client преобразует операции полномочий почтового домена в настроенный owner RPC; транспортная аутентификация собирается вне адаптера.
 type Client struct{ API cp.RuntimeWorkServiceClient }
 
+// Binding converts a structurally valid execution binding into an exact Proto oneof and lease snapshot, without granting or renewing authority.
+// Binding преобразует структурно допустимую привязку исполнения в точные Proto oneof и снимок lease, не выдавая и не продлевая полномочия.
 func Binding(b *api.ExecutionBinding) *cp.EmailExecutionBinding {
 	if !api.ValidExecutionBinding(b) {
 		return nil
@@ -29,6 +33,10 @@ func Binding(b *api.ExecutionBinding) *cp.EmailExecutionBinding {
 	return result
 }
 
+// Resolve requires the live original fence, bounds RPC by that lease and accepts only matching binding/operation plus known policy/scope enums.
+// Connection tests are health-only and agentless; the domain still checks returned ownership, scopes and decision freshness before protocol I/O.
+// Resolve требует живой исходный fence, ограничивает RPC этим lease и принимает только совпавшие binding/operation и известные policy/scope enum.
+// Проверки подключения допускают только health без агента; домен ещё проверяет ownership, scope и свежесть решения до протокольного I/O.
 func (c *Client) Resolve(ctx context.Context, input api.AuthorizationRequest) (api.AuthorizationDecision, error) {
 	binding := Binding(input.ExecutionBinding)
 	if binding == nil || binding.Lease.ExpiresAt.CheckValid() != nil || !binding.Lease.ExpiresAt.AsTime().After(time.Now()) || input.InvocationToken != binding.Lease.Fence {
@@ -68,10 +76,15 @@ func (c *Client) Resolve(ctx context.Context, input api.AuthorizationRequest) (a
 	return api.AuthorizationDecision{Allowed: response.Allowed, ActorId: response.ActorRef, AgentId: response.AgentRef, TenantId: response.OrganizationRef, ConnectionId: response.ConnectionRef, MailboxId: response.MailboxRef, GrantId: response.GrantRef, Operation: input.Operation, InputSha256: response.SemanticInputDigest, EffectKey: response.EffectKey, ConfigurationRevision: response.ConfigurationRevision, CredentialGeneration: response.CredentialGeneration, Policy: approval, GateApproved: response.GateApproved, UserScope: user, AgentScope: agent, ConnectionScope: connection, ResourceScope: resource, ExpiresAt: response.ExpiresAt.AsTime().Unix(), ExecutionBinding: input.ExecutionBinding}, nil
 }
 
+// operation maps the named mail operation to a known nonzero generated owner enum and rejects an absent mapping.
+// operation переводит именованную почтовую операцию в известный ненулевой generated enum владельца и отвергает отсутствие соответствия.
 func operation(op api.Operation) (cp.EmailOperation, bool) {
 	value, ok := cp.EmailOperation_value["EMAIL_OPERATION_"+strings.ToUpper(string(op))]
 	return cp.EmailOperation(value), ok && value != 0
 }
+
+// scope copies scope lists and rejects absent scopes or unknown operation enums; domain policy evaluates the actual resource eligibility.
+// scope копирует списки scope и отвергает отсутствующий scope либо неизвестные операции; фактический допуск ресурса оценивает доменная политика.
 func scope(s *cp.EmailAuthorizationScope) (api.Scope, bool) {
 	if s == nil {
 		return api.Scope{}, false

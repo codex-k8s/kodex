@@ -22,9 +22,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/testfixture"
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
+// TestExecutedTurnFailurePreservesUsageInRetriedCallback exercises successful and post-execution failure modes against a synthetic TLS callback that loses its first acknowledgement, requiring byte-identical retries with exact usage, archive policy and no forged private diagnostic.
+// TestExecutedTurnFailurePreservesUsageInRetriedCallback проверяет success и post-execution failures через синтетический TLS callback с потерей первого acknowledgement, требуя побайтно одинаковые повторы с точным usage, archive policy и без поддельной private diagnostic.
 func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 	usage := runtimecontract.TokenUsage{TotalTokens: 150, InputTokens: 100, CachedInputTokens: 30, CacheWriteInputTokens: 10, OutputTokens: 50, ReasoningOutputTokens: 20, ModelContextWindow: 32768}
 	for _, mode := range []string{"workspace", "cancelled workspace", "empty message", "oversized message", "invalid utf8", "publish result", "collect artifacts", "completion archive", "provider failure", "provider outbox failure", "success", "before execution"} {
@@ -146,6 +149,8 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 	}
 }
 
+// completionTestClient creates temporary trust/client-identity/ticket files from the synthetic server, updates only the supplied fixture input and registers callback-client cleanup; the authentication bytes never come from live accounts.
+// completionTestClient создаёт временные trust/client-identity/ticket файлы из синтетического сервера, меняет лишь переданный fixture input и регистрирует callback-client cleanup; auth bytes не берутся из живых аккаунтов.
 func completionTestClient(t *testing.T, input *model.Input, server *httptest.Server) *callback.Client {
 	t.Helper()
 	directory := t.TempDir()
@@ -170,13 +175,23 @@ func completionTestClient(t *testing.T, input *model.Input, server *httptest.Ser
 	return client
 }
 
+// turnProxyFixture exposes inert local MCP strings and records bounded cleanup so turn tests can prove lifecycle ordering without running a proxy or provider.
+// turnProxyFixture предоставляет неактивные local MCP strings и фиксирует ограниченное закрытие для проверки lifecycle ordering без прокси или провайдера.
 type turnProxyFixture struct {
 	t      *testing.T
 	closed bool
 }
 
-func (*turnProxyFixture) SocketPath() string       { return "synthetic-mcp-socket" }
+// SocketPath returns only a synthetic endpoint marker used to assert prepared-turn argument routing.
+// SocketPath возвращает лишь synthetic endpoint marker для проверки передачи аргументов prepared turn.
+func (*turnProxyFixture) SocketPath() string { return "synthetic-mcp-socket" }
+
+// LocalBearerToken returns an inert fixture marker, not a controller ticket or an actual local proxy capability.
+// LocalBearerToken возвращает неактивный fixture marker, не controller ticket и не настоящую local proxy capability.
 func (*turnProxyFixture) LocalBearerToken() string { return "synthetic-mcp-token" }
+
+// Close checks the cleanup context is active and bounded to at most five seconds, then records closure for assertions after turn completion.
+// Close проверяет активный cleanup context с пределом не более пяти секунд и фиксирует закрытие для assertions после завершения хода.
 func (proxy *turnProxyFixture) Close(ctx context.Context) error {
 	deadline, bounded := ctx.Deadline()
 	if ctx.Err() != nil || !bounded || time.Until(deadline) > 5*time.Second {
@@ -186,6 +201,8 @@ func (proxy *turnProxyFixture) Close(ctx context.Context) error {
 	return nil
 }
 
+// TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures injects preparation, execution, activity, cancellation and deadline outcomes while using real synthetic source capture only in verified cases. It requires one provider attempt, correct usage/archive projection, stable terminal retry and independent proxy/context cleanup.
+// TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures задаёт preparation, execution, activity, cancellation и deadline outcomes с настоящим synthetic source capture лишь для verified-случаев. Требует одну попытку provider, верные usage/archive projection, стабильный terminal retry и независимую proxy/context cleanup.
 func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T) {
 	for _, mode := range []string{"timeline", "cancelled timeline", "partial broker", "cancelled broker", "verified timeline", "verified broker", "verified deadline", "success", "preparation", "provider before effect"} {
 		t.Run(mode, func(t *testing.T) {
@@ -276,18 +293,7 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 				input.CodexHome = filepath.Join(input.WorkspaceRoot, ".kodex/state/codex-home")
 				input.InputDigest, input.SessionRef, input.TurnRef = strings.Repeat("e", 64), "ses_fixture", "turn_fixture"
 				path := filepath.Join(input.WorkspaceRoot, filepath.FromSlash(result.ArchiveRelativePath))
-				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-					t.Fatal(err)
-				}
-				file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0o640)
-				if err != nil {
-					t.Fatal(err)
-				}
-				_, writeErr := file.WriteString("{\"type\":\"session_meta\"}\n{\"type\":\"event_msg\"}\n")
-				syncErr, closeErr := file.Sync(), file.Close()
-				if writeErr != nil || syncErr != nil || closeErr != nil {
-					t.Fatal("fixture source was not durably closed")
-				}
+				testfixture.WriteRolloutSource(t, path)
 				captured, err := codex.CaptureStoppedRollout(input, result.SessionID, path)
 				if err != nil {
 					t.Fatal("actual source capture failed")
@@ -362,6 +368,8 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 	}
 }
 
+// TestExecutedTurnRejectsInvalidArchiveBindings corrupts archive tuples, outcomes or usage and verifies failed completions either drop invalid archive metadata or fail validation before transport, preserving the expected public failure code.
+// TestExecutedTurnRejectsInvalidArchiveBindings повреждает archive tuples, outcomes или usage и проверяет удаление неверной archive metadata из failed completion либо validation-отказ до транспорта с ожидаемым public failure code.
 func TestExecutedTurnRejectsInvalidArchiveBindings(t *testing.T) {
 	for _, mode := range []string{"partial", "foreign session", "unsafe path", "invalid digest", "zero size", "oversized", "unknown outcome", "terminal failed", "invalid usage", "success partial"} {
 		t.Run(mode, func(t *testing.T) {

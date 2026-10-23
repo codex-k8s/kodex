@@ -10,6 +10,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestTrustedClusterRequiresExplicitConfigurationAndExactBinding verifies
+// explicit profile selection, immutable exact binding and the inability of
+// a trusted header to downgrade a protected mTLS server.
+// RU: TestTrustedClusterRequiresExplicitConfigurationAndExactBinding
+// проверяет явный выбор профиля, неизменность точного binding и невозможность
+// понизить mTLS-сервер trusted-заголовком.
 func TestTrustedClusterRequiresExplicitConfigurationAndExactBinding(t *testing.T) {
 	for _, profile := range []string{"", "service-v1", "insecure", "production"} {
 		if _, err := NewTrustedCluster(profile, target, []Binding{binding()}); err == nil {
@@ -41,6 +47,12 @@ func TestTrustedClusterRequiresExplicitConfigurationAndExactBinding(t *testing.T
 	}
 }
 
+// TestTrustedClusterAdmissionProfileRequiresServerInterceptor verifies that
+// metadata alone creates no admission and a denied method never reaches the
+// unary handler.
+// RU: TestTrustedClusterAdmissionProfileRequiresServerInterceptor проверяет,
+// что одной metadata недостаточно для допуска, а запрещённый метод не
+// достигает unary-обработчика.
 func TestTrustedClusterAdmissionProfileRequiresServerInterceptor(t *testing.T) {
 	auth, err := NewTrustedCluster(TrustedClusterProfile, target, []Binding{binding()})
 	if err != nil {
@@ -73,6 +85,10 @@ func TestTrustedClusterAdmissionProfileRequiresServerInterceptor(t *testing.T) {
 	}
 }
 
+// TestTrustedClusterRejectsAmbiguousAndLegacyMetadata covers absent, mixed,
+// duplicated and legacy authority metadata on the trusted profile.
+// RU: TestTrustedClusterRejectsAmbiguousAndLegacyMetadata покрывает
+// отсутствующую, смешанную, повторную и устаревшую metadata полномочий.
 func TestTrustedClusterRejectsAmbiguousAndLegacyMetadata(t *testing.T) {
 	auth, err := NewTrustedCluster(TrustedClusterProfile, target, []Binding{binding()})
 	if err != nil {
@@ -93,13 +109,26 @@ func TestTrustedClusterRejectsAmbiguousAndLegacyMetadata(t *testing.T) {
 	}
 }
 
+// trustedStreamFixture supplies only an initial context to the gRPC stream
+// interceptor so tests can inspect the admission wrapper independently.
+// RU: trustedStreamFixture передаёт interceptor только исходный контекст,
+// чтобы тест проверял обёртку допуска независимо от транспорта.
 type trustedStreamFixture struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
+// Context returns the unwrapped fixture context, proving admission is not
+// written into caller-controlled metadata before server interception.
+// RU: Context возвращает исходный контекст fixture и помогает доказать, что
+// допуск не появляется из caller-controlled metadata до server interception.
 func (stream trustedStreamFixture) Context() context.Context { return stream.ctx }
 
+// TestTrustedClusterStreamAdmissionAndCancellation verifies exact stream
+// binding, preservation of cancellation and no admission leakage into the
+// caller's original context.
+// RU: TestTrustedClusterStreamAdmissionAndCancellation проверяет точный
+// binding потока, сохранение отмены и отсутствие допуска в исходном контексте.
 func TestTrustedClusterStreamAdmissionAndCancellation(t *testing.T) {
 	auth, err := NewTrustedCluster(TrustedClusterProfile, target, []Binding{binding()})
 	if err != nil {
@@ -132,6 +161,10 @@ func TestTrustedClusterStreamAdmissionAndCancellation(t *testing.T) {
 	}
 }
 
+// TestTrustedClusterStreamRejectsBeforeHandler ensures invalid profile,
+// caller, method or mixed metadata is rejected before a stream handler runs.
+// RU: TestTrustedClusterStreamRejectsBeforeHandler проверяет отказ при
+// неверном профиле, caller, методе или смешанной metadata до запуска handler.
 func TestTrustedClusterStreamRejectsBeforeHandler(t *testing.T) {
 	auth, err := NewTrustedCluster(TrustedClusterProfile, target, []Binding{binding()})
 	if err != nil {

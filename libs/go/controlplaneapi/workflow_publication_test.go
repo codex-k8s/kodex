@@ -7,9 +7,18 @@ import (
 	"testing"
 )
 
+// publicationFixture builds a minimal valid published workflow with full
+// instruction text and an input default for canonical-wire tests.
+// RU: publicationFixture создаёт минимальный опубликованный процесс с полным
+// текстом инструкции и значением поля по умолчанию для проверки передачи.
 func publicationFixture() WorkflowPublication {
 	return WorkflowPublication{Version: 1, WorkflowRef: "wfl_workflow01", ProjectRef: "prj_project001", PublishedRef: "wfv_workflow01", SpecDigest: strings.Repeat("a", 64), WorkflowVersion: 7, PublishedVersion: 3, Name: "Процесс", CoordinatorAgentRef: "agt_coordinator", Concurrency: 1, TimeoutSeconds: 3600, InputFields: []WorkflowPublicationInput{{Key: "field-001", ValueType: "LONG_TEXT", DefaultValue: "Полное значение"}}, Steps: []WorkflowPublicationStep{{Key: "step-001", Position: 1, AgentRef: "agt_specialist", Instructions: "Полная инструкция", ExpectedResult: "Результат", TimeoutSeconds: 900}}, ResultSchema: WorkflowPublicationSchema{}}
 }
+
+// TestWorkflowPublicationCanonicalWhitelist verifies exact digest roundtrip
+// and rejects unknown fields, duplicate keys, cycles and invalid text.
+// RU: TestWorkflowPublicationCanonicalWhitelist проверяет точный дайджест и
+// отказ для чужих полей, повторных ключей, циклов и неверного текста.
 func TestWorkflowPublicationCanonicalWhitelist(t *testing.T) {
 	value := publicationFixture()
 	raw, digest, err := EncodeWorkflowPublication(value)
@@ -50,6 +59,11 @@ func TestWorkflowPublicationCanonicalWhitelist(t *testing.T) {
 		})
 	}
 }
+
+// TestWorkflowPublicationResultSchemaClosed accepts local bounded result
+// shapes and rejects refs, nulls, duplicate keys and unregistered keywords.
+// RU: TestWorkflowPublicationResultSchemaClosed принимает локальные
+// ограниченные схемы и отклоняет ссылки, null, повторы и чужие ключи.
 func TestWorkflowPublicationResultSchemaClosed(t *testing.T) {
 	for _, raw := range []string{`{}`, `{"type":"object","properties":{"status":{"type":"string","enum":["ok","failed"]}},"required":["status"],"additionalProperties":false}`} {
 		if _, err := DecodeWorkflowPublicationSchema([]byte(raw)); err != nil {

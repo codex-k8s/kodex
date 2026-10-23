@@ -11,10 +11,18 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// responseUsageNotification interpolates trusted fixture literals into a bound response receipt.
+// It performs no escaping or validation and must not accept arbitrary external strings.
+// responseUsageNotification подставляет доверенные литералы fixture в связанный response receipt.
+// Она не экранирует и не проверяет данные; произвольные внешние строки ей не передаются.
 func responseUsageNotification(responseID, usage string) json.RawMessage {
 	return raw(`{"responseId":"` + responseID + `","threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","usage":` + usage + `,"usageMetadata":null}`)
 }
 
+// measuredUsageState creates fresh in-memory accounting with a captured baseline and current turn;
+// it does not initialize a provider process or establish external session provenance.
+// measuredUsageState создаёт отдельное учётное состояние в памяти с baseline и текущим ходом;
+// процесс провайдера не запускается и внешнее происхождение сессии не подтверждается.
 func measuredUsageState(t *testing.T) *protocolState {
 	t.Helper()
 	state := newProtocolState(testThreadID)
@@ -26,6 +34,10 @@ func measuredUsageState(t *testing.T) *protocolState {
 	return state
 }
 
+// TestResponseUsageNotCompactionDisplayIsMeasured keeps numeric response counters unchanged when
+// compaction-style display totals diverge, while retaining the display context-window hint.
+// TestResponseUsageNotCompactionDisplayIsMeasured сохраняет числовые response counters при
+// расходящихся display totals сжатия, оставляя подсказку размера контекста из display.
 func TestResponseUsageNotCompactionDisplayIsMeasured(t *testing.T) {
 	state := measuredUsageState(t)
 	if err := state.notification("rawResponse/completed", responseUsageNotification("response-1", codex160UsageBreakdownFixture)); err != nil {
@@ -45,6 +57,10 @@ func TestResponseUsageNotCompactionDisplayIsMeasured(t *testing.T) {
 	}
 }
 
+// TestResponseUsageDeduplicatesAndRejectsChangedReceipt ignores an identical receipt replay and
+// rejects changed counters under the same response ID without altering the measured subtotal.
+// TestResponseUsageDeduplicatesAndRejectsChangedReceipt игнорирует точный повтор receipt и
+// отвергает изменённые counters того же response ID без изменения измеренного итога.
 func TestResponseUsageDeduplicatesAndRejectsChangedReceipt(t *testing.T) {
 	state := measuredUsageState(t)
 	observation := responseUsageNotification("response-1", codex160UsageBreakdownFixture)
@@ -65,6 +81,10 @@ func TestResponseUsageDeduplicatesAndRejectsChangedReceipt(t *testing.T) {
 	}
 }
 
+// TestResponseUsageOverflowPreservesPriorMeasurements accepts the largest valid int64 receipt,
+// then rejects an overflowing addition without losing the previously recorded counters.
+// TestResponseUsageOverflowPreservesPriorMeasurements принимает максимальный int64 receipt,
+// затем отвергает переполняющее сложение, сохраняя ранее принятые counters.
 func TestResponseUsageOverflowPreservesPriorMeasurements(t *testing.T) {
 	state := measuredUsageState(t)
 	maximum := fmt.Sprintf(`{"totalTokens":%d,"inputTokens":%d,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0}`, int64(1<<63-1), int64(1<<63-1))
@@ -80,6 +100,10 @@ func TestResponseUsageOverflowPreservesPriorMeasurements(t *testing.T) {
 	}
 }
 
+// TestResponseUsageNullIsUnknownOrPartialWithoutFailingLifecycle treats null as missing evidence,
+// not measured zero, and preserves UNKNOWN or numeric PARTIAL through terminal and failure envelopes.
+// TestResponseUsageNullIsUnknownOrPartialWithoutFailingLifecycle считает null отсутствием данных,
+// не измеренным нулём, сохраняя UNKNOWN или числовой PARTIAL в terminal и failure envelopes.
 func TestResponseUsageNullIsUnknownOrPartialWithoutFailingLifecycle(t *testing.T) {
 	for _, numeric := range []bool{false, true} {
 		t.Run(fmt.Sprint(numeric), func(t *testing.T) {
@@ -112,6 +136,10 @@ func TestResponseUsageNullIsUnknownOrPartialWithoutFailingLifecycle(t *testing.T
 	}
 }
 
+// TestResponseUsageCompleteRequiresNumericObservationAndTerminal distinguishes no observation from
+// explicit numeric zero, and requires a terminal count before upgrading the latter from PARTIAL.
+// TestResponseUsageCompleteRequiresNumericObservationAndTerminal отличает отсутствие данных от
+// явного числового нуля и требует terminal count для перевода последнего из PARTIAL в COMPLETE.
 func TestResponseUsageCompleteRequiresNumericObservationAndTerminal(t *testing.T) {
 	state := measuredUsageState(t)
 	if state.measuredResult().UsageCompleteness != UsageUnknown {
@@ -130,6 +158,10 @@ func TestResponseUsageCompleteRequiresNumericObservationAndTerminal(t *testing.T
 	}
 }
 
+// TestResponseUsageClosedNumericValidationAndTupleIsolation rejects malformed counters/metadata,
+// foreign or unbound turns and post-terminal receipts without committing measurements or raw diagnostics.
+// TestResponseUsageClosedNumericValidationAndTupleIsolation отвергает неверные counters/metadata,
+// чужие, несвязанные и завершённые ходы без записи измерений или вывода сырых диагностических данных.
 func TestResponseUsageClosedNumericValidationAndTupleIsolation(t *testing.T) {
 	valid := string(responseUsageNotification("response-1", codex160UsageBreakdownFixture))
 	for name, input := range map[string]string{
@@ -174,6 +206,10 @@ func TestResponseUsageClosedNumericValidationAndTupleIsolation(t *testing.T) {
 	}
 }
 
+// TestResponseUsageMetadataIsRedactedButPinnedForDeduplication excludes private metadata from
+// serialized results/receipts, yet rejects its mutation under an already observed response ID.
+// TestResponseUsageMetadataIsRedactedButPinnedForDeduplication исключает приватные metadata из
+// сериализованных результатов/receipts, но отвергает их изменение у уже принятого response ID.
 func TestResponseUsageMetadataIsRedactedButPinnedForDeduplication(t *testing.T) {
 	state := measuredUsageState(t)
 	observation := strings.Replace(string(responseUsageNotification("response-1", codex160UsageBreakdownFixture)), `"usageMetadata":null`, `"usageMetadata":{"amount":"PRIVATE_BODY_SENTINEL","metadata":{"private":"PRIVATE_BODY_SENTINEL"}}`, 1)
@@ -190,6 +226,10 @@ func TestResponseUsageMetadataIsRedactedButPinnedForDeduplication(t *testing.T) 
 	}
 }
 
+// TestResponseUsageReceiptsHaveABoundedBudget pre-fills the receipt map to its configured limit
+// and rejects a new observation without charging its counters; no provider is contacted.
+// TestResponseUsageReceiptsHaveABoundedBudget заполняет receipt map до заданного предела
+// и отвергает новое наблюдение без учёта его counters; обращения к провайдеру нет.
 func TestResponseUsageReceiptsHaveABoundedBudget(t *testing.T) {
 	state := measuredUsageState(t)
 	for index := range maximumResponseReceipts {
@@ -203,6 +243,10 @@ func TestResponseUsageReceiptsHaveABoundedBudget(t *testing.T) {
 	}
 }
 
+// TestResponseUsageAggregatesEachNumericResponseExactlyOnce sums two distinct receipts including
+// cache-write/reasoning counters, then ignores a reordered JSON replay of the second receipt.
+// TestResponseUsageAggregatesEachNumericResponseExactlyOnce суммирует два receipt вместе с
+// cache-write/reasoning counters, затем игнорирует повтор второго с другим порядком JSON-полей.
 func TestResponseUsageAggregatesEachNumericResponseExactlyOnce(t *testing.T) {
 	state := measuredUsageState(t)
 	usage := strings.TrimSuffix(codex160UsageBreakdownFixture, `}`) + `,"cacheWriteInputTokens":10}`
@@ -221,6 +265,10 @@ func TestResponseUsageAggregatesEachNumericResponseExactlyOnce(t *testing.T) {
 	}
 }
 
+// TestResponseUsageResponseIDIsBoundedOpaqueString permits non-tool characters in response IDs
+// while rejecting an empty ID and a value exceeding the 256-byte fixture boundary.
+// TestResponseUsageResponseIDIsBoundedOpaqueString допускает в response ID символы вне tool ID,
+// но отвергает пустое значение и превышение проверяемого предела 256 байт.
 func TestResponseUsageResponseIDIsBoundedOpaqueString(t *testing.T) {
 	state := measuredUsageState(t)
 	if err := state.notification("rawResponse/completed", responseUsageNotification("opaque/response#1", codex160UsageBreakdownFixture)); err != nil {
@@ -233,6 +281,10 @@ func TestResponseUsageResponseIDIsBoundedOpaqueString(t *testing.T) {
 	}
 }
 
+// TestResponseUsageFailureReasonStaysClosedAtNotificationBoundary preserves the named arithmetic
+// reason through a private wrapped error instead of deriving a reason from its sentinel text.
+// TestResponseUsageFailureReasonStaysClosedAtNotificationBoundary сохраняет закрытую причину
+// арифметики через приватную обёртку ошибки, не выводя её из текста sentinel.
 func TestResponseUsageFailureReasonStaysClosedAtNotificationBoundary(t *testing.T) {
 	state := measuredUsageState(t)
 	invalid := strings.Replace(codex160UsageBreakdownFixture, `"totalTokens":100`, `"totalTokens":101`, 1)
@@ -246,6 +298,10 @@ func TestResponseUsageFailureReasonStaysClosedAtNotificationBoundary(t *testing.
 	}
 }
 
+// TestUsageCompletenessIsClosedAndDefaultsToUnknown checks enum round trips, absent-field UNKNOWN,
+// unchanged receivers on invalid input, and rejection of unsupported values by JSON and broker validation.
+// TestUsageCompletenessIsClosedAndDefaultsToUnknown проверяет JSON-цикл enum, UNKNOWN без поля,
+// неизменность receiver при ошибке и отказ JSON/broker validation для неподдержанных значений.
 func TestUsageCompletenessIsClosedAndDefaultsToUnknown(t *testing.T) {
 	var empty Result
 	if json.Unmarshal([]byte(`{}`), &empty) != nil || empty.UsageCompleteness != UsageUnknown {

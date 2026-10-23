@@ -19,11 +19,16 @@ import (
 )
 
 const (
-	platformSnapshotPageSize         = 50
+	// platformSnapshotPageSize bounds ordinary initial owner catalogs at fifty records; pagination cursors remain owner-produced and later pages are not fetched here.
+	// platformSnapshotPageSize ограничивает обычные начальные каталоги пятьюдесятью записями; курсоры формирует владелец, следующие страницы здесь не загружаются.
+	platformSnapshotPageSize = 50
+	// assistantSnapshotInitialPageSize starts an unhinted assistant snapshot at twenty-five whole conversations before bounded size adaptation.
+	// assistantSnapshotInitialPageSize начинает снимок помощника без подсказки с двадцати пяти целых диалогов до ограниченного подбора размера.
 	assistantSnapshotInitialPageSize = 25
 )
 
-// Размер принадлежит одному socket; payload и полномочия в подсказке отсутствуют.
+// assistantSnapshotPageHint retains only the last fitting page size for one socket and exact organization/project. It contains no owner payload, credentials or permission decision and cannot replace fresh reads.
+// assistantSnapshotPageHint хранит только последний поместившийся размер страницы одного сокета и точных организации и проекта. Ответ владельца, credentials и решение о правах отсутствуют; свежие чтения не заменяются.
 type assistantSnapshotPageHint struct {
 	organizationRef string
 	projectRef      string
@@ -31,16 +36,28 @@ type assistantSnapshotPageHint struct {
 }
 
 const (
-	platformSnapshotReadFailure       = "platform bootstrap snapshot read failed"
+	// platformSnapshotReadFailure is the fixed platform dependency-read log message; dynamic causes are represented by closed diagnostic fields instead of raw text.
+	// platformSnapshotReadFailure — фиксированное сообщение отказа чтения зависимостей платформы; причины представлены закрытыми полями вместо сырого текста.
+	platformSnapshotReadFailure = "platform bootstrap snapshot read failed"
+	// platformSnapshotValidationFailure identifies a rejected typed snapshot projection without serializing the invalid owner payload.
+	// platformSnapshotValidationFailure обозначает отклонённую типизированную проекцию снимка без сериализации неверного ответа владельца.
 	platformSnapshotValidationFailure = "platform bootstrap snapshot validation failed"
-	platformSnapshotSizeFailure       = "platform snapshot frame size exceeded"
+	// platformSnapshotSizeFailure identifies full-frame overflow after bounded adaptation, recording size/class rather than snapshot contents.
+	// platformSnapshotSizeFailure обозначает превышение полного кадра после ограниченного подбора, записывая размер и класс вместо содержимого снимка.
+	platformSnapshotSizeFailure = "platform snapshot frame size exceeded"
 )
 
 var (
+	// errPlatformSnapshotInvalid rejects malformed/unsupported snapshot projections before that envelope is admitted to the outbound queue.
+	// errPlatformSnapshotInvalid отклоняет некорректную или неподдерживаемую проекцию до допуска этого конверта в исходящую очередь.
 	errPlatformSnapshotInvalid = errors.New("platform snapshot projection is invalid")
-	errPlatformSnapshotSize    = errors.New("platform snapshot frame exceeds maximum size")
+	// errPlatformSnapshotSize reports that a complete envelope still exceeds the fixed frame limit; callers must not silently truncate its conversations or fields.
+	// errPlatformSnapshotSize сообщает, что полный конверт всё ещё превышает предел кадра; вызывающий не должен молча усекать диалоги или поля.
+	errPlatformSnapshotSize = errors.New("platform snapshot frame exceeds maximum size")
 )
 
+// typedPlatformSnapshot JSON-roundtrips a server-built map into the generated payload with unknown-field rejection and validates which top-level sections are present for the exact kind. It does not itself authorize resources or validate every business-field invariant.
+// typedPlatformSnapshot преобразует серверную map через JSON в generated payload с отказом на неизвестных полях и проверяет набор верхнеуровневых разделов точного вида. Права на ресурсы и все бизнес-инварианты отдельных полей здесь не проверяются.
 func typedPlatformSnapshot(kind string, value map[string]any) (generated.PlatformSnapshotPayload, error) {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -86,6 +103,8 @@ func typedPlatformSnapshot(kind string, value map[string]any) (generated.Platfor
 	return snapshot, nil
 }
 
+// platformBootstrapKinds defines the fixed ordered initial catalog kinds; denied kinds are skipped by bootstrap rather than synthesized from a client's request.
+// platformBootstrapKinds задаёт фиксированный порядок начальных видов каталогов; запрещённые виды bootstrap пропускает, а не создаёт по запросу клиента.
 var platformBootstrapKinds = []string{
 	"PROJECT",
 	"AGENT",
@@ -105,10 +124,14 @@ var platformBootstrapKinds = []string{
 	"RUNTIME_SELECTION",
 }
 
+// platformPage returns a fresh first-page request with the common fifty-item budget and no fabricated owner pagination token.
+// platformPage возвращает новый запрос первой страницы с общим пределом пятьдесят и без выдуманного токена пагинации владельца.
 func platformPage() *controlplanev1.PageRequest {
 	return &controlplanev1.PageRequest{PageSize: platformSnapshotPageSize}
 }
 
+// projectSnapshotPart converts one protobuf response through the HTTP-safe projection and localizes only explicit safe errors, propagating projection failure without owner writes.
+// projectSnapshotPart преобразует один protobuf-ответ через безопасную HTTP-проекцию и локализует только явные безопасные ошибки, возвращая отказ проекции без записей у владельца.
 func projectSnapshotPart(message proto.Message, localize func(string) string) (map[string]any, error) {
 	projection, err := httptransport.ProtoMap(message)
 	if err != nil {
@@ -118,6 +141,8 @@ func projectSnapshotPart(message proto.Message, localize func(string) string) (m
 	return projection, nil
 }
 
+// snapshotWithCatalog wraps a successfully projected protobuf response in the catalog section, returning no map on conversion failure.
+// snapshotWithCatalog помещает успешно спроецированный protobuf-ответ в раздел catalog и не возвращает map при ошибке преобразования.
 func snapshotWithCatalog(message proto.Message, localize func(string) string) (map[string]any, error) {
 	catalog, err := projectSnapshotPart(message, localize)
 	if err != nil {
@@ -126,6 +151,8 @@ func snapshotWithCatalog(message proto.Message, localize func(string) string) (m
 	return map[string]any{"catalog": catalog}, nil
 }
 
+// projectSpeechAvailability combines owner STT availability with the configured speech-client projection and formats an optional UTC validity ceiling into the generated browser type; it does not transcribe audio.
+// projectSpeechAvailability объединяет доступность STT владельца с проекцией настроенного speech client и форматирует необязательный срок UTC в generated browser type; аудио не транскрибируется.
 func (server *Server) projectSpeechAvailability(ctx context.Context, owner *controlplanev1.SpeechTranscriptionAvailability) *generated.SpeechTranscriptionAvailability {
 	availability := httptransport.SpeechAvailability(ctx, server.speech, owner)
 	projected := &generated.SpeechTranscriptionAvailability{
@@ -139,6 +166,8 @@ func (server *Server) projectSpeechAvailability(ctx context.Context, owner *cont
 	return projected
 }
 
+// speechAvailabilityMap copies nonnil generated availability into the exact available/reason/optional-validUntil map expected by bootstrap projection.
+// speechAvailabilityMap копирует ненулевую generated доступность в точную map available/reason/необязательный validUntil для bootstrap-проекции.
 func speechAvailabilityMap(value *generated.SpeechTranscriptionAvailability) map[string]any {
 	projected := map[string]any{
 		"available": value.Available,
@@ -150,6 +179,8 @@ func speechAvailabilityMap(value *generated.SpeechTranscriptionAvailability) map
 	return projected
 }
 
+// scopedProjectContext preserves an empty project context or attaches the explicit transport selector through controlplaneclient; attaching a selector does not grant project access.
+// scopedProjectContext сохраняет контекст без проекта либо добавляет явный транспортный селектор через controlplaneclient; добавление селектора прав не выдаёт.
 func scopedProjectContext(ctx context.Context, projectRef string) (context.Context, error) {
 	if projectRef == "" {
 		return ctx, nil
@@ -157,10 +188,14 @@ func scopedProjectContext(ctx context.Context, projectRef string) (context.Conte
 	return controlplaneclient.WithProjectReference(ctx, projectRef)
 }
 
+// projectPlatformSnapshot reads the requested owner-backed catalog with the common first-page budget, delegating kind-specific scope, projection and errors to projectPlatformSnapshotPage.
+// projectPlatformSnapshot читает каталог владельца с общим бюджетом первой страницы, передавая выбор области, проекцию и ошибки вида в projectPlatformSnapshotPage.
 func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, projectRef string, localize func(string) string) (map[string]any, error) {
 	return server.projectPlatformSnapshotPage(ctx, kind, projectRef, localize, platformSnapshotPageSize)
 }
 
+// projectPlatformSnapshotPage composes one kind's fresh typed owner reads, preserving explicit project context and separate organizational catalogs/cursors. It adds overview/gates, access registries, assistant/bootstrap and runtime/provider data only in their declared branches; financial summary is mandatory even when the typed provider-catalog size outcome permits a reduced catalog. Managed configurations keep four kind-specific page records. Optional denied/not-found parts are handled only at their existing branches; other failures abort this kind without inventing data. It returns projections, not authority or durable state.
+// projectPlatformSnapshotPage объединяет свежие типизированные чтения одного вида у владельцев, сохраняя явный контекст проекта и отдельные организационные каталоги с курсорами. Обзор, подтверждения, реестры доступа, помощник, bootstrap, runtime и provider добавляются только в своих ветвях; финансовая сводка обязательна даже при допустимом сокращении каталога по типизированному исходу размера. Управляемые конфигурации сохраняют четыре записи страниц по видам. Необязательные отказанные или отсутствующие части обрабатываются только в прежних ветвях; другие ошибки прерывают этот вид без выдуманных данных. Результат — проекции, а не полномочия или устойчивое состояние.
 func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, projectRef string, localize func(string) string, assistantPageSize int32) (map[string]any, error) {
 	scoped, err := scopedProjectContext(ctx, projectRef)
 	if err != nil {
@@ -583,12 +618,14 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 	}
 }
 
-// boundedPlatformSnapshot уменьшает только целую авторитетную страницу.
-// Содержимое разговоров и cursor не переписываются; размер включает envelope.
+// boundedPlatformSnapshot uses the socket lifecycle context for the complete bounded snapshot path; it does not create a new request lifetime or reuse owner payloads.
+// boundedPlatformSnapshot использует жизненный контекст сокета для полного ограниченного снимка, не создавая новый срок запроса и не переиспользуя ответы владельца.
 func (multiplexer *sessionMultiplexer) boundedPlatformSnapshot(envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
 	return multiplexer.boundedPlatformSnapshotWithin(multiplexer.ctx, envelope)
 }
 
+// boundedPlatformSnapshotWithin freshly reads/projects and measures the entire envelope against maximumFrameBytes under the supplied context. Only assistant/provider kinds halve whole owner pages to one; provider overflow may retain the verified financial summary with an unavailable-catalog flag. A successful live assistant read remembers only its scoped page size. Denials/errors are not retried as size failures, content is never truncated, and this method does not enqueue or advance a cursor.
+// boundedPlatformSnapshotWithin заново читает, проецирует и измеряет полный конверт относительно maximumFrameBytes в переданном контексте. Только виды помощника и провайдера делят целые owner-страницы до единицы; переполнение провайдера может сохранить проверенную финансовую сводку с признаком недоступного каталога. Успешное активное чтение помощника запоминает только размер страницы своей области. Отказы и ошибки не повторяются как ошибки размера, содержимое не усекается, очередь и курсор этот метод не меняет.
 func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context.Context, envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
 	initialPageSize := int32(platformSnapshotPageSize)
 	if envelope.Kind == generated.PlatformResourceKindSystemAssistant {
@@ -648,6 +685,8 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context
 	}
 }
 
+// assistantSnapshotInitialPageSize accepts a known hint only for the current organization/project and active socket context; otherwise it clears the hint and returns twenty-five.
+// assistantSnapshotInitialPageSize принимает известную подсказку только для текущих организации, проекта и активного контекста сокета; иначе очищает её и возвращает двадцать пять.
 func (multiplexer *sessionMultiplexer) assistantSnapshotInitialPageSize() int32 {
 	hint := multiplexer.assistantPageHint
 	_, size := platformSnapshotDiagnosticPage("SYSTEM_ASSISTANT", 1, hint.pageSize)
@@ -658,6 +697,8 @@ func (multiplexer *sessionMultiplexer) assistantSnapshotInitialPageSize() int32 
 	return size
 }
 
+// sendPlatformBootstrap reads and enqueues kinds in fixed order, skipping permission-denied kinds and returning admitted kinds. Other read failure marks the platform unavailable; queue overflow fails immediately. Earlier queued kinds are not rolled back, so this is not an atomic all-kinds bundle.
+// sendPlatformBootstrap читает и ставит виды в очередь в фиксированном порядке, пропускает запрещённые виды и возвращает допущенные. Другой отказ чтения отмечает недоступность платформы; переполнение очереди немедленно прерывает работу. Уже поставленные виды не откатываются, это не атомарный набор всех видов.
 func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.PlatformResourceKind, error) {
 	available := make([]generated.PlatformResourceKind, 0, len(platformBootstrapKinds))
 	for _, kind := range platformBootstrapKinds {
@@ -686,7 +727,8 @@ func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.Plat
 	return available, nil
 }
 
-// Только закрытый CP outcome ограничения каталога; auth/network ошибки не подавляются.
+// providerCatalogOversized recognizes Unavailable only when at least one typed ErrorInfo has exact control-plane domain/reason and empty metadata. It never converts ordinary authorization/network failures into an empty successful catalog.
+// providerCatalogOversized распознаёт Unavailable только при наличии типизированного ErrorInfo с точными domain/reason control-plane и пустой metadata. Обычные ошибки авторизации и сети в пустой успешный каталог не превращаются.
 func providerCatalogOversized(err error) bool {
 	if status.Code(err) != codes.Unavailable {
 		return false

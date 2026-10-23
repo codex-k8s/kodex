@@ -17,6 +17,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantAgentRuntimeConfigurationFixture builds safe runtime metadata with exact
+// canonical projected inventory digest and truthful MISSING tool observations.
+// Its fixed model/image/ref data are synthetic and do not prove an admitted live image.
+// assistantAgentRuntimeConfigurationFixture создаёт safe runtime metadata с exact canonical
+// projected inventory digest и MISSING tool observations. Fixed model/image/ref data
+// синтетические и не доказывают допуск live image.
 func assistantAgentRuntimeConfigurationFixture(t *testing.T) (runtimecontract.RunnerInput, map[string]any, *cp.AssistantConfigurationCatalogResponse) {
 	t.Helper()
 	input, arguments, response := assistantAgentConfigurationFixture(t)
@@ -48,6 +54,12 @@ func assistantAgentRuntimeConfigurationFixture(t *testing.T) (runtimecontract.Ru
 	return input, arguments, response
 }
 
+// TestAssistantAgentRuntimeConfigurationMCPFullRead checks typed validation and
+// caster acceptance, then reassembles seventy-one-byte local MCP pages through a
+// fake owner for both scopes, preserving exact target and lease generation.
+// TestAssistantAgentRuntimeConfigurationMCPFullRead проверяет typed validation/caster
+// и собирает local MCP pages до семидесяти одного byte через fake owner обоих
+// scopes, сохраняя exact target и lease generation.
 func TestAssistantAgentRuntimeConfigurationMCPFullRead(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -78,6 +90,12 @@ func TestAssistantAgentRuntimeConfigurationMCPFullRead(t *testing.T) {
 	}
 }
 
+// TestAssistantAgentRuntimeConfigurationProducerContractFixture compares exact bytes
+// against the checked-in shared producer fixture and checks caster acceptance of
+// its recomputed digest; this is a local fixture contract check, not a live RPC proof.
+// TestAssistantAgentRuntimeConfigurationProducerContractFixture сравнивает exact bytes
+// с checked-in shared producer fixture и проверяет caster с пересчитанным digest;
+// это local fixture contract check, не live RPC proof.
 func TestAssistantAgentRuntimeConfigurationProducerContractFixture(t *testing.T) {
 	input, arguments, response := assistantAgentRuntimeConfigurationFixture(t)
 	golden, err := os.ReadFile("../../../../../contracts/proto/testdata/assistant_agent_runtime_configuration.json")
@@ -100,6 +118,12 @@ func TestAssistantAgentRuntimeConfigurationProducerContractFixture(t *testing.T)
 	}
 }
 
+// TestAssistantNamedRuntimeConfigurationWithoutCurrentAgentScreen checks safe runtime
+// metadata selectors/casters work without a current agent screen for both scopes,
+// while switching the same selector to full AGENT_CONFIGURATION remains rejected.
+// TestAssistantNamedRuntimeConfigurationWithoutCurrentAgentScreen проверяет safe runtime
+// metadata selectors/casters без current agent screen обоих scopes; смена selector
+// на full AGENT_CONFIGURATION по-прежнему отвергается.
 func TestAssistantNamedRuntimeConfigurationWithoutCurrentAgentScreen(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input, arguments, response := assistantAgentRuntimeConfigurationFixture(t)
@@ -119,6 +143,12 @@ func TestAssistantNamedRuntimeConfigurationWithoutCurrentAgentScreen(t *testing.
 	}
 }
 
+// TestAssistantAgentRuntimeConfigurationRejectsForeignAndOwnSelectors checks invalid
+// scope, kind, helper/entity refs and extra selectors are rejected locally, and
+// CURRENT_CONFIGURATION remains own-only rather than reading the selected employee.
+// TestAssistantAgentRuntimeConfigurationRejectsForeignAndOwnSelectors проверяет локальный
+// отказ неверных scope,kind,helper/entity refs и extra selectors; CURRENT_CONFIGURATION
+// остаётся own-only, а не чтением выбранного employee.
 func TestAssistantAgentRuntimeConfigurationRejectsForeignAndOwnSelectors(t *testing.T) {
 	for _, mutate := range []func(*runtimecontract.RunnerInput, map[string]any){
 		func(i *runtimecontract.RunnerInput, _ map[string]any) {
@@ -153,6 +183,12 @@ func TestAssistantAgentRuntimeConfigurationRejectsForeignAndOwnSelectors(t *test
 	}
 }
 
+// TestAssistantAgentRuntimeConfigurationRejectsMismatchAndSecrets checks rehashed
+// private fields, mismatched versions/project/inventory and invalid resource/tool shapes
+// are rejected with no sentinel reflection; recomputing an outer digest is insufficient.
+// TestAssistantAgentRuntimeConfigurationRejectsMismatchAndSecrets проверяет отказ rehashed
+// private fields,mismatched versions/project/inventory и invalid resource/tool shapes
+// без sentinel reflection; пересчёта outer digest недостаточно.
 func TestAssistantAgentRuntimeConfigurationRejectsMismatchAndSecrets(t *testing.T) {
 	for _, mutate := range []func(*cp.AssistantConfigurationCatalogResponse, map[string]any){
 		func(r *cp.AssistantConfigurationCatalogResponse, _ map[string]any) {

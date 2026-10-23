@@ -20,11 +20,19 @@ import (
 	"github.com/emersion/go-sasl"
 )
 
+// imapDialFixture redirects IMAP ports to a loopback server while retaining the
+// SMTP/POP fixture routes; it never connects to a named external mail host.
+// imapDialFixture направляет IMAP-порты в локальный сервер, сохраняя тестовые
+// маршруты SMTP/POP; соединения с указанным внешним почтовым хостом не создаются.
 type imapDialFixture struct {
 	other   dialFixture
 	address string
 }
 
+// Dial routes ports 993 and 143 to the fixture IMAP listener with cancellation,
+// delegating other destinations to the existing synthetic SMTP/POP dialer.
+// Dial направляет порты 993 и 143 в тестовый IMAP с поддержкой отмены,
+// передавая остальные адреса существующему искусственному соединителю SMTP/POP.
 func (d imapDialFixture) Dial(ctx context.Context, target string) (net.Conn, error) {
 	if strings.HasSuffix(target, ":993") || strings.HasSuffix(target, ":143") {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", d.address)
@@ -32,16 +40,33 @@ func (d imapDialFixture) Dial(ctx context.Context, target string) (net.Conn, err
 	return d.other.Dial(ctx, target)
 }
 
+// literalFixture pairs an in-memory reader with the exact declared literal
+// length used to seed the synthetic IMAP mailbox through APPEND.
+// literalFixture объединяет чтение из памяти с точной объявленной длиной
+// литерала для наполнения искусственного IMAP-ящика через APPEND.
 type literalFixture struct {
 	*strings.Reader
 	size int64
 }
 
+// Size returns the declared byte count without consuming the literal reader;
+// fixture construction is responsible for matching it to the actual MIME bytes.
+// Size возвращает объявленное число байтов, не читая литерал; соответствие
+// фактическим MIME-байтам обеспечивает создание стенда.
 func (r literalFixture) Size() int64 { return r.size }
 
+// imapFixture starts the local in-memory IMAP backend with native MOVE enabled,
+// forwarding optional session wrappers for authentication or fault injection.
+// imapFixture запускает локальный IMAP в памяти с нативным MOVE и передаёт
+// необязательные обёртки сессий для аутентификации и воспроизведения сбоев.
 func imapFixture(t *testing.T, f *providerFixture, mode string, wrappers ...func(imapserver.Session, *imapserver.Conn) imapserver.Session) (*imapmemserver.User, string) {
 	return imapFixtureCaps(t, f, mode, true, wrappers...)
 }
+
+// imapFixtureCaps creates four folders and three fixture messages, advertises
+// UIDPLUS/optional MOVE and joins the local TLS server during test cleanup.
+// imapFixtureCaps создаёт четыре папки и три тестовых письма, объявляет UIDPLUS
+// и необязательный MOVE, а при очистке ждёт завершения локального TLS-сервера.
 func imapFixtureCaps(t *testing.T, f *providerFixture, mode string, nativeMove bool, wrappers ...func(imapserver.Session, *imapserver.Conn) imapserver.Session) (*imapmemserver.User, string) {
 	t.Helper()
 	backend := imapmemserver.New()
@@ -84,6 +109,10 @@ func imapFixtureCaps(t *testing.T, f *providerFixture, mode string, nativeMove b
 	return user, address
 }
 
+// lostAppendSession tracks successful appends and can close the connection
+// before their acknowledgement, modelling an externally applied but uncertain change.
+// lostAppendSession считает успешные добавления и умеет закрыть соединение
+// до подтверждения, моделируя применённое извне, но неопределённое изменение.
 type lostAppendSession struct {
 	imapserver.Session
 	conn    *imapserver.Conn
@@ -91,12 +120,25 @@ type lostAppendSession struct {
 	appends *atomic.Int32
 }
 
+// oauthIMAPSession adds fixture OAUTHBEARER authentication to an in-memory
+// session and counts accepted dummy credentials without contacting an OAuth server.
+// oauthIMAPSession добавляет тестовый вход OAUTHBEARER к сессии в памяти
+// и считает принятые условные реквизиты без обращения к OAuth-серверу.
 type oauthIMAPSession struct {
 	imapserver.Session
 	accepted *atomic.Int32
 }
 
+// AuthenticateMechanisms advertises only OAUTHBEARER for this synthetic session;
+// it does not discover or validate mechanisms at a remote provider.
+// AuthenticateMechanisms объявляет только OAUTHBEARER искусственной сессии;
+// механизмы удалённого провайдера здесь не обнаруживаются и не проверяются.
 func (s *oauthIMAPSession) AuthenticateMechanisms() []string { return []string{sasl.OAuthBearer} }
+
+// Authenticate accepts only the fixture username/token through the wrapped login,
+// records success and rejects all other SASL mechanisms or credential values.
+// Authenticate принимает только тестовые имя/токен через обёрнутый вход, считает
+// успех и отклоняет остальные механизмы SASL и значения реквизитов.
 func (s *oauthIMAPSession) Authenticate(mechanism string) (sasl.Server, error) {
 	if mechanism != sasl.OAuthBearer {
 		return nil, imapserver.ErrAuthFailed
@@ -109,10 +151,19 @@ func (s *oauthIMAPSession) Authenticate(mechanism string) (sasl.Server, error) {
 		return nil
 	}), nil
 }
+
+// Move preserves the wrapped backend's native MOVE capability through the
+// authentication wrapper; the fixture assumes the session implements SessionMove.
+// Move сохраняет нативный MOVE обёрнутого сервера сквозь обёртку входа;
+// тестовый стенд предполагает реализацию SessionMove исходной сессией.
 func (s *oauthIMAPSession) Move(w *imapserver.MoveWriter, set imap.NumSet, folder string) error {
 	return s.Session.(imapserver.SessionMove).Move(w, set, folder)
 }
 
+// TestIMAPSMTPAuthAndReadiness checks local OAUTHBEARER over both TLS modes,
+// optional POP readiness and IMAP hostname refusal without insecure authentication.
+// TestIMAPSMTPAuthAndReadiness проверяет локальный OAUTHBEARER в обоих режимах TLS,
+// необязательный POP и отказ неверному IMAP-имени без незащищённой аутентификации.
 func TestIMAPSMTPAuthAndReadiness(t *testing.T) {
 	for _, mode := range []string{"implicit", "starttls"} {
 		t.Run(mode, func(t *testing.T) {
@@ -149,6 +200,11 @@ func TestIMAPSMTPAuthAndReadiness(t *testing.T) {
 		})
 	}
 }
+
+// Append applies the in-memory append first, counts success and optionally drops
+// the socket before the server can acknowledge it, preserving real uncertainty.
+// Append сначала применяет добавление в памяти, считает успех и при необходимости
+// обрывает сокет до ответа сервера, сохраняя действительную неопределённость исхода.
 func (s *lostAppendSession) Append(folder string, r imap.LiteralReader, opts *imap.AppendOptions) (*imap.AppendData, error) {
 	result, err := s.Session.Append(folder, r, opts)
 	if err == nil {
@@ -159,10 +215,19 @@ func (s *lostAppendSession) Append(folder string, r imap.LiteralReader, opts *im
 	}
 	return result, err
 }
+
+// Move forwards the optional native MOVE interface unchanged so the append-fault
+// wrapper does not accidentally remove a capability from the local server.
+// Move неизменно передаёт необязательный нативный MOVE, чтобы обёртка сбоя
+// добавления случайно не убрала возможность локального сервера.
 func (s *lostAppendSession) Move(w *imapserver.MoveWriter, set imap.NumSet, folder string) error {
 	return s.Session.(imapserver.SessionMove).Move(w, set, folder)
 }
 
+// TestIMAPUnknownAppendDoesNotRepeat loses an update APPEND acknowledgement and
+// requires UNKNOWN replay without new credentials/appends, including another effect key.
+// TestIMAPUnknownAppendDoesNotRepeat теряет подтверждение APPEND при обновлении
+// и требует повтор UNKNOWN без реквизитов/добавлений, в том числе с другим ключом эффекта.
 func TestIMAPUnknownAppendDoesNotRepeat(t *testing.T) {
 	f := newFixture(t, "implicit")
 	var drop atomic.Bool
@@ -215,6 +280,10 @@ func TestIMAPUnknownAppendDoesNotRepeat(t *testing.T) {
 	}
 }
 
+// TestIMAPReadOperations exercises local folder eligibility, paging, MIME/thread
+// reads, flags, drafts and moves, including cursor/UIDVALIDITY conflicts and receipt replay.
+// TestIMAPReadOperations проверяет локальные области папок, страницы, MIME/цепочки,
+// флаги, черновики и перемещения, включая конфликты курсора/UIDVALIDITY и повторы квитанций.
 func TestIMAPReadOperations(t *testing.T) {
 	for _, mode := range []string{"implicit", "starttls"} {
 		t.Run(mode, func(t *testing.T) {

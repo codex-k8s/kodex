@@ -12,6 +12,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// systemDeliveryFixture binds a managed revision and exact approved delivery intent to a claim.
+// RU: systemDeliveryFixture связывает управляемую версию и точное одобренное действие с claim доставки.
 func systemDeliveryFixture(t *testing.T, adapter *Adapter) *cp.InteractionDeliveryClaim {
 	t.Helper()
 	definition, raw := managedPackageFixture(t, adapter.definition, "UI", false)
@@ -21,6 +23,10 @@ func systemDeliveryFixture(t *testing.T, adapter *Adapter) *cp.InteractionDelive
 		CapabilityKey: "mattermost.notifications", SourceCapabilityKey: "mattermost.notifications", ApprovalGateRef: "gate_fixture", ApprovalGateVersion: 2}
 }
 
+// TestManagedSystemDeliveryChecksApprovalBeforeProviderAndUsesBudget verifies owner-gate
+// validation before provider I/O and enforces the selected revision's execution deadline.
+// RU: TestManagedSystemDeliveryChecksApprovalBeforeProviderAndUsesBudget проверяет owner gate
+// до обращения к провайдеру и срок исполнения выбранной версии.
 func TestManagedSystemDeliveryChecksApprovalBeforeProviderAndUsesBudget(t *testing.T) {
 	adapter, _ := claimFixture(t, "mattermost.notifications", map[string]any{"message": "Ready"})
 	claim := systemDeliveryFixture(t, adapter)
@@ -70,6 +76,10 @@ func TestManagedSystemDeliveryChecksApprovalBeforeProviderAndUsesBudget(t *testi
 	}
 }
 
+// TestManagedSourceRejectsGatedInboundAndDetachedConfiguration checks that a source accepts
+// only pinned read capabilities and refuses invalid approval gates or detached configuration.
+// RU: TestManagedSourceRejectsGatedInboundAndDetachedConfiguration проверяет точные read-
+// возможности и отказ для недопустимых gate либо отсоединённой конфигурации.
 func TestManagedSourceRejectsGatedInboundAndDetachedConfiguration(t *testing.T) {
 	adapter, _ := claimFixture(t, "mattermost.team.read", map[string]any{})
 	definition, raw := managedPackageFixture(t, adapter.definition, "GIT", false)
@@ -109,15 +119,7 @@ func TestManagedSourceRejectsGatedInboundAndDetachedConfiguration(t *testing.T) 
 						candidate.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_EACH_EFFECT"
 					}
 				}
-				encoded, err := json.Marshal(candidate)
-				if err != nil {
-					t.Fatal(err)
-				}
-				parsed, err := integrationpackage.Parse(encoded)
-				if err != nil {
-					t.Fatal(err)
-				}
-				source.DefinitionPackage, source.DefinitionDigest = encoded, parsed.Digest
+				source.DefinitionPackage, source.DefinitionDigest = invalidPackageFixture(t, candidate)
 			}
 			if _, err := adapter.sourceBudget(source); err == nil {
 				t.Fatal("unsafe subscription accepted")

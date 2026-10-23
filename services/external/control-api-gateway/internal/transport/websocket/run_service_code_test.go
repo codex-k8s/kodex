@@ -6,6 +6,8 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestCancellationServiceCodeRealtimeProjection checks the known cancellation discriminator and localized summary in two languages while preserving exact execution pins; an unknown future summary must not acquire a service code.
+// TestCancellationServiceCodeRealtimeProjection проверяет известный признак отмены и локализованную сводку на двух языках с точными привязками выполнения; неизвестная будущая сводка не получает service code.
 func TestCancellationServiceCodeRealtimeProjection(t *testing.T) {
 	for _, locale := range []struct{ name, summary string }{{"ru", "Запуск отменён"}, {"en", "Run cancelled"}} {
 		t.Run(locale.name, func(t *testing.T) {
@@ -32,6 +34,8 @@ func TestCancellationServiceCodeRealtimeProjection(t *testing.T) {
 	}
 }
 
+// TestRootCompletionServiceCodeRealtimeProjection preserves the known root-completion service code independently of translated text, and does not assign it to a different root failure reason.
+// TestRootCompletionServiceCodeRealtimeProjection сохраняет известный service code завершения корня независимо от перевода и не назначает его другой причине отказа корня.
 func TestRootCompletionServiceCodeRealtimeProjection(t *testing.T) {
 	for _, summary := range []string{"Корневой процесс завершён", "Root workflow completed"} {
 		event := &cp.RunEvent{

@@ -16,16 +16,22 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantFreshCatalogMCPClient captures the last local activity projection while inheriting the configured catalog-search stub; it does not persist owner state.
+// assistantFreshCatalogMCPClient сохраняет последнюю локальную проекцию активности, наследуя заданную подстановку поиска каталога; состояние владельца не сохраняется.
 type assistantFreshCatalogMCPClient struct {
 	*assistantDefinitionCatalogClient
 	projection *controlplanev1.RecordRunToolCallRequest
 }
 
+// RecordRunToolCall stores the request and returns a synthetic event receipt without enforcing remote authorization, OCC or durable effects.
+// RecordRunToolCall сохраняет запрос и возвращает синтетическую квитанцию события без удалённой авторизации, OCC или устойчивых изменений.
 func (client *assistantFreshCatalogMCPClient) RecordRunToolCall(_ context.Context, request *controlplanev1.RecordRunToolCallRequest, _ ...grpc.CallOption) (*controlplanev1.RecordRunToolCallResponse, error) {
 	client.projection = request
 	return &controlplanev1.RecordRunToolCallResponse{Event: &controlplanev1.RunEvent{Ref: "event_synthetic123"}}, nil
 }
 
+// TestAssistantFreshFutureReasoningTraversesMCPAndSafeProjection checks a future canonical effort survives local MCP serialization with exact lease pins and only catalogKind in successful activity metadata.
+// TestAssistantFreshFutureReasoningTraversesMCPAndSafeProjection проверяет прохождение будущей канонической степени рассуждения через локальную сериализацию MCP с точными привязками аренды и только catalogKind в метаданных успешной активности.
 func TestAssistantFreshFutureReasoningTraversesMCPAndSafeProjection(t *testing.T) {
 	input, arguments, response := assistantFreshCatalogFixture(runtimecontract.AssistantScopeSystem, "MODELS")
 	entry := response.AssistantConfigurationCatalog.Entries[0]
@@ -58,10 +64,12 @@ func TestAssistantFreshFutureReasoningTraversesMCPAndSafeProjection(t *testing.T
 	}
 }
 
-// Однократный tools/list содержит полные typed схемы семи assistant tools.
-// Это budget компактности теста; production MCP frame/readiness не меняются.
+// maximumAssistantCompactCatalogBytes bounds serialized assistant tools/list to 16 KiB in this compactness test only; production frame and readiness limits are unchanged.
+// maximumAssistantCompactCatalogBytes ограничивает сериализованный tools/list помощника 16 КиБ только в проверке компактности; производственные пределы кадра и готовности не меняются.
 const maximumAssistantCompactCatalogBytes = 16 << 10
 
+// TestAssistantFreshCatalogToolListStaysCompactForRealSystemInput measures all tool descriptors for a synthetic system input with no screen context against the test-only byte budget; it starts no model session.
+// TestAssistantFreshCatalogToolListStaysCompactForRealSystemInput измеряет все описания инструментов для синтетического системного входа без экранного контекста относительно тестового байтового бюджета; сессия модели не запускается.
 func TestAssistantFreshCatalogToolListStaysCompactForRealSystemInput(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeSystem)
 	input.AssistantContext = nil
@@ -73,6 +81,10 @@ func TestAssistantFreshCatalogToolListStaysCompactForRealSystemInput(t *testing.
 	t.Logf("assistant tools/list bytes=%d budget=%d", len(encoded), maximumAssistantCompactCatalogBytes)
 }
 
+// assistantFreshCatalogFixture creates synthetic scope-bound input, selector and one owner catalog row with kind-specific metadata for local read tests.
+// Image evidence deliberately defaults to UNAVAILABLE; unsupported kinds require the specialized fixture used by their tests.
+// assistantFreshCatalogFixture создаёт синтетические вход, селектор и одну строку каталога владельца с привязкой области и полями конкретного вида для локальных тестов чтения.
+// Свидетельство образа по умолчанию намеренно UNAVAILABLE; неподдерживаемые виды требуют специальных образцов своих тестов.
 func assistantFreshCatalogFixture(scope runtimecontract.AssistantScope, kind string) (runtimecontract.RunnerInput, map[string]any, *controlplanev1.SearchAssistantResourcesResponse) {
 	input := assistantConfigurationFixture(scope)
 	input.OrganizationRef = "org_owned123"
@@ -117,6 +129,10 @@ func assistantFreshCatalogFixture(scope runtimecontract.AssistantScope, kind str
 	return input, map[string]any{"assistant_configuration_catalog": selector}, &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}
 }
 
+// TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC checks seven ordinary catalog kinds in both scopes use one exact fenced selector and closed, credential-free row/activity projections.
+// Own full CURRENT_CONFIGURATION is excluded here and covered by its separate typed read tests.
+// TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC проверяет для семи обычных видов каталога в обеих областях точный селектор с ограждением и закрытые проекции строк и активности без учётных данных.
+// Полное собственное чтение CURRENT_CONFIGURATION здесь исключено и проверяется отдельными типизированными тестами.
 func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, kind := range assistantConfigurationCatalogKinds {
@@ -167,6 +183,8 @@ func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T)
 	}
 }
 
+// TestAssistantFreshModelCatalogAcceptsCanonicalFutureReasoningThroughFencedRPC checks catalog-defined model and effort names pass through the configured owner-search stub with exact account and lease coordinates in both scopes.
+// TestAssistantFreshModelCatalogAcceptsCanonicalFutureReasoningThroughFencedRPC проверяет прохождение заданных каталогом имён модели и рассуждений через подставной поиск владельца с точными координатами аккаунта и аренды в обеих областях.
 func TestAssistantFreshModelCatalogAcceptsCanonicalFutureReasoningThroughFencedRPC(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
@@ -191,6 +209,8 @@ func TestAssistantFreshModelCatalogAcceptsCanonicalFutureReasoningThroughFencedR
 	}
 }
 
+// TestAssistantFreshModelCatalogReasoningIsStructurallyClosedAndBounded checks twelve effort-list/default combinations for canonical syntax, length/cardinality, uniqueness and default membership after owner read.
+// TestAssistantFreshModelCatalogReasoningIsStructurallyClosedAndBounded проверяет двенадцать сочетаний списка рассуждений и значения по умолчанию: канонический синтаксис, длину, количество, уникальность и включение значения в список после чтения владельца.
 func TestAssistantFreshModelCatalogReasoningIsStructurallyClosedAndBounded(t *testing.T) {
 	efforts := make([]string, 16)
 	for index := range efforts {
@@ -228,6 +248,8 @@ func TestAssistantFreshModelCatalogReasoningIsStructurallyClosedAndBounded(t *te
 	}
 }
 
+// TestAssistantFreshCatalogEnvironmentLocatorIsOnlyAssistantMetadata checks runtime_environment_ref is projected only for ASSISTANTS and malformed locators fail while an absent binding remains valid.
+// TestAssistantFreshCatalogEnvironmentLocatorIsOnlyAssistantMetadata проверяет выдачу runtime_environment_ref только для ASSISTANTS, отказ для некорректных ссылок и допустимость отсутствующей привязки.
 func TestAssistantFreshCatalogEnvironmentLocatorIsOnlyAssistantMetadata(t *testing.T) {
 	for _, kind := range assistantConfigurationCatalogKinds {
 		t.Run(kind, func(t *testing.T) {
@@ -252,6 +274,8 @@ func TestAssistantFreshCatalogEnvironmentLocatorIsOnlyAssistantMetadata(t *testi
 	}
 }
 
+// TestAssistantFreshCatalogRecipeEnvironmentKeyIsClosedPerKind checks both scopes allow environment_key only on recipe rows and reject missing, uppercase, path-like or oversized keys.
+// TestAssistantFreshCatalogRecipeEnvironmentKeyIsClosedPerKind проверяет в обеих областях допустимость environment_key только в строках рецептов и отказ для отсутствующих, прописных, похожих на путь или слишком длинных ключей.
 func TestAssistantFreshCatalogRecipeEnvironmentKeyIsClosedPerKind(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, kind := range assistantConfigurationCatalogKinds {
@@ -278,6 +302,8 @@ func TestAssistantFreshCatalogRecipeEnvironmentKeyIsClosedPerKind(t *testing.T) 
 	}
 }
 
+// TestAssistantFreshConfigurationCatalogRejectsMalformedSelectorsBeforeRPC checks ten invalid selector, scope and lease mutations return errors without reaching the owner-search stub.
+// TestAssistantFreshConfigurationCatalogRejectsMalformedSelectorsBeforeRPC проверяет возврат ошибки без обращения к подставному поиску владельца при десяти некорректных изменениях селектора, области и аренды.
 func TestAssistantFreshConfigurationCatalogRejectsMalformedSelectorsBeforeRPC(t *testing.T) {
 	for _, mutate := range []struct {
 		name  string
@@ -337,6 +363,8 @@ func TestAssistantFreshConfigurationCatalogRejectsMalformedSelectorsBeforeRPC(t 
 	}
 }
 
+// TestAssistantFreshConfigurationCatalogRejectsResponseBoundaryMismatch checks fourteen malformed owner responses are rejected for tenant/target/scope, mixed arms, unknown fields, duplicates, provenance and page bounds.
+// TestAssistantFreshConfigurationCatalogRejectsResponseBoundaryMismatch проверяет отклонение четырнадцати некорректных ответов владельца из-за организации, цели, области, смешанных вариантов, неизвестных полей, дубликатов, происхождения и пределов страницы.
 func TestAssistantFreshConfigurationCatalogRejectsResponseBoundaryMismatch(t *testing.T) {
 	for _, mutate := range []struct {
 		name  string
@@ -399,6 +427,8 @@ func TestAssistantFreshConfigurationCatalogRejectsResponseBoundaryMismatch(t *te
 	}
 }
 
+// TestAssistantFreshConfigurationCatalogChecksEveryEntryKindAndPagination rejects a kind-specific invalid row in each ordinary catalog and checks ten-entry pages advance within the bounded offset range.
+// TestAssistantFreshConfigurationCatalogChecksEveryEntryKindAndPagination отклоняет некорректную строку каждого обычного вида каталога и проверяет продвижение страниц по десять элементов в ограниченном диапазоне смещений.
 func TestAssistantFreshConfigurationCatalogChecksEveryEntryKindAndPagination(t *testing.T) {
 	for _, kind := range assistantConfigurationCatalogKinds {
 		if kind == "CURRENT_CONFIGURATION" {
@@ -453,6 +483,8 @@ func TestAssistantFreshConfigurationCatalogChecksEveryEntryKindAndPagination(t *
 	}
 }
 
+// TestAssistantCatalogRejectsMixedResponseArmsForOtherQueries checks definition lookup and ordinary resource search cannot consume a configuration-catalog response arm.
+// TestAssistantCatalogRejectsMixedResponseArmsForOtherQueries проверяет, что поиск определения и обычный поиск ресурсов не принимают вариант ответа каталога конфигурации.
 func TestAssistantCatalogRejectsMixedResponseArmsForOtherQueries(t *testing.T) {
 	input, _, response := assistantFreshCatalogFixture(runtimecontract.AssistantScopeSystem, "MODELS")
 	client := &assistantDefinitionCatalogClient{response: response}
@@ -465,6 +497,10 @@ func TestAssistantCatalogRejectsMixedResponseArmsForOtherQueries(t *testing.T) {
 	}
 }
 
+// TestSystemAssistantFreshCatalogCanDiscoverProjectAssistantWithoutScreenRebind checks SYSTEM discovery can list/read a project helper while PROJECT discovery rejects another helper's row.
+// The test validates read projection only and neither changes screen context nor grants configuration authority.
+// TestSystemAssistantFreshCatalogCanDiscoverProjectAssistantWithoutScreenRebind проверяет возможность системного поиска перечислить и прочитать проектного помощника, тогда как проектный поиск отклоняет строку другого помощника.
+// Проверяется только проекция чтения без изменения экранного контекста и выдачи полномочий настройки.
 func TestSystemAssistantFreshCatalogCanDiscoverProjectAssistantWithoutScreenRebind(t *testing.T) {
 	input, arguments, response := assistantFreshCatalogFixture(runtimecontract.AssistantScopeSystem, "ASSISTANTS")
 	projectEntry := proto.Clone(response.AssistantConfigurationCatalog.Entries[0]).(*controlplanev1.AssistantConfigurationCatalogEntry)

@@ -20,7 +20,13 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// authorizationCleanupFixture creates an already expired synthetic pending attempt and unobserved
+// cleanup query with a deterministic materializer ref, but no object UID/resource-version authority.
+// authorizationCleanupFixture создаёт уже просроченный synthetic pending attempt и unobserved
+// cleanup query с детерминированным materializer ref, но без object UID/resource-version authority.
 func authorizationCleanupFixture() (ProviderAuthorizationAttempt, ProviderAuthorizationCleanupTarget) {
+	// attemptRef fixes the synthetic identity used to derive the matching materializer name.
+	// attemptRef фиксирует synthetic identity для вычисления совпадающего materializer name.
 	const attemptRef = "pauth_cleanup123456"
 	digest := sha256.Sum256([]byte(attemptRef + "\x00" + providerCleanupAccountRef))
 	attempt := ProviderAuthorizationAttempt{AttemptRef: attemptRef, AccountRef: providerCleanupAccountRef,
@@ -30,8 +36,10 @@ func authorizationCleanupFixture() (ProviderAuthorizationAttempt, ProviderAuthor
 		AuthorizationAttemptRef: attempt.AttemptRef, MaterializerAttemptRef: attempt.MaterializerAttemptRef, Generation: providerCleanupGeneration}
 }
 
-// Fake API сохраняет настоящие UUID и применяет UID/RV CAS при Update;
-// обычный object tracker сам этих Kubernetes preconditions не проверяет.
+// newAuthorizationCleanupStore adds synthetic UUID/resource versions and explicit update UID/RV/data
+// CAS checks missing from the basic tracker. It models selected API behavior, not a real Kubernetes server.
+// newAuthorizationCleanupStore добавляет synthetic UUID/resource versions и явные update UID/RV/data
+// CAS checks, отсутствующие в простом tracker. Это модель выбранного API behavior, не реальный Kubernetes server.
 func newAuthorizationCleanupStore(t *testing.T) (*Store, *fake.Clientset) {
 	t.Helper()
 	store, client := newTestStore(t)
@@ -63,6 +71,10 @@ func newAuthorizationCleanupStore(t *testing.T) (*Store, *fake.Clientset) {
 	return store, client
 }
 
+// TestAuthorizationCleanupMetadataDoesNotPollOrExpire permits only GET actions while observing an
+// expired pending attempt and rejects malformed query authority before any fake API access.
+// TestAuthorizationCleanupMetadataDoesNotPollOrExpire допускает лишь GET actions при наблюдении
+// expired pending attempt и отвергает неверную query authority до обращения к fake API.
 func TestAuthorizationCleanupMetadataDoesNotPollOrExpire(t *testing.T) {
 	t.Parallel()
 	store, client := newAuthorizationCleanupStore(t)
@@ -98,6 +110,10 @@ func TestAuthorizationCleanupMetadataDoesNotPollOrExpire(t *testing.T) {
 	}
 }
 
+// TestAuthorizationCleanupFencesBothNamesAcrossRestart resumes a partial fence through a fresh Store,
+// rejects late producers/terminal updates, erases pending material and retains exact UID pins.
+// TestAuthorizationCleanupFencesBothNamesAcrossRestart продолжает частичный fence через новый Store,
+// отвергает late producers/terminal updates, стирает pending material и сохраняет точные UID pins.
 func TestAuthorizationCleanupFencesBothNamesAcrossRestart(t *testing.T) {
 	t.Parallel()
 	store, client := newAuthorizationCleanupStore(t)
@@ -147,6 +163,10 @@ func TestAuthorizationCleanupFencesBothNamesAcrossRestart(t *testing.T) {
 	}
 }
 
+// TestAuthorizationAbsenceCannotDeleteLatePendingObject rejects unpinned/stale commands after a late
+// pending object appears, requiring fresh owner metadata and no unintended update/delete.
+// TestAuthorizationAbsenceCannotDeleteLatePendingObject отвергает unpinned/stale commands после появления
+// late pending object, требуя свежие owner metadata и отсутствие лишних update/delete.
 func TestAuthorizationAbsenceCannotDeleteLatePendingObject(t *testing.T) {
 	t.Parallel()
 	store, client := newAuthorizationCleanupStore(t)
@@ -176,6 +196,10 @@ func TestAuthorizationAbsenceCannotDeleteLatePendingObject(t *testing.T) {
 	}
 }
 
+// TestAuthorizationProducedCredentialReceiptSurvivesCleanupAndLostACK injects a committed receipt with
+// lost acknowledgement, then proves its produced descriptor survives restart and independent deletion.
+// TestAuthorizationProducedCredentialReceiptSurvivesCleanupAndLostACK подставляет committed receipt с
+// потерянным acknowledgement, затем проверяет сохранение produced descriptor после restart и отдельного удаления.
 func TestAuthorizationProducedCredentialReceiptSurvivesCleanupAndLostACK(t *testing.T) {
 	t.Parallel()
 	store, client := newAuthorizationCleanupStore(t)
@@ -229,6 +253,10 @@ func TestAuthorizationProducedCredentialReceiptSurvivesCleanupAndLostACK(t *test
 	}
 }
 
+// TestCredentialCleanupReportsLateCreateRaceAsSeparateTarget injects a replacement during name fencing,
+// preserves it as a new cleanup target and requires replay of the old task to return the same receipt.
+// TestCredentialCleanupReportsLateCreateRaceAsSeparateTarget подставляет замену при name fencing,
+// сохраняет её как новую cleanup target и требует тот же receipt при повторе прежней task.
 func TestCredentialCleanupReportsLateCreateRaceAsSeparateTarget(t *testing.T) {
 	t.Parallel()
 	store, client := newAuthorizationCleanupStore(t)
@@ -271,6 +299,10 @@ func TestCredentialCleanupReportsLateCreateRaceAsSeparateTarget(t *testing.T) {
 	}
 }
 
+// TestAuthorizationFenceUnknownUpdateACKRecoversExactOriginalPins persists a fence while returning
+// an API error, then verifies restart can rejoin its original pins but not a different source UID.
+// TestAuthorizationFenceUnknownUpdateACKRecoversExactOriginalPins сохраняет fence с возвратом API error,
+// затем проверяет rejoin исходных pins после restart и отказ другому source UID.
 func TestAuthorizationFenceUnknownUpdateACKRecoversExactOriginalPins(t *testing.T) {
 	t.Parallel()
 	store, client := newAuthorizationCleanupStore(t)
@@ -301,15 +333,13 @@ func TestAuthorizationFenceUnknownUpdateACKRecoversExactOriginalPins(t *testing.
 	}
 }
 
+// TestAuthorizationFenceRejectsConcurrentResourceVersionChange changes the stored pending version
+// before the default update reactor and requires CAS refusal without overwriting that newer object.
+// TestAuthorizationFenceRejectsConcurrentResourceVersionChange меняет stored pending version
+// перед обычным update reactor и требует CAS refusal без перезаписи более нового объекта.
 func TestAuthorizationFenceRejectsConcurrentResourceVersionChange(t *testing.T) {
 	t.Parallel()
-	store, client := newAuthorizationCleanupStore(t)
-	attempt, target := authorizationCleanupFixture()
-	stored, _, err := store.CreateProviderAuthorizationAttempt(t.Context(), attempt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	target.Kind, target.UID, target.ResourceVersion = ProviderCleanupAuthorization, stored.SecretUID, stored.ResourceVersion
+	store, client, target := authorizationCleanupTargetFixture(t)
 	client.PrependReactor("update", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		wanted := action.(k8stesting.UpdateAction).GetObject().(*corev1.Secret)
 		object, err := client.Tracker().Get(corev1.SchemeGroupVersion.WithResource("secrets"), testNamespace, wanted.Name)
@@ -332,6 +362,26 @@ func TestAuthorizationFenceRejectsConcurrentResourceVersionChange(t *testing.T) 
 	}
 }
 
+// authorizationCleanupTargetFixture creates a pending attempt through the normal fake adapter
+// and pins the returned UID/resource version; caller-specific update reactors are installed later.
+// authorizationCleanupTargetFixture создаёт pending attempt через обычный fake adapter
+// и закрепляет возвращённые UID/resource version; особые update reactors ставит caller после этого.
+func authorizationCleanupTargetFixture(t *testing.T) (*Store, *fake.Clientset, ProviderAuthorizationCleanupTarget) {
+	t.Helper()
+	store, client := newAuthorizationCleanupStore(t)
+	attempt, target := authorizationCleanupFixture()
+	stored, _, err := store.CreateProviderAuthorizationAttempt(t.Context(), attempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target.Kind, target.UID, target.ResourceVersion = ProviderCleanupAuthorization, stored.SecretUID, stored.ResourceVersion
+	return store, client, target
+}
+
+// TestAuthorizationCleanupRejectsMalformedDurableFence mutates immutable/identity/material/JSON fence
+// properties and requires a closed conflict with GET-only actions, not repair or mutation.
+// TestAuthorizationCleanupRejectsMalformedDurableFence меняет immutable/identity/material/JSON fence
+// properties и требует закрытый conflict с GET-only actions, не repair или mutation.
 func TestAuthorizationCleanupRejectsMalformedDurableFence(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -383,6 +433,10 @@ func TestAuthorizationCleanupRejectsMalformedDurableFence(t *testing.T) {
 	}
 }
 
+// TestProviderDiscardKeepsAPIFailuresRetryable injects GET unavailability for pending/credential
+// discard and keeps it transient, rather than converting it to terminal conflict or performing a write.
+// TestProviderDiscardKeepsAPIFailuresRetryable подставляет GET unavailability для pending/credential
+// discard и сохраняет transient отказ без превращения в terminal conflict или выполнения write.
 func TestProviderDiscardKeepsAPIFailuresRetryable(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []string{"pending", "credential"} {

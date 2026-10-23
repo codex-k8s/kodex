@@ -8,6 +8,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
 )
 
+// TestWorkspaceNestedMountContainer is an explicit opt-in disposable-container entrypoint for UID/GID 10001; it checks fixed shared-directory creation, rejects unsafe relative paths and writes only synthetic proof files in prepared workspace mounts.
+// TestWorkspaceNestedMountContainer — явный opt-in entrypoint одноразового контейнера для UID/GID 10001; проверяет создание фиксированных shared directories, отказ unsafe relative paths и пишет лишь synthetic proof files в подготовленные workspace mounts.
 func TestWorkspaceNestedMountContainer(t *testing.T) {
 	if os.Getenv("KODEX_WORKSPACE_CONTAINER_TEST") != "1" {
 		t.Skip("disposable container entrypoint only")
@@ -36,6 +38,8 @@ func TestWorkspaceNestedMountContainer(t *testing.T) {
 	}
 }
 
+// TestWorkspaceProtectionContainer requires an opt-in runner container and checks protecting descendants preserves mounted root ownership/mode while setting the expected setgid directory and read-only file modes; absent opt-in is a skip, not proof.
+// TestWorkspaceProtectionContainer требует opt-in runner container и проверяет сохранение root ownership/mode mounts при защите descendants ожидаемыми setgid directory и read-only file modes; без opt-in это skip, не доказательство.
 func TestWorkspaceProtectionContainer(t *testing.T) {
 	if os.Getenv("KODEX_WORKSPACE_CONTAINER_TEST") != "1" {
 		t.Skip("disposable container entrypoint only")

@@ -11,6 +11,8 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+// Config maps deployment inputs to the exact policy files and listener addresses.
+// Config связывает параметры установки с точными файлами policy и адресами слушателей.
 type Config struct {
 	Mode                      string `env:"EGRESS_GATEWAY_MODE"`
 	PolicyFile                string `env:"EGRESS_GATEWAY_POLICY_FILE,required"`
@@ -32,6 +34,8 @@ type Config struct {
 	ResolverConfig            string `env:"EGRESS_GATEWAY_RESOLV_CONF,required"`
 }
 
+// loadConfig parses the process environment once and rejects invalid combinations.
+// loadConfig один раз разбирает окружение процесса и отвергает неверные сочетания.
 func loadConfig() (Config, error) {
 	var config Config
 	if err := env.ParseWithOptions(&config, env.Options{}); err != nil {
@@ -43,6 +47,8 @@ func loadConfig() (Config, error) {
 	return config, nil
 }
 
+// validate enforces mode-specific paths, fixed listener ports, and canonical digests.
+// validate проверяет пути режима, фиксированные порты и канонические дайджесты.
 func (config Config) validate() error {
 	if config.Mode != "" && config.Mode != "clamav" {
 		return errors.New("egress gateway mode is invalid")

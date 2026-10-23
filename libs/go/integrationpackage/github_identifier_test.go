@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+// TestGitHubProviderIdentifiersUseExactJSONIntegerBounds checks provider IDs against the exact
+// JSON-safe integer ceiling while keeping repository-local numbers and pagination bounds distinct.
+// TestGitHubProviderIdentifiersUseExactJSONIntegerBounds проверяет ID провайдера по точной
+// JSON-безопасной границе, отдельно сохраняя номера внутри репозитория и лимиты страниц.
 func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {
@@ -64,6 +68,10 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 	}
 }
 
+// TestGitHubReviewIdentifiersRemainClosed covers large valid review IDs, invalid numeric forms,
+// duplicate or extra fields and the separate approval/idempotency boundary for review creation.
+// TestGitHubReviewIdentifiersRemainClosed проверяет большие допустимые ID, неверные числа,
+// повторные или лишние поля и отдельную границу подтверждения и повтора при создании review.
 func TestGitHubReviewIdentifiersRemainClosed(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {

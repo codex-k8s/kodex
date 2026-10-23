@@ -14,6 +14,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// trustedOwnerClient records owner call metadata/deadline and returns configurable synthetic snapshots for trusted identity resolution tests.
+// RU: trustedOwnerClient сохраняет metadata/deadline owner вызова и возвращает настраиваемые синтетические снимки для тестов разрешения trusted-идентичности.
 type trustedOwnerClient struct {
 	snapshot          *sttv1.TrustedTranscriptionAuthority
 	calls             int
@@ -22,6 +24,8 @@ type trustedOwnerClient struct {
 	expiresAtDeadline bool
 }
 
+// responseSnapshot records the nested RPC deadline and optionally pins fixture expiry to that deadline without contacting an owner service.
+// RU: responseSnapshot сохраняет срок вложенного RPC и при необходимости закрепляет за ним срок оснастки без обращения к сервису-владельцу.
 func (client *trustedOwnerClient) responseSnapshot(ctx context.Context) *sttv1.TrustedTranscriptionAuthority {
 	client.deadline, _ = ctx.Deadline()
 	if client.expiresAtDeadline && client.snapshot != nil {
@@ -30,18 +34,26 @@ func (client *trustedOwnerClient) responseSnapshot(ctx context.Context) *sttv1.T
 	return client.snapshot
 }
 
+// ResolveTranscriptionAuthority counts the synthetic transcription-authority RPC and captures exactly the forwarded outgoing metadata.
+// RU: ResolveTranscriptionAuthority считает синтетический RPC полномочий распознавания и сохраняет точные переданные исходящие metadata.
 func (client *trustedOwnerClient) ResolveTranscriptionAuthority(ctx context.Context, _ *sttv1.ResolveTranscriptionAuthorityRequest, _ ...grpc.CallOption) (*sttv1.ResolveTranscriptionAuthorityResponse, error) {
 	client.calls++
 	client.metadata, _ = metadata.FromOutgoingContext(ctx)
 	return &sttv1.ResolveTranscriptionAuthorityResponse{Authority: client.responseSnapshot(ctx)}, nil
 }
 
+// ResolveTranscriptionCatalogAuthority returns the independently selected catalog snapshot while preserving the same metadata/deadline observation path.
+// RU: ResolveTranscriptionCatalogAuthority возвращает независимо выбранный снимок каталога с тем же наблюдением metadata/deadline.
 func (client *trustedOwnerClient) ResolveTranscriptionCatalogAuthority(ctx context.Context, _ *sttv1.ResolveTranscriptionCatalogAuthorityRequest, _ ...grpc.CallOption) (*sttv1.ResolveTranscriptionCatalogAuthorityResponse, error) {
 	client.calls++
 	client.metadata, _ = metadata.FromOutgoingContext(ctx)
 	return &sttv1.ResolveTranscriptionCatalogAuthorityResponse{Authority: client.responseSnapshot(ctx)}, nil
 }
 
+// TestTrustedResolverValidatesOwnerSnapshotAndDoesNotForwardIdentity exercises both entrypoints against malformed snapshots, bad credentials, project overrides and forged metadata.
+// RU: TestTrustedResolverValidatesOwnerSnapshotAndDoesNotForwardIdentity проверяет оба входа на неверных снимках, реквизитах, project override и поддельных metadata.
+// Only admitted requests reach the fake owner; successful private identity remains method-bound and rejects later cancellation.
+// RU: Только допущенные запросы достигают фиктивного владельца; успешная приватная идентичность привязана к методу и отвергает последующую отмену.
 func TestTrustedResolverValidatesOwnerSnapshotAndDoesNotForwardIdentity(t *testing.T) {
 	for _, catalog := range []bool{false, true} {
 		method, operation, permission, domainPermission := sttv1.SpeechToTextService_Transcribe_FullMethodName, transcribeOperation, value.TransportPermissionTranscribe, value.PermissionTranscribe
@@ -132,6 +144,8 @@ func TestTrustedResolverValidatesOwnerSnapshotAndDoesNotForwardIdentity(t *testi
 	}
 }
 
+// TestTrustedResolverLeavesDeadlineMarginForNestedOwnerRPC accepts a snapshot at the shorter nested deadline and proves the original request retains the configured margin.
+// RU: TestTrustedResolverLeavesDeadlineMarginForNestedOwnerRPC принимает снимок на более коротком вложенном сроке и доказывает сохранение заданного запаса у исходного запроса.
 func TestTrustedResolverLeavesDeadlineMarginForNestedOwnerRPC(t *testing.T) {
 	const caller = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
 	method := sttv1.SpeechToTextService_GetModelCatalog_FullMethodName

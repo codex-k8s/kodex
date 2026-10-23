@@ -20,10 +20,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// unprintableFailure detects accidental raw-error formatting at the safe diagnostics boundary.
+// unprintableFailure обнаруживает случайное форматирование сырой ошибки на границе безопасной диагностики.
 type unprintableFailure struct{}
 
+// Error panics deliberately so tests fail immediately if classification or logging formats the synthetic private cause.
+// Error намеренно вызывает panic, немедленно проваливая тест при форматировании синтетической закрытой причины классификацией или логом.
 func (unprintableFailure) Error() string { panic("raw error must not be formatted") }
 
+// TestFailureDiagnosticsNeverPrintCause checks typed class/stage mapping, safe wrapper formatting, cancellation identity and unknown-stage normalization.
+// Synthetic sentinel values and a panic-on-format cause must never reach structured log output.
+// TestFailureDiagnosticsNeverPrintCause проверяет типизированные class/stage, безопасное форматирование wrapper, идентичность отмены и нормализацию неизвестного этапа.
+// Синтетические контрольные значения и причина с panic при форматировании не должны попадать в структурированный лог.
 func TestFailureDiagnosticsNeverPrintCause(t *testing.T) {
 	const secret = "SENTINEL_PASSWORD_DSN_SQL_MAILBOX_PATH"
 	for _, tc := range []struct {
@@ -69,6 +77,8 @@ func TestFailureDiagnosticsNeverPrintCause(t *testing.T) {
 	}
 }
 
+// TestStartupConfigurationAndSecureFileStages induces local env, certificate and DSN failures before any real database or mailbox access.
+// TestStartupConfigurationAndSecureFileStages вызывает локальные отказы env, сертификата и DSN до обращения к настоящей БД или ящику.
 func TestStartupConfigurationAndSecureFileStages(t *testing.T) {
 	t.Setenv("EMAIL_BRIDGE_SECRETS_ROOT", "")
 	err := Run(t.Context(), t.Context(), "test")
@@ -93,6 +103,10 @@ func TestStartupConfigurationAndSecureFileStages(t *testing.T) {
 	}
 }
 
+// TestConfigurationFailureStageAndClosedPublication verifies each failed local phase stops later callbacks and retains its exact diagnostic stage.
+// Only a post-publication owner-readback failure may leave the locally valid service selected.
+// TestConfigurationFailureStageAndClosedPublication проверяет остановку дальнейших callback при локальном отказе и сохранение точного диагностического этапа.
+// Только отказ readback владельца после публикации может оставить выбранным локально допустимый сервис.
 func TestConfigurationFailureStageAndClosedPublication(t *testing.T) {
 	for _, target := range []failureStage{stageConfiguration, stagePins, stageWatermark, stageService, stageReadback} {
 		t.Run(string(target), func(t *testing.T) {

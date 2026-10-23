@@ -12,9 +12,14 @@ import (
 	"time"
 )
 
+// testEgressConfig supplies a syntactically valid synthetic generation pin, not a deployed policy receipt.
+// testEgressConfig задаёт синтаксически допустимое синтетическое поколение, не подтверждение развёрнутой политики.
 func testEgressConfig() EgressConfig {
 	return EgressConfig{Revision: "test-generation", Digest: strings.Repeat("a", 64)}
 }
+
+// testEgressHeaders creates a fresh exact readback set so rejection cases can mutate one pin independently.
+// testEgressHeaders создаёт новый точный набор заголовков для независимого изменения одного значения в отказных сценариях.
 func testEgressHeaders() http.Header {
 	result := http.Header{}
 	for name, value := range map[string]string{"Revision": testEgressConfig().Revision, "Digest": testEgressConfig().Digest, "Profile": "openai-stt", "Workload": "stt-tts-service", "Operation": "openai.transcription"} {
@@ -23,6 +28,10 @@ func testEgressHeaders() http.Header {
 	return result
 }
 
+// TestEgressReadbackRequiresEveryExactHeader rejects absent, wrong, or repeated pins in both diagnostics and CONNECT readback.
+// It also verifies the exact credential-free diagnostic URL and acceptance of only the expected 204 status.
+// TestEgressReadbackRequiresEveryExactHeader отвергает отсутствующие, неверные и повторные значения в диагностике и CONNECT.
+// Также проверяются точный диагностический URL без credentials и допуск только ожидаемого статуса 204.
 func TestEgressReadbackRequiresEveryExactHeader(t *testing.T) {
 	for _, name := range []string{"Revision", "Digest", "Profile", "Workload", "Operation"} {
 		for _, mode := range []string{"absent", "wrong", "duplicate"} {
@@ -66,8 +75,10 @@ func TestEgressReadbackRequiresEveryExactHeader(t *testing.T) {
 	}
 }
 
-// Два новых соединения к разным поколениям имитируют rolling replicas.
-// Только совпадающий CONNECT допускает даже первый TLS byte.
+// TestEveryCONNECTChecksGenerationBeforeTLS uses two loopback tunnels to simulate current and stale rolling replicas.
+// Only the matching CONNECT permits a first TLS handshake byte; neither fake tunnel reaches the actual provider.
+// TestEveryCONNECTChecksGenerationBeforeTLS использует два локальных туннеля, имитируя актуальную и устаревшую реплики.
+// Только совпадающий CONNECT допускает первый байт TLS handshake; ни один подставной туннель не достигает реального провайдера.
 func TestEveryCONNECTChecksGenerationBeforeTLS(t *testing.T) {
 	observed := make(chan bool, 2)
 	calls := 0

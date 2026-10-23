@@ -20,6 +20,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 )
 
+// TestMailTunnelPreservesEndToEndTLSVerification lets the mail client accept trusted and reject foreign roots.
+// TestMailTunnelPreservesEndToEndTLSVerification проверяет принятие доверенного и отказ для чужого корня клиентом почты.
 func TestMailTunnelPreservesEndToEndTLSVerification(t *testing.T) {
 	certificate, roots := mailCertificate(t)
 	for _, mode := range []string{"implicit", "starttls"} {
@@ -141,6 +143,8 @@ func TestMailTunnelPreservesEndToEndTLSVerification(t *testing.T) {
 	}
 }
 
+// mailCertificate creates a short-lived test certificate and its isolated trust pool.
+// mailCertificate создаёт краткоживущий тестовый сертификат и отдельный пул доверия.
 func mailCertificate(t *testing.T) (tls.Certificate, *x509.CertPool) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

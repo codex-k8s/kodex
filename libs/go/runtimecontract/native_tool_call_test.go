@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestRunnerNativeToolCallRequestAllowsOnlyClosedSafeProjection accepts a pinned safe shell summary
+// and rejects unknown kinds, inconsistent lifecycle, raw results, and arbitrary command parameters.
+// TestRunnerNativeToolCallRequestAllowsOnlyClosedSafeProjection допускает закреплённую безопасную сводку shell,
+// отклоняя неизвестные виды, неверный lifecycle, сырые результаты и произвольные параметры команд.
 func TestRunnerNativeToolCallRequestAllowsOnlyClosedSafeProjection(t *testing.T) {
 	valid := RunnerNativeToolCallRequest{RuntimeRevisionDigest: strings.Repeat("a", 64), NativeToolCall: NativeToolCall{
 		CallID: "call-1", Revision: 2, Kind: NativeToolKindShell, State: NativeToolStateSucceeded, DurationMS: 10,
@@ -32,6 +36,10 @@ func TestRunnerNativeToolCallRequestAllowsOnlyClosedSafeProjection(t *testing.T)
 	}
 }
 
+// TestNativeToolCallEmptySafeArraysValidatedJSONRoundTrip preserves explicit empty arrays across
+// all lifecycle states and JSON persistence while rejecting null substitutions.
+// TestNativeToolCallEmptySafeArraysValidatedJSONRoundTrip сохраняет явные пустые массивы во всех
+// состояниях lifecycle и JSON-сохранении, отклоняя подмену на null.
 func TestNativeToolCallEmptySafeArraysValidatedJSONRoundTrip(t *testing.T) {
 	for _, call := range []NativeToolCall{
 		{CallID: "shell-empty", Revision: 2, Kind: NativeToolKindShell, State: NativeToolStateSucceeded, SafeResult: NativeToolResultCompleted,

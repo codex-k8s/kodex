@@ -12,8 +12,22 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// maximumAssistantCurrentConfigurationBytes bounds a complete current/full source
+// snapshot to one MiB before page projection; it does not raise per-page or wire budgets.
+// maximumAssistantCurrentConfigurationBytes ограничивает полный current/full source
+// snapshot одним MiB до page projection, не увеличивая per-page/wire budgets.
 const maximumAssistantCurrentConfigurationBytes = 1 << 20
 
+// castAssistantOwnCurrentConfiguration validates the caller's own typed current
+// configuration, environment/image/inventory bindings, safe variables and scope-specific
+// instruction fields, then emits the public DTO separately from immutable turn pins.
+// The enclosing catalog path owns response authority; this function neither substitutes
+// historical execution settings nor exposes credential descriptors or resolved task data.
+// castAssistantOwnCurrentConfiguration проверяет собственные typed current configuration,
+// environment/image/inventory bindings,safe variables и scope-specific instructions,
+// выдавая public DTO отдельно от immutable turn pins. Response authority проверяет
+// внешний catalog path; historical settings не подставляются,credential descriptors
+// и resolved task data не выдаются.
 func castAssistantOwnCurrentConfiguration(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant current configuration response is invalid")
 	current := response.GetCurrentConfiguration()
@@ -98,8 +112,14 @@ func castAssistantOwnCurrentConfiguration(input runtimecontract.RunnerInput, req
 		"current_configuration": projection, "execution_snapshot": execution}, nil
 }
 
-// Только безопасные pins immutable owner input, без fence, credential, input/task
-// или resolved template values; не является перечитыванием текущих настроек.
+// assistantCurrentExecutionSnapshot validates workspace policy and projects safe
+// immutable turn/revision/image/instruction/model pins with fixed read-only roots and
+// search configuration. It omits fences, credentials, task/input and resolved values;
+// provider-process status remains UNKNOWN, not an inferred live process observation.
+// assistantCurrentExecutionSnapshot проверяет workspace policy и проецирует safe immutable
+// turn/revision/image/instruction/model pins с fixed read-only roots и search configuration.
+// Fences,credentials,task/input,resolved values исключены; provider-process status
+// остаётся UNKNOWN, а не выводится как live process observation.
 func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) (map[string]any, error) {
 	if err := input.WorkspacePolicy.Validate(); err != nil {
 		return nil, err
@@ -124,8 +144,12 @@ func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) (map[s
 		"workspace_policy": workspace, "hosted_native_search": search}, nil
 }
 
-// Только запрошенный режим writer/default закреплённого Codex 0.160.0,
-// не доказательство effective provider behavior или успешного native call.
+// assistantHostedSearchDiscovery parses the overlay and reports the requested mode
+// or the pinned SDK's cached default with provenance. It explicitly marks actual call
+// verification false and does not claim effective provider behavior or shell access.
+// assistantHostedSearchDiscovery разбирает overlay и сообщает requested mode либо cached
+// default закреплённого SDK с provenance. Actual call verification явно false;
+// effective provider behavior и shell access не утверждаются.
 func assistantHostedSearchDiscovery(raw string) (map[string]any, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(raw)
 	if err != nil {
@@ -139,6 +163,12 @@ func assistantHostedSearchDiscovery(raw string) (map[string]any, error) {
 		"sandbox_domain_allowlist_applies": false, "actual_call_verified": false}, nil
 }
 
+// validAssistantCurrentImage allows a wholly unset image only for SYSTEM bootstrap;
+// otherwise it requires a pinned reference whose suffix matches a canonical digest.
+// It never fills an absent current binding from historical turn image pins.
+// validAssistantCurrentImage допускает полностью unset image лишь для SYSTEM bootstrap;
+// иначе требует pinned reference с suffix точного canonical digest.
+// Отсутствующий current binding не заполняется historical turn image pins.
 func validAssistantCurrentImage(input runtimecontract.RunnerInput, image *controlplanev1.RuntimeEnvironmentImage) bool {
 	if image.GetReference() == "" {
 		// Canonical ORGANIZATION bootstrap может ещё не иметь опубликованного
@@ -149,6 +179,14 @@ func validAssistantCurrentImage(input runtimecontract.RunnerInput, image *contro
 		validAssistantCatalogDigest(strings.TrimPrefix(image.GetDigest(), "sha256:")) && strings.HasSuffix(image.GetReference(), "@"+image.GetDigest())
 }
 
+// validAssistantImageToolInventory accepts an explicitly empty UNAVAILABLE observation
+// or validates VERIFIED inventory structure, image binding, platform uniqueness and
+// closed tool manifests. It does not rehash external image bytes, verify admission
+// signatures or turn observed binaries into execution capabilities.
+// validAssistantImageToolInventory принимает явно пустое UNAVAILABLE observation либо
+// проверяет VERIFIED inventory structure,image binding,platform uniqueness и closed
+// tool manifests. External image bytes не хешируются повторно,admission signatures
+// не проверяются и observed binaries не превращаются в execution capabilities.
 func validAssistantImageToolInventory(value *controlplanev1.ImageToolInventory, image *controlplanev1.RuntimeEnvironmentImage) bool {
 	if value == nil {
 		return false
@@ -183,8 +221,14 @@ func validAssistantImageToolInventory(value *controlplanev1.ImageToolInventory, 
 	return true
 }
 
-// Recursion проверяет unknown metadata, enum, точность чисел и общий bounded
-// typed DTO, но не приписывает прочитанным настройкам исполнительные полномочия.
+// validAssistantCurrentReadMessage recursively rejects unknown fields, maps, depth
+// over ten, unsupported kinds, invalid UTF-8/NUL, large strings/lists and integers
+// outside the nonnegative JavaScript-exact range. It inspects populated typed fields
+// only; domain-specific required fields and authority are checked by the caller.
+// validAssistantCurrentReadMessage рекурсивно отвергает unknown fields,maps,depth
+// более десяти,unsupported kinds,invalid UTF-8/NUL,large strings/lists и integers
+// вне nonnegative JavaScript-exact range. Читаются лишь populated typed fields;
+// domain-required fields и authority проверяет caller.
 func validAssistantCurrentReadMessage(message protoreflect.Message, depth int) bool {
 	if !message.IsValid() || depth > 10 || len(message.GetUnknown()) != 0 {
 		return false

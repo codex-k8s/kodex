@@ -7,6 +7,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestTrustedTransportRejectsDestinationDriftBeforeNetwork verifies the selected plaintext transport has no proxy/TLS dependency and rejects changed IP, port, host and unknown profiles before dialing.
+// TestTrustedTransportRejectsDestinationDriftBeforeNetwork проверяет отсутствие proxy/TLS у выбранного открытого транспорта и отказ изменённых IP, порта, хоста и неизвестного профиля до dial.
 func TestTrustedTransportRejectsDestinationDriftBeforeNetwork(t *testing.T) {
 	input := model.Input{CallbackURL: "http://10.42.0.10:8444", CallbackTLS: model.TLSBinding{Profile: runtimecontract.CallbackProfileTrustedCluster}}
 	transport, err := TransportForInput(input)

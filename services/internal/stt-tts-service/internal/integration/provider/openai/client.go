@@ -1,4 +1,5 @@
-// Package openai реализует единственный исходящий HTTPS adapter распознавания.
+// Package openai implements the fixed HTTPS transcription route and its pinned proxy readback.
+// Пакет openai реализует фиксированный HTTPS-маршрут распознавания и сверку ожидаемого прокси.
 package openai
 
 import (
@@ -21,22 +22,40 @@ import (
 )
 
 const (
-	Endpoint             = "https://api.openai.com/v1/audio/transcriptions"
-	ProxyURL             = "http://egress-gateway.kodex-system.svc.cluster.local:8081"
+	// Endpoint fixes the transcription destination; caller input cannot select another URL.
+	// Endpoint фиксирует адрес распознавания; входные данные не выбирают другой URL.
+	Endpoint = "https://api.openai.com/v1/audio/transcriptions"
+	// ProxyURL selects the internal CONNECT proxy and its separate local diagnostic endpoint.
+	// ProxyURL выбирает внутренний CONNECT-прокси и его отдельную локальную диагностическую точку.
+	ProxyURL = "http://egress-gateway.kodex-system.svc.cluster.local:8081"
+	// maximumResponseBytes bounds successful JSON bodies; it is this adapter's limit, not a provider quota.
+	// maximumResponseBytes ограничивает успешное JSON-тело; это лимит адаптера, не квота провайдера.
 	maximumResponseBytes = 1 << 20
-	multipartBoundary    = "kodex-stt-boundary-v1"
+	// multipartBoundary makes envelope construction deterministic without buffering the audio payload.
+	// multipartBoundary делает сборку оболочки детерминированной без буферизации самого аудио.
+	multipartBoundary = "kodex-stt-boundary-v1"
 )
 
+// doer abstracts one HTTP exchange so adapter tests can inspect requests without external traffic.
+// doer абстрагирует один HTTP-обмен для проверки запросов без внешнего трафика в тестах адаптера.
 type doer interface {
+	// Do executes the request under its context; callers close any successfully returned response body.
+	// Do исполняет запрос с его контекстом; вызывающий закрывает тело успешно возвращённого ответа.
 	Do(*http.Request) (*http.Response, error)
 }
 
+// Client separates provider traffic from proxy diagnostics and retains the expected egress generation.
+// Client отделяет трафик провайдера от диагностики прокси и хранит ожидаемое поколение egress.
 type Client struct {
 	http      doer
 	readiness doer
 	egress    EgressConfig
 }
 
+// New constructs a TLS-1.3-only provider client with exact CONNECT readback and no redirects.
+// Construction performs no network probe; the separate internal diagnostic client does not use CONNECT.
+// New создаёт клиент провайдера только с TLS 1.3, точной сверкой CONNECT и запретом перенаправлений.
+// Создание не проверяет сеть; отдельный клиент внутренней диагностики не использует CONNECT.
 func New(config EgressConfig) (*Client, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -59,7 +78,8 @@ func New(config EgressConfig) (*Client, error) {
 	return client, nil
 }
 
-// NewWithHTTPClient предназначен для hermetic adapter-тестов.
+// NewWithHTTPClient injects a non-nil HTTP executor for hermetic tests; it does not install production TLS or proxy policy.
+// NewWithHTTPClient внедряет непустой HTTP-исполнитель для изолированных тестов; production TLS и политика прокси здесь не устанавливаются.
 func NewWithHTTPClient(client doer) (*Client, error) {
 	if client == nil {
 		return nil, errors.New("OpenAI HTTP client is required")
@@ -67,7 +87,8 @@ func NewWithHTTPClient(client doer) (*Client, error) {
 	return &Client{http: client, readiness: client}, nil
 }
 
-// CheckLocal не обращается к сети и проверяет только локальную конфигурацию.
+// CheckLocal checks only context presence and configured client fields, without network I/O or a cancellation probe.
+// CheckLocal проверяет только наличие контекста и полей клиента, без сети и проверки отмены контекста.
 func (client *Client) CheckLocal(ctx context.Context) error {
 	if ctx == nil || client == nil || client.http == nil || client.readiness == nil {
 		return errors.New("OpenAI provider adapter is not configured")
@@ -75,7 +96,10 @@ func (client *Client) CheckLocal(ctx context.Context) error {
 	return nil
 }
 
-// CheckEgress — отдельный diagnostic readback, не Kubernetes readiness.
+// CheckEgress requires the proxy's 204 diagnostic response and every exact expected generation header.
+// This optional diagnostic neither authenticates the provider key nor serves as Kubernetes readiness.
+// CheckEgress требует диагностический ответ прокси 204 и все точно ожидаемые заголовки поколения.
+// Необязательная диагностика не проверяет ключ провайдера и не является Kubernetes readiness.
 func (client *Client) CheckEgress(ctx context.Context) error {
 	if err := client.CheckLocal(ctx); err != nil {
 		return err
@@ -95,6 +119,10 @@ func (client *Client) CheckEgress(ctx context.Context) error {
 	return nil
 }
 
+// Transcribe validates the catalog profile, rewinds bounded audio, and submits one non-streaming multipart request.
+// It never retries, discards error bodies, bounds and strictly decodes successful JSON, and retains cancellation causes.
+// Transcribe проверяет профиль каталога, перематывает ограниченное аудио и делает один multipart-запрос без потокового ответа.
+// Повторов нет; тела ошибок отбрасываются, успешный JSON ограничивается и строго разбирается, причины отмены сохраняются.
 func (client *Client) Transcribe(ctx context.Context, request value.ProviderRequest) (string, error) {
 	if ctx == nil || modelprofile.Validate(request.Model, request.Language, request.Parameters) != nil || len(request.APIKey) == 0 ||
 		request.Audio.Reader == nil || request.Audio.SizeBytes <= 0 || request.Audio.SizeBytes > value.MaximumAbsoluteBytes {
@@ -161,14 +189,22 @@ func (client *Client) Transcribe(ctx context.Context, request value.ProviderRequ
 	return strings.TrimSpace(result.Text), nil
 }
 
+// switchingWriter redirects multipart metadata into prefix or suffix buffers while leaving audio outside both.
+// switchingWriter направляет multipart-метаданные в буфер префикса либо суффикса, не помещая туда аудио.
 type switchingWriter struct {
 	current io.Writer
 }
 
+// Write delegates to the currently selected buffer and preserves its byte count and error.
+// Write передаёт запись выбранному буферу и сохраняет число байтов и ошибку.
 func (writer *switchingWriter) Write(input []byte) (int, error) {
 	return writer.current.Write(input)
 }
 
+// multipartEnvelope builds the exact file header and trailing catalog fields around separately streamed audio.
+// It rejects header-breaking filenames; full model/parameter eligibility remains the caller's prior validation.
+// multipartEnvelope строит точный заголовок файла и последующие поля каталога вокруг отдельно передаваемого аудио.
+// Имена, нарушающие заголовок, отвергаются; полный допуск модели и параметров предварительно проверяет вызывающий.
 func multipartEnvelope(fileName, model, language string, parameters modelprofile.Parameters) (*bytes.Buffer, *bytes.Buffer, string, error) {
 	if fileName == "" || strings.ContainsAny(fileName, "\r\n\"") {
 		return nil, nil, "", errors.New("OpenAI audio filename is invalid")
@@ -221,8 +257,10 @@ func multipartEnvelope(fileName, model, language string, parameters modelprofile
 	return prefix, suffix, writer.FormDataContentType(), nil
 }
 
-// CheckModel проверяет key/model/exact HTTPS path без audio и billable POST.
-// Доступность модели в каталоге не заменяет отдельный live acceptance smoke.
+// CheckModel issues one bounded model-metadata GET for a supported catalog ID, without audio or transcription POST.
+// Matching metadata and a still-live context prove only this probe, not a successful transcription or account quota.
+// CheckModel делает один ограниченный GET метаданных поддержанной модели без аудио и POST распознавания.
+// Совпадение метаданных и живой контекст доказывают лишь этот запрос, не успешное распознавание или квоту аккаунта.
 func (client *Client) CheckModel(ctx context.Context, model string, key []byte) error {
 	_, supported := modelprofile.Lookup(model)
 	if ctx == nil || !supported || len(key) < 8 || len(key) > 16<<10 {
@@ -259,4 +297,6 @@ func (client *Client) CheckModel(ctx context.Context, model string, key []byte) 
 	return ctx.Err()
 }
 
+// Catalog returns the shared local OpenAI model profile; it neither queries the network nor proves account access.
+// Catalog возвращает общий локальный профиль моделей OpenAI, не обращаясь в сеть и не доказывая доступ аккаунта.
 func (client *Client) Catalog() modelprofile.Catalog { return modelprofile.OpenAICatalog() }

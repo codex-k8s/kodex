@@ -15,11 +15,18 @@ import (
 	pop3 "github.com/knadh/go-pop3"
 )
 
+// fixedDial adapts a connection already established and secured by Provider to the POP library's dial interface.
+// fixedDial адаптирует уже установленное и защищённое Provider соединение к dial-интерфейсу POP-библиотеки.
 type fixedDial struct{ conn net.Conn }
 
-// Отдельный dialer отдаёт только уже проверенный TLS transport.
+// Dial returns only the prepared connection, ignoring the library's target arguments and never opening a direct external socket.
+// Dial возвращает только подготовленное соединение, игнорируя target библиотеки и никогда не открывая прямой внешний сокет.
 func (d fixedDial) Dial(_, _ string) (net.Conn, error) { return d.conn, nil }
 
+// pop requires configured password-auth POP, establishes verified implicit/STARTTLS transport before USER/PASS and checks NOOP without enumerating mail.
+// Rejections are classified from exact status prefixes; the returned cleanup closes the socket without implicitly issuing QUIT.
+// pop требует настроенный POP с password-auth, устанавливает проверенный implicit/STARTTLS до USER/PASS и проверяет NOOP без перечисления почты.
+// Отказ определяется по точному статусному префиксу; возвращённая очистка закрывает сокет без неявного QUIT.
 func (p *Provider) pop(ctx context.Context, m api.Mailbox) (*pop3.Conn, func(), error) {
 	if m.Pop == nil || m.Pop.AuthMethod != "password" {
 		return nil, nil, healthFailure(api.ProtocolReadinessReasonConfigurationInvalid)
@@ -61,6 +68,11 @@ func (p *Provider) pop(ctx context.Context, m api.Mailbox) (*pop3.Conn, func(), 
 	}
 	return client, cleanup, nil
 }
+
+// snapshot bounds UIDL/LIST cardinality, cross-checks unique positive message indexes and printable stable UIDs, then sorts by UIDL.
+// Advertised sizes are validated metadata, not proof that a later RETR payload fits its content limit.
+// snapshot ограничивает число UIDL/LIST, сверяет уникальные положительные индексы и печатные устойчивые UID, затем сортирует по UIDL.
+// Объявленный размер является проверенными метаданными, не доказательством допустимости будущего тела RETR.
 func snapshot(c *pop3.Conn, m api.Mailbox) ([]pop3.MessageID, map[int]int, error) {
 	ids, e := c.Uidl(0)
 	if e != nil {
@@ -103,6 +115,9 @@ func snapshot(c *pop3.Conn, m api.Mailbox) ([]pop3.MessageID, map[int]int, error
 	sort.Slice(ids, func(i, j int) bool { return ids[i].UID < ids[j].UID })
 	return ids, byID, nil
 }
+
+// readRaw resolves a stable UIDL inside a validated bounded snapshot, checks advertised size and rejects an oversized actual RETR response.
+// readRaw разрешает устойчивый UIDL в проверенном ограниченном снимке, проверяет объявленный размер и отвергает чрезмерный фактический RETR.
 func readRaw(c *pop3.Conn, m api.Mailbox, uid string) ([]byte, error) {
 	ids, sizes, e := snapshot(c, m)
 	if e != nil {
@@ -122,6 +137,11 @@ func readRaw(c *pop3.Conn, m api.Mailbox, uid string) ([]byte, error) {
 	}
 	return nil, errs.NotFound
 }
+
+// Read dispatches validated IMAP commands or bounded POP fetch/attachment/list/search operations and closes the chosen connection afterward.
+// POP paging correlates UIDL snapshot and mailbox/query configuration; search filters page headers, while attachment bytes remain untrusted base64 data.
+// Read направляет проверенные IMAP-команды либо ограниченные POP fetch/attachment/list/search и затем закрывает выбранное соединение.
+// Страницы POP связаны с UIDL-снимком и настройками ящика и запроса; search фильтрует заголовки страницы, а байты вложений остаются недоверенным base64.
 func (p *Provider) Read(ctx context.Context, m api.Mailbox, cmd api.Command) (api.Result, error) {
 	if m.ReceiveProtocol == "imap" {
 		return p.readIMAP(ctx, m, cmd)
@@ -210,6 +230,9 @@ func (p *Provider) Read(ctx context.Context, m api.Mailbox, cmd api.Command) (ap
 	}
 	return result, nil
 }
+
+// Delete finds the authorized stable UIDL, issues DELE and commits it only with a positive QUIT response; failures after an attempt remain unknown.
+// Delete находит разрешённый устойчивый UIDL, выполняет DELE и фиксирует его только положительным QUIT; ошибки после попытки остаются unknown.
 func (p *Provider) Delete(ctx context.Context, m api.Mailbox, uid string) (string, error) {
 	c, cleanup, e := p.pop(ctx, m)
 	if e != nil {

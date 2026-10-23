@@ -11,6 +11,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestAuthoritySourcePreservesSupportedPolicySources checks explicit mapping of workload readiness,
+// provider readback, Git reconciliation and runtime execution sources rather than allowing them to
+// collapse to unspecified.
+// TestAuthoritySourcePreservesSupportedPolicySources проверяет явное преобразование workload readiness,
+// provider readback, Git reconciliation и runtime execution sources вместо их потери в unspecified.
 func TestAuthoritySourcePreservesSupportedPolicySources(t *testing.T) {
 	t.Parallel()
 
@@ -31,6 +36,10 @@ func TestAuthoritySourcePreservesSupportedPolicySources(t *testing.T) {
 	}
 }
 
+// TestAuthoritySourceRejectsUnknownValue verifies an unsupported provenance name remains unspecified and
+// cannot acquire a known authority source through a fallback.
+// TestAuthoritySourceRejectsUnknownValue проверяет сохранение unsupported provenance имени как
+// unspecified без получения известного authority source через fallback.
 func TestAuthoritySourceRejectsUnknownValue(t *testing.T) {
 	t.Parallel()
 	if actual := authoritySource("UNKNOWN"); actual != internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_UNSPECIFIED {
@@ -38,6 +47,12 @@ func TestAuthoritySourceRejectsUnknownValue(t *testing.T) {
 	}
 }
 
+// TestMapErrorPreservesRequestContextTermination verifies direct and persistence-wrapped
+// cancellation/deadline keep their exact gRPC code/message with no authorization detail, preserving
+// request lifecycle semantics.
+// TestMapErrorPreservesRequestContextTermination проверяет точные gRPC code/message прямых и
+// persistence-wrapped cancellation/deadline без authorization detail, сохраняя request lifecycle
+// семантику.
 func TestMapErrorPreservesRequestContextTermination(t *testing.T) {
 	t.Parallel()
 
@@ -94,6 +109,11 @@ func TestMapErrorPreservesRequestContextTermination(t *testing.T) {
 	}
 }
 
+// TestMapErrorKeepsActualPersistenceFailureUnavailable verifies a real non-context persistence failure
+// remains Unavailable with one typed retryable persistence detail and the fixed safe message.
+// TestMapErrorKeepsActualPersistenceFailureUnavailable проверяет сохранение non-context persistence
+// отказа как Unavailable с одним typed retryable persistence detail и фиксированным безопасным
+// сообщением.
 func TestMapErrorKeepsActualPersistenceFailureUnavailable(t *testing.T) {
 	t.Parallel()
 

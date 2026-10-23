@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { Readable } from "node:stream";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import { lstat } from "node:fs/promises";
+import { ownerInputRequest } from "./test-support/owner-ui-fixtures.mjs";
 import {
   assertInputEnvironment,
   assertInputRequest,
@@ -25,32 +25,14 @@ import {
 const port = 23456;
 const body = () => Buffer.from(JSON.stringify({ intent: inputIntent }));
 function request(changes = {}, content = body()) {
-  const value = Readable.from([content]);
-  Object.assign(
-    value,
-    {
-      socket: {
-        servername: inputHost,
-        getProtocol: () => "TLSv1.3",
-        localAddress: "127.0.0.2",
-        localPort: port,
-        remoteAddress: "127.0.0.1",
-        remotePort: 45678,
-        destroyed: false,
-      },
-      method: "POST",
-      url: inputPath,
-      headers: {
-        host: `${inputHost}:${port}`,
-        origin: inputOrigin,
-        "content-type": "application/json",
-        "content-length": String(content.length),
-      },
-    },
+  return ownerInputRequest({
+    host: inputHost,
+    origin: inputOrigin,
+    path: inputPath,
+    port,
+    body: content,
     changes,
-  );
-  value.rawHeaders = Object.entries(value.headers).flat();
-  return value;
+  });
 }
 function response() {
   const value = new EventEmitter();

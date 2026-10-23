@@ -16,6 +16,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// jiraCatalogInput decodes the catalog's issue-related identities, pagination and attachment fields; package validation supplies the operation-specific schema before execution.
+// jiraCatalogInput декодирует идентификаторы ресурсов задачи, параметры страниц и поля вложения каталога; проверка пакета задаёт схему конкретной операции до выполнения.
 type jiraCatalogInput struct {
 	IssueKey     string `json:"issue_key"`
 	AccountID    string `json:"account_id"`
@@ -32,6 +34,8 @@ type jiraCatalogInput struct {
 	Cursor       int    `json:"cursor"`
 }
 
+// jiraUserView selects account identity, display name, activity and type from the project-assignable user response, omitting the provider's wider user profile.
+// jiraUserView выбирает идентификатор аккаунта, отображаемое имя, активность и тип из ответа о назначаемых пользователях проекта, не включая полный профиль провайдера.
 type jiraUserView struct {
 	AccountID   string `json:"accountId"`
 	DisplayName string `json:"displayName"`
@@ -39,6 +43,8 @@ type jiraUserView struct {
 	AccountType string `json:"accountType"`
 }
 
+// jiraTransitionView decodes transition identity, target state and optional field requirements used by the bounded transition-list result.
+// jiraTransitionView декодирует идентификатор перехода, целевое состояние и необязательные требования к полям для ограниченного списка переходов.
 type jiraTransitionView struct {
 	ID     string                         `json:"id"`
 	Name   string                         `json:"name"`
@@ -49,6 +55,8 @@ type jiraTransitionView struct {
 	} `json:"to"`
 }
 
+// jiraTransitionField retains the provider's required-field flag, schema descriptors and supported operations as transition metadata, not as independently executable authority.
+// jiraTransitionField хранит обязательность поля, описатели схемы и поддерживаемые операции как сведения о переходе, а не самостоятельные полномочия выполнения.
 type jiraTransitionField struct {
 	Required bool   `json:"required"`
 	Name     string `json:"name"`
@@ -62,16 +70,24 @@ type jiraTransitionField struct {
 	Operations []string `json:"operations,omitempty"`
 }
 
+// jiraCommentView keeps the comment ID and raw JSON body so the adapter can verify identity and project a compact document rather than decode arbitrary provider fields.
+// jiraCommentView сохраняет ID комментария и исходное JSON-тело, позволяя проверить идентификатор и выдать компактный документ без разбора произвольных полей провайдера.
 type jiraCommentView struct {
 	ID   string          `json:"id"`
 	Body json.RawMessage `json:"body"`
 }
+
+// jiraAttachmentView records attachment identity, filename, declared byte size and media type for parent-bound listing, upload readback and bounded download checks.
+// jiraAttachmentView хранит идентификатор вложения, имя файла, объявленный размер и тип для списка в границах родителя, сверки загрузки и ограниченного скачивания.
 type jiraAttachmentView struct {
 	ID        string `json:"id"`
 	Filename  string `json:"filename"`
 	Size      int64  `json:"size"`
 	MediaType string `json:"mimeType"`
 }
+
+// jiraLinkView decodes an issue link and its inward/outward endpoints so related-resource operations can exclude links outside the configured project.
+// jiraLinkView декодирует связь задач и её входящий и исходящий концы, позволяя исключать связи за пределами заданного проекта.
 type jiraLinkView struct {
 	ID   string `json:"id"`
 	Type struct {
@@ -87,6 +103,8 @@ type jiraLinkView struct {
 	} `json:"outwardIssue"`
 }
 
+// catalogListResult encodes a non-null item array with its count and optional numeric continuation cursor; callers own item eligibility, page bounds and cursor semantics.
+// catalogListResult кодирует ненулевой массив элементов, их число и необязательный числовой курсор продолжения; допустимость элементов, размер страницы и смысл курсора определяет вызывающий код.
 func catalogListResult[T any](request Request, items []T, next int) (Result, error) {
 	if items == nil {
 		items = []T{}
@@ -102,6 +120,8 @@ func catalogListResult[T any](request Request, items []T, next int) (Result, err
 	}{string(encoded), len(items), next})
 }
 
+// executeJiraCatalog enforces project-local issue keys and numeric related-resource IDs, then dispatches scoped users, transitions, comments, links and attachments using the configured authentication and effect key.
+// executeJiraCatalog проверяет ключи задач внутри проекта и числовые ID связанных ресурсов, затем направляет операции пользователей, переходов, комментариев, связей и вложений с заданной авторизацией и ключом эффекта.
 func (adapter *Adapter) executeJiraCatalog(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, raw []byte) (Result, error) {
 	var in jiraCatalogInput
 	if json.Unmarshal(raw, &in) != nil {
@@ -261,10 +281,14 @@ func (adapter *Adapter) executeJiraCatalog(ctx context.Context, request Request,
 	}
 }
 
+// decimalID accepts a nonempty sequence of decimal digits containing at least one nonzero digit; it validates syntax without converting to a bounded integer.
+// decimalID принимает непустую последовательность десятичных цифр хотя бы с одной ненулевой; проверяет форму без преобразования в целое ограниченной разрядности.
 func decimalID(value string) bool {
 	return value != "" && strings.Trim(value, "0123456789") == "" && strings.Trim(value, "0") != ""
 }
 
+// jiraRelatedResource binds links and attachments to the exact issue before reads or deletes, filters cross-project links, and bounds upload/download bytes; uploads verify the single returned attachment's filename and ID.
+// jiraRelatedResource привязывает связи и вложения к точной задаче до чтения или удаления, исключает межпроектные связи и ограничивает байты загрузки и скачивания; загрузка проверяет имя и ID единственного возвращённого вложения.
 func (adapter *Adapter) jiraRelatedResource(ctx context.Context, request Request, call providerCall, in jiraCatalogInput, project, issuePath string) (Result, error) {
 	reference := request.Operation + ":" + request.EffectKey
 	if request.Operation == "jira.attachment.upload" {
@@ -381,6 +405,8 @@ func (adapter *Adapter) jiraRelatedResource(ctx context.Context, request Request
 	return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 }
 
+// jiraAttachmentResult projects attachment metadata and optional Base64 content through the standard result encoder without exposing a provider download URL.
+// jiraAttachmentResult выдаёт сведения вложения и необязательное содержимое Base64 через стандартный кодировщик результата, не раскрывая URL скачивания провайдера.
 func jiraAttachmentResult(request Request, reference string, attachment jiraAttachmentView, content string) (Result, error) {
 	return providerResult(request, reference, struct {
 		ID        string `json:"id"`
@@ -391,6 +417,8 @@ func jiraAttachmentResult(request Request, reference string, attachment jiraAtta
 	}{attachment.ID, attachment.Filename, attachment.Size, attachment.MediaType, content})
 }
 
+// boundedMultipart rejects path/control characters in the filename, parses the media type and strict Base64, then builds one multipart file under decoded and encoded size limits.
+// boundedMultipart отклоняет разделители пути и управляющие символы в имени, разбирает тип и строгий Base64, затем создаёт один multipart-файл с ограничением декодированного и итогового размера.
 func boundedMultipart(filename, mediaType, encoded string) ([]byte, string, error) {
 	if filename == "" || strings.ContainsAny(filename, "\r\n/\\\x00") {
 		return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}

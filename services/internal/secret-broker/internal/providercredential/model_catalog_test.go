@@ -15,14 +15,32 @@ import (
 	"time"
 )
 
+// catalogHTTPFunc adapts an in-memory response callback to the catalog HTTP port, keeping API parser
+// tests off the network.
+// catalogHTTPFunc преобразует callback ответа в памяти в catalog HTTP port, не допуская сетевых запросов
+// тестов API parser.
 type catalogHTTPFunc func(*http.Request) (*http.Response, error)
 
+// Do forwards the supplied request directly to the synthetic callback, allowing assertions on URL,
+// method, body and authorization without a transport.
+// Do передаёт запрос прямо synthetic callback для проверки URL, method, body и authorization без
+// транспорта.
 func (call catalogHTTPFunc) Do(request *http.Request) (*http.Response, error) { return call(request) }
 
+// catalogCapabilityFixture supplies one synthetic reasoning model with an ordered custom effort and one
+// plain model, proving validators are not hardcoded to current provider model names.
+// catalogCapabilityFixture задаёт одну synthetic reasoning модель с упорядоченным custom effort и одну
+// plain модель, показывая отсутствие привязки validator к текущим provider model именам.
 func catalogCapabilityFixture() []CatalogModel {
 	return []CatalogModel{{ID: "fixture-reasoning", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"low", "medium", "custom-effort"}}, {ID: "fixture-plain"}}
 }
 
+// TestAPIModelCatalogRequiresAccountIntersection exercises complete account subsets, empty/unknown
+// lists, authorization and status failures, partial pagination, duplicates, malformed records and
+// oversized bodies while asserting the exact synthetic request boundary.
+// TestAPIModelCatalogRequiresAccountIntersection проверяет полные account подмножества,
+// пустые/неизвестные списки, authorization и status отказы, частичную pagination, повторы, повреждённые
+// записи и слишком большой body с точной synthetic request границей.
 func TestAPIModelCatalogRequiresAccountIntersection(t *testing.T) {
 	for _, test := range []struct {
 		name, body string
@@ -58,6 +76,12 @@ func TestAPIModelCatalogRequiresAccountIntersection(t *testing.T) {
 	}
 }
 
+// TestRemoteCodexCatalogRejectsFallbackAndChangedCapabilities verifies fresh/empty cache intersections
+// and rejects stale/future/version/default/identity failures plus missing files, symlinks, hardlinks and
+// FIFOs through real local file reads.
+// TestRemoteCodexCatalogRejectsFallbackAndChangedCapabilities проверяет пересечение свежего/пустого
+// cache и отклоняет stale/future/version/default/identity ошибки, отсутствующие файлы, symlink, hardlink
+// и FIFO через реальное локальное чтение файлов.
 func TestRemoteCodexCatalogRejectsFallbackAndChangedCapabilities(t *testing.T) {
 	started := time.Now().UTC().Add(-time.Second)
 	fixture := func() map[string]any {
@@ -128,6 +152,10 @@ func TestRemoteCodexCatalogRejectsFallbackAndChangedCapabilities(t *testing.T) {
 	}
 }
 
+// TestCatalogReaderCancellationJoinsBackpressuredStream cancels a reader blocked by an unconsumed events
+// channel and requires its done signal within one second without spawning an external process.
+// TestCatalogReaderCancellationJoinsBackpressuredStream отменяет reader, заблокированный
+// невостребованным events channel, и требует done signal в течение секунды без внешнего процесса.
 func TestCatalogReaderCancellationJoinsBackpressuredStream(t *testing.T) {
 	stop, done := make(chan struct{}), make(chan struct{})
 	events := make(chan streamEvent)
@@ -140,6 +168,12 @@ func TestCatalogReaderCancellationJoinsBackpressuredStream(t *testing.T) {
 	}
 }
 
+// TestModelCatalogProcessIsolatedCredentialAndCleanup uses the current test executable as the fake
+// native process and synthetic HTTP responses to verify route separation, safe results and empty private
+// state after each auth mode.
+// TestModelCatalogProcessIsolatedCredentialAndCleanup использует текущий test executable как fake native
+// process и synthetic HTTP ответы для проверки раздельных маршрутов, безопасных результатов и отсутствия
+// private state после каждого auth режима.
 func TestModelCatalogProcessIsolatedCredentialAndCleanup(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
@@ -182,6 +216,12 @@ func TestModelCatalogProcessIsolatedCredentialAndCleanup(t *testing.T) {
 	}
 }
 
+// TestStagingModelCatalogAcceptsValidatedProtocolWithoutOptionalCache explicitly enables protocol-only
+// fallback on a fake app-server with no cache and requires validated capabilities and private-home
+// cleanup; it is not a staging deployment test.
+// TestStagingModelCatalogAcceptsValidatedProtocolWithoutOptionalCache явно включает protocol-only
+// fallback fake app-server без cache и требует проверенных capabilities с cleanup private home; staging
+// deployment не проверяется.
 func TestStagingModelCatalogAcceptsValidatedProtocolWithoutOptionalCache(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
@@ -206,8 +246,12 @@ func TestStagingModelCatalogAcceptsValidatedProtocolWithoutOptionalCache(t *test
 	}
 }
 
-// Дочерний fixture исполняет настоящий bounded process/stdio/cleanup путь.
-// Внешний Codex и provider заменены только в этом тестовом бинаре.
+// TestMain dispatches this test binary's --version and app-server fixture modes before normal unit
+// execution, replacing only the external executable/provider while exercising production bounded
+// process, stdio and cleanup paths.
+// TestMain направляет --version и app-server fixture режимы этого test binary до обычных unit-тестов,
+// подменяя только внешний executable/provider и проверяя production ограниченные process, stdio и
+// cleanup пути.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
 		_, _ = os.Stdout.WriteString("codex-cli " + catalogCodexVersion + "\n")
@@ -219,6 +263,12 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// runCatalogProcessFixture validates the isolated CLI/proxy environment and serves only synthetic
+// initialization, access-token login and model-list traffic over stdio. It can request forbidden
+// refresh, hang or write malformed/missing cache fixtures; no provider network is used.
+// runCatalogProcessFixture проверяет изолированные CLI/proxy environment и обслуживает только synthetic
+// initialization, access-token login и model-list через stdio. Он может запросить запрещённый refresh,
+// зависнуть или записать повреждённый/отсутствующий cache fixture; provider сеть не используется.
 func runCatalogProcessFixture() int {
 	if len(os.Args) != 7 || os.Args[2] != "-c" || os.Args[3] != fileCredentialStoreConfig ||
 		os.Args[4] != "--strict-config" || os.Args[5] != "--listen" || os.Args[6] != "stdio://" ||
@@ -312,6 +362,12 @@ func runCatalogProcessFixture() int {
 	return 0
 }
 
+// TestModelCatalogProcessRefusesRefreshAndJoinsDeadline makes the fake child request forbidden token
+// refresh or hang, then requires authorization refusal or bounded deadline termination with no retained
+// private state.
+// TestModelCatalogProcessRefusesRefreshAndJoinsDeadline заставляет fake child запросить запрещённый
+// token refresh или зависнуть, затем требует authorization отказа либо ограниченного завершения по
+// дедлайну без оставшегося private state.
 func TestModelCatalogProcessRefusesRefreshAndJoinsDeadline(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
@@ -351,6 +407,10 @@ func TestModelCatalogProcessRefusesRefreshAndJoinsDeadline(t *testing.T) {
 	}
 }
 
+// TestCatalogAuthenticationRejectsMismatchedAndUnconfiguredMaterial rejects missing, short and
+// mixed-mode auth JSON for API observation before any process or HTTP call.
+// TestCatalogAuthenticationRejectsMismatchedAndUnconfiguredMaterial отклоняет отсутствующий, короткий и
+// смешанный auth JSON для API наблюдения до любых process и HTTP вызовов.
 func TestCatalogAuthenticationRejectsMismatchedAndUnconfiguredMaterial(t *testing.T) {
 	for _, raw := range []string{`{}`, `{"auth_mode":"apikey","OPENAI_API_KEY":"short"}`, `{"auth_mode":"chatgpt","OPENAI_API_KEY":"synthetic-catalog-key"}`, `{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic-catalog-key","tokens":{}}`} {
 		if _, err := catalogAuthentication([]byte(raw), CatalogMethodAPIKey); !errors.Is(err, errModelCatalogAuthorization) {

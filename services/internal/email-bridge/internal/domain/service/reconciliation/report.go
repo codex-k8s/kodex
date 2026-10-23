@@ -8,6 +8,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/repository/receipt"
 )
 
+// ReportCycle recovers a bounded batch only after the original lease plus grace, retaining original invocation and receipt identity.
+// It claims, validates exact owner readback, remembers evidence and acknowledges in order; it never executes the mailbox effect again.
+// ReportCycle восстанавливает ограниченную пачку лишь после исходного lease с запасом, сохраняя исходные invocation и идентичность квитанции.
+// Он по порядку захватывает отчёт, сверяет точный ответ владельца, сохраняет свидетельство и подтверждает; эффект ящика повторно не исполняется.
 func (s *Service) ReportCycle(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, CycleTimeout)
 	defer cancel()

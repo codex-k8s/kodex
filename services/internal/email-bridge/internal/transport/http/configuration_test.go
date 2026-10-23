@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/mail"
 )
 
+// TestUnavailableSnapshotDoesNotUsePreviousService verifies that a temporarily missing current configuration fails closed instead of reusing an old service.
+// TestUnavailableSnapshotDoesNotUsePreviousService проверяет, что временное отсутствие текущей конфигурации закрыто отклоняется, а не подменяется прежним сервисом.
 func TestUnavailableSnapshotDoesNotUsePreviousService(t *testing.T) {
 	peer, _ := url.Parse(CallerSPIFFE)
 	certificate := &x509.Certificate{URIs: []*url.URL{peer}}

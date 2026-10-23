@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestContinuationDiffPinsAllChangesAndTurnIdentity verifies component ordering, binding of the
+// attempt into the digest, and refusal of private components and malformed digest values.
+// TestContinuationDiffPinsAllChangesAndTurnIdentity проверяет порядок компонентов, привязку попытки
+// к дайджесту и отказ для закрытых компонентов и некорректных значений дайджеста.
 func TestContinuationDiffPinsAllChangesAndTurnIdentity(t *testing.T) {
 	previous, current := map[string][]RuntimeDescriptor{}, map[string][]RuntimeDescriptor{}
 	for _, component := range runtimeComponentOrder {
@@ -35,6 +39,10 @@ func TestContinuationDiffPinsAllChangesAndTurnIdentity(t *testing.T) {
 	}
 }
 
+// TestProspectiveDiffRejectsFabricatedIdentityAndTampering validates the prospective form, then
+// rejects fabricated future identity, altered content, unsupported actions, and duplicate components.
+// TestProspectiveDiffRejectsFabricatedIdentityAndTampering проверяет предварительную форму и затем
+// отклоняет выдуманную будущую личность, изменение содержимого, неизвестные действия и повторы компонентов.
 func TestProspectiveDiffRejectsFabricatedIdentityAndTampering(t *testing.T) {
 	previous, current := map[string][]RuntimeDescriptor{}, map[string][]RuntimeDescriptor{}
 	for _, component := range runtimeComponentOrder {

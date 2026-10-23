@@ -8,9 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -19,14 +17,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryAssistantParallelLifecycleExpire expires one exact claimed lease to
+// exercise recovery without changing unrelated concurrent conversations.
+// RU: queryAssistantParallelLifecycleExpire истекает один точный claimed
+// lease для проверки recovery без изменения соседних диалогов.
+//
 //go:embed testdata/sql/assistant_parallel_lifecycle_expire.sql
 var queryAssistantParallelLifecycleExpire string
 
+// queryAssistantParallelLifecycleGraph counts active nodes, leases and turns
+// under one root run to detect cross-conversation lifecycle leaks.
+// RU: queryAssistantParallelLifecycleGraph считает активные узлы, leases
+// и turns одного root run для выявления утечки состояния между диалогами.
+//
 //go:embed testdata/sql/assistant_parallel_lifecycle_graph.sql
 var queryAssistantParallelLifecycleGraph string
 
-// Проверка использует только disposable PostgreSQL и синтетические callback.
-// Реальный provider, микрофон и пользовательские диалоги не вызываются.
+// TestAssistantParallelLifecycleComponent verifies queued and interrupting
+// turns, cancellation, restart and history isolation with disposable
+// PostgreSQL and synthetic callbacks, not a real provider or user session.
+// RU: TestAssistantParallelLifecycleComponent проверяет очередь и прерывание
+// turns, отмену, restart и изоляцию истории на disposable PostgreSQL и
+// синтетических callback без реального provider и пользовательской сессии.
 func TestAssistantParallelLifecycleComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
@@ -36,55 +48,7 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	newRepository := func() *Repository {
-		t.Helper()
-		repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
-			SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
-			SecretResourceVersion: "1", ContentSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.ConfigureRoleImages(RoleImageConfig{
-			PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-			BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-			StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-			DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-		}); err != nil {
-			t.Fatal(err)
-		}
-		return repository
-	}
-	repository := newRepository()
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
-	prepareObservedWarmFixture(t, ctx, repository)
-	principal := func(workload, operation, actor, tenant string) value.Principal {
-		t.Helper()
-		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-			ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation,
-		}, workload)
-	}
-	owner := principal("control-api-gateway", "platform.assistant.turns.add", "20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002")
-	worker := principal("runtime-controller", "platform.runtime.execution.claim", "kodex-system-subject", "kodex-installation")
-	warmWorker := principal("runtime-controller", "platform.runtime.warm.report", "kodex-system-subject", "kodex-installation")
-	service, err := platformservice.New(repository)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
-		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	repository, service, owner, worker, assistant := newReadyAssistantComponentService(t, ctx, pool)
 	execute := func(kind command.Kind, actor value.Principal, key string, version *int64, payload any) command.Result {
 		t.Helper()
 		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor,
@@ -187,7 +151,7 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 	completeClaimedExecutionWithSummary(t, ctx, service, worker, followupClaims[0], "parallel-lifecycle-followup", false, "Only conversation A queued result")
 	assertRun(stringMap(bFirst, "runRef"), "RUNNING")
 	// Создание нового adapter/service не должно зависеть от памяти прежнего controller.
-	repository = newRepository()
+	repository = newConfiguredAssistantComponentRepository(t, pool, "gpt-5")
 	service, err = platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)

@@ -10,13 +10,42 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// maximumAssistantDiscoveredSchemas caps explicitly expanded operation schemas per
+// catalog request at four; the complete type index remains separately available.
+// maximumAssistantDiscoveredSchemas ограничивает раскрытие схем в одном catalog
+// request четырьмя; полный индекс типов возвращается отдельно.
 const maximumAssistantDiscoveredSchemas = 4
+
+// maximumAssistantCatalogAgents caps one locally sorted delegation-target page
+// at twenty entries; it is not an execution concurrency or owner eligibility limit.
+// maximumAssistantCatalogAgents ограничивает страницу отсортированных delegation
+// targets двадцатью; это не лимит запусков и не правило owner eligibility.
 const maximumAssistantCatalogAgents = 20
 
+// configurationCatalogBaseDescription supplies compact discovery guidance,
+// distinguishing a fresh catalog from the turn-pinned execution snapshot.
+// configurationCatalogBaseDescription задаёт краткую подсказку discovery,
+// отделяя свежий каталог от execution snapshot, закреплённого за ходом.
 const configurationCatalogBaseDescription = "Discover refs/schemas; omit operation_types for index. No mixed selectors; MODELS needs account_ref. Fresh catalog; execution_snapshot turn-pinned."
+
+// configurationCatalogContextGuidance explains which exact resource reads may
+// use eligible refs and when a new native-route context is required; it grants no access.
+// configurationCatalogContextGuidance поясняет точные eligible resource reads
+// и необходимость нового native-route context, не выдавая доступ.
 const configurationCatalogContextGuidance = "Full instructions and change plans require the current server-owned context. Safe AGENT_RUNTIME_CONFIGURATION and WORKFLOW_METADATA reads use exact eligible refs resolved by find_platform_resources; never guess refs or broaden authority. Historical plans do not replace current published workflow metadata. If a full context-bound read is absent from inputSchema, ask the owner to open its matching native resource route and submit a new turn."
+
+// configurationCatalogPageGuidance instructs byte-offset traversal of pinned
+// configuration text through EOF, with a digest on continuation and bounded pages.
+// configurationCatalogPageGuidance задаёт обход configuration text по byte offset
+// до EOF, с закреплением digest при продолжении и ограничением страницы.
 const configurationCatalogPageGuidance = "Use assistant_configuration_catalog with its required kind, assistant_ref, entity_kind and entity_ref. Read configuration_page.text from configuration_offset_bytes=0 via next_offset_bytes to eof=true; pin configuration_sha256 on continuation, maximum_bytes 4..16384."
 
+// configurationCatalogDescription advertises only locally available read kinds,
+// adds paginated full-read guidance and distinguishes safe runtime/workflow metadata
+// from instructions, draft state and running immutable revisions. It performs no owner read.
+// configurationCatalogDescription перечисляет локально доступные read kinds,
+// добавляет правила постраничного чтения и отделяет безопасные runtime/workflow
+// metadata от instructions, draft и running revisions; owner read здесь не выполняется.
 func configurationCatalogDescription(input runtimecontract.RunnerInput) string {
 	description := configurationCatalogBaseDescription
 	reads := []string{}
@@ -44,6 +73,12 @@ func configurationCatalogDescription(input runtimecontract.RunnerInput) string {
 	return description + " " + configurationCatalogContextGuidance
 }
 
+// configurationCatalogTool constructs closed discovery input and a bounded output
+// description from the runner snapshot. Schema advertisement is not validation of
+// current owner authority or execution of the advertised resource reads.
+// configurationCatalogTool строит закрытый discovery input и ограниченное описание
+// output из runner snapshot. Публикация схемы не проверяет текущую owner authority
+// и не исполняет перечисленные resource reads.
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
@@ -72,6 +107,10 @@ func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any 
 	}
 }
 
+// assistantMetadataTool describes a bounded conversation-title proposal and its
+// owner revision receipt; accepting or preserving a user-edited title belongs to CP.
+// assistantMetadataTool описывает ограниченное предложение названия диалога
+// и owner revision receipt; принятие и защита пользовательского названия принадлежат CP.
 func assistantMetadataTool() map[string]any {
 	return map[string]any{
 		"name": "propose_assistant_metadata", "description": "Propose a concise conversation title. The control-plane owns the accepted title and never overwrites a user-edited title.",
@@ -82,6 +121,10 @@ func assistantMetadataTool() map[string]any {
 	}
 }
 
+// runMetadataTool describes bounded title/activity proposals and safe-content
+// guidance; constructing this schema neither updates a run nor sanitizes payloads.
+// runMetadataTool описывает ограниченные предложения title/activity и правила
+// безопасного содержимого; создание схемы не меняет запуск и не очищает payload.
 func runMetadataTool() map[string]any {
 	return map[string]any{
 		"name": "propose_run_metadata", "description": "Propose a concise server-owned Run title and bounded current activity summary. Do not include secrets, raw tool output, or user payloads.",
@@ -92,6 +135,16 @@ func runMetadataTool() map[string]any {
 	}
 }
 
+// configurationCatalog rejects non-assistants, unknown keys and invalid selections,
+// then returns snapshot-derived types and at most four selected schemas in registry
+// order. It sorts a copied target slice by name/ref, applies case-folded filtering
+// and pages twenty entries, retaining full descriptions only for the current agent.
+// Context and runtime metadata are projections, not fresh owner authority checks.
+// configurationCatalog отвергает не-помощников, лишние keys и неверный selection,
+// затем выдаёт snapshot types и до четырёх выбранных схем в порядке реестра.
+// Копия targets сортируется по name/ref, фильтруется без учёта регистра и делится
+// по двадцать; полные описания доступны лишь текущему agent. Context/runtime
+// metadata — проекции, а не свежая проверка owner authority.
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
 	if !input.IsAssistant() {
 		return nil, errors.New("configuration catalog is not available")
@@ -212,6 +265,12 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 	return result, nil
 }
 
+// assistantPlanTool advertises a compact closed plan envelope with up to thirty-two
+// operations; specialized schemas are discovered separately. It proposes a reviewed
+// draft only and neither applies operations nor assigns permissions or owner versions.
+// assistantPlanTool публикует компактный закрытый plan envelope до тридцати двух
+// операций; специализированные схемы читаются отдельно. Это предложение draft
+// для согласования, не применение операций и не назначение прав или owner versions.
 func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "propose_configuration_plan",
@@ -238,10 +297,18 @@ func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
 	}
 }
 
+// assistantOperationTypes derives the advertised operation index from the same
+// context/self-filtered schemas used by plan discovery, without a second registry.
+// assistantOperationTypes получает индекс операций из тех же context/self-filtered
+// схем discovery плана, не поддерживая второй реестр.
 func assistantOperationTypes(input runtimecontract.RunnerInput) []string {
 	return assistantOperationTypesFromSchemas(assistantPlanOperationSchemas(input))
 }
 
+// assistantOperationTypesFromSchemas preserves schema order and duplicates while
+// extracting trusted builder-produced type constants; it does not validate arbitrary maps.
+// assistantOperationTypesFromSchemas сохраняет порядок и повторы схем, извлекая
+// type constants доверенного builder; произвольные maps здесь не проверяются.
 func assistantOperationTypesFromSchemas(schemas []map[string]any) []string {
 	result := make([]string, 0, len(schemas))
 	for _, schema := range schemas {
@@ -250,10 +317,20 @@ func assistantOperationTypesFromSchemas(schemas []map[string]any) []string {
 	return result
 }
 
+// assistantSchemaType directly asserts the internal properties/type/const shape.
+// Only builder-produced schemas are valid input; malformed maps can panic.
+// assistantSchemaType прямо утверждает внутреннюю форму properties/type/const.
+// Допустимы схемы builder; неверная map может вызвать panic.
 func assistantSchemaType(schema map[string]any) string {
 	return schema["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
 }
 
+// environmentPublicValuesSchema describes a complete list of at most 128 non-secret
+// name/value pairs, with bounded names and values. Reserved prefixes are guidance here;
+// their rejection belongs to the separate normalizer/owner validation path.
+// environmentPublicValuesSchema описывает полный список до 128 несекретных пар
+// name/value с ограничениями длины. Запрет префиксов здесь лишь guidance;
+// его проверяет отдельный normalizer/owner validation path.
 func environmentPublicValuesSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 128,
 		"description": "Non-secret environment values only. Names must not start with KODEX_, CODEX_, OPENAI_, OTEL_, AWS_, AZURE_, GOOGLE_, or KUBERNETES_. Credentials and tokens must use a protected Secret form and secretBindings.",
@@ -264,6 +341,10 @@ func environmentPublicValuesSchema() map[string]any {
 	}
 }
 
+// environmentPublicValueUpdatesSchema describes sparse non-secret upserts using
+// the same bounded pair shape as full replacement; authoritative merging happens in CP.
+// environmentPublicValueUpdatesSchema описывает разреженные несекретные upserts
+// той же ограниченной формы пары, что полная замена; authoritative merge выполняет CP.
 func environmentPublicValueUpdatesSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 128,
 		"description": "Sparse upserts for non-secret environment values. Names must not start with KODEX_, CODEX_, OPENAI_, OTEL_, AWS_, AZURE_, GOOGLE_, or KUBERNETES_. Use this when the current complete value list is not exposed; the server merges entries into its authoritative snapshot.",
@@ -274,6 +355,10 @@ func environmentPublicValueUpdatesSchema() map[string]any {
 	}
 }
 
+// environmentPublicValueRemovalsSchema describes up to 128 unique variable names
+// for removal; constructing the schema neither deletes values nor checks reserved prefixes.
+// environmentPublicValueRemovalsSchema описывает до 128 уникальных имён переменных
+// для удаления; создание схемы не удаляет значения и не проверяет reserved prefixes.
 func environmentPublicValueRemovalsSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 128, "uniqueItems": true,
 		"description": "Names of non-secret environment values to remove from the server-owned current list.",
@@ -281,6 +366,12 @@ func environmentPublicValueRemovalsSchema() map[string]any {
 	}
 }
 
+// environmentSecretBindingsSchema describes bounded references to existing Secrets,
+// optional nonnegative revisions and variable names, never plaintext secret values.
+// Reference syntax alone does not prove project ownership or secret availability.
+// environmentSecretBindingsSchema описывает ограниченные ссылки на существующие Secrets,
+// необязательные неотрицательные revisions и имена переменных, без plaintext values.
+// Форма ссылки не доказывает владение проектом или доступность секрета.
 func environmentSecretBindingsSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 128,
 		"description": "References to already created project Secrets; never include plaintext values.",
@@ -292,6 +383,12 @@ func environmentSecretBindingsSchema() map[string]any {
 	}
 }
 
+// environmentToolsSchema describes the complete selected command inventory with
+// bounded metadata and bare executable names. Owner review and promoted-image
+// membership are required downstream, not established by these field patterns.
+// environmentToolsSchema описывает полный выбранный command inventory с ограниченными
+// metadata и именами без пути. Owner review и membership в promoted image
+// проверяются далее, а не доказываются patterns этих полей.
 func environmentToolsSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 128,
 		"description": "Complete selected tool list from the exact promoted image. The owner reviews each command before publishing the environment draft.",
@@ -303,6 +400,14 @@ func environmentToolsSchema() map[string]any {
 	}
 }
 
+// environmentPolicySchema describes closed resource/workspace limits, ephemeral
+// volumes and HTTPS:443 method/domain rules, with exactly the three service network
+// destinations and Kubernetes access NONE. This is proposal shape, not an installed
+// NetworkPolicy, DNS resolution, live network enforcement or approval receipt.
+// environmentPolicySchema описывает закрытые resource/workspace limits, ephemeral
+// volumes и HTTPS:443 domain/method rules, ровно три служебных network destinations
+// и Kubernetes access NONE. Это форма предложения, не установленная NetworkPolicy,
+// DNS resolution, фактическое сетевое ограничение или approval receipt.
 func environmentPolicySchema() map[string]any {
 	resources := objectSchema([]string{"cpuRequestMilli", "cpuLimitMilli", "memoryRequestMib", "memoryLimitMib", "ephemeralStorageRequestMib", "ephemeralStorageLimitMib"}, map[string]any{
 		"cpuRequestMilli":            map[string]any{"type": "integer", "minimum": 100, "maximum": 8000},
@@ -343,6 +448,10 @@ func environmentPolicySchema() map[string]any {
 	})
 }
 
+// environmentSecretSuggestionsSchema describes at most eight safe metadata entries
+// for owner-only Secret forms; it carries neither credential values nor proof of creation.
+// environmentSecretSuggestionsSchema описывает до восьми безопасных metadata entries
+// для owner-only форм Secrets, без credential values и доказательства создания.
 func environmentSecretSuggestionsSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 8,
 		"description": "Safe metadata for owner-only Secret forms. Never include credential values or pretend that the Secret already exists.",
@@ -353,6 +462,14 @@ func environmentSecretSuggestionsSchema() map[string]any {
 	}
 }
 
+// environmentRevisionInputSchema builds sparse environment edits around the supplied
+// locator schema and optionally requires a system-assistant locator. Its anyOf requires
+// at least one editable field by presence, not a nonempty value or current ownership.
+// The passed locator maps remain referenced by the constructed schema.
+// environmentRevisionInputSchema строит разреженные изменения среды с переданной
+// схемой locator, при необходимости требуя system-assistant locator. AnyOf требует
+// наличие хотя бы одного изменяемого поля, не непустое значение и не текущее владение.
+// Переданные locator maps остаются общими со схемой.
 func environmentRevisionInputSchema(environmentRef map[string]any, systemAssistantRef map[string]any) map[string]any {
 	required := []string{"environmentRef"}
 	properties := map[string]any{
@@ -376,6 +493,16 @@ func environmentRevisionInputSchema(environmentRef map[string]any, systemAssista
 	return schema
 }
 
+// assistantPlanOperationSchemas assembles specialized proposal shapes from project,
+// delegation, assistant scope and native context. Self-configuration exceptions survive
+// ordinary screen filtering; exact project-assistant variants are merged afterwards.
+// Ref enums constrain discovery only: CP resolves eligibility, versions, grants and
+// HumanGate. No operation is applied, image admitted or secret material read here.
+// assistantPlanOperationSchemas собирает специализированные proposal shapes из project,
+// delegation, assistant scope и native context. Исключения self-configuration сохраняются
+// при фильтрации экрана; затем объединяются адресные project-assistant варианты.
+// Ref enums ограничивают discovery: CP проверяет eligibility, versions, grants
+// и HumanGate. Операции, допуск образа и чтение secret material здесь не исполняются.
 func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[string]any {
 	projectRef := opaqueRefSchema()
 	agentRef := opaqueRefSchema()
@@ -594,8 +721,14 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	return withProjectAssistantOperations(input, filtered)
 }
 
-// Locator помощника не заменяет authority: CP разрешает профиль и текущие pins.
-// Обычная экранная команда и адресная команда помощника — непересекающиеся формы.
+// withProjectAssistantOperations adds three exact project-assistant parameter variants
+// for configured assistants, mutating matching schema maps into oneOf or appending new
+// schemas. Ordinary screen and addressed assistant forms remain distinct; locators do
+// not confer authority, which CP resolves from the current profile and pins.
+// withProjectAssistantOperations добавляет три адресных project-assistant варианта
+// для настроенных помощников: меняет map найденной схемы на oneOf либо дописывает
+// новую схему. Экранная и адресная формы различны; locators не дают authority,
+// которую CP определяет по текущему профилю и pins.
 func withProjectAssistantOperations(input runtimecontract.RunnerInput, schemas []map[string]any) []map[string]any {
 	if !input.IsAssistant() || input.AgentRef == "" {
 		return schemas
@@ -618,6 +751,14 @@ func withProjectAssistantOperations(input runtimecontract.RunnerInput, schemas [
 	return schemas
 }
 
+// projectAssistantOperationParameters describes only instruction drafts, environment
+// binding and environment revision for an assistant locator. PROJECT pins itself; SYSTEM
+// uses a syntactic ref. Revision permits omission of environmentRef for owner resolution;
+// unsupported kinds return nil, and all ownership/version decisions remain in CP.
+// projectAssistantOperationParameters описывает лишь instruction draft, привязку среды
+// и revision по assistant locator. PROJECT закрепляет себя; SYSTEM использует форму ref.
+// Revision допускает отсутствие environmentRef для owner resolution; неизвестный kind
+// даёт nil, а владение и версии определяет CP.
 func projectAssistantOperationParameters(input runtimecontract.RunnerInput, kind string) map[string]any {
 	ref := opaqueRefSchema()
 	if input.AssistantScope == runtimecontract.AssistantScopeProject {
@@ -644,6 +785,14 @@ func projectAssistantOperationParameters(input runtimecontract.RunnerInput, kind
 	return schema
 }
 
+// assistantRuntimeConfigurationSchema describes reviewed model/profile/account policy
+// and optional hosted search, retaining the supplied agent-ref schema. Field bounds do
+// not establish catalog eligibility, account access, weight semantics or shell egress;
+// CP validates those semantics and assigns current versions and pins.
+// assistantRuntimeConfigurationSchema описывает согласуемые model/profile/account policy
+// и optional hosted search, сохраняя переданную схему agent ref. Ограничения полей
+// не доказывают catalog eligibility, account access, смысл weights или shell egress;
+// CP проверяет семантику и назначает текущие versions/pins.
 func assistantRuntimeConfigurationSchema(agentRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts"}, map[string]any{
 		"agentRef": agentRef, "runtimeProfileRef": assistantRuntimeProfileKeySchema(), "model": stringSchema(1, 128),
@@ -658,23 +807,45 @@ func assistantRuntimeConfigurationSchema(agentRef map[string]any) map[string]any
 	return schema
 }
 
+// assistantCurrentRuntimeSchema advertises only an object capped at five properties;
+// it intentionally does not enumerate or close the current runtime projection fields.
+// assistantCurrentRuntimeSchema публикует лишь object с максимум пятью properties;
+// поля current runtime projection намеренно не перечисляются и не закрываются.
 func assistantCurrentRuntimeSchema() map[string]any {
 	return map[string]any{"type": "object", "maxProperties": 5}
 }
 
+// assistantRuntimeProfileKeySchema constrains profile-key text to eight through 128
+// ASCII identifier characters; it does not resolve a profile or grant access to it.
+// assistantRuntimeProfileKeySchema ограничивает profile-key text восемью–128 ASCII
+// identifier characters, не разрешая профиль и не выдавая доступ к нему.
 func assistantRuntimeProfileKeySchema() map[string]any {
 	return map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{8,128}$", "maxLength": 128}
 }
 
+// assistantRoleEnvironmentKeySchema reuses the catalog environment-key grammar and
+// 100-character bound; catalog membership is a separate owner decision.
+// assistantRoleEnvironmentKeySchema переиспользует grammar ключа среды каталога
+// и предел 100 characters; membership в каталоге решает owner отдельно.
 func assistantRoleEnvironmentKeySchema() map[string]any {
 	return map[string]any{"type": "string", "pattern": assistantCatalogEnvironmentKeyPattern.String(), "maxLength": 100}
 }
 
+// assistantCurrentRuntime projects five turn-input runtime identifiers/settings
+// without credentials or fresh catalog reads; values may be empty and are not revalidated.
+// assistantCurrentRuntime проецирует пять runtime identifiers/settings из turn input
+// без credentials и свежего чтения каталога; значения могут быть пустыми и не перепроверяются.
 func assistantCurrentRuntime(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{"agent_ref": input.AgentRef, "runtime_profile_ref": input.RuntimeProfileRef,
 		"provider_account_ref": input.ProviderAccountRef, "model": input.Model, "reasoning_effort": input.EffectiveReasoningEffort}
 }
 
+// projectSelfTargetSchema always includes ownRef and adds one distinct native-context
+// ref only when kind and allowed operation match. It preserves the original ordering
+// and performs no ref syntax, owner eligibility or permission verification.
+// projectSelfTargetSchema всегда включает ownRef и добавляет один отличный ref native
+// context лишь при совпадении kind и allowed operation. Порядок сохраняется; syntax ref,
+// owner eligibility и permissions здесь не проверяются.
 func projectSelfTargetSchema(input runtimecontract.RunnerInput, operation, kind, ownRef string) map[string]any {
 	refs := []string{ownRef}
 	if context := input.AssistantContext; context != nil && context.EntityKind == kind && context.EntityRef != "" && context.EntityRef != ownRef {
@@ -688,16 +859,28 @@ func projectSelfTargetSchema(input runtimecontract.RunnerInput, operation, kind,
 	return enumSchema(refs...)
 }
 
+// assistantAgentCapabilitySchema advertises exactly the three supported platform
+// capability keys for configuration; an enum entry is not an enabled capability grant.
+// assistantAgentCapabilitySchema публикует ровно три поддерживаемых platform capability
+// keys для настройки; наличие в enum не означает enabled grant.
 func assistantAgentCapabilitySchema() map[string]any {
 	return enumSchema("platform.artifact.manage", "platform.run.delegate", "platform.run.launch")
 }
 
+// assistantAgentInstructionsSchema describes bounded Go-template instructions and
+// stable/dynamic variable guidance, but neither parses templates nor resolves integrations.
+// assistantAgentInstructionsSchema описывает ограниченные Go-template instructions
+// и stable/dynamic variables, не разбирая шаблоны и не разрешая integrations.
 func assistantAgentInstructionsSchema() map[string]any {
 	schema := stringSchema(20, 65536)
 	schema["description"] = "Go template instructions. Stable scalar variables: {{ .organization.name }}, {{ .project.name }}, {{ .agent.name }}. Dynamic integrations: {{ range .integrations.items }} with .name, .description and .capability; include {{ else }} for the empty list and {{ end }}. Do not use i18n keys or index expressions."
 	return schema
 }
 
+// agentUpdateInputSchema permits sparse name/purpose/role edits for a supplied agent
+// locator and requires at least one editable key; it excludes instructions and runtime fields.
+// agentUpdateInputSchema допускает разреженные name/purpose/role edits для переданного
+// agent locator, требуя хотя бы один изменяемый key; instructions/runtime fields исключены.
 func agentUpdateInputSchema(agentRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"agentRef"}, map[string]any{
 		"agentRef": agentRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 2000),
@@ -709,6 +892,12 @@ func agentUpdateInputSchema(agentRef map[string]any) map[string]any {
 	return schema
 }
 
+// connectionUpdateInputSchema pins one connection locator and permits name/public
+// configuration changes only. The nested public object remains open; credential and
+// definition changes are not advertised by this operation.
+// connectionUpdateInputSchema закрепляет один connection locator и допускает лишь name/public
+// configuration changes. Вложенный public object остаётся открытым; credential
+// и definition changes эта операция не публикует.
 func connectionUpdateInputSchema(connectionRef string) map[string]any {
 	schema := objectSchema([]string{"connectionRef"}, map[string]any{
 		"connectionRef": enumSchema(connectionRef), "name": stringSchema(1, 160),
@@ -718,6 +907,14 @@ func connectionUpdateInputSchema(connectionRef string) map[string]any {
 	return schema
 }
 
+// workflowUpdateInputSchema derives fresh field/step shapes from workflow creation,
+// adds stable key locators and sparse update fields, and instructs complete ordered-step
+// readback with preserved dependencies. It does not itself compare or normalize a DAG,
+// retain input defaults or prove the published/current revision; CP owns those effects.
+// workflowUpdateInputSchema берёт новые field/step shapes из создания workflow, добавляет
+// stable key locators и sparse update fields, требует полного ordered-step readback
+// с сохранением dependencies. Сравнение/нормализация DAG, сохранение input defaults
+// и доказательство published/current revision здесь не выполняются: это эффекты CP.
 func workflowUpdateInputSchema(workflowRef string) map[string]any {
 	graph := workflowInputSchema(opaqueRefSchema(), opaqueRefSchema())["properties"].(map[string]any)
 	fields := graph["inputFields"].(map[string]any)
@@ -746,6 +943,12 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 	return schema
 }
 
+// scheduleUpdateInputSchema pins the current schedule ref and requires at least one
+// of twelve editable keys. It describes bounds and enums without validating cron/timezone
+// semantics, resolving a target or updating the durable schedule.
+// scheduleUpdateInputSchema закрепляет текущий schedule ref и требует хотя бы один
+// из двенадцати editable keys. Bounds/enums не проверяют cron/timezone semantics,
+// не разрешают target и не меняют durable schedule.
 func scheduleUpdateInputSchema(scheduleRef string) map[string]any {
 	schema := objectSchema([]string{"scheduleRef"}, map[string]any{
 		"scheduleRef": enumSchema(scheduleRef), "name": stringSchema(1, 160),
@@ -765,6 +968,10 @@ func scheduleUpdateInputSchema(scheduleRef string) map[string]any {
 	return schema
 }
 
+// projectUpdateInputSchema permits sparse name, purpose or ru/en language edits
+// for the supplied project-ref schema; version hydration and ownership stay server-owned.
+// projectUpdateInputSchema допускает sparse name,purpose или ru/en language edits
+// с переданной project-ref схемой; version hydration и владение остаются server-owned.
 func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"projectRef"}, map[string]any{
 		"projectRef": projectRef,
@@ -780,6 +987,12 @@ func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
 	return schema
 }
 
+// integrationGrantInputSchema pins an AGENT/WORKFLOW screen recipient when present,
+// otherwise requires exactly one of those recipient keys. It describes approval policy
+// and scope paths but creates no grant, approval or current connection authority.
+// integrationGrantInputSchema закрепляет AGENT/WORKFLOW recipient экрана при наличии,
+// иначе требует ровно один из этих recipient keys. Описание approval policy/scope paths
+// не создаёт grant, approval и текущую connection authority.
 func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext) map[string]any {
 	properties := map[string]any{
 		"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "agentRef": opaqueRefSchema(), "workflowRef": opaqueRefSchema(),
@@ -807,6 +1020,14 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 	return schema
 }
 
+// assistantOperationSchema derives action/version requirements from the closed local
+// registry, retaining special archive/execute cases. It describes create before/after,
+// versioned targets and selected=true, but server-hydrated kinds require only the compact
+// four fields. Parameter maps are reused; advertised optional owner fields are not authority.
+// assistantOperationSchema получает action/version requirements из закрытого локального
+// реестра, сохраняя archive/execute cases. Описывает create before/after, versioned
+// targets и selected=true, но server-hydrated kinds требуют лишь четыре compact fields.
+// Parameter maps переиспользуются; опубликованные optional owner fields не дают authority.
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	// Discovery и нормализатор используют один закрытый реестр действий.
 	action := assistantServerAction(kind)
@@ -852,6 +1073,12 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 	return objectSchema(required, properties)
 }
 
+// workflowInputSchema describes bounded creation fields, ordered steps, parallel-group
+// forms, human-gate choices and a complete capability ceiling. It does not infer dependency
+// edges, grant stage capabilities or launch work; supplied project/agent schemas are reused.
+// workflowInputSchema описывает ограниченные create fields, ordered steps, parallel-group
+// формы, human-gate choices и полный capability ceiling. Dependency edges не выводятся,
+// stage capabilities не выдаются и работа не запускается; project/agent schemas общие.
 func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 	inputField := objectSchema([]string{"label", "valueType", "required", "options"}, map[string]any{
 		"label": stringSchema(1, 160), "description": stringSchema(0, 500),
@@ -877,6 +1104,12 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 	})
 }
 
+// scheduleInputSchema describes a schedule with an explicit task, session/notification
+// policy and distinct agent/workflow target branches. Cron/timezone validity and scheduling
+// remain owner concerns; the supplied target schema constrains only the agent branch.
+// scheduleInputSchema описывает schedule с явной задачей, session/notification policy
+// и отдельными agent/workflow target branches. Cron/timezone validity и запуск расписания
+// решает owner; переданная target schema ограничивает только agent branch.
 func scheduleInputSchema(projectRef, targetRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "automationText", "sessionPolicy", "notificationPolicy"}, map[string]any{
 		"projectRef": projectRef, "name": stringSchema(1, 160), "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
@@ -891,6 +1124,12 @@ func scheduleInputSchema(projectRef, targetRef map[string]any) map[string]any {
 	return schema
 }
 
+// runInputSchema describes launch intent with optional session/attachment-set locators,
+// closed target-type branches and an open bounded input object. It does not resolve
+// attachments, authorize continuation or launch the requested execution.
+// runInputSchema описывает launch intent с optional session/attachment-set locators,
+// закрытыми target-type branches и открытым ограниченным input object. Attachments
+// не разрешаются, continuation не авторизуется и execution не запускается.
 func runInputSchema(projectRef, targetRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"projectRef", "targetType", "targetRef", "title", "task", "input"}, map[string]any{
 		"projectRef": projectRef, "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
@@ -902,6 +1141,10 @@ func runInputSchema(projectRef, targetRef map[string]any) map[string]any {
 	return schema
 }
 
+// assistantExecutionTargetBranches separates the supplied agent-ref constraint from
+// a syntactic workflow ref. Branches add no required keys themselves and resolve no target.
+// assistantExecutionTargetBranches отделяет переданное agent-ref ограничение от формы
+// workflow ref. Сами branches не требуют keys и не разрешают target.
 func assistantExecutionTargetBranches(agentRef map[string]any) []map[string]any {
 	return []map[string]any{
 		{"properties": map[string]any{"targetType": map[string]any{"const": "AGENT"}, "targetRef": agentRef}},
@@ -909,26 +1152,50 @@ func assistantExecutionTargetBranches(agentRef map[string]any) []map[string]any 
 	}
 }
 
+// objectSchema returns a closed object descriptor retaining the supplied properties
+// map and required slice, including nil required; it performs no validation or defensive copy.
+// objectSchema возвращает закрытый object descriptor с исходными properties map
+// и required slice, включая nil required; проверки и защитного копирования нет.
 func objectSchema(required []string, properties map[string]any) map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
 }
 
+// stringSchema records the supplied length bounds as JSON Schema character limits;
+// it does not check bound ordering, count bytes or validate a string value.
+// stringSchema записывает переданные length bounds как JSON Schema character limits,
+// не проверяя их порядок, byte count и само строковое значение.
 func stringSchema(minimum, maximum int) map[string]any {
 	return map[string]any{"type": "string", "minLength": minimum, "maxLength": maximum}
 }
 
+// opaqueRefSchema describes eight through 96 ASCII identifier characters only;
+// prefix, existence, tenant membership and authority must be checked by the owner.
+// opaqueRefSchema описывает лишь восемь–96 ASCII identifier characters; prefix,
+// существование, tenant membership и authority проверяет owner.
 func opaqueRefSchema() map[string]any {
 	return map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{8,96}$", "maxLength": 96}
 }
 
+// capabilityKeySchema describes a lowercase capability key beginning with a letter
+// or digit and capped at eighty characters; it does not prove registry membership or grants.
+// capabilityKeySchema описывает lowercase capability key с начальной буквой/цифрой
+// до восьмидесяти characters, не доказывая registry membership или grants.
 func capabilityKeySchema() map[string]any {
 	return map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$", "maxLength": 80}
 }
 
+// enumSchema describes the supplied string choices without deduplication or copying
+// their backing slice; constructing an enum neither validates choices nor grants access.
+// enumSchema описывает переданные string choices без deduplication и копирования
+// backing slice; создание enum не проверяет варианты и не выдаёт доступ.
 func enumSchema(values ...string) map[string]any {
 	return map[string]any{"type": "string", "enum": values}
 }
 
+// stringArraySchema describes a unique bounded array of the supplied string choices,
+// retaining that choice slice; array bounds and candidate values are not evaluated here.
+// stringArraySchema описывает unique bounded array переданных string choices, сохраняя
+// их slice; array bounds и конкретные значения здесь не проверяются.
 func stringArraySchema(minimum, maximum int, values []string) map[string]any {
 	return map[string]any{"type": "array", "minItems": minimum, "maxItems": maximum, "uniqueItems": true,
 		"items": map[string]any{"type": "string", "enum": values}}

@@ -2,6 +2,8 @@ package integration
 
 import "testing"
 
+// TestInvocationSelectedApprovalPolicyIsClosedBeforeEffects checks allowed selected policies and grant pins, then rejects autonomous approving reviews and unapproved writes at invocation validation without a provider call.
+// TestInvocationSelectedApprovalPolicyIsClosedBeforeEffects проверяет допустимые выбранные политики и версии гранта, затем отклоняет автономные одобряющие ревью и неподтверждённые записи при проверке вызова без обращения к провайдеру.
 func TestInvocationSelectedApprovalPolicyIsClosedBeforeEffects(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)

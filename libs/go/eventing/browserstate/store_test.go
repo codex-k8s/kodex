@@ -12,8 +12,12 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// testID is the fixed UUID used to isolate subject-level CAS fixtures.
+// testID — фиксированный UUID для тестов CAS по одному subject.
 const testID = "f480e57b-f1f3-4978-ab52-7f6eb0d97410"
 
+// memoryStream models one JetStream subject with optional loss of the publish ACK.
+// memoryStream моделирует один subject JetStream с возможной потерей подтверждения публикации.
 type memoryStream struct {
 	mu      sync.Mutex
 	record  *jetstream.RawStreamMsg
@@ -21,10 +25,14 @@ type memoryStream struct {
 	writes  int
 }
 
+// Info returns the exact test stream contract for readiness checks.
+// Info возвращает точный тестовый контракт потока для проверки готовности.
 func (s *memoryStream) Info(context.Context, ...jetstream.StreamInfoOpt) (*jetstream.StreamInfo, error) {
 	return &jetstream.StreamInfo{Config: validConfig()}, nil
 }
 
+// GetLastMsgForSubject returns a snapshot of the latest in-memory record.
+// GetLastMsgForSubject возвращает снимок последней записи в памяти.
 func (s *memoryStream) GetLastMsgForSubject(_ context.Context, subject string) (*jetstream.RawStreamMsg, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -35,6 +43,8 @@ func (s *memoryStream) GetLastMsgForSubject(_ context.Context, subject string) (
 	return &copy, nil
 }
 
+// PublishMsg enforces expected sequence before committing, then may hide the ACK.
+// PublishMsg проверяет ожидаемую последовательность до записи, а затем может скрыть ACK.
 func (s *memoryStream) PublishMsg(_ context.Context, message *nats.Msg, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -57,10 +67,14 @@ func (s *memoryStream) PublishMsg(_ context.Context, message *nats.Msg, _ ...jet
 	return &jetstream.PubAck{Stream: StreamName, Sequence: current + 1}, nil
 }
 
+// testStore wires one in-memory stream to both readback and publication paths.
+// testStore подключает один поток в памяти к чтению и публикации.
 func testStore(stream *memoryStream) *Store {
 	return &Store{stream: stream, publisher: stream, replicas: 1, timeout: time.Second}
 }
 
+// TestLostACKReadbackDoesNotRepeatPublication accepts only the exact committed ciphertext after ACK loss.
+// TestLostACKReadbackDoesNotRepeatPublication принимает после потери ACK только точно записанный шифротекст.
 func TestLostACKReadbackDoesNotRepeatPublication(t *testing.T) {
 	t.Parallel()
 	stream := &memoryStream{loseACK: true}
@@ -74,6 +88,8 @@ func TestLostACKReadbackDoesNotRepeatPublication(t *testing.T) {
 	}
 }
 
+// TestConcurrentRotationHasSingleWinnerAndTerminalFencesOldVersion checks CAS arbitration and stale-response fencing.
+// TestConcurrentRotationHasSingleWinnerAndTerminalFencesOldVersion проверяет выбор единственного победителя CAS и запрет позднего ответа.
 func TestConcurrentRotationHasSingleWinnerAndTerminalFencesOldVersion(t *testing.T) {
 	t.Parallel()
 	store := testStore(&memoryStream{})
@@ -119,6 +135,8 @@ func TestConcurrentRotationHasSingleWinnerAndTerminalFencesOldVersion(t *testing
 	}
 }
 
+// TestMissingStateCannotRecreateWithOldSequence prevents stale writers from recreating absent state.
+// TestMissingStateCannotRecreateWithOldSequence запрещает устаревшим писателям воссоздавать отсутствующее состояние.
 func TestMissingStateCannotRecreateWithOldSequence(t *testing.T) {
 	t.Parallel()
 	store := testStore(&memoryStream{})
@@ -130,6 +148,8 @@ func TestMissingStateCannotRecreateWithOldSequence(t *testing.T) {
 	}
 }
 
+// validConfig builds the exact served stream configuration expected by readiness.
+// validConfig создаёт точную действующую конфигурацию потока, ожидаемую проверкой готовности.
 func validConfig() jetstream.StreamConfig {
 	return jetstream.StreamConfig{
 		Name: StreamName, Subjects: []string{SubjectFilter}, Storage: jetstream.FileStorage, Replicas: 1,
@@ -139,6 +159,8 @@ func validConfig() jetstream.StreamConfig {
 	}
 }
 
+// TestReadinessRejectsEvictionPrematureExpiryAndOverwriteDrift rejects retention and replacement drift.
+// TestReadinessRejectsEvictionPrematureExpiryAndOverwriteDrift отклоняет изменения хранения и замены записей.
 func TestReadinessRejectsEvictionPrematureExpiryAndOverwriteDrift(t *testing.T) {
 	t.Parallel()
 	if !compatible(validConfig(), 1) {

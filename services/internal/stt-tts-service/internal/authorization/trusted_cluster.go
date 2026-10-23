@@ -17,22 +17,33 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// trustedSTTCaller is this service's fixed internal identity when resolving owner authority; request metadata cannot select another workload.
+// RU: trustedSTTCaller задаёт фиксированную внутреннюю идентичность сервиса при разрешении authority владельцем; metadata запроса не выбирает иной workload.
 const trustedSTTCaller = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
 
+// trustedAuthorityDeadlineMargin reserves local response handling time inside the caller's deadline instead of extending owner RPC lifetime.
+// RU: trustedAuthorityDeadlineMargin оставляет время локальной обработки ответа внутри срока клиента, не продлевая жизнь owner RPC.
 const trustedAuthorityDeadlineMargin = 10 * time.Millisecond
 
+// trustedPrincipalKey keeps resolved principal context private to this package so ordinary caller metadata cannot install it.
+// RU: trustedPrincipalKey сохраняет контекст разрешённого субъекта приватным для пакета, не позволяя установить его обычными metadata клиента.
 type trustedPrincipalKey struct{}
+
+// trustedPrincipal binds one owner-derived principal to the exact RPC method that obtained it.
+// RU: trustedPrincipal связывает одного выведенного владельцем субъекта с точным RPC методом его получения.
 type trustedPrincipal struct {
 	method    string
 	principal value.Principal
 }
 
-// TrustedResolver получает identity только от CP после owner ACL.
-// Соединение с CP создаётся composition root, а не выбирается запросом.
+// TrustedResolver derives identity only from control-plane after owner ACL; its client is installed by composition rather than selected by an incoming request.
+// RU: TrustedResolver выводит идентичность только из control-plane после owner ACL; клиент задаётся композицией, а не выбирается входящим запросом.
 type TrustedResolver struct {
 	client sttv1.TranscriptionAuthorityServiceClient
 }
 
+// NewTrustedResolver requires the explicit trusted-cluster profile and an owner client without performing authority resolution during construction.
+// RU: NewTrustedResolver требует явный trusted-cluster профиль и owner клиент без разрешения полномочий при создании.
 func NewTrustedResolver(profile string, client sttv1.TranscriptionAuthorityServiceClient) (*TrustedResolver, error) {
 	if profile != transportprofile.TrustedCluster || client == nil {
 		return nil, errors.New("trusted STT authority configuration is invalid")
@@ -40,8 +51,12 @@ func NewTrustedResolver(profile string, client sttv1.TranscriptionAuthorityServi
 	return &TrustedResolver{client: client}, nil
 }
 
-// Resolve возвращает request context с закрытым, method-bound principal.
-// Digest — идентификатор owner snapshot для receipt, не подпись или JWS proof.
+// Resolve checks workload admission and one incoming bearer, calls the exact owner method and validates the returned bounded-lived organization principal.
+// RU: Resolve проверяет workload admission и единственный входящий bearer, вызывает точный owner метод и проверяет возвращённого субъекта организации с ограниченным сроком.
+// Outgoing metadata contains only the fixed profile/caller and original credential, never caller-supplied actor or project fields.
+// RU: Исходящие metadata содержат только фиксированные profile/caller и исходный реквизит, без переданных клиентом actor или project полей.
+// The deterministic snapshot digest correlates receipts, not a signature or JWS proof; the original request context receives a private method-bound principal.
+// RU: Детерминированный дайджест снимка связывает квитанции, а не служит подписью или JWS proof; исходный контекст запроса получает приватного субъекта с привязкой к методу.
 func (resolver *TrustedResolver) Resolve(ctx context.Context, method string) (context.Context, error) {
 	if resolver == nil || resolver.client == nil || ctx == nil {
 		return nil, errors.New("trusted STT authority unavailable")

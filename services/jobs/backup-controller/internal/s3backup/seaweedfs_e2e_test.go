@@ -5,21 +5,21 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
-	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/configspec"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
 
+// TestSeaweedFSOperationLockE2E proves a stale lock holder cannot release its live replacement in local S3.
+// RU: TestSeaweedFSOperationLockE2E доказывает, что прежний держатель не освобождает заменившую его блокировку в локальном S3.
 func TestSeaweedFSOperationLockE2E(t *testing.T) {
 	if os.Getenv("BACKUP_RESTORE_E2E") != "1" {
 		t.Skip("local backup restore E2E is disabled")
@@ -30,20 +30,10 @@ func TestSeaweedFSOperationLockE2E(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	client, err := NewClient(ctx, configspec.S3{
-		Name: "backup-repository", Endpoint: requireBackupLoopbackEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT")),
-		Region: "us-east-1", Bucket: "kodex-backups",
-		AccessKeyID:     readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE")),
-		SecretAccessKey: readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE")),
-		UsePathStyle:    true, AllowInsecureLocal: true,
-	})
-	if err != nil {
-		t.Fatal("initialize local backup repository")
-	}
-	repository, err := NewRepository(client, "kodex")
-	if err != nil || repository.Check(ctx, nil) != nil {
-		t.Fatal("local backup repository is unavailable")
-	}
+	repository := newLocalBackupE2ERepository(t, ctx,
+		objectstoragetest.RequireLoopbackHTTPEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT"), "backup E2E"),
+		objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE"), "backup E2E"),
+		objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE"), "backup E2E"))
 	lock, err := repository.AcquireOperationLock(ctx, "verify", operationID, time.Now().UTC(), 10*time.Minute)
 	if err != nil {
 		t.Fatalf("acquire disposable operation lock: %v", err)
@@ -66,13 +56,15 @@ func TestSeaweedFSOperationLockE2E(t *testing.T) {
 	}
 }
 
+// TestSeaweedFSBackupRestoreDrillReadbackE2E checks exact receipts and optional object bytes of a disposable restore.
+// RU: TestSeaweedFSBackupRestoreDrillReadbackE2E сверяет точные квитанции и при наличии файлы одноразового восстановления.
 func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	if os.Getenv("BACKUP_RESTORE_E2E") != "1" {
 		t.Skip("local backup restore E2E is disabled")
 	}
-	endpoint := requireBackupLoopbackEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT"))
-	accessKey := readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE"))
-	secretKey := readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE"))
+	endpoint := objectstoragetest.RequireLoopbackHTTPEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT"), "backup E2E")
+	accessKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE"), "backup E2E")
+	secretKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE"), "backup E2E")
 	backupID := strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_BACKUP_ID"))
 	restoreID := strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_RESTORE_ID"))
 	targetPrefix := strings.Trim(strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_TARGET_PREFIX")), "/")
@@ -85,18 +77,7 @@ func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	client, err := NewClient(ctx, configspec.S3{
-		Name: "backup-repository", Endpoint: endpoint, Region: "us-east-1",
-		Bucket: "kodex-backups", AccessKeyID: accessKey, SecretAccessKey: secretKey,
-		UsePathStyle: true, AllowInsecureLocal: true,
-	})
-	if err != nil {
-		t.Fatal("initialize local backup repository")
-	}
-	repository, err := NewRepository(client, "kodex")
-	if err != nil || repository.Check(ctx, nil) != nil {
-		t.Fatal("local backup repository is unavailable")
-	}
+	repository := newLocalBackupE2ERepository(t, ctx, endpoint, accessKey, secretKey)
 	backup, _, err := repository.LoadVerifiedManifest(ctx, backupID)
 	if err != nil {
 		t.Fatalf("verified backup readback failed: %v", err)
@@ -173,34 +154,21 @@ func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	}
 }
 
-func requireBackupLoopbackEndpoint(t *testing.T, raw string) string {
+// newLocalBackupE2ERepository opens the one checked local backup bucket used by disposable E2E scenarios.
+// RU: newLocalBackupE2ERepository открывает один проверенный локальный бакет копий для одноразовых E2E-сценариев.
+func newLocalBackupE2ERepository(t *testing.T, ctx context.Context, endpoint, accessKey, secretKey string) *Repository {
 	t.Helper()
-	endpoint, err := url.Parse(raw)
-	if err != nil || endpoint.Scheme != "http" || endpoint.User != nil || endpoint.RawQuery != "" ||
-		endpoint.Fragment != "" || (endpoint.Path != "" && endpoint.Path != "/") ||
-		(endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "localhost") || endpoint.Port() == "" {
-		t.Fatal("backup E2E endpoint must be loopback-only HTTP")
+	client, err := NewClient(ctx, configspec.S3{
+		Name: "backup-repository", Endpoint: endpoint, Region: "us-east-1",
+		Bucket: "kodex-backups", AccessKeyID: accessKey, SecretAccessKey: secretKey,
+		UsePathStyle: true, AllowInsecureLocal: true,
+	})
+	if err != nil {
+		t.Fatal("initialize local backup repository")
 	}
-	return raw
-}
-
-func readBackupE2ESecret(t *testing.T, secretPath string) string {
-	t.Helper()
-	info, err := os.Lstat(secretPath)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 ||
-		!filepath.IsAbs(secretPath) || info.Mode().Perm()&0o077 != 0 {
-		t.Fatal("backup E2E credential file is invalid")
+	repository, err := NewRepository(client, "kodex")
+	if err != nil || repository.Check(ctx, nil) != nil {
+		t.Fatal("local backup repository is unavailable")
 	}
-	raw, err := os.ReadFile(secretPath)
-	if err != nil || len(raw) == 0 || len(raw) > 16<<10 {
-		t.Fatal("backup E2E credential cannot be read")
-	}
-	value := strings.TrimSpace(string(raw))
-	for index := range raw {
-		raw[index] = 0
-	}
-	if value == "" || strings.ContainsAny(value, "\r\n") {
-		t.Fatal(errors.New("backup E2E credential is invalid"))
-	}
-	return value
+	return repository
 }

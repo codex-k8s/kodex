@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 
 import { assistantCreatedWorkflowTarget } from "@/features/assistant/model";
+import { watchAssistantReadback } from "@/features/assistant/readback-lifecycle";
 import { requestSignal } from "@/shared/api/client";
 import { getWorkflow } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -18,53 +19,27 @@ const target = computed(() =>
 const workflow = ref<Workflow>();
 const loading = ref(false);
 const problem = ref(false);
-let refresh: (() => Promise<void>) | undefined;
-
-watch(
-  target,
-  (value, _previous, onCleanup) => {
+const refresh = watchAssistantReadback(target, {
+  loading,
+  problem,
+  reset: () => {
     workflow.value = undefined;
-    loading.value = false;
-    problem.value = false;
-    if (!value) return;
-    const controller = new AbortController();
-    onCleanup(() => {
-      controller.abort();
-      refresh = undefined;
-    });
-    refresh = async () => {
-      if (controller.signal.aborted) return;
-      loading.value = true;
-      try {
-        const next = (
-          await unwrap(
-            getWorkflow({
-              path: { workflowRef: value.workflowRef },
-              signal: requestSignal(controller.signal),
-            }),
-          )
-        ).data;
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (controller.signal.aborted) return;
-        if (
-          next.ref !== value.workflowRef ||
-          next.projectRef !== value.projectRef
-        )
-          throw new Error("Assistant workflow readback mismatch");
-        workflow.value = next;
-        problem.value = false;
-      } catch {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) problem.value = true;
-      } finally {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) loading.value = false;
-      }
-    };
-    void refresh();
   },
-  { immediate: true },
-);
+  read: async (value, signal) =>
+    (
+      await unwrap(
+        getWorkflow({
+          path: { workflowRef: value.workflowRef },
+          signal: requestSignal(signal),
+        }),
+      )
+    ).data,
+  apply: (value, next) => {
+    if (next.ref !== value.workflowRef || next.projectRef !== value.projectRef)
+      throw new Error("Assistant workflow readback mismatch");
+    workflow.value = next;
+  },
+});
 </script>
 
 <template>
@@ -96,7 +71,7 @@ watch(
         class="button"
         type="button"
         :disabled="loading"
-        @click="refresh?.()"
+        @click="refresh()"
       >
         {{ $t("common.refresh") }}
       </button>

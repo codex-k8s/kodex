@@ -15,8 +15,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// authorityPostgresTestDSNEnv names the optional connection setting for the destructive schema-owning PostgreSQL concurrency fixture. The test only checks nonempty presence, so operators must supply an isolated database; this constant provides no disposable-environment proof.
+// authorityPostgresTestDSNEnv обозначает необязательное connection setting PostgreSQL concurrency fixture, удаляющего собственную schema. Тест проверяет лишь непустое наличие: оператор обязан предоставить изолированную БД, сама константа не доказывает одноразовую среду.
 const authorityPostgresTestDSNEnv = "KODEX_AUTHORITY_POSTGRES_TEST_DSN"
 
+// TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock recreates a fixture schema on the explicitly supplied database, holds a watermark row lock and checks twelve concurrent accepts, replay/fence/receipt refusal and forward-only advancement. Missing DSN skips execution; successful compilation is not a component PASS.
+// TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock пересоздаёт schema эталона в явно переданной БД, удерживает watermark row lock и проверяет двенадцать concurrent accepts, replay, fence, receipt refusals и forward-only advancement. Без DSN исполнение пропускается; успешная компиляция не равна component PASS.
 func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testing.T) {
 	dsn := os.Getenv(authorityPostgresTestDSNEnv)
 	if dsn == "" {
@@ -38,8 +42,12 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 	prepareAuthorityConcurrencyFixture(t, ctx, pool)
 
 	const (
+		// workloadID fixes the common replay/watermark scope for the isolated fixture's concurrent accepts.
+		// workloadID фиксирует общую replay и watermark scope параллельных accepts изолированного эталона.
 		workloadID = "control-api-gateway"
-		receiptID  = "00000000-0000-4000-8000-000000000001"
+		// receiptID pins the originally seeded attestation, retained when another replica receipt is accepted.
+		// receiptID закрепляет исходную attestation, сохраняемую при принятии квитанции другой реплики.
+		receiptID = "00000000-0000-4000-8000-000000000001"
 	)
 	state := snapshotStateForConcurrencyTest(receiptID)
 	if _, err := pool.Exec(ctx, `
@@ -75,6 +83,8 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 		t.Fatalf("lock accepted watermark row: %v", err)
 	}
 
+	// parallelReads bounds the concurrent accept count and expected independent durable reservations.
+	// parallelReads ограничивает число concurrent accepts и ожидаемых независимых durable reservations.
 	const parallelReads = 12
 	start := make(chan struct{})
 	errorsByRead := make(chan error, parallelReads)
@@ -121,6 +131,8 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 		t.Fatalf("release watermark row lock: %v", err)
 	}
 
+	// replicaReceiptID supplies a second attested receipt for the same exact snapshot without replacing its watermark.
+	// replicaReceiptID задаёт вторую attested receipt того же точного снимка без замены его watermark.
 	const replicaReceiptID = "00000000-0000-4000-8000-000000000003"
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO internal_rpc_authority.test_receipts (
@@ -232,12 +244,16 @@ func TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock(t *testin
 	}
 }
 
+// prepareAuthorityConcurrencyFixture drops and recreates the authority schema with simplified tables/functions and registers a best-effort cleanup using an independent five-second context. It does not validate the DSN's environment or reproduce production RLS, grants or real issued-context proof enforcement.
+// prepareAuthorityConcurrencyFixture удаляет и пересоздаёт authority schema с упрощёнными таблицами и функциями и регистрирует best-effort cleanup с независимым пятисекундным контекстом. Среда DSN не проверяется и production RLS, grants и реальная issued-context proof enforcement не воспроизводятся.
 func prepareAuthorityConcurrencyFixture(
 	t *testing.T,
 	ctx context.Context,
 	pool *pgxpool.Pool,
 ) {
 	t.Helper()
+	// fixture destructively recreates only the authority schema and simplified test functions on the supplied database.
+	// fixture разрушительно пересоздаёт лишь authority schema и упрощённые тестовые функции переданной БД.
 	const fixture = `
 		DROP SCHEMA IF EXISTS internal_rpc_authority CASCADE;
 		CREATE SCHEMA internal_rpc_authority;
@@ -305,6 +321,8 @@ func prepareAuthorityConcurrencyFixture(
 	})
 }
 
+// snapshotStateForConcurrencyTest constructs the fixed revision-one snapshot pins with the supplied receipt and no predecessor history, leaving database validation to the component caller.
+// snapshotStateForConcurrencyTest строит фиксированные привязки снимка первой ревизии с переданной квитанцией без predecessor history, оставляя проверку БД component caller.
 func snapshotStateForConcurrencyTest(receiptID string) domainrepository.SnapshotState {
 	return domainrepository.SnapshotState{
 		SourceRevision:          1,
@@ -318,6 +336,8 @@ func snapshotStateForConcurrencyTest(receiptID string) domainrepository.Snapshot
 	}
 }
 
+// contextReservationForConcurrencyTest creates a synthetic context reservation scoped to the supplied workload, with a sequence-derived JTI, fixed digest and one-hour wall-clock expiry. It does not sign a token or persist the reservation.
+// contextReservationForConcurrencyTest создаёт синтетическую context reservation для переданного workload с JTI от sequence, фиксированным digest и часовым сроком настенных часов. Токен не подписывается и reservation не сохраняется.
 func contextReservationForConcurrencyTest(
 	workloadID string,
 	sequence int,

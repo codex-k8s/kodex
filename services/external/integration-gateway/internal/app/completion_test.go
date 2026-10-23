@@ -12,17 +12,25 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// completionFixture captures invocation completion requests and injects an owner RPC failure without a live transport or mutation.
+// RU: completionFixture сохраняет запросы завершения вызова и подставляет ошибку owner RPC без живого транспорта и изменения состояния.
 type completionFixture struct {
 	cp.RuntimeWorkServiceClient
 	requests []*cp.CompleteIntegrationInvocationRequest
 	err      error
 }
 
+// CompleteIntegrationInvocation records each request before returning the configured error, exposing hidden retries to the caller's assertions.
+// RU: CompleteIntegrationInvocation записывает каждый запрос до возврата заданной ошибки, позволяя проверке обнаружить скрытые повторы.
 func (f *completionFixture) CompleteIntegrationInvocation(_ context.Context, r *cp.CompleteIntegrationInvocationRequest, _ ...grpc.CallOption) (*cp.CompleteIntegrationInvocationResponse, error) {
 	f.requests = append(f.requests, r)
 	return &cp.CompleteIntegrationInvocationResponse{}, f.err
 }
 
+// TestEmailCompletionPreservesFenceAndUnknown covers success, unknown outcome, denial and stale-fence RPC failure without fabricating receipts or retrying.
+// RU: TestEmailCompletionPreservesFenceAndUnknown проверяет успех, неопределённый результат, отказ и RPC-ошибку fence без выдуманных квитанций и повторов.
+// Every report must preserve invocation, lease, generation and idempotency pins; only classified success may carry the exact effect receipt.
+// RU: Каждый отчёт обязан сохранять привязки invocation, lease, generation и идемпотентности; точная квитанция эффекта допустима только для классифицированного успеха.
 func TestEmailCompletionPreservesFenceAndUnknown(t *testing.T) {
 	for _, outcome := range []string{"success", "unknown", "denied", "stale-fence"} {
 		t.Run(outcome, func(t *testing.T) {

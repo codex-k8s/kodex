@@ -10,6 +10,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// fakeRuntimeSecretClient records generated RPC requests and returns synthetic responses; it does not
+// enforce transport authentication, grants or durable claims.
+// fakeRuntimeSecretClient записывает generated RPC requests и возвращает synthetic responses; transport
+// authentication, grants и durable claims не обеспечивает.
 type fakeRuntimeSecretClient struct {
 	consumeRequest  *controlplanev1.ConsumeRuntimeSecretOperationRequest
 	completeRequest *controlplanev1.CompleteRuntimeSecretOperationRequest
@@ -18,26 +22,48 @@ type fakeRuntimeSecretClient struct {
 	listRequests    []*controlplanev1.ListRuntimeSecretRecoveryWorkRequest
 }
 
+// CheckRuntimeSecretWorkReadiness always returns synthetic readiness, ignoring request/context/options.
+// CheckRuntimeSecretWorkReadiness всегда возвращает synthetic readiness, игнорируя
+// request/context/options.
 func (*fakeRuntimeSecretClient) CheckRuntimeSecretWorkReadiness(context.Context, *controlplanev1.CheckRuntimeSecretWorkReadinessRequest, ...grpc.CallOption) (*controlplanev1.CheckRuntimeSecretWorkReadinessResponse, error) {
 	return &controlplanev1.CheckRuntimeSecretWorkReadinessResponse{Ready: true}, nil
 }
 
+// CheckCredentialProjectionWorkReadiness returns a ready projection stub without checking authority or
+// dependencies.
+// CheckCredentialProjectionWorkReadiness возвращает готовую projection-подмену без проверки authority и
+// dependencies.
 func (*fakeRuntimeSecretClient) CheckCredentialProjectionWorkReadiness(context.Context, *controlplanev1.CheckCredentialProjectionWorkReadinessRequest, ...grpc.CallOption) (*controlplanev1.CheckCredentialProjectionWorkReadinessResponse, error) {
 	return &controlplanev1.CheckCredentialProjectionWorkReadinessResponse{Ready: true}, nil
 }
 
+// ResolveRuntimeCredentialProjection rejects unexpected use so unrelated lifecycle tests cannot
+// accidentally rely on projection resolution.
+// ResolveRuntimeCredentialProjection отклоняет неожиданный вызов, чтобы посторонние lifecycle tests
+// случайно не использовали projection resolution.
 func (*fakeRuntimeSecretClient) ResolveRuntimeCredentialProjection(context.Context, *controlplanev1.ResolveRuntimeCredentialProjectionRequest, ...grpc.CallOption) (*controlplanev1.ResolveRuntimeCredentialProjectionResponse, error) {
 	return nil, errors.New("unexpected runtime credential projection")
 }
 
+// ValidateRuntimeCredentialProjection returns an unexpected-call error rather than approving any runtime
+// binding.
+// ValidateRuntimeCredentialProjection возвращает unexpected-call error вместо одобрения runtime binding.
 func (*fakeRuntimeSecretClient) ValidateRuntimeCredentialProjection(context.Context, *controlplanev1.ValidateRuntimeCredentialProjectionRequest, ...grpc.CallOption) (*controlplanev1.ValidateRuntimeCredentialProjectionResponse, error) {
 	return nil, errors.New("unexpected runtime credential projection validation")
 }
 
+// ResolveTranscriptionCredentialProjection rejects unexpected transcription credential access in these
+// synthetic owner tests.
+// ResolveTranscriptionCredentialProjection отклоняет неожиданный доступ к transcription credentials в этих
+// synthetic owner tests.
 func (*fakeRuntimeSecretClient) ResolveTranscriptionCredentialProjection(context.Context, *controlplanev1.ResolveTranscriptionCredentialProjectionRequest, ...grpc.CallOption) (*controlplanev1.ResolveTranscriptionCredentialProjectionResponse, error) {
 	return nil, errors.New("unexpected transcription credential projection")
 }
 
+// ListRuntimeSecretRecoveryWork records requests and serves two deterministic pages containing original
+// expired claimants/generations without a real owner queue.
+// ListRuntimeSecretRecoveryWork записывает requests и выдаёт две deterministic pages с original expired
+// claimants/generations без реальной owner queue.
 func (client *fakeRuntimeSecretClient) ListRuntimeSecretRecoveryWork(_ context.Context, request *controlplanev1.ListRuntimeSecretRecoveryWorkRequest, _ ...grpc.CallOption) (*controlplanev1.ListRuntimeSecretRecoveryWorkResponse, error) {
 	client.listRequests = append(client.listRequests, request)
 	if request.GetPage().GetPageToken() == "" {
@@ -59,16 +85,28 @@ func (client *fakeRuntimeSecretClient) ListRuntimeSecretRecoveryWork(_ context.C
 	}, nil
 }
 
+// ConsumeRuntimeSecretOperation records the request and returns fixed operation/generation metadata
+// without consuming a real grant.
+// ConsumeRuntimeSecretOperation записывает request и возвращает fixed operation/generation metadata без
+// потребления реального grant.
 func (client *fakeRuntimeSecretClient) ConsumeRuntimeSecretOperation(_ context.Context, request *controlplanev1.ConsumeRuntimeSecretOperationRequest, _ ...grpc.CallOption) (*controlplanev1.ConsumeRuntimeSecretOperationResponse, error) {
 	client.consumeRequest = request
 	return &controlplanev1.ConsumeRuntimeSecretOperationResponse{OperationRef: "secop_test", ClaimGeneration: 7}, nil
 }
 
+// CompleteRuntimeSecretOperation records the request and returns a minimal nonnil Secret; later
+// scope/metadata verification is not modeled.
+// CompleteRuntimeSecretOperation записывает request и возвращает минимальный nonnil Secret; последующая
+// scope/metadata verification не моделируется.
 func (client *fakeRuntimeSecretClient) CompleteRuntimeSecretOperation(_ context.Context, request *controlplanev1.CompleteRuntimeSecretOperationRequest, _ ...grpc.CallOption) (*controlplanev1.CompleteRuntimeSecretOperationResponse, error) {
 	client.completeRequest = request
 	return &controlplanev1.CompleteRuntimeSecretOperationResponse{Secret: &controlplanev1.RuntimeSecret{Ref: "sec_test"}}, nil
 }
 
+// FailRuntimeSecretOperation records each request and mirrors its operation/code in a FAILED receipt
+// without persisting a state transition.
+// FailRuntimeSecretOperation записывает каждый request и повторяет operation/code в FAILED receipt без
+// сохранения state transition.
 func (client *fakeRuntimeSecretClient) FailRuntimeSecretOperation(_ context.Context, request *controlplanev1.FailRuntimeSecretOperationRequest, _ ...grpc.CallOption) (*controlplanev1.FailRuntimeSecretOperationResponse, error) {
 	client.failRequests = append(client.failRequests, request)
 	return &controlplanev1.FailRuntimeSecretOperationResponse{
@@ -77,6 +115,10 @@ func (client *fakeRuntimeSecretClient) FailRuntimeSecretOperation(_ context.Cont
 	}, nil
 }
 
+// RecoverRuntimeSecretMaterialization records the request and returns fixed KEEP/COMPLETED metadata
+// without performing recovery effects.
+// RecoverRuntimeSecretMaterialization записывает request и возвращает fixed KEEP/COMPLETED metadata без
+// выполнения recovery effects.
 func (client *fakeRuntimeSecretClient) RecoverRuntimeSecretMaterialization(_ context.Context, request *controlplanev1.RecoverRuntimeSecretMaterializationRequest, _ ...grpc.CallOption) (*controlplanev1.RecoverRuntimeSecretMaterializationResponse, error) {
 	client.recoverRequest = request
 	return &controlplanev1.RecoverRuntimeSecretMaterializationResponse{
@@ -85,6 +127,10 @@ func (client *fakeRuntimeSecretClient) RecoverRuntimeSecretMaterialization(_ con
 	}, nil
 }
 
+// TestOwnerSendsStableClaimantAndFence checks forwarded claimant/generation, original expired claimant,
+// bounded two-page recovery and operation references across synthetic consume/complete/fail/recover calls.
+// TestOwnerSendsStableClaimantAndFence проверяет forwarded claimant/generation, original expired claimant,
+// bounded two-page recovery и operation references в synthetic consume/complete/fail/recover calls.
 func TestOwnerSendsStableClaimantAndFence(t *testing.T) {
 	t.Parallel()
 	client := &fakeRuntimeSecretClient{}

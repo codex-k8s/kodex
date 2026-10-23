@@ -13,18 +13,32 @@ import (
 	"google.golang.org/grpc"
 )
 
+// workflowLaunchClient records local launch command calls and returns fixed accepted
+// locators; it does not create a workflow, validate owner authority or deduplicate.
+// workflowLaunchClient записывает local launch command calls и возвращает fixed accepted
+// locators, не создавая workflow,не проверяя owner authority и deduplication.
 type workflowLaunchClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	request *controlplanev1.LaunchWorkflowExecutionRequest
 	calls   int
 }
 
+// LaunchWorkflowExecution captures the exact request pointer/count and returns
+// synthetic run/launch/callback refs without running an agent or workflow.
+// LaunchWorkflowExecution сохраняет exact request pointer/count и возвращает synthetic
+// run/launch/callback refs без запуска agent или workflow.
 func (client *workflowLaunchClient) LaunchWorkflowExecution(_ context.Context, input *controlplanev1.LaunchWorkflowExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.LaunchWorkflowExecutionResponse, error) {
 	client.request = input
 	client.calls++
 	return &controlplanev1.LaunchWorkflowExecutionResponse{Run: &controlplanev1.Run{Ref: "run_workflow001"}, LaunchRef: "wlaunch_workflow01", CallbackEdgeRef: "edg_callback001"}, nil
 }
 
+// TestWorkflowLaunchSchemaExplainsExactInputKeys checks discovery instructions require
+// exact published input keys, declared values and prior schema discovery rather than
+// guessed labels/aliases, alongside a positive integer OCC version descriptor.
+// TestWorkflowLaunchSchemaExplainsExactInputKeys проверяет guidance exact published input
+// keys,declared values/prior schema discovery вместо guessed labels/aliases
+// и positive integer OCC version descriptor.
 func TestWorkflowLaunchSchemaExplainsExactInputKeys(t *testing.T) {
 	tool := workflowLaunchTool()
 	schema := tool["inputSchema"].(map[string]any)
@@ -52,6 +66,14 @@ func TestWorkflowLaunchSchemaExplainsExactInputKeys(t *testing.T) {
 	}
 }
 
+// TestWorkflowLaunchNativeCatalogAndClosedAuthority checks tool eligibility and one
+// lease-bound accepted command with exact publication/OCC pins and maximum Unicode task.
+// Missing/foreign authority fields, imprecise versions and invalid task text never reach
+// the fake owner; actual child lifecycle/idempotent storage are not exercised.
+// TestWorkflowLaunchNativeCatalogAndClosedAuthority проверяет tool eligibility и один
+// lease-bound accepted command с exact publication/OCC pins/maximum Unicode task.
+// Missing/foreign authority fields,imprecise versions/invalid task не достигают fake
+// owner; actual child lifecycle/idempotent storage не проверяются.
 func TestWorkflowLaunchNativeCatalogAndClosedAuthority(t *testing.T) {
 	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: runtimecontract.AssistantScopeNone, ProjectRef: "prj_project001", Capabilities: []string{"platform.run.launch"}, LeaseRef: "lse_origin001", LeaseFence: "private-test-fence", LeaseGeneration: 7}
 	hasTool := func(input runtimecontract.RunnerInput) bool {

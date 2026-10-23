@@ -8,6 +8,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestExecutionSnapshotConsumerRequiresExactOwnToolBeforeTurn requires the current turn's exact snapshot tool in connected MCP readiness, rejects its absence and verifies warm mode does not expose that turn-bound read or the privileged configuration catalog.
+// TestExecutionSnapshotConsumerRequiresExactOwnToolBeforeTurn требует точный snapshot tool текущего хода в connected MCP readiness, отклоняет его отсутствие и проверяет, что warm не предоставляет turn-bound read или privileged configuration catalog.
 func TestExecutionSnapshotConsumerRequiresExactOwnToolBeforeTurn(t *testing.T) {
 	input := providerProcessInput()
 	input.Mode = runtimecontract.RunnerModeTurn

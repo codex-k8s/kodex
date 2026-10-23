@@ -7,9 +7,18 @@ import (
 	"strings"
 )
 
+// openAPIHeaderName bounds a header selected by a published OpenAPI definition, not by tool input.
+// openAPIHeaderName ограничивает имя заголовка из опубликованного определения OpenAPI, а не из ввода инструмента.
 var openAPIHeaderName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]{0,63}$`)
+
+// openAPIParameterName bounds parameter and property names before importing them into a closed schema.
+// openAPIParameterName ограничивает имена параметров и свойств до переноса в закрытую схему.
 var openAPIParameterName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,63}$`)
 
+// validateOpenAPICapability binds a managed operation to one approved HTTPS origin, typed input,
+// fixed output projection, method-specific risk policy and server-owned credential route.
+// validateOpenAPICapability связывает управляемую операцию с одним допущенным HTTPS-origin,
+// типизированным вводом, фиксированным выводом, политикой риска метода и серверным маршрутом реквизитов.
 func validateOpenAPICapability(definition *Package, capability Capability) error {
 	binding := capability.OpenAPI
 	if binding == nil || len(capability.InputFields) != 0 || capability.ResourceScope.Kind != "HTTPS_RESOURCE" ||
@@ -84,6 +93,8 @@ func validateOpenAPICapability(definition *Package, capability Capability) error
 	return nil
 }
 
+// validOpenAPISourceDigest accepts only a lowercase SHA-256 hex digest of the inspected source.
+// validOpenAPISourceDigest допускает только строчный hex-дайджест SHA-256 проверенного источника.
 func validOpenAPISourceDigest(digest string) bool {
 	if len(digest) != 64 {
 		return false
@@ -96,6 +107,8 @@ func validOpenAPISourceDigest(digest string) bool {
 	return true
 }
 
+// ValidOpenAPIOutboundHeader rejects names that could change routing, transport, proxy authorization
+// or body framing; any remaining name is pinned by the definition rather than the tool call.
 // ValidOpenAPIOutboundHeader исключает заголовки, влияющие на routing,
 // transport, авторизацию прокси и формат тела. Остальные имена закрепляет
 // опубликованное определение, а не input инструмента.
@@ -116,6 +129,10 @@ func ValidOpenAPIOutboundHeader(name string) bool {
 	}
 }
 
+// validateOpenAPIHTTPInput checks that path placeholders exactly match required primitive fields,
+// query fields are bounded, and GET cannot carry a body.
+// validateOpenAPIHTTPInput проверяет точное совпадение path-шаблонов с обязательными простыми полями,
+// ограничение query-полей и отсутствие тела у GET.
 func validateOpenAPIHTTPInput(binding *OpenAPIHTTP) error {
 	properties, ok := binding.InputSchema["properties"].(map[string]any)
 	if !ok {
@@ -192,6 +209,8 @@ func validateOpenAPIHTTPInput(binding *OpenAPIHTTP) error {
 	return nil
 }
 
+// openAPIPrimitiveParameter admits only scalar types in path and query parameter schemas.
+// openAPIPrimitiveParameter допускает только скалярные типы в схемах path- и query-параметров.
 func openAPIPrimitiveParameter(raw any) bool {
 	field, ok := raw.(map[string]any)
 	if !ok {
@@ -205,6 +224,8 @@ func openAPIPrimitiveParameter(raw any) bool {
 	}
 }
 
+// openAPIRequiredKeys reads a required-field list while rejecting non-string and duplicate entries.
+// openAPIRequiredKeys читает список обязательных полей с отказом для нестроковых и повторных элементов.
 func openAPIRequiredKeys(raw any) (map[string]bool, bool) {
 	items, ok := raw.([]any)
 	if !ok {

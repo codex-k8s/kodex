@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// TestWebSocketLegacyCutoffIsAbsoluteBoundedAndExpiredIsSafe covers absent/past/exact-bound UTC cutoffs and rejects invalid, overlong-future and offset-form text using a fixed clock; it does not open a WebSocket.
+// TestWebSocketLegacyCutoffIsAbsoluteBoundedAndExpiredIsSafe на фиксированных часах охватывает отсутствующий, прошлый и граничный UTC cutoff и отклоняет invalid, overlong-future и offset-form текст без открытия WebSocket.
 func TestWebSocketLegacyCutoffIsAbsoluteBoundedAndExpiredIsSafe(t *testing.T) {
 	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 	for _, value := range []string{"", "2026-09-08T11:00:00Z", "2026-09-09T12:00:00Z"} {

@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+// TestContextSnapshotIsBoundToExecutionAndWarmCompatibility proves that context changes invalidate
+// execution/warm digests and that an absent snapshot cannot masquerade as an explicit empty one.
+// TestContextSnapshotIsBoundToExecutionAndWarmCompatibility проверяет смену дайджестов исполнения
+// и warm при изменении контекста и запрет подмены отсутствующего снимка явно пустым.
 func TestContextSnapshotIsBoundToExecutionAndWarmCompatibility(t *testing.T) {
 	input := validRunnerInputFixture()
 	_, snapshot, _ := contextFixture()
@@ -46,6 +50,8 @@ func TestContextSnapshotIsBoundToExecutionAndWarmCompatibility(t *testing.T) {
 	}
 }
 
+// TestMemoryRetentionBoundsActiveExecution requires the provider context to expire at memory retention.
+// TestMemoryRetentionBoundsActiveExecution требует завершения контекста провайдера по сроку хранения памяти.
 func TestMemoryRetentionBoundsActiveExecution(t *testing.T) {
 	_, snapshot, _ := contextFixture()
 	snapshot.Memories[0].RetentionUntil = time.Now().Add(20 * time.Millisecond)
@@ -61,6 +67,8 @@ func TestMemoryRetentionBoundsActiveExecution(t *testing.T) {
 	}
 }
 
+// contextFixture constructs a digest-consistent skill and memory snapshot with explicit provenance and time.
+// contextFixture создаёт согласованный по дайджесту снимок навыка и памяти с явными происхождением и временем.
 func contextFixture() (RunnerInput, RuntimeContextSnapshot, time.Time) {
 	now := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
 	input := RunnerInput{OrganizationRef: "org_abcdefgh", ProjectRef: "proj_abcdefgh", AgentRef: "agt_abcdefgh"}
@@ -77,6 +85,10 @@ func contextFixture() (RunnerInput, RuntimeContextSnapshot, time.Time) {
 	return input, snapshot, now
 }
 
+// TestRuntimeContextSnapshotExactPins rejects foreign identity, expired memory, missing provenance,
+// invalid paths, duplicate bundles, byte overflows, and content changes after digest pinning.
+// TestRuntimeContextSnapshotExactPins отклоняет чужую идентичность, истёкшую память, отсутствие происхождения,
+// неверные пути, повторные навыки, превышение размера и изменения содержимого после закрепления дайджеста.
 func TestRuntimeContextSnapshotExactPins(t *testing.T) {
 	input, snapshot, now := contextFixture()
 	if err := snapshot.ValidateFor(input, now); err != nil {
@@ -111,6 +123,10 @@ func TestRuntimeContextSnapshotExactPins(t *testing.T) {
 	}
 }
 
+// TestContextDoesNotInferSkillsOrMemoryFromOtherResources prevents environment tools and knowledge artifacts
+// from becoming implicit context when the owner explicitly selected no skills or memory.
+// TestContextDoesNotInferSkillsOrMemoryFromOtherResources запрещает превращать инструменты и справочные
+// артефакты в неявный контекст, если владелец явно не выбрал навыки или память.
 func TestContextDoesNotInferSkillsOrMemoryFromOtherResources(t *testing.T) {
 	input, snapshot, now := contextFixture()
 	snapshot.Skills, snapshot.Memories = nil, nil
@@ -122,6 +138,10 @@ func TestContextDoesNotInferSkillsOrMemoryFromOtherResources(t *testing.T) {
 	}
 }
 
+// TestSkillPathAllowsApprovedSupportingFiles permits canonical supporting paths while rejecting
+// traversal, absolute paths, hidden/blank segments, alternate SKILL.md casing, and stream syntax.
+// TestSkillPathAllowsApprovedSupportingFiles допускает канонические вспомогательные пути, отклоняя
+// traversal, абсолютные пути, скрытые и пустые сегменты, иной регистр SKILL.md и синтаксис потоков.
 func TestSkillPathAllowsApprovedSupportingFiles(t *testing.T) {
 	for _, value := range []string{"SKILL.md", "README.md", "scripts/check.sh", "references/context.txt", "assets/icon.png", "agents/openai.yaml"} {
 		if !ValidSkillPath(value) {

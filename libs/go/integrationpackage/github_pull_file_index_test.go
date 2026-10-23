@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestGitHubPullFileIndexVersionAndRequiredBoundedPins requires immutable head/base/count pins
+// and bounded metadata pagination without claiming that source bytes were read.
+// TestGitHubPullFileIndexVersionAndRequiredBoundedPins требует неизменяемые head/base/count
+// привязки и ограниченную пагинацию метаданных без заявления о прочтении исходных bytes.
 func TestGitHubPullFileIndexVersionAndRequiredBoundedPins(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {
@@ -71,6 +75,10 @@ func TestGitHubPullFileIndexVersionAndRequiredBoundedPins(t *testing.T) {
 	}
 }
 
+// TestGitHubPullSourcePinsAreReadOnlyAndMutationsKeepFullBody keeps source-specific pins on reads
+// while create/update retain the required full pull-request body and result projection.
+// TestGitHubPullSourcePinsAreReadOnlyAndMutationsKeepFullBody оставляет source-привязки в чтении,
+// сохраняя полный обязательный body и проекцию результата при создании и обновлении PR.
 func TestGitHubPullSourcePinsAreReadOnlyAndMutationsKeepFullBody(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {

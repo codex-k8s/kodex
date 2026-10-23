@@ -8,6 +8,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// TestProtectWorkspaceInputTree checks invalid subtree selectors and symlink, hardlink, root-file and FIFO fixtures fail, while an ordinary temporary tree gets exact modes and supports repeated protection.
+// It changes only disposable test directories and does not prove Kubernetes readOnly mount enforcement.
+// TestProtectWorkspaceInputTree проверяет отказ для неверных селекторов поддерева, ссылок, жёсткой ссылки, файла вместо корня и FIFO; обычное временное дерево получает точные режимы и допускает повторную защиту.
+// Изменяются только одноразовые тестовые каталоги; применение readOnly-монтирования Kubernetes не доказывается.
 func TestProtectWorkspaceInputTree(t *testing.T) {
 	for _, invalid := range []string{"../input", "input/../knowledge", "/input", "input/child", ".kodex/state", "context"} {
 		if ProtectWorkspaceInputTree(t.TempDir(), invalid) == nil {

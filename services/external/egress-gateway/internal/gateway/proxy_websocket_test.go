@@ -18,8 +18,10 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
-// Моделирует конкретный pinned AttackCheck при одном успешном Read на Write.
-// Это synthetic conformance, а не доказательство actual TLS packet layout.
+// providerWebSocketAttackCheckConn simulates the pinned packet-size check with one successful Read per Write.
+// providerWebSocketAttackCheckConn моделирует закреплённую проверку размера пакетов при одном успешном Read на Write.
+// This synthetic conformance fixture does not prove the actual TLS packet layout.
+// Эта синтетическая заглушка не доказывает фактическую раскладку TLS-пакетов.
 type providerWebSocketAttackCheckConn struct {
 	net.Conn
 	wire                   bytes.Buffer
@@ -27,6 +29,8 @@ type providerWebSocketAttackCheckConn struct {
 	attacked               bool
 }
 
+// Write rejects excessive or tiny fragmented handshake writes before recording the bytes.
+// Write отклоняет чрезмерные либо слишком мелкие фрагменты рукопожатия до записи байтов.
 func (connection *providerWebSocketAttackCheckConn) Write(data []byte) (int, error) {
 	connection.packets++
 	connection.receivedBytes += len(data)
@@ -38,15 +42,28 @@ func (connection *providerWebSocketAttackCheckConn) Write(data []byte) (int, err
 	return connection.wire.Write(data)
 }
 
+// Read ends the synthetic client stream without supplying request bytes.
+// Read завершает синтетический клиентский поток без передачи байтов запроса.
 func (*providerWebSocketAttackCheckConn) Read([]byte) (int, error) { return 0, io.EOF }
-func (*providerWebSocketAttackCheckConn) Close() error             { return nil }
+
+// Close is a no-op because the synthetic connection owns no external resources.
+// Close ничего не делает, поскольку синтетическое соединение не владеет внешними ресурсами.
+func (*providerWebSocketAttackCheckConn) Close() error { return nil }
+
+// SetDeadline accepts the test deadline without changing the in-memory recorder.
+// SetDeadline принимает срок теста, не изменяя локальный регистратор байтов.
 func (*providerWebSocketAttackCheckConn) SetDeadline(time.Time) error {
 	return nil
 }
+
+// SetWriteDeadline accepts the write budget without adding timing behavior to the fixture.
+// SetWriteDeadline принимает бюджет записи, не добавляя временного поведения заглушке.
 func (*providerWebSocketAttackCheckConn) SetWriteDeadline(time.Time) error {
 	return nil
 }
 
+// TestProviderWebSocketHandshakeAvoidsPinnedTinyReadAttackCheck checks one coalesced, byte-identical upgrade write.
+// TestProviderWebSocketHandshakeAvoidsPinnedTinyReadAttackCheck проверяет единую запись upgrade без изменения байтов.
 func TestProviderWebSocketHandshakeAvoidsPinnedTinyReadAttackCheck(t *testing.T) {
 	upstream, peer := net.Pipe()
 	defer peer.Close()
@@ -74,6 +91,8 @@ func TestProviderWebSocketHandshakeAvoidsPinnedTinyReadAttackCheck(t *testing.T)
 	}
 }
 
+// syntheticUpgradeWithSerializedBytes builds a response whose serialized header has the requested exact size.
+// syntheticUpgradeWithSerializedBytes создаёт ответ с точно заданным размером сериализованного заголовка.
 func syntheticUpgradeWithSerializedBytes(t *testing.T, size int) *http.Response {
 	t.Helper()
 	response := syntheticUpgradeResponse(nil)
@@ -87,6 +106,8 @@ func syntheticUpgradeWithSerializedBytes(t *testing.T, size int) *http.Response 
 	return response
 }
 
+// TestProviderWebSocketHandshakeBoundBeforeAnyDownstreamWrite rejects oversized headers before partial output.
+// TestProviderWebSocketHandshakeBoundBeforeAnyDownstreamWrite отклоняет слишком большой заголовок до частичного вывода.
 func TestProviderWebSocketHandshakeBoundBeforeAnyDownstreamWrite(t *testing.T) {
 	for _, test := range []struct {
 		name          string
@@ -122,17 +143,23 @@ func TestProviderWebSocketHandshakeBoundBeforeAnyDownstreamWrite(t *testing.T) {
 	}
 }
 
+// providerWebSocketWriteNotifyConn signals when a potentially blocking handshake write begins.
+// providerWebSocketWriteNotifyConn сигнализирует о начале потенциально блокирующей записи рукопожатия.
 type providerWebSocketWriteNotifyConn struct {
 	net.Conn
 	started chan struct{}
 	once    sync.Once
 }
 
+// Write notifies the test once and then preserves the underlying connection write.
+// Write один раз уведомляет тест и далее использует запись базового соединения.
 func (connection *providerWebSocketWriteNotifyConn) Write(data []byte) (int, error) {
 	connection.once.Do(func() { close(connection.started) })
 	return connection.Conn.Write(data)
 }
 
+// TestProviderWebSocketHandshakeWriteBudgetAndCancellation joins blocked writers on budget, cancel, and disconnect.
+// TestProviderWebSocketHandshakeWriteBudgetAndCancellation завершает блокирующую запись при лимите, отмене и разрыве.
 func TestProviderWebSocketHandshakeWriteBudgetAndCancellation(t *testing.T) {
 	for _, boundary := range []string{"budget", "cancel", "clientDisconnect"} {
 		t.Run(boundary, func(t *testing.T) {
@@ -179,6 +206,8 @@ func TestProviderWebSocketHandshakeWriteBudgetAndCancellation(t *testing.T) {
 	}
 }
 
+// TestProviderWebSocketHandshakeOverflowClosesUpstream closes the peer without exposing a partial upgrade.
+// TestProviderWebSocketHandshakeOverflowClosesUpstream закрывает upstream без вывода части upgrade-ответа.
 func TestProviderWebSocketHandshakeOverflowClosesUpstream(t *testing.T) {
 	logs := captureProviderResponsesLogs(t)
 	upstream, peer := net.Pipe()
@@ -201,6 +230,8 @@ func TestProviderWebSocketHandshakeOverflowClosesUpstream(t *testing.T) {
 	}
 }
 
+// syntheticUpgradeRequest parses a fixed WebSocket upgrade request for the selected host.
+// syntheticUpgradeRequest разбирает фиксированный WebSocket upgrade-запрос для заданного хоста.
 func syntheticUpgradeRequest(t *testing.T, host string) *http.Request {
 	t.Helper()
 	request, err := http.ReadRequest(bufio.NewReader(strings.NewReader("GET /v1/responses HTTP/1.1\r\nHost: " + host + "\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")))
@@ -210,11 +241,15 @@ func syntheticUpgradeRequest(t *testing.T, host string) *http.Request {
 	return request
 }
 
+// syntheticUpgradeResponse provides the valid switching-protocols headers around a chosen body.
+// syntheticUpgradeResponse задаёт корректные заголовки переключения протокола вокруг выбранного тела.
 func syntheticUpgradeResponse(body io.ReadCloser) *http.Response {
 	return &http.Response{StatusCode: 101, Status: "101 Switching Protocols", Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1, Body: body,
 		Header: http.Header{"Connection": {"Upgrade"}, "Upgrade": {"websocket"}, "Sec-Websocket-Accept": {"s3pPLMBiTxaQ9kYGzzhZRbK+xOo="}}}
 }
 
+// TestProviderWebSocketRejectsUserWebUpgradeAndInvalidResponses checks policy separation and strict upstream handshake validation.
+// TestProviderWebSocketRejectsUserWebUpgradeAndInvalidResponses проверяет разделение policy и строгую проверку upstream-рукопожатия.
 func TestProviderWebSocketRejectsUserWebUpgradeAndInvalidResponses(t *testing.T) {
 	for _, mode := range []string{runtimecontract.RuntimeWebAccessFullPublic, runtimecontract.RuntimeWebAccessAllowlistFull} {
 		request := syntheticUpgradeRequest(t, "example.org")
@@ -253,26 +288,20 @@ func TestProviderWebSocketRejectsUserWebUpgradeAndInvalidResponses(t *testing.T)
 	}
 }
 
+// TestProviderWebSocketPumpClosesAndJoinsEveryBoundary joins both stream directions at each terminal boundary.
+// TestProviderWebSocketPumpClosesAndJoinsEveryBoundary завершает оба направления потока на каждой конечной границе.
 func TestProviderWebSocketPumpClosesAndJoinsEveryBoundary(t *testing.T) {
 	for _, boundary := range []string{"idle", "shutdown", "clientEOF", "upstreamEOF", "blockedWrite"} {
 		t.Run(boundary, func(t *testing.T) {
 			logs := captureProviderResponsesLogs(t)
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			client, consumer := net.Pipe()
-			upstream, producer := net.Pipe()
-			defer consumer.Close()
-			defer producer.Close()
-			server := &Server{context: ctx, metrics: newTestMetrics(t)}
 			limits := policy.Limits{MaximumHeaderBytes: 16384, WriteTimeoutMilliseconds: 50, IdleTimeoutMilliseconds: 500}
 			if boundary == "idle" {
 				limits.IdleTimeoutMilliseconds = 30
 			}
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				server.forwardWebSocket(client, bufio.NewReader(client), syntheticUpgradeResponse(upstream), limits, providerResponsesDiagnostic{mode: "WSS"})
-			}()
+			consumer, producer, done, cancel := startWebSocketPump(t, limits)
+			defer cancel()
+			defer consumer.Close()
+			defer producer.Close()
 			_ = consumer.SetReadDeadline(time.Now().Add(time.Second))
 			response, err := http.ReadResponse(bufio.NewReader(consumer), nil)
 			if err != nil || response.StatusCode != 101 {
@@ -318,23 +347,17 @@ func TestProviderWebSocketPumpClosesAndJoinsEveryBoundary(t *testing.T) {
 	}
 }
 
+// TestProviderWebSocketPumpDataPresenceAfterJoin records actual client and upstream traffic after pump completion.
+// TestProviderWebSocketPumpDataPresenceAfterJoin учитывает фактический трафик клиента и upstream после завершения pump.
 func TestProviderWebSocketPumpDataPresenceAfterJoin(t *testing.T) {
 	for _, direction := range []string{"client", "upstream", "both"} {
 		t.Run(direction, func(t *testing.T) {
 			logs := captureProviderResponsesLogs(t)
-			ctx, cancel := context.WithCancel(t.Context())
+			limits := policy.Limits{MaximumHeaderBytes: 16384, WriteTimeoutMilliseconds: 500, IdleTimeoutMilliseconds: 1000}
+			consumer, producer, done, cancel := startWebSocketPump(t, limits)
 			defer cancel()
-			client, consumer := net.Pipe()
-			upstream, producer := net.Pipe()
 			defer consumer.Close()
 			defer producer.Close()
-			server := &Server{context: ctx, metrics: newTestMetrics(t)}
-			limits := policy.Limits{MaximumHeaderBytes: 16384, WriteTimeoutMilliseconds: 500, IdleTimeoutMilliseconds: 1000}
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				server.forwardWebSocket(client, bufio.NewReader(client), syntheticUpgradeResponse(upstream), limits, providerResponsesDiagnostic{mode: "WSS"})
-			}()
 			reader := bufio.NewReader(consumer)
 			_ = consumer.SetReadDeadline(time.Now().Add(time.Second))
 			if response, err := http.ReadResponse(reader, nil); err != nil || response.StatusCode != 101 {
@@ -375,4 +398,20 @@ func TestProviderWebSocketPumpDataPresenceAfterJoin(t *testing.T) {
 			}
 		})
 	}
+}
+
+// startWebSocketPump connects an in-memory client and upstream to one cancellable proxy pump.
+// startWebSocketPump подключает локальные клиент и upstream к одному отменяемому proxy pump.
+func startWebSocketPump(t *testing.T, limits policy.Limits) (net.Conn, net.Conn, <-chan struct{}, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	client, consumer := net.Pipe()
+	upstream, producer := net.Pipe()
+	server := &Server{context: ctx, metrics: newTestMetrics(t)}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		server.forwardWebSocket(client, bufio.NewReader(client), syntheticUpgradeResponse(upstream), limits, providerResponsesDiagnostic{mode: "WSS"})
+	}()
+	return consumer, producer, done, cancel
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestClaimQueryKeepsBoundedFencedLifecycle pins skip-locked batching, exact receipts and generation leases.
+// RU: TestClaimQueryKeepsBoundedFencedLifecycle закрепляет skip-locked пачки, точные receipts и аренды поколений.
 func TestClaimQueryKeepsBoundedFencedLifecycle(t *testing.T) {
 	for _, fragment := range []string{
 		"FOR UPDATE OF artifact SKIP LOCKED",
@@ -23,6 +25,8 @@ func TestClaimQueryKeepsBoundedFencedLifecycle(t *testing.T) {
 	}
 }
 
+// TestFinalizationRequiresOwnerAndGenerationFence checks both locking and tombstone SQL conditions.
+// RU: TestFinalizationRequiresOwnerAndGenerationFence проверяет условия блокировки и tombstone SQL.
 func TestFinalizationRequiresOwnerAndGenerationFence(t *testing.T) {
 	for _, query := range []string{queryLockClaim, queryFinalizeTombstone} {
 		for _, fragment := range []string{"retention_claim_owner = @claim_owner", "retention_claim_generation = @claim_generation"} {
@@ -33,6 +37,8 @@ func TestFinalizationRequiresOwnerAndGenerationFence(t *testing.T) {
 	}
 }
 
+// TestFinalizationRequiresAllVersionReceiptsCleared forbids terminal purge with a live revision receipt.
+// RU: TestFinalizationRequiresAllVersionReceiptsCleared запрещает конечную очистку при живом receipt версии.
 func TestFinalizationRequiresAllVersionReceiptsCleared(t *testing.T) {
 	if !strings.Contains(queryFinalizeTombstone, "current_revision_id = NULL") ||
 		!strings.Contains(queryFinalizeTombstone, "NOT EXISTS") ||

@@ -18,10 +18,24 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Операция оставляет 15 секунд существующего MCP-бюджета для terminal audit
-// и ответа. Она не продлевает lease и не вводит новый транспортный timeout.
+// maximumFileReadDuration caps the full-source read stage at forty-five seconds;
+// the actual deadline also reserves config.RequestTimeout before any parent deadline.
+// It neither renews the lease nor changes the enclosing MCP transport timeout.
+// maximumFileReadDuration ограничивает full-source read сорока пятью секундами;
+// фактический deadline также оставляет config.RequestTimeout до parent deadline.
+// Lease не продлевается,enclosing MCP transport timeout не меняется.
 const maximumFileReadDuration = 45 * time.Second
 
+// readFile validates exact pins and byte coordinates, reserves terminal-audit time,
+// reads current owner metadata, then verifies the entire source in private spool and
+// scans all bytes for UTF-8/NUL before slicing a rune-safe page. A second exact metadata
+// read and equality check precede private lease-bound page evidence. Every acquired
+// file is released; no page or success evidence escapes a failed mandatory stage.
+// readFile проверяет exact pins/byte coordinates,оставляет время terminal audit,
+// читает current owner metadata,проверяет весь source в private spool и все bytes
+// на UTF-8/NUL до rune-safe page slicing. Второй exact metadata read/equality check
+// предшествует private lease-bound page evidence. Каждый acquired file освобождается;
+// при failed mandatory stage page/success evidence не выдаются.
 func (server *Server) readFile(ctx context.Context, input runtimecontract.RunnerInput, purpose cp.RuntimeFilePurpose, arguments map[string]any) (any, error) {
 	if !onlyKeys(arguments, "purpose", "entry_ref", "artifact_ref", "revision", "digest", "offset_bytes", "maximum_bytes") {
 		return nil, errRuntimeFileInput
@@ -100,6 +114,10 @@ func (server *Server) readFile(ctx context.Context, input runtimecontract.Runner
 	}}, nil
 }
 
+// fileReadOffset permits omitted offset as zero or finite nonnegative integral
+// float64 bounded by transfer size policy; actual source EOF/rune alignment is checked later.
+// fileReadOffset допускает omitted offset как zero либо finite nonnegative integral
+// float64 до transfer size policy; actual source EOF/rune alignment проверяются далее.
 func fileReadOffset(arguments map[string]any) (int64, bool) {
 	raw, present := arguments["offset_bytes"]
 	if !present {
@@ -112,6 +130,12 @@ func fileReadOffset(arguments map[string]any) (int64, bool) {
 	return int64(number), true
 }
 
+// readFileMetadata performs one bounded generated owner RPC using supplied exact
+// execution/file pins, then returns the owner descriptor only after catalog/descriptor
+// and selected-pin validation. Current owner authority is enforced by that RPC.
+// readFileMetadata выполняет один bounded generated owner RPC с exact execution/file
+// pins,возвращая owner descriptor лишь после catalog/descriptor/selected-pin проверки.
+// Текущую owner authority обеспечивает RPC.
 func (server *Server) readFileMetadata(ctx context.Context, input runtimecontract.RunnerInput, purpose cp.RuntimeFilePurpose, execution *cp.ExecutionFileContext, exact *cp.ExecutionFileRef) (*cp.ExecutionFileDescriptor, map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
@@ -126,6 +150,14 @@ func (server *Server) readFileMetadata(ctx context.Context, input runtimecontrac
 	return response.GetFile(), result, nil
 }
 
+// validateFileReadText scans the complete declared private-file interval in bounded
+// chunks, carrying incomplete UTF-8 runes between reads and rejecting NUL/invalid/truncated
+// encoding with cancellation checks. It relies on prior verified spool size and does
+// not rewind the descriptor, normalize text or provide antivirus/semantic analysis.
+// validateFileReadText сканирует весь declared private-file interval bounded chunks,
+// перенося incomplete UTF-8 runes и отвергая NUL/invalid/truncated encoding с cancellation
+// checks. Опирается на ранее verified spool size,не перематывает descriptor,
+// не нормализует text и не выполняет antivirus/semantic analysis.
 func validateFileReadText(ctx context.Context, file *os.File, size int64) error {
 	reader := io.NewSectionReader(file, 0, size)
 	buffer := make([]byte, runtimecontract.MaximumArtifactTransferChunkBytes+utf8.UTFMax-1)
@@ -160,6 +192,14 @@ func validateFileReadText(ctx context.Context, file *os.File, size int64) error 
 	}
 }
 
+// fileReadPage requires previously checked size/offset/maximum and a verified UTF-8
+// source. It reads at most the remaining bounded interval, rejects a mid-rune starting
+// offset and trims an incomplete trailing rune; exact EOF returns an empty page.
+// It does not hash or validate bytes outside this already-validated source interval.
+// fileReadPage требует ранее проверенные size/offset/maximum и verified UTF-8 source.
+// Читает bounded remaining interval,отвергает mid-rune start,убирает incomplete
+// trailing rune; exact EOF даёт empty page. Bytes вне этого ранее validated source
+// interval не хешируются и не проверяются.
 func fileReadPage(file *os.File, size, offset, maximum int64) ([]byte, error) {
 	page := make([]byte, min(maximum, size-offset))
 	if len(page) == 0 {

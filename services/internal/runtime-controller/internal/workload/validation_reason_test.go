@@ -12,6 +12,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestTurnInputValidationReasonClosedProjection checks allowed stage-bound
+// reasons and error unwrapping while keeping the public message fixed;
+// wrong stages, arbitrary causes and unrecognized codes remain UNKNOWN.
+// TestTurnInputValidationReasonClosedProjection проверяет допустимые причины
+// для нужной стадии и раскрытие исходной ошибки при неизменном публичном тексте;
+// неверные стадии, произвольные причины и неизвестные коды остаются UNKNOWN.
 func TestTurnInputValidationReasonClosedProjection(t *testing.T) {
 	t.Parallel()
 	for _, reason := range []string{"REQUIRED_CONTEXT", "ATTACHMENT_LINEAGE", "ATTACHMENT_MANIFEST", "WORKSPACE_MANIFEST"} {
@@ -40,6 +46,12 @@ func TestTurnInputValidationReasonClosedProjection(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvelopeReasonMatchesActualValidator mutates envelope guards one
+// at a time against an otherwise valid fixture, requiring actual validation
+// rejection and the matching closed code without exposing arbitrary text.
+// TestRuntimeEnvelopeReasonMatchesActualValidator по одному изменяет guards
+// конверта в корректной fixture, требуя реального отказа валидатора и совпадения
+// закрытого кода без выдачи произвольного текста.
 func TestRuntimeEnvelopeReasonMatchesActualValidator(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	baseline, _, err := manager.BuildTurnInput(testExecution(false))
@@ -133,6 +145,12 @@ func TestRuntimeEnvelopeReasonMatchesActualValidator(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvelopeIntegrationReasonsMatchActualValidator isolates malformed
+// grant references, approval, text, package, schema, risk and duplicates, checking
+// each diagnostic against a real shared-validator rejection of the same input.
+// TestRuntimeEnvelopeIntegrationReasonsMatchActualValidator изолирует неверные
+// ссылки grant, подтверждение, текст, пакет, схему, риск и дубли, сверяя каждый
+// диагноз с реальным отказом общего валидатора для того же input.
 func TestRuntimeEnvelopeIntegrationReasonsMatchActualValidator(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	baseline, _, err := manager.BuildTurnInput(testExecution(false))
@@ -188,6 +206,12 @@ func TestRuntimeEnvelopeIntegrationReasonsMatchActualValidator(t *testing.T) {
 	}
 }
 
+// TestEnvelopeDiagnosticCannotOverrideDifferentFailure proves a stored envelope
+// detail cannot replace a managed-MCP-profile error classification, whether that
+// detail is an allowed envelope code or an arbitrary caller-controlled string.
+// TestEnvelopeDiagnosticCannotOverrideDifferentFailure проверяет, что сохранённое
+// уточнение конверта не заменяет классификацию ошибки managed MCP profile,
+// даже если это допустимый код конверта либо произвольная строка caller.
 func TestEnvelopeDiagnosticCannotOverrideDifferentFailure(t *testing.T) {
 	cause := errors.New("managed MCP profile binding is invalid")
 	for _, detail := range []string{"synthetic-private", "ENVELOPE_SCHEMA"} {
@@ -198,6 +222,12 @@ func TestEnvelopeDiagnosticCannotOverrideDifferentFailure(t *testing.T) {
 	}
 }
 
+// TestRunnerInputValidationReasonKnownBranches checks the fixed validator-error
+// mapping and wrapped context sentinel, retaining the original cause; nil and
+// unrelated messages stay UNKNOWN rather than becoming user-visible details.
+// TestRunnerInputValidationReasonKnownBranches проверяет фиксированное отображение
+// ошибок валидатора и обёрнутый sentinel контекста с сохранением исходной причины;
+// nil и посторонние сообщения остаются UNKNOWN вместо выдачи их подробностей.
 func TestRunnerInputValidationReasonKnownBranches(t *testing.T) {
 	t.Parallel()
 	for text, want := range map[string]string{
@@ -245,6 +275,12 @@ func TestRunnerInputValidationReasonKnownBranches(t *testing.T) {
 	}
 }
 
+// TestBuildTurnInputValidationDiagnosticPreservesGuard mutates context,
+// envelope, prompt, turn and digest bindings, requiring the same rejection text
+// as the original validator except for the controller's required-context guard.
+// TestBuildTurnInputValidationDiagnosticPreservesGuard изменяет контекст,
+// конверт, prompt, ход и digest-привязки, требуя прежнего текста отказа валидатора,
+// кроме отдельного controller guard обязательного контекста.
 func TestBuildTurnInputValidationDiagnosticPreservesGuard(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	for name, test := range map[string]struct {

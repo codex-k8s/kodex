@@ -8,6 +8,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestTrustedRuntimePodOmitsCallbackKeysButRetainsTicket checks trusted-profile
+// input and generated Pod omit callback CA/client volumes and mounts while
+// retaining the role's isolated execution ticket, not giving it to the provider.
+// This specification test does not validate actual cluster transport protection.
+// TestTrustedRuntimePodOmitsCallbackKeysButRetainsTicket проверяет trusted input
+// и отсутствие callback CA/client volumes и mounts в Pod при сохранении
+// изолированного execution ticket у роли, но не провайдера. Проверка спецификации
+// не подтверждает фактическую защиту transport в кластере.
 func TestTrustedRuntimePodOmitsCallbackKeysButRetainsTicket(t *testing.T) {
 	config := testManagerConfig()
 	config.RPCProfile = runtimecontract.CallbackProfileTrustedCluster

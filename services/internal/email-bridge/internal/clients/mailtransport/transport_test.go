@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// TestTunnelCancellationDuringCONNECT cancels after a loopback proxy receives CONNECT and requires prompt return plus socket EOF at the proxy.
+// TestTunnelCancellationDuringCONNECT отменяет запрос после получения CONNECT локальным proxy и требует быстрого возврата и EOF сокета на proxy.
 func TestTunnelCancellationDuringCONNECT(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

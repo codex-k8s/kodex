@@ -1,4 +1,5 @@
-// Package app содержит composition root необязательной платформы интеграций.
+// Package app composes protected integration work, technical HTTP and process-owned startup, polling and shutdown.
+// RU: Пакет app собирает защищённую работу интеграций, технический HTTP и управляемые процессом запуск, опрос и остановку.
 package app
 
 import (
@@ -20,10 +21,18 @@ import (
 )
 
 const (
+	// issuerUID pins the expected owner of projected application-grant files; it does not identify the invoking user.
+	// RU: issuerUID закрепляет ожидаемого владельца файлов application grant, а не идентичность вызывающего пользователя.
 	issuerUID = 29001
+	// issuerGID pins the expected issuer group checked by the protected control-plane client.
+	// RU: issuerGID закрепляет ожидаемую группу издателя, проверяемую защищённым клиентом control plane.
 	issuerGID = 29000
 )
 
+// Run validates configuration and initializes telemetry, protected owner RPC, the adapter and the technical listener before polling.
+// RU: Run проверяет конфигурацию и создаёт телеметрию, защищённый owner RPC, адаптер и технический listener до начала опроса.
+// Once workers have started, it clears readiness on termination and performs ordered bounded cleanup using the independent shutdown base.
+// RU: После запуска workers функция снимает готовность при завершении и выполняет упорядоченную ограниченную очистку с независимой базой shutdown.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
@@ -66,7 +75,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	technical, err := httpserver.New(httpserver.Config{Address: config.TechnicalListen, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 32 << 10, MaximumConnections: 128}, readiness, metrics.PrometheusHandler())
+	technical, err := httpserver.New(httpserver.StandardProcessConfig(config.TechnicalListen), readiness, metrics.PrometheusHandler())
 	if err != nil {
 		return err
 	}
@@ -76,7 +85,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
 	workHealth := &workCycleHealth{}
-	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), monitorWorkPathHealth(workHealth, business, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, technical.Worker(), monitorWorkPathHealth(workHealth, business, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -91,19 +100,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	return errors.Join(err, shutdownErr)
 }
 
-func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.Serve() }()
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
+// monitorWorkPathHealth periodically publishes freshness of completed owner work cycles to business metrics, not HTTP readiness.
+// RU: monitorWorkPathHealth периодически публикует свежесть завершённых owner-циклов в бизнесовые метрики, не меняя HTTP readiness.
+// Its tolerance includes the full cycle budget, readiness interval and five seconds; cancellation stops the ticker and worker.
+// RU: Допуск включает полный бюджет цикла, интервал проверки и пять секунд; отмена останавливает ticker и worker.
 func monitorWorkPathHealth(workHealth *workCycleHealth, business *businessmetrics.Metrics, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
@@ -119,6 +119,10 @@ func monitorWorkPathHealth(workHealth *workCycleHealth, business *businessmetric
 	}
 }
 
+// runIntegrationLoop runs bounded sequential claim cycles, records health and metrics, and logs only degradation or recovery transitions.
+// RU: runIntegrationLoop выполняет ограниченные последовательные claim-циклы, учитывает здоровье и метрики, журналирует только деградацию и восстановление.
+// Productive successful cycles reset idle backoff; errors or idle cycles increase it, while cancellation interrupts the wait.
+// RU: Успешный цикл с работой сбрасывает паузу простоя; ошибка или отсутствие работы увеличивают её, а отмена прерывает ожидание.
 func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, workHealth *workCycleHealth, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
@@ -152,6 +156,12 @@ func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration
 	}
 }
 
+// processIntegrationWork processes connection tests, invocations, source reads and writebacks in that order, returning completed work even on a later error.
+// RU: processIntegrationWork последовательно обрабатывает проверки подключений, вызовы, чтение источников и запись, сохраняя счётчик завершённого при последующей ошибке.
+// Invocation mode selects read-only recovery or execution; insufficient remaining lease time prevents either provider call.
+// RU: Режим вызова выбирает read-only восстановление либо исполнение; нехватка остатка аренды запрещает оба обращения к провайдеру.
+// External-operation metrics are recorded before owner completion, and an unknown provider outcome remains explicit rather than retried here.
+// RU: Метрики внешней операции учитываются до owner completion; неопределённый результат сохраняется явно и здесь не повторяется.
 func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config) (int, error) {
 	tests, err := control.Runtime.ClaimIntegrationConnectionTests(ctx, &controlplanev1.ClaimIntegrationConnectionTestsRequest{WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit})
 	if err != nil {
@@ -203,6 +213,10 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 	return processed + writebacks, err
 }
 
+// completeTest reports the adapter's classified outcome with the exact test lease, fence and generation, rejecting a missing lease locally.
+// RU: completeTest передаёт классифицированный результат адаптера с точными lease, fence и generation проверки, локально отклоняя отсутствующую аренду.
+// The idempotency key includes lease generation; owner validation and the RPC error remain authoritative, with no retry here.
+// RU: Ключ идемпотентности включает поколение аренды; owner-проверка и RPC-ошибка остаются авторитетными, повтора здесь нет.
 func completeTest(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.IntegrationConnectionTestClaim, result string, operationErr error) error {
 	lease := claim.GetLease()
 	if lease == nil {
@@ -213,6 +227,10 @@ func completeTest(ctx context.Context, control *controlplaneclient.Client, claim
 	return err
 }
 
+// completeInvocation reports exact claim pins, the safe classified outcome and unknown-outcome flag to the owner without retrying completion.
+// RU: completeInvocation передаёт владельцу точные привязки claim, безопасный классифицированный результат и признак неопределённости без повтора completion.
+// Only success includes the adapter's effect receipt; failed or uncertain work never receives a fabricated successful receipt.
+// RU: Только успех включает квитанцию эффекта адаптера; ошибка и неопределённость не получают выдуманную успешную квитанцию.
 func completeInvocation(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.IntegrationInvocationClaim, result integration.Result, operationErr error) error {
 	lease := claim.GetLease()
 	if lease == nil {
@@ -235,6 +253,8 @@ func completeInvocation(ctx context.Context, control *controlplaneclient.Client,
 	return err
 }
 
+// stableKey derives a deterministic namespaced UUID from NUL-separated components for idempotency, not authorization.
+// RU: stableKey выводит детерминированный UUID с пространством имён из разделённых NUL компонентов для идемпотентности, а не авторизации.
 func stableKey(left, right string) string {
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(left+"\x00"+right)).String()
 }

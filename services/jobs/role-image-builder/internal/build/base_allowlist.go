@@ -9,14 +9,24 @@ import (
 	"path/filepath"
 )
 
+// maximumRoleEnvironmentCatalogBytes bounds catalog bytes read before JSON decoding to one MiB.
+// maximumRoleEnvironmentCatalogBytes ограничивает чтение каталога перед разбором JSON одним МиБ.
 const maximumRoleEnvironmentCatalogBytes = 1 << 20
 
+// roleEnvironmentCatalog models the versioned local document; only environment base tuples become the allowlist.
+// Context remains raw JSON and is not interpreted as authority by this loader.
+// roleEnvironmentCatalog описывает версионированный локальный документ; в список разрешений попадают только пары баз окружений.
+// Контекст остаётся сырым JSON и не трактуется загрузчиком как источник полномочий.
 type roleEnvironmentCatalog struct {
 	SchemaVersion uint64                  `json:"schemaVersion"`
 	Context       json.RawMessage         `json:"context"`
 	Environments  []roleEnvironmentRecord `json:"environments"`
 }
 
+// roleEnvironmentRecord accepts catalog presentation and setup fields while exposing exact base reference/digest pairs.
+// Availability and recommendation flags are parsed but are not used to filter the base allowlist.
+// roleEnvironmentRecord принимает поля представления и настройки каталога и задаёт точные пары ссылки и дайджеста базы.
+// Флаги доступности и рекомендации разбираются, но не фильтруют список разрешённых баз.
 type roleEnvironmentRecord struct {
 	Key                       string            `json:"key"`
 	NameMessageKey            string            `json:"nameMessageKey"`
@@ -33,8 +43,14 @@ type roleEnvironmentRecord struct {
 	Tools                     []json.RawMessage `json:"tools"`
 }
 
+// baseAllowlist indexes exact repository@digest pairs loaded from the local role-environment catalog.
+// baseAllowlist индексирует точные пары repository@digest из локального каталога ролевых окружений.
 type baseAllowlist map[string]struct{}
 
+// loadBaseAllowlist reads a bounded catalog from a clean absolute path and rejects unknown fields or trailing JSON.
+// Version 1 and 1..100 nonduplicate, syntactically valid base tuples are required; no remote lookup is performed.
+// loadBaseAllowlist читает ограниченный каталог по нормализованному абсолютному пути и отклоняет неизвестные поля и лишний JSON.
+// Требуются версия 1 и 1..100 неповторяющихся синтаксически корректных пар баз; удалённый поиск не выполняется.
 func loadBaseAllowlist(path string) (baseAllowlist, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return nil, errors.New("role environment catalog path is invalid")
@@ -74,6 +90,8 @@ func loadBaseAllowlist(path string) (baseAllowlist, error) {
 	return result, nil
 }
 
+// Allows tests the exact combined reference/digest key without normalization, fallback or external access.
+// Allows проверяет точный составной ключ ссылки и дайджеста без нормализации, запасного варианта или внешнего доступа.
 func (allowlist baseAllowlist) Allows(reference, digest string) bool {
 	_, ok := allowlist[reference+"@"+digest]
 	return ok

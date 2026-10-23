@@ -2,6 +2,8 @@ package controlplaneclient
 
 import controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 
+// EmailBridgeOperations registers only configuration, authorization and effect-receipt RPCs used by the managed mail bridge.
+// EmailBridgeOperations регистрирует только RPC конфигурации, авторизации и квитанций эффекта управляемого почтового моста.
 func EmailBridgeOperations() map[string]string {
 	return map[string]string{
 		"platform.email.configuration.report":   controlplanev1.RuntimeWorkService_ReportEmailConfigurationReadback_FullMethodName,
@@ -11,6 +13,8 @@ func EmailBridgeOperations() map[string]string {
 	}
 }
 
+// STTGatewayOperations exposes transcription and model-catalog methods to the gateway's explicit operation registry.
+// STTGatewayOperations открывает методы транскрипции и каталога моделей для явного реестра операций шлюза.
 func STTGatewayOperations() map[string]string {
 	return map[string]string{
 		"platform.stt.transcribe":        "/stt.v1.SpeechToTextService/Transcribe",
@@ -18,6 +22,8 @@ func STTGatewayOperations() map[string]string {
 	}
 }
 
+// SecretDraftGatewayOperations lists the draft save, validation, publication, discard and readiness methods of the broker.
+// SecretDraftGatewayOperations перечисляет методы broker для сохранения, проверки, публикации, отмены и readiness черновика.
 func SecretDraftGatewayOperations() map[string]string {
 	return map[string]string{
 		"platform.runtime-secret-drafts.save":      "/secretbroker.v1.SecretBrokerService/SaveSecretDraft",
@@ -28,11 +34,14 @@ func SecretDraftGatewayOperations() map[string]string {
 	}
 }
 
+// STTPolicyProjectionOperations registers the exact read method for resolving one transcription policy.
+// STTPolicyProjectionOperations регистрирует точный метод чтения политики одной транскрипции.
 func STTPolicyProjectionOperations() map[string]string {
 	return map[string]string{"platform.stt.policy.resolve": "/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy"}
 }
 
-// ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
+// ControlAPIGatewayOperations returns the closed owner-facing operation-to-RPC map used by the control API gateway.
+// ControlAPIGatewayOperations возвращает закрытое соответствие операций владельца и RPC для control API gateway.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
 		"platform.command.role-image-impact-plans.prepare":                  controlplanev1.PlatformCommandService_PrepareRoleImageImpactPlan_FullMethodName,
@@ -359,6 +368,8 @@ func ControlAPIGatewayOperations() map[string]string {
 	}
 }
 
+// SecretBrokerOperations limits broker-side work to credential renewal and runtime-secret task lifecycle methods.
+// SecretBrokerOperations ограничивает работу broker обновлением credentials и методами жизненного цикла runtime-secret задач.
 func SecretBrokerOperations() map[string]string {
 	return map[string]string{
 		"platform.provider-accounts.credential.renewal.work.check": controlplanev1.ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName,
@@ -384,8 +395,10 @@ func SecretBrokerOperations() map[string]string {
 	}
 }
 
-// ProviderCredentialMaterializerOperations возвращает exact API изолированного
-// materializer, ответы которого содержат только Secret descriptors.
+// ProviderCredentialMaterializerOperations registers only the isolated materializer's credential and catalog RPCs.
+// ProviderCredentialMaterializerOperations регистрирует только RPC credentials и каталога изолированного materializer.
+// The caller receives Secret descriptors rather than raw provider credentials from these operations.
+// Вызывающий получает дескрипторы Secret, а не сырые credentials провайдера.
 func ProviderCredentialMaterializerOperations() map[string]string {
 	return map[string]string{
 		"platform.provider-accounts.credential.renew":           controlplanev1.ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName,
@@ -400,8 +413,8 @@ func ProviderCredentialMaterializerOperations() map[string]string {
 	}
 }
 
-// RuntimeCredentialProjectionOperations возвращает exact secret-broker API,
-// который материализует и проверяет credentials одной execution lease.
+// RuntimeCredentialProjectionOperations binds one execution lease to exact materialization and readiness broker methods.
+// RuntimeCredentialProjectionOperations связывает одну execution lease с точными методами materialization и readiness broker.
 func RuntimeCredentialProjectionOperations() map[string]string {
 	return map[string]string{
 		"platform.runtime.credentials.materialize":                  "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials",
@@ -410,14 +423,16 @@ func RuntimeCredentialProjectionOperations() map[string]string {
 	}
 }
 
-// STTCredentialProjectionOperations возвращает exact credential producer API
-// для одного защищённого STT-запроса.
+// STTCredentialProjectionOperations registers the credential projection method for a single protected STT request.
+// STTCredentialProjectionOperations регистрирует метод проекции credentials для одного защищённого STT-запроса.
 func STTCredentialProjectionOperations() map[string]string {
 	return map[string]string{
 		"platform.stt.credential.project": "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential",
 	}
 }
 
+// RuntimeOperations registers exact execution, file, assistant, integration and warm-runtime RPCs for runtime work clients.
+// RuntimeOperations регистрирует точные RPC исполнения, файлов, помощника, интеграций и warm runtime для runtime-клиентов.
 func RuntimeOperations() map[string]string {
 	return map[string]string{
 		"platform.runtime.execution.claim":                    controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
@@ -447,8 +462,8 @@ func RuntimeOperations() map[string]string {
 	}
 }
 
-// RoleImageBuilderOperations возвращает только операции fenced lifecycle
-// сборки образа роли. Admission и promotion принадлежат отдельным workload.
+// RoleImageBuilderOperations registers fenced image-build lifecycle methods without admission or promotion authority.
+// RoleImageBuilderOperations регистрирует защищённые методы сборки образа без полномочий admission и promotion.
 func RoleImageBuilderOperations() map[string]string {
 	return map[string]string{
 		"platform.role-images.builds.claim":    controlplanev1.RoleImageService_ClaimImageBuild_FullMethodName,
@@ -459,8 +474,8 @@ func RoleImageBuilderOperations() map[string]string {
 	}
 }
 
-// ImageAdmissionOperations изолирует проверку supply-chain evidence от
-// builder и promotion workload.
+// ImageAdmissionOperations registers evidence-verification lifecycle methods separately from builder and promotion work.
+// ImageAdmissionOperations регистрирует методы проверки evidence отдельно от сборки и promotion.
 func ImageAdmissionOperations() map[string]string {
 	return map[string]string{
 		"platform.role-images.admission.claim":        controlplanev1.RoleImageService_ClaimImageAdmission_FullMethodName,
@@ -471,8 +486,8 @@ func ImageAdmissionOperations() map[string]string {
 	}
 }
 
-// ImagePromotionOperations разрешает только одноразовый перенос уже
-// допущенного immutable image artifact в promoted registry.
+// ImagePromotionOperations registers the claim, authorization and completion RPCs for promoting an admitted immutable image.
+// ImagePromotionOperations регистрирует RPC claim, авторизации и завершения promotion допущенного неизменяемого образа.
 func ImagePromotionOperations() map[string]string {
 	return map[string]string{
 		"platform.role-images.promotion.claim":     controlplanev1.RoleImageService_ClaimImagePromotion_FullMethodName,
@@ -481,8 +496,8 @@ func ImagePromotionOperations() map[string]string {
 	}
 }
 
-// ImageAdmissionControllerOperations разрешает только owner work availability
-// и original receipt terminal proof; claim/mutation остаются у worker.
+// ImageAdmissionControllerOperations exposes availability and terminal readback to the controller while leaving mutations to workers.
+// ImageAdmissionControllerOperations открывает controller только availability и конечное чтение; изменения остаются у workers.
 func ImageAdmissionControllerOperations() map[string]string {
 	return map[string]string{
 		"platform.role-images.supply-work.get":                 controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName,
@@ -490,8 +505,8 @@ func ImageAdmissionControllerOperations() map[string]string {
 	}
 }
 
-// AutomationSchedulerOperations возвращает минимальный профиль job, которая
-// только материализует server-owned due occurrences.
+// AutomationSchedulerOperations registers the claim, renew, materialize and fail methods for server-owned due occurrences.
+// AutomationSchedulerOperations регистрирует claim, renew, materialize и fail для назначенных сервером наступивших запусков.
 func AutomationSchedulerOperations() map[string]string {
 	return map[string]string{
 		"platform.runtime.schedules.claim":       controlplanev1.RuntimeWorkService_ClaimDueSchedules_FullMethodName,
@@ -501,8 +516,8 @@ func AutomationSchedulerOperations() map[string]string {
 	}
 }
 
-// SessionArchiveOperations возвращает только fenced lifecycle snapshot,
-// restore, удаления PVC и object GC.
+// SessionArchiveOperations registers the fenced task lifecycle for snapshot, restore, PVC deletion and object cleanup.
+// SessionArchiveOperations регистрирует защищённый жизненный цикл задач snapshot, restore, удаления PVC и очистки объектов.
 func SessionArchiveOperations() map[string]string {
 	return map[string]string{
 		"platform.session-archive.tasks.claim":            controlplanev1.SessionArchiveWorkService_ClaimSessionArchiveTasks_FullMethodName,
@@ -515,6 +530,8 @@ func SessionArchiveOperations() map[string]string {
 	}
 }
 
+// IntegrationGatewayOperations registers Git configuration work and runtime integration execution methods for this gateway.
+// IntegrationGatewayOperations регистрирует для шлюза задачи Git-конфигурации и методы исполнения runtime-интеграций.
 func IntegrationGatewayOperations() map[string]string {
 	return map[string]string{
 		"platform.configuration-writebacks.work.claim":    controlplanev1.ManagedConfigurationGitWriteBackWorkService_ClaimManagedConfigurationGitWriteBackWork_FullMethodName,
@@ -534,6 +551,8 @@ func IntegrationGatewayOperations() map[string]string {
 	}
 }
 
+// InteractionGatewayOperations registers connection tests, invocations and inbound interaction delivery methods.
+// InteractionGatewayOperations регистрирует проверку соединений, вызовы и доставку входящих взаимодействий.
 func InteractionGatewayOperations() map[string]string {
 	return map[string]string{
 		"platform.interactions.connection-tests.claim":    controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName,
@@ -547,10 +566,10 @@ func InteractionGatewayOperations() map[string]string {
 	}
 }
 
-// ControlAPIGatewayProjectRequiredOperations возвращает операции, для которых
-// proof обязан содержать повторно проверенную project boundary. Операции над
-// ресурсами вне project route повторно разрешают project по самому opaque ref в
-// control-plane и поэтому не доверяют locator из браузера.
+// ControlAPIGatewayProjectRequiredOperations identifies routes whose proof must carry a freshly checked project boundary.
+// ControlAPIGatewayProjectRequiredOperations выделяет маршруты, где proof содержит заново проверенную границу проекта.
+// Other resource routes resolve the opaque reference in control-plane instead of trusting a browser locator.
+// Для остальных ресурсов control-plane разрешает opaque reference, не доверяя locator браузера.
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
 		"platform.assistant.project.create":                                 {},

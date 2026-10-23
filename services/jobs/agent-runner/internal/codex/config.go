@@ -1,4 +1,5 @@
-// Package codex управляет одним non-interactive Codex turn.
+// Package codex executes one bounded provider turn through the isolated broker/protocol and maps its pinned configuration, context, activity and result without owning domain grants.
+// Пакет codex выполняет один ограниченный provider turn через изолированный broker/protocol и отображает pinned configuration, context, activity и результат без владения domain grants.
 package codex
 
 import (
@@ -19,8 +20,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// ErrRuntimeProfile is the shared safe sentinel for invalid pinned runtime selection or profile materialization; it carries no raw config, authentication or provider diagnostic.
+// ErrRuntimeProfile — общий безопасный sentinel неверного pinned runtime selection или profile materialization без сырой конфигурации, авторизации и provider diagnostics.
 var ErrRuntimeProfile = errors.New("Codex runtime profile is invalid")
 
+// ValidateRuntimeProfile requires the complete runner input contract before checking local model/reasoning/tool selection; it does not replace server-owned admission, capability or grant validation.
+// ValidateRuntimeProfile требует полный runner input contract до локальной проверки model/reasoning/tool selection; не заменяет серверные admission, capability и grant checks.
 func ValidateRuntimeProfile(input model.Input) error {
 	if input.Validate() != nil {
 		return ErrRuntimeProfile
@@ -28,6 +33,8 @@ func ValidateRuntimeProfile(input model.Input) error {
 	return validateRuntimeSelection(input)
 }
 
+// validateRuntimeSelection accepts the pinned openai provider and bounded nonblank model, validates effective reasoning against the overlay and requires each declared tool to resolve to an executable regular file. It does not impose a local model catalog or execute the tools.
+// validateRuntimeSelection принимает pinned openai provider и ограниченную непустую модель, сверяет effective reasoning с overlay и требует разрешения каждого tool в исполняемый обычный файл. Не навязывает локальный model catalog и не запускает tools.
 func validateRuntimeSelection(input model.Input) error {
 	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil || input.Provider != "openai" || input.Model == "" || len(input.Model) > 128 || strings.TrimSpace(input.Model) != input.Model {
 		return ErrRuntimeProfile
@@ -45,6 +52,8 @@ func validateRuntimeSelection(input model.Input) error {
 	return nil
 }
 
+// runtimeConfig is the typed TOML projection generated from approved runtime input, combining exact model, permission, environment, history and required-MCP settings; it is not an unrestricted caller-supplied CLI config.
+// runtimeConfig — типизированная TOML-проекция одобренного runtime input с точными model, permission, environment, history и required-MCP settings, не произвольная CLI-конфигурация клиента.
 type runtimeConfig struct {
 	WebSearchMode          string                       `toml:"web_search,omitempty"`
 	Model                  string                       `toml:"model"`
@@ -62,6 +71,8 @@ type runtimeConfig struct {
 	Permissions            map[string]permissionProfile `toml:"permissions"`
 }
 
+// runtimeFeatures serializes the native tool-routing and local-memory feature switches explicitly, including false values, so the generated profile does not silently inherit user feature defaults.
+// runtimeFeatures явно сериализует native tool-routing и local-memory switches, включая false, чтобы создаваемый профиль не наследовал user feature defaults незаметно.
 type runtimeFeatures struct {
 	CodeModeHost bool                  `toml:"code_mode_host"`
 	CodeModeOnly bool                  `toml:"code_mode_only"`
@@ -69,24 +80,30 @@ type runtimeFeatures struct {
 	Memories     bool                  `toml:"memories"`
 }
 
-// Память поступает только из Kodex-owned records; локальная генерация Codex
-// не может стать вторым источником контекста или записывать readonly projection.
+// runtimeMemories carries explicit local generation/use switches, left disabled by this producer because context comes from Kodex-owned records rather than a second provider memory source or writes to the read-only projection.
+// runtimeMemories хранит явные local generation/use switches, отключённые этим producer: контекст поступает из записей Kodex, а не второго provider memory source или записи в read-only projection.
 type runtimeMemories struct {
 	GenerateMemories bool `toml:"generate_memories"`
 	UseMemories      bool `toml:"use_memories"`
 }
 
+// runtimeCodeModeConfig records the existing disabled code-mode host settings and direct-only namespaces for the pinned provider profile; routing flags do not relax filesystem, approval or callback authority checks.
+// runtimeCodeModeConfig фиксирует прежние disabled code-mode host settings и direct-only namespaces pinned provider profile; routing flags не ослабляют filesystem, approval и callback authority checks.
 type runtimeCodeModeConfig struct {
 	Enabled                  bool     `toml:"enabled"`
 	DirectOnlyToolNamespaces []string `toml:"direct_only_tool_namespaces"`
 }
 
+// permissionProfile describes the selected CLI permission base plus exact filesystem rules and network projection, without granting resources absent from the materialized runtime policy.
+// permissionProfile описывает выбранную CLI permission base, точные filesystem rules и network projection без выдачи ресурсов вне материализованной runtime policy.
 type permissionProfile struct {
 	Extends    string            `toml:"extends"`
 	Filesystem map[string]string `toml:"filesystem"`
 	Network    *networkPolicy    `toml:"network,omitempty"`
 }
 
+// networkPolicy is the CLI-facing network projection, including upstream-proxy support and domain hints; protocol, port and method enforcement still belongs to the managed network boundary, not this struct alone.
+// networkPolicy — CLI-проекция сети с upstream-proxy support и domain hints; контроль protocol, port и method остаётся у managed network boundary, не у одной этой структуры.
 type networkPolicy struct {
 	Enabled            bool     `toml:"enabled"`
 	Mode               string   `toml:"mode,omitempty"`
@@ -94,10 +111,14 @@ type networkPolicy struct {
 	AllowUpstreamProxy bool     `toml:"allow_upstream_proxy"`
 }
 
+// historyConfig carries only the approved history persistence selection; an empty overlay value is materialized as save-all by the home writer.
+// historyConfig хранит лишь одобренный history persistence selection; пустое overlay-значение writer home материализует как save-all.
 type historyConfig struct {
 	Persistence string `toml:"persistence"`
 }
 
+// shellEnvironmentPolicy projects approved environment names into filters and nonsecret values into set, keeping secret projection values out of persisted TOML while preserving the existing CLI filter policy.
+// shellEnvironmentPolicy проецирует одобренные environment names в filters и несекретные values в set, не записывая secret projection values в TOML и сохраняя прежнюю CLI filter policy.
 type shellEnvironmentPolicy struct {
 	Inherit               string            `toml:"inherit"`
 	IgnoreDefaultExcludes bool              `toml:"ignore_default_excludes"`
@@ -105,6 +126,8 @@ type shellEnvironmentPolicy struct {
 	Set                   map[string]string `toml:"set"`
 }
 
+// mcpServerConfig declares the required local Kodex MCP endpoint, bearer environment-variable name, startup/tool budgets and tool approval mode; the bearer value and server-owned execution permission are not stored here.
+// mcpServerConfig задаёт обязательный local Kodex MCP endpoint, имя bearer environment variable, startup/tool budgets и tool approval mode; bearer value и серверное execution permission здесь не хранятся.
 type mcpServerConfig struct {
 	URL                      string `toml:"url"`
 	Required                 bool   `toml:"required"`
@@ -114,6 +137,8 @@ type mcpServerConfig struct {
 	DefaultToolsApprovalMode string `toml:"default_tools_approval_mode"`
 }
 
+// PrepareHomeWithAuth validates reasoning, volume pins, home containment and the authentication digest before publishing auth.json, then materializes and round-trip checks the typed TOML profile. It persists only approved nonsecret environment values, not projected secret values. Later failures can leave the already published auth snapshot: this is not an atomic whole-home transaction, and callers supply the trusted input/MCP endpoint.
+// PrepareHomeWithAuth проверяет reasoning, volume pins, home containment и auth digest до публикации auth.json, затем материализует и сверяет typed TOML profile обратным разбором. Сохраняет лишь approved nonsecret environment values, не secret projection values. Поздний отказ может оставить уже опубликованный auth snapshot: это не атомарная whole-home transaction, trusted input/MCP endpoint задаёт вызывающий.
 func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return ErrRuntimeProfile
@@ -140,6 +165,8 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if err := replacePrivateFile(filepath.Join(input.CodexHome, "auth.json"), auth); err != nil {
 		return err
 	}
+	// permissionProfileName fixes the single generated profile selected for this runtime input.
+	// permissionProfileName закрепляет единственный создаваемый профиль данного runtime input.
 	const permissionProfileName = "kodex-runtime"
 	filesystem := map[string]string{
 		filepath.Join(input.CodexHome, "auth.json"): "deny",
@@ -244,8 +271,8 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	return replacePrivateFile(filepath.Join(input.CodexHome, "config.toml"), raw.Bytes())
 }
 
-// Отдельные тома принадлежат опубликованному окружению, а не рабочему checkout.
-// Разрешение не распространяется на их родителя, state, INPUT или чужие тома.
+// runtimeVolumePermissions maps only normalized, digest-pinned declared volume mount paths to read or workspace-write access; it grants no parent/state/input paths and accepts an empty volume list without adding permissions.
+// runtimeVolumePermissions назначает read или workspace-write лишь нормализованным digest-pinned объявленным mount paths томов; не разрешает parent/state/input paths и принимает пустой список без добавления прав.
 func runtimeVolumePermissions(input model.Input) (map[string]string, error) {
 	permissions := make(map[string]string, len(input.EnvironmentPolicy.Volumes))
 	if len(input.EnvironmentPolicy.Volumes) == 0 {
@@ -265,6 +292,8 @@ func runtimeVolumePermissions(input model.Input) (map[string]string, error) {
 	return permissions, nil
 }
 
+// sameEnvironmentFilters compares map size and expected lookup values for the generated nonempty include filters, including nil/empty equality; it is not a general key-presence comparator for arbitrary empty-string map values.
+// sameEnvironmentFilters сравнивает размер maps и ожидаемые lookup values создаваемых непустых include filters, включая равенство nil/empty; не является общим key-presence comparator произвольных пустых строк.
 func sameEnvironmentFilters(actual, expected map[string]string) bool {
 	if len(actual) != len(expected) {
 		return false
@@ -277,6 +306,8 @@ func sameEnvironmentFilters(actual, expected map[string]string) bool {
 	return true
 }
 
+// codexNetworkPolicy projects the existing web-access mode and allowlist domain patterns into CLI network settings with upstream proxy enabled. It assumes validated input and neither resolves DNS nor itself enforces port/protocol/HTTP-method rules.
+// codexNetworkPolicy проецирует прежний web-access mode и allowlist domain patterns в CLI network settings с upstream proxy. Предполагает проверенный вход, не разрешает DNS и сам не применяет port/protocol/HTTP-method rules.
 func codexNetworkPolicy(access runtimecontract.RuntimeWebAccess) *networkPolicy {
 	result := &networkPolicy{Enabled: access.Mode != runtimecontract.RuntimeWebAccessNone, AllowUpstreamProxy: true}
 	switch access.Mode {
@@ -293,6 +324,8 @@ func codexNetworkPolicy(access runtimecontract.RuntimeWebAccess) *networkPolicy 
 	return result
 }
 
+// readProviderDigest reads a small textual lowercase SHA-256 pin, allowing the existing raw-length range and trimmed whitespace; length is checked after ReadFile, not as a pre-allocation or no-follow file bound.
+// readProviderDigest читает текстовый lowercase SHA-256 pin с прежним raw-length range и обрезкой пробелов; размер проверяется после ReadFile, не как pre-allocation или no-follow ограничение.
 func readProviderDigest(path string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil || len(raw) < 64 || len(raw) > 66 {
@@ -305,6 +338,8 @@ func readProviderDigest(path string) (string, error) {
 	return value, nil
 }
 
+// pinnedProviderDigest requires the mounted authentication digest to equal the immutable input's provider credential digest and returns a fixed mismatch error rather than using the file as a new source of credential authority.
+// pinnedProviderDigest требует равенства mounted auth digest и provider credential digest immutable input, возвращая фиксированный mismatch вместо принятия файла за новый источник credential authority.
 func pinnedProviderDigest(input model.Input) (string, error) {
 	value, err := readProviderDigest(input.ProviderAuthSHA256File)
 	if err != nil || value != input.ProviderCredentialSHA256 {
@@ -313,6 +348,8 @@ func pinnedProviderDigest(input model.Input) (string, error) {
 	return value, nil
 }
 
+// codexPermissionBase recognizes only read-only and workspace-write, mapping them to existing named CLI bases and rejecting dangerous full-access or unknown policies.
+// codexPermissionBase распознаёт лишь read-only и workspace-write, переводя в прежние именованные CLI bases и отклоняя dangerous full-access или неизвестные policies.
 func codexPermissionBase(sandbox string) (string, error) {
 	switch sandbox {
 	case "read-only":
@@ -324,6 +361,8 @@ func codexPermissionBase(sandbox string) (string, error) {
 	}
 }
 
+// secureDirectory creates or inspects the final state directory without accepting a final symlink. Provider UID 10002 must observe the exact existing runner-owned shared boundary; other callers require current-user ownership before the existing numeric chmod request. Parent-path trust remains the caller's responsibility.
+// secureDirectory создаёт или проверяет конечный state directory без принятия final symlink. Provider UID 10002 обязан видеть точную существующую runner-owned shared boundary; прочим вызывающим нужно current-user ownership перед прежним numeric chmod request. Доверие parent path остаётся обязанностью вызывающего.
 func secureDirectory(path string) error {
 	if err := os.MkdirAll(path, 0o770); err != nil {
 		return errors.New("create Codex state directory")
@@ -348,6 +387,8 @@ func secureDirectory(path string) error {
 	return nil
 }
 
+// replacePrivateFile removes stale staging, exclusively creates a 0600 snapshot, writes/syncs/closes and renames it. Failure staging is not universally removed, parent directories are assumed trusted and directory fsync is absent; rename errors preserve their OS cause while other stages use fixed diagnostics.
+// replacePrivateFile удаляет прежний staging, исключительно создаёт snapshot 0600, пишет/синхронизирует/закрывает и переименовывает. Staging не очищается при всех отказах, parent directories предполагаются доверенными и fsync каталога отсутствует; rename errors сохраняют OS cause, прочие этапы дают фиксированную диагностику.
 func replacePrivateFile(path string, payload []byte) error {
 	temporary := path + ".next"
 	if err := os.Remove(temporary); err != nil && !os.IsNotExist(err) {

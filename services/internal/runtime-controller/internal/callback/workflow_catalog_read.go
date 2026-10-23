@@ -14,8 +14,20 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// errWorkflowCatalogRead is the fixed comparable rejection for invalid specialized
+// publication/active-run input or response, without reflecting private source data.
+// errWorkflowCatalogRead — fixed comparable отказ неверных specialized publication/
+// active-run input или response без отражения private source data.
 var errWorkflowCatalogRead = errors.New("workflow catalog read is invalid")
 
+// workflowCatalogReadTool describes three disjoint catalog modes, exact publication
+// pins, bounded UTF-8 continuation and actor-visible active roots. Nested pin maps
+// are shared between branch descriptors; schema construction neither reads workflows
+// nor grants launch authority, and active-run discovery remains advisory.
+// workflowCatalogReadTool описывает три непересекающихся catalog modes,exact publication
+// pins,bounded UTF-8 continuation и actor-visible active roots. Nested pin maps общие
+// для branch descriptors; построение схемы не читает workflows и не даёт launch
+// authority; active-run discovery остаётся advisory.
 func workflowCatalogReadTool() map[string]any {
 	pins := map[string]any{"workflow_ref": opaqueRefSchema(), "published_ref": opaqueRefSchema(), "spec_digest": map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"}, "workflow_version": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991}}
 	publication := map[string]any{}
@@ -32,6 +44,12 @@ func workflowCatalogReadTool() map[string]any {
 	return map[string]any{"name": "get_workflow_catalog", "description": "Discover published project Workflows with query/page_token; follow next_page_token to EOF. Then use exactly one selector: publication_read with discovered workflow_ref/published_ref/spec_digest/workflow_version reads the full published configuration, steps/instructions/DAG/capabilities/defaults/result schema in UTF-8 pages; continue offset_bytes=next_offset_bytes with unchanged configuration_sha256 and pins until eof=true. active_runs_read with those pins lists actor-visible nonterminal roots of that Workflow; follow next_page_token. Project/actor come from the server. Active-run discovery is advisory, not a uniqueness guarantee. Never guess refs/schema or repeat an accepted launch; launch_workflow revalidates authority and exact pins.", "inputSchema": map[string]any{"type": "object", "oneOf": []any{discovery, full, active}}}
 }
 
+// workflowCatalogReadPins validates syntactic workflow/publication refs, lowercase
+// spec digest and a positive JavaScript-exact record version, then builds typed pins.
+// It does not check extra selector keys, publication existence or current ownership.
+// workflowCatalogReadPins проверяет syntactic workflow/publication refs,lowercase spec
+// digest и positive JavaScript-exact record version, строя typed pins. Лишние selector
+// keys,существование publication и текущее владение здесь не проверяются.
 func workflowCatalogReadPins(selector map[string]any) (*cp.ExecutionWorkflowReadPins, error) {
 	workflow, ok := selector["workflow_ref"].(string)
 	published, pubOK := selector["published_ref"].(string)
@@ -43,6 +61,16 @@ func workflowCatalogReadPins(selector map[string]any) (*cp.ExecutionWorkflowRead
 	return &cp.ExecutionWorkflowReadPins{WorkflowRef: workflow, PublishedRef: published, SpecDigest: digest, WorkflowVersion: version}, nil
 }
 
+// workflowCatalogRead validates a single publication/active selector, sends exact
+// pins with lease/fence/generation to the owner and rejects mixed responses. Publication
+// bytes pass the shared decoder before UTF-8 slicing and digest-bound continuation;
+// active roots retain their actual historical revision and nonterminal state. Results
+// receive local receipt evidence, not a uniqueness guarantee or an execution grant.
+// workflowCatalogRead проверяет один publication/active selector и передаёт exact pins
+// с lease/fence/generation owner, отвергая mixed responses. Publication bytes проходят
+// shared decoder до UTF-8 slicing/digest continuation; active roots сохраняют actual
+// historical revision/nonterminal state. Результат получает local receipt evidence,
+// не uniqueness guarantee и не execution grant.
 func (server *Server) workflowCatalogRead(ctx context.Context, input runtimecontract.RunnerInput, args map[string]any) (any, error) {
 	if !workflowLaunchAvailable(input) {
 		return nil, errWorkflowCatalogRead

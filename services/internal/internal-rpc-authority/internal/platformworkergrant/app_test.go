@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
+// TestRotateWritesExactBoundedGrant issues a synthetic local credential, verifies exact readback and
+// checks 0440 output permissions without a live owner or cluster.
+// TestRotateWritesExactBoundedGrant выпускает синтетический локальный credential, проверяет точное
+// чтение и права результата 0440 без живого владельца или кластера.
 func TestRotateWritesExactBoundedGrant(t *testing.T) {
 	t.Parallel()
 	directory := t.TempDir()
@@ -36,6 +40,10 @@ func TestRotateWritesExactBoundedGrant(t *testing.T) {
 	}
 }
 
+// TestRotateAdvancesGrantRevisionWithoutChangingCredentialGeneration checks that a later issue second
+// changes revision/JTI while preserving the signing credential generation.
+// TestRotateAdvancesGrantRevisionWithoutChangingCredentialGeneration проверяет смену ревизии и JTI в
+// следующую секунду выпуска при сохранении поколения учётного ключа.
 func TestRotateAdvancesGrantRevisionWithoutChangingCredentialGeneration(t *testing.T) {
 	t.Parallel()
 	directory := t.TempDir()
@@ -62,6 +70,12 @@ func TestRotateAdvancesGrantRevisionWithoutChangingCredentialGeneration(t *testi
 	}
 }
 
+// readTestClaims reads a test output, verifies its canonical JWS with the fixture public key and
+// strictly decodes this issuer's claims; it intentionally does not repeat production semantic binding
+// checks.
+// readTestClaims читает тестовый результат, проверяет канонический JWS публичным ключом примера и
+// строго разбирает claims выпуска; смысловые производственные проверки привязок намеренно не
+// повторяет.
 func readTestClaims(t *testing.T, path string, key internalrpcauth.ES256Key) claims {
 	t.Helper()
 	raw, err := os.ReadFile(path)
@@ -79,6 +93,10 @@ func readTestClaims(t *testing.T, path string, key internalrpcauth.ES256Key) cla
 	return value
 }
 
+// TestWriteAtomicRejectsSymlinkDirectory checks rejection when the immediate output directory is a
+// symlink; it does not prove race-free ancestor traversal.
+// TestWriteAtomicRejectsSymlinkDirectory проверяет отказ, если непосредственный каталог результата —
+// симлинк; защиту обхода предков от гонок не доказывает.
 func TestWriteAtomicRejectsSymlinkDirectory(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -95,6 +113,10 @@ func TestWriteAtomicRejectsSymlinkDirectory(t *testing.T) {
 	}
 }
 
+// TestSupportedWorkloadsIncludeAuthorityCallers pins four required local allowlist members without
+// treating list membership as caller authentication.
+// TestSupportedWorkloadsIncludeAuthorityCallers закрепляет четыре обязательных элемента локального
+// списка, не считая членство аутентификацией вызывающего.
 func TestSupportedWorkloadsIncludeAuthorityCallers(t *testing.T) {
 	t.Parallel()
 	for _, workloadID := range []string{"control-plane", "session-archive", "interaction-gateway", "email-bridge"} {
@@ -104,6 +126,10 @@ func TestSupportedWorkloadsIncludeAuthorityCallers(t *testing.T) {
 	}
 }
 
+// TestOptionalWorkerGrantExactIdentityAndRotation checks two local workload fixtures for exact
+// credential fields and bounded lifetime, then requires revision/JTI advancement on a later issue.
+// TestOptionalWorkerGrantExactIdentityAndRotation проверяет точные поля и ограниченный срок двух
+// локальных примеров нагрузки, затем требует роста ревизии и смены JTI при следующем выпуске.
 func TestOptionalWorkerGrantExactIdentityAndRotation(t *testing.T) {
 	for _, workload := range []string{"email-bridge", "interaction-gateway"} {
 		t.Run(workload, func(t *testing.T) {
@@ -135,6 +161,10 @@ func TestOptionalWorkerGrantExactIdentityAndRotation(t *testing.T) {
 	}
 }
 
+// TestWorkerGrantRejectsUnknownWorkloadAndForeignKey requires unknown workloads, another workload's
+// key and malformed key-generation binding to fail before any output file is created.
+// TestWorkerGrantRejectsUnknownWorkloadAndForeignKey требует отказа для неизвестной нагрузки, ключа
+// другой нагрузки и неверной привязки поколения до создания результата.
 func TestWorkerGrantRejectsUnknownWorkloadAndForeignKey(t *testing.T) {
 	for _, tc := range []struct{ workload, kid string }{
 		{"unknown-worker", "unknown-worker-platform-worker-g1"},
@@ -158,6 +188,12 @@ func TestWorkerGrantRejectsUnknownWorkloadAndForeignKey(t *testing.T) {
 	}
 }
 
+// TestGrantReadbackRejectsSignedIdentityMismatch resigns eight individual identity/scope/version
+// mutations with the valid fixture key and requires semantic readback rejection despite a valid
+// signature.
+// TestGrantReadbackRejectsSignedIdentityMismatch заново подписывает восемь отдельных изменений
+// личности, области или версии действующим ключом примера и требует смыслового отказа несмотря на
+// корректную подпись.
 func TestGrantReadbackRejectsSignedIdentityMismatch(t *testing.T) {
 	key, err := internalrpcauth.GenerateES256Key("email-bridge-platform-worker-g1")
 	if err != nil {

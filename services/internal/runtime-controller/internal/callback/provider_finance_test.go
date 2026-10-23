@@ -17,16 +17,32 @@ import (
 	"google.golang.org/grpc"
 )
 
+// financialProgressClient records financial-progress RPC requests without applying
+// provider-account balance, limit or admission state changes.
+// financialProgressClient записывает financial-progress RPC requests без изменения
+// provider-account balance,limit и admission state.
 type financialProgressClient struct {
 	cp.RuntimeWorkServiceClient
 	requests []*cp.ReportExecutionProgressRequest
 }
 
+// ReportExecutionProgress stores the exact request pointer and returns an empty
+// successful fake response; no account observation is persisted.
+// ReportExecutionProgress сохраняет exact request pointer и выдаёт empty successful
+// fake response без сохранения account observation.
 func (client *financialProgressClient) ReportExecutionProgress(_ context.Context, request *cp.ReportExecutionProgressRequest, _ ...grpc.CallOption) (*cp.ReportExecutionProgressResponse, error) {
 	client.requests = append(client.requests, request)
 	return &cp.ReportExecutionProgressResponse{}, nil
 }
 
+// TestFinancialHTTPCallbackPreservesBindingPresenceAndRejectsMalformed checks local
+// HTTP forwards exactly one valid financial observation with lease binding, optional
+// presence and decimal precision; duplicate/aliased/unknown/mixed/invalid JSON stays
+// rejected before owner RPC, without invoking or billing a real provider.
+// TestFinancialHTTPCallbackPreservesBindingPresenceAndRejectsMalformed проверяет передачу
+// local HTTP ровно одного valid financial observation с lease binding,optional presence
+// и decimal precision; duplicate/aliased/unknown/mixed/invalid JSON отвергается
+// до owner RPC без вызова/биллинга реального provider.
 func TestFinancialHTTPCallbackPreservesBindingPresenceAndRejectsMalformed(t *testing.T) {
 	manager, _, input, _, ticket := providerCredentialRefreshRouteFixture(t)
 	client := &financialProgressClient{}

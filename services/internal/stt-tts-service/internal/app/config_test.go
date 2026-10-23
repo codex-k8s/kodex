@@ -9,6 +9,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
+// TestConfigRejectsAlternateSecurityBoundary starts from a valid protected fixture and rejects drift in egress, dependency identity, paths or fixed timeouts.
+// RU: TestConfigRejectsAlternateSecurityBoundary начинает с допустимой защищённой оснастки и отклоняет drift egress, идентичности зависимостей, путей или фиксированных timeout.
 func TestConfigRejectsAlternateSecurityBoundary(t *testing.T) {
 	valid := Config{
 		Egress:     openai.EgressConfig{Revision: "test-revision", Digest: strings.Repeat("a", 64)},
@@ -47,6 +49,8 @@ func TestConfigRejectsAlternateSecurityBoundary(t *testing.T) {
 	}
 }
 
+// TestLoadConfigRequiresDeploymentEgressExpectations rejects absent egress revision/digest and proves explicitly supplied typed expectations are loaded.
+// RU: TestLoadConfigRequiresDeploymentEgressExpectations отклоняет отсутствие egress revision/digest и доказывает загрузку явно переданных типизированных ожиданий.
 func TestLoadConfigRequiresDeploymentEgressExpectations(t *testing.T) {
 	t.Setenv("STT_EGRESS_EXPECTED_REVISION", "")
 	t.Setenv("STT_EGRESS_EXPECTED_DIGEST", "")
@@ -61,6 +65,8 @@ func TestLoadConfigRequiresDeploymentEgressExpectations(t *testing.T) {
 	}
 }
 
+// TestTrustedConfigDoesNotRequireInternalAuthorityFiles permits only the explicit trusted profile without local authority/TLS files while preserving owner endpoints and egress pins.
+// RU: TestTrustedConfigDoesNotRequireInternalAuthorityFiles допускает отсутствие локальных authority/TLS файлов только в явном trusted профиле, сохраняя адреса владельцев и координаты egress.
 func TestTrustedConfigDoesNotRequireInternalAuthorityFiles(t *testing.T) {
 	t.Setenv("STT_EGRESS_EXPECTED_REVISION", "test-generation")
 	t.Setenv("STT_EGRESS_EXPECTED_DIGEST", strings.Repeat("a", 64))

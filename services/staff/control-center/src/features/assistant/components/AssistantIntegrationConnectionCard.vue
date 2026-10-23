@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 
 import { assistantIntegrationConnectionTarget } from "@/features/assistant/model";
+import { watchAssistantReadback } from "@/features/assistant/readback-lifecycle";
 import { usePlatformStore } from "@/features/platform/store";
 import { requestSignal } from "@/shared/api/client";
 import { getIntegrationConnection } from "@/shared/api/generated/openapi/sdk.gen";
@@ -42,56 +43,36 @@ const destination = computed(() => ({
   name: "integrations",
   query: { assistantForm: "1", connectionRef: connection.value?.ref },
 }));
-let refresh: (() => Promise<void>) | undefined;
-
-watch(
-  target,
-  (value, _previous, onCleanup) => {
+const refresh = watchAssistantReadback(target, {
+  loading,
+  problem,
+  reset: () => {
     readback.value = undefined;
-    loading.value = false;
-    problem.value = false;
-    if (!value) return;
-    const controller = new AbortController();
-    onCleanup(() => {
-      controller.abort();
-      refresh = undefined;
-    });
-    refresh = async () => {
-      if (controller.signal.aborted) return;
-      loading.value = true;
-      try {
-        const next = (
-          await unwrap(
-            getIntegrationConnection({
-              path: { connectionRef: value.connectionRef },
-              signal: requestSignal(controller.signal),
-            }),
-          )
-        ).data;
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (controller.signal.aborted) return;
-        if (next.ref !== value.connectionRef)
-          throw new Error("Integration connection readback mismatch");
-        readback.value = next;
-        platform.connections[next.ref] = next;
-        problem.value = false;
-      } catch {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) problem.value = true;
-      } finally {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) loading.value = false;
-      }
-    };
+  },
+  read: async (value, signal) =>
+    (
+      await unwrap(
+        getIntegrationConnection({
+          path: { connectionRef: value.connectionRef },
+          signal: requestSignal(signal),
+        }),
+      )
+    ).data,
+  apply: (value, next) => {
+    if (next.ref !== value.connectionRef)
+      throw new Error("Integration connection readback mismatch");
+    readback.value = next;
+    platform.connections[next.ref] = next;
+  },
+  restore: (value) => {
     const cached = platform.connections[value.connectionRef];
     if (cached) readback.value = cached;
-    else void refresh();
+    return Boolean(cached);
   },
-  { immediate: true },
-);
+});
 watch(
   () => props.refreshToken,
-  () => void refresh?.(),
+  () => void refresh(),
 );
 </script>
 
@@ -123,7 +104,7 @@ watch(
         class="button"
         type="button"
         :disabled="loading"
-        @click="refresh?.()"
+        @click="refresh()"
       >
         {{ $t("common.refresh") }}
       </button>

@@ -1,5 +1,7 @@
-// Package kubernetessecret реализует закрытую доставку authority-материалов
-// через заранее созданные Kubernetes Secret.
+// Package kubernetessecret adapts exact precreated Secret clients to the
+// authority's versioned material delivery port without resource discovery.
+// Пакет kubernetessecret адаптирует точные заранее созданные Secret clients
+// к порту версионированной доставки authority без обнаружения ресурсов.
 package kubernetessecret
 
 import (
@@ -10,45 +12,47 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/exactkubernetessecret"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/client/secretschema"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 var (
+	// keySetKeys is the closed application-key list for current/next private-key material, generations and source provenance. The exact Secret client owns the separate generation marker and validation.
+	// keySetKeys — закрытый список прикладных ключей текущего и следующего закрытого материала, поколений и происхождения источника. Отдельным маркером поколения и проверкой владеет exact Secret client.
 	keySetKeys = []string{
 		"private.jwk", "current_private_jwk", "next_private_jwk",
 		"current_generation", "next_generation", "source_revision",
 		"source_digest_sha256", "previous_public_jwk", "previous_generation",
 	}
-	manifestTrustKeys      = []string{"bundle.jws", "source_revision", "source_digest_sha256"}
-	proofTrustKeys         = []string{"jwks.json", "source_revision", "source_digest_sha256"}
-	readbackCredentialKeys = []string{
-		"pinned_intent_id", "readback_credential_compact_jws",
-		"readback_credential_jti", "readback_credential_digest_sha256",
-		"intent_digest_sha256", "expires_at",
-	}
-	readbackPossessionKeys = []string{
-		"possession_private_jwk", "possession_key_kid",
-		"possession_key_generation", "possession_key_thumbprint_sha256",
-	}
-	restoreCredentialKeys = []string{
-		"semantic_digest_sha256", "issuance_directive_jti",
-		"role_credential_compact_jws", "role_credential_digest_sha256",
-		"delivery_receipt_jti", "issued_at",
-	}
-	restoreACKKeys = []string{
-		"semantic_digest_sha256", "issuance_directive_jti", "ack_private_jwk",
-		"ack_key_kid", "ack_key_thumbprint_sha256", "role_credential_jti",
-		"delivery_receipt_jti", "issued_at",
-	}
+	// manifestTrustKeys restricts manifest-trust delivery to the signed bundle and its source revision/digest; listing these fields neither verifies the signature nor authorizes a resource.
+	// manifestTrustKeys ограничивает доставку доверия manifest подписанным bundle и ревизией и дайджестом источника; перечень полей не проверяет подпись и не авторизует ресурс.
+	manifestTrustKeys = []string{"bundle.jws", "source_revision", "source_digest_sha256"}
+	// proofTrustKeys restricts proof-trust delivery to JWKS and exact source provenance, distinct from private-key delivery; actual key parsing and trust activation belong to consumers.
+	// proofTrustKeys ограничивает доставку доверия proof набором JWKS и точным происхождением источника отдельно от доставки закрытых ключей; разбор ключей и активация доверия принадлежат потребителям.
+	proofTrustKeys = []string{"jwks.json", "source_revision", "source_digest_sha256"}
+	// readbackCredentialKeys holds this adapter's application allowlist for the pinned readback credential and intent/digest/expiry bindings; the material's logical generation is managed separately.
+	// readbackCredentialKeys хранит прикладной список полей адаптера для закреплённого readback credential и привязок намерения, дайджестов и срока; логическое поколение материала управляется отдельно.
+	readbackCredentialKeys = secretschema.ReadbackCredentialKeys()
+	// readbackPossessionKeys is the application's possession-material allowlist: private JWK, key ID, generation and thumbprint. Possession proof and secret access are not granted by the list.
+	// readbackPossessionKeys — прикладной список полей материала владения: закрытый JWK, ID ключа, поколение и отпечаток. Перечень не выдаёт доказательство владения или доступ к секрету.
+	readbackPossessionKeys = secretschema.ReadbackPossessionKeys()
+	// restoreCredentialKeys binds delivered restore-role material to semantic/directive identity, compact credential, delivery receipt and issue time; consumers still verify the signed material.
+	// restoreCredentialKeys связывает доставленный restore-role material с семантической идентичностью и директивой, compact credential, квитанцией доставки и временем выдачи; подписанный материал всё равно проверяют потребители.
+	restoreCredentialKeys = secretschema.RestoreCredentialKeys()
+	// restoreACKKeys defines the restore-ACK private material and its directive, role-credential, receipt and time bindings, separately from the role-credential allowlist.
+	// restoreACKKeys задаёт закрытый материал restore ACK и его привязки директивы, role credential, квитанции и времени отдельно от списка полей role credential.
+	restoreACKKeys = secretschema.RestoreACKKeys()
 )
 
-// Delivery предоставляет versioned CAS только для закрытого набора ресурсов.
+// Delivery owns one exact Secret map client per registered resource and exposes logical generation-based reads/CAS. It provides no runtime arbitrary resource discovery or Kubernetes create/delete operation.
+// Delivery владеет одним exact Secret map client на зарегистрированный ресурс и предоставляет чтение и CAS по логическому поколению. Произвольное обнаружение ресурсов в runtime и Kubernetes create или delete не предоставляются.
 type Delivery struct {
 	clients map[string]*exactkubernetessecret.MapClient
 }
 
-// NewPublisherDelivery строит реестр ресурсов из проверенного publisher registry.
+// NewPublisherDelivery derives up to eight purpose bindings per supplied registry target, skips empty optional names and rejects name reuse with different key lists. It does not itself verify the registry signature before constructing exact clients.
+// NewPublisherDelivery получает до восьми привязок назначения на цель переданного реестра, пропускает пустые необязательные имена и отклоняет повтор имени с другим списком полей. Подпись реестра сама функция до создания exact clients не проверяет.
 func NewPublisherDelivery(registry model.DeliveryTargetRegistry) (*Delivery, error) {
 	resources := make(map[string][]string, len(registry.Targets)*8)
 	for _, target := range registry.Targets {
@@ -77,7 +81,8 @@ func NewPublisherDelivery(registry model.DeliveryTargetRegistry) (*Delivery, err
 	return New(resources)
 }
 
-// NewRuntimeDelivery ограничивает sidecar четырьмя назначенными Secret.
+// NewRuntimeDelivery assembles four core readback/restore resources and two optional resolver resources with fixed purpose schemas before delegating to New. It does not independently reject aliases between the supplied names.
+// NewRuntimeDelivery собирает четыре основных ресурса readback и restore и два необязательных resolver с фиксированными схемами назначений перед передачей New. Совпадение переданных имён отдельно не отклоняется.
 func NewRuntimeDelivery(
 	readbackCredential string,
 	readbackPossession string,
@@ -101,7 +106,8 @@ func NewRuntimeDelivery(
 	return New(resources)
 }
 
-// New создаёт доставку для явно переданного закрытого реестра ресурсов.
+// New accepts one to 256 registered resources, constructs exact map clients with five-second timeouts and closes already opened clients on a later construction error. Client creation loads its trust boundary; no material read or write is performed by this loop.
+// New принимает от одного до 256 зарегистрированных ресурсов, создаёт exact map clients с таймаутом пять секунд и закрывает открытые клиенты при поздней ошибке создания. Создание клиента загружает его границу доверия; материал в этом цикле не читается и не пишется.
 func New(resources map[string][]string) (*Delivery, error) {
 	if len(resources) == 0 || len(resources) > 256 {
 		return nil, errors.New("Kubernetes Secret delivery registry is invalid")
@@ -122,7 +128,8 @@ func New(resources map[string][]string) (*Delivery, error) {
 	return &Delivery{clients: clients}, nil
 }
 
-// ReadVersioned читает exact Secret и возвращает generation как логическую версию.
+// ReadVersioned rejects an unregistered name, reads that client's exact snapshot and treats generation zero as uninitialized absence. A nonzero snapshot becomes application strings and a canonical data digest; its logical version is not Kubernetes resourceVersion.
+// ReadVersioned отклоняет незарегистрированное имя, читает точный снимок его клиента и считает нулевое поколение отсутствием инициализации. Ненулевой снимок превращается в прикладные строки и канонический дайджест данных; логическая версия не равна Kubernetes resourceVersion.
 func (delivery *Delivery) ReadVersioned(
 	ctx context.Context,
 	resourceName string,
@@ -141,7 +148,8 @@ func (delivery *Delivery) ReadVersioned(
 	return material(snapshot)
 }
 
-// CreateVersioned инициализирует заранее созданный пустой Secret.
+// CreateVersioned initializes a preexisting empty Secret using its observed resourceVersion and generation zero CAS. Already initialized material is reread and returned without comparing the supplied data; this is not creation of a Kubernetes resource.
+// CreateVersioned инициализирует существующий пустой Secret через наблюдённый resourceVersion и CAS нулевого поколения. Уже инициализированный материал перечитывается и возвращается без сравнения переданных данных; ресурс Kubernetes не создаётся.
 func (delivery *Delivery) CreateVersioned(
 	ctx context.Context,
 	resourceName string,
@@ -167,7 +175,8 @@ func (delivery *Delivery) CreateVersioned(
 	return result, err
 }
 
-// WriteVersionedCAS заменяет материал при совпадении поколения.
+// WriteVersionedCAS requires a registered resource and nonzero expected logical version, reads its current resourceVersion and passes both pins to exact CAS. It returns the served canonical material; a failed CAS is not silently retried.
+// WriteVersionedCAS требует зарегистрированный ресурс и ненулевую ожидаемую логическую версию, читает текущий resourceVersion и передаёт обе привязки exact CAS. Возвращается обслуженный канонический материал; отказ CAS скрыто не повторяется.
 func (delivery *Delivery) WriteVersionedCAS(
 	ctx context.Context,
 	resourceName string,
@@ -195,13 +204,16 @@ func (delivery *Delivery) WriteVersionedCAS(
 	return result, err
 }
 
-// Close освобождает соединения с Kubernetes API.
+// Close releases idle connections on every owned exact client. It does not cancel in-flight operations or wait for workers; callers must stop their work before disposing of delivery.
+// Close освобождает простаивающие соединения всех своих exact clients. Текущие операции не отменяются и workers не ожидаются; вызывающий останавливает работу до освобождения доставки.
 func (delivery *Delivery) Close() {
 	for _, client := range delivery.clients {
 		client.Close()
 	}
 }
 
+// material copies application byte values into a string map and computes its canonical JSON SHA-256 while preserving the snapshot generation as logical version. It neither authenticates values nor explicitly erases the resulting strings.
+// material копирует прикладные байты в карту строк и вычисляет канонический JSON SHA-256, сохраняя поколение снимка как логическую версию. Значения не аутентифицируются и полученные строки явно не стираются.
 func material(snapshot exactkubernetessecret.MapSnapshot) (repository.SecretMaterial, bool, error) {
 	data := make(map[string]string, len(snapshot.Data))
 	for key, value := range snapshot.Data {
@@ -214,6 +226,8 @@ func material(snapshot exactkubernetessecret.MapSnapshot) (repository.SecretMate
 	return repository.SecretMaterial{Version: snapshot.Generation, Data: data, Digest: digest}, true, nil
 }
 
+// encode allocates a new byte slice per string value and a new result map for the exact Secret client, leaving the input map unchanged; it does not zero returned secret bytes.
+// encode выделяет новый байтовый срез на строковое значение и новую результирующую карту для exact Secret client, не меняя входную карту; возвращённые секретные байты не обнуляются.
 func encode(data map[string]string) map[string][]byte {
 	result := make(map[string][]byte, len(data))
 	for key, value := range data {
@@ -222,6 +236,8 @@ func encode(data map[string]string) map[string][]byte {
 	return result
 }
 
+// equalKeys sorts copies of both lists and compares lengths and entries, preserving the callers' order and backing arrays. It compares multisets, so duplicate-key multiplicity is significant.
+// equalKeys сортирует копии обоих списков и сравнивает длины и элементы, сохраняя порядок и массивы вызывающих. Сравниваются мультимножества, поэтому количество одинаковых ключей значимо.
 func equalKeys(left, right []string) bool {
 	leftCopy, rightCopy := append([]string(nil), left...), append([]string(nil), right...)
 	sort.Strings(leftCopy)

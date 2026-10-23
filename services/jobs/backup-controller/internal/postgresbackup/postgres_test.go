@@ -9,6 +9,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/configspec"
 )
 
+// TestSupportedServerVersion pins the accepted major releases and fixed six-digit server-version format.
+// RU: TestSupportedServerVersion закрепляет допустимые основные версии и шестизначный формат номера сервера.
 func TestSupportedServerVersion(t *testing.T) {
 	t.Parallel()
 	for _, value := range []string{"170010", "180003"} {
@@ -23,6 +25,8 @@ func TestSupportedServerVersion(t *testing.T) {
 	}
 }
 
+// TestDatabaseEnvironmentUsesExactTLSNameAndConnectAddress keeps verification identity distinct from routing.
+// RU: TestDatabaseEnvironmentUsesExactTLSNameAndConnectAddress отделяет проверяемую идентичность от адреса маршрута.
 func TestDatabaseEnvironmentUsesExactTLSNameAndConnectAddress(t *testing.T) {
 	t.Parallel()
 	database := configspec.Database{Host: "10.0.0.10", Port: 5432, User: "backup", TLSMode: "verify-full",
@@ -35,6 +39,8 @@ func TestDatabaseEnvironmentUsesExactTLSNameAndConnectAddress(t *testing.T) {
 	}
 }
 
+// TestWritePGPassEscapesFieldsAndUsesOwnerOnlyMode checks separator escaping and private credential-file mode.
+// RU: TestWritePGPassEscapesFieldsAndUsesOwnerOnlyMode проверяет экранирование разделителей и закрытый режим файла.
 func TestWritePGPassEscapesFieldsAndUsesOwnerOnlyMode(t *testing.T) {
 	t.Parallel()
 	file, err := writePGPass(t.TempDir(), "postgres.test", 5432, "db", "user", `pa:ss\word`)

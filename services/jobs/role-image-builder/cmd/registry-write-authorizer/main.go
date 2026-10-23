@@ -2,34 +2,57 @@ package main
 
 import (
 	"crypto/subtle"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"errors"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/httpserver/streamproxy"
 )
 
 const (
-	expectedClientCN                     = "kodex-buildkit-staging-push"
+	// expectedClientCN selects the staging push certificate identity, not a repository grant by itself.
+	// expectedClientCN выбирает сертификат отправителя staging, сам по себе не выдавая доступ к репозиторию.
+	expectedClientCN = "kodex-buildkit-staging-push"
+	// evidenceBasicAuthenticationChallenge invites only a missing application credential to retry Basic authentication.
+	// evidenceBasicAuthenticationChallenge предлагает Basic-аутентификацию только при отсутствии прикладных реквизитов.
 	evidenceBasicAuthenticationChallenge = `Basic realm="kodex-image-registry-evidence"`
-	serverError                          = "registry write authorizer failed"
-	denialLog                            = "registry request denied"
-	registryHeaderTimeout                = 5 * time.Second
-	registryStreamTimeout                = 15 * time.Minute
-	registryIdleTimeout                  = 30 * time.Second
+	// serverError is the fixed startup/serving failure that avoids exposing identity-file or TLS details.
+	// serverError — фиксированная ошибка запуска/обслуживания без подробностей файлов идентичности и TLS.
+	serverError = "registry write authorizer failed"
+	// denialLog is the shared denial prefix; only closed reasons and normalized methods are appended.
+	// denialLog — общий префикс отказа, дополняемый только закрытой причиной и нормализованным методом.
+	denialLog = "registry request denied"
+	// registryHeaderTimeout limits request-header acquisition independently from long blob transfers.
+	// registryHeaderTimeout ограничивает получение заголовков отдельно от длительной передачи blob.
+	registryHeaderTimeout = 5 * time.Second
+	// registryStreamTimeout bounds client and server transfer lifetimes for large registry payloads.
+	// registryStreamTimeout ограничивает передачу крупных данных реестра на клиенте и сервере.
+	registryStreamTimeout = 15 * time.Minute
+	// registryIdleTimeout closes idle HTTP connections without reducing the active stream budget.
+	// registryIdleTimeout закрывает простаивающие HTTP-соединения, не сокращая бюджет активного потока.
+	registryIdleTimeout = 30 * time.Second
 )
 
+// authorizationProfile chooses the fixed staging/evidence listener and loopback
+// backend; the evidence flag selects a separate certificate/credential policy.
+// authorizationProfile выбирает фиксированные staging/evidence адреса и локальный
+// сервер; флаг evidence включает отдельную политику сертификатов и реквизитов.
 type authorizationProfile struct {
 	address, backend string
 	evidence         bool
 }
 
+// main serves the selected mTLS registry proxy, checking operation scope before
+// forwarding and stripping application Authorization from the loopback request.
+// Evidence additionally checks its identity-specific Basic credential; staging uses its fixed CN.
+// main обслуживает выбранный mTLS-прокси реестра, проверяя область операции до
+// передачи и удаляя прикладной Authorization из запроса локальному серверу.
+// Evidence дополнительно проверяет Basic-реквизиты идентичности, staging использует заданный CN.
 func main() {
 	ca, err := os.ReadFile("/identity/client-ca.pem")
 	if err != nil {
@@ -46,7 +69,7 @@ func main() {
 		log.Fatal(serverError)
 	}
 	backend, _ := url.Parse(profile.backend)
-	client := newRegistryProxyClient()
+	client := streamproxy.NewClient(registryStreamTimeout)
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.TLS == nil || len(request.TLS.PeerCertificates) == 0 ||
 			len(request.TLS.VerifiedChains) == 0 {
@@ -72,35 +95,20 @@ func main() {
 			writeEvidenceCredentialDenial(writer, request.Header.Values("Authorization"))
 			return
 		}
-		target := *backend
-		target.Path, target.RawQuery = request.URL.Path, request.URL.RawQuery
-		upstream, err := http.NewRequestWithContext(request.Context(), request.Method, target.String(), request.Body)
-		if err != nil {
-			http.Error(writer, "upstream request rejected", http.StatusBadGateway)
-			return
-		}
-		upstream.Header = request.Header.Clone()
-		upstream.Header.Del("Authorization")
-		response, err := client.Do(upstream)
-		if err != nil {
-			http.Error(writer, "upstream unavailable", http.StatusBadGateway)
-			return
-		}
-		defer response.Body.Close()
-		for key, values := range response.Header {
-			for _, value := range values {
-				writer.Header().Add(key, value)
-			}
-		}
-		writer.WriteHeader(response.StatusCode)
-		_, _ = io.Copy(writer, io.LimitReader(response.Body, 1<<30))
+		streamproxy.Forward(writer, request, backend, request.Body, client, 1<<30)
 	})
-	server := newRegistryProxyServer(profile.address, handler, pool)
+	server := streamproxy.NewMTLSServer(profile.address, handler, pool, streamproxy.Timeouts{
+		Header: registryHeaderTimeout, Stream: registryStreamTimeout, Idle: registryIdleTimeout,
+	})
 	if err := server.ListenAndServeTLS("/identity/tls.crt", "/identity/tls.key"); err != nil {
 		log.Fatal(serverError)
 	}
 }
 
+// writeEvidenceCredentialDenial returns a Basic challenge only when no header
+// was supplied; malformed or wrong supplied credentials remain Forbidden.
+// writeEvidenceCredentialDenial выдаёт Basic-запрос только при отсутствии заголовка;
+// переданные неверные или повреждённые реквизиты остаются Forbidden.
 func writeEvidenceCredentialDenial(writer http.ResponseWriter, authorization []string) {
 	status := http.StatusForbidden
 	if len(authorization) == 0 {
@@ -110,31 +118,10 @@ func writeEvidenceCredentialDenial(writer http.ResponseWriter, authorization []s
 	http.Error(writer, "request forbidden", status)
 }
 
-func newRegistryProxyClient() *http.Client {
-	return &http.Client{
-		Timeout: registryStreamTimeout,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return errors.New("redirect rejected")
-		},
-	}
-}
-
-func newRegistryProxyServer(address string, handler http.Handler, pool *x509.CertPool) *http.Server {
-	return &http.Server{
-		Addr:              address,
-		Handler:           handler,
-		ReadHeaderTimeout: registryHeaderTimeout,
-		ReadTimeout:       registryStreamTimeout,
-		WriteTimeout:      registryStreamTimeout,
-		IdleTimeout:       registryIdleTimeout,
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS13,
-			ClientAuth: tls.RequireAndVerifyClientCert,
-			ClientCAs:  pool,
-		},
-	} //nolint:gosec // exact client CA and TLS 1.3.
-}
-
+// logRegistryDenial emits the selected closed profile/reason and normalized method,
+// without recording request paths, credentials, payloads or certificate contents.
+// logRegistryDenial пишет выбранные закрытые профиль/причину и нормализованный метод,
+// не записывая пути запросов, реквизиты, содержимое и данные сертификата.
 func logRegistryDenial(profile authorizationProfile, reason, method string) {
 	profileName := "staging"
 	if profile.evidence {
@@ -149,6 +136,10 @@ func logRegistryDenial(profile authorizationProfile, reason, method string) {
 	)
 }
 
+// normalizeMethod preserves the six known HTTP methods and maps every other
+// string to OTHER, bounding the diagnostic method vocabulary.
+// normalizeMethod сохраняет шесть известных HTTP-методов, заменяя любую другую
+// строку на OTHER для ограничения множества диагностических значений.
 func normalizeMethod(method string) string {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPatch,
@@ -159,6 +150,10 @@ func normalizeMethod(method string) string {
 	}
 }
 
+// allowedEvidenceRequest separates admission writes, promotion reads and probe-only
+// root checks for the evidence repository; deletion and other identities are denied.
+// allowedEvidenceRequest разделяет запись допуска, чтение продвижения и проверку корня
+// для probe в evidence-репозитории; удаление и прочие идентичности запрещены.
 func allowedEvidenceRequest(commonName, method, path string) bool {
 	if path == "/v2/" && method == http.MethodGet {
 		return commonName == "image-admission" || commonName == "image-promotion" ||
@@ -182,10 +177,20 @@ func allowedEvidenceRequest(commonName, method, path string) bool {
 	}
 }
 
+// authorizedEvidenceCredential reads the fixed identity-specific username/password
+// files for each check; it grants no operation beyond the separate repository policy.
+// authorizedEvidenceCredential при каждой проверке читает фиксированные файлы имени/пароля
+// выбранной идентичности и не расширяет отдельную политику операций репозитория.
 func authorizedEvidenceCredential(commonName, authorization string) bool {
 	return authorizedEvidenceCredentialWithReader(commonName, authorization, os.ReadFile)
 }
 
+// authorizedEvidenceCredentialWithReader selects known identity files, rejects
+// empty/over-4-KiB values after reading, trims terminal CR/LF and compares canonical Basic.
+// Reader injection supports synthetic tests and does not accept caller-selected paths.
+// authorizedEvidenceCredentialWithReader выбирает файлы известных идентичностей и после чтения
+// отклоняет пустые/свыше 4 КиБ значения, убирает конечные CR/LF и сравнивает канонический Basic.
+// Подмена reader нужна тестам и не разрешает путь из запроса клиента.
 func authorizedEvidenceCredentialWithReader(
 	commonName string,
 	authorization string,
@@ -219,6 +224,10 @@ func authorizedEvidenceCredentialWithReader(
 	return subtle.ConstantTimeCompare([]byte(authorization), []byte(expected)) == 1
 }
 
+// allowedRegistryWrite permits the known read/upload verbs only under staging
+// image/readiness operation prefixes, plus GET /v2/; deletes and other roots are denied.
+// allowedRegistryWrite разрешает известные методы чтения/загрузки только в префиксах
+// staging image/readiness и GET /v2/; удаление и другие корни запрещены.
 func allowedRegistryWrite(method, path string) bool {
 	if method == http.MethodGet && path == "/v2/" {
 		return true
@@ -239,6 +248,10 @@ func allowedRegistryWrite(method, path string) bool {
 	return false
 }
 
+// pathInRegistryRepository recognizes blobs/manifests prefixes under an exact
+// repository prefix; it does not independently validate the remaining selector syntax.
+// pathInRegistryRepository распознаёт префиксы blobs/manifests заданного репозитория;
+// синтаксис оставшегося селектора отдельно не проверяется.
 func pathInRegistryRepository(path, repository string) bool {
 	remainder := strings.TrimPrefix(path, "/v2/"+repository+"/")
 	return remainder != path && (strings.HasPrefix(remainder, "blobs/") || strings.HasPrefix(remainder, "manifests/"))

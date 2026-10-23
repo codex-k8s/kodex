@@ -2,8 +2,6 @@ package callback
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -13,6 +11,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// assistantWorkflowMetadataSnapshot is the safe current published-workflow metadata
+// shape with revision, ordered steps and gates, excluding draft instructions, input
+// defaults, result schema and execution grants.
+// assistantWorkflowMetadataSnapshot — safe current published-workflow metadata shape
+// с revision,ordered steps/gates без draft instructions,input defaults,result schema
+// и execution grants.
 type assistantWorkflowMetadataSnapshot struct {
 	WorkflowRef         string                          `json:"workflow_ref"`
 	ProjectRef          string                          `json:"project_ref"`
@@ -27,6 +31,10 @@ type assistantWorkflowMetadataSnapshot struct {
 	Steps               []assistantWorkflowMetadataStep `json:"steps"`
 }
 
+// assistantWorkflowMetadataStep describes one published step's order, dependencies,
+// parallelism and human-gate options, without task instructions or capability grants.
+// assistantWorkflowMetadataStep описывает order,dependencies,parallelism и human-gate
+// options published step без task instructions и capability grants.
 type assistantWorkflowMetadataStep struct {
 	Key            string   `json:"key"`
 	Position       int64    `json:"position"`
@@ -40,11 +48,25 @@ type assistantWorkflowMetadataStep struct {
 	DependsOn      []string `json:"depends_on"`
 }
 
+// assistantWorkflowMetadataAvailable advertises named safe reads for SYSTEM or a
+// PROJECT assistant with a valid project ref, independent of the current screen.
+// It does not prove that a supplied workflow is currently eligible.
+// assistantWorkflowMetadataAvailable публикует named safe reads для SYSTEM или PROJECT
+// assistant с valid project ref независимо от экрана. Текущая eligibility
+// переданного workflow этим не доказывается.
 func assistantWorkflowMetadataAvailable(input runtimecontract.RunnerInput) bool {
 	return input.IsAssistant() && (input.AssistantScope == runtimecontract.AssistantScopeSystem ||
 		input.AssistantScope == runtimecontract.AssistantScopeProject && validAssistantResourceRef(input.ProjectRef))
 }
 
+// castAssistantWorkflowMetadata verifies exact tenant/project/entity/version and
+// digest, then requires both map-canonical bytes and typed round-trip canonical bytes
+// for the closed metadata projection. It exposes published configuration only,
+// not private full draft content or a running workflow revision.
+// castAssistantWorkflowMetadata проверяет exact tenant/project/entity/version,digest,
+// затем требует map-canonical и typed round-trip canonical bytes closed metadata
+// projection. Выдаётся published configuration, не private full draft content
+// и не running workflow revision.
 func castAssistantWorkflowMetadata(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant workflow metadata response is invalid")
 	if !assistantWorkflowMetadataAvailable(input) || request.GetAssistantRef() != input.AgentRef || request.GetEntityKind() != "WORKFLOW" || !validAssistantResourceRef(request.GetEntityRef()) || response == nil ||
@@ -57,14 +79,8 @@ func castAssistantWorkflowMetadata(input runtimecontract.RunnerInput, request *c
 		return nil, invalid
 	}
 	raw := c.GetConfigurationJson()
-	digest := sha256.Sum256(raw)
-	if hex.EncodeToString(digest[:]) != c.GetConfigurationSha256() {
-		return nil, invalid
-	}
 	var typed assistantWorkflowMetadataSnapshot
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&typed) != nil || typed.WorkflowRef != c.GetWorkflowRef() || typed.ProjectRef != c.GetProjectRef() || typed.Version != c.GetVersion() || !validAssistantWorkflowMetadata(typed) {
+	if !decodeAssistantConfigurationSnapshot(raw, c.GetConfigurationSha256(), &typed) || typed.WorkflowRef != c.GetWorkflowRef() || typed.ProjectRef != c.GetProjectRef() || typed.Version != c.GetVersion() || !validAssistantWorkflowMetadata(typed) {
 		return nil, invalid
 	}
 	var snapshot map[string]any
@@ -98,6 +114,14 @@ func castAssistantWorkflowMetadata(input runtimecontract.RunnerInput, request *c
 		"workflow_metadata": map[string]any{"workflow_ref": c.GetWorkflowRef(), "project_ref": c.GetProjectRef(), "version": c.GetVersion(), "configuration_sha256": c.GetConfigurationSha256(), "configuration": snapshot}}, nil
 }
 
+// validAssistantWorkflowMetadata distinguishes an unpublished empty metadata state
+// from a bounded published graph, validates step positions, unique keys and gate
+// decisions, and requires unique dependencies strictly earlier than their dependent.
+// It does not infer edges or read live execution state.
+// validAssistantWorkflowMetadata отличает unpublished empty metadata state от bounded
+// published graph, проверяет step positions,unique keys/gate decisions и unique
+// dependencies строго раньше dependent. Edges не выводятся, live execution state
+// не читается.
 func validAssistantWorkflowMetadata(v assistantWorkflowMetadataSnapshot) bool {
 	if !slices.Contains([]string{"DRAFT", "VALID", "PUBLISHED", "ARCHIVED"}, v.State) || strings.TrimSpace(v.Name) == "" || len([]rune(v.Name)) > 160 || v.Steps == nil {
 		return false

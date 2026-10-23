@@ -1,3 +1,4 @@
+// Package integrationpackage loads versioned integration definitions under a closed adapter contract.
 // Package integrationpackage загружает и проверяет versioned integration packages.
 package integrationpackage
 
@@ -21,21 +22,43 @@ import (
 )
 
 const (
-	APIVersion     = "integrations.kodex.io/v1"
-	Kind           = "IntegrationPackage"
-	Origin         = "SHIPPED"
-	OriginUI       = "UI"
-	OriginGit      = "GIT"
-	maxBytes       = 256 << 10
+	// APIVersion pins the supported integration-package wire schema version.
+	// APIVersion закрепляет поддержанную версию wire-схемы пакета интеграции.
+	APIVersion = "integrations.kodex.io/v1"
+	// Kind rejects documents that are not integration packages.
+	// Kind отклоняет документы, не являющиеся пакетами интеграции.
+	Kind = "IntegrationPackage"
+	// Origin marks definitions shipped with the platform rather than managed by a tenant.
+	// Origin отмечает определения, поставленные платформой, а не управляемые арендатором.
+	Origin = "SHIPPED"
+	// OriginUI identifies a managed revision created through the owner-authorized interface.
+	// OriginUI определяет управляемую версию, созданную через интерфейс с полномочиями владельца.
+	OriginUI = "UI"
+	// OriginGit identifies a managed revision originating from a pinned Git source.
+	// OriginGit определяет управляемую версию из закреплённого Git-источника.
+	OriginGit = "GIT"
+	// maxBytes bounds the untrusted package document before parsing.
+	// maxBytes ограничивает недоверенный документ пакета до разбора.
+	maxBytes = 256 << 10
+	// maxObjectBytes bounds one tool input or output JSON object before decoding.
+	// maxObjectBytes ограничивает один JSON-объект ввода или вывода инструмента до декодирования.
 	maxObjectBytes = 512 << 10
+	// maxFieldLength caps a declared string field so canonical validation stays bounded.
+	// maxFieldLength ограничивает объявленное строковое поле при канонической проверке.
 	maxFieldLength = 349528
 )
 
 var (
-	keyPattern     = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$`)
+	// keyPattern accepts stable package, capability and field keys without path or whitespace syntax.
+	// keyPattern допускает устойчивые ключи пакета, возможности и поля без синтаксиса пути или пробелов.
+	keyPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$`)
+	// versionPattern restricts package versions to a positive major and numeric minor and patch.
+	// versionPattern ограничивает версию пакета положительным major и числовыми minor и patch.
 	versionPattern = regexp.MustCompile(`^[1-9][0-9]*\.[0-9]+\.[0-9]+$`)
 )
 
+// Package is one validated integration definition with a digest over its canonical JSON form.
+// Package — проверенное определение интеграции с дайджестом канонической JSON-формы.
 type Package struct {
 	APIVersion string   `yaml:"apiVersion" json:"apiVersion"`
 	Kind       string   `yaml:"kind" json:"kind"`
@@ -44,12 +67,16 @@ type Package struct {
 	Digest     string   `yaml:"-" json:"-"`
 }
 
+// Metadata carries the stable package key, version and server-controlled origin.
+// Metadata хранит устойчивый ключ, версию пакета и origin, назначаемый сервером.
 type Metadata struct {
 	Key     string `yaml:"key" json:"key"`
 	Version string `yaml:"version" json:"version"`
 	Origin  string `yaml:"origin" json:"origin"`
 }
 
+// Spec binds the registered adapter to exact configuration, destinations, health and capabilities.
+// Spec связывает зарегистрированный адаптер с точной конфигурацией, назначениями, health и возможностями.
 type Spec struct {
 	Name                string               `yaml:"name" json:"name"`
 	Description         string               `yaml:"description" json:"description"`
@@ -65,11 +92,15 @@ type Spec struct {
 	Capabilities        []Capability         `yaml:"capabilities" json:"capabilities"`
 }
 
+// Credential describes a required secret key and kind, never the credential value itself.
+// Credential описывает требуемые ключ и вид секрета, но не значение реквизита.
 type Credential struct {
 	SecretKey string `yaml:"secretKey" json:"secretKey"`
 	Kind      string `yaml:"kind" json:"kind"`
 }
 
+// Field constrains one named scalar configuration, input or output value before adapter use.
+// Field ограничивает именованное скалярное значение конфигурации, ввода или вывода до вызова адаптера.
 type Field struct {
 	Key           string   `yaml:"key" json:"key"`
 	Type          string   `yaml:"type" json:"type"`
@@ -82,6 +113,8 @@ type Field struct {
 	AllowedValues []string `yaml:"allowedValues,omitempty" json:"allowedValues,omitempty"`
 }
 
+// NetworkDestination pins a static host or validated configuration field to one port and TLS mode.
+// NetworkDestination закрепляет статический host либо проверенное поле конфигурации за портом и режимом TLS.
 type NetworkDestination struct {
 	Key                string `yaml:"key" json:"key"`
 	Source             string `yaml:"source" json:"source"`
@@ -91,17 +124,23 @@ type NetworkDestination struct {
 	TLS                string `yaml:"tls" json:"tls"`
 }
 
+// HealthCheck selects a bounded read operation for adapter readiness without creating an effect.
+// HealthCheck выбирает ограниченную операцию чтения для проверки готовности адаптера без эффекта.
 type HealthCheck struct {
 	Operation      string `yaml:"operation" json:"operation"`
 	TimeoutSeconds int    `yaml:"timeoutSeconds" json:"timeoutSeconds"`
 	MaxAttempts    int    `yaml:"maxAttempts" json:"maxAttempts"`
 }
 
+// ResourceScope derives an operation's exact resource identity from validated connection fields.
+// ResourceScope выводит точную идентичность ресурса операции из проверенных полей подключения.
 type ResourceScope struct {
 	Kind             string   `yaml:"kind" json:"kind"`
 	ConnectionFields []string `yaml:"connectionFields" json:"connectionFields"`
 }
 
+// Capability binds one operation to risk, approval, scope, typed fields and execution limits.
+// Capability связывает операцию с риском, подтверждением, областью, типизированными полями и лимитами исполнения.
 type Capability struct {
 	Key                     string        `yaml:"key" json:"key"`
 	Name                    string        `yaml:"name" json:"name"`
@@ -117,6 +156,8 @@ type Capability struct {
 	OpenAPI                 *OpenAPIHTTP  `yaml:"openapi,omitempty" json:"openapi,omitempty"`
 }
 
+// OpenAPIHTTP pins an imported operation to a source digest, literal server, method and closed input;
+// it does not accept a caller-selected URL, method or credential at invocation time.
 // OpenAPIHTTP является закреплённым результатом import/admission, а не
 // разрешением принимать URL, method или credential из вызова модели.
 type OpenAPIHTTP struct {
@@ -131,6 +172,8 @@ type OpenAPIHTTP struct {
 	InputSchema       map[string]any `yaml:"inputSchema" json:"inputSchema"`
 }
 
+// Execution records retry, timeout and backoff limits under the declared idempotency guarantee.
+// Execution хранит лимиты повтора, времени и задержки согласно заявленной гарантии идемпотентности.
 type Execution struct {
 	Idempotency              string `yaml:"idempotency" json:"idempotency"`
 	TimeoutSeconds           int    `yaml:"timeoutSeconds" json:"timeoutSeconds"`
@@ -138,6 +181,10 @@ type Execution struct {
 	RetryBackoffMilliseconds int    `yaml:"retryBackoffMilliseconds" json:"retryBackoffMilliseconds"`
 }
 
+// Parse rejects oversized, ambiguous or unknown-field YAML/JSON and returns a validated package
+// with a digest of canonical JSON rather than trusting a digest supplied by the document.
+// Parse отклоняет чрезмерный, неоднозначный YAML/JSON и неизвестные поля, возвращая пакет
+// с дайджестом канонического JSON вместо доверия дайджесту из документа.
 func Parse(raw []byte) (Package, error) {
 	if len(raw) == 0 || len(raw) > maxBytes {
 		return Package{}, errors.New("integration package size is invalid")
@@ -176,6 +223,10 @@ func Parse(raw []byte) (Package, error) {
 	return result, nil
 }
 
+// LoadShipped parses every embedded definition, checks its registered adapter binding and rejects
+// non-shipped origins or duplicate keys before exposing the complete map.
+// LoadShipped разбирает каждое встроенное определение, проверяет привязку к адаптеру и отклоняет
+// чужой origin или повторный ключ до выдачи полного набора.
 func LoadShipped() (map[string]Package, error) {
 	result := make(map[string]Package, len(shippedYAML))
 	for filename, raw := range shippedYAML {
@@ -197,6 +248,8 @@ func LoadShipped() (map[string]Package, error) {
 	return result, nil
 }
 
+// Sorted returns package values in stable key order without mutating the caller's map.
+// Sorted возвращает пакеты в устойчивом порядке ключей, не изменяя карту вызывающего кода.
 func Sorted(packages map[string]Package) []Package {
 	keys := make([]string, 0, len(packages))
 	for key := range packages {
@@ -210,6 +263,8 @@ func Sorted(packages map[string]Package) []Package {
 	return result
 }
 
+// Capability resolves a declared public capability key without inventing a fallback operation.
+// Capability разрешает объявленный публичный ключ возможности без выдуманной запасной операции.
 func (definition Package) Capability(key string) (Capability, bool) {
 	for _, capability := range definition.Spec.Capabilities {
 		if capability.Key == key {
@@ -219,6 +274,8 @@ func (definition Package) Capability(key string) (Capability, bool) {
 	return Capability{}, false
 }
 
+// CapabilityByOperation resolves the pinned adapter operation, which may differ from the public
+// capability key of an imported integration.
 // CapabilityByOperation разрешает закреплённую операцию, которая у импортированных
 // интеграций может отличаться от публичного ключа возможности.
 func (definition Package) CapabilityByOperation(operation string) (Capability, bool) {
@@ -230,11 +287,14 @@ func (definition Package) CapabilityByOperation(operation string) (Capability, b
 	return Capability{}, false
 }
 
+// ValidateConfiguration checks public connection fields and an imported server pin without reading secrets.
 // ValidateConfiguration проверяет public configuration без credential values.
 func (definition Package) ValidateConfiguration(configuration map[string]string) error {
 	return definition.validateConfiguration(configuration, false)
 }
 
+// ValidateConnectionBootstrapConfiguration permits initial public configuration of a shipped
+// OpenAPI template without making that unbound template executable.
 // ValidateConnectionBootstrapConfiguration разрешает создать ещё не привязанное
 // OpenAPI-подключение по поставленному шаблону. Исполнение такого шаблона
 // остаётся запрещённым до owner-привязки опубликованной ревизии.
@@ -242,6 +302,10 @@ func (definition Package) ValidateConnectionBootstrapConfiguration(configuration
 	return definition.validateConfiguration(configuration, definition.Metadata.Origin == Origin && definition.Spec.Adapter == string(AdapterOpenAPIMCP))
 }
 
+// validateConfiguration rejects unknown or missing fields and enforces the pinned OpenAPI server,
+// except during explicit bootstrap of a non-executable shipped template.
+// validateConfiguration отклоняет неизвестные и отсутствующие поля и проверяет закреплённый сервер
+// OpenAPI, кроме явного начального подключения неисполняемого поставленного шаблона.
 func (definition Package) validateConfiguration(configuration map[string]string, allowUnboundTemplate bool) error {
 	fields := make(map[string]Field, len(definition.Spec.ConfigurationFields))
 	for _, field := range definition.Spec.ConfigurationFields {
@@ -270,6 +334,10 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 	return nil
 }
 
+// ResourceScopeValues derives every required resource locator from validated connection configuration;
+// absent or empty fields close the operation rather than broadening its scope.
+// ResourceScopeValues выводит все требуемые координаты ресурса из проверенной конфигурации;
+// отсутствующее или пустое поле закрывает операцию, не расширяя её область.
 // ResourceScope строит exact scope только из проверенной connection configuration.
 func (capability Capability) ResourceScopeValues(configuration map[string]string) (map[string]string, error) {
 	result := make(map[string]string, len(capability.ResourceScope.ConnectionFields))
@@ -283,6 +351,10 @@ func (capability Capability) ResourceScopeValues(configuration map[string]string
 	return result, nil
 }
 
+// ValidateInput canonicalizes one closed JSON object against either the imported OpenAPI schema
+// or the package's declared scalar input fields.
+// ValidateInput канонизирует один закрытый JSON-объект по импортированной OpenAPI-схеме
+// либо по объявленным скалярным полям ввода пакета.
 // ValidateInput принимает только одно JSON object с закрытым набором primitive fields.
 func (capability Capability) ValidateInput(raw []byte) ([]byte, error) {
 	if capability.OpenAPI != nil {
@@ -295,12 +367,19 @@ func (capability Capability) ValidateInput(raw []byte) ([]byte, error) {
 	return validateObject(raw, capability.InputFields, "input")
 }
 
+// ValidateOutput canonicalizes only fields declared in the safe output projection.
+// ValidateOutput канонизирует лишь поля, объявленные в безопасной проекции вывода.
 // ValidateOutput принимает только безопасную проекцию с закрытым набором полей.
 func (capability Capability) ValidateOutput(raw []byte) ([]byte, error) {
 	return validateObject(raw, capability.OutputFields, "output")
 }
 
-// InputSchema возвращает закрытую JSON Schema, связанную с package digest.
+// InputSchema builds the closed input JSON Schema from validated fields or a pinned OpenAPI binding;
+// unsupported types cannot silently widen the tool input.
+// InputSchema строит закрытую JSON Schema из проверенных полей или закреплённой OpenAPI-привязки;
+// неподдержанный тип не расширяет ввод инструмента молча.
+// InputSchema возвращает закрытую JSON Schema; её отдельный дайджест позволяет
+// закрепить точную форму ввода при вызове инструмента.
 func (capability Capability) InputSchema() ([]byte, error) {
 	if capability.OpenAPI != nil {
 		encoded, _, err := validateOpenAPIInputSchema(capability.OpenAPI.InputSchema)
@@ -353,6 +432,8 @@ func (capability Capability) InputSchema() ([]byte, error) {
 	return json.Marshal(schema)
 }
 
+// InputSchemaDigest hashes the canonical input schema for exact tool-contract pinning.
+// InputSchemaDigest хэширует каноническую схему ввода для точной привязки контракта инструмента.
 func (capability Capability) InputSchemaDigest() (string, error) {
 	schema, err := capability.InputSchema()
 	if err != nil {
@@ -362,6 +443,10 @@ func (capability Capability) InputSchemaDigest() (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// validateObject rejects undeclared, invalid or missing fields before emitting canonical JSON;
+// the supplied kind changes only the safe diagnostic class, not field eligibility.
+// validateObject отклоняет необъявленные, неверные и отсутствующие поля до канонического JSON;
+// kind меняет лишь класс безопасной диагностики, но не допустимость полей.
 func validateObject(raw []byte, declared []Field, kind string) ([]byte, error) {
 	values, err := decodeJSONObject(raw)
 	if err != nil {
@@ -395,6 +480,10 @@ func validateObject(raw []byte, declared []Field, kind string) ([]byte, error) {
 	return canonical, nil
 }
 
+// decodeJSONObject reads one bounded JSON object while rejecting duplicate keys, malformed keys
+// and trailing content before semantic field validation.
+// decodeJSONObject читает один ограниченный JSON-объект, отклоняя повторные и неверные ключи
+// и хвостовые данные до смысловой проверки полей.
 func decodeJSONObject(raw []byte) (map[string]json.RawMessage, error) {
 	if len(raw) == 0 || len(raw) > maxObjectBytes {
 		return nil, errors.New("JSON object size is invalid")
@@ -429,6 +518,8 @@ func decodeJSONObject(raw []byte) (map[string]json.RawMessage, error) {
 	return result, nil
 }
 
+// decodeFieldValue decodes one declared scalar without coercion and checks its string or numeric bounds.
+// decodeFieldValue разбирает объявленный скаляр без приведения типов и проверяет строковые либо числовые границы.
 func decodeFieldValue(field Field, raw json.RawMessage) (any, error) {
 	switch field.Type {
 	case "STRING":
@@ -460,6 +551,10 @@ func decodeFieldValue(field Field, raw json.RawMessage) (any, error) {
 	}
 }
 
+// validateStringValue enforces length, allowed values and format-specific restrictions, including
+// exact HTTPS host rules; multiline text is allowed only for explicitly plain input.
+// validateStringValue проверяет длину, разрешённые значения и ограничения формата, включая
+// точный HTTPS host; многострочный текст допустим лишь для явно простого ввода.
 func validateStringValue(field Field, value string, allowPlainMultiline bool) error {
 	if value == "" && !(field.AllowEmpty && allowPlainMultiline) || len(value) > field.MaximumLength || strings.ContainsRune(value, '\x00') ||
 		strings.ContainsRune(value, '\r') || (!allowPlainMultiline || field.Format != "PLAIN") && strings.ContainsRune(value, '\n') {
@@ -503,8 +598,10 @@ func validateStringValue(field Field, value string, allowPlainMultiline bool) er
 	return nil
 }
 
+// ValidHTTPSResourcePath accepts an absolute literal path without query, fragment, percent encoding
+// or traversal segments; the caller separately pins the path in the published operation.
 // ValidHTTPSResourcePath принимает только абсолютный путь без query, fragment,
-// percent-encoding и сегментов обхода. Caller не может менять его при вызове.
+// percent-encoding и сегментов обхода; вызывающий код отдельно закрепляет путь в операции.
 func ValidHTTPSResourcePath(value string) bool {
 	if value == "" || value[0] != '/' || strings.HasPrefix(value, "//") || strings.Contains(value, "//") {
 		return false
@@ -524,7 +621,12 @@ func ValidHTTPSResourcePath(value string) bool {
 	return true
 }
 
-// EMAIL проверяет approval по авторитетной mailbox policy перед каждым effect.
+// emailMailboxApproval allows selected email effects to defer to authoritative mailbox policy
+// only for the exact managed email adapter and sender resource, not for unrelated packages.
+// emailMailboxApproval разрешает выбранным почтовым эффектам обратиться к авторитетной политике ящика
+// лишь для точного управляемого почтового адаптера и ресурса отправителя, а не чужих пакетов.
+// Проверка авторитетной mailbox policy перед каждым эффектом принадлежит
+// почтовому сервису; этот предикат лишь ограничивает исключение из package policy.
 func emailMailboxApproval(result *Package, capability Capability) bool {
 	if result.Metadata.Key != "email" ||
 		result.Spec.Adapter != "EMAIL_HTTPS" || result.Spec.AdapterOwner != "integration-gateway" ||
@@ -542,6 +644,10 @@ func emailMailboxApproval(result *Package, capability Capability) bool {
 	}
 }
 
+// validate checks package metadata, adapter ownership, typed fields, exact network destinations,
+// operation risk/approval/idempotency and a bounded read-only health capability as one closed contract.
+// validate проверяет метаданные пакета, владельца адаптера, типизированные поля, точные сетевые
+// назначения, риск/подтверждение/повторы операций и ограниченную health-операцию чтения как закрытый контракт.
 func validate(result *Package) error {
 	if result.APIVersion != APIVersion || result.Kind != Kind || !oneOf(result.Metadata.Origin, Origin, OriginUI, OriginGit) ||
 		!validKey(result.Metadata.Key) || !versionPattern.MatchString(result.Metadata.Version) || len(result.Metadata.Version) > 32 ||
@@ -658,6 +764,10 @@ func validate(result *Package) error {
 	return nil
 }
 
+// validateFields rejects duplicate names and values, inconsistent types and formats, and widening
+// bounds before any configuration, tool input or output is accepted.
+// validateFields отклоняет повторные имена и значения, несовместимые типы и форматы и расширяющие
+// границы до допуска конфигурации, ввода или вывода инструмента.
 func validateFields(fields []Field) (map[string]struct{}, error) {
 	keys := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
@@ -690,6 +800,10 @@ func validateFields(fields []Field) (map[string]struct{}, error) {
 	return keys, nil
 }
 
+// rejectUnsafeYAML recursively rejects aliases, anchors, merge keys, duplicate mapping keys
+// and non-string keys before strict decoding of the integration package.
+// rejectUnsafeYAML рекурсивно отклоняет alias, anchor, merge-ключи, повторные ключи карты
+// и нестроковые ключи до строгого декодирования пакета интеграции.
 func rejectUnsafeYAML(node *yaml.Node) error {
 	if node == nil {
 		return errors.New("integration package YAML is empty")
@@ -719,8 +833,12 @@ func rejectUnsafeYAML(node *yaml.Node) error {
 	return nil
 }
 
+// validKey confines package identifiers to bounded lowercase tokens with explicit separators.
+// validKey ограничивает идентификаторы пакета строчными токенами с явными разделителями.
 func validKey(value string) bool { return len(value) <= 120 && keyPattern.MatchString(value) }
 
+// validHostname rejects IP literals, mixed-case names and invalid DNS labels for exact destinations.
+// validHostname отклоняет IP-литералы, имена с заглавными буквами и неверные DNS-метки для точных назначений.
 func validHostname(value string) bool {
 	if value == "" || len(value) > 253 || value != strings.ToLower(value) || net.ParseIP(value) != nil || strings.HasPrefix(value, ".") || strings.HasSuffix(value, ".") {
 		return false
@@ -738,6 +856,8 @@ func validHostname(value string) bool {
 	return true
 }
 
+// contains checks exact case-sensitive membership in a field's declared value set.
+// contains проверяет точное с учётом регистра вхождение в объявленный набор значений поля.
 func contains(values []string, candidate string) bool {
 	for _, value := range values {
 		if value == candidate {
@@ -747,6 +867,8 @@ func contains(values []string, candidate string) bool {
 	return false
 }
 
+// oneOf accepts only byte-identical members of a closed enum; case-folded similarity is insufficient.
+// oneOf допускает лишь побайтно совпадающее значение закрытого enum; похожего регистра недостаточно.
 func oneOf(value string, allowed ...string) bool {
 	for _, candidate := range allowed {
 		if strings.EqualFold(value, candidate) && value == candidate {

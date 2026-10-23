@@ -9,8 +9,14 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// syntheticRuntimeProxy is a nonworking fixture credential for exact URL-shape checks, not a live token.
+// syntheticRuntimeProxy задаёт нерабочие реквизиты fixture для проверки формы URL, а не живой токен.
 const syntheticRuntimeProxy = "http://kodex:fixture.signature@egress-gateway.kodex-system.svc:8084"
 
+// setRuntimeTransportFixture installs the exact synthetic transport allowlist through t.Setenv,
+// restoring prior process values when the test completes without contacting the named gateway.
+// setRuntimeTransportFixture устанавливает точный синтетический список транспорта через t.Setenv
+// с восстановлением прежних значений после теста и без обращения к указанному gateway.
 func setRuntimeTransportFixture(t *testing.T) {
 	t.Helper()
 	for _, name := range runtimeTransportEnvironmentNames {
@@ -25,6 +31,10 @@ func setRuntimeTransportFixture(t *testing.T) {
 	}
 }
 
+// TestRuntimeTransportEnvironmentRejectsMissingOrForeignAuthority mutates required proxy, bypass and
+// trust settings one at a time and requires rejection before transport can use foreign configuration.
+// TestRuntimeTransportEnvironmentRejectsMissingOrForeignAuthority по одному подменяет обязательные proxy,
+// bypass и CA, требуя отказа до использования транспортом чужой конфигурации.
 func TestRuntimeTransportEnvironmentRejectsMissingOrForeignAuthority(t *testing.T) {
 	for _, mutation := range []struct{ name, value string }{
 		{"HTTPS_PROXY", ""}, {"HTTP_PROXY", "http://other.example"},
@@ -43,6 +53,12 @@ func TestRuntimeTransportEnvironmentRejectsMissingOrForeignAuthority(t *testing.
 	}
 }
 
+// TestAppServerEnvironmentPreservesExactTrustWithoutCredentialInheritance verifies the child receives
+// only fixed runtime settings and explicitly projected secrets, without unrelated inherited values;
+// user values and secret projections cannot overwrite server-owned transport or disable TLS checks.
+// TestAppServerEnvironmentPreservesExactTrustWithoutCredentialInheritance проверяет передачу дочернему
+// процессу только заданного окружения и явно спроецированных секретов без посторонних переменных;
+// пользовательские значения и secret projections не подменяют транспорт и не отключают TLS-проверки.
 func TestAppServerEnvironmentPreservesExactTrustWithoutCredentialInheritance(t *testing.T) {
 	setRuntimeTransportFixture(t)
 	t.Setenv("UNRELATED_SECRET", "synthetic-unrelated")

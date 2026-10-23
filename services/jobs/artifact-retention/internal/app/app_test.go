@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestShouldResetRetentionBackoff distinguishes idle polling from work and retryable failures.
+// RU: TestShouldResetRetentionBackoff различает простой опрос, выполненную работу и требующий повтора отказ.
 func TestShouldResetRetentionBackoff(t *testing.T) {
 	tests := []struct {
 		name      string

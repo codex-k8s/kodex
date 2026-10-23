@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestArtifactRevisionSignalHasExactClosedImmutableTuple accepts the declared artifact revision signal shape and rejects malformed ref/revision/digest, private fields and cross-kind tuple reuse. It validates metadata syntax, not the hash of actual artifact bytes.
+// TestArtifactRevisionSignalHasExactClosedImmutableTuple принимает объявленный формат сигнала версии файла и отклоняет неверные ref/revision/digest, закрытые поля и перенос tuple в другой вид. Проверяется синтаксис metadata, а не хеш настоящих байтов файла.
 func TestArtifactRevisionSignalHasExactClosedImmutableTuple(t *testing.T) {
 	fixture := []byte(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"ARTIFACT_CHANGED","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"art_example0001","aggregateVersion":3,"sequence":9,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"ARTIFACT","safeSummary":"i18n:ARTIFACT_REVISION_CREATED","artifactRevision":{"ref":"arv_example0001","revision":2,"digest":"sha256:` + strings.Repeat("a", 64) + `"}}}`)
 	if signal, ok := decodePlatformSignal(fixture, "org_example0001"); !ok || signal.Kind != "ARTIFACT" || signal.Sequence != 9 {

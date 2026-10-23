@@ -12,6 +12,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// cleanupProviderCredentialMaterializerStub records credential-cleanup inputs and returns configured
+// receipt/error while unused provider operations deliberately fail; it is not a storage or authority
+// implementation.
+// cleanupProviderCredentialMaterializerStub записывает credential-cleanup inputs и возвращает настроенные
+// receipt/error, намеренно отклоняя unused provider operations; storage и authority не реализует.
 type cleanupProviderCredentialMaterializerStub struct {
 	ProviderCredentialMaterializer
 	taskRef      string
@@ -24,12 +29,18 @@ type cleanupProviderCredentialMaterializerStub struct {
 	recovery     kubernetesstore.ProviderCleanupRecoveryIdentity
 }
 
+// Check returns synthetic readiness without probing provider, Kubernetes or credential state.
+// Check возвращает synthetic readiness без проверки provider, Kubernetes и credential state.
 func (stub *cleanupProviderCredentialMaterializerStub) Check(context.Context) error { return nil }
 
+// ObserveModelCatalog refuses unexpected catalog access in cleanup-only fixtures.
+// ObserveModelCatalog отклоняет неожиданный catalog access в cleanup-only fixtures.
 func (stub *cleanupProviderCredentialMaterializerStub) ObserveModelCatalog(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string) (providercredential.ModelCatalog, error) {
 	return providercredential.ModelCatalog{}, errors.New("unexpected catalog observation")
 }
 
+// StartDeviceAuthorization returns an unexpected-call error without starting a login flow.
+// StartDeviceAuthorization возвращает unexpected-call error без запуска login flow.
 func (stub *cleanupProviderCredentialMaterializerStub) StartDeviceAuthorization(
 	context.Context,
 	string,
@@ -38,6 +49,10 @@ func (stub *cleanupProviderCredentialMaterializerStub) StartDeviceAuthorization(
 	return providercredential.DeviceAuthorization{}, errors.New("unexpected device authorization start")
 }
 
+// ObserveDeviceAuthorization rejects accidental polling rather than mutating or inspecting a real
+// authorization attempt.
+// ObserveDeviceAuthorization отклоняет случайный polling без изменения и чтения реальной authorization
+// attempt.
 func (stub *cleanupProviderCredentialMaterializerStub) ObserveDeviceAuthorization(
 	context.Context,
 	string,
@@ -45,6 +60,8 @@ func (stub *cleanupProviderCredentialMaterializerStub) ObserveDeviceAuthorizatio
 	return kubernetesstore.ProviderAuthorizationAttempt{}, errors.New("unexpected device authorization observation")
 }
 
+// MaterializeAPIKey refuses unexpected key handling and returns no credential or account label.
+// MaterializeAPIKey отклоняет неожиданную обработку ключа без возврата credential и account label.
 func (stub *cleanupProviderCredentialMaterializerStub) MaterializeAPIKey(
 	context.Context,
 	string,
@@ -54,6 +71,10 @@ func (stub *cleanupProviderCredentialMaterializerStub) MaterializeAPIKey(
 	return kubernetesstore.ProviderCredentialDescriptor{}, "", errors.New("unexpected API key materialization")
 }
 
+// Discard refuses unrelated materialization deletion so cleanup tests cannot pass through an alternate
+// destructive path.
+// Discard отклоняет постороннее materialization deletion, чтобы cleanup tests не проходили через alternate
+// destructive path.
 func (stub *cleanupProviderCredentialMaterializerStub) Discard(
 	context.Context,
 	providercredential.DiscardMaterialization,
@@ -61,6 +82,10 @@ func (stub *cleanupProviderCredentialMaterializerStub) Discard(
 	return errors.New("unexpected materialization discard")
 }
 
+// CleanupProviderCredentialWithRecovery counts and records task/account/generation/exact
+// descriptor/origin, then returns the configured synthetic receipt/error without deleting anything.
+// CleanupProviderCredentialWithRecovery учитывает и записывает task/account/generation/exact
+// descriptor/origin, затем возвращает настроенные synthetic receipt/error без удаления.
 func (stub *cleanupProviderCredentialMaterializerStub) CleanupProviderCredentialWithRecovery(
 	_ context.Context,
 	taskRef, accountRef string,
@@ -77,8 +102,15 @@ func (stub *cleanupProviderCredentialMaterializerStub) CleanupProviderCredential
 	return kubernetesstore.ProviderCredentialCleanupResult{TerminalReceipt: stub.receipt}, stub.err
 }
 
+// TestCleanupProviderCredentialHandlerPreservesExactTarget requires exactly one materializer call and
+// unchanged task/account/generation/object pins plus returned receipt, using a synthetic owner-origin
+// identity.
+// TestCleanupProviderCredentialHandlerPreservesExactTarget требует один materializer call, неизменные
+// task/account/generation/object pins и returned receipt с synthetic owner-origin identity.
 func TestCleanupProviderCredentialHandlerPreservesExactTarget(t *testing.T) {
 	t.Parallel()
+	// receipt is a fixed synthetic terminal string for forwarding assertions, not an actual committed owner receipt.
+	// receipt — fixed synthetic terminal string для forwarding assertions, не реальный committed owner receipt.
 	const receipt = "provider-credential-cleanup:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	stub := &cleanupProviderCredentialMaterializerStub{receipt: receipt}
 	server := &Server{providerCredentials: stub}
@@ -106,6 +138,10 @@ func TestCleanupProviderCredentialHandlerPreservesExactTarget(t *testing.T) {
 	}
 }
 
+// TestCleanupProviderCredentialHandlerClassifiesErrors checks invalid/conflict/arbitrary failure status
+// mapping after one stub cleanup call, not live Kubernetes error behavior.
+// TestCleanupProviderCredentialHandlerClassifiesErrors проверяет invalid/conflict/arbitrary failure status
+// mapping после одного stub cleanup call, не live Kubernetes error behavior.
 func TestCleanupProviderCredentialHandlerClassifiesErrors(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -139,6 +175,10 @@ func TestCleanupProviderCredentialHandlerClassifiesErrors(t *testing.T) {
 	}
 }
 
+// TestCleanupProviderCredentialHandlerRequiresConfiguredMaterializer requires Unavailable before cleanup
+// when no provider capability is installed.
+// TestCleanupProviderCredentialHandlerRequiresConfiguredMaterializer требует Unavailable до cleanup, если
+// provider capability не установлена.
 func TestCleanupProviderCredentialHandlerRequiresConfiguredMaterializer(t *testing.T) {
 	t.Parallel()
 	_, err := (&Server{}).CleanupProviderCredential(

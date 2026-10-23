@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestReadProofSignerGenerationUsesCurrentSecretValue writes a read-only temporary generation file containing two plus newline and checks that exact value is read. It tests file decoding, not a live Secret update, multi-version rotation or resolver attestation.
+// TestReadProofSignerGenerationUsesCurrentSecretValue записывает во временный read-only файл поколение два с переводом строки и проверяет чтение этого значения. Проверяется разбор файла, а не живое обновление Secret, многоверсионная ротация или аттестация resolver.
 func TestReadProofSignerGenerationUsesCurrentSecretValue(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "current_generation")
@@ -21,6 +23,8 @@ func TestReadProofSignerGenerationUsesCurrentSecretValue(t *testing.T) {
 	}
 }
 
+// TestReadProofSignerGenerationRejectsUnsafeOrInvalidValue creates isolated temporary fixtures for zero, nonnumeric text and a writable file mode, requiring rejection in all three cases without reading real mounted material.
+// TestReadProofSignerGenerationRejectsUnsafeOrInvalidValue создаёт изолированные временные эталоны нуля, нечислового текста и записываемого режима файла, требуя отказ во всех трёх случаях без чтения реальных смонтированных материалов.
 func TestReadProofSignerGenerationRejectsUnsafeOrInvalidValue(t *testing.T) {
 	t.Parallel()
 	for name, fixture := range map[string]struct {

@@ -13,22 +13,41 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// SandboxExecMode selects the private child entrypoint that checks identity and kernel restrictions before executing one registered version command.
+// SandboxExecMode выбирает частную дочернюю точку входа, проверяющую идентичность и ограничения ядра до выполнения одной зарегистрированной команды версии.
 const SandboxExecMode = "image-tool-probe-exec"
 
 var (
-	errProbeSandbox            = errors.New("image tool probe sandbox rejected")
-	errProbeSandboxIdentity    = errors.New("image tool probe sandbox identity rejected")
-	errProbeSandboxCaps        = errors.New("image tool probe sandbox capabilities rejected")
+	// errProbeSandbox rejects unregistered probe arguments or unavailable kernel setup without exposing command content.
+	// errProbeSandbox отклоняет незарегистрированные аргументы пробы или недоступную настройку ядра без раскрытия содержимого команды.
+	errProbeSandbox = errors.New("image tool probe sandbox rejected")
+	// errProbeSandboxIdentity marks a wrong probe UID/GID or nonempty supplementary group set before kernel restrictions and exec.
+	// errProbeSandboxIdentity обозначает неверные UID и GID пробы либо непустые дополнительные группы до ограничений ядра и exec.
+	errProbeSandboxIdentity = errors.New("image tool probe sandbox identity rejected")
+	// errProbeSandboxCaps marks nonempty or unreadable effective, permitted, inheritable or ambient capabilities in the probe child.
+	// errProbeSandboxCaps обозначает непустые либо нечитаемые effective, permitted, inheritable или ambient capabilities дочерней пробы.
+	errProbeSandboxCaps = errors.New("image tool probe sandbox capabilities rejected")
+	// errProbeSandboxDescriptors marks unsafe standard descriptors instead of accepting inherited writable files as probe input/output.
+	// errProbeSandboxDescriptors обозначает небезопасные стандартные дескрипторы вместо принятия унаследованных записываемых файлов как ввода и вывода пробы.
 	errProbeSandboxDescriptors = errors.New("image tool probe sandbox descriptors rejected")
-	errProbeSandboxFilesystem  = errors.New("image tool probe sandbox filesystem rejected")
-	errProbeSandboxExec        = errors.New("image tool probe sandbox exec rejected")
+	// errProbeSandboxFilesystem marks failed filesystem/metadata restrictions, descriptor close-on-exec fencing or working-directory setup.
+	// errProbeSandboxFilesystem обозначает отказ ограничений файловой системы и метаданных, установки close-on-exec для дескрипторов либо рабочего каталога.
+	errProbeSandboxFilesystem = errors.New("image tool probe sandbox filesystem rejected")
+	// errProbeSandboxExec marks failure to replace the restricted child with its registered tool command; raw exec errors stay private.
+	// errProbeSandboxExec обозначает невозможность заменить ограниченный дочерний процесс зарегистрированной командой инструмента; исходная ошибка exec остаётся частной.
+	errProbeSandboxExec = errors.New("image tool probe sandbox exec rejected")
 )
 
-// Linux amd64/arm64 asm-generic/ioctls.h: меняет только OFD nonblocking flag.
+// probePipeNonblockRequest is the amd64/arm64 FIONBIO request allowed only for checked stdout/stderr pipes by the private seccomp filter.
+// probePipeNonblockRequest задаёт запрос FIONBIO для amd64 и arm64, разрешённый частным seccomp-фильтром только для проверенных stdout и stderr pipe.
 const probePipeNonblockRequest = 0x5421
 
-// RunSandboxedTool принимает только exact path/args закрытого version registry.
-// Вызывается отдельным процессом уже с UID/GID 10001 и пустыми groups.
+// RunSandboxedTool checks registry-exact path/arguments and UID/GID 10001 without groups, locks the thread, then requires empty capabilities and safe standard descriptors.
+// Installs filesystem/metadata restrictions, marks other descriptors close-on-exec and replaces the child with the tool under a fixed environment.
+// Designed for a dedicated child; it is neither a general runtime sandbox nor an independent network policy.
+// RunSandboxedTool проверяет точные путь и аргументы реестра, UID и GID 10001 без групп, закрепляет поток, затем требует пустые capabilities и безопасные стандартные дескрипторы.
+// Устанавливает ограничения файловой системы и метаданных, помечает остальные дескрипторы close-on-exec и заменяет дочерний процесс инструментом с фиксированным окружением.
+// Предназначен для отдельного дочернего процесса; это не общий sandbox выполнения и не самостоятельная сетевая политика.
 func RunSandboxedTool(args []string) error {
 	if !closedProbeArguments(args) {
 		return errProbeSandbox
@@ -67,6 +86,8 @@ func RunSandboxedTool(args []string) error {
 	return nil
 }
 
+// closedProbeArguments matches one registered executable path and its entire ordered argument vector; extra arguments and unregistered shells are rejected.
+// closedProbeArguments сопоставляет один зарегистрированный путь исполняемого файла со всем упорядоченным вектором аргументов; лишние аргументы и незарегистрированные оболочки отклоняются.
 func closedProbeArguments(args []string) bool {
 	if len(args) == 0 {
 		return false
@@ -79,6 +100,8 @@ func closedProbeArguments(args []string) bool {
 	return false
 }
 
+// probeCapabilitiesEmpty requires both capability data words and every ambient capability through CAP_LAST_CAP to be empty; read errors reject the child.
+// probeCapabilitiesEmpty требует пустые оба слова capabilities и каждую ambient capability до CAP_LAST_CAP; ошибка чтения отклоняет дочерний процесс.
 func probeCapabilitiesEmpty() bool {
 	var data [2]unix.CapUserData
 	header := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
@@ -99,6 +122,8 @@ func probeCapabilitiesEmpty() bool {
 	return true
 }
 
+// probeStandardDescriptorsSafe requires stdin to be the native null character device and stdout/stderr to be pipes, not regular writable files.
+// probeStandardDescriptorsSafe требует stdin как штатное символьное нулевое устройство и stdout со stderr как pipe, а не обычные записываемые файлы.
 func probeStandardDescriptorsSafe() bool {
 	for fd := 0; fd <= 2; fd++ {
 		var stat unix.Stat_t
@@ -116,7 +141,10 @@ func probeStandardDescriptorsSafe() bool {
 	return true
 }
 
-// ABI 3 нужен для TRUNCATE. Неизвестные/недоступные kernel boundaries закрыты.
+// restrictProbeFilesystem requires Landlock ABI 3 and no_new_privs, builds default-deny rules for handled filesystem mutation rights except null writes/truncation, then adds a metadata syscall fence.
+// ABI 5 additionally handles device ioctl; unsupported setup fails closed. Restrictions apply to the calling thread and its future children/exec, not sibling threads.
+// restrictProbeFilesystem требует Landlock ABI 3 и no_new_privs, создаёт запрещающие по умолчанию правила обрабатываемых прав изменения файловой системы, кроме записи и усечения null, затем добавляет границу системных вызовов метаданных.
+// ABI 5 дополнительно обрабатывает ioctl устройств; неподдерживаемая настройка даёт закрытый отказ. Ограничения применяются к вызывающему потоку и будущим потомкам и exec, а не соседним потокам.
 func restrictProbeFilesystem() error {
 	abi, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, 0, 0, unix.LANDLOCK_CREATE_RULESET_VERSION)
 	if errno != 0 || abi < 3 || unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != nil {
@@ -161,8 +189,10 @@ func restrictProbeFilesystem() error {
 	return restrictProbeMetadataSyscalls()
 }
 
-// Landlock не закрывает chmod/chown/utime/xattr; io_uring не должен обходить
-// syscall fence. Это private offline probe, не общий runtime sandbox.
+// restrictProbeMetadataSyscalls installs an amd64/arm64 seccomp denylist for metadata changes, namespace/mount changes, process-group escape and io_uring.
+// Rejects foreign/x32 architectures and allows only full-width FIONBIO on fd 1/2 as the ioctl exception; other syscalls remain outside this narrow fence.
+// restrictProbeMetadataSyscalls устанавливает для amd64 и arm64 запрещающий seccomp-список изменений метаданных, пространств и монтирования, выхода из группы процессов и io_uring.
+// Отклоняет чужую и x32 архитектуру, разрешая из ioctl только полноразрядный FIONBIO на fd 1 и 2; прочие системные вызовы остаются вне этой узкой границы.
 func restrictProbeMetadataSyscalls() error {
 	architecture := uint32(0)
 	denied := []uint32{unix.SYS_FCHMOD, unix.SYS_FCHMODAT, unix.SYS_FCHMODAT2,

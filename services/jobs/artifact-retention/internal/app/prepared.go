@@ -9,9 +9,16 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/prepared"
 )
 
+// preparedCycleDegraded is the bounded diagnostic emitted on transition into failed cleanup.
+// RU: preparedCycleDegraded — ограниченная диагностика перехода к неуспешной очистке.
 const preparedCycleDegraded = "prepared content cleanup cycle degraded"
+
+// preparedCycleRestored is the bounded diagnostic emitted after cleanup recovers.
+// RU: preparedCycleRestored — ограниченная диагностика восстановления очистки.
 const preparedCycleRestored = "prepared content cleanup cycle restored"
 
+// runPreparedLoop processes fenced prepared-content claims and reports only changes in health state.
+// RU: runPreparedLoop обрабатывает защищённые claim prepared-контента и сообщает лишь смену состояния здоровья.
 func runPreparedLoop(processor *prepared.Processor, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		backoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Minute)

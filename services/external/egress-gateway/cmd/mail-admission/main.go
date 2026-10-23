@@ -1,4 +1,5 @@
-// Команда генерирует единственный admission artifact из shared source.
+// This command generates the sole mail admission artifact from the shared source.
+// Команда генерирует единственный почтовый admission-артефакт из общего источника.
 package main
 
 import (
@@ -9,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
+// main emits the exact admission resources as a Kubernetes List on stdout.
+// main выдаёт точные admission-ресурсы в виде Kubernetes List в stdout.
 func main() {
 	if len(os.Args) != 1 {
 		fmt.Fprintln(os.Stderr, "mail admission generator takes no arguments")

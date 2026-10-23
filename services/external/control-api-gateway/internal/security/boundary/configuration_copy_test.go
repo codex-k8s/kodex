@@ -3,9 +3,6 @@ package boundary
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,15 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 )
 
+// TestConfigurationLifecycleRequiresFreshSessionAndCSRF checks copy/archive routes with real family cookies and fake provider state: wrong CSRF/origin, absent cookie and revocation cannot reach the handler. Despite its name it does not prove interactive fresh-login elevation or configuration persistence.
+// TestConfigurationLifecycleRequiresFreshSessionAndCSRF проверяет маршруты копирования и архивации с настоящими cookies семейств и тестовым провайдером: неверные CSRF/origin, отсутствие cookie и отзыв не допускают обработчик. Несмотря на название, свежий интерактивный вход и сохранение конфигурации не доказываются.
 func TestConfigurationLifecycleRequiresFreshSessionAndCSRF(t *testing.T) {
-	keyPath := filepath.Join(t.TempDir(), "key")
-	if err := os.WriteFile(keyPath, []byte(strings.Repeat("44", 32)), 0400); err != nil {
-		t.Fatal(err)
-	}
-	keys, err := session.New(session.Config{CurrentKeyFile: keyPath, TTL: 15 * time.Minute})
-	if err != nil {
-		t.Fatal(err)
-	}
+	keys := testSessionKeys(t)
 	now := time.Now().UTC()
 	verifier := &browserVerifier{original: oidcauth.Principal{Issuer: "https://identity.example.test", Subject: "710025af-02cf-4a7b-9f29-8479f757e42a", OrganizationID: "6832a593-1d97-4c50-a3d5-6f5b27bbf2c4", SessionID: "b2c2d1e9-cb78-43a0-b1df-299ce8a49d50", SessionRevision: 1, AuthenticatedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}}
 	families, err := session.NewFamilies(t.Context(), &browserMemory{records: map[string]browserstate.Record{}}, verifier, keys)

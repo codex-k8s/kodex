@@ -10,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestAssistantFileRevisionClosedSourceMatrix checks two scopes and four screens expose/route file-revision drafts only in the permitted source matrix with exact lease pins and no caller target/OCC.
+// TestAssistantFileRevisionClosedSourceMatrix проверяет объявление и отправку черновиков ревизии файла только по допустимой матрице двух областей и четырёх экранов с точными привязками аренды без цели и OCC вызывающей стороны.
 func TestAssistantFileRevisionClosedSourceMatrix(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeProject, runtimecontract.AssistantScopeSystem} {
 		for _, screen := range []string{"PROJECT", "FILE", "AGENT", "ENVIRONMENT"} {
@@ -45,6 +47,8 @@ func TestAssistantFileRevisionClosedSourceMatrix(t *testing.T) {
 	}
 }
 
+// TestAssistantFileRevisionParametersRejectAuthorityAndBodyMismatch checks eleven missing-capability/context, caller-authority, encoding, size, NUL and UTF-8 cases reject file-revision parameters.
+// TestAssistantFileRevisionParametersRejectAuthorityAndBodyMismatch проверяет отклонение параметров ревизии файла в одиннадцати случаях отсутствующих полномочий и контекста, полномочий вызывающего, кодировки, размера, NUL и UTF-8.
 func TestAssistantFileRevisionParametersRejectAuthorityAndBodyMismatch(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeProject)
 	input.Capabilities = []string{runtimecontract.ArtifactCapability}

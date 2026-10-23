@@ -19,15 +19,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// assistantCurrentDiagnosticClient returns a configured owner-search failure while inheriting local activity recording; it does not read a real current configuration.
+// assistantCurrentDiagnosticClient возвращает заданную ошибку поиска владельца, наследуя локальную запись активности; настоящую текущую конфигурацию не читает.
 type assistantCurrentDiagnosticClient struct {
 	*assistantFreshCatalogMCPClient
 	failure error
 }
 
+// SearchAssistantResources returns no response and the configured error without network, storage or request interpretation.
+// SearchAssistantResources возвращает пустой ответ и заданную ошибку без сети, хранилища и интерпретации запроса.
 func (client *assistantCurrentDiagnosticClient) SearchAssistantResources(context.Context, *controlplanev1.SearchAssistantResourcesRequest, ...grpc.CallOption) (*controlplanev1.SearchAssistantResourcesResponse, error) {
 	return nil, client.failure
 }
 
+// TestAssistantCurrentDiagnosticsLogClosedStageWithoutChangingMCPFailure checks canonical owner ErrorInfo becomes a closed log class while MCP/activity remain failed and private payload, lease and instructions stay absent.
+// TestAssistantCurrentDiagnosticsLogClosedStageWithoutChangingMCPFailure проверяет преобразование канонического ErrorInfo владельца в закрытый класс лога с сохранением ошибки MCP и активности без частных данных, аренды и инструкций.
 func TestAssistantCurrentDiagnosticsLogClosedStageWithoutChangingMCPFailure(t *testing.T) {
 	input, arguments, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
 	value, _ := status.New(codes.Unavailable, "PRIVATE_PROVIDER_PAYLOAD").WithDetails(&errdetails.ErrorInfo{Domain: "kodex.control-plane", Reason: "ASSISTANT_CURRENT_CONFIGURATION_PROMPT_CONTEXT"})
@@ -49,6 +55,8 @@ func TestAssistantCurrentDiagnosticsLogClosedStageWithoutChangingMCPFailure(t *t
 	}
 }
 
+// TestAssistantCurrentDiagnosticsClassifyOnlyCanonicalClosedStages checks six allowed owner stages and rejects foreign, unknown, metadata-bearing, duplicate or wrong-code details to existing status fallbacks.
+// TestAssistantCurrentDiagnosticsClassifyOnlyCanonicalClosedStages проверяет шесть разрешённых стадий владельца и возврат к прежней классификации статуса для чужих, неизвестных, снабжённых метаданными, повторных деталей либо неверного кода.
 func TestAssistantCurrentDiagnosticsClassifyOnlyCanonicalClosedStages(t *testing.T) {
 	known := map[string]string{
 		"ASSISTANT_CURRENT_CONFIGURATION_PROMPT_CONTEXT":      "assistant_current_configuration_prompt_context",

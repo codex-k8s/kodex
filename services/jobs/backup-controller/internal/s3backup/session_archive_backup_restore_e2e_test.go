@@ -16,21 +16,26 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/configspec"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
 
+// canonicalSessionArchiveKey confines fixture operations to a versioned session-archive object key.
+// RU: canonicalSessionArchiveKey ограничивает операции оснастки версионированным ключом архива сессии.
 var canonicalSessionArchiveKey = regexp.MustCompile(
 	`^session-archive/v1/org_[a-z0-9]+/prj_[a-z0-9]+/ses_[a-z0-9]+/g[1-9][0-9]*/sat_[a-z0-9]+-a[1-9][0-9]*\.tar$`,
 )
 
+// TestSeaweedFSSessionArchiveBackupFixtureE2E runs explicit prepare, mutate, verify and cleanup fixture phases.
+// RU: TestSeaweedFSSessionArchiveBackupFixtureE2E выполняет явные этапы подготовки, изменения, проверки и очистки оснастки.
 func TestSeaweedFSSessionArchiveBackupFixtureE2E(t *testing.T) {
 	if os.Getenv("BACKUP_SESSION_ARCHIVE_E2E") != "1" {
 		t.Skip("local session archive backup E2E is disabled")
 	}
-	endpoint := requireBackupLoopbackEndpoint(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_ENDPOINT"))
-	accessKey := readBackupE2ESecret(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_ACCESS_KEY_FILE"))
-	secretKey := readBackupE2ESecret(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_SECRET_KEY_FILE"))
+	endpoint := objectstoragetest.RequireLoopbackHTTPEndpoint(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_ENDPOINT"), "backup E2E")
+	accessKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_ACCESS_KEY_FILE"), "backup E2E")
+	secretKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_SECRET_KEY_FILE"), "backup E2E")
 	objectKey := strings.TrimSpace(os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_OBJECT_KEY"))
 	if !canonicalSessionArchiveKey.MatchString(objectKey) {
 		t.Fatal("session archive fixture key is not canonical")
@@ -71,6 +76,8 @@ func TestSeaweedFSSessionArchiveBackupFixtureE2E(t *testing.T) {
 	}
 }
 
+// putSessionArchiveFixture writes one declared archive payload and checks its exact version, digest and bytes.
+// RU: putSessionArchiveFixture записывает архив и сверяет его точную версию, дайджест и байты.
 func putSessionArchiveFixture(t *testing.T, ctx context.Context, client *Client, key string,
 	payload []byte, requireAbsent bool) {
 	t.Helper()
@@ -98,20 +105,12 @@ func putSessionArchiveFixture(t *testing.T, ctx context.Context, client *Client,
 	}
 }
 
+// findSessionArchiveBackup locates a verified post-start backup containing the exact source and copied bytes.
+// RU: findSessionArchiveBackup ищет проверенную после старта копию с точными исходными и сохранёнными байтами.
 func findSessionArchiveBackup(t *testing.T, ctx context.Context, endpoint, accessKey, secretKey,
 	objectKey string, expected []byte, startedAt time.Time) string {
 	t.Helper()
-	destination, err := NewClient(ctx, configspec.S3{
-		Name: "backup-repository", Endpoint: endpoint, Region: "us-east-1", Bucket: "kodex-backups",
-		AccessKeyID: accessKey, SecretAccessKey: secretKey, UsePathStyle: true, AllowInsecureLocal: true,
-	})
-	if err != nil {
-		t.Fatal("initialize local backup repository")
-	}
-	repository, err := NewRepository(destination, "kodex")
-	if err != nil || repository.Check(ctx, nil) != nil {
-		t.Fatal("local backup repository is unavailable")
-	}
+	repository := newLocalBackupE2ERepository(t, ctx, endpoint, accessKey, secretKey)
 	backups, _, err := repository.Catalog(ctx)
 	if err != nil {
 		t.Fatal("read verified backup catalog")
@@ -142,6 +141,8 @@ func findSessionArchiveBackup(t *testing.T, ctx context.Context, endpoint, acces
 	return ""
 }
 
+// deleteExactObjectVersions removes only the fixture key's versions and markers, then checks absence.
+// RU: deleteExactObjectVersions удаляет лишь версии и маркеры ключа оснастки, затем проверяет отсутствие.
 func deleteExactObjectVersions(t *testing.T, ctx context.Context, client *Client, key string) {
 	t.Helper()
 	input := &s3.ListObjectVersionsInput{Bucket: aws.String(client.config.Bucket), Prefix: aws.String(key)}
@@ -197,6 +198,8 @@ func deleteExactObjectVersions(t *testing.T, ctx context.Context, client *Client
 	}
 }
 
+// readPrivateE2EFile accepts only a bounded absolute regular fixture file with private permissions.
+// RU: readPrivateE2EFile принимает лишь ограниченный абсолютный regular file оснастки с закрытыми правами.
 func readPrivateE2EFile(t *testing.T, value string, maximumBytes int64) []byte {
 	t.Helper()
 	value = strings.TrimSpace(value)
@@ -212,6 +215,8 @@ func readPrivateE2EFile(t *testing.T, value string, maximumBytes int64) []byte {
 	return payload
 }
 
+// writePrivateE2EResult creates one exclusive owner-only result file under a private directory.
+// RU: writePrivateE2EResult создаёт исключительным образом один закрытый файл результата в закрытом каталоге.
 func writePrivateE2EResult(t *testing.T, value, content string) {
 	t.Helper()
 	value = strings.TrimSpace(value)
@@ -234,6 +239,8 @@ func writePrivateE2EResult(t *testing.T, value, content string) {
 	}
 }
 
+// findPlatformObject selects a manifest source object by both store identity and exact key.
+// RU: findPlatformObject выбирает исходный объект манифеста по хранилищу и точному ключу.
 func findPlatformObject(value manifest.Manifest, storeName, key string) (manifest.PlatformObject, bool) {
 	for _, object := range value.PlatformObjects {
 		if object.StoreName == storeName && object.Source.Key == key {

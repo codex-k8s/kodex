@@ -1,4 +1,5 @@
-// Package app выполняет один immutable turn либо последовательную очередь always-hot помощника.
+// Package app composes runner modes and executes immutable server-owned turns, including serial warm-assistant consumption, without owning execution grants or terminal domain state.
+// Пакет app собирает режимы runner и исполняет immutable серверные ходы, включая последовательную warm-очередь помощника, не владея execution grants и terminal domain state.
 package app
 
 import (
@@ -37,16 +38,28 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// mcpStartupFailureMessage fixes the startup warning text; only the separately classified stage is logged, never the MCP endpoint or raw error payload.
+// mcpStartupFailureMessage закрепляет текст startup warning; журналируется лишь отдельно классифицированный этап, не MCP endpoint и не сырой пакет ошибки.
 const mcpStartupFailureMessage = "Runtime MCP startup failed"
 
+// inputPath is the fixed mounted immutable runtime input path used by runner modes, not a caller-selected file or an authority grant by itself.
+// inputPath — фиксированный mount-путь immutable runtime-входа для режимов runner, а не выбранный клиентом файл или самостоятельный grant.
 const inputPath = "/var/run/config/kodex/runtime/runtime.json"
 
+// attachmentSetReadme fixes the exact non-secret directory guidance shared by manifest publication and readback, preventing their bytes from drifting independently.
+// attachmentSetReadme закрепляет точную несекретную инструкцию каталога для публикации и сверки manifest, не позволяя их байтам расходиться независимо.
+const attachmentSetReadme = "This directory contains a read-only, server-owned AttachmentSet. Read manifest.json before using files.\n"
+
+// health holds atomic liveness/readiness flags and the latest workspace-probe snapshot alongside immutable input; a ready flag alone does not prove fresh filesystem readiness.
+// health хранит atomic liveness/readiness и последний workspace-probe snapshot рядом с immutable-входом; один ready flag не доказывает свежую файловую готовность.
 type health struct {
 	live, ready atomic.Bool
 	input       model.Input
 	workspace   atomic.Pointer[workspaceHealth]
 }
 
+// Run dispatches fixed inventory, workspace, provider, relay and turn/warm modes, validating the relevant invocation, input and UID boundaries before their work. Session modes compose telemetry, health monitoring and callbacks; warm mode serially consumes server-owned turns. Owned clients/monitor/server and independent bounded telemetry shutdown use caller-provided lifecycle/base contexts, without creating root authority.
+// Run выбирает фиксированные режимы inventory, workspace, provider, relay и turn/warm, проверяя соответствующие invocation, input и UID boundaries до работы. Session-режимы собирают telemetry, health monitoring и callbacks; warm последовательно получает серверные ходы. Свои clients/monitor/server и независимый ограниченный telemetry shutdown используют переданные lifecycle/base contexts без создания корневых полномочий.
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
 	if len(args) > 1 && args[1] == imageinventory.SandboxExecMode {
 		return imageinventory.RunSandboxedTool(args[2:])
@@ -197,18 +210,30 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}
 }
 
+// turnMCPProxy exposes only the prepared turn's local MCP endpoint, local bearer and bounded close operation, allowing unit tests to replace process plumbing without bypassing callback authority.
+// turnMCPProxy предоставляет лишь локальный MCP endpoint подготовленного хода, local bearer и ограниченное закрытие, позволяя unit-тестам заменить процессную обвязку без обхода callback authority.
 type turnMCPProxy interface {
+	// SocketPath returns the prepared local Unix endpoint used by the provider broker, not a remotely supplied tool destination.
+	// SocketPath возвращает подготовленный локальный Unix endpoint provider broker, не удалённый tool destination клиента.
 	SocketPath() string
+	// LocalBearerToken returns the local proxy capability; it is distinct from the controller execution ticket and must not be logged.
+	// LocalBearerToken возвращает локальную capability прокси; она отличается от execution ticket controller и не должна журналироваться.
 	LocalBearerToken() string
+	// Close releases the prepared proxy under the caller's shutdown context; the turn orchestrator supplies an independent bounded context even after cancellation.
+	// Close освобождает подготовленный прокси в shutdown-контексте вызывающего; orchestrator передаёт независимый ограниченный контекст даже после отмены.
 	Close(context.Context) error
 }
 
+// preparedTurn owns the effective snapshot/deadline context, MCP proxy and combined cancellation for one turn; runTurn releases the proxy before cancelling that prepared context.
+// preparedTurn владеет действующим snapshot/deadline context, MCP proxy и объединённой отменой одного хода; runTurn освобождает прокси до отмены подготовленного контекста.
 type preparedTurn struct {
 	ctx    context.Context
 	proxy  turnMCPProxy
 	cancel context.CancelFunc
 }
 
+// turnRuntime injects preparation, broker execution, workspace probing and a runtime logger into turn orchestration; tests can substitute these seams without spawning an actual provider.
+// turnRuntime передаёт preparation, broker execution, workspace probing и runtime logger в orchestration хода; тесты могут заменить эти зависимости без настоящего провайдера.
 type turnRuntime struct {
 	prepare        func(context.Context, model.Input, *callback.Client) (preparedTurn, string, error)
 	execute        func(context.Context, model.Input, []byte, string, string, func(runtimecontract.RuntimeActivity) error) (codex.Result, error)
@@ -216,6 +241,8 @@ type turnRuntime struct {
 	logger         *slog.Logger
 }
 
+// prepareRuntimeTurn validates a turn and its mounted context snapshot, binds snapshot expiry and the effective deadline, prepares workspace/input/profile, resets outbox and starts the exact MCP proxy. Failures cancel prepared contexts and return an existing safe failure code where applicable; the input remains server-owned authority.
+// prepareRuntimeTurn проверяет ход и смонтированный context snapshot, связывает snapshot expiry и действующий deadline, готовит workspace/input/profile, очищает outbox и запускает точный MCP proxy. Ошибки отменяют подготовленные контексты и по возможности возвращают прежний безопасный код; authority входа остаётся серверной.
 func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback.Client) (prepared preparedTurn, code string, resultErr error) {
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil {
 		return preparedTurn{}, "", errors.New("runtime turn input is invalid")
@@ -256,6 +283,8 @@ func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback
 	return preparedTurn{ctx: ctx, proxy: mcpProxy, cancel: cancelContext}, "", nil
 }
 
+// runTurn prepares once, reports readiness/progress, builds the prompt and executes the broker once while validating and delivering typed activity. It preserves measured usage on execution/deadline/activity failures and independently closes the proxy; a nil return means callback delivery succeeded, not necessarily that the model task succeeded.
+// runTurn один раз готовит ход, сообщает readiness/progress, строит prompt и однократно выполняет broker с проверкой и доставкой typed activity. Сохраняет измеренный расход при execution/deadline/activity failures и независимо закрывает прокси; nil означает успешную доставку callback, не обязательно успех задачи модели.
 func runTurn(ctx context.Context, input model.Input, client *callback.Client, workingPathReady func(), runtime turnRuntime) error {
 	prepared, code, err := runtime.prepare(ctx, input, client)
 	if err != nil {
@@ -319,8 +348,8 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace, runtime.logger)
 }
 
-// Ошибка execute не подтверждает итог; только отдельное подтверждение capture
-// позволяет передать новые source pins в неизменённом failed completion.
+// completeMeasuredFailure sends a failed terminal payload with measured usage and safe provider diagnostics; archive pins are included only when the result's private capture proof verifies against this input. Delivery detaches from cancellation without rerunning the provider.
+// completeMeasuredFailure отправляет failed terminal payload с измеренным usage и безопасной provider-диагностикой; archive pins включаются лишь при проверке private capture proof результата против данного входа. Доставка отделена от отмены без повторного провайдера.
 func completeMeasuredFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code string) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
 		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: result.Usage}
@@ -331,8 +360,8 @@ func completeMeasuredFailure(ctx context.Context, input model.Input, client *cal
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
-// Завершение учитывает расход провайдера даже при отказе последующей проверки
-// workspace или публикации результата; повтор callback сохраняет тот же Usage.
+// completeExecutedTurn checks workspace after execution, handles terminal failures, validates a successful final message, optionally publishes workspace provenance and collects allowed artifacts before completion. Every later failure retains measured usage through the failure path; success payload validation precedes the callback and does not grant new artifact access.
+// completeExecutedTurn проверяет workspace после execute, обрабатывает terminal failures, проверяет успешный final message, при необходимости публикует workspace provenance и собирает разрешённые артефакты до completion. Последующие отказы сохраняют измеренный usage через failure path; success payload проверяется до callback без новых прав на артефакты.
 func completeExecutedTurn(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, checkWorkspace func(context.Context) error, logger *slog.Logger) error {
 	if err := checkWorkspace(ctx); err != nil {
 		logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionCheck, err)
@@ -375,8 +404,8 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 	return client.Complete(ctx, input, payload)
 }
 
-// Только результат завершённого execute может сохранить проверенный rollout
-// при последующем отказе публикации. Generic execution failures сюда не входят.
+// completeExecutedFailure handles a completed execute result that later failed publication, mapping workspace failure to the existing artifact code and retaining a valid terminal archive tuple. Invalid outcome/payload falls back to a tuple-free failure with the same usage; this path is not the private-proof test used for arbitrary execution errors.
+// completeExecutedFailure обрабатывает завершённый execute с последующим отказом публикации, переводя workspace failure в прежний artifact code и сохраняя корректный terminal archive tuple. Неверные outcome/payload дают отказ без tuple с тем же usage; это не private-proof проверка произвольных execution errors.
 func completeExecutedFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code, summary string) error {
 	// Отказ сохранения после execute не означает ошибку пользовательского ввода.
 	// Canary остаётся обязательным; наружу выдаётся существующий закрытый код.
@@ -394,6 +423,8 @@ func completeExecutedFailure(ctx context.Context, input model.Input, client *cal
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
+// completeResultFailure projects an executed failed result into the terminal callback with normalized failure, measured usage, archive metadata and safe diagnostic provenance; callback validation still rejects an invalid tuple or usage.
+// completeResultFailure проецирует выполненный failed result в terminal callback с нормализованным отказом, измеренным usage, archive metadata и безопасной diagnostic provenance; callback validation отклоняет неверные tuple или usage.
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
 		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: result.Usage, CodexSessionID: result.SessionID,
@@ -402,6 +433,8 @@ func completeResultFailure(ctx context.Context, input model.Input, client *callb
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
+// completionArtifacts returns no project artifacts for assistant scopes or missing artifact capability; otherwise it delegates outbox collection without enlarging capabilities.
+// completionArtifacts не создаёт проектных артефактов для областей помощника или без artifact capability; иначе передаёт сбор outbox без расширения capabilities.
 func completionArtifacts(input model.Input, finalMessage string) ([]runtimecontract.RunnerArtifact, error) {
 	if input.IsAssistant() || !hasCapability(input, runtimecontract.ArtifactCapability) {
 		return nil, nil
@@ -409,6 +442,8 @@ func completionArtifacts(input model.Input, finalMessage string) ([]runtimecontr
 	return collectArtifacts(input, finalMessage)
 }
 
+// hasCapability checks exact membership in the input's already materialized capability list; matching a string is not independent server authorization.
+// hasCapability проверяет точное вхождение в уже материализованный список capabilities входа; совпадение строки не является самостоятельной серверной авторизацией.
 func hasCapability(input model.Input, expected string) bool {
 	for _, capability := range input.Capabilities {
 		if capability == expected {
@@ -418,12 +453,20 @@ func hasCapability(input model.Input, expected string) bool {
 	return false
 }
 
+// completeFailure derives the existing i18n summary for a pre-execution failure and delegates terminal delivery with zero measured usage.
+// completeFailure строит прежнюю i18n-сводку отказа до исполнения и передаёт terminal delivery с нулевым измеренным usage.
 func completeFailure(ctx context.Context, input model.Input, client *callback.Client, code string) error {
 	return completeFailureWithSummary(ctx, input, client, code, "i18n:"+code)
 }
+
+// completeFailureWithSummary retains a caller-supplied failure summary but explicitly supplies zero usage for the generic failure path.
+// completeFailureWithSummary сохраняет переданную сводку отказа, но явно задаёт нулевой usage для generic failure path.
 func completeFailureWithSummary(ctx context.Context, input model.Input, client *callback.Client, code, summary string) error {
 	return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, runtimecontract.TokenUsage{})
 }
+
+// completeFailureWithSummaryAndUsage builds a tuple-free failed completion with normalized code and supplied usage, then delivers it independently of cancellation. Nil reports delivery success only; it never turns the failed payload into successful execution.
+// completeFailureWithSummaryAndUsage строит failed completion без tuple с нормализованным кодом и переданным usage, доставляя независимо от отмены. Nil сообщает лишь успех доставки; failed payload не превращается в успешное исполнение.
 func completeFailureWithSummaryAndUsage(ctx context.Context, input model.Input, client *callback.Client, code, summary string, usage runtimecontract.TokenUsage) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: usage}
 	if err := client.Complete(context.WithoutCancel(ctx), input, payload); err != nil {
@@ -432,6 +475,8 @@ func completeFailureWithSummaryAndUsage(ctx context.Context, input model.Input, 
 	return nil
 }
 
+// safeFailureCode maps the closed provider/runtime failure vocabulary to existing public terminal codes and collapses every unknown input to RUNTIME_UNAVAILABLE without copying diagnostics.
+// safeFailureCode переводит закрытый словарь provider/runtime failures в прежние публичные terminal codes, заменяя неизвестное на RUNTIME_UNAVAILABLE без копирования диагностики.
 func safeFailureCode(code string) string {
 	switch code {
 	case "unauthorized", "authentication_required", "authentication_expired", "PROVIDER_AUTH_REJECTED":
@@ -465,6 +510,8 @@ func safeFailureCode(code string) string {
 	}
 }
 
+// runtimeExecutionFailureCode classifies wrapped context-file, authentication, unsupported-authority, required-MCP and profile sentinels in fixed order; unclassified execution errors become provider-unavailable rather than exposing their text.
+// runtimeExecutionFailureCode классифицирует обёрнутые sentinels context-file, authentication, unsupported-authority, required-MCP и profile в фиксированном порядке; остальные execution errors становятся provider-unavailable без раскрытия текста.
 func runtimeExecutionFailureCode(err error) string {
 	switch {
 	case errors.Is(err, runtimecontract.ErrRuntimeContext), errors.Is(err, contextfiles.ErrContextFiles):
@@ -482,6 +529,8 @@ func runtimeExecutionFailureCode(err error) string {
 	}
 }
 
+// materializeWorkspace creates the fixed service layout, probes readiness, validates materialized instructions and holds the cooperative workspace lock while publishing AGENTS.md and inbox prompt. Warm mode writes only the inert wait prompt; caller-prepared mounts and policy remain the filesystem authority boundary.
+// materializeWorkspace создаёт фиксированную служебную структуру, проверяет готовность и materialized instructions и под согласующим workspace lock публикует AGENTS.md и inbox prompt. Warm пишет лишь неактивное ожидание; подготовленные вызывающим mounts и policy остаются файловой authority boundary.
 func materializeWorkspace(ctx context.Context, input model.Input) error {
 	if err := materializeWorkspaceDirectories(); err != nil {
 		return err
@@ -511,6 +560,8 @@ func materializeWorkspace(ctx context.Context, input model.Input) error {
 	return writeWorkspaceFile(input.WorkspaceRoot, ".kodex/inbox/prompt.md", prompt)
 }
 
+// materializeWorkspaceDirectories creates the fixed shared runtime directory list through the security helper, stopping on the first error and never accepting arbitrary directory names.
+// materializeWorkspaceDirectories создаёт фиксированный список общих runtime-каталогов через security helper, останавливаясь при первой ошибке и не принимая произвольных имён.
 func materializeWorkspaceDirectories() error {
 	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge", "work"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
@@ -520,6 +571,8 @@ func materializeWorkspaceDirectories() error {
 	return nil
 }
 
+// buildPrompt accepts only turn mode, validates versioned prompt provenance when present and appends validated session history plus the exact current task. A missing current notice triggers the existing continuation revision path; the final UTF-8 prompt is bounded to one MiB without issuing any execution grant.
+// buildPrompt принимает лишь turn mode, проверяет присутствующую versioned prompt provenance и добавляет проверенную историю и точную текущую задачу. При отсутствии текущей notice использует прежний continuation revision path; итоговый UTF-8 prompt ограничен одним MiB без выдачи grant исполнения.
 func buildPrompt(input model.Input) ([]byte, error) {
 	if input.Mode != runtimecontract.RunnerModeTurn {
 		return nil, errors.New("turn prompt is unavailable")
@@ -548,6 +601,8 @@ func buildPrompt(input model.Input) ([]byte, error) {
 	return result, nil
 }
 
+// appendContinuationRevision validates reasoning configuration and appends exact revision/config/environment pins with sorted tool/grant/file descriptions. Versioned prompts include only PLATFORM sections; the existing unversioned path extracts its fixed service blocks. Textual context describes approved state, not newly granted capabilities.
+// appendContinuationRevision проверяет reasoning configuration и добавляет точные revision/config/environment pins с сортированными tool/grant/file descriptions. Versioned prompts включают лишь PLATFORM sections; прежний unversioned path извлекает фиксированные service blocks. Текст описывает одобренное состояние, а не выдаёт capabilities.
 func appendContinuationRevision(builder *strings.Builder, input model.Input) error {
 	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return errors.New("continuation configuration is invalid")
@@ -615,6 +670,8 @@ func appendContinuationRevision(builder *strings.Builder, input model.Input) err
 	return nil
 }
 
+// validateMaterializedInstructions delegates versioned envelopes to the strict contract decoder; otherwise it requires bounded UTF-8 resolved text, exactly one of each fixed block, at most one used launch kind and an exact capability block. Resumed sessions require the existing continuation block; these shape checks do not manufacture trusted provenance.
+// validateMaterializedInstructions передаёт versioned envelopes строгому contract decoder; иначе требует ограниченный UTF-8 resolved text, по одному фиксированному блоку, не более одного used launch kind и точный capability block. Resumed sessions требуют прежний continuation block; проверки формы не создают доверенную provenance.
 func validateMaterializedInstructions(input model.Input) error {
 	if input.PromptServiceTemplateRevision != "" {
 		_, err := runtimecontract.DecodePromptService(input)
@@ -660,6 +717,8 @@ func validateMaterializedInstructions(input model.Input) error {
 	return nil
 }
 
+// materializedServiceBlock extracts one fixed-name used=true/false block with exactly one closing tag using literal counts and offsets, not an XML parser or general user-content sanitizer; callers supply the closed block-name set.
+// materializedServiceBlock извлекает один fixed-name used=true/false block с ровно одним closing tag по literal counts и offsets; это не XML parser и не очиститель произвольного user-content, имена задаются закрытым набором вызывающего.
 func materializedServiceBlock(value, name string) (string, error) {
 	trueOpen := "<" + name + ` used="true">`
 	falseOpen := "<" + name + ` used="false">`
@@ -680,6 +739,8 @@ func materializedServiceBlock(value, name string) (string, error) {
 	return value[start:end], nil
 }
 
+// scopedArtifacts creates a separate filtered slice for exact scope and sorts it by declared position without mutating the caller's slice order or deciding attachment eligibility.
+// scopedArtifacts создаёт отдельный фильтрованный срез точной scope и сортирует по заявленной позиции без изменения порядка среза вызывающего и без решения attachment eligibility.
 func scopedArtifacts(artifacts []runtimecontract.RunnerInputArtifact, scope string) []runtimecontract.RunnerInputArtifact {
 	result := make([]runtimecontract.RunnerInputArtifact, 0, len(artifacts))
 	for _, artifact := range artifacts {
@@ -691,30 +752,16 @@ func scopedArtifacts(artifacts []runtimecontract.RunnerInputArtifact, scope stri
 	return result
 }
 
+// materializeInputArtifacts verifies canonical catalogs before resetting input/knowledge/session
+// trees, retrieves exact artifact bytes through the callback, writes manifests and protects read-only
+// trees; a catalog failure precedes those effects and this function grants no additional access.
+// materializeInputArtifacts проверяет канонические каталоги до очистки деревьев input/knowledge/session,
+// получает точные байты через callback, записывает манифесты и защищает деревья только для чтения;
+// ошибка каталога предшествует этим эффектам, дополнительных прав функция не выдаёт.
 func materializeInputArtifacts(ctx context.Context, input model.Input, client *callback.Client) error {
-	setManifests := make(map[string]runtimecontract.CanonicalAttachmentManifest, len(input.AttachmentSets))
-	for _, set := range input.AttachmentSets {
-		setArtifacts := make([]runtimecontract.RunnerInputArtifact, 0)
-		for _, artifact := range input.InputArtifacts {
-			if artifact.AttachmentSetRef != set.Ref {
-				continue
-			}
-			canonicalArtifact := artifact
-			canonicalArtifact.Scope = runtimecontract.AttachmentScopeInput
-			canonicalArtifact.AttachmentSetRef = ""
-			canonicalArtifact.AttachmentPurpose = ""
-			canonicalArtifact.Provenance = ""
-			setArtifacts = append(setArtifacts, canonicalArtifact)
-		}
-		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, setArtifacts)
-		if err != nil || manifest.Digest != set.ManifestDigest {
-			return errors.New("runtime attachment manifest digest is invalid")
-		}
-		setManifests[set.Ref] = manifest
-	}
-	workspaceManifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
+	setManifests, workspaceManifest, err := buildInputManifests(input)
 	if err != nil {
-		return errors.New("build runtime workspace manifest")
+		return err
 	}
 	if err := resetWorkspaceDirectory(ctx, input.WorkspaceRoot, "input"); err != nil {
 		return err
@@ -751,30 +798,16 @@ func materializeInputArtifacts(ctx context.Context, input model.Input, client *c
 	return protectReadOnlyWorkspaceTrees(input.WorkspaceRoot, "input", "knowledge")
 }
 
+// verifyInputArtifacts rebuilds the expected catalogs before checking exact on-disk manifests,
+// README files and artifact digests inside the workspace; it performs readback only and never repairs
+// mismatched files or accepts persisted bytes as a replacement for the runtime input authority.
+// verifyInputArtifacts восстанавливает ожидаемые каталоги до сверки точных манифестов на диске,
+// README и хешей файлов внутри workspace; выполняет только чтение, не исправляет несовпадения
+// и не заменяет полномочия runtime-входа сохранёнными байтами.
 func verifyInputArtifacts(input model.Input) error {
-	sets := make(map[string]runtimecontract.CanonicalAttachmentManifest, len(input.AttachmentSets))
-	for _, set := range input.AttachmentSets {
-		artifacts := make([]runtimecontract.RunnerInputArtifact, 0)
-		for _, artifact := range input.InputArtifacts {
-			if artifact.AttachmentSetRef != set.Ref {
-				continue
-			}
-			canonical := artifact
-			canonical.Scope = runtimecontract.AttachmentScopeInput
-			canonical.AttachmentSetRef = ""
-			canonical.AttachmentPurpose = ""
-			canonical.Provenance = ""
-			artifacts = append(artifacts, canonical)
-		}
-		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, artifacts)
-		if err != nil || manifest.Digest != set.ManifestDigest {
-			return errors.New("runtime attachment manifest digest is invalid")
-		}
-		sets[set.Ref] = manifest
-	}
-	workspaceManifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
+	sets, workspaceManifest, err := buildInputManifests(input)
 	if err != nil {
-		return errors.New("build runtime workspace manifest")
+		return err
 	}
 	if err := verifyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", "manifest.json"), workspaceManifest.Bytes, int64(len(workspaceManifest.Bytes))); err != nil {
 		return err
@@ -784,7 +817,7 @@ func verifyInputArtifacts(input model.Input) error {
 		if err := verifyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", set.Ref, "manifest.json"), manifest.Bytes, int64(len(manifest.Bytes))); err != nil {
 			return err
 		}
-		readme := []byte("This directory contains a read-only, server-owned AttachmentSet. Read manifest.json before using files.\n")
+		readme := []byte(attachmentSetReadme)
 		if err := verifyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", set.Ref, "README.md"), readme, int64(len(readme))); err != nil {
 			return err
 		}
@@ -805,6 +838,8 @@ func verifyInputArtifacts(input model.Input) error {
 	return nil
 }
 
+// verifyWorkspaceFile opens a guarded regular input, requires exact size and mode 0440 and compares bounded bytes in constant time; it never repairs mismatched files or accepts their contents as new authority.
+// verifyWorkspaceFile открывает защищённый обычный input, требует точные размер и режим 0440 и сравнивает ограниченные байты constant-time; не исправляет несовпадения и не принимает содержимое за новые полномочия.
 func verifyWorkspaceFile(root, relative string, expected []byte, expectedSize int64) error {
 	file, info, err := openWorkspaceFile(root, relative)
 	if err != nil {
@@ -821,6 +856,8 @@ func verifyWorkspaceFile(root, relative string, expected []byte, expectedSize in
 	return nil
 }
 
+// verifyWorkspaceDigest verifies a guarded input's exact size/mode, hashes at most the configured artifact bound plus one and compares the expected SHA-256 pin without modifying the file.
+// verifyWorkspaceDigest проверяет точные размер/режим защищённого input, хеширует не более artifact bound плюс один и сравнивает ожидаемый SHA-256 pin без изменения файла.
 func verifyWorkspaceDigest(root, relative string, artifact runtimecontract.RunnerInputArtifact) error {
 	file, info, err := openWorkspaceFile(root, relative)
 	if err != nil {
@@ -839,6 +876,8 @@ func verifyWorkspaceDigest(root, relative string, artifact runtimecontract.Runne
 	return nil
 }
 
+// openWorkspaceFile validates lexical root/relative paths, walks relative directories by no-follow descriptors and opens the final nonblocking regular file. The caller owns the returned file; ancestors preceding the supplied root and single-link ownership are not checked here.
+// openWorkspaceFile проверяет lexical root/relative paths, обходит относительные каталоги no-follow дескрипторами и открывает конечный nonblocking обычный файл. Возвращённый файл принадлежит вызывающему; предки перед root и single-link ownership здесь не проверяются.
 func openWorkspaceFile(root, relative string) (*os.File, os.FileInfo, error) {
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.IsAbs(relative) || filepath.Clean(relative) != relative ||
 		relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
@@ -879,6 +918,8 @@ func openWorkspaceFile(root, relative string) (*os.File, os.FileInfo, error) {
 	return file, info, nil
 }
 
+// writeInputManifests publishes each declared attachment set's canonical manifest and fixed read-only README before the full workspace manifest; missing set data fails rather than inventing a catalog or attachment authority.
+// writeInputManifests публикует канонический manifest и фиксированный read-only README каждого объявленного attachment set до полного workspace manifest; отсутствие данных set даёт отказ без выдумывания каталога или attachment authority.
 func writeInputManifests(input model.Input, sets map[string]runtimecontract.CanonicalAttachmentManifest, workspace runtimecontract.CanonicalWorkspaceAttachmentManifest) error {
 	for _, set := range input.AttachmentSets {
 		manifest, exists := sets[set.Ref]
@@ -889,7 +930,7 @@ func writeInputManifests(input model.Input, sets map[string]runtimecontract.Cano
 		if err := writeReadOnlyWorkspaceFile(input.WorkspaceRoot, manifestPath, manifest.Bytes); err != nil {
 			return err
 		}
-		readme := []byte("This directory contains a read-only, server-owned AttachmentSet. Read manifest.json before using files.\n")
+		readme := []byte(attachmentSetReadme)
 		if err := writeReadOnlyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", set.Ref, "README.md"), readme); err != nil {
 			return err
 		}
@@ -897,6 +938,8 @@ func writeInputManifests(input model.Input, sets map[string]runtimecontract.Cano
 	return writeReadOnlyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", "manifest.json"), workspace.Bytes)
 }
 
+// resetWorkspaceDirectory takes the cooperative lock, requires a nonsymlink directory and removes its current entries under the supplied internal relative path with fixed diagnostics. It uses path-based operations on caller-prepared workspace parents, not an atomic descriptor-rooted snapshot or general authorization API.
+// resetWorkspaceDirectory берёт согласующий lock, требует каталог без symlink и удаляет его текущие entries под переданным внутренним relative path с фиксированной диагностикой. Использует path-based операции на подготовленных workspace parents, не atomic descriptor-rooted snapshot и не общий authorization API.
 func resetWorkspaceDirectory(ctx context.Context, root, relative string) error {
 	lock, err := workspacepolicy.Lock(ctx, root)
 	if err != nil {
@@ -924,6 +967,8 @@ func resetWorkspaceDirectory(ctx context.Context, root, relative string) error {
 	return nil
 }
 
+// protectReadOnlyWorkspaceTrees delegates each internal tree to the security helper and stops on the first failure; it does not change which trees the server-approved input may expose.
+// protectReadOnlyWorkspaceTrees передаёт каждое внутреннее дерево security helper и прекращает при первой ошибке; не меняет список деревьев, доступных по одобренному сервером входу.
 func protectReadOnlyWorkspaceTrees(root string, relatives ...string) error {
 	for _, relative := range relatives {
 		if err := security.ProtectWorkspaceInputTree(root, relative); err != nil {
@@ -933,6 +978,8 @@ func protectReadOnlyWorkspaceTrees(root string, relatives ...string) error {
 	return nil
 }
 
+// writeWorkspaceArtifact enforces lexical containment, streams callback-verified bytes into an exclusive no-follow 0440 staging file, syncs/closes and renames only on success, cleaning failed staging. Parent-directory trust remains external and directory fsync is not performed.
+// writeWorkspaceArtifact требует lexical containment, передаёт проверенные callback байты в исключительный no-follow staging 0440, синхронизирует/закрывает и переименовывает лишь при успехе, очищая отказавший staging. Доверие parent-каталогам внешнее; fsync каталога не выполняется.
 func writeWorkspaceArtifact(ctx context.Context, input model.Input, artifact runtimecontract.RunnerInputArtifact, relative string, client *callback.Client) error {
 	path := filepath.Join(input.WorkspaceRoot, relative)
 	if filepath.Clean(path) != path || !strings.HasPrefix(path, input.WorkspaceRoot+string(os.PathSeparator)) {
@@ -962,6 +1009,8 @@ func writeWorkspaceArtifact(ctx context.Context, input model.Input, artifact run
 	return nil
 }
 
+// writeReadOnlyWorkspaceFile first publishes through the ordinary workspace writer and then changes the final file to mode 0440, returning a fixed protection error if chmod fails after publication.
+// writeReadOnlyWorkspaceFile сначала публикует обычным workspace writer, затем меняет конечный файл на 0440, возвращая фиксированный protection error при отказе chmod уже после публикации.
 func writeReadOnlyWorkspaceFile(root, relative string, payload []byte) error {
 	if err := writeWorkspaceFile(root, relative, payload); err != nil {
 		return err
@@ -972,6 +1021,8 @@ func writeReadOnlyWorkspaceFile(root, relative string, payload []byte) error {
 	return nil
 }
 
+// writeWorkspaceFile checks lexical containment and writes/syncs/closes an exclusive no-follow 0640 staging file before rename. It cleans write/close failures but leaves the existing staging file on rename failure; trusted parents and caller locking are assumed, and no directory sync is claimed.
+// writeWorkspaceFile проверяет lexical containment и пишет/синхронизирует/закрывает исключительный no-follow staging 0640 до rename. Очищает write/close failures, но при rename failure оставляет staging; предполагает доверенные parents и lock вызывающего, не обещая directory sync.
 func writeWorkspaceFile(root, relative string, payload []byte) error {
 	path := filepath.Join(root, relative)
 	if filepath.Clean(path) != path || !strings.HasPrefix(path, root+string(os.PathSeparator)) {
@@ -997,6 +1048,8 @@ func writeWorkspaceFile(root, relative string, payload []byte) error {
 	return nil
 }
 
+// collectArtifacts begins with result.md, prioritizes workspace provenance and collects at most sixteen total artifacts from guarded immediate outbox files. Unsafe names/directories and unsupported sizes/types are skipped; open/read/link guards fail with redacted typed denials. Single-link regular files are read with a one-MiB bound without traversing subdirectories.
+// collectArtifacts начинает с result.md, отдаёт приоритет workspace provenance и собирает не более шестнадцати артефактов из защищённых непосредственных outbox-файлов. Небезопасные имена/каталоги и недопустимые размеры/типы пропускаются; open/read/link guards дают очищенный typed denial. Single-link обычные файлы читаются с пределом один MiB без обхода подкаталогов.
 func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.RunnerArtifact, error) {
 	artifacts := []runtimecontract.RunnerArtifact{artifact("result.md", "text/markdown", []byte(markdown))}
 	directory, err := workspacepolicy.OpenOutbox(input.WorkspaceRoot)
@@ -1058,10 +1111,15 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 	return artifacts, nil
 }
 
+// artifact computes the content SHA-256 and pairs it with name/media type while retaining the supplied byte slice rather than copying it; callers own content immutability until serialization.
+// artifact вычисляет SHA-256 содержимого и связывает его с name/media type, сохраняя исходный срез без копирования; вызывающий отвечает за immutable content до сериализации.
 func artifact(name, mediaType string, content []byte) runtimecontract.RunnerArtifact {
 	digest := sha256.Sum256(content)
 	return runtimecontract.RunnerArtifact{FileName: name, MediaType: mediaType, SHA256: hex.EncodeToString(digest[:]), Content: content}
 }
+
+// safeFileName accepts only a nonempty single filename up to 255 bytes without separators, NUL or line breaks and rejects dot names; it returns the original spelling without normalization.
+// safeFileName принимает лишь непустое единичное имя до 255 байтов без разделителей, NUL и переносов строк, отклоняя точечные имена; возвращает исходное написание без нормализации.
 func safeFileName(value string) string {
 	if value == "" || len(value) > 255 || strings.ContainsAny(value, "/\\\x00\r\n") || value == "." || value == ".." {
 		return ""
@@ -1069,6 +1127,8 @@ func safeFileName(value string) string {
 	return value
 }
 
+// startHealthServer starts the fixed :9090 health listener with bounded HTTP headers/timeouts and a buffered terminal error channel, normalizing ErrServerClosed. The caller owns shutdown and observation of that channel; starting the goroutine alone is not a readiness barrier.
+// startHealthServer запускает фиксированный health listener :9090 с ограниченными HTTP headers/timeouts и буферным terminal error channel, нормализуя ErrServerClosed. Shutdown и наблюдение канала принадлежат вызывающему; старт goroutine сам не readiness barrier.
 func startHealthServer(ctx context.Context, state *health) (*http.Server, <-chan error) {
 	server := &http.Server{Addr: ":9090", Handler: healthHandler(state), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	done := make(chan error, 1)
@@ -1082,22 +1142,21 @@ func startHealthServer(ctx context.Context, state *health) (*http.Server, <-chan
 	return server, done
 }
 
+// healthHandler serves identical healthz/livez aliases from the live flag and readyz from the ready flag plus a fresh workspace snapshot. It preserves existing status/body behavior without doing filesystem I/O or deriving execution authority from probes.
+// healthHandler обслуживает одинаковые healthz/livez aliases по live flag и readyz по ready flag плюс свежему workspace snapshot. Сохраняет прежние status/body без файлового I/O и без вывода execution authority из probes.
 func healthHandler(state *health) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, _ *http.Request) {
+	// liveness shares the unchanged live-flag response between the two route aliases.
+	// liveness разделяет неизменный ответ live flag между двумя route aliases.
+	liveness := func(writer http.ResponseWriter, _ *http.Request) {
 		if !state.live.Load() {
 			http.Error(writer, "process is stopping", http.StatusServiceUnavailable)
 			return
 		}
 		writer.WriteHeader(http.StatusNoContent)
-	})
-	mux.HandleFunc("/livez", func(writer http.ResponseWriter, _ *http.Request) {
-		if !state.live.Load() {
-			http.Error(writer, "process is stopping", http.StatusServiceUnavailable)
-			return
-		}
-		writer.WriteHeader(http.StatusNoContent)
-	})
+	}
+	mux.HandleFunc("/healthz", liveness)
+	mux.HandleFunc("/livez", liveness)
 	mux.HandleFunc("/readyz", func(writer http.ResponseWriter, _ *http.Request) {
 		if !state.ready.Load() {
 			http.Error(writer, "runtime is not ready", http.StatusServiceUnavailable)
@@ -1112,7 +1171,8 @@ func healthHandler(state *health) http.Handler {
 	return mux
 }
 
-// Только закрытая stage диагностика: публичный terminal code/receipt не меняется.
+// logMCPStartupFailure emits the fixed startup warning and closed readiness stage through the supplied non-nil logger, leaving terminal codes unchanged and excluding raw errors or MCP payloads.
+// logMCPStartupFailure пишет фиксированный startup warning и закрытый readiness stage через переданный non-nil logger, не меняя terminal codes и исключая сырые ошибки и MCP-пакеты.
 func logMCPStartupFailure(ctx context.Context, logger *slog.Logger, err error) {
 	logger.WarnContext(ctx, mcpStartupFailureMessage, "stage", readiness.FailureStage(err))
 }

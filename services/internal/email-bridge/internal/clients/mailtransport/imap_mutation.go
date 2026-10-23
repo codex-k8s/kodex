@@ -11,7 +11,10 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 )
 
-// Apply вызывается только после durable unknown receipt и точной проверки scopes.
+// Apply executes an already-authorized, durably reserved IMAP mutation and preserves unknown outcome/observed coordinates after uncertain protocol failures.
+// It pins UIDVALIDITY, requires UIDPLUS/rev2 where needed, checks draft digest and confirms COPY/APPEND destination before deleting the source.
+// Apply исполняет уже разрешённое и устойчиво зарезервированное изменение IMAP, сохраняя unknown и наблюдённые координаты при неопределённых сбоях.
+// Проверяются UIDVALIDITY, нужные UIDPLUS/rev2 и draft digest; назначение COPY/APPEND подтверждается до удаления источника.
 func (p *Provider) Apply(ctx context.Context, m api.Mailbox, cmd api.Command, id string) (api.Result, error) {
 	r := api.Result{Status: "unknown", Folder: cmd.Folder, Uid: cmd.Uid, UidValidity: cmd.UidValidity}
 	c, done, err := p.imap(ctx, m)
@@ -135,6 +138,8 @@ func (p *Provider) Apply(ctx context.Context, m api.Mailbox, cmd api.Command, id
 	return r, nil
 }
 
+// imapDelete marks only the supplied UID set deleted and uses UID EXPUNGE rather than expunging unrelated flagged messages.
+// imapDelete помечает удалённым только переданный UID-набор и использует UID EXPUNGE, не удаляя посторонние помеченные сообщения.
 func imapDelete(c *imapclient.Client, set imap.UIDSet) error {
 	if err := c.Store(set, &imap.StoreFlags{Op: imap.StoreFlagsAdd, Flags: []imap.Flag{imap.FlagDeleted}, Silent: true}, nil).Close(); err != nil {
 		return errs.Unavailable
@@ -145,6 +150,9 @@ func imapDelete(c *imapclient.Client, set imap.UIDSet) error {
 	}
 	return nil
 }
+
+// setDestination accepts only a nonzero UIDVALIDITY and one nonzero singleton UID range before updating observed destination coordinates.
+// setDestination допускает только ненулевой UIDVALIDITY и один ненулевой singleton UID-диапазон до обновления наблюдённых координат назначения.
 func setDestination(r *api.Result, numbers imap.NumSet, validity uint32, folder string) error {
 	set, ok := numbers.(imap.UIDSet)
 	if !ok {

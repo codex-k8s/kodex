@@ -6,11 +6,12 @@ import (
 	"net/url"
 )
 
+// CallbackProfileTrustedCluster identifies the explicit private-Pod callback transport profile; it is not an implicit fallback from protected TLS.
+// CallbackProfileTrustedCluster обозначает явный профиль callback-транспорта к частному адресу Pod, а не неявный запасной путь при отказе защищённого TLS.
 const CallbackProfileTrustedCluster = "trusted-cluster"
 
-// ValidateCallbackTransport проверяет server-owned locator. Private Pod IP и
-// единственный callback port не разрешают произвольный внешний plaintext URL.
-// Ticket, execution digests и NetworkPolicy проверяются отдельными границами.
+// ValidateCallbackTransport accepts a protected TLS locator or the exact explicit private-IPv4 profile on port 8444; tickets, execution digests and network policy remain separate checks.
+// ValidateCallbackTransport принимает защищённый TLS-адрес либо точный явный профиль частного IPv4 на порту 8444; ticket, дайджесты исполнения и сетевая политика проверяются отдельно.
 func (input RunnerInput) ValidateCallbackTransport() error {
 	if input.CallbackTLS.Profile == "" {
 		if input.CallbackTLS.validate() == nil && validCallbackURL(input.CallbackURL, input.CallbackTLS.ServerName) {

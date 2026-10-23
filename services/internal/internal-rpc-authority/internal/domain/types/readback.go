@@ -5,7 +5,11 @@ import (
 	"time"
 )
 
-// ReadbackIntent закрепляет ожидаемое обслуживаемое состояние за workload.
+// ReadbackIntent pins expected workload/role/material/source state and public possession-key identity to
+// one durable revision, digest, status and expiry; it is resolved by the owning store before a challenge
+// is issued.
+// ReadbackIntent закрепляет ожидаемые workload/role/material/source состояние и public possession-key
+// identity за durable revision, digest, status и expiry; до challenge intent разрешается owning store.
 type ReadbackIntent struct {
 	IntentID                string
 	Kind                    string
@@ -27,7 +31,12 @@ type ReadbackIntent struct {
 	ExpiresAt               time.Time
 }
 
-// ReadbackCredentialClaims разрешает конкретную независимую проверку.
+// ReadbackCredentialClaims binds signed permission for one exact intent/workload/generation and
+// possession key to signer-source provenance and lifetime; payload possession is not equivalent to
+// successful credential verification.
+// ReadbackCredentialClaims связывает signed разрешение одного exact intent/workload/generation и
+// possession key с signer-source происхождением и сроком; наличие payload не равно успешной credential
+// проверке.
 type ReadbackCredentialClaims struct {
 	Version                  int             `json:"v"`
 	Issuer                   string          `json:"iss"`
@@ -58,7 +67,11 @@ type ReadbackCredentialClaims struct {
 	ExpiresAt                int64           `json:"exp"`
 }
 
-// ReadbackAttestationClaims доказывает владение ключом и обслуживаемое состояние.
+// ReadbackAttestationClaims binds proof of possession and served state to the exact credential, intent,
+// workload and one-time challenge nonce/digest; verifier checks these relationships before producing a
+// receipt.
+// ReadbackAttestationClaims связывает proof of possession и served state с exact credential, intent,
+// workload и одноразовыми challenge nonce/digest; verifier проверяет связи до выдачи receipt.
 type ReadbackAttestationClaims struct {
 	Version                  int    `json:"v"`
 	Issuer                   string `json:"iss"`
@@ -90,7 +103,12 @@ type ReadbackAttestationClaims struct {
 	ExpiresAt                int64  `json:"exp"`
 }
 
-// ReadbackChallenge содержит созданный сервером одноразовый запрос.
+// ReadbackChallenge records a server-created challenge with the resolved intent, credential binding,
+// semantic idempotency and time limits plus optional consumption time; it is not a reusable generic
+// nonce.
+// ReadbackChallenge фиксирует созданный сервером challenge с разрешённым intent, credential привязкой,
+// semantic idempotency, сроками и optional временем потребления; это не повторно используемый общий
+// nonce.
 type ReadbackChallenge struct {
 	ChallengeID              string
 	ChallengeJTI             string
@@ -106,7 +124,11 @@ type ReadbackChallenge struct {
 	ConsumedAt               *time.Time
 }
 
-// ReadbackReceipt неизменяемо фиксирует принятую независимую проверку.
+// ReadbackReceipt records accepted challenge/evidence identity, semantic binding, verifier generation
+// and receipt lifetime with the exact intent snapshot; callers cannot manufacture acceptance by setting
+// these fields.
+// ReadbackReceipt фиксирует принятые challenge/evidence identity, semantic привязку, verifier generation
+// и срок receipt с exact intent snapshot; заполнение полей не создаёт принятие.
 type ReadbackReceipt struct {
 	ReceiptID             string
 	ChallengeID           string
@@ -119,8 +141,12 @@ type ReadbackReceipt struct {
 	Intent                ReadbackIntent
 }
 
-// ReadbackTrustState фиксирует фактически обслуживаемую независимую цепочку
-// root -> manifest signer -> credential signer и её forward-only predecessor.
+// ReadbackTrustState pins the served root-to-manifest-to-credential trust chain and forward-only
+// predecessor digest with observation time; cryptographic loading and durable activation enforce those
+// pins.
+// ReadbackTrustState закрепляет served root-to-manifest-to-credential trust цепочку и forward-only
+// predecessor digest со временем наблюдения; привязки обеспечиваются cryptographic загрузкой и durable
+// активацией.
 type ReadbackTrustState struct {
 	RootID                       string
 	RootFingerprintSHA256        string

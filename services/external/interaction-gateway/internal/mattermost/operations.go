@@ -14,6 +14,8 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
+// operationInput is the closed typed execution view of package-validated post, file, reaction and pagination arguments.
+// RU: operationInput задаёт закрытый типизированный вид проверенных пакетом аргументов сообщений, файлов, реакций и пагинации.
 type operationInput struct {
 	PostID  string `json:"post_id"`
 	RootID  string `json:"root_id"`
@@ -27,6 +29,10 @@ type operationInput struct {
 	Offset  int64  `json:"offset"`
 }
 
+// executeOperation dispatches only the implemented operation set under the resolved channel and returns projected output, provider reference and mutation-attempt flag.
+// RU: executeOperation направляет только реализованные операции в разрешённом канале и возвращает проекцию результата, ссылку провайдера и признак попытки изменения.
+// Reads and preflight failures do not claim a mutation; unknown operations fail without an external request.
+// RU: Чтения и предварительные отказы не заявляют изменение; неизвестная операция отклоняется без внешнего запроса.
 func executeOperation(ctx context.Context, client *model.Client4, channel *model.Channel, operation string, input operationInput) (map[string]any, string, bool, error) {
 	failed := func(err error) (map[string]any, string, bool, error) { return nil, "", false, err }
 	if channel == nil || !model.IsValidId(channel.Id) || !model.IsValidId(channel.TeamId) {
@@ -131,6 +137,8 @@ func executeOperation(ctx context.Context, client *model.Client4, channel *model
 	}
 }
 
+// scopedPost resolves a valid post ID and rejects missing, deleted, malformed or other-channel readback before dependent operations.
+// RU: scopedPost разрешает допустимый ID сообщения и отклоняет отсутствующий, удалённый, неверный или чужой ответ до зависимых операций.
 func scopedPost(ctx context.Context, client *model.Client4, channelID, postID string) (*model.Post, error) {
 	if !model.IsValidId(postID) {
 		return nil, errInvocation
@@ -145,10 +153,14 @@ func scopedPost(ctx context.Context, client *model.Client4, channelID, postID st
 	return post, nil
 }
 
+// validReadPost checks live same-channel post identity, author/root syntax, nonnegative update time and message byte size without requiring nonempty text.
+// RU: validReadPost проверяет живое сообщение того же канала, форму автора/корня, неотрицательное время изменения и размер текста, не требуя непустого текста.
 func validReadPost(post *model.Post, channelID string) bool {
 	return post != nil && model.IsValidId(post.Id) && model.IsValidId(post.UserId) && post.ChannelId == channelID && post.DeleteAt == 0 && post.UpdateAt >= 0 && (post.RootId == "" || model.IsValidId(post.RootId)) && len(post.Message) <= maximumMessageBytes
 }
 
+// postProjection returns approved post fields, omits empty optional values and optionally truncates preview text to a UTF-8-safe 512-byte prefix.
+// RU: postProjection возвращает разрешённые поля сообщения, опускает пустые необязательные значения и при необходимости ограничивает preview корректным UTF-8 префиксом до 512 байт.
 func postProjection(post *model.Post, preview bool) map[string]any {
 	message := post.Message
 	if preview && len(message) > 512 {
@@ -170,6 +182,8 @@ func postProjection(post *model.Post, preview bool) map[string]any {
 	return result
 }
 
+// listProjection embeds a JSON-encoded item array and count under the selected result key, rejecting payloads above 60000 bytes.
+// RU: listProjection помещает JSON-кодированный массив и количество в выбранное поле результата, отклоняя payload свыше 60000 байт.
 func listProjection(key string, items []map[string]any) (map[string]any, error) {
 	body, err := json.Marshal(items)
 	if err != nil || len(body) > 60000 {
@@ -178,6 +192,10 @@ func listProjection(key string, items []map[string]any) (map[string]any, error) 
 	return map[string]any{key: string(body), "count": len(items)}, nil
 }
 
+// readPosts performs scoped listing, restricted literal search or exact-thread pagination, validating all returned post identities before projection.
+// RU: readPosts выполняет ограниченный список, ограниченный буквальный поиск либо пагинацию точной ветки, проверяя идентичность всех сообщений до проекции.
+// Search syntax cannot add user scope operators; duplicate order entries, foreign posts and invalid cursors fail closed.
+// RU: Поисковый синтаксис не допускает пользовательские операторы области; повторные позиции, чужие сообщения и неверные курсоры отклоняются.
 func readPosts(ctx context.Context, client *model.Client4, channel *model.Channel, operation string, input operationInput, limit int) (map[string]any, string, bool, error) {
 	var posts *model.PostList
 	var err error
@@ -248,6 +266,10 @@ func readPosts(ctx context.Context, client *model.Client4, channel *model.Channe
 	return result, channel.Id, false, nil
 }
 
+// readFiles lists validated attachments of the scoped post or returns at most 32768 bytes from one exact, membership-checked file range as base64.
+// RU: readFiles перечисляет проверенные вложения сообщения своей области либо возвращает base64 не более 32768 байт точного диапазона одного привязанного файла.
+// Range status, Content-Range and byte count must match; this read is not an antivirus, quarantine or semantic admission check.
+// RU: Статус диапазона, Content-Range и число байтов должны совпадать; это чтение не является антивирусом, карантином или смысловым допуском.
 func readFiles(ctx context.Context, client *model.Client4, channel *model.Channel, operation string, input operationInput) (map[string]any, string, bool, error) {
 	post, err := scopedPost(ctx, client, channel.Id, input.PostID)
 	if err != nil {
@@ -323,10 +345,16 @@ func readFiles(ctx context.Context, client *model.Client4, channel *model.Channe
 	return result, file.Id, false, nil
 }
 
+// validFile checks exact post membership, optional channel binding, live state, one-GiB size ceiling and bounded name/MIME metadata.
+// RU: validFile проверяет точную принадлежность сообщению, необязательную привязку канала, живое состояние, предел одного GiB и ограниченные имя/MIME.
 func validFile(file *model.FileInfo, post *model.Post) bool {
 	return file != nil && model.IsValidId(file.Id) && file.PostId == post.Id && (file.ChannelId == "" || file.ChannelId == post.ChannelId) && slices.Contains(post.FileIds, file.Id) && file.DeleteAt == 0 && file.Size >= 0 && file.Size <= 1<<30 && len(file.Name) <= 512 && len(file.MimeType) <= 128
 }
 
+// changePost scopes the target and current bot before updating its own non-gate text or adding/removing the bot's reaction.
+// RU: changePost ограничивает цель и текущего бота до изменения собственного текста вне gate либо добавления/удаления реакции бота.
+// It validates mutation readback and distinguishes a reached mutation endpoint from preflight failure for unknown-outcome handling.
+// RU: Функция проверяет ответ изменения и отличает достигнутую изменяющую операцию от предварительного отказа для обработки неизвестного исхода.
 func changePost(ctx context.Context, client *model.Client4, channel *model.Channel, operation string, input operationInput) (map[string]any, string, bool, error) {
 	post, err := scopedPost(ctx, client, channel.Id, input.PostID)
 	if err != nil {
@@ -379,6 +407,8 @@ func changePost(ctx context.Context, client *model.Client4, channel *model.Chann
 	return map[string]any{"status": "applied"}, post.Id + ":" + me.Id + ":" + input.Emoji, true, nil
 }
 
+// validEmoji accepts bounded ASCII emoji names using letters, digits, underscore, hyphen or plus without selecting an external resource.
+// RU: validEmoji допускает ограниченные ASCII-имена emoji из букв, цифр, подчёркивания, дефиса или плюса без выбора внешнего ресурса.
 func validEmoji(value string) bool {
 	if len(value) == 0 || len(value) > 64 {
 		return false
@@ -391,6 +421,8 @@ func validEmoji(value string) bool {
 	return true
 }
 
+// mutationError attaches no-effect proof only to the closed set of rejecting provider statuses and otherwise retains the classified uncertain failure.
+// RU: mutationError добавляет доказательство отсутствия эффекта только закрытому набору отклоняющих статусов провайдера, иначе сохраняя классифицированный неопределённый отказ.
 func mutationError(response *model.Response, err error) error {
 	classified := classify(err)
 	if response != nil {

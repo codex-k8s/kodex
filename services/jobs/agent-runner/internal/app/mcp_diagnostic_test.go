@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+// TestMCPStartupDiagnosticDoesNotLogErrorPayload supplies a private startup error and requires only the fixed warning, UNKNOWN stage and standard logger fields, never the error text.
+// TestMCPStartupDiagnosticDoesNotLogErrorPayload передаёт приватную startup-ошибку и требует лишь фиксированное предупреждение, этап UNKNOWN и стандартные поля logger без текста ошибки.
 func TestMCPStartupDiagnosticDoesNotLogErrorPayload(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))

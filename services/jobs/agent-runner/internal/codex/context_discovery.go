@@ -10,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// discoveredSkill models the bounded provider discovery descriptor, including optional opaque interface/dependency metadata and plugin provenance; parsing a descriptor alone does not admit or enable the skill.
+// discoveredSkill описывает ограниченный provider discovery descriptor с optional opaque interface/dependency metadata и plugin provenance; один разбор descriptor не допускает и не включает skill.
 type discoveredSkill struct {
 	Name             string          `json:"name"`
 	Description      string          `json:"description"`
@@ -22,9 +24,8 @@ type discoveredSkill struct {
 	PluginID         *string         `json:"pluginId,omitempty"`
 }
 
-// configureContextSkills регистрирует только фиксированный readonly root и
-// сверяет фактическое обнаружение provider до thread/start или thread/resume.
-// Сохранённые user/repo/system skills не расширяют разрешённый snapshot.
+// configureContextSkills sets only the fixed read-only extra root, reloads discovery, enables exact snapshot paths and disables unbound discoveries, then re-reads exact names/descriptions/enabled states and rejects plugin-backed expected skills or missing pins. The caller supplies the already trusted snapshot; discovery cannot broaden it.
+// configureContextSkills задаёт лишь фиксированный read-only extra root, перезагружает discovery, включает точные snapshot paths и отключает unbound discoveries, затем повторно сверяет names/descriptions/enabled и отклоняет plugin-backed expected skills или missing pins. Доверенный snapshot задаёт вызывающий; discovery не расширяет его.
 func (server *appServer) configureContextSkills(ctx context.Context, state *protocolState, input model.Input, snapshot runtimecontract.RuntimeContextSnapshot) error {
 	raw, err := server.call(ctx, state, "skills/extraRoots/set", map[string]any{"extraRoots": []string{runtimecontract.RuntimeContextRoot + "/skills"}})
 	if err != nil {
@@ -88,6 +89,8 @@ func (server *appServer) configureContextSkills(ctx context.Context, state *prot
 	return nil
 }
 
+// decodeContextSkills strictly decodes one bounded discovery result for the exact working directory, rejecting reported errors, excessive counts, unsafe/duplicate paths, oversized metadata and unknown scopes. It intentionally returns unbound discoveries too so reconciliation can disable them; it is not an admission decision.
+// decodeContextSkills строго разбирает один ограниченный discovery result для точного working directory, отклоняя reported errors, чрезмерное число, unsafe/duplicate paths, oversized metadata и unknown scopes. Намеренно возвращает также unbound discoveries для отключения при reconciliation; не является admission decision.
 func decodeContextSkills(raw json.RawMessage, cwd string) ([]discoveredSkill, error) {
 	var response struct {
 		Data []struct {

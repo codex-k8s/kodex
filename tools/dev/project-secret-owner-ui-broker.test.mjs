@@ -1,8 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { Readable } from "node:stream";
 import vm from "node:vm";
+import {
+  ownerInputRequest,
+  projectSecretInputProfile,
+  projectSecretOwnerProof,
+} from "./test-support/owner-ui-fixtures.mjs";
 import {
   assertOwnerPins,
   secretInputIntent,
@@ -25,100 +29,19 @@ import {
 
 const port = 23456;
 const sentinel = "synthetic-private-Git-token-never-log";
-const profile = {
-  cdpEndpoint: "http://127.0.0.1:9222",
-  chromePID: 1234,
-  chromeStartTicks: "4321",
-  pageURL: `${brokerOrigin}/projects/prj_synthetic/secrets`,
-  organizationRef: "org_synthetic",
-  ownerRef: "usr_synthetic",
-  projectRef: "prj_synthetic",
-  environmentRef: "renv_synthetic",
-  environmentVersion: 2,
-  versionRef: "renvv_synthetic",
-  environmentDigest: "a".repeat(64),
-  agentRef: "agt_synthetic",
-  agentVersion: 5,
-  bindingRef: "aenv_synthetic",
-  bindingVersion: 3,
-  bindingDigest: "b".repeat(64),
-};
+const profile = projectSecretInputProfile(brokerOrigin);
 function proof() {
-  return {
-    ownerRef: profile.ownerRef,
-    organizationRef: profile.organizationRef,
-    platformRole: "OWNER",
-    environment: {
-      ref: profile.environmentRef,
-      organizationRef: profile.organizationRef,
-      projectRef: profile.projectRef,
-      scopeKind: "PROJECT",
-      name: "selfdev-write",
-      state: "ACTIVE",
-      ready: true,
-      version: profile.environmentVersion,
-      revisionRef: profile.versionRef,
-      digest: profile.environmentDigest,
-    },
-    agentVersion: profile.agentVersion,
-    binding: {
-      ref: profile.bindingRef,
-      version: profile.bindingVersion,
-      agentRef: profile.agentRef,
-      environmentRef: profile.environmentRef,
-      versionRef: profile.versionRef,
-      digest: profile.bindingDigest,
-    },
-    assignedAgents: {
-      items: [
-        {
-          ref: profile.agentRef,
-          version: profile.agentVersion,
-          projectRef: profile.projectRef,
-          system: false,
-        },
-      ],
-      nextPageToken: "",
-    },
-    impact: {
-      environmentRef: profile.environmentRef,
-      environmentVersion: profile.environmentVersion,
-      targetVersionRef: profile.versionRef,
-      targetDigest: profile.environmentDigest,
-      total: 0,
-      consumers: [],
-      nextPageToken: "",
-    },
-    secretAbsent: true,
-  };
+  return projectSecretOwnerProof(profile);
 }
 function request(patch = {}, body = Buffer.from(brokerBody(profile))) {
-  const r = Readable.from([body]);
-  Object.assign(
-    r,
-    {
-      socket: {
-        servername: brokerHost,
-        getProtocol: () => "TLSv1.3",
-        localAddress: "127.0.0.2",
-        localPort: port,
-        remoteAddress: "127.0.0.1",
-        remotePort: 45678,
-        destroyed: false,
-      },
-      method: "POST",
-      url: brokerPath,
-      headers: {
-        host: `${brokerHost}:${port}`,
-        origin: brokerOrigin,
-        "content-type": "application/json",
-        "content-length": String(body.length),
-      },
-    },
-    patch,
-  );
-  r.rawHeaders = Object.entries(r.headers).flat();
-  return r;
+  return ownerInputRequest({
+    host: brokerHost,
+    origin: brokerOrigin,
+    path: brokerPath,
+    port,
+    body,
+    changes: patch,
+  });
 }
 function response() {
   const r = new EventEmitter();

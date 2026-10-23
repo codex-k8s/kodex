@@ -11,6 +11,8 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// githubPullView projects full pull-request text and branch identity for individual read or mutation results, not compact list entries.
+// RU: githubPullView проецирует полный текст pull request и идентичность веток для отдельного чтения либо изменения, а не компактного списка.
 type githubPullView struct {
 	Number int    `json:"number"`
 	Title  string `json:"title"`
@@ -23,18 +25,22 @@ type githubPullView struct {
 	URL    string `json:"url"`
 }
 
+// projectGitHubPull copies SDK getter values without adding read-only required fields; operation-specific callers validate the response first.
+// RU: projectGitHubPull копирует значения SDK getters без дополнительных обязательных read-полей; ответ предварительно проверяет вызывающая операция.
 func projectGitHubPull(value *github.PullRequest) githubPullView {
 	return githubPullView{value.GetNumber(), value.GetTitle(), value.GetBody(), value.GetState(), value.GetHead().GetRef(), value.GetBase().GetRef(), value.GetHead().GetSHA(), value.GetDraft(), value.GetHTMLURL()}
 }
 
-// Полный read отдельно закрепляет источник. Mutation replies не получают
-// дополнительных обязательных полей и сохраняют прежнюю семантику outcome.
+// githubPullReadView adds exact base revision and changed-file count to a full read so subsequent file indexing can pin its source independently of mutation replies.
+// RU: githubPullReadView добавляет точную base-ревизию и число изменённых файлов для закрепления источника последующего индекса независимо от mutation-ответов.
 type githubPullReadView struct {
 	githubPullView
 	BaseSHA      string `json:"base_sha"`
 	ChangedFiles int    `json:"changed_files"`
 }
 
+// projectGitHubPullRead requires the selected number, head/base commits, bounded explicit changed-file count and a known open/closed state before projecting a full read.
+// RU: projectGitHubPullRead требует выбранный номер, head/base commits, явно заданное ограниченное число файлов и известное состояние open/closed до проекции полного чтения.
 func projectGitHubPullRead(value *github.PullRequest, number int) (githubPullReadView, error) {
 	if value == nil || value.GetNumber() != number || value.Head == nil || value.Base == nil ||
 		!sourceCommitPattern.MatchString(value.Head.GetSHA()) || !sourceCommitPattern.MatchString(value.Base.GetSHA()) ||
@@ -45,13 +51,24 @@ func projectGitHubPullRead(value *github.PullRequest, number int) (githubPullRea
 	return githubPullReadView{projectGitHubPull(value), value.Base.GetSHA(), value.GetChangedFiles()}, nil
 }
 
+// maximumGitHubPullFilePageSize keeps each pinned file-index response small; it is not the provider's general pagination maximum.
+// RU: maximumGitHubPullFilePageSize удерживает закреплённую страницу file-индекса маленькой, а не задаёт общий предел пагинации провайдера.
 const maximumGitHubPullFilePageSize = 4
+
+// maximumGitHubPullFiles bounds the claimed complete pull-request file count accepted by the pinned index operation.
+// RU: maximumGitHubPullFiles ограничивает заявленное полное число файлов pull request, допустимое операцией закреплённого индекса.
 const maximumGitHubPullFiles = 3000
+
+// maximumGitHubFilePathBytes bounds UTF-8 path bytes before repository-path and control-character checks.
+// RU: maximumGitHubFilePathBytes ограничивает байты UTF-8 пути до проверки repository-path и управляющих символов.
 const maximumGitHubFilePathBytes = 1024
+
+// maximumGitHubFileChangeCount limits change counters to the largest exactly representable JSON/JavaScript safe integer.
+// RU: maximumGitHubFileChangeCount ограничивает счётчики изменений максимальным точно представимым безопасным целым JSON/JavaScript.
 const maximumGitHubFileChangeCount = int64(9007199254740991)
 
-// Это индекс метаданных, не прочитанный patch или содержимое файла.
-// Nullable SHA сохраняет отсутствие provider blob identity без фиктивного hash.
+// githubPullFileIndex contains validated file metadata, not a loaded patch or file content; nullable SHA preserves an absent provider blob identity.
+// RU: githubPullFileIndex содержит проверенные метаданные файла, а не загруженный patch либо содержимое; nullable SHA сохраняет отсутствие provider blob-идентичности.
 type githubPullFileIndex struct {
 	Filename         string  `json:"filename"`
 	PreviousFilename string  `json:"previous_filename,omitempty"`
@@ -61,6 +78,8 @@ type githubPullFileIndex struct {
 	Deletions        int     `json:"deletions"`
 }
 
+// githubPullFilePage binds a serialized metadata page, offset and EOF to exact head/base revisions, total count and page size for continuation checks.
+// RU: githubPullFilePage связывает сериализованную страницу метаданных, offset и EOF с точными head/base ревизиями, общим числом и размером страницы для продолжения.
 type githubPullFilePage struct {
 	Items    string `json:"items"`
 	Count    int    `json:"count"`
@@ -73,6 +92,8 @@ type githubPullFilePage struct {
 	EOF      bool   `json:"eof"`
 }
 
+// validGitHubIndexPath requires a bounded valid UTF-8 repository path without ASCII controls, with emptiness allowed only for explicitly optional metadata.
+// RU: validGitHubIndexPath требует ограниченный корректный UTF-8 путь репозитория без ASCII control-символов, разрешая пустоту только явно необязательным метаданным.
 func validGitHubIndexPath(path string, allowEmpty bool) bool {
 	if len(path) > maximumGitHubFilePathBytes || !utf8.ValidString(path) || !validRepositoryPath(path, allowEmpty) {
 		return false
@@ -85,6 +106,10 @@ func validGitHubIndexPath(path string, allowEmpty bool) bool {
 	return true
 }
 
+// projectGitHubPullFiles validates every file's unique path, optional SHA, known status and nonnegative safe counters whose additions/deletions sum matches changes.
+// RU: projectGitHubPullFiles проверяет уникальный путь, необязательный SHA, известный статус и безопасные неотрицательные счётчики с равенством additions+deletions=changes.
+// Renames require a previous path; any invalid item rejects the whole page, while absent SHAs and empty valid pages remain explicit.
+// RU: Переименование требует предыдущий путь; неверный элемент отклоняет всю страницу, а отсутствие SHA и корректная пустая страница сохраняются явно.
 func projectGitHubPullFiles(files []*github.CommitFile) ([]githubPullFileIndex, error) {
 	result := make([]githubPullFileIndex, 0, len(files))
 	seen := make(map[string]bool, len(files))
@@ -112,6 +137,10 @@ func projectGitHubPullFiles(files []*github.CommitFile) ([]githubPullFileIndex, 
 	return result, nil
 }
 
+// executeGitHubPullFileIndex reads one small file-metadata page only when exact expected head, base and total pins match full pull-request reads both before and after listing.
+// RU: executeGitHubPullFileIndex читает маленькую страницу file-метаданных только при совпадении ожидаемых head, base и total с полным PR-чтением до и после списка.
+// Count, offset, EOF and sequential next-page checks reject truncated, stale or inconsistent pages without returning partial index data or patches.
+// RU: Проверки count, offset, EOF и последовательной next page отклоняют усечённые, устаревшие либо несогласованные страницы без частичного индекса и patch.
 func executeGitHubPullFileIndex(ctx context.Context, client *github.Client, owner, repo string, request Request, capability integrationpackage.Capability, in githubCatalogInput) (Result, error) {
 	if in.Limit < 1 || in.Limit > maximumGitHubPullFilePageSize || in.Cursor < 1 || in.Cursor > 10000 ||
 		!sourceCommitPattern.MatchString(in.ExpectedHeadSHA) || !sourceCommitPattern.MatchString(in.ExpectedBaseSHA) ||
@@ -171,8 +200,8 @@ func executeGitHubPullFileIndex(ctx context.Context, client *github.Client, owne
 		githubPullFilePage{string(encoded), len(index), response.NextPage, in.ExpectedHeadSHA, in.ExpectedBaseSHA, *in.ExpectedChangedFiles, in.Limit, offset, eof})
 }
 
-// Список является указателем, не пакетным чтением всех полных описаний.
-// Полное body возвращают отдельные read/create/update, без усечения текста.
+// githubPullIndex is a compact list pointer without body; complete descriptions remain available through separate read/create/update operations without truncation.
+// RU: githubPullIndex — компактный указатель списка без body; полные описания доступны отдельным read/create/update операциям без усечения.
 type githubPullIndex struct {
 	Number int    `json:"number"`
 	Title  string `json:"title"`
@@ -184,10 +213,14 @@ type githubPullIndex struct {
 	URL    string `json:"url"`
 }
 
+// projectGitHubPullIndex copies only compact PR identity and branch metadata, deliberately excluding body rather than truncating the original description.
+// RU: projectGitHubPullIndex копирует только компактную PR-идентичность и данные веток, намеренно исключая body вместо усечения исходного описания.
 func projectGitHubPullIndex(value *github.PullRequest) githubPullIndex {
 	return githubPullIndex{value.GetNumber(), value.GetTitle(), value.GetState(), value.GetHead().GetRef(), value.GetBase().GetRef(), value.GetHead().GetSHA(), value.GetDraft(), value.GetHTMLURL()}
 }
 
+// githubReviewView projects review identity, complete body, state and reviewed commit without exposing unrelated SDK metadata.
+// RU: githubReviewView проецирует идентичность review, полный body, состояние и проверенный commit без посторонних SDK-метаданных.
 type githubReviewView struct {
 	ID       int64  `json:"id"`
 	Body     string `json:"body"`
@@ -195,15 +228,25 @@ type githubReviewView struct {
 	CommitID string `json:"commit_id"`
 }
 
+// projectGitHubReview copies safe review fields through SDK getters; operation-specific identity and outcome checks remain with its caller.
+// RU: projectGitHubReview копирует безопасные поля review через SDK getters; идентичность и результат операции проверяет вызывающий.
 func projectGitHubReview(value *github.PullRequestReview) githubReviewView {
 	return githubReviewView{value.GetID(), value.GetBody(), value.GetState(), value.GetCommitID()}
 }
 
+// githubCommentView contains only a comment's provider ID and full body after the operation has checked its selected issue association.
+// RU: githubCommentView содержит только provider ID комментария и полный body после проверки связи с выбранным issue в соответствующей операции.
 type githubCommentView struct {
 	ID   int64  `json:"id"`
 	Body string `json:"body"`
 }
 
+// executeGitHubCollaboration dispatches PR/file/review and issue-comment operations inside the validated repository, then delegates other known operations to automation.
+// RU: executeGitHubCollaboration направляет PR/file/review и issue-comment операции внутри проверенного репозитория, передавая другие известные операции в automation.
+// Reads use bounded retry and operation-specific projections; mutations run once, preserve uncertain outcomes and do not acquire owner approval here.
+// RU: Чтения используют ограниченный повтор и проекции операции; изменения выполняются один раз, сохраняют неопределённость и не получают owner approval здесь.
+// Individual comment reads or mutations verify the exact issue URL, and full PR reads retain stronger source pins than compact lists or mutation replies.
+// RU: Отдельное чтение либо изменение комментария проверяет точный issue URL, а полный PR-read сохраняет более сильные source-привязки, чем список либо mutation-ответ.
 func (adapter *Adapter) executeGitHubCollaboration(ctx context.Context, client *github.Client, owner, repo string, request Request, capability integrationpackage.Capability, in githubCatalogInput, options github.ListOptions) (Result, error) {
 	switch request.Operation {
 	case "github.pull_request.file.list":

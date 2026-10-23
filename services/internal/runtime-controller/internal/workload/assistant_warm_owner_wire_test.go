@@ -10,7 +10,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-// Digest берётся у настоящего owner, sealTestWarmRevision здесь не используется.
+// TestAssistantWarmRuntimeOwnerWireBuild consumes an explicitly enabled
+// disposable owner's protobuf-JSON snapshot without locally resealing its digest,
+// then rejects changed image pins. Missing KODEX_TEST_WARM_WIRE_PATH skips this
+// producer-dependent test and must not be reported as a successful wire check.
+// TestAssistantWarmRuntimeOwnerWireBuild читает явно включённый protobuf-JSON
+// снимок disposable-владельца без локальной перепривязки digest и отвергает
+// изменённые image pins. Без KODEX_TEST_WARM_WIRE_PATH тест пропускается;
+// это нельзя объявлять успешной проверкой producer wire.
 func TestAssistantWarmRuntimeOwnerWireBuild(t *testing.T) {
 	path := os.Getenv("KODEX_TEST_WARM_WIRE_PATH")
 	if path == "" {

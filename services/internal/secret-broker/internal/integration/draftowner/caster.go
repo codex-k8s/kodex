@@ -15,6 +15,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
+// castWork converts owner metadata into scoped native work, validates descriptor shapes and permits
+// recovery-only receipt descriptors only on recovery reads; it checks lease representation, not
+// current-time freshness.
+// castWork переводит owner metadata в scoped native work, проверяет descriptor shapes и допускает
+// recovery-only receipt descriptors лишь при recovery reads; проверяет представление lease, не
+// актуальность относительно текущего времени.
 func castWork(v *cp.RuntimeSecretDraftWork, recovery bool) (value.DraftWork, error) {
 	if v == nil {
 		return value.DraftWork{}, secretdrafts.ErrConflict
@@ -53,6 +59,12 @@ func castWork(v *cp.RuntimeSecretDraftWork, recovery bool) (value.DraftWork, err
 	return w, nil
 }
 
+// validNativeWork checks scoped draft/binding equality, canonical staging name, namespaces, claim tuple
+// and kind/revision shape. Only recovery permits an empty zero-claim tuple; actual lease/expiry freshness
+// belongs to the domain service.
+// validNativeWork проверяет scoped draft/binding equality, canonical staging name, namespaces, claim tuple
+// и kind/revision shape. Лишь recovery допускает пустой zero-claim tuple; фактическую актуальность
+// lease/expiry проверяет domain service.
 func validNativeWork(w value.DraftWork, recovery bool) bool {
 	if !reference(w.OperationRef) || w.Binding.Validate() != nil || w.Draft.ScopeKind != w.Binding.ScopeKind || w.Draft.OrganizationRef != w.Binding.OrganizationRef || w.Draft.Ref != w.Binding.DraftRef || w.Draft.Generation != w.Binding.DraftGeneration || w.Draft.ProjectRef != w.Binding.ProjectRef || w.Draft.SecretRef != w.Binding.SecretRef || w.Draft.ValueType != w.Binding.ValueType || w.Draft.Version < 1 || w.ExpiresAt.IsZero() || len(validation.IsDNS1123Label(w.RuntimeNamespace)) != 0 || len(validation.IsDNS1123Label(w.StagedNamespace)) != 0 || w.StagedKey != "ciphertext" {
 		return false
@@ -83,6 +95,10 @@ func validNativeWork(w value.DraftWork, recovery bool) bool {
 	return true
 }
 
+// castDraft validates owner draft identity/scope/versions, bounded text, enum membership and timestamp
+// ordering, then returns metadata only; it does not grant access or require future expiry.
+// castDraft проверяет owner draft identity/scope/versions, bounded text, enum membership и порядок
+// timestamps, затем возвращает лишь metadata; доступ не выдаёт и будущего expiry не требует.
 func castDraft(v *cp.RuntimeSecretDraft) (value.SecretDraft, error) {
 	if v == nil {
 		return value.SecretDraft{}, secretdrafts.ErrConflict
@@ -117,10 +133,22 @@ func castDraft(v *cp.RuntimeSecretDraft) (value.SecretDraft, error) {
 	return draft, nil
 }
 
+// sameDraft matches stable scope/identity/descriptive/binding fields and creation/expiry while allowing a
+// nondecreasing version; state, updated time and publication/secret versions are checked separately where
+// required.
+// sameDraft сверяет стабильные scope/identity/descriptive/binding fields и creation/expiry, допуская
+// nondecreasing version; state, updated time и publication/secret versions при необходимости проверяются
+// отдельно.
 func sameDraft(actual, expected value.SecretDraft) bool {
 	return actual.ScopeKind == expected.ScopeKind && actual.OrganizationRef == expected.OrganizationRef && actual.Ref == expected.Ref && actual.ProjectRef == expected.ProjectRef && actual.SecretRef == expected.SecretRef && actual.Generation == expected.Generation && actual.ValueType == expected.ValueType && actual.Name == expected.Name && actual.Description == expected.Description && actual.Version >= expected.Version && actual.CreatedAt.Equal(expected.CreatedAt) && actual.ExpiresAt.Equal(expected.ExpiresAt)
 }
 
+// castResult requires matching owner draft and command-final state, rejects Secret output for non-PUBLISH
+// and validates published Secret scope/metadata/version/revision/state/times before returning a
+// plaintext-free result.
+// castResult требует совпавшие owner draft и command-final state, отклоняет Secret output вне PUBLISH и
+// проверяет published Secret scope/metadata/version/revision/state/times до возврата результата без
+// plaintext.
 func castResult(d *cp.RuntimeSecretDraft, s *cp.RuntimeSecret, work value.DraftWork) (value.DraftResult, error) {
 	draft, err := castDraft(d)
 	if err != nil || !sameDraft(draft, work.Draft) {
@@ -154,6 +182,11 @@ func castResult(d *cp.RuntimeSecretDraft, s *cp.RuntimeSecret, work value.DraftW
 	return result, nil
 }
 
+// requestDescriptors validates native work plus each supplied encrypted/runtime descriptor before copying
+// exact protobuf pins; optional nil descriptors remain nil and owner commands enforce required presence.
+// requestDescriptors проверяет native work и каждый переданный encrypted/runtime descriptor до копирования
+// exact protobuf pins; optional nil descriptors остаются nil, обязательность их наличия проверяют owner
+// commands.
 func requestDescriptors(work value.DraftWork, e *value.DraftEncryptedDescriptor, m *value.DraftMaterialization, recovery bool) (*cp.RuntimeSecretDraftEncryptedDescriptor, *cp.RuntimeSecretMaterialization, error) {
 	if !validNativeWork(work, recovery) {
 		return nil, nil, secretdrafts.ErrInvalid
@@ -175,16 +208,35 @@ func requestDescriptors(work value.DraftWork, e *value.DraftEncryptedDescriptor,
 	return encrypted, materialized, nil
 }
 
+// castEncrypted copies protobuf encryption/object pins without independently validating them or reading
+// ciphertext; callers must apply validEncrypted.
+// castEncrypted копирует protobuf encryption/object pins без самостоятельной проверки и чтения ciphertext;
+// caller применяет validEncrypted.
 func castEncrypted(v *cp.RuntimeSecretDraftEncryptedDescriptor) value.DraftEncryptedDescriptor {
 	return value.DraftEncryptedDescriptor{Namespace: v.GetNamespace(), Name: v.GetSecretName(), DataKey: v.GetSecretKey(), UID: v.GetSecretUid(), ResourceVersion: v.GetSecretResourceVersion(), CiphertextSHA256: v.GetCiphertextSha256(), EncryptionKey: value.DraftEncryptionKey{ID: v.GetEncryptionKeyId(), Generation: v.GetEncryptionKeyGeneration()}}
 }
+
+// validEncrypted matches staging namespace/name/ciphertext key and validates UID/RV/digest/key-identity
+// shapes, not actual object bytes or grant authority.
+// validEncrypted сверяет staging namespace/name/ciphertext key и проверяет форму UID/RV/digest/key
+// identity, не реальные object bytes и не grant authority.
 func validEncrypted(w value.DraftWork, e value.DraftEncryptedDescriptor) bool {
 	return e.Namespace == w.StagedNamespace && e.Name == w.StagedName && e.DataKey == "ciphertext" && identityToken(e.UID) && identityToken(e.ResourceVersion) && digest(e.CiphertextSHA256) && digest(e.EncryptionKey.ID) && e.EncryptionKey.Generation > 0
 }
+
+// validMaterialized accepts only claimed PUBLISH output at the canonical versioned runtime name with exact
+// revision/digest/value key and bounded identity tokens.
+// validMaterialized принимает лишь claimed PUBLISH output с canonical versioned runtime name, exact
+// revision/digest/value key и bounded identity tokens.
 func validMaterialized(w value.DraftWork, m value.DraftMaterialization) bool {
 	name, err := runtimesecret.VersionedKubernetesName(w.Draft.SecretRef, w.TargetRevision)
 	return err == nil && w.Kind == value.DraftPublish && w.ClaimGeneration > 0 && m.Namespace == w.RuntimeNamespace && m.Name == name && m.DataKey == "value" && m.Revision == w.TargetRevision && m.ContentSHA256 == w.Binding.ContentSHA256 && identityToken(m.UID) && identityToken(m.ResourceVersion)
 }
+
+// identityToken accepts one to 128 printable non-space ASCII bytes, rejecting controls and non-ASCII
+// metadata without requiring a particular UID or RV syntax.
+// identityToken принимает от 1 до 128 printable non-space ASCII bytes, отклоняя controls и non-ASCII
+// metadata без требования конкретной UID либо RV syntax.
 func identityToken(s string) bool {
 	if len(s) == 0 || len(s) > 128 {
 		return false
@@ -196,12 +248,22 @@ func identityToken(s string) bool {
 	}
 	return true
 }
+
+// timestamp returns zero for nil/invalid protobuf timestamps and AsTime only after CheckValid; zero does
+// not mean current time or a valid lease.
+// timestamp возвращает zero для nil/invalid protobuf timestamps и вызывает AsTime лишь после CheckValid;
+// zero не означает current time либо valid lease.
 func timestamp(v *timestamppb.Timestamp) time.Time {
 	if v == nil || v.CheckValid() != nil {
 		return time.Time{}
 	}
 	return v.AsTime()
 }
+
+// reference accepts one to 128 ASCII letters/digits/underscore/hyphen, not arbitrary Unicode or a
+// resource-authority proof.
+// reference принимает от 1 до 128 ASCII letters/digits/underscore/hyphen, не произвольный Unicode и не
+// resource-authority proof.
 func reference(s string) bool {
 	if len(s) < 1 || len(s) > 128 {
 		return false
@@ -213,9 +275,19 @@ func reference(s string) bool {
 	}
 	return true
 }
+
+// boundedText checks byte length, optional emptiness, valid UTF-8 and absence of NUL; it neither trims
+// whitespace nor forbids CR/LF.
+// boundedText проверяет byte length, optional emptiness, valid UTF-8 и отсутствие NUL; whitespace не
+// удаляет и CR/LF не запрещает.
 func boundedText(s string, limit int, empty bool) bool {
 	return (empty || len(s) > 0) && len(s) <= limit && utf8.ValidString(s) && !strings.ContainsRune(s, '\x00')
 }
+
+// digest accepts exactly 64 lowercase hexadecimal characters, including zero, without proving
+// correspondence to material or content.
+// digest принимает ровно 64 lowercase hexadecimal символа, включая zero, без доказательства соответствия
+// material либо content.
 func digest(s string) bool {
 	if len(s) != 64 || strings.ToLower(s) != s {
 		return false

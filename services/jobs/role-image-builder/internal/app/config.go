@@ -12,10 +12,18 @@ import (
 )
 
 const (
-	serviceName      = "role-image-builder"
+	// serviceName fixes the builder's telemetry service identity rather than accepting a request-selected name.
+	// serviceName фиксирует сервисную идентичность telemetry сборщика вместо выбора имени из запроса.
+	serviceName = "role-image-builder"
+	// metricsSubsystem fixes the bounded Prometheus subsystem shared by builder runtime and tests.
+	// metricsSubsystem фиксирует ограниченный Prometheus subsystem среды сборщика и тестов.
 	metricsSubsystem = "role_image_builder"
 )
 
+// Config carries deployment endpoints, identity-file paths, immutable pins and bounded builder/runtime timing from environment tags.
+// It stores paths rather than credential contents; detailed executor/transport validation remains at their constructors.
+// Config переносит endpoints развёртывания, пути идентичностей, immutable-привязки и ограниченные интервалы сборщика из env-тегов.
+// Хранятся пути, а не содержимое реквизитов; подробная проверка executor и транспорта остаётся в их конструкторах.
 type Config struct {
 	RPCProfile                   string        `env:"KODEX_RPC_PROFILE"`
 	Environment                  string        `env:"DEPLOYMENT_ENVIRONMENT"`
@@ -59,6 +67,10 @@ type Config struct {
 	ReadinessTimeout             time.Duration `env:"ROLE_IMAGE_BUILDER_INFRASTRUCTURE_READINESS_TIMEOUT"`
 }
 
+// loadConfig initializes the canonical builder defaults, overlays the process environment and runs local configuration validation.
+// Deployment environment and a nonzero toolchain pin must be supplied; loading does not read identity files or contact services.
+// loadConfig задаёт канонические умолчания сборщика, накладывает окружение процесса и выполняет локальную проверку конфигурации.
+// Среда развёртывания и ненулевая привязка toolchain должны быть заданы; файлы идентичностей не читаются и сервисы не вызываются.
 func loadConfig() (Config, error) {
 	config := Config{
 		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.kodex-system.svc:8443",
@@ -100,6 +112,10 @@ func loadConfig() (Config, error) {
 	return config, config.validate()
 }
 
+// validate checks the closed environment/RPC profile, endpoint shapes, canonical absolute paths and timing/hash limits.
+// Only the toolchain pin is explicitly required nonzero here; these syntactic checks neither prove file ownership nor authorize remote targets.
+// validate проверяет закрытые среду и RPC-профиль, форму endpoints, нормализованные абсолютные пути и пределы времени и хешей.
+// Здесь явно требуется ненулевой только toolchain pin; синтаксические проверки не доказывают владение файлами и не авторизуют удалённые назначения.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("role image builder RPC profile is invalid")
@@ -153,10 +169,14 @@ func (config Config) validate() error {
 	return nil
 }
 
+// validSHA256 accepts exactly 64 lowercase hexadecimal characters, including all zeros, without an algorithm prefix.
+// validSHA256 допускает ровно 64 шестнадцатеричных символа нижнего регистра, включая все нули, без префикса алгоритма.
 func validSHA256(value string) bool {
 	return len(value) == 64 && strings.Trim(value, "0123456789abcdef") == ""
 }
 
+// validManifestDigest requires the sha256 prefix followed by the exact lowercase digest syntax checked by validSHA256.
+// validManifestDigest требует префикс sha256 и точный синтаксис дайджеста нижнего регистра, проверяемый validSHA256.
 func validManifestDigest(value string) bool {
 	return strings.HasPrefix(value, "sha256:") && validSHA256(strings.TrimPrefix(value, "sha256:"))
 }

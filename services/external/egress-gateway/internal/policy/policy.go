@@ -19,6 +19,8 @@ import (
 	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
+// Policy constants pin the API shape, file bound, and closed STT profile.
+// Константы policy закрепляют формат API, предел файла и закрытый профиль STT.
 const (
 	APIVersion       = "kodex.io/v1alpha1"
 	Kind             = "EgressGatewayPolicy"
@@ -28,7 +30,8 @@ const (
 	STTOperation     = "openai.transcription"
 )
 
-// Document — версионированный machine policy contract.
+// Document is the versioned machine policy contract loaded from JSON.
+// Document — версионированный контракт машинной политики из JSON.
 type Document struct {
 	APIVersion string   `json:"apiVersion"`
 	Kind       string   `json:"kind"`
@@ -36,13 +39,15 @@ type Document struct {
 	Spec       Spec     `json:"spec"`
 }
 
-// Metadata задаёт server-owned имя и immutable revision.
+// Metadata carries the fixed policy name and immutable revision.
+// Metadata задаёт фиксированное имя политики и неизменяемую ревизию.
 type Metadata struct {
 	Name     string `json:"name"`
 	Revision string `json:"revision"`
 }
 
-// Spec задаёт DNS, resource bounds и exact destinations.
+// Spec binds DNS rules, runtime limits, destinations, and optional profiles.
+// Spec задаёт DNS, лимиты выполнения, адреса назначения и профили.
 type Spec struct {
 	DNS          DNSConfig     `json:"dns"`
 	Limits       Limits        `json:"limits"`
@@ -50,7 +55,8 @@ type Spec struct {
 	Profiles     []Profile     `json:"profiles,omitempty"`
 }
 
-// Profile связывает отдельный listener с закрытым workload/operation набором.
+// Profile binds a separate listener to a closed workload and operation.
+// Profile связывает отдельный listener с закрытой нагрузкой и операцией.
 type Profile struct {
 	Name         string        `json:"name"`
 	Workload     string        `json:"workload"`
@@ -58,10 +64,12 @@ type Profile struct {
 	Destinations []Destination `json:"destinations"`
 }
 
-// DNSConfig ограничивает server-owned resolver и cache.
+// DNSConfig reuses the validated resolver and cache bounds.
+// DNSConfig использует проверяемые пределы resolver и его кэша.
 type DNSConfig = dnsresolver.Config
 
-// Limits ограничивает CONNECT, ClientHello, dial, tunnel и shutdown.
+// Limits bounds CONNECT, ClientHello, dial, tunnel, and shutdown resources.
+// Limits ограничивает ресурсы CONNECT, ClientHello, dial, tunnel и остановки.
 type Limits struct {
 	MaximumHeaderBytes             int `json:"maximumHeaderBytes"`
 	MaximumClientHelloBytes        int `json:"maximumClientHelloBytes"`
@@ -75,13 +83,15 @@ type Limits struct {
 	ShutdownTimeoutMilliseconds    int `json:"shutdownTimeoutMilliseconds"`
 }
 
-// Destination — exact normalized FQDN и обязательный TCP/443.
+// Destination is an exact normalized FQDN with its required TCP port.
+// Destination — точный нормализованный FQDN и обязательный TCP-порт.
 type Destination struct {
 	Hostname string `json:"hostname"`
 	Port     int    `json:"port"`
 }
 
-// Active — проверенный immutable policy snapshot.
+// Active is a validated immutable policy snapshot with an exact allowlist.
+// Active — проверенный неизменяемый снимок policy с точным списком разрешений.
 type Active struct {
 	document Document
 	digest   string
@@ -89,7 +99,8 @@ type Active struct {
 	profile  *Profile
 }
 
-// LoadFile bounded-читает, строго валидирует и сверяет revision/digest.
+// LoadFile reads a bounded file and validates its expected revision and digest.
+// LoadFile ограниченно читает файл и сверяет ожидаемые ревизию и дайджест.
 func LoadFile(path, expectedRevision, expectedDigest string) (*Active, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -106,7 +117,8 @@ func LoadFile(path, expectedRevision, expectedDigest string) (*Active, error) {
 	return Load(value, expectedRevision, expectedDigest)
 }
 
-// Load строго разбирает policy bytes и создаёт ACTIVE snapshot.
+// Load strictly parses policy bytes and builds a validated active snapshot.
+// Load строго разбирает байты policy и создаёт проверенный активный снимок.
 func Load(value []byte, expectedRevision, expectedDigest string) (*Active, error) {
 	document, digest, err := parseAndDigest(value)
 	if err != nil {
@@ -125,7 +137,8 @@ func Load(value []byte, expectedRevision, expectedDigest string) (*Active, error
 	return &Active{document: document, digest: digest, allowed: allowed}, nil
 }
 
-// DigestFile возвращает canonical digest policy через тот же parser, что runtime.
+// DigestFile computes the canonical digest with the same parser used at runtime.
+// DigestFile вычисляет канонический дайджест тем же разборщиком, что и runtime.
 func DigestFile(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -140,6 +153,8 @@ func DigestFile(path string) (string, error) {
 	return digest, err
 }
 
+// parseAndDigest rejects ambiguous JSON before validating and hashing canonical fields.
+// parseAndDigest отклоняет неоднозначный JSON до проверки и хеширования полей.
 func parseAndDigest(value []byte) (Document, string, error) {
 	if len(value) == 0 || len(value) > MaximumFileBytes {
 		return Document{}, "", errors.New("policy size is invalid")
@@ -168,19 +183,24 @@ func parseAndDigest(value []byte) (Document, string, error) {
 	return document, digest, nil
 }
 
-// Revision возвращает активную immutable revision.
+// Revision returns the active immutable policy revision.
+// Revision возвращает активную неизменяемую ревизию политики.
 func (active *Active) Revision() string { return active.document.Metadata.Revision }
 
-// Digest возвращает canonical SHA-256 в hex без префикса.
+// Digest returns the canonical SHA-256 as unprefixed lowercase hexadecimal.
+// Digest возвращает канонический SHA-256 шестнадцатеричной строкой без префикса.
 func (active *Active) Digest() string { return active.digest }
 
-// DNS возвращает проверенные DNS bounds.
+// DNS returns the validated DNS resolution limits.
+// DNS возвращает проверенные пределы разрешения DNS.
 func (active *Active) DNS() DNSConfig { return active.document.Spec.DNS }
 
-// Limits возвращает проверенные runtime bounds.
+// Limits returns the validated runtime resource bounds.
+// Limits возвращает проверенные пределы ресурсов выполнения.
 func (active *Active) Limits() Limits { return active.document.Spec.Limits }
 
-// Destinations возвращает копию exact allowlist.
+// Destinations copies the exact allowlist for the active profile or default policy.
+// Destinations копирует точный список разрешений профиля либо основной политики.
 func (active *Active) Destinations() []Destination {
 	destinations := active.document.Spec.Destinations
 	if active.profile != nil {
@@ -191,7 +211,8 @@ func (active *Active) Destinations() []Destination {
 	return result
 }
 
-// ForProfile разрешает только зарегистрированный профиль того же snapshot.
+// ForProfile selects only a registered profile from this policy snapshot.
+// ForProfile выбирает только зарегистрированный профиль того же снимка policy.
 func (active *Active) ForProfile(name string) (*Active, error) {
 	for _, profile := range active.document.Spec.Profiles {
 		if profile.Name != name {
@@ -206,7 +227,8 @@ func (active *Active) ForProfile(name string) (*Active, error) {
 	return nil, errors.New("egress policy profile is not registered")
 }
 
-// ProfileIdentity возвращает только проверенные серверные идентификаторы.
+// ProfileIdentity returns identities from the selected, validated profile only.
+// ProfileIdentity возвращает идентификаторы только проверенного выбранного профиля.
 func (active *Active) ProfileIdentity() (name, workload, operation string) {
 	if active.profile != nil {
 		return active.profile.Name, active.profile.Workload, active.profile.Operation
@@ -214,17 +236,21 @@ func (active *Active) ProfileIdentity() (name, workload, operation string) {
 	return "default", "", ""
 }
 
-// Allows проверяет exact normalized hostname и port.
+// Allows checks one exact normalized hostname and port against this snapshot.
+// Allows сверяет точные нормализованные имя узла и порт с текущим снимком.
 func (active *Active) Allows(hostname string, port int) bool {
 	_, ok := active.allowed[net.JoinHostPort(hostname, strconv.Itoa(port))]
 	return ok
 }
 
-// NormalizeHostname принимает только уже canonical lowercase ASCII FQDN.
+// NormalizeHostname accepts only already canonical lowercase ASCII FQDNs.
+// NormalizeHostname принимает только канонические FQDN в нижнем регистре ASCII.
 func NormalizeHostname(value string) (string, error) {
 	return shared.NormalizeHostname(value)
 }
 
+// validate closes the policy identity, limits, destinations, and STT profile registry.
+// validate ограничивает идентичность, лимиты, адреса и реестр профилей STT.
 func validate(document *Document) error {
 	if document.APIVersion != APIVersion || document.Kind != Kind || document.Metadata.Name != "egress-gateway" {
 		return errors.New("policy identity is invalid")
@@ -282,6 +308,8 @@ func validate(document *Document) error {
 	return nil
 }
 
+// canonicalJSON serializes validated policy fields in a stable digest form.
+// canonicalJSON сериализует проверенные поля policy в устойчивой форме для дайджеста.
 func canonicalJSON(document Document) ([]byte, error) {
 	destinations := make([]map[string]any, 0, len(document.Spec.Destinations))
 	for _, destination := range document.Spec.Destinations {
@@ -332,6 +360,8 @@ func canonicalJSON(document Document) ([]byte, error) {
 	return json.Marshal(canonical)
 }
 
+// validRevision accepts a bounded ASCII revision without whitespace or separators beyond the registry.
+// validRevision принимает ограниченную ASCII-ревизию без пробелов и лишних разделителей.
 func validRevision(value string) bool {
 	if len(value) < 3 || len(value) > 64 {
 		return false
@@ -345,10 +375,14 @@ func validRevision(value string) bool {
 	return true
 }
 
+// boundedMilliseconds checks an inclusive timeout range.
+// boundedMilliseconds проверяет включительный диапазон таймаута.
 func boundedMilliseconds(value, minimum, maximum int) bool {
 	return value >= minimum && value <= maximum
 }
 
+// requireJSONEOF rejects a second JSON value or trailing non-whitespace data.
+// requireJSONEOF отклоняет второе значение JSON и лишние данные после документа.
 func requireJSONEOF(decoder *json.Decoder) error {
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
@@ -357,6 +391,8 @@ func requireJSONEOF(decoder *json.Decoder) error {
 	return nil
 }
 
+// rejectDuplicateFields scans nested JSON objects before typed decoding.
+// rejectDuplicateFields проверяет вложенные объекты JSON до типизированного разбора.
 func rejectDuplicateFields(value []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(value))
 	if err := inspectJSONValue(decoder); err != nil {
@@ -365,9 +401,12 @@ func rejectDuplicateFields(value []byte) error {
 	return requireJSONEOF(decoder)
 }
 
-// RejectDuplicateFields применяет общий строгий JSON parser к отдельной mail projection.
+// RejectDuplicateFields exposes the strict JSON duplicate-field check to mail projection.
+// RejectDuplicateFields предоставляет строгую проверку полей JSON для mail projection.
 func RejectDuplicateFields(value []byte) error { return rejectDuplicateFields(value) }
 
+// inspectJSONValue recursively rejects repeated object keys and malformed delimiters.
+// inspectJSONValue рекурсивно отклоняет повторные ключи и неверные разделители.
 func inspectJSONValue(decoder *json.Decoder) error {
 	token, err := decoder.Token()
 	if err != nil {

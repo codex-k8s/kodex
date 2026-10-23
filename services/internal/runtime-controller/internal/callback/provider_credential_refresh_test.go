@@ -28,11 +28,15 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// providerCredentialRefreshClient captures metadata-only refresh commits and returns a matching synthetic revision-two binding without implementing durable idempotency or a provider.
+// providerCredentialRefreshClient сохраняет запросы фиксации метаданных обновления и возвращает совпадающую синтетическую привязку второй ревизии без реализации устойчивой идемпотентности или провайдера.
 type providerCredentialRefreshClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	requests []*controlplanev1.CommitProviderCredentialRefreshRequest
 }
 
+// CommitProviderCredentialRefresh records the request and echoes its Secret identity/hash into a fixed synthetic account/revision response; no credential bytes are returned.
+// CommitProviderCredentialRefresh записывает запрос и переносит идентичность и хеш Secret в ответ с фиксированными синтетическими аккаунтом и ревизией; байты учётных данных не возвращаются.
 func (client *providerCredentialRefreshClient) CommitProviderCredentialRefresh(_ context.Context, request *controlplanev1.CommitProviderCredentialRefreshRequest, _ ...grpc.CallOption) (*controlplanev1.CommitProviderCredentialRefreshResponse, error) {
 	client.requests = append(client.requests, request)
 	return &controlplanev1.CommitProviderCredentialRefreshResponse{ProviderCredential: &controlplanev1.ProviderCredentialBinding{
@@ -42,6 +46,10 @@ func (client *providerCredentialRefreshClient) CommitProviderCredentialRefresh(_
 	}}, nil
 }
 
+// TestProviderCredentialRefreshRouteCommitsOnlyMaterializedMetadata runs the local refresh route twice against fake Kubernetes, verifies exact new Secret bytes and stable metadata commit idempotency keys, then rejects an invalid ticket.
+// The stub accepts both commits; this proves key reuse and projection, not durable exactly-once behavior or real credential refresh.
+// TestProviderCredentialRefreshRouteCommitsOnlyMaterializedMetadata дважды вызывает локальный маршрут обновления с подставным Kubernetes, проверяет точные новые байты Secret и одинаковые ключи идемпотентности запросов метаданных, затем отклоняет неверный билет.
+// Подстановка принимает обе фиксации; доказываются повторное использование ключа и проекция, а не устойчивая однократность или настоящее обновление учётных данных.
 func TestProviderCredentialRefreshRouteCommitsOnlyMaterializedMetadata(t *testing.T) {
 	manager, client, input, payload, ticket := providerCredentialRefreshRouteFixture(t)
 	runtimeClient := &providerCredentialRefreshClient{}
@@ -91,6 +99,8 @@ func TestProviderCredentialRefreshRouteCommitsOnlyMaterializedMetadata(t *testin
 	}
 }
 
+// TestProviderCredentialRefreshRouteRejectsRevisionMismatchBeforeMaterialization checks a mismatched runtime-revision digest returns HTTP 400 without an owner commit; all workload objects remain local fake fixtures.
+// TestProviderCredentialRefreshRouteRejectsRevisionMismatchBeforeMaterialization проверяет HTTP 400 при несовпадающем дайджесте ревизии выполнения без фиксации у владельца; все объекты нагрузки остаются локальными подставными данными.
 func TestProviderCredentialRefreshRouteRejectsRevisionMismatchBeforeMaterialization(t *testing.T) {
 	manager, _, input, payload, ticket := providerCredentialRefreshRouteFixture(t)
 	runtimeClient := &providerCredentialRefreshClient{}
@@ -108,6 +118,10 @@ func TestProviderCredentialRefreshRouteRejectsRevisionMismatchBeforeMaterializat
 	}
 }
 
+// bindTestExecutionHeaders copies exact tenant/run/session/turn/attempt/digest coordinates and callback method from fixture input into request headers.
+// It adds no Authorization ticket and does not authenticate caller-supplied header values by itself.
+// bindTestExecutionHeaders копирует точные координаты организации, проекта, запуска, сессии, хода, попытки, дайджестов и метод обратного вызова из тестового входа в заголовки запроса.
+// Билет Authorization не добавляется; функция сама не аутентифицирует значения заголовков вызывающей стороны.
 func bindTestExecutionHeaders(request *http.Request, input runtimecontract.RunnerInput, method string) {
 	request.Header.Set("X-Kodex-Organization-Ref", input.OrganizationRef)
 	request.Header.Set("X-Kodex-Project-Ref", input.ProjectRef)
@@ -123,6 +137,8 @@ func bindTestExecutionHeaders(request *http.Request, input runtimecontract.Runne
 	request.Header.Set("X-Kodex-Callback-Method", method)
 }
 
+// TestExecutionHeadersRejectCrossBoundaryAndStaleProjection checks exact fixture headers succeed and nine independently changed tenant/session/attempt/digest/method headers fail the existing matcher.
+// TestExecutionHeadersRejectCrossBoundaryAndStaleProjection проверяет принятие точных тестовых заголовков и отказ существующей проверки при девяти независимых изменениях организации, сессии, попытки, дайджестов и метода.
 func TestExecutionHeadersRejectCrossBoundaryAndStaleProjection(t *testing.T) {
 	input := validWarmExecutionInput()
 	request := httptest.NewRequest(http.MethodPost, "/v1/executions/"+input.LeaseRef+"/progress", nil)
@@ -152,6 +168,8 @@ func TestExecutionHeadersRejectCrossBoundaryAndStaleProjection(t *testing.T) {
 	}
 }
 
+// TestProviderCredentialRefreshReadbackRequiresExactNewRevision accepts the exact next credential revision and materialized Secret metadata, then rejects account, revision-ref/number, resource-version and hash mutations.
+// TestProviderCredentialRefreshReadbackRequiresExactNewRevision принимает точную следующую ревизию учётных данных и метаданные размещённого Secret, затем отклоняет изменения аккаунта, ссылки и номера ревизии, версии ресурса и хеша.
 func TestProviderCredentialRefreshReadbackRequiresExactNewRevision(t *testing.T) {
 	input := validWarmExecutionInput()
 	materialized := workload.ProviderSecretBinding{Name: "runtime-provider-refresh-123", UID: "secret-uid", ResourceVersion: "21", ContentSHA256: strings.Repeat("e", 64)}
@@ -181,6 +199,10 @@ func TestProviderCredentialRefreshReadbackRequiresExactNewRevision(t *testing.T)
 	}
 }
 
+// providerCredentialRefreshRouteFixture builds a fake Kubernetes manager, synthetic immutable provider Secret, exact runtime/context bindings and a generated callback ticket for local route tests.
+// Optional input changes are applied before revision/binding digests; the returned refresh payload contains inert fixture strings only.
+// providerCredentialRefreshRouteFixture создаёт подставной менеджер Kubernetes, синтетический неизменяемый Secret провайдера, точные привязки выполнения и контекста, сгенерированный билет обратного вызова для локальных тестов маршрута.
+// Необязательные изменения входа применяются до вычисления дайджестов ревизии и привязок; возвращаемый запрос обновления содержит только неактивные тестовые строки.
 func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runtimecontract.RunnerInput)) (*workload.Manager, *fake.Clientset, runtimecontract.RunnerInput, runtimecontract.RunnerProviderCredentialRefreshRequest, string) {
 	t.Helper()
 	client := fake.NewSimpleClientset()
@@ -263,6 +285,8 @@ func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runt
 	return manager, client, input, payload, string(ticketSecret.Data["token"])
 }
 
+// callbackTicketName derives the expected fake-manager ticket Secret name from the first eight SHA256 bytes of the lease ref; it does not generate or reveal a ticket.
+// callbackTicketName вычисляет ожидаемое имя Secret билета подставного менеджера по первым восьми байтам SHA256 ссылки аренды; билет не генерируется и не раскрывается.
 func callbackTicketName(leaseRef string) string {
 	digest := sha256.Sum256([]byte(leaseRef))
 	return "runtime-ticket-" + hex.EncodeToString(digest[:8])

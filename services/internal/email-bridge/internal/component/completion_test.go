@@ -14,24 +14,40 @@ import (
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
 )
 
+// cancellingProvider cancels the caller during a synthetic mutation and counts
+// attempts, allowing completion-context tests without any external mail transport.
+// cancellingProvider отменяет вызывающий контекст во время искусственного изменения
+// и считает попытки, позволяя проверить завершение без внешнего почтового транспорта.
 type cancellingProvider struct {
 	mail.Provider
 	cancel context.CancelFunc
 	calls  int
 }
 
+// Send cancels the request but returns synthetic SMTP acceptance, modelling an
+// accepted external effect whose receipt still needs independent completion.
+// Send отменяет запрос, но возвращает искусственное принятие SMTP, моделируя
+// принятый внешний эффект, квитанцию которого ещё нужно независимо завершить.
 func (p *cancellingProvider) Send(ctx context.Context, _ api.Mailbox, _ api.Command, _ string) (string, error) {
 	p.calls++
 	p.cancel()
 	return "accepted", nil
 }
 
+// Apply cancels the request and returns partial IMAP coordinates with its error;
+// tests require that uncertainty and the source identity survive receipt completion.
+// Apply отменяет запрос и возвращает частичные координаты IMAP с ошибкой;
+// тесты требуют сохранить неопределённость и источник при завершении квитанции.
 func (p *cancellingProvider) Apply(ctx context.Context, _ api.Mailbox, _ api.Command, _ string) (api.Result, error) {
 	p.calls++
 	p.cancel()
 	return api.Result{Status: "unknown", Uid: "42", UidValidity: 7, Folder: "INBOX", ContentDigest: strings.Repeat("a", 64)}, ctx.Err()
 }
 
+// completionStore wraps a fixture repository to inspect completion deadlines
+// and optionally reject persistence after the provider has already been invoked.
+// completionStore оборачивает тестовый репозиторий для проверки срока завершения
+// и управляемого отказа сохранения после уже выполненного вызова провайдера.
 type completionStore struct {
 	port.Repository
 	port.ReportRepository
@@ -39,6 +55,10 @@ type completionStore struct {
 	fail bool
 }
 
+// CompleteEffect requires a live independent context bounded by three seconds;
+// it either injects Unavailable or delegates the unchanged completion to the store.
+// CompleteEffect требует действующий независимый контекст с бюджетом до трёх секунд;
+// затем возвращает искусственный Unavailable либо передаёт завершение хранилищу.
 func (s *completionStore) CompleteEffect(ctx context.Context, scope port.Scope, record port.Record, status string, source port.ReportSource) (port.Record, error) {
 	s.t.Helper()
 	deadline, ok := ctx.Deadline()
@@ -51,10 +71,18 @@ func (s *completionStore) CompleteEffect(ctx context.Context, scope port.Scope, 
 	return s.ReportRepository.CompleteEffect(ctx, scope, record, status, source)
 }
 
+// TestReceiptCompletionAfterCancellation runs the cancellation/replay matrix
+// against memory only; it does not establish persistent receipt recovery.
+// TestReceiptCompletionAfterCancellation выполняет матрицу отмены/повтора только
+// в памяти; устойчивое восстановление квитанций этим тестом не доказывается.
 func TestReceiptCompletionAfterCancellation(t *testing.T) {
 	testReceiptCompletion(t, nil)
 }
 
+// TestMutationRequiresCompletionLifecycle rejects a missing or cancelled cleanup
+// base before reserving a receipt or calling the synthetic provider.
+// TestMutationRequiresCompletionLifecycle отклоняет отсутствующую или отменённую
+// основу завершения до резервирования квитанции и вызова тестового провайдера.
 func TestMutationRequiresCompletionLifecycle(t *testing.T) {
 	for _, missing := range []bool{false, true} {
 		base, cancel := context.WithCancel(t.Context())
@@ -72,10 +100,18 @@ func TestMutationRequiresCompletionLifecycle(t *testing.T) {
 	}
 }
 
+// TestPostgresReceiptCompletionAfterCancellation runs the same lifecycle checks
+// with a disposable database, skipping when its explicit fixture is unavailable.
+// TestPostgresReceiptCompletionAfterCancellation проверяет тот же жизненный цикл
+// с временной БД и пропускается при отсутствии явно настроенного стенда.
 func TestPostgresReceiptCompletionAfterCancellation(t *testing.T) {
 	testReceiptCompletion(t, postgresFixture(t))
 }
 
+// testReceiptCompletion covers accepted SMTP, partial IMAP and failed completion;
+// it verifies replay without a second provider call and locking of unknown IMAP sources.
+// testReceiptCompletion проверяет принятое SMTP, частичное IMAP и сбой завершения;
+// повтор не должен снова вызвать провайдера или снять блокировку неопределённого источника.
 func testReceiptCompletion(t *testing.T, durable port.Repository) {
 	t.Helper()
 	for _, scenario := range []string{"smtp-accepted", "imap-partial", "store-failure"} {

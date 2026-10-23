@@ -14,10 +14,26 @@ import (
 )
 
 const (
-	CatalogMethodAPIKey     = "API_KEY"
+	// CatalogMethodAPIKey selects account API-list observation using a bounded API key and the separate
+	// pinned API capability source, never an app-server login.
+	// CatalogMethodAPIKey выбирает наблюдение API списка account через ограниченный API key и отдельный
+	// закреплённый API capability источник, без app-server login.
+	CatalogMethodAPIKey = "API_KEY"
+	// CatalogMethodDeviceCode selects observation from an existing managed account's access token; it does
+	// not initiate device authorization or permit observation-time refresh.
+	// CatalogMethodDeviceCode выбирает наблюдение по access token существующего managed account; device
+	// authorization не начинается, refresh во время наблюдения не разрешается.
 	CatalogMethodDeviceCode = "DEVICE_CODE"
 )
 
+// ObserveModelCatalog selects the API-key path or a temporary isolated access-token app-server session
+// under one deadline. Device observation passes no refresh token, validates protocol capabilities and
+// optionally a fresh pinned cache, then joins the watcher/process and removes private state; cleanup
+// failure cannot preserve a successful catalog.
+// ObserveModelCatalog выбирает API-key путь либо временную изолированную access-token app-server сессию
+// с общим дедлайном. Device наблюдение не передаёт refresh token, проверяет protocol capabilities и при
+// необходимости свежий закреплённый cache, затем завершает watcher/process и удаляет приватное
+// состояние; cleanup ошибка не сохраняет успешный каталог.
 func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJSON []byte, method string) (result ModelCatalog, resultErr error) {
 	if ctx == nil || len(authJSON) < 1 || len(authJSON) > maximumAuthJSONBytes {
 		return ModelCatalog{}, ErrInvalidInput
@@ -109,12 +125,22 @@ func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJS
 	return ModelCatalog{ObservedAt: time.Now().UTC(), Source: CatalogRemoteCodex, Models: models, Failure: CatalogFailureNone}, nil
 }
 
+// catalogAuth holds only the mode-specific material required by observation: a mutable API-key copy or
+// access-token/account strings, never a forwarded refresh token.
+// catalogAuth хранит только нужные наблюдению данные режима: изменяемую API-key копию либо
+// access-token/account строки, без передачи refresh token.
 type catalogAuth struct {
 	apiKey      []byte
 	accessToken string
 	accountID   string
 }
 
+// catalogAuthentication checks mode-specific credential shape and bounds, rejecting API-key/token
+// mixtures and unsafe edge whitespace or control separators. It selects only access-token/account fields
+// for device observation, without treating JSON parsing as canonical or cryptographic verification.
+// catalogAuthentication проверяет форму и границы credentials режима, отклоняя смешение API key/tokens и
+// опасные крайние пробелы или управляющие разделители. Для device наблюдения выбираются только
+// access-token/account поля; JSON разбор не считается канонической или криптографической проверкой.
 func catalogAuthentication(raw []byte, method string) (catalogAuth, error) {
 	var auth struct {
 		Mode   string `json:"auth_mode"`
@@ -143,10 +169,20 @@ func catalogAuthentication(raw []byte, method string) (catalogAuth, error) {
 	}
 }
 
+// validCatalogTokenField requires nonempty byte-bounded text without leading/trailing whitespace, CR, LF
+// or NUL; it is not a general token authenticity or full ASCII validator.
+// validCatalogTokenField требует непустой текст ограниченной байтовой длины без крайних пробелов, CR, LF
+// и NUL; это не проверка подлинности token или всего ASCII-алфавита.
 func validCatalogTokenField(value string, maximum int) bool {
 	return value != "" && len(value) <= maximum && strings.TrimSpace(value) == value && !strings.ContainsAny(value, "\r\n\x00")
 }
 
+// readAppServerCatalog collects at most eight 32-record pages, requires matching model/ID and valid
+// accumulated capabilities, and rejects empty, repeated or oversize continuation cursors. No-effort none
+// defaults normalize to empty; model order follows the protocol.
+// readAppServerCatalog собирает максимум восемь страниц по 32 записи, требует совпадения model/ID и
+// корректных накопленных возможностей, отклоняет пустые, повторные или слишком длинные continuation
+// cursors. Default none без efforts нормализуется в пустой; порядок моделей следует протоколу.
 func readAppServerCatalog(ctx context.Context, server *appServer) ([]CatalogModel, error) {
 	models := make([]CatalogModel, 0)
 	cursor := ""
@@ -203,6 +239,12 @@ func readAppServerCatalog(ctx context.Context, server *appServer) ([]CatalogMode
 	return nil, atCatalogStage(catalogStageListCursor, errModelCatalogUnverified)
 }
 
+// readRemoteCodexCatalog opens only models_cache.json without following symlinks and without blocking on
+// special files, requires a regular single-link file owned by the effective UID and a bounded read, then
+// validates snapshot freshness and capabilities. It does not itself impose a file permission mode.
+// readRemoteCodexCatalog открывает только models_cache.json без следования symlink и блокировки на
+// специальных файлах, требует обычный single-link файл effective UID и ограниченное чтение, затем
+// проверяет свежесть и возможности снимка. Режим прав файла здесь отдельно не задаётся.
 func readRemoteCodexCatalog(home string, started time.Time, capabilities []CatalogModel) ([]CatalogModel, error) {
 	file, err := os.OpenFile(filepath.Join(home, "models_cache.json"), os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
@@ -225,6 +267,14 @@ func readRemoteCodexCatalog(home string, started time.Time, capabilities []Catal
 	return parseRemoteCodexCatalog(raw, started, time.Now().UTC(), capabilities)
 }
 
+// parseRemoteCodexCatalog requires the pinned client version and fetch time within this observation,
+// validates unique remote models and returns the protocol-ordered intersection. Matching defaults and
+// effort order must agree exactly; IsDefault remains protocol-owned, and ordinary JSON decoding is not a
+// duplicate-field guard.
+// parseRemoteCodexCatalog требует закреплённую client версию и время fetch в пределах этого наблюдения,
+// проверяет уникальные remote модели и возвращает пересечение в порядке протокола. Defaults и порядок
+// efforts совпадают точно; IsDefault принадлежит протоколу, обычный JSON decoder не запрещает duplicate
+// поля.
 func parseRemoteCodexCatalog(raw []byte, started, now time.Time, capabilities []CatalogModel) ([]CatalogModel, error) {
 	if validateCatalogModels(capabilities) != nil {
 		return nil, atCatalogStage(catalogStageListCapabilities, errModelCatalogUnverified)

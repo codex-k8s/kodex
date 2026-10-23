@@ -2,6 +2,8 @@ package oidcverifier
 
 import "testing"
 
+// TestNormalizeGroupsBoundsAndSorts checks stable ordering, duplicate removal and rejection of unsafe or excessive claims.
+// TestNormalizeGroupsBoundsAndSorts проверяет порядок, удаление повторов и отказ небезопасным или избыточным claims.
 func TestNormalizeGroupsBoundsAndSorts(t *testing.T) {
 	groups, err := normalizeGroups([]string{"operators", " auditors ", "operators"})
 	if err != nil || len(groups) != 2 || groups[0] != "auditors" || groups[1] != "operators" {

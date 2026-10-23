@@ -12,6 +12,8 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
+// TestEmptyMattermostCatalogKeepsAdapterConstructible checks that an optional adapter can start with no allowed provider hosts and no remote request.
+// RU: TestEmptyMattermostCatalogKeepsAdapterConstructible проверяет создание необязательного адаптера без разрешённых узлов провайдера и без удалённого запроса.
 func TestEmptyMattermostCatalogKeepsAdapterConstructible(t *testing.T) {
 	t.Parallel()
 	adapter, err := New(Config{
@@ -24,6 +26,8 @@ func TestEmptyMattermostCatalogKeepsAdapterConstructible(t *testing.T) {
 	}
 }
 
+// TestParseDecisionUsesBoundedCommands covers explicit bilingual decisions, nonempty feedback and rejection of unrelated or empty commands.
+// RU: TestParseDecisionUsesBoundedCommands проверяет явные двуязычные решения, непустую обратную связь и отклонение посторонних либо пустых команд.
 func TestParseDecisionUsesBoundedCommands(t *testing.T) {
 	t.Parallel()
 	tests := map[string]controlplanev1.OwnerGateDecision{
@@ -43,6 +47,8 @@ func TestParseDecisionUsesBoundedCommands(t *testing.T) {
 	}
 }
 
+// TestPostedMessageDropsForeignChannelAndBot accepts a synthetic posted event only for the intended channel and a non-bot author.
+// RU: TestPostedMessageDropsForeignChannelAndBot принимает синтетическое posted-событие только для заданного канала и автора не-бота.
 func TestPostedMessageDropsForeignChannelAndBot(t *testing.T) {
 	t.Parallel()
 	event := model.NewWebSocketEvent(model.WebsocketEventPosted, "team", "channel", "user", nil, "").SetData(map[string]any{
@@ -59,6 +65,8 @@ func TestPostedMessageDropsForeignChannelAndBot(t *testing.T) {
 	}
 }
 
+// TestOutcomeDoesNotExposeProviderError ensures an arbitrary raw provider diagnostic becomes only the stable unavailable code.
+// RU: TestOutcomeDoesNotExposeProviderError проверяет превращение произвольной сырой диагностики провайдера только в устойчивый код недоступности.
 func TestOutcomeDoesNotExposeProviderError(t *testing.T) {
 	t.Parallel()
 	success, code := Outcome(errors.New("provider response with secret"))
@@ -67,6 +75,8 @@ func TestOutcomeDoesNotExposeProviderError(t *testing.T) {
 	}
 }
 
+// localizerForTest constructs an in-memory English READY catalog and fails setup if localizer initialization is invalid.
+// RU: localizerForTest создаёт английский каталог READY в памяти и завершает подготовку при ошибке инициализации локализатора.
 func localizerForTest(t *testing.T) *texti18n.Localizer {
 	t.Helper()
 	localizer, err := texti18n.New(texti18n.Config{

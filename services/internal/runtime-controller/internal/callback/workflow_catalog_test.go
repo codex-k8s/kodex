@@ -16,6 +16,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// workflowCatalogClient captures the last catalog request and call count, returning
+// a configured in-memory response without performing owner authorization or live discovery.
+// workflowCatalogClient сохраняет последний catalog request/call count и возвращает
+// заданный in-memory response без owner authorization и live discovery.
 type workflowCatalogClient struct {
 	cp.RuntimeWorkServiceClient
 	request  *cp.GetExecutionWorkflowCatalogRequest
@@ -23,15 +27,30 @@ type workflowCatalogClient struct {
 	calls    int
 }
 
+// GetExecutionWorkflowCatalog records the request pointer, increments calls and returns
+// the configured response by reference; tests intentionally mutate that response between calls.
+// GetExecutionWorkflowCatalog записывает request pointer,увеличивает calls и возвращает
+// заданный response по ссылке; tests намеренно меняют его между вызовами.
 func (client *workflowCatalogClient) GetExecutionWorkflowCatalog(_ context.Context, request *cp.GetExecutionWorkflowCatalogRequest, _ ...grpc.CallOption) (*cp.GetExecutionWorkflowCatalogResponse, error) {
 	client.calls++
 	client.request = request
 	return client.response, nil
 }
 
+// workflowCatalogFixture creates one synthetic published-workflow discovery row with
+// required input metadata, readiness pins and a continuation token; it is not live readiness.
+// workflowCatalogFixture создаёт synthetic published-workflow discovery row с required
+// input metadata,readiness pins/continuation token; это не live readiness.
 func workflowCatalogFixture() *cp.GetExecutionWorkflowCatalogResponse {
 	return &cp.GetExecutionWorkflowCatalogResponse{NextPageToken: "canonical-next", Items: []*cp.ExecutionWorkflowCatalogEntry{{WorkflowRef: "wfl_workflow01", Name: "Рабочий процесс", Purpose: "Безопасная проверка", WorkflowVersion: 7, PublishedRef: "wfv_workflow01", SpecDigest: strings.Repeat("a", 64), InputFields: []*cp.WorkflowInputField{{Key: "field-001", Label: "Задача", ValueType: "LONG_TEXT", Required: true}}, Readiness: &cp.WorkflowLaunchReadiness{AllowedToSubmit: true, Reason: "READY", WorkflowVersion: 7, RevisionRef: "wfv_workflow01", ContextDigest: strings.Repeat("b", 64), OperationalState: "READY"}}}}
 }
+
+// TestExecutionWorkflowCatalogClosedProjection checks bounded ordinary tools/catalog
+// wire, lease-bound query mapping, safe mode metadata and preservation of owner UNKNOWN
+// operational state; unauthorized scopes and malformed owner rows fail locally.
+// TestExecutionWorkflowCatalogClosedProjection проверяет bounded ordinary tools/catalog
+// wire,lease-bound query mapping,safe mode metadata и сохранение owner UNKNOWN state;
+// недопустимые scopes и malformed owner rows отвергаются локально.
 func TestExecutionWorkflowCatalogClosedProjection(t *testing.T) {
 	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: runtimecontract.AssistantScopeNone, ProjectRef: "prj_project001", Capabilities: []string{"platform.run.launch"}, LeaseRef: "lse_origin001", LeaseFence: "fixture-fence", LeaseGeneration: 7}
 	client := &workflowCatalogClient{response: workflowCatalogFixture()}

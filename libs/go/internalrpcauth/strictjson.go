@@ -8,15 +8,26 @@ import (
 	"io"
 )
 
+// maxJSONDepth bounds nesting while inspecting every token for duplicate
+// fields before a JSON document is used as configuration or signed claims.
+// RU: maxJSONDepth ограничивает вложенность при просмотре всех токенов на
+// повторные поля до использования JSON как конфигурации или подписанных claims.
 const maxJSONDepth = 16
 
-// DecodeStrictJSON декодирует доверенную неподписанную конфигурацию, запрещая
-// дублирующиеся и неизвестные поля, лишние данные и чрезмерную вложенность.
-// В отличие от DecodeCanonicalJSON функция не требует JCS-представления байтов.
+// DecodeStrictJSON decodes trusted unsigned configuration, rejecting duplicate
+// and unknown fields, trailing data and excessive depth; unlike
+// DecodeCanonicalJSON, it does not require canonical JCS bytes.
+// RU: DecodeStrictJSON декодирует доверенную неподписанную конфигурацию,
+// отклоняя повторные и неизвестные поля, лишние данные и глубину; в отличие
+// от DecodeCanonicalJSON не требует канонических байтов JCS.
 func DecodeStrictJSON(data []byte, target any) error {
 	return decodeStrictJSON(data, target)
 }
 
+// decodeStrictJSON performs the duplicate-field walk before decoding into the
+// expected Go shape with unknown-field rejection and an EOF trailing check.
+// RU: decodeStrictJSON ищет повторные поля до декодирования в ожидаемую Go
+// форму с отказом на неизвестные поля и проверкой EOF после документа.
 func decodeStrictJSON(data []byte, target any) error {
 	if len(data) == 0 {
 		return errors.New("empty JSON")
@@ -37,6 +48,10 @@ func decodeStrictJSON(data []byte, target any) error {
 	return nil
 }
 
+// ensureStrictJSONObject requires a duplicate-free top-level JSON object
+// before the verified JWS payload is considered for canonical claim decoding.
+// RU: ensureStrictJSONObject требует объект JSON без повторных полей на
+// верхнем уровне до канонического декодирования claims проверенного JWS.
 func ensureStrictJSONObject(data []byte) error {
 	if err := rejectDuplicateJSONFields(data); err != nil {
 		return err
@@ -53,6 +68,10 @@ func ensureStrictJSONObject(data []byte) error {
 	return nil
 }
 
+// rejectDuplicateJSONFields walks an entire JSON value and rejects ambiguous
+// object keys or extra tokens, not merely the first successfully decoded item.
+// RU: rejectDuplicateJSONFields проходит всё значение JSON и отклоняет
+// неоднозначные ключи объектов либо лишние токены, а не только первый элемент.
 func rejectDuplicateJSONFields(data []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
@@ -65,6 +84,10 @@ func rejectDuplicateJSONFields(data []byte) error {
 	return nil
 }
 
+// walkJSONValue recursively scans object and array tokens, bounding nesting
+// and detecting repeated keys independently within each object scope.
+// RU: walkJSONValue рекурсивно просматривает токены объектов и массивов,
+// ограничивает глубину и ищет повторные ключи отдельно в каждом объекте.
 func walkJSONValue(decoder *json.Decoder, depth int) error {
 	if depth > maxJSONDepth {
 		return errors.New("JSON depth exceeds limit")

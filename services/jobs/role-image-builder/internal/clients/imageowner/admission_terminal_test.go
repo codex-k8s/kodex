@@ -13,6 +13,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// terminalRPCStub independently controls the fail/expiry denial and readback proof,
+// recording terminal reads and their deadline without real owner authority.
+// terminalRPCStub независимо задаёт отказы fail/expiry и доказательство readback,
+// сохраняя terminal-чтения и их срок без настоящих полномочий владельца.
 type terminalRPCStub struct {
 	cp.RoleImageServiceClient
 	proof    *cp.GetImageAdmissionTerminalResponse
@@ -23,12 +27,26 @@ type terminalRPCStub struct {
 	deadline bool
 }
 
+// FailImageAdmission returns the chosen synthetic denial or uncertain error;
+// it does not manufacture a successful failure receipt.
+// FailImageAdmission возвращает выбранный искусственный отказ либо неопределённую
+// ошибку и не создаёт успешную квитанцию завершения.
 func (s *terminalRPCStub) FailImageAdmission(context.Context, *cp.FailImageAdmissionRequest, ...grpc.CallOption) (*cp.FailImageAdmissionResponse, error) {
 	return nil, status.Error(s.failCode, "closed fixture denial")
 }
+
+// ExpireImageAdmissionClaim always denies the synthetic expiry, forcing recovery
+// to rely on separate exact terminal readback rather than this denied write.
+// ExpireImageAdmissionClaim всегда отклоняет искусственный expiry, заставляя recovery
+// использовать отдельный точный terminal readback, а не отклонённую запись.
 func (s *terminalRPCStub) ExpireImageAdmissionClaim(context.Context, *cp.ExpireImageAdmissionClaimRequest, ...grpc.CallOption) (*cp.ExpireImageAdmissionClaimResponse, error) {
 	return nil, status.Error(codes.PermissionDenied, "closed fixture denial")
 }
+
+// GetImageAdmissionTerminal records one exact read request and whether its context
+// is bounded, then returns the independently configured synthetic proof/read error.
+// GetImageAdmissionTerminal сохраняет точный запрос чтения и наличие ограниченного
+// срока контекста, затем возвращает отдельно заданные искусственные proof/read error.
 func (s *terminalRPCStub) GetImageAdmissionTerminal(ctx context.Context, request *cp.GetImageAdmissionTerminalRequest, options ...grpc.CallOption) (*cp.GetImageAdmissionTerminalResponse, error) {
 	s.reads++
 	s.request = request
@@ -36,6 +54,14 @@ func (s *terminalRPCStub) GetImageAdmissionTerminal(ctx context.Context, request
 	return s.proof, s.readErr
 }
 
+// TestSupersededAdmissionRecoveryRequiresExactOwnerTerminalProof permits four exact
+// terminal states, rejects denied/mismatched/unknown/stale readback and preserves
+// original claim/risk/source request pins. Unavailable must not cause terminal reads;
+// fabricated protobuf proofs do not exercise the real owner's storage or authority.
+// TestSupersededAdmissionRecoveryRequiresExactOwnerTerminalProof допускает четыре
+// точных terminal-состояния, отклоняет отказ, чужой/неизвестный/старый readback
+// и сохраняет исходные claim/risk/source. Unavailable не должен запускать чтение;
+// искусственные protobuf-доказательства не проверяют хранилище/authority владельца.
 func TestSupersededAdmissionRecoveryRequiresExactOwnerTerminalProof(t *testing.T) {
 	claim := Claim{ArtifactID: "imgart_12345678", Version: 2, Fence: 1, AuthorityGeneration: 4, ClaimToken: "private-fixture-token", RecipeID: "imgrec_12345678", RecipeGeneration: 1, BuildID: "imgbld_12345678", BuildAttempt: 1, ScopeKind: "PROJECT", OrganizationRef: "org_12345678", ProjectRef: "prj_12345678", ManifestDigest: "manifest-fixture", ImmutableBuildSHA256: "build-fixture", ProvenanceSHA256: "provenance-fixture", PolicyRevision: 1, PolicySHA256: "policy-fixture", SpecSHA256: "spec-fixture", AdmissionAttemptRef: "imgadm_12345678", AdmissionAttempt: 1, ExpiresAt: time.Now().Add(time.Hour)}
 	proof := &cp.GetImageAdmissionTerminalResponse{TerminalState: cp.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_CANCELLED, ClaimedArtifact: &cp.ImageArtifact{Ref: claim.ArtifactID, Version: claim.Version, RecipeRef: claim.RecipeID, RecipeGeneration: claim.RecipeGeneration, BuildRef: claim.BuildID, BuildAttempt: claim.BuildAttempt, ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: claim.OrganizationRef, ProjectRef: claim.ProjectRef, ManifestDigest: claim.ManifestDigest, ImmutableBuildSha256: claim.ImmutableBuildSHA256, ProvenanceSha256: claim.ProvenanceSHA256, PolicyRevision: claim.PolicyRevision, PolicySha256: claim.PolicySHA256, SpecSha256: claim.SpecSHA256}, AdmissionAttemptRef: claim.AdmissionAttemptRef, AdmissionAttempt: 1, ClaimFence: claim.Fence, ClaimAuthorityGeneration: claim.AuthorityGeneration, TerminalArtifactVersion: 3, TerminalFence: 2, TerminalAttemptVersion: 3}

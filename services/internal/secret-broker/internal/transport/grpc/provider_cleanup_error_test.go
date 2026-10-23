@@ -11,6 +11,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestCleanupSnapshotChangedErrorPreservesClosedNoEffectProof grants one empty-metadata ErrorInfo only to
+// the snapshot-changed sentinel and denies that signal to conflict/invalid/deadline or matching untrusted
+// text.
+// TestCleanupSnapshotChangedErrorPreservesClosedNoEffectProof допускает один empty-metadata ErrorInfo лишь
+// для snapshot-changed sentinel и запрещает этот signal для conflict/invalid/deadline и совпавшего
+// untrusted text.
 func TestCleanupSnapshotChangedErrorPreservesClosedNoEffectProof(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {

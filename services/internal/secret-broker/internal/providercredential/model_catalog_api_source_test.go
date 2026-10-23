@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+// expectedAPICapabilities returns the exact nine-model dated fixture expected from the embedded reviewed
+// source, including explicit runtime-policy versus API defaults; it is not a live provider inventory.
+// expectedAPICapabilities возвращает точную датированную fixture девяти моделей из embedded проверенного
+// источника с явными runtime-policy и API defaults; это не live инвентаризация provider.
 func expectedAPICapabilities() []CatalogModel {
 	return []CatalogModel{
 		{ID: "gpt-6.1-sol", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"low", "medium", "high", "xhigh", "max"}},
@@ -29,6 +33,12 @@ func expectedAPICapabilities() []CatalogModel {
 	}
 }
 
+// TestAPIExactNineCapabilitiesAndAccountSubsets validates the pinned source at a fixed in-window date,
+// then intersects synthetic account subsets and unknown models while preserving reviewed effort/default
+// values and source order.
+// TestAPIExactNineCapabilitiesAndAccountSubsets проверяет закреплённый источник на фиксированную дату
+// внутри окна, затем пересекает синтетические account подмножества и неизвестные модели, сохраняя
+// проверенные effort/default и порядок источника.
 func TestAPIExactNineCapabilitiesAndAccountSubsets(t *testing.T) {
 	want := expectedAPICapabilities()
 	models, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC))
@@ -52,6 +62,12 @@ func TestAPIExactNineCapabilitiesAndAccountSubsets(t *testing.T) {
 	}
 }
 
+// TestAPICapabilitySourceRejectsUnverifiedSnapshot varies digest, dates, schema, revision, runtime,
+// count, identities, provenance, defaults and unknown fields; even self-consistent test digests must not
+// bypass semantic source checks.
+// TestAPICapabilitySourceRejectsUnverifiedSnapshot меняет digest, даты, схему, ревизию, runtime, число,
+// identity, происхождение, defaults и неизвестные поля; даже согласованный тестовый digest не обходит
+// смысловые проверки источника.
 func TestAPICapabilitySourceRejectsUnverifiedSnapshot(t *testing.T) {
 	for _, mode := range []string{"digest", "future", "expired", "schema", "revision", "runtime", "interval", "missing_model", "duplicate", "source", "default_origin", "astra_api_default", "api_default", "unsupported_default", "unknown_field"} {
 		t.Run(mode, func(t *testing.T) {
@@ -105,6 +121,11 @@ func TestAPICapabilitySourceRejectsUnverifiedSnapshot(t *testing.T) {
 	}
 }
 
+// TestRuntimePinRejectsDifferentVersionAndOversizeOutput uses private synthetic shell executables to
+// verify rejection of a different CLI version and more than 128 version-output bytes without invoking
+// real Codex.
+// TestRuntimePinRejectsDifferentVersionAndOversizeOutput использует приватные синтетические shell
+// executable для отказа другой CLI версии и version выводу свыше 128 байтов без запуска реального Codex.
 func TestRuntimePinRejectsDifferentVersionAndOversizeOutput(t *testing.T) {
 	for _, output := range []string{"codex-cli 0.152.0", strings.Repeat("x", 129)} {
 		root := t.TempDir()

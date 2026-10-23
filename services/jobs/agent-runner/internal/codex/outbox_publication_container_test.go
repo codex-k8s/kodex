@@ -10,7 +10,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Вызывается только отдельной offline container fixture без credentials.
+// TestProviderOutboxPublicationContainer is an opt-in offline fixture for UID 10002 on disposable
+// /workspace: WRITE prepares private/atomic files, PUBLISH shares them, REJECT_FOREIGN protects another UID.
+// With no mode it returns without testing the container boundary; a passing direct call proves nothing.
+// TestProviderOutboxPublicationContainer — opt-in offline fixture UID 10002 на disposable
+// /workspace: WRITE готовит private/atomic files, PUBLISH выдаёт доступ, REJECT_FOREIGN защищает иной UID.
+// Без mode она возвращается без проверки container boundary; успешный прямой вызов её не доказывает.
 func TestProviderOutboxPublicationContainer(t *testing.T) {
 	mode := os.Getenv("KODEX_OUTBOX_PUBLICATION_TEST")
 	if mode == "" {

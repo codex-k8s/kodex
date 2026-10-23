@@ -32,6 +32,8 @@ import (
 	internalpolicy "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// TestProviderAccountDiscoveryKeepsExactProxyBoundary allows only the exact provider discovery GET without upgrade.
+// TestProviderAccountDiscoveryKeepsExactProxyBoundary разрешает только точный GET для discovery без upgrade.
 func TestProviderAccountDiscoveryKeepsExactProxyBoundary(t *testing.T) {
 	const discovery = "/backend-api/wham/accounts/check"
 	for _, test := range []struct {
@@ -64,6 +66,8 @@ func TestProviderAccountDiscoveryKeepsExactProxyBoundary(t *testing.T) {
 	}
 }
 
+// TestProviderDiscoveryDiagnosticContainsOnlyClosedRoute prevents private paths and queries from entering route labels.
+// TestProviderDiscoveryDiagnosticContainsOnlyClosedRoute не допускает закрытые пути и query в метки маршрутов.
 func TestProviderDiscoveryDiagnosticContainsOnlyClosedRoute(t *testing.T) {
 	access := runtimecontract.RuntimeProxyAccess{ProviderAccess: true}
 	target := connect.Target{Hostname: "chatgpt.com", Port: 443}
@@ -92,17 +96,27 @@ func TestProviderDiscoveryDiagnosticContainsOnlyClosedRoute(t *testing.T) {
 	}
 }
 
+// discoveryHTTP2Dialer redirects one fixture dial to a local HTTP/2-capable TLS server.
+// discoveryHTTP2Dialer направляет тестовое соединение на локальный TLS-сервер с поддержкой HTTP/2.
 type discoveryHTTP2Dialer struct{ address string }
 
+// DialContext connects to the fixture listener while retaining the caller's cancellation.
+// DialContext соединяется с тестовым listener, сохраняя отмену вызывающего кода.
 func (dialer discoveryHTTP2Dialer) DialContext(ctx context.Context, _ netip.AddrPort) (net.Conn, error) {
 	var loopbackDialer net.Dialer
 	return loopbackDialer.DialContext(ctx, "tcp", dialer.address)
 }
 
+// discoveryReadFailure injects a controlled body-read error after preceding fixture bytes.
+// discoveryReadFailure вводит заданную ошибку чтения тела после предшествующих тестовых байтов.
 type discoveryReadFailure struct{ err error }
 
+// Read returns the injected error without supplying additional body data.
+// Read возвращает заданную ошибку без дополнительных байтов тела.
 func (reader discoveryReadFailure) Read([]byte) (int, error) { return 0, reader.err }
 
+// TestProviderDiscoveryHTTP2UpstreamUsesHTTP1Downstream preserves streaming body and trailers across protocol conversion.
+// TestProviderDiscoveryHTTP2UpstreamUsesHTTP1Downstream сохраняет потоковое тело и трейлеры при смене протокола.
 func TestProviderDiscoveryHTTP2UpstreamUsesHTTP1Downstream(t *testing.T) {
 	certificate, roots := serverCertificateFixture(t, "chatgpt.com")
 	upstreamProtocol := make(chan int, 1)
@@ -149,6 +163,8 @@ func TestProviderDiscoveryHTTP2UpstreamUsesHTTP1Downstream(t *testing.T) {
 	}
 }
 
+// TestProxyResponseChunkedEligibilityIsClosed selects chunking only for eligible unknown-length response bodies.
+// TestProxyResponseChunkedEligibilityIsClosed выбирает chunked лишь для допустимого тела неизвестной длины.
 func TestProxyResponseChunkedEligibilityIsClosed(t *testing.T) {
 	for _, test := range []struct {
 		name, method string
@@ -179,6 +195,8 @@ func TestProxyResponseChunkedEligibilityIsClosed(t *testing.T) {
 	}
 }
 
+// TestProviderDiscoveryProxyDiagnosticsAreClosed checks the exact diagnostic sequence without leaking private data.
+// TestProviderDiscoveryProxyDiagnosticsAreClosed сверяет последовательность диагностики без раскрытия закрытых данных.
 func TestProviderDiscoveryProxyDiagnosticsAreClosed(t *testing.T) {
 	for _, test := range []struct {
 		name, path, failure, statusClass string
@@ -348,6 +366,8 @@ func TestProviderDiscoveryProxyDiagnosticsAreClosed(t *testing.T) {
 	}
 }
 
+// TestDiscoveryBodyCapturePreservesStreamErrorsAndClears bounds capture without changing stream errors and zeroes retained bytes.
+// TestDiscoveryBodyCapturePreservesStreamErrorsAndClears ограничивает захват, сохраняет ошибки потока и обнуляет байты.
 func TestDiscoveryBodyCapturePreservesStreamErrorsAndClears(t *testing.T) {
 	input := strings.Repeat("private-capture-sentinel", 50000)
 	readFailure := errors.New("private-read-error-sentinel")
@@ -369,6 +389,8 @@ func TestDiscoveryBodyCapturePreservesStreamErrorsAndClears(t *testing.T) {
 	}
 }
 
+// TestProviderDiscoveryResponseMetadataRemainsClosed maps only known content metadata to bounded labels.
+// TestProviderDiscoveryResponseMetadataRemainsClosed отображает лишь известные метаданные ответа в ограниченные метки.
 func TestProviderDiscoveryResponseMetadataRemainsClosed(t *testing.T) {
 	for _, test := range []struct {
 		encoding, want string
@@ -400,6 +422,8 @@ func TestProviderDiscoveryResponseMetadataRemainsClosed(t *testing.T) {
 	}
 }
 
+// TestProviderDiscoveryFailureAndStatusClassesRemainClosed classifies failures and status codes without raw error detail.
+// TestProviderDiscoveryFailureAndStatusClassesRemainClosed классифицирует сбои и статусы без сырого текста ошибок.
 func TestProviderDiscoveryFailureAndStatusClassesRemainClosed(t *testing.T) {
 	for _, test := range []struct {
 		err       error
@@ -442,6 +466,8 @@ func TestProviderDiscoveryFailureAndStatusClassesRemainClosed(t *testing.T) {
 	}
 }
 
+// TestAuthenticatedProxyTerminatesTLSAndForwardsAllowedRequest preserves an authorized POST through both TLS legs.
+// TestAuthenticatedProxyTerminatesTLSAndForwardsAllowedRequest передаёт разрешённый POST через оба TLS-сегмента.
 func TestAuthenticatedProxyTerminatesTLSAndForwardsAllowedRequest(t *testing.T) {
 	proxyCA, proxyRoots := proxyAuthorityFixture(t)
 	upstreamCertificate, upstreamRoots := serverCertificateFixture(t, "example.com")
@@ -509,6 +535,8 @@ func TestAuthenticatedProxyTerminatesTLSAndForwardsAllowedRequest(t *testing.T) 
 	}
 }
 
+// TestAuthenticatedProxyRejectsWriteBeforeDNSAndDial denies a read-only grant's POST before resolution or dial.
+// TestAuthenticatedProxyRejectsWriteBeforeDNSAndDial отклоняет POST при read-only grant до DNS и соединения.
 func TestAuthenticatedProxyRejectsWriteBeforeDNSAndDial(t *testing.T) {
 	proxyCA, proxyRoots := proxyAuthorityFixture(t)
 	access := runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessAllowlistReadOnly, Rules: []runtimecontract.RuntimeWebAccessRule{{
@@ -547,23 +575,37 @@ func TestAuthenticatedProxyRejectsWriteBeforeDNSAndDial(t *testing.T) {
 	}
 }
 
+// authenticatedPolicyStub grants only the fixture host and credential with selected web permissions.
+// authenticatedPolicyStub разрешает тестовый хост и реквизит с заданными web-правами.
 type authenticatedPolicyStub struct {
 	access runtimecontract.RuntimeWebAccess
 }
 
+// Allows prevents unauthenticated access through the fixture policy.
+// Allows запрещает неаутентифицированный доступ через тестовую policy.
 func (stub authenticatedPolicyStub) Allows(string, int) bool { return false }
+
+// Limits reuses the bounded gateway limits from the shared test policy.
+// Limits использует ограниченные лимиты шлюза из общей тестовой policy.
 func (stub authenticatedPolicyStub) Limits() internalpolicy.Limits {
 	return fakePolicy{}.Limits()
 }
+
+// AuthorizeAuthenticated returns fixture access only for the exact host, port, and credential.
+// AuthorizeAuthenticated выдаёт тестовые права только для точных хоста, порта и реквизита.
 func (stub authenticatedPolicyStub) AuthorizeAuthenticated(host string, port int, credential string) (runtimecontract.RuntimeProxyAccess, bool) {
 	return runtimecontract.RuntimeProxyAccess{WebAccess: stub.access}, host == "example.com" && port == 443 && credential == "fixture"
 }
 
+// securedReader carries an established TLS client and its buffered HTTP response reader.
+// securedReader содержит установленный TLS-клиент и буферизованный читатель HTTP-ответа.
 type securedReader struct {
 	conn   *tls.Conn
 	reader *bufio.Reader
 }
 
+// authenticatedConnect sends a fixture proxy grant and completes the client-side TLS handshake.
+// authenticatedConnect передаёт тестовый proxy grant и завершает TLS-рукопожатие клиента.
 func authenticatedConnect(t *testing.T, connection net.Conn, roots *x509.CertPool) securedReader {
 	t.Helper()
 	credential := base64.StdEncoding.EncodeToString([]byte("kodex:fixture"))
@@ -580,6 +622,8 @@ func authenticatedConnect(t *testing.T, connection net.Conn, roots *x509.CertPoo
 	return securedReader{conn: secured, reader: bufio.NewReader(secured)}
 }
 
+// proxyAuthorityFixture creates a local CA and the matching TLS interception authority.
+// proxyAuthorityFixture создаёт локальный CA и соответствующий перехватывающий TLS authority.
 func proxyAuthorityFixture(t *testing.T) (*TLSInterceptAuthority, *x509.CertPool) {
 	t.Helper()
 	certificate, key, roots := certificateAuthorityFixture(t, "proxy")
@@ -594,6 +638,8 @@ func proxyAuthorityFixture(t *testing.T) (*TLSInterceptAuthority, *x509.CertPool
 	return authority, roots
 }
 
+// serverCertificateFixture signs a short-lived upstream certificate for the exact fixture hostname.
+// serverCertificateFixture подписывает короткоживущий upstream-сертификат для точного тестового имени.
 func serverCertificateFixture(t *testing.T, hostname string) (tls.Certificate, *x509.CertPool) {
 	t.Helper()
 	ca, caKey, roots := certificateAuthorityFixture(t, "upstream")
@@ -606,6 +652,8 @@ func serverCertificateFixture(t *testing.T, hostname string) (tls.Certificate, *
 	return tls.Certificate{Certificate: [][]byte{raw, ca.Raw}, PrivateKey: key}, roots
 }
 
+// certificateAuthorityFixture creates an isolated ECDSA CA and trust pool for TLS tests.
+// certificateAuthorityFixture создаёт изолированный ECDSA CA и пул доверия для TLS-тестов.
 func certificateAuthorityFixture(t *testing.T, name string) (*x509.Certificate, *ecdsa.PrivateKey, *x509.CertPool) {
 	t.Helper()
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

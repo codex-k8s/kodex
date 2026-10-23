@@ -2,8 +2,6 @@ package providercredentialclient
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"slices"
 	"strings"
@@ -11,12 +9,17 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// invalidModelCatalog fixes the bounded diagnostic for invalid model-catalog bindings or observations.
+// invalidModelCatalog задаёт ограниченную диагностику неверных привязок или наблюдений каталога моделей.
 const invalidModelCatalog = "provider model catalog binding is invalid"
 
+// modelCatalogRequest validates the authorization method, exact task/account/credential/claim pins, bounded versions and timestamp representation.
+// It constructs the provider observation request without probing expiry freshness or authorizing access itself.
+// modelCatalogRequest проверяет способ авторизации, точные привязки задачи/аккаунта/учётных данных/заявки, ограниченные версии и запись времени.
+// Создаётся запрос наблюдения провайдера без проверки свежести срока или самостоятельного разрешения доступа.
 func modelCatalogRequest(task platformrepo.ProviderModelCatalogTask) (*controlplanev1.ObserveProviderModelCatalogRequest, error) {
 	method, ok := controlplanev1.ProviderAuthorizationMethod_value["PROVIDER_AUTHORIZATION_METHOD_"+task.AuthorizationMethod]
 	if !ok || method == 0 || !validProviderCredentialRef(task.Ref, "mcattsk_") || !validProviderCredentialRef(task.AccountRef, "pacc_") || task.AccountVersion < 1 || task.AccountVersion > 9007199254740991 || task.CredentialRevision < 1 || task.CredentialRevision > 9007199254740991 || task.ClaimGeneration < 1 || task.ClaimGeneration > 9007199254740991 || !validBoundedSafeText(task.ClaimantID, 128) || !validBoundedSafeText(task.Fence, 128) || !validBoundedSafeText(task.CredentialRef, 96) || !validProviderCredentialDescriptor(task.Credential) || task.ExpiresAt.IsZero() {
@@ -34,19 +37,22 @@ func modelCatalogRequest(task platformrepo.ProviderModelCatalogTask) (*controlpl
 	}, nil
 }
 
+// ModelCatalogRequestDigest validates and deterministically hashes the exact model-catalog observation request.
+// The digest is request binding, not a catalog content digest or a proof of a verified provider source.
+// ModelCatalogRequestDigest проверяет и детерминированно хеширует точный запрос наблюдения каталога моделей.
+// Дайджест привязывает запрос, а не содержимое каталога и не доказывает проверенный источник провайдера.
 func (client *Client) ModelCatalogRequestDigest(task platformrepo.ProviderModelCatalogTask) (string, error) {
 	request, err := modelCatalogRequest(task)
 	if err != nil {
 		return "", err
 	}
-	encoded, err := (proto.MarshalOptions{Deterministic: true}).Marshal(request)
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(encoded)
-	return hex.EncodeToString(digest[:]), nil
+	return deterministicRequestDigest(request)
 }
 
+// ObserveProviderModelCatalog requires the recomputed request digest to match the task before one broker RPC.
+// It validates the returned observation without retrying, inventing models or changing the owner task.
+// ObserveProviderModelCatalog требует совпадения заново вычисленного дайджеста с задачей до одного RPC брокера.
+// Возвращённое наблюдение проверяется без повтора, выдумывания моделей или изменения задачи владельца.
 func (client *Client) ObserveProviderModelCatalog(ctx context.Context, task platformrepo.ProviderModelCatalogTask) (platformrepo.ProviderModelCatalogObservation, error) {
 	request, err := modelCatalogRequest(task)
 	if err != nil {
@@ -63,6 +69,10 @@ func (client *Client) ObserveProviderModelCatalog(ctx context.Context, task plat
 	return modelCatalogObservation(task, response)
 }
 
+// modelCatalogObservation checks account/credential binding, timestamp syntax, count limits and the allowed source/failure combination.
+// It rejects duplicate model/effort IDs and multiple defaults, sorts copied efforts and preserves capability/default metadata without claiming response freshness or signature verification.
+// modelCatalogObservation проверяет привязки аккаунта/учётных данных, синтаксис времени, лимиты количества и допустимое сочетание источника/ошибки.
+// Отклоняются повторные модели/степени и несколько моделей по умолчанию, копии степеней сортируются и метаданные сохраняются без заявления свежести ответа или проверки подписи.
 func modelCatalogObservation(task platformrepo.ProviderModelCatalogTask, response *controlplanev1.ObserveProviderModelCatalogResponse) (platformrepo.ProviderModelCatalogObservation, error) {
 	invalid := func() (platformrepo.ProviderModelCatalogObservation, error) {
 		return platformrepo.ProviderModelCatalogObservation{}, errors.New(invalidModelCatalog)

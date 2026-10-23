@@ -12,6 +12,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// confluenceCatalogInput decodes parent and related-resource IDs, storage body, expected version and cursor; the selected package capability constrains the operation-specific input.
+// confluenceCatalogInput декодирует ID родителя и связанных ресурсов, тело storage, ожидаемую версию и курсор; выбранная возможность пакета ограничивает вход конкретной операции.
 type confluenceCatalogInput struct {
 	PageID          string `json:"page_id"`
 	CommentID       string `json:"comment_id"`
@@ -23,6 +25,8 @@ type confluenceCatalogInput struct {
 	Cursor          string `json:"cursor"`
 }
 
+// confluenceComment decodes a footer comment's page/parent lineage, version, status and storage body for scoped readback and optimistic update checks.
+// confluenceComment декодирует принадлежность комментария странице и родителю, версию, состояние и тело storage для ограниченной сверки и проверки оптимистического изменения.
 type confluenceComment struct {
 	ID              string `json:"id"`
 	PageID          string `json:"pageId"`
@@ -38,6 +42,8 @@ type confluenceComment struct {
 	} `json:"body"`
 }
 
+// confluenceAttachment holds attachment metadata and the provider download link; listing clears that link, while download separately validates its resolved origin and page path.
+// confluenceAttachment хранит сведения вложения и ссылку скачивания провайдера; список очищает ссылку, а скачивание отдельно проверяет разрешённый источник и путь страницы.
 type confluenceAttachment struct {
 	ID           string `json:"id"`
 	PageID       string `json:"pageId"`
@@ -50,6 +56,8 @@ type confluenceAttachment struct {
 	} `json:"version"`
 }
 
+// confluenceDescendant represents bounded descendant metadata whose ID, parent, depth and supported content type are checked before projection.
+// confluenceDescendant представляет ограниченные сведения потомка, чьи ID, родитель, глубина и поддерживаемый тип проверяются до проекции.
 type confluenceDescendant struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
@@ -59,6 +67,8 @@ type confluenceDescendant struct {
 	Depth    int    `json:"depth"`
 }
 
+// confluenceCatalogPage validates a bounded page with the supplied item predicate and extracts a bounded changing cursor from the next link; it never follows that link or treats its origin as authority.
+// confluenceCatalogPage проверяет ограниченную страницу переданным предикатом элементов и извлекает ограниченный меняющийся курсор из следующей ссылки; сама по ссылке не обращается и её источник не считает полномочием.
 func confluenceCatalogPage[T any](request Request, body []byte, limit int, previous string, valid func(T) bool) (Result, error) {
 	var page struct {
 		Results []T `json:"results"`
@@ -99,6 +109,8 @@ func confluenceCatalogPage[T any](request Request, body []byte, limit int, previ
 	}{string(encoded), len(page.Results), next})
 }
 
+// executeConfluenceCatalog reads only the configured space, verifies page eligibility before related operations, and constrains attachment downloads to that page and origin with exact byte-size readback.
+// executeConfluenceCatalog читает только заданное пространство, проверяет допустимость страницы до связанных операций и ограничивает скачивание вложений этой страницей и источником со сверкой точного размера.
 func (adapter *Adapter) executeConfluenceCatalog(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, raw []byte) (Result, error) {
 	var in confluenceCatalogInput
 	if json.Unmarshal(raw, &in) != nil {
@@ -238,6 +250,8 @@ func (adapter *Adapter) executeConfluenceCatalog(ctx context.Context, request Re
 	}
 }
 
+// confluenceCommentOperation verifies comment and optional reply-parent ownership, checks the expected version before update/delete, and validates returned identity/version; list and read never acquire write authority.
+// confluenceCommentOperation проверяет принадлежность комментария и необязательного родителя ответа, сверяет ожидаемую версию до изменения или удаления и проверяет идентификатор и версию результата; список и чтение не получают полномочий записи.
 func (adapter *Adapter) confluenceCommentOperation(ctx context.Context, request Request, call providerCall, in confluenceCatalogInput, pagePath string, query url.Values) (Result, error) {
 	read := func(id string) (confluenceComment, error) {
 		readCall := call
@@ -342,6 +356,8 @@ func (adapter *Adapter) confluenceCommentOperation(ctx context.Context, request 
 	return confluenceCommentResult(request, comment)
 }
 
+// confluenceCommentResult projects only comment identity, page/parent lineage, status, version and storage body using a comment-specific provider reference.
+// confluenceCommentResult выдаёт только ID комментария, принадлежность странице и родителю, состояние, версию и тело storage со ссылкой провайдера на комментарий.
 func confluenceCommentResult(request Request, comment confluenceComment) (Result, error) {
 	return providerResult(request, "confluence-comment:"+comment.ID, struct {
 		ID      string `json:"id"`

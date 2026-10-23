@@ -17,6 +17,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// recoveryQueueClient models a mutable synthetic owner queue with retained items, visitation tracking and
+// injected listing failures/cycles; it is not durable database state.
+// recoveryQueueClient моделирует mutable synthetic owner queue с retained items, visitation tracking и
+// injected listing failures/cycles; это не durable database state.
 type recoveryQueueClient struct {
 	ownerStub
 	queue          []*cp.RuntimeSecretDraftWork
@@ -27,6 +31,10 @@ type recoveryQueueClient struct {
 	cyclePages     int
 }
 
+// newRecoveryQueue builds ordered canonical synthetic works and a real adapter over their fake owner,
+// initializing retained/visited state per test.
+// newRecoveryQueue создаёт ordered canonical synthetic works и реальный adapter над fake owner, отдельно
+// инициализируя retained/visited state теста.
 func newRecoveryQueue(t *testing.T, size int) (*recoveryQueueClient, *Owner) {
 	t.Helper()
 	client := &recoveryQueueClient{retained: map[string]bool{}, visited: map[string]int{}}
@@ -44,6 +52,10 @@ func newRecoveryQueue(t *testing.T, size int) (*recoveryQueueClient, *Owner) {
 	return client, owner
 }
 
+// ListRuntimeSecretDraftRecoveryWork observes cancellation/failure and serves lexical pages or a
+// deliberate fixed-length cursor cycle, recording each starting token.
+// ListRuntimeSecretDraftRecoveryWork учитывает cancellation/failure и выдаёт lexical pages либо намеренный
+// fixed-length cursor cycle, записывая каждый starting token.
 func (client *recoveryQueueClient) ListRuntimeSecretDraftRecoveryWork(ctx context.Context, request *cp.ListRuntimeSecretDraftRecoveryWorkRequest, _ ...grpc.CallOption) (*cp.ListRuntimeSecretDraftRecoveryWorkResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -74,6 +86,10 @@ func (client *recoveryQueueClient) ListRuntimeSecretDraftRecoveryWork(ctx contex
 	return result, nil
 }
 
+// RecoverRuntimeSecretDraftMaterialization counts visits, removes only nonretained synthetic work and
+// returns FAILED/KEEP for absent effects; it performs no real owner transaction.
+// RecoverRuntimeSecretDraftMaterialization считает visits, удаляет лишь nonretained synthetic work и
+// возвращает FAILED/KEEP для absent effects; реальную owner transaction не выполняет.
 func (client *recoveryQueueClient) RecoverRuntimeSecretDraftMaterialization(_ context.Context, request *cp.RecoverRuntimeSecretDraftMaterializationRequest, _ ...grpc.CallOption) (*cp.RecoverRuntimeSecretDraftMaterializationResponse, error) {
 	for index, work := range client.queue {
 		if work.OperationRef != request.OperationRef {
@@ -96,21 +112,47 @@ func (client *recoveryQueueClient) RecoverRuntimeSecretDraftMaterialization(_ co
 	return nil, secretdrafts.ErrNotFound
 }
 
+// recoveryAbsentEncrypted overrides only Lookup as absent; other embedded methods are deliberately
+// unconfigured so unintended effects cannot silently succeed.
+// recoveryAbsentEncrypted подменяет лишь Lookup как absent; остальные embedded methods намеренно не
+// настроены, чтобы unintended effects не проходили незаметно.
 type recoveryAbsentEncrypted struct{ secretdrafts.EncryptedStore }
 
+// Lookup always returns the encrypted-store NotFound sentinel without reading bytes or touching
+// Kubernetes.
+// Lookup всегда возвращает encrypted-store NotFound sentinel без чтения байтов и обращения к Kubernetes.
 func (recoveryAbsentEncrypted) Lookup(context.Context, value.DraftWork) (value.DraftEncryptedDescriptor, error) {
 	return value.DraftEncryptedDescriptor{}, secretdrafts.ErrNotFound
 }
 
+// recoveryAbsentRuntime supplies absence-only runtime lookup while leaving other embedded effect methods
+// unconfigured.
+// recoveryAbsentRuntime предоставляет лишь absence-only runtime lookup, оставляя прочие embedded effect
+// methods ненастроенными.
 type recoveryAbsentRuntime struct{ secretdrafts.RuntimeStore }
 
+// Lookup returns runtime-materialization NotFound without publishing, deleting or reading a real object.
+// Lookup возвращает runtime-materialization NotFound без publication, deletion и чтения реального объекта.
 func (recoveryAbsentRuntime) Lookup(context.Context, value.DraftWork) (value.DraftMaterialization, error) {
 	return value.DraftMaterialization{}, secretdrafts.ErrNotFound
 }
 
+// recoveryUnusedCipher leaves its embedded cipher nil so recovery would fail visibly if it unexpectedly
+// tried encryption or decryption.
+// recoveryUnusedCipher оставляет embedded cipher nil, чтобы неожиданные encryption/decryption при recovery
+// завершились явным отказом.
 type recoveryUnusedCipher struct{ secretdrafts.Cipher }
+
+// recoveryUnusedChecker leaves its embedded checker unconfigured because these direct reconciliation tests
+// do not probe key readiness.
+// recoveryUnusedChecker оставляет embedded checker ненастроенным, поскольку direct reconciliation tests не
+// проверяют key readiness.
 type recoveryUnusedChecker struct{ secretdrafts.Checker }
 
+// recoveryQueueService composes the real domain reconciler with fake owner/absent stores and unusable
+// crypto ports, proving recovery does not need plaintext operations.
+// recoveryQueueService собирает реальный domain reconciler с fake owner/absent stores и неработающими
+// crypto ports, проверяя отсутствие plaintext operations при recovery.
 func recoveryQueueService(t *testing.T, owner *Owner) *secretdraft.Service {
 	t.Helper()
 	service, err := secretdraft.New(owner, recoveryUnusedCipher{}, recoveryUnusedChecker{}, recoveryAbsentEncrypted{}, recoveryAbsentRuntime{},
@@ -121,6 +163,10 @@ func recoveryQueueService(t *testing.T, owner *Owner) *secretdraft.Service {
 	return service
 }
 
+// TestRecoveryDrainsMoreThanOneThousandThroughOwnerAndService drains 2101 synthetic works across three
+// real adapter/service batches and checks exactly one visit for completed items.
+// TestRecoveryDrainsMoreThanOneThousandThroughOwnerAndService обрабатывает 2101 synthetic works тремя
+// реальными adapter/service batches и проверяет ровно один visit завершённых items.
 func TestRecoveryDrainsMoreThanOneThousandThroughOwnerAndService(t *testing.T) {
 	client, owner := newRecoveryQueue(t, 2101)
 	service := recoveryQueueService(t, owner)
@@ -139,6 +185,12 @@ func TestRecoveryDrainsMoreThanOneThousandThroughOwnerAndService(t *testing.T) {
 	}
 }
 
+// TestRecoveryCursorPassesRetainedPrefixAndSurvivesRestart passes 1000 retained items to process the tail,
+// revisits them after wrap and checks a new adapter starts from authoritative synthetic state without
+// inherited cursor.
+// TestRecoveryCursorPassesRetainedPrefixAndSurvivesRestart проходит 1000 retained items ради обработки
+// хвоста, повторно посещает их после wrap и проверяет старт нового adapter с authoritative synthetic state
+// без унаследованного cursor.
 func TestRecoveryCursorPassesRetainedPrefixAndSurvivesRestart(t *testing.T) {
 	client, owner := newRecoveryQueue(t, 1001)
 	for _, work := range client.queue[:1000] {
@@ -164,6 +216,10 @@ func TestRecoveryCursorPassesRetainedPrefixAndSurvivesRestart(t *testing.T) {
 	}
 }
 
+// TestRecoveryReaderWaitIsCancellableAndCursorErrorResets checks deadline cancellation of a blocked
+// reader, then a listing failure resets progress and a healthy retry starts at the owner queue prefix.
+// TestRecoveryReaderWaitIsCancellableAndCursorErrorResets проверяет deadline cancellation blocked reader,
+// затем сброс progress при listing failure и возврат healthy retry к началу owner queue.
 func TestRecoveryReaderWaitIsCancellableAndCursorErrorResets(t *testing.T) {
 	client, owner := newRecoveryQueue(t, 1001)
 	if _, err := owner.ListRecovery(t.Context()); err != nil || owner.recoveryCursor == "" {
@@ -187,6 +243,10 @@ func TestRecoveryReaderWaitIsCancellableAndCursorErrorResets(t *testing.T) {
 	}
 }
 
+// TestRecoveryRejectsRepeatedCursorAcrossBatchBoundary returns the previous batch's starting token and
+// requires Conflict, no partial work and cleared cursor.
+// TestRecoveryRejectsRepeatedCursorAcrossBatchBoundary возвращает starting token предыдущего batch и
+// требует Conflict, отсутствия partial work и очищенного cursor.
 func TestRecoveryRejectsRepeatedCursorAcrossBatchBoundary(t *testing.T) {
 	_, stub, owner := nativeFixture(t)
 	owner.recoveryCursor = "same-cursor"
@@ -196,6 +256,10 @@ func TestRecoveryRejectsRepeatedCursorAcrossBatchBoundary(t *testing.T) {
 	}
 }
 
+// TestRecoveryRejectsCursorCycleLongerThanOneBatch feeds a 13-page cycle through ten-page budgets and
+// requires detection within five calls without accepting the offending partial batch.
+// TestRecoveryRejectsCursorCycleLongerThanOneBatch передаёт 13-page cycle через ten-page budgets и требует
+// обнаружения за пять вызовов без принятия ошибочного partial batch.
 func TestRecoveryRejectsCursorCycleLongerThanOneBatch(t *testing.T) {
 	client, owner := newRecoveryQueue(t, 13)
 	client.cyclePages = 13

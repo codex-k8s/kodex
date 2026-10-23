@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestContextHTTPMethodsHaveExactAuthorityProfile keeps an independent selected-method oracle, checks routing/proof agreement and requires project scope only for the two listed create operations. It checks local registry projections, not transport authentication or domain permissions.
+// TestContextHTTPMethodsHaveExactAuthorityProfile сохраняет независимый эталон выбранных methods, проверяет routing и proof agreement и требует project scope лишь двух перечисленных create operations. Проверяются локальные registry projections, а не transport authentication и domain permissions.
 func TestContextHTTPMethodsHaveExactAuthorityProfile(t *testing.T) {
 	operations := controlplaneclient.ControlAPIGatewayOperations()
 	reverse := map[string]string{}
@@ -61,6 +63,8 @@ func TestContextHTTPMethodsHaveExactAuthorityProfile(t *testing.T) {
 	}
 }
 
+// TestManagedConfigurationCreateAuthorityProjectScope distinguishes project-owned prompt/image draft creation from organization-owned integration/STT draft creation in the local required-project set.
+// TestManagedConfigurationCreateAuthorityProjectScope различает project-owned создание prompt и image drafts и organization-owned создание integration и STT drafts в локальном required-project set.
 func TestManagedConfigurationCreateAuthorityProjectScope(t *testing.T) {
 	required := authorityProjectRequiredOperations()
 	for _, operation := range []string{

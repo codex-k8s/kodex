@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// TestRuntimeExecutionDeadlineProtoRoundtripAndRejectsInvalidPins preserves
+// timestamp precision through protobuf, rejects malformed or unknown clock pins,
+// checks runner schema/JSON conversion and rejects an unsealed deadline change.
+// TestRuntimeExecutionDeadlineProtoRoundtripAndRejectsInvalidPins проверяет
+// точность времени при переводе protobuf, отказ для неверных и неизвестных полей
+// часов, runner-схему и JSON, а также незакреплённое изменение срока.
 func TestRuntimeExecutionDeadlineProtoRoundtripAndRejectsInvalidPins(t *testing.T) {
 	start := time.Date(2026, 10, 8, 0, 0, 0, 123000, time.UTC)
 	value := &cp.RuntimeExecutionDeadline{Policy: runtimecontract.WorkflowExecutionDeadlinePolicy, EffectiveDeadlineAt: timestamppb.New(start.Add(24 * time.Hour)), Clocks: []*cp.RuntimeExecutionClock{{RunRef: "run_fixture01", WorkflowVersionRef: "wfv_fixture01", WorkflowVersionDigest: strings.Repeat("a", 64), TimeoutSeconds: 86400, StartedAt: timestamppb.New(start), DeadlineAt: timestamppb.New(start.Add(24 * time.Hour))}}}

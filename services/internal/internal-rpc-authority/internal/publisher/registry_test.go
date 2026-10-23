@@ -10,6 +10,11 @@ import (
 	"testing"
 )
 
+// TestCanonicalDeliveryRegistriesLoad projects both repository registries as read-only files and
+// verifies required targets, exact startup counts and stable ordering without contacting a cluster.
+// TestCanonicalDeliveryRegistriesLoad материализует оба реестра репозитория в файлы только для чтения и
+// проверяет обязательные цели, точные количества при запуске и устойчивый порядок без обращения к
+// кластеру.
 func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 	t.Parallel()
 
@@ -97,6 +102,10 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 	}
 }
 
+// TestRegistryRequiresExplicitStartupReadbackPolicy removes one startup flag from a canonical registry
+// and requires loader rejection rather than treating omission as false.
+// TestRegistryRequiresExplicitStartupReadbackPolicy удаляет один флаг проверки при запуске из
+// канонического реестра и требует отказ загрузчика вместо трактовки отсутствия как false.
 func TestRegistryRequiresExplicitStartupReadbackPolicy(t *testing.T) {
 	t.Parallel()
 

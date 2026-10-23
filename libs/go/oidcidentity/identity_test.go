@@ -2,6 +2,10 @@ package oidcidentity
 
 import "testing"
 
+// TestCanonicalIdentity requires deterministic opaque mapping and distinct
+// derived UUIDs for another issuer or identity kind, without external OIDC calls.
+// TestCanonicalIdentity требует устойчивого opaque отображения и разных UUID
+// при другом issuer или виде identity, без внешних OIDC-запросов.
 func TestCanonicalIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -26,6 +30,10 @@ func TestCanonicalIdentity(t *testing.T) {
 	}
 }
 
+// TestCanonicalIdentityPreservesUUID checks that uppercase UUID spelling is
+// normalized while its identity is preserved instead of being namespace-hashed.
+// TestCanonicalIdentityPreservesUUID проверяет нормализацию регистра UUID
+// с сохранением идентичности вместо вычисления нового namespace-хеша.
 func TestCanonicalIdentityPreservesUUID(t *testing.T) {
 	t.Parallel()
 
@@ -36,6 +44,10 @@ func TestCanonicalIdentityPreservesUUID(t *testing.T) {
 	}
 }
 
+// TestCanonicalIdentityRejectsInvalidInput rejects missing, short, whitespace and
+// slash-bearing opaque values before any identity can be returned.
+// TestCanonicalIdentityRejectsInvalidInput запрещает пустой, короткий, содержащий
+// пробелы или slash opaque ввод до возврата идентификатора.
 func TestCanonicalIdentityRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 

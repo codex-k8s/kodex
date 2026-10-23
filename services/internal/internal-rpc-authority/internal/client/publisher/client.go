@@ -18,7 +18,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Config задаёт точную mTLS-границу и идентичность publisher.
+// Config supplies exact publisher DNS/SNI, CA/client certificate paths, a one-to-ten-second call timeout and an application interceptor. Transport identity does not replace the interceptor's authorization layer.
+// Config задаёт точные DNS и SNI publisher, пути CA и клиентской пары, таймаут вызова от одной до десяти секунд и прикладной interceptor. Транспортная идентичность не заменяет слой авторизации interceptor.
 type Config struct {
 	Address               string
 	TLSServerName         string
@@ -29,14 +30,16 @@ type Config struct {
 	UnaryInterceptor      grpc.UnaryClientInterceptor
 }
 
-// Client вызывает publisher через точную mTLS-границу.
+// Client owns the publisher gRPC connection and bounded-call settings, sharing the configured transport/application layers between credential publication and readiness.
+// Client владеет соединением gRPC publisher и настройками ограниченных вызовов, используя одни транспортные и прикладные слои для публикации credential и проверки готовности.
 type Client struct {
 	timeout    time.Duration
 	connection *grpc.ClientConn
 	client     internalrpcauthorityv1.RestoreRoleCredentialPublisherServiceClient
 }
 
-// New создаёт клиент с обязательной проверкой TLS и SPIFFE.
+// New requires the fixed publisher hostname as address host and SNI, loads CA/client material, enables TLS 1.3 and strict protobuf codec, then starts asynchronous connection establishment. It does not explicitly compare a peer SPIFFE URI or prove readiness before returning.
+// New требует фиксированное имя publisher в host адреса и SNI, загружает CA и клиентский материал, включает TLS 1.3 и строгий protobuf codec, затем начинает асинхронное подключение. SPIFFE URI peer явно не сравнивается и готовность до возврата не доказывается.
 func New(config Config) (*Client, error) {
 	host, _, err := net.SplitHostPort(config.Address)
 	if err != nil ||
@@ -88,7 +91,8 @@ func New(config Config) (*Client, error) {
 	}, nil
 }
 
-// PublishRoleCredential запрашивает связанную с целью роль восстановления.
+// PublishRoleCredential sends the exact directive under a child timeout with one idempotency/correlation key. It checks receipt presence, digest length and nonzero credential/ACK generations, returning pinned fields without locally verifying the receipt JWS or hexadecimal digest syntax.
+// PublishRoleCredential передаёт точную директиву под дочерним таймаутом с одним ключом идемпотентности и корреляции. Проверяются наличие квитанции, длина дайджеста и ненулевые поколения credential и ACK; возвращаются привязанные поля без локальной проверки JWS квитанции или hex-синтаксиса дайджеста.
 func (client *Client) PublishRoleCredential(
 	ctx context.Context,
 	directiveCompact string,
@@ -123,7 +127,8 @@ func (client *Client) PublishRoleCredential(
 	}, nil
 }
 
-// PublisherReady проверяет рабочий путь publisher.
+// PublisherReady uses the same client and child timeout to require ready, nonzero registry revision, nonblank digest and exact-target Secret-readback readiness. It checks returned fields, not registry signature or digest syntax.
+// PublisherReady использует тот же клиент и дочерний таймаут, требуя ready, ненулевую ревизию реестра, непустой дайджест и готовность точного Secret readback. Проверяются возвращённые поля, а не подпись реестра или синтаксис дайджеста.
 func (client *Client) PublisherReady(ctx context.Context) error {
 	callContext, cancel := context.WithTimeout(ctx, client.timeout)
 	defer cancel()
@@ -143,7 +148,8 @@ func (client *Client) PublisherReady(ctx context.Context) error {
 	return nil
 }
 
-// Close закрывает gRPC-соединение.
+// Close delegates to the owned gRPC connection without waiting for caller workers or coordinating concurrent calls; the composition root owns shutdown ordering.
+// Close передаёт закрытие своему соединению gRPC без ожидания workers вызывающего или координации конкурентных вызовов; порядком завершения владеет composition root.
 func (client *Client) Close() error {
 	return client.connection.Close()
 }

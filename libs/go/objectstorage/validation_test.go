@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestValidKey checks ordinary tenant-scoped keys and rejects absolute, trailing, traversing, empty, and NUL-bearing paths.
+// TestValidKey проверяет обычные ключи с областью арендатора и отклоняет абсолютные, незавершённые, обходящие каталог, пустые и содержащие NUL пути.
 func TestValidKey(t *testing.T) {
 	t.Parallel()
 	for _, value := range []string{"organizations/org/projects/prj/artifacts/art/1", "backups/2026/08/snapshot.tar.zst"} {
@@ -19,6 +21,8 @@ func TestValidKey(t *testing.T) {
 	}
 }
 
+// TestValidDigest checks the accepted SHA-256 textual shape and rejects non-hexadecimal payloads.
+// TestValidDigest проверяет допустимую текстовую форму SHA-256 и отклоняет не шестнадцатеричное содержимое.
 func TestValidDigest(t *testing.T) {
 	t.Parallel()
 	if !ValidDigest("sha256:" + strings.Repeat("a", 64)) {

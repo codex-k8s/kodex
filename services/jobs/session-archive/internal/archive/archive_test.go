@@ -19,8 +19,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
 
+// fullRestoreTaskFile is the fixed task mount used only by the disposable full-restore kernel fixture.
+// RU: fullRestoreTaskFile задаёт фиксированный путь задания только для одноразовой kernel-оснастки полного восстановления.
 const fullRestoreTaskFile = "/var/run/config/kodex/session-archive/task.json"
 
+// fullRestoreSnapshotTask creates consistent session, PVC and source pins for native-writer restore tests.
+// RU: fullRestoreSnapshotTask создаёт согласованные привязки сессии, PVC и источника для проверки восстановления native writer.
 func fullRestoreSnapshotTask(t *testing.T) model.Task {
 	t.Helper()
 	pvc, err := runtimecontract.SessionPVCName("ses_abcdefgh")
@@ -38,6 +42,8 @@ func fullRestoreSnapshotTask(t *testing.T) model.Task {
 		TargetObjectKey: "session-archive/v1/org_abcdefgh/ses_abcdefgh/g1/sat_abcdefgh-a1.tar", Attempt: 1}
 }
 
+// fullRestoreFixtureSnapshot archives synthetic session bytes in an isolated in-memory store and returns the verified receipt.
+// RU: fullRestoreFixtureSnapshot архивирует синтетические байты сессии в изолированное хранилище памяти и возвращает проверенную квитанцию.
 func fullRestoreFixtureSnapshot(t *testing.T) (*objectstoragetest.Store, model.Result) {
 	t.Helper()
 	task := fullRestoreSnapshotTask(t)
@@ -54,7 +60,8 @@ func fullRestoreFixtureSnapshot(t *testing.T) (*objectstoragetest.Store, model.R
 	return store, result
 }
 
-// Только disposable kernel-container с tmpfs /workspace и отдельными test binaries.
+// TestPreparedRestoreThenCurrentWorkspaceAndNativeCapture runs the full UID/volume ABI only in an explicitly enabled disposable kernel container.
+// RU: TestPreparedRestoreThenCurrentWorkspaceAndNativeCapture проверяет полный ABI UID/тома лишь в явно включённом одноразовом kernel-контейнере.
 func TestPreparedRestoreThenCurrentWorkspaceAndNativeCapture(t *testing.T) {
 	if os.Getenv("KODEX_TEST_FULL_RESTORE_ABI") != "1" {
 		return
@@ -126,6 +133,8 @@ func TestPreparedRestoreThenCurrentWorkspaceAndNativeCapture(t *testing.T) {
 	run(runnerBinary, "TestRestoredRolloutCaptureFixture", "FULL_NATIVE_WRITER", 10002, false)
 }
 
+// TestFullPreparedRestoreKernelFixture restores the pinned task as the native writer UID in the dedicated full-ABI stage.
+// RU: TestFullPreparedRestoreKernelFixture восстанавливает закреплённое задание с UID native writer на выделенном этапе полного ABI.
 func TestFullPreparedRestoreKernelFixture(t *testing.T) {
 	if os.Getenv("KODEX_TEST_FULL_RESTORE_ABI") != "1" || os.Getenv("KODEX_TEST_RESTORE_MODE") != "RESTORE" {
 		return
@@ -143,16 +152,22 @@ func TestFullPreparedRestoreKernelFixture(t *testing.T) {
 	}
 }
 
+// TestSnapshotRestoreAndDeleteExactArchive exercises the same exact-byte lifecycle for project and system scope.
+// RU: TestSnapshotRestoreAndDeleteExactArchive проверяет один жизненный цикл точных байтов в проектном и системном scope.
 func TestSnapshotRestoreAndDeleteExactArchive(t *testing.T) {
 	t.Run("PROJECT", func(t *testing.T) { snapshotRestoreAndDeleteExactArchive(t, "prj_abcdefgh") })
 	t.Run("SYSTEM", func(t *testing.T) { snapshotRestoreAndDeleteExactArchive(t, "") })
 }
 
+// snapshotRestoreAndDeleteExactArchive allocates a private workspace for one scoped lifecycle fixture.
+// RU: snapshotRestoreAndDeleteExactArchive выделяет закрытый workspace для оснастки жизненного цикла одного scope.
 func snapshotRestoreAndDeleteExactArchive(t *testing.T, projectRef string) {
 	t.Helper()
 	snapshotRestoreAndDeleteExactArchiveAtWorkspace(t, t.TempDir(), projectRef)
 }
 
+// snapshotRestoreAndDeleteExactArchiveAtWorkspace verifies restored bytes and mode, a repeated snapshot and exact-version deletion.
+// RU: snapshotRestoreAndDeleteExactArchiveAtWorkspace проверяет восстановленные байты и режим, повторный снимок и удаление точной версии.
 func snapshotRestoreAndDeleteExactArchiveAtWorkspace(t *testing.T, workspace, projectRef string) {
 	t.Helper()
 	relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000001.jsonl"
@@ -211,8 +226,8 @@ func snapshotRestoreAndDeleteExactArchiveAtWorkspace(t *testing.T, workspace, pr
 	}
 }
 
-// Отдельная kernel-проверка запускается только root в изолированном /tmp.
-// Обычные unit-тесты не получают дополнительных UID либо capabilities.
+// TestRestoreThenRunnerCaptureAcrossUIDs compares restored-file ownership across UIDs only in an isolated root fixture.
+// RU: TestRestoreThenRunnerCaptureAcrossUIDs сравнивает владельцев восстановленного файла между UID лишь в изолированной root-оснастке.
 func TestRestoreThenRunnerCaptureAcrossUIDs(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("requires an explicit isolated root fixture")
@@ -270,6 +285,8 @@ func TestRestoreThenRunnerCaptureAcrossUIDs(t *testing.T) {
 	}
 }
 
+// TestRestoreSourceOwnershipFixture accepts only the bound disposable workspace and one of the two fixture UIDs.
+// RU: TestRestoreSourceOwnershipFixture допускает лишь закреплённый одноразовый workspace и один из двух UID оснастки.
 func TestRestoreSourceOwnershipFixture(t *testing.T) {
 	if os.Getenv("KODEX_TEST_RESTORE_MODE") != "RESTORE" {
 		return
@@ -282,6 +299,8 @@ func TestRestoreSourceOwnershipFixture(t *testing.T) {
 	snapshotRestoreAndDeleteExactArchiveAtWorkspace(t, workspace, "")
 }
 
+// TestRestoreRejectsReceiptMismatchBeforeWriting prevents source writes from a missing or mismatched object receipt.
+// RU: TestRestoreRejectsReceiptMismatchBeforeWriting запрещает запись источника при отсутствующей либо чужой квитанции объекта.
 func TestRestoreRejectsReceiptMismatchBeforeWriting(t *testing.T) {
 	workspace := t.TempDir()
 	task := model.Task{Kind: "RESTORE", SourceSHA256: stringDigest('a'), SourceSizeBytes: 1,
@@ -291,20 +310,12 @@ func TestRestoreRejectsReceiptMismatchBeforeWriting(t *testing.T) {
 	}
 }
 
+// TestSnapshotCleansUpObjectAfterReadbackMismatch requires cleanup when stored-object ETag readback disagrees.
+// RU: TestSnapshotCleansUpObjectAfterReadbackMismatch требует очистки при несовпадении перечитанного ETag объекта.
 func TestSnapshotCleansUpObjectAfterReadbackMismatch(t *testing.T) {
 	workspace := t.TempDir()
 	relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000004.jsonl"
-	body := []byte("{\"type\":\"session_meta\"}\n")
-	path := filepath.Join(workspace, filepath.FromSlash(relative))
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, body, 0o640); err != nil {
-		t.Fatal(err)
-	}
-	hash := sha256.Sum256(body)
-	task := model.Task{SourceRelativePath: relative, SourceSHA256: hex.EncodeToString(hash[:]),
-		SourceSizeBytes: int64(len(body)), TargetObjectKey: "session-archive/v1/readback-mismatch.tar"}
+	task := snapshotSourceTask(t, workspace, relative, "session-archive/v1/readback-mismatch.tar")
 	store := &readbackMismatchStore{Store: objectstoragetest.New()}
 	if _, err := Snapshot(context.Background(), store, workspace, task); err == nil {
 		t.Fatal("Snapshot() accepted a readback mismatch")
@@ -314,20 +325,12 @@ func TestSnapshotCleansUpObjectAfterReadbackMismatch(t *testing.T) {
 	}
 }
 
+// TestSnapshotCleansUpObjectWhenPutReadbackFails removes bytes left by a failed upload receipt path.
+// RU: TestSnapshotCleansUpObjectWhenPutReadbackFails удаляет байты, оставшиеся после отказа выдачи квитанции загрузки.
 func TestSnapshotCleansUpObjectWhenPutReadbackFails(t *testing.T) {
 	workspace := t.TempDir()
 	relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000005.jsonl"
-	body := []byte("{\"type\":\"session_meta\"}\n")
-	path := filepath.Join(workspace, filepath.FromSlash(relative))
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, body, 0o640); err != nil {
-		t.Fatal(err)
-	}
-	hash := sha256.Sum256(body)
-	task := model.Task{SourceRelativePath: relative, SourceSHA256: hex.EncodeToString(hash[:]),
-		SourceSizeBytes: int64(len(body)), TargetObjectKey: "session-archive/v1/put-readback-failure.tar"}
+	task := snapshotSourceTask(t, workspace, relative, "session-archive/v1/put-readback-failure.tar")
 	store := &putReadbackFailureStore{Store: objectstoragetest.New()}
 	if _, err := Snapshot(context.Background(), store, workspace, task); err == nil {
 		t.Fatal("Snapshot() accepted a failed Put readback")
@@ -337,16 +340,41 @@ func TestSnapshotCleansUpObjectWhenPutReadbackFails(t *testing.T) {
 	}
 }
 
+// snapshotSourceTask writes exact synthetic source bytes and binds their size and digest to the caller's object key.
+// RU: snapshotSourceTask записывает точные синтетические байты источника и связывает их размер и дайджест с ключом объекта вызывающего теста.
+func snapshotSourceTask(t *testing.T, workspace, relative, objectKey string) model.Task {
+	t.Helper()
+	body := []byte("{\"type\":\"session_meta\"}\n")
+	path := filepath.Join(workspace, filepath.FromSlash(relative))
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256(body)
+	return model.Task{SourceRelativePath: relative, SourceSHA256: hex.EncodeToString(hash[:]),
+		SourceSizeBytes: int64(len(body)), TargetObjectKey: objectKey}
+}
+
+// readbackMismatchStore corrupts returned ETag metadata while retaining the stored object for cleanup assertions.
+// RU: readbackMismatchStore искажает возвращённый ETag, сохраняя объект для проверки очистки.
 type readbackMismatchStore struct{ *objectstoragetest.Store }
 
+// Get delegates the read and injects a mismatched ETag to exercise receipt validation.
+// RU: Get делегирует чтение и подставляет чужой ETag для проверки валидации квитанции.
 func (store *readbackMismatchStore) Get(ctx context.Context, key, version string) (objectstorage.Object, error) {
 	object, err := store.Store.Get(ctx, key, version)
 	object.ETag = "mismatched-etag"
 	return object, err
 }
 
+// putReadbackFailureStore simulates an upload that stores bytes but cannot return a successful receipt.
+// RU: putReadbackFailureStore имитирует загрузку с сохранёнными байтами без успешной квитанции.
 type putReadbackFailureStore struct{ *objectstoragetest.Store }
 
+// Put persists the object before returning a conflict to force the snapshot's unknown-result cleanup path.
+// RU: Put сохраняет объект и возвращает конфликт, вынуждая snapshot выполнить очистку при неопределённом результате.
 func (store *putReadbackFailureStore) Put(ctx context.Context, input objectstorage.PutInput) (objectstorage.Receipt, error) {
 	if _, err := store.Store.Put(ctx, input); err != nil {
 		return objectstorage.Receipt{}, err
@@ -354,6 +382,8 @@ func (store *putReadbackFailureStore) Put(ctx context.Context, input objectstora
 	return objectstorage.Receipt{}, objectstorage.ErrConflict
 }
 
+// stringDigest builds deterministic 64-byte digest-shaped fixture input from one character.
+// RU: stringDigest создаёт детерминированное 64-байтовое значение в форме дайджеста из одного символа.
 func stringDigest(character byte) string {
 	raw := make([]byte, 64)
 	for index := range raw {

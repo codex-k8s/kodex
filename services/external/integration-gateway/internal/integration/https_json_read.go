@@ -12,10 +12,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// maximumHTTPSJSONBodyBytes caps raw and canonical JSON bodies exposed by the bounded HTTPS and imported OpenAPI adapters.
+// maximumHTTPSJSONBodyBytes ограничивает исходные и канонические JSON-тела, выдаваемые ограниченным HTTPS-адаптером и адаптером импортированного OpenAPI.
 const maximumHTTPSJSONBodyBytes = 16 << 10
 
-// executeHTTPSJSONRead использует только закреплённые поля соединения; input
-// capability пуст, поэтому модель не выбирает URL, путь или HTTP method.
+// executeHTTPSJSONRead performs one bearer-authenticated GET using only the configured resource path, accepts a bounded JSON object or array and references the endpoint hash rather than claiming a content digest.
+// executeHTTPSJSONRead выполняет один GET с bearer-авторизацией только по заданному пути ресурса, принимает ограниченный JSON-объект либо массив и ссылается на хеш конечной точки, не выдавая его за хеш содержимого.
 func (adapter *Adapter) executeHTTPSJSONRead(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (Result, error) {
 	if request.Operation != "https_json.resource.read" || !integrationpackage.ValidHTTPSResourcePath(configuration["resource_path"]) {
 		return Result{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}

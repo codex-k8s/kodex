@@ -11,8 +11,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/providersmoke"
 )
 
+// maximumCredentialBytes bounds the dedicated smoke credential read through the secure projected-file reader.
+// RU: maximumCredentialBytes ограничивает чтение отдельного smoke-реквизита безопасным reader спроецированных файлов.
 const maximumCredentialBytes = 16 << 10
 
+// main verifies the pinned local audio fixture first and contacts the provider only outside fixture-only mode with an explicit dedicated credential file.
+// RU: main сначала проверяет закреплённую локальную запись и обращается к провайдеру лишь вне fixture-only режима с явным отдельным файлом реквизитов.
+// The entire command is bounded to twenty seconds; credential buffers are cleared and no real check runs merely by building this binary.
+// RU: Вся команда ограничена двадцатью секундами; буферы реквизитов очищаются, а одна сборка бинаря не запускает реальную проверку.
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

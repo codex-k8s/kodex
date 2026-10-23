@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// diagnosticFixture constructs matching synthetic input and request-failure pins
+// without a real provider account, external request or durable business receipt.
+// diagnosticFixture создаёт согласованные синтетические привязки отказа запроса
+// без реального аккаунта, внешнего вызова и устойчивой бизнесовой квитанции.
 func diagnosticFixture() (RunnerInput, ProviderFailureDiagnostic) {
 	input := RunnerInput{SessionRef: "ses_fixture1", TurnRef: "trn_fixture1", Attempt: 1,
 		RuntimeRevisionDigest: strings.Repeat("a", 64), InputDigest: strings.Repeat("b", 64), ExecutionBindingDigest: strings.Repeat("c", 64)}
@@ -16,6 +20,10 @@ func diagnosticFixture() (RunnerInput, ProviderFailureDiagnostic) {
 		Notification: "thread/tokenUsage/updated", NotificationError: "TOKEN_USAGE_LAST_EXCEEDS_TOTAL", AccountRead: "NONE"}
 }
 
+// TestProviderDiagnosticCanonicalWireAndBinding checks wire round-trip, rejects
+// every foreign binding coordinate and prevents failure metadata on success.
+// TestProviderDiagnosticCanonicalWireAndBinding проверяет wire round-trip,
+// отклоняет чужие привязки и запрещает диагностику отказа при успехе.
 func TestProviderDiagnosticCanonicalWireAndBinding(t *testing.T) {
 	input, value := diagnosticFixture()
 	raw, err := json.Marshal(value)
@@ -47,6 +55,10 @@ func TestProviderDiagnosticCanonicalWireAndBinding(t *testing.T) {
 	}
 }
 
+// TestProviderDiagnosticRejectsMalformedOrPrivateWire exercises ambiguous keys,
+// nulls, aliases, oversize input and private sentinels without reflecting content.
+// TestProviderDiagnosticRejectsMalformedOrPrivateWire проверяет неоднозначные ключи,
+// null, иные имена, превышение размера и закрытый текст без его отражения.
 func TestProviderDiagnosticRejectsMalformedOrPrivateWire(t *testing.T) {
 	_, value := diagnosticFixture()
 	raw, _ := json.Marshal(value)
@@ -67,6 +79,10 @@ func TestProviderDiagnosticRejectsMalformedOrPrivateWire(t *testing.T) {
 	}
 }
 
+// TestProviderDiagnosticTerminalAndCrossFieldGuards accepts an exact terminal
+// failure and rejects contradictory stages, classes and out-of-catalog codes.
+// TestProviderDiagnosticTerminalAndCrossFieldGuards принимает точный terminal-отказ
+// и отклоняет противоречивые этапы, классы и коды вне каталога.
 func TestProviderDiagnosticTerminalAndCrossFieldGuards(t *testing.T) {
 	_, value := diagnosticFixture()
 	value.Kind, value.Stage, value.Detail = "TERMINAL_FAILURE", "TERMINAL_RESULT", "NONE"
@@ -90,6 +106,10 @@ func TestProviderDiagnosticTerminalAndCrossFieldGuards(t *testing.T) {
 	}
 }
 
+// TestProviderDiagnosticResumeSourceClosedReasons verifies every allowed resume
+// reason at its exact stage/class and rejects cross-field substitutions.
+// TestProviderDiagnosticResumeSourceClosedReasons проверяет каждую разрешённую
+// причину resume в точном этапе/классе и отклоняет подмену связанных полей.
 func TestProviderDiagnosticResumeSourceClosedReasons(t *testing.T) {
 	input, base := diagnosticFixture()
 	base.Stage, base.Detail, base.Notification, base.NotificationError = "THREAD_READ", "NONE", "NONE", "NONE"

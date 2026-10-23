@@ -19,8 +19,16 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimesecret"
 )
 
+// testNamespace isolates fake runtime-secret objects in the in-memory client; it names no live namespace
+// used by these tests.
+// testNamespace изолирует fake runtime-secret объекты в клиенте в памяти; эти тесты не используют живой
+// namespace.
 const testNamespace = "test-namespace"
 
+// TestCreateReadbackAndDeleteExact exercises immutable create, metadata, exact resolve and plaintext
+// copy, then checks delete options and idempotent absence using a fake client.
+// TestCreateReadbackAndDeleteExact проверяет immutable создание, metadata, точное разрешение и копию
+// plaintext, затем delete options и идемпотентное отсутствие через fake клиент.
 func TestCreateReadbackAndDeleteExact(t *testing.T) {
 	t.Parallel()
 	store, client := newTestStore(t)
@@ -63,6 +71,10 @@ func TestCreateReadbackAndDeleteExact(t *testing.T) {
 	}
 }
 
+// TestCreateImmutableIsIdempotentOnlyForSameEffect accepts exact retries and rejects changed operation,
+// claim generation or content at the same deterministic name.
+// TestCreateImmutableIsIdempotentOnlyForSameEffect допускает точный повтор и отклоняет другие operation,
+// claim generation или содержимое по тому же детерминированному имени.
 func TestCreateImmutableIsIdempotentOnlyForSameEffect(t *testing.T) {
 	t.Parallel()
 	store, _ := newTestStore(t)
@@ -92,6 +104,10 @@ func TestCreateImmutableIsIdempotentOnlyForSameEffect(t *testing.T) {
 	}
 }
 
+// TestLookupExpectedEffectDistinguishesExactMissingAndConflict verifies successful metadata lookup,
+// absent deterministic name and rejection of a changed claim fence.
+// TestLookupExpectedEffectDistinguishesExactMissingAndConflict проверяет успешный поиск metadata,
+// отсутствие детерминированного имени и отказ при другом поколении claim.
 func TestLookupExpectedEffectDistinguishesExactMissingAndConflict(t *testing.T) {
 	t.Parallel()
 	store, _ := newTestStore(t)
@@ -118,6 +134,10 @@ func TestLookupExpectedEffectDistinguishesExactMissingAndConflict(t *testing.T) 
 	}
 }
 
+// TestCreateImmutableRejectsForeignSecret preloads an unmanaged colliding object and verifies that
+// neither create nor exact delete adopts or removes it.
+// TestCreateImmutableRejectsForeignSecret заранее помещает неуправляемый объект с совпадающим именем и
+// проверяет, что create и exact delete не принимают его и не удаляют.
 func TestCreateImmutableRejectsForeignSecret(t *testing.T) {
 	t.Parallel()
 	effect, value := testEffect("secop_foreign1234", 1, "sec_foreign123456", 2, "synthetic-value")
@@ -142,6 +162,10 @@ func TestCreateImmutableRejectsForeignSecret(t *testing.T) {
 	}
 }
 
+// TestListManagedReturnsMetadataOnlyAndSorted verifies label filtering and stable metadata order for two
+// managed objects beside an unmanaged Secret; the fake API still stores full bytes.
+// TestListManagedReturnsMetadataOnlyAndSorted проверяет фильтр метки и устойчивый порядок metadata двух
+// управляемых объектов рядом с неуправляемым Secret; fake API по-прежнему хранит полные байты.
 func TestListManagedReturnsMetadataOnlyAndSorted(t *testing.T) {
 	t.Parallel()
 	store, client := newTestStore(t)
@@ -172,6 +196,11 @@ func TestListManagedReturnsMetadataOnlyAndSorted(t *testing.T) {
 	}
 }
 
+// TestReadbackRejectsIntegrityAndStaleIdentity rejects stale UID and resourceVersion before delete, then
+// mutates the fake immutable object to verify readback and plaintext reads detect digest corruption.
+// TestReadbackRejectsIntegrityAndStaleIdentity отклоняет устаревшие UID и resourceVersion до удаления,
+// затем изменяет fake immutable объект и проверяет обнаружение повреждения digest при чтении metadata и
+// plaintext.
 func TestReadbackRejectsIntegrityAndStaleIdentity(t *testing.T) {
 	t.Parallel()
 	store, client := newTestStore(t)
@@ -211,6 +240,10 @@ func TestReadbackRejectsIntegrityAndStaleIdentity(t *testing.T) {
 	}
 }
 
+// TestExactReadRejectsForeignOperationMetadata removes the operation annotation in the fake store and
+// verifies that otherwise exact plaintext reads fail closed.
+// TestExactReadRejectsForeignOperationMetadata удаляет annotation операции в fake хранилище и проверяет
+// закрытый отказ формально точного чтения plaintext.
 func TestExactReadRejectsForeignOperationMetadata(t *testing.T) {
 	t.Parallel()
 	store, client := newTestStore(t)
@@ -232,6 +265,10 @@ func TestExactReadRejectsForeignOperationMetadata(t *testing.T) {
 	}
 }
 
+// TestListManagedRejectsMalformedManagedObject verifies that a managed immutable object lacking required
+// operation annotations fails the whole reconciliation list.
+// TestListManagedRejectsMalformedManagedObject проверяет, что управляемый immutable объект без
+// обязательных annotations операции прерывает весь список для сверки.
 func TestListManagedRejectsMalformedManagedObject(t *testing.T) {
 	t.Parallel()
 	immutable := true
@@ -250,6 +287,12 @@ func TestListManagedRejectsMalformedManagedObject(t *testing.T) {
 	}
 }
 
+// newTestStore seeds an in-memory Kubernetes tracker and assigns synthetic UID and increasing
+// resourceVersion on Secret create. It does not emulate API validation, immutability or server-side
+// delete precondition enforcement.
+// newTestStore заполняет Kubernetes tracker в памяти и назначает синтетические UID и возрастающий
+// resourceVersion при создании Secret. Проверки API, immutability и серверное применение delete
+// preconditions не эмулируются.
 func newTestStore(t *testing.T, objects ...runtime.Object) (*Store, *fake.Clientset) {
 	t.Helper()
 	client := fake.NewSimpleClientset(objects...)
@@ -277,6 +320,10 @@ func newTestStore(t *testing.T, objects ...runtime.Object) (*Store, *fake.Client
 	return store, client
 }
 
+// testEffect creates an immediate materialization intent and synthetic bytes with a matching SHA-256 for
+// caller-supplied operation, claim and revision.
+// testEffect создаёт immediate намерение материализации и синтетические байты с соответствующим SHA-256
+// для переданных operation, claim и revision.
 func testEffect(operationRef string, generation int64, secretRef string, revision int64, value string) (MaterializationEffect, []byte) {
 	content := []byte(value)
 	digest := sha256.Sum256(content)
@@ -291,6 +338,10 @@ func testEffect(operationRef string, generation int64, secretRef string, revisio
 	}, content
 }
 
+// materializationForEffect combines a synthetic effect with supplied name and API identity pins in
+// testNamespace without reading or validating a Kubernetes object.
+// materializationForEffect объединяет синтетический эффект с заданными именем и привязками API identity
+// в testNamespace без чтения или проверки объекта Kubernetes.
 func materializationForEffect(effect MaterializationEffect, name, uid, resourceVersion string) Materialization {
 	return Materialization{
 		WorkKind:        effect.WorkKind,
@@ -307,6 +358,10 @@ func materializationForEffect(effect MaterializationEffect, name, uid, resourceV
 	}
 }
 
+// exactDescriptor copies only descriptor pins from a test materialization, intentionally excluding the
+// original operation and claim fence.
+// exactDescriptor копирует только привязки descriptor из тестовой materialization, намеренно исключая
+// исходные operation и claim generation.
 func exactDescriptor(materialized Materialization) ExactDescriptor {
 	return ExactDescriptor{
 		Namespace: materialized.Namespace, Name: materialized.Name, SecretRef: materialized.SecretRef,
@@ -315,6 +370,10 @@ func exactDescriptor(materialized Materialization) ExactDescriptor {
 	}
 }
 
+// assertDeletePreconditions finds the recorded Secret delete action and checks its UID and
+// resourceVersion options; it does not prove that a real API server enforced those options.
+// assertDeletePreconditions находит записанное действие удаления Secret и проверяет options UID и
+// resourceVersion; применение этих options реальным API server здесь не доказывается.
 func assertDeletePreconditions(t *testing.T, client *fake.Clientset, expected Materialization) {
 	t.Helper()
 	for _, action := range client.Actions() {

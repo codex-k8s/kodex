@@ -21,6 +21,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestAppServerPipeProcessFixture is a closed-mode synthetic test executable for stdio, exit, rollout
+// append and signal/descendant cases. It returns immediately without a fixture env; real execution
+// is proven by the parent tests, not by that inactive direct invocation. No model/provider is launched.
+// TestAppServerPipeProcessFixture является синтетическим test executable с закрытыми режимами stdio,
+// exit, append архива, сигналов и потомков. Без fixture env она сразу возвращается; реальное
+// исполнение доказывают родительские тесты, не этот неактивный вызов. Модель или провайдер не запускаются.
 func TestAppServerPipeProcessFixture(t *testing.T) {
 	mode := os.Getenv("KODEX_APP_SERVER_PIPE_FIXTURE")
 	if mode == "" {
@@ -90,6 +96,10 @@ func TestAppServerPipeProcessFixture(t *testing.T) {
 	os.Exit(0)
 }
 
+// TestAppServerOwnsPipesUntilReadersDrain gates readers until the synthetic child has exited, then
+// requires buffered stdout and stderr plus EOF to survive the earlier Cmd.Wait completion.
+// TestAppServerOwnsPipesUntilReadersDrain удерживает readers до выхода синтетического ребёнка, затем
+// требует сохранения stdout/stderr и EOF после уже завершившегося Cmd.Wait.
 func TestAppServerOwnsPipesUntilReadersDrain(t *testing.T) {
 	command := appServerPipeFixtureCommand(t, "buffered")
 	readerGate := make(chan struct{})
@@ -130,6 +140,10 @@ func TestAppServerOwnsPipesUntilReadersDrain(t *testing.T) {
 	server.closeStreams()
 }
 
+// TestAppServerStopPreservesProcessAndDiagnosticFailures runs clean, oversized-stderr and nonzero-exit
+// children and checks graceful stop preserves the exact expected exit/diagnostic failure rather than success.
+// TestAppServerStopPreservesProcessAndDiagnosticFailures запускает clean, oversized-stderr и nonzero-exit
+// детей, проверяя сохранение точного exit/diagnostic отказа при stop вместо ложного успеха.
 func TestAppServerStopPreservesProcessAndDiagnosticFailures(t *testing.T) {
 	for _, test := range []struct {
 		mode      string
@@ -155,6 +169,10 @@ func TestAppServerStopPreservesProcessAndDiagnosticFailures(t *testing.T) {
 	}
 }
 
+// TestAppServerTerminateKillsDescriptorHoldingDescendant observes a real fixture descendant retaining
+// pipes after leader exit and requires bounded group shutdown, retained abort cause and no live descendant.
+// TestAppServerTerminateKillsDescriptorHoldingDescendant наблюдает настоящего fixture потомка, удерживающего
+// pipes после выхода leader, и требует bounded group shutdown, сохранения abort cause и остановки потомка.
 func TestAppServerTerminateKillsDescriptorHoldingDescendant(t *testing.T) {
 	pidPath := filepath.Join(t.TempDir(), "pid")
 	command := appServerPipeFixtureCommand(t, "holding-descendant")
@@ -201,12 +219,20 @@ func TestAppServerTerminateKillsDescriptorHoldingDescendant(t *testing.T) {
 	}
 }
 
+// TestAppServerStartFailureClosesOwnedPipes invokes a separate synthetic executable that repeats missing
+// binary startup and compares /proc/self/fd counts, avoiding unrelated delayed closes in the parent process.
+// TestAppServerStartFailureClosesOwnedPipes запускает отдельный синтетический executable, повторяющий
+// неудачный старт и сравнивающий /proc/self/fd без влияния отложенных закрытий родительского процесса.
 func TestAppServerStartFailureClosesOwnedPipes(t *testing.T) {
 	if err := appServerPipeFixtureCommand(t, "start-failure").Run(); err != nil {
 		t.Fatal("isolated start failure descriptor fixture failed")
 	}
 }
 
+// appServerPipeFixtureCommand launches only this test executable's exact fixture test with a minimal
+// mode-only environment, new process group and parent-death TERM. Callers add only scenario-owned temp paths.
+// appServerPipeFixtureCommand запускает лишь точный fixture test текущего executable с минимальным
+// mode-only окружением, новой группой и parent-death TERM. Вызывающий код добавляет лишь пути своего сценария.
 func appServerPipeFixtureCommand(t *testing.T, mode string) *exec.Cmd {
 	t.Helper()
 	executable, err := os.Executable()
@@ -219,6 +245,12 @@ func appServerPipeFixtureCommand(t *testing.T, mode string) *exec.Cmd {
 	return command
 }
 
+// TestFailedProcessCanCaptureOnlyAfterBoundedJoin verifies fresh source bytes appended by a synthetic
+// clean/failed child cannot be captured while readers are gated, but become input-bound proof after join.
+// A deployment-group publication denial may withhold capture, never measured usage or unverified pins.
+// TestFailedProcessCanCaptureOnlyAfterBoundedJoin проверяет запрет захвата новых байтов синтетического
+// clean/failed ребёнка до join и выдачу привязанного доказательства после него. Отказ назначения
+// deployment group может запретить захват, но не должен терять usage или выдавать непроверенные pins.
 func TestFailedProcessCanCaptureOnlyAfterBoundedJoin(t *testing.T) {
 	for _, mode := range []string{"rollout-nonzero", "rollout-clean"} {
 		t.Run(mode, func(t *testing.T) {
@@ -269,6 +301,10 @@ func TestFailedProcessCanCaptureOnlyAfterBoundedJoin(t *testing.T) {
 	}
 }
 
+// TestAppServerAbortPreservesRealReadError closes the actual stderr handle before first Read and
+// requires abort to retain both the original cause and read error while joining both readers.
+// TestAppServerAbortPreservesRealReadError закрывает настоящий stderr handle до первого Read и
+// требует сохранения исходной причины с read error и завершения обоих readers при abort.
 func TestAppServerAbortPreservesRealReadError(t *testing.T) {
 	gate := make(chan struct{})
 	server, err := startAppServerCommand(appServerPipeFixtureCommand(t, "clean"), gate)
@@ -287,6 +323,10 @@ func TestAppServerAbortPreservesRealReadError(t *testing.T) {
 	}
 }
 
+// TestAppServerTermResistantProcessIsKilledAndJoined waits for the child to install SIGTERM resistance,
+// then requires bounded escalation, observed failed exit, joined readers and an absent child PID.
+// TestAppServerTermResistantProcessIsKilledAndJoined ждёт установки защиты ребёнка от SIGTERM,
+// затем требует bounded эскалации, наблюдённого failed exit, join readers и отсутствия PID ребёнка.
 func TestAppServerTermResistantProcessIsKilledAndJoined(t *testing.T) {
 	readyPath := filepath.Join(t.TempDir(), "ready")
 	command := appServerPipeFixtureCommand(t, "term-resistant")
@@ -322,6 +362,10 @@ func TestAppServerTermResistantProcessIsKilledAndJoined(t *testing.T) {
 	}
 }
 
+// TestAppServerStopCloseFailureStillJoins precloses stdin and requires the resulting close error
+// without skipping process Wait or either reader join.
+// TestAppServerStopCloseFailureStillJoins заранее закрывает stdin и требует ошибку повторного close
+// без пропуска Wait процесса или ожидания любого reader.
 func TestAppServerStopCloseFailureStillJoins(t *testing.T) {
 	server, err := startAppServerCommand(appServerPipeFixtureCommand(t, "clean"), nil)
 	if err != nil {
@@ -333,6 +377,12 @@ func TestAppServerStopCloseFailureStillJoins(t *testing.T) {
 	}
 }
 
+// TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt checks new/resumed inputs retain explicit
+// model/effort/personality, exact thread/cwd and complete UTF-8 instruction chunks. Missing effort is
+// rejected for supported reasoning and omitted for unsupported models without a collaboration preset.
+// TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt проверяет явные model/effort/personality,
+// точные thread/cwd и полные UTF-8 instructions для нового и resumed ввода. Отсутствующий effort
+// отклоняется при supported reasoning и не придумывается для unsupported без collaboration preset.
 func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 	for _, session := range []string{"", "existing-thread"} {
 		input := model.Input{ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high", Model: "gpt-6-astra", CodexSessionID: session, WorkspaceRoot: "/workspace",
@@ -383,6 +433,12 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 	}
 }
 
+// TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess requires incomplete/invalid
+// synthetic runtime selections, overlays and tools to fail at pre-start validation. It does not query
+// a live catalog or independently prove a rejection branch for every otherwise valid model fixture.
+// TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess требует pre-start отказа для
+// неполных или неверных синтетических selections, overlays и tools. Она не читает живой каталог
+// и не изолирует отдельную ветвь отказа каждой модели с полностью корректной остальной fixture.
 func TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess(t *testing.T) {
 	for _, input := range []model.Input{
 		{Provider: "openai", Model: "unknown"},
@@ -397,6 +453,10 @@ func TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess(t *t
 	}
 }
 
+// TestProviderStageErrorKeepsClassificationAndHidesDiagnostic checks errors.Is still reaches the
+// private cause while the outer stage Error stays fixed and absent wrappers map to UNKNOWN.
+// TestProviderStageErrorKeepsClassificationAndHidesDiagnostic проверяет доступность приватной причины
+// через errors.Is при фиксированном внешнем Error и UNKNOWN без stage wrapper.
 func TestProviderStageErrorKeepsClassificationAndHidesDiagnostic(t *testing.T) {
 	secret := errors.New("provider response with secret diagnostic")
 	err := atProviderStage(providerStageThreadCall, secret)
@@ -414,6 +474,10 @@ func TestProviderStageErrorKeepsClassificationAndHidesDiagnostic(t *testing.T) {
 	}
 }
 
+// TestProtocolErrorReportsOnlyMethodAndCode requires a parsed RPC error to report only its request
+// method and numeric code, excluding the synthetic upstream secret message.
+// TestProtocolErrorReportsOnlyMethodAndCode требует вывода лишь request method и числового кода
+// разобранной RPC ошибки без синтетического приватного upstream message.
 func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
 	t.Parallel()
 	err := protocolError("turn/start", json.RawMessage(`{"code":-32602,"message":"secret diagnostic"}`))
@@ -425,6 +489,10 @@ func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
 	}
 }
 
+// TestWaitTerminalPreservesClosedFailureDiagnostics feeds in-memory malformed notifications, stream
+// failure and an uncorrelated response, requiring exact internal details/categories without a terminal.
+// TestWaitTerminalPreservesClosedFailureDiagnostics подаёт повреждённые уведомления, stream failure
+// и несвязанный response в памяти, требуя точные детали и категории без выдуманного terminal.
 func TestWaitTerminalPreservesClosedFailureDiagnostics(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -456,6 +524,10 @@ func TestWaitTerminalPreservesClosedFailureDiagnostics(t *testing.T) {
 	}
 }
 
+// TestWaitTerminalClosedStreamAndCancellationDiagnostics distinguishes closed response stream from
+// caller cancellation, preserving the typed detail and context.Canceled identity.
+// TestWaitTerminalClosedStreamAndCancellationDiagnostics различает закрытый поток и отмену вызывающего,
+// сохраняя типизированный detail и идентичность context.Canceled.
 func TestWaitTerminalClosedStreamAndCancellationDiagnostics(t *testing.T) {
 	t.Parallel()
 	messages := make(chan streamEvent)
@@ -473,6 +545,10 @@ func TestWaitTerminalClosedStreamAndCancellationDiagnostics(t *testing.T) {
 	}
 }
 
+// TestProtocolErrorPreservesClosedAccountReadReason preserves only the pinned account reason from
+// an exact correlated failure, not private nested data supplied alongside it.
+// TestProtocolErrorPreservesClosedAccountReadReason сохраняет лишь закреплённую account причину
+// точного связанного отказа, но не переданные вместе с ней приватные вложенные данные.
 func TestProtocolErrorPreservesClosedAccountReadReason(t *testing.T) {
 	t.Parallel()
 	err := protocolError("account/read", json.RawMessage(`{"code":-32603,"message":"workspace routing discovery failed","data":{"private":"private-sentinel"}}`))
@@ -482,6 +558,10 @@ func TestProtocolErrorPreservesClosedAccountReadReason(t *testing.T) {
 	}
 }
 
+// TestClassifyAccountReadResponse checks supported account/routing shapes, nullable/auth-required
+// outcomes and transport/schema failures without interpreting opaque metadata as a financial permission.
+// TestClassifyAccountReadResponse проверяет поддержанные account/routing схемы, nullable/auth-required
+// исходы и transport/schema отказы без трактовки непрозрачных метаданных как финансового разрешения.
 func TestClassifyAccountReadResponse(t *testing.T) {
 	t.Parallel()
 
@@ -523,9 +603,19 @@ func TestClassifyAccountReadResponse(t *testing.T) {
 	}
 }
 
+// TestAccountReadWorkspaceRoutingClosedSchema tests exact optional routing fields, enums, nulls,
+// types, string/raw bounds and duplicate keys; rejection must retain the safe schema/auth sentinel,
+// not disclose private account data or bypass required authentication.
+// TestAccountReadWorkspaceRoutingClosedSchema проверяет точные optional routing поля, enum, null,
+// типы, длины и повторные ключи; отказ обязан сохранить безопасный schema/auth маркер без раскрытия
+// аккаунта или обхода обязательной авторизации.
 func TestAccountReadWorkspaceRoutingClosedSchema(t *testing.T) {
 	t.Parallel()
+	// account is the synthetic outer response prefix; only the nested routing object changes below.
+	// account задаёт синтетический внешний префикс; ниже меняется лишь вложенный объект routing.
 	const account = `{"account":{"type":"chatgpt","email":null,"planType":"pro"},"requiresOpenaiAuth":true,"workspaceRouting":`
+	// valid pins an independent accepted routing shape, not a live account or an egress destination.
+	// valid закрепляет независимую допустимую routing схему, а не живой аккаунт или назначение egress.
 	const valid = `{"chatgptAccountId":"synthetic-private-account","backendOrigin":"https://chatgpt.com/backend-api","accountRoutingOverride":"NO_CONSTRAINT"}`
 	tests := []struct {
 		name, routing string
@@ -586,6 +676,10 @@ func TestAccountReadWorkspaceRoutingClosedSchema(t *testing.T) {
 	}
 }
 
+// TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy verifies the fixed synthetic proxy/bypass
+// settings reach the child environment but an unrelated inherited secret does not.
+// TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy проверяет передачу фиксированных синтетических
+// proxy/bypass в окружение ребёнка без наследования постороннего секрета.
 func TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy(t *testing.T) {
 	setRuntimeTransportFixture(t)
 	t.Setenv("UNRELATED_SECRET", "must-not-be-forwarded")
@@ -605,6 +699,10 @@ func TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy(t *testing.T) {
 	}
 }
 
+// TestTokenUsageNotificationRemainsEnabled ensures both authoritative usage notifications remain
+// outside the opt-out set rather than silently losing accounting observations.
+// TestTokenUsageNotificationRemainsEnabled требует отсутствия обоих авторитетных usage уведомлений
+// в opt-out наборе, исключая их тихое отключение из учёта.
 func TestTokenUsageNotificationRemainsEnabled(t *testing.T) {
 	t.Parallel()
 	for _, method := range suppressedNotificationMethods {
@@ -614,6 +712,10 @@ func TestTokenUsageNotificationRemainsEnabled(t *testing.T) {
 	}
 }
 
+// TestRawProviderResponseItemsRemainSuppressed requires raw provider response items to remain opted
+// out; this flag check alone is not a substitute for strict parsing or redaction of accepted events.
+// TestRawProviderResponseItemsRemainSuppressed требует сохранения opt-out для исходных provider items;
+// одна проверка флага не заменяет строгий разбор и сокрытие принимаемых событий.
 func TestRawProviderResponseItemsRemainSuppressed(t *testing.T) {
 	t.Parallel()
 	for _, required := range []string{"rawResponseItem/completed"} {
@@ -623,6 +725,10 @@ func TestRawProviderResponseItemsRemainSuppressed(t *testing.T) {
 	}
 }
 
+// TestRequiredMCPToolNamesMatchRuntimeAuthority compares the synthetic assistant/target/grant presence
+// projection to an independent literal tool-name set, without claiming those incomplete fixtures issue grants.
+// TestRequiredMCPToolNamesMatchRuntimeAuthority сравнивает проекцию наличия assistant/target/grant
+// с независимым списком имён, не считая неполные синтетические fixtures выдачей полномочий.
 func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
 	input := model.Input{AssistantScope: runtimecontract.AssistantScopeSystem}
 	input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{})
@@ -644,6 +750,10 @@ func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
 	}
 }
 
+// TestTrustedMCPToolApproval checks only the matching empty Kodex MCP form receives an accept with
+// empty content; no owner decision or external tool effect is created by this protocol test.
+// TestTrustedMCPToolApproval проверяет лишь accept с пустым content для совпадающей пустой формы
+// Kodex MCP; owner decision или внешнего tool effect этот протокольный тест не создаёт.
 func TestTrustedMCPToolApproval(t *testing.T) {
 	state := &protocolState{threadID: "thread-1", turnID: "turn-1"}
 	request := map[string]any{
@@ -675,6 +785,10 @@ func TestTrustedMCPToolApproval(t *testing.T) {
 	}
 }
 
+// TestTrustedMCPToolApprovalRejectsAuthorityExpansion rejects another server/turn, a nonempty user-input
+// form and a missing tool-approval marker, rather than broadening the narrow transport acknowledgement.
+// TestTrustedMCPToolApprovalRejectsAuthorityExpansion отклоняет чужие server/turn, непустую форму ввода
+// и отсутствие tool-approval маркера, не расширяя узкое подтверждение транспорта.
 func TestTrustedMCPToolApprovalRejectsAuthorityExpansion(t *testing.T) {
 	state := &protocolState{threadID: "thread-1", turnID: "turn-1"}
 	tests := map[string]map[string]any{

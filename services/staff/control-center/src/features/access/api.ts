@@ -80,6 +80,10 @@ function versionedHeaders(headers: MutationHeaders): {
   return { ...mutationHeaders(headers), "If-Match": headers["If-Match"] };
 }
 
+function accessPickerQuery(query: string): { query?: string; pageSize: number } {
+  return { ...(query ? { query } : {}), pageSize: 100 };
+}
+
 export async function fetchPermissionRegistry(): Promise<PermissionDefinitionPage> {
   return (await unwrap(listPermissionRegistry({ signal: requestSignal() })))
     .data;
@@ -193,7 +197,7 @@ export async function fetchProjects(query = ""): Promise<ProjectPage> {
   return (
     await unwrap(
       listProjects({
-        query: { ...(query ? { query } : {}), pageSize: 100 },
+        query: accessPickerQuery(query),
         signal: requestSignal(),
       }),
     )
@@ -208,7 +212,7 @@ export async function fetchAgents(
     await unwrap(
       listAgents({
         path: { projectRef },
-        query: { ...(query ? { query } : {}), pageSize: 100 },
+        query: accessPickerQuery(query),
         signal: requestSignal(),
       }),
     )
@@ -223,7 +227,7 @@ export async function fetchWorkflows(
     await unwrap(
       listWorkflows({
         path: { projectRef },
-        query: { ...(query ? { query } : {}), pageSize: 100 },
+        query: accessPickerQuery(query),
         signal: requestSignal(),
       }),
     )

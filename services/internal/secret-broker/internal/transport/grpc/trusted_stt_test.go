@@ -23,11 +23,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// denyingSTTOwner counts transcription resolution requests and refuses them, allowing tests to prove
+// denial precedes storage access.
+// denyingSTTOwner учитывает transcription resolution requests и отклоняет их, позволяя проверить отказ до
+// storage access.
 type denyingSTTOwner struct {
 	fakeOwner
 	calls int
 }
 
+// materializingSTTOwner records request/order and can return a matching or deliberately wrong synthetic
+// account binding; it does not authorize a real provider account.
+// materializingSTTOwner записывает request/order и может вернуть matching либо намеренно wrong synthetic
+// account binding; реальный provider account не авторизует.
 type materializingSTTOwner struct {
 	fakeOwner
 	events       *[]string
@@ -35,6 +43,10 @@ type materializingSTTOwner struct {
 	wrongAccount bool
 }
 
+// ResolveTranscriptionCredentialProjection records the owner event/request and returns fixed object pins
+// with requested generation and a short future expiry, optionally substituting a foreign account.
+// ResolveTranscriptionCredentialProjection записывает owner event/request и возвращает fixed object pins с
+// requested generation и short future expiry, при необходимости подставляя foreign account.
 func (owner *materializingSTTOwner) ResolveTranscriptionCredentialProjection(_ context.Context, request *cp.ResolveTranscriptionCredentialProjectionRequest) (*cp.ResolveTranscriptionCredentialProjectionResponse, error) {
 	*owner.events = append(*owner.events, "owner")
 	owner.request = request
@@ -48,6 +60,10 @@ func (owner *materializingSTTOwner) ResolveTranscriptionCredentialProjection(_ c
 	}, ExpiresAt: timestamppb.New(time.Now().Add(10 * time.Second))}, nil
 }
 
+// materializingSTTStore records exact descriptor/account reads and returns synthetic API-key bytes or a
+// failure; retaining its raw buffer lets tests observe deferred clearing.
+// materializingSTTStore записывает exact descriptor/account reads и возвращает synthetic API-key bytes
+// либо failure; сохранённый raw buffer позволяет проверить deferred clearing.
 type materializingSTTStore struct {
 	fakeStore
 	events     *[]string
@@ -57,6 +73,10 @@ type materializingSTTStore struct {
 	fail       bool
 }
 
+// ReadProviderCredentialExact records the store event/pins, optionally fails and otherwise returns the
+// tracked synthetic byte buffer without a real Kubernetes lookup.
+// ReadProviderCredentialExact записывает store event/pins, при настройке отказывает, иначе возвращает
+// отслеживаемый synthetic byte buffer без реального Kubernetes lookup.
 func (store *materializingSTTStore) ReadProviderCredentialExact(_ context.Context, account string, descriptor kubernetesstore.ProviderCredentialDescriptor) ([]byte, error) {
 	*store.events = append(*store.events, "store")
 	store.account, store.descriptor = account, descriptor
@@ -67,11 +87,23 @@ func (store *materializingSTTStore) ReadProviderCredentialExact(_ context.Contex
 	return store.raw, nil
 }
 
+// ResolveTranscriptionCredentialProjection counts the call and returns fixed synthetic PermissionDenied,
+// never a credential descriptor.
+// ResolveTranscriptionCredentialProjection учитывает вызов и возвращает fixed synthetic PermissionDenied,
+// не credential descriptor.
 func (owner *denyingSTTOwner) ResolveTranscriptionCredentialProjection(context.Context, *cp.ResolveTranscriptionCredentialProjectionRequest) (*cp.ResolveTranscriptionCredentialProjectionResponse, error) {
 	owner.calls++
 	return nil, status.Error(codes.PermissionDenied, "synthetic owner denial")
 }
 
+// TestTrustedSTTProjectionRelaysOnlyExplicitSessionToOwner checks explicit bearer relay without
+// actor-header leakage, owner-before-store order, exact descriptor reads, byte clearing and refusals for
+// wrong binding/storage/session/snapshot/expiry/project/caller. All credentials/ports are synthetic; no
+// speech/model/provider request executes.
+// TestTrustedSTTProjectionRelaysOnlyExplicitSessionToOwner проверяет explicit bearer relay без
+// actor-header leakage, owner-before-store order, exact descriptor reads, byte clearing и отказы wrong
+// binding/storage/session/snapshot/expiry/project/caller. Все credentials/ports подменены;
+// speech/model/provider request не выполняется.
 func TestTrustedSTTProjectionRelaysOnlyExplicitSessionToOwner(t *testing.T) {
 	method := sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName
 	authorizer, err := serviceidentity.NewTrustedCluster(transportprofile.TrustedCluster, secretBrokerSPIFFEID, []serviceidentity.Binding{{

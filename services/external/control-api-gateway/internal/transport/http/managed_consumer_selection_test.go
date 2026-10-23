@@ -12,6 +12,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestManagedConsumerSelectionHTTP exercises twenty absent-or-match selection cases on each of the
+// three typed rebind routes, verifies unchanged impact/OCC and consumer pins, rejects malformed
+// selections before the RPC, and preserves owner-conflict mapping to 412. The recorder is synthetic
+// and proves no live owner mutation.
+// TestManagedConsumerSelectionHTTP проверяет20 случаев выбора отсутствия или совпадения на каждом из
+// трёх типизированных маршрутов перепривязки, неизменность привязок влияния, конкуренции и
+// потребителя, отказ неверного выбора до RPC и преобразование конфликта владельца в412. Синтетический
+// recorder не доказывает реальное изменение владельца.
 func TestManagedConsumerSelectionHTTP(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -87,6 +95,12 @@ func TestManagedConsumerSelectionHTTP(t *testing.T) {
 	}
 }
 
+// TestManagedConsumerReadDTOUnchanged verifies that converting and encoding a consumer read projection
+// does not expose the write-only expectedAbsent selector. The mutation input contract remains separate
+// from the read DTO.
+// TestManagedConsumerReadDTOUnchanged проверяет, что преобразование и кодирование проекции чтения
+// потребителя не раскрывает только входной признак expectedAbsent. Контракт изменения остаётся
+// отдельным от DTO чтения.
 func TestManagedConsumerReadDTOUnchanged(t *testing.T) {
 	t.Parallel()
 	value, err := managedConsumerView(&cp.ManagedConfigurationConsumer{Kind: "STT_SERVICE", Ref: "stt-tts-service", RevisionRef: "mrev_previous", Version: 7})

@@ -10,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/repository/receipt"
 )
 
+// reportStore substitutes only report-recovery paths and remembering, with no actual persistence or concurrency guarantees.
+// reportStore подставляет только пути восстановления отчёта и запоминание, без реального хранения или гарантий конкуренции.
 type reportStore struct {
 	receipt.ReportRepository
 	receipt.ReconciliationRepository
@@ -18,28 +20,45 @@ type reportStore struct {
 	remember func(context.Context) error
 }
 
+// PendingReports delegates the context and batch bound to a test-controlled journal read.
+// PendingReports передаёт контекст и размер пачки тестовому чтению журнала.
 func (s reportStore) PendingReports(ctx context.Context, batch int) ([]receipt.PendingReport, error) {
 	return s.pending(ctx, batch)
 }
+
+// ClaimReport grants every synthetic claim, so worker tests do not stand in for PostgreSQL fencing tests.
+// ClaimReport выдаёт каждый синтетический claim, поэтому тесты worker не заменяют проверку ограничений в PostgreSQL.
 func (s reportStore) ClaimReport(context.Context, receipt.PendingReport, time.Duration) (bool, error) {
 	return true, nil
 }
+
+// AcknowledgeReport exposes the reported version and context to the case-specific acknowledgement assertion.
+// AcknowledgeReport передаёт версию отчёта и контекст проверке подтверждения конкретного сценария.
 func (s reportStore) AcknowledgeReport(ctx context.Context, p receipt.PendingReport) error {
 	return s.ack(ctx, p)
 }
+
+// Remember injects success, failure or a cancellable wait; it deliberately does not validate receipt fields itself.
+// Remember внедряет успех, отказ либо отменяемое ожидание; поля квитанции намеренно не проверяются самой заглушкой.
 func (s reportStore) Remember(ctx context.Context, _ receipt.Scope, _ receipt.Record, _ receipt.OwnerReceipt, _ time.Time) error {
 	return s.remember(ctx)
 }
 
+// reportAuthority implements only the synthetic report path, leaving other owner methods outside this fixture.
+// reportAuthority реализует только синтетический путь отчёта, оставляя прочие методы владельца вне этой оснастки.
 type reportAuthority struct {
 	receipt.EffectAuthority
 	report func(context.Context, receipt.Report) (receipt.OwnerReceipt, error)
 }
 
+// Report delegates the original replay/source/receipt envelope to the controlled owner response.
+// Report передаёт исходную оболочку replay/source/receipt управляемому ответу владельца.
 func (a reportAuthority) Report(ctx context.Context, p receipt.Report) (receipt.OwnerReceipt, error) {
 	return a.report(ctx, p)
 }
 
+// recoveryFixture builds a versioned report with expired synthetic invocation lease so recovery is eligible without waiting.
+// recoveryFixture создаёт версионированный отчёт с истёкшим синтетическим lease invocation для восстановления без ожидания.
 func recoveryFixture() receipt.PendingReport {
 	p, _ := fixture()
 	p.Record.ReportVersion = 1
@@ -48,6 +67,10 @@ func recoveryFixture() receipt.PendingReport {
 		Binding: &api.ExecutionBinding{InvocationRef: &ref, Lease: api.ExecutionLease{Ref: "lease_fixture01", Fence: "fixture-fence", Generation: 1, ExpiresAt: time.Now().Add(-time.Minute)}}}}
 }
 
+// TestReportWorkerStartupBarrierAndCancelJoin exercises cancellation at barrier, journal read, owner report, remember and acknowledgement checkpoints.
+// Every injected dependency cooperates with context cancellation; the test waits for RunReports to return before dependency shutdown.
+// TestReportWorkerStartupBarrierAndCancelJoin проверяет отмену на barrier, чтении журнала, отчёте владельцу, remember и подтверждении.
+// Каждая заглушка соблюдает отмену контекста; тест ожидает возврат RunReports до закрытия зависимостей.
 func TestReportWorkerStartupBarrierAndCancelJoin(t *testing.T) {
 	for _, phase := range []string{"barrier", "pending", "rpc", "remember", "ack"} {
 		t.Run(phase, func(t *testing.T) {
@@ -102,6 +125,10 @@ func TestReportWorkerStartupBarrierAndCancelJoin(t *testing.T) {
 	}
 }
 
+// TestReportWorkerValidatesReadbackAndPreservesPartialProgress rejects changed lineage, denied reports and failed remembering before acknowledgement.
+// A successful first item remains counted even when the second report fails; all requests must retain Replay=true.
+// TestReportWorkerValidatesReadbackAndPreservesPartialProgress отвергает иное происхождение, запрет отчёта и отказ remember до подтверждения.
+// Успешный первый элемент остаётся учтённым при сбое второго; все запросы должны сохранять Replay=true.
 func TestReportWorkerValidatesReadbackAndPreservesPartialProgress(t *testing.T) {
 	for _, mode := range []string{"success", "changed", "denied", "remember"} {
 		t.Run(mode, func(t *testing.T) {

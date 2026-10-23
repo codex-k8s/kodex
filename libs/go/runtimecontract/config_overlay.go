@@ -17,18 +17,32 @@ import (
 )
 
 const (
-	MaximumConfigOverlayBytes      = 64 << 10
+	// MaximumConfigOverlayBytes caps the UTF-8 TOML overlay before parsing or draft inspection.
+	// MaximumConfigOverlayBytes ограничивает UTF-8 TOML-настройки до разбора или проверки черновика.
+	MaximumConfigOverlayBytes = 64 << 10
+	// MaximumRuntimeEnvironmentBytes caps combined ordinary values and secret-projection metadata, not secret contents.
+	// MaximumRuntimeEnvironmentBytes ограничивает сумму обычных значений и метаданных проекций секретов, но не содержимое секретов.
 	MaximumRuntimeEnvironmentBytes = 64 << 10
 )
 
+// environmentNamePattern restricts user variable names to bounded uppercase identifiers before reserved-name checks.
+// environmentNamePattern ограничивает имена переменных короткими идентификаторами верхнего регистра до проверки зарезервированных имён.
 var environmentNamePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,126}$`)
+
+// secretNamePattern checks the bounded lowercase Kubernetes Secret name shape used by projections.
+// secretNamePattern проверяет ограниченную строчную форму имени Kubernetes Secret в проекциях.
 var secretNamePattern = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?$`)
+
+// secretKeyPattern accepts bounded key tokens without allowing directory separators or arbitrary paths.
+// secretKeyPattern принимает ограниченные ключи без разделителей каталогов и произвольных путей.
 var secretKeyPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,253}$`)
+
+// runtimeToolCommandPattern admits one bounded executable token rather than a shell command line.
+// runtimeToolCommandPattern допускает один ограниченный токен исполняемого файла, а не командную строку shell.
 var runtimeToolCommandPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$`)
 
-// ConfigOverlay содержит только owner-editable и не несущие authority ключи
-// Codex. Provider, credentials, sandbox, approvals, permissions, MCP и shell
-// environment всегда материализуются сервером и не входят в overlay.
+// ConfigOverlay contains only owner-editable non-authorizing preferences; provider, credentials, sandbox, approvals, permissions, MCP and shell environment remain server materializations.
+// ConfigOverlay содержит только редактируемые владельцем настройки без полномочий; провайдер, реквизиты, sandbox, подтверждения, права, MCP и shell-окружение материализуются сервером.
 type ConfigOverlay struct {
 	WebSearchMode        string         `toml:"web_search,omitempty" json:"webSearchMode,omitempty"`
 	ModelReasoningEffort string         `toml:"model_reasoning_effort,omitempty" json:"modelReasoningEffort,omitempty"`
@@ -37,17 +51,21 @@ type ConfigOverlay struct {
 	History              OverlayHistory `toml:"history,omitempty" json:"history,omitempty"`
 }
 
+// OverlayHistory carries the allowlisted history-persistence preference without selecting filesystem paths or granting file access.
+// OverlayHistory содержит разрешённую настройку сохранения истории без выбора файловых путей и выдачи доступа к файлам.
 type OverlayHistory struct {
 	Persistence string `toml:"persistence,omitempty" json:"persistence,omitempty"`
 }
 
+// RuntimeEnvironmentValue binds a nonsecret string value to a validated user variable name; secret values use a separate projection channel.
+// RuntimeEnvironmentValue связывает несекретную строку с проверенным именем переменной; значения секретов используют отдельный канал проекций.
 type RuntimeEnvironmentValue struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
-// RuntimeSecretProjection не содержит Secret value. Метаданные связывают
-// RuntimeRevision с одной immutable Kubernetes Secret revision и одним key.
+// RuntimeSecretProjection contains no secret value and pins a runtime variable to the exact Secret UID, resource version, key and content digest.
+// RuntimeSecretProjection не содержит значения секрета и закрепляет переменную исполнения за точными UID Secret, версией ресурса, ключом и дайджестом содержимого.
 type RuntimeSecretProjection struct {
 	Name                  string `json:"name"`
 	SecretName            string `json:"secret_name"`
@@ -57,9 +75,8 @@ type RuntimeSecretProjection struct {
 	ContentSHA256         string `json:"content_sha256"`
 }
 
-// RuntimeEnvironmentImage связывает версию окружения с exact promoted image.
-// ArtifactRef/RecipeRef/RecipeGeneration обязательны для всех окружений, включая
-// системного помощника: platform-owned образ проходит тот же exact admission.
+// RuntimeEnvironmentImage describes a digest-pinned image and its artifact and recipe provenance; authorized promotion is checked by the owning admission boundary, not conferred by this value.
+// RuntimeEnvironmentImage описывает закреплённый по дайджесту образ и происхождение артефакта и рецепта; разрешённое продвижение проверяет граница допуска владельца, а не это значение.
 type RuntimeEnvironmentImage struct {
 	ArtifactRef      string `json:"artifact_ref,omitempty"`
 	RecipeRef        string `json:"recipe_ref,omitempty"`
@@ -68,8 +85,8 @@ type RuntimeEnvironmentImage struct {
 	Digest           string `json:"digest"`
 }
 
-// RuntimeEnvironmentTool является проверенным image executable, разрешенным
-// конкретной immutable версией окружения.
+// RuntimeEnvironmentTool describes an image executable selected by an immutable environment, with bounded display and usage text rather than an arbitrary command line.
+// RuntimeEnvironmentTool описывает исполняемый файл образа, выбранный неизменяемым окружением, с ограниченными пояснениями вместо произвольной командной строки.
 type RuntimeEnvironmentTool struct {
 	Name        string `json:"name"`
 	Command     string `json:"command"`
@@ -77,6 +94,8 @@ type RuntimeEnvironmentTool struct {
 	UsageHint   string `json:"usage_hint,omitempty"`
 }
 
+// SafeEffectiveConfigInput collects versioned configuration metadata, ordinary values and secret locators for readback; callers must not put secret bytes in Values or Overlay.
+// SafeEffectiveConfigInput собирает версионные метаданные, обычные значения и ссылки на секреты для чтения; вызывающий не должен помещать секретные байты в Values или Overlay.
 type SafeEffectiveConfigInput struct {
 	Model, Provider, RuntimeProfileRef                          string
 	RuntimeConfigRef, RuntimeConfigDigest                       string
@@ -92,14 +111,20 @@ type SafeEffectiveConfigInput struct {
 	Secrets                                                     []RuntimeSecretProjection
 }
 
+// RenderSafeEffectiveConfig validates overlay and environment values, then renders TOML readback with default history persistence and secret metadata but no resolved secret contents.
+// RenderSafeEffectiveConfig проверяет настройки и переменные, затем формирует TOML с сохранением истории по умолчанию и метаданными секретов без разрешения их содержимого.
 func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 	overlay, err := ParseConfigOverlay(input.Overlay)
 	if err != nil || ValidateRuntimeEnvironment(input.Values, input.Secrets) != nil {
 		return "", errors.New("effective configuration input is invalid")
 	}
+	// safeSecret limits the rendered secret entry to locator, version and digest metadata.
+	// safeSecret ограничивает вывод секрета метаданными ссылки, версии и дайджеста.
 	type safeSecret struct {
 		Name, SecretName, SecretKey, SecretUID, SecretResourceVersion, ContentSHA256 string
 	}
+	// safeReadback fixes the effective TOML layout without embedding credential values or transport-authority configuration.
+	// safeReadback закрепляет формат итогового TOML без значений реквизитов и конфигурации транспортных полномочий.
 	type safeReadback struct {
 		WebSearchMode        string         `toml:"web_search,omitempty"`
 		Model                string         `toml:"model"`
@@ -162,6 +187,8 @@ func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 	return encoded.String(), nil
 }
 
+// ParseConfigOverlay requires a clean diagnostic pass and complete typed TOML decoding, rejecting protected or undecoded keys with bounded generic errors.
+// ParseConfigOverlay требует отсутствия диагностик и полного типизированного разбора TOML, отклоняя защищённые и неразобранные ключи ограниченными общими ошибками.
 func ParseConfigOverlay(raw string) (ConfigOverlay, error) {
 	if len(DiagnoseConfigOverlay(raw, nil)) != 0 {
 		return ConfigOverlay{}, errors.New("config overlay is invalid or protected")
@@ -177,6 +204,8 @@ func ParseConfigOverlay(raw string) (ConfigOverlay, error) {
 	return overlay, nil
 }
 
+// ValidateConfigOverlayDraftPayload rejects oversized or invalid text and protected-content markers; it is a draft filter, not a substitute for the TOML schema validator.
+// ValidateConfigOverlayDraftPayload отклоняет чрезмерный или некорректный текст и маркеры защищённого содержимого; это фильтр черновика, не замена проверки TOML-схемы.
 func ValidateConfigOverlayDraftPayload(raw string) error {
 	if len(raw) > MaximumConfigOverlayBytes || !utf8.ValidString(raw) || strings.ContainsRune(raw, '\x00') {
 		return errors.New("config overlay size or encoding is invalid")
@@ -196,6 +225,8 @@ func ValidateConfigOverlayDraftPayload(raw string) error {
 	return nil
 }
 
+// CanonicalConfigOverlay parses the allowlisted overlay, re-encodes stable TOML with a single trailing newline when nonempty and returns its SHA-256 digest.
+// CanonicalConfigOverlay разбирает разрешённые настройки, формирует устойчивый TOML с одним завершающим переводом строки при непустом результате и возвращает его SHA-256.
 func CanonicalConfigOverlay(raw string) (string, string, error) {
 	overlay, err := ParseConfigOverlay(raw)
 	if err != nil {
@@ -213,6 +244,8 @@ func CanonicalConfigOverlay(raw string) (string, string, error) {
 	return canonical, hex.EncodeToString(digest[:]), nil
 }
 
+// ValidateRuntimeEnvironment bounds item counts and total bytes, validates ordinary values and exact secret metadata and rejects reserved or duplicate names across both channels.
+// ValidateRuntimeEnvironment ограничивает количество и общий размер, проверяет обычные значения и точные метаданные секретов, отклоняя зарезервированные и повторные имена в обоих каналах.
 func ValidateRuntimeEnvironment(values []RuntimeEnvironmentValue, secrets []RuntimeSecretProjection) error {
 	if len(values) > 128 || len(secrets) > 128 {
 		return errors.New("runtime environment item limit exceeded")
@@ -249,6 +282,8 @@ func ValidateRuntimeEnvironment(values []RuntimeEnvironmentValue, secrets []Runt
 	return nil
 }
 
+// RuntimeEnvironmentDigest combines the validated core with normalized component-policy digests, using the canonical default only when no policy is supplied and rejecting multiple policies.
+// RuntimeEnvironmentDigest объединяет проверенное ядро с дайджестами нормализованной политики, используя канонический default только при отсутствии политики и отклоняя несколько политик.
 func RuntimeEnvironmentDigest(values []RuntimeEnvironmentValue, secrets []RuntimeSecretProjection, image RuntimeEnvironmentImage, tools []RuntimeEnvironmentTool, policies ...RuntimeEnvironmentPolicy) (string, error) {
 	coreDigest, err := RuntimeEnvironmentCoreDigest(values, secrets, image, tools)
 	if err != nil {
@@ -269,6 +304,8 @@ func RuntimeEnvironmentDigest(values []RuntimeEnvironmentValue, secrets []Runtim
 		normalized.VolumesDigest, normalized.NetworkDigest, normalized.RBACDigest), nil
 }
 
+// RuntimeEnvironmentCoreDigest validates and sorts copied inputs before hashing exact image provenance, ordinary values, secret metadata and tool descriptions without resolving secrets.
+// RuntimeEnvironmentCoreDigest проверяет и сортирует копии входов перед хэшированием точного происхождения образа, обычных значений, метаданных секретов и описаний инструментов без разрешения секретов.
 func RuntimeEnvironmentCoreDigest(values []RuntimeEnvironmentValue, secrets []RuntimeSecretProjection, image RuntimeEnvironmentImage, tools []RuntimeEnvironmentTool) (string, error) {
 	if err := ValidateRuntimeEnvironment(values, secrets); err != nil {
 		return "", err
@@ -301,6 +338,8 @@ func RuntimeEnvironmentCoreDigest(values []RuntimeEnvironmentValue, secrets []Ru
 	return hex.EncodeToString(coreDigest[:]), nil
 }
 
+// validateRuntimeEnvironmentImage requires a digest-pinned image and validates artifact and recipe provenance when supplied; an entirely absent provenance tuple is structurally accepted here.
+// validateRuntimeEnvironmentImage требует закреплённого образа и проверяет происхождение артефакта и рецепта при его наличии; полностью отсутствующий набор происхождения здесь структурно допускается.
 func validateRuntimeEnvironmentImage(image RuntimeEnvironmentImage) error {
 	if !validPinnedImage(image.Reference, image.Digest) {
 		return errors.New("runtime environment image is invalid")
@@ -315,6 +354,8 @@ func validateRuntimeEnvironmentImage(image RuntimeEnvironmentImage) error {
 	return nil
 }
 
+// validateRuntimeEnvironmentTools bounds the tool catalog and its UTF-8 descriptions, permits only executable tokens and rejects repeated commands.
+// validateRuntimeEnvironmentTools ограничивает каталог и UTF-8-пояснения, допускает только токены исполняемых файлов и отклоняет повторные команды.
 func validateRuntimeEnvironmentTools(tools []RuntimeEnvironmentTool) error {
 	if len(tools) > 128 {
 		return errors.New("runtime environment tools exceed limit")
@@ -335,6 +376,8 @@ func validateRuntimeEnvironmentTools(tools []RuntimeEnvironmentTool) error {
 	return nil
 }
 
+// DecodeRuntimeEnvironment decodes both JSON arrays with unknown-field and trailing-value rejection, then validates them together before returning either channel.
+// DecodeRuntimeEnvironment разбирает оба JSON-массива с запретом неизвестных полей и остаточных значений, затем проверяет их вместе до возврата любого канала.
 func DecodeRuntimeEnvironment(rawValues, rawSecrets []byte) ([]RuntimeEnvironmentValue, []RuntimeSecretProjection, error) {
 	var values []RuntimeEnvironmentValue
 	var secrets []RuntimeSecretProjection
@@ -350,6 +393,8 @@ func DecodeRuntimeEnvironment(rawValues, rawSecrets []byte) ([]RuntimeEnvironmen
 	return values, secrets, nil
 }
 
+// DecodeRuntimeEnvironmentTools decodes one tool list with strict field and trailing-value handling, then enforces catalog bounds and command uniqueness.
+// DecodeRuntimeEnvironmentTools разбирает один список инструментов со строгой обработкой полей и остаточных значений, затем проверяет пределы и уникальность команд.
 func DecodeRuntimeEnvironmentTools(raw []byte) ([]RuntimeEnvironmentTool, error) {
 	var tools []RuntimeEnvironmentTool
 	if err := strictJSON(raw, &tools); err != nil {
@@ -361,6 +406,8 @@ func DecodeRuntimeEnvironmentTools(raw []byte) ([]RuntimeEnvironmentTool, error)
 	return tools, nil
 }
 
+// strictJSON decodes a single typed JSON value with unknown fields forbidden and requires EOF afterwards; it does not independently detect duplicate keys.
+// strictJSON разбирает одно типизированное JSON-значение с запретом неизвестных полей и требует последующего EOF; повторные ключи отдельно не выявляет.
 func strictJSON(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -370,6 +417,8 @@ func strictJSON(raw []byte, target any) error {
 	return nil
 }
 
+// validRuntimeEnvironmentName checks uppercase variable grammar and excludes platform, cloud, runtime, trust and proxy names that could override managed execution behavior.
+// validRuntimeEnvironmentName проверяет грамматику переменных верхнего регистра и исключает имена платформы, облака, исполнения, доверия и прокси, способные подменить управляемое поведение.
 func validRuntimeEnvironmentName(value string) bool {
 	if !environmentNamePattern.MatchString(value) {
 		return false
@@ -389,7 +438,8 @@ func validRuntimeEnvironmentName(value string) bool {
 	}
 }
 
-// ValidRuntimeEnvironmentName проверяет имя переменной для обычного значения и Secret binding.
+// ValidRuntimeEnvironmentName exposes the same reserved-name and grammar checks for ordinary variables and secret bindings without inspecting any value.
+// ValidRuntimeEnvironmentName предоставляет одинаковые проверки грамматики и зарезервированных имён для обычных переменных и привязок секретов без анализа значения.
 func ValidRuntimeEnvironmentName(value string) bool {
 	return validRuntimeEnvironmentName(value)
 }

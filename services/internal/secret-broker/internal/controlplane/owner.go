@@ -17,13 +17,32 @@ import (
 )
 
 const (
-	recoveryPageSize     = 100
+	// recoveryPageSize requests at most 100 owner recovery items per page; oversized responses fail closed.
+	// recoveryPageSize запрашивает до 100 owner recovery items на страницу; слишком большой ответ закрыто
+	// отклоняется.
+	recoveryPageSize = 100
+	// maximumRecoveryPages bounds one recovery read to ten pages, preserving an internal continuation cursor
+	// for the next batch.
+	// maximumRecoveryPages ограничивает один recovery read десятью страницами с сохранением внутреннего
+	// continuation cursor для следующего batch.
 	maximumRecoveryPages = 10
-	recoveryListTimeout  = 10 * time.Second
+	// recoveryListTimeout gives the serialized recovery read a ten-second budget including waiting for the
+	// reader slot.
+	// recoveryListTimeout задаёт десятисекундный бюджет serialized recovery read, включая ожидание reader
+	// slot.
+	recoveryListTimeout = 10 * time.Second
 )
 
+// errRecoveryPaginationCycle reports repeated cursor traversal without including opaque token contents in
+// diagnostics.
+// errRecoveryPaginationCycle сообщает о повторном обходе cursor без включения opaque token contents в
+// diagnostic.
 var errRecoveryPaginationCycle = errors.New("runtime secret recovery pagination cycled")
 
+// Owner adapts the authenticated control-plane client with a stable claimant and serialized recovery
+// cursor; it forwards domain authority rather than creating grants or owning lifecycle state locally.
+// Owner адаптирует authenticated control-plane client со стабильным claimant и serialized recovery cursor;
+// передаёт domain authority, не создавая grants и local lifecycle state.
 type Owner struct {
 	client         *controlplaneclient.Client
 	claimantID     string
@@ -32,6 +51,10 @@ type Owner struct {
 	recoveryCycle  recoverycursor.Cycle
 }
 
+// New requires a nonnil client/RuntimeSecrets route and nonempty claimant, but does not validate other
+// optional routes, claimant syntax or remote readiness.
+// New требует nonnil client/RuntimeSecrets route и непустой claimant, не проверяя остальные optional
+// routes, claimant syntax и remote readiness.
 func New(client *controlplaneclient.Client, claimantID string) (*Owner, error) {
 	if client == nil || client.RuntimeSecrets == nil || claimantID == "" {
 		return nil, errors.New("runtime secret owner client is required")
@@ -39,6 +62,10 @@ func New(client *controlplaneclient.Client, claimantID string) (*Owner, error) {
 	return &Owner{client: client, claimantID: claimantID, recoveryReader: make(chan struct{}, 1)}, nil
 }
 
+// Check verifies local client authority, then secret-work and projection-work readiness in order; RPC
+// errors remain wrapped, not redacted, and this method does not claim work.
+// Check проверяет local client authority, затем secret-work и projection-work readiness в таком порядке;
+// RPC errors оборачиваются, не очищаются, и work не забирается.
 func (owner *Owner) Check(ctx context.Context) error {
 	if err := owner.client.CheckLocalAuthority(ctx); err != nil {
 		return err
@@ -60,6 +87,10 @@ func (owner *Owner) Check(ctx context.Context) error {
 	return nil
 }
 
+// CheckCredentialProjection verifies local client authority and only the projection readiness route,
+// without consuming grants or resolving credentials.
+// CheckCredentialProjection проверяет local client authority и лишь projection readiness route, без
+// потребления grants и разрешения credentials.
 func (owner *Owner) CheckCredentialProjection(ctx context.Context) error {
 	if err := owner.client.CheckLocalAuthority(ctx); err != nil {
 		return err
@@ -74,10 +105,18 @@ func (owner *Owner) CheckCredentialProjection(ctx context.Context) error {
 	return nil
 }
 
+// ResolveRuntimeCredentialProjection forwards the exact request/context to the protected client;
+// eligibility and descriptor validation are not newly implemented in this wrapper.
+// ResolveRuntimeCredentialProjection передаёт exact request/context защищённому клиенту; eligibility и
+// descriptor validation заново в wrapper не реализуются.
 func (owner *Owner) ResolveRuntimeCredentialProjection(ctx context.Context, request *controlplanev1.ResolveRuntimeCredentialProjectionRequest) (*controlplanev1.ResolveRuntimeCredentialProjectionResponse, error) {
 	return owner.client.RuntimeSecrets.ResolveRuntimeCredentialProjection(ctx, request)
 }
 
+// ValidateRuntimeCredentialProjection maps PermissionDenied/NotFound/FailedPrecondition to false without
+// error, preserves other failures and returns the response validity flag on success.
+// ValidateRuntimeCredentialProjection отображает PermissionDenied/NotFound/FailedPrecondition в false без
+// ошибки, сохраняет остальные failures и возвращает response validity flag при успехе.
 func (owner *Owner) ValidateRuntimeCredentialProjection(ctx context.Context, request *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (bool, error) {
 	result, err := owner.client.RuntimeSecrets.ValidateRuntimeCredentialProjection(ctx, request)
 	if err != nil {
@@ -90,12 +129,22 @@ func (owner *Owner) ValidateRuntimeCredentialProjection(ctx context.Context, req
 	return result.GetValid(), nil
 }
 
+// ResolveTranscriptionCredentialProjection forwards the exact transcription request through the configured
+// protected client without selecting an alternate credential source.
+// ResolveTranscriptionCredentialProjection передаёт exact transcription request через настроенный
+// защищённый клиент без выбора альтернативного credential source.
 func (owner *Owner) ResolveTranscriptionCredentialProjection(ctx context.Context, request *controlplanev1.ResolveTranscriptionCredentialProjectionRequest) (*controlplanev1.ResolveTranscriptionCredentialProjectionResponse, error) {
 	return owner.client.RuntimeSecrets.ResolveTranscriptionCredentialProjection(ctx, request)
 }
 
-// ListRecoveryWork читает ограниченную порцию просроченных CLAIMED operation.
-// Pagination token остаётся внутри owner adapter и не попадает в recovery logs.
+// ListRecoveryWork serializes only recovery reads and returns at most ten validated pages, retaining
+// cursor progress across batches. Once the reader slot is held, errors discard partial work and reset
+// cursor/cycle state; earlier waiting cancellation leaves it untouched. Complete item eligibility remains
+// owner/reconciler work, beyond the local ref-uniqueness/page checks.
+// ListRecoveryWork сериализует лишь recovery reads и возвращает до десяти проверенных страниц с
+// сохранением cursor progress между batches. После получения reader slot ошибка отбрасывает partial work
+// и сбрасывает cursor/cycle state; отмена ожидания до slot не меняет их. Полная eligibility остаётся
+// owner/reconciler, сверх локальных проверок ref uniqueness и pages.
 func (owner *Owner) ListRecoveryWork(ctx context.Context) (work []recovery.RecoveryWork, resultErr error) {
 	ctx, cancel := context.WithTimeout(ctx, recoveryListTimeout)
 	defer cancel()
@@ -165,6 +214,10 @@ func (owner *Owner) ListRecoveryWork(ctx context.Context) (work []recovery.Recov
 	return result, nil
 }
 
+// Consume forwards the opaque grant with the configured current claimant, not a caller-selected claimant;
+// it does not independently validate the returned work DTO.
+// Consume передаёт opaque grant с настроенным current claimant, не claimant по выбору caller; returned
+// work DTO самостоятельно не проверяет.
 func (owner *Owner) Consume(ctx context.Context, grant string) (*controlplanev1.ConsumeRuntimeSecretOperationResponse, error) {
 	return owner.client.RuntimeSecrets.ConsumeRuntimeSecretOperation(ctx, &controlplanev1.ConsumeRuntimeSecretOperationRequest{
 		OperationGrant: grant,
@@ -172,6 +225,10 @@ func (owner *Owner) Consume(ctx context.Context, grant string) (*controlplanev1.
 	})
 }
 
+// Complete forwards the exact operation/generation/materialization with the configured claimant, requires
+// a nonnil returned Secret and leaves detailed metadata verification to its caller.
+// Complete передаёт exact operation/generation/materialization с настроенным claimant, требует nonnil
+// returned Secret и оставляет подробную metadata verification caller.
 func (owner *Owner) Complete(ctx context.Context, operationRef string, claimGeneration int64, materialization *controlplanev1.RuntimeSecretMaterialization) (*controlplanev1.RuntimeSecret, error) {
 	result, err := owner.client.RuntimeSecrets.CompleteRuntimeSecretOperation(ctx, &controlplanev1.CompleteRuntimeSecretOperationRequest{
 		OperationRef: operationRef, Materialization: materialization,
@@ -186,12 +243,18 @@ func (owner *Owner) Complete(ctx context.Context, operationRef string, claimGene
 	return result.GetSecret(), nil
 }
 
+// Fail uses the configured current claimant and exact supplied generation/code through the shared
+// receipt-checked failure request.
+// Fail использует настроенный current claimant и exact переданные generation/code через общий failure
+// request с проверкой receipt.
 func (owner *Owner) Fail(ctx context.Context, operationRef string, claimGeneration int64, failureCode controlplanev1.RuntimeSecretFailureCode) error {
 	return owner.failClaim(ctx, operationRef, owner.claimantID, claimGeneration, failureCode)
 }
 
-// FailExpiredClaim закрывает просроченную claim её исходным fence. Текущий
-// POD_UID здесь намеренно не используется: новый pod не является claimant.
+// FailExpiredClaim requires and forwards the original expired claimant/fence instead of replacing it with
+// this pod's claimant; no new claim is taken.
+// FailExpiredClaim требует и передаёт original expired claimant/fence без замены на claimant текущего Pod;
+// новый claim не создаёт.
 func (owner *Owner) FailExpiredClaim(ctx context.Context, operationRef, claimantID string, claimGeneration int64, failureCode controlplanev1.RuntimeSecretFailureCode) error {
 	if claimantID == "" {
 		return errors.New("runtime secret expired claimant is required")
@@ -199,6 +262,10 @@ func (owner *Owner) FailExpiredClaim(ctx context.Context, operationRef, claimant
 	return owner.failClaim(ctx, operationRef, claimantID, claimGeneration, failureCode)
 }
 
+// failClaim forwards operation/claimant/generation/code and accepts only a receipt matching operation,
+// FAILED state and code; transport failures are preserved unchanged.
+// failClaim передаёт operation/claimant/generation/code и принимает лишь receipt с совпавшими operation,
+// FAILED state и code; transport failures сохраняет без изменений.
 func (owner *Owner) failClaim(ctx context.Context, operationRef, claimantID string, claimGeneration int64, failureCode controlplanev1.RuntimeSecretFailureCode) error {
 	result, err := owner.client.RuntimeSecrets.FailRuntimeSecretOperation(ctx, &controlplanev1.FailRuntimeSecretOperationRequest{
 		OperationRef: operationRef, ClaimantId: claimantID,
@@ -213,6 +280,10 @@ func (owner *Owner) failClaim(ctx context.Context, operationRef, claimantID stri
 	return nil
 }
 
+// Recover refuses a nil materialization then forwards operation and observed descriptor to the owner; it
+// neither chooses KEEP/DELETE locally nor validates the returned decision here.
+// Recover отклоняет nil materialization, затем передаёт operation и observed descriptor владельцу;
+// локально KEEP/DELETE не выбирает и returned decision здесь не проверяет.
 func (owner *Owner) Recover(ctx context.Context, operationRef string, materialization *controlplanev1.RuntimeSecretMaterialization) (*controlplanev1.RecoverRuntimeSecretMaterializationResponse, error) {
 	if materialization == nil {
 		return nil, errors.New("runtime secret recovery materialization is required")

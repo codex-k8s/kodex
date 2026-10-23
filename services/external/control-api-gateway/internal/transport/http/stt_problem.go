@@ -11,6 +11,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// writeSpeechProblem recognizes rate limiting only from ResourceExhausted plus the exact STT ErrorInfo domain/reason. It preserves a single valid whole-second 1..MaximumRetryAfter hint and otherwise clears Retry-After; it never replays transcription.
+// writeSpeechProblem распознаёт ограничение частоты только по ResourceExhausted и точным domain/reason STT ErrorInfo. Сохраняется единственная допустимая целосекундная подсказка 1..MaximumRetryAfter; иначе Retry-After удаляется. Повтор транскрипции не выполняется.
 func writeSpeechProblem(writer http.ResponseWriter, err error) {
 	upstream := status.Convert(err)
 	typed := false
@@ -37,6 +39,7 @@ func writeSpeechProblem(writer http.ResponseWriter, err error) {
 			retryable = true
 		}
 	}
+	// The hint permits an explicit user retry, but does not replay the billable POST.
 	// Подсказка разрешает явный повтор пользователя, но не повторяет платный POST.
 	writeLocalProblem(writer, http.StatusTooManyRequests, errorprofile.TranscriptionRateLimited, retryable)
 }

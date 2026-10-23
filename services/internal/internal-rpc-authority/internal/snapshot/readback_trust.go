@@ -12,11 +12,23 @@ import (
 )
 
 const (
-	readbackManifestRootType    = "kodex-internal-rpc-readback-manifest-root+jws"
+	// readbackManifestRootType pins the independently root-signed readback manifest bundle's protected JWS
+	// type, not the ordinary authority snapshot type.
+	// readbackManifestRootType закрепляет защищённый тип JWS независимо подписанного корнем набора манифеста
+	// проверки доставки, не тип обычного снимка полномочий.
+	readbackManifestRootType = "kodex-internal-rpc-readback-manifest-root+jws"
+	// readbackCredentialTrustType pins the signed normal-readback credential trust document type consumed
+	// after manifest-key verification.
+	// readbackCredentialTrustType закрепляет тип подписанного документа доверия обычным учётным данным
+	// проверки доставки, читаемого после проверки ключа манифеста.
 	readbackCredentialTrustType = "kodex-internal-rpc-readback-credential-trust+jws"
 )
 
-// ReadbackTrustOptions задаёт независимую цепочку доверия проверки выдачи.
+// ReadbackTrustOptions supplies independently mounted readback root, metadata, manifest bundle and
+// credential-trust files with an optional evaluation clock; it performs no loading itself.
+// ReadbackTrustOptions задаёт независимо монтируемые корень проверки доставки, метаданные, набор
+// манифеста и файл доверия учётным данным с необязательными часами; загрузка сама по себе не
+// выполняется.
 type ReadbackTrustOptions struct {
 	RootPublicJWKFile      string
 	RootMetadataFile       string
@@ -25,7 +37,11 @@ type ReadbackTrustOptions struct {
 	Now                    time.Time
 }
 
-// ReadbackTrustMetadata фиксирует назначение и поколение доверенного ключа.
+// ReadbackTrustMetadata returns checked root/manifest/trust pins and derived predecessor/served-state
+// digests for subsequent durable activation; it does not itself record a persistent high-watermark.
+// ReadbackTrustMetadata возвращает проверенные привязки корня, манифеста и доверия и вычисленные хеши
+// предшествующего и обслуживаемого состояний для последующей устойчивой активации; собственную
+// устойчивую границу версий структура не фиксирует.
 type ReadbackTrustMetadata struct {
 	RootID                   string
 	RootFingerprintSHA256    string
@@ -39,6 +55,10 @@ type ReadbackTrustMetadata struct {
 	ServedStateDigest        string
 }
 
+// readbackRootMaterial carries canonical mounted root metadata, public JWK and fingerprint with fixed
+// purpose/audience and validity for comparison to the separately mounted root key.
+// readbackRootMaterial содержит канонические монтируемые метаданные корня, открытый JWK и отпечаток с
+// фиксированными назначением, аудиторией и сроком для сравнения с отдельно монтируемым корневым ключом.
 type readbackRootMaterial struct {
 	Version        int             `json:"v"`
 	RootID         string          `json:"root_id"`
@@ -54,6 +74,10 @@ type readbackRootMaterial struct {
 	NotAfter       int64           `json:"not_after"`
 }
 
+// readbackManifestBundle carries the independent root-signed manifest signer set, publication deadline
+// and bounded predecessor history; it is distinct from credential trust.
+// readbackManifestBundle содержит независимо подписанный корнем набор подписантов манифеста, срок
+// публикации и ограниченную историю; это не набор доверия учётным данным.
 type readbackManifestBundle struct {
 	Version        int                   `json:"v"`
 	RootID         string                `json:"root_id"`
@@ -69,6 +93,10 @@ type readbackManifestBundle struct {
 	ValidUntil     int64                 `json:"valid_until"`
 }
 
+// readbackManifestKey is the public manifest-signer wire record whose generation uses
+// manifest_signer_generation; it is not a credential-signing key record.
+// readbackManifestKey — открытая запись подписанта манифеста с полем поколения
+// manifest_signer_generation; это не запись ключа подписи учётных данных.
 type readbackManifestKey struct {
 	Status     string          `json:"status"`
 	Generation uint64          `json:"manifest_signer_generation"`
@@ -79,6 +107,10 @@ type readbackManifestKey struct {
 	NotAfter   int64           `json:"not_after"`
 }
 
+// readbackCredentialTrust binds a signed credential-key set to exact root fingerprint, manifest
+// revision/signer, source/key-set revisions, declared trust digest and predecessor history.
+// readbackCredentialTrust связывает подписанный набор ключей учётных данных с точными отпечатком корня,
+// ревизией и подписантом манифеста, ревизиями источника и ключей, заявленным хешем доверия и историей.
 type readbackCredentialTrust struct {
 	Version             int                     `json:"v"`
 	Issuer              string                  `json:"iss"`
@@ -98,17 +130,20 @@ type readbackCredentialTrust struct {
 	ValidUntil          int64                   `json:"valid_until"`
 }
 
-type readbackCredentialKey struct {
-	Status     string          `json:"status"`
-	Generation uint64          `json:"credential_signer_generation"`
-	KeyID      string          `json:"kid"`
-	PublicJWK  json.RawMessage `json:"public_jwk"`
-	Thumbprint string          `json:"jwk_thumbprint_sha256"`
-	NotBefore  int64           `json:"not_before"`
-	NotAfter   int64           `json:"not_after"`
-}
+// readbackCredentialKey carries a public normal-readback credential signer with
+// credential_signer_generation; its use is selected by the verified outer document, not by field shape
+// alone.
+// readbackCredentialKey содержит открытого подписанта обычных учётных данных проверки доставки с
+// credential_signer_generation; назначение выбирается проверенным внешним документом, а не одной формой
+// полей.
+type readbackCredentialKey credentialSignerKey
 
-// LoadReadbackTrust проверяет корневую подпись и назначение ключа.
+// LoadReadbackTrust verifies mounted root identity, root-signed manifest and CURRENT-signed credential
+// trust, checks exact chain/history/key bindings and returns records plus derived state digests without
+// durable activation or external effects.
+// LoadReadbackTrust проверяет монтируемый корень, подписанный им манифест и доверие учётным данным с
+// подписью CURRENT, точные связи цепочки, истории и ключей и возвращает записи и хеши состояний без
+// устойчивой активации и внешних эффектов.
 func LoadReadbackTrust(options ReadbackTrustOptions) (
 	map[string]service.VerificationKeyRecord,
 	ReadbackTrustMetadata,
@@ -202,14 +237,10 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 		if parseErr != nil {
 			return nil, ReadbackTrustMetadata{}, errors.New("readback manifest signer key rejected")
 		}
-		thumbprint, thumbprintErr := internalrpcauth.PublicJWKThumbprintSHA256(key)
-		if thumbprintErr != nil ||
-			key.KeyID != entry.KeyID ||
-			thumbprint != entry.Thumbprint ||
-			entry.Generation == 0 ||
-			(entry.Status != "CURRENT" && entry.Status != "NEXT" && entry.Status != "PREVIOUS") ||
-			now.Before(time.Unix(entry.NotBefore, 0)) ||
-			!now.Before(time.Unix(entry.NotAfter, 0)) {
+		if !validReadbackSignerMetadata(
+			key, entry.KeyID, entry.Thumbprint, entry.Generation,
+			entry.Status, entry.NotBefore, entry.NotAfter, now,
+		) {
 			return nil, ReadbackTrustMetadata{}, errors.New("readback manifest signer metadata rejected")
 		}
 		if _, duplicate := manifestKeys[key.KeyID]; duplicate {
@@ -280,14 +311,10 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 		if parseErr != nil {
 			return nil, ReadbackTrustMetadata{}, errors.New("readback credential signer key rejected")
 		}
-		thumbprint, thumbprintErr := internalrpcauth.PublicJWKThumbprintSHA256(key)
-		if thumbprintErr != nil ||
-			key.KeyID != entry.KeyID ||
-			thumbprint != entry.Thumbprint ||
-			entry.Generation == 0 ||
-			(entry.Status != "CURRENT" && entry.Status != "NEXT" && entry.Status != "PREVIOUS") ||
-			now.Before(time.Unix(entry.NotBefore, 0)) ||
-			!now.Before(time.Unix(entry.NotAfter, 0)) {
+		if !validReadbackSignerMetadata(
+			key, entry.KeyID, entry.Thumbprint, entry.Generation,
+			entry.Status, entry.NotBefore, entry.NotAfter, now,
+		) {
 			return nil, ReadbackTrustMetadata{}, errors.New("readback credential signer metadata rejected")
 		}
 		if _, duplicate := records[key.KeyID]; duplicate {

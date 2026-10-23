@@ -12,15 +12,31 @@ import (
 )
 
 const (
-	context7Origin        = "https://mcp.context7.com"
-	context7Endpoint      = context7Origin + "/mcp"
-	context7Proxy         = "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083"
-	context7RequestBytes  = 16 << 10
+	// context7Origin fixes the HTTPS provider origin accepted by connection validation; model input cannot select another host.
+	// context7Origin закрепляет HTTPS-источник провайдера для проверки соединения; вход модели не выбирает другой узел.
+	context7Origin = "https://mcp.context7.com"
+	// context7Endpoint adds the sole permitted MCP path to the fixed origin and is compared as a complete URL by the transport.
+	// context7Endpoint задаёт единственный разрешённый MCP-путь закреплённого источника; транспорт сравнивает полный URL.
+	context7Endpoint = context7Origin + "/mcp"
+	// context7Proxy identifies the exact internal egress proxy required for the Context7 client, rather than accepting an arbitrary proxy from configuration.
+	// context7Proxy задаёт точный внутренний выходной прокси клиента Context7 вместо произвольного прокси из конфигурации.
+	context7Proxy = "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083"
+	// context7RequestBytes caps the encoded request body before forwarding and parsing its protocol method.
+	// context7RequestBytes ограничивает размер закодированного тела запроса до передачи и разбора протокольного метода.
+	context7RequestBytes = 16 << 10
+	// context7ResponseBytes bounds both the response-body reader and the SDK's single SSE event buffer.
+	// context7ResponseBytes ограничивает чтение тела ответа и буфер отдельного SSE-события SDK.
 	context7ResponseBytes = 512 << 10
-	context7TextBytes     = 32 << 10
-	context7Deadline      = 30 * time.Second
+	// context7TextBytes limits the combined projected tool text, including separators inserted between content blocks.
+	// context7TextBytes ограничивает объединённую текстовую проекцию инструмента вместе с разделителями между блоками.
+	context7TextBytes = 32 << 10
+	// context7Deadline caps execution and HTTP response waits even when the configured timeout is longer.
+	// context7Deadline ограничивает выполнение и ожидание HTTP-ответа, даже если заданный таймаут больше.
+	context7Deadline = 30 * time.Second
 )
 
+// newContext7HTTPClient requires the exact egress proxy and a bounded timeout, then constructs a TLS 1.3 client with fixed SNI, bounded connections and headers, and no redirects.
+// newContext7HTTPClient требует точный выходной прокси и ограниченный таймаут, затем создаёт TLS 1.3-клиент с закреплённым SNI, ограничениями соединений и заголовков, без перенаправлений.
 func newContext7HTTPClient(config Config) (*http.Client, error) {
 	if config.OpenAPIProxyURL != context7Proxy || config.Timeout < time.Second || config.Timeout > 2*time.Minute {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
@@ -39,12 +55,15 @@ func newContext7HTTPClient(config Config) (*http.Client, error) {
 	}, nil
 }
 
-// context7Transport не принимает адреса, методы или учётные данные от агента.
+// context7Transport wraps the configured HTTP transport with an exact provider boundary and an adapter-owned credential, never accepting an agent-selected address or credential.
+// context7Transport оборачивает заданный HTTP-транспорт точной границей провайдера и учётными данными адаптера, не принимая адрес или учётные данные от агента.
 type context7Transport struct {
 	base       http.RoundTripper
 	credential string
 }
 
+// RoundTrip permits only POST or bodyless DELETE at the exact MCP endpoint, replaces authentication headers, filters protocol methods, and bounds status, content type and body before returning the response.
+// RoundTrip разрешает только POST либо DELETE без тела на точной MCP-конечной точке, заменяет заголовки авторизации, фильтрует протокольные методы и проверяет статус, тип и размер тела ответа.
 func (transport context7Transport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL == nil || request.URL.String() != context7Endpoint || request.Host != "" && request.Host != "mcp.context7.com" ||
 		(request.Method != http.MethodPost && request.Method != http.MethodDelete) {
@@ -100,6 +119,8 @@ func (transport context7Transport) RoundTrip(request *http.Request) (*http.Respo
 	return response, nil
 }
 
+// context7MethodAllowed admits only initialization, its cancellation notifications, tool listing and tool calls; all other JSON-RPC method names are rejected.
+// context7MethodAllowed допускает только инициализацию, её уведомления об отмене, список и вызов инструментов; остальные имена методов JSON-RPC отклоняются.
 func context7MethodAllowed(method string) bool {
 	switch method {
 	case "initialize", "notifications/initialized", "notifications/cancelled", "tools/list", "tools/call":
@@ -109,11 +130,15 @@ func context7MethodAllowed(method string) bool {
 	}
 }
 
+// context7BoundedBody retains the upstream closer while tracking the remaining response bytes; exhausting the budget requires an extra-byte EOF check.
+// context7BoundedBody сохраняет закрытие внешнего потока и оставшийся бюджет ответа; исчерпание бюджета требует проверки конца потока чтением дополнительного байта.
 type context7BoundedBody struct {
 	io.ReadCloser
 	remaining int64
 }
 
+// Read returns at most the remaining budget and probes one extra byte at exhaustion to distinguish an exact-sized response from overflow, leaving closure to the embedded reader.
+// Read возвращает не больше оставшегося бюджета и при его исчерпании проверяет дополнительный байт, отличая точный размер от переполнения; закрытие выполняет встроенный поток.
 func (body *context7BoundedBody) Read(buffer []byte) (int, error) {
 	if len(buffer) == 0 {
 		return 0, nil

@@ -11,6 +11,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestVerifySignerTrustAcceptsCompletePublisherDocument writes a complete canonical synthetic trust
+// document and requires its matching current public key/generation to be selected; it does not prove
+// root delivery or mount security.
+// TestVerifySignerTrustAcceptsCompletePublisherDocument записывает полный канонический синтетический
+// документ доверия и требует выбора совпадающих текущего открытого ключа и поколения; доставка корня и
+// защита монтирования не доказываются.
 func TestVerifySignerTrustAcceptsCompletePublisherDocument(t *testing.T) {
 	t.Parallel()
 
@@ -56,6 +62,10 @@ func TestVerifySignerTrustAcceptsCompletePublisherDocument(t *testing.T) {
 	}
 }
 
+// TestVerifySignerTrustRejectsLegacyJWKS rejects a bare public JWKS without the required trust-document
+// envelope, even when it contains a matching public key.
+// TestVerifySignerTrustRejectsLegacyJWKS отклоняет голый открытый JWKS без обязательного конверта
+// документа доверия даже с совпадающим открытым ключом.
 func TestVerifySignerTrustRejectsLegacyJWKS(t *testing.T) {
 	t.Parallel()
 
@@ -82,6 +92,10 @@ func TestVerifySignerTrustRejectsLegacyJWKS(t *testing.T) {
 	}
 }
 
+// TestIndexPolicyBindsOIDCProducerToInstallationConfiguration accepts exact configured OIDC
+// issuer/audience then rejects another installation's issuer using synthetic policy data only.
+// TestIndexPolicyBindsOIDCProducerToInstallationConfiguration принимает точные настроенные issuer и
+// audience OIDC, затем отклоняет issuer другой установки только на синтетической политике.
 func TestIndexPolicyBindsOIDCProducerToInstallationConfiguration(t *testing.T) {
 	t.Parallel()
 
@@ -103,6 +117,10 @@ func TestIndexPolicyBindsOIDCProducerToInstallationConfiguration(t *testing.T) {
 	}
 }
 
+// TestIndexPolicyAcceptsPermissionDistinctFromOperation accepts a nonempty RBAC permission distinct from
+// operation ID and rejects an empty one; it does not grant that permission to an actor.
+// TestIndexPolicyAcceptsPermissionDistinctFromOperation принимает непустое право RBAC, отличное от ID
+// операции, и отклоняет пустое, не выдавая это право исполнителю.
 func TestIndexPolicyAcceptsPermissionDistinctFromOperation(t *testing.T) {
 	t.Parallel()
 
@@ -121,6 +139,11 @@ func TestIndexPolicyAcceptsPermissionDistinctFromOperation(t *testing.T) {
 	}
 }
 
+// TestWorkerGrantRequiresExactWorkloadBinding signs local synthetic grants and rejects mismatched/absent
+// credential generation, wrong audience and missing ABI while preserving the valid baseline.
+// TestWorkerGrantRequiresExactWorkloadBinding подписывает локальные синтетические grant и отклоняет
+// несовпадающее или отсутствующее поколение, чужую аудиторию и отсутствие ABI, сохраняя допустимый
+// исходный вариант.
 func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	t.Parallel()
 
@@ -198,6 +221,11 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	}
 }
 
+// testProducer constructs a synthetic workload producer with fixed owner/proof identity,
+// workload-specific credential issuer/audience and one allowed operation; it performs no registration or
+// credential issuance.
+// testProducer создаёт синтетического производителя нагрузки с фиксированными владельцем и подписантом,
+// аудиторией и issuer нагрузки и одной допустимой операцией без регистрации и выпуска учётных данных.
 func testProducer(workloadID, credentialType string) proofProducer {
 	return proofProducer{
 		ProducerID: "control-plane." + workloadID, CallerWorkloadID: workloadID,
@@ -213,6 +241,11 @@ func testProducer(workloadID, credentialType string) proofProducer {
 	}
 }
 
+// testPolicy wraps the supplied producer in a minimal current-ABI DENY policy with one exact unary
+// binding and forbidden optional pins; it is test data, not an installed policy.
+// testPolicy помещает производителя в минимальную политику DENY текущего ABI с одной точной
+// unary-привязкой и запрещёнными необязательными измерениями; это тестовые данные, не установленная
+// политика.
 func testPolicy(producer proofProducer) policyDocument {
 	document := policyDocument{Version: 1, PolicyRevision: 1}
 	document.Policy.AuthorityABIVersion = internalrpcauth.AuthorityABIVersion

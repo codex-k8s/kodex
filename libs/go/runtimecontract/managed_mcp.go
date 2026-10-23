@@ -11,22 +11,47 @@ import (
 )
 
 const (
-	ManagedMCPContext7         = "CONTEXT7"
-	ManagedMCPNamespace        = "kodex"
-	ManagedMCPProfileVersion   = 1
-	ManagedMCPHealthProbe      = "CONTEXT7_INITIALIZE_TOOLS_LIST"
+	// ManagedMCPContext7 is the only managed provider in this profile revision.
+	// ManagedMCPContext7 — единственный управляемый провайдер в этой версии профиля.
+	ManagedMCPContext7 = "CONTEXT7"
+	// ManagedMCPNamespace isolates managed tools in the agent tool registry.
+	// ManagedMCPNamespace изолирует управляемые инструменты в реестре агента.
+	ManagedMCPNamespace = "kodex"
+	// ManagedMCPProfileVersion pins the managed profile schema.
+	// ManagedMCPProfileVersion закрепляет схему управляемого профиля.
+	ManagedMCPProfileVersion = 1
+	// ManagedMCPHealthProbe names the required adapter initialization and tool-list proof.
+	// ManagedMCPHealthProbe называет обязательную проверку инициализации адаптера и списка инструментов.
+	ManagedMCPHealthProbe = "CONTEXT7_INITIALIZE_TOOLS_LIST"
+	// ManagedMCPHealthMaximumAge bounds the age of the owner-verified health receipt.
+	// ManagedMCPHealthMaximumAge ограничивает возраст подтверждённой владельцем проверки здоровья.
 	ManagedMCPHealthMaximumAge = 5 * time.Minute
-	Context7ResolveTool        = "context7_resolve_library_id"
-	Context7QueryTool          = "context7_query_docs"
-	Context7ResolveCapability  = "context7.library.resolve"
-	Context7QueryCapability    = "context7.docs.query"
+	// Context7ResolveTool names the tool exposed for library identification.
+	// Context7ResolveTool называет инструмент определения библиотеки.
+	Context7ResolveTool = "context7_resolve_library_id"
+	// Context7QueryTool names the tool exposed for documentation lookup.
+	// Context7QueryTool называет инструмент поиска документации.
+	Context7QueryTool = "context7_query_docs"
+	// Context7ResolveCapability binds the resolve operation to an exact grant.
+	// Context7ResolveCapability связывает операцию определения с точным разрешением.
+	Context7ResolveCapability = "context7.library.resolve"
+	// Context7QueryCapability binds the documentation query to an exact grant.
+	// Context7QueryCapability связывает запрос документации с точным разрешением.
+	Context7QueryCapability = "context7.docs.query"
 )
 
+// errManagedMCPProfile denotes an invalid profile or grant binding.
+// errManagedMCPProfile обозначает неверную привязку профиля или разрешения.
 var errManagedMCPProfile = errors.New("managed MCP profile binding is invalid")
+
+// errManagedMCPHealth denotes an absent or stale owner-verified health proof.
+// errManagedMCPHealth обозначает отсутствие или устаревание подтверждённой владельцем проверки здоровья.
 var errManagedMCPHealth = errors.New("required managed MCP health proof is unavailable")
 
-// ManagedMCPProfile связывает закрытые tools с exact grants immutable revision.
-// Профиль не содержит transport, URL, command либо credential value.
+// ManagedMCPProfile binds closed tools to exact grants in an immutable revision;
+// it carries no transport, URL, command, or credential value.
+// ManagedMCPProfile связывает закрытые инструменты с точными разрешениями неизменной версии;
+// он не содержит transport, URL, command или значения учётных данных.
 type ManagedMCPProfile struct {
 	Provider        string                `json:"provider"`
 	Version         int64                 `json:"version"`
@@ -40,8 +65,10 @@ type ManagedMCPProfile struct {
 	Health          ManagedMCPHealthProof `json:"health"`
 }
 
-// ManagedMCPHealthProof — owner-verified receipt реального adapter initialize/list.
-// Owner сверяет snapshot с current configuration/credential/package до выдачи.
+// ManagedMCPHealthProof records a real adapter initialize/list receipt verified by the owner
+// against the current configuration, credential revision, and package before grants are issued.
+// ManagedMCPHealthProof хранит подтверждённый владельцем результат реальной инициализации и списка;
+// перед выдачей разрешений он сверяется с текущими конфигурацией, версией учётных данных и пакетом.
 type ManagedMCPHealthProof struct {
 	TestRef               string    `json:"test_ref"`
 	Generation            int64     `json:"generation"`
@@ -58,8 +85,10 @@ type ManagedMCPHealthProof struct {
 	Probe                 string    `json:"probe"`
 }
 
-// DeriveContext7ManagedMCPProfile принимает уже выбранные owner grants. Любая
-// неоднозначность, даже второй допустимый connection, не выбирается first-match.
+// DeriveContext7ManagedMCPProfile binds already selected owner grants and rejects ambiguity,
+// including a second otherwise valid connection, instead of choosing the first match.
+// DeriveContext7ManagedMCPProfile связывает уже выбранные владельцем разрешения и отклоняет
+// неоднозначность, включая второе допустимое подключение, вместо выбора первого совпадения.
 func DeriveContext7ManagedMCPProfile(scopeKind, scopeRef string, grants []RunnerIntegrationGrant, health ManagedMCPHealthProof) (ManagedMCPProfile, error) {
 	profile := ManagedMCPProfile{Provider: ManagedMCPContext7, Version: ManagedMCPProfileVersion, Namespace: ManagedMCPNamespace,
 		Required: true, ScopeKind: scopeKind, ScopeRef: scopeRef, Health: health}
@@ -90,6 +119,10 @@ func DeriveContext7ManagedMCPProfile(scopeKind, scopeRef string, grants []Runner
 	return profile, err
 }
 
+// boundGrants verifies exactly one read-only resolve grant and one read-only query grant
+// on the same connection, then pins the owner health receipt to their definition.
+// boundGrants проверяет ровно одно разрешение чтения для определения библиотеки и одно для запроса
+// на общем подключении, затем привязывает проверку владельца к их определению.
 func (profile ManagedMCPProfile) boundGrants(grants []RunnerIntegrationGrant) (RunnerIntegrationGrant, RunnerIntegrationGrant, error) {
 	var resolve, query RunnerIntegrationGrant
 	if profile.Provider != ManagedMCPContext7 || profile.Version != ManagedMCPProfileVersion ||
@@ -129,6 +162,8 @@ func (profile ManagedMCPProfile) boundGrants(grants []RunnerIntegrationGrant) (R
 	return resolve, query, nil
 }
 
+// managedMCPDigest hashes the profile and the two ordered grants without the digest field itself.
+// managedMCPDigest хеширует профиль и два упорядоченных разрешения без самого поля дайджеста.
 func managedMCPDigest(profile ManagedMCPProfile, resolve, query RunnerIntegrationGrant) (string, error) {
 	profile.Digest = ""
 	raw, err := json.Marshal(struct {
@@ -142,8 +177,10 @@ func managedMCPDigest(profile ManagedMCPProfile, resolve, query RunnerIntegratio
 	return hex.EncodeToString(digest[:]), nil
 }
 
-// ValidateManagedMCPProfiles — deterministic structural проверка; время жизни
-// проверяется отдельно, чтобы исторический revision digest не зависел от часов.
+// ValidateManagedMCPProfiles checks deterministic structure, scope, grants, and digest;
+// freshness is checked separately so historical revision digests do not depend on a clock.
+// ValidateManagedMCPProfiles проверяет детерминированную структуру, область, разрешения и дайджест;
+// актуальность проверяется отдельно, чтобы исторический дайджест версии не зависел от часов.
 func ValidateManagedMCPProfiles(input RunnerInput) error {
 	if len(input.ManagedMCPProfiles) > 1 {
 		return errManagedMCPProfile
@@ -171,8 +208,10 @@ func ValidateManagedMCPProfiles(input RunnerInput) error {
 	return nil
 }
 
-// ValidateManagedMCPReadiness проверяет свежесть owner receipt непосредственно
-// перед provider startup, не выполняя внешних вызовов или выдачи новых grants.
+// ValidateManagedMCPReadiness checks owner-receipt freshness just before provider startup
+// without making external calls or issuing new grants.
+// ValidateManagedMCPReadiness проверяет актуальность подтверждения владельца перед запуском
+// провайдера, не выполняя внешних вызовов и не выдавая новых разрешений.
 func ValidateManagedMCPReadiness(input RunnerInput, now time.Time) error {
 	if err := ValidateManagedMCPProfiles(input); err != nil {
 		return err
@@ -186,7 +225,8 @@ func ValidateManagedMCPReadiness(input RunnerInput, now time.Time) error {
 	return nil
 }
 
-// ManagedMCPToolSchemas возвращает schemas exact grants без authority полей.
+// ManagedMCPToolSchemas returns schemas from the exact validated grants, excluding authority fields.
+// ManagedMCPToolSchemas возвращает схемы точных проверенных разрешений без полей полномочий.
 func ManagedMCPToolSchemas(input RunnerInput) (map[string]string, error) {
 	if err := ValidateManagedMCPProfiles(input); err != nil {
 		return nil, err
@@ -199,7 +239,8 @@ func ManagedMCPToolSchemas(input RunnerInput) (map[string]string, error) {
 	return result, nil
 }
 
-// ManagedMCPSchemaDigest нормализует порядок JSON keys, но не допускает дубли.
+// ManagedMCPSchemaDigest canonicalizes JSON key order for the closed object schema and rejects duplicates.
+// ManagedMCPSchemaDigest канонизирует порядок ключей JSON закрытой схемы объекта и отклоняет повторы.
 func ManagedMCPSchemaDigest(raw []byte) (string, error) {
 	if len(raw) == 0 || len(raw) > 64<<10 {
 		return "", errManagedMCPProfile

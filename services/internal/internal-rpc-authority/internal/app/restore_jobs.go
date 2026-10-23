@@ -22,7 +22,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// RestoreOperatorConfig задаёт одну операторскую команду восстановления.
+// RestoreOperatorConfig carries one prepare/complete command's controller mTLS/application-token locators, exact database/backup/target bindings, Kubernetes manifest-resolution inputs, idempotency/correlation keys and timeout. These fields describe an intended command; authorization and durable state transitions remain owned by the controller.
+// RestoreOperatorConfig хранит адреса mTLS и токена приложения контроллера, точные привязки БД, резервной копии и цели, входы разрешения manifest Kubernetes, ключи идемпотентности и сопоставления и срок одной команды prepare или complete. Поля описывают намерение команды; авторизация и устойчивые переходы принадлежат контроллеру.
 type RestoreOperatorConfig struct {
 	Action                  string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ACTION"`
 	ControllerAddress       string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS"`
@@ -45,7 +46,8 @@ type RestoreOperatorConfig struct {
 	Timeout                 time.Duration `env:"INTERNAL_RPC_AUTHORITY_RESTORE_TIMEOUT"`
 }
 
-// LoadRestoreOperatorConfig читает и проверяет окружение операторской команды.
+// LoadRestoreOperatorConfig parses environment over fixed defaults, normalizes recovery time to a UTC second and validates the closed action, controller host/SNI, database and Kubernetes endpoints plus required backup/token/idempotency references. It does not read those credentials, authenticate an operator, resolve a backup manifest or validate every timeout during parsing.
+// LoadRestoreOperatorConfig разбирает окружение поверх фиксированных исходных параметров, нормализует время восстановления до секунды UTC и проверяет закрытое действие, host и SNI контроллера, адреса БД и Kubernetes и обязательные ссылки резервной копии, токена и идемпотентности. При разборе реквизиты не читаются, оператор не аутентифицируется, manifest резервной копии не разрешается и все сроки не проверяются.
 func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 	config := RestoreOperatorConfig{
 		ControllerAddress:       "internal-rpc-authority-restore-controller.kodex-system.svc:8443",
@@ -90,7 +92,8 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 	return config, nil
 }
 
-// RunRestoreOperator выполняет подготовку или завершение восстановления.
+// RunRestoreOperator resolves the exact backup manifest under a bounded command context, loads controller mTLS and a projected application bearer, then calls the selected specialized prepare or complete RPC with the same restore/backup/time/idempotency bindings. It requires QUIESCING for prepare or COMPLETED for complete and closes clients plus telemetry on return; it adds no application-level blind retry or local owner approval. This performs real external command work if invoked and is not a unit probe.
+// RunRestoreOperator разрешает точный manifest резервной копии в ограниченном контексте команды, загружает mTLS контроллера и проецируемый bearer приложения, затем вызывает выбранный специализированный RPC prepare или complete с теми же привязками восстановления, резервной копии, времени и идемпотентности. Для prepare требуется QUIESCING, для complete — COMPLETED; при возврате закрываются клиенты и телеметрия, слепого прикладного повтора или локального одобрения владельца нет. При вызове выполняется настоящая внешняя команда, это не юнит-проба.
 func RunRestoreOperator(
 	ctx context.Context,
 	shutdownBase context.Context,
@@ -210,7 +213,8 @@ func RunRestoreOperator(
 	return nil
 }
 
-// RunRestoreRecovery сверяет координацию и ограждение после перезапуска.
+// RunRestoreRecovery loads the controller's configuration, opens restore-capability PostgreSQL and Kubernetes coordination under a fifteen-second startup context, applies the durable fence to the loaded coordination state and checks that exact fence's readiness. It closes the pool/client and independently cleans telemetry on return; it does not execute PITR, prepare an owner decision or complete a restore.
+// RunRestoreRecovery загружает конфигурацию контроллера, открывает PostgreSQL с возможностью restore и координацию Kubernetes в стартовом контексте пятнадцать секунд, применяет устойчивое ограждение к загруженному состоянию координации и проверяет готовность этого ограждения. Пул и клиент закрываются, телеметрия независимо очищается при возврате; PITR, подготовка решения владельца и завершение восстановления не выполняются.
 func RunRestoreRecovery(
 	ctx context.Context,
 	shutdownBase context.Context,
@@ -263,6 +267,8 @@ func RunRestoreRecovery(
 	return fence.RestoreFenceReady(startup, state)
 }
 
+// loadRestoreClientTLS loads a parseable nonempty PEM CA pool and one client certificate/key pair, then returns TLS 1.3 minimum with the exact supplied ServerName and no insecure verification override. Building this config neither establishes a connection nor substitutes for the application bearer and per-method authority checks.
+// loadRestoreClientTLS загружает разбираемый непустой PEM-пул CA и пару клиентского сертификата и ключа, затем возвращает TLS минимум 1.3 с точным переданным ServerName без обхода проверки. Создание конфигурации не устанавливает соединение и не заменяет bearer приложения и проверку полномочий метода.
 func loadRestoreClientTLS(
 	caFile string,
 	certificateFile string,

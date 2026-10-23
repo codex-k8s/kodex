@@ -14,6 +14,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// outboxPublicationFixture creates a temporary setgid directory owned by the current test identity
+// and registers descriptor cleanup; it does not impersonate the production runner/provider UIDs.
+// outboxPublicationFixture создаёт временный setgid каталог текущей тестовой identity
+// и регистрирует закрытие descriptor; production runner/provider UIDs она не имитирует.
 func outboxPublicationFixture(t *testing.T) (string, *os.File) {
 	t.Helper()
 	root := t.TempDir()
@@ -28,6 +32,10 @@ func outboxPublicationFixture(t *testing.T) (string, *os.File) {
 	return root, directory
 }
 
+// TestProviderOutboxPublicationPrivateAndAtomicFiles publishes private and already atomically
+// replaced files under the current UID, checking mode/group/link metadata rather than concurrent replacement.
+// TestProviderOutboxPublicationPrivateAndAtomicFiles публикует private и уже атомарно заменённые
+// файлы текущего UID, проверяя mode/group/link metadata, не одновременный race замены.
 func TestProviderOutboxPublicationPrivateAndAtomicFiles(t *testing.T) {
 	root, directory := outboxPublicationFixture(t)
 	for _, name := range []string{"private.md", "replace.md"} {
@@ -55,6 +63,10 @@ func TestProviderOutboxPublicationPrivateAndAtomicFiles(t *testing.T) {
 	}
 }
 
+// TestProviderOutboxPublicationRejectsUnsafeEntries checks closed reasons for invalid links/types,
+// names, ownership, directory mode, quotas and cancellation, retaining outside sentinels' private mode.
+// TestProviderOutboxPublicationRejectsUnsafeEntries проверяет закрытые причины неверных links/types,
+// names, ownership, directory mode, квот и отмены, сохраняя private mode внешних sentinels.
 func TestProviderOutboxPublicationRejectsUnsafeEntries(t *testing.T) {
 	for _, kind := range []string{"symlink", "hardlink", "fifo", "empty", "oversized", "foreign owner", "reserved provenance", "invalid name", "directory owner", "directory mode", "too many", "cancelled", "zero limit", "excess limit"} {
 		t.Run(kind, func(t *testing.T) {
@@ -142,6 +154,10 @@ func TestProviderOutboxPublicationRejectsUnsafeEntries(t *testing.T) {
 	}
 }
 
+// TestExecuteProviderTurnDoesNotPublishAssistantOrFailedOutbox injects an executor for assistant,
+// capability-free and failed turns, requiring unchanged results/errors and removal of temporary auth.
+// TestExecuteProviderTurnDoesNotPublishAssistantOrFailedOutbox подставляет executor для assistant,
+// capability-free и failed turns, требуя неизменных result/error и удаления временного auth.
 func TestExecuteProviderTurnDoesNotPublishAssistantOrFailedOutbox(t *testing.T) {
 	for _, mode := range []string{"SYSTEM", "PROJECT", "NO_CAPABILITY", "FAILED", "EXECUTION_ERROR"} {
 		t.Run(mode, func(t *testing.T) {
@@ -175,6 +191,10 @@ func TestExecuteProviderTurnDoesNotPublishAssistantOrFailedOutbox(t *testing.T) 
 	}
 }
 
+// TestExecuteProviderTurnRejectsArtifactPublicationPreservingUsage injects success into an
+// unpublishable fixture and requires the closed artifact failure outcome while retaining measured usage.
+// TestExecuteProviderTurnRejectsArtifactPublicationPreservingUsage подставляет успех в
+// непубликуемую fixture и требует закрытый artifact failure outcome с сохранением измеренного usage.
 func TestExecuteProviderTurnRejectsArtifactPublicationPreservingUsage(t *testing.T) {
 	input, authPath := providerTurnFixture(t, []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"test-key"}`))
 	input.Capabilities = []string{runtimecontract.ArtifactCapability}

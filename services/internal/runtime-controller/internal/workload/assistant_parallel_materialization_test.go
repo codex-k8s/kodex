@@ -10,7 +10,14 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-// Fake Kubernetes доказывает материализацию и ownership, не live acceptance.
+// TestParallelAssistantSessionsMaterializeAndCleanupIndependently sequentially
+// materializes ten distinct session/lease/credential fixtures in one fake API,
+// checks adoption by a new manager and exact cleanup of only the first turn.
+// It proves object isolation, not simultaneous model turns or live concurrency.
+// TestParallelAssistantSessionsMaterializeAndCleanupIndependently последовательно
+// материализует десять разных session/lease/credential fixtures в одном fake API,
+// проверяет принятие новым manager и очистку только первого хода. Это проверка
+// изоляции объектов, не одновременных ходов модели и не live-конкурентности.
 func TestParallelAssistantSessionsMaterializeAndCleanupIndependently(t *testing.T) {
 	t.Parallel()
 	client := fake.NewSimpleClientset()

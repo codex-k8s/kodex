@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestSessionRotationAndCSRF uses temporary synthetic keys and a fixed clock to check exact CSRF, previous-key overlap, rejection without overlap and ciphertext tampering. No real OIDC issuer, browser or deployed key rotation is involved.
+// TestSessionRotationAndCSRF использует временные synthetic keys и фиксированные часы для проверки exact CSRF, previous-key overlap, отказа без overlap и изменения ciphertext. Реальные OIDC issuer, browser и deployed key rotation не используются.
 func TestSessionRotationAndCSRF(t *testing.T) {
 	directory := t.TempDir()
 	first := filepath.Join(directory, "first.hex")
@@ -55,6 +57,8 @@ func TestSessionRotationAndCSRF(t *testing.T) {
 	}
 }
 
+// TestSessionExpiryIsClosed advances the local store clock beyond a synthetic cookie's expiry and requires Open to reject it, without a live browser session or revocation store.
+// TestSessionExpiryIsClosed продвигает локальные часы store за expiry synthetic cookie и требует отказа Open без живой browser session и revocation store.
 func TestSessionExpiryIsClosed(t *testing.T) {
 	directory := t.TempDir()
 	key := filepath.Join(directory, "key.hex")
@@ -75,6 +79,8 @@ func TestSessionExpiryIsClosed(t *testing.T) {
 	}
 }
 
+// TestSessionElevationIsSealedAndRenewalDoesNotExtendIt mutates the original purpose after sealing and checks the cookie retains its exact binding, then renews after elevation expiry and requires it to disappear. It does not consume a real secret effect.
+// TestSessionElevationIsSealedAndRenewalDoesNotExtendIt меняет первоначальную purpose после seal и проверяет сохранение точной binding cookie, затем продлевает после elevation expiry и требует её исчезновения. Настоящий secret effect не потребляется.
 func TestSessionElevationIsSealedAndRenewalDoesNotExtendIt(t *testing.T) {
 	directory := t.TempDir()
 	key := filepath.Join(directory, "key.hex")
@@ -111,6 +117,8 @@ func TestSessionElevationIsSealedAndRenewalDoesNotExtendIt(t *testing.T) {
 	}
 }
 
+// TestSessionRenewalPreservesBindingAndBearerCeiling checks early no-op and late renewal, unchanged identity/bearer/CSRF, accepted old cookie before expiry and no renewal past the supplied bearer ceiling using a fixed clock.
+// TestSessionRenewalPreservesBindingAndBearerCeiling на фиксированных часах проверяет early no-op и late renewal, неизменные identity, bearer и CSRF, допустимость old cookie до expiry и отсутствие продления за переданный bearer ceiling.
 func TestSessionRenewalPreservesBindingAndBearerCeiling(t *testing.T) {
 	directory := t.TempDir()
 	key := filepath.Join(directory, "key.hex")
@@ -164,6 +172,8 @@ func TestSessionRenewalPreservesBindingAndBearerCeiling(t *testing.T) {
 	}
 }
 
+// writeKey writes supplied synthetic hexadecimal key material with a newline and read-only mode 0400 to the test-owned path, failing the unit on filesystem error.
+// writeKey записывает переданный synthetic hexadecimal key material с newline и read-only mode 0400 по принадлежащему тесту пути, останавливая unit при filesystem error.
 func writeKey(t *testing.T, path, value string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(value+"\n"), 0o400); err != nil {

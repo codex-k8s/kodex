@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.10
-updated: 2026-10-20
+version: 2.2.11
+updated: 2026-10-21
 ---
 
 # Кодификация документов и задач
@@ -75,6 +75,7 @@ updated: 2026-07-28
 
 ## Реестр
 
+- `OPS-CODE-QUALITY-1823` — [Подготовка кода к построчному ревью](../operations/code-quality-1823.md).
 - `OPS-PROTOTYPE-HANDOFF-1031` — [Единый прототип перед построчным ревью](../operations/prototype-review-handoff-1031.md).
 
 | Код                | Файл                                                        |

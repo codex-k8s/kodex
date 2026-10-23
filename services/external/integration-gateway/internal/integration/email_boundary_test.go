@@ -13,7 +13,8 @@ import (
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 )
 
-// Сохраняем generated HTTP serialization и реальный socket, меняя только test destination.
+// emailFixture retains generated HTTP serialization and a real local socket, checking the logical origin and disabled body replay before replacing only the test destination.
+// emailFixture сохраняет сгенерированную HTTP-сериализацию и реальный локальный сокет, проверяет логический источник и запрет повторного тела перед заменой только тестового назначения.
 func emailFixture(t *testing.T, adapter *Adapter, handler http.HandlerFunc) {
 	t.Helper()
 	server := httptest.NewServer(handler)
@@ -30,6 +31,8 @@ func emailFixture(t *testing.T, adapter *Adapter, handler http.HandlerFunc) {
 	})}
 }
 
+// TestEmailEveryMutationHTTPFailureIsNotRetried injects six response failures for every email mutation, checks uncertain versus definite errors and requires exactly one local bridge request.
+// TestEmailEveryMutationHTTPFailureIsNotRetried подставляет шесть отказов ответа для каждого изменения почты, проверяет неопределённые и определённые ошибки и требует ровно один запрос к локальному мосту.
 func TestEmailEveryMutationHTTPFailureIsNotRetried(t *testing.T) {
 	for operation, raw := range catalogInputs() {
 		command, err := api.CommandForIntegration(operation, "mailbox", "sender@example.test", "effect", []byte(raw))
@@ -69,6 +72,8 @@ func TestEmailEveryMutationHTTPFailureIsNotRetried(t *testing.T) {
 	}
 }
 
+// TestEmailClaimExpiryBoundsHTTP uses a short lease to cancel a stalled mutation, preserves its uncertain outcome and rejects the expired claim before any subsequent HTTP request.
+// TestEmailClaimExpiryBoundsHTTP использует короткую аренду для отмены зависшего изменения, сохраняет неопределённый исход и отклоняет истёкший claim до следующего HTTP-запроса.
 func TestEmailClaimExpiryBoundsHTTP(t *testing.T) {
 	adapter := testAdapter(t)
 	var calls atomic.Int32
@@ -93,6 +98,8 @@ func TestEmailClaimExpiryBoundsHTTP(t *testing.T) {
 	}
 }
 
+// TestEmailTestBindingCannotAuthorizeMutation substitutes a connection-test binding for an invocation and verifies rejection of send before the local bridge receives a request.
+// TestEmailTestBindingCannotAuthorizeMutation заменяет привязку вызова привязкой проверки соединения и проверяет отказ отправки до обращения к локальному мосту.
 func TestEmailTestBindingCannotAuthorizeMutation(t *testing.T) {
 	adapter := testAdapter(t)
 	var calls atomic.Int32
@@ -105,6 +112,8 @@ func TestEmailTestBindingCannotAuthorizeMutation(t *testing.T) {
 	}
 }
 
+// TestEmailReadbackExactIdentity checks exact IMAP/POP message UID, optional UIDVALIDITY/folder and thread identity, rejecting missing or foreign readback coordinates.
+// TestEmailReadbackExactIdentity проверяет точные UID писем IMAP и POP, необязательные UIDVALIDITY и папку, идентификатор цепочки, отклоняя отсутствующие или чужие координаты ответа.
 func TestEmailReadbackExactIdentity(t *testing.T) {
 	command := api.Command{Operation: api.OperationFetch, Uid: "7", UidValidity: 3, Folder: "INBOX"}
 	result := api.Result{Uid: "7", UidValidity: 3, Folder: "INBOX"}

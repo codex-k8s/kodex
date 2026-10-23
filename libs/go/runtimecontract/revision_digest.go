@@ -7,16 +7,16 @@ import (
 	"errors"
 )
 
-// RuntimeRevisionCredentialSource связывает логическую credential revision с
-// точной immutable Kubernetes Secret, доступной только trusted controller.
+// RuntimeRevisionCredentialSource pins the credential source by Secret name, UID and resource version without including secret values in revision material.
+// RuntimeRevisionCredentialSource закрепляет источник реквизитов по имени Secret, UID и версии ресурса без включения значений секрета в материал ревизии.
 type RuntimeRevisionCredentialSource struct {
 	SecretName            string `json:"secret_name"`
 	SecretUID             string `json:"secret_uid"`
 	SecretResourceVersion string `json:"secret_resource_version"`
 }
 
-// RuntimeRevisionDigest вычисляется без execution-local lease, callback
-// locator и путей контейнера. Все server-owned inputs самой revision остаются.
+// RuntimeRevisionDigest hashes the revision and exact credential-source metadata after clearing execution-local leases, transport bindings and container paths; remaining revision inputs stay bound.
+// RuntimeRevisionDigest хэширует ревизию и точные метаданные источника реквизитов после очистки локальных аренд, транспортных привязок и путей контейнера; остальные входы ревизии остаются связанными.
 func RuntimeRevisionDigest(input RunnerInput, source RuntimeRevisionCredentialSource) (string, error) {
 	if input.RuntimeRevisionRef == "" || input.RuntimeRevisionVersion < 1 ||
 		source.SecretName == "" || source.SecretUID == "" || source.SecretResourceVersion == "" {
@@ -53,6 +53,8 @@ func RuntimeRevisionDigest(input RunnerInput, source RuntimeRevisionCredentialSo
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// RuntimeBoundedInputDigest hashes the JSON encoding of a bounded input map, treating nil as an empty object and propagating unsupported-value encoding failures.
+// RuntimeBoundedInputDigest хэширует JSON-представление ограниченного входного словаря, трактуя nil как пустой объект и возвращая ошибки кодирования неподдерживаемых значений.
 func RuntimeBoundedInputDigest(input map[string]any) (string, error) {
 	if input == nil {
 		input = map[string]any{}

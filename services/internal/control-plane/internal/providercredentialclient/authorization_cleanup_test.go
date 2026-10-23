@@ -13,6 +13,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// authorizationMetadataStub records metadata-only observation calls while inheriting the independent cleanup stub.
+// Its configured responses and errors remain local and do not access provider or Kubernetes state.
+// authorizationMetadataStub записывает вызовы наблюдения только метаданных, наследуя отдельную заглушку очистки.
+// Настроенные ответы и ошибки остаются локальными и не обращаются к состоянию провайдера или Kubernetes.
 type authorizationMetadataStub struct {
 	providerCredentialClientStub
 	metadata        *controlplanev1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
@@ -20,12 +24,20 @@ type authorizationMetadataStub struct {
 	metadataCalls   int
 }
 
+// ObserveDeviceAuthorization increments the metadata counter, records the exact request and returns the configured response/error.
+// It does not execute device authorization or poll a real provider.
+// ObserveDeviceAuthorization увеличивает счётчик метаданных, сохраняет точный запрос и возвращает настроенный ответ/ошибку.
+// Авторизация устройства и опрос настоящего провайдера не выполняются.
 func (stub *authorizationMetadataStub) ObserveDeviceAuthorization(_ context.Context, request *controlplanev1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest, _ ...grpc.CallOption) (*controlplanev1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse, error) {
 	stub.metadataCalls++
 	stub.metadataRequest = request
 	return stub.metadata, stub.err
 }
 
+// authorizationCleanupTarget builds synthetic owner references and derives the materializer locator from the attempt/account pair.
+// The fixture leaves kind/UID/version unset for a metadata observation to resolve.
+// authorizationCleanupTarget создаёт синтетические ссылки владельца и выводит указатель размещения из пары попытки и аккаунта.
+// Вид, UID и версия оставляются незаданными для разрешения наблюдением метаданных.
 func authorizationCleanupTarget() entity.ProviderAuthorizationCleanupTarget {
 	target := entity.ProviderAuthorizationCleanupTarget{TaskRef: cleanupTaskRef, AccountRef: cleanupAccountRef, AuthorizationAttemptRef: "pauth_" + strings.Repeat("a", 32), Generation: 7}
 	digest := sha256.Sum256([]byte(target.AuthorizationAttemptRef + "\x00" + target.AccountRef))
@@ -33,6 +45,10 @@ func authorizationCleanupTarget() entity.ProviderAuthorizationCleanupTarget {
 	return target
 }
 
+// TestAuthorizationMetadataPreservesExactOwnerBinding checks both absence states retain task/account/attempt/generation and metadata-only mode.
+// Unfenced absence must not become confirmed, and a foreign account response must fail.
+// TestAuthorizationMetadataPreservesExactOwnerBinding проверяет сохранение задачи/аккаунта/попытки/поколения и режима только метаданных для обоих видов отсутствия.
+// Неограждённое отсутствие не должно становиться подтверждённым, а ответ чужого аккаунта должен отклоняться.
 func TestAuthorizationMetadataPreservesExactOwnerBinding(t *testing.T) {
 	t.Parallel()
 	target := authorizationCleanupTarget()
@@ -67,6 +83,10 @@ func TestAuthorizationMetadataPreservesExactOwnerBinding(t *testing.T) {
 	}
 }
 
+// TestAuthorizationCleanupRejectsMixedPinsBeforeRPC mutates target kind, presence/absence pins, account binding and generation.
+// Each invalid target must fail before the cleanup stub records any RPC.
+// TestAuthorizationCleanupRejectsMixedPinsBeforeRPC изменяет вид цели, привязки наличия/отсутствия, аккаунт и поколение.
+// Каждая некорректная цель должна отклоняться до записи RPC заглушкой очистки.
 func TestAuthorizationCleanupRejectsMixedPinsBeforeRPC(t *testing.T) {
 	t.Parallel()
 	base := authorizationCleanupTarget()
@@ -92,6 +112,10 @@ func TestAuthorizationCleanupRejectsMixedPinsBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestAuthorizationMetadataPresentAndClosedResponse accepts an exact synthetic present object, then rejects unknown state, invalid UID and mixed or extraneous response fields.
+// It checks response mapping locally rather than proving broker authorization or resource existence.
+// TestAuthorizationMetadataPresentAndClosedResponse принимает точный синтетический присутствующий объект, затем отклоняет неизвестное состояние, неверный UID и смешанные или лишние поля ответа.
+// Проверяется локальное преобразование ответа, а не авторизация брокера или существование ресурса.
 func TestAuthorizationMetadataPresentAndClosedResponse(t *testing.T) {
 	t.Parallel()
 	target := authorizationCleanupTarget()
@@ -138,6 +162,10 @@ func TestAuthorizationMetadataPresentAndClosedResponse(t *testing.T) {
 	}
 }
 
+// TestAuthorizationCleanupPreservesProducedCredentialForSeparateTask verifies absence cleanup carries no pending/credential deletion target
+// and returns a valid produced descriptor unchanged, while rejecting a later invalid digest.
+// TestAuthorizationCleanupPreservesProducedCredentialForSeparateTask проверяет отсутствие цели удаления ожидающего объекта/учётных данных в очистке отсутствия
+// и неизменный возврат корректного созданного дескриптора, отклоняя последующий неверный дайджест.
 func TestAuthorizationCleanupPreservesProducedCredentialForSeparateTask(t *testing.T) {
 	t.Parallel()
 	target := authorizationCleanupTarget()

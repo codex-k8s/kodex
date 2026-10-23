@@ -12,6 +12,10 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// TestAuthorizationCleanupSnapshotChangeRequiresFreshMetadataBeforeEffect distinguishes stale UID/RV,
+// late/vanished objects and a foreign account, requiring GET-only refusal before a fresh permitted fence.
+// TestAuthorizationCleanupSnapshotChangeRequiresFreshMetadataBeforeEffect различает stale UID/RV,
+// late/vanished objects и чужой account, требуя GET-only refusal до нового допустимого fence.
 func TestAuthorizationCleanupSnapshotChangeRequiresFreshMetadataBeforeEffect(t *testing.T) {
 	t.Parallel()
 	for _, scenario := range []string{"resource version", "UID", "late object", "vanished object", "foreign account"} {
@@ -72,18 +76,16 @@ func TestAuthorizationCleanupSnapshotChangeRequiresFreshMetadataBeforeEffect(t *
 	}
 }
 
+// TestAuthorizationCleanupCASFailureDiffersFromLostWriteAcknowledgement separates rejected/invalid
+// updates from a committed write with lost ACK, checking both the error class and actual stored fence.
+// TestAuthorizationCleanupCASFailureDiffersFromLostWriteAcknowledgement отделяет rejected/invalid
+// updates от committed write с потерянным ACK, проверяя error class и фактический stored fence.
 func TestAuthorizationCleanupCASFailureDiffersFromLostWriteAcknowledgement(t *testing.T) {
 	t.Parallel()
 	for _, scenario := range []string{"update conflict", "invalid object", "lost write acknowledgement"} {
 		t.Run(scenario, func(t *testing.T) {
 			t.Parallel()
-			store, client := newAuthorizationCleanupStore(t)
-			attempt, target := authorizationCleanupFixture()
-			stored, _, err := store.CreateProviderAuthorizationAttempt(t.Context(), attempt)
-			if err != nil {
-				t.Fatal(err)
-			}
-			target.Kind, target.UID, target.ResourceVersion = ProviderCleanupAuthorization, stored.SecretUID, stored.ResourceVersion
+			store, client, target := authorizationCleanupTargetFixture(t)
 			client.PrependReactor("update", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 				wanted := action.(k8stesting.UpdateAction).GetObject().(*corev1.Secret).DeepCopy()
 				switch scenario {
@@ -99,7 +101,7 @@ func TestAuthorizationCleanupCASFailureDiffersFromLostWriteAcknowledgement(t *te
 					return true, nil, apierrors.NewServiceUnavailable("synthetic committed update with lost response")
 				}
 			})
-			err = store.FenceProviderAuthorization(t.Context(), target)
+			err := store.FenceProviderAuthorization(t.Context(), target)
 			if err == nil || errors.Is(err, ErrProviderAuthorizationCleanupSnapshotChanged) != (scenario == "update conflict") {
 				t.Fatalf("ambiguous write was classified as no effect: %v", err)
 			}

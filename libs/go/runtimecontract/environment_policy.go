@@ -13,44 +13,91 @@ import (
 )
 
 const (
-	RuntimeVolumeEphemeralDisk   = "EPHEMERAL_DISK"
+	// RuntimeVolumeEphemeralDisk selects execution-scoped disk-backed emptyDir storage.
+	// RuntimeVolumeEphemeralDisk выбирает дисковое emptyDir-хранилище в пределах исполнения.
+	RuntimeVolumeEphemeralDisk = "EPHEMERAL_DISK"
+	// RuntimeVolumeEphemeralMemory selects execution-scoped memory-backed emptyDir storage.
+	// RuntimeVolumeEphemeralMemory выбирает emptyDir-хранилище в памяти в пределах исполнения.
 	RuntimeVolumeEphemeralMemory = "EPHEMERAL_MEMORY"
 
-	RuntimeEgressDNS             = "DNS"
+	// RuntimeEgressDNS names the platform-resolved DNS destination, not an arbitrary endpoint.
+	// RuntimeEgressDNS обозначает назначаемый платформой DNS, а не произвольный адрес.
+	RuntimeEgressDNS = "DNS"
+	// RuntimeEgressRuntimeCallback names the controller callback transport required by a turn.
+	// RuntimeEgressRuntimeCallback обозначает транспорт обратного вызова контроллера, необходимый ходу.
 	RuntimeEgressRuntimeCallback = "RUNTIME_CALLBACK"
-	RuntimeEgressProviderProxy   = "PROVIDER_PROXY"
+	// RuntimeEgressProviderProxy names the managed model-provider transport destination.
+	// RuntimeEgressProviderProxy обозначает управляемое назначение транспорта провайдера модели.
+	RuntimeEgressProviderProxy = "PROVIDER_PROXY"
 
+	// RuntimeProtocolTCP identifies TCP in the closed service-egress tuple.
+	// RuntimeProtocolTCP обозначает TCP в закрытом наборе параметров служебного исходящего трафика.
 	RuntimeProtocolTCP = "TCP"
+	// RuntimeProtocolUDP identifies UDP, admitted here only for the DNS destination.
+	// RuntimeProtocolUDP обозначает UDP, допускаемый здесь только для DNS.
 	RuntimeProtocolUDP = "UDP"
 
-	RuntimeWebAccessNone              = "NONE"
+	// RuntimeWebAccessNone disables optional public web access while retaining required service links.
+	// RuntimeWebAccessNone отключает необязательный публичный веб-доступ, сохраняя служебные связи.
+	RuntimeWebAccessNone = "NONE"
+	// RuntimeWebAccessAllowlistReadOnly confines web access to named domains and read-only HTTP methods.
+	// RuntimeWebAccessAllowlistReadOnly ограничивает веб-доступ указанными доменами и HTTP-методами чтения.
 	RuntimeWebAccessAllowlistReadOnly = "ALLOWLIST_READ_ONLY"
-	RuntimeWebAccessAllowlistFull     = "ALLOWLIST_FULL"
-	RuntimeWebAccessFullPublic        = "FULL_PUBLIC"
-	RuntimeWebProtocolHTTPS           = "HTTPS"
+	// RuntimeWebAccessAllowlistFull permits the closed write-capable method set only on listed domains.
+	// RuntimeWebAccessAllowlistFull допускает закрытый набор методов с записью лишь на перечисленных доменах.
+	RuntimeWebAccessAllowlistFull = "ALLOWLIST_FULL"
+	// RuntimeWebAccessFullPublic selects managed public-web access without per-domain rules.
+	// RuntimeWebAccessFullPublic выбирает управляемый публичный веб-доступ без правил отдельных доменов.
+	RuntimeWebAccessFullPublic = "FULL_PUBLIC"
+	// RuntimeWebProtocolHTTPS is the sole admitted protocol for web allowlist rules.
+	// RuntimeWebProtocolHTTPS — единственный допускаемый протокол доменных веб-правил.
+	RuntimeWebProtocolHTTPS = "HTTPS"
 
-	RuntimeHTTPMethodGet     = "GET"
-	RuntimeHTTPMethodHead    = "HEAD"
+	// RuntimeHTTPMethodGet permits retrieval in both read-only and write-capable web modes.
+	// RuntimeHTTPMethodGet разрешает получение данных в веб-режимах чтения и записи.
+	RuntimeHTTPMethodGet = "GET"
+	// RuntimeHTTPMethodHead permits response metadata reads in either web mode.
+	// RuntimeHTTPMethodHead разрешает чтение метаданных ответа в обоих веб-режимах.
+	RuntimeHTTPMethodHead = "HEAD"
+	// RuntimeHTTPMethodOptions permits capability/preflight requests in either web mode.
+	// RuntimeHTTPMethodOptions разрешает запросы возможностей и preflight в обоих веб-режимах.
 	RuntimeHTTPMethodOptions = "OPTIONS"
-	RuntimeHTTPMethodPost    = "POST"
-	RuntimeHTTPMethodPut     = "PUT"
-	RuntimeHTTPMethodPatch   = "PATCH"
-	RuntimeHTTPMethodDelete  = "DELETE"
+	// RuntimeHTTPMethodPost is available only in the write-capable web method set.
+	// RuntimeHTTPMethodPost доступен только в наборе веб-методов с записью.
+	RuntimeHTTPMethodPost = "POST"
+	// RuntimeHTTPMethodPut is available only in the write-capable web method set.
+	// RuntimeHTTPMethodPut доступен только в наборе веб-методов с записью.
+	RuntimeHTTPMethodPut = "PUT"
+	// RuntimeHTTPMethodPatch is available only in the write-capable web method set.
+	// RuntimeHTTPMethodPatch доступен только в наборе веб-методов с записью.
+	RuntimeHTTPMethodPatch = "PATCH"
+	// RuntimeHTTPMethodDelete is available only in the write-capable web method set.
+	// RuntimeHTTPMethodDelete доступен только в наборе веб-методов с записью.
+	RuntimeHTTPMethodDelete = "DELETE"
 
+	// RuntimeKubernetesAccessNone is the sole supported profile and never issues API rules.
+	// RuntimeKubernetesAccessNone — единственный поддерживаемый профиль, не выдающий правил Kubernetes API.
 	RuntimeKubernetesAccessNone = "NONE"
-	RuntimeKubernetesNamespace  = "kodex-runtime"
+	// RuntimeKubernetesNamespace fixes the server-owned namespace for execution identities.
+	// RuntimeKubernetesNamespace закрепляет серверное пространство имён идентичностей исполнения.
+	RuntimeKubernetesNamespace = "kodex-runtime"
 )
 
+// runtimeVolumeNamePattern limits owner volume names to bounded lowercase DNS-label-like tokens.
+// runtimeVolumeNamePattern ограничивает имена томов владельца короткими строчными токенами вида DNS-label.
 var runtimeVolumeNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}[a-z0-9]$|^[a-z]$`)
 
+// reservedRuntimeVolumeNames prevents user volumes from shadowing platform-owned runtime mounts.
+// reservedRuntimeVolumeNames запрещает пользовательским томам подменять платформенные mount-имена runtime.
 var reservedRuntimeVolumeNames = map[string]struct{}{
 	"callback-ca": {}, "callback-client": {}, "kube-api-access": {}, "provider-auth": {},
 	"provider-socket": {}, "provider-tmp": {}, "runtime-input": {}, "session": {}, "tmp": {},
 }
 
-// RuntimeResourcePolicy использует целые единицы вместо произвольных
-// Kubernetes quantities. Это сохраняет browser contract типизированным и
-// исключает неоднозначную канонизацию значений.
+// RuntimeResourcePolicy uses integer milli-CPU and MiB quantities plus optional narrower workspace
+// quotas, keeping the browser contract typed without ambiguous Kubernetes quantity parsing.
+// RuntimeResourcePolicy использует целые milli-CPU и MiB и необязательные меньшие квоты workspace,
+// сохраняя типизированный browser-контракт без неоднозначного разбора Kubernetes quantities.
 type RuntimeResourcePolicy struct {
 	WorkspaceLimits            *RuntimeWorkspaceLimits `json:"workspace_limits,omitempty"`
 	CPURequestMilli            int64                   `json:"cpu_request_milli"`
@@ -61,8 +108,10 @@ type RuntimeResourcePolicy struct {
 	EphemeralStorageLimitMiB   int64                   `json:"ephemeral_storage_limit_mib"`
 }
 
-// RuntimeVolume разрешает только execution-scoped emptyDir. Имя источника,
-// host path, PVC, Secret, ConfigMap и произвольный mount path не принимаются.
+// RuntimeVolume describes only execution-scoped emptyDir storage; source names, host paths,
+// PVCs, Secrets, ConfigMaps, and arbitrary mount locations cannot be selected through it.
+// RuntimeVolume описывает лишь emptyDir в пределах исполнения; имена источников, host path,
+// PVC, Secret, ConfigMap и произвольные пути монтирования через него не выбираются.
 type RuntimeVolume struct {
 	Name      string `json:"name"`
 	Kind      string `json:"kind"`
@@ -70,15 +119,18 @@ type RuntimeVolume struct {
 	MountPath string `json:"mount_path"`
 }
 
+// RuntimeNetworkEgress records one closed service destination with its exact protocol and port.
+// RuntimeNetworkEgress хранит одно закрытое служебное назначение с точными протоколом и портом.
 type RuntimeNetworkEgress struct {
 	Destination string `json:"destination"`
 	Protocol    string `json:"protocol"`
 	Port        int32  `json:"port"`
 }
 
-// RuntimeWebAccessRule задаёт доступ к публичному HTTPS endpoint. Scoped
-// wildcard не равен глобальному wildcard: *.example.com разрешает только один
-// уровень, **.example.com — apex и любое число поддоменов.
+// RuntimeWebAccessRule describes public HTTPS access with an explicit HTTP method subset;
+// *.example.com matches one subdomain level, while **.example.com includes the apex and deeper levels.
+// RuntimeWebAccessRule описывает публичный HTTPS-доступ с явным подмножеством HTTP-методов;
+// *.example.com охватывает один уровень, а **.example.com — основной домен и вложенные уровни.
 type RuntimeWebAccessRule struct {
 	DomainPattern string   `json:"domain_pattern"`
 	Protocol      string   `json:"protocol"`
@@ -86,24 +138,32 @@ type RuntimeWebAccessRule struct {
 	HTTPMethods   []string `json:"http_methods"`
 }
 
+// RuntimeWebAccess selects one closed public-web mode and its mode-compatible domain rules.
+// RuntimeWebAccess выбирает один закрытый режим публичного веб-доступа и совместимые доменные правила.
 type RuntimeWebAccess struct {
 	Mode  string                 `json:"mode"`
 	Rules []RuntimeWebAccessRule `json:"rules"`
 }
 
+// RuntimeNetworkPolicy combines mandatory deny-by-default service egress with optional managed web access.
+// RuntimeNetworkPolicy объединяет обязательный deny-by-default служебный трафик с управляемым веб-доступом.
 type RuntimeNetworkPolicy struct {
 	DenyByDefault bool                   `json:"deny_by_default"`
 	Egress        []RuntimeNetworkEgress `json:"egress"`
 	WebAccess     RuntimeWebAccess       `json:"web_access"`
 }
 
-// RuntimeKubernetesAccessProfile фиксирует отсутствие Kubernetes-прав.
-// ServiceAccount назначается сервером и не получает token mount или RBAC.
+// RuntimeKubernetesAccessProfile fixes the absence of Kubernetes permissions;
+// the server-assigned ServiceAccount receives neither a token mount nor RBAC rules.
+// RuntimeKubernetesAccessProfile закрепляет отсутствие Kubernetes-прав;
+// назначенный сервером ServiceAccount не получает смонтированный токен или правила RBAC.
 type RuntimeKubernetesAccessProfile struct {
 	Kind      string `json:"kind"`
 	Namespace string `json:"namespace"`
 }
 
+// RuntimeKubernetesRule represents an effective API rule shape; the supported NONE profile requires no rules.
+// RuntimeKubernetesRule представляет форму правила API; поддерживаемый профиль NONE требует пустой набор.
 type RuntimeKubernetesRule struct {
 	APIGroup      string   `json:"api_group"`
 	Resource      string   `json:"resource"`
@@ -111,6 +171,8 @@ type RuntimeKubernetesRule struct {
 	ResourceNames []string `json:"resource_names"`
 }
 
+// RuntimeKubernetesAccess binds the server-assigned execution identity and empty effective rules to a digest.
+// RuntimeKubernetesAccess связывает серверную идентичность исполнения и пустые эффективные правила с дайджестом.
 type RuntimeKubernetesAccess struct {
 	Profile            RuntimeKubernetesAccessProfile `json:"profile"`
 	ServiceAccountName string                         `json:"service_account_name"`
@@ -118,6 +180,8 @@ type RuntimeKubernetesAccess struct {
 	Digest             string                         `json:"digest"`
 }
 
+// RuntimeEnvironmentPolicy holds normalized resources, volumes, network, and Kubernetes profile with separate digests.
+// RuntimeEnvironmentPolicy хранит нормализованные ресурсы, тома, сеть и профиль Kubernetes с отдельными дайджестами.
 type RuntimeEnvironmentPolicy struct {
 	Resources        RuntimeResourcePolicy          `json:"resources"`
 	Volumes          []RuntimeVolume                `json:"volumes"`
@@ -129,6 +193,10 @@ type RuntimeEnvironmentPolicy struct {
 	RBACDigest       string                         `json:"rbac_digest,omitempty"`
 }
 
+// RuntimeEnvironmentPolicyInput carries owner-selectable resource/web settings and closed destination names,
+// leaving service ports, mount roots, and the Kubernetes namespace to the platform.
+// RuntimeEnvironmentPolicyInput содержит выбираемые владельцем ресурсы, веб-настройки и закрытые имена назначений,
+// оставляя служебные порты, корни томов и пространство имён Kubernetes платформе.
 type RuntimeEnvironmentPolicyInput struct {
 	Resources           RuntimeResourcePolicy `json:"resources"`
 	Volumes             []RuntimeVolume       `json:"volumes"`
@@ -137,25 +205,17 @@ type RuntimeEnvironmentPolicyInput struct {
 	KubernetesAccess    string                `json:"kubernetes_access"`
 }
 
+// DefaultRuntimeEnvironmentPolicy returns the canonical normalized platform defaults with all four digests.
+// DefaultRuntimeEnvironmentPolicy возвращает канонические платформенные настройки с четырьмя дайджестами.
 func DefaultRuntimeEnvironmentPolicy() RuntimeEnvironmentPolicy {
-	policy := RuntimeEnvironmentPolicy{
-		Resources: RuntimeResourcePolicy{
-			CPURequestMilli: 2000, CPULimitMilli: 2000,
-			MemoryRequestMiB: 4096, MemoryLimitMiB: 4096,
-			EphemeralStorageRequestMiB: 1024, EphemeralStorageLimitMiB: 4096,
-		},
-		Network: RuntimeNetworkPolicy{DenyByDefault: true, Egress: []RuntimeNetworkEgress{
-			{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolTCP, Port: 53},
-			{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolUDP, Port: 53},
-			{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8084},
-			{Destination: RuntimeEgressRuntimeCallback, Protocol: RuntimeProtocolTCP, Port: 8444},
-		}, WebAccess: RuntimeWebAccess{Mode: RuntimeWebAccessNone, Rules: []RuntimeWebAccessRule{}}},
-		KubernetesAccess: RuntimeKubernetesAccessProfile{Kind: RuntimeKubernetesAccessNone, Namespace: RuntimeKubernetesNamespace},
-	}
-	normalized, _ := NormalizeRuntimeEnvironmentPolicy(policy)
+	normalized, _ := NormalizeRuntimeEnvironmentPolicy(DefaultRuntimeEnvironmentPolicyWithoutDigests())
 	return normalized
 }
 
+// NormalizeRuntimeEnvironmentPolicy applies the zero-value default, validates platform bounds,
+// normalizes ordering and web methods, then computes independent component digests.
+// NormalizeRuntimeEnvironmentPolicy применяет default для нулевого значения, проверяет платформенные пределы,
+// нормализует порядок и веб-методы и вычисляет отдельные дайджесты компонентов.
 func NormalizeRuntimeEnvironmentPolicy(input RuntimeEnvironmentPolicy) (RuntimeEnvironmentPolicy, error) {
 	if input.Resources == (RuntimeResourcePolicy{}) && len(input.Volumes) == 0 && len(input.Network.Egress) == 0 && input.KubernetesAccess.Kind == "" {
 		input = DefaultRuntimeEnvironmentPolicyWithoutDigests()
@@ -224,19 +284,31 @@ func NormalizeRuntimeEnvironmentPolicy(input RuntimeEnvironmentPolicy) (RuntimeE
 	return result, nil
 }
 
+// DefaultRuntimeEnvironmentPolicyWithoutDigests supplies fresh unnormalized default values for shared construction.
+// DefaultRuntimeEnvironmentPolicyWithoutDigests создаёт новые ненормализованные defaults для общего построения.
 func DefaultRuntimeEnvironmentPolicyWithoutDigests() RuntimeEnvironmentPolicy {
 	return RuntimeEnvironmentPolicy{
-		Resources: RuntimeResourcePolicy{CPURequestMilli: 2000, CPULimitMilli: 2000, MemoryRequestMiB: 4096, MemoryLimitMiB: 4096, EphemeralStorageRequestMiB: 1024, EphemeralStorageLimitMiB: 4096},
-		Network: RuntimeNetworkPolicy{DenyByDefault: true, Egress: []RuntimeNetworkEgress{
-			{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolTCP, Port: 53},
-			{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolUDP, Port: 53},
-			{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8084},
-			{Destination: RuntimeEgressRuntimeCallback, Protocol: RuntimeProtocolTCP, Port: 8444},
-		}, WebAccess: RuntimeWebAccess{Mode: RuntimeWebAccessNone, Rules: []RuntimeWebAccessRule{}}},
+		Resources:        RuntimeResourcePolicy{CPURequestMilli: 2000, CPULimitMilli: 2000, MemoryRequestMiB: 4096, MemoryLimitMiB: 4096, EphemeralStorageRequestMiB: 1024, EphemeralStorageLimitMiB: 4096},
+		Network:          defaultRuntimeNetworkPolicy(),
 		KubernetesAccess: RuntimeKubernetesAccessProfile{Kind: RuntimeKubernetesAccessNone, Namespace: RuntimeKubernetesNamespace},
 	}
 }
 
+// defaultRuntimeNetworkPolicy creates the exact mandatory service links and disables optional web access.
+// defaultRuntimeNetworkPolicy создаёт точные обязательные служебные связи и отключает необязательный веб-доступ.
+func defaultRuntimeNetworkPolicy() RuntimeNetworkPolicy {
+	return RuntimeNetworkPolicy{DenyByDefault: true, Egress: []RuntimeNetworkEgress{
+		{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolTCP, Port: 53},
+		{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolUDP, Port: 53},
+		{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8084},
+		{Destination: RuntimeEgressRuntimeCallback, Protocol: RuntimeProtocolTCP, Port: 8444},
+	}, WebAccess: RuntimeWebAccess{Mode: RuntimeWebAccessNone, Rules: []RuntimeWebAccessRule{}}}
+}
+
+// RuntimeEnvironmentPolicyFromInput requires the exact closed destination set and NONE Kubernetes profile,
+// then combines owner settings with platform-owned ports and normalizes the result.
+// RuntimeEnvironmentPolicyFromInput требует точный закрытый набор назначений и профиль Kubernetes NONE,
+// затем объединяет настройки владельца с платформенными портами и нормализует результат.
 func RuntimeEnvironmentPolicyFromInput(input RuntimeEnvironmentPolicyInput) (RuntimeEnvironmentPolicy, error) {
 	if input.KubernetesAccess != RuntimeKubernetesAccessNone {
 		return RuntimeEnvironmentPolicy{}, errors.New("runtime Kubernetes access is not supported")
@@ -257,18 +329,16 @@ func RuntimeEnvironmentPolicyFromInput(input RuntimeEnvironmentPolicyInput) (Run
 	if len(required) != 0 {
 		return RuntimeEnvironmentPolicy{}, errors.New("runtime network destination set is incomplete")
 	}
-	egress := []RuntimeNetworkEgress{
-		{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolTCP, Port: 53},
-		{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolUDP, Port: 53},
-		{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8084},
-		{Destination: RuntimeEgressRuntimeCallback, Protocol: RuntimeProtocolTCP, Port: 8444},
-	}
+	network := defaultRuntimeNetworkPolicy()
+	network.WebAccess = input.WebAccess
 	return NormalizeRuntimeEnvironmentPolicy(RuntimeEnvironmentPolicy{
 		Resources: input.Resources, Volumes: input.Volumes,
-		Network: RuntimeNetworkPolicy{DenyByDefault: true, Egress: egress, WebAccess: input.WebAccess}, KubernetesAccess: access,
+		Network: network, KubernetesAccess: access,
 	})
 }
 
+// RuntimeEnvironmentPolicyDigest hashes the four canonical component digests under the policy version tag.
+// RuntimeEnvironmentPolicyDigest хеширует четыре канонических дайджеста компонентов с версионным тегом политики.
 func RuntimeEnvironmentPolicyDigest(policy RuntimeEnvironmentPolicy) (string, error) {
 	normalized, err := NormalizeRuntimeEnvironmentPolicy(policy)
 	if err != nil {
@@ -277,6 +347,8 @@ func RuntimeEnvironmentPolicyDigest(policy RuntimeEnvironmentPolicy) (string, er
 	return digestParts("runtime-environment-policy-v1", normalized.ResourcesDigest, normalized.VolumesDigest, normalized.NetworkDigest, normalized.RBACDigest), nil
 }
 
+// RuntimeKubernetesAccessForExecution validates server-assigned names and materializes only NONE access with no rules.
+// RuntimeKubernetesAccessForExecution проверяет серверные имена и материализует только доступ NONE без правил.
 func RuntimeKubernetesAccessForExecution(profile RuntimeKubernetesAccessProfile, serviceAccountName, podName string) (RuntimeKubernetesAccess, error) {
 	if profile.Namespace != "kodex-runtime" || !validDNSLabelContract(serviceAccountName) || !validDNSLabelContract(podName) {
 		return RuntimeKubernetesAccess{}, errors.New("runtime Kubernetes execution identity is invalid")
@@ -292,6 +364,8 @@ func RuntimeKubernetesAccessForExecution(profile RuntimeKubernetesAccessProfile,
 	return result, nil
 }
 
+// ValidateRuntimeKubernetesAccess reconstructs the supported effective profile and compares rules and digest.
+// ValidateRuntimeKubernetesAccess заново строит поддерживаемый профиль и сравнивает правила и дайджест.
 func ValidateRuntimeKubernetesAccess(input RuntimeKubernetesAccess) error {
 	expected, err := RuntimeKubernetesAccessForExecution(input.Profile, input.ServiceAccountName, runtimeKubernetesRulePodName(input.Rules))
 	if err != nil || expected.Digest != input.Digest || !equalRuntimeKubernetesRules(expected.Rules, input.Rules) {
@@ -300,6 +374,8 @@ func ValidateRuntimeKubernetesAccess(input RuntimeKubernetesAccess) error {
 	return nil
 }
 
+// RuntimeVolumeMountPath derives a volume location under the fixed workspace subtree from a valid name.
+// RuntimeVolumeMountPath выводит путь тома внутри фиксированной папки workspace из допустимого имени.
 func RuntimeVolumeMountPath(name string) (string, error) {
 	if !runtimeVolumeNamePattern.MatchString(name) {
 		return "", errors.New("runtime volume name is invalid")
@@ -307,26 +383,38 @@ func RuntimeVolumeMountPath(name string) (string, error) {
 	return "/workspace/.kodex/volumes/" + name, nil
 }
 
+// RuntimeTurnPodName derives the stable turn Pod name from the lease identity without granting authority.
+// RuntimeTurnPodName выводит постоянное имя Pod хода из идентичности аренды без выдачи полномочий.
 func RuntimeTurnPodName(leaseRef string) string {
 	return runtimeResourceName("runtime-turn-", leaseRef)
 }
 
+// RuntimeServiceAccountName derives the execution ServiceAccount name from the lease identity.
+// RuntimeServiceAccountName выводит имя ServiceAccount исполнения из идентичности аренды.
 func RuntimeServiceAccountName(leaseRef string) string {
 	return runtimeResourceName("runtime-sa-", leaseRef)
 }
 
+// RuntimeRoleName derives the lease-scoped Role resource locator, not permission to create rules.
+// RuntimeRoleName выводит locator ресурса Role по аренде, а не право создавать правила.
 func RuntimeRoleName(leaseRef string) string {
 	return runtimeResourceName("runtime-role-", leaseRef)
 }
 
+// RuntimeRoleBindingName derives the lease-scoped binding resource locator without assigning permissions.
+// RuntimeRoleBindingName выводит locator привязки по аренде без назначения полномочий.
 func RuntimeRoleBindingName(leaseRef string) string {
 	return runtimeResourceName("runtime-rb-", leaseRef)
 }
 
+// RuntimeNetworkPolicyName derives the execution network-policy resource name from its lease identity.
+// RuntimeNetworkPolicyName выводит имя сетевой политики исполнения из идентичности аренды.
 func RuntimeNetworkPolicyName(leaseRef string) string {
 	return runtimeResourceName("runtime-net-", leaseRef)
 }
 
+// validateRuntimeResources enforces fixed CPU, memory, and storage admission bounds with limits at least requests.
+// validateRuntimeResources проверяет фиксированные пределы CPU, памяти и диска и требует limits не ниже requests.
 func validateRuntimeResources(value RuntimeResourcePolicy) error {
 	if value.CPURequestMilli < 100 || value.CPURequestMilli > 8000 || value.CPULimitMilli < value.CPURequestMilli || value.CPULimitMilli > 16000 ||
 		value.MemoryRequestMiB < 128 || value.MemoryRequestMiB > 32768 || value.MemoryLimitMiB < value.MemoryRequestMiB || value.MemoryLimitMiB > 65536 ||
@@ -337,6 +425,10 @@ func validateRuntimeResources(value RuntimeResourcePolicy) error {
 	return nil
 }
 
+// validateRuntimeVolumes checks a list already sorted by normalization for bounded ephemeral volumes,
+// adjacent duplicate names, and collisions with reserved platform mounts.
+// validateRuntimeVolumes проверяет уже отсортированные нормализацией временные тома, их пределы,
+// соседние повторные имена и совпадения с платформенными томами.
 func validateRuntimeVolumes(values []RuntimeVolume) error {
 	if len(values) > 16 {
 		return errors.New("runtime volume limit exceeded")
@@ -351,6 +443,10 @@ func validateRuntimeVolumes(values []RuntimeVolume) error {
 	return nil
 }
 
+// validateRuntimeNetwork requires deny-by-default and the four exact service destination/protocol/port tuples
+// before validating optional web access; additional or missing links fail closed.
+// validateRuntimeNetwork требует deny-by-default и четыре точные служебные тройки назначения, протокола и порта
+// до проверки веб-доступа; лишние или отсутствующие связи закрыто отклоняются.
 func validateRuntimeNetwork(value RuntimeNetworkPolicy) error {
 	if !value.DenyByDefault || len(value.Egress) != 4 {
 		return errors.New("runtime network policy must be deny-by-default")
@@ -375,6 +471,8 @@ func validateRuntimeNetwork(value RuntimeNetworkPolicy) error {
 	return validateRuntimeWebAccess(value.WebAccess)
 }
 
+// validateRuntimeWebAccess checks mode-compatible rule counts, scoped domains, HTTPS/443, and exact method subsets.
+// validateRuntimeWebAccess проверяет число правил режима, доменные шаблоны, HTTPS/443 и точные подмножества методов.
 func validateRuntimeWebAccess(value RuntimeWebAccess) error {
 	if !containsString([]string{RuntimeWebAccessNone, RuntimeWebAccessAllowlistReadOnly, RuntimeWebAccessAllowlistFull, RuntimeWebAccessFullPublic}, value.Mode) {
 		return errors.New("runtime web access mode is invalid")
@@ -409,6 +507,8 @@ func validateRuntimeWebAccess(value RuntimeWebAccess) error {
 	return nil
 }
 
+// runtimeWebAccessMethods returns a fresh closed method set, narrowing read-only mode to GET/HEAD/OPTIONS.
+// runtimeWebAccessMethods возвращает новый закрытый набор методов, сужая режим чтения до GET/HEAD/OPTIONS.
 func runtimeWebAccessMethods(mode string) []string {
 	if mode == RuntimeWebAccessAllowlistReadOnly {
 		return []string{RuntimeHTTPMethodGet, RuntimeHTTPMethodHead, RuntimeHTTPMethodOptions}
@@ -416,6 +516,10 @@ func runtimeWebAccessMethods(mode string) []string {
 	return []string{RuntimeHTTPMethodDelete, RuntimeHTTPMethodGet, RuntimeHTTPMethodHead, RuntimeHTTPMethodOptions, RuntimeHTTPMethodPatch, RuntimeHTTPMethodPost, RuntimeHTTPMethodPut}
 }
 
+// validRuntimeDomainPattern accepts canonical multi-label domains with an optional scoped wildcard,
+// rejecting IP literals, global wildcards, credentials, ports, and path syntax.
+// validRuntimeDomainPattern допускает канонические составные домены с ограниченным wildcard,
+// отклоняя IP, общий wildcard, учётные данные, порты и синтаксис путей.
 func validRuntimeDomainPattern(value string) bool {
 	if value == "" || value == "*" || len(value) > 253 || strings.ContainsAny(value, "/:@ \\") {
 		return false
@@ -441,6 +545,8 @@ func validRuntimeDomainPattern(value string) bool {
 	return true
 }
 
+// digestRuntimeResources binds integer resource quantities and any explicit workspace quota to their version tag.
+// digestRuntimeResources связывает целые ресурсные значения и явные квоты workspace с версионным тегом.
 func digestRuntimeResources(value RuntimeResourcePolicy) string {
 	parts := []string{"resources-v1", strconv.FormatInt(value.CPURequestMilli, 10), strconv.FormatInt(value.CPULimitMilli, 10),
 		strconv.FormatInt(value.MemoryRequestMiB, 10), strconv.FormatInt(value.MemoryLimitMiB, 10),
@@ -451,6 +557,8 @@ func digestRuntimeResources(value RuntimeResourcePolicy) string {
 	return digestParts(parts...)
 }
 
+// digestRuntimeVolumes hashes the ordered volume names, kinds, sizes, and fixed mount locations.
+// digestRuntimeVolumes хеширует упорядоченные имена, виды, размеры и фиксированные пути томов.
 func digestRuntimeVolumes(values []RuntimeVolume) string {
 	parts := []string{"volumes-v1"}
 	for _, value := range values {
@@ -459,6 +567,8 @@ func digestRuntimeVolumes(values []RuntimeVolume) string {
 	return digestParts(parts...)
 }
 
+// digestRuntimeNetwork pins ordered service egress, public-web mode, domain rules, and HTTP methods.
+// digestRuntimeNetwork закрепляет порядок служебных связей, веб-режим, доменные правила и HTTP-методы.
 func digestRuntimeNetwork(value RuntimeNetworkPolicy) string {
 	parts := []string{"network-v2", strconv.FormatBool(value.DenyByDefault)}
 	for _, item := range value.Egress {
@@ -472,10 +582,14 @@ func digestRuntimeNetwork(value RuntimeNetworkPolicy) string {
 	return digestParts(parts...)
 }
 
+// digestRuntimeKubernetesProfile hashes the profile kind and server namespace under a separate domain tag.
+// digestRuntimeKubernetesProfile хеширует вид профиля и серверное пространство имён с отдельным тегом.
 func digestRuntimeKubernetesProfile(value RuntimeKubernetesAccessProfile) string {
 	return digestParts("rbac-profile-v1", value.Kind, value.Namespace)
 }
 
+// digestRuntimeKubernetesAccess binds the effective ServiceAccount identity and ordered rule fields.
+// digestRuntimeKubernetesAccess связывает эффективную идентичность ServiceAccount и упорядоченные поля правил.
 func digestRuntimeKubernetesAccess(value RuntimeKubernetesAccess) string {
 	parts := []string{"rbac-effective-v1", value.Profile.Kind, value.Profile.Namespace, value.ServiceAccountName}
 	for _, rule := range value.Rules {
@@ -486,6 +600,8 @@ func digestRuntimeKubernetesAccess(value RuntimeKubernetesAccess) string {
 	return digestParts(parts...)
 }
 
+// digestParts hashes ordered NUL-terminated fields, including the version/domain tag supplied by its caller.
+// digestParts хеширует упорядоченные поля с NUL-разделителями, включая переданный вызывающим версионный тег.
 func digestParts(parts ...string) string {
 	var payload bytes.Buffer
 	for _, part := range parts {
@@ -496,6 +612,8 @@ func digestParts(parts ...string) string {
 	return hex.EncodeToString(digest[:])
 }
 
+// runtimeKubernetesRulePodName supplies the NONE placeholder or extracts the sole name from the first rule.
+// runtimeKubernetesRulePodName возвращает заполнитель NONE либо единственное имя из первого правила.
 func runtimeKubernetesRulePodName(rules []RuntimeKubernetesRule) string {
 	if len(rules) == 0 {
 		return "runtime-no-access"
@@ -506,6 +624,8 @@ func runtimeKubernetesRulePodName(rules []RuntimeKubernetesRule) string {
 	return rules[0].ResourceNames[0]
 }
 
+// equalRuntimeKubernetesRules compares rule order, API resources, verbs, and exact named-resource lists.
+// equalRuntimeKubernetesRules сравнивает порядок правил, API-ресурсы, действия и точные списки имён ресурсов.
 func equalRuntimeKubernetesRules(left, right []RuntimeKubernetesRule) bool {
 	if len(left) != len(right) {
 		return false
@@ -520,22 +640,14 @@ func equalRuntimeKubernetesRules(left, right []RuntimeKubernetesRule) bool {
 	return true
 }
 
+// validDNSLabelContract accepts a bounded lowercase ASCII DNS label without leading or trailing hyphens.
+// validDNSLabelContract допускает ограниченную строчную ASCII DNS-label без дефиса в начале или конце.
 func validDNSLabelContract(value string) bool {
-	if value == "" || len(value) > 63 || strings.HasPrefix(value, "-") || strings.HasSuffix(value, "-") {
-		return false
-	}
-	for _, character := range value {
-		if character < 'a' || character > 'z' {
-			if character < '0' || character > '9' {
-				if character != '-' {
-					return false
-				}
-			}
-		}
-	}
-	return true
+	return ValidDNSLabel(value)
 }
 
+// runtimeResourceName appends the first eight SHA-256 bytes of an identity to the fixed resource prefix.
+// runtimeResourceName добавляет первые восемь байтов SHA-256 идентичности к фиксированному префиксу ресурса.
 func runtimeResourceName(prefix, identity string) string {
 	digest := sha256.Sum256([]byte(identity))
 	return prefix + hex.EncodeToString(digest[:8])

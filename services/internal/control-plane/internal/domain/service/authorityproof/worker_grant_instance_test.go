@@ -8,6 +8,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestVerifyWorkerGrantInstanceCompatibility exercises the existing v1/v2 instance rules with locally
+// signed grants, rejecting injected/malformed instance IDs, revision/time mismatch, expiry, generation
+// and foreign workload without changing supported formats.
+// TestVerifyWorkerGrantInstanceCompatibility проверяет существующие правила экземпляров v1 и v2 локально
+// подписанными grant, отклоняя внедрённые или неверные ID, несовпадение ревизии и времени, истечение,
+// поколение и чужую нагрузку без изменения поддерживаемых форматов.
 func TestVerifyWorkerGrantInstanceCompatibility(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	key, err := internalrpcauth.GenerateES256Key("runtime-controller-platform-worker-g1")

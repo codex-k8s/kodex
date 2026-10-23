@@ -8,15 +8,26 @@ import (
 	"time"
 )
 
+// databaseRetryDelay spaces only transient connection probes; migration SQL is never retried by this wait loop.
+// databaseRetryDelay разделяет только временно отказавшие проверки соединения; SQL миграций этим циклом никогда не повторяется.
 const databaseRetryDelay = time.Second
 
+// connectionWaitFailure retains the last network cause and the exhausted caller budget for separate safe diagnostic classification.
+// connectionWaitFailure сохраняет последнюю сетевую причину и исчерпанный бюджет вызывающего для раздельной безопасной классификации.
 type connectionWaitFailure struct{ cause, budget error }
 
-func (*connectionWaitFailure) Error() string     { return "database connection wait exhausted" }
+// Error returns a fixed wait-exhaustion message without formatting network hostnames, DSNs or nested errors.
+// Error возвращает фиксированное сообщение об исчерпании ожидания без сетевых имён, DSN или форматирования вложенных ошибок.
+func (*connectionWaitFailure) Error() string { return "database connection wait exhausted" }
+
+// Unwrap exposes both typed causes for internal errors.Is/As inspection, not for printing private details.
+// Unwrap раскрывает обе типизированные причины для внутренних errors.Is/As, не для печати закрытых подробностей.
 func (e *connectionWaitFailure) Unwrap() []error { return []error{e.cause, e.budget} }
 
-// Ожидание относится только к Ping; миграция вызывается единожды после успеха
-// и использует остаток исходного бюджета, без перезапуска SQL.
+// withReadyDatabase retries only classified transient ping failures under the unchanged caller context and runs apply once after success.
+// Permanent failures, cancellation or exhausted budget stop before apply; an apply error is returned without restarting SQL.
+// withReadyDatabase повторяет только классифицированные временные отказы ping в неизменном контексте и однократно запускает apply после успеха.
+// Постоянный отказ, отмена или исчерпание бюджета останавливают вызов до apply; его ошибка возвращается без повторного SQL.
 func withReadyDatabase(ctx context.Context, ping func(context.Context) error, apply func(context.Context) error, delay time.Duration) error {
 	var last error
 	for {
@@ -51,6 +62,8 @@ func withReadyDatabase(ctx context.Context, ping func(context.Context) error, ap
 	}
 }
 
+// retryableConnection admits only the explicit transient DNS/network classes after the shared classifier excludes TLS, authentication and config errors.
+// retryableConnection допускает только явные временные DNS/network-классы после исключения общим классификатором TLS, auth и config-ошибок.
 func retryableConnection(err error) bool {
 	// Общая диагностика знает permanent SQL/TLS/configuration до сетевых wrappers.
 	switch failureClass(err) {
@@ -61,6 +74,8 @@ func retryableConnection(err error) bool {
 	}
 }
 
+// networkFailureClass maps typed DNS conditions and known syscall errors to fixed labels; arbitrary network error text is never emitted.
+// networkFailureClass переводит типизированные состояния DNS и известные syscall-ошибки в фиксированные метки; произвольный текст сетевой ошибки не выводится.
 func networkFailureClass(err error) string {
 	var dns *net.DNSError
 	if errors.As(err, &dns) {

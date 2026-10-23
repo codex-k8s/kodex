@@ -19,6 +19,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// GetAgentRuntimeConfiguration bounds the read to five seconds, resolves the exact editable/system agent target and authority-project boundary, requires its current permission and returns the enriched view in a read-only repeatable-read transaction. Infrastructure/commit failures are not converted into a successful view.
+// GetAgentRuntimeConfiguration ограничивает чтение пятью секундами, разрешает точную цель обычного/системного агента и authority-project границу, требует текущее полномочие и возвращает дополненный view в read-only repeatable-read транзакции. Инфраструктурный отказ и ошибка commit успешным view не становятся.
 func (repository *Repository) GetAgentRuntimeConfiguration(ctx context.Context, principal value.Principal, ref string) (entity.AgentRuntimeConfigurationView, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -51,6 +53,8 @@ func (repository *Repository) GetAgentRuntimeConfiguration(ctx context.Context, 
 	return view, nil
 }
 
+// ListAgentRuntimeConfigurations lists exact agent config/policy versions through the existing scoped SQL row rule and positive version cursor, collecting one extra row before trimming and emitting the next version token. Typed scan/iteration failures remain Unavailable; callers do not gain edit rights from a listed version.
+// ListAgentRuntimeConfigurations перечисляет точные версии config/policy агента через прежнее scoped SQL условие и положительный курсор версии, собирая дополнительную строку до обрезки и выдачи следующего токена. Ошибки чтения/итерации остаются Unavailable; перечисленная версия не даёт права изменения.
 func (repository *Repository) ListAgentRuntimeConfigurations(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.AgentRuntimeConfiguration, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -69,16 +73,9 @@ func (repository *Repository) ListAgentRuntimeConfigurations(ctx context.Context
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	items := make([]entity.AgentRuntimeConfiguration, 0, limit+1)
-	for rows.Next() {
-		item, scanErr := scanAgentRuntimeConfiguration(rows)
-		if scanErr != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		items = append(items, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
+	items, err := scanRuntimeVersionRows(rows, limit, scanAgentRuntimeConfiguration)
+	if err != nil {
+		return nil, "", err
 	}
 	next := ""
 	if len(items) > int(limit) {
@@ -88,6 +85,8 @@ func (repository *Repository) ListAgentRuntimeConfigurations(ctx context.Context
 	return items, next, nil
 }
 
+// ListRuntimeEnvironments uses authorizedCatalog for scoped environment metadata, exact row eligibility and action projection; its typed SQL fetcher verifies stored content/digests before returning a page. Project-manage, disable and delete hints are evaluated separately and never authorize a mutation by themselves.
+// ListRuntimeEnvironments использует authorizedCatalog для scoped метаданных окружений, точной доступности строк и действий; типизированный SQL fetcher проверяет сохранённое содержимое/digest до страницы. Project-manage, disable и delete подсказки вычисляются отдельно и сами не разрешают изменение.
 func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentSet, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -122,6 +121,8 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 		})
 }
 
+// GetRuntimeEnvironment uses the shared exact environment read, computes current action hints in the same snapshot and commits before returning metadata. The deferred rollback still closes every early-failure path; secret descriptors do not expose secret values.
+// GetRuntimeEnvironment использует общее точное чтение окружения, вычисляет текущие action hints в том же snapshot и делает commit до возврата метаданных. Отложенный rollback закрывает ранние отказы; дескрипторы секретов не раскрывают значения.
 func (repository *Repository) GetRuntimeEnvironment(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentSet, error) {
 	current, tx, item, err := repository.runtimeEnvironmentRead(ctx, principal, ref)
 	if err != nil {
@@ -138,6 +139,8 @@ func (repository *Repository) GetRuntimeEnvironment(ctx context.Context, princip
 	return item, nil
 }
 
+// runtimeEnvironmentRead resolves the verified scope and exact ENVIRONMENT context before scanning its stored snapshot in a read-only repeatable-read transaction, with extra organization-owner access for shared environments. Failures roll back locally; success transfers the open transaction to the caller for further read/commit work.
+// runtimeEnvironmentRead разрешает проверенную область и точный ENVIRONMENT context перед чтением сохранённого snapshot в read-only repeatable-read транзакции с дополнительным organization-owner доступом для общих окружений. При отказе выполняет rollback; при успехе передаёт открытую транзакцию вызывающему для дальнейшего чтения/commit.
 func (repository *Repository) runtimeEnvironmentRead(
 	ctx context.Context,
 	principal value.Principal,
@@ -173,6 +176,8 @@ func (repository *Repository) runtimeEnvironmentRead(
 	return scope, tx, item, nil
 }
 
+// runtimeEnvironmentActions projects state and independently supplied manage/disable/delete booleans into ordered UI actions, returning an empty list for DELETED and permitting DELETE only while DISABLED. It does not check actual bindings, fresh authentication or command authority.
+// runtimeEnvironmentActions проецирует состояние и отдельно переданные manage/disable/delete признаки в упорядоченные UI-действия, возвращая пустой список для DELETED и DELETE лишь при DISABLED. Реальные привязки, свежую аутентификацию и полномочия команды не проверяет.
 func runtimeEnvironmentActions(item entity.RuntimeEnvironmentSet, canManage, canDisable, canDelete bool) []string {
 	if item.State == "DELETED" {
 		return []string{}
@@ -197,6 +202,8 @@ func runtimeEnvironmentActions(item entity.RuntimeEnvironmentSet, canManage, can
 	return actions
 }
 
+// runtimeEnvironmentActions requires organization-owner access for shared environment hints, otherwise resolves actor bindings plus exact project/environment targets at one evaluation time. Organization hints intentionally omit enable/disable/delete; every real mutation must recheck its own authority and lifecycle.
+// runtimeEnvironmentActions требует organization-owner доступ для подсказок общего окружения, иначе разрешает actor bindings и точные project/environment targets с единым временем оценки. Общие окружения намеренно не получают enable/disable/delete hints; реальное изменение повторно проверяет собственные полномочия и жизненный цикл.
 func (repository *Repository) runtimeEnvironmentActions(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -237,6 +244,8 @@ func (repository *Repository) runtimeEnvironmentActions(
 		allowed("runtime.environment.disable", environment), allowed("runtime.environment.delete", environment)), nil
 }
 
+// ListRuntimeEnvironmentVersions authorizes the exact environment through runtimeEnvironmentRead, collects the scoped descending version page and closes SQL rows before cursor construction and transaction commit. Stored revision decoding/digest failure blocks the page rather than returning a partial successful history.
+// ListRuntimeEnvironmentVersions авторизует точное окружение через runtimeEnvironmentRead, собирает scoped страницу версий по убыванию и закрывает SQL rows до построения курсора и commit. Ошибка разбора сохранённой ревизии/digest блокирует страницу вместо частично успешной истории.
 func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error) {
 	before, err := versionCursor(filter.Page.Token)
 	if err != nil || filter.ResourceRef == "" {
@@ -256,16 +265,9 @@ func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	items := make([]entity.RuntimeEnvironmentVersion, 0, limit+1)
-	for rows.Next() {
-		item, scanErr := scanRuntimeEnvironmentVersion(rows)
-		if scanErr != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		items = append(items, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
+	items, err := scanRuntimeVersionRows(rows, limit, scanRuntimeEnvironmentVersion)
+	if err != nil {
+		return nil, "", err
 	}
 	rows.Close()
 	next := ""
@@ -279,6 +281,8 @@ func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context
 	return items, next, nil
 }
 
+// ListTemplateVariables builds the server-owned variable schema catalog with context-derived availability/reasons under a five-second budget, validating project access, bounded UTF-8 filters and a scope/filter-bound cursor. It returns schema/presentation metadata with pagination, not runtime values or additional file/integration grants.
+// ListTemplateVariables строит серверный каталог схем переменных с availability/reasons из контекста под пятисекундным бюджетом, проверяя доступ проекта, ограниченные UTF-8 фильтры и scope/filter-bound cursor. Возвращает schema/presentation метаданные с пагинацией, а не runtime значения и дополнительные file/integration grants.
 func (repository *Repository) ListTemplateVariables(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.TemplateVariable, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -340,11 +344,15 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	return items, total, next, nil
 }
 
+// templateVariableMatchesFilter matches the already normalized query against lowercase variable name/description and an optional exact source kind, without mutating catalog entries or determining runtime availability.
+// templateVariableMatchesFilter сопоставляет уже нормализованный запрос с lowercase именем/описанием переменной и необязательным точным source kind без изменения каталога и определения runtime-доступности.
 func templateVariableMatchesFilter(item entity.TemplateVariable, normalizedQuery, source string) bool {
 	return (source == "" || item.Source == source) &&
 		(normalizedQuery == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), normalizedQuery))
 }
 
+// validTemplateVariableSourceKind accepts the closed source-kind filter vocabulary plus an empty all-sources selector; unsupported source text is rejected before catalog pagination.
+// validTemplateVariableSourceKind принимает закрытый набор source-kind фильтров и пустой выбор всех источников; неподдержанный текст отклоняется до пагинации каталога.
 func validTemplateVariableSourceKind(source string) bool {
 	switch source {
 	case "", "AGENT", "AUTOMATION", "GATE", "INPUT", "ORGANIZATION", "PROJECT", "RUN", "RUNTIME", "SESSION", "USER", "WORKFLOW":
@@ -354,6 +362,8 @@ func validTemplateVariableSourceKind(source string) bool {
 	}
 }
 
+// templateVariableCatalog allocates a fresh name-sorted set of scalar/object/collection schemas for the supported server-owned prompt variables, including file/tool/integration descriptor fields and rendering examples. Declaring a variable grants no access and does not materialize its context value or files.
+// templateVariableCatalog выделяет новый отсортированный по имени набор scalar/object/collection схем поддержанных серверных переменных промпта с file/tool/integration descriptor полями и примерами. Объявление переменной доступа не даёт и её контекстное значение либо файлы не материализует.
 func templateVariableCatalog() []entity.TemplateVariable {
 	items := []entity.TemplateVariable{
 		{Name: "agent.name", Type: "string", Description: "Server-owned имя текущего ИИ-сотрудника", Example: "{{ .agent.name }}", Source: "AGENT"},
@@ -424,6 +434,8 @@ func templateVariableCatalog() []entity.TemplateVariable {
 	return items
 }
 
+// promptFileCollection constructs the fixed file-descriptor collection schema and range example for a supplied catalog name/source. Its fields describe immutable artifact pins and workspace paths; it performs no lookup, download, mount or authority assignment.
+// promptFileCollection строит фиксированную схему коллекции file descriptors и range-пример для переданных имени/источника каталога. Поля описывают неизменяемые artifact pins и пути workspace; поиск, скачивание, mount и назначение полномочий не выполняются.
 func promptFileCollection(name, description, source string) entity.TemplateVariable {
 	rangeExample := "{{ range ." + name + " }}{{ .name }}: {{ .path }}{{ end }}"
 	return entity.TemplateVariable{
@@ -444,6 +456,8 @@ func promptFileCollection(name, description, source string) entity.TemplateVaria
 	}
 }
 
+// scanAgentRuntimeConfiguration decodes the fixed runtime config/policy row and its stored candidate JSON, mapping either scan or candidate-decoding failure to the existing fixed error. It does not select an account or validate current provider/model availability.
+// scanAgentRuntimeConfiguration читает фиксированную runtime config/policy строку и сохранённый JSON кандидатов, заменяя ошибку чтения либо разбора кандидатов прежней фиксированной ошибкой. Аккаунт не выбирает и текущую доступность provider/model не проверяет.
 func scanAgentRuntimeConfiguration(scanner rowScanner) (entity.AgentRuntimeConfiguration, error) {
 	var item entity.AgentRuntimeConfiguration
 	var rawCandidates []byte
@@ -456,6 +470,8 @@ func scanAgentRuntimeConfiguration(scanner rowScanner) (entity.AgentRuntimeConfi
 	return item, nil
 }
 
+// scanAgentRuntimeConfigurationView decodes the composed config/overlay/environment row, normalizes version aliases, verifies stored policy and image-present content digests, and derives readiness plus safe effective config. Only the existing projectless absent-image exception skips image digests; internal role-contract pins are cleared from the returned projection and caller authorization remains separate.
+// scanAgentRuntimeConfigurationView разбирает составную config/overlay/environment строку, нормализует псевдонимы версий, проверяет policy и digest содержимого при наличии образа, вычисляя readiness и safe effective config. Лишь прежнее отсутствие образа без проекта пропускает image digests; внутренние role-contract pins очищаются из результата, а авторизация выполняется отдельно.
 func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeConfigurationView, error) {
 	var view entity.AgentRuntimeConfigurationView
 	var rawCandidates, rawPublishedProblems, rawDraftProblems, rawValues, rawSecrets, rawTools []byte
@@ -509,9 +525,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 	}
 	values, secrets := runtimeEnvironmentContract(view.Environment.CurrentVersion)
 	if view.Environment.CurrentVersion.Image.Reference != "" {
-		storedCore, storedDigest, digestErr := runtimeEnvironmentConfigurationDigests(values, secrets,
-			view.Environment.CurrentVersion.Image, view.Environment.CurrentVersion.Tools, view.Environment.CurrentVersion.Policy)
-		if digestErr != nil || storedCore != coreDigest || storedDigest != view.Environment.CurrentVersion.Digest {
+		if !runtimeEnvironmentVersionDigestsMatch(values, secrets, view.Environment.CurrentVersion, coreDigest) {
 			return entity.AgentRuntimeConfigurationView{}, errors.New("runtime environment digest mismatch")
 		}
 	} else if view.Environment.ProjectRef != "" {
@@ -548,6 +562,8 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 	return view, nil
 }
 
+// scanRuntimeEnvironment decodes the exact environment/current-version SQL projection, validates JSON/policy and both content digests before deriving readiness. It clears internal role-contract pins only after validation and returns the existing fixed errors on malformed stored content; row visibility is the caller/query responsibility.
+// scanRuntimeEnvironment разбирает точную environment/current-version SQL-проекцию, проверяет JSON/policy и оба digest содержимого до вычисления readiness. Очищает внутренние role-contract pins лишь после проверки и возвращает прежние фиксированные ошибки повреждённых данных; видимость строки обеспечивает вызывающий/запрос.
 func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, error) {
 	var item entity.RuntimeEnvironmentSet
 	var rawValues, rawSecrets, rawTools, rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
@@ -579,9 +595,7 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 		return entity.RuntimeEnvironmentSet{}, err
 	}
 	values, secrets := runtimeEnvironmentContract(item.CurrentVersion)
-	storedCore, storedDigest, digestErr := runtimeEnvironmentConfigurationDigests(values, secrets, item.CurrentVersion.Image,
-		item.CurrentVersion.Tools, item.CurrentVersion.Policy)
-	if digestErr != nil || storedCore != coreDigest || storedDigest != item.CurrentVersion.Digest {
+	if !runtimeEnvironmentVersionDigestsMatch(values, secrets, item.CurrentVersion, coreDigest) {
 		return entity.RuntimeEnvironmentSet{}, errors.New("runtime environment digest mismatch")
 	}
 	readiness := repository.runtimeEnvironmentReadiness(item)
@@ -592,6 +606,8 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 	return item, nil
 }
 
+// scanRuntimeEnvironmentVersion decodes immutable version values, secret/tool descriptors and policy, verifies exact core/full digests and preserves the stored revision as the public version alias. It performs no readiness or authority decision and retains version-specific decode/digest errors.
+// scanRuntimeEnvironmentVersion разбирает неизменяемые значения версии, secret/tool descriptors и policy, проверяет точные core/full digest и сохраняет ревизию как публичный псевдоним версии. Readiness и полномочия не определяет, сохраняя отдельные decode/digest ошибки версии.
 func scanRuntimeEnvironmentVersion(scanner rowScanner) (entity.RuntimeEnvironmentVersion, error) {
 	var item entity.RuntimeEnvironmentVersion
 	var rawValues, rawSecrets, rawTools, rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
@@ -616,13 +632,38 @@ func scanRuntimeEnvironmentVersion(scanner rowScanner) (entity.RuntimeEnvironmen
 		return entity.RuntimeEnvironmentVersion{}, err
 	}
 	values, secrets := runtimeEnvironmentContract(item)
-	storedCore, storedDigest, digestErr := runtimeEnvironmentConfigurationDigests(values, secrets, item.Image, item.Tools, item.Policy)
-	if digestErr != nil || storedCore != coreDigest || storedDigest != item.Digest {
+	if !runtimeEnvironmentVersionDigestsMatch(values, secrets, item, coreDigest) {
 		return entity.RuntimeEnvironmentVersion{}, errors.New("runtime environment version digest mismatch")
 	}
 	return item, nil
 }
 
+// scanRuntimeVersionRows collects the supplied bounded-query rows using the exact typed version decoder, preserving row order and mapping scan/iteration failures to Unavailable without returning partial success. It allocates limit+1 capacity for caller pagination; query bounds, row Close and transaction commit remain caller-owned.
+// scanRuntimeVersionRows собирает строки переданного ограниченного запроса точным типизированным декодером версий, сохраняя порядок и заменяя ошибки чтения/итерации на Unavailable без частичного успеха. Выделяет capacity limit+1 для пагинации; границы запроса, Close rows и commit транзакции остаются у вызывающего.
+func scanRuntimeVersionRows[T any](rows pgx.Rows, limit int32, scan func(rowScanner) (T, error)) ([]T, error) {
+	items := make([]T, 0, limit+1)
+	for rows.Next() {
+		item, err := scan(rows)
+		if err != nil {
+			return nil, errs.ErrUnavailable
+		}
+		items = append(items, item)
+	}
+	if rows.Err() != nil {
+		return nil, errs.ErrUnavailable
+	}
+	return items, nil
+}
+
+// runtimeEnvironmentVersionDigestsMatch checks both stored core and full-policy digests against the canonical version inputs, returning false on contract validation error or either mismatch. It neither mutates data nor chooses the caller-specific absent-image exception or public error text.
+// runtimeEnvironmentVersionDigestsMatch сверяет сохранённые core и full-policy digest с каноническими входами версии, возвращая false при ошибке контракта или любом несовпадении. Данные не меняет и не выбирает исключение отсутствующего образа либо публичный текст ошибки вызывающего.
+func runtimeEnvironmentVersionDigestsMatch(values []runtimecontract.RuntimeEnvironmentValue, secrets []runtimecontract.RuntimeSecretProjection, version entity.RuntimeEnvironmentVersion, coreDigest string) bool {
+	actualCore, actualFull, err := runtimeEnvironmentConfigurationDigests(values, secrets, version.Image, version.Tools, version.Policy)
+	return err == nil && actualCore == coreDigest && actualFull == version.Digest
+}
+
+// decodeRuntimeEnvironmentPolicy decodes all four stored policy sections, normalizes them through the shared runtime contract and requires every resource/volume/network/RBAC digest to match. Any malformed section or mismatch returns the existing fixed error without trusting the stored digests as authority.
+// decodeRuntimeEnvironmentPolicy разбирает четыре сохранённые секции policy, нормализует общим runtime-контрактом и требует совпадения каждого resource/volume/network/RBAC digest. Повреждённая секция или несовпадение возвращает прежнюю фиксированную ошибку; сохранённые digest полномочиями не считаются.
 func decodeRuntimeEnvironmentPolicy(
 	rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte,
 	resourcesDigest, volumesDigest, networkDigest, rbacDigest string,
@@ -640,6 +681,8 @@ func decodeRuntimeEnvironmentPolicy(
 	return normalized, nil
 }
 
+// runtimeEnvironmentContract copies non-secret values and secret object-identity/digest descriptors in their original order into non-nil runtime-contract slices, including empty input. It does not read secret material, reorder bindings or validate ownership.
+// runtimeEnvironmentContract копирует несекретные значения и secret object-identity/digest дескрипторы в исходном порядке в non-nil runtime-contract срезы, включая пустой вход. Значения секретов не читает, привязки не сортирует и владение не проверяет.
 func runtimeEnvironmentContract(version entity.RuntimeEnvironmentVersion) ([]runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection) {
 	values := make([]runtimecontract.RuntimeEnvironmentValue, 0, len(version.Values))
 	for _, item := range version.Values {
@@ -654,6 +697,8 @@ func runtimeEnvironmentContract(version entity.RuntimeEnvironmentVersion) ([]run
 	return values, secrets
 }
 
+// decodeStrict decodes one stored JSON value with DisallowUnknownFields and a fixed error on failure. This existing helper does not explicitly enforce EOF or reject duplicate object keys; callers must not treat its name as proof of those additional guards.
+// decodeStrict разбирает одно сохранённое JSON-значение с DisallowUnknownFields и фиксированной ошибкой при отказе. Существующий helper явно не проверяет EOF и не отклоняет повторные ключи объекта; его имя не доказывает наличие этих дополнительных guards.
 func decodeStrict(raw []byte, target any) error {
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
@@ -663,6 +708,8 @@ func decodeStrict(raw []byte, target any) error {
 	return nil
 }
 
+// versionCursor maps an empty initial cursor to zero and otherwise parses a positive signed decimal int64, rejecting parse errors and nonpositive values. The numeric position is not a signature or proof of resource access.
+// versionCursor преобразует пустой начальный курсор в ноль, иначе разбирает положительный знаковый десятичный int64, отклоняя ошибку разбора и неположительное значение. Числовая позиция не является подписью и доказательством доступа к ресурсу.
 func versionCursor(token string) (int64, error) {
 	if token == "" {
 		return 0, nil

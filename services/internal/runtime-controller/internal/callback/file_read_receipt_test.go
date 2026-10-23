@@ -12,6 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// actualFileReadResult obtains a genuine local handler-produced typed read result
+// with private receipt evidence from a synthetic source, not a JSON-reconstructed proof.
+// actualFileReadResult получает настоящий local handler-produced typed read result
+// с private receipt evidence synthetic source,не JSON-reconstructed proof.
 func actualFileReadResult(t *testing.T) (fileReadFixture, map[string]any, fileReadToolResult) {
 	t.Helper()
 	fixture := newFileReadFixture(t, []byte("PRIVATE_RECEIPT_CONTENT_CANARY-я😀"), "")
@@ -27,6 +31,12 @@ func actualFileReadResult(t *testing.T) (fileReadFixture, map[string]any, fileRe
 	return fixture, arguments, value
 }
 
+// TestReadFileReceiptRejectsUntrustedResultBeforeTerminalWrite checks nil/maps/JSON/
+// evidence-free typed values cannot yield a successful terminal audit or bypass
+// the bound receipt path through generic safe-result fallback.
+// TestReadFileReceiptRejectsUntrustedResultBeforeTerminalWrite проверяет запрет successful
+// terminal audit и generic safe-result fallback для nil/maps/JSON и evidence-free
+// typed values вместо bound receipt path.
 func TestReadFileReceiptRejectsUntrustedResultBeforeTerminalWrite(t *testing.T) {
 	fixture, arguments, value := actualFileReadResult(t)
 	wire, err := json.Marshal(value)
@@ -48,6 +58,12 @@ func TestReadFileReceiptRejectsUntrustedResultBeforeTerminalWrite(t *testing.T) 
 	}
 }
 
+// TestReadFileReceiptRejectsBindingAndMalformedMetadata mutates execution/catalog/
+// request/receipt pins, integer/page bounds and private selectors, checking every
+// mismatch fails before any success projection reaches the recording owner double.
+// TestReadFileReceiptRejectsBindingAndMalformedMetadata меняет execution/catalog/request/
+// receipt pins,integer/page bounds/private selectors,проверяя отказ каждого mismatch
+// до success projection recording owner double.
 func TestReadFileReceiptRejectsBindingAndMalformedMetadata(t *testing.T) {
 	mutations := []struct {
 		name  string
@@ -130,6 +146,12 @@ func TestReadFileReceiptRejectsBindingAndMalformedMetadata(t *testing.T) {
 	}
 }
 
+// TestReadFileReceiptPreservesWireAndContainsOnlyWhitelistedMetadata checks public
+// wire JSON is unchanged even with extra private metadata, while the safe terminal
+// receipt has exactly fifteen bounded fields and contains none of those private values.
+// TestReadFileReceiptPreservesWireAndContainsOnlyWhitelistedMetadata проверяет неизменный
+// public wire JSON даже с extra private metadata и ровно пятнадцать bounded fields
+// safe terminal receipt без этих private values.
 func TestReadFileReceiptPreservesWireAndContainsOnlyWhitelistedMetadata(t *testing.T) {
 	fixture, arguments, result := actualFileReadResult(t)
 	// Такие данные остаются только в существующем MCP ответе, не в квитанции.
@@ -162,6 +184,12 @@ func TestReadFileReceiptPreservesWireAndContainsOnlyWhitelistedMetadata(t *testi
 	}
 }
 
+// TestReadFileReceiptFailureNeverPublishesMetadata checks handler error/cancellation/
+// deadline paths record FAILED with TOOL_UNAVAILABLE rather than publishing successful
+// page metadata; the fake records attempts, not durable database writes.
+// TestReadFileReceiptFailureNeverPublishesMetadata проверяет FAILED/TOOL_UNAVAILABLE
+// handler error/cancellation/deadline paths вместо successful page metadata; fake
+// записывает attempts,не durable database writes.
 func TestReadFileReceiptFailureNeverPublishesMetadata(t *testing.T) {
 	fixture, arguments, result := actualFileReadResult(t)
 	for index, err := range []error{errRuntimeFileReply, context.Canceled, context.DeadlineExceeded} {
@@ -175,6 +203,12 @@ func TestReadFileReceiptFailureNeverPublishesMetadata(t *testing.T) {
 	}
 }
 
+// TestReadFileReceiptMaximumMetadataFitsExistingSafeResultBudget encodes maximum-size
+// valid metadata pins/versions to check the existing two-thousand-byte receipt budget
+// without including body text or private authority fields.
+// TestReadFileReceiptMaximumMetadataFitsExistingSafeResultBudget кодирует maximum-size
+// valid metadata pins/versions в пределах прежнего two-thousand-byte receipt budget
+// без body text/private authority fields.
 func TestReadFileReceiptMaximumMetadataFitsExistingSafeResultBudget(t *testing.T) {
 	receipt := fileReadReceipt{Version: 1, Kind: fileReadReceiptKind, CatalogRef: "vfc_" + strings.Repeat("x", 92), CatalogDigest: strings.Repeat("a", 64),
 		Purpose: runtimecontract.FilePurposeWorkspaceInput, EntryRef: runtimeFileFixtureEntry, ArtifactRef: "art_" + strings.Repeat("x", 92),

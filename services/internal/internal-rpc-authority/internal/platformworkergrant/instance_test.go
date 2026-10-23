@@ -12,6 +12,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestInstanceGrantRotationAndSameSecondRestart requires exact envelope reuse within one second,
+// stable instance with fresh revision/JTI on refresh and rejection after switching the configured
+// instance.
+// TestInstanceGrantRotationAndSameSecondRestart требует сохранения точного конверта в одной секунде,
+// прежнего экземпляра с новой ревизией и JTI при обновлении и отказа после смены настроенного
+// экземпляра.
 func TestInstanceGrantRotationAndSameSecondRestart(t *testing.T) {
 	key, err := internalrpcauth.GenerateES256Key("runtime-controller-platform-worker-g3")
 	if err != nil {
@@ -45,6 +51,11 @@ func TestInstanceGrantRotationAndSameSecondRestart(t *testing.T) {
 	}
 }
 
+// TestGrantReadinessChecksActualExpiryBetweenRefreshTicks drives in-memory HTTP handlers against a
+// local signed file: readiness fails at expiry or corruption while health/live stay available.
+// TestGrantReadinessChecksActualExpiryBetweenRefreshTicks вызывает HTTP handlers в памяти с локальным
+// подписанным файлом: готовность пропадает при истечении или повреждении, а health/live остаются
+// доступны.
 func TestGrantReadinessChecksActualExpiryBetweenRefreshTicks(t *testing.T) {
 	key, err := internalrpcauth.GenerateES256Key("email-bridge-platform-worker-g1")
 	if err != nil {
@@ -79,6 +90,10 @@ func TestGrantReadinessChecksActualExpiryBetweenRefreshTicks(t *testing.T) {
 	probe("/healthz", http.StatusNoContent)
 }
 
+// TestGrantInstanceValidationAndLegacyDefault pins rejection of nil/noncanonical UUIDs and acceptance
+// of the existing empty or canonical-instance inputs, without adding a new fallback protocol.
+// TestGrantInstanceValidationAndLegacyDefault закрепляет отказ для нулевых и неканонических UUID и
+// принятие существующих пустого либо канонического ввода экземпляра, не добавляя запасной протокол.
 func TestGrantInstanceValidationAndLegacyDefault(t *testing.T) {
 	for _, value := range []string{uuid.Nil.String(), "caller-controlled", "ABCDEF00-0000-4000-8000-000000000001"} {
 		if validInstanceID(value) {

@@ -22,23 +22,48 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// caller is the fixture identity of the permitted runtime workload.
+// RU: caller — тестовая идентичность разрешённого runtime workload.
 const caller = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
+
+// target is the fixture identity of the policy-owning RPC service.
+// RU: target — тестовая идентичность сервиса-владельца RPC-политики.
 const target = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+
+// method is the exact privileged RPC operation covered by fixture bindings.
+// RU: method — точный привилегированный RPC-метод тестовых bindings.
 const method = "/controlplane.v1.RuntimeWorkService/ClaimWork"
 
+// revocationCheck counts peer checks and can simulate a fail-closed
+// revocation failure without exposing its private cause to the client.
+// RU: revocationCheck считает проверки peer и имитирует закрытый отказ при
+// ошибке отзыва, не раскрывая клиенту внутреннюю причину.
 type revocationCheck struct {
 	err   error
 	calls int
 }
 
+// CheckPeer records each invocation and returns the configured revocation
+// result so tests can verify per-RPC checks and error redaction.
+// RU: CheckPeer учитывает каждый вызов и возвращает настроенный результат,
+// чтобы проверить повторную проверку на RPC и сокрытие ошибки.
 func (check *revocationCheck) CheckPeer(context.Context, PeerIdentity) error {
 	check.calls++
 	return check.err
 }
 
+// binding builds one target-owned exact caller/method rule with a service
+// actor mode for the admission tests.
+// RU: binding создаёт одно точное правило target для caller/method с режимом
+// служебного actor для тестов допуска.
 func binding() Binding {
 	return Binding{CallerSPIFFEID: caller, FullMethod: method, OperationID: "runtime.work.claim", Permission: "runtime.work.claim", ActorMode: ServiceActor}
 }
+
+// syntheticPeer attaches a matching synthetic verified TLS state; real
+// handshake behavior is tested separately over a local TCP listener.
+// RU: syntheticPeer прикрепляет подходящее синтетическое TLS-состояние;
+// реальное рукопожатие отдельно проверяется через локальный TCP listener.
 func syntheticPeer(t *testing.T) (context.Context, *x509.Certificate) {
 	t.Helper()
 	identity, _ := url.Parse(caller)
@@ -47,6 +72,12 @@ func syntheticPeer(t *testing.T) (context.Context, *x509.Certificate) {
 	return ctx, cert
 }
 
+// TestLocalAdmissionPreservesIdentityAndDoesNotTrustMetadata verifies the
+// immutable binding copy, per-RPC revocation check and redaction of a private
+// revocation error despite caller-controlled actor metadata.
+// RU: TestLocalAdmissionPreservesIdentityAndDoesNotTrustMetadata проверяет
+// неизменяемую копию binding, отзыв на каждом RPC и сокрытие внутренней ошибки
+// даже при переданной caller metadata с заявленными правами.
 func TestLocalAdmissionPreservesIdentityAndDoesNotTrustMetadata(t *testing.T) {
 	check := &revocationCheck{}
 	bindings := []Binding{binding()}
@@ -76,6 +107,12 @@ func TestLocalAdmissionPreservesIdentityAndDoesNotTrustMetadata(t *testing.T) {
 	}
 }
 
+// TestAdmissionRejectsUnverifiedExpiredAndWrongMethod verifies closed denial
+// for missing or invalid TLS, a method outside the binding and a certificate
+// that expires while the connection remains open.
+// RU: TestAdmissionRejectsUnverifiedExpiredAndWrongMethod проверяет закрытый
+// отказ без доверенного TLS, для чужого метода и при истечении сертификата на
+// уже открытом соединении.
 func TestAdmissionRejectsUnverifiedExpiredAndWrongMethod(t *testing.T) {
 	auth, err := New(target, []Binding{binding()}, &revocationCheck{})
 	if err != nil {
@@ -107,6 +144,12 @@ func TestAdmissionRejectsUnverifiedExpiredAndWrongMethod(t *testing.T) {
 	}
 }
 
+// TestClosedPolicyAndActorModes checks that configuration rejects missing
+// revocation, duplicate or malformed bindings but accepts each known actor
+// mode only through an exact policy entry.
+// RU: TestClosedPolicyAndActorModes проверяет отказ без границы отзыва, при
+// повторных или неверных bindings и допуск каждого известного режима actor
+// лишь через точное правило политики.
 func TestClosedPolicyAndActorModes(t *testing.T) {
 	check := &revocationCheck{}
 	if _, err := New(target, []Binding{binding()}, nil); err == nil {
@@ -131,6 +174,12 @@ func TestClosedPolicyAndActorModes(t *testing.T) {
 	}
 }
 
+// TestAdmissionFromRealMutualTLSHandshake exercises a real local TLS 1.3
+// handshake with a generated CA and client certificate before passing the
+// resulting peer state to the exact-method authorizer.
+// RU: TestAdmissionFromRealMutualTLSHandshake выполняет настоящее локальное
+// TLS 1.3 рукопожатие с временным CA и клиентским сертификатом, после чего
+// передаёт состояние peer в authorizer точного метода.
 func TestAdmissionFromRealMutualTLSHandshake(t *testing.T) {
 	public, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

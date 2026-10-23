@@ -16,6 +16,12 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// recoveryServiceFixture creates a fake Kubernetes tracker with synthetic API pins, a real cleanup
+// service and a synthetic produced credential; the registered cleanup closes the service lifecycle
+// without any provider connection.
+// recoveryServiceFixture создаёт fake Kubernetes tracker с синтетическими API-привязками, реальный
+// cleanup service и синтетический произведённый credential; зарегистрированный cleanup закрывает
+// lifecycle сервиса без provider соединения.
 func recoveryServiceFixture(t *testing.T) (*Service, *kubernetesstore.Store, *fake.Clientset, kubernetesstore.ProviderAuthorizationCleanupTarget, kubernetesstore.ProviderCredentialDescriptor) {
 	t.Helper()
 	client := fake.NewSimpleClientset()
@@ -46,6 +52,12 @@ func recoveryServiceFixture(t *testing.T) (*Service, *kubernetesstore.Store, *fa
 	return service, store, client, target, produced
 }
 
+// TestCleanupRecoveryKeepsProducedAcrossSuccessorsAndRestart verifies that canonical-origin and bounded
+// historical receipts preserve the original produced descriptor across successor task references and a
+// new service instance after the credential itself is cleaned.
+// TestCleanupRecoveryKeepsProducedAcrossSuccessorsAndRestart проверяет, что canonical-origin и
+// ограниченные исторические квитанции сохраняют исходный produced descriptor при смене successor task и
+// экземпляра сервиса после cleanup самого credential.
 func TestCleanupRecoveryKeepsProducedAcrossSuccessorsAndRestart(t *testing.T) {
 	for _, legacy := range []bool{false, true} {
 		t.Run(fmt.Sprint("legacy=", legacy), func(t *testing.T) {
@@ -86,6 +98,12 @@ func TestCleanupRecoveryKeepsProducedAcrossSuccessorsAndRestart(t *testing.T) {
 	}
 }
 
+// TestCleanupRecoveryRejectsConflictingLegacyProduced seeds historical receipts with different
+// replacement outcomes and requires read-only conflict rather than choosing one result or mutating
+// cleanup state.
+// TestCleanupRecoveryRejectsConflictingLegacyProduced заранее помещает исторические квитанции с разными
+// replacement исходами и требует read-only конфликта вместо выбора результата или изменения cleanup
+// состояния.
 func TestCleanupRecoveryRejectsConflictingLegacyProduced(t *testing.T) {
 	service, store, client, target, produced := recoveryServiceFixture(t)
 	for generation := int64(2); generation <= 3; generation++ {
@@ -112,6 +130,10 @@ func TestCleanupRecoveryRejectsConflictingLegacyProduced(t *testing.T) {
 	}
 }
 
+// TestCleanupRecoveryRejectsMalformedOriginBeforeStore supplies absent, foreign, future or over-budget
+// recovery identities and verifies rejection before any fake storage action.
+// TestCleanupRecoveryRejectsMalformedOriginBeforeStore передаёт отсутствующие, чужие, будущие либо
+// превышающие бюджет recovery identity и проверяет отказ до любого fake storage действия.
 func TestCleanupRecoveryRejectsMalformedOriginBeforeStore(t *testing.T) {
 	service, _, client, target, _ := recoveryServiceFixture(t)
 	for _, identity := range []kubernetesstore.ProviderCleanupRecoveryIdentity{
@@ -125,6 +147,12 @@ func TestCleanupRecoveryRejectsMalformedOriginBeforeStore(t *testing.T) {
 	}
 }
 
+// TestCleanupRecoveryPersistsOriginBeforeLostAcknowledgement commits the origin receipt but drops its
+// response, verifies current was not persisted first, then restarts with a successor and recovers the
+// original produced descriptor despite credential cleanup.
+// TestCleanupRecoveryPersistsOriginBeforeLostAcknowledgement записывает origin квитанцию, но теряет
+// ответ, проверяет отсутствие преждевременной current записи, затем после перезапуска с successor
+// восстанавливает исходный produced descriptor несмотря на cleanup credential.
 func TestCleanupRecoveryPersistsOriginBeforeLostAcknowledgement(t *testing.T) {
 	service, store, client, target, produced := recoveryServiceFixture(t)
 	lost := false
@@ -169,6 +197,10 @@ func TestCleanupRecoveryPersistsOriginBeforeLostAcknowledgement(t *testing.T) {
 	}
 }
 
+// TestCleanupRecoveryRejectsCurrentOriginDisagreement preloads a current absence result and an origin
+// replacement result, then verifies disagreement is rejected using only GET actions.
+// TestCleanupRecoveryRejectsCurrentOriginDisagreement заранее сохраняет current результат отсутствия и
+// origin результат с заменой, затем проверяет отказ противоречию с выполнением только GET.
 func TestCleanupRecoveryRejectsCurrentOriginDisagreement(t *testing.T) {
 	service, store, client, target, produced := recoveryServiceFixture(t)
 	current, _ := kubernetesstore.AuthorizationCleanupReceiptIdentity(target)
@@ -192,6 +224,12 @@ func TestCleanupRecoveryRejectsCurrentOriginDisagreement(t *testing.T) {
 	}
 }
 
+// TestCleanupRecoveryLegacyRequiresExactTargetDigest changes target kind and API pins after seeding a
+// historical receipt to ensure task/generation similarity cannot reuse a result for another immutable
+// target digest.
+// TestCleanupRecoveryLegacyRequiresExactTargetDigest меняет target kind и API-привязки после сохранения
+// исторической квитанции, проверяя запрет использования результата другого immutable target digest по
+// сходным task/generation.
 func TestCleanupRecoveryLegacyRequiresExactTargetDigest(t *testing.T) {
 	service, store, _, target, produced := recoveryServiceFixture(t)
 	old, _ := kubernetesstore.AuthorizationCleanupReceiptIdentity(target)

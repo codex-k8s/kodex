@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// resumeSourceFixture creates a captured synthetic rollout and matching thread/read metadata,
+// adding model/approval expectations without starting an app-server or contacting a provider.
+// resumeSourceFixture создаёт captured synthetic rollout и совпадающие thread/read metadata,
+// добавляя ожидаемые model/approval без запуска app-server или обращения к provider.
 func resumeSourceFixture(t *testing.T) (model.Input, Result, json.RawMessage) {
 	t.Helper()
 	input, before := capturedRolloutFixture(t, model.Input{})
@@ -25,6 +29,10 @@ func resumeSourceFixture(t *testing.T) (model.Input, Result, json.RawMessage) {
 	return input, before, marshalProtocolFixture(t, map[string]any{"thread": thread})
 }
 
+// TestConfirmResumeSourceDoesNotBindExecutionOrUsage confirms an exact source without assigning
+// thread/turn/baseline/result authority and rejects capture without a joined writer.
+// TestConfirmResumeSourceDoesNotBindExecutionOrUsage подтверждает точный source без назначения
+// thread/turn/baseline/result authority и отвергает capture без завершённого join writer.
 func TestConfirmResumeSourceDoesNotBindExecutionOrUsage(t *testing.T) {
 	input, before, raw := resumeSourceFixture(t)
 	state := newProtocolState(input.CodexSessionID)
@@ -45,6 +53,10 @@ func TestConfirmResumeSourceDoesNotBindExecutionOrUsage(t *testing.T) {
 	}
 }
 
+// TestConfirmResumeSourceRejectsUntrustedLocators exercises schema/identity/path/link/type/size/mode
+// and home failures, requiring no retained source and a bound, payload-free closed diagnostic.
+// TestConfirmResumeSourceRejectsUntrustedLocators проверяет отказы schema/identity/path/link/type/size/mode
+// и home, требуя отсутствие source и связанный закрытый diagnostic без payload.
 func TestConfirmResumeSourceRejectsUntrustedLocators(t *testing.T) {
 	for _, mode := range []string{"empty expected", "foreign id", "malformed id", "foreign session metadata", "missing path", "null path", "relative path", "outside home", "archived", "wrong suffix", "unclean", "ephemeral", "unknown field", "duplicate field", "malformed envelope", "symlink", "directory symlink", "hardlink", "missing file", "wrong mode", "empty file", "oversized file", "directory", "foreign home"} {
 		t.Run(mode, func(t *testing.T) {
@@ -144,6 +156,10 @@ func TestConfirmResumeSourceRejectsUntrustedLocators(t *testing.T) {
 	}
 }
 
+// assertResumeDiagnostic checks the fixed error text and exact reason, supplies canonical session/turn
+// refs to the synthetic input, and validates safe diagnostic JSON round-trip without a workspace path.
+// assertResumeDiagnostic проверяет фиксированный error text и точную причину, подставляет канонические
+// session/turn refs synthetic input и проверяет безопасный diagnostic JSON round-trip без workspace path.
 func assertResumeDiagnostic(t *testing.T, input model.Input, err error, wantDetail string) {
 	t.Helper()
 	if err.Error() != errResumeSourceInvalid.Error() {
@@ -163,6 +179,10 @@ func assertResumeDiagnostic(t *testing.T, input model.Input, err error, wantDeta
 	}
 }
 
+// TestResumeSourceDiagnosticDoesNotClassifyForeignStagesOrErrors prevents unrelated stages/errors,
+// unknown details and joined authentication failures from acquiring a local resume-source diagnostic reason.
+// TestResumeSourceDiagnosticDoesNotClassifyForeignStagesOrErrors не даёт чужим stages/errors,
+// неизвестным details и joined authentication failures получить локальную resume-source diagnostic reason.
 func TestResumeSourceDiagnosticDoesNotClassifyForeignStagesOrErrors(t *testing.T) {
 	for _, scenario := range []struct {
 		stage providerExecutionStage
@@ -181,6 +201,10 @@ func TestResumeSourceDiagnosticDoesNotClassifyForeignStagesOrErrors(t *testing.T
 	}
 }
 
+// TestConfirmedResumeSourceRejectsChangedInodeAndPermissions rejects path replacement, unsafe links,
+// mode changes, disappearance, a closed fd and a foreign expected session after initial confirmation.
+// TestConfirmedResumeSourceRejectsChangedInodeAndPermissions отвергает замену пути, опасные ссылки,
+// смену mode, удаление, закрытый fd и чужую expected session после первоначального подтверждения.
 func TestConfirmedResumeSourceRejectsChangedInodeAndPermissions(t *testing.T) {
 	for _, mode := range []string{"replacement", "symlink", "hardlink", "mode", "missing", "closed descriptor", "foreign input"} {
 		t.Run(mode, func(t *testing.T) {
@@ -225,13 +249,21 @@ func TestConfirmedResumeSourceRejectsChangedInodeAndPermissions(t *testing.T) {
 	}
 }
 
+// resumeForeignOwnerInfo preserves real file metadata while substituting syscall ownership in a unit test.
+// resumeForeignOwnerInfo сохраняет реальные file metadata, подменяя syscall ownership в unit-тесте.
 type resumeForeignOwnerInfo struct {
 	os.FileInfo
 	stat syscall.Stat_t
 }
 
+// Sys returns the substituted stat rather than the embedded file's original ownership record.
+// Sys возвращает подставленный stat вместо исходной ownership record вложенного файла.
 func (info resumeForeignOwnerInfo) Sys() any { return &info.stat }
 
+// TestResumeSourceRejectsForeignOwner substitutes a different UID in metadata without privileged
+// chown and requires rejection by validResumeSourceInfo.
+// TestResumeSourceRejectsForeignOwner подставляет другой UID в metadata без привилегированного
+// chown и требует отказ validResumeSourceInfo.
 func TestResumeSourceRejectsForeignOwner(t *testing.T) {
 	_, before, _ := resumeSourceFixture(t)
 	info, err := os.Stat(before.ArchivePath)
@@ -245,7 +277,10 @@ func TestResumeSourceRejectsForeignOwner(t *testing.T) {
 	}
 }
 
-// Изолированная синтетическая RPC-оснастка не запускает Codex или внешние calls.
+// TestResumeRolloutRPCProcessFixture is an opt-in synthetic JSONL child that records read/resume,
+// appends history and injects RPC/binding failures. With no mode it returns without exercising a process.
+// TestResumeRolloutRPCProcessFixture — opt-in synthetic JSONL child, записывающий read/resume,
+// дописывающий history и подставляющий RPC/binding failures. Без mode она возвращается без проверки процесса.
 func TestResumeRolloutRPCProcessFixture(t *testing.T) {
 	mode := os.Getenv("KODEX_RESUME_RPC_FIXTURE")
 	if mode == "" {
@@ -305,6 +340,12 @@ func TestResumeRolloutRPCProcessFixture(t *testing.T) {
 	os.Exit(0)
 }
 
+// TestResumePreReadCapturesAppendOnRPCAndBindingFailures launches the synthetic RPC child, requires
+// bounded abort/join before fresh capture, preserves appended history without success/usage and rejects
+// replacement after join. Invalid pre-read must never reach thread/resume or issue archive pins.
+// TestResumePreReadCapturesAppendOnRPCAndBindingFailures запускает synthetic RPC child, требует
+// bounded abort/join перед новым capture, сохраняет добавленную историю без success/usage и отвергает
+// замену после join. Неверный pre-read не должен достигать thread/resume или выдавать archive pins.
 func TestResumePreReadCapturesAppendOnRPCAndBindingFailures(t *testing.T) {
 	for _, mode := range []string{"resume error", "bind error", "invalid pre-read", "replacement after join"} {
 		t.Run(mode, func(t *testing.T) {

@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/admissioncontroller"
 )
 
+// admissionControllerConfig holds environment-bound controller, Pod identity, policy, RPC-path and lifecycle settings.
+// Credential fields are file paths only; work-source transport initialization performs its own detailed checks.
+// admissionControllerConfig хранит настройки контроллера, идентичности Pod, политики, RPC-пути и жизненного цикла из окружения.
+// Поля реквизитов содержат только пути; подробную проверку транспорта источника работы выполняет его создание.
 type admissionControllerConfig struct {
 	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
@@ -33,6 +37,10 @@ type admissionControllerConfig struct {
 	ShutdownTimeout             time.Duration `env:"IMAGE_ADMISSION_CONTROLLER_SHUTDOWN_TIMEOUT"`
 }
 
+// loadAdmissionControllerConfig overlays environment onto fixed defaults and validates controller shape, Pod UID, profile and shutdown bounds.
+// Empty/protected and trusted-cluster profiles retain their existing behavior; no identity file or Kubernetes resource is read here.
+// loadAdmissionControllerConfig накладывает окружение на фиксированные умолчания и проверяет форму контроллера, Pod UID, профиль и предел остановки.
+// Пустой protected-профиль и trusted-cluster сохраняют прежнее поведение; файлы идентичности и ресурсы Kubernetes здесь не читаются.
 func loadAdmissionControllerConfig() (admissionControllerConfig, error) {
 	config := admissionControllerConfig{
 		Namespace: "kodex-system", PolicyConfigMap: "kodex-image-admission-policy",
@@ -64,6 +72,10 @@ func loadAdmissionControllerConfig() (admissionControllerConfig, error) {
 	return config, nil
 }
 
+// workSourceConfig projects the caller's RPC endpoint/identity paths with fixed issuer IDs and request-bound dial/RPC budgets.
+// It does not dial, read the grant or prove availability while constructing this value.
+// workSourceConfig проецирует заданные RPC endpoint и пути идентичности с фиксированными issuer IDs и бюджетами dial и RPC из RequestTimeout.
+// При создании значения соединение не устанавливается, grant не читается и доступность не доказывается.
 func (config admissionControllerConfig) workSourceConfig() admissioncontroller.WorkSourceConfig {
 	return admissioncontroller.WorkSourceConfig{
 		RPCProfile: config.RPCProfile, Target: config.ControlPlaneTarget,
@@ -76,6 +88,10 @@ func (config admissionControllerConfig) workSourceConfig() admissioncontroller.W
 	}
 }
 
+// controllerConfig copies policy, renderer and timing choices without selecting a WorkSource or configuring leadership.
+// Those runtime dependencies are assigned explicitly by RunAdmissionController after loading this projection.
+// controllerConfig копирует выбор политики, renderer и интервалов без выбора WorkSource или настройки лидерства.
+// Эти зависимости среды явно назначаются RunAdmissionController после загрузки проекции.
 func (config admissionControllerConfig) controllerConfig() admissioncontroller.Config {
 	return admissioncontroller.Config{
 		Environment: config.Environment, Namespace: config.Namespace, PolicyConfigMap: config.PolicyConfigMap,

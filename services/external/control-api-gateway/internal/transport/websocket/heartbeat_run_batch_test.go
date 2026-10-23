@@ -14,6 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// heartbeatRunBatchRecorder mutex-serializes synthetic catalog/event/run responses and counters, optionally denying a catalog or omitting a run set. It measures control flow, not real RPC parallelism or authorization.
+// heartbeatRunBatchRecorder под mutex сериализует тестовые ответы и счётчики каталогов, событий и запусков, при необходимости запрещая каталог либо убирая набор запусков. Измеряется порядок, а не настоящий параллелизм RPC или авторизация.
 type heartbeatRunBatchRecorder struct {
 	platformWakeRaceRecorder
 	mu                                 sync.Mutex
@@ -22,6 +24,8 @@ type heartbeatRunBatchRecorder struct {
 	invalidSnapshot                    bool
 }
 
+// Invoke checks context cancellation, serves counted synthetic RUN/catalog/gate/overview responses and delegates other queries. Its mutex includes callbacks, so tests cannot infer real multi-request server concurrency from it.
+// Invoke проверяет отмену, выдаёт подсчитанные тестовые RUN/catalog/gate/overview-ответы и передаёт остальные запросы дальше. Mutex охватывает callbacks, поэтому настоящий параллелизм сервера здесь не доказывается.
 func (c *heartbeatRunBatchRecorder) Invoke(ctx context.Context, method string, request, response any, options ...grpc.CallOption) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -71,6 +75,8 @@ func (c *heartbeatRunBatchRecorder) Invoke(ctx context.Context, method string, r
 	return nil
 }
 
+// heartbeatRunBatchFixture wires the counting fake query client with one registered available root at cursor seven and the shared buffered wake/frame fixture.
+// heartbeatRunBatchFixture связывает тестовый query client со счётчиком и одним доступным зарегистрированным корнем на курсоре семь и общей оснасткой буферов событий и кадров.
 func heartbeatRunBatchFixture(t *testing.T) (*sessionMultiplexer, *heartbeatRunBatchRecorder) {
 	t.Helper()
 	m, base := platformWakeRaceFixture(t, 11)
@@ -80,6 +86,8 @@ func heartbeatRunBatchFixture(t *testing.T) (*sessionMultiplexer, *heartbeatRunB
 	return m, c
 }
 
+// queueHeartbeatRunWakes enqueues the requested number of synthetic sequential RUN_CHANGED signals starting at eight; each base signal first passes the real platform decoder before kind substitution.
+// queueHeartbeatRunWakes ставит заданное число последовательных тестовых RUN_CHANGED начиная с восьми; исходный сигнал перед заменой вида проходит настоящий parser платформы.
 func queueHeartbeatRunWakes(t *testing.T, m *sessionMultiplexer, count int) {
 	t.Helper()
 	for i := range count {
@@ -89,6 +97,8 @@ func queueHeartbeatRunWakes(t *testing.T, m *sessionMultiplexer, count int) {
 	}
 }
 
+// TestHeartbeatCoalescesRunRefreshAndSeparatesBudgets requires one catalog bundle and one full run read for four contiguous deltas, distinct catalog/run deadlines and exactly one complete snapshot plus confirmed run heartbeat.
+// TestHeartbeatCoalescesRunRefreshAndSeparatesBudgets требует один каталог и одно полное чтение запуска для четырёх непрерывных delta, отдельные сроки каталога и запуска и ровно один полный снимок с подтверждённым heartbeat запуска.
 func TestHeartbeatCoalescesRunRefreshAndSeparatesBudgets(t *testing.T) {
 	m, c := heartbeatRunBatchFixture(t)
 	c.beforeInvoke = func(ctx context.Context, response any) error {
@@ -139,6 +149,8 @@ func TestHeartbeatCoalescesRunRefreshAndSeparatesBudgets(t *testing.T) {
 	}
 }
 
+// TestHeartbeatBatchClosedFailures tests denied/invalid run snapshots and failed/denied catalogs, preserving accepted-prefix cursors, queued tail and cursor-only denial while preventing delta-only revival of an unavailable run.
+// TestHeartbeatBatchClosedFailures проверяет запрещённые и неверные снимки и отказы каталогов, сохраняя курсор принятого префикса, хвост очереди и только курсор при запрете без восстановления недоступного запуска одними delta.
 func TestHeartbeatBatchClosedFailures(t *testing.T) {
 	for _, condition := range []string{"run-denied", "invalid-snapshot", "catalog-failed-after-prefix", "catalog-denied"} {
 		t.Run(condition, func(t *testing.T) {
@@ -203,6 +215,8 @@ func TestHeartbeatBatchClosedFailures(t *testing.T) {
 	}
 }
 
+// TestHeartbeatBatchSiblingSharedDeadline checks both registered-root reads inherit the exact earlier parent deadline without restarting their shared budget.
+// TestHeartbeatBatchSiblingSharedDeadline проверяет наследование обоими корнями точного раннего срока родителя без перезапуска общего бюджета.
 func TestHeartbeatBatchSiblingSharedDeadline(t *testing.T) {
 	m, c := heartbeatRunBatchFixture(t)
 	m.runs["run_root0002"] = &runSubscription{rootRef: "run_root0002", requestRef: "request_run002", cursor: 7, available: true}
@@ -223,6 +237,8 @@ func TestHeartbeatBatchSiblingSharedDeadline(t *testing.T) {
 	}
 }
 
+// TestHeartbeatBatchSiblingBudgetAndCancellation cancels the session during a synthetic run read and requires transport failure without continuing to or declaring readiness for the sibling.
+// TestHeartbeatBatchSiblingBudgetAndCancellation отменяет сессию во время тестового чтения запуска и требует отказ транспорта без продолжения или объявления готовности соседа.
 func TestHeartbeatBatchSiblingBudgetAndCancellation(t *testing.T) {
 	m, c := heartbeatRunBatchFixture(t)
 	parent, cancel := context.WithCancel(t.Context())
@@ -243,6 +259,8 @@ func TestHeartbeatBatchSiblingBudgetAndCancellation(t *testing.T) {
 	}
 }
 
+// TestHeartbeatBatchDuplicateBudgetAndForeignScope ensures duplicates still consume the fixed drain budget and foreign-project wakes advance only cursor metadata, not scoped owner body reads.
+// TestHeartbeatBatchDuplicateBudgetAndForeignScope проверяет расход фиксированного бюджета дубликатами и продвижение только metadata курсора чужими проектными событиями без чтения тел владельца.
 func TestHeartbeatBatchDuplicateBudgetAndForeignScope(t *testing.T) {
 	for _, foreign := range []bool{false, true} {
 		t.Run(map[bool]string{false: "duplicate-and-bounded-prefix", true: "foreign-project-cursor-only"}[foreign], func(t *testing.T) {
@@ -269,6 +287,8 @@ func TestHeartbeatBatchDuplicateBudgetAndForeignScope(t *testing.T) {
 	}
 }
 
+// TestUnavailableRunRequiresCompleteOwnerSnapshot rejects delta-only recovery: only a valid full owner fixture can restore run availability and emit RunReady; an invalid full response stays unavailable.
+// TestUnavailableRunRequiresCompleteOwnerSnapshot запрещает восстановление одними delta: доступность и RunReady возвращает только допустимая полная оснастка владельца; неверный полный ответ оставляет запуск недоступным.
 func TestUnavailableRunRequiresCompleteOwnerSnapshot(t *testing.T) {
 	for _, invalid := range []bool{false, true} {
 		t.Run(map[bool]string{false: "complete-recovery", true: "invalid-remains-unavailable"}[invalid], func(t *testing.T) {

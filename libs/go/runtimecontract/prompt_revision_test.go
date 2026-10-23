@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// TestPromptServiceExplicitImmutableRevisions accepts supported pinned revisions but rejects unknown labels, relabeled material and capability escalation.
+// TestPromptServiceExplicitImmutableRevisions принимает поддерживаемые закреплённые ревизии, но отклоняет неизвестные метки, переименование материала и расширение прав.
 func TestPromptServiceExplicitImmutableRevisions(t *testing.T) {
 	for _, revision := range []string{"prompt-service-v2", "prompt-service-v3"} {
 		t.Run(revision, func(t *testing.T) {
@@ -38,6 +40,8 @@ func TestPromptServiceExplicitImmutableRevisions(t *testing.T) {
 	}
 }
 
+// revisionPromptFixture builds a minimal platform-section envelope and matching template digest for a supplied revision with only read capability.
+// revisionPromptFixture собирает минимальный конверт платформенных разделов и соответствующий дайджест шаблона заданной ревизии только с правом чтения.
 func revisionPromptFixture(t *testing.T, revision string) RunnerInput {
 	t.Helper()
 	slots := []string{"PURPOSE", "INPUT", "CONSTRAINTS", "EFFECTIVE_CAPABILITIES", "FILES", "TOOLS", "INTEGRATIONS"}

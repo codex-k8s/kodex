@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestPostJoinWorkspaceOutboxDenialStillNormalizesPrivateDirectories rejects a synthetic empty outbox
+// entry yet still normalizes private directories, preserving the original failure/usage and private-file mode.
+// TestPostJoinWorkspaceOutboxDenialStillNormalizesPrivateDirectories отклоняет пустую синтетическую запись
+// outbox, но нормализует приватные каталоги, сохраняя исходный отказ, usage и права приватного файла.
 func TestPostJoinWorkspaceOutboxDenialStillNormalizesPrivateDirectories(t *testing.T) {
 	outbox, publication := outboxPublicationFixture(t)
 	if os.WriteFile(filepath.Join(outbox, "empty.md"), nil, 0o600) != nil {
@@ -47,10 +51,18 @@ func TestPostJoinWorkspaceOutboxDenialStillNormalizesPrivateDirectories(t *testi
 	}
 }
 
+// TestPostJoinWorkspaceOutcomeAndIndependentBudget checks cleanup after caller cancellation retains
+// context values under its own deadline, runs only for terminal outcomes and never replaces an existing failure.
+// TestPostJoinWorkspaceOutcomeAndIndependentBudget проверяет сохранение context values после отмены
+// с собственным deadline очистки, её запуск лишь для итоговых состояний и сохранение прежнего отказа.
 func TestPostJoinWorkspaceOutcomeAndIndependentBudget(t *testing.T) {
 	for _, outcome := range []string{"SUCCEEDED", "FAILED", "UNKNOWN"} {
 		for _, denied := range []bool{false, true} {
 			t.Run(outcome+"/"+map[bool]string{false: "clean", true: "denied"}[denied], func(t *testing.T) {
+				// contextKey isolates the synthetic execution marker so cleanup-context inheritance is checked
+				// without colliding with application context keys.
+				// contextKey изолирует синтетическую отметку исполнения для проверки наследования cleanup context
+				// без пересечения с ключами контекста приложения.
 				type contextKey struct{}
 				ctx, cancel := context.WithCancel(context.WithValue(t.Context(), contextKey{}, "bound execution"))
 				cancel()
@@ -83,7 +95,13 @@ func TestPostJoinWorkspaceOutcomeAndIndependentBudget(t *testing.T) {
 	}
 }
 
+// TestProviderFilesystemDiagnosticsClosedAndPrivate checks every reason for both known stages and
+// requires foreign/unknown metadata to collapse to UNKNOWN with no path/body/error sentinel disclosure.
+// TestProviderFilesystemDiagnosticsClosedAndPrivate проверяет все причины обоих этапов и требует
+// UNKNOWN для чужих или неизвестных метаданных без утечки маркера пути, содержимого или ошибки.
 func TestProviderFilesystemDiagnosticsClosedAndPrivate(t *testing.T) {
+	// sentinel is synthetic private data that must stay outside every structured diagnostic field.
+	// sentinel является синтетическими приватными данными, недопустимыми в полях структурированной диагностики.
 	const sentinel = "private-path-body-error-secret-sentinel"
 	for _, stage := range []string{providerOutboxStage, providerWorkspaceStage} {
 		cause := errProviderOutboxPublication
@@ -125,6 +143,10 @@ func TestProviderFilesystemDiagnosticsClosedAndPrivate(t *testing.T) {
 	}
 }
 
+// assertProviderFilesystemReason requires both the exact sentinel and a nonnil typed guard error,
+// then checks its assigned reason rather than inferring a reason from error text.
+// assertProviderFilesystemReason требует точный маркер и ненулевую типизированную ошибку guard,
+// затем сверяет назначенную категорию, не выводя её из текста ошибки.
 func assertProviderFilesystemReason(t *testing.T, err error, cause error, reason providerFilesystemReason) {
 	t.Helper()
 	var denied *providerFilesystemError

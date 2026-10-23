@@ -11,6 +11,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// TestScopedEncryptedMetadataRejectsCrossScopeReadAndDelete covers project/organization bindings,
+// cross-scope or foreign-organization Get-only refusals and rejection of metadata lacking v2 scope fields.
+// TestScopedEncryptedMetadataRejectsCrossScopeReadAndDelete проверяет project/organization bindings,
+// Get-only отказы при иной области или организации и отклонение metadata без v2 scope fields.
 func TestScopedEncryptedMetadataRejectsCrossScopeReadAndDelete(t *testing.T) {
 	for _, scope := range []runtimesecret.ScopeKind{runtimesecret.ScopeProject, runtimesecret.ScopeOrganization} {
 		t.Run(string(scope), func(t *testing.T) {

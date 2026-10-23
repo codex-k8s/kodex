@@ -15,20 +15,44 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TaskSessionMaximumProjectionBytes bounds the published JSON projection,
+// including its commitment, before it crosses the control-plane boundary.
+// RU: TaskSessionMaximumProjectionBytes ограничивает размер опубликованной
+// JSON-проекции вместе с дайджестом до пересечения границы control-plane.
 const TaskSessionMaximumProjectionBytes = 512 << 10
+
+// TaskSessionMaximumMessages bounds the number of public messages per page.
+// RU: TaskSessionMaximumMessages ограничивает число публичных сообщений на странице.
 const TaskSessionMaximumMessages = 10
 
+// errTaskSessionProjection is the closed failure for malformed or uncommitted
+// task-session data; callers receive no partial projection.
+// RU: errTaskSessionProjection — закрытый отказ для ошибочной либо не
+// закреплённой дайджестом истории; частичный результат не выдаётся.
 var errTaskSessionProjection = errors.New("task session projection invalid")
+
+// taskSessionRef restricts opaque run, session and message references on the wire.
+// RU: taskSessionRef ограничивает непрозрачные ссылки запуска, сессии и сообщений в передаче.
 var taskSessionRef = regexp.MustCompile(`^[A-Za-z0-9_-]{8,96}$`)
+
+// taskSessionDigest accepts canonical lowercase SHA-256 commitments only.
+// RU: taskSessionDigest допускает только канонические строчные дайджесты SHA-256.
 var taskSessionDigest = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
-// Курсор — locator страницы, никогда не authority. CP перечитывает весь scope.
+// TaskSessionCursor locates the next page but conveys no authority;
+// control-plane re-resolves the selected run and source within the owner scope.
+// RU: TaskSessionCursor указывает следующую страницу, но не даёт полномочий:
+// control-plane заново проверяет запуск и источник в области владельца.
 type TaskSessionCursor struct {
 	Version         int
 	Binding, Source string
 	Offset          int
 }
 
+// ReadTaskSessionCursor decodes one bounded canonical base64url cursor and
+// rejects unknown fields, trailing values and invalid digest or offset pins.
+// RU: ReadTaskSessionCursor читает ограниченный канонический курсор base64url,
+// отклоняя чужие поля, хвостовые значения и некорректные дайджесты или смещение.
 func ReadTaskSessionCursor(token string) (TaskSessionCursor, error) {
 	var cursor TaskSessionCursor
 	if token == "" {
@@ -53,8 +77,10 @@ func ReadTaskSessionCursor(token string) (TaskSessionCursor, error) {
 	return cursor, nil
 }
 
-// Формат v1 задаёт точные JSON bytes для digest: фиксированные поля, decimal
-// strings для int64 и стандартный encoding/json, без protobuf canonical claims.
+// TaskSessionPublishedMessage contains one approved public message in the
+// v1 JSON commitment, using decimal strings for int64 without ProtoJSON claims.
+// RU: TaskSessionPublishedMessage хранит одно разрешённое публичное сообщение
+// в JSON-дайджесте v1 с десятичными строками int64, без заявления о ProtoJSON.
 type TaskSessionPublishedMessage struct {
 	EventRef         string `json:"event_ref"`
 	MessageRef       string `json:"message_ref"`
@@ -71,6 +97,11 @@ type TaskSessionPublishedMessage struct {
 	EventSequence    int64  `json:"event_sequence,string"`
 	MessageRevision  int64  `json:"message_revision,string"`
 }
+
+// TaskSessionProjection is the closed, versioned public history of one
+// selected run/session; source and projection hashes bind its exact content.
+// RU: TaskSessionProjection — закрытая версионированная публичная история
+// выбранного запуска и сессии; дайджесты источника и проекции закрепляют состав.
 type TaskSessionProjection struct {
 	Version             int                           `json:"version"`
 	Coverage            string                        `json:"coverage"`
@@ -92,6 +123,10 @@ type TaskSessionProjection struct {
 	ProjectionSHA256    string                        `json:"projection_sha256,omitempty"`
 }
 
+// taskSessionProjection validates the typed owner page and whitelists only
+// public phases, origins, refs and bounded text before JSON sealing.
+// RU: taskSessionProjection проверяет типизированную страницу владельца и
+// допускает до закрепления JSON только публичные фазы, источники, ссылки и текст.
 func taskSessionProjection(page *controlplanev1.AssistantTaskSessionPage) (TaskSessionProjection, error) {
 	var result TaskSessionProjection
 	if page == nil || len(page.ProtoReflect().GetUnknown()) != 0 || !taskSessionRef.MatchString(page.RunRef) || !taskSessionRef.MatchString(page.SessionRef) || (page.ProjectRef != "" && !taskSessionRef.MatchString(page.ProjectRef)) || page.RunVersion < 1 || !taskSessionDigest.MatchString(page.SourceSha256) || len(page.Messages) > TaskSessionMaximumMessages || len(page.NextCursor) > 1024 || page.Truncated != (page.NextCursor != "") || (page.Truncated && len(page.Messages) == 0) {
@@ -148,7 +183,10 @@ func taskSessionProjection(page *controlplanev1.AssistantTaskSessionPage) (TaskS
 	return result, nil
 }
 
-// Producer и consumer используют одну закрытую проекцию, а не raw ProtoJSON.
+// SealTaskSessionPage computes the canonical projection commitment on the
+// producer's typed page after the same whitelist used by consumers.
+// RU: SealTaskSessionPage вычисляет канонический дайджест проекции в
+// типизированной странице отправителя после той же проверки, что у получателя.
 func SealTaskSessionPage(page *controlplanev1.AssistantTaskSessionPage) error {
 	projection, err := taskSessionProjection(page)
 	if err != nil {
@@ -167,6 +205,11 @@ func SealTaskSessionPage(page *controlplanev1.AssistantTaskSessionPage) error {
 	}
 	return nil
 }
+
+// ProjectTaskSessionPage independently rebuilds the public projection and
+// rejects any page whose stored commitment differs from its exact JSON bytes.
+// RU: ProjectTaskSessionPage независимо восстанавливает публичную проекцию
+// и отклоняет страницу при несовпадении закреплённого дайджеста и точных JSON-байтов.
 func ProjectTaskSessionPage(page *controlplanev1.AssistantTaskSessionPage) (TaskSessionProjection, error) {
 	projection, err := taskSessionProjection(page)
 	if err != nil {

@@ -17,17 +17,31 @@ import (
 )
 
 const (
-	scheduleActionEnable  = "ENABLE"
-	scheduleActionPause   = "PAUSE"
+	// scheduleActionEnable is the exact public schedule action that selects the owner enable command with Enabled=true, not an execution trigger.
+	// scheduleActionEnable — точное публичное действие автоматизации, выбирающее enable владельца с Enabled=true, а не запуск выполнения.
+	scheduleActionEnable = "ENABLE"
+	// scheduleActionPause selects the same owner enable command with Enabled=false; occurrence cancellation policy remains owner-managed.
+	// scheduleActionPause выбирает ту же enable-команду владельца с Enabled=false; политика отмены occurrence остаётся у владельца.
+	scheduleActionPause = "PAUSE"
+	// scheduleActionArchive selects the dedicated archive command rather than pretending archival is a disable or delete.
+	// scheduleActionArchive выбирает отдельную команду архивации, не подменяя её отключением или удалением.
 	scheduleActionArchive = "ARCHIVE"
-	maximumArtifactBytes  = 512 << 20
+	// maximumArtifactBytes caps declared and forwarded artifact data at512MiB; this transport bound neither scans content nor grants download eligibility.
+	// maximumArtifactBytes ограничивает объявленные и переданные данные файла512МиБ; транспортный предел не проверяет содержимое и не выдаёт допуск скачивания.
+	maximumArtifactBytes = 512 << 20
 )
 
 var (
+	// errArtifactContentLengthMismatch classifies missing/invalid forwarding configuration or actual bytes disagreeing with the declared/bounded size, using the upload length problem rather than upstream diagnostics.
+	// errArtifactContentLengthMismatch обозначает неверные параметры передачи либо несовпадение байтов с объявленной и допустимой длиной и выбирает upload length problem вместо внешней диагностики.
 	errArtifactContentLengthMismatch = errors.New("artifact content length mismatch")
-	errArtifactBodyRead              = errors.New("artifact request body read failed")
+	// errArtifactBodyRead replaces arbitrary body-reader failures with a fixed public read-failure classification; already forwarded prefix bytes are not undone.
+	// errArtifactBodyRead заменяет произвольный отказ reader фиксированной публичной классификацией; уже переданный префикс байтов не откатывается.
+	errArtifactBodyRead = errors.New("artifact request body read failed")
 )
 
+// CompleteOnboarding creates mutation context for the dedicated owner command and writes the returned bootstrap state through its specialized projector. Completion eligibility and actor identity remain owner/boundary decisions, not client state.
+// CompleteOnboarding создаёт mutation context отдельной команды владельца и выдаёт bootstrap через специальную проекцию. Допуск завершения и личность остаются решениями владельца и границы, а не клиентским состоянием.
 func (server *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request, p generated.CompleteOnboardingParams) {
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	if m == nil {
@@ -40,6 +54,9 @@ func (server *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request,
 	}
 	server.writeBootstrapState(w, r, response.GetState())
 }
+
+// CreateProject decodes name/purpose/language, builds create idempotency context and invokes the dedicated owner create, returning the public project with HTTP201. It supplies no client-selected owner field.
+// CreateProject разбирает name/purpose/language, собирает контекст идемпотентного create и вызывает отдельное создание владельца, возвращая проект с HTTP201. Клиентское поле владельца не передаётся.
 func (server *Server) CreateProject(w http.ResponseWriter, r *http.Request, p generated.CreateProjectParams) {
 	body, ok := decodeJSON[generated.ProjectInput](w, r)
 	if !ok {
@@ -53,6 +70,9 @@ func (server *Server) CreateProject(w http.ResponseWriter, r *http.Request, p ge
 	}
 	writeMessage(w, http.StatusCreated, response, "project", "")
 }
+
+// UpdateProject binds route-project context, decodes editable fields and mutation/version pins, then invokes the owner update and public-projects the result without changing ownership locally.
+// UpdateProject привязывает проект маршрута, разбирает редактируемые поля и mutation/version pins, затем вызывает update владельца и проецирует результат без локальной смены владения.
 func (server *Server) UpdateProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.UpdateProjectParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {
@@ -73,6 +93,9 @@ func (server *Server) UpdateProject(w http.ResponseWriter, r *http.Request, ref 
 	}
 	writeMessage(w, http.StatusOK, response, "project", "")
 }
+
+// TrashProject binds project context and sends exact project plus mutation pins to the dedicated trash transition; cleanup and restoration deadlines belong to owner state.
+// TrashProject привязывает проект и передаёт его с mutation pins отдельному переходу в корзину; очистка и срок восстановления принадлежат состоянию владельца.
 func (server *Server) TrashProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.TrashProjectParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {
@@ -89,6 +112,9 @@ func (server *Server) TrashProject(w http.ResponseWriter, r *http.Request, ref g
 	}
 	writeMessage(w, http.StatusOK, response, "project", "")
 }
+
+// RestoreProject delegates exact project restoration with mutation/version pins under the existing request context, then projects public state; no active-project context is fabricated for a trashed resource.
+// RestoreProject поручает восстановление точного проекта с mutation/version pins в существующем контексте, затем проецирует состояние; активный проектный контекст для корзины не выдумывается.
 func (server *Server) RestoreProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.RestoreProjectParams) {
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -101,6 +127,9 @@ func (server *Server) RestoreProject(w http.ResponseWriter, r *http.Request, ref
 	}
 	writeMessage(w, http.StatusOK, response, "project", "")
 }
+
+// PurgeProject requests the dedicated owner purge transition with exact project/version/idempotency and returns HTTP202. Acceptance does not mean the asynchronous irreversible cleanup has finished.
+// PurgeProject запрашивает отдельный purge владельца с точными проектом, версией и идемпотентностью и выдаёт HTTP202. Принятие не означает завершённую асинхронную безвозвратную очистку.
 func (server *Server) PurgeProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.PurgeProjectParams) {
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -113,6 +142,9 @@ func (server *Server) PurgeProject(w http.ResponseWriter, r *http.Request, ref g
 	}
 	writeMessage(w, http.StatusAccepted, response, "project", "")
 }
+
+// AddPlatformMembership decodes the selected user and public role, forwards create mutation context to the owner and returns HTTP201; caller privilege is not derived from that requested role.
+// AddPlatformMembership разбирает выбранного пользователя и публичную роль, передаёт create mutation владельцу и выдаёт HTTP201; полномочия вызывающего из запрошенной роли не выводятся.
 func (server *Server) AddPlatformMembership(w http.ResponseWriter, r *http.Request, p generated.AddPlatformMembershipParams) {
 	body, ok := decodeJSON[generated.PlatformMembershipCreateInput](w, r)
 	if !ok {
@@ -129,6 +161,9 @@ func (server *Server) AddPlatformMembership(w http.ResponseWriter, r *http.Reque
 	}
 	writeMessage(w, http.StatusCreated, response, "membership", "")
 }
+
+// ChangePlatformMembership sends exact membership, requested role/active flag and mutation pins to owner policy, returning the public result rather than applying IdP membership directly.
+// ChangePlatformMembership передаёт точное членство, роль, active и mutation pins политике владельца, возвращая публичный результат вместо прямого изменения членства IdP.
 func (server *Server) ChangePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef generated.MembershipRef, p generated.ChangePlatformMembershipParams) {
 	body, ok := decodeJSON[generated.PlatformMembershipChangeInput](w, r)
 	if !ok {
@@ -145,6 +180,9 @@ func (server *Server) ChangePlatformMembership(w http.ResponseWriter, r *http.Re
 	}
 	writeMessage(w, http.StatusOK, response, "membership", "")
 }
+
+// RemovePlatformMembership invokes the owner removal with exact membership and mutation/version context; access revocation and session effects remain owned by the domain transaction.
+// RemovePlatformMembership вызывает удаление владельца с точным членством и mutation/version context; отзыв доступа и эффекты сессий принадлежат доменной транзакции.
 func (server *Server) RemovePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef generated.MembershipRef, p generated.RemovePlatformMembershipParams) {
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -157,6 +195,9 @@ func (server *Server) RemovePlatformMembership(w http.ResponseWriter, r *http.Re
 	}
 	writeMessage(w, http.StatusOK, response, "membership", "")
 }
+
+// AddProjectMembership binds route-project context and maps requested permission names before the owner create. The mapper may omit unknown names; only the owner decides whether the actor may assign the resulting permissions.
+// AddProjectMembership привязывает проект маршрута и преобразует имена разрешений до create владельца. Mapper может пропускать неизвестные имена; только владелец решает, может ли actor назначить итоговые права.
 func (server *Server) AddProjectMembership(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.AddProjectMembershipParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {
@@ -174,6 +215,9 @@ func (server *Server) AddProjectMembership(w http.ResponseWriter, r *http.Reques
 	}
 	writeMessage(w, http.StatusCreated, response, "membership", "")
 }
+
+// ChangeProjectMembership binds project context and forwards exact project/membership, permissions, active flag and mutation pins to the dedicated owner command without treating request permissions as authority.
+// ChangeProjectMembership привязывает проект и передаёт точные project/membership, permissions, active и mutation pins отдельной команде владельца без принятия запрошенных прав за полномочия.
 func (server *Server) ChangeProjectMembership(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, membershipRef generated.MembershipRef, p generated.ChangeProjectMembershipParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -194,6 +238,9 @@ func (server *Server) ChangeProjectMembership(w http.ResponseWriter, r *http.Req
 	}
 	writeMessage(w, http.StatusOK, response, "membership", "")
 }
+
+// RemoveProjectMembership binds the route project and delegates exact membership removal with mutation pins; it does not directly revoke credentials or update another service's storage.
+// RemoveProjectMembership привязывает проект маршрута и поручает удаление точного членства с mutation pins; credentials напрямую не отзывает и хранилище другого сервиса не меняет.
 func (server *Server) RemoveProjectMembership(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, membershipRef generated.MembershipRef, p generated.RemoveProjectMembershipParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -211,6 +258,8 @@ func (server *Server) RemoveProjectMembership(w http.ResponseWriter, r *http.Req
 	writeMessage(w, http.StatusOK, response, "membership", "")
 }
 
+// CreateAgent binds project context and forwards editable metadata, optional role/runtime references and initial instructions to owner creation, returning HTTP201 without starting an agent.
+// CreateAgent привязывает проект и передаёт metadata, необязательные role/runtime и начальные инструкции созданию владельца, выдавая HTTP201 без запуска сотрудника.
 func (server *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateAgentParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -228,6 +277,9 @@ func (server *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projec
 	}
 	writeMessage(w, http.StatusCreated, response, "agent", "")
 }
+
+// UpdateAgent decodes editable metadata and role/runtime selectors with mutation pins for the dedicated owner update; it does not republish initial instructions or grant runtime capabilities itself.
+// UpdateAgent разбирает metadata и role/runtime selectors с mutation pins отдельного update владельца; начальные инструкции заново не публикует и runtime capabilities сам не выдаёт.
 func (server *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.UpdateAgentParams) {
 	body, ok := decodeJSON[generated.AgentInput](w, r)
 	if !ok {
@@ -244,6 +296,9 @@ func (server *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ref ge
 	}
 	writeMessage(w, http.StatusOK, response, "agent", "")
 }
+
+// CommandAgent routes only the explicit enable/disable/archive/capability/integration actions to their specialized owner RPCs under one mutation context. Unknown actions fail before RPC; request action/refs do not bypass owner permission policy.
+// CommandAgent направляет только явные enable/disable/archive/capability/integration действия в специальные RPC владельца с одним mutation context. Неизвестные действия отклоняются до RPC; action и ссылки политику прав не обходят.
 func (server *Server) CommandAgent(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.CommandAgentParams) {
 	body, ok := decodeJSON[generated.AgentCommand](w, r)
 	if !ok {
@@ -275,6 +330,8 @@ func (server *Server) CommandAgent(w http.ResponseWriter, r *http.Request, ref g
 	writeMessage(w, http.StatusOK, response, "agent", "")
 }
 
+// CreateInstructionDraft decodes content and mutation/version pins, invokes the owner draft command and returns HTTP201 without publishing or applying the text to a running turn.
+// CreateInstructionDraft разбирает content и mutation/version pins, вызывает черновик владельца и выдаёт HTTP201 без публикации и применения текста к действующему ходу.
 func (server *Server) CreateInstructionDraft(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.CreateInstructionDraftParams) {
 	body, ok := decodeJSON[generated.CreateInstructionDraftJSONBody](w, r)
 	if !ok {
@@ -291,6 +348,9 @@ func (server *Server) CreateInstructionDraft(w http.ResponseWriter, r *http.Requ
 	}
 	writeMessage(w, http.StatusCreated, response, "agent", "")
 }
+
+// CommandAgentInstructions keeps validate/publish/rollback as distinct owner paths: validate/rollback reject plan-selection fields, while publish delegates to impact-aware handling. Unknown actions fail closed; mutation pins do not replace owner authorization.
+// CommandAgentInstructions сохраняет validate/publish/rollback отдельными путями: validate и rollback запрещают plan-selection поля, publish передаётся impact-aware обработке. Неизвестное действие отклоняется; mutation pins авторизацию не заменяют.
 func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.CommandAgentInstructionsParams) {
 	body, ok := decodeJSON[generated.InstructionCommand](w, r)
 	if !ok {
@@ -329,6 +389,8 @@ func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Re
 	writeMessage(w, http.StatusOK, response, "agent", "")
 }
 
+// workflowDraft maps optional workflow input/steps into a new protobuf draft, copying input options but retaining RequiredCapabilityKeys slice references. Numeric casts and many semantic constraints are unchecked here and belong to validation; it does not publish a version.
+// workflowDraft преобразует необязательные вход и шаги в новый protobuf-черновик, копируя input options, но сохраняя ссылки slice RequiredCapabilityKeys. Числовые casts и многие семантические ограничения здесь не проверяются; версия не публикуется.
 func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion {
 	draft := &controlplanev1.WorkflowVersion{Name: body.Name, Purpose: body.Purpose, CoordinatorAgentRef: body.CoordinatorAgentRef}
 	if body.InputFields != nil {
@@ -356,6 +418,9 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 	}
 	return draft
 }
+
+// CreateWorkflow binds project context and creates owner workflow metadata, attaching a mapped draft only when a nonempty step list is present. An input-fields-only body does not create Draft here; publication is a separate command.
+// CreateWorkflow привязывает проект и создаёт metadata процесса владельца, прикладывая draft только при непустых шагах. Одни input fields Draft здесь не создают; публикация выполняется отдельно.
 func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateWorkflowParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -377,6 +442,9 @@ func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, pro
 	}
 	writeMessage(w, http.StatusCreated, response, "workflow", "")
 }
+
+// UpdateWorkflowDraft sends the full mapped draft and mutation/version context to the dedicated owner update, returning public workflow state without activation or execution.
+// UpdateWorkflowDraft передаёт полный преобразованный draft и mutation/version context отдельному update владельца, возвращая состояние без активации и выполнения.
 func (server *Server) UpdateWorkflowDraft(w http.ResponseWriter, r *http.Request, ref generated.WorkflowRef, p generated.UpdateWorkflowDraftParams) {
 	body, ok := decodeJSON[generated.WorkflowInput](w, r)
 	if !ok {
@@ -393,6 +461,9 @@ func (server *Server) UpdateWorkflowDraft(w http.ResponseWriter, r *http.Request
 	}
 	writeMessage(w, http.StatusOK, response, "workflow", "")
 }
+
+// CommandWorkflow permits only validate, publish and archive, preserving distinct typed owner RPCs and mutation pins. Unknown actions return INVALID_REQUEST rather than a generic transition.
+// CommandWorkflow допускает только validate, publish и archive с отдельными типизированными RPC и mutation pins. Неизвестное действие даёт INVALID_REQUEST, а не универсальный переход.
 func (server *Server) CommandWorkflow(w http.ResponseWriter, r *http.Request, ref generated.WorkflowRef, p generated.CommandWorkflowParams) {
 	body, ok := decodeJSON[generated.WorkflowCommand](w, r)
 	if !ok {
@@ -422,6 +493,8 @@ func (server *Server) CommandWorkflow(w http.ResponseWriter, r *http.Request, re
 	writeMessage(w, http.StatusOK, response, "workflow", "")
 }
 
+// CreateRun decodes launch input, maps target/input and sends project/task/session/attachment selectors to the dedicated owner LaunchRun with fixed CONTROL_CENTER source. Struct conversion errors are ignored as before; ownership, queue/admission and graph creation remain owner-managed.
+// CreateRun разбирает вход запуска, преобразует target/input и передаёт project/task/session/attachment отдельному LaunchRun с фиксированным CONTROL_CENTER. Ошибка Struct conversion по-прежнему игнорируется; владение, очередь, допуск и граф принадлежат владельцу.
 func (server *Server) CreateRun(w http.ResponseWriter, r *http.Request, p generated.CreateRunParams) {
 	body, ok := decodeJSON[generated.RunInput](w, r)
 	if !ok {
@@ -436,18 +509,27 @@ func (server *Server) CreateRun(w http.ResponseWriter, r *http.Request, p genera
 	}
 	writeMessage(w, http.StatusCreated, response, "", "")
 }
+
+// valueOrEmpty returns a fresh empty map for an absent optional map, otherwise the original map without copying or validating its contents.
+// valueOrEmpty возвращает новую пустую map при отсутствии необязательного значения, иначе исходную map без копирования и проверки содержимого.
 func valueOrEmpty(value *map[string]interface{}) map[string]interface{} {
 	if value == nil {
 		return map[string]interface{}{}
 	}
 	return *value
 }
+
+// sliceOrEmpty preserves absence as nil and otherwise returns the original slice, without allocating, deduplicating or validating elements.
+// sliceOrEmpty сохраняет отсутствие как nil, иначе возвращая исходный slice без выделения памяти, удаления дубликатов и проверки элементов.
 func sliceOrEmpty(value *[]string) []string {
 	if value == nil {
 		return nil
 	}
 	return *value
 }
+
+// CommandRun dispatches only CANCEL or RETRY to their dedicated owner commands with exact run, reason and mutation pins. It does not kill pods, reuse old attempt grants or implement terminal graph cleanup locally.
+// CommandRun направляет только CANCEL и RETRY отдельным командам владельца с точными run, reason и mutation pins. Поды не убивает, старые grants попыток не использует и terminal cleanup графа локально не реализует.
 func (server *Server) CommandRun(w http.ResponseWriter, r *http.Request, ref generated.RunRef, p generated.CommandRunParams) {
 	body, ok := decodeJSON[generated.RunCommand](w, r)
 	if !ok {
@@ -473,6 +555,9 @@ func (server *Server) CommandRun(w http.ResponseWriter, r *http.Request, ref gen
 	}
 	writeMessage(w, http.StatusOK, response, "", "")
 }
+
+// AddSessionTurn delegates a user turn with exact session/run/node/task/attachment selectors and create idempotency context to the owner, returning HTTP201 without directly resuming a provider session.
+// AddSessionTurn поручает пользовательский ход с точными session/run/node/task/attachment и идемпотентным create владельцу, выдавая HTTP201 без прямого возобновления сессии провайдера.
 func (server *Server) AddSessionTurn(w http.ResponseWriter, r *http.Request, sessionRef generated.SessionRef, p generated.AddSessionTurnParams) {
 	body, ok := decodeJSON[generated.TurnInput](w, r)
 	if !ok {
@@ -486,6 +571,9 @@ func (server *Server) AddSessionTurn(w http.ResponseWriter, r *http.Request, ses
 	}
 	writeMessage(w, http.StatusCreated, response, "", "")
 }
+
+// ResolveOwnerGate forwards the explicit decision, comment, attachment and mutation/version pins to the owner, then requires an exact nonnil gate reply. The handler never manufactures a decision from chat text or executes the external effect itself.
+// ResolveOwnerGate передаёт явное решение, комментарий, вложение и mutation/version pins владельцу, затем требует точный ненулевой gate-ответ. Решение из текста чата не создаётся, внешний эффект сам handler не выполняет.
 func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, ref generated.GateRef, p generated.ResolveOwnerGateParams) {
 	body, ok := decodeJSON[generated.GateResolution](w, r)
 	if !ok {
@@ -507,11 +595,16 @@ func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, r
 	writeMessage(w, http.StatusOK, response, "", "")
 }
 
+// scheduleInput maps the run target and two JSON maps to protobuf, preserving the existing ignored Struct-conversion errors. It does not validate cron, target eligibility or materialization semantics.
+// scheduleInput преобразует цель запуска и две JSON-map в protobuf с прежним игнорированием ошибок Struct conversion. Cron, допуск цели и семантику материализации не проверяет.
 func scheduleInput(body generated.ScheduleInput) (*controlplanev1.RunTarget, *structpb.Struct, *structpb.Struct) {
 	input, _ := structpb.NewStruct(body.Input)
 	promptInputs, _ := structpb.NewStruct(body.PromptInputs)
 	return targetProto(string(body.TargetType), body.TargetRef), input, promptInputs
 }
+
+// CreateSchedule binds route-project context, decodes schedule fields and forwards target/input/prompt maps plus timing, session, notification and DST/misfire/overlap policy to owner creation. HTTP201 reports metadata creation, not a scheduled execution.
+// CreateSchedule привязывает проект маршрута, разбирает поля и передаёт target/input/prompt, время, session, notification и DST/misfire/overlap политику созданию владельца. HTTP201 сообщает создание metadata, а не выполнение по расписанию.
 func (server *Server) CreateSchedule(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateScheduleParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -530,6 +623,9 @@ func (server *Server) CreateSchedule(w http.ResponseWriter, r *http.Request, pro
 	}
 	writeMessage(w, http.StatusCreated, response, "schedule", "")
 }
+
+// UpdateSchedule maps the full selected schedule with mutation/version pins to the owner update, preserving explicit timing/materialization policy fields without locally acquiring or rescheduling occurrences.
+// UpdateSchedule передаёт полное выбранное расписание с mutation/version pins update владельца, сохраняя явные поля времени и материализации без локальных claims и перепланирования occurrence.
 func (server *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef, p generated.UpdateScheduleParams) {
 	body, ok := decodeJSON[generated.ScheduleInput](w, r)
 	if !ok {
@@ -547,6 +643,9 @@ func (server *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, ref
 	}
 	writeMessage(w, http.StatusOK, response, "schedule", "")
 }
+
+// CommandSchedule handles enable/pause through the dedicated enabled flag and archive through a separate owner RPC, rejecting unknown actions. Active occurrence and cancellation semantics stay in owner state rather than this switch.
+// CommandSchedule обрабатывает enable/pause отдельным enabled-флагом, archive — другим RPC владельца, отклоняя неизвестные действия. Семантика действующих occurrence и отмены остаётся у владельца, а не в switch.
 func (server *Server) CommandSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef, p generated.CommandScheduleParams) {
 	body, ok := decodeJSON[generated.ScheduleCommand](w, r)
 	if !ok {
@@ -574,6 +673,8 @@ func (server *Server) CommandSchedule(w http.ResponseWriter, r *http.Request, re
 	writeMessage(w, http.StatusOK, response, "schedule", "")
 }
 
+// CreateIntegrationConnection copies optional public configuration into a new map, converts it with the existing ignored Struct error and creates the owner connection with idempotency context. No credential or remote-tool invocation is performed here.
+// CreateIntegrationConnection копирует необязательную публичную конфигурацию в новую map, преобразует её с прежним игнорированием Struct-ошибки и создаёт подключение владельца с идемпотентностью. Credentials и удалённые инструменты здесь не используются.
 func (server *Server) CreateIntegrationConnection(w http.ResponseWriter, r *http.Request, p generated.CreateIntegrationConnectionParams) {
 	body, ok := decodeJSON[generated.IntegrationConnectionInput](w, r)
 	if !ok {
@@ -598,6 +699,8 @@ func (server *Server) CreateIntegrationConnection(w http.ResponseWriter, r *http
 	writeMessage(w, http.StatusCreated, response, "connection", "")
 }
 
+// ConfigureIntegrationConnectionCredential converts the optional decoded value to mutable bytes, clears the decoded field and defers clearing those bytes around the owner command with mutation pins. This best effort does not guarantee erasure of immutable string/decoder copies.
+// ConfigureIntegrationConnectionCredential преобразует необязательное decoded value в изменяемые байты, очищает поле и откладывает очистку байтов вокруг команды владельца с mutation pins. Это не гарантирует стирание неизменяемых string/decoder copies.
 func (server *Server) ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.ConfigureIntegrationConnectionCredentialParams) {
 	body, ok := decodeJSON[generated.IntegrationCredentialInput](w, r)
 	if !ok {
@@ -620,6 +723,8 @@ func (server *Server) ConfigureIntegrationConnectionCredential(w http.ResponseWr
 	writeMessage(w, http.StatusOK, response, "connection", "")
 }
 
+// CommandIntegrationConnection supports only test and enable/disable, using dedicated owner RPCs under mutation/version context. Unknown actions fail before RPC, and a test response is not a grant to use remote tools.
+// CommandIntegrationConnection допускает только test и enable/disable с отдельными RPC владельца и mutation/version context. Неизвестное действие отклоняется до RPC; ответ проверки не выдаёт grant удалённых инструментов.
 func (server *Server) CommandIntegrationConnection(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.CommandIntegrationConnectionParams) {
 	body, ok := decodeJSON[generated.IntegrationConnectionCommand](w, r)
 	if !ok {
@@ -645,6 +750,9 @@ func (server *Server) CommandIntegrationConnection(w http.ResponseWriter, r *htt
 	}
 	writeMessage(w, http.StatusOK, response, "connection", "")
 }
+
+// ChangeIntegrationGrant copies approval scope paths and maps requested policy/targets into the dedicated owner grant command with mutation pins. Enum lookup alone is not validation, and caller-supplied policy cannot itself authorize execution.
+// ChangeIntegrationGrant копирует approval scope paths и преобразует запрошенные policy и targets в отдельную grant-команду владельца с mutation pins. Enum lookup не заменяет проверку, входная policy сама выполнение не разрешает.
 func (server *Server) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.ChangeIntegrationGrantParams) {
 	body, ok := decodeJSON[generated.IntegrationGrantInput](w, r)
 	if !ok {
@@ -667,6 +775,8 @@ func (server *Server) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Requ
 	writeMessage(w, http.StatusOK, response, "connection", "")
 }
 
+// ChangeArtifactBinding sends exact artifact/agent/enabled selectors and mutation pins to the owner binding command without granting raw-file access or removing quarantine locally.
+// ChangeArtifactBinding передаёт точные artifact/agent/enabled и mutation pins команде привязки владельца без выдачи доступа к байтам и локального снятия карантина.
 func (server *Server) ChangeArtifactBinding(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.ChangeArtifactBindingParams) {
 	body, ok := decodeJSON[generated.ArtifactBindingInput](w, r)
 	if !ok {
@@ -683,6 +793,9 @@ func (server *Server) ChangeArtifactBinding(w http.ResponseWriter, r *http.Reque
 	}
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
+
+// DeleteArtifact forwards exact artifact, impact digest and mutation/version pins to owner deletion, preserving its dependency/impact policy rather than deleting storage directly.
+// DeleteArtifact передаёт точный файл, impact digest и mutation/version pins удалению владельца, сохраняя политику зависимостей и влияния вместо прямого удаления хранилища.
 func (server *Server) DeleteArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DeleteArtifactParams) {
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -695,6 +808,9 @@ func (server *Server) DeleteArtifact(w http.ResponseWriter, r *http.Request, ref
 	}
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
+
+// RestoreArtifact delegates exact artifact restoration with mutation/version pins and public-projects the returned metadata without reclassifying scan safety.
+// RestoreArtifact поручает восстановление точного файла с mutation/version pins и проецирует metadata без переклассификации безопасности проверки.
 func (server *Server) RestoreArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.RestoreArtifactParams) {
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -707,6 +823,9 @@ func (server *Server) RestoreArtifact(w http.ResponseWriter, r *http.Request, re
 	}
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
+
+// PurgeArtifact invokes the dedicated irreversible owner purge with impact and mutation pins, then projects the full returned response; this handler does not remove storage or invent completion state itself.
+// PurgeArtifact вызывает отдельный безвозвратный purge владельца с impact и mutation pins и проецирует полный ответ; сам handler хранилище не удаляет и состояние завершения не выдумывает.
 func (server *Server) PurgeArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.PurgeArtifactParams) {
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -719,6 +838,9 @@ func (server *Server) PurgeArtifact(w http.ResponseWriter, r *http.Request, ref 
 	}
 	writeMessage(w, http.StatusOK, response, "", "")
 }
+
+// GetArtifactImpact queries owner impact for the selected action and explicitly maps counts, digest, blockers, permission hint and active-run summaries into the public shape. The read neither authorizes purge nor validates every response field itself.
+// GetArtifactImpact запрашивает влияние выбранного действия у владельца и явно переносит счётчики, digest, blockers, подсказку допуска и активные запуски в публичную форму. Чтение purge не разрешает и все поля ответа само не проверяет.
 func (server *Server) GetArtifactImpact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.GetArtifactImpactParams) {
 	action := controlplanev1.ArtifactImpactAction(controlplanev1.ArtifactImpactAction_value["ARTIFACT_IMPACT_ACTION_"+string(p.Action)])
 	response, err := server.control.Query.GetArtifactImpact(r.Context(), &controlplanev1.GetArtifactImpactRequest{ArtifactRef: ref, Action: action})
@@ -748,6 +870,9 @@ func (server *Server) GetArtifactImpact(w http.ResponseWriter, r *http.Request, 
 		Blockers: impact.GetBlockers(), Permitted: impact.GetPermitted(),
 	})
 }
+
+// UploadArtifact derives route-project context and forwards project/run/name/idempotency selectors to the shared upload path; actual content and owner admission are handled there.
+// UploadArtifact выводит контекст проекта маршрута и передаёт project/run/name/idempotency общему пути загрузки; содержимое и допуск владельца обрабатываются там.
 func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.UploadArtifactParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -761,6 +886,8 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 	})
 }
 
+// UploadOrganizationArtifact uses the shared upload path with no project/run selectors, leaving organization identity to verified owner context rather than request fields.
+// UploadOrganizationArtifact использует общий путь загрузки без project/run selectors, оставляя организационную identity проверенному контексту владельца, а не входным полям.
 func (server *Server) UploadOrganizationArtifact(w http.ResponseWriter, r *http.Request, p generated.UploadOrganizationArtifactParams) {
 	server.uploadArtifact(w, r, artifactUploadRequest{
 		fileName:       p.XFileName,
@@ -768,6 +895,8 @@ func (server *Server) UploadOrganizationArtifact(w http.ResponseWriter, r *http.
 	})
 }
 
+// artifactUploadRequest carries only endpoint-selected scope/name/idempotency metadata for the shared upload path; an empty project chooses the organization RPC, not a wildcard access grant.
+// artifactUploadRequest хранит только выбранные endpoint область, имя и идемпотентность общего пути; пустой проект выбирает организационный RPC, а не wildcard grant.
 type artifactUploadRequest struct {
 	projectRef     string
 	runRef         string
@@ -775,11 +904,19 @@ type artifactUploadRequest struct {
 	idempotencyKey string
 }
 
+// artifactUploadClient is the narrow typed metadata/chunk/commit send-and-final-reply port shared by project and organization uploads. It does not provide cancellation, admission or durable receipt guarantees itself.
+// artifactUploadClient — узкий типизированный порт metadata/chunk/commit и финального ответа проектной и организационной загрузки. Сам отмену, допуск и durable receipt не гарантирует.
 type artifactUploadClient interface {
+	// Send submits one typed upload part and reports transport failure; a successful call alone is not owner admission or publication.
+	// Send отправляет одну типизированную часть загрузки и сообщает транспортную ошибку; успех сам по себе не означает допуск и публикацию владельца.
 	Send(*controlplanev1.UploadArtifactRequest) error
+	// CloseAndRecv ends the outbound upload stream and obtains its typed owner reply or error; the consumer still validates/project-shapes that reply.
+	// CloseAndRecv завершает исходящий поток загрузки и получает типизированный ответ владельца либо ошибку; потребитель ещё проверяет и проецирует ответ.
 	CloseAndRecv() (*controlplanev1.UploadArtifactResponse, error)
 }
 
+// uploadArtifact enforces explicit length0..512MiB and mutation context, selects the exact project/organization stream, then sends metadata, counted/hash-checked chunks and commit before HTTP201 projection. Failures preserve earlier transport effects and return without an added abort/CloseSend path here; scan/quarantine/admission remain owner-managed.
+// uploadArtifact требует явную длину0..512МиБ и mutation context, выбирает точный проектный либо организационный поток, затем отправляет metadata, подсчитанные и хешированные chunks и commit до HTTP201. Ошибки сохраняют прежние транспортные эффекты и возвращаются без дополнительного abort/CloseSend здесь; проверка, карантин и допуск остаются у владельца.
 func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upload artifactUploadRequest) {
 	if r.ContentLength < 0 {
 		writeLocalProblem(w, http.StatusLengthRequired, "CONTENT_LENGTH_REQUIRED", false)
@@ -815,16 +952,7 @@ func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upl
 	received, sha256Digest, err := forwardArtifactBody(r.Body, r.ContentLength, func(chunk []byte) error {
 		return stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Chunk{Chunk: chunk}})
 	})
-	if errors.Is(err, errArtifactContentLengthMismatch) {
-		writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
-		return
-	}
-	if errors.Is(err, errArtifactBodyRead) {
-		writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
-		return
-	}
-	if err != nil {
-		writeRPCProblem(w, err)
+	if writeArtifactUploadError(w, err) {
 		return
 	}
 	if err := stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Commit{Commit: &controlplanev1.UploadArtifactCommit{
@@ -842,10 +970,14 @@ func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upl
 	writeMessage(w, http.StatusCreated, response, "artifact", "")
 }
 
+// organizationArtifactUploadClient adapts only the differing generated organization stream message types to the common upload port, retaining the original stream context and ownership.
+// organizationArtifactUploadClient приспосабливает только различающиеся generated-типы организационного потока к общему порту, сохраняя исходные контекст и владение потоком.
 type organizationArtifactUploadClient struct {
 	stream controlplanev1.PlatformCommandService_UploadOrganizationArtifactClient
 }
 
+// Send converts known metadata/chunk/commit oneofs while preserving their payloads and delegates to the organization stream. An unknown part produces an empty converted message rather than a local rejection; owner validation remains necessary.
+// Send преобразует известные metadata/chunk/commit oneof с сохранением payload и передаёт организационному потоку. Неизвестная часть даёт пустое сообщение вместо локального отказа; проверка владельца остаётся обязательной.
 func (client organizationArtifactUploadClient) Send(request *controlplanev1.UploadArtifactRequest) error {
 	converted := &controlplanev1.UploadOrganizationArtifactRequest{}
 	switch part := request.GetPart().(type) {
@@ -859,6 +991,8 @@ func (client organizationArtifactUploadClient) Send(request *controlplanev1.Uplo
 	return client.stream.Send(converted)
 }
 
+// CloseAndRecv propagates the organization's terminal error, otherwise wraps only its artifact field in the common typed reply without copying or inventing admission metadata.
+// CloseAndRecv передаёт терминальную ошибку организации, иначе оборачивает только artifact в общий типизированный ответ без копирования и выдумывания metadata допуска.
 func (client organizationArtifactUploadClient) CloseAndRecv() (*controlplanev1.UploadArtifactResponse, error) {
 	response, err := client.stream.CloseAndRecv()
 	if err != nil {
@@ -867,6 +1001,26 @@ func (client organizationArtifactUploadClient) CloseAndRecv() (*controlplanev1.U
 	return &controlplanev1.UploadArtifactResponse{Artifact: response.GetArtifact()}, nil
 }
 
+// writeArtifactUploadError preserves upload failure precedence: length mismatch, body-read sentinel, then the existing closed RPC problem mapper. It returns false and performs no write for nil; true means an error response was attempted, not delivered or rolled back. Avatar and artifact streams retain their own commit/close lifecycle.
+// writeArtifactUploadError сохраняет порядок отказов загрузки: несовпадение длины, sentinel чтения тела, затем прежний закрытый RPC problem mapper. При nil возвращает false без записи; true означает попытку error-ответа, а не доставку и откат. Commit и закрытие остаются у потоков аватара и файла.
+func writeArtifactUploadError(w http.ResponseWriter, err error) bool {
+	if errors.Is(err, errArtifactContentLengthMismatch) {
+		writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
+		return true
+	}
+	if errors.Is(err, errArtifactBodyRead) {
+		writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
+		return true
+	}
+	if err != nil {
+		writeRPCProblem(w, err)
+		return true
+	}
+	return false
+}
+
+// forwardArtifactBody validates reader/callback/declared bounds and forwards independent64KiB-or-smaller copies while counting and hashing exact bytes. It rejects overflow before sending that chunk, returns prior received count on failures, and yields a digest only at exact EOF/size agreement. Reader errors become a fixed sentinel, send errors stay intact; no context, deadline or zero-progress-read bound is added here.
+// forwardArtifactBody проверяет reader, callback и пределы длины и передаёт независимые копии до64КиБ с подсчётом и хешированием точных байтов. Превышение отклоняется до отправки chunk, при ошибке возвращается прежний received, digest — только при точном EOF и размере. Reader-ошибка заменяется sentinel, send-ошибка сохраняется; context, deadline и предел пустых чтений здесь не добавляются.
 func forwardArtifactBody(reader io.Reader, declaredSize int64, send func([]byte) error) (int64, string, error) {
 	if reader == nil || send == nil || declaredSize < 0 || declaredSize > maximumArtifactBytes {
 		return 0, "", errArtifactContentLengthMismatch
@@ -899,6 +1053,9 @@ func forwardArtifactBody(reader io.Reader, declaredSize int64, send func([]byte)
 	}
 	return received, hex.EncodeToString(digest.Sum(nil)), nil
 }
+
+// DownloadArtifact maps the public preview/download purpose to the dedicated owner stream and delegates bounded HTTP output; selecting PREVIEW does not bypass owner eligibility or content policy.
+// DownloadArtifact преобразует публичную цель preview/download в отдельный поток владельца и передаёт ограниченную HTTP-выдачу; PREVIEW допуск и content policy владельца не обходит.
 func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DownloadArtifactParams) {
 	purpose := controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED
 	switch p.Purpose {
@@ -911,6 +1068,8 @@ func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, r
 	writeArtifactDownloadStream(w, stream, err)
 }
 
+// DownloadArtifactRevision pins artifact and revision in the owner stream request and delegates the same bounded download writer without silently selecting the latest revision.
+// DownloadArtifactRevision закрепляет файл и ревизию в запросе потока владельца и передаёт тому же ограниченному writer без скрытого выбора последней ревизии.
 func (server *Server) DownloadArtifactRevision(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, revisionRef string, p generated.DownloadArtifactRevisionParams) {
 	purpose := controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED
 	switch p.Purpose {
@@ -923,13 +1082,25 @@ func (server *Server) DownloadArtifactRevision(w http.ResponseWriter, r *http.Re
 	writeArtifactDownloadStream(w, stream, err)
 }
 
+// artifactDownloadFrame exposes only typed content bytes and metadata shared by current/revision download messages; framing, authorization and total-length checks belong to the owner stream and writer.
+// artifactDownloadFrame выдаёт только типизированные байты и metadata текущего и ревизионного скачивания; framing, авторизация и проверка общей длины принадлежат потоку владельца и writer.
 type artifactDownloadFrame interface {
+	// GetData exposes the current frame's bytes; the first metadata frame must contain none, and later bytes remain bounded by the declared total.
+	// GetData выдаёт байты текущего кадра; первый metadata-кадр обязан быть пустым, следующие байты ограничены объявленной общей длиной.
 	GetData() []byte
+	// GetFileName supplies the first frame's display name, which the HTTP writer sanitizes before header use; it is not a filesystem path.
+	// GetFileName задаёт отображаемое имя первого кадра, очищаемое writer до заголовка; файловым путём оно не является.
 	GetFileName() string
+	// GetMediaType supplies first-frame media metadata; the writer parses it and substitutes octet-stream for an invalid type without executing content.
+	// GetMediaType задаёт media metadata первого кадра; writer разбирает её и заменяет неверный тип на octet-stream без исполнения содержимого.
 	GetMediaType() string
+	// GetSizeBytes exposes the declared first-frame total, bounded0..512MiB; subsequent chunk frames must leave this metadata at zero.
+	// GetSizeBytes выдаёт объявленную общую длину первого кадра в пределах0..512МиБ; следующие chunk-кадры обязаны оставлять её нулевой.
 	GetSizeBytes() int64
 }
 
+// writeArtifactDownloadStream requires a data-free bounded metadata frame before committing sandboxed no-store attachment headers, then accepts only metadata-free chunks within the declared total. After HTTP200, receive/write/size failures simply stop output and cannot replace it with a problem; no explicit stream cancel/join or checksum verification is added here.
+// writeArtifactDownloadStream требует пустой по данным ограниченный metadata-кадр до sandboxed no-store attachment headers, затем допускает только chunks без metadata в пределах общей длины. После HTTP200 ошибки получения, записи и размера лишь останавливают выдачу и не заменяют её problem; явные cancel/join потока и проверка checksum здесь не добавляются.
 func writeArtifactDownloadStream[T artifactDownloadFrame](w http.ResponseWriter, stream interface {
 	Recv() (T, error)
 }, err error) {
@@ -989,6 +1160,8 @@ func writeArtifactDownloadStream[T artifactDownloadFrame](w http.ResponseWriter,
 	}
 }
 
+// safeAttachmentFileName removes ASCII controls, DEL and both slash separators, trims outer whitespace and substitutes artifact for an empty name. It preserves dots and other Unicode, so it sanitizes header display names rather than confining filesystem paths.
+// safeAttachmentFileName удаляет ASCII controls, DEL и оба slash-разделителя, убирает внешние пробелы и заменяет пустое имя на artifact. Точки и прочий Unicode сохраняются: это очистка имени заголовка, а не ограничение файлового пути.
 func safeAttachmentFileName(value string) string {
 	value = strings.Map(func(character rune) rune {
 		if character < 0x20 || character == 0x7f || character == '/' || character == '\\' {

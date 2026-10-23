@@ -13,11 +13,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// assistantSearchRecorder wraps an in-memory HTTP recorder with a deterministic default-title localizer for history-search query tests; it does not replace owner catalog filtering.
+// assistantSearchRecorder дополняет in-memory HTTP recorder детерминированной локализацией исходного имени для query-тестов истории; owner catalog filtering не подменяет.
 type assistantSearchRecorder struct {
 	*httptest.ResponseRecorder
 	defaultTitle string
 }
 
+// Localize substitutes only the new-conversation message ID and preserves every other ID, so tests observe whether default-title matching was requested.
+// Localize подставляет только message ID нового диалога и сохраняет остальные ID, чтобы тест видел запрос сопоставления исходного имени.
 func (recorder *assistantSearchRecorder) Localize(messageID string) string {
 	if messageID == "NEW_ASSISTANT_CONVERSATION" {
 		return recorder.defaultTitle
@@ -25,6 +29,8 @@ func (recorder *assistantSearchRecorder) Localize(messageID string) string {
 	return messageID
 }
 
+// TestAssistantHistorySearchAndState checks real locale catalog labels, literal query/state mapping and localized default-title matches, then rejects invalid filters before owner RPC. It exercises a synthetic HTTP handler, not live conversation storage or browser search.
+// TestAssistantHistorySearchAndState проверяет реальные locale labels каталога, literal query/state mapping и совпадения локализованного исходного имени, затем отклоняет неверные фильтры до owner RPC. Использует synthetic HTTP handler, не live хранилище диалогов и браузерный поиск.
 func TestAssistantHistorySearchAndState(t *testing.T) {
 	texts, err := usertext.New()
 	if err != nil {
@@ -81,6 +87,8 @@ func TestAssistantHistorySearchAndState(t *testing.T) {
 	}
 }
 
+// TestAssistantArchiveExactMutationAndErrors pins the archive RPC, OCC/idempotency and public ETag/no-store response; missing mutation headers, owner errors and inconsistent identity/version/state fail without exposing private diagnostics. It does not execute the owner transaction or claim archival completion in a live environment.
+// TestAssistantArchiveExactMutationAndErrors закрепляет archive RPC, OCC/idempotency и публичный ответ ETag/no-store; отсутствие mutation headers, owner errors и несогласованные identity/version/state отклоняются без private diagnostics. Owner transaction не исполняется, live завершение архивации не утверждается.
 func TestAssistantArchiveExactMutationAndErrors(t *testing.T) {
 	request := func() *http.Request {
 		r := httptest.NewRequest("POST", "/api/v1/assistant-conversations/conv_fixture01/archive", nil)
@@ -128,6 +136,8 @@ func TestAssistantArchiveExactMutationAndErrors(t *testing.T) {
 	}
 }
 
+// TestAssistantTrashRestoreAndPurgeExactMutations preserves distinct restore/purge RPCs and exact mutation pins, including restore ETag and a bodyless purge 204. In-memory replies prove transport mapping, not storage cleanup or recovery of a real archived conversation.
+// TestAssistantTrashRestoreAndPurgeExactMutations сохраняет разные restore/purge RPC и точные mutation pins, включая restore ETag и purge 204 без тела. In-memory ответы доказывают transport mapping, не очистку хранилища и восстановление реального диалога.
 func TestAssistantTrashRestoreAndPurgeExactMutations(t *testing.T) {
 	mutationRequest := func(method, path, key string) *http.Request {
 		r := httptest.NewRequest(method, path, nil)

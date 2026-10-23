@@ -11,33 +11,71 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/policydeclaration"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// snapshotDigestPattern accepts exactly 64 lowercase hexadecimal characters for declared SHA-256 pins;
+// matching it is not proof that the document bytes have that digest.
+// snapshotDigestPattern принимает ровно 64 строчных шестнадцатеричных символа для заявленной привязки
+// SHA-256; совпадение не доказывает соответствие хеша байтам документа.
 var snapshotDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 const (
+	// snapshotProtectedType pins the JWS protected type of full authority snapshots, separating them from
+	// ordinary authorization contexts and trust bundles.
+	// snapshotProtectedType закрепляет защищённый тип JWS полного снимка полномочий, отделяя его от обычных
+	// контекстов авторизации и наборов доверия.
 	snapshotProtectedType = "kodex-internal-rpc-snapshot+jws"
-	manifestBundleType    = "kodex-internal-rpc-manifest-trust+jws"
-	// MaxPublisherSnapshotBytes ограничивает полный служебный snapshot и не
-	// расширяет лимит обычного authorization JWS.
+	// manifestBundleType pins the root-signed manifest verification bundle's protected type so another
+	// signed document cannot substitute for it.
+	// manifestBundleType закрепляет защищённый тип подписанного корнем набора проверки манифеста, не
+	// позволяя заменить его другим подписанным документом.
+	manifestBundleType = "kodex-internal-rpc-manifest-trust+jws"
+	// MaxPublisherSnapshotBytes allows a complete service snapshot up to one MiB without increasing the
+	// separate ordinary authorization-token limit.
+	// MaxPublisherSnapshotBytes допускает полный служебный снимок размером до одного МиБ, не увеличивая
+	// отдельный предел обычного токена авторизации.
 	MaxPublisherSnapshotBytes = 1 << 20
-	maxSnapshotBytes          = MaxPublisherSnapshotBytes
-	maxKeyFileBytes           = 64 << 10
+	// maxSnapshotBytes is the local alias of the full snapshot byte budget used for bounded file reads and
+	// complete snapshot JWS verification.
+	// maxSnapshotBytes — локальный псевдоним бюджета полного снимка для ограниченного чтения файлов и
+	// проверки его полного JWS.
+	maxSnapshotBytes = MaxPublisherSnapshotBytes
+	// maxKeyFileBytes limits individually mounted key and metadata files to 64 KiB; format, permissions and
+	// trust validation remain separate checks.
+	// maxKeyFileBytes ограничивает отдельные монтируемые файлы ключей и метаданных 64 КиБ; формат, права и
+	// доверие проверяются отдельно.
+	maxKeyFileBytes = 64 << 10
 )
 
-// Role выбирает назначение загружаемого снимка.
+// Role selects the local issuer or verifier view of a signed snapshot; it does not grant an arbitrary
+// caller a workload role.
+// Role выбирает локальное представление выпускающей либо проверяющей стороны подписанного снимка, не
+// выдавая произвольному вызывающему роль нагрузки.
 type Role string
 
-// Поддерживаемые роли локального authority-компонента.
+// Local roles select distinct workload policy views without granting authority.
+// Локальные роли выбирают разные представления политики нагрузки, не выдавая полномочий.
 const (
-	RoleIssuer   Role = "issuer"
+	// RoleIssuer selects caller-owned operation bindings, proof trust and a private current authorization
+	// signing key during loading.
+	// RoleIssuer выбирает при загрузке операции вызывающей стороны, доверие доказательствам и текущий
+	// закрытый ключ подписи контекстов.
+	RoleIssuer Role = "issuer"
+	// RoleVerifier selects target-owned operation bindings and verification keys without loading a private
+	// authorization signing key.
+	// RoleVerifier выбирает операции целевой стороны и ключи проверки без загрузки закрытого ключа подписи
+	// контекстов.
 	RoleVerifier Role = "verifier"
 )
 
-// LoadOptions задаёт доверенные корни и пути подписанного снимка.
+// LoadOptions supplies the configured role/workload, independently pinned root files and mounted
+// snapshot/key paths, with an optional evaluation clock; fields do not authenticate themselves.
+// LoadOptions задаёт роль и нагрузку, независимо закреплённые корневые файлы, пути снимка и ключей и
+// необязательные часы проверки; сами поля себя не удостоверяют.
 type LoadOptions struct {
 	Role                       Role
 	WorkloadID                 string
@@ -50,12 +88,20 @@ type LoadOptions struct {
 	Now                        time.Time
 }
 
-// Loaded содержит проверенный снимок и разделённые наборы ключей.
+// Loaded returns the checked policy view and separated signing/verification/proof key material; issuer
+// results may contain a private signing key and must not be logged.
+// Loaded возвращает проверенное представление политики и раздельные материалы подписи, проверки и
+// доказательств; результат выпускающей стороны может содержать закрытый ключ и не журналируется.
 type Loaded struct {
 	Policy model.PolicySnapshot
 	Keys   service.KeyMaterial
 }
 
+// document is the signed snapshot payload containing independent source/key/policy/signer revisions,
+// lifetime, predecessor history, issuers and policy; decoding alone does not activate it.
+// document представляет подписанное содержимое снимка с независимыми ревизиями источника, ключей,
+// политики и подписанта, сроком, историей, подписантами и политикой; одно декодирование не активирует
+// снимок.
 type document struct {
 	Version          int              `json:"v"`
 	SourceRevision   uint64           `json:"source_revision"`
@@ -71,14 +117,26 @@ type document struct {
 	Policy           policy           `json:"policy"`
 }
 
+// revisionDigest uses the shared exact revision/digest wire shape for signed trust history; monotonic
+// acceptance still belongs to the persistent verifier.
+// revisionDigest использует общую точную форму ревизии и хеша для подписанной истории доверия;
+// монотонное принятие по-прежнему принадлежит устойчивой проверяющей стороне.
 type revisionDigest = internalrpcauth.TrustRevisionDigest
 
+// issuerKeySet groups public authorization keys under one issuer and workload identity; the loader
+// enforces the current-key cardinality and audience binding.
+// issuerKeySet объединяет открытые ключи авторизации по подписанту и нагрузке; число текущих ключей и
+// привязку аудитории проверяет загрузчик.
 type issuerKeySet struct {
 	Issuer     string     `json:"issuer"`
 	WorkloadID string     `json:"workload_id"`
 	Keys       []keyEntry `json:"keys"`
 }
 
+// keyEntry carries one public JWK with lifecycle status, generation, purpose, audiences and validity
+// interval inside the signed snapshot.
+// keyEntry содержит один открытый JWK со статусом жизненного цикла, поколением, назначением, аудиториями
+// и сроком внутри подписанного снимка.
 type keyEntry struct {
 	Status     string          `json:"status"`
 	Generation uint64          `json:"generation"`
@@ -89,6 +147,10 @@ type keyEntry struct {
 	JWK        json.RawMessage `json:"jwk"`
 }
 
+// manifestRootMetadata pins the mounted root's identity, generation, purpose, audience, key thumbprint,
+// source metadata and lifetime; it is checked against the separately mounted public root.
+// manifestRootMetadata закрепляет личность, поколение, назначение, аудиторию, отпечаток ключа,
+// метаданные источника и срок корня; они сверяются с отдельно монтируемым открытым корнем.
 type manifestRootMetadata struct {
 	Version        int    `json:"v"`
 	RootID         string `json:"root_id"`
@@ -103,6 +165,10 @@ type manifestRootMetadata struct {
 	NotAfter       int64  `json:"not_after"`
 }
 
+// manifestTrustBundle is the root-signed manifest-key registry with declared bundle digest, bounded
+// predecessor history and publication lifetime; the selected signer must be exact CURRENT.
+// manifestTrustBundle представляет подписанный корнем реестр ключей манифеста с заявленным хешем,
+// ограниченной историей и сроком публикации; выбранный подписант должен быть точным CURRENT.
 type manifestTrustBundle struct {
 	Version        int                 `json:"v"`
 	RootID         string              `json:"root_id"`
@@ -118,6 +184,10 @@ type manifestTrustBundle struct {
 	ValidUntil     int64               `json:"valid_until"`
 }
 
+// manifestSignerKey stores public manifest-key identity, thumbprint, lifecycle generation/status and
+// time bounds; private signing material is not part of this wire record.
+// manifestSignerKey хранит личность и отпечаток открытого ключа манифеста, поколение, статус и сроки;
+// закрытый материал подписи в запись не входит.
 type manifestSignerKey struct {
 	Status     string          `json:"status"`
 	Generation uint64          `json:"generation"`
@@ -128,9 +198,22 @@ type manifestSignerKey struct {
 	NotAfter   int64           `json:"not_after"`
 }
 
+// proofTrustDocument aliases the shared authority-proof trust schema, preserving its canonical wire
+// representation rather than introducing a second local definition.
+// proofTrustDocument ссылается на общую схему доверия доказательствам полномочий, сохраняя каноническое
+// представление вместо второго локального определения.
 type proofTrustDocument = internalrpcauth.AuthorityProofTrustDocument
+
+// proofTrustKey aliases the shared public proof-key record used by publication and loading; the alias
+// itself performs no key validation.
+// proofTrustKey ссылается на общую запись открытого ключа доказательств для публикации и загрузки; сам
+// псевдоним ключ не проверяет.
 type proofTrustKey = internalrpcauth.AuthorityProofTrustKey
 
+// policy carries the signed machine-policy envelope and closed producer/operation declarations; role
+// projection and domain validation remain separate from JSON decoding.
+// policy содержит подписанную машинную политику и закрытые декларации производителей и операций; выбор
+// по роли и доменная проверка отделены от разбора JSON.
 type policy struct {
 	AuthorityABIVersion     uint32                   `json:"authority_abi_version"`
 	TrustDomain             string                   `json:"trust_domain"`
@@ -142,33 +225,20 @@ type policy struct {
 	OperationBindings       []operationBinding       `json:"operation_bindings"`
 }
 
-type authorityProofProducer struct {
-	ProducerID                         string   `json:"producer_id"`
-	CallerWorkloadID                   string   `json:"caller_workload_id"`
-	CallerSPIFFEID                     string   `json:"caller_spiffe_id"`
-	OwnerWorkloadID                    string   `json:"owner_workload_id"`
-	OwnerSPIFFEID                      string   `json:"owner_spiffe_id"`
-	FullMethod                         string   `json:"full_method"`
-	TLSServerName                      string   `json:"tls_server_name"`
-	TransportTrustBundleID             string   `json:"transport_trust_bundle_id"`
-	ApplicationCredential              string   `json:"application_credential"`
-	ApplicationCredentialMetadata      string   `json:"application_credential_metadata"`
-	ApplicationCredentialIssuer        string   `json:"application_credential_issuer"`
-	ApplicationCredentialAudience      string   `json:"application_credential_audience"`
-	ApplicationCredentialTrustBundleID string   `json:"application_credential_trust_bundle_id"`
-	AuthorityProofIssuer               string   `json:"authority_proof_issuer"`
-	AuthorityProofAudience             string   `json:"authority_proof_audience"`
-	AuthorityProofTrustBundleID        string   `json:"authority_proof_trust_bundle_id"`
-	AuthorityProofMaxAgeSeconds        int64    `json:"authority_proof_max_age_seconds"`
-	DeadlineMilliseconds               int64    `json:"deadline_milliseconds"`
-	MaxAttempts                        int      `json:"max_attempts"`
-	RetryableGRPCCodes                 []string `json:"retryable_grpc_codes"`
-	IdempotencyScope                   string   `json:"idempotency_scope"`
-	AuthoritySources                   []string `json:"authority_sources"`
-	AllowedOperationIDs                []string `json:"allowed_operation_ids"`
-	ServerResolvedFields               []string `json:"server_resolved_fields"`
-}
+// authorityProofProducer keeps the snapshot loader's nominal producer record
+// over the common machine-policy field layout; signed provenance and role-specific
+// projection remain loader/domain checks rather than properties of the type.
+// authorityProofProducer сохраняет отдельную запись загрузчика снимка на общей
+// форме полей машинной политики; подписанное происхождение и выбор по роли
+// проверяются загрузчиком и доменом, а не обеспечиваются самим типом.
+type authorityProofProducer policydeclaration.ProofProducer
 
+// operationBinding pins caller, target, full RPC, permission, proof producer, local peers and
+// request/continuation profiles in the signed policy; the loader projects only the applicable workload
+// role.
+// operationBinding закрепляет в подписанной политике вызывающую и целевую стороны, полный RPC, право,
+// производителя доказательств, локальные стороны и профили запроса и продолжения; загрузчик выбирает
+// лишь применимую роль нагрузки.
 type operationBinding struct {
 	OperationID         string               `json:"operation_id"`
 	CallerWorkloadID    string               `json:"caller_workload_id"`
@@ -190,26 +260,30 @@ type operationBinding struct {
 	Continuation        *continuationProfile `json:"continuation,omitempty"`
 }
 
-type requestProfile struct {
-	Mode        string `json:"mode"`
-	Resource    string `json:"resource"`
-	Version     string `json:"version"`
-	Attempt     string `json:"attempt"`
-	Idempotency string `json:"idempotency"`
-}
+// requestProfile names request-binding dimensions required by policy, not caller-supplied resource,
+// version, attempt or idempotency values.
+// requestProfile называет требуемые политикой измерения привязки, а не переданные вызывающим значения
+// ресурса, версии, попытки или идемпотентности.
+type requestProfile policydeclaration.RequestProfile
 
-type continuationProfile struct {
-	ParentOperationID string `json:"parent_operation_id"`
-	ParentFullMethod  string `json:"parent_full_method"`
-}
+// continuationProfile restricts a child operation to one exact parent operation and full RPC method; it
+// does not authorize unrelated delegation edges.
+// continuationProfile ограничивает дочернюю операцию одной точной родительской операцией и полным
+// методом RPC, не разрешая посторонние рёбра делегирования.
+type continuationProfile policydeclaration.ContinuationProfile
 
-type localPeer struct {
-	UID         uint32 `json:"uid"`
-	PrimaryGID  uint32 `json:"primary_gid"`
-	SharedFSGID uint32 `json:"shared_fs_gid"`
-}
+// localPeer carries policy-owned local UID, primary GID and shared filesystem GID pins for Unix-socket
+// boundaries; these values are not observed peer credentials by themselves.
+// localPeer содержит закреплённые политикой UID, основной GID и общий файловый GID для границ
+// Unix-сокетов; сами значения не являются наблюдаемыми учётными данными стороны.
+type localPeer policydeclaration.LocalPeer
 
-// Load проверяет цепочку корня, signer и истории, затем загружает снимок.
+// Load verifies the independently rooted manifest signer and canonical signed snapshot, checks
+// revision/lifetime/history and key bindings, then projects role-specific policy and key material. It
+// does not persist or activate a rollback high-watermark.
+// Load проверяет независимо укоренённого подписанта и канонический подписанный снимок, ревизии, сроки,
+// историю и привязки ключей, затем выбирает политику и ключи роли. Устойчивую границу откатов функция не
+// сохраняет и не активирует.
 func Load(options LoadOptions) (Loaded, error) {
 	if options.Role != RoleIssuer && options.Role != RoleVerifier {
 		return Loaded{}, errors.New("invalid authority snapshot role")
@@ -372,6 +446,10 @@ func Load(options LoadOptions) (Loaded, error) {
 	}, nil
 }
 
+// buildPolicySnapshot maps checked snapshot metadata and selected bindings into the domain policy, using
+// the current workload key's generation rather than the manifest signer's generation.
+// buildPolicySnapshot преобразует проверенные метаданные и выбранные привязки в доменную политику,
+// используя поколение текущего ключа нагрузки, а не подписанта манифеста.
 func buildPolicySnapshot(
 	snapshot document,
 	current service.VerificationKeyRecord,
@@ -400,6 +478,10 @@ func buildPolicySnapshot(
 	}
 }
 
+// castContinuationProfile preserves nil or allocates a domain copy of the exact parent operation/method
+// pair without validating the edge itself.
+// castContinuationProfile сохраняет nil либо выделяет доменную копию точной пары родительской операции и
+// метода без самостоятельной проверки ребра.
 func castContinuationProfile(value *continuationProfile) *model.ContinuationProfile {
 	if value == nil {
 		return nil
@@ -407,6 +489,10 @@ func castContinuationProfile(value *continuationProfile) *model.ContinuationProf
 	return &model.ContinuationProfile{ParentOperationID: value.ParentOperationID, ParentFullMethod: value.ParentFullMethod}
 }
 
+// loadManifestVerificationKey selects a rooted manifest key for the snapshot protected type with the
+// complete-snapshot header budget; actual payload verification follows in Load.
+// loadManifestVerificationKey выбирает укоренённый ключ манифеста для типа снимка с бюджетом полного
+// снимка при чтении заголовка; содержимое затем проверяет Load.
 func loadManifestVerificationKey(
 	options LoadOptions,
 	snapshotCompact string,
@@ -421,6 +507,12 @@ func loadManifestVerificationKey(
 	)
 }
 
+// loadManifestVerificationKeyForType checks pinned root metadata, the root-signed bundle and bounded
+// history, then selects the single active CURRENT key matching the requested document type/header. It
+// resolves trust without activating persistent state.
+// loadManifestVerificationKeyForType проверяет закреплённые метаданные корня, подписанный им набор и
+// ограниченную историю, затем выбирает единственный активный CURRENT, соответствующий типу и заголовку
+// документа. Доверие разрешается без активации устойчивого состояния.
 func loadManifestVerificationKeyForType(
 	options LoadOptions,
 	signedCompact string,
@@ -562,17 +654,20 @@ func loadManifestVerificationKeyForType(
 	return selected, selectedGeneration, nil
 }
 
+// validateHistory checks a bootstrap-zero predecessor or a contiguous bounded history of at most 32
+// revisions ending at the exact predecessor; it does not compare a persisted local high-watermark.
+// validateHistory проверяет нулевого начального предшественника либо непрерывную историю до 32 ревизий с
+// точным последним предшественником; локальную устойчивую границу версий она не сравнивает.
 func validateHistory(
 	sourceRevision uint64,
 	predecessor revisionDigest,
 	history []revisionDigest,
 ) error {
-	const zeroDigest = "0000000000000000000000000000000000000000000000000000000000000000"
 	if len(history) > 32 {
 		return errors.New("signed authority snapshot history exceeds the bounded window")
 	}
 	if sourceRevision == 1 {
-		if predecessor.Revision != 0 || predecessor.DigestSHA256 != zeroDigest || len(history) != 0 {
+		if predecessor.Revision != 0 || predecessor.DigestSHA256 != zeroSHA256 || len(history) != 0 {
 			return errors.New("bootstrap authority snapshot predecessor or history is invalid")
 		}
 		return nil
@@ -603,6 +698,10 @@ func validateHistory(
 	return nil
 }
 
+// modelHistory allocates a domain revision/digest slice in input order without sharing its backing array
+// or adding validation.
+// modelHistory выделяет доменный срез ревизий и хешей в исходном порядке без общего базового массива и
+// дополнительной проверки.
 func modelHistory(values []revisionDigest) []model.RevisionDigest {
 	result := make([]model.RevisionDigest, 0, len(values))
 	for _, value := range values {
@@ -614,6 +713,12 @@ func modelHistory(values []revisionDigest) []model.RevisionDigest {
 	return result
 }
 
+// loadIssuerKeys parses unique public key IDs, exact policy audience sets and validity, requires one
+// CURRENT per issuer set and optionally the configured workload's key set, then returns verification
+// records and the selected current key.
+// loadIssuerKeys разбирает уникальные открытые ключи, точные аудитории политики и сроки, требует один
+// CURRENT на набор подписанта и при необходимости набор заданной нагрузки, затем возвращает записи
+// проверки и выбранный текущий ключ.
 func loadIssuerKeys(
 	keySets []issuerKeySet,
 	bindings []operationBinding,
@@ -697,6 +802,12 @@ func loadIssuerKeys(
 	return keys, ownCurrent, nil
 }
 
+// loadProofTrust reads the shared proof-trust format pinned to exact snapshot revision/digest, validates
+// bounded public key records and checks that each encountered CURRENT issuer count is one; it does not
+// activate trust or mint proofs.
+// loadProofTrust читает общий формат доверия с точной ревизией и хешем снимка, проверяет ограниченные
+// записи открытых ключей и единичность каждого встреченного счётчика CURRENT по подписанту; доверие не
+// активирует и доказательств не выпускает.
 func loadProofTrust(
 	path string,
 	now time.Time,
@@ -762,6 +873,10 @@ func loadProofTrust(
 	return result, nil
 }
 
+// stringSet copies nonempty strings into a set, dropping empty and repeated entries without otherwise
+// normalizing their contents.
+// stringSet копирует непустые строки в множество, отбрасывая пустые и повторные элементы без иной
+// нормализации.
 func stringSet(values []string) map[string]struct{} {
 	result := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -773,6 +888,10 @@ func stringSet(values []string) map[string]struct{} {
 	return result
 }
 
+// sameStringSet compares exact membership and cardinality without depending on map order; nil and empty
+// sets compare equal.
+// sameStringSet сравнивает точные состав и размер без зависимости от порядка карты; nil и пустое
+// множество равны.
 func sameStringSet(left, right map[string]struct{}) bool {
 	if len(left) != len(right) {
 		return false
@@ -785,6 +904,10 @@ func sameStringSet(left, right map[string]struct{}) bool {
 	return true
 }
 
+// bindingApplies selects caller workload for issuer role and target workload otherwise; callers validate
+// the role before using this selector.
+// bindingApplies выбирает нагрузку вызывающей стороны для выпускающей роли и целевую нагрузку иначе;
+// допустимость роли проверяет вызывающий.
 func bindingApplies(role Role, workloadID string, binding operationBinding) bool {
 	if role == RoleIssuer {
 		return binding.CallerWorkloadID == workloadID
@@ -792,6 +915,10 @@ func bindingApplies(role Role, workloadID string, binding operationBinding) bool
 	return binding.TargetWorkloadID == workloadID
 }
 
+// samePublicKey rejects missing or unencodable public keys and compares their encoded public points,
+// ignoring key IDs and private scalars.
+// samePublicKey отклоняет отсутствующие или некодируемые открытые ключи и сравнивает закодированные
+// открытые точки без учёта идентификаторов и закрытых скаляров.
 func samePublicKey(left, right internalrpcauth.ES256Key) bool {
 	if left.Public == nil || right.Public == nil {
 		return false
@@ -801,6 +928,10 @@ func samePublicKey(left, right internalrpcauth.ES256Key) bool {
 	return leftErr == nil && rightErr == nil && bytes.Equal(leftBytes, rightBytes)
 }
 
+// readRegularFile rejects an empty path and delegates bounded read-only file validation to securefile,
+// returning fixed diagnostics rather than exposing failed file contents.
+// readRegularFile отклоняет пустой путь и передаёт securefile ограниченную проверку файла только для
+// чтения, возвращая фиксированную диагностику вместо содержимого ошибочного файла.
 func readRegularFile(path string, limit int64) ([]byte, error) {
 	if path == "" {
 		return nil, errors.New("file path is empty")
@@ -812,6 +943,10 @@ func readRegularFile(path string, limit int64) ([]byte, error) {
 	return value, nil
 }
 
+// trimSingleTrailingNewline removes at most one final LF byte by subslicing; it does not trim CR,
+// repeated newlines or other whitespace and may share the input storage.
+// trimSingleTrailingNewline удаляет не более одного завершающего LF срезом; CR, повторные переводы
+// строки и прочие пробелы не удаляются, память может оставаться общей с входом.
 func trimSingleTrailingNewline(value []byte) []byte {
 	if len(value) > 0 && value[len(value)-1] == '\n' {
 		return value[:len(value)-1]

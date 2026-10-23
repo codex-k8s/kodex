@@ -12,8 +12,12 @@ import (
 	"google.golang.org/grpc"
 )
 
+// emptySnapshotRecorder decorates organizational fixtures with an explicitly empty project-secret response, keeping absent and empty wire collections distinguishable.
+// emptySnapshotRecorder дополняет организационную оснастку явно пустым ответом проектных секретов, сохраняя различие отсутствующих и пустых wire-коллекций.
 type emptySnapshotRecorder struct{ organizationSnapshotRecorder }
 
+// Invoke returns an explicit empty secret slice/page for the project listing and delegates other requests to the synthetic organizational recorder.
+// Invoke возвращает явные пустые список секретов и страницу проектного чтения, передавая остальные запросы тестовому организационному recorder.
 func (client *emptySnapshotRecorder) Invoke(ctx context.Context, method string, request, response any, options ...grpc.CallOption) error {
 	if out, ok := response.(*cp.ListRuntimeSecretsResponse); ok {
 		out.Secrets, out.Page = []*cp.RuntimeSecret{}, &cp.PageInfo{}
@@ -22,6 +26,8 @@ func (client *emptySnapshotRecorder) Invoke(ctx context.Context, method string, 
 	return client.organizationSnapshotRecorder.Invoke(ctx, method, request, response, options...)
 }
 
+// TestSnapshotOptionalCollectionsKeepEmptyDistinctFromAbsent enumerates generated catalog slice fields via reflection and requires an explicit empty slice to serialize as [] without synthesizing absent collection fields.
+// TestSnapshotOptionalCollectionsKeepEmptyDistinctFromAbsent через reflection перечисляет slice-поля generated-каталога и требует сериализовать явный пустой slice как [] без появления отсутствующих коллекций.
 func TestSnapshotOptionalCollectionsKeepEmptyDistinctFromAbsent(t *testing.T) {
 	t.Parallel()
 	fields := reflect.TypeFor[generated.PlatformCatalogSnapshot]()
@@ -53,6 +59,8 @@ func TestSnapshotOptionalCollectionsKeepEmptyDistinctFromAbsent(t *testing.T) {
 	}
 }
 
+// TestOrganizationSnapshotEmptyCatalogsSurviveWireSerialization checks empty project and organization recipe/secret catalogs remain explicit [] through owner-fixture projection, typed conversion and JSON serialization.
+// TestOrganizationSnapshotEmptyCatalogsSurviveWireSerialization проверяет сохранение пустых проектных и организационных рецептов и секретов как явных [] через owner-оснастку, типизированную проекцию и JSON.
 func TestOrganizationSnapshotEmptyCatalogsSurviveWireSerialization(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct{ kind, projectItems, organizationItems string }{

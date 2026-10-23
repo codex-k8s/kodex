@@ -2,8 +2,12 @@ package authorityproof
 
 import "github.com/google/uuid"
 
-// Instance назначается signer из Pod UID и проверяется после подписи workload.
-// Старый формат сохраняет прежнюю общую границу revision.
+// validWorkerGrantInstance preserves the existing v1 empty-instance rule and v2 canonical nonzero Pod
+// UUID with positive issuance time and revision equal to Unix issuance seconds; it does not verify
+// signature, workload or lifetime.
+// validWorkerGrantInstance сохраняет существующее правило пустого экземпляра v1 и канонического
+// ненулевого UUID Pod v2 с положительным временем выпуска и ревизией в Unix-секундах выпуска; подпись,
+// нагрузка и срок здесь не проверяются.
 func validWorkerGrantInstance(claims workerGrantClaims) bool {
 	if claims.Version == 1 {
 		return claims.InstanceID == ""

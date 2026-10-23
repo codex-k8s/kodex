@@ -10,8 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
-// Проверяется настоящий consumer относительно сгенерированной deploy policy,
-// а не две независимые фикстуры с одинаковой ошибкой в имени permission.
+// TestGeneratedPolicyReachesTranscriptionPrincipal checks the real consumer against the generated deployment policy, including exact permission/method/workload binding.
+// RU: TestGeneratedPolicyReachesTranscriptionPrincipal проверяет настоящий consumer относительно сгенерированной deploy policy, включая точную привязку permission/method/workload.
+// Reading the generated artifact does not edit it, and the test requires exactly one matching operation binding.
+// RU: Чтение сгенерированного артефакта не меняет его; тест требует ровно одну совпадающую привязку операции.
 func TestGeneratedPolicyReachesTranscriptionPrincipal(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "..", "..", "deploy", "k8s", "base", "internal-rpc-authority-publisher", "authority-policy.json")
 	raw, err := os.ReadFile(path)

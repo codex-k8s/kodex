@@ -9,6 +9,10 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestNativeInventoryProbePreservesIndependentImmutablePins decodes the rendered JSON command and compares distinct input pins.
+// It separately checks pinned frontend/runtime references to catch swapped hashes without executing the image.
+// TestNativeInventoryProbePreservesIndependentImmutablePins разбирает сформированную JSON-команду и сравнивает различные привязки входа.
+// Закреплённые ссылки frontend и runtime проверяются отдельно для обнаружения перепутанных хешей без запуска образа.
 func TestNativeInventoryProbePreservesIndependentImmutablePins(t *testing.T) {
 	input := &controlplanev1.RoleImageBuildInput{
 		Dockerfile:                "FROM registry.invalid/owner@sha256:" + strings.Repeat("a", 64),
@@ -43,6 +47,10 @@ func TestNativeInventoryProbePreservesIndependentImmutablePins(t *testing.T) {
 	}
 }
 
+// TestNativeInventoryOutputCopiesOnlyManifestIntoFinalizedRootfs fixes the final stage and single inventory-manifest copy.
+// It checks the exact rendered suffix rather than claiming a successful remote build.
+// TestNativeInventoryOutputCopiesOnlyManifestIntoFinalizedRootfs закрепляет финальный этап и единственное копирование манифеста инвентаризации.
+// Проверяется точный сформированный суффикс, а не успешность удалённой сборки.
 func TestNativeInventoryOutputCopiesOnlyManifestIntoFinalizedRootfs(t *testing.T) {
 	input := &controlplanev1.RoleImageBuildInput{Dockerfile: "FROM registry.invalid/owner@sha256:" + strings.Repeat("a", 64)}
 	text := string(dockerfile(input, "registry.invalid/frontend", "registry.invalid/trusted", "sha256:"+strings.Repeat("b", 64)))
@@ -56,6 +64,10 @@ func TestNativeInventoryOutputCopiesOnlyManifestIntoFinalizedRootfs(t *testing.T
 	}
 }
 
+// TestNativeInventoryStageUsesExactOwnerAliasOrAssignedAlias checks canonical final-rootfs inheritance with and without an owner alias.
+// Both local source fixtures must pass the owner-source validator before rendering the wrapper.
+// TestNativeInventoryStageUsesExactOwnerAliasOrAssignedAlias проверяет каноническое наследование итоговой файловой системы с псевдонимом владельца и без него.
+// Обе локальные фикстуры исходника должны пройти проверку владельческого текста до формирования обёртки.
 func TestNativeInventoryStageUsesExactOwnerAliasOrAssignedAlias(t *testing.T) {
 	base := "registry.invalid/owner@sha256:" + strings.Repeat("a", 64)
 	for _, test := range []struct {

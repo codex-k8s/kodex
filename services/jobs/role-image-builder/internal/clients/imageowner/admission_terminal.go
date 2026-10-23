@@ -10,7 +10,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Старый callback не подтверждает terminal; только отдельное exact owner read.
+// FailWithTerminalRecovery first tries Fail, including its dedicated expiry path.
+// Only a final PermissionDenied, Aborted or NotFound triggers exact owner terminal
+// readback using the original claim receipt; Unavailable/other uncertain outcomes
+// are returned unchanged rather than interpreted as successful termination.
+// FailWithTerminalRecovery сначала выполняет Fail с его отдельным путём expiry.
+// Только итоговые PermissionDenied, Aborted либо NotFound запускают точное чтение
+// terminal владельца по исходной claim-квитанции; Unavailable и прочие неопределённые
+// исходы возвращаются без превращения в успешное завершение.
 func (client *Client) FailWithTerminalRecovery(ctx context.Context, key, claimKey string, claim Claim, code string) error {
 	err := client.Fail(ctx, key, claim, code)
 	if status.Code(err) != codes.PermissionDenied && status.Code(err) != codes.Aborted && status.Code(err) != codes.NotFound {
@@ -19,6 +26,14 @@ func (client *Client) FailWithTerminalRecovery(ctx context.Context, key, claimKe
 	return client.GetTerminal(ctx, claimKey, claim)
 }
 
+// GetTerminal validates the retained claim and reads its exact terminal proof with
+// original receipt, fencing/build/policy/risk/source pins and bounded WaitForReady.
+// It mutates no owner state and accepts success only after validateTerminal matches
+// the returned proof to that snapshot, not merely because a prior write was denied.
+// GetTerminal проверяет сохранённый claim и читает точное terminal-доказательство
+// с исходными receipt/fencing/build/policy/risk/source и ограниченным WaitForReady.
+// Состояние владельца не меняется; успех требует совпадения снимка в validateTerminal,
+// а не одного лишь отказа предыдущей записи.
 func (client *Client) GetTerminal(ctx context.Context, claimKey string, claim Claim) error {
 	if err := ValidateAdmissionClaim(claim); err != nil {
 		return err
@@ -37,6 +52,14 @@ func (client *Client) GetTerminal(ctx context.Context, claimKey string, claim Cl
 	return validateTerminal(proof, claim)
 }
 
+// validateTerminal permits only ACCEPTED/REJECTED/FAILED/CANCELLED proofs whose
+// historical artifact and attempt/fence/authority/risk/source pins match the claim.
+// Terminal artifact version must advance, terminal fence cannot regress, and
+// terminal attempt version must be at least two; denial or unknown state is not proof.
+// validateTerminal принимает только ACCEPTED/REJECTED/FAILED/CANCELLED с совпадающими
+// историческими artifact и attempt/fence/authority/risk/source полями claim.
+// Terminal version артефакта должна вырасти, fence не может уменьшиться, версия
+// terminal попытки — не ниже двух; отказ либо неизвестное состояние не доказательство.
 func validateTerminal(proof *cp.GetImageAdmissionTerminalResponse, claim Claim) error {
 	switch proof.GetTerminalState() {
 	case cp.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_ACCEPTED, cp.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_REJECTED, cp.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_FAILED, cp.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_CANCELLED:

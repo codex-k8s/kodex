@@ -18,6 +18,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport injects synthetic credential,
+// execution and refresh-commit failures, including cancellation, then uses the real broker codec to
+// retain only measured usage. It checks single execution/commit counts and removal of temporary auth.
+// TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport создаёт синтетические отказы
+// учётных данных, исполнения и сохранения обновления, включая отмену, затем проверяет настоящий кодек
+// broker: остаются лишь измерения, вызовы не повторяются, временный auth удаляется.
 func TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport(t *testing.T) {
 	for _, mode := range []string{"missing auth", "invalid auth", "changed API key", "commit", "cancelled commit", "execution", "before effect"} {
 		t.Run(mode, func(t *testing.T) {
@@ -103,6 +109,10 @@ func TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport(t *tes
 	}
 }
 
+// TestBrokerRejectsMalformedPartialMeasurements requires invalid failure kinds, usage, tool batches
+// and trailing JSON to return no partial result, rather than laundering measurements through a bad envelope.
+// TestBrokerRejectsMalformedPartialMeasurements требует пустого результата при неверном виде отказа,
+// расходе, пакете инструментов и лишнем JSON вместо переноса измерений через недопустимый конверт.
 func TestBrokerRejectsMalformedPartialMeasurements(t *testing.T) {
 	for _, mode := range []string{"unknown failure", "invalid usage", "invalid call", "too many calls", "trailing data"} {
 		t.Run(mode, func(t *testing.T) {
@@ -129,6 +139,10 @@ func TestBrokerRejectsMalformedPartialMeasurements(t *testing.T) {
 	}
 }
 
+// TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations separates resumed-thread baseline from
+// current-turn deltas and preserves the last accepted measurement when a later observation is malformed.
+// TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations отделяет базовый расход прежнего потока
+// от дельты текущего хода и сохраняет последнее проверенное измерение при повреждённом следующем событии.
 func TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
@@ -160,12 +174,18 @@ func TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations(t *testing.T)
 	}
 }
 
+// deadlineRecordingConnection records read deadlines under a mutex while delegating all transport
+// operations to the embedded connection; it observes cancellation grace without replacing real pipe I/O.
+// deadlineRecordingConnection записывает сроки чтения под mutex, передавая транспорт встроенному
+// соединению; это позволяет проверить период завершения при отмене без подмены ввода-вывода pipe.
 type deadlineRecordingConnection struct {
 	net.Conn
 	mu       sync.Mutex
 	deadline time.Time
 }
 
+// SetReadDeadline records the requested deadline before forwarding it and returning the real transport error.
+// SetReadDeadline запоминает запрошенный срок до передачи соединению и возвращает настоящую транспортную ошибку.
 func (connection *deadlineRecordingConnection) SetReadDeadline(deadline time.Time) error {
 	connection.mu.Lock()
 	connection.deadline = deadline
@@ -173,6 +193,10 @@ func (connection *deadlineRecordingConnection) SetReadDeadline(deadline time.Tim
 	return connection.Conn.SetReadDeadline(deadline)
 }
 
+// TestCancelledBrokerConnectionReceivesBoundedFinalMeasurements joins cancellation handling, verifies
+// its finite read grace and receives measured failure usage through the still-open net.Pipe.
+// TestCancelledBrokerConnectionReceivesBoundedFinalMeasurements ждёт завершения обработчика отмены,
+// проверяет ограниченный срок чтения и получает измеренный расход при отказе через открытый net.Pipe.
 func TestCancelledBrokerConnectionReceivesBoundedFinalMeasurements(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()

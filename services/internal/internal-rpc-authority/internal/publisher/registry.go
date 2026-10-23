@@ -14,18 +14,43 @@ import (
 )
 
 var (
-	registryWorkloadPattern  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$`)
-	registrySecretPattern    = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
-	registryDigestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	// registryWorkloadPattern restricts workload identifiers to the registry's bounded lowercase grammar;
+	// matching it alone does not establish a workload identity.
+	// registryWorkloadPattern ограничивает идентификатор рабочей нагрузки допустимыми строчными символами и
+	// длиной; само совпадение не подтверждает личность нагрузки.
+	registryWorkloadPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$`)
+	// registrySecretPattern checks the bounded lowercase Secret-name spelling used by delivery
+	// configuration, not the existence or ownership of a Kubernetes object.
+	// registrySecretPattern проверяет ограниченный формат имени Secret в настройках доставки, но не
+	// существование и не владельца объекта Kubernetes.
+	registrySecretPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
+	// registryDigestPattern requires exactly 64 lowercase hexadecimal characters for configured SHA-256
+	// digests without authenticating the corresponding bytes.
+	// registryDigestPattern требует ровно 64 строчных шестнадцатеричных символа для SHA-256, не удостоверяя
+	// соответствующие байты.
+	registryDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	// registryPrincipalPattern restricts database principal spelling to an authority-owned name with a
+	// positive generation suffix; database permissions are checked elsewhere.
+	// registryPrincipalPattern ограничивает имя принципала базы префиксом authority и суффиксом
+	// положительного поколения; права базы проверяются отдельно.
 	registryPrincipalPattern = regexp.MustCompile(`^ira_[a-z0-9_]+_g[1-9][0-9]*$`)
 )
 
+// registryDocument is the strict YAML input envelope for a versioned target registry; source revision
+// and target cardinality are validated before projection.
+// registryDocument представляет входную YAML-оболочку версионированного реестра; ревизия источника и
+// число целей проверяются до преобразования.
 type registryDocument struct {
 	Version        int              `yaml:"version"`
 	SourceRevision uint64           `yaml:"source_revision"`
 	Targets        []registryTarget `yaml:"targets"`
 }
 
+// registryTarget carries declarative identity, mounted Secret/config references and fixed
+// restore/readback routes. The pointer policy distinguishes an omitted startup flag from explicit false.
+// registryTarget содержит декларативную личность, ссылки на монтируемые Secret и конфигурацию и
+// фиксированные маршруты восстановления и проверки доставки. Указатель отличает отсутствующий флаг
+// запуска от явного false.
 type registryTarget struct {
 	WorkloadID              string `yaml:"workload_id"`
 	Role                    string `yaml:"role"`
@@ -103,7 +128,14 @@ type registryTarget struct {
 	} `yaml:"readback"`
 }
 
-// LoadRegistry читает и строго проверяет реестр целей доставки.
+// LoadRegistry securely reads at most 1 MiB, strictly decodes YAML, validates
+// revision/cardinality and hashes the original bytes. It then validates each
+// identity, role-specific material, fixed routes and unique workload/role tuple
+// before returning projected targets; it performs no Kubernetes delivery.
+// LoadRegistry безопасно читает до 1 МиБ, строго разбирает YAML, проверяет
+// ревизию и число целей и хеширует исходные байты. Затем проверяет каждую
+// личность, материалы роли, фиксированные маршруты и уникальность пары нагрузки
+// и роли до возврата преобразованных целей; доставки в Kubernetes здесь нет.
 func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 	raw, err := securefile.Read(path, 1<<20)
 	if err != nil {
@@ -294,6 +326,10 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 	return registry, nil
 }
 
+// validOptionalAuthKey requires an issuer key Secret at the exact issuer mount for issuers and requires
+// both fields to be empty for other roles.
+// validOptionalAuthKey требует Secret ключа и точный путь монтирования для выпускающей роли; у остальных
+// ролей оба поля должны отсутствовать.
 func validOptionalAuthKey(entry registryTarget) bool {
 	if entry.Role != "AUTHORIZATION_ISSUER" {
 		return entry.AuthPrivateKey.SecretName == "" &&
@@ -304,6 +340,10 @@ func validOptionalAuthKey(entry registryTarget) bool {
 			"/var/run/secrets/kodex/internal-rpc-authority/issuer"
 }
 
+// validOptionalProofTrust forbids proof-trust material on authorization verifiers and requires the exact
+// trust mount with a valid Secret name on other roles.
+// validOptionalProofTrust запрещает материал доверия доказательств у проверяющих контексты и требует
+// точный путь доверия с допустимым именем Secret у остальных ролей.
 func validOptionalProofTrust(entry registryTarget) bool {
 	if entry.Role == "AUTHORIZATION_VERIFIER" {
 		return entry.AuthorityProofTrust.SecretName == "" &&
@@ -314,6 +354,10 @@ func validOptionalProofTrust(entry registryTarget) bool {
 			"/var/run/config/kodex/internal-rpc-authority/authority-proof-trust"
 }
 
+// validOptionalProofPrivateKey permits a proof-signing Secret only for the resolver role and requires
+// its exact mount; other roles must omit both fields.
+// validOptionalProofPrivateKey разрешает Secret ключа подписи доказательств только роли resolver с
+// точным путём; остальные роли не задают оба поля.
 func validOptionalProofPrivateKey(entry registryTarget) bool {
 	if entry.Role != "AUTHORITY_PROOF_RESOLVER" {
 		return entry.AuthorityProofPrivateKey.SecretName == "" &&
@@ -324,6 +368,10 @@ func validOptionalProofPrivateKey(entry registryTarget) bool {
 			"/var/run/secrets/kodex/internal-rpc-authority/proof-signer"
 }
 
+// targetID combines the workload ID with a lowercased hyphenated role for the registry map; validation
+// and tuple uniqueness remain the loader's responsibility.
+// targetID объединяет идентификатор нагрузки с ролью в нижнем регистре и с дефисами для ключа реестра;
+// проверка и уникальность пары остаются обязанностью загрузчика.
 func targetID(workloadID, role string) string {
 	roleValue := strings.ToLower(strings.ReplaceAll(role, "_", "-"))
 	return workloadID + "." + roleValue

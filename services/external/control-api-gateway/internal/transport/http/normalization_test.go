@@ -13,12 +13,18 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// localizingRecorder wraps an in-memory response recorder with deterministic translation for JSON assertions; it is not a browser or real localization catalog.
+// localizingRecorder дополняет рекордер ответа в памяти детерминированным переводом для JSON-проверок; это не браузер и не настоящий каталог переводов.
 type localizingRecorder struct{ *httptest.ResponseRecorder }
 
+// Localize prefixes the supplied message identifier for assertions without resolving locale, interpolating data or contacting a service.
+// Localize добавляет проверочный префикс к идентификатору без выбора языка, подстановки данных и обращения к сервису.
 func (recorder *localizingRecorder) Localize(messageID string) string {
 	return "localized:" + messageID
 }
 
+// TestNormalizePreservesRequiredWorkflowDefaults checks flattened draft steps retain explicit false/zero/empty scalar defaults and empty gate/capability collections rather than losing required public fields.
+// TestNormalizePreservesRequiredWorkflowDefaults проверяет сохранение явных false, нулей, пустых строк и коллекций gate/capability в развёрнутых шагах черновика вместо потери обязательных полей.
 func TestNormalizePreservesRequiredWorkflowDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -49,6 +55,8 @@ func TestNormalizePreservesRequiredWorkflowDefaults(t *testing.T) {
 	}
 }
 
+// TestNormalizeDoesNotAddAgentFieldsToAssistantPlanSnapshot distinguishes a partial before-snapshot from a complete agent shape, requiring collection defaults only for the complete resource.
+// TestNormalizeDoesNotAddAgentFieldsToAssistantPlanSnapshot отличает частичный before-снимок от полного сотрудника, требуя defaults коллекций только у полного ресурса.
 func TestNormalizeDoesNotAddAgentFieldsToAssistantPlanSnapshot(t *testing.T) {
 	t.Parallel()
 	before := map[string]any{
@@ -77,6 +85,8 @@ func TestNormalizeDoesNotAddAgentFieldsToAssistantPlanSnapshot(t *testing.T) {
 	}
 }
 
+// TestWorkflowDraftPreservesBoundedInputFields verifies the fixture's select input retains its key, type, required flag and options through draft conversion; it does not exhaustively test input bounds.
+// TestWorkflowDraftPreservesBoundedInputFields проверяет сохранение ключа, типа, required и options тестового select-поля при преобразовании черновика; все пределы входа здесь не перебираются.
 func TestWorkflowDraftPreservesBoundedInputFields(t *testing.T) {
 	t.Parallel()
 
@@ -98,6 +108,8 @@ func TestWorkflowDraftPreservesBoundedInputFields(t *testing.T) {
 	}
 }
 
+// TestWorkflowRevisionPinsFollowSelectedBody covers draft, published, both and absent revisions, requiring the selected body and revision pin to agree while retaining separate pins and removing internal nested snapshots.
+// TestWorkflowRevisionPinsFollowSelectedBody проверяет черновую, опубликованную, обе и отсутствующие ревизии: тело и выбранный pin должны совпадать, отдельные pins сохраняться, внутренние вложенные снимки удаляться.
 func TestWorkflowRevisionPinsFollowSelectedBody(t *testing.T) {
 	for _, test := range []struct {
 		name             string
@@ -149,6 +161,8 @@ func TestWorkflowRevisionPinsFollowSelectedBody(t *testing.T) {
 	}
 }
 
+// TestWorkflowRevisionRejectsInvalidOwnerPin rejects empty, short and path-like revision references in either owner-supplied draft or published snapshots without claiming exhaustive pin validation.
+// TestWorkflowRevisionRejectsInvalidOwnerPin отклоняет пустые, короткие и похожие на путь ссылки ревизии в черновом и опубликованном снимках без заявления о полной проверке всех pins.
 func TestWorkflowRevisionRejectsInvalidOwnerPin(t *testing.T) {
 	for _, ref := range []string{"", "short", "wfv/invalid"} {
 		for _, published := range []bool{false, true} {
@@ -166,6 +180,8 @@ func TestWorkflowRevisionRejectsInvalidOwnerPin(t *testing.T) {
 	}
 }
 
+// TestNormalizeWorkflowInputFieldAddsEmptyOptions requires empty options for workflow inputs but not integration fields, whose required help string must instead be restored.
+// TestNormalizeWorkflowInputFieldAddsEmptyOptions требует пустые options для входа процесса, но не integration fields, у которых должна восстанавливаться обязательная пустая help-строка.
 func TestNormalizeWorkflowInputFieldAddsEmptyOptions(t *testing.T) {
 	t.Parallel()
 
@@ -188,6 +204,8 @@ func TestNormalizeWorkflowInputFieldAddsEmptyOptions(t *testing.T) {
 	}
 }
 
+// TestNormalizeSystemAssistantDoesNotExposeInternalLabel checks the synthetic system assistant's internal systemLabel is absent from its public JSON projection.
+// TestNormalizeSystemAssistantDoesNotExposeInternalLabel проверяет отсутствие внутреннего systemLabel тестового системного помощника в публичной JSON-проекции.
 func TestNormalizeSystemAssistantDoesNotExposeInternalLabel(t *testing.T) {
 	t.Parallel()
 
@@ -206,6 +224,8 @@ func TestNormalizeSystemAssistantDoesNotExposeInternalLabel(t *testing.T) {
 	}
 }
 
+// TestNormalizeBootstrapDoesNotInventMembershipPermissions prevents a bootstrap platformRole/currentUser shape from receiving membership-only permissions through heuristic normalization.
+// TestNormalizeBootstrapDoesNotInventMembershipPermissions запрещает добавлять membership-only permissions в bootstrap с platformRole/currentUser через эвристическую нормализацию.
 func TestNormalizeBootstrapDoesNotInventMembershipPermissions(t *testing.T) {
 	t.Parallel()
 
@@ -225,6 +245,8 @@ func TestNormalizeBootstrapDoesNotInventMembershipPermissions(t *testing.T) {
 	}
 }
 
+// TestNormalizeRuntimeSecretHidesOwnerMaterializationIdentity supplies synthetic namespace/revision identity and requires both private fields to disappear from public secret metadata without reading actual secrets.
+// TestNormalizeRuntimeSecretHidesOwnerMaterializationIdentity подставляет тестовые namespace и identity ревизии и требует удаления обоих закрытых полей публичного описания без чтения настоящих секретов.
 func TestNormalizeRuntimeSecretHidesOwnerMaterializationIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -254,6 +276,8 @@ func TestNormalizeRuntimeSecretHidesOwnerMaterializationIdentity(t *testing.T) {
 	}
 }
 
+// TestNormalizeRoleImageRecipeUsesPublicProjection removes the fixture's internal supply-chain pins, derives promotion readiness from its public reference and restores false sourceAvailable; it does not build or admit an image.
+// TestNormalizeRoleImageRecipeUsesPublicProjection проверяет удаление внутренних supply-chain pins, вывод готовности из публичной ссылки и false sourceAvailable; образ не собирается и не допускается.
 func TestNormalizeRoleImageRecipeUsesPublicProjection(t *testing.T) {
 	t.Parallel()
 
@@ -297,6 +321,8 @@ func TestNormalizeRoleImageRecipeUsesPublicProjection(t *testing.T) {
 	}
 }
 
+// TestNormalizeArtifactSource checks the exact AGENT_RESULT artifact-source prefix projection without asserting artifact storage or scan behavior.
+// TestNormalizeArtifactSource проверяет точную проекцию префикса источника AGENT_RESULT без проверки хранилища и сканирования файла.
 func TestNormalizeArtifactSource(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"source": "ARTIFACT_SOURCE_AGENT_RESULT"}
@@ -306,6 +332,8 @@ func TestNormalizeArtifactSource(t *testing.T) {
 	}
 }
 
+// TestNormalizeArtifactLifecycleState checks the DELETED artifact-lifecycle display value without deleting an artifact or exercising lifecycle transitions.
+// TestNormalizeArtifactLifecycleState проверяет отображаемое значение DELETED жизненного цикла файла без удаления и выполнения переходов.
 func TestNormalizeArtifactLifecycleState(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"lifecycleState": "ARTIFACT_LIFECYCLE_STATE_DELETED"}
@@ -315,6 +343,8 @@ func TestNormalizeArtifactLifecycleState(t *testing.T) {
 	}
 }
 
+// TestMessageMapNormalizesAccessBindingManagementKind checks the typed project-membership binding management enum becomes its public value, not a permission grant.
+// TestMessageMapNormalizesAccessBindingManagementKind проверяет публичное значение типизированного enum управления привязкой проектного членства, а не выдачу прав.
 func TestMessageMapNormalizesAccessBindingManagementKind(t *testing.T) {
 	t.Parallel()
 
@@ -329,6 +359,8 @@ func TestMessageMapNormalizesAccessBindingManagementKind(t *testing.T) {
 	}
 }
 
+// TestMessageMapNormalizesAttachmentSetEnumsToOpenAPIValues verifies the fixture's finalized set, session-turn purpose and nested interaction source retain their public enum values and item shape.
+// TestMessageMapNormalizesAttachmentSetEnumsToOpenAPIValues проверяет публичные enum завершённого набора, цели хода сессии и вложенного источника взаимодействия с сохранением формы элемента.
 func TestMessageMapNormalizesAttachmentSetEnumsToOpenAPIValues(t *testing.T) {
 	t.Parallel()
 
@@ -358,6 +390,8 @@ func TestMessageMapNormalizesAttachmentSetEnumsToOpenAPIValues(t *testing.T) {
 	}
 }
 
+// TestMessageMapNormalizesProviderEnumsToOpenAPIValues checks account state and nested device-code authorization method/state projection using synthetic metadata, without authorizing a provider.
+// TestMessageMapNormalizesProviderEnumsToOpenAPIValues проверяет отображение состояния аккаунта и вложенных метода и состояния device-code по тестовой metadata без авторизации провайдера.
 func TestMessageMapNormalizesProviderEnumsToOpenAPIValues(t *testing.T) {
 	t.Parallel()
 
@@ -383,6 +417,8 @@ func TestMessageMapNormalizesProviderEnumsToOpenAPIValues(t *testing.T) {
 	}
 }
 
+// TestMessageMapNormalizesSearchKindsToLocalizedKeys checks the RUN search-kind key loses its protobuf prefix; it does not perform search or verify translations.
+// TestMessageMapNormalizesSearchKindsToLocalizedKeys проверяет удаление protobuf-префикса ключа RUN без выполнения поиска и проверки переводов.
 func TestMessageMapNormalizesSearchKindsToLocalizedKeys(t *testing.T) {
 	t.Parallel()
 
@@ -398,6 +434,8 @@ func TestMessageMapNormalizesSearchKindsToLocalizedKeys(t *testing.T) {
 	}
 }
 
+// TestMessageMapMaterializesRequiredProviderAccountZeroValues restores empty masked-account text and explicit disabled/not-ready booleans for a revoked synthetic account.
+// TestMessageMapMaterializesRequiredProviderAccountZeroValues восстанавливает пустой masked-account и явные disabled/not-ready значения отозванного тестового аккаунта.
 func TestMessageMapMaterializesRequiredProviderAccountZeroValues(t *testing.T) {
 	t.Parallel()
 
@@ -413,6 +451,8 @@ func TestMessageMapMaterializesRequiredProviderAccountZeroValues(t *testing.T) {
 	}
 }
 
+// TestMessageMapMaterializesRequiredRunEventsPageScalars preserves complete and currentSequence, including false/zero, plus an empty event array for synthetic page variants.
+// TestMessageMapMaterializesRequiredRunEventsPageScalars сохраняет complete и currentSequence, включая false и ноль, и пустой массив событий в тестовых вариантах страницы.
 func TestMessageMapMaterializesRequiredRunEventsPageScalars(t *testing.T) {
 	t.Parallel()
 
@@ -443,6 +483,8 @@ func TestMessageMapMaterializesRequiredRunEventsPageScalars(t *testing.T) {
 	}
 }
 
+// TestRunEventsEndpointPreservesRequiredPageScalars exercises the generated route with a fake RPC for empty, partial-five-hundred and final-sixty-six pages, checking request pins, exact public keys, event order/identity and no-store JSON headers; no real event store is used.
+// TestRunEventsEndpointPreservesRequiredPageScalars проверяет generated route с fake RPC на пустой, частичной странице из пятисот и последней из шестидесяти шести: pins запроса, точные ключи, порядок и identity событий и no-store JSON; настоящее хранилище не используется.
 func TestRunEventsEndpointPreservesRequiredPageScalars(t *testing.T) {
 	t.Parallel()
 
@@ -467,7 +509,8 @@ func TestRunEventsEndpointPreservesRequiredPageScalars(t *testing.T) {
 			}
 			client := &catalogRPCRecorder{response: response}
 			writer := httptest.NewRecorder()
-			// Проверяем обслуживающий generated route, RPC и конечный JSON, а не DTO отдельно.
+			// Exercise the generated route, fake RPC and final JSON together rather than only a DTO.
+			// Проверяем вместе generated route, fake RPC и конечный JSON, а не только DTO.
 			catalogTestHandler(client).ServeHTTP(writer, httptest.NewRequest("GET",
 				fmt.Sprintf("/api/v1/runs/run_fixture01/events?afterSequence=%d&limit=500", test.after), nil))
 			var body map[string]any
@@ -501,6 +544,8 @@ func TestRunEventsEndpointPreservesRequiredPageScalars(t *testing.T) {
 	}
 }
 
+// TestMessageMapMaterializesRequiredRuntimeEnvironmentEmptyStrings keeps required environment descriptions, empty variable values and tool description/usage strings in the nested public projection.
+// TestMessageMapMaterializesRequiredRuntimeEnvironmentEmptyStrings сохраняет обязательные описания окружения, пустые значения переменных и строки описания и применения инструментов во вложенной проекции.
 func TestMessageMapMaterializesRequiredRuntimeEnvironmentEmptyStrings(t *testing.T) {
 	t.Parallel()
 
@@ -526,6 +571,8 @@ func TestMessageMapMaterializesRequiredRuntimeEnvironmentEmptyStrings(t *testing
 	}
 }
 
+// TestMessageMapNormalizesRunEventEnumsToOpenAPIValues checks event type/message kind and nested agent actor/tool state public enums without executing an agent or tool.
+// TestMessageMapNormalizesRunEventEnumsToOpenAPIValues проверяет публичные enum типа события, вида сообщения и вложенных actor сотрудника и состояния инструмента без их запуска.
 func TestMessageMapNormalizesRunEventEnumsToOpenAPIValues(t *testing.T) {
 	t.Parallel()
 
@@ -562,6 +609,8 @@ func TestMessageMapNormalizesRunEventEnumsToOpenAPIValues(t *testing.T) {
 	}
 }
 
+// TestNormalizeEnumCollections checks each synthetic nextActions entry loses its known prefix while retaining collection order.
+// TestNormalizeEnumCollections проверяет удаление известного префикса каждого тестового nextActions с сохранением порядка коллекции.
 func TestNormalizeEnumCollections(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"nextActions": []any{"NEXT_ACTION_OPEN", "NEXT_ACTION_CREATE_PROJECT"}}
@@ -571,6 +620,8 @@ func TestNormalizeEnumCollections(t *testing.T) {
 	}
 }
 
+// TestMessageMapNormalizesAccessEnumsToOpenAPIValues checks permission risk, scope and resource-kind enum collections retain public values without assigning access.
+// TestMessageMapNormalizesAccessEnumsToOpenAPIValues проверяет публичные значения риска разрешения, областей и видов ресурсов без назначения доступа.
 func TestMessageMapNormalizesAccessEnumsToOpenAPIValues(t *testing.T) {
 	t.Parallel()
 
@@ -594,6 +645,8 @@ func TestMessageMapNormalizesAccessEnumsToOpenAPIValues(t *testing.T) {
 	}
 }
 
+// TestMessageMapConvertsProtoInt64ToOpenAPIJSONNumber checks safe version conversion, required empty plan collections and preservation of an absent optional project reference.
+// TestMessageMapConvertsProtoInt64ToOpenAPIJSONNumber проверяет безопасное преобразование версии, обязательные пустые коллекции плана и сохранение отсутствия необязательной ссылки проекта.
 func TestMessageMapConvertsProtoInt64ToOpenAPIJSONNumber(t *testing.T) {
 	t.Parallel()
 
@@ -614,6 +667,8 @@ func TestMessageMapConvertsProtoInt64ToOpenAPIJSONNumber(t *testing.T) {
 	}
 }
 
+// TestMessageMapMaterializesZeroTokenUsage requires all seven synthetic usage counters to appear as numeric zero, not omitted fields; it does not obtain provider usage.
+// TestMessageMapMaterializesZeroTokenUsage требует числовой ноль всех семи тестовых usage counters вместо отсутствующих полей без получения статистики провайдера.
 func TestMessageMapMaterializesZeroTokenUsage(t *testing.T) {
 	t.Parallel()
 
@@ -644,6 +699,8 @@ func TestMessageMapMaterializesZeroTokenUsage(t *testing.T) {
 	}
 }
 
+// TestMessageMapMaterializesRequiredEmptyRuntimeConfigurationStrings checks empty safeEffectiveConfig and published overlay content remain present in the public configuration view.
+// TestMessageMapMaterializesRequiredEmptyRuntimeConfigurationStrings проверяет присутствие пустых safeEffectiveConfig и content опубликованного overlay в публичной конфигурации.
 func TestMessageMapMaterializesRequiredEmptyRuntimeConfigurationStrings(t *testing.T) {
 	t.Parallel()
 
@@ -665,6 +722,8 @@ func TestMessageMapMaterializesRequiredEmptyRuntimeConfigurationStrings(t *testi
 	}
 }
 
+// TestMessageMapDoesNotMaterializeAbsentOptionalScalar keeps expectedVersion absent when omitted from a synthetic mutation context rather than inventing optimistic-concurrency state.
+// TestMessageMapDoesNotMaterializeAbsentOptionalScalar сохраняет отсутствие expectedVersion в тестовом mutation context без выдумывания состояния оптимистической конкуренции.
 func TestMessageMapDoesNotMaterializeAbsentOptionalScalar(t *testing.T) {
 	t.Parallel()
 
@@ -677,6 +736,8 @@ func TestMessageMapDoesNotMaterializeAbsentOptionalScalar(t *testing.T) {
 	}
 }
 
+// TestMessageMapMaterializesNestedEmptyCollections requires an explicitly empty turns array inside the projected conversation list without dropping the containing conversation.
+// TestMessageMapMaterializesNestedEmptyCollections требует явно пустой turns внутри списка диалогов без потери самого диалога.
 func TestMessageMapMaterializesNestedEmptyCollections(t *testing.T) {
 	t.Parallel()
 
@@ -696,6 +757,8 @@ func TestMessageMapMaterializesNestedEmptyCollections(t *testing.T) {
 	}
 }
 
+// TestMessageMapNormalizesAssistantConversationToOpenAPIShape checks nested context defaults, plan enums, unapplied state, operation target/version and validation collections while preserving protobuf Struct parameters.
+// TestMessageMapNormalizesAssistantConversationToOpenAPIShape проверяет вложенные defaults контекста, enum и неприменённое состояние плана, target/version и коллекции проверки с сохранением параметров protobuf Struct.
 func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 	t.Parallel()
 	targetVersion := int64(7)
@@ -752,6 +815,8 @@ func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 	}
 }
 
+// TestAssistantResourceContextPreservesOwnerReadback preserves seven resource kinds, literal name/reference, exact version and owner-supplied operation list through projection without deriving new eligibility from resource kind.
+// TestAssistantResourceContextPreservesOwnerReadback сохраняет семь видов ресурсов, literal имя и ссылку, точную версию и список операций владельца без вывода нового допуска из вида ресурса.
 func TestAssistantResourceContextPreservesOwnerReadback(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []string{"PROJECT", "AGENT", "WORKFLOW", "RUN", "FILE", "ENVIRONMENT", "INTEGRATION_CONNECTION"} {
@@ -778,6 +843,8 @@ func TestAssistantResourceContextPreservesOwnerReadback(t *testing.T) {
 	}
 }
 
+// TestMessageMapMaterializesEmptyAssistantPlanReceiptCollections renames operations to operationReceipts and restores empty conflicts/audit/created-resource collections without applying or forging a real plan receipt.
+// TestMessageMapMaterializesEmptyAssistantPlanReceiptCollections проверяет переименование operations в operationReceipts и пустые conflicts/audit/created-resource коллекции без применения и подделки настоящего receipt.
 func TestMessageMapMaterializesEmptyAssistantPlanReceiptCollections(t *testing.T) {
 	t.Parallel()
 
@@ -804,6 +871,8 @@ func TestMessageMapMaterializesEmptyAssistantPlanReceiptCollections(t *testing.T
 	}
 }
 
+// TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget requires target type/ref/version projection without mistaking a graph node's agentRef for a RunTarget or losing node identity.
+// TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget требует проекцию type/ref/version цели без ошибочного принятия agentRef узла графа за RunTarget и без потери identity узла.
 func TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget(t *testing.T) {
 	t.Parallel()
 	value, err := messageMap(&controlplanev1.GetRunGraphResponse{
@@ -841,6 +910,8 @@ func TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget(t *testing.
 	}
 }
 
+// TestNormalizeFlattensAgentRuntimeWithExplicitReadiness flattens synthetic runtime metadata and supplies false readiness when omitted, without claiming the runtime is actually usable.
+// TestNormalizeFlattensAgentRuntimeWithExplicitReadiness разворачивает тестовую runtime metadata и задаёт false готовности при отсутствии без заявления о настоящей работоспособности.
 func TestNormalizeFlattensAgentRuntimeWithExplicitReadiness(t *testing.T) {
 	t.Parallel()
 	value := map[string]any{"runtime": map[string]any{
@@ -856,6 +927,8 @@ func TestNormalizeFlattensAgentRuntimeWithExplicitReadiness(t *testing.T) {
 	}
 }
 
+// TestSafeAttachmentFileNameRemovesHeaderAndPathControls checks removal of control characters and slash separators plus the empty-name fallback; preserved dots show this display helper is not filesystem path confinement.
+// TestSafeAttachmentFileNameRemovesHeaderAndPathControls проверяет удаление управляющих символов и slash-разделителей и запасное пустое имя; сохранённые точки показывают, что helper отображения не ограничивает файловые пути.
 func TestSafeAttachmentFileNameRemovesHeaderAndPathControls(t *testing.T) {
 	t.Parallel()
 
@@ -867,6 +940,8 @@ func TestSafeAttachmentFileNameRemovesHeaderAndPathControls(t *testing.T) {
 	}
 }
 
+// TestAgentAvatarSourceMatchesOpenAPI accepts the known ARTIFACT source projection and rejects an unspecified source without fetching avatar bytes.
+// TestAgentAvatarSourceMatchesOpenAPI принимает проекцию известного ARTIFACT source и отклоняет неопределённый source без загрузки байтов аватара.
 func TestAgentAvatarSourceMatchesOpenAPI(t *testing.T) {
 	t.Parallel()
 
@@ -887,6 +962,8 @@ func TestAgentAvatarSourceMatchesOpenAPI(t *testing.T) {
 	}
 }
 
+// TestLocalizeSafeErrorsResolvesOnlyExplicitMessageReferences checks explicit i18n markers, nested markers and safeErrorCode localization while retaining the fixture's unmarked ownerContent text.
+// TestLocalizeSafeErrorsResolvesOnlyExplicitMessageReferences проверяет локализацию явных и вложенных i18n-маркеров и safeErrorCode с сохранением тестового ownerContent без маркера.
 func TestLocalizeSafeErrorsResolvesOnlyExplicitMessageReferences(t *testing.T) {
 	t.Parallel()
 
@@ -914,6 +991,8 @@ func TestLocalizeSafeErrorsResolvesOnlyExplicitMessageReferences(t *testing.T) {
 	}
 }
 
+// TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog checks page reshaping retains synthetic owner counts, readiness and actions while translating an explicit catalog marker; it does not verify real owner authorization or service readiness.
+// TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog проверяет сохранение тестовых счётчиков, готовности и действий владельца при перестройке страницы и переводе явного маркера; настоящие authorization и readiness сервиса не доказываются.
 func TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog(t *testing.T) {
 	t.Parallel()
 

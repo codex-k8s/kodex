@@ -9,6 +9,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// TestTrustedAdmissionScanResourcesAreScoped renders every phase in both environment/profile combinations and checks exact CPU/memory budgets.
+// Trusted-cluster scan gets its distinct larger budget; no workload is launched and no resource settings are applied.
+// TestTrustedAdmissionScanResourcesAreScoped формирует все этапы для обеих сред и профилей и проверяет точные бюджеты CPU и памяти.
+// Scan профиля trusted-cluster получает свой увеличенный бюджет; нагрузки не запускаются и настройки ресурсов не применяются.
 func TestTrustedAdmissionScanResourcesAreScoped(t *testing.T) {
 	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
 	if err != nil {
@@ -44,6 +48,10 @@ func TestTrustedAdmissionScanResourcesAreScoped(t *testing.T) {
 	}
 }
 
+// TestTrustedAdmissionRenderRemovesAuthorityWithoutChangingProtectedProfile compares local protected/trusted renders and their distinct execution bindings.
+// It checks removal of authority sidecars/volumes/env in trusted mode, exact owner RPC scope and CEL rejection of injected authority, missing profile or foreign target.
+// TestTrustedAdmissionRenderRemovesAuthorityWithoutChangingProtectedProfile сравнивает локальные protected/trusted представления и их разные привязки исполнения.
+// Проверяются отсутствие authority-контейнеров, томов и env в trusted, точная область owner RPC и отказ CEL внедрённому authority, отсутствующему профилю или чужому назначению.
 func TestTrustedAdmissionRenderRemovesAuthorityWithoutChangingProtectedProfile(t *testing.T) {
 	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
 	if err != nil {

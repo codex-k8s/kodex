@@ -22,12 +22,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// lockedRuntimeAgent holds the organization-locked agent identity plus configuration/overlay/environment-binding versions needed for exact runtime changes; it is not itself a permission grant.
+// lockedRuntimeAgent хранит заблокированную в организации identity агента и версии конфигурации/overlay/привязки окружения для точных изменений runtime; само по себе полномочий не предоставляет.
 type lockedRuntimeAgent struct {
 	id, projectID, projectRef, systemKey, overlayID, runtimeProfileRef string
 	agentVersion, configVersion                                        int64
 	overlayVersion, bindingVersion                                     int64
 }
 
+// bootstrapAgentRuntime binds a newly created role to the configured platform image, canonical default environment policy, provider catalog candidates and initial config/overlay in the caller transaction. It preserves an existing published shared environment revision and activates only a newly initialized version; gpt-6.1-sol starts with the approved medium overlay.
+// bootstrapAgentRuntime привязывает новую роль к настроенному платформенному образу, канонической policy окружения по умолчанию, кандидатам каталога провайдера и исходным config/overlay в транзакции вызывающего. Сохраняет существующую опубликованную ревизию общего окружения и активирует лишь новую; gpt-6.1-sol получает утверждённый medium overlay.
 func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.Tx, organizationID, agentID, projectID string, runtime entity.RuntimeSelection, createdBy string) error {
 	imageArtifactID, image, selectedTools, err := repository.ensureBootstrapRuntimeEnvironmentImage(
 		ctx, tx, organizationID, agentID, projectID, createdBy)
@@ -105,6 +109,8 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	return nil
 }
 
+// ensureBootstrapRuntimeEnvironmentImage reuses the exact configured default image metadata when present, otherwise materializes its platform-owned recipe/artifact metadata and activates the resulting exact generation. It derives immutable provenance inputs from configured digests, performs no external build here and returns an explicit empty selected-tools list.
+// ensureBootstrapRuntimeEnvironmentImage повторно использует метаданные точного настроенного образа по умолчанию, иначе материализует его платформенные recipe/artifact метаданные и активирует полученное точное поколение. Выводит неизменяемые provenance inputs из настроенных digest, не выполняет внешнюю сборку и возвращает явно пустой список выбранных инструментов.
 func (repository *Repository) ensureBootstrapRuntimeEnvironmentImage(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -193,11 +199,15 @@ func (repository *Repository) ensureBootstrapRuntimeEnvironmentImage(
 	return image.id, image.image, emptyTools, nil
 }
 
+// bootstrapRuntimeEnvironmentImage pairs the database artifact ID with its immutable public image selection for bootstrap resolution and activation checks.
+// bootstrapRuntimeEnvironmentImage связывает ID артефакта БД с неизменяемым публичным выбором образа для разрешения bootstrap и проверки активации.
 type bootstrapRuntimeEnvironmentImage struct {
 	id    string
 	image entity.RuntimeEnvironmentImage
 }
 
+// scanBootstrapRuntimeEnvironmentImage reads the fixed artifact ID/ref, recipe ref/generation and reference/digest projection, returning the original scanner error for caller-specific absence handling.
+// scanBootstrapRuntimeEnvironmentImage читает фиксированную проекцию artifact ID/ref, recipe ref/generation и reference/digest, возвращая исходную ошибку scanner для отдельной обработки отсутствия вызывающим.
 func scanBootstrapRuntimeEnvironmentImage(row interface{ Scan(...any) error }) (bootstrapRuntimeEnvironmentImage, error) {
 	var result bootstrapRuntimeEnvironmentImage
 	err := row.Scan(&result.id, &result.image.ArtifactRef, &result.image.RecipeRef,
@@ -205,6 +215,8 @@ func scanBootstrapRuntimeEnvironmentImage(row interface{ Scan(...any) error }) (
 	return result, err
 }
 
+// selectProviderAccountForAgent locks the agent, validates stored account/config/policy pins and prefers a candidate whose fresh catalog marks the requested model eligible. If none qualifies it retains the first authorized selection for reauthorization; subsequent RuntimeRevision construction must still reject an unverified model snapshot.
+// selectProviderAccountForAgent блокирует агента, проверяет сохранённые account/config/policy pins и предпочитает кандидата, чей свежий каталог допускает запрошенную модель. Если подходящего нет, сохраняет первый разрешённый выбор для повторной авторизации; последующая сборка RuntimeRevision всё равно должна отклонить непроверенный snapshot модели.
 func (repository *Repository) selectProviderAccountForAgent(ctx context.Context, tx pgx.Tx, organizationID, agentRef string) (string, error) {
 	var lockedAgentID string
 	if err := tx.QueryRow(ctx, queryRuntimeCatalogLockAgent, organizationID, agentRef).Scan(&lockedAgentID); err != nil {
@@ -214,6 +226,8 @@ func (repository *Repository) selectProviderAccountForAgent(ctx context.Context,
 	if err != nil {
 		return "", errs.ErrUnavailable
 	}
+	// selection holds one account candidate with its exact config/policy version/digest and provider/model for ordered catalog eligibility checks after SQL rows are closed.
+	// selection хранит кандидата аккаунта с точными version/digest config/policy и provider/model для последовательной проверки каталога после закрытия SQL rows.
 	type selection struct {
 		accountID, accountRef, configRef, configDigest, policyRef, policyDigest, provider, model string
 		configVersion, policyVersion                                                             int64
@@ -256,6 +270,8 @@ func (repository *Repository) selectProviderAccountForAgent(ctx context.Context,
 	return "", errs.ErrConflict
 }
 
+// changeRuntimeConfiguration dispatches only the explicitly registered runtime config, overlay, environment lifecycle and binding commands; unsupported kinds fail instead of reaching a generic resource mutation.
+// changeRuntimeConfiguration направляет лишь явно зарегистрированные команды runtime config, overlay, жизненного цикла окружения и привязки; неподдержанный вид отклоняется без универсального изменения ресурса.
 func (repository *Repository) changeRuntimeConfiguration(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	switch input.Kind {
 	case command.PublishAgentRuntimeConfig:
@@ -274,6 +290,8 @@ func (repository *Repository) changeRuntimeConfiguration(ctx context.Context, tx
 	}
 }
 
+// changeRuntimeEnvironmentLifecycle locks organization-scoped environment metadata under the already authorized command, enforces expected version and explicit enable/disable/delete rules, and refuses deleting an enabled or bound environment. It returns the changed state/event projection for the enclosing owner transaction rather than committing itself.
+// changeRuntimeEnvironmentLifecycle блокирует метаданные окружения организации внутри уже авторизованной команды, проверяет ожидаемую версию и явные правила enable/disable/delete, запрещая удаление включённого либо связанного окружения. Возвращает state/event проекцию внешней транзакции владельца без собственного commit.
 func (repository *Repository) changeRuntimeEnvironmentLifecycle(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -340,6 +358,8 @@ func (repository *Repository) changeRuntimeEnvironmentLifecycle(
 	}, nil
 }
 
+// lockRuntimeAgent locks one agent under the resolved organization and scans exact agent/config/overlay/binding counters, distinguishing missing metadata from infrastructure failure. Authorization belongs to the enclosing command path.
+// lockRuntimeAgent блокирует агента разрешённой организации и читает точные счётчики agent/config/overlay/binding, различая отсутствие метаданных и инфраструктурный отказ. Авторизацией владеет внешний путь команды.
 func (repository *Repository) lockRuntimeAgent(ctx context.Context, tx pgx.Tx, scope scope, ref string) (lockedRuntimeAgent, error) {
 	var agent lockedRuntimeAgent
 	err := tx.QueryRow(ctx, queryRuntimeConfigurationLockAgent, scope.organizationID, ref).Scan(
@@ -354,17 +374,21 @@ func (repository *Repository) lockRuntimeAgent(ctx context.Context, tx pgx.Tx, s
 	return agent, nil
 }
 
+// validRuntimeConfigurationAgent accepts project agents with no protected system key or the projectless system-assistant key; it checks the editable target shape without proving caller access.
+// validRuntimeConfigurationAgent принимает проектного агента без защищённого системного ключа либо системного помощника без проекта; проверяет форму изменяемой цели, а не доступ вызывающего.
 func validRuntimeConfigurationAgent(agent lockedRuntimeAgent) bool {
 	return agent.projectID != "" && agent.systemKey == "" ||
 		agent.projectID == "" && agent.systemKey == "system-assistant"
 }
 
+// publishAgentRuntimeConfiguration uses the specialized publication path with the currently published overlay; prepared replacement overlay is reserved for the atomic assistant publication caller.
+// publishAgentRuntimeConfiguration использует специализированную публикацию с текущим опубликованным overlay; подготовленная замена overlay предусмотрена лишь для атомарной публикации помощника.
 func (repository *Repository) publishAgentRuntimeConfiguration(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	return repository.publishAgentRuntimeConfigurationWithOverlay(ctx, tx, scope, input, nil)
 }
 
-// preparedOverlay применим только к атомарной специализированной публикации
-// помощника; обычная публикация всегда сверяет текущий опубликованный overlay.
+// publishAgentRuntimeConfigurationWithOverlay validates the editable agent and expected version, normalizes account order, verifies exact runtime/catalog eligibility and persists a new provider policy/config revision. Only its specialized caller can supply a prepared overlay; ordinary publication reads the current published overlay and returns owner event metadata without committing.
+// publishAgentRuntimeConfigurationWithOverlay проверяет изменяемого агента и ожидаемую версию, упорядочивает аккаунты, сверяет точную доступность runtime/каталога и сохраняет новую policy/config ревизию. Подготовленный overlay передаёт лишь специализированный вызывающий; обычная публикация читает текущий overlay и возвращает метаданные события владельца без commit.
 func (repository *Repository) publishAgentRuntimeConfigurationWithOverlay(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, preparedOverlay *string) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AgentRuntimeConfigurationInput)
 	if !ok || payload.AgentRef == "" || payload.RuntimeProfileRef == "" || input.Mutation.ExpectedVersion == nil ||
@@ -433,6 +457,8 @@ func (repository *Repository) publishAgentRuntimeConfigurationWithOverlay(ctx co
 	return runtimeConfigurationOutcome(view, agent, "i18n:AGENT_RUNTIME_CONFIGURATION_PUBLISHED"), nil
 }
 
+// changeConfigOverlay handles create/validate/publish/rollback through explicit draft/published transitions under the locked agent version. Publication rechecks canonical content, catalog candidates and schema pins; rollback creates a new publication from the selected immutable source, while diagnostics and agent version update stay in the owner transaction.
+// changeConfigOverlay обрабатывает create/validate/publish/rollback явными переходами draft/published под заблокированной версией агента. Публикация повторно проверяет каноническое содержимое, кандидатов каталога и schema pins; rollback создаёт новую публикацию из выбранного неизменяемого источника, диагностика и версия агента остаются в транзакции владельца.
 func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ConfigOverlayInput)
 	if !ok || payload.AgentRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -574,6 +600,38 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 	return runtimeConfigurationOutcome(view, agent, "i18n:AGENT_CONFIG_OVERLAY_CHANGED"), nil
 }
 
+// preparedRuntimeEnvironmentContents keeps the validated immutable content required by create/publish SQL: non-secret values, secret descriptors, admitted image/tool selection, canonical policy and their digests. It contains no plaintext secret material or independently granted owner access.
+// preparedRuntimeEnvironmentContents хранит проверенное неизменяемое содержимое для SQL создания/публикации: несекретные значения, дескрипторы секретов, допущенные образ/инструменты, каноническую policy и digest. Открытого содержимого секретов и самостоятельно назначенных полномочий владельца не содержит.
+type preparedRuntimeEnvironmentContents struct {
+	values, secrets, tools      []byte
+	imageID, coreDigest, digest string
+	policy                      runtimecontract.RuntimeEnvironmentPolicy
+}
+
+// prepareRuntimeEnvironmentContents runs policy admission, scoped secret resolution, promoted-image/tool validation and digest construction in the same order for environment create and publish. The caller supplies owner-resolved scope/project identity and retains metadata validation, version locks, SQL effects, audit/event and commit; rollback uses its separate immutable-source path.
+// prepareRuntimeEnvironmentContents выполняет допуск policy, разрешение scoped-секретов, проверку опубликованного образа/инструментов и построение digest в прежнем порядке для создания и публикации окружения. Вызывающий передаёт разрешённые владельцем scope/project identity и сохраняет проверку метаданных, version locks, SQL-действия, audit/event и commit; rollback использует отдельный путь неизменяемого источника.
+func (repository *Repository) prepareRuntimeEnvironmentContents(ctx context.Context, tx pgx.Tx, current scope, projectID, projectRef, scopeKind, environmentRef string, input command.RuntimeEnvironmentInput) (preparedRuntimeEnvironmentContents, error) {
+	policy, err := repository.admitRuntimeEnvironmentPolicy(ctx, tx, current, projectRef, environmentRef, input.Policy)
+	if err != nil {
+		return preparedRuntimeEnvironmentContents{}, err
+	}
+	values, secrets, contractValues, contractSecrets, err := repository.resolveScopedEnvironmentPayload(ctx, tx, current.organizationID, projectID, scopeKind, input.Values, input.SecretBindings)
+	if err != nil {
+		return preparedRuntimeEnvironmentContents{}, err
+	}
+	imageID, image, tools, encodedTools, err := repository.resolveScopedRuntimeEnvironmentImage(ctx, tx, current.organizationID, projectID, scopeKind, input.ImageArtifactRef, input.Tools)
+	if err != nil {
+		return preparedRuntimeEnvironmentContents{}, err
+	}
+	coreDigest, digest, err := runtimeEnvironmentConfigurationDigests(contractValues, contractSecrets, image, tools, policy)
+	if err != nil {
+		return preparedRuntimeEnvironmentContents{}, errs.ErrInvalid
+	}
+	return preparedRuntimeEnvironmentContents{values: values, secrets: secrets, tools: encodedTools, imageID: imageID, coreDigest: coreDigest, digest: digest, policy: policy}, nil
+}
+
+// changeRuntimeEnvironment keeps create, publish and immutable-source rollback as explicit owner transitions with separate metadata/scope/version checks. Create/publish share only ordered content preparation, then persist their own version/activation SQL and return the typed environment/event projection; this method never opens or commits a transaction itself.
+// changeRuntimeEnvironment сохраняет create, publish и rollback из неизменяемого источника явными переходами владельца с раздельными проверками метаданных/области/версии. Create/publish делят лишь упорядоченную подготовку содержимого, затем сохраняют собственные version/activation SQL и возвращают типизированную environment/event проекцию; метод сам не открывает и не фиксирует транзакцию.
 func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.RuntimeEnvironmentInput)
 	if !ok {
@@ -594,23 +652,9 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		if scopeKind == "PROJECT" && projectID == "" {
 			return commandOutcome{}, errs.ErrNotFound
 		}
-		policy, policyErr := repository.admitRuntimeEnvironmentPolicy(ctx, tx, scope, payload.ProjectRef, "", payload.Policy)
-		if policyErr != nil {
-			return commandOutcome{}, policyErr
-		}
-		values, secrets, contractValues, contractSecrets, err := repository.resolveScopedEnvironmentPayload(
-			ctx, tx, scope.organizationID, projectID, scopeKind, payload.Values, payload.SecretBindings)
-		if err != nil {
-			return commandOutcome{}, err
-		}
-		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveScopedRuntimeEnvironmentImage(
-			ctx, tx, scope.organizationID, projectID, scopeKind, payload.ImageArtifactRef, payload.Tools)
-		if resolveErr != nil {
-			return commandOutcome{}, resolveErr
-		}
-		coreDigest, digest, digestErr := runtimeEnvironmentConfigurationDigests(contractValues, contractSecrets, image, normalizedTools, policy)
-		if digestErr != nil {
-			return commandOutcome{}, errs.ErrInvalid
+		prepared, prepareErr := repository.prepareRuntimeEnvironmentContents(ctx, tx, scope, projectID, payload.ProjectRef, scopeKind, "", payload)
+		if prepareErr != nil {
+			return commandOutcome{}, prepareErr
 		}
 		environmentRef, _ := newRef("renv")
 		versionRef, _ := newRef("renvv")
@@ -618,12 +662,12 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		createErr := tx.QueryRow(ctx, queryRuntimeConfigurationCreateEnvironment, pgx.StrictNamedArgs{
 			"environment_ref": environmentRef, "version_ref": versionRef, "organization_id": scope.organizationID,
 			"scope_kind": scopeKind, "project_id": projectID, "name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
-			"created_by": scope.actorID, "non_secret_values": values, "secret_descriptors": secrets, "digest": digest,
-			"image_artifact_id": imageArtifactID, "selected_tools": selectedTools,
-			"core_digest": coreDigest, "resource_policy": asJSON(policy.Resources), "volume_policy": asJSON(policy.Volumes),
-			"network_policy": asJSON(policy.Network), "kubernetes_access_profile": asJSON(policy.KubernetesAccess),
-			"resources_digest": policy.ResourcesDigest, "volumes_digest": policy.VolumesDigest,
-			"network_digest": policy.NetworkDigest, "rbac_digest": policy.RBACDigest,
+			"created_by": scope.actorID, "non_secret_values": prepared.values, "secret_descriptors": prepared.secrets, "digest": prepared.digest,
+			"image_artifact_id": prepared.imageID, "selected_tools": prepared.tools,
+			"core_digest": prepared.coreDigest, "resource_policy": asJSON(prepared.policy.Resources), "volume_policy": asJSON(prepared.policy.Volumes),
+			"network_policy": asJSON(prepared.policy.Network), "kubernetes_access_profile": asJSON(prepared.policy.KubernetesAccess),
+			"resources_digest": prepared.policy.ResourcesDigest, "volumes_digest": prepared.policy.VolumesDigest,
+			"network_digest": prepared.policy.NetworkDigest, "rbac_digest": prepared.policy.RBACDigest,
 		}).Scan(&environmentID, &environmentVersionID, &created)
 		if createErr != nil {
 			return commandOutcome{}, fmt.Errorf("create runtime environment storage: %w", mapWriteError(createErr))
@@ -672,33 +716,19 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		if strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 120 || len(payload.Description) > 1000 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		policy, policyErr := repository.admitRuntimeEnvironmentPolicy(ctx, tx, scope, projectRef, payload.Ref, payload.Policy)
-		if policyErr != nil {
-			return commandOutcome{}, policyErr
-		}
-		values, secrets, contractValues, contractSecrets, payloadErr := repository.resolveScopedEnvironmentPayload(
-			ctx, tx, scope.organizationID, projectID, existing.ScopeKind, payload.Values, payload.SecretBindings)
-		if payloadErr != nil {
-			return commandOutcome{}, payloadErr
-		}
-		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveScopedRuntimeEnvironmentImage(
-			ctx, tx, scope.organizationID, projectID, existing.ScopeKind, payload.ImageArtifactRef, payload.Tools)
-		if resolveErr != nil {
-			return commandOutcome{}, resolveErr
-		}
-		coreDigest, digest, digestErr := runtimeEnvironmentConfigurationDigests(contractValues, contractSecrets, image, normalizedTools, policy)
-		if digestErr != nil {
-			return commandOutcome{}, errs.ErrInvalid
+		prepared, prepareErr := repository.prepareRuntimeEnvironmentContents(ctx, tx, scope, projectID, projectRef, existing.ScopeKind, payload.Ref, payload)
+		if prepareErr != nil {
+			return commandOutcome{}, prepareErr
 		}
 		err = tx.QueryRow(ctx, queryRuntimeConfigurationPublishEnvironment, pgx.StrictNamedArgs{
 			"version_ref": versionRef, "organization_id": scope.organizationID, "environment_id": environmentID,
 			"version_number": currentRevision + 1, "parent_version_id": currentVersionID,
-			"non_secret_values": values, "secret_descriptors": secrets, "digest": digest, "created_by": scope.actorID,
-			"image_artifact_id": nullUUID(imageArtifactID), "selected_tools": selectedTools,
-			"core_digest": coreDigest, "resource_policy": asJSON(policy.Resources), "volume_policy": asJSON(policy.Volumes),
-			"network_policy": asJSON(policy.Network), "kubernetes_access_profile": asJSON(policy.KubernetesAccess),
-			"resources_digest": policy.ResourcesDigest, "volumes_digest": policy.VolumesDigest,
-			"network_digest": policy.NetworkDigest, "rbac_digest": policy.RBACDigest,
+			"non_secret_values": prepared.values, "secret_descriptors": prepared.secrets, "digest": prepared.digest, "created_by": scope.actorID,
+			"image_artifact_id": nullUUID(prepared.imageID), "selected_tools": prepared.tools,
+			"core_digest": prepared.coreDigest, "resource_policy": asJSON(prepared.policy.Resources), "volume_policy": asJSON(prepared.policy.Volumes),
+			"network_policy": asJSON(prepared.policy.Network), "kubernetes_access_profile": asJSON(prepared.policy.KubernetesAccess),
+			"resources_digest": prepared.policy.ResourcesDigest, "volumes_digest": prepared.policy.VolumesDigest,
+			"network_digest": prepared.policy.NetworkDigest, "rbac_digest": prepared.policy.RBACDigest,
 			"name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 		}).Scan(&changed)
 	} else if input.Kind == command.RollbackRuntimeEnvironment && payload.PublishedVersionRef != "" {
@@ -724,6 +754,8 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		summary: "i18n:RUNTIME_ENVIRONMENT_PUBLISHED", platformEvent: "AGENT_CHANGED"}, nil
 }
 
+// resolveRuntimeEnvironmentImage resolves the project-scoped image/tool selection through the shared scoped resolver without inferring organization scope from a caller field.
+// resolveRuntimeEnvironmentImage разрешает проектный выбор образа/инструментов общим scoped-разрешителем без вывода области организации из поля вызывающего.
 func (repository *Repository) resolveRuntimeEnvironmentImage(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -733,6 +765,8 @@ func (repository *Repository) resolveRuntimeEnvironmentImage(
 	return repository.resolveScopedRuntimeEnvironmentImage(ctx, tx, organizationID, projectID, "PROJECT", artifactRef, tools)
 }
 
+// resolveScopedRuntimeEnvironmentImage requires a consistent project/organization scope, exact promoted artifact/recipe generation and matching active image inventory. It copies and sorts selected tools, validates bounded UTF-8 metadata and rejects duplicates or commands absent from verified image inventory before returning canonical JSON and image pins.
+// resolveScopedRuntimeEnvironmentImage требует согласованную область проекта/организации, точный опубликованный artifact/recipe generation и совпадающий активный inventory образа. Копирует и сортирует инструменты, проверяет ограничения UTF-8 метаданных и отклоняет дубли/команды вне проверенного inventory до возврата канонического JSON и image pins.
 func (repository *Repository) resolveScopedRuntimeEnvironmentImage(ctx context.Context, tx pgx.Tx, organizationID, projectID, scopeKind, artifactRef string, tools []entity.RuntimeEnvironmentTool) (string, entity.RuntimeEnvironmentImage, []entity.RuntimeEnvironmentTool, []byte, error) {
 	if scopeKind != "ORGANIZATION" && scopeKind != "PROJECT" || (scopeKind == "ORGANIZATION") != (projectID == "") {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
@@ -782,6 +816,8 @@ func (repository *Repository) resolveScopedRuntimeEnvironmentImage(ctx context.C
 	return artifactID, image, normalized, encoded, nil
 }
 
+// bindRuntimeEnvironment locks and version-checks the editable agent, binds the exact environment/version through scoped SQL and advances agent metadata before reading back its runtime view. The binding digest includes the next binding generation; resource authorization and transaction commit remain outside.
+// bindRuntimeEnvironment блокирует и сверяет версию изменяемого агента, связывает точные environment/version через scoped SQL и продвигает метаданные агента до повторного чтения runtime view. Digest привязки включает следующее поколение; авторизация ресурса и commit транзакции остаются снаружи.
 func (repository *Repository) bindRuntimeEnvironment(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.RuntimeEnvironmentBindingInput)
 	if !ok || payload.AgentRef == "" || payload.EnvironmentRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -820,6 +856,8 @@ func (repository *Repository) bindRuntimeEnvironment(ctx context.Context, tx pgx
 	return runtimeConfigurationOutcome(view, agent, "i18n:AGENT_RUNTIME_ENVIRONMENT_BOUND"), nil
 }
 
+// lockOverlayDraft locks the current agent draft within the organization and returns its exact identity/version/state/content, mapping NoRows separately from a driver failure.
+// lockOverlayDraft блокирует текущий черновик агента в организации и возвращает точные identity/version/state/content, отдельно классифицируя NoRows и отказ драйвера.
 func lockOverlayDraft(ctx context.Context, tx pgx.Tx, organizationID, agentRef string) (string, string, int64, string, string, error) {
 	var id, ref, state, content string
 	var version int64
@@ -833,6 +871,8 @@ func lockOverlayDraft(ctx context.Context, tx pgx.Tx, organizationID, agentRef s
 	return id, ref, version, state, content, nil
 }
 
+// getRuntimeConfigurationViewTx reads the owner projection after its caller has authorized the exact agent, then populates context bindings and overlay schema within the same transaction. The OWNER query selector is an internal projection choice, not permission derived from request payload.
+// getRuntimeConfigurationViewTx читает owner-проекцию после проверки точного агента вызывающим, затем наполняет context bindings и overlay schema в той же транзакции. Внутренний селектор OWNER выбирает проекцию, а не назначает полномочия из request payload.
 func (repository *Repository) getRuntimeConfigurationViewTx(ctx context.Context, tx pgx.Tx, scope scope, ref string) (entity.AgentRuntimeConfigurationView, error) {
 	// Caller уже проверил точное право Agent; legacy membership не заменяет эту policy.
 	view, err := repository.scanAgentRuntimeConfigurationView(tx.QueryRow(ctx, queryRuntimeConfigurationGetAgentView,
@@ -852,6 +892,8 @@ func (repository *Repository) getRuntimeConfigurationViewTx(ctx context.Context,
 	return view, nil
 }
 
+// getRuntimeEnvironmentTx reads the scoped environment snapshot and additionally checks organization-resource owner access for organization environments. It preserves existing scan-error mapping; project eligibility is enforced by the scoped query/enclosing owner path.
+// getRuntimeEnvironmentTx читает scoped snapshot окружения и дополнительно проверяет доступ владельца ресурса организации для общих окружений. Сохраняет прежнюю классификацию scan-error; проектную доступность обеспечивает scoped-запрос/внешний путь владельца.
 func (repository *Repository) getRuntimeEnvironmentTx(ctx context.Context, tx pgx.Tx, scope scope, ref string) (entity.RuntimeEnvironmentSet, error) {
 	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment,
 		scope.organizationID, ref, scope.role, scope.actorID))
@@ -866,12 +908,16 @@ func (repository *Repository) getRuntimeEnvironmentTx(ctx context.Context, tx pg
 	return item, nil
 }
 
+// runtimeConfigurationOutcome wraps the exact runtime configuration view with its agent/project coordinates, summary and AGENT_CHANGED event intent for the enclosing owner transaction; it emits nothing itself.
+// runtimeConfigurationOutcome оборачивает точный runtime configuration view с agent/project координатами, сводкой и намерением события AGENT_CHANGED для внешней транзакции владельца; самостоятельно ничего не публикует.
 func runtimeConfigurationOutcome(view entity.AgentRuntimeConfigurationView, agent lockedRuntimeAgent, summary string) commandOutcome {
 	return commandOutcome{result: command.Result{RuntimeConfiguration: &view}, projectID: agent.projectID,
 		projectRef: agent.projectRef, resourceKind: "AGENT_RUNTIME_CONFIGURATION", resourceRef: view.Configuration.AgentRef,
 		summary: summary, platformEvent: "AGENT_CHANGED"}
 }
 
+// validateEnvironmentPayload copies values and secret descriptors without reordering caller slices, maps them to the runtime contract and validates the full environment before JSON encoding. Only descriptors, never plaintext secret bytes, enter the stored secret projection.
+// validateEnvironmentPayload копирует значения и дескрипторы секретов без изменения порядка срезов вызывающего, переносит их в runtime-контракт и проверяет окружение до JSON-кодирования. В сохраняемую проекцию секретов попадают лишь дескрипторы, не открытые байты секретов.
 func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets []entity.RuntimeSecretDescriptor) ([]byte, []byte, []runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection, error) {
 	normalizedValues := make([]entity.RuntimeEnvironmentValue, len(values))
 	copy(normalizedValues, values)
@@ -895,6 +941,8 @@ func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets
 	return rawValues, rawSecrets, contractValues, contractSecrets, nil
 }
 
+// resolveEnvironmentPayload delegates the ordinary project environment values/secret bindings to the scoped resolver with a server-selected PROJECT kind.
+// resolveEnvironmentPayload передаёт обычные значения/привязки секретов проектного окружения scoped-разрешителю с назначенным сервером видом PROJECT.
 func (repository *Repository) resolveEnvironmentPayload(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -905,6 +953,8 @@ func (repository *Repository) resolveEnvironmentPayload(
 	return repository.resolveScopedEnvironmentPayload(ctx, tx, organizationID, projectID, "PROJECT", values, bindings)
 }
 
+// resolveScopedEnvironmentPayload validates project/organization shape and bounded unique binding names, resolves each exact secret revision through owner-scoped SQL and validates the resulting values/descriptors with the runtime contract. Missing secrets and infrastructure failures remain distinct; the resolver never reads secret values.
+// resolveScopedEnvironmentPayload проверяет форму проекта/организации и ограниченные уникальные имена привязок, разрешает точную ревизию каждого секрета через owner-scoped SQL и проверяет значения/дескрипторы runtime-контрактом. Отсутствие секретов и инфраструктурный отказ различаются; значения секретов не читаются.
 func (repository *Repository) resolveScopedEnvironmentPayload(ctx context.Context, tx pgx.Tx, organizationID, projectID, scopeKind string, values []entity.RuntimeEnvironmentValue, bindings []entity.RuntimeSecretBinding) ([]byte, []byte, []runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection, error) {
 	if scopeKind != "ORGANIZATION" && scopeKind != "PROJECT" || (scopeKind == "ORGANIZATION") != (projectID == "") {
 		return nil, nil, nil, nil, errs.ErrInvalid
@@ -941,6 +991,8 @@ func (repository *Repository) resolveScopedEnvironmentPayload(ctx context.Contex
 	return encodedValues, encodedSecrets, contractValues, contractSecrets, nil
 }
 
+// runtimeEnvironmentConfigurationDigests maps image/tools into the shared runtime contract and computes separate core-content and complete policy-inclusive digests in their established order, propagating validation failure without changing caller data.
+// runtimeEnvironmentConfigurationDigests переносит образ/инструменты в общий runtime-контракт и вычисляет отдельные digest базового содержимого и полного набора с policy в прежнем порядке, возвращая ошибку проверки без изменения данных вызывающего.
 func runtimeEnvironmentConfigurationDigests(
 	values []runtimecontract.RuntimeEnvironmentValue,
 	secrets []runtimecontract.RuntimeSecretProjection,
@@ -966,6 +1018,8 @@ func runtimeEnvironmentConfigurationDigests(
 	return coreDigest, digest, err
 }
 
+// admitRuntimeEnvironmentPolicy normalizes policy and refuses Kubernetes privileges, then requires privileged environment access plus fresh five-minute credential authentication when web access is enabled. Resource target derives from the resolved environment/project or organization scope; normalization alone does not authorize network access.
+// admitRuntimeEnvironmentPolicy нормализует policy и отвергает привилегии Kubernetes, затем требует привилегированный доступ к окружению и свежую пятиминутную аутентификацию при включённом web-доступе. Цель ресурса выводится из разрешённого environment/project либо области организации; одной нормализации недостаточно для разрешения сети.
 func (repository *Repository) admitRuntimeEnvironmentPolicy(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -997,17 +1051,21 @@ func (repository *Repository) admitRuntimeEnvironmentPolicy(
 			return runtimecontract.RuntimeEnvironmentPolicy{}, accessErr
 		}
 		now := time.Now().UTC()
-		if !(value.Principal{CredentialAuthenticatedAt: current.credentialAuthenticatedAt}).AuthenticationIsFresh(now, 5*time.Minute) {
+		if !runtimeEnvironmentAuthenticationIsFresh(current.credentialAuthenticatedAt, now) {
 			return runtimecontract.RuntimeEnvironmentPolicy{}, errs.ErrFreshAuthenticationRequired
 		}
 	}
 	return normalized, nil
 }
 
+// runtimeEnvironmentAuthenticationIsFresh applies the canonical Principal freshness rule with the environment-specific five-minute window; callers supply both the verified authentication time and current time.
+// runtimeEnvironmentAuthenticationIsFresh применяет каноническое правило свежести Principal с пятиминутным окном окружения; вызывающий передаёт проверенное время аутентификации и текущее время.
 func runtimeEnvironmentAuthenticationIsFresh(authenticatedAt, now time.Time) bool {
 	return (value.Principal{CredentialAuthenticatedAt: authenticatedAt}).AuthenticationIsFresh(now, 5*time.Minute)
 }
 
+// validProviderPolicy accepts only FIXED/LEAST_USED/WEIGHTED with bounded unique account refs and valid weights, requiring exactly one fixed candidate and unit weights outside WEIGHTED. It validates syntax/cardinality, while current account/model authorization is checked separately.
+// validProviderPolicy принимает лишь FIXED/LEAST_USED/WEIGHTED с ограниченными уникальными account refs и допустимыми весами, требуя одного фиксированного кандидата и единичные веса вне WEIGHTED. Проверяет синтаксис/количество, а актуальные права на аккаунт/модель проверяются отдельно.
 func validProviderPolicy(mode string, candidates []entity.ProviderAccountCandidate) bool {
 	if !contains([]string{"FIXED", "LEAST_USED", "WEIGHTED"}, mode) || len(candidates) < 1 || len(candidates) > 128 ||
 		(mode == "FIXED" && len(candidates) != 1) {
@@ -1027,6 +1085,8 @@ func validProviderPolicy(mode string, candidates []entity.ProviderAccountCandida
 	return true
 }
 
+// validModel checks a nonempty trimmed UTF-8 model identifier within 128 bytes and the existing ASCII letter/digit/punctuation alphabet. It does not prove that the model exists or is eligible for an account.
+// validModel проверяет непустой UTF-8 идентификатор модели без краевых пробелов в пределах 128 байтов и прежнего ASCII набора букв/цифр/знаков. Не доказывает существование модели и её доступность аккаунту.
 func validModel(model string) bool {
 	if strings.TrimSpace(model) != model || len(model) < 1 || len(model) > 128 || !utf8.ValidString(model) {
 		return false
@@ -1041,6 +1101,8 @@ func validModel(model string) bool {
 	return true
 }
 
+// digestBytes hashes the ordered byte parts with a trailing NUL after each part and returns lowercase SHA-256 hex; it does not sort, normalize JSON or sign the input.
+// digestBytes хеширует упорядоченные части байтов с завершающим NUL после каждой и возвращает строчный SHA-256 hex; не сортирует, не нормализует JSON и не подписывает вход.
 func digestBytes(parts ...[]byte) string {
 	digest := sha256.New()
 	for _, part := range parts {
@@ -1050,6 +1112,8 @@ func digestBytes(parts ...[]byte) string {
 	return hex.EncodeToString(digest.Sum(nil))
 }
 
+// strconvFormat encodes a signed version counter as base-10 text for the established digest inputs without changing counter range or generation semantics.
+// strconvFormat кодирует знаковый счётчик версии десятичным текстом для прежних digest inputs без изменения диапазона и смысла поколения.
 func strconvFormat(value int64) string {
 	return strconv.FormatInt(value, 10)
 }

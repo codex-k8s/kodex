@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// processObservationInput provides deterministic synthetic execution and image
+// pins for diagnostic tests, without authorizing an actual workload.
+// processObservationInput задаёт устойчивые синтетические привязки исполнения
+// и образа для диагностики, не разрешая запуск реального workload.
 func processObservationInput() RunnerInput {
 	return RunnerInput{OrganizationRef: "org_fixture123", ProjectRef: "prj_fixture123", RunRef: "run_fixture123", NodeRef: "nod_fixture123",
 		SessionRef: "ses_fixture123", TurnRef: "trn_fixture123", Attempt: 1, RuntimeRevisionRef: "rev_fixture123", RuntimeRevisionVersion: 2,
@@ -13,6 +17,10 @@ func processObservationInput() RunnerInput {
 		InputDigest: strings.Repeat("c", 64), ExecutionBindingDigest: strings.Repeat("d", 64)}
 }
 
+// TestProviderProcessObservationCanonicalBinding checks exact round-trip and
+// every binding coordinate, rejecting duplicate, alias, null and private fields.
+// TestProviderProcessObservationCanonicalBinding проверяет точный round-trip
+// и все привязки, отклоняя дубликаты, иные имена, null и закрытые поля.
 func TestProviderProcessObservationCanonicalBinding(t *testing.T) {
 	input := processObservationInput()
 	value := BindProviderProcessObservation(input, "0.160.0")
@@ -52,6 +60,10 @@ func TestProviderProcessObservationCanonicalBinding(t *testing.T) {
 	}
 }
 
+// TestProviderProcessVersionAndActivityClosedSchema covers supported semver and
+// hostile suffixes, then requires one unambiguous observation per activity.
+// TestProviderProcessVersionAndActivityClosedSchema проверяет semver и враждебные
+// суффиксы, затем требует одно однозначное наблюдение на activity.
 func TestProviderProcessVersionAndActivityClosedSchema(t *testing.T) {
 	for _, version := range []string{"0.160.0", "1.2.3", "0.161.0-alpha.1", "0.161.0-rc.2"} {
 		if !ValidProviderProcessVersion(version) {

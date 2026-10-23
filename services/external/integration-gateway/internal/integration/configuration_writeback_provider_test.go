@@ -14,6 +14,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// writeBackProviderFixture derives a synthetic approved proposal and exact writeback work from the source fixture, including fixed author/content/marker bindings.
+// RU: writeBackProviderFixture выводит синтетическое одобренное предложение и точную writeback-работу из source-оснастки, включая фиксированные author/content/marker привязки.
+// These approval fields are isolated test data, not a server-owned live decision.
+// RU: Поля одобрения — изолированные тестовые данные, а не живое серверное решение.
 func writeBackProviderFixture(t *testing.T, adapter *Adapter, provider string) *cp.ManagedConfigurationGitWriteBackWork {
 	t.Helper()
 	source := sourceWorkFixture(t, adapter, provider)
@@ -23,6 +27,10 @@ func writeBackProviderFixture(t *testing.T, adapter *Adapter, provider string) *
 	return &cp.ManagedConfigurationGitWriteBackWork{Proposal: p, Lease: &cp.ManagedConfigurationGitWriteBackLease{ProposalRef: p.Ref, Attempt: 2, ClaimGeneration: 2, Claimant: "fixture", Fence: "fixture-fence", ExpiresAt: timestamppb.New(time.Now().Add(time.Minute))}, Mode: cp.ManagedConfigurationGitWriteBackWorkMode_MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_EXECUTE, Effect: cp.ManagedConfigurationGitWriteBackEffect_MANAGED_CONFIGURATION_GIT_WRITE_BACK_EFFECT_PULL_REQUEST, DefinitionKey: source.GetDefinitionKey(), DefinitionVersion: source.GetDefinitionVersion(), DefinitionDigest: source.GetDefinitionDigest(), DefinitionPackage: source.GetDefinitionPackage(), PublicConfiguration: source.GetPublicConfiguration(), CredentialRevision: source.GetCredentialRevision(), ProposedContent: content, EffectMarker: "kodex-configuration-writeback:" + p.Ref, CommitMessage: "Update managed configuration", CommitAuthorName: "Kodex", CommitAuthorEmail: "configuration@kodex.invalid", CommitTime: created, CandidateTreeSha: strings.Repeat("c", 40), CandidateBlobSha: strings.Repeat("d", 40), Deadline: timestamppb.New(time.Now().Add(time.Minute))}
 }
 
+// TestWriteBackProviderPRReadbackIsExactAndNeverRetriesCreate checks GitHub/GitLab PR identity, canonical URL, marker, duplicates, status failures and read-only creation denial.
+// RU: TestWriteBackProviderPRReadbackIsExactAndNeverRetriesCreate проверяет GitHub/GitLab PR identity, канонический URL, marker, дубликаты, status-ошибки и запрет создания в read-only режиме.
+// Fake transport counters require a single create/read attempt and prevent foreign or ambiguous results from becoming a confirmed provider receipt.
+// RU: Счётчики фиктивного transport требуют единственную create/read попытку и запрещают превращение чужого либо неоднозначного результата в подтверждённую provider-квитанцию.
 func TestWriteBackProviderPRReadbackIsExactAndNeverRetriesCreate(t *testing.T) {
 	for _, provider := range []string{"github", "gitlab"} {
 		for _, mode := range []string{"success", "foreign-head", "foreign-repo", "foreign-url", "foreign-marker", "duplicate", "unauthorized", "rate-limit", "readonly"} {
@@ -136,6 +144,10 @@ func TestWriteBackProviderPRReadbackIsExactAndNeverRetriesCreate(t *testing.T) {
 	}
 }
 
+// TestWriteBackRejectsMissingGitDestinationAndTamperedWorkBeforeCredentialRead rejects incomplete network packages and changed payload/branch/author/lease/state bindings.
+// RU: TestWriteBackRejectsMissingGitDestinationAndTamperedWorkBeforeCredentialRead отклоняет неполные network-пакеты и изменённые payload/branch/author/lease/state привязки.
+// It also verifies rejection leaves the original owner snapshot unchanged instead of clearing or rewriting caller-owned content during validation.
+// RU: Тест также проверяет неизменность исходного owner-снимка при отказе вместо очистки либо переписывания содержимого вызывающего во время проверки.
 func TestWriteBackRejectsMissingGitDestinationAndTamperedWorkBeforeCredentialRead(t *testing.T) {
 	for _, mode := range []string{"api-only", "git-only", "unknown", "digest", "branch", "author", "expired", "state"} {
 		t.Run(mode, func(t *testing.T) {

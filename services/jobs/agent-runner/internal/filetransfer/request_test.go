@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// TestCatalogDescriptorRequiresExactBoundSelectors checks one canonical file descriptor and fourteen independent path/method/body/query/catalog/lease mutations without making a file request.
+// TestCatalogDescriptorRequiresExactBoundSelectors проверяет один канонический файловый дескриптор и четырнадцать независимых изменений пути, метода, тела, запроса, каталога и аренды без файлового HTTP-вызова.
 func TestCatalogDescriptorRequiresExactBoundSelectors(t *testing.T) {
 	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, ProjectRef: "prj_fixture01", LeaseRef: "lease_fixture01", LeaseFence: "fence", LeaseGeneration: 1, FileCatalog: &runtimecontract.RuntimeFileCatalog{Ref: "vfc_fixture01", Digest: strings.Repeat("a", 64), Total: 1, Purposes: []string{"PROJECT"}}}
 	path := "/v1/executions/lease_fixture01/artifacts/art_fixture01?purpose=PROJECT&entry_ref=vfe_fixture01&revision=1&digest=sha256:" + strings.Repeat("b", 64)
@@ -53,6 +55,8 @@ func TestCatalogDescriptorRequiresExactBoundSelectors(t *testing.T) {
 	}
 }
 
+// TestFileClientSeparatesHeaderAndBodyBudget checks transport cloning leaves the caller unchanged, uses distinct file budgets and refuses redirects without connecting to an HTTP server.
+// TestFileClientSeparatesHeaderAndBodyBudget проверяет копирование транспорта без изменения переданного объекта, отдельные файловые бюджеты и отказ перенаправлений без подключения к HTTP-серверу.
 func TestFileClientSeparatesHeaderAndBodyBudget(t *testing.T) {
 	transport := &http.Transport{ResponseHeaderTimeout: 30 * time.Second}
 	client := NewClient(transport)

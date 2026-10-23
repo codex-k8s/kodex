@@ -11,6 +11,8 @@ import (
 	"testing"
 )
 
+// TestGitHubReviewLargeIdentifierRoundtrip preserves a review ID above signed 32-bit range, full body/state/commit and effect reference across create/read/list fixture operations.
+// RU: TestGitHubReviewLargeIdentifierRoundtrip сохраняет review ID выше signed 32-bit диапазона, полный body/state/commit и effect reference при create/read/list операциях оснастки.
 func TestGitHubReviewLargeIdentifierRoundtrip(t *testing.T) {
 	for _, operation := range []string{"github.pull_request.review.create", "github.pull_request.review.read", "github.pull_request.review.list"} {
 		t.Run(operation, func(t *testing.T) {
@@ -73,6 +75,8 @@ func TestGitHubReviewLargeIdentifierRoundtrip(t *testing.T) {
 	}
 }
 
+// TestGitHubReviewUnsafeIdentifierRemainsUnknownWithoutRetry injects a mutation reply ID outside the safe output-number range and requires one POST with UNKNOWN response_validation, not retry or false success.
+// RU: TestGitHubReviewUnsafeIdentifierRemainsUnknownWithoutRetry подставляет mutation reply ID вне безопасного числового диапазона и требует один POST с UNKNOWN response_validation вместо повтора либо ложного успеха.
 func TestGitHubReviewUnsafeIdentifierRemainsUnknownWithoutRetry(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "fixture-token")

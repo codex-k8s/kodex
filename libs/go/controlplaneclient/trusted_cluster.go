@@ -12,10 +12,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// trustedWorkloadPattern bounds the service-account segment of a locally constructed trusted caller identity.
+// trustedWorkloadPattern ограничивает часть service account в локально построенной доверенной идентичности caller.
 var trustedWorkloadPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
-// TrustedUnaryClientInterceptor переносит только явно установленный credential,
-// а caller/profile назначает adapter. Target проверяется самим adapter до dial.
+// TrustedUnaryClientInterceptor validates the profile and caller, then registers explicit RPC methods for trusted traffic.
+// TrustedUnaryClientInterceptor проверяет профиль и caller, затем регистрирует явные RPC-методы доверенного трафика.
+// The adapter supplies caller metadata; the configured target is validated separately before dialing.
+// Метаданные caller задаёт adapter; целевой адрес отдельно проверяется до соединения.
 func TrustedUnaryClientInterceptor(profile, caller string, operations map[string]string) (grpc.UnaryClientInterceptor, error) {
 	if profile != transportprofile.TrustedCluster || !trustedWorkloadPattern.MatchString(caller) || len(operations) == 0 {
 		return nil, errors.New("trusted cluster interceptor configuration rejected")
@@ -27,6 +31,8 @@ func TrustedUnaryClientInterceptor(profile, caller string, operations map[string
 	return serviceUnary(registered, nil, profile, "spiffe://kodex.local/ns/kodex-system/sa/"+caller), nil
 }
 
+// TrustedStreamClientInterceptor applies the registered-operation and metadata boundary to a trusted stream invocation.
+// TrustedStreamClientInterceptor применяет границу зарегистрированной операции и метаданных к доверенному потоку.
 func TrustedStreamClientInterceptor(profile, caller string, operations map[string]string) (grpc.StreamClientInterceptor, error) {
 	unary, err := TrustedUnaryClientInterceptor(profile, caller, operations)
 	if err != nil {
@@ -43,9 +49,10 @@ func TrustedStreamClientInterceptor(profile, caller string, operations map[strin
 	}, nil
 }
 
-// dialTrustedCluster не создаёт legacy connection, issuer или proof resolver.
-// Plaintext допускается только для точного внутреннего Service; внешний
-// endpoint нельзя включить одной настройкой insecure.
+// dialTrustedCluster accepts only fixed internal service targets and authorized workload operations before creating a service client.
+// dialTrustedCluster принимает только заданные внутренние Service и разрешённые операции workload до создания клиента.
+// It uses cluster-internal plaintext without constructing an issuer, proof resolver or fallback external connection.
+// Он использует внутренний plaintext без создания issuer, proof resolver либо запасного внешнего соединения.
 func dialTrustedCluster(ctx context.Context, config Config) (*Client, error) {
 	if ctx == nil || ctx.Err() != nil || config.RPCProfile != transportprofile.TrustedCluster ||
 		!trustedWorkloadPattern.MatchString(config.CallerWorkload) ||

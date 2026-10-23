@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestRotationAbortArgumentsFailClosed accepts one canonical abort command and rejects six altered flag/identity/revision/digest/confirmation variants plus missing or extra arguments. It runs only parsers, not a database abort, role check or rotation-state transition.
+// TestRotationAbortArgumentsFailClosed принимает одну каноническую команду отмены и отклоняет шесть изменений флага, идентичности, ревизии, дайджеста или подтверждения, а также неполные и лишние аргументы. Выполняются только разборщики без отмены в БД, проверки роли или перехода состояния ротации.
 func TestRotationAbortArgumentsFailClosed(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	valid := []string{"rotation-abort", "--intent-id", "13900000-0000-4000-8000-000000000001", "--source-revision", "2", "--source-digest-sha256", digest, "--confirm", "ABORT-STAGING-AUTHORITY-ROTATION"}
@@ -37,6 +39,8 @@ func TestRotationAbortArgumentsFailClosed(t *testing.T) {
 	}
 }
 
+// TestRotationWatchCommandIsExact checks one exact operation-watch command and its parsed identity, then rejects a malformed force form. It does not run the timed watch loop or connect to PostgreSQL.
+// TestRotationWatchCommandIsExact проверяет одну точную команду наблюдения операции и разобранную идентичность, затем отклоняет некорректную форму force. Цикл наблюдения по времени и подключение PostgreSQL не запускаются.
 func TestRotationWatchCommandIsExact(t *testing.T) {
 	arguments := []string{"rotation-watch", "--operation-id", "13900000-0000-4000-8000-000000000002"}
 	action, err := parseCommand(arguments)
@@ -52,6 +56,8 @@ func TestRotationWatchCommandIsExact(t *testing.T) {
 	}
 }
 
+// TestRotationWatchRejectsForeignRetiredOperationAcrossRestart rejects a foreign RETIRED operation and an own WAITING_RETIRE state, then evaluates the matching terminal predicate twice. The repeated calls model restart-independent selection; no process restart, persistent-state read or timer loop occurs in this unit.
+// TestRotationWatchRejectsForeignRetiredOperationAcrossRestart отклоняет чужую RETIRED-операцию и собственное состояние WAITING_RETIRE, затем дважды вычисляет совпадающий terminal-предикат. Повторные вызовы моделируют независимый от перезапуска выбор; реального перезапуска процесса, чтения устойчивого состояния или цикла таймера в юните нет.
 func TestRotationWatchRejectsForeignRetiredOperationAcrossRestart(t *testing.T) {
 	expected := "13900000-0000-4000-8000-000000000002"
 	foreign := rotationStatus{OperationID: "13900000-0000-4000-8000-000000000003", Status: "RETIRED"}

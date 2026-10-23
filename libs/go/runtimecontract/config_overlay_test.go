@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestConfigOverlayStrictAllowlist requires canonical TOML output for allowed preferences and rejects credential, provider, sandbox, MCP and invalid-value overrides.
+// TestConfigOverlayStrictAllowlist требует канонический TOML для разрешённых настроек и отклоняет подмену реквизитов, провайдера, sandbox, MCP и некорректные значения.
 func TestConfigOverlayStrictAllowlist(t *testing.T) {
 	valid := "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\nallow_login_shell = false\n\n[history]\npersistence = \"none\"\n"
 	canonical, digest, err := CanonicalConfigOverlay(valid)
@@ -37,6 +39,8 @@ func TestConfigOverlayStrictAllowlist(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentRejectsReservedAndSecretValues accepts separate ordinary and secret-metadata channels but rejects reserved or overlapping variable names.
+// TestRuntimeEnvironmentRejectsReservedAndSecretValues принимает отдельные каналы обычных значений и метаданных секретов, но отклоняет зарезервированные или пересекающиеся имена переменных.
 func TestRuntimeEnvironmentRejectsReservedAndSecretValues(t *testing.T) {
 	for _, name := range []string{"APP_MODE", "SERVICE_AUTH"} {
 		if !ValidRuntimeEnvironmentName(name) {
@@ -67,6 +71,8 @@ func TestRuntimeEnvironmentRejectsReservedAndSecretValues(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentDigestBindsExactImageAndNormalizedTools keeps tool order irrelevant while requiring image and usage-hint changes to alter the environment digest.
+// TestRuntimeEnvironmentDigestBindsExactImageAndNormalizedTools сохраняет независимость от порядка инструментов, требуя изменения дайджеста при смене образа или подсказки использования.
 func TestRuntimeEnvironmentDigestBindsExactImageAndNormalizedTools(t *testing.T) {
 	values := []RuntimeEnvironmentValue{{Name: "APP_MODE", Value: "test"}}
 	image := testRuntimeEnvironmentImage("a")
@@ -98,6 +104,8 @@ func TestRuntimeEnvironmentDigestBindsExactImageAndNormalizedTools(t *testing.T)
 	}
 }
 
+// testRuntimeEnvironmentImage creates a synthetic digest-pinned image with matching artifact and recipe provenance for environment tests.
+// testRuntimeEnvironmentImage создаёт синтетический закреплённый образ с согласованным происхождением артефакта и рецепта для проверок окружения.
 func testRuntimeEnvironmentImage(marker string) RuntimeEnvironmentImage {
 	return RuntimeEnvironmentImage{
 		ArtifactRef:      "imgart_abcdefgh" + marker,

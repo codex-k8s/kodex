@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integrationfixture"
 )
 
+// managedDefinitionFixture clones and reparses a package with a UI/Git origin, new name and version to obtain a synthetic managed revision with a valid computed digest.
+// managedDefinitionFixture копирует и повторно разбирает пакет с источником UI или Git, новым именем и версией, получая синтетическую управляемую ревизию с корректно вычисленным хешем.
 func managedDefinitionFixture(t *testing.T, baseline integrationpackage.Package, name, origin string) integrationpackage.Package {
 	t.Helper()
 	raw, err := json.Marshal(baseline)
@@ -37,6 +39,8 @@ func managedDefinitionFixture(t *testing.T, baseline integrationpackage.Package,
 	return parsed
 }
 
+// sealedDefinitionFixture serializes and reparses a changed package to validate it and recompute its digest before fixture execution.
+// sealedDefinitionFixture сериализует и повторно разбирает изменённый пакет, проверяя его и пересчитывая хеш перед тестовым выполнением.
 func sealedDefinitionFixture(t *testing.T, candidate integrationpackage.Package) integrationpackage.Package {
 	t.Helper()
 	raw, err := json.Marshal(candidate)
@@ -50,6 +54,8 @@ func sealedDefinitionFixture(t *testing.T, candidate integrationpackage.Package)
 	return parsed
 }
 
+// TestManagedExecutionUsesSelectedRevisionDeadline narrows three managed providers to one second/attempt and verifies that the outbound request inherits that deadline without retrying its injected failure.
+// TestManagedExecutionUsesSelectedRevisionDeadline сужает три управляемых провайдера до секунды и одной попытки, проверяя наследование срока внешним запросом без повтора подставной ошибки.
 func TestManagedExecutionUsesSelectedRevisionDeadline(t *testing.T) {
 	for _, provider := range []string{"synthetic", "github", "gitlab"} {
 		t.Run(provider, func(t *testing.T) {
@@ -83,6 +89,8 @@ func TestManagedExecutionUsesSelectedRevisionDeadline(t *testing.T) {
 	}
 }
 
+// TestManagedHealthCheckHonorsNarrowedBudgetAndGate checks a narrowed health timeout/attempt and an intentionally invalid gated package, requiring one bounded request or rejection before HTTP respectively.
+// TestManagedHealthCheckHonorsNarrowedBudgetAndGate проверяет сокращённый срок и число попыток готовности и намеренно некорректный пакет с подтверждением, требуя соответственно один ограниченный запрос либо отказ до HTTP.
 func TestManagedHealthCheckHonorsNarrowedBudgetAndGate(t *testing.T) {
 	for _, mode := range []string{"budget", "human_gate"} {
 		t.Run(mode, func(t *testing.T) {
@@ -123,6 +131,8 @@ func TestManagedHealthCheckHonorsNarrowedBudgetAndGate(t *testing.T) {
 	}
 }
 
+// TestManagedDefinitionsRemainLocalToConcurrentConnections repeatedly executes and probes two distinct revisions concurrently against a local fixture, then verifies the shared adapter baseline was not replaced.
+// TestManagedDefinitionsRemainLocalToConcurrentConnections многократно выполняет и проверяет две разные ревизии параллельно на локальной оснастке, затем проверяет неизменность общего исходного определения адаптера.
 func TestManagedDefinitionsRemainLocalToConcurrentConnections(t *testing.T) {
 	fixture := integrationfixture.NewHandler(integrationfixture.NewStore())
 	fixture.SetReady(true)
@@ -159,6 +169,8 @@ func TestManagedDefinitionsRemainLocalToConcurrentConnections(t *testing.T) {
 	}
 }
 
+// TestManagedDefinitionRejectsDetachedPinsBeforeProvider removes or corrupts the package and its key/version/digest/adapter pins or size, requiring validation failure before the synthetic provider receives a call.
+// TestManagedDefinitionRejectsDetachedPinsBeforeProvider удаляет либо искажает пакет, закреплённые ключ, версию, хеш, адаптер или размер, требуя отказ до обращения к синтетическому провайдеру.
 func TestManagedDefinitionRejectsDetachedPinsBeforeProvider(t *testing.T) {
 	adapter := testAdapter(t)
 	calls := 0

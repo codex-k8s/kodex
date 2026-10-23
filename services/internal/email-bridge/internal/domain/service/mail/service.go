@@ -15,6 +15,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/repository/receipt"
 )
 
+// Service coordinates mailbox policy, online owner authority and durable effect/report journals around protocol I/O.
+// Its completion base is independently supplied by the process so a canceled caller does not erase a known protocol outcome.
+// Service связывает политику ящика, онлайн-полномочия владельца и устойчивые журналы эффектов и отчётов вокруг протокольного I/O.
+// Базовый контекст фиксации задаётся процессом независимо, чтобы отмена клиента не теряла известный исход протокола.
 type Service struct {
 	Ledger         receipt.ReconciliationRepository
 	Reports        receipt.ReportRepository
@@ -26,8 +30,14 @@ type Service struct {
 	Receipts       receipt.Repository
 }
 
+// receiptCompletionTimeout bounds durable completion/reporting after protocol I/O independently of the operation context.
+// receiptCompletionTimeout ограничивает устойчивую фиксацию и отчёт после протокола независимо от контекста операции.
 const receiptCompletionTimeout = receipt.ReportGrace
 
+// Mutation classifies externally state-changing operations that require an effect key and a durable reservation.
+// Unknown or read-only operations return false; validity is checked separately before dispatch.
+// Mutation выделяет внешние изменяющие операции, требующие ключ эффекта и устойчивого резервирования.
+// Неизвестные операции и чтение дают false; допустимость отдельно проверяется до исполнения.
 func Mutation(op api.Operation) bool {
 	switch op {
 	case api.OperationSend, api.OperationReply, api.OperationReplyAll, api.OperationForward, api.OperationDelete, api.OperationMarkRead, api.OperationMarkUnread, api.OperationMove, api.OperationArchive, api.OperationDraftCreate, api.OperationDraftUpdate, api.OperationDraftDelete:
@@ -36,10 +46,17 @@ func Mutation(op api.Operation) bool {
 		return false
 	}
 }
+
+// Sending identifies send, reply, reply-all and forward so message policy and the SMTP path share one exact operation set.
+// Sending выделяет send, reply, reply-all и forward, задавая один точный набор для политики сообщения и пути SMTP.
 func Sending(op api.Operation) bool {
 	return op == api.OperationSend || op == api.OperationReply || op == api.OperationReplyAll || op == api.OperationForward
 }
 
+// Execute validates mailbox/folder/message bounds and exact online authority before dispatching any protocol operation.
+// Mutations reserve and report first; a replay returns its receipt without another effect, and uncertain completion remains unknown rather than retried.
+// Execute проверяет ограничения ящика, папки, сообщения и точные онлайн-полномочия до любой операции протокола.
+// Изменение сначала резервируется и докладывается; повтор возвращает квитанцию без нового эффекта, неопределённая фиксация остаётся unknown без повтора.
 func (s *Service) Execute(ctx context.Context, caller, token string, command api.Command) (api.Result, error) {
 	if !command.Operation.Valid() || len(token) < 1 || len(token) > 16384 || len(command.EffectKey) > 128 || len(command.Query) > 256 || len(command.Cursor) > 512 || len(command.Uid) > 70 || strings.ContainsAny(command.Uid, "\r\n\x00") {
 		return api.Result{}, errs.Invalid
@@ -241,6 +258,10 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 	return r.Result(), nil
 }
 
+// report validates original invocation lineage, reports to the owner, remembers reconciliation evidence and acknowledges only that journal version.
+// Errors stop the sequence; the durable report remains recoverable instead of creating another external mailbox effect.
+// report проверяет исходное происхождение invocation, докладывает владельцу, сохраняет свидетельство для сверки и подтверждает только эту версию журнала.
+// Ошибка останавливает последовательность; устойчивый отчёт можно восстановить без нового внешнего эффекта в ящике.
 func (s *Service) report(ctx context.Context, binding *api.ExecutionBinding, scope receipt.Scope, mailbox api.Mailbox, r receipt.Record) (receipt.OwnerReceipt, error) {
 	pending := receipt.PendingReport{Scope: scope, Record: r, Source: receipt.ReportSource{Binding: binding, Connection: mailbox.ConnectionId}}
 	if !pending.Valid() {
@@ -260,6 +281,8 @@ func (s *Service) report(ctx context.Context, binding *api.ExecutionBinding, sco
 	return confirmed, nil
 }
 
+// randomID reads a cryptographically random 16-byte receipt identity and panics rather than falling back if entropy fails.
+// randomID читает криптографически случайный 16-байтовый ID квитанции и вызывает panic вместо запасного источника при отказе энтропии.
 func randomID() []byte {
 	v := make([]byte, 16)
 	if _, e := rand.Read(v); e != nil {
@@ -267,6 +290,11 @@ func randomID() []byte {
 	}
 	return v
 }
+
+// authorize intersects mailbox policy with exact owner decision, execution lineage, revision/generation, lifetime and every applicable scope.
+// A connection test is health-only; either side's HumanGate still requires the owner's GateApproved result.
+// authorize пересекает политику ящика с точным решением владельца, происхождением исполнения, ревизией, поколением, сроком и всеми применимыми scope.
+// Проверка подключения допускает только health; HumanGate с любой стороны требует результата GateApproved от владельца.
 func authorize(m api.Mailbox, c api.Command, r api.AuthorizationRequest, d api.AuthorizationDecision) error {
 	test := r.ExecutionBinding != nil && r.ExecutionBinding.ConnectionTestRef != nil
 	if test && (c.Operation != api.OperationHealth || d.AgentId != "") {
@@ -312,6 +340,8 @@ func authorize(m api.Mailbox, c api.Command, r api.AuthorizationRequest, d api.A
 	return nil
 }
 
+// recipients returns a fresh To/Cc/Bcc list without normalization or deduplication so every supplied recipient is checked.
+// recipients возвращает новый список To/Cc/Bcc без нормализации и дедупликации, чтобы проверялся каждый переданный получатель.
 func recipients(m api.MessageInput) []string {
 	out := []string{}
 	if m.To != "" {
@@ -320,6 +350,11 @@ func recipients(m api.MessageInput) []string {
 	out = append(out, m.Cc...)
 	return append(out, m.Bcc...)
 }
+
+// validateMessage checks exact sender/recipient eligibility, header safety, source references and decoded attachment/message byte limits.
+// It validates MIME syntax and base64 only: it performs no antivirus, content safety analysis or HumanGate approval.
+// validateMessage проверяет точные разрешённые адреса, безопасность заголовков, исходные ссылки и лимиты декодированных вложений и сообщения.
+// Проверяются лишь MIME-синтаксис и base64: антивирус, смысловой анализ и подтверждение HumanGate здесь не выполняются.
 func validateMessage(m api.Mailbox, c api.Command) error {
 	v := c.Message
 	if Sending(c.Operation) && !api.Address(v.To) {

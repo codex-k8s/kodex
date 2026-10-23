@@ -18,11 +18,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// assistantSearchRecoveryClient extends the search stub with an optional terminal activity-recording failure; it is not a real owner store.
+// assistantSearchRecoveryClient расширяет поисковую подстановку необязательной ошибкой записи итоговой активности; настоящим хранилищем владельца не является.
 type assistantSearchRecoveryClient struct {
 	*assistantSearchDiagnosticClient
 	terminalFailure bool
 }
 
+// RecordRunToolCall fails only revision-two recording when requested, otherwise delegating to the existing in-memory activity stub.
+// RecordRunToolCall по запросу отклоняет только запись второй ревизии, иначе передаёт вызов существующей подстановке активности в памяти.
 func (client *assistantSearchRecoveryClient) RecordRunToolCall(ctx context.Context, request *controlplanev1.RecordRunToolCallRequest, options ...grpc.CallOption) (*controlplanev1.RecordRunToolCallResponse, error) {
 	if client.terminalFailure && request.GetRevision() == 2 {
 		return nil, status.Error(codes.Unavailable, "PRIVATE_PROJECTION_ERROR")
@@ -30,6 +34,10 @@ func (client *assistantSearchRecoveryClient) RecordRunToolCall(ctx context.Conte
 	return client.assistantFreshCatalogMCPClient.RecordRunToolCall(ctx, request, options...)
 }
 
+// TestAssistantSearchInvalidInputIsRecoverableWithoutOwnerRead checks seven malformed queries in each scope receive bounded retry guidance without a search RPC or private-data disclosure.
+// A failed terminal activity write must instead report TOOL_UNAVAILABLE without promising a safe input retry.
+// TestAssistantSearchInvalidInputIsRecoverableWithoutOwnerRead проверяет, что семь некорректных запросов в каждой области получают ограниченную подсказку повтора без поискового RPC и раскрытия частных данных.
+// Ошибка итоговой записи активности должна вместо этого вернуть TOOL_UNAVAILABLE без обещания безопасного повтора входных данных.
 func TestAssistantSearchInvalidInputIsRecoverableWithoutOwnerRead(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, arguments := range []map[string]any{

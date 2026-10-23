@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// TestDatabaseTransport accepts the pinned synthetic DSN and rejects query overrides of host, identity, TLS or service settings without dialing.
+// TestDatabaseTransport допускает фиксированный синтетический DSN и отвергает query-подмены host, identity, TLS или service без соединения.
 func TestDatabaseTransport(t *testing.T) {
 	const valid = "postgresql://email_bridge_runtime@" + "email-bridge-postgresql.kodex-system.svc.cluster.local:5432/email_bridge?sslmode=verify-full&sslrootcert=/var/run/email/tls/ca.crt"
 	for _, suffix := range []string{"", "&host=foreign.example.test", "&sslmode=disable", "&user=postgres", "&service=override", "&sslrootcert=/other", "&hostaddr=127.0.0.1"} {
@@ -21,6 +23,8 @@ func TestDatabaseTransport(t *testing.T) {
 	}
 }
 
+// TestMailEgressDestination checks exact mail tunnel routing, digest syntax and the complete bootstrap/managed pin combinations in synthetic env.
+// TestMailEgressDestination проверяет точный почтовый туннель, формат дайджеста и полные комбинации bootstrap/managed в синтетическом окружении.
 func TestMailEgressDestination(t *testing.T) {
 	t.Setenv("EMAIL_BRIDGE_CONFIGURATION_MODE", configurationBootstrap)
 	t.Setenv("EMAIL_BRIDGE_EXPECTED_CONFIGURATION_REVISION", "0")

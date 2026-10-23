@@ -8,19 +8,35 @@ import (
 )
 
 const (
-	stateReceived   = "RECEIVED"
+	// stateReceived holds durable work that has not yet acquired a lease.
+	// stateReceived хранит устойчивую работу, ещё не получившую аренду.
+	stateReceived = "RECEIVED"
+	// stateProcessing marks work owned by an exact live lease.
+	// stateProcessing обозначает работу под точной действующей арендой.
 	stateProcessing = "PROCESSING"
-	stateRetry      = "RETRY"
-	stateCompleted  = "COMPLETED"
-	stateStale      = "STALE"
+	// stateRetry holds an event waiting for a bounded backoff or redelivery.
+	// stateRetry хранит событие в ожидании ограниченной задержки или повторной доставки.
+	stateRetry = "RETRY"
+	// stateCompleted records an applied effect eligible for durable acknowledgement.
+	// stateCompleted фиксирует применённый эффект, допускающий устойчивое подтверждение.
+	stateCompleted = "COMPLETED"
+	// stateStale records a sequence already passed by its ordering cursor.
+	// stateStale фиксирует номер, который уже прошёл курсор соответствующего ключа.
+	stateStale = "STALE"
+	// stateDeadLetter retains terminal delivery until an authorized repair.
+	// stateDeadLetter сохраняет завершённую доставку до авторизованного исправления.
 	stateDeadLetter = "DEAD_LETTER"
 )
 
+// receiveDecision separates a durable broker outcome from permission to claim the event.
+// receiveDecision разделяет устойчивое решение для брокера и возможность захватить событие.
 type receiveDecision struct {
 	result    Result
 	claimable bool
 }
 
+// receive serializes one ordering key and persists a new, stale, or conflicting event before acknowledgement.
+// receive сериализует один ключ порядка и сохраняет новое, устаревшее либо конфликтное событие до подтверждения.
 func (processor *Processor) receive(
 	ctx context.Context,
 	consumer Consumer,
@@ -140,6 +156,8 @@ func (processor *Processor) receive(
 	return receiveDecision{}, err
 }
 
+// classifyExisting compares durable identity and cursor state before allowing a replayed event to be claimed.
+// classifyExisting сравнивает устойчивую идентичность и курсор до допуска повторного события к захвату.
 func classifyExisting(
 	record eventRecord,
 	cursor cursorRow,
@@ -206,6 +224,8 @@ func classifyExisting(
 	return receiveDecision{claimable: true}, nil
 }
 
+// eventArguments binds immutable event fields and optionally the stale-row retention horizon.
+// eventArguments привязывает неизменные поля события и, при необходимости, срок хранения устаревшей строки.
 func (processor *Processor) eventArguments(
 	consumer Consumer,
 	record eventRecord,

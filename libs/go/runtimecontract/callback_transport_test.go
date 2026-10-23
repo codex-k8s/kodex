@@ -2,6 +2,8 @@ package runtimecontract
 
 import "testing"
 
+// TestTrustedCallbackRequiresExplicitPrivateExactEndpoint accepts only the explicit private-Pod endpoint and rejects public, loopback, mixed-profile and URL-decoration variants.
+// TestTrustedCallbackRequiresExplicitPrivateExactEndpoint принимает только явный частный адрес Pod и отклоняет публичные, петлевые, смешанные и дополненные URL-варианты.
 func TestTrustedCallbackRequiresExplicitPrivateExactEndpoint(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.CallbackTLS = RuntimeTLSBinding{Profile: CallbackProfileTrustedCluster}
@@ -26,6 +28,8 @@ func TestTrustedCallbackRequiresExplicitPrivateExactEndpoint(t *testing.T) {
 	}
 }
 
+// TestCallbackProfileChangesExecutionButNotDomainRevision binds a transport switch to execution and MCP digests without changing the domain revision digest.
+// TestCallbackProfileChangesExecutionButNotDomainRevision связывает смену транспорта с дайджестами исполнения и MCP, не меняя дайджест доменной ревизии.
 func TestCallbackProfileChangesExecutionButNotDomainRevision(t *testing.T) {
 	input := validRunnerInputFixture()
 	oldExecution, oldMCP, err := RuntimeExecutionBindingDigests(input)

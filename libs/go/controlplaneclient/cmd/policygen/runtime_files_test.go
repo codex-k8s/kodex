@@ -6,6 +6,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 )
 
+// TestRuntimeFileProfilesRequireExactControllerTuple confines file reads to the runtime controller.
+// TestRuntimeFileProfilesRequireExactControllerTuple ограничивает чтение файлов runtime-контроллером.
 func TestRuntimeFileProfilesRequireExactControllerTuple(t *testing.T) {
 	for _, operation := range []string{"search", "metadata", "preview", "manifest"} {
 		id := "platform.runtime.files." + operation

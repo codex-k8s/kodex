@@ -5,14 +5,25 @@ import (
 	"errors"
 )
 
+// stoppableServer exposes the two gRPC shutdown operations required for a
+// bounded graceful-then-forced stop, including test doubles.
+// RU: stoppableServer задаёт две операции остановки gRPC для ограниченного
+// перехода от плавного завершения к принудительному, включая тестовые объекты.
 type stoppableServer interface {
+	// GracefulStop waits for in-flight RPCs to finish before returning.
+	// RU: GracefulStop ожидает завершения текущих RPC перед возвратом.
 	GracefulStop()
+	// Stop forces the server to stop accepting or serving RPCs.
+	// RU: Stop принудительно прекращает приём и выполнение RPC.
 	Stop()
 }
 
-// GracefulStop ждёт in-flight RPC до graceful deadline, затем асинхронно
-// вызывает Stop и ограниченно ожидает обе потенциально блокирующие операции в
-// независимом force-контексте.
+// GracefulStop waits for in-flight RPCs until a bounded graceful deadline;
+// after expiry it starts Stop independently and joins both operations only
+// within a second bounded force context.
+// RU: GracefulStop ждёт текущие RPC до ограниченного плавного срока, затем
+// независимо запускает Stop и ожидает обе операции лишь в отдельном
+// ограниченном контексте принудительной остановки.
 func GracefulStop(gracefulCtx, forceCtx context.Context, server stoppableServer) error {
 	if gracefulCtx == nil || forceCtx == nil || server == nil {
 		return errors.New("gRPC shutdown configuration is invalid")

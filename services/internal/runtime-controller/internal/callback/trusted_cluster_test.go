@@ -7,6 +7,14 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestTrustedCallbackTLSRequiresServerConfiguration checks trusted-cluster is an
+// explicit configured plaintext profile rather than a fallback for unknown profiles,
+// and a profile header without a valid execution ticket never authorizes a callback.
+// The historical test name does not imply trusted-cluster requires certificate files.
+// TestTrustedCallbackTLSRequiresServerConfiguration проверяет trusted-cluster как явно
+// настроенный plaintext profile,не fallback unknown profiles; profile header без valid
+// execution ticket не авторизует callback. Историческое имя не означает,что trusted-
+// cluster требует certificate files.
 func TestTrustedCallbackTLSRequiresServerConfiguration(t *testing.T) {
 	tlsConfig, err := serverTLS(Config{RPCProfile: runtimecontract.CallbackProfileTrustedCluster})
 	if err != nil || tlsConfig != nil {

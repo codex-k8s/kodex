@@ -11,6 +11,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// continuationContextFixture builds a synthetic revision-delta notice with a canonical digest and all required platform slots, retaining the user-template section as ordinary data rather than a platform authority source.
+// continuationContextFixture создаёт синтетическую notice смены ревизии с каноническим дайджестом и всеми обязательными platform slots, сохраняя user-template как обычные данные, не источник platform authority.
 func continuationContextFixture(t *testing.T, input model.Input) string {
 	t.Helper()
 	diffValue := struct {
@@ -52,6 +54,8 @@ func continuationContextFixture(t *testing.T, input model.Input) string {
 	return string(raw)
 }
 
+// promptSessionMessages checks the exact history preamble and schema before decoding the first serialized JSON line for assertions; it does not parse or execute the remaining current task.
+// promptSessionMessages проверяет точные history preamble и schema до разбора первой JSON-строки для assertions; оставшуюся текущую задачу не разбирает и не исполняет.
 func promptSessionMessages(t *testing.T, prompt []byte) []runtimecontract.RunnerSessionMessage {
 	t.Helper()
 	if !strings.HasPrefix(string(prompt), sessionContextPreamble) {
@@ -68,6 +72,8 @@ func promptSessionMessages(t *testing.T, prompt []byte) []runtimecontract.Runner
 	return envelope.Messages
 }
 
+// TestSessionContextReachesFreshColdAndResumedPromptOnce covers fresh tasks, cold history/continuation and provider resume, requiring exact message cardinality/content, one current notice and rejection of resume without it.
+// TestSessionContextReachesFreshColdAndResumedPromptOnce проверяет свежую задачу, cold history/continuation и provider resume, требуя точные количество/содержимое сообщений, одну текущую notice и отказ resume без неё.
 func TestSessionContextReachesFreshColdAndResumedPromptOnce(t *testing.T) {
 	for _, mode := range []string{"fresh", "cold history", "cold continuation", "provider resume", "resume existing history"} {
 		t.Run(mode, func(t *testing.T) {
@@ -121,6 +127,8 @@ func TestSessionContextReachesFreshColdAndResumedPromptOnce(t *testing.T) {
 	}
 }
 
+// TestSessionContextPreservesWholeBoundedUserJSON checks complete JSON, Unicode and escaped-control USER content survive history serialization unchanged while the current task remains the prompt suffix.
+// TestSessionContextPreservesWholeBoundedUserJSON проверяет сохранение целых JSON, Unicode и escaped-control USER-сообщений при сериализации истории и текущей задачи в конце prompt.
 func TestSessionContextPreservesWholeBoundedUserJSON(t *testing.T) {
 	for _, content := range []string{
 		`{"operations":[{"instructions":"` + strings.Repeat("Исходный JSON <>& 😀 ", 600) + `"}],"complete":true}`,
@@ -140,6 +148,8 @@ func TestSessionContextPreservesWholeBoundedUserJSON(t *testing.T) {
 	}
 }
 
+// TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged carries a large valid platform notice through cold and resumed prompts unchanged, yet rejects oversized ordinary USER history rather than widening its budget.
+// TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged передаёт большую корректную platform notice без изменений через cold и resumed prompts, но отклоняет чрезмерную обычную USER-историю вместо расширения её бюджета.
 func TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged(t *testing.T) {
 	for _, resumed := range []bool{false, true} {
 		input := semanticRunnerFixture("AGENT")
@@ -179,6 +189,8 @@ func TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged(t *testing
 	}
 }
 
+// TestSessionContextRejectsStaleNoticeAndInvalidHistory mutates revision/session/turn/attempt bindings, role, UTF-8, content size and message count, requiring prompt construction to reject each invalid synthetic case.
+// TestSessionContextRejectsStaleNoticeAndInvalidHistory меняет revision/session/turn/attempt bindings, роль, UTF-8, размер и число сообщений, требуя отказ prompt construction в каждом синтетическом случае.
 func TestSessionContextRejectsStaleNoticeAndInvalidHistory(t *testing.T) {
 	for _, mode := range []string{"revision", "session", "turn", "attempt", "role", "size", "utf8", "count"} {
 		t.Run(mode, func(t *testing.T) {

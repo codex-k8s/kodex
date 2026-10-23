@@ -22,40 +22,21 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/nodepullidentity"
 )
 
+// TestPullRegistryProxyTimeoutsBoundLargeBlobStreams pins the pull command's header, active-stream and idle budgets.
+// Common client/server mechanics are covered by streamproxy tests while pull-specific policy tests remain here.
+// TestPullRegistryProxyTimeoutsBoundLargeBlobStreams закрепляет бюджеты заголовков, активного потока и простоя pull-команды.
+// Общая механика клиента и сервера покрыта тестами streamproxy, а отдельная политика чтения проверяется здесь.
 func TestPullRegistryProxyTimeoutsBoundLargeBlobStreams(t *testing.T) {
 	t.Parallel()
-	client := newPullRegistryProxyClient()
-	if client.Timeout != 15*time.Minute {
-		t.Fatalf("client timeout = %s, want 15m", client.Timeout)
-	}
-	if client.CheckRedirect == nil {
-		t.Fatal("redirect rejection is not configured")
-	}
-	if err := client.CheckRedirect(&http.Request{}, nil); err == nil {
-		t.Fatal("redirect was accepted")
-	}
-
-	pool := x509.NewCertPool()
-	server := newPullRegistryProxyServer(":0", http.NotFoundHandler(), pool)
-	if server.ReadHeaderTimeout != 5*time.Second ||
-		server.ReadTimeout != 15*time.Minute ||
-		server.WriteTimeout != 15*time.Minute ||
-		server.IdleTimeout != 30*time.Second {
-		t.Fatalf(
-			"server timeouts = header:%s read:%s write:%s idle:%s",
-			server.ReadHeaderTimeout,
-			server.ReadTimeout,
-			server.WriteTimeout,
-			server.IdleTimeout,
-		)
-	}
-	if server.TLSConfig == nil || server.TLSConfig.MinVersion != tls.VersionTLS13 ||
-		server.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert ||
-		server.TLSConfig.ClientCAs != pool {
-		t.Fatal("mTLS boundary changed while configuring pull stream timeouts")
+	if pullRegistryHeaderTimeout != 5*time.Second || pullRegistryStreamTimeout != 15*time.Minute || pullRegistryIdleTimeout != 30*time.Second {
+		t.Fatal("pull registry transfer budgets changed")
 	}
 }
 
+// TestPullClientCertificateAcceptsVerifiedChain uses synthetic TLS state to
+// verify leaf selection with intermediates; it does not execute a TLS handshake.
+// TestPullClientCertificateAcceptsVerifiedChain использует искусственное TLS-состояние
+// для выбора первого сертификата с промежуточным; TLS-рукопожатие здесь не выполняется.
 func TestPullClientCertificateAcceptsVerifiedChain(t *testing.T) {
 	t.Parallel()
 	leaf := &x509.Certificate{Subject: pkix.Name{CommonName: "role-image-builder-input-read"}}
@@ -68,6 +49,10 @@ func TestPullClientCertificateAcceptsVerifiedChain(t *testing.T) {
 	}
 }
 
+// TestPullClientCertificateRejectsMissingTLSIdentity distinguishes absent TLS
+// state from an empty peer list using closed diagnostic reasons.
+// TestPullClientCertificateRejectsMissingTLSIdentity различает отсутствие TLS-
+// состояния и пустой список сертификатов закрытыми диагностическими причинами.
 func TestPullClientCertificateRejectsMissingTLSIdentity(t *testing.T) {
 	t.Parallel()
 	if _, failure := pullClientCertificate(&http.Request{}); failure != "tls_state" {
@@ -78,6 +63,10 @@ func TestPullClientCertificateRejectsMissingTLSIdentity(t *testing.T) {
 	}
 }
 
+// TestNodePullRepositoriesAreClosedToBootstrapAndRuntime checks a narrow sample
+// allowlist accepts manifests/blobs but refuses other repositories, evidence and tags.
+// TestNodePullRepositoriesAreClosedToBootstrapAndRuntime проверяет узкий пример списка:
+// manifests/blobs допускаются, чужие репозитории, evidence и теги запрещены.
 func TestNodePullRepositoriesAreClosedToBootstrapAndRuntime(t *testing.T) {
 	t.Parallel()
 	repositories := []string{"kodex/agent-runner", "kodex/roles"}
@@ -100,6 +89,10 @@ func TestNodePullRepositoriesAreClosedToBootstrapAndRuntime(t *testing.T) {
 	}
 }
 
+// TestInstallationNodePullProfileIsBounded pins the installer's credential file
+// and exact 24-entry node repository registry without widening other profiles.
+// TestInstallationNodePullProfileIsBounded закрепляет файл реквизитов установщика
+// и точный реестр из 24 репозиториев узлов, не расширяя остальные профили.
 func TestInstallationNodePullProfileIsBounded(t *testing.T) {
 	t.Parallel()
 	profile, ok := pullProfiles()["kodex-node-pull-installer"]
@@ -114,6 +107,10 @@ func TestInstallationNodePullProfileIsBounded(t *testing.T) {
 	}
 }
 
+// TestPlatformArchivePullIsLimitedToNodeIdentities limits builder/archive images
+// to the installer profile and rejects sibling names or tag-list operations.
+// TestPlatformArchivePullIsLimitedToNodeIdentities ограничивает образы builder/archive
+// профилем установщика и отклоняет похожие имена и операции списка тегов.
 func TestPlatformArchivePullIsLimitedToNodeIdentities(t *testing.T) {
 	t.Parallel()
 	for name, profile := range pullProfiles() {
@@ -137,6 +134,10 @@ func TestPlatformArchivePullIsLimitedToNodeIdentities(t *testing.T) {
 	}
 }
 
+// TestPlatformRepositoriesDoNotExpandOtherPullProfiles checks every shipped
+// repository against each profile and prevents caller mutation of the node list.
+// TestPlatformRepositoriesDoNotExpandOtherPullProfiles проверяет каждый поставляемый
+// репозиторий во всех профилях и запрещает изменение реестра узлов вызывающим кодом.
 func TestPlatformRepositoriesDoNotExpandOtherPullProfiles(t *testing.T) {
 	t.Parallel()
 	for name, profile := range pullProfiles() {
@@ -159,6 +160,10 @@ func TestPlatformRepositoriesDoNotExpandOtherPullProfiles(t *testing.T) {
 	}
 }
 
+// TestPullRepositorySelectorsCannotEscapeTheirExactRepository rejects empty,
+// traversal, encoded/slashed, query and fragment selectors for every node repository.
+// TestPullRepositorySelectorsCannotEscapeTheirExactRepository отклоняет пустые,
+// обходящие путь, кодированные/составные селекторы, запросы и фрагменты во всех репозиториях узлов.
 func TestPullRepositorySelectorsCannotEscapeTheirExactRepository(t *testing.T) {
 	t.Parallel()
 	for _, repository := range nodePullRepositories() {
@@ -172,6 +177,10 @@ func TestPullRepositorySelectorsCannotEscapeTheirExactRepository(t *testing.T) {
 	}
 }
 
+// TestNodeRepositoriesMatchShippedPodImagesWithoutBuildInputs compares the node
+// allowlist with repo-owned image inventory while excluding build-only inputs and duplicates.
+// TestNodeRepositoriesMatchShippedPodImagesWithoutBuildInputs сопоставляет список узлов
+// с реестром образов репозитория, исключая только сборочные входы и повторения.
 func TestNodeRepositoriesMatchShippedPodImagesWithoutBuildInputs(t *testing.T) {
 	t.Parallel()
 	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "tools", "release", "images.json"))
@@ -204,6 +213,10 @@ func TestNodeRepositoriesMatchShippedPodImagesWithoutBuildInputs(t *testing.T) {
 	}
 }
 
+// TestPlatformArchiveActualNodeAuthorization signs synthetic RSA-PSS node
+// credentials and checks actual path/method decisions, including missing-credential refusal.
+// TestPlatformArchiveActualNodeAuthorization подписывает искусственные RSA-PSS реквизиты
+// узла и проверяет решения по путям/методам, включая отказ без реквизитов.
 func TestPlatformArchiveActualNodeAuthorization(t *testing.T) {
 	t.Parallel()
 	const host = "pull.fixture.invalid"
@@ -219,6 +232,10 @@ func TestPlatformArchiveActualNodeAuthorization(t *testing.T) {
 	}
 	certificate := &x509.Certificate{Subject: pkix.Name{CommonName: name},
 		IPAddresses: []net.IP{net.ParseIP("192.0.2.1")}, PublicKey: &key.PublicKey}
+	// pullCase pairs a synthetic request with its expected closed failure code;
+	// an empty failure denotes authorization, not a real registry download.
+	// pullCase связывает искусственный запрос с ожидаемым закрытым кодом отказа;
+	// пустой отказ означает разрешение, а не настоящую загрузку из реестра.
 	type pullCase struct {
 		method, path, failure string
 	}
@@ -265,6 +282,10 @@ func TestPlatformArchiveActualNodeAuthorization(t *testing.T) {
 	}
 }
 
+// TestPullProfileBasicAuthenticationBoundary checks missing/wrong/valid dummy
+// profile credentials, HTTP status/challenge and fixed safe denial text.
+// TestPullProfileBasicAuthenticationBoundary проверяет отсутствующие/неверные/правильные
+// условные реквизиты профиля, HTTP-статус/запрос аутентификации и безопасный текст отказа.
 func TestPullProfileBasicAuthenticationBoundary(t *testing.T) {
 	t.Parallel()
 	const registryHost = "images.kodex.works"
@@ -336,6 +357,10 @@ func TestPullProfileBasicAuthenticationBoundary(t *testing.T) {
 	}
 }
 
+// TestPullProfileValidCredentialDoesNotBypassRepositoryBoundary denies a foreign
+// repository even with valid dummy credentials, without offering another challenge.
+// TestPullProfileValidCredentialDoesNotBypassRepositoryBoundary запрещает чужой
+// репозиторий даже с правильными условными реквизитами без повторного запроса аутентификации.
 func TestPullProfileValidCredentialDoesNotBypassRepositoryBoundary(t *testing.T) {
 	t.Parallel()
 	const registryHost = "images.kodex.works"
@@ -354,6 +379,10 @@ func TestPullProfileValidCredentialDoesNotBypassRepositoryBoundary(t *testing.T)
 	}
 }
 
+// TestDockerCredentialMatchesInternalAndPromotedHosts accepts the selected
+// public/internal pair and rejects a changed password in a temporary dummy config.
+// TestDockerCredentialMatchesInternalAndPromotedHosts допускает выбранную пару
+// внешнего/внутреннего хостов и отклоняет другой пароль во временной условной конфигурации.
 func TestDockerCredentialMatchesInternalAndPromotedHosts(t *testing.T) {
 	t.Parallel()
 	const promotedHost = "images.kodex.works"
@@ -370,6 +399,10 @@ func TestDockerCredentialMatchesInternalAndPromotedHosts(t *testing.T) {
 	}
 }
 
+// TestDockerCredentialMatchesInternalProfile verifies the internal-host entry
+// can supply the selected profile's dummy credential when no public entry exists.
+// TestDockerCredentialMatchesInternalProfile проверяет условные реквизиты профиля
+// из внутреннего хоста при отсутствии записи внешнего хоста.
 func TestDockerCredentialMatchesInternalProfile(t *testing.T) {
 	t.Parallel()
 	const promotedHost = "images.kodex.works"
@@ -382,6 +415,10 @@ func TestDockerCredentialMatchesInternalProfile(t *testing.T) {
 	}
 }
 
+// TestDockerCredentialMatchesRejectsUnexpectedRegistryEntry inserts a third
+// host into the dummy config and requires refusal instead of partial acceptance.
+// TestDockerCredentialMatchesRejectsUnexpectedRegistryEntry добавляет третий
+// хост в условную конфигурацию и требует отказа вместо частичного принятия.
 func TestDockerCredentialMatchesRejectsUnexpectedRegistryEntry(t *testing.T) {
 	t.Parallel()
 	const promotedHost = "images.kodex.works"
@@ -397,6 +434,10 @@ func TestDockerCredentialMatchesRejectsUnexpectedRegistryEntry(t *testing.T) {
 	}
 }
 
+// writeDockerConfig serializes only supplied synthetic auth entries into a
+// test-owned temporary 0600 file, returning its path without reading host credentials.
+// writeDockerConfig записывает только переданные искусственные auth-записи
+// во временный файл теста 0600 и возвращает путь без чтения реквизитов хоста.
 func writeDockerConfig(t *testing.T, auths map[string]string) string {
 	t.Helper()
 	document := struct {

@@ -19,11 +19,25 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const issuerUID, issuerGID = 29001, 29000
+const (
+	// issuerUID pins the expected owner of the workload's projected application grant.
+	// RU: issuerUID закрепляет ожидаемого владельца проекции application grant рабочего процесса.
+	issuerUID = 29001
+	// issuerGID pins the expected group of the workload's projected application grant.
+	// RU: issuerGID закрепляет ожидаемую группу проекции application grant рабочего процесса.
+	issuerGID = 29000
+)
 
+// archiveClaimFailureMessage names the bounded failure record for the owner claim RPC.
+// RU: archiveClaimFailureMessage задаёт имя ограниченной записи отказа owner RPC получения задания.
 const archiveClaimFailureMessage = "session archive claim failed"
+
+// archiveRPCCodeAttribute names the canonical gRPC-code diagnostic field.
+// RU: archiveRPCCodeAttribute задаёт поле диагностики канонического gRPC-кода.
 const archiveRPCCodeAttribute = "rpc_code"
 
+// Run composes telemetry, the authorized control-plane client and Kubernetes controller before owning worker shutdown.
+// RU: Run собирает telemetry, авторизованный клиент control-plane и Kubernetes-контроллер, затем управляет остановкой workers.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	config, err := loadConfig()
 	if err != nil {
@@ -80,7 +94,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	readiness.Set(false, "control_plane_unchecked")
 	metrics.SetReady(false)
-	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), runLoop(control, kubernetes, readiness, metrics, owned, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, technical.Worker(), runLoop(control, kubernetes, readiness, metrics, owned, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -94,19 +108,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	return errors.Join(err, shutdownErr)
 }
 
-func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.Serve() }()
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
+// runLoop checks Kubernetes availability and claims at most one owner task before a bounded polling delay.
+// RU: runLoop проверяет доступность Kubernetes и получает не более одного owner-задания до ограниченной паузы опроса.
 func runLoop(control *controlplaneclient.Client, kube *controller.Controller, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, owned *archiveMetrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		var lastKubernetesCheck time.Time
@@ -156,7 +159,8 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 	}
 }
 
-// Готовность подтверждает рабочий owner RPC, а не только Kubernetes API.
+// setArchiveClaimReadiness derives readiness from a successful working owner RPC rather than Kubernetes reachability alone.
+// RU: setArchiveClaimReadiness определяет готовность по успешному рабочему owner RPC, а не только доступности Kubernetes.
 func setArchiveClaimReadiness(readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, err error) {
 	if err != nil {
 		readiness.Set(false, "control_plane_unavailable")
@@ -167,6 +171,8 @@ func setArchiveClaimReadiness(readiness *serviceruntime.Readiness, metrics *shar
 	metrics.SetReady(true)
 }
 
+// process validates a leased task, executes its renewing worker and submits one generation-bound terminal owner command.
+// RU: process проверяет задание с lease, выполняет worker с продлением и отправляет конечную owner-команду, связанную с поколением.
 func process(ctx context.Context, control *controlplaneclient.Client, kube *controller.Controller, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, logger *slog.Logger, config Config) error {
 	if claim == nil || claim.GetLease() == nil {
 		return errors.New("claimed session archive task is incomplete")
@@ -237,6 +243,8 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 	return err
 }
 
+// failClaim reports an invalid task using its exact lease/fence/generation and stable failure idempotency key.
+// RU: failClaim сообщает о неверном задании с точными lease/fence/generation и устойчивым ключом идемпотентности отказа.
 func failClaim(ctx context.Context, control *controlplaneclient.Client, taskRef string, lease *controlplanev1.WorkLease, safeErrorCode string, timeout time.Duration) error {
 	if taskRef == "" || lease == nil || lease.GetRef() == "" || lease.GetFence() == "" || lease.GetGeneration() < 1 {
 		return errors.New("session archive claim identity is invalid")

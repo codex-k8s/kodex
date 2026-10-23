@@ -15,12 +15,24 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
+// decodeTimeout caps one FFmpeg process independently of the caller's shorter deadline.
+// RU: decodeTimeout ограничивает один процесс FFmpeg независимо от более короткого срока вызывающего.
 const decodeTimeout = 5 * time.Second
+
+// pcmBytesPerSecond is the byte rate of mono, 16-kHz, signed 16-bit decoded audio.
+// RU: pcmBytesPerSecond задаёт число байтов в секунду одноканального PCM 16 кГц и 16 бит.
 const pcmBytesPerSecond = int64(16000 * 2)
 
+// Decoder invokes local FFmpeg against a seekable file and confines temporary spools to directory.
+// RU: Decoder вызывает локальный FFmpeg для перематываемого файла и хранит временные записи в directory.
 type Decoder struct{ directory string }
 
+// New records the spool directory; CheckLocal verifies its absolute path and FFmpeg availability.
+// RU: New сохраняет каталог временных файлов; CheckLocal проверяет абсолютный путь и доступность FFmpeg.
 func New(directory string) *Decoder { return &Decoder{directory: directory} }
+
+// CheckLocal rejects invalid local configuration or a cancelled context without opening media.
+// RU: CheckLocal отклоняет неверную локальную конфигурацию и отменённый контекст, не открывая запись.
 func (decoder *Decoder) CheckLocal(ctx context.Context) error {
 	if ctx == nil || !filepath.IsAbs(decoder.directory) {
 		return errors.New("audio decoder configuration is invalid")
@@ -32,6 +44,10 @@ func (decoder *Decoder) CheckLocal(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// Duration decodes the complete bounded stream through FFmpeg with only inherited fd input,
+// constrained protocols/codecs and a PCM byte limit; errors, warnings or empty output fail closed.
+// RU: Duration полностью декодирует ограниченный поток FFmpeg только через унаследованный fd,
+// разрешённые протоколы/кодеки и лимит байтов PCM; ошибки, предупреждения и пустой вывод отклоняются.
 func (decoder *Decoder) Duration(ctx context.Context, reader io.ReadSeeker, size int64, format string, maximum time.Duration) (time.Duration, error) {
 	if ctx == nil || reader == nil || size <= 0 || size > value.MaximumAbsoluteBytes || maximum <= 0 || maximum > 30*time.Minute {
 		return 0, errs.ErrInvalidRequest
@@ -110,12 +126,16 @@ func (decoder *Decoder) Duration(ctx context.Context, reader io.ReadSeeker, size
 	return time.Duration(output.bytes) * time.Second / time.Duration(pcmBytesPerSecond), nil
 }
 
+// sampleCounter counts decoded PCM bytes and cancels the process as soon as duration exceeds its limit.
+// RU: sampleCounter считает байты декодированного PCM и отменяет процесс при превышении лимита длительности.
 type sampleCounter struct {
 	bytes, limit int64
 	exceeded     bool
 	cancel       context.CancelFunc
 }
 
+// Write accepts PCM bytes up to the limit; an overflow marks the result invalid before cancelling FFmpeg.
+// RU: Write принимает PCM в пределах лимита; превышение помечает результат неверным до отмены FFmpeg.
 func (counter *sampleCounter) Write(raw []byte) (int, error) {
 	counter.bytes += int64(len(raw))
 	if counter.bytes > counter.limit {
@@ -126,9 +146,12 @@ func (counter *sampleCounter) Write(raw []byte) (int, error) {
 	return len(raw), nil
 }
 
-// Диагностика декодера может содержать metadata; не сохраняем даже её текст.
+// warningCounter retains only whether FFmpeg emitted diagnostics, never their potentially sensitive text.
+// RU: warningCounter хранит лишь факт диагностики FFmpeg, но не её потенциально конфиденциальный текст.
 type warningCounter struct{ seen bool }
 
+// Write marks any warning as present while discarding its bytes to avoid retaining media metadata.
+// RU: Write отмечает любое предупреждение и отбрасывает байты, не сохраняя метаданные записи.
 func (counter *warningCounter) Write(raw []byte) (int, error) {
 	counter.seen = true
 	return len(raw), nil

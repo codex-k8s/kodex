@@ -11,17 +11,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// correlationContextKey is the private context key for the server-assigned stream identifier, independent of incoming transport metadata.
+// correlationContextKey — частный ключ контекста идентификатора потока от сервера, независимый от входящих транспортных метаданных.
 type correlationContextKey struct{}
 
+// contextServerStream substitutes only the context while preserving every other operation of the underlying gRPC stream.
+// contextServerStream заменяет только контекст, сохраняя остальные операции исходного gRPC-потока.
 type contextServerStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
+// Context returns the correlated or traced context selected by the wrapping interceptor.
+// Context возвращает контекст корреляции или трассировки, выбранный оборачивающим interceptor.
 func (stream *contextServerStream) Context() context.Context { return stream.ctx }
 
-// StreamCorrelationServerInterceptor назначает один server-owned correlation
-// UUID всему streaming RPC. Transport metadata и payload не могут его задать.
+// StreamCorrelationServerInterceptor assigns one fresh server-generated UUID to the stream context and rejects entropy failure before invoking the handler.
+// StreamCorrelationServerInterceptor назначает контексту потока один новый UUID сервера и отклоняет отказ энтропии до вызова обработчика.
 func StreamCorrelationServerInterceptor() grpc.StreamServerInterceptor {
 	return func(
 		service any,
@@ -38,7 +44,8 @@ func StreamCorrelationServerInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-// CorrelationID возвращает назначенный общим interceptor идентификатор.
+// CorrelationID reads only the private server context key and returns empty for nil contexts or a missing or mistyped value.
+// CorrelationID читает лишь частный серверный ключ контекста и возвращает пустую строку для nil, отсутствующего значения или неверного типа.
 func CorrelationID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -47,6 +54,8 @@ func CorrelationID(ctx context.Context) string {
 	return correlationID
 }
 
+// newCorrelationID reads cryptographic entropy and formats a canonical version-four UUID; the result is a correlation locator, not an authorization credential.
+// newCorrelationID читает криптографическую энтропию и формирует канонический UUID четвёртой версии; результат служит корреляции, а не авторизации.
 func newCorrelationID() (string, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {

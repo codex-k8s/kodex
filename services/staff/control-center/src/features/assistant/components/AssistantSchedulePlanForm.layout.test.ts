@@ -14,7 +14,10 @@ describe("форма автоматизации в плане помощника
   it("показывает задание, точную цель и ближайшие запуски", () => {
     expect(source).toContain("automationText");
     expect(source).toContain("createExecutionTargetPickerLoader");
-    expect(source).toContain("target.projectRef !== projectRef");
+    expect(source).toContain("watchAssistantExecutionTarget(");
+    expect(source).toContain(
+      "[() => props.projectRef, targetType, targetRef] as const",
+    );
     expect(source).toContain("loadSchedulePreview");
     expect(source).toContain("previewIdentity.value === previewKey.value");
     expect(source).toContain("cronExpression");

@@ -17,6 +17,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// executeContext7 maps a fixed READ operation to one MCP tool after probing the catalog, bounds its deadline and text, and hashes the projected text; provider content remains untrusted data.
+// executeContext7 сопоставляет закреплённую READ-операцию одному MCP-инструменту после проверки каталога, ограничивает срок и текст, хеширует проекцию; содержимое провайдера остаётся недоверенными данными.
 func (adapter *Adapter) executeContext7(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
 	tool := context7Tool(request.Operation)
 	if tool == "" || capability.Risk != "READ" || request.ApprovalPolicy != "NONE" || configuration["base_url"] != context7Origin {
@@ -63,6 +65,8 @@ func (adapter *Adapter) executeContext7(ctx context.Context, request Request, ca
 	return providerResult(request, "context7:"+tool+":"+hex.EncodeToString(digest[:]), map[string]any{"text": text})
 }
 
+// testContext7 initializes the fixed endpoint and checks both required tools within fifteen seconds or the shorter configured budget, without calling a tool.
+// testContext7 инициализирует закреплённую конечную точку и проверяет оба обязательных инструмента за пятнадцать секунд либо меньший заданный срок, не вызывая инструмент.
 func (adapter *Adapter) testContext7(ctx context.Context, request Request) (string, error) {
 	configuration, err := normalizeStringMap(request.Configuration)
 	if err != nil || len(configuration) != 1 || configuration["base_url"] != context7Origin {
@@ -86,6 +90,8 @@ func (adapter *Adapter) testContext7(ctx context.Context, request Request) (stri
 	return "i18n:INTEGRATION_TEST_SUCCEEDED", nil
 }
 
+// openContext7 validates a printable credential and opens an SDK session with empty client capabilities, no cookie jar, redirects, standalone SSE or reconnect retries; the transport holds a string copy of the credential.
+// openContext7 проверяет печатные символы учётных данных и открывает SDK-сессию с пустыми возможностями клиента, без cookie, перенаправлений, отдельного SSE и повторных подключений; транспорт хранит строковую копию учётных данных.
 func (adapter *Adapter) openContext7(ctx context.Context, credential []byte) (*mcp.ClientSession, error) {
 	if len(credential) < 1 || len(credential) > 4096 || adapter.context7HTTPClient == nil || adapter.context7HTTPClient.Transport == nil {
 		return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
@@ -111,6 +117,8 @@ func (adapter *Adapter) openContext7(ctx context.Context, credential []byte) (*m
 	return session, nil
 }
 
+// context7Probe requires one bounded unpaginated tool list containing both expected tools and their required string fields; duplicate required tools fail, while unrelated tools are ignored.
+// context7Probe требует один ограниченный список инструментов без продолжения, содержащий оба ожидаемых инструмента и обязательные строковые поля; повтор обязательного инструмента отклоняется, посторонние инструменты игнорируются.
 func context7Probe(ctx context.Context, session *mcp.ClientSession) error {
 	response, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -142,6 +150,8 @@ func context7Probe(ctx context.Context, session *mcp.ClientSession) error {
 	return nil
 }
 
+// context7Schema checks an object schema for two named string properties and exactly those two required names; it does not implement general JSON Schema validation or forbid extra properties.
+// context7Schema проверяет объектную схему с двумя именованными строковыми свойствами и ровно этими двумя обязательными именами; общую валидацию JSON Schema и запрет дополнительных свойств не реализует.
 func context7Schema(raw any, field string) bool {
 	schema, ok := raw.(map[string]any)
 	if !ok || schema["type"] != "object" {
@@ -166,6 +176,8 @@ func context7Schema(raw any, field string) bool {
 	return firstOK && secondOK && first != second && (first == field && second == "query" || second == field && first == "query")
 }
 
+// context7Text joins one to sixty-four UTF-8 text blocks under the text budget, rejecting tool errors, empty output, forbidden C0 controls and an exact credential echo; it is not general secret redaction.
+// context7Text объединяет от одного до шестидесяти четырёх текстовых блоков UTF-8 в пределах бюджета, отклоняя ошибки инструмента, пустой вывод, запрещённые управляющие символы C0 и точное повторение учётных данных; общей очисткой секретов не является.
 func context7Text(response *mcp.CallToolResult, credential []byte) (string, error) {
 	if response == nil || response.IsError || len(response.Content) == 0 || len(response.Content) > 64 {
 		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
@@ -195,6 +207,8 @@ func context7Text(response *mcp.CallToolResult, credential []byte) (string, erro
 	return output.String(), nil
 }
 
+// context7Tool translates only the two supported catalog operations to provider tool names and returns an empty name for every other operation.
+// context7Tool переводит только две поддерживаемые операции каталога в имена инструментов провайдера и возвращает пустое имя для остальных операций.
 func context7Tool(operation string) string {
 	switch operation {
 	case "context7.library.resolve":
@@ -206,6 +220,8 @@ func context7Tool(operation string) string {
 	}
 }
 
+// context7SafeError preserves a wrapped SafeError and replaces every other SDK failure with a transient unavailable error without exposing upstream diagnostics.
+// context7SafeError сохраняет вложенную SafeError, а остальные ошибки SDK заменяет временной ошибкой недоступности без раскрытия диагностики внешнего сервиса.
 func context7SafeError(err error) error {
 	var safe *SafeError
 	if errors.As(err, &safe) {

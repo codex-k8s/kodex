@@ -1,3 +1,4 @@
+// This command materializes a verified local initial projection for OpenAPI egress.
 // Команда материализует проверенную локальную начальную проекцию OpenAPI egress.
 package main
 
@@ -17,6 +18,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// main runs the bounded projection command and exits on a closed diagnostic.
+// main запускает ограниченную команду проекции и завершает её с закрытой диагностикой.
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -26,6 +29,8 @@ func main() {
 	}
 }
 
+// run validates source and policy, resolves approved hosts, and writes private artifacts.
+// run проверяет источник и политику, разрешает допущенные узлы и записывает закрытые артефакты.
 func run(ctx context.Context) error {
 	baseFile := flag.String("policy", "", "gateway policy file")
 	revision := flag.String("revision", "", "expected gateway policy revision")
@@ -85,8 +90,12 @@ func run(ctx context.Context) error {
 	return nil
 }
 
+// resolverAdapter maps validated DNS snapshots into the shared producer contract.
+// resolverAdapter преобразует проверенные снимки DNS в контракт общего производителя.
 type resolverAdapter struct{ *dnsresolver.Resolver }
 
+// Resolve refreshes the host through the approved resolver and preserves expiry.
+// Resolve обновляет узел через утверждённый resolver и сохраняет срок действия.
 func (r resolverAdapter) Resolve(ctx context.Context, host string) (shared.Snapshot, error) {
 	snapshot, err := r.Resolver.Refresh(ctx, host)
 	return shared.Snapshot{Addresses: snapshot.Addresses, ExpiresAt: snapshot.ExpiresAt}, err

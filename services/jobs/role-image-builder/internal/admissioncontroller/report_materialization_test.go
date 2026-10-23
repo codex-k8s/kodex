@@ -19,6 +19,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
+// TestReportMaterializationBuildCopyAndToolRegistry checks source Dockerfiles build/copy/probe the report validator exactly as required.
+// It compares the sorted unique required-tools registry with the local CRD enum; it does not build images or approve a report.
+// TestReportMaterializationBuildCopyAndToolRegistry проверяет исходные Dockerfiles на обязательные сборку, копирование и проверку report validator.
+// Упорядоченный уникальный реестр обязательных инструментов сравнивается с локальным enum CRD; образы не собираются и отчёт не одобряется.
 func TestReportMaterializationBuildCopyAndToolRegistry(t *testing.T) {
 	root := repositoryRoot()
 	for _, name := range []string{"tools/dev/Dockerfile.local-image-supply-chain", "infra/admission-tools/Dockerfile", "services/jobs/role-image-builder/Dockerfile"} {
@@ -62,6 +66,10 @@ func TestReportMaterializationBuildCopyAndToolRegistry(t *testing.T) {
 	}
 }
 
+// TestReportMaterializationRenderedClaimEvidenceNetworkIsExact runs local kustomize and checks exact policy/tool-registry projections.
+// It verifies claim-to-evidence TCP5007 and closed same-namespace workload selectors in rendered bytes, without contacting or configuring a cluster.
+// TestReportMaterializationRenderedClaimEvidenceNetworkIsExact запускает локальный kustomize и проверяет точные проекции политики и реестра инструментов.
+// TCP5007 от claim к evidence и закрытые селекторы нагрузок одного namespace проверяются по сформированным байтам без обращения к кластеру или его настройки.
 func TestReportMaterializationRenderedClaimEvidenceNetworkIsExact(t *testing.T) {
 	command := exec.CommandContext(t.Context(), "kubectl", "kustomize", filepath.Join(repositoryRoot(), "deploy/k8s/overlays/staging/image-supply-chain"))
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}

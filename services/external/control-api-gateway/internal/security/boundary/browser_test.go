@@ -6,9 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -19,11 +16,15 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 )
 
+// browserMemory is a mutex-protected, ciphertext-copying CAS fixture shared by boundary tests; it provides neither broker durability nor real multi-Pod access controls.
+// browserMemory — защищённая mutex тестовая CAS-оснастка с копированием шифротекста; она не доказывает устойчивость брокера или реальные права нескольких Pod.
 type browserMemory struct {
 	mu      sync.Mutex
 	records map[string]browserstate.Record
 }
 
+// Read returns a ciphertext copy under the mutex or ErrNotFound; the fixture ignores context cancellation.
+// Read под mutex возвращает копию шифротекста либо ErrNotFound; тестовая реализация игнорирует отмену контекста.
 func (s *browserMemory) Read(_ context.Context, id string) (browserstate.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -34,6 +35,9 @@ func (s *browserMemory) Read(_ context.Context, id string) (browserstate.Record,
 	v.Ciphertext = bytes.Clone(v.Ciphertext)
 	return v, nil
 }
+
+// CompareAndSwap checks the exact sequence under the mutex, copies bytes and increments once, returning ErrConflict on mismatch.
+// CompareAndSwap под mutex сверяет точный sequence, копирует байты и увеличивает sequence один раз, возвращая ErrConflict при несовпадении.
 func (s *browserMemory) CompareAndSwap(_ context.Context, id string, expected uint64, data []byte) (browserstate.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -45,15 +49,22 @@ func (s *browserMemory) CompareAndSwap(_ context.Context, id string, expected ui
 	return v, nil
 }
 
+// browserVerifier simulates initial and rotated access tokens, records verification/refresh calls and checks only fixture expiry, not signatures or real IdP responses.
+// browserVerifier имитирует исходный и обновлённый access token, запоминает проверки и обновления, проверяет только тестовый срок, а не подписи и реальные ответы IdP.
 type browserVerifier struct {
 	original, current oidcauth.Principal
 	refreshCalls      int
 	verified          string
 }
 
+// VerifyAuthorization always rejects header-based login so family-renewal tests cannot accidentally pass through that separate path.
+// VerifyAuthorization всегда отклоняет вход через заголовок, исключая случайное прохождение тестов обновления семейства по другому пути.
 func (v *browserVerifier) VerifyAuthorization(context.Context, string) (oidcauth.Principal, string, error) {
 	return oidcauth.Principal{}, "", ErrUnauthenticated
 }
+
+// VerifyToken records the token, accepts only initial/rotated fixture values and rejects expired fixture principals using the real test clock.
+// VerifyToken запоминает токен, принимает только тестовые initial/rotated и отклоняет истёкших principal по реальным часам теста.
 func (v *browserVerifier) VerifyToken(_ context.Context, token string) (oidcauth.Principal, error) {
 	v.verified = token
 	p := v.original
@@ -67,6 +78,9 @@ func (v *browserVerifier) VerifyToken(_ context.Context, token string) (oidcauth
 	}
 	return p, nil
 }
+
+// Refresh counts one simulated provider call and returns rotated tokens with future fixture expiries while retaining the original identity bindings.
+// Refresh считает имитированный вызов провайдера и возвращает обновлённые токены с будущими сроками, сохраняя исходные привязки личности.
 func (v *browserVerifier) Refresh(context.Context, string) (oidcauth.BrowserTokens, error) {
 	v.refreshCalls++
 	v.current = v.original
@@ -74,16 +88,11 @@ func (v *browserVerifier) Refresh(context.Context, string) (oidcauth.BrowserToke
 	return oidcauth.BrowserTokens{AccessToken: "rotated", RefreshToken: "rotated-refresh", RefreshExpiresAt: time.Now().Add(8 * time.Hour), Principal: v.current}, nil
 }
 
+// TestBackendRenewAfterAccessExpiryRequiresCurrentCookieAndCSRF uses real cookie crypto and memory CAS to reject expired GET/invalid-CSRF renewal, accept one verified backend refresh, then reject refresh after family revocation. It makes no real provider or browser call.
+// TestBackendRenewAfterAccessExpiryRequiresCurrentCookieAndCSRF с настоящим шифрованием cookie и memory CAS отклоняет истёкший GET и обновление с неверным CSRF, принимает одно проверенное серверное обновление, затем запрещает его после отзыва. Реальные провайдер и браузер не вызываются.
 func TestBackendRenewAfterAccessExpiryRequiresCurrentCookieAndCSRF(t *testing.T) {
 	t.Parallel()
-	keyPath := filepath.Join(t.TempDir(), "key")
-	if err := os.WriteFile(keyPath, []byte(strings.Repeat("44", 32)), 0400); err != nil {
-		t.Fatal(err)
-	}
-	keys, err := session.New(session.Config{CurrentKeyFile: keyPath, TTL: 15 * time.Minute})
-	if err != nil {
-		t.Fatal(err)
-	}
+	keys := testSessionKeys(t)
 	now := time.Now().UTC()
 	verifier := &browserVerifier{original: oidcauth.Principal{Issuer: "https://identity.example.test", Subject: "710025af-02cf-4a7b-9f29-8479f757e42a",
 		OrganizationID: "6832a593-1d97-4c50-a3d5-6f5b27bbf2c4", SessionID: "b2c2d1e9-cb78-43a0-b1df-299ce8a49d50", SessionRevision: 1,

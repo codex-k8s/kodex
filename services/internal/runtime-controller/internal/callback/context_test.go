@@ -17,6 +17,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestContextArtifactRouteBindsOwnerReadAndDoesNotExposeMismatches drives the
+// local route with a synthetic context file, requiring exact content/digest only
+// after a lease-fenced fake owner read and no bytes on pin/owner mismatches.
+// Invalid selectors/binding fail before RPC; fixture scan labels are not real AV.
+// TestContextArtifactRouteBindsOwnerReadAndDoesNotExposeMismatches проверяет
+// локальный маршрут синтетического context file: точные content/digest лишь
+// после lease-fenced fake owner read и отсутствие bytes при pin/owner mismatch.
+// Неверные selectors/binding отвергаются до RPC; scan labels не являются AV.
 func TestContextArtifactRouteBindsOwnerReadAndDoesNotExposeMismatches(t *testing.T) {
 	content := []byte("---\nname: fixture\ndescription: Synthetic skill\n---\nRead the approved references.\n")
 	sum := sha256.Sum256(content)
@@ -84,6 +92,12 @@ func TestContextArtifactRouteBindsOwnerReadAndDoesNotExposeMismatches(t *testing
 	}
 }
 
+// TestContextArtifactSelectorRequiresExactSnapshotMembership checks exact
+// selection and rejects changed/duplicate/extra selectors, malformed query,
+// traversal and a project mismatch without downloading any artifact.
+// TestContextArtifactSelectorRequiresExactSnapshotMembership проверяет точный
+// выбор и отказ для changed/duplicate/extra selectors, неверного query,
+// traversal и чужого проекта без скачивания артефактов.
 func TestContextArtifactSelectorRequiresExactSnapshotMembership(t *testing.T) {
 	now := time.Now().UTC()
 	input := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", ProjectRef: "proj_abcdefgh", AgentRef: "agt_abcdefgh"}

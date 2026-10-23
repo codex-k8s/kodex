@@ -12,6 +12,8 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 )
 
+// main runs the local authority readiness probe, prints the returned failure with a fixed English prefix and exits nonzero when the probe fails; it never starts an authority server.
+// main запускает локальную проверку готовности authority, выводит возвращённую ошибку с фиксированным английским префиксом и завершается ненулевым кодом при отказе; сервер authority не запускается.
 func main() {
 	if err := run(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "local authority readiness failed: %v\n", err)
@@ -19,6 +21,8 @@ func main() {
 	}
 }
 
+// run parses the closed issuer/verifier role and optional expected server UID, selects the role's fixed Unix socket and default UID, and dials with the fixed group under a three-second root timeout and one-second dial budget. Issuer readiness requires ready, nonzero revision and a nonempty digest; verifier additionally requires replay-store readiness. This checks returned presence flags, not digest syntax or snapshot bytes, and closes the local connection on return.
+// run разбирает закрытую роль issuer или verifier и необязательный ожидаемый UID сервера, выбирает фиксированный Unix-сокет роли и исходный UID и подключается с фиксированной группой при корневом сроке три секунды и бюджете dial одна секунда. Для issuer нужны ready, ненулевая ревизия и непустой дайджест; verifier дополнительно требует готовность replay-store. Проверяются возвращённые признаки присутствия, а не синтаксис дайджеста или байты снимка; локальное соединение закрывается при возврате.
 func run() error {
 	config := struct {
 		Role        string `env:"INTERNAL_RPC_AUTHORITY_LOCAL_ROLE,required,notEmpty"`

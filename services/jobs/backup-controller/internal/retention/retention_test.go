@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// TestSelectNeverDeletesLatestVerifiedRestorePoint keeps the drilled point even when it is older than policy cutoff.
+// RU: TestSelectNeverDeletesLatestVerifiedRestorePoint сохраняет проверенную точку даже после достижения возрастного порога.
 func TestSelectNeverDeletesLatestVerifiedRestorePoint(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
@@ -25,6 +27,8 @@ func TestSelectNeverDeletesLatestVerifiedRestorePoint(t *testing.T) {
 	}
 }
 
+// TestSelectRefusesDeletionWithoutRestoreDrill rejects any cleanup without a verified restore point.
+// RU: TestSelectRefusesDeletionWithoutRestoreDrill отклоняет очистку без проверенной точки восстановления.
 func TestSelectRefusesDeletionWithoutRestoreDrill(t *testing.T) {
 	t.Parallel()
 	_, err := Select([]Candidate{{BackupID: "old", CompletedAt: time.Now().Add(-365 * 24 * time.Hour)}},

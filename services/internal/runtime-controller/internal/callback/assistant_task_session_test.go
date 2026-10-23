@@ -13,6 +13,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// callbackTaskSessionPage creates and seals one synthetic public final-message
+// projection for a failed run whose session storage is PURGED; persisted public history
+// is distinct from provider archive availability, and no live owner read is performed.
+// callbackTaskSessionPage создаёт/связывает synthetic public final-message projection
+// failed run с session storage PURGED; persisted public history отличается от provider
+// archive availability,live owner read не выполняется.
 func callbackTaskSessionPage() *controlplanev1.AssistantTaskSessionPage {
 	p := &controlplanev1.AssistantTaskSessionPage{RunRef: "run_selected123", ProjectRef: "prj_owned123", SessionRef: "ses_owned123", Title: "Предыдущая задача", State: controlplanev1.RunState_RUN_STATE_FAILED, RunVersion: 3, ResultSummary: "Публичный результат", SessionStorageState: "PURGED", SourceSha256: strings.Repeat("a", 64), Messages: []*controlplanev1.AssistantTaskPublishedMessage{{EventRef: "evt_public123", MessageRef: "msg_final123", Phase: 3, Origin: 1, Text: "Публичный итог", SourceRunRef: "run_selected123", SourceRunVersion: 3, SessionRef: "ses_owned123", NodeRef: "nod_source123", TurnRef: "trn_source123", TurnNumber: 1, Attempt: 1, EventSequence: 48, MessageRevision: 1}}}
 	if controlplaneapi.SealTaskSessionPage(p) != nil {
@@ -21,6 +27,12 @@ func callbackTaskSessionPage() *controlplanev1.AssistantTaskSessionPage {
 	return p
 }
 
+// TestTaskSessionToolCatalogPreservesAssistantOrdinaryPartition checks session reads
+// are advertised to SYSTEM/PROJECT assistants while ordinary launch-capable runtime
+// retains launch_workflow instead; no session or workflow is executed.
+// TestTaskSessionToolCatalogPreservesAssistantOrdinaryPartition проверяет session read
+// discovery SYSTEM/PROJECT assistants и launch_workflow ordinary launch-capable
+// runtime без исполнения session или workflow.
 func TestTaskSessionToolCatalogPreservesAssistantOrdinaryPartition(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeNone, runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: scope, ProjectRef: "prj_owned123", Capabilities: []string{"platform.run.launch"}}
@@ -36,6 +48,15 @@ func TestTaskSessionToolCatalogPreservesAssistantOrdinaryPartition(t *testing.T)
 		}
 	}
 }
+
+// TestReadTaskSessionUsesExactLeaseTypedSelectorAndSafeActivity checks one typed
+// lease/fence/generation-bound owner request, public FINAL output and commitment-only
+// safe history without selected-run/fence/body disclosure; a forged map cannot
+// supply the private typed-result path.
+// TestReadTaskSessionUsesExactLeaseTypedSelectorAndSafeActivity проверяет один typed
+// lease/fence/generation-bound owner request,public FINAL output и commitment-only
+// safe history без selected-run/fence/body disclosure; forged map не создаёт
+// private typed-result path.
 func TestReadTaskSessionUsesExactLeaseTypedSelectorAndSafeActivity(t *testing.T) {
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeProject, AssistantProfileRef: "asstprof_owned123", AgentRef: "agt_owned123", ProjectRef: "prj_owned123", LeaseRef: "lse_current123", LeaseFence: "PRIVATE_SYNTHETIC_FENCE", LeaseGeneration: 2}
 	client := &assistantResourceSearchClient{response: &controlplanev1.SearchAssistantResourcesResponse{AssistantTaskSession: callbackTaskSessionPage()}}
@@ -63,6 +84,13 @@ func TestReadTaskSessionUsesExactLeaseTypedSelectorAndSafeActivity(t *testing.T)
 		t.Fatal("read changed capability or logged locator")
 	}
 }
+
+// TestReadTaskSessionRejectsWrongModeScopePinsAndCursor checks eleven invalid context,
+// selector, mixed reply, foreign run/project, unknown proto, digest and cursor-progress
+// cases remain rejected even when a substituted projection is correctly resealed.
+// TestReadTaskSessionRejectsWrongModeScopePinsAndCursor проверяет отказ одиннадцати invalid
+// context/selector,mixed reply,foreign run/project,unknown proto,digest/cursor-progress
+// cases,даже когда подменённая projection корректно resealed.
 func TestReadTaskSessionRejectsWrongModeScopePinsAndCursor(t *testing.T) {
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeProject, AssistantProfileRef: "asstprof_owned123", AgentRef: "agt_owned123", ProjectRef: "prj_owned123", LeaseRef: "lse_current123", LeaseFence: "fence", LeaseGeneration: 1}
 	for _, test := range []struct {

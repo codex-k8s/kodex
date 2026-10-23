@@ -6,6 +6,10 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// TestStrictProtoCodecAcceptsCanonicalSingularField preserves acceptance of
+// one valid known protobuf field without a malformed marker.
+// RU: TestStrictProtoCodecAcceptsCanonicalSingularField проверяет принятие
+// одного корректного известного поля без метки ошибки.
 func TestStrictProtoCodecAcceptsCanonicalSingularField(t *testing.T) {
 	message := &wrapperspb.StringValue{}
 	if err := StrictProtoCodec().Unmarshal([]byte{0x0a, 0x01, 'a'}, message); err != nil {
@@ -16,6 +20,10 @@ func TestStrictProtoCodecAcceptsCanonicalSingularField(t *testing.T) {
 	}
 }
 
+// TestStrictProtoCodecMarksDuplicateUnknownAndBrokenWire requires a marker
+// for duplicate singular fields, unknown fields and truncated wire values.
+// RU: TestStrictProtoCodecMarksDuplicateUnknownAndBrokenWire требует метку
+// для повтора одиночного поля, чужого поля и повреждённого wire-значения.
 func TestStrictProtoCodecMarksDuplicateUnknownAndBrokenWire(t *testing.T) {
 	for name, raw := range map[string][]byte{
 		"duplicate": {0x0a, 0x01, 'a', 0x0a, 0x01, 'b'},

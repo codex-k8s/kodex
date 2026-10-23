@@ -11,8 +11,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// serviceIdentityClientStream supplies a synthetic client stream without opening a connection in interceptor tests.
+// serviceIdentityClientStream предоставляет искусственный клиентский поток без соединения в тестах interceptor.
 type serviceIdentityClientStream struct{ grpc.ClientStream }
 
+// TestServiceIdentityForwardsExplicitContextOnceWithoutLegacy verifies header replacement and absence of fallback or retry.
+// TestServiceIdentityForwardsExplicitContextOnceWithoutLegacy проверяет замену заголовков и отсутствие запасного пути либо повтора.
 func TestServiceIdentityForwardsExplicitContextOnceWithoutLegacy(t *testing.T) {
 	const method = "/example.v1.Service/Read"
 	ctx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("authorization", "stale", "x-kodex-authorization", "stale", "x-kodex-project-ref", "foreign"))
@@ -38,6 +42,8 @@ func TestServiceIdentityForwardsExplicitContextOnceWithoutLegacy(t *testing.T) {
 	}
 }
 
+// TestServiceIdentityRejectsMissingProjectBeforeInvoke ensures a required project pin fails before invoking the transport.
+// TestServiceIdentityRejectsMissingProjectBeforeInvoke проверяет отказ без обязательного project pin до вызова transport.
 func TestServiceIdentityRejectsMissingProjectBeforeInvoke(t *testing.T) {
 	called := false
 	err := serviceIdentityUnary(operationSet{"/example.v1.Service/Read": "project.read"}, map[string]struct{}{"project.read": {}})(t.Context(), "/example.v1.Service/Read", nil, nil, nil, func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
@@ -49,6 +55,8 @@ func TestServiceIdentityRejectsMissingProjectBeforeInvoke(t *testing.T) {
 	}
 }
 
+// TestServiceIdentityAllowsExactArtifactUploadStream verifies the allowed client-stream shape and bound metadata.
+// TestServiceIdentityAllowsExactArtifactUploadStream проверяет разрешённую форму исходящего потока и привязанные метаданные.
 func TestServiceIdentityAllowsExactArtifactUploadStream(t *testing.T) {
 	method := cp.PlatformCommandService_UploadArtifact_FullMethodName
 	ctx, err := WithApplicationGrant(t.Context(), "synthetic-user-credential")
@@ -76,6 +84,8 @@ func TestServiceIdentityAllowsExactArtifactUploadStream(t *testing.T) {
 	}
 }
 
+// TestServiceIdentityAllowsExactAgentAvatarUploadStream covers the separate registered avatar upload method.
+// TestServiceIdentityAllowsExactAgentAvatarUploadStream проверяет отдельный зарегистрированный метод загрузки аватара.
 func TestServiceIdentityAllowsExactAgentAvatarUploadStream(t *testing.T) {
 	method := cp.PlatformCommandService_UploadAgentAvatar_FullMethodName
 	ctx, err := WithApplicationGrant(t.Context(), "synthetic-user-credential")
@@ -103,6 +113,8 @@ func TestServiceIdentityAllowsExactAgentAvatarUploadStream(t *testing.T) {
 	}
 }
 
+// TestServiceIdentityAllowsExactArtifactDownloadStream verifies server-stream direction and explicit grant/project metadata.
+// TestServiceIdentityAllowsExactArtifactDownloadStream проверяет направление входящего потока и явные grant/project метаданные.
 func TestServiceIdentityAllowsExactArtifactDownloadStream(t *testing.T) {
 	method := cp.PlatformCommandService_DownloadArtifact_FullMethodName
 	ctx, err := WithApplicationGrant(t.Context(), "synthetic-user-credential")
@@ -130,6 +142,8 @@ func TestServiceIdentityAllowsExactArtifactDownloadStream(t *testing.T) {
 	}
 }
 
+// TestServiceIdentityRejectsArtifactDownloadWithWrongStreamShape rejects a client-stream disguise for a download method.
+// TestServiceIdentityRejectsArtifactDownloadWithWrongStreamShape отвергает маскировку метода скачивания под исходящий поток.
 func TestServiceIdentityRejectsArtifactDownloadWithWrongStreamShape(t *testing.T) {
 	method := cp.PlatformCommandService_DownloadArtifact_FullMethodName
 	called := false
@@ -145,6 +159,8 @@ func TestServiceIdentityRejectsArtifactDownloadWithWrongStreamShape(t *testing.T
 	}
 }
 
+// TestServiceIdentityRejectsUnknownClientStream keeps unregistered upload methods from reaching the transport.
+// TestServiceIdentityRejectsUnknownClientStream не пропускает незарегистрированный метод загрузки в transport.
 func TestServiceIdentityRejectsUnknownClientStream(t *testing.T) {
 	called := false
 	_, err := serviceIdentityStream(operationSet{"/example.v1.Service/Upload": "unknown.upload"}, nil)(
@@ -159,6 +175,8 @@ func TestServiceIdentityRejectsUnknownClientStream(t *testing.T) {
 	}
 }
 
+// TestServiceIdentityOrdinaryReadinessDoesNotRequireLegacyIssuer keeps ordinary readiness independent of the old issuer.
+// TestServiceIdentityOrdinaryReadinessDoesNotRequireLegacyIssuer проверяет независимость обычной readiness от прежнего issuer.
 func TestServiceIdentityOrdinaryReadinessDoesNotRequireLegacyIssuer(t *testing.T) {
 	client := &Client{serviceIdentity: true}
 	if err := client.CheckLocalAuthority(t.Context()); err != nil {
@@ -166,6 +184,8 @@ func TestServiceIdentityOrdinaryReadinessDoesNotRequireLegacyIssuer(t *testing.T
 	}
 }
 
+// TestServiceProjectOperationsAcceptsRegisteredProofOperation allows a project pin for an explicitly registered proof method.
+// TestServiceProjectOperationsAcceptsRegisteredProofOperation разрешает project pin для явно зарегистрированного proof-метода.
 func TestServiceProjectOperationsAcceptsRegisteredProofOperation(t *testing.T) {
 	projects, err := serviceProjectOperations(
 		operationSet{"/controlplane.v1.Runtime/Claim": "runtime.claim"},
@@ -180,6 +200,8 @@ func TestServiceProjectOperationsAcceptsRegisteredProofOperation(t *testing.T) {
 	}
 }
 
+// TestServiceProjectOperationsRejectsUnknownOperation closes configuration when a project-required operation has no registration.
+// TestServiceProjectOperationsRejectsUnknownOperation закрывает конфигурацию при отсутствии регистрации обязательной проектной операции.
 func TestServiceProjectOperationsRejectsUnknownOperation(t *testing.T) {
 	_, err := serviceProjectOperations(
 		operationSet{"/controlplane.v1.Runtime/Claim": "runtime.claim"},

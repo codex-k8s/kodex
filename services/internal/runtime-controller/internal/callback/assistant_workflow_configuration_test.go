@@ -22,6 +22,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assistantWorkflowConfigurationFixture builds a canonical thirty-three-step draft
+// and editable projection with chained dependencies, exact native context and digest.
+// It is synthetic read data, not an owner-approved or published workflow.
+// assistantWorkflowConfigurationFixture создаёт canonical thirty-three-step draft
+// и editable projection с chained dependencies,exact native context/digest.
+// Это synthetic read data, не owner-approved/published workflow.
 func assistantWorkflowConfigurationFixture(t *testing.T) (runtimecontract.RunnerInput, map[string]any, *controlplanev1.AssistantConfigurationCatalogResponse) {
 	t.Helper()
 	input, arguments, _ := assistantFreshCatalogFixture(runtimecontract.AssistantScopeProject, "WORKFLOW_CONFIGURATION")
@@ -61,6 +67,12 @@ func assistantWorkflowConfigurationFixture(t *testing.T) (runtimecontract.Runner
 	return input, arguments, response
 }
 
+// TestAssistantWorkflowConfigurationTraversesNativeMCP reconstructs complete local
+// MCP source via a fake owner and checks exact workflow/helper/lease selectors,
+// without changing or executing the workflow.
+// TestAssistantWorkflowConfigurationTraversesNativeMCP восстанавливает полный local
+// MCP source через fake owner и проверяет exact workflow/helper/lease selectors,
+// не меняя и не исполняя workflow.
 func TestAssistantWorkflowConfigurationTraversesNativeMCP(t *testing.T) {
 	input, arguments, response := assistantWorkflowConfigurationFixture(t)
 	client := &assistantFreshCatalogMCPClient{assistantDefinitionCatalogClient: &assistantDefinitionCatalogClient{response: &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}}}
@@ -72,6 +84,16 @@ func TestAssistantWorkflowConfigurationTraversesNativeMCP(t *testing.T) {
 	}
 }
 
+// readAssistantConfigurationMCP drives at most 1024 local tool calls, pins source
+// digest/version, checks text/structured equality, encoded budgets, hashes, byte
+// continuity and exact reconstructed EOF, then returns page count. It installs a
+// discard logger if absent and removes continuation fields from the mutable selector
+// on return; metadata versions come from source rather than unrelated screen context.
+// readAssistantConfigurationMCP выполняет до 1024 local tool calls с source digest/version,
+// проверяет text/structured equality,encoded budgets,hashes,byte continuity и exact EOF,
+// возвращая page count. При отсутствии ставится discard logger; continuation fields
+// удаляются из изменяемого selector при возврате. Metadata version берётся из source,
+// а не постороннего screen context.
 func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInput, arguments map[string]any, server *Server, key string, expected []byte) int {
 	t.Helper()
 	if server.logger == nil {
@@ -153,6 +175,12 @@ func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInp
 	return 0
 }
 
+// TestAssistantWorkflowConfigurationNativeLargePageBudget reconstructs an exact
+// 149159-byte source with plain/escaped multilingual instructions at two explicit
+// chunk limits and default ten-page traversal, preserving full draft semantics.
+// TestAssistantWorkflowConfigurationNativeLargePageBudget восстанавливает source
+// ровно 149159 bytes с plain/escaped multilingual instructions при двух chunk limits
+// и default десяти страницах, сохраняя полную draft semantics.
 func TestAssistantWorkflowConfigurationNativeLargePageBudget(t *testing.T) {
 	for _, escaped := range []bool{false, true} {
 		t.Run(fmt.Sprintf("escaped-%t", escaped), func(t *testing.T) {
@@ -169,6 +197,10 @@ func TestAssistantWorkflowConfigurationNativeLargePageBudget(t *testing.T) {
 			snapshot["instructions"], draft["Instructions"] = text, text
 			draft["ResultSchema"] = map[string]any{"padding": ""}
 			raw, err := json.Marshal(snapshot)
+			// size fixes the complete canonical JSON fixture byte count, independently of
+			// instruction character count and requested page size.
+			// size фиксирует byte count полной canonical JSON fixture независимо от
+			// instruction character count и requested page size.
 			const size = 149159
 			if err != nil || len(raw) >= size {
 				t.Fatal("large configuration fixture has invalid initial size")
@@ -201,6 +233,12 @@ func TestAssistantWorkflowConfigurationNativeLargePageBudget(t *testing.T) {
 	}
 }
 
+// TestAssistantWorkflowConfigurationClosedRead checks all thirty-three draft/projected
+// steps survive, tenant/target/version/proto/digest mismatches fail, and selected-agent
+// grant discovery cannot bypass the current workflow UPDATE permission.
+// TestAssistantWorkflowConfigurationClosedRead проверяет сохранение всех тридцати трёх
+// draft/projected steps, отказ tenant/target/version/proto/digest mismatch и запрет
+// selected-agent grant discovery в обход current workflow UPDATE permission.
 func TestAssistantWorkflowConfigurationClosedRead(t *testing.T) {
 	input, arguments, response := assistantWorkflowConfigurationFixture(t)
 	selector := arguments["assistant_configuration_catalog"].(map[string]any)
@@ -265,6 +303,12 @@ func TestAssistantWorkflowConfigurationClosedRead(t *testing.T) {
 	}
 }
 
+// rewriteAssistantWorkflowConfigurationFixture decodes a synthetic full snapshot,
+// applies the test's mutation and replaces its canonical bytes/digest together,
+// so semantic reject tests cannot pass merely from a stale outer hash.
+// rewriteAssistantWorkflowConfigurationFixture разбирает synthetic full snapshot,
+// применяет test mutation и вместе заменяет canonical bytes/digest, чтобы semantic
+// reject tests не проходили лишь из-за stale outer hash.
 func rewriteAssistantWorkflowConfigurationFixture(t *testing.T, response *controlplanev1.AssistantConfigurationCatalogResponse, mutate func(map[string]any)) {
 	t.Helper()
 	var snapshot map[string]any
@@ -281,6 +325,12 @@ func rewriteAssistantWorkflowConfigurationFixture(t *testing.T, response *contro
 	response.WorkflowConfiguration.ConfigurationSha256 = hex.EncodeToString(hash[:])
 }
 
+// TestAssistantWorkflowConfigurationUnicodeTextBounds checks ASCII, Cyrillic and emoji
+// at character boundaries and overflow for workflow/step text, keeping draft/projection
+// values aligned so results exercise bounds rather than inconsistent mirrors.
+// TestAssistantWorkflowConfigurationUnicodeTextBounds проверяет ASCII,Cyrillic,emoji
+// на character boundaries/overflow workflow/step text, сохраняя draft/projection
+// values одинаковыми для проверки bounds, а не inconsistent mirrors.
 func TestAssistantWorkflowConfigurationUnicodeTextBounds(t *testing.T) {
 	t.Parallel()
 	fields := []struct {
@@ -330,6 +380,12 @@ func TestAssistantWorkflowConfigurationUnicodeTextBounds(t *testing.T) {
 	}
 }
 
+// TestAssistantWorkflowConfigurationUnicodeNativeMCP reconstructs a mixed 903-rune,
+// 1352-byte step instruction through local MCP, ensuring byte size does not replace
+// the character limit; the owner is a fixture, not a real agent run.
+// TestAssistantWorkflowConfigurationUnicodeNativeMCP восстанавливает mixed step instruction
+// 903 runes/1352 bytes через local MCP, проверяя отличие byte size от character limit;
+// owner — fixture, реальный agent run не выполняется.
 func TestAssistantWorkflowConfigurationUnicodeNativeMCP(t *testing.T) {
 	input, arguments, response := assistantWorkflowConfigurationFixture(t)
 	text := strings.Repeat("a", 454) + strings.Repeat("я", 449)
@@ -345,6 +401,12 @@ func TestAssistantWorkflowConfigurationUnicodeNativeMCP(t *testing.T) {
 	readAssistantConfigurationMCP(t, input, arguments, server, "workflow_configuration", response.WorkflowConfiguration.ConfigurationJson)
 }
 
+// TestAssistantWorkflowConfigurationUnicodeKeepsClosedGuards checks character-aware
+// acceptance does not admit NUL, invalid UTF-8 or an oversized total JSON document,
+// even when mutated bytes have a matching recomputed outer digest.
+// TestAssistantWorkflowConfigurationUnicodeKeepsClosedGuards проверяет, что character-aware
+// acceptance не допускает NUL,invalid UTF-8 и oversized total JSON document,
+// даже при matching recomputed outer digest изменённых bytes.
 func TestAssistantWorkflowConfigurationUnicodeKeepsClosedGuards(t *testing.T) {
 	t.Parallel()
 	for name, mutate := range map[string]func(map[string]any){
@@ -383,6 +445,12 @@ func TestAssistantWorkflowConfigurationUnicodeKeepsClosedGuards(t *testing.T) {
 	}
 }
 
+// TestAssistantWorkflowConfigurationRejectsUnknownJSON checks rehashed extra private
+// fields, unknown dependencies and mismatched capability mirrors are rejected,
+// without relying solely on the outer snapshot hash.
+// TestAssistantWorkflowConfigurationRejectsUnknownJSON проверяет отказ rehashed extra
+// private fields,unknown dependencies и mismatched capability mirrors
+// без опоры только на outer snapshot hash.
 func TestAssistantWorkflowConfigurationRejectsUnknownJSON(t *testing.T) {
 	input, arguments, response := assistantWorkflowConfigurationFixture(t)
 	request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])

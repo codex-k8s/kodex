@@ -18,6 +18,42 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
+// configurationHomeFixture creates an independent temporary home and pinned synthetic authentication digest, leaving sandbox, volumes, overlays and secret projections explicit in each consuming test. It never reads live provider credentials.
+// configurationHomeFixture создаёт независимый временный home и закреплённый дайджест synthetic authentication, оставляя sandbox, volumes, overlays и secret projections явными в каждом тесте. Живые provider-реквизиты не читает.
+func configurationHomeFixture(t *testing.T) (model.Input, []byte) {
+	t.Helper()
+	workspace := t.TempDir()
+	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
+	digest := sha256.Sum256(auth)
+	digestValue := hex.EncodeToString(digest[:])
+	digestFile := filepath.Join(workspace, "auth.sha256")
+	if err := os.WriteFile(digestFile, []byte(digestValue), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return model.Input{WorkspaceRoot: workspace, CodexHome: filepath.Join(workspace, ".kodex", "state", "codex-home"),
+		Model: "gpt-5", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
+		CodexApprovalPolicy: "never", CodexSandbox: "workspace-write",
+		ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: digestValue}, auth
+}
+
+// TestConfigurationHomeFixturePinsIndependentSyntheticAuth checks separate paths and buffers plus exact digest-file binding, so extraction cannot silently share mutable authentication across test cases.
+// TestConfigurationHomeFixturePinsIndependentSyntheticAuth проверяет отдельные paths/buffers и точную digest-file binding, не позволяя выносу незаметно разделить mutable authentication между тестами.
+func TestConfigurationHomeFixturePinsIndependentSyntheticAuth(t *testing.T) {
+	first, auth := configurationHomeFixture(t)
+	second, otherAuth := configurationHomeFixture(t)
+	digest := sha256.Sum256(auth)
+	pin, err := os.ReadFile(first.ProviderAuthSHA256File)
+	if err != nil || string(pin) != hex.EncodeToString(digest[:]) || string(pin) != first.ProviderCredentialSHA256 || first.WorkspaceRoot == second.WorkspaceRoot || first.CodexHome == second.CodexHome {
+		t.Fatal("synthetic configuration fixture lost independent paths or authentication pin")
+	}
+	auth[0] = 'x'
+	if otherAuth[0] != '{' {
+		t.Fatal("synthetic configuration authentication buffers are shared")
+	}
+}
+
+// TestProviderSandboxProbeUsesBoundedBubblewrapBoundary captures the proposed bwrap command without executing it, checks exact identity/root/environment arguments and safe failure classification; it does not prove a live kernel sandbox.
+// TestProviderSandboxProbeUsesBoundedBubblewrapBoundary перехватывает предполагаемую bwrap-команду без запуска, сверяет точные identity/root/environment arguments и safe failure classification; не доказывает живую kernel sandbox.
 func TestProviderSandboxProbeUsesBoundedBubblewrapBoundary(t *testing.T) {
 	previousEUID := os.Geteuid()
 	called := false
@@ -38,19 +74,12 @@ func TestProviderSandboxProbeUsesBoundedBubblewrapBoundary(t *testing.T) {
 	}
 }
 
+// TestPrepareHomeDeniesShellReadOfProviderState materializes a temporary TOML profile and checks explicit native-routing/local-memory flags, exact read/deny rules and required MCP settings without granting broad home access or persisting a real credential.
+// TestPrepareHomeDeniesShellReadOfProviderState материализует временный TOML profile и проверяет явные native-routing/local-memory flags, точные read/deny rules и required MCP settings без широкого home access и сохранения реальных реквизитов.
 func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	setRuntimeTransportFixture(t)
-	workspace := t.TempDir()
-	home := filepath.Join(workspace, ".kodex", "state", "codex-home")
-	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
-	digest := sha256.Sum256(auth)
-	digestFile := filepath.Join(workspace, "auth.sha256")
-	if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
-		CodexApprovalPolicy: "never", CodexSandbox: "workspace-write",
-		ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
+	input, auth := configurationHomeFixture(t)
+	workspace, home := input.WorkspaceRoot, input.CodexHome
 	if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
 		t.Fatalf("PrepareHomeWithAuth() error = %v", err)
 	}
@@ -92,6 +121,8 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	}
 }
 
+// TestPublishedVolumePermissionsAreExactAndRespectSandbox checks read/write rules for exactly the pinned published volumes and rejects foreign, reserved, unpinned, changed or duplicate volume policies without broadening protected filesystem paths.
+// TestPublishedVolumePermissionsAreExactAndRespectSandbox проверяет read/write rules ровно pinned published volumes и отклоняет foreign, reserved, unpinned, changed и duplicate volume policies без расширения protected filesystem paths.
 func TestPublishedVolumePermissionsAreExactAndRespectSandbox(t *testing.T) {
 	setRuntimeTransportFixture(t)
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
@@ -105,17 +136,9 @@ func TestPublishedVolumePermissionsAreExactAndRespectSandbox(t *testing.T) {
 	}
 	for sandbox, access := range map[string]string{"workspace-write": "write", "read-only": "read"} {
 		t.Run(sandbox, func(t *testing.T) {
-			workspace := t.TempDir()
-			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
-			digest := sha256.Sum256(auth)
-			digestFile := filepath.Join(workspace, "auth.sha256")
-			if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			input := model.Input{WorkspaceRoot: workspace, CodexHome: filepath.Join(workspace, ".kodex", "state", "codex-home"),
-				Model: "fixture-model", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
-				CodexApprovalPolicy: "never", CodexSandbox: sandbox, EnvironmentPolicy: policy,
-				ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
+			input, auth := configurationHomeFixture(t)
+			workspace := input.WorkspaceRoot
+			input.Model, input.CodexSandbox, input.EnvironmentPolicy = "fixture-model", sandbox, policy
 			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
 				t.Fatal(err)
 			}
@@ -161,21 +184,15 @@ func TestPublishedVolumePermissionsAreExactAndRespectSandbox(t *testing.T) {
 	}
 }
 
+// TestPrepareHomePreservesPinnedSandboxBoundary tests both approved CLI bases, fixed native-routing settings and the joint workspace-write/artifact-capability requirement for outbox writes, rejecting unknown and full-access bases.
+// TestPrepareHomePreservesPinnedSandboxBoundary проверяет обе approved CLI bases, фиксированные native-routing settings и совместное требование workspace-write/artifact capability для outbox writes, отклоняя unknown и full-access bases.
 func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 	setRuntimeTransportFixture(t)
 	for sandbox, expected := range map[string]string{"read-only": ":read-only", "workspace-write": ":workspace"} {
 		t.Run(sandbox, func(t *testing.T) {
-			workspace := t.TempDir()
-			home := filepath.Join(workspace, ".kodex", "state", "codex-home")
-			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
-			digest := sha256.Sum256(auth)
-			digestFile := filepath.Join(workspace, "auth.sha256")
-			if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
-				CodexApprovalPolicy: "never", CodexSandbox: sandbox,
-				ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
+			input, auth := configurationHomeFixture(t)
+			workspace, home := input.WorkspaceRoot, input.CodexHome
+			input.CodexSandbox = sandbox
 			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
 				t.Fatal(err)
 			}
@@ -218,24 +235,17 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 	}
 }
 
+// TestPrepareHomeMaterializesOnlyBoundEnvironment uses an inert secret sentinel to verify nonsecret values are persisted, approved secret/transport names are filtered in, and their values or private MCP token are not embedded in generated TOML.
+// TestPrepareHomeMaterializesOnlyBoundEnvironment использует неактивный secret sentinel для проверки сохранения nonsecret values, включения approved secret/transport names в filters и отсутствия их values или private MCP token в TOML.
 func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	setRuntimeTransportFixture(t)
 	t.Setenv("CRM_TOKEN", "synthetic-secret-must-not-persist")
-	workspace := t.TempDir()
-	home := filepath.Join(workspace, ".kodex", "state", "codex-home")
-	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
-	digest := sha256.Sum256(auth)
-	digestFile := filepath.Join(workspace, "auth.sha256")
-	if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
-		CodexApprovalPolicy: "never", CodexSandbox: "workspace-write",
-		ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:]),
-		ConfigOverlay:     "model_reasoning_effort = \"high\"\n\n[history]\npersistence = \"none\"\n",
-		EnvironmentValues: []runtimecontract.RuntimeEnvironmentValue{{Name: "APP_MODE", Value: "review"}},
-		SecretProjections: []runtimecontract.RuntimeSecretProjection{{Name: "CRM_TOKEN", SecretName: "runtime-crm-v1", SecretKey: "token",
-			SecretUID: "7fe2f86e-4bb9-4325-a983-a389367c1cbf", SecretResourceVersion: "42", ContentSHA256: strings.Repeat("a", 64)}}}
+	input, auth := configurationHomeFixture(t)
+	home := input.CodexHome
+	input.ConfigOverlay = "model_reasoning_effort = \"high\"\n\n[history]\npersistence = \"none\"\n"
+	input.EnvironmentValues = []runtimecontract.RuntimeEnvironmentValue{{Name: "APP_MODE", Value: "review"}}
+	input.SecretProjections = []runtimecontract.RuntimeSecretProjection{{Name: "CRM_TOKEN", SecretName: "runtime-crm-v1", SecretKey: "token",
+		SecretUID: "7fe2f86e-4bb9-4325-a983-a389367c1cbf", SecretResourceVersion: "42", ContentSHA256: strings.Repeat("a", 64)}}
 	if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
 		t.Fatal(err)
 	}
@@ -267,18 +277,14 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	}
 }
 
+// TestPrepareHomeMaterializesPinnedHostedSearchWithoutEgressChanges checks declared hosted-search modes survive TOML generation without enabling sandbox egress, leaves absent selection unset and rejects an unknown mode.
+// TestPrepareHomeMaterializesPinnedHostedSearchWithoutEgressChanges проверяет сохранение объявленных hosted-search modes в TOML без включения sandbox egress, отсутствие выдуманного default при пустом выборе и отказ unknown mode.
 func TestPrepareHomeMaterializesPinnedHostedSearchWithoutEgressChanges(t *testing.T) {
 	setRuntimeTransportFixture(t)
 	for _, mode := range []string{"", "disabled", "cached", "indexed", "live", "unknown"} {
 		t.Run(mode, func(t *testing.T) {
-			workspace := t.TempDir()
-			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
-			digest := sha256.Sum256(auth)
-			digestFile := filepath.Join(workspace, "auth.sha256")
-			if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			input := model.Input{WorkspaceRoot: workspace, CodexHome: filepath.Join(workspace, ".kodex", "state", "codex-home"), Model: "fixture-model", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high", CodexApprovalPolicy: "never", CodexSandbox: "workspace-write", ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
+			input, auth := configurationHomeFixture(t)
+			input.Model = "fixture-model"
 			input.EnvironmentPolicy.Network.WebAccess.Mode = runtimecontract.RuntimeWebAccessNone
 			if mode != "" {
 				input.ConfigOverlay = "web_search = \"" + mode + "\"\n"
@@ -303,6 +309,8 @@ func TestPrepareHomeMaterializesPinnedHostedSearchWithoutEgressChanges(t *testin
 	}
 }
 
+// TestValidateProviderAuthenticationFailsClosed checks synthetic subscription/API-key snapshots accept only matching digests and supported authentication shapes, rejecting malformed content, mismatches and unsupported modes before provider use.
+// TestValidateProviderAuthenticationFailsClosed проверяет принятие synthetic subscription/API-key snapshots лишь с соответствующими digests и поддерживаемой auth shape, отклоняя malformed content, mismatch и unsupported mode до провайдера.
 func TestValidateProviderAuthenticationFailsClosed(t *testing.T) {
 	auth := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-only"}}`)
 	digest := sha256.Sum256(auth)
@@ -327,6 +335,8 @@ func TestValidateProviderAuthenticationFailsClosed(t *testing.T) {
 	}
 }
 
+// TestValidateRuntimeSelectionRejectsInvalidModelReasoningToolAndMCP accepts the pinned baseline and future server-issued model/effort, then rejects wrong provider, empty model, overlay mismatch/unknown/MCP keys and missing tools without executing them.
+// TestValidateRuntimeSelectionRejectsInvalidModelReasoningToolAndMCP принимает pinned baseline и будущие server-issued model/effort, затем отклоняет wrong provider, empty model, overlay mismatch/unknown/MCP keys и отсутствующие tools без их запуска.
 func TestValidateRuntimeSelectionRejectsInvalidModelReasoningToolAndMCP(t *testing.T) {
 	valid := model.Input{ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high", Provider: "openai", Model: "gpt-5.4", ConfigOverlay: "model_reasoning_effort = \"high\"\n",
 		EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{Name: "Shell", Command: "sh", Description: "Shell"}}}
@@ -359,6 +369,8 @@ func TestValidateRuntimeSelectionRejectsInvalidModelReasoningToolAndMCP(t *testi
 	}
 }
 
+// TestRuntimeSelectionAcceptsAllSevenAPICapabilities exercises the seven historical synthetic model/effort rows without contacting a provider; it checks local acceptance, not current external model availability or entitlement.
+// TestRuntimeSelectionAcceptsAllSevenAPICapabilities проверяет семь исторических synthetic model/effort rows без провайдера; это local acceptance, не актуальная внешняя доступность моделей или entitlement.
 func TestRuntimeSelectionAcceptsAllSevenAPICapabilities(t *testing.T) {
 	for modelID, efforts := range map[string][]string{
 		"gpt-6-astra":   {"low", "medium", "high", "xhigh", "max"},

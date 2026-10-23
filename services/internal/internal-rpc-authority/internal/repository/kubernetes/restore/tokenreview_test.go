@@ -9,14 +9,22 @@ import (
 	"testing"
 )
 
+// The operator-credential unit checks a local TLS TokenReview exchange with distinct synthetic controller/operator tokens, exact audience and service-account bindings, plus wrong-audience rejection. It bypasses New and uses the test server's trusted client, not a real Kubernetes authenticator.
+// Проверка operator credential выполняет локальный TLS TokenReview exchange с разными синтетическими controller и operator tokens, точными audience и service-account bindings и отказом неверной audience. New обходится и используется доверенный клиент тестового сервера, а не реальный Kubernetes authenticator.
 func TestVerifyOperatorCredentialПроверяетExactAudienceИServiceAccount(
 	t *testing.T,
 ) {
 	t.Parallel()
 	const (
+		// operatorToken is the synthetic credential placed in the TokenReview body, not the HTTP bearer.
+		// operatorToken — синтетический credential тела TokenReview, а не HTTP bearer.
 		operatorToken = "operator-projected-token"
-		serverToken   = "controller-kubernetes-token"
-		audience      = "urn:kodex:internal-rpc-authority-restore-controller"
+		// serverToken is the separate synthetic controller bearer read from the test-owned token file.
+		// serverToken — отдельный синтетический controller bearer из принадлежащего тесту token file.
+		serverToken = "controller-kubernetes-token"
+		// audience fixes the exact expected application audience in both request and fake response.
+		// audience фиксирует точную прикладную аудиторию запроса и фиктивного ответа.
+		audience = "urn:kodex:internal-rpc-authority-restore-controller"
 	)
 	server := httptest.NewTLSServer(http.HandlerFunc(
 		func(response http.ResponseWriter, request *http.Request) {

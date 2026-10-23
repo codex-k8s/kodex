@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+// TestBearerProtectedOpenAPIPath requires bearer authentication for prefixed reads/writes and checks the same store through the plain fixture path.
+// It uses a synthetic token and loopback HTTP, not provider OAuth, production TLS or platform authorization.
+// TestBearerProtectedOpenAPIPath требует bearer для чтения и записи с префиксом и проверяет то же хранилище через обычный путь оснастки.
+// Используются искусственный токен и loopback HTTP, а не OAuth провайдера, production TLS или полномочия платформы.
 func TestBearerProtectedOpenAPIPath(t *testing.T) {
 	t.Parallel()
 	const token = "fixture-token-with-at-least-thirty-two-bytes"
@@ -48,6 +52,8 @@ func TestBearerProtectedOpenAPIPath(t *testing.T) {
 	}
 }
 
+// TestOpenAPIPathIsClosedWithoutBearerConfiguration requires a prefixed route to remain absent when its authentication mode is disabled.
+// TestOpenAPIPathIsClosedWithoutBearerConfiguration требует отсутствия маршрута с префиксом, когда его режим аутентификации не включён.
 func TestOpenAPIPathIsClosedWithoutBearerConfiguration(t *testing.T) {
 	t.Parallel()
 	handler := NewHandler(NewStore())
@@ -59,6 +65,10 @@ func TestOpenAPIPathIsClosedWithoutBearerConfiguration(t *testing.T) {
 	}, http.StatusNotFound)
 }
 
+// TestReadinessAndStrictJournalContract exercises probe transitions and rejects query/path escapes, malformed JSON, bad keys and payload/content bounds.
+// All requests target a disposable loopback handler; no platform readiness or external provider state is inferred.
+// TestReadinessAndStrictJournalContract проверяет переходы probe и отклоняет query и обход пути, неверный JSON, ключи и пределы содержимого.
+// Все запросы идут к одноразовому loopback-обработчику; готовность платформы или состояние внешнего провайдера не выводятся.
 func TestReadinessAndStrictJournalContract(t *testing.T) {
 	t.Parallel()
 	handler := NewHandler(NewStore())
@@ -102,6 +112,10 @@ func TestReadinessAndStrictJournalContract(t *testing.T) {
 	}, http.StatusBadRequest)
 }
 
+// TestWriteRetryReturnsExactReadbackAndConflictDoesNotMutate requires exact same-key replay and rejects a changed value without another effect.
+// It compares both stored receipts and current journal state within one process, not durable exactly-once delivery.
+// TestWriteRetryReturnsExactReadbackAndConflictDoesNotMutate требует точного повтора того же ключа и отклоняет изменённое значение без нового эффекта.
+// Сравниваются квитанции и текущее состояние журнала одного процесса, а не устойчивая доставка exactly-once.
 func TestWriteRetryReturnsExactReadbackAndConflictDoesNotMutate(t *testing.T) {
 	t.Parallel()
 	handler := NewHandler(NewStore())
@@ -123,6 +137,10 @@ func TestWriteRetryReturnsExactReadbackAndConflictDoesNotMutate(t *testing.T) {
 	}
 }
 
+// TestCRUDWithVersionPreconditionsAndFaultClassification covers synthetic create/update/delete, stale versions and immutable fault/retry keys.
+// It checks deleted historical value versus empty current state and diagnostic counts without relying on external APIs.
+// TestCRUDWithVersionPreconditionsAndFaultClassification проверяет искусственные create, update и delete, старые версии и неизменяемые ключи ошибок и повторов.
+// Проверяются удалённое историческое значение, пустое текущее состояние и диагностические счётчики без внешних API.
 func TestCRUDWithVersionPreconditionsAndFaultClassification(t *testing.T) {
 	t.Parallel()
 	handler := NewHandler(NewStore())
@@ -180,6 +198,10 @@ func TestCRUDWithVersionPreconditionsAndFaultClassification(t *testing.T) {
 	}
 }
 
+// TestReplayDiagnosticProvesOneEffect uses a short injected replay delay and confirms one mutation plus one exact retry in diagnostics.
+// It also rejects writes and query parameters on the read-only diagnostic endpoint.
+// TestReplayDiagnosticProvesOneEffect использует короткую подставленную задержку повтора и подтверждает одно изменение и один точный повтор диагностикой.
+// Также отклоняются запись и query-параметры диагностического endpoint только для чтения.
 func TestReplayDiagnosticProvesOneEffect(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(NewStore(), time.Millisecond)
@@ -203,6 +225,10 @@ func TestReplayDiagnosticProvesOneEffect(t *testing.T) {
 	assertStatus(t, server.Client(), http.MethodGet, server.URL+"/v1/diagnostics/journals/replay?unsafe=true", "", nil, http.StatusBadRequest)
 }
 
+// TestConcurrentRetryCreatesOneEffect releases 64 local HTTP mutations with one effect key and checks a single resulting sequence/resource.
+// Responses and errors are joined before final readback; this proves the in-process mutex path, not cross-restart or distributed idempotency.
+// TestConcurrentRetryCreatesOneEffect одновременно выпускает 64 локальных HTTP-изменения с одним ключом и проверяет одну итоговую последовательность и ресурс.
+// Ответы и ошибки собираются до итогового чтения; доказывается путь mutex одного процесса, не идемпотентность между перезапусками или узлами.
 func TestConcurrentRetryCreatesOneEffect(t *testing.T) {
 	t.Parallel()
 	handler := NewHandler(NewStore())
@@ -259,6 +285,10 @@ func TestConcurrentRetryCreatesOneEffect(t *testing.T) {
 	}
 }
 
+// TestConcurrentDistinctJournalsHaveOneSequenceEach creates 128 distinct resources concurrently and requires per-journal sequence one.
+// It checks independent journal versions against the shared mutex-backed store without network traffic.
+// TestConcurrentDistinctJournalsHaveOneSequenceEach конкурентно создаёт 128 разных ресурсов и требует последовательность один для каждого журнала.
+// Независимые версии проверяются на общем хранилище с mutex без сетевого трафика.
 func TestConcurrentDistinctJournalsHaveOneSequenceEach(t *testing.T) {
 	t.Parallel()
 	store := NewStore()
@@ -298,10 +328,16 @@ func TestConcurrentDistinctJournalsHaveOneSequenceEach(t *testing.T) {
 	}
 }
 
+// mutationHeaders allocates fresh exact JSON and idempotency headers so callers may add authentication without sharing mutations.
+// mutationHeaders создаёт новые точные JSON-заголовки и ключ идемпотентности, позволяя добавлять аутентификацию без общих изменений.
 func mutationHeaders(effectKey string) http.Header {
 	return http.Header{"Content-Type": {"application/json"}, "Idempotency-Key": {effectKey}}
 }
 
+// requestProjection sends a fixture request with cloned headers, closes its response and requires one exact 200 projection JSON document.
+// Error-body reads are only test diagnostics and are not used as a production bounded-provider transport.
+// requestProjection отправляет запрос оснастки с копией заголовков, закрывает ответ и требует один точный JSON-документ проекции со статусом 200.
+// Чтение тела ошибки служит лишь тестовой диагностикой и не используется как production-транспорт с ограничением ответа провайдера.
 func requestProjection(t *testing.T, client *http.Client, method, endpoint, body string, headers http.Header) Projection {
 	t.Helper()
 	request, err := http.NewRequest(method, endpoint, strings.NewReader(body))
@@ -327,6 +363,8 @@ func requestProjection(t *testing.T, client *http.Client, method, endpoint, body
 	return projection
 }
 
+// requestDiagnostic reads one 200 diagnostic document, rejects unknown fields/trailing JSON and closes the local HTTP response.
+// requestDiagnostic читает один диагностический документ со статусом 200, отклоняет неизвестные поля и лишний JSON и закрывает локальный HTTP-ответ.
 func requestDiagnostic(t *testing.T, client *http.Client, endpoint string) DiagnosticProjection {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
@@ -350,6 +388,10 @@ func requestDiagnostic(t *testing.T, client *http.Client, endpoint string) Diagn
 	return projection
 }
 
+// assertStatus sends an independently constructed fixture request and compares its exact status without changing or retrying the input.
+// The response is closed on success and failure; mismatch details are local test diagnostics only.
+// assertStatus отправляет независимо созданный запрос оснастки и сравнивает точный статус без изменения или повтора входа.
+// Ответ закрывается и при успехе, и при ошибке; подробности несовпадения служат только локальной диагностикой теста.
 func assertStatus(t *testing.T, client *http.Client, method, endpoint, body string, headers http.Header, expected int) {
 	t.Helper()
 	request, err := http.NewRequest(method, endpoint, bytes.NewBufferString(body))
@@ -368,6 +410,61 @@ func assertStatus(t *testing.T, client *http.Client, method, endpoint, body stri
 	}
 }
 
+// errorsIsEOF accepts only the exact io.EOF sentinel from the fixture decoder's trailing-document probe.
+// errorsIsEOF принимает только точный sentinel io.EOF проверки лишнего документа декодером оснастки.
 func errorsIsEOF(err error) bool {
 	return err == io.EOF
+}
+
+// trackedReadBody counts explicit handler closes while exposing the supplied reader unchanged for guard-order assertions.
+// trackedReadBody считает явные закрытия тела обработчиком, сохраняя переданный читатель для проверки порядка отказов.
+type trackedReadBody struct {
+	io.Reader
+	closes int
+}
+
+// Close records a close without consuming more bytes or invoking external cleanup.
+// Close фиксирует закрытие без потребления дополнительных байтов или внешней очистки.
+func (body *trackedReadBody) Close() error { body.closes++; return nil }
+
+// TestReadGuardsPreserveOrderClosureAndNoEffects checks all four GET routes for method-first rejection and one-byte body validation.
+// It requires the same safe error JSON, header policy, exact body-close count and no journal/effect allocation without opening a listener.
+// TestReadGuardsPreserveOrderClosureAndNoEffects проверяет все четыре GET-маршрута на приоритет метода и однобайтовую проверку тела.
+// Требуются прежние безопасные JSON-ошибки, заголовки, точное число закрытий тела и отсутствие создания журналов и эффектов без открытия listener.
+func TestReadGuardsPreserveOrderClosureAndNoEffects(t *testing.T) {
+	t.Parallel()
+	for _, path := range []string{"/healthz", "/readyz", "/v1/journals/guard", "/v1/diagnostics/journals/guard"} {
+		for _, scenario := range []struct {
+			name, method, value, errorCode string
+			status, closes, remaining      int
+		}{
+			{name: "method before body", method: http.MethodPost, value: "bad", errorCode: "method_not_allowed", status: http.StatusMethodNotAllowed, remaining: 3},
+			{name: "body rejected", method: http.MethodGet, value: "bad", errorCode: "request_body_invalid", status: http.StatusBadRequest, closes: 1, remaining: 2},
+			{name: "empty body accepted", method: http.MethodGet, status: http.StatusOK, closes: 1},
+		} {
+			t.Run(path+"/"+scenario.name, func(t *testing.T) {
+				store := NewStore()
+				handler := NewHandler(store)
+				handler.SetReady(true)
+				request := httptest.NewRequest(scenario.method, "http://fixture.invalid"+path, nil)
+				reader := strings.NewReader(scenario.value)
+				body := &trackedReadBody{Reader: reader}
+				request.Body = body
+				writer := httptest.NewRecorder()
+				handler.ServeHTTP(writer, request)
+				if writer.Code != scenario.status || body.closes != scenario.closes || reader.Len() != scenario.remaining {
+					t.Fatalf("read guard changed: status=%d closes=%d remaining=%d", writer.Code, body.closes, reader.Len())
+				}
+				if scenario.errorCode != "" && writer.Body.String() != `{"error":"`+scenario.errorCode+`"}`+"\n" {
+					t.Fatal("read guard error bytes changed")
+				}
+				if writer.Header().Get("Cache-Control") != "no-store" || writer.Header().Get("Content-Type") != "application/json" || writer.Header().Get("X-Content-Type-Options") != "nosniff" {
+					t.Fatal("read guard response headers changed")
+				}
+				if len(store.journals) != 0 || len(store.receipts) != 0 || len(store.faultAttempts) != 0 {
+					t.Fatal("read guard allocated a synthetic effect")
+				}
+			})
+		}
+	}
 }

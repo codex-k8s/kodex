@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestExecutionSnapshotRegistryRequiresCurrentPinnedExecution exposes own-execution observation only with current turn, attempt, lease and revision pins, without opening a configuration catalog.
+// TestExecutionSnapshotRegistryRequiresCurrentPinnedExecution открывает наблюдение собственного исполнения только с текущими привязками хода, попытки, аренды и ревизии, не открывая каталог конфигурации.
 func TestExecutionSnapshotRegistryRequiresCurrentPinnedExecution(t *testing.T) {
 	input := processObservationInput()
 	input.Mode, input.LeaseRef, input.LeaseFence, input.LeaseGeneration = RunnerModeTurn, "lease_fixture123", "private-fixture", 1

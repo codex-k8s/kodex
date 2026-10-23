@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestConfiguredListenAddress checks default, explicit ephemeral/fixed loopback and rejected wildcard/privileged HTTP overrides.
+// These environment-only cases do not open ports or start the fixture.
+// TestConfiguredListenAddress проверяет умолчание, явный временный и фиксированный loopback и запрещённые wildcard и привилегированные HTTP-переопределения.
+// Случаи с окружением не открывают порты и не запускают оснастку.
 func TestConfiguredListenAddress(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -39,6 +43,10 @@ func TestConfiguredListenAddress(t *testing.T) {
 	}
 }
 
+// TestConfiguredTLSServer covers disabled, complete, partial and malformed optional TLS settings with a synthetic bearer digest.
+// It compares the decoded digest and configured paths but does not read actual identity files or perform a TLS handshake.
+// TestConfiguredTLSServer проверяет выключенные, полные, неполные и неверные необязательные TLS-настройки с искусственным bearer-дайджестом.
+// Сравниваются декодированный дайджест и настроенные пути без чтения настоящих файлов идентичности или TLS-рукопожатия.
 func TestConfiguredTLSServer(t *testing.T) {
 	tokenDigest := sha256.Sum256([]byte("fixture-token-with-at-least-thirty-two-bytes"))
 	digest := hex.EncodeToString(tokenDigest[:])

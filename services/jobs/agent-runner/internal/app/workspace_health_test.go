@@ -18,6 +18,8 @@ import (
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
+// TestWorkspaceCanaryProcessFixture is inert without its explicit mode; controlled child invocations exercise actual temporary filesystem probing, SIGTERM-ignoring sleep or oversized stdout, then exit without running agents or providers.
+// TestWorkspaceCanaryProcessFixture неактивен без явного mode; управляемые child-вызовы проверяют реальную временную ФС, игнорирующий SIGTERM сон или чрезмерный stdout и выходят без агентов и провайдеров.
 func TestWorkspaceCanaryProcessFixture(t *testing.T) {
 	mode := os.Getenv("KODEX_CANARY_TEST_MODE")
 	if mode == "" {
@@ -42,6 +44,8 @@ func TestWorkspaceCanaryProcessFixture(t *testing.T) {
 	os.Exit(0)
 }
 
+// TestWorkspaceCanaryProcessIsBoundedAndReaped launches the test binary in three controlled modes and requires correct success/failure, safe diagnostics, bounded reaping and no temporary outbox residue.
+// TestWorkspaceCanaryProcessIsBoundedAndReaped запускает тестовый бинарь в трёх управляемых режимах и требует правильный успех/отказ, безопасную диагностику, ограниченное ожидание выхода и отсутствие временных остатков outbox.
 func TestWorkspaceCanaryProcessIsBoundedAndReaped(t *testing.T) {
 	for _, mode := range []string{"filesystem", "hang", "overflow"} {
 		t.Run(mode, func(t *testing.T) {
@@ -72,6 +76,8 @@ func TestWorkspaceCanaryProcessIsBoundedAndReaped(t *testing.T) {
 	}
 }
 
+// TestWorkspaceReadinessUsesOnlyFreshSnapshot checks the ready HTTP handler against missing, fresh, stale, future and denied atomic snapshots without invoking a filesystem probe.
+// TestWorkspaceReadinessUsesOnlyFreshSnapshot проверяет ready HTTP handler для отсутствующего, свежего, устаревшего, будущего и неуспешного atomic snapshots без файловой пробы.
 func TestWorkspaceReadinessUsesOnlyFreshSnapshot(t *testing.T) {
 	state := &health{}
 	state.ready.Store(true)
@@ -98,6 +104,8 @@ func TestWorkspaceReadinessUsesOnlyFreshSnapshot(t *testing.T) {
 	}
 }
 
+// TestWorkspaceMonitorCancellationJoinsCheckAndClearsReadiness blocks a synthetic check until cancellation and requires stop to join it and erase the last ready snapshot.
+// TestWorkspaceMonitorCancellationJoinsCheckAndClearsReadiness блокирует синтетический check до отмены и требует от stop дождаться его и стереть последний ready snapshot.
 func TestWorkspaceMonitorCancellationJoinsCheckAndClearsReadiness(t *testing.T) {
 	state := &health{}
 	entered, joined := make(chan struct{}), make(chan struct{})

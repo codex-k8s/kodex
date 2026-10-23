@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+// main embeds sorted shipped YAML definitions into generated Go source without modifying the definitions.
+// main встраивает отсортированные поставленные YAML-определения в сгенерированный Go-код, не меняя их.
 func main() {
 	contracts := flag.String("contracts", "../../../contracts/integrations/v1/definitions", "каталог shipped definitions")
 	output := flag.String("output", "shipped_gen.go", "generated Go file")
@@ -34,6 +36,10 @@ func main() {
 	}
 }
 
+// fatal reports a generator failure on stderr and exits with a nonzero status, supplying a
+// deterministic error when no underlying error was returned.
+// fatal сообщает об отказе генератора в stderr и завершает процесс с ненулевым кодом,
+// подставляя определённую ошибку, когда исходная ошибка отсутствует.
 func fatal(message string, err error) {
 	if err == nil {
 		err = fmt.Errorf("no input files")

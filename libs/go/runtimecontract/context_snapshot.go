@@ -13,20 +13,40 @@ import (
 )
 
 const (
-	RuntimeContextSchema          = "kodex.runtime-context.v1"
-	RuntimeContextRoot            = "/workspace/context"
-	MaximumContextSkills          = 32
-	MaximumContextMemories        = 64
-	MaximumSkillFiles             = 128
-	MaximumSkillFileBytes   int64 = 32 << 20
+	// RuntimeContextSchema identifies the owner-materialized skills and memory snapshot.
+	// RuntimeContextSchema обозначает материализованный владельцем снимок навыков и памяти.
+	RuntimeContextSchema = "kodex.runtime-context.v1"
+	// RuntimeContextRoot is the protected root used for admitted context files.
+	// RuntimeContextRoot задаёт защищённый корень допущенных файлов контекста.
+	RuntimeContextRoot = "/workspace/context"
+	// MaximumContextSkills limits distinct skill bundles in one runtime revision.
+	// MaximumContextSkills ограничивает количество различных навыков одной версии runtime.
+	MaximumContextSkills = 32
+	// MaximumContextMemories limits memory records delivered with one snapshot.
+	// MaximumContextMemories ограничивает количество записей памяти одного снимка.
+	MaximumContextMemories = 64
+	// MaximumSkillFiles limits the number of files in each admitted skill bundle.
+	// MaximumSkillFiles ограничивает количество файлов каждого допущенного навыка.
+	MaximumSkillFiles = 128
+	// MaximumSkillFileBytes bounds one immutable skill file before materialization.
+	// MaximumSkillFileBytes ограничивает размер неизменяемого файла навыка до материализации.
+	MaximumSkillFileBytes int64 = 32 << 20
+	// MaximumSkillBundleBytes bounds the sum of file sizes within one skill bundle.
+	// MaximumSkillBundleBytes ограничивает суммарный размер файлов одного навыка.
 	MaximumSkillBundleBytes int64 = 64 << 20
-	MaximumContextBytes     int64 = 512 << 20
+	// MaximumContextBytes bounds all skill bytes and memory summaries in a snapshot.
+	// MaximumContextBytes ограничивает общий объём файлов навыков и выдержек памяти в снимке.
+	MaximumContextBytes int64 = 512 << 20
 )
 
+// ErrRuntimeContext is the safe rejection for missing, expired, or incorrectly bound context.
+// ErrRuntimeContext обозначает безопасный отказ при отсутствии, истечении или неверной привязке контекста.
 var ErrRuntimeContext = errors.New("runtime context snapshot is invalid")
 
-// RequiredContextSnapshot вызывается в исполняющем consumer. Отсутствующий
-// snapshot не равен явно назначенному владельцем пустому набору контекста.
+// RequiredContextSnapshot requires a valid explicit owner snapshot at the execution consumer;
+// absence is not interpreted as an intentionally empty context.
+// RequiredContextSnapshot требует явный корректный снимок владельца у потребителя исполнения;
+// отсутствие не трактуется как намеренно пустой контекст.
 func (input RunnerInput) RequiredContextSnapshot(now time.Time) (RuntimeContextSnapshot, error) {
 	if input.ContextSnapshot == nil || input.ContextSnapshot.ValidateFor(input, now) != nil {
 		return RuntimeContextSnapshot{}, ErrRuntimeContext
@@ -34,8 +54,10 @@ func (input RunnerInput) RequiredContextSnapshot(now time.Time) (RuntimeContextS
 	return *input.ContextSnapshot, nil
 }
 
-// RuntimeContextSnapshot связывает CP pins с внешней execution lineage.
-// Lifecycle eligibility проверяет CP до создания immutable RuntimeRevision.
+// RuntimeContextSnapshot binds control-plane context pins to the outer execution lineage;
+// the control plane verifies lifecycle eligibility before creating the immutable RuntimeRevision.
+// RuntimeContextSnapshot связывает контекст control plane с внешней цепочкой исполнения;
+// control plane проверяет доступность по lifecycle до создания неизменной RuntimeRevision.
 type RuntimeContextSnapshot struct {
 	Schema          string                `json:"schema"`
 	OrganizationRef string                `json:"organization_ref"`
@@ -46,6 +68,8 @@ type RuntimeContextSnapshot struct {
 	Digest          string                `json:"digest"`
 }
 
+// RuntimeContextProvenance records the owner-projected actor, source revision, digest, and creation time.
+// RuntimeContextProvenance хранит назначенные проекцией владельца actor, версию источника, дайджест и время создания.
 type RuntimeContextProvenance struct {
 	ActorRef       string    `json:"actor_ref"`
 	SourceKind     string    `json:"source_kind"`
@@ -55,6 +79,8 @@ type RuntimeContextProvenance struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+// RuntimeSkillFile pins one relative bundle path to exact artifact revision, digest, and byte size.
+// RuntimeSkillFile закрепляет относительный путь навыка за точными версией артефакта, дайджестом и размером.
 type RuntimeSkillFile struct {
 	Path             string `json:"path"`
 	ArtifactRef      string `json:"artifact_ref"`
@@ -63,8 +89,10 @@ type RuntimeSkillFile struct {
 	SizeBytes        int64  `json:"size_bytes"`
 }
 
-// RuntimeSkillBundle соответствует RuntimeSkillBundleSnapshot CP #1046.
-// Поля State/reviewer не дублируются: CP выдаёт только PUBLISHED/CLEAN revision.
+// RuntimeSkillBundle carries the exact published clean revision selected by the owner;
+// lifecycle state and reviewer are not re-created by the execution consumer.
+// RuntimeSkillBundle содержит точную опубликованную чистую версию, выбранную владельцем;
+// состояние lifecycle и reviewer не создаются заново потребителем исполнения.
 type RuntimeSkillBundle struct {
 	BindingRef     string                   `json:"binding_ref"`
 	BindingVersion int64                    `json:"binding_version"`
@@ -81,8 +109,10 @@ type RuntimeSkillBundle struct {
 	Description    string                   `json:"description"`
 }
 
-// RuntimeMemoryRecord соответствует RuntimeMemoryRecordSnapshot CP #1046.
-// Scope, отсутствие redaction и permission устанавливаются owner projection.
+// RuntimeMemoryRecord carries a pinned memory summary and retention deadline;
+// scope, redaction eligibility, and permissions are resolved by the owner projection.
+// RuntimeMemoryRecord содержит закреплённую выдержку памяти и срок хранения;
+// область, допустимость по redaction и права разрешаются проекцией владельца.
 type RuntimeMemoryRecord struct {
 	BindingRef     string                   `json:"binding_ref"`
 	BindingVersion int64                    `json:"binding_version"`
@@ -96,6 +126,8 @@ type RuntimeMemoryRecord struct {
 	Provenance     RuntimeContextProvenance `json:"provenance"`
 }
 
+// ComputeDigest hashes the bounded typed snapshot with its own digest field cleared.
+// ComputeDigest хеширует ограниченный типизированный снимок с очищенным собственным полем дайджеста.
 func (snapshot RuntimeContextSnapshot) ComputeDigest() (string, error) {
 	snapshot.Digest = ""
 	raw, err := json.Marshal(snapshot)
@@ -106,8 +138,10 @@ func (snapshot RuntimeContextSnapshot) ComputeDigest() (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
-// ValidateFor не назначает полномочия: outer input уже проверен по binding.
-// now передаёт вызывающий, expiry проверяется перед каждым процессом.
+// ValidateFor checks exact outer-input pins, unique context identities, safe skill paths, byte budgets,
+// and memory expiry at caller-supplied time; it does not replace outer execution authorization.
+// ValidateFor проверяет привязки внешнего входа, уникальность контекста, пути навыков, объём и срок памяти
+// по переданному времени; проверка не заменяет внешнюю авторизацию исполнения.
 func (snapshot RuntimeContextSnapshot) ValidateFor(input RunnerInput, now time.Time) error {
 	digest, err := snapshot.ComputeDigest()
 	if err != nil || snapshot.Schema != RuntimeContextSchema || snapshot.Digest != digest ||
@@ -173,8 +207,10 @@ func (snapshot RuntimeContextSnapshot) ValidateFor(input RunnerInput, now time.T
 	return nil
 }
 
-// BoundExecutionContext прекращает использование памяти при ближайшем retention
-// deadline; существующий cancel/join останавливает provider.
+// BoundExecutionContext inherits the earliest memory-retention deadline so the existing
+// cancellation/join lifecycle stops the provider when any delivered memory expires.
+// BoundExecutionContext наследует ближайший срок хранения памяти, чтобы существующий
+// cancel/join остановил провайдера при истечении любой переданной записи.
 func (snapshot RuntimeContextSnapshot) BoundExecutionContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	var deadline time.Time
 	for _, memory := range snapshot.Memories {
@@ -188,8 +224,10 @@ func (snapshot RuntimeContextSnapshot) BoundExecutionContext(ctx context.Context
 	return context.WithDeadline(ctx, deadline)
 }
 
-// ValidSkillPath проверяет пути одобренного bundle. Типы supporting files и
-// разрешение исполнения scripts принадлежат scan/policy владельца.
+// ValidSkillPath accepts bounded canonical relative bundle paths without traversal or hidden segments;
+// supporting file types and script execution permissions remain the owner's scan/policy responsibility.
+// ValidSkillPath принимает ограниченные канонические относительные пути без traversal и скрытых сегментов;
+// типы вспомогательных файлов и запуск скриптов остаются ответственностью проверки и политики владельца.
 func ValidSkillPath(value string) bool {
 	if value == "" || len(value) > 240 || !utf8.ValidString(value) || strings.ContainsAny(value, "\\\x00\r\n:") ||
 		path.IsAbs(value) || path.Clean(value) != value {
@@ -203,15 +241,21 @@ func ValidSkillPath(value string) bool {
 	return !strings.EqualFold(value, "SKILL.md") || value == "SKILL.md"
 }
 
+// validContextPin requires immutable resource/revision references and a positive versioned binding.
+// validContextPin требует неизменные ссылки ресурса и версии, а также положительную версию привязки.
 func validContextPin(ref, revisionRef string, revision int64, digest, bindingRef string, bindingVersion int64) bool {
 	return opaqueReferencePattern.MatchString(ref) && opaqueReferencePattern.MatchString(revisionRef) &&
 		revision > 0 && sha256Pattern.MatchString(digest) && opaqueReferencePattern.MatchString(bindingRef) && bindingVersion > 0
 }
 
+// validContextText accepts bounded nonblank UTF-8 text without a NUL byte.
+// validContextText принимает ограниченный непустой текст UTF-8 без NUL-байта.
 func validContextText(value string, maximum int) bool {
 	return strings.TrimSpace(value) != "" && len(value) <= maximum && utf8.ValidString(value) && !strings.ContainsRune(value, 0)
 }
 
+// validContextProvenance checks actor/source shape, source-reference bounds, digest, and creation time.
+// validContextProvenance проверяет форму actor и источника, пределы ссылок, дайджест и время создания.
 func validContextProvenance(value RuntimeContextProvenance) bool {
 	return opaqueReferencePattern.MatchString(value.ActorRef) && validContextText(value.SourceKind, 64) &&
 		len(value.SourceRef) <= 128 && len(value.SourceRevision) <= 128 &&

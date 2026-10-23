@@ -1,3 +1,7 @@
+// Package secretbroker composes control API access to raw secret and protected
+// draft RPC clients; secret storage and domain eligibility remain in the broker.
+// Пакет secretbroker связывает control API с raw secret и protected draft RPC
+// clients; хранение секретов и domain eligibility остаются у broker.
 package secretbroker
 
 import (
@@ -17,6 +21,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// Config supplies explicit secret-broker transport pins, local issuer peer IDs, proof provider and dial/request budgets. Selecting trusted-cluster follows a separate constructor and does not validate or use every ordinary TLS field.
+// Config задаёт явные secret-broker transport pins, local issuer peer IDs, proof provider и dial и request budgets. Выбор trusted-cluster использует отдельный constructor, не проверяющий и не использующий все обычные TLS fields.
 type Config struct {
 	RPCProfile                                                                 string
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
@@ -25,6 +31,8 @@ type Config struct {
 	Proofs                                                                     authorityclient.ProofProvider
 }
 
+// Client owns separate raw secret and protected draft connections plus an optional local issuer; trusted-cluster deliberately shares one connection for both generated clients. Readiness uses the raw client with the configured timeout.
+// Client владеет отдельными raw secret и protected draft connections и необязательным local issuer; trusted-cluster намеренно использует одно соединение обоих generated clients. Readiness вызывает raw client с настроенным timeout.
 type Client struct {
 	SecretBroker secretbrokerv1.SecretBrokerServiceClient
 	Drafts       secretbrokerv1.SecretBrokerServiceClient
@@ -34,6 +42,8 @@ type Client struct {
 	timeout      time.Duration
 }
 
+// Dial selects the explicit trusted profile or validates ordinary paths/budgets, loads TLS identity and bounded CA, opens raw and authority-protected draft clients and authenticates the local issuer peer. Failure closes already-created connections at the existing points; remote service readiness is not probed by this factory.
+// Dial выбирает явный trusted profile либо проверяет обычные paths и budgets, загружает TLS identity и ограниченный CA, создаёт raw и authority-protected draft clients и аутентифицирует local issuer peer. При отказе созданные соединения закрываются в прежних точках; remote service readiness factory не проверяет.
 func Dial(ctx context.Context, config Config) (*Client, error) {
 	if config.RPCProfile != "" {
 		return dialTrustedCluster(config)
@@ -87,8 +97,12 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	return &Client{SecretBroker: secretbrokerv1.NewSecretBrokerServiceClient(connection), Drafts: secretbrokerv1.NewSecretBrokerServiceClient(protected), connection: connection, protected: protected, issuer: issuer, timeout: config.RequestTimeout}, nil
 }
 
-type operationSet map[string]string
+// operationSet names this client's exact method-to-operation map; registration validation and authority decisions belong to the surrounding client/proof path, not map lookup.
+// operationSet обозначает карту точного method к operation данного client; registration validation и решения о полномочиях принадлежат окружающему client и proof path, а не map lookup.
+type operationSet = authorityclient.MethodOperations
 
+// draftInterceptor reverses the closed secret-draft operation registry into exact method lookup and delegates deterministic request binding and context issuance to the shared unary interceptor. Privileged non-draft methods are not registered on this connection.
+// draftInterceptor обращает закрытый secret-draft operation registry в exact method lookup и передаёт deterministic request binding и context issuance общему unary interceptor. Привилегированные non-draft methods на этом соединении не регистрируются.
 func draftInterceptor(issuer authorityv1.AuthorizationIssuerServiceClient, proofs authorityclient.ProofProvider) grpc.UnaryClientInterceptor {
 	operations := operationSet{}
 	for operation, method := range controlplaneclient.SecretDraftGatewayOperations() {
@@ -97,11 +111,8 @@ func draftInterceptor(issuer authorityv1.AuthorizationIssuerServiceClient, proof
 	return authorityclient.IssuerUnaryClientInterceptor(issuer, operations, proofs)
 }
 
-func (operations operationSet) OperationID(method string) (string, bool) {
-	operation, ok := operations[method]
-	return operation, ok
-}
-
+// Check calls raw broker CheckReadiness with a child request timeout and converts transport refusal or false readiness to the fixed unavailable error. It does not validate a draft or probe the protected draft connection.
+// Check вызывает raw broker CheckReadiness с дочерним request timeout и переводит transport refusal либо false readiness в фиксированную unavailable error. Draft и protected draft connection не проверяются.
 func (client *Client) Check(ctx context.Context) error {
 	check, cancel := context.WithTimeout(ctx, client.timeout)
 	defer cancel()
@@ -112,6 +123,8 @@ func (client *Client) Check(ctx context.Context) error {
 	return nil
 }
 
+// Close is a no-op for nil/uninitialized primary connection, otherwise closes the raw connection, optional protected connection and issuer in order and joins errors. Trusted-cluster has no separate protected or issuer resource.
+// Close ничего не делает при nil либо неинициализированном primary connection, иначе последовательно закрывает raw connection, необязательные protected connection и issuer, объединяя ошибки. Trusted-cluster не имеет отдельных protected и issuer resources.
 func (client *Client) Close() error {
 	if client == nil || client.connection == nil {
 		return nil

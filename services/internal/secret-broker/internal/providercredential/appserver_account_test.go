@@ -9,17 +9,34 @@ import (
 	"time"
 )
 
+// observedAppServerWriter captures independent copies of synthetic outbound stdin messages on a channel
+// so tests can assert protocol ordering without a process.
+// observedAppServerWriter передаёт независимые копии synthetic исходящих stdin сообщений в channel для
+// проверки protocol порядка без процесса.
 type observedAppServerWriter struct {
 	writes chan []byte
 }
 
+// Write copies the request bytes before channel delivery so production buffer clearing cannot erase the
+// fixture's observed request; delivery is intentionally synchronous.
+// Write копирует request байты до передачи в channel, чтобы production очистка буфера не стирала
+// наблюдённый fixture запрос; передача намеренно синхронная.
 func (writer *observedAppServerWriter) Write(value []byte) (int, error) {
 	writer.writes <- append([]byte(nil), value...)
 	return len(value), nil
 }
 
+// Close is a no-op fixture implementation because this writer owns no file descriptor or external
+// process.
+// Close ничего не делает в fixture, поскольку writer не владеет file descriptor и внешним процессом.
 func (*observedAppServerWriter) Close() error { return nil }
 
+// TestDeviceSessionWaitsForAccountUpdateBeforeReadingAccount injects synthetic login-completed and
+// account-updated events separately, verifies no early account/read and checks the later masked
+// account/auth-file result.
+// TestDeviceSessionWaitsForAccountUpdateBeforeReadingAccount отдельно внедряет synthetic login-completed
+// и account-updated events, проверяет отсутствие преждевременного account/read и последующий masked
+// account/auth-file результат.
 func TestDeviceSessionWaitsForAccountUpdateBeforeReadingAccount(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
@@ -77,6 +94,10 @@ func TestDeviceSessionWaitsForAccountUpdateBeforeReadingAccount(t *testing.T) {
 	}
 }
 
+// TestMaskedAccountAllowsChatGPTWithoutEmail accepts provider metadata with a null email and requires
+// the generic ChatGPT label, not a fabricated address.
+// TestMaskedAccountAllowsChatGPTWithoutEmail допускает provider metadata с null email и требует общую
+// ChatGPT метку, не выдуманный адрес.
 func TestMaskedAccountAllowsChatGPTWithoutEmail(t *testing.T) {
 	t.Parallel()
 	masked, err := maskedAccount([]byte(`{"account":{"type":"chatgpt","email":null}}`))
@@ -85,6 +106,10 @@ func TestMaskedAccountAllowsChatGPTWithoutEmail(t *testing.T) {
 	}
 }
 
+// TestMaskedAccountMasksEmailAndRejectsInvalidMetadata verifies masking on a synthetic address and
+// rejects another account type, missing separator and an empty email.
+// TestMaskedAccountMasksEmailAndRejectsInvalidMetadata проверяет маскирование synthetic адреса и
+// отклоняет другой account type, отсутствие разделителя и пустой email.
 func TestMaskedAccountMasksEmailAndRejectsInvalidMetadata(t *testing.T) {
 	t.Parallel()
 	masked, err := maskedAccount([]byte(`{"account":{"type":"chatgpt","email":"owner@example.test"}}`))
@@ -102,6 +127,10 @@ func TestMaskedAccountMasksEmailAndRejectsInvalidMetadata(t *testing.T) {
 	}
 }
 
+// TestReadAuthJSONRejectsUnsafeFileIdentity accepts one private regular synthetic JSON file and rejects
+// symlink, hardlink, FIFO and public mode through real disposable filesystem operations.
+// TestReadAuthJSONRejectsUnsafeFileIdentity допускает один private regular synthetic JSON файл и
+// отклоняет symlink, hardlink, FIFO и public mode через реальные disposable filesystem операции.
 func TestReadAuthJSONRejectsUnsafeFileIdentity(t *testing.T) {
 	for _, mode := range []string{"regular", "symlink", "hardlink", "fifo", "public"} {
 		t.Run(mode, func(t *testing.T) {

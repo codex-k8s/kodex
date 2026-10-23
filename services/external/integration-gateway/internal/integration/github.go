@@ -12,6 +12,10 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// githubRead retries only eligible SDK read failures under the capability attempt/backoff policy and preserves local SafeError validation failures immediately.
+// RU: githubRead повторяет только допустимые SDK-ошибки чтения по бюджету capability и сразу сохраняет локальные ошибки проверки SafeError.
+// Rate-limit response metadata receives its own safe classification; callers must not consume the returned partial value when an error is present.
+// RU: Метаданные ограничения частоты получают отдельную безопасную классификацию; вызывающий не должен использовать частичный результат при наличии ошибки.
 func githubRead[T any](ctx context.Context, capability integrationpackage.Capability, call func() (T, *github.Response, error)) (T, error) {
 	for attempt := 1; ; attempt++ {
 		value, response, err := call()
@@ -39,11 +43,17 @@ func githubRead[T any](ctx context.Context, capability integrationpackage.Capabi
 	}
 }
 
+// githubRateLimited recognizes HTTP 429 or a 403 with exhausted-rate or Retry-After headers, not every forbidden response.
+// RU: githubRateLimited распознаёт HTTP 429 либо 403 с заголовками исчерпанного лимита или Retry-After, а не любой запрет доступа.
 func githubRateLimited(response *github.Response) bool {
 	return response != nil && (response.StatusCode == http.StatusTooManyRequests || response.StatusCode == http.StatusForbidden &&
 		(response.Header.Get("X-RateLimit-Remaining") == "0" || response.Header.Get("Retry-After") != ""))
 }
 
+// githubMutationError preserves nil success but treats missing, server-error or nominally successful responses with SDK errors as potentially applied effects.
+// RU: githubMutationError сохраняет nil-успех, но считает отсутствие ответа, server-ошибку либо формально успешный ответ с SDK-ошибкой возможно выполненным эффектом.
+// Other failures use closed rate-limit/status classes; this classifier never retries a mutation.
+// RU: Остальные ошибки используют закрытые rate-limit/status классы; классификатор не повторяет изменение.
 func githubMutationError(response *github.Response, err error) error {
 	if err == nil {
 		return nil
@@ -57,6 +67,10 @@ func githubMutationError(response *github.Response, err error) error {
 	return githubError(response, err)
 }
 
+// findGitHubIssueByMarker scans at most one hundred sequential hundred-item pages and returns the first non-pull-request issue whose body contains the effect marker.
+// RU: findGitHubIssueByMarker просматривает не более ста последовательных страниц по сто элементов и возвращает первый обычный issue с effect-маркером в body.
+// Confirmed exhaustion returns nil; a skipped next page or exhausted search budget fails closed instead of proving absence or uniqueness.
+// RU: Подтверждённый конец возвращает nil; пропуск страницы либо исчерпание бюджета закрыто отклоняются, не доказывая отсутствия или уникальности.
 func findGitHubIssueByMarker(ctx context.Context, client *github.Client, owner, repository string, capability integrationpackage.Capability, marker string) (*github.Issue, error) {
 	for page := 1; page <= 100; page++ {
 		var next int
@@ -85,11 +99,17 @@ func findGitHubIssueByMarker(ctx context.Context, client *github.Client, owner, 
 	return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 }
 
+// githubIssueMatchesUpdate accepts only a non-pull-request issue matching every requested nonempty field; omitted fields remain unconstrained.
+// RU: githubIssueMatchesUpdate принимает только обычный issue с совпадением каждого заданного непустого поля; пропущенные поля не ограничиваются.
 func githubIssueMatchesUpdate(issue *github.Issue, title, body, state string) bool {
 	return issue != nil && !issue.IsPullRequest() && (title == "" || issue.GetTitle() == title) &&
 		(body == "" || issue.GetBody() == body) && (state == "" || issue.GetState() == state)
 }
 
+// listGitHubIssues applies the existing open/first-page/thirty-item defaults, reads one repository page and excludes pull requests from the safe issue index.
+// RU: listGitHubIssues применяет прежние defaults open, первой страницы и тридцати элементов, читает страницу репозитория и исключает pull request из безопасного issue-индекса.
+// Positive issue identity is required; the returned JSON string and optional next cursor do not claim full bodies or complete repository enumeration.
+// RU: Требуется положительная идентичность issue; JSON-строка и необязательный next cursor не означают полные body либо перечисление всего репозитория.
 func (adapter *Adapter) listGitHubIssues(ctx context.Context, client *github.Client, owner, repository string, request Request, capability integrationpackage.Capability, raw []byte) (Result, error) {
 	var input struct {
 		State         string
@@ -139,6 +159,8 @@ func (adapter *Adapter) listGitHubIssues(ctx context.Context, client *github.Cli
 	return providerResult(request, "github-issues:"+owner+"/"+repository+":"+strconv.Itoa(input.Cursor), output)
 }
 
+// readGitHubIssue fetches the claimed repository issue number through bounded read retries, rejects a mismatched number and projects an optional full body.
+// RU: readGitHubIssue читает назначенный номер issue репозитория с ограниченными повторами, отклоняет несовпавший номер и проецирует необязательный полный body.
 func (adapter *Adapter) readGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, capability integrationpackage.Capability, raw []byte) (Result, error) {
 	var input struct {
 		Number int `json:"issue_number"`
@@ -158,6 +180,10 @@ func (adapter *Adapter) readGitHubIssue(ctx context.Context, client *github.Clie
 	return githubIssueResult(issue, request, true)
 }
 
+// createGitHubIssueComment first verifies the selected ordinary issue, then searches bounded sequential comment pages for the effect marker before creating once.
+// RU: createGitHubIssueComment сначала проверяет выбранный обычный issue, затем ищет effect-маркер на ограниченных последовательных страницах комментариев до единственного создания.
+// An uncertain create receives read-only marker reconciliation; the result requires a positive comment ID and never triggers a blind second creation.
+// RU: Неопределённое создание получает read-only поиск маркера; результат требует положительного comment ID и не запускает слепое повторное создание.
 func (adapter *Adapter) createGitHubIssueComment(ctx context.Context, client *github.Client, owner, repository string, request Request, capability integrationpackage.Capability, raw []byte) (Result, error) {
 	var input struct {
 		Number int    `json:"issue_number"`

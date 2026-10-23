@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+// TestCatalogDownloadUsesSeparateBoundedAuthenticatedClient verifies the file client outlives the short control timeout, replaces caller authority/cookies, omits upstream cookies and never dials for an already-cancelled request.
+// TestCatalogDownloadUsesSeparateBoundedAuthenticatedClient проверяет отдельный файловый бюджет вопреки короткому control timeout, замену authority/cookies, отсутствие cookies upstream в ответе и отсутствие dial у заранее отменённого запроса.
 func TestCatalogDownloadUsesSeparateBoundedAuthenticatedClient(t *testing.T) {
 	body := []byte("exact synthetic file")
 	sum := sha256.Sum256(body)
@@ -58,6 +60,8 @@ func TestCatalogDownloadUsesSeparateBoundedAuthenticatedClient(t *testing.T) {
 	}
 }
 
+// TestCatalogDownloadRejectsRedirectAndInvalidMetadata checks redirect, oversize, digest mismatch and denial failures with exactly one upstream request per synthetic case.
+// TestCatalogDownloadRejectsRedirectAndInvalidMetadata проверяет отказы перенаправления, превышения размера, несовпадения дайджеста и доступа с ровно одним upstream-запросом на случай.
 func TestCatalogDownloadRejectsRedirectAndInvalidMetadata(t *testing.T) {
 	input := validWarmTurnFixture()
 	input.FileCatalog = &runtimecontract.RuntimeFileCatalog{Ref: "vfc_fixture01", Digest: strings.Repeat("a", 64), Purposes: []string{"PROJECT"}}
@@ -97,6 +101,8 @@ func TestCatalogDownloadRejectsRedirectAndInvalidMetadata(t *testing.T) {
 	}
 }
 
+// TestCatalogDownloadCancellationClosesActiveResponse waits for actual partial streaming, cancels the request and requires ErrAbortHandler plus timely closure of the upstream response.
+// TestCatalogDownloadCancellationClosesActiveResponse дожидается фактической частичной передачи, отменяет запрос и требует ErrAbortHandler и своевременное закрытие upstream-ответа.
 func TestCatalogDownloadCancellationClosesActiveResponse(t *testing.T) {
 	input := validWarmTurnFixture()
 	input.FileCatalog = &runtimecontract.RuntimeFileCatalog{Ref: "vfc_fixture01", Digest: strings.Repeat("a", 64), Purposes: []string{"PROJECT"}}
@@ -151,24 +157,36 @@ func TestCatalogDownloadCancellationClosesActiveResponse(t *testing.T) {
 	}
 }
 
+// notifyingFileWriter records the response and signals the first write exactly once so cancellation tests can wait for real downstream streaming.
+// notifyingFileWriter сохраняет ответ и ровно один раз сигнализирует о первой записи, позволяя тесту отмены дождаться реальной передачи клиенту.
 type notifyingFileWriter struct {
 	*httptest.ResponseRecorder
 	written chan struct{}
 	once    sync.Once
 }
 
+// SetWriteDeadline supplies the ResponseController capability expected by the handler without implementing timing in the in-memory test recorder.
+// SetWriteDeadline предоставляет ожидаемый handler метод ResponseController без реализации сроков в тестовом recorder в памяти.
 func (w *notifyingFileWriter) SetWriteDeadline(time.Time) error { return nil }
 
+// fileDeadlineWriter adds a no-op write-deadline capability to ResponseRecorder for bounded-file handler unit tests, not a real deadline implementation.
+// fileDeadlineWriter добавляет ResponseRecorder пустой метод срока записи для unit-тестов файлового handler, а не реальную реализацию сроков.
 type fileDeadlineWriter struct{ *httptest.ResponseRecorder }
 
+// SetWriteDeadline accepts deadline installation/reset for the recorder; actual HTTP transport timeout behavior is exercised separately.
+// SetWriteDeadline принимает установку/сброс срока для recorder; реальное поведение HTTP transport timeout проверяется отдельно.
 func (w *fileDeadlineWriter) SetWriteDeadline(time.Time) error { return nil }
 
+// Write forwards bytes and errors to the recorder and closes the notification once after the first write, allowing deterministic cancellation sequencing.
+// Write передаёт байты и ошибки recorder и после первой записи однократно закрывает уведомление для определённого порядка отмены.
 func (w *notifyingFileWriter) Write(p []byte) (int, error) {
 	n, err := w.ResponseRecorder.Write(p)
 	w.once.Do(func() { close(w.written) })
 	return n, err
 }
 
+// TestInitialArtifactUsesFileBudgetAndExactSizeDigest serves delayed synthetic bytes with pinned metadata and verifies the separate file budget succeeds despite a one-millisecond control timeout.
+// TestInitialArtifactUsesFileBudgetAndExactSizeDigest выдаёт задержанные синтетические байты с закреплёнными метаданными и проверяет успешный файловый бюджет при миллисекундном control timeout.
 func TestInitialArtifactUsesFileBudgetAndExactSizeDigest(t *testing.T) {
 	body := []byte("initial input")
 	sum := sha256.Sum256(body)

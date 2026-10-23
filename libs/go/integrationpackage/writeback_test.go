@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+// TestGitHubWriteBackBoundsAndManagedNetworkNarrowing keeps the write-back payload bounded and
+// lets a managed revision remove, but never alter, an exact Git transport destination.
+// TestGitHubWriteBackBoundsAndManagedNetworkNarrowing ограничивает payload записи и допускает
+// в управляемой версии удаление, но не изменение точного Git-назначения.
 func TestGitHubWriteBackBoundsAndManagedNetworkNarrowing(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {

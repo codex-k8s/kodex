@@ -13,6 +13,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// invocationControl isolates the four typed owner RPCs for connection-test and invocation work without a live gRPC server.
+// RU: invocationControl изолирует четыре типизированных owner RPC работы проверки подключения и вызова без живого gRPC сервера.
 type invocationControl struct {
 	controlplanev1.RuntimeWorkServiceClient
 	claimTests   func(context.Context, *controlplanev1.ClaimIntegrationConnectionTestsRequest) (*controlplanev1.ClaimIntegrationConnectionTestsResponse, error)
@@ -21,41 +23,65 @@ type invocationControl struct {
 	completeCall func(context.Context, *controlplanev1.CompleteIntegrationInvocationRequest) (*controlplanev1.CompleteIntegrationInvocationResponse, error)
 }
 
+// ClaimIntegrationConnectionTests delegates the unchanged request and context to the connection-test claim fixture.
+// RU: ClaimIntegrationConnectionTests передаёт неизменные запрос и контекст оснастке получения аренды проверки подключения.
 func (control invocationControl) ClaimIntegrationConnectionTests(ctx context.Context, request *controlplanev1.ClaimIntegrationConnectionTestsRequest, _ ...grpc.CallOption) (*controlplanev1.ClaimIntegrationConnectionTestsResponse, error) {
 	return control.claimTests(ctx, request)
 }
+
+// ClaimIntegrationInvocations exposes invocation claim identity and limits to the test callback without creating real leases.
+// RU: ClaimIntegrationInvocations передаёт идентичность и лимиты claim вызова тестовому обработчику без создания реальных аренд.
 func (control invocationControl) ClaimIntegrationInvocations(ctx context.Context, request *controlplanev1.ClaimIntegrationInvocationsRequest, _ ...grpc.CallOption) (*controlplanev1.ClaimIntegrationInvocationsResponse, error) {
 	return control.claimCalls(ctx, request)
 }
+
+// CompleteIntegrationConnectionTest forwards exact test completion pins to a synthetic owner callback.
+// RU: CompleteIntegrationConnectionTest передаёт точные координаты завершения проверки синтетическому обработчику владельца.
 func (control invocationControl) CompleteIntegrationConnectionTest(ctx context.Context, request *controlplanev1.CompleteIntegrationConnectionTestRequest, _ ...grpc.CallOption) (*controlplanev1.CompleteIntegrationConnectionTestResponse, error) {
 	return control.completeTest(ctx, request)
 }
+
+// CompleteIntegrationInvocation lets a test inspect effect classification and lease identity before returning synthetic run readback.
+// RU: CompleteIntegrationInvocation позволяет проверить классификацию эффекта и идентичность аренды до синтетического ответа о запуске.
 func (control invocationControl) CompleteIntegrationInvocation(ctx context.Context, request *controlplanev1.CompleteIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.CompleteIntegrationInvocationResponse, error) {
 	return control.completeCall(ctx, request)
 }
 
+// invocationAdapter supplies independent execution and connection-probe callbacks without external provider access.
+// RU: invocationAdapter задаёт независимые обработчики исполнения и проверки подключения без доступа к внешнему провайдеру.
 type invocationAdapter struct {
 	execute func(context.Context, *controlplanev1.IntegrationInvocationClaim) (*controlplanev1.IntegrationEffectReceipt, error)
 	test    func(context.Context, *controlplanev1.IntegrationConnectionTestClaim) (string, error)
 }
 
+// Execute forwards the exact invocation claim and operation context to the synthetic effect callback.
+// RU: Execute передаёт точный claim вызова и контекст операции синтетическому обработчику эффекта.
 func (adapter invocationAdapter) Execute(ctx context.Context, claim *controlplanev1.IntegrationInvocationClaim) (*controlplanev1.IntegrationEffectReceipt, error) {
 	return adapter.execute(ctx, claim)
 }
+
+// TestConnection forwards the exact connection-test claim to the configured fixture probe.
+// RU: TestConnection передаёт точный claim проверки подключения настроенному обработчику оснастки.
 func (adapter invocationAdapter) TestConnection(ctx context.Context, claim *controlplanev1.IntegrationConnectionTestClaim) (string, error) {
 	return adapter.test(ctx, claim)
 }
 
+// invocationClaim constructs synthetic Mattermost write work with pinned effect and input identity plus a fresh delivery-style lease.
+// RU: invocationClaim создаёт синтетическую Mattermost-запись с закреплёнными идентичностью эффекта и входа и новой арендой по образцу доставки.
 func invocationClaim() *controlplanev1.IntegrationInvocationClaim {
 	return &controlplanev1.IntegrationInvocationClaim{InvocationRef: "invocation", DefinitionKey: "mattermost", EffectKey: "effect", InputDigest: "input-digest", Risk: controlplanev1.IntegrationRisk_INTEGRATION_RISK_WRITE, Lease: deliveryClaim().GetLease()}
 }
 
+// invocationReceipt binds a synthetic post receipt to the claim's effect and input, hashing the exact returned summary.
+// RU: invocationReceipt связывает синтетическую квитанцию сообщения с эффектом и входом claim, хешируя точное возвращаемое резюме.
 func invocationReceipt(claim *controlplanev1.IntegrationInvocationClaim) *controlplanev1.IntegrationEffectReceipt {
 	const summary = `{"post_id":"post"}`
 	digest := sha256.Sum256([]byte(summary))
 	return &controlplanev1.IntegrationEffectReceipt{EffectKey: claim.GetEffectKey(), InputDigest: claim.GetInputDigest(), ProviderEffectRef: "post", ResponseDigest: hex.EncodeToString(digest[:]), ResultSummary: summary}
 }
 
+// TestInvocationCompletesExactLeaseBeforeClaimingNext verifies sequential bounded claims, exact completion pins, distinct generation keys and dispatch time reserve.
+// RU: TestInvocationCompletesExactLeaseBeforeClaimingNext проверяет последовательные ограниченные claim, точные координаты завершения, разные ключи поколений и запас времени отправки.
 func TestInvocationCompletesExactLeaseBeforeClaimingNext(t *testing.T) {
 	claimed, completed := 0, 0
 	keys := map[string]bool{}
@@ -106,6 +132,8 @@ func TestInvocationCompletesExactLeaseBeforeClaimingNext(t *testing.T) {
 	}
 }
 
+// TestInvocationRejectsExpiredLeaseAndForeignOwnerBeforeDispatch rejects another integration definition and malformed lease pins before adapter execution.
+// RU: TestInvocationRejectsExpiredLeaseAndForeignOwnerBeforeDispatch отклоняет другое определение интеграции и неверные координаты аренды до исполнения адаптера.
 func TestInvocationRejectsExpiredLeaseAndForeignOwnerBeforeDispatch(t *testing.T) {
 	for _, mutate := range []func(*controlplanev1.IntegrationInvocationClaim){
 		func(claim *controlplanev1.IntegrationInvocationClaim) { claim.DefinitionKey = "github" },
@@ -124,6 +152,10 @@ func TestInvocationRejectsExpiredLeaseAndForeignOwnerBeforeDispatch(t *testing.T
 	}
 }
 
+// TestInvocationInvalidEffectReceiptCannotBecomeSuccess rejects mismatched effect/input or incomplete receipt metadata for both reads and writes.
+// RU: TestInvocationInvalidEffectReceiptCannotBecomeSuccess отклоняет чужие эффект/вход или неполные метаданные квитанции для чтения и записи.
+// Invalid writes retain unknown-outcome classification, and rejected receipts are not attached to completion.
+// RU: Неверные записи сохраняют классификацию неизвестного исхода, а отклонённые квитанции не прикладываются к завершению.
 func TestInvocationInvalidEffectReceiptCannotBecomeSuccess(t *testing.T) {
 	for _, risk := range []controlplanev1.IntegrationRisk{controlplanev1.IntegrationRisk_INTEGRATION_RISK_READ, controlplanev1.IntegrationRisk_INTEGRATION_RISK_WRITE} {
 		for _, mutate := range []func(*controlplanev1.IntegrationEffectReceipt){
@@ -152,6 +184,8 @@ func TestInvocationInvalidEffectReceiptCannotBecomeSuccess(t *testing.T) {
 	}
 }
 
+// TestConnectionTestUsesExactCompletionAndRejectsWrongReadback checks bounded probing, exact lease pins and rejection of another connection in owner readback.
+// RU: TestConnectionTestUsesExactCompletionAndRejectsWrongReadback проверяет ограниченную проверку, точные координаты аренды и отказ при другом подключении в ответе владельца.
 func TestConnectionTestUsesExactCompletionAndRejectsWrongReadback(t *testing.T) {
 	for _, reference := range []string{"connection", "other"} {
 		claim := &controlplanev1.IntegrationConnectionTestClaim{TestRef: "test", ConnectionRef: "connection", DefinitionKey: "mattermost", Lease: deliveryClaim().GetLease()}

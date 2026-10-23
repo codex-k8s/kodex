@@ -21,6 +21,32 @@ import (
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
+// TestClosedWorkspaceReasonKeepsOnlyExactFailureCodes independently fixes the existing four-code output set, rejecting success tokens, private text and noncanonical whitespace/case without normalizing them.
+// TestClosedWorkspaceReasonKeepsOnlyExactFailureCodes независимо закрепляет прежние четыре кода отказа, отклоняя признаки успеха, приватный текст и неканонические пробелы/регистр без нормализации.
+func TestClosedWorkspaceReasonKeepsOnlyExactFailureCodes(t *testing.T) {
+	for _, fixture := range []struct {
+		input string
+		want  string
+	}{
+		{"READ_ONLY", "READ_ONLY"},
+		{"QUOTA_EXCEEDED", "QUOTA_EXCEEDED"},
+		{"PATH_OUTSIDE_WORKSPACE", "PATH_OUTSIDE_WORKSPACE"},
+		{"RUNTIME_IO_ERROR", "RUNTIME_IO_ERROR"},
+		{"", "RUNTIME_IO_ERROR"},
+		{"OK", "RUNTIME_IO_ERROR"},
+		{"PRIVATE_REASON_SENTINEL", "RUNTIME_IO_ERROR"},
+		{"read_only", "RUNTIME_IO_ERROR"},
+		{" READ_ONLY", "RUNTIME_IO_ERROR"},
+		{"READ_ONLY\n", "RUNTIME_IO_ERROR"},
+	} {
+		if got := closedWorkspaceReason(fixture.input); got != fixture.want {
+			t.Errorf("closed workspace reason = %q, want %q", got, fixture.want)
+		}
+	}
+}
+
+// TestWorkspaceCompletionDiagnosticIsClosedAndRedacted combines known/private reasons and stages, requiring one structured warning with canonical fallbacks, no private cause and harmless handling of a nil logger.
+// TestWorkspaceCompletionDiagnosticIsClosedAndRedacted сочетает известные/приватные причины и этапы, требуя одно структурированное предупреждение с каноническими fallback, без приватной cause и с безопасным nil logger.
 func TestWorkspaceCompletionDiagnosticIsClosedAndRedacted(t *testing.T) {
 	for _, reason := range []string{runtimecontract.RuntimeWorkspaceReadOnly,
 		runtimecontract.RuntimeWorkspaceQuotaExceeded, runtimecontract.RuntimeWorkspacePathOutsideWorkspace,
@@ -52,6 +78,8 @@ func TestWorkspaceCompletionDiagnosticIsClosedAndRedacted(t *testing.T) {
 	logWorkspaceCompletionDenial(t.Context(), nil, workspaceCompletionCheck, errors.New("PRIVATE_CAUSE_SENTINEL"))
 }
 
+// TestWorkspaceArtifactCollectionGuardReasonsAreClosed checks typed, errno, private and nil errors become redacted artifact guards with the expected closed reason and fixed log shape.
+// TestWorkspaceArtifactCollectionGuardReasonsAreClosed проверяет преобразование типизированных, errno, приватных и nil-ошибок в очищенные artifact guards с ожидаемой закрытой причиной и фиксированной формой лога.
 func TestWorkspaceArtifactCollectionGuardReasonsAreClosed(t *testing.T) {
 	for _, fixture := range []struct {
 		err    error
@@ -79,6 +107,8 @@ func TestWorkspaceArtifactCollectionGuardReasonsAreClosed(t *testing.T) {
 	}
 }
 
+// TestWorkspaceArtifactCollectionReportsActualFileGuards creates disposable symlink, hardlink and unreadable files, requiring rejection with no returned artifacts or private data and preservation of the outside sentinel; the unreadable case skips under root.
+// TestWorkspaceArtifactCollectionReportsActualFileGuards создаёт одноразовые symlink, hardlink и нечитаемый файл, требуя отказ без артефактов и приватных данных и сохранение внешнего sentinel; нечитаемый случай пропускается под root.
 func TestWorkspaceArtifactCollectionReportsActualFileGuards(t *testing.T) {
 	for _, kind := range []string{"symlink", "hardlink", "unreadable"} {
 		t.Run(kind, func(t *testing.T) {
@@ -120,6 +150,8 @@ func TestWorkspaceArtifactCollectionReportsActualFileGuards(t *testing.T) {
 	}
 }
 
+// TestWorkspaceCompletionArtifactCollectionDenialIsObserved uses a synthetic mutual-TLS callback to verify an artifact guard produces one failed completion retaining usage and one closed publication warning without leaking final text or paths.
+// TestWorkspaceCompletionArtifactCollectionDenialIsObserved использует синтетический mutual-TLS callback для проверки одного неуспешного завершения с сохранением usage и одного закрытого publication warning без раскрытия итогового текста и путей.
 func TestWorkspaceCompletionArtifactCollectionDenialIsObserved(t *testing.T) {
 	input := model.Input{RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 1,
 		LeaseRef: "lease_fixture", WorkspaceRoot: filepath.Join(t.TempDir(), "PRIVATE_PATH_SENTINEL"),

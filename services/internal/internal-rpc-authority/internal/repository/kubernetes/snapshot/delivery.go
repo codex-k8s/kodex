@@ -20,9 +20,12 @@ import (
 	authoritysnapshot "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 )
 
+// maxResponseBytes limits each Kubernetes Secret response to two MiB, with one extra byte read so oversized responses are rejected rather than silently truncated.
+// maxResponseBytes ограничивает каждый ответ Kubernetes Secret двумя МиБ с чтением дополнительного байта для отказа при превышении вместо молчаливого усечения.
 const maxResponseBytes = 2 << 20
 
-// Config задаёт exact Kubernetes API и заранее созданный Secret.
+// Config identifies the sole snapshot Secret, fixed Kubernetes API/TLS boundary, local CA/token paths and bounded request timeout; it does not carry caller-selected resource authority.
+// Config указывает единственный snapshot Secret, фиксированную Kubernetes API и TLS boundary, локальные пути CA и токена и ограниченный timeout; полномочия на выбранный caller ресурс не передаются.
 type Config struct {
 	Address       string
 	TLSServerName string
@@ -33,13 +36,16 @@ type Config struct {
 	Timeout       time.Duration
 }
 
-// Delivery реализует atomic resourceVersion CAS и served readback.
+// Delivery reads and version-CAS-updates the configured pre-existing Secret through an owned HTTP client. It validates publication byte/pin equality, while cryptographic JWS trust belongs to downstream snapshot verification.
+// Delivery читает и обновляет настроенный существующий Secret по version CAS через собственный HTTP-клиент. Проверяется равенство байтов и привязок публикации, а криптографическое доверие JWS принадлежит последующей проверке снимка.
 type Delivery struct {
 	config      Config
 	client      *http.Client
 	resourceURL string
 }
 
+// secretEnvelope models the Secret identity, resource version, annotations and Base64 data needed for CAS. JSON decoding tolerates unmodeled Kubernetes fields; readEnvelope separately checks the selected identity.
+// secretEnvelope описывает идентичность Secret, resource version, annotations и данные Base64 для CAS. JSON-декодирование допускает неописанные Kubernetes-поля; readEnvelope отдельно проверяет выбранную идентичность.
 type secretEnvelope struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
@@ -54,7 +60,8 @@ type secretEnvelope struct {
 	Data map[string]string `json:"data"`
 }
 
-// New создаёт fail-closed клиент только для канонического snapshot Secret.
+// New restricts delivery to the fixed in-cluster API and snapshot Secret, validates the timeout and CA, then configures TLS 1.3, exact server name and redirect refusal. It does not read the token or contact the API during construction.
+// New ограничивает доставку фиксированными внутрикластерными API и snapshot Secret, проверяет timeout и CA, затем задаёт TLS 1.3, точное серверное имя и запрет redirect. Токен не читается и обращения к API при создании нет.
 func New(config Config) (*Delivery, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
@@ -95,12 +102,14 @@ func New(config Config) (*Delivery, error) {
 	}, nil
 }
 
-// Close закрывает простаивающие соединения Kubernetes API.
+// Close releases idle client connections without deleting the Secret, reverting a publication or cancelling an active caller-owned request.
+// Close освобождает простаивающие соединения клиента без удаления Secret, отмены публикации и прерывания активного запроса вызывающего.
 func (delivery *Delivery) Close() {
 	delivery.client.CloseIdleConnections()
 }
 
-// Publish обновляет existing Secret по resourceVersion и читает результат.
+// Publish validates supplied revision/digest/size, prevents observed rollback and same-revision mutation, and attempts at most four resourceVersion PUTs against an existing Secret. Conflicts retry from a new read; success requires served pin/byte equality, not signature verification, and no independent post-PUT GET is issued.
+// Publish проверяет переданные revision, digest и размер, запрещает наблюдённый rollback и изменение той же ревизии и выполняет до четырёх resourceVersion PUT существующего Secret. Конфликт повторяется с новым чтением; успех требует совпадения served pins и байтов, а не подписи; отдельного GET после PUT нет.
 func (delivery *Delivery) Publish(
 	ctx context.Context,
 	publication model.AuthoritySnapshotPublication,
@@ -184,7 +193,8 @@ func (delivery *Delivery) Publish(
 	)
 }
 
-// Read возвращает только cryptographically bound served state.
+// Read validates the Secret envelope, parses revision and lowercase digest, requires exactly one data key and strictly decodes bounded nonempty Base64 JWS bytes. It does not verify the JWS signature or populate signer generation from annotations.
+// Read проверяет оболочку Secret, разбирает revision и строчный digest, требует ровно один data key и строго декодирует ограниченные непустые Base64-байты JWS. Подпись JWS не проверяется и signer generation из annotations не заполняется.
 func (delivery *Delivery) Read(
 	ctx context.Context,
 ) (model.AuthoritySnapshotPublication, error) {
@@ -225,6 +235,8 @@ func (delivery *Delivery) Read(
 	}, nil
 }
 
+// readEnvelope requires HTTP 200 and validates API kind, configured name/namespace, nonempty UID/resourceVersion and empty-or-Opaque type after permissive JSON decoding. It does not validate snapshot data or signatures.
+// readEnvelope требует HTTP 200 и после допускающего лишние поля JSON-декодирования проверяет API kind, настроенные имя и namespace, непустые UID и resourceVersion и пустой либо Opaque type. Данные снимка и подписи не проверяются.
 func (delivery *Delivery) readEnvelope(
 	ctx context.Context,
 ) (secretEnvelope, error) {
@@ -249,6 +261,8 @@ func (delivery *Delivery) readEnvelope(
 	return envelope, nil
 }
 
+// publication requires exact expected revision/digest/signer annotations and decoded snapshot bytes, then returns the expected publication with the served resource version. It does not independently authenticate the signer or reject extra data keys.
+// publication требует точных ожидаемых revision, digest и signer annotations и декодированных байтов снимка, затем возвращает ожидаемую публикацию с served resource version. Подписант независимо не аутентифицируется и лишние data keys не отклоняются.
 func (delivery *Delivery) publication(
 	envelope secretEnvelope,
 	expected model.AuthoritySnapshotPublication,
@@ -274,6 +288,8 @@ func (delivery *Delivery) publication(
 	return expected, nil
 }
 
+// do rereads and trims the token for every fixed-resource request, sets JSON headers, performs the HTTP call and reads a bounded body before closing it. It returns status handling to callers and does not retry ambiguous transport failures.
+// do перечитывает и обрезает токен для каждого запроса фиксированного ресурса, задаёт JSON-заголовки, выполняет HTTP-вызов и читает ограниченное тело до закрытия. Статус обрабатывают callers; неопределённый транспортный отказ не повторяется.
 func (delivery *Delivery) do(
 	ctx context.Context,
 	method string,
@@ -310,6 +326,8 @@ func (delivery *Delivery) do(
 	return response, raw, nil
 }
 
+// validDigest accepts exactly sixty-four lowercase ASCII hexadecimal characters, without normalizing text or checking that it hashes any particular snapshot bytes.
+// validDigest допускает ровно шестьдесят четыре строчных ASCII hex-символа без нормализации текста и проверки их соответствия хешу конкретных байтов снимка.
 func validDigest(value string) bool {
 	if len(value) != 64 {
 		return false

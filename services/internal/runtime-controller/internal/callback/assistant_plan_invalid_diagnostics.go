@@ -9,13 +9,24 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// assistantPlanInvalidDiagnostic stores only registered plan-stage/field labels and
+// one-based operation index, excluding raw rejected parameters or owner credentials.
+// assistantPlanInvalidDiagnostic хранит лишь registered plan-stage/field labels и one-
+// based operation index без raw rejected parameters и owner credentials.
 type assistantPlanInvalidDiagnostic struct {
 	stage string
 	field string
 	index int
 }
 
-// Только typed detail точного внутреннего RPC, не payload или текст ошибки.
+// assistantPlanInvalidDetails accepts a validated attached local diagnostic or one
+// exact InvalidArgument ErrorInfo from the internal owner domain, with closed reason/
+// metadata keys and canonical bounded index. Raw message text, duplicate details,
+// unknown proto data and foreign fields cannot supply diagnostic authority.
+// assistantPlanInvalidDetails принимает validated attached local diagnostic либо один
+// точный InvalidArgument ErrorInfo internal owner domain с closed reason/metadata keys
+// и canonical bounded index. Raw message text,duplicate details,unknown proto data
+// и foreign fields не создают diagnostic authority.
 func assistantPlanInvalidDetails(err error) (assistantPlanInvalidDiagnostic, bool) {
 	var inputErr *assistantPlanInputError
 	if errors.As(err, &inputErr) && inputErr.diagnostic != nil {
@@ -58,6 +69,10 @@ func assistantPlanInvalidDetails(err error) (assistantPlanInvalidDiagnostic, boo
 	return result, errIndex == nil && strconv.Itoa(index) == info.Metadata["operation_index"] && len(info.Metadata) == expectedKeys && validAssistantPlanInvalidDiagnostic(result)
 }
 
+// validAssistantPlanInvalidDiagnostic accepts five registered stages and indices
+// one through32, with an optional closed field label; it resolves no plan or permission.
+// validAssistantPlanInvalidDiagnostic допускает пять registered stages и indices один–32
+// с optional closed field label,не разрешая plan и permission.
 func validAssistantPlanInvalidDiagnostic(value assistantPlanInvalidDiagnostic) bool {
 	switch value.stage {
 	case "hydrate", "normalize", "command", "bind", "authorize":
@@ -67,6 +82,10 @@ func validAssistantPlanInvalidDiagnostic(value assistantPlanInvalidDiagnostic) b
 	}
 }
 
+// validAssistantPlanInvalidField allows only seventeen registered workflow-related
+// failure labels, never arbitrary JSON paths or reflected model/user input.
+// validAssistantPlanInvalidField допускает лишь семнадцать registered workflow-related
+// failure labels,не arbitrary JSON paths и не reflected model/user input.
 func validAssistantPlanInvalidField(field string) bool {
 	switch field {
 	case "WORKFLOW_SHAPE", "WORKFLOW_REF", "WORKFLOW_VERSION", "WORKFLOW_BINDING",

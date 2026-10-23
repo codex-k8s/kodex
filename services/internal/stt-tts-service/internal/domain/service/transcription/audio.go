@@ -11,8 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
-// ValidateAudio не доверяет длительности контейнера: adapter декодирует весь
-// поток и считает samples до выдачи credential и billable provider call.
+// ValidateAudio bounds the declared bytes and media type, then derives duration
+// from the complete decoded stream before a credential or provider call exists.
+// RU: ValidateAudio ограничивает байты и тип записи, затем определяет длительность
+// всего декодированного потока до получения реквизита и вызова провайдера.
 func ValidateAudio(ctx context.Context, reader io.ReadSeeker, sizeBytes int64, declaredMediaType string, maximumBytes int64, maximumDuration time.Duration, decoder AudioDecoder) (value.Audio, error) {
 	if ctx == nil || decoder == nil || reader == nil || sizeBytes <= 0 {
 		return value.Audio{}, errs.ErrInvalidRequest

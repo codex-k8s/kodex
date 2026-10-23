@@ -9,16 +9,22 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
+// fakeRepository returns fixed claims and records finalization order and exact claims.
+// RU: fakeRepository возвращает заданные claims и фиксирует порядок и точные claims финализации.
 type fakeRepository struct {
 	claims    []Claim
 	finalized []Claim
 	events    *[]string
 }
 
+// Claim returns the synthetic due versions without changing their ownership state.
+// RU: Claim возвращает синтетические версии к очистке, не меняя их состояние владения.
 func (repository *fakeRepository) Claim(context.Context, string, int, int64) ([]Claim, error) {
 	return repository.claims, nil
 }
 
+// Finalize records a terminal repository action after the test's object readback.
+// RU: Finalize фиксирует конечное действие repository после проверки объекта в тесте.
 func (repository *fakeRepository) Finalize(_ context.Context, claim Claim, _ string) error {
 	if repository.events != nil {
 		*repository.events = append(*repository.events, "finalize")
@@ -27,6 +33,8 @@ func (repository *fakeRepository) Finalize(_ context.Context, claim Claim, _ str
 	return nil
 }
 
+// fakeObjects captures exact delete/head arguments and injects object-store outcomes.
+// RU: fakeObjects сохраняет точные аргументы delete/head и подставляет исходы объектного хранилища.
 type fakeObjects struct {
 	deleteKey, deleteVersion string
 	headKey, headVersion     string
@@ -35,6 +43,8 @@ type fakeObjects struct {
 	events                   *[]string
 }
 
+// Delete records the target version and returns the configured deletion outcome.
+// RU: Delete записывает целевую версию и возвращает заданный исход удаления.
 func (objects *fakeObjects) Delete(_ context.Context, key, version string) error {
 	if objects.events != nil {
 		*objects.events = append(*objects.events, "delete")
@@ -43,6 +53,8 @@ func (objects *fakeObjects) Delete(_ context.Context, key, version string) error
 	return objects.deleteErr
 }
 
+// Head records the target version and returns the configured readback outcome.
+// RU: Head записывает целевую версию и возвращает заданный исход контрольного чтения.
 func (objects *fakeObjects) Head(_ context.Context, key, version string) (objectstorage.Receipt, error) {
 	if objects.events != nil {
 		*objects.events = append(*objects.events, "head")
@@ -51,6 +63,10 @@ func (objects *fakeObjects) Head(_ context.Context, key, version string) (object
 	return objectstorage.Receipt{Key: key, VersionID: version}, objects.headErr
 }
 
+// TestProcessDeletesExactVersionBeforeTombstone asserts delete, absent readback and
+// repository finalization occur in that order for the same claimed object version.
+// RU: TestProcessDeletesExactVersionBeforeTombstone проверяет порядок удаления,
+// подтверждения отсутствия и финализации одной заявленной версии объекта.
 func TestProcessDeletesExactVersionBeforeTombstone(t *testing.T) {
 	events := make([]string, 0, 3)
 	repository := &fakeRepository{
@@ -74,6 +90,8 @@ func TestProcessDeletesExactVersionBeforeTombstone(t *testing.T) {
 	}
 }
 
+// TestProcessDoesNotTombstoneFailedDeletion keeps the claim open when object deletion fails.
+// RU: TestProcessDoesNotTombstoneFailedDeletion не завершает claim при отказе удаления объекта.
 func TestProcessDoesNotTombstoneFailedDeletion(t *testing.T) {
 	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
 	objects := &fakeObjects{deleteErr: errors.New("object storage unavailable")}
@@ -84,6 +102,8 @@ func TestProcessDoesNotTombstoneFailedDeletion(t *testing.T) {
 	}
 }
 
+// TestProcessFinalizesAlreadyMissingExactVersion proves retry is idempotent after prior deletion.
+// RU: TestProcessFinalizesAlreadyMissingExactVersion доказывает идемпотентность повтора после удаления.
 func TestProcessFinalizesAlreadyMissingExactVersion(t *testing.T) {
 	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
 	objects := &fakeObjects{deleteErr: objectstorage.ErrNotFound, headErr: objectstorage.ErrNotFound}
@@ -94,6 +114,8 @@ func TestProcessFinalizesAlreadyMissingExactVersion(t *testing.T) {
 	}
 }
 
+// TestProcessDoesNotTombstoneObjectStillPresentAfterDelete rejects a non-effective delete.
+// RU: TestProcessDoesNotTombstoneObjectStillPresentAfterDelete отклоняет удаление без фактического эффекта.
 func TestProcessDoesNotTombstoneObjectStillPresentAfterDelete(t *testing.T) {
 	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
 	objects := &fakeObjects{}
@@ -104,6 +126,8 @@ func TestProcessDoesNotTombstoneObjectStillPresentAfterDelete(t *testing.T) {
 	}
 }
 
+// TestProcessDoesNotTombstoneUncertainHeadFailure refuses finalization on readback outage.
+// RU: TestProcessDoesNotTombstoneUncertainHeadFailure запрещает финализацию при сбое контрольного чтения.
 func TestProcessDoesNotTombstoneUncertainHeadFailure(t *testing.T) {
 	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
 	objects := &fakeObjects{headErr: objectstorage.ErrUnavailable}

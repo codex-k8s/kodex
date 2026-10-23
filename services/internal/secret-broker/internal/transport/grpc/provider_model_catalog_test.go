@@ -29,6 +29,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// catalogMaterializerFixture records account/method/descriptor/deadline and returns a synthetic observed
+// catalog/failure; no provider network call occurs.
+// catalogMaterializerFixture записывает account/method/descriptor/deadline и возвращает synthetic observed
+// catalog/failure; provider network call не выполняется.
 type catalogMaterializerFixture struct {
 	cleanupProviderCredentialMaterializerStub
 	calls           int
@@ -38,6 +42,10 @@ type catalogMaterializerFixture struct {
 	descriptor      kubernetesstore.ProviderCredentialDescriptor
 }
 
+// ObserveModelCatalog captures its bounded call context and returns current-time metadata plus one fixture
+// model only for the configured successful outcome.
+// ObserveModelCatalog сохраняет bounded call context и возвращает current-time metadata с одной fixture
+// model лишь для настроенного successful outcome.
 func (fixture *catalogMaterializerFixture) ObserveModelCatalog(ctx context.Context, account string, descriptor kubernetesstore.ProviderCredentialDescriptor, method string) (providercredential.ModelCatalog, error) {
 	fixture.calls++
 	fixture.account, fixture.method, fixture.descriptor = account, method, descriptor
@@ -50,6 +58,10 @@ func (fixture *catalogMaterializerFixture) ObserveModelCatalog(ctx context.Conte
 	return result, nil
 }
 
+// catalogVerifierFixture synthesizes already-verified claims when an opaque fixture proof/digest matches,
+// with optional denial/mutation; it is not a cryptographic verifier.
+// catalogVerifierFixture формирует synthetic already-verified claims при совпадении fixture proof/digest с
+// optional denial/mutation; криптографическим verifier не является.
 type catalogVerifierFixture struct {
 	av1.AuthorizationVerifierServiceClient
 	expectedDigest string
@@ -57,6 +69,10 @@ type catalogVerifierFixture struct {
 	deny           bool
 }
 
+// VerifyAuthorizationContext rejects mismatched synthetic proof/request digest, then builds fixed
+// caller/target/unary claims and applies the programmed mutation for negative cases.
+// VerifyAuthorizationContext отклоняет mismatched synthetic proof/request digest, затем создаёт fixed
+// caller/target/unary claims и применяет настроенную mutation для negative cases.
 func (fixture *catalogVerifierFixture) VerifyAuthorizationContext(_ context.Context, request *av1.VerifyAuthorizationContextRequest, _ ...googlegrpc.CallOption) (*av1.VerifyAuthorizationContextResponse, error) {
 	if fixture.deny || request.GetCompactJws() != "fixture-proof" || request.GetObservedRequestDigestSha256() != fixture.expectedDigest {
 		return nil, status.Error(codes.PermissionDenied, "fixture owner proof rejected")
@@ -79,12 +95,20 @@ func (fixture *catalogVerifierFixture) VerifyAuthorizationContext(_ context.Cont
 	return &av1.VerifyAuthorizationContextResponse{Context: verified}, nil
 }
 
+// catalogRequestFixture builds bounded synthetic owner task, versioned credential pins and a short future
+// expiry without using a real account.
+// catalogRequestFixture создаёт bounded synthetic owner task, versioned credential pins и short future
+// expiry без реального account.
 func catalogRequestFixture() *cp.ObserveProviderModelCatalogRequest {
 	return &cp.ObserveProviderModelCatalogRequest{TaskRef: "pct_fixture0001", ClaimantId: "controller-fixture", ClaimGeneration: 2, Fence: "fence-fixture", AccountRef: "pacc_fixture01", AccountVersion: 3, CredentialRevisionRef: "pcrev_fixture01", CredentialRevision: 4,
 		Credential:          &cp.ProviderCredentialDescriptor{SecretName: "provider-fixture", SecretUid: "f4b9c3dc-69c9-44f2-b010-d75d5e62c06e", SecretResourceVersion: "10", ContentSha256: strings.Repeat("a", 64)},
 		AuthorizationMethod: cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_API_KEY, ExpiresAt: timestamppb.New(time.Now().UTC().Add(5 * time.Second))}
 }
 
+// catalogPeerContext constructs an in-memory TLSInfo/verified-chain-shaped peer plus opaque fixture proof
+// metadata; no TLS handshake or certificate-chain verification is performed.
+// catalogPeerContext создаёт in-memory TLSInfo/verified-chain-shaped peer с opaque fixture proof metadata;
+// TLS handshake и certificate-chain verification не выполняет.
 func catalogPeerContext(t *testing.T) context.Context {
 	t.Helper()
 	identity, err := url.Parse("spiffe://kodex.local/ns/kodex-system/sa/control-plane")
@@ -96,6 +120,12 @@ func catalogPeerContext(t *testing.T) context.Context {
 	return metadata.NewIncomingContext(ctx, metadata.Pairs(authorityclient.AuthorizationMetadata, "fixture-proof"))
 }
 
+// TestProviderCatalogMiddlewareRejectsDetachedAuthorityBeforeCredentialRead mutates
+// peer/bearer/proof/request/scope/ABI fields and requires zero observer calls except the valid case with
+// exact descriptor/deadline forwarding.
+// TestProviderCatalogMiddlewareRejectsDetachedAuthorityBeforeCredentialRead меняет
+// peer/bearer/proof/request/scope/ABI fields и требует отсутствия observer calls, кроме valid case с exact
+// descriptor/deadline forwarding.
 func TestProviderCatalogMiddlewareRejectsDetachedAuthorityBeforeCredentialRead(t *testing.T) {
 	for _, mode := range []string{"allowed", "missing_mtls", "missing_bearer", "revoked", "changed_payload", "wrong_operation", "wrong_permission", "foreign_caller", "project", "expired", "binding", "continuation", "unknown_payload", "unknown_auth"} {
 		t.Run(mode, func(t *testing.T) {
@@ -155,6 +185,10 @@ func TestProviderCatalogMiddlewareRejectsDetachedAuthorityBeforeCredentialRead(t
 	}
 }
 
+// TestTrustedProviderCatalogRequiresExactServerAdmission checks trusted middleware context,
+// operation/permission/actor/project/target boundaries and rejects raw metadata before any observer call.
+// TestTrustedProviderCatalogRequiresExactServerAdmission проверяет trusted middleware context,
+// operation/permission/actor/project/target boundaries и отклоняет raw metadata до observer call.
 func TestTrustedProviderCatalogRequiresExactServerAdmission(t *testing.T) {
 	method := cp.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName
 	caller := "spiffe://kodex.local/ns/kodex-system/sa/control-plane"

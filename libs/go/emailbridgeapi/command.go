@@ -2,8 +2,12 @@ package emailbridgeapi
 
 import "errors"
 
-// CommandForIntegration — единый mapping для consumer и owner input digest.
-// Строковые массивы соответствуют primitive-field контракту IntegrationPackage.
+// CommandForIntegration maps a registered capability and typed primitive-field
+// input to a mail command, preserving the owner input digest boundary.
+// It rejects unknown operations, ambiguous receipts and untyped recipients.
+// RU: CommandForIntegration преобразует зарегистрированную capability и
+// типизированный ввод примитивных полей в почтовую команду, сохраняя границу
+// дайджеста входа владельца; неизвестные операции и неоднозначные квитанции отклоняются.
 func CommandForIntegration(operation, mailbox, sender, effect string, raw []byte) (Command, error) {
 	ops := map[string]Operation{"email.delivery.health.read": OperationHealth, "email.mailbox.list": OperationMailboxes, "email.message.list": OperationList, "email.message.search": OperationSearch, "email.message.read": OperationFetch, "email.attachment.read": OperationDownload, "email.message.send": OperationSend, "email.message.reply": OperationReply, "email.message.reply_all": OperationReplyAll, "email.message.forward": OperationForward, "email.message.delete": OperationDelete, "email.message.status.read": OperationReceipt, "email.thread.read": OperationThread, "email.attachment.list": OperationAttachments, "email.message.mark_read": OperationMarkRead, "email.message.mark_unread": OperationMarkUnread, "email.message.move": OperationMove, "email.message.archive": OperationArchive, "email.draft.create": OperationDraftCreate, "email.draft.update": OperationDraftUpdate, "email.draft.delete": OperationDraftDelete}
 	op, ok := ops[operation]
@@ -55,6 +59,10 @@ func CommandForIntegration(operation, mailbox, sender, effect string, raw []byte
 	return command, nil
 }
 
+// IsMutation identifies operations that change mailbox state or send mail
+// and therefore require a server-owned effect key and approval policy.
+// RU: IsMutation определяет операции изменения ящика либо отправки письма,
+// которым необходим назначенный сервером ключ эффекта и политика подтверждения.
 func IsMutation(op Operation) bool {
 	switch op {
 	case OperationSend, OperationReply, OperationReplyAll, OperationForward, OperationDelete, OperationMarkRead, OperationMarkUnread, OperationMove, OperationArchive, OperationDraftCreate, OperationDraftUpdate, OperationDraftDelete:

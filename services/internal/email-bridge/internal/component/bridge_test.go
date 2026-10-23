@@ -19,7 +19,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/textproto"
 	"net/url"
 	"os"
@@ -40,6 +39,10 @@ import (
 	"github.com/emersion/go-sasl"
 )
 
+// providerFixture owns loopback SMTP/POP listeners, synthetic MIME bytes and
+// fault controls; counters observe fixture effects, not delivery to a real mailbox.
+// providerFixture содержит локальные SMTP/POP-серверы, искусственное MIME-письмо
+// и переключатели сбоев; счётчики отражают эффекты стенда, а не реальную доставку.
 type providerFixture struct {
 	oauthAuth                atomic.Int32
 	mu                       sync.Mutex
@@ -59,6 +62,10 @@ type providerFixture struct {
 	wg                       sync.WaitGroup
 }
 
+// certificate creates a short-lived self-signed P-256 fixture certificate for
+// local client/server TLS, including the expected caller URI and loopback names.
+// certificate создаёт краткоживущий самоподписанный сертификат P-256 для
+// локального клиентского и серверного TLS с ожидаемым URI и локальными именами.
 func certificate(t *testing.T) (tls.Certificate, []byte) {
 	t.Helper()
 	key, e := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -79,6 +86,11 @@ func certificate(t *testing.T) (tls.Certificate, []byte) {
 	}
 	return cert, ca
 }
+
+// newFixture starts ephemeral loopback mail servers with bounded connections;
+// implicit mode wraps TLS immediately, and cleanup closes listeners and joins handlers.
+// newFixture запускает временные локальные почтовые серверы с ограниченным
+// временем соединений; implicit сразу включает TLS, очистка закрывает и ждёт обработчики.
 func newFixture(t *testing.T, mode string) *providerFixture {
 	t.Helper()
 	f := &providerFixture{}
@@ -129,6 +141,11 @@ func newFixture(t *testing.T, mode string) *providerFixture {
 	}
 	return f
 }
+
+// serveSMTP handles the fixture SMTP subset, records DATA before its acknowledgement
+// and can lose or delay that acknowledgement to simulate an uncertain send outcome.
+// serveSMTP обслуживает тестовое подмножество SMTP, сохраняет DATA до подтверждения
+// и умеет потерять или задержать его для воспроизведения неопределённого исхода отправки.
 func (f *providerFixture) serveSMTP(c net.Conn) {
 	tp := textproto.NewConn(c)
 	_ = tp.PrintfLine("220 fixture ESMTP")
@@ -210,6 +227,11 @@ func (f *providerFixture) serveSMTP(c net.Conn) {
 		}
 	}
 }
+
+// servePOP serves synthetic UIDL/LIST/TOP/RETR data, commits a deletion on QUIT
+// and supports TLS/authentication failures or a lost final acknowledgement.
+// servePOP выдаёт искусственные UIDL/LIST/TOP/RETR, фиксирует удаление при QUIT
+// и воспроизводит ошибки TLS/аутентификации либо потерю итогового подтверждения.
 func (f *providerFixture) servePOP(c net.Conn) {
 	tp := textproto.NewConn(c)
 	_ = tp.PrintfLine("+OK fixture")
@@ -298,8 +320,16 @@ func (f *providerFixture) servePOP(c net.Conn) {
 	}
 }
 
+// dialFixture maps configured SMTP ports to the local SMTP listener and other
+// targets to the POP listener; it is a test route, not an egress-policy verifier.
+// dialFixture направляет настроенные SMTP-порты в локальный SMTP, остальные
+// адреса — в POP; это тестовый маршрут, а не проверка сетевой политики.
 type dialFixture struct{ smtp, pop string }
 
+// Dial opens the selected loopback TCP endpoint with the caller's cancellation;
+// remote target names never cause an external DNS lookup in this fixture.
+// Dial открывает выбранный локальный TCP-адрес с отменой вызывающей стороны;
+// удалённые имена в этом стенде не приводят к внешнему DNS-запросу.
 func (d dialFixture) Dial(ctx context.Context, target string) (net.Conn, error) {
 	address := d.pop
 	if strings.HasSuffix(target, ":465") || strings.HasSuffix(target, ":587") {
@@ -308,12 +338,20 @@ func (d dialFixture) Dial(ctx context.Context, target string) (net.Conn, error) 
 	return (&net.Dialer{}).DialContext(ctx, "tcp", address)
 }
 
+// secrets counts credential reads and supplies fixture CA or dummy values;
+// revocation and a missing descriptor simulate unavailable projected credentials.
+// secrets считает чтения реквизитов и выдаёт тестовый CA либо условные значения;
+// отзыв и отсутствующий дескриптор имитируют недоступность проецируемых реквизитов.
 type secrets struct {
 	ca      []byte
 	reads   atomic.Int32
 	revoked atomic.Bool
 }
 
+// Read counts every attempt, refuses revoked/missing data, and returns only
+// synthetic values; it does not read the host's secret files or validate generations.
+// Read считает каждую попытку, отклоняет отозванные/отсутствующие данные и выдаёт
+// только искусственные значения; файлы секретов хоста и поколения здесь не проверяются.
 func (s *secrets) Read(_ context.Context, d api.Descriptor) ([]byte, error) {
 	s.reads.Add(1)
 	if s.revoked.Load() || d.Name == "missing" {
@@ -325,11 +363,19 @@ func (s *secrets) Read(_ context.Context, d api.Descriptor) ([]byte, error) {
 	return []byte("fixture-value"), nil
 }
 
+// authorityFixture supplies mutable synthetic owner decisions for negative tests;
+// it does not replace transport authentication or a real control-plane authority.
+// authorityFixture выдаёт изменяемые искусственные решения владельца для негативных
+// тестов; он не заменяет аутентификацию транспорта и настоящий управляющий сервис.
 type authorityFixture struct {
 	mutate  func(*api.AuthorizationDecision)
 	revoked bool
 }
 
+// Resolve binds a short-lived fixture decision to the request's operation, digest,
+// effect and execution, then allows selected decision fields to be corrupted by tests.
+// Resolve связывает краткоживущее тестовое решение с операцией, хешем, эффектом
+// и выполнением запроса, позволяя тестам исказить выбранные поля решения.
 func (a *authorityFixture) Resolve(_ context.Context, r api.AuthorizationRequest) (api.AuthorizationDecision, error) {
 	if a.revoked {
 		return api.AuthorizationDecision{}, errs.Denied
@@ -343,22 +389,38 @@ func (a *authorityFixture) Resolve(_ context.Context, r api.AuthorizationRequest
 	return d, nil
 }
 
+// memory serializes fixture receipts in a tenant/mailbox-keyed map; its no-op
+// ledger/report methods cannot demonstrate durable recovery or database fencing.
+// memory последовательно хранит тестовые квитанции в карте с ключом арендатора/ящика;
+// заглушки журнала/отчётов не доказывают устойчивое восстановление и защиту БД.
 type memory struct {
 	port.ReconciliationRepository
 	mu   sync.Mutex
 	rows map[string]port.Record
 }
 
+// Remember accepts fixture owner bindings without persisting a reconciliation
+// journal; tests requiring durable linkage must use the PostgreSQL repository.
+// Remember принимает тестовые привязки владельца без сохранения журнала сверки;
+// проверки устойчивой связи должны использовать PostgreSQL-репозиторий.
 func (m *memory) Remember(context.Context, port.Scope, port.Record, port.OwnerReceipt, time.Time) error {
 	return nil
 }
 
+// Reserve holds the fixture mutex while reserving or replaying one scoped key,
+// preventing concurrent map mutations from manufacturing duplicate fixture effects.
+// Reserve удерживает мьютекс при резервировании или повторном чтении ключа области,
+// не позволяя конкурентным изменениям карты создавать повторные тестовые эффекты.
 func (m *memory) Reserve(_ context.Context, s port.Scope, key, digest, id, resource string, audit port.Audit) (port.Record, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.reserve(s, key, digest, id, resource, audit)
 }
 
+// reserve requires the caller to hold the mutex; it rejects changed input or a
+// resource already locked by an unknown outcome and otherwise creates UNKNOWN.
+// reserve требует удержания мьютекса; отклоняет изменённый ввод и ресурс, занятый
+// неопределённым исходом, а в остальных случаях создаёт квитанцию UNKNOWN.
 func (m *memory) reserve(s port.Scope, key, digest, id, resource string, audit port.Audit) (port.Record, bool, error) {
 	k := s.Tenant + "/" + s.Mailbox + "/" + key
 	if r, ok := m.rows[k]; ok {
@@ -377,6 +439,10 @@ func (m *memory) reserve(s port.Scope, key, digest, id, resource string, audit p
 	return r, true, nil
 }
 
+// ReserveEffect checks the fixture source and lease expiry before reserving;
+// only a newly created receipt receives initial report version one.
+// ReserveEffect проверяет тестовый источник и срок аренды перед резервированием;
+// начальная версия отчёта один назначается только новой квитанции.
 func (m *memory) ReserveEffect(_ context.Context, s port.Scope, record port.Record, source port.ReportSource) (port.Record, bool, error) {
 	if !source.Valid() || !source.Binding.Lease.ExpiresAt.After(time.Now()) {
 		return port.Record{}, false, errs.Invalid
@@ -391,6 +457,10 @@ func (m *memory) ReserveEffect(_ context.Context, s port.Scope, record port.Reco
 	return r, created, err
 }
 
+// CompleteEffect atomically checks the current fixture report version, advances
+// it and stores the supplied status; it does not model a durable pending-report queue.
+// CompleteEffect атомарно проверяет текущую тестовую версию отчёта, увеличивает её
+// и сохраняет заданный статус; устойчивая очередь отчётов здесь не моделируется.
 func (m *memory) CompleteEffect(_ context.Context, s port.Scope, r port.Record, status string, source port.ReportSource) (port.Record, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -404,11 +474,30 @@ func (m *memory) CompleteEffect(_ context.Context, s port.Scope, r port.Record, 
 	return r, nil
 }
 
+// PendingReports exposes no background work in the in-memory fixture; report
+// recovery assertions belong to the separately configured durable repository tests.
+// PendingReports не выдаёт фоновую работу в памяти; восстановление отчётов
+// проверяют отдельные тесты с явно настроенным устойчивым репозиторием.
 func (*memory) PendingReports(context.Context, int) ([]port.PendingReport, error) { return nil, nil }
+
+// ClaimReport refuses all fixture background claims, leaving delivery to direct
+// service calls rather than pretending to implement durable lease ownership.
+// ClaimReport отклоняет все фоновые захваты стенда, оставляя передачу прямым
+// вызовам сервиса без имитации устойчивого владения арендой.
 func (*memory) ClaimReport(context.Context, port.PendingReport, time.Duration) (bool, error) {
 	return false, nil
 }
+
+// AcknowledgeReport is a no-op interface stub; it neither changes fixture rows
+// nor proves acknowledgement persistence across a process restart.
+// AcknowledgeReport — пустая заглушка интерфейса: она не меняет строки стенда
+// и не доказывает сохранность подтверждения после перезапуска процесса.
 func (*memory) AcknowledgeReport(context.Context, port.PendingReport) error { return nil }
+
+// Complete replaces the scoped fixture record with the requested status under
+// the mutex; unlike CompleteEffect it does not check or advance report versions.
+// Complete под мьютексом заменяет квитанцию области с заданным статусом;
+// в отличие от CompleteEffect версии отчётов здесь не проверяются и не увеличиваются.
 func (m *memory) Complete(_ context.Context, s port.Scope, r port.Record, status string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -416,6 +505,11 @@ func (m *memory) Complete(_ context.Context, s port.Scope, r port.Record, status
 	m.rows[s.Tenant+"/"+s.Mailbox+"/"+r.Key] = r
 	return nil
 }
+
+// Get searches only the requested tenant/mailbox prefix for either receipt ID
+// or effect key; an absent match returns NotFound without crossing fixture scopes.
+// Get ищет идентификатор квитанции либо ключ эффекта только внутри заданного
+// арендатора/ящика; отсутствие совпадения возвращает NotFound без выхода из области.
 func (m *memory) Get(_ context.Context, s port.Scope, id, key string) (port.Record, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -426,8 +520,23 @@ func (m *memory) Get(_ context.Context, s port.Scope, id, key string) (port.Reco
 	}
 	return port.Record{}, errs.NotFound
 }
+
+// Configuration accepts fixture snapshots without a rollback watermark; only
+// the durable repository tests exercise persistent configuration monotonicity.
+// Configuration принимает тестовые снимки без границы отката; устойчивую
+// монотонность конфигурации проверяют только тесты настоящего репозитория.
 func (m *memory) Configuration(context.Context, api.Configuration, string) error { return nil }
-func (m *memory) Ready(context.Context) error                                    { return nil }
+
+// Ready always reports this in-memory stub available and performs no dependency
+// probe; it cannot establish readiness of PostgreSQL or a remote mail provider.
+// Ready всегда объявляет заглушку памяти доступной без проверки зависимостей;
+// это не доказывает готовность PostgreSQL и удалённого почтового провайдера.
+func (m *memory) Ready(context.Context) error { return nil }
+
+// configuration builds a synthetic mailbox with bounded messages, two recipients
+// and all operations allowed; TLS mode chooses the fixture SMTP/POP port pair.
+// configuration создаёт искусственный ящик с лимитами, двумя получателями
+// и разрешёнными операциями; режим TLS выбирает пару тестовых SMTP/POP-портов.
 func configuration(mode string) api.Configuration {
 	d := func(name string) api.Descriptor { return api.Descriptor{Name: name, Generation: 1} }
 	endpoint := api.Endpoint{Host: "mail.example.test", ServerName: "mail.example.test", Port: 465, TlsMode: api.EndpointTlsMode(mode), Ca: d("ca"), Username: d("user"), AuthMethod: "password", Secret: d("password")}
@@ -443,7 +552,10 @@ func configuration(mode string) api.Configuration {
 	return api.Configuration{Version: "email-bridge/v1", Revision: 1, ManagedBy: "git", Source: "fixture", Mailboxes: []api.Mailbox{box}}
 }
 
-// Одна disposable БД использует один immutable configuration digest во всех tests.
+// receiptConfiguration supplies the same immutable IMAP-enabled configuration
+// digest to tests sharing one disposable database, avoiding unrelated revision conflicts.
+// receiptConfiguration задаёт одинаковый неизменяемый хеш конфигурации с IMAP
+// тестам одной временной БД, исключая посторонние конфликты ревизий.
 func receiptConfiguration() api.Configuration {
 	c := configuration("implicit")
 	c.Mailboxes[0].ReceiveProtocol = "imap"
@@ -452,6 +564,11 @@ func receiptConfiguration() api.Configuration {
 	c.Mailboxes[0].Imap = &endpoint
 	return c
 }
+
+// service wires the real mail service to local transports and synthetic authority;
+// an optional repository must also implement report and reconciliation ports.
+// service подключает настоящий почтовый сервис к локальным транспортам и тестовым
+// полномочиям; переданный репозиторий также обязан поддерживать отчёты и сверку.
 func service(t *testing.T, f *providerFixture, mode string, store port.Repository) (*mail.Service, *secrets, *authorityFixture) {
 	t.Helper()
 	sec := &secrets{ca: f.ca}
@@ -463,15 +580,29 @@ func service(t *testing.T, f *providerFixture, mode string, store port.Repositor
 	return s, sec, auth
 }
 
+// executionContext preserves an existing execution binding or installs the
+// synthetic fixture binding; this helper does not authenticate a real caller.
+// executionContext сохраняет существующую привязку выполнения либо добавляет
+// тестовую; этот помощник не аутентифицирует настоящего вызывающего клиента.
 func executionContext(ctx context.Context) context.Context {
 	if api.ExecutionFromContext(ctx) != nil {
 		return ctx
 	}
 	return api.WithExecutionBinding(ctx, executionFixture())
 }
+
+// send creates a deterministic synthetic command with one text attachment;
+// reply/forward tests add their source identity before invoking the service.
+// send создаёт определённую искусственную команду с текстовым вложением;
+// тесты ответа/пересылки добавляют идентификатор источника перед вызовом сервиса.
 func send(op api.Operation, key string) api.Command {
 	return api.Command{Operation: op, MailboxId: "mailbox", EffectKey: key, Message: api.MessageInput{From: "sender@example.test", To: "recipient@example.test", Subject: "Fixture", BodyText: "Message body", Attachments: []api.Attachment{{Filename: "hello.txt", ContentType: "text/plain", ContentBase64: base64.StdEncoding.EncodeToString([]byte("hello"))}}}}
 }
+
+// execute invokes the service with fixture caller credentials and an execution
+// binding, failing the current test on error while leaving status assertions to callers.
+// execute вызывает сервис с тестовыми реквизитами и привязкой выполнения;
+// ошибка прерывает тест, а проверку статуса результата выполняет вызывающий код.
 func execute(t *testing.T, s *mail.Service, c api.Command) api.Result {
 	t.Helper()
 	r, e := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture-token", c)
@@ -481,6 +612,10 @@ func execute(t *testing.T, s *mail.Service, c api.Command) api.Result {
 	return r
 }
 
+// TestProtocolOperations exercises synthetic SMTP/POP reads, MIME and mutation
+// replay over implicit TLS and STARTTLS, including stale cursors and unsupported flags.
+// TestProtocolOperations проверяет тестовые SMTP/POP-чтения, MIME и повторы изменений
+// через implicit TLS и STARTTLS, включая устаревшие курсоры и неподдерживаемые флаги.
 func TestProtocolOperations(t *testing.T) {
 	for _, mode := range []string{"implicit", "starttls"} {
 		t.Run(mode, func(t *testing.T) {
@@ -555,6 +690,10 @@ func TestProtocolOperations(t *testing.T) {
 	}
 }
 
+// TestAuthorityBeforeCredentials corrupts decision bindings/scopes and requires
+// refusal before credential reads; revoked fixture credentials must cause no SMTP effect.
+// TestAuthorityBeforeCredentials искажает привязки/области решения и требует отказа
+// до чтения реквизитов; отозванные тестовые реквизиты не должны дать SMTP-эффект.
 func TestAuthorityBeforeCredentials(t *testing.T) {
 	f := newFixture(t, "implicit")
 	for _, name := range []string{"tenant", "user", "agent", "connection", "resource", "gate", "revocation", "generation", "digest", "expiry", "deny"} {
@@ -610,6 +749,10 @@ func TestAuthorityBeforeCredentials(t *testing.T) {
 	}
 }
 
+// TestUnknownTimeoutTLSAndDuplicate keeps lost replies, timeouts and TLS failures
+// UNKNOWN across service replacement, rejects changed input and prevents repeated effects.
+// TestUnknownTimeoutTLSAndDuplicate сохраняет UNKNOWN при потере ответа, тайм-ауте
+// и ошибке TLS после замены сервиса, отклоняет изменённый ввод и повторные эффекты.
 func TestUnknownTimeoutTLSAndDuplicate(t *testing.T) {
 	for _, mode := range []string{"drop", "timeout", "hostname", "ca", "pop-drop"} {
 		t.Run(mode, func(t *testing.T) {
@@ -651,17 +794,14 @@ func TestUnknownTimeoutTLSAndDuplicate(t *testing.T) {
 	}
 }
 
+// TestHTTPSBoundary checks a local mTLS HTTP mutation with execution headers and
+// a typed accepted receipt, then verifies that a request without a bearer is denied.
+// TestHTTPSBoundary проверяет локальное изменение по mTLS HTTP с заголовками выполнения
+// и типизированной квитанцией, затем отказ запросу без bearer-токена.
 func TestHTTPSBoundary(t *testing.T) {
 	f := newFixture(t, "implicit")
 	s, _, _ := service(t, f, "implicit", nil)
-	server := httptest.NewUnstartedServer(httptransport.Handler{Service: s})
-	ca := x509.NewCertPool()
-	ca.AppendCertsFromPEM(f.ca)
-	server.TLS = &tls.Config{Certificates: []tls.Certificate{f.cert}, ClientCAs: ca, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS12}
-	server.StartTLS()
-	defer server.Close()
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: ca, Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12}}}
-	defer client.CloseIdleConnections()
+	server, client := httpsFixture(t, f, httptransport.Handler{Service: s})
 	raw, _ := json.Marshal(send(api.OperationSend, "https").Message)
 	request, _ := http.NewRequestWithContext(t.Context(), "POST", server.URL+"/v1/messages?sender=sender%40example.test", bytes.NewReader(raw))
 	request.Header.Set("Content-Type", "application/json")
@@ -693,6 +833,10 @@ func TestHTTPSBoundary(t *testing.T) {
 	}
 }
 
+// TestPostgresEffects requires the disposable database fixture to verify concurrent
+// deduplication, durable UNKNOWN/resource locks, scoped reads and configuration rollback refusal.
+// TestPostgresEffects требует временную БД для проверки конкурентной дедупликации,
+// сохранности UNKNOWN/блокировок, чтений в области и запрета отката конфигурации.
 func TestPostgresEffects(t *testing.T) {
 	store := postgresFixture(t)
 	pool := store.Pool
@@ -767,6 +911,10 @@ func TestPostgresEffects(t *testing.T) {
 	}
 }
 
+// TestProjectedCredentialRevocation uses temporary dummy files to ensure removal
+// is observed on the next read and traversal-like descriptors cannot escape the root.
+// TestProjectedCredentialRevocation использует временные условные файлы, проверяя
+// отзыв при следующем чтении и запрет выхода дескрипторов за корневой каталог.
 func TestProjectedCredentialRevocation(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "credential", "1")
@@ -793,6 +941,10 @@ func TestProjectedCredentialRevocation(t *testing.T) {
 	}
 }
 
+// TestCONNECTTransport tunnels local SMTP STARTTLS and POP STLS through a bounded
+// fixture proxy with policy readback, and requires refusal for an unlisted destination.
+// TestCONNECTTransport передаёт локальные SMTP STARTTLS и POP STLS через ограниченный
+// тестовый прокси с данными политики и требует отказа для неразрешённого адреса.
 func TestCONNECTTransport(t *testing.T) {
 	f := newFixture(t, "starttls")
 	s, _, _ := service(t, f, "starttls", nil)

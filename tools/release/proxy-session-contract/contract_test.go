@@ -33,7 +33,10 @@ import (
 	redisstore "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/sessions/redis"
 )
 
-// Оснастка запускает только свой контейнер с loopback port и одноразовыми данными.
+// TestProxySessionContract checks cookie and Redis-backed OAuth session behavior through
+// one disposable loopback-only container, including refresh races, restart and fail-closed paths.
+// RU: TestProxySessionContract проверяет cookie- и Redis-сессии OAuth через один одноразовый
+// контейнер только на loopback, включая гонки обновления, перезапуск и закрытые отказы.
 func TestProxySessionContract(t *testing.T) {
 	if os.Getenv("KODEX_PROXY_SESSION_CONTAINER_TEST") != "1" {
 		t.Skip("explicit local container profile required")
@@ -249,12 +252,18 @@ func TestProxySessionContract(t *testing.T) {
 		}
 	})
 }
+
+// must fails the fixture immediately when a prerequisite operation returns an error.
+// RU: must немедленно останавливает оснастку, если подготовительная операция вернула ошибку.
 func must(t *testing.T, e error) {
 	t.Helper()
 	if e != nil {
 		t.Fatal("fixture operation failed")
 	}
 }
+
+// save persists an expired-for-refresh synthetic session and returns its cookie-bearing request.
+// RU: save сохраняет синтетическую сессию с наступившим сроком обновления и возвращает запрос с cookie.
 func save(t *testing.T, s sessionsapi.SessionStore) (*http.Request, error) {
 	t.Helper()
 	req := httptest.NewRequest("GET", "https://control.fixture.test/", nil)
@@ -270,6 +279,9 @@ func save(t *testing.T, s sessionsapi.SessionStore) (*http.Request, error) {
 	}
 	return req, nil
 }
+
+// runConcurrent sends two requests to independent stores and checks refresh and acceptance cardinality.
+// RU: runConcurrent отправляет два запроса независимым хранилищам и проверяет число обновлений и допусков.
 func runConcurrent(t *testing.T, a, b sessionsapi.SessionStore, expected int32, delay ...time.Duration) {
 	t.Helper()
 	req, e := save(t, a)
@@ -331,6 +343,8 @@ func runConcurrent(t *testing.T, a, b sessionsapi.SessionStore, expected int32, 
 	}
 }
 
+// consume passes a stored session through the proxy middleware and reports whether it was accepted.
+// RU: consume проводит сохранённую сессию через middleware прокси и сообщает, была ли она допущена.
 func consume(store sessionsapi.SessionStore, req *http.Request, refresh func(context.Context, *sessionsapi.SessionState) (bool, error)) bool {
 	accepted := false
 	handler := middleware.NewScope(false, "", nil)(middleware.NewStoredSessionLoader(&middleware.StoredSessionLoaderOptions{SessionStore: store, RefreshPeriod: time.Hour, RefreshSession: refresh, ValidateSession: func(_ context.Context, s *sessionsapi.SessionState) bool {
@@ -342,9 +356,16 @@ func consume(store sessionsapi.SessionStore, req *http.Request, refresh func(con
 	return accepted
 }
 
+// fixtureRefreshError models a provider-side invalid_grant response that revokes a session.
+// RU: fixtureRefreshError моделирует ответ провайдера invalid_grant, отзывающий сессию.
 type fixtureRefreshError struct{}
 
+// Error returns the exact synthetic provider error classified as an authoritative revocation.
+// RU: Error возвращает точную синтетическую ошибку провайдера, означающую авторитетный отзыв.
 func (*fixtureRefreshError) Error() string { return "invalid_grant" }
+
+// makeTLS writes an ephemeral CA and localhost server certificate for the isolated Redis fixture.
+// RU: makeTLS создаёт временный CA и сертификат сервера localhost для изолированной Redis-оснастки.
 func makeTLS(t *testing.T, dir string) {
 	t.Helper()
 	key, e := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// TestRetryOperationLockReleaseRecoversAfterTemporaryFailure accepts success after bounded transient failures.
+// RU: TestRetryOperationLockReleaseRecoversAfterTemporaryFailure проверяет успех после временных отказов.
 func TestRetryOperationLockReleaseRecoversAfterTemporaryFailure(t *testing.T) {
 	t.Parallel()
 	attempts := 0
@@ -22,6 +24,8 @@ func TestRetryOperationLockReleaseRecoversAfterTemporaryFailure(t *testing.T) {
 	}
 }
 
+// TestRetryOperationLockReleaseStopsOnContext returns the observed failure after cancellation without another attempt.
+// RU: TestRetryOperationLockReleaseStopsOnContext возвращает наблюдённый отказ после отмены без новой попытки.
 func TestRetryOperationLockReleaseStopsOnContext(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -36,6 +40,8 @@ func TestRetryOperationLockReleaseStopsOnContext(t *testing.T) {
 	}
 }
 
+// TestRetryOperationLockReleaseStopsWhenAttemptCancelsContext preserves a failure that cancels its own retry budget.
+// RU: TestRetryOperationLockReleaseStopsWhenAttemptCancelsContext сохраняет отказ, отменивший собственный бюджет повтора.
 func TestRetryOperationLockReleaseStopsWhenAttemptCancelsContext(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())

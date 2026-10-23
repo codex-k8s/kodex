@@ -23,29 +23,49 @@ import (
 )
 
 const (
-	firstPodUID  = "11111111-1111-4111-8111-111111111111"
+	// firstPodUID supplies a deterministic valid first replica identity without resolving any real Pod.
+	// firstPodUID задаёт постоянную корректную идентичность первой реплики без поиска настоящего Pod.
+	firstPodUID = "11111111-1111-4111-8111-111111111111"
+	// secondPodUID supplies a distinct valid contender so simulated CAS/election races cannot share holder identity.
+	// secondPodUID задаёт другого корректного кандидата, чтобы искусственные гонки CAS и выборов не разделяли идентичность держателя.
 	secondPodUID = "22222222-2222-4222-8222-222222222222"
 )
 
+// testElection shortens local lease/renew/retry intervals while preserving client-go's required ordering.
+// testElection сокращает локальные интервалы аренды, продления и повторов, сохраняя обязательный порядок client-go.
 var testElection = electionTiming{3 * time.Second, time.Second, 50 * time.Millisecond}
 
+// workAvailabilityFunc injects a synthetic work-source callback for controlled cancellation and join tests.
+// workAvailabilityFunc подставляет искусственный источник работы для управляемых проверок отмены и ожидания завершения.
 type workAvailabilityFunc func(context.Context) (WorkAvailability, error)
 
+// GetAvailability forwards the exact caller context and returns the callback result without introducing external I/O.
+// GetAvailability передаёт точный контекст вызывающего и возвращает результат обработчика без добавления внешнего ввода-вывода.
 func (fn workAvailabilityFunc) GetAvailability(ctx context.Context) (WorkAvailability, error) {
 	return fn(ctx)
 }
 
+// testLeaderLease returns a fresh precreated, labelled lease fixture with stable UID and initial resource version.
+// It has no holder until the synthetic election acquires it.
+// testLeaderLease возвращает новую фикстуру заранее созданной аренды с меткой, постоянным UID и начальной версией ресурса.
+// Держателя нет до захвата искусственными выборами.
 func testLeaderLease() *coordinationv1.Lease {
 	return &coordinationv1.Lease{ObjectMeta: metav1.ObjectMeta{Namespace: "kodex-system", Name: LeaderLeaseName,
 		UID: "lease-fixture", ResourceVersion: "1", Labels: map[string]string{"app.kubernetes.io/name": "image-admission-controller"}}}
 }
 
-// Fake tracker не проверяет RV автоматически. Reactor воспроизводит обязательный
-// CAS API server, иначе тест двух election loops дал бы ложное доказательство.
+// leaderClient creates an available fake API with explicit resource-version CAS, which the plain tracker does not enforce.
+// This prevents two local election loops from incorrectly proving exclusivity against an unconstrained fake.
+// leaderClient создаёт доступный искусственный API с явным CAS версии ресурса, которого нет у обычного tracker.
+// Это не даёт двум локальным циклам выборов ложно доказать исключительность на неограниченной заглушке.
 func leaderClient() *fake.Clientset {
 	return leaderClientWithOutage(nil)
 }
 
+// leaderClientWithOutage serializes fake lease updates, checks UID/resource version and advances versions on success.
+// An optional atomic switch rejects updates to simulate renew failure; all operations stay in the fake object tracker.
+// leaderClientWithOutage сериализует искусственные обновления аренды, проверяет UID и версию и продвигает версии при успехе.
+// Необязательный атомарный переключатель отклоняет обновления для имитации сбоя продления; операции остаются в fake tracker.
 func leaderClientWithOutage(failed *atomic.Bool) *fake.Clientset {
 	client := fake.NewClientset(testPolicy(), testLeaderLease())
 	var mutex sync.Mutex
@@ -75,6 +95,10 @@ func leaderClientWithOutage(failed *atomic.Bool) *fake.Clientset {
 	return client
 }
 
+// leaderController constructs a controller against the fake client and renderer, injects optional work and pins leadership.
+// It shortens only the reconcile interval and fails the test if construction or read-only lease configuration fails.
+// leaderController создаёт контроллер с искусственными клиентом и renderer, подставляет необязательную работу и закрепляет лидерство.
+// Сокращается только интервал согласования; ошибка создания или настройки аренды чтением завершает тест.
 func leaderController(t *testing.T, client *fake.Clientset, identity string, source WorkSource) *Controller {
 	t.Helper()
 	config := testConfig()
@@ -92,6 +116,10 @@ func leaderController(t *testing.T, client *fake.Clientset, identity string, sou
 	return controller
 }
 
+// awaitLeaderCondition polls a synthetic-state predicate every ten milliseconds until it holds or the caller context expires.
+// Its ticker is stopped on every return; timeout fails the current test instead of starting an unbounded wait.
+// awaitLeaderCondition опрашивает условие искусственного состояния каждые десять миллисекунд до успеха или истечения контекста.
+// При любом возврате ticker останавливается; таймаут завершает тест вместо неограниченного ожидания.
 func awaitLeaderCondition(t *testing.T, ctx context.Context, condition func() bool) {
 	t.Helper()
 	ticker := time.NewTicker(10 * time.Millisecond)
@@ -105,6 +133,10 @@ func awaitLeaderCondition(t *testing.T, ctx context.Context, condition func() bo
 	}
 }
 
+// TestLeaderRequiresExactPrecreatedLeaseAndNeverCreatesIt rejects missing leases, non-UID identity and unconfigured Run.
+// The fake action log must contain only reads, proving no synthetic startup object was created or updated.
+// TestLeaderRequiresExactPrecreatedLeaseAndNeverCreatesIt отклоняет отсутствие аренды, идентичность не-UID и Run без настройки.
+// Журнал искусственных действий должен содержать только чтение, без создания или обновления объекта при запуске.
 func TestLeaderRequiresExactPrecreatedLeaseAndNeverCreatesIt(t *testing.T) {
 	client := fake.NewClientset(testPolicy())
 	controller, err := New(client, testRenderer{}, testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -127,6 +159,10 @@ func TestLeaderRequiresExactPrecreatedLeaseAndNeverCreatesIt(t *testing.T) {
 	}
 }
 
+// TestLeaderLockPreservesUIDAndUsesServerVersionCAS makes one contender win and rejects a stale update from the other.
+// Replacing the fixture UID must also fail reads, readiness and cached updates; runtime creation remains forbidden.
+// TestLeaderLockPreservesUIDAndUsesServerVersionCAS даёт победить одному кандидату и отклоняет устаревшее обновление второго.
+// Замена UID фикстуры также должна нарушить чтение, готовность и кешированное обновление; создание во время работы запрещено.
 func TestLeaderLockPreservesUIDAndUsesServerVersionCAS(t *testing.T) {
 	client := leaderClient()
 	one := leaderController(t, client, firstPodUID, nil)
@@ -168,6 +204,12 @@ func TestLeaderLockPreservesUIDAndUsesServerVersionCAS(t *testing.T) {
 	}
 }
 
+// TestTwoAdmissionReplicasMaterializeOnceAndTakeOverExistingGraph runs two local election loops against CAS-aware fake storage.
+// It checks joined cancellation, no early release, eventual takeover without duplicate Jobs/PVCs and only get/update lease verbs.
+// This is synthetic concurrency evidence, not a live Kubernetes availability test.
+// TestTwoAdmissionReplicasMaterializeOnceAndTakeOverExistingGraph запускает два локальных цикла выборов с учитывающим CAS хранилищем.
+// Проверяются ожидание отмены, отсутствие раннего освобождения, смена без дубликатов Jobs/PVC и только get/update для аренды.
+// Это искусственное доказательство конкурентности, а не проверка доступности живого Kubernetes.
 func TestTwoAdmissionReplicasMaterializeOnceAndTakeOverExistingGraph(t *testing.T) {
 	client := leaderClient()
 	controllers := []*Controller{leaderController(t, client, firstPodUID, nil), leaderController(t, client, secondPodUID, nil)}
@@ -240,6 +282,10 @@ func TestTwoAdmissionReplicasMaterializeOnceAndTakeOverExistingGraph(t *testing.
 	}
 }
 
+// TestLeadershipLossCancelsAndJoinsReconcileBeforeReturning blocks synthetic work after cancellation and forces renew failure.
+// The leader must not return before work is released, and the failed worker must not create or delete objects.
+// TestLeadershipLossCancelsAndJoinsReconcileBeforeReturning задерживает искусственную работу после отмены и вызывает сбой продления.
+// Лидер не должен вернуться до разрешения завершить работу, а неуспешный worker не должен создавать или удалять объекты.
 func TestLeadershipLossCancelsAndJoinsReconcileBeforeReturning(t *testing.T) {
 	failed := &atomic.Bool{}
 	client := leaderClientWithOutage(failed)
@@ -290,6 +336,10 @@ func TestLeadershipLossCancelsAndJoinsReconcileBeforeReturning(t *testing.T) {
 	}
 }
 
+// TestCanceledLeaderContextDoesNotMaterialize requires an already canceled reconciler to return cancellation without writes.
+// It also rejects an empty foreign lease; fake action history is inspected instead of a live cluster.
+// TestCanceledLeaderContextDoesNotMaterialize требует возврата отмены уже отменённого согласования без записей.
+// Также отклоняется пустая чужая аренда; проверяется история искусственных действий, а не живой кластер.
 func TestCanceledLeaderContextDoesNotMaterialize(t *testing.T) {
 	client := leaderClient()
 	controller := leaderController(t, client, firstPodUID, nil)
@@ -308,6 +358,10 @@ func TestCanceledLeaderContextDoesNotMaterialize(t *testing.T) {
 	}
 }
 
+// TestFollowerCannotEnterReconcileThroughFormerLeaderLoop rejects reconciliation when the configured contender is not holder.
+// Every observed fake API action must remain read-only, with no bypass through the lower-level loop.
+// TestFollowerCannotEnterReconcileThroughFormerLeaderLoop отклоняет согласование, если настроенный кандидат не держит аренду.
+// Все наблюдаемые действия искусственного API должны оставаться чтением, без обхода через нижележащий цикл.
 func TestFollowerCannotEnterReconcileThroughFormerLeaderLoop(t *testing.T) {
 	client := leaderClient()
 	controller := leaderController(t, client, firstPodUID, nil)

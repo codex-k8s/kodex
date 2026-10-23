@@ -10,15 +10,27 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// observeFinancial allows at most 63 ordinary observations, reserving the last slot for final collection.
+// observeFinancial разрешает максимум63 обычных наблюдения, оставляя последний слот итоговому сбору.
 func (server *appServer) observeFinancial(ctx context.Context, state *protocolState) error {
 	// Последний из 64 слотов сохраняется для чтения перед stop/join.
 	return server.observeFinancialWithinBudget(ctx, state, 63)
 }
 
+// observeFinancialFinal permits the reserved 64th observation; its caller owns process stop/join ordering.
+// observeFinancialFinal разрешает зарезервированное64-е наблюдение; порядок stop/join задаёт вызывающий код.
 func (server *appServer) observeFinancialFinal(ctx context.Context, state *protocolState) error {
 	return server.observeFinancialWithinBudget(ctx, state, 64)
 }
 
+// observeFinancialWithinBudget clears the wake flag and reads only while enabled and below the limit.
+// After an auth epoch change it rechecks ordinary account type, then accepts a financial snapshot only
+// for the private expected identity and unchanged bound epoch. Method absence or the pinned no-snapshot
+// RPC outcome yields UNAVAILABLE; other failures propagate. Notifications alone never grant admission.
+// observeFinancialWithinBudget снимает флаг пробуждения и читает лишь при включённом сборе ниже лимита.
+// После смены auth epoch она заново проверяет тип аккаунта и принимает финансовый снимок только для
+// ожидаемой приватной идентичности при неизменной привязанной epoch. Отсутствующий метод или точный
+// закреплённый ответ об отсутствии снимка дают UNAVAILABLE; другие ошибки сохраняются. Уведомление не даёт допуска.
 func (server *appServer) observeFinancialWithinBudget(ctx context.Context, state *protocolState, maximumSequence int64) error {
 	state.financialWake = false
 	if !state.financialEnabled || state.financialSequence >= maximumSequence {
@@ -75,8 +87,14 @@ func (server *appServer) observeFinancialWithinBudget(ctx context.Context, state
 	return state.publishActivity(runtimecontract.RuntimeActivity{Financial: &observation})
 }
 
-// Nullable identity и смена sealed process/auth epoch не становятся measurement.
-// Expected ID назначен private pinned snapshot; значение не включается в ошибки.
+// financialResponseBound checks bounded UTF-8 JSON without duplicate keys and compares accountId to
+// the private expected identity. Missing/null identity or no expected binding means unavailable, not
+// trusted measurement; malformed or foreign identity is an error without exposing either identifier.
+// Other snapshot fields are parsed by the financial contract, not authenticated by this comparison.
+// financialResponseBound проверяет ограниченный UTF-8 JSON без повторных ключей и сравнивает accountId
+// с приватной ожидаемой идентичностью. Отсутствующая или null-идентичность либо отсутствие привязки
+// дают недоступность, а не доверенное измерение; неверная или чужая идентичность отклоняется без вывода
+// идентификаторов. Остальные поля снимка разбирает финансовый контракт, а не это сравнение.
 func financialResponseBound(raw json.RawMessage, expected string) (bool, error) {
 	if len(raw) > 64<<10 || !utf8.Valid(raw) || rejectDuplicateJSONKeys(raw) != nil {
 		return false, errors.New("Codex financial response is invalid")

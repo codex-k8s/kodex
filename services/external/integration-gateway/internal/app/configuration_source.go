@@ -11,12 +11,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// maximumConfigurationSourceOperation caps provider source reads independently of a larger deployment operation timeout.
+// RU: maximumConfigurationSourceOperation ограничивает чтение источника у провайдера независимо от большего runtime-таймаута операции.
 const maximumConfigurationSourceOperation = 20 * time.Second
 
+// configurationSourceAdapter separates provider reads from owner claim and completion RPCs, which remain in the application loop.
+// RU: configurationSourceAdapter отделяет чтение у провайдера от owner RPC получения и завершения работы, остающихся в прикладном цикле.
 type configurationSourceAdapter interface {
+	// ReadConfigurationSource reads the claimed revision within the supplied deadline and returns content with provenance for owner validation.
+	// RU: ReadConfigurationSource читает назначенную ревизию в пределах переданного срока и возвращает содержимое с происхождением для owner-проверки.
 	ReadConfigurationSource(context.Context, *cp.ManagedConfigurationSourceWork) (integration.ConfigurationSourceResult, error)
 }
 
+// processConfigurationSourceWork claims at most one read and reserves one owner request before both lease expiry and work deadline.
+// RU: processConfigurationSourceWork получает не более одного чтения и резервирует один owner-запрос до конца аренды и срока работы.
+// It clears returned bytes and reports classified failure or exact completion once, rejecting foreign or inconsistent receipts.
+// RU: Функция очищает возвращённые байты и однократно сообщает классифицированную ошибку либо точное завершение, отклоняя чужие или несогласованные квитанции.
+// A processed SYNC_BLOCKED receipt is not an accepted configuration; READY additionally requires matching commit and content hashes.
+// RU: Обработанная квитанция SYNC_BLOCKED не означает принятую конфигурацию; READY дополнительно требует совпадения commit и хеша содержимого.
+// Parent cancellation prevents finalization, and a lost completion acknowledgement is returned without replaying the provider read.
+// RU: Отмена родителя запрещает финализацию, а потерянное подтверждение завершения возвращается без повтора чтения у провайдера.
 func processConfigurationSourceWork(ctx context.Context, control cp.ManagedConfigurationSourceWorkServiceClient, adapter configurationSourceAdapter, metrics *businessmetrics.Metrics, config Config) (int, error) {
 	if control == nil {
 		return 0, errors.New("configuration source owner is unavailable")
@@ -88,6 +102,10 @@ func processConfigurationSourceWork(ctx context.Context, control cp.ManagedConfi
 	return 1, nil
 }
 
+// validConfigurationSourceReceipt requires a known-field versioned source with the exact claimed generation, connection and repository path.
+// RU: validConfigurationSourceReceipt требует источник без неизвестных полей, с версией и точными назначенными поколением, подключением и путём репозитория.
+// State and accepted-content checks belong to completion or failure branches, not this common identity predicate.
+// RU: Проверки состояния и принятого содержимого принадлежат веткам завершения либо ошибки, а не этому общему предикату идентичности.
 func validConfigurationSourceReceipt(source *cp.ManagedConfigurationGitSource, work *cp.ManagedConfigurationSourceWork) bool {
 	return source != nil && len(source.ProtoReflect().GetUnknown()) == 0 && source.GetRef() == work.GetSourceRef() && source.GetVersion() > 0 && source.GetGeneration() == work.GetLease().GetSourceGeneration() && source.GetConnectionRef() == work.GetConnectionRef() && source.GetProviderKey() == work.GetDefinitionKey() && source.GetRepositoryRef() == work.GetRepositoryRef() && source.GetRefName() == work.GetRefName() && source.GetPath() == work.GetPath()
 }

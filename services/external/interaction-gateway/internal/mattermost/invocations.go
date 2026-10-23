@@ -18,15 +18,28 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// maximumInvocationOutput caps the validated canonical result summary in bytes before an effect receipt is accepted.
+// RU: maximumInvocationOutput ограничивает проверенное каноническое резюме результата в байтах до принятия квитанции эффекта.
 const maximumInvocationOutput = 64 << 10
+
+// credentialSecretPrefix confines descriptors to the configured shared credential Secret; ReadKey independently validates the selected key path.
+// RU: credentialSecretPrefix ограничивает descriptor заданным общим Secret реквизитов; ReadKey независимо проверяет путь выбранного ключа.
 const credentialSecretPrefix = "kodex-system/kodex-integration-credentials#"
 
+// errInvocation rejects a capability, bounded input or scope inconsistent with the selected executable package.
+// RU: errInvocation отклоняет capability, ограниченный ввод или область, несовместимые с выбранным исполняемым пакетом.
 var errInvocation = errors.New("mattermost invocation is invalid")
 
+// unknownInvocationError records that an attempted external mutation has no trustworthy final receipt and must not be blindly repeated.
+// RU: unknownInvocationError обозначает попытку внешнего изменения без достоверной итоговой квитанции, которую нельзя слепо повторять.
 type unknownInvocationError struct{}
 
+// Error returns a fixed diagnostic without embedding provider payload, credential or raw transport error.
+// RU: Error возвращает фиксированную диагностику без payload провайдера, реквизитов или сырой транспортной ошибки.
 func (*unknownInvocationError) Error() string { return "mattermost invocation outcome is unknown" }
 
+// InvocationOutcome maps adapter errors to success, a closed safe code and an explicit unknown-effect bit, never raw provider text.
+// RU: InvocationOutcome отображает ошибки адаптера в успех, закрытый безопасный код и явный признак неизвестного эффекта, не выдавая сырой текст провайдера.
 func InvocationOutcome(err error) (bool, string, bool) {
 	if err == nil {
 		return true, "", false
@@ -53,6 +66,8 @@ func InvocationOutcome(err error) (bool, string, bool) {
 	}
 }
 
+// Execute validates the exact managed claim, creates a credential-bound client and runs its operation within the selected capability deadline.
+// RU: Execute проверяет точный управляемый claim, создаёт привязанный к реквизитам клиент и выполняет операцию в срок выбранной capability.
 func (adapter *Adapter) Execute(ctx context.Context, claim *controlplanev1.IntegrationInvocationClaim) (*controlplanev1.IntegrationEffectReceipt, error) {
 	capability, configuration, input, err := adapter.validateInvocation(claim)
 	if err != nil {
@@ -68,6 +83,10 @@ func (adapter *Adapter) Execute(ctx context.Context, claim *controlplanev1.Integ
 	return executeClaim(operation, client, channel, claim, capability, input)
 }
 
+// executeClaim executes typed provider work, validates bounded canonical output and hashes that exact output into an intent-bound receipt.
+// RU: executeClaim выполняет типизированную работу провайдера, проверяет ограниченный канонический результат и хеширует его точные байты в квитанцию с привязкой к intent.
+// Attempted mutations with unproven failure or invalid output remain unknown; a read failure is not converted into a write effect.
+// RU: Попытки изменения с недоказанным отказом или неверным результатом остаются неизвестными; отказ чтения не превращается в эффект записи.
 func executeClaim(ctx context.Context, client *model.Client4, channel *model.Channel, claim *controlplanev1.IntegrationInvocationClaim, capability integrationpackage.Capability, input operationInput) (*controlplanev1.IntegrationEffectReceipt, error) {
 	output, providerRef, attempted, err := executeOperation(ctx, client, channel, claim.GetOperation(), input)
 	if err != nil {
@@ -90,6 +109,10 @@ func executeClaim(ctx context.Context, client *model.Client4, channel *model.Cha
 	return &controlplanev1.IntegrationEffectReceipt{EffectKey: claim.GetEffectKey(), InputDigest: claim.GetInputDigest(), ProviderEffectRef: providerRef, ResponseDigest: hex.EncodeToString(digest[:]), ResultSummary: string(body)}, nil
 }
 
+// TestConnection permits only the pinned package's READ/NONE health operation and validates its output within the smaller health/capability budget.
+// RU: TestConnection допускает только health-операцию READ/NONE закреплённого пакета и проверяет результат в меньшем из бюджетов health и capability.
+// It uses the working credential/channel path and returns a catalog key rather than provider response content on success.
+// RU: Функция использует рабочий путь реквизитов и канала и при успехе возвращает ключ каталога вместо содержимого ответа провайдера.
 func (adapter *Adapter) TestConnection(ctx context.Context, claim *controlplanev1.IntegrationConnectionTestClaim) (string, error) {
 	definition, err := adapter.claimDefinition(claim.GetDefinitionPackage(), claim.GetDefinitionKey(), claim.GetDefinitionVersion(), claim.GetDefinitionDigest())
 	if err != nil {
@@ -127,6 +150,10 @@ func (adapter *Adapter) TestConnection(ctx context.Context, claim *controlplanev
 	return "i18n:INTEGRATION_TEST_SUCCEEDED", nil
 }
 
+// claimDefinition validates a bounded Mattermost package against the shipped executable baseline, exact key/version/digest and executor route.
+// RU: claimDefinition сверяет ограниченный пакет Mattermost с поставленной исполняемой основой, точными key/version/digest и маршрутом исполнителя.
+// A managed revision is returned per claim without replacing the adapter's shared baseline.
+// RU: Управляемая ревизия возвращается для конкретного claim без замены общей основы адаптера.
 func (adapter *Adapter) claimDefinition(raw []byte, key, version, digest string) (integrationpackage.Package, error) {
 	if key != "mattermost" || len(raw) == 0 || len(raw) > 256<<10 {
 		return integrationpackage.Package{}, errConfiguration
@@ -140,6 +167,10 @@ func (adapter *Adapter) claimDefinition(raw []byte, key, version, digest string)
 	return definition, nil
 }
 
+// validateInvocation binds callable operation, risk, approval, effect key, configuration, exact resource scope and canonical input digest to the managed package.
+// RU: validateInvocation связывает вызываемую операцию, риск, подтверждение, ключ эффекта, настройки, точную область ресурса и дайджест канонического ввода с управляемым пакетом.
+// It validates local claim consistency only; owner authorization and human decisions are not inferred from caller fields.
+// RU: Функция проверяет только локальную согласованность claim; owner-полномочия и человеческие решения не выводятся из полей вызывающей стороны.
 func (adapter *Adapter) validateInvocation(claim *controlplanev1.IntegrationInvocationClaim) (integrationpackage.Capability, map[string]string, operationInput, error) {
 	invalid := func(err error) (integrationpackage.Capability, map[string]string, operationInput, error) {
 		return integrationpackage.Capability{}, nil, operationInput{}, err
@@ -178,6 +209,8 @@ func (adapter *Adapter) validateInvocation(claim *controlplanev1.IntegrationInvo
 	return capability, configuration, input, nil
 }
 
+// configurationStrings copies only string-valued protobuf configuration fields into a new map, rejecting numbers, nulls and compound values.
+// RU: configurationStrings копирует только строковые поля protobuf-настроек в новую карту, отклоняя числа, null и составные значения.
 func configurationStrings(value *structpb.Struct) (map[string]string, error) {
 	result := map[string]string{}
 	for key, raw := range value.GetFields() {
@@ -190,6 +223,10 @@ func configurationStrings(value *structpb.Struct) (map[string]string, error) {
 	return result, nil
 }
 
+// invocationClient derives the exact origin/team/channel from validated configuration and opens a scoped client using digest-checked projected credentials.
+// RU: invocationClient выводит точные адрес/команду/канал из проверенной конфигурации и создаёт ограниченный клиент со спроецированными реквизитами, проверенными по дайджесту.
+// Temporary credential bytes are cleared; the returned cleanup releases the SDK client's token field and idle connections.
+// RU: Временные байты реквизитов очищаются; возвращаемый cleanup освобождает поле токена SDK клиента и неактивные соединения.
 func (adapter *Adapter) invocationClient(ctx context.Context, configuration map[string]string, credential *controlplanev1.IntegrationCredentialRevision) (*model.Client4, *model.Channel, func(), error) {
 	source := &controlplanev1.InteractionSource{BaseUrl: configuration["base_url"], TeamName: configuration["team_name"], ChannelName: configuration["channel_name"]}
 	base, err := adapter.baseURL(source.GetBaseUrl())
@@ -205,6 +242,12 @@ func (adapter *Adapter) invocationClient(ctx context.Context, configuration map[
 	return client, channel, cleanup, err
 }
 
+// readInvocationCredential checks descriptor shape and Secret namespace, then waits within the adapter deadline for a safe projected key file.
+// RU: readInvocationCredential проверяет форму descriptor и пространство Secret, затем в срок адаптера ждёт безопасный спроецированный файл ключа.
+// Returned trimmed bytes must match the declared digest and be bounded and single-line; callers own clearing them after use.
+// RU: Возвращаемые обрезанные байты должны совпадать с заявленным дайджестом, быть ограниченными и однострочными; их очисткой после использования владеет вызывающая сторона.
+// UID/resource-version fields are shape-checked here, not resolved by a Kubernetes API lookup.
+// RU: Поля UID/resource-version здесь проверяются по форме, а не разрешаются запросом Kubernetes API.
 func (adapter *Adapter) readInvocationCredential(ctx context.Context, credential *controlplanev1.IntegrationCredentialRevision) ([]byte, error) {
 	if credential == nil || credential.GetRef() == "" || credential.GetRevision() < 1 || uuid.Validate(credential.GetSecretUid()) != nil || credential.GetSecretResourceVersion() == "" || len(credential.GetSecretResourceVersion()) > 128 || len(credential.GetContentSha256()) != 64 || !strings.HasPrefix(credential.GetSecretRef(), credentialSecretPrefix) {
 		return nil, errCredential

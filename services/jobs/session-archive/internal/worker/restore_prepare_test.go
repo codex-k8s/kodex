@@ -10,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
 
+// restorePreparationTask constructs consistent synthetic restore, archive and derived PVC bindings.
+// RU: restorePreparationTask создаёт согласованные синтетические привязки восстановления, архива и производного PVC.
 func restorePreparationTask(t *testing.T) model.Task {
 	t.Helper()
 	pvc, err := runtimecontract.SessionPVCName("ses_fixture01")
@@ -28,6 +30,8 @@ func restorePreparationTask(t *testing.T) model.Task {
 			ObjectSizeBytes: 1, SourceRelativePath: path, SourceSHA256: digest, SourceSizeBytes: 1}}
 }
 
+// TestRestorePreparationAcceptsOnlyExactRestoreBinding rejects other task kinds and mismatched source or PVC pins.
+// RU: TestRestorePreparationAcceptsOnlyExactRestoreBinding отклоняет другие виды заданий и несовпадающие привязки источника либо PVC.
 func TestRestorePreparationAcceptsOnlyExactRestoreBinding(t *testing.T) {
 	if validateRestorePreparationTask(restorePreparationTask(t)) != nil {
 		t.Fatal("valid restore preparation binding rejected")
@@ -50,7 +54,8 @@ func TestRestorePreparationAcceptsOnlyExactRestoreBinding(t *testing.T) {
 	}
 }
 
-// Вызывается только отдельной kernel-fixture: production CLI и fixed paths те же.
+// TestPrepareRestoredHomeKernelFixture exercises fixed production paths only in the explicitly enabled UID-isolated fixture.
+// RU: TestPrepareRestoredHomeKernelFixture проверяет фиксированные production-пути лишь в явно включённой изолированной по UID оснастке.
 func TestPrepareRestoredHomeKernelFixture(t *testing.T) {
 	if os.Getenv("KODEX_TEST_FULL_RESTORE_ABI") != "1" {
 		return

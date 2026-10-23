@@ -21,6 +21,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
+// admissionPolicyDocument decodes only the policy identity and CEL expression
+// lists needed by local tests; it is not a complete Kubernetes policy schema or
+// a strict unknown-field decoder and is never used to authorize runtime requests.
+// admissionPolicyDocument разбирает лишь identity политики и списки CEL для
+// локальных тестов; это не полная Kubernetes schema, не strict unknown-field
+// decoder и не средство выдачи полномочий runtime-запросам.
 type admissionPolicyDocument struct {
 	Kind     string `json:"kind"`
 	Metadata struct {
@@ -41,6 +47,12 @@ type admissionPolicyDocument struct {
 	} `json:"spec"`
 }
 
+// TestAdmissionPoliciesContainSyntacticallyValidCEL compiles every match condition,
+// variable and validation from the three repository policies in the local dynamic
+// CEL environment; it does not install them or exercise API-server admission.
+// TestAdmissionPoliciesContainSyntacticallyValidCEL компилирует все match conditions,
+// variables и validations трёх политик репозитория в локальном dynamic CEL;
+// установка политик и admission настоящего API server не выполняются.
 func TestAdmissionPoliciesContainSyntacticallyValidCEL(t *testing.T) {
 	policies, err := readAdmissionPolicies()
 	if err != nil {
@@ -54,6 +66,14 @@ func TestAdmissionPoliciesContainSyntacticallyValidCEL(t *testing.T) {
 	}
 }
 
+// TestAdmissionPoliciesAcceptExactRenderedResources renders/prepares every phase
+// with synthetic owner policy, requires zero Job retries and accepts the exact
+// Job/PVC through local CEL evaluation. Missing jq skips this test, not admission
+// enforcement, and rendered resources are never applied to a cluster.
+// TestAdmissionPoliciesAcceptExactRenderedResources создаёт и подготавливает все
+// фазы с искусственной owner policy, требует ноль повторов Job и принятия точных
+// Job/PVC локальным CEL. Отсутствие jq пропускает этот тест, а не enforcement;
+// созданные ресурсы никогда не применяются к кластеру.
 func TestAdmissionPoliciesAcceptExactRenderedResources(t *testing.T) {
 	if _, err := exec.LookPath("jq"); err != nil {
 		t.Skip("jq is required to execute the production renderer")
@@ -62,15 +82,9 @@ func TestAdmissionPoliciesAcceptExactRenderedResources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	byName := make(map[string]admissionPolicyDocument, len(policies))
-	for _, policy := range policies {
-		byName[policy.Metadata.Name] = policy
-	}
+	byName := admissionPoliciesByName(policies)
 	ownerPolicy := completeTestPolicy()
-	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	renderer := newTestScriptRenderer(t)
 	runID := "v20260822120000-" + testOrchestrationRevision
 	for _, phase := range phases {
 		rendered, err := renderer.Render(t.Context(), ownerPolicy, "production", runID, phase)
@@ -98,6 +112,14 @@ func TestAdmissionPoliciesAcceptExactRenderedResources(t *testing.T) {
 	}
 }
 
+// TestAdmissionJobPolicyRejectsPrivilegeExpansion deep-copies the rendered claim
+// Job and separately changes service account, executable image, secret volume or
+// authority endpoint. Each must evaluate to false without a CEL error; the source
+// fixture stays intact, and absent job policy fails the test explicitly.
+// TestAdmissionJobPolicyRejectsPrivilegeExpansion глубоко копирует claim Job
+// и отдельно меняет service account, образ, secret volume либо authority endpoint.
+// Каждый вариант должен дать false без CEL-ошибки; исходная fixture сохраняется,
+// а отсутствие job policy явно завершает тест ошибкой.
 func TestAdmissionJobPolicyRejectsPrivilegeExpansion(t *testing.T) {
 	if _, err := exec.LookPath("jq"); err != nil {
 		t.Skip("jq is required to execute the production renderer")
@@ -107,10 +129,7 @@ func TestAdmissionJobPolicyRejectsPrivilegeExpansion(t *testing.T) {
 		t.Fatal(err)
 	}
 	ownerPolicy := completeTestPolicy()
-	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	renderer := newTestScriptRenderer(t)
 	runID := "v20260822120000-" + testOrchestrationRevision
 	rendered, err := renderer.Render(t.Context(), ownerPolicy, "production", runID, "claim")
 	if err != nil {
@@ -160,6 +179,14 @@ func TestAdmissionJobPolicyRejectsPrivilegeExpansion(t *testing.T) {
 	t.Fatal("job policy is missing")
 }
 
+// TestAdmissionReportMaterializationHasExactRegistryAndAdmitPaths evaluates rendered
+// Jobs in protected/trusted profiles, confines report inputs to admit and rejects
+// altered paths, validator entrypoint and non-exact tool registries. It checks local
+// shell/CEL agreement, not scanner execution, signed evidence or a real image verdict.
+// TestAdmissionReportMaterializationHasExactRegistryAndAdmitPaths проверяет Job
+// protected/trusted-профилей, ограничивает report inputs фазой admit и отклоняет
+// чужие пути, validator entrypoint и неточный реестр инструментов. Проверяется
+// согласованность shell/CEL, не сканирование, signed evidence и реальный допуск.
 func TestAdmissionReportMaterializationHasExactRegistryAndAdmitPaths(t *testing.T) {
 	policies, err := readAdmissionPolicies()
 	if err != nil {
@@ -171,10 +198,7 @@ func TestAdmissionReportMaterializationHasExactRegistryAndAdmitPaths(t *testing.
 			jobPolicy = policy
 		}
 	}
-	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	renderer := newTestScriptRenderer(t)
 	runID := "v20261005120000-" + testOrchestrationRevision
 	for _, profile := range []string{"protected", "trusted-cluster"} {
 		ownerPolicy := completeTestPolicy()
@@ -243,6 +267,14 @@ func TestAdmissionReportMaterializationHasExactRegistryAndAdmitPaths(t *testing.
 	}
 }
 
+// TestAdmissionPoliciesAcceptOnlyExactProofHoldAndRelease accepts a synthetic held
+// Job and its exact unsuspend update with oldObject, then rejects a simultaneous
+// service-account expansion. UID/resourceVersion here are fixture values, not live
+// reservations, and jq absence remains the original explicit test skip.
+// TestAdmissionPoliciesAcceptOnlyExactProofHoldAndRelease принимает искусственный
+// held Job и точное снятие suspend с oldObject, затем отклоняет одновременную замену
+// service account. UID/resourceVersion — данные fixture, не живые reservations;
+// отсутствие jq сохраняет прежний явный пропуск теста.
 func TestAdmissionPoliciesAcceptOnlyExactProofHoldAndRelease(t *testing.T) {
 	if _, err := exec.LookPath("jq"); err != nil {
 		t.Skip("jq is required to execute the production renderer")
@@ -251,15 +283,9 @@ func TestAdmissionPoliciesAcceptOnlyExactProofHoldAndRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	byName := make(map[string]admissionPolicyDocument, len(policies))
-	for _, policy := range policies {
-		byName[policy.Metadata.Name] = policy
-	}
+	byName := admissionPoliciesByName(policies)
 	ownerPolicy := completeTestPolicy()
-	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	renderer := newTestScriptRenderer(t)
 	runID := "v20260909120000-" + testOrchestrationRevision
 	rendered, err := renderer.Render(t.Context(), ownerPolicy, "production", runID, "claim")
 	if err != nil {
@@ -301,6 +327,69 @@ func TestAdmissionPoliciesAcceptOnlyExactProofHoldAndRelease(t *testing.T) {
 	}
 }
 
+// newTestScriptRenderer constructs the existing repository-owned shell renderer
+// with the same path/error handling. It neither runs the script nor inserts jq
+// skips, render calls, policy inputs or phase preparation into a caller's test.
+// newTestScriptRenderer создаёт существующий shell renderer из репозитория
+// с прежними путём и проверкой ошибки. Скрипт, jq skips, render, policy и подготовка
+// фаз остаются в вызывающем тесте и здесь не выполняются.
+func newTestScriptRenderer(t *testing.T) *ScriptRenderer {
+	t.Helper()
+	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return renderer
+}
+
+// admissionPoliciesByName builds a fresh shallow index with the same last-name-wins
+// behavior as the two original loops; it does not validate, deduplicate or reorder
+// the source list used by tests that intentionally inspect its first match.
+// admissionPoliciesByName строит новый неглубокий индекс с прежним приоритетом
+// последнего одинакового имени. Исходный список не проверяется, не очищается
+// от дублей и не переставляется для тестов, выбирающих первое совпадение.
+func admissionPoliciesByName(policies []admissionPolicyDocument) map[string]admissionPolicyDocument {
+	byName := make(map[string]admissionPolicyDocument, len(policies))
+	for _, policy := range policies {
+		byName[policy.Metadata.Name] = policy
+	}
+	return byName
+}
+
+// TestAdmissionPolicyIndexPreservesLastMatchAndInput checks the original duplicate
+// overwrite rule, independent map storage and an allocated empty result for nil
+// input, without interpreting policy expressions or changing list order.
+// TestAdmissionPolicyIndexPreservesLastMatchAndInput проверяет прежнюю замену
+// одинакового имени, независимость map и выделенный пустой результат для nil,
+// не вычисляя выражения политики и не меняя порядок исходного списка.
+func TestAdmissionPolicyIndexPreservesLastMatchAndInput(t *testing.T) {
+	first := admissionPolicyDocument{Kind: "first"}
+	first.Metadata.Name = "duplicate"
+	second := admissionPolicyDocument{Kind: "second"}
+	second.Metadata.Name = "other"
+	last := admissionPolicyDocument{Kind: "last"}
+	last.Metadata.Name = "duplicate"
+	policies := []admissionPolicyDocument{first, second, last}
+	byName := admissionPoliciesByName(policies)
+	if len(byName) != 2 || byName["duplicate"].Kind != "last" || byName["other"].Kind != "second" {
+		t.Fatal("policy index changed duplicate resolution")
+	}
+	delete(byName, "other")
+	byName["duplicate"] = first
+	if len(policies) != 3 || policies[1].Metadata.Name != "other" || policies[2].Kind != "last" {
+		t.Fatal("policy index mutated source list")
+	}
+	if empty := admissionPoliciesByName(nil); empty == nil || len(empty) != 0 {
+		t.Fatal("empty policy index changed allocation behavior")
+	}
+}
+
+// repositoryRoot resolves the fixed five-parent path from this package's test
+// directory to the checkout root and panics if absolute-path resolution fails;
+// it does not search arbitrary directories or discover external installations.
+// repositoryRoot переводит фиксированный путь на пять уровней вверх от тестового
+// пакета в абсолютный корень checkout и паникует при ошибке разрешения; произвольные
+// каталоги и внешние установки не разыскиваются.
 func repositoryRoot() string {
 	root, err := filepath.Abs(filepath.Join("..", "..", "..", "..", ".."))
 	if err != nil {
@@ -309,6 +398,14 @@ func repositoryRoot() string {
 	return root
 }
 
+// readAdmissionPolicies reads the fixed repository manifest, skips empty/non-policy
+// documents and preserves policy order while propagating read/decode failures.
+// The 64KiB YAML decoder setting is a buffer size, not a total input-size limit;
+// this fixture loader does not perform runtime trust or strict schema validation.
+// readAdmissionPolicies читает фиксированный manifest репозитория, пропускает пустые
+// и не-policy документы, сохраняя порядок политик и ошибки чтения/разбора. 64KiB
+// YAML decoder — размер буфера, не общий лимит входа; загрузчик fixture не проверяет
+// runtime trust и не выполняет strict schema validation.
 func readAdmissionPolicies() ([]admissionPolicyDocument, error) {
 	raw, err := os.ReadFile(filepath.Join(repositoryRoot(), "deploy", "k8s", "base",
 		"image-supply-chain", "image-admission-controller-policy.yaml"))
@@ -337,6 +434,14 @@ func readAdmissionPolicies() ([]admissionPolicyDocument, error) {
 	}
 }
 
+// completeTestPolicy returns a fresh synthetic immutable policy with exact fixture
+// digests, repositories and required tools for the real local renderer. Its owner-
+// intent label, identities and image references grant no real approval or access,
+// and the function neither reads private credentials nor contacts those endpoints.
+// completeTestPolicy возвращает новую искусственную immutable policy с точными
+// хешами, repositories и tools для настоящего локального renderer. Owner-intent,
+// identity и image references не выдают реального approval либо доступа; функция
+// не читает закрытые реквизиты и не обращается к указанным адресам.
 func completeTestPolicy() *corev1.ConfigMap {
 	immutable := true
 	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
@@ -362,6 +467,10 @@ func completeTestPolicy() *corev1.ConfigMap {
 	}}
 }
 
+// stringsOf concatenates the fixture string count times; zero or negative counts
+// return empty, preserving the original integer-range behavior without validation.
+// stringsOf соединяет строку fixture count раз; ноль и отрицательное значение дают
+// пустую строку, сохраняя исходное поведение integer range без проверки аргумента.
 func stringsOf(value string, count int) string {
 	result := ""
 	for range count {
@@ -370,6 +479,12 @@ func stringsOf(value string, count int) string {
 	return result
 }
 
+// compilePolicyExpressions compiles all declared expression categories with named
+// failure diagnostics and stops on CEL issues; it does not evaluate variables or
+// validate resources, Kubernetes schema, policy actor membership or cluster state.
+// compilePolicyExpressions компилирует все категории выражений с именованными
+// ошибками и останавливается при CEL issues; variables не вычисляются, ресурсы,
+// Kubernetes schema, actor membership и состояние кластера не проверяются.
 func compilePolicyExpressions(t *testing.T, policy admissionPolicyDocument) {
 	t.Helper()
 	environment, err := newPolicyEnvironment()
@@ -394,6 +509,10 @@ func compilePolicyExpressions(t *testing.T, policy admissionPolicyDocument) {
 	}
 }
 
+// assertPolicyAccepts requires error-free true from the local policy evaluator;
+// evaluation failure is not accepted even when a fixture expects an allowed resource.
+// assertPolicyAccepts требует true без ошибки от локального evaluator; ошибка
+// вычисления не принимается даже для ожидаемо разрешённого ресурса fixture.
 func assertPolicyAccepts(t *testing.T, policy admissionPolicyDocument, object map[string]any, ownerPolicy *corev1.ConfigMap) {
 	t.Helper()
 	accepted, err := evaluateAdmissionPolicy(policy, object, ownerPolicy)
@@ -405,6 +524,12 @@ func assertPolicyAccepts(t *testing.T, policy admissionPolicyDocument, object ma
 	}
 }
 
+// assertPolicyRejects requires error-free false, distinguishing a deliberate policy
+// denial from a broken CEL evaluation. Tests for malformed field types explicitly
+// inspect errors themselves instead of weakening this common assertion.
+// assertPolicyRejects требует false без ошибки, отличая осознанный policy denial
+// от сломанного CEL. Тесты повреждённых типов отдельно рассматривают ошибки,
+// не ослабляя эту общую проверку.
 func assertPolicyRejects(t *testing.T, policy admissionPolicyDocument, object map[string]any, ownerPolicy *corev1.ConfigMap) {
 	t.Helper()
 	accepted, err := evaluateAdmissionPolicy(policy, object, ownerPolicy)
@@ -416,14 +541,34 @@ func assertPolicyRejects(t *testing.T, policy admissionPolicyDocument, object ma
 	}
 }
 
+// evaluateAdmissionPolicy evaluates a create-shaped synthetic resource by supplying
+// nil oldObject to the fixed-controller actor path; it does not call Kubernetes.
+// evaluateAdmissionPolicy проверяет искусственный create-ресурс с nil oldObject
+// через путь фиксированного controller actor, без вызова Kubernetes.
 func evaluateAdmissionPolicy(policy admissionPolicyDocument, object map[string]any, ownerPolicy *corev1.ConfigMap) (bool, error) {
 	return evaluateAdmissionPolicyWithOld(policy, object, nil, ownerPolicy)
 }
 
+// evaluateAdmissionPolicyWithOld uses the synthetic admission-controller service
+// account name and forwards oldObject to select CREATE/UPDATE evaluation. That name
+// is test input, not authentication or proof of a service-account credential.
+// evaluateAdmissionPolicyWithOld задаёт искусственное имя service account контроллера
+// и передаёт oldObject для CREATE/UPDATE. Имя — вход теста, а не аутентификация
+// либо доказательство наличия реквизитов service account.
 func evaluateAdmissionPolicyWithOld(policy admissionPolicyDocument, object, oldObject map[string]any, ownerPolicy *corev1.ConfigMap) (bool, error) {
 	return evaluateAdmissionPolicyForActor(policy, object, oldObject, ownerPolicy, "system:serviceaccount:kodex-system:image-admission-controller")
 }
 
+// evaluateAdmissionPolicyForActor builds synthetic object/params/request activation,
+// checks conditions, evaluates variables in order and requires boolean validations.
+// Compile/program/evaluation errors propagate; a false condition returns false here
+// rather than emulating the API server's complete policy selection/failure lifecycle.
+// The helper neither authenticates actor nor enforces Kubernetes RBAC or schema.
+// evaluateAdmissionPolicyForActor строит искусственные object/params/request,
+// проверяет conditions, по порядку вычисляет variables и требует boolean validations.
+// Ошибки compile/program/evaluation возвращаются; false condition здесь даёт false,
+// а не моделирует полный выбор policy/failure lifecycle API server. Helper
+// не аутентифицирует actor и не применяет Kubernetes RBAC либо schema.
 func evaluateAdmissionPolicyForActor(policy admissionPolicyDocument, object, oldObject map[string]any, ownerPolicy *corev1.ConfigMap, actor string) (bool, error) {
 	environment, err := newPolicyEnvironment()
 	if err != nil {
@@ -508,6 +653,12 @@ func evaluateAdmissionPolicyForActor(policy admissionPolicyDocument, object, old
 	return true, nil
 }
 
+// newPolicyEnvironment declares the five dynamic activation roots and CEL string
+// extensions for test evaluation; dynamic types deliberately do not reproduce the
+// API server's full resource schema or runtime admission configuration.
+// newPolicyEnvironment объявляет пять dynamic-корней activation и CEL string
+// extensions для тестов; dynamic types намеренно не воспроизводят полную schema
+// ресурсов API server и runtime admission configuration.
 func newPolicyEnvironment() (*cel.Env, error) {
 	return cel.NewEnv(
 		cel.Variable("object", cel.DynType),
