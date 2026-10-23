@@ -4,11 +4,64 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.345.0
+version: 1.346.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 346 — подготовка окружений и помощников component fixtures
+
+Код `479489ee8a48d500bc7db8cdc050ec6d9a820e20`. Общая подготовка
+credential-scope и parallel-lifecycle component tests вынесена в существующий
+fixture-файл как `newReadyAssistantComponentService`: прежние Bootstrap,
+observed warm evidence, owner/claim/warm-report principal, GetSystemAssistant
+и ReportWarmRuntime остались побайтно тем же блоком в том же порядке.
+Disposable DSN, context deadline и pool cleanup принадлежат каждому тесту;
+нет общей БД, глобальной state или запуска реального runtime. Возвращается
+также исходный assistant snapshot для поздней проверки точной retry pin.
+
+В runtime configuration create/publish одинаковые policy admission → scoped
+secret resolution → promoted image/tool validation → digest construction
+объединены в `prepareRuntimeEnvironmentContents` с узким prepared value.
+Metadata/scope/OCC, отдельные create/publish/rollback SQL, ошибки, activation,
+owner audit/event/commit остались у команд. Свежая аутентификация использует
+существующий helper с прежними пятью минутами. Все строковые literals файла,
+включая имена StrictNamedArgs и тексты ошибок, совпадают с предшествующим
+источником; SQL-файлы и applied migrations не менялись.
+
+Добавлены 32 предметные EN→RU пары ко всем прежним объявлениям файла команд,
+описаны три новых fixture/content объявления и три reauth unit declaration.
+Итого +38 двуязычных объявлений. Рассмотрены bootstrap platform image,
+catalog fallback, immutable overlay/environment revisions, exact image tools,
+secret descriptors, привилегированный network/fresh-auth gate и граница
+projection OWNER против полномочий caller. Для reauth tests AST без
+комментариев/позиций совпадает.
+
+Первый compile выявил, что поздний retry assertion нуждается в assistant
+snapshot: добавлен явный пятый результат helper, credential-scope caller его
+не использует. До финальной проверки чтение diff также обнаружило случайно
+переименованный SQL key digest при механическом замещении локальной переменной;
+оба key восстановлены и полный literal multiset проверен. Одно раннее
+редактирование использовало путь от корня из cwd Go-модуля и не применилось;
+повтор выполнен в правильном worktree. Эти промежуточные отказы не скрыты.
+
+PASS LOCAL на коде волны: unit platform repository и полный build
+control-plane; исходные component сценарии компилируются в том же пакете,
+их реальный PostgreSQL прогон NOT RUN по scope владельца. Дополнительно PASS:
+побайтное сравнение общего fixture-блока, Go AST reauth tests, literal multiset,
+полный scan/точный assessor, пять ignore guards, gofmt/diff-check.
+
+Замер на коде волны: **6651 own / 222 excluded; 1779 raw / 788 retained /
+991 unresolved; Go 15409/21343, missing 5934**. Raw report SHA256
+`f7aa03f9fc6d44e67c93d03153d2dd5336b28385b5711e1e9cad6417a033f1bb`,
+clone-set SHA256
+`3335e704acdca7f6977b173d4dac625e2b2fd386c980098af217758b2f86ae6a`.
+Пороги и реестр исключений не расширялись. Общий итоговый -check/build/unit,
+991 группа, 5934 объявления и незакрытые historical FAIL/finding остаются
+обязательными. Единственный #1824 остаётся Draft до завершения и решения
+владельца; merge/owner approve не выполняются. Main проверен повторно:
+`9339e3081bc40da194e019b4e0846d55fdd51d89`, новых open PR нет.
 
 ## Волна 345 — очистка проектов и восстановление внешних объектов
 
