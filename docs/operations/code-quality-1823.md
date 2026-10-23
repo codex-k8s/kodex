@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.326.0
+version: 1.327.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,59 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцать седьмая волна — полный каталог SQL runtime
+
+Предыдущий опубликованный SHA — `e7b844230a3d87a60ad7f2c5b8fea513ff3feea5`.
+Exact VqFWP2:6645 sources/222 excluded,1799 raw/750 retained/1049 unresolved;
+Go14510/21315,missing6805. Issue1823 open, Draft1824 head/body326 подтверждены.
+Предыдущий goal-ход — progress:75 комментариев опубликованы, проверки пройдены.
+
+Все79 фактических SQL runtime прочитаны полностью, включая808 строк выборки
+claimable executions, artifact read, terminal closure, delegation/callback/
+integration continuation. Ранее было прочитано лишь164 строки Go bindings;
+это различие не подменяется утверждением о прочитанных SQL. Все79 Go declarations
+теперь имеют содержательные EN→RU комментарии.
+
+| Путь | Реальные границы SQL | Вне доказательств этой волны |
+| --- | --- | --- |
+| claim/expire | SKIP LOCKED, pins конфигурации/реквизитов/допущенного образа, capacity prefilter, отдельный account lock/recount, expiry только при активных run/root | фактическая конкурентность, свежие grants и provider launch |
+| lease/progress/artifact read | разные read/lock predicates, ID-only renew/progress, fence/generation/deadline и exact file descriptors | новый antivirus scan, object bytes download |
+| credential refresh | pin старой runtime revision, exact UID/resource-version, max-plus-one и guarded pointer activation, DELETING reconciliation | чтение секретных байтов или доступность провайдера |
+| completion/storage/usage | отдельные node/turn/lease/root writes, LIVE content generation, archive supersede, замена usage по turn key | архивирование объектов, billing, общий terminal proof |
+| delegate/callback | parent/root/session locks, workflow pins, server edges, exact receipt provenance, max16 direct artifacts и полученные pins | произвольные client IDs как источник полномочий |
+| continuation/gate/events | ожидание всех receipts, отсутствие CONTINUES, owner-gate/invocation state match, durable event/outbox enrichment | человеческое одобрение, broker publish, внешний send |
+
+ID-only statements описаны именно как зависящие от предварительных owner
+checks, не как самостоятельная авторизация. COMPLETED lease, SUCCEEDED root
+и metadata RUNNING не объявляются доказательством всего графа/работы модели.
+Terminal closure сохраняет UNKNOWN_OUTCOME для начатых записей и захваченных
+доставок. Инструкция/роль системного помощника в completion-turn SQL не
+названа автоматическим выбором проектного помощника. SQL не менялся.
+
+AST всего Go-файла совпал; все79 go:embed directives и79 SQL bytes прежние.
+SQL path/content set SHA-256:
+`8059fa2b37ef9310730cd767ea1e6e8badaf7300f2ac268852bdc6c6f60f0820`.
+Шесть выбранных hermetic platform unit и полный control-plane build -p=2 —
+PASS LOCAL,0 FAIL/SKIP. Прежняя команда325/326 с unset DSN; это не все unit
+пакета и не PostgreSQL component. 17 Node unit, Go checker unit, AST1,
+scope79/79,5 addressed ignores, gofmt и diff-check — PASS LOCAL.
+Exact commit scan/build/unit повторяются после фиксации и публикуются в PR.
+
+Canonical 6eJATN:6645 sources/222 excluded,1799 raw/750 retained/1049 unresolved;
+Go14589/21315,missing6726: gateway789 и control-plane5937.
+Все normalized clone keys/hashes/counts прежние. Мультимножества полных
+records отличаются лишь координатами двух окон runtime catalog, уже разобранных
+в325; tokens/lines/fragment hashes этих окон прежние. Clone-set fingerprint,
+учитывающий координаты, изменился; это не устранение алгоритмического повтора.
+Raw SHA-256 `6d357e5cc2d29db4b94c169ddcd9eeef9535d93f5a59da7a4cc1486a63f960e6`;
+clone-set `78a3877f5b92b0e64ae1c762ba4d65e33256f1f81908d436abb0040625666971`.
+Registry632 entries/750 occurrences и пять ignore boundaries неизменны.
+
+Generated/SQL/contracts/deps/migrations/live state неизменны. Полный -check
+ещё не пройден. Historical FAIL/finding293 открыты; DB/component/broker/
+browser/live/model/mail/STT/deploy/full acceptance — NOT RUN.
+Цель active, общий PR не готов к приёмке; merge/ready/owner approve нет.
 
 ## Триста двадцать шестая волна — SQL конфигурации и планов помощника
 
