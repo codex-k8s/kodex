@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.319.0
+version: 1.320.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,65 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцатая волна — metadata секретов, draft lifecycle и кандидаты интеграций
+
+Предыдущий опубликованный SHA — `a3c8a2ae9661a9bfd1f44b6450f663ccf33066e3`.
+ExactYmgo8d:6643 sources,222 excluded,1799 raw/733 retained/
+1066 unresolved; Go14158/21308,missing7150. Push/PR head/body319
+подтверждены readback; цель остаётся progress, не completion.
+
+Полностью прочитаны runtime_secret_endpoints.go390,
+runtime_secret_draft_endpoints.go300 и integration_candidate_endpoints.go381
+исходных строк. Все54 declarations, включая5 candidatePage methods,
+получили предметные EN→RU комментарии; scope54/54. Русский комментарий
+про query-prefix сохранён в двуязычном описании, executable AST всех3 файлов
+и //go: directives прежние. Generated/SQL/contracts/deps не менялись.
+
+Комментарии фиксируют фактические ограничения, не придумывают гарантии:
+- secret metadata reads не reveal; page проверяет области и одну organization,
+  но сам не проверяет advancing cursor. Mappers не устанавливают authority;
+- decoded bytes ограничены512KiB и hash-pinned в prepare, binary Base64 strict,
+  JSON проверяется json.Valid. erase затирает лишь mutable slice, не strings,
+  transport/runtime copies; секреты в код или отчёты не добавлены;
+- create/rotate/revoke сохраняют dedicated prepare -> broker grant ->
+  checked metadata либо terminal replay. Terminal helper отдельно exact
+  requested secret ref не сверяет; эта старая граница не объявлена исправленной;
+- reveal требует exact metadata scope и consume fresh scope authentication
+  до prepare/broker. Наличие metadata не разрешает чтение value;
+- draft save/validate/publish/discard различаются owner commands и broker
+  methods, readiness и version/generation/scope/time pins; publication требует
+  active secret tuple, не chat approval. Display hints redacted callers;
+- draft view проверяет timestamp validity/creation chronology, не current
+  expiry against clock. Prepare metadata не равно owner actor eligibility;
+- candidate query допускает только stage prefix, запрещает unknown/duplicate
+  fields и несовместимые GRANT/USE contexts. Client refs — selectors, не grants;
+- candidate page проверяет exact context, concrete stage, ordered unique
+  items, required/absent version/definition pins и closed reason flags.
+  Digest shape/equality — не recomputation/signature; cursor advancement не
+  проверяется. Capability metadata schema — описание, не execution authority.
+
+| Путь | Сохраняемый контракт | Эффект комментариев |
+| --- | --- | --- |
+| list/get secret | typed owner query -> scoped metadata, no-store | нет value read/state write/event |
+| create/rotate/revoke/reveal | exact mutation/prepared grant -> broker -> checked metadata/value | порядок вызовов, replay и elevation прежние |
+| draft create/save/validate/publish/discard | dedicated owner prepare -> readiness -> exact broker method -> pinned snapshot | target/version/readiness/terminal branches прежние |
+| integration candidate stages0..3 | bounded request prefix -> specialized owner query -> exact context/pin public page | grant не создаётся, eligibility не расширена |
+
+589 верхних/2788 всех выбранных gateway unit,0 FAIL/SKIP, полный gateway
+build -p=2,17 Node unit, Go checker unit, AST3, scope54/54,5 addressed ignores,
+gofmt/diff-check — PASS LOCAL. Команда selected packages прежняя как в318.
+Рабочий canonicalo4KMJb:6643sources/222excluded,1799raw/733retained/
+1066unresolved; Go14212/21308,missing7096. Все1799 clone keys/counts и
+clone-set `df074cff99ad91e916f0665c090a7155b842aa36541d4102ba545f8aeeab4957`
+прежние; registry615/733 и ignore boundaries не менялись.
+После commit повторяются exact-SHA canonical и build/unit; readback в PR.
+
+Остаток Go:gateway864,CP6232. Полный -check не пройден, все1066
+неразобранных групп остаются видимыми. Historical FAIL/finding293 не
+исправлены. Live secret/reveal/draft/integration/broker/model/component/
+browser/deploy/full acceptance — NOT RUN; комментарии не выданы за живую
+проверку. Draft остаётся открыт, merge/ready/owner approve не выполняются.
 
 ## Триста девятнадцатая волна — общая страница рецептов образов
 

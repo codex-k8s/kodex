@@ -9,16 +9,23 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// candidateString returns an optional string-like query value unchanged, mapping nil to empty; it performs no enum, scope or UTF-8 validation.
+// candidateString возвращает необязательное string-like query value без изменений, nil — пустую строку; enum, scope и UTF-8 не проверяет.
 func candidateString[T ~string](v *T) string {
 	if v == nil {
 		return ""
 	}
 	return string(*v)
 }
+
+// candidateRecipient looks up the exact recipient enum suffix and maps unknown names to zero. Later stage validation, not this conversion, determines whether AGENT or WORKFLOW is allowed.
+// candidateRecipient ищет точный суффикс recipient enum, неизвестное имя даёт zero. Допуск AGENT и WORKFLOW определяет последующая stage validation, не это преобразование.
 func candidateRecipient(v string) cp.IntegrationGrantRecipientKind {
 	return cp.IntegrationGrantRecipientKind(cp.IntegrationGrantRecipientKind_value["INTEGRATION_GRANT_RECIPIENT_KIND_"+v])
 }
 
+// ListIntegrationGrantConnectionCandidates builds the allowed stage-zero GRANT or USE context, validates query shape and reads connection candidates through the dedicated owner RPC. The returned page is checked against that exact context; candidate display does not create a grant or authorize integration use.
+// ListIntegrationGrantConnectionCandidates строит допустимый stage-zero GRANT/USE context, проверяет query и читает кандидатов подключений отдельным owner RPC. Страница сверяется с точным context; показ кандидатов grant не создаёт и использование интеграции не разрешает.
 func (s *Server) ListIntegrationGrantConnectionCandidates(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationGrantConnectionCandidatesParams) {
 	c := &cp.IntegrationGrantCandidateContext{ProjectRef: stringValue(p.ProjectRef), RecipientKind: candidateRecipient(candidateString(p.RecipientKind)), RecipientRef: stringValue(p.RecipientRef), CapabilityKey: stringValue(p.CapabilityKey), WorkflowRef: stringValue(p.WorkflowRef), StepKey: stringValue(p.StepKey)}
 	purpose := string(p.Purpose)
@@ -33,6 +40,9 @@ func (s *Server) ListIntegrationGrantConnectionCandidates(w http.ResponseWriter,
 	}
 	writeCandidatePage(w, v, c, purpose, 0, int(page(p.PageSize, p.PageToken).PageSize))
 }
+
+// ListIntegrationGrantProjectCandidates accepts only the connection-selected GRANT stage, validates the query and reads project candidates through its specialized owner RPC. It forwards the page to contextual validation rather than treating the connection reference as authority.
+// ListIntegrationGrantProjectCandidates принимает только GRANT stage с выбранным connection, проверяет query и читает проекты специализированным owner RPC. Передаёт страницу contextual validation, не считая connection reference полномочием.
 func (s *Server) ListIntegrationGrantProjectCandidates(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationGrantProjectCandidatesParams) {
 	c := &cp.IntegrationGrantCandidateContext{ConnectionRef: p.ConnectionRef}
 	if !candidateRequestValid(r, 1, "GRANT", c, p.Query, p.PageSize, p.PageToken) {
@@ -46,6 +56,9 @@ func (s *Server) ListIntegrationGrantProjectCandidates(w http.ResponseWriter, r 
 	}
 	writeCandidatePage(w, v, c, "GRANT", 1, int(page(p.PageSize, p.PageToken).PageSize))
 }
+
+// ListIntegrationGrantRecipientCandidates requires the connection/project/recipient-kind prefix for GRANT stage two, then reads and validates owner recipient candidates against it. The client selects a candidate kind, not a role or permission grant.
+// ListIntegrationGrantRecipientCandidates требует connection/project/recipient-kind prefix для второго GRANT stage, затем читает и сверяет owner candidates. Клиент выбирает вид кандидата, а не выдаёт роль или permission grant.
 func (s *Server) ListIntegrationGrantRecipientCandidates(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationGrantRecipientCandidatesParams) {
 	c := &cp.IntegrationGrantCandidateContext{ConnectionRef: p.ConnectionRef, ProjectRef: p.ProjectRef, RecipientKind: candidateRecipient(string(p.RecipientKind))}
 	if !candidateRequestValid(r, 2, "GRANT", c, p.Query, p.PageSize, p.PageToken) {
@@ -59,6 +72,9 @@ func (s *Server) ListIntegrationGrantRecipientCandidates(w http.ResponseWriter, 
 	}
 	writeCandidatePage(w, v, c, "GRANT", 2, int(page(p.PageSize, p.PageToken).PageSize))
 }
+
+// ListIntegrationGrantCapabilityCandidates requires the full connection/project/recipient prefix before the dedicated capability candidate query and public page validation. Current grant refs are display pins; this endpoint neither creates nor edits grants.
+// ListIntegrationGrantCapabilityCandidates требует полный connection/project/recipient prefix до отдельного capability candidate query и проверки публичной страницы. Current grant refs — display pins; endpoint grants не создаёт и не меняет.
 func (s *Server) ListIntegrationGrantCapabilityCandidates(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationGrantCapabilityCandidatesParams) {
 	c := &cp.IntegrationGrantCandidateContext{ConnectionRef: p.ConnectionRef, ProjectRef: p.ProjectRef, RecipientKind: candidateRecipient(string(p.RecipientKind)), RecipientRef: p.RecipientRef}
 	if !candidateRequestValid(r, 3, "GRANT", c, p.Query, p.PageSize, p.PageToken) {
@@ -73,7 +89,8 @@ func (s *Server) ListIntegrationGrantCapabilityCandidates(w http.ResponseWriter,
 	writeCandidatePage(w, v, c, "GRANT", 3, int(page(p.PageSize, p.PageToken).PageSize))
 }
 
-// Каждый шаг допускает только уже выбранный префикс. Неизвестные query-поля не теряются молча.
+// candidateRequestValid allows only the selected stage's query prefix, rejecting unknown, duplicate and forbidden empty parameters. It checks bounded search/page/refs, empty-context GRANT discovery and complete agent USE context; these structural rules do not replace owner eligibility.
+// candidateRequestValid допускает только query prefix выбранного stage, отклоняет неизвестные, повторные и запрещённые пустые параметры. Проверяет bounded search/page/refs, empty-context GRANT discovery и полный agent USE context; структура не заменяет owner eligibility.
 func candidateRequestValid(r *http.Request, stage int, purpose string, c *cp.IntegrationGrantCandidateContext, q *string, size *int, token *string) bool {
 	allowed := map[string]bool{"query": true, "pageSize": true, "pageToken": true}
 	fields := []string{}
@@ -126,15 +143,29 @@ func candidateRequestValid(r *http.Request, stage int, purpose string, c *cp.Int
 	return stage < 3 || c.RecipientRef != ""
 }
 
+// candidatePage describes common owner candidate-page metadata for validation while concrete reply types still determine the stage. It carries context/version pins for consistency, not an independently verified authorization grant.
+// candidatePage описывает общие metadata owner candidate-page для проверки, тогда как stage определяется конкретным типом ответа. Context/version pins обеспечивают согласованность, а не самостоятельно проверенный authorization grant.
 type candidatePage interface {
 	proto.Message
+	// GetPage reads optional owner pagination metadata; callers validate token shape before public projection.
+	// GetPage читает необязательные owner pagination metadata; форму токена вызывающий код проверяет до публичной проекции.
 	GetPage() *cp.PageInfo
+	// GetTotal reads the owner total for safe-integer and actual-item count checks, not a locally recomputed count.
+	// GetTotal читает owner total для safe-integer и actual-item count checks, а не локально пересчитанное количество.
 	GetTotal() int64
+	// GetContextDigest reads the context digest to compare page and pins; the getter does not recompute or authenticate it.
+	// GetContextDigest читает context digest для сравнения страницы и pins; getter его не пересчитывает и не аутентифицирует.
 	GetContextDigest() string
+	// GetContext reads the echoed selection context for exact protobuf equality with the validated request.
+	// GetContext читает возвращённый selection context для точного protobuf equality с проверенным запросом.
 	GetContext() *cp.IntegrationGrantCandidateContext
+	// GetPins reads owner version and definition pins; required and absent fields depend on the selected context prefix.
+	// GetPins читает owner version и definition pins; обязательность и отсутствие полей зависят от выбранного context prefix.
 	GetPins() *cp.IntegrationGrantCandidatePins
 }
 
+// candidatePins builds a fresh public pin map only when context digest and required safe versions/definition pins/workflow revision are present and absent-prefix pins stay zero or empty. It validates shape and correspondence, not live freshness or authority.
+// candidatePins создаёт новую публичную map pins только при наличии context digest, требуемых safe versions/definition pins/workflow revision и нулевых либо пустых pins отсутствующего prefix. Проверяет форму и соответствие, не live freshness и полномочия.
 func candidatePins(p *cp.IntegrationGrantCandidatePins, c *cp.IntegrationGrantCandidateContext) (map[string]any, bool) {
 	if p == nil || !validManagedDigest(p.ContextDigest) {
 		return nil, false
@@ -173,6 +204,9 @@ func candidatePins(p *cp.IntegrationGrantCandidatePins, c *cp.IntegrationGrantCa
 	}
 	return v, true
 }
+
+// candidateContext projects only nonempty selection refs/keys and an optional recipient enum suffix into a fresh public map. It performs no resource lookup, grant creation or owner eligibility check.
+// candidateContext проецирует только непустые selection refs/keys и необязательный recipient enum suffix в новую публичную map. Resource lookup, grant creation и owner eligibility check не выполняет.
 func candidateContext(c *cp.IntegrationGrantCandidateContext) map[string]any {
 	v := map[string]any{}
 	for k, s := range map[string]string{"connectionRef": c.ConnectionRef, "projectRef": c.ProjectRef, "recipientRef": c.RecipientRef, "capabilityKey": c.CapabilityKey, "workflowRef": c.WorkflowRef, "stepKey": c.StepKey} {
@@ -185,6 +219,9 @@ func candidateContext(c *cp.IntegrationGrantCandidateContext) map[string]any {
 	}
 	return v
 }
+
+// candidateReason accepts only the closed reason range and consistent GRANT/USE readiness flags; USE must be ready and usable without grantable, while GRANT's grantable bit follows READY. It returns a display suffix, not executable permission.
+// candidateReason принимает только закрытый reason range и согласованные GRANT/USE readiness flags: USE требует ready и usable без grantable, у GRANT grantable совпадает с READY. Возвращает display suffix, не исполняемое разрешение.
 func candidateReason(reason cp.IntegrationCandidateReason, grantable, usable bool, purpose string) (string, bool) {
 	if reason < cp.IntegrationCandidateReason_INTEGRATION_CANDIDATE_REASON_READY || reason > cp.IntegrationCandidateReason_INTEGRATION_CANDIDATE_REASON_WORKFLOW_EXCLUDED {
 		return "", false
@@ -200,6 +237,8 @@ func candidateReason(reason cp.IntegrationCandidateReason, grantable, usable boo
 	return strings.TrimPrefix(reason.String(), "INTEGRATION_CANDIDATE_REASON_"), true
 }
 
+// writeCandidatePage writes the validated public candidate map or a non-retryable 502 without partial items; all context/type/pin validation is delegated to candidatePageView.
+// writeCandidatePage выдаёт проверенную публичную map кандидатов либо non-retryable 502 без partial items; context/type/pin validation делегирована candidatePageView.
 func writeCandidatePage(w http.ResponseWriter, v candidatePage, c *cp.IntegrationGrantCandidateContext, purpose string, stage, limit int) {
 	result, ok := candidatePageView(v, c, purpose, stage, limit)
 	if !ok {
@@ -208,6 +247,9 @@ func writeCandidatePage(w http.ResponseWriter, v candidatePage, c *cp.Integratio
 	}
 	writeJSON(w, 200, result)
 }
+
+// candidatePageView requires a valid concrete protobuf reply matching the selected stage and exact request context, then checks page/item pins, reason flags, unique identities and count bounds. It allocates ordered public items and forwards a shape-valid cursor; it does not recompute the digest, compare cursor advancement or issue a grant.
+// candidatePageView требует допустимый конкретный protobuf reply нужного stage и точный request context, затем сверяет page/item pins, reason flags, уникальные identity и count bounds. Выделяет упорядоченные публичные items и передаёт cursor допустимой формы; digest не пересчитывает, продвижение cursor не сравнивает и grant не выдаёт.
 func candidatePageView(v candidatePage, c *cp.IntegrationGrantCandidateContext, purpose string, stage, limit int) (map[string]any, bool) {
 	if v == nil || !v.ProtoReflect().IsValid() || v.GetContext() == nil || !proto.Equal(v.GetContext(), c) || !validManagedDigest(v.GetContextDigest()) || v.GetTotal() < 0 || v.GetTotal() > maximumSafeJSONInteger {
 		return nil, false
@@ -341,6 +383,8 @@ func candidatePageView(v candidatePage, c *cp.IntegrationGrantCandidateContext, 
 	return result, true
 }
 
+// candidateCapabilityView validates bounded capability metadata and a closed set of input-field types, then maps the protobuf while preserving literal description/labels/help and explicit empty fields. Risk/approval/resource enums must appear in the mapping; the result describes a capability and cannot execute it.
+// candidateCapabilityView проверяет ограниченные capability metadata и закрытый набор input-field types, затем преобразует protobuf с сохранением literal description/labels/help и явно пустых fields. Risk/approval/resource enums должны присутствовать в mapping; результат описывает capability, но не исполняет её.
 func candidateCapabilityView(c *cp.IntegrationCapability) (map[string]any, bool) {
 	if c == nil || !validSearchText(c.Key, 1, 100) || !validSearchText(c.Name, 1, 160) || !validSearchText(c.Description, 0, 500) || !validSearchText(c.Operation, 1, 120) || c.ApprovalPolicy == 0 || c.ResourceKind == 0 || len(c.InputFields) > 16 {
 		return nil, false
