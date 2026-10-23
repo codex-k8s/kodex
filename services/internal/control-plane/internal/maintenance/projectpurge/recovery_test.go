@@ -12,6 +12,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 )
 
+// recoverySourceFixture extends the ordinary purge fixture with recorded pin receipt/outcome and an injected pin failure for recovery ordering assertions.
+// recoverySourceFixture дополняет обычный fixture очистки записанной pin-квитанцией/результатом и внедряемым отказом pin для проверки порядка восстановления.
 type recoverySourceFixture struct {
 	sourceFixture
 	pinned  bool
@@ -20,6 +22,8 @@ type recoverySourceFixture struct {
 	receipt objectstorage.Receipt
 }
 
+// PinProjectPurgeRecovery fails before recording a pin when configured, otherwise stores the exact observed receipt and marks it pinned for the deletion spy.
+// PinProjectPurgeRecovery при настройке отказывает до записи pin, иначе сохраняет точную наблюдаемую квитанцию и признак привязки для spy удаления.
 func (source *recoverySourceFixture) PinProjectPurgeRecovery(_ context.Context, _ string, _ platform.ProjectPurgeRecoveryClaim, receipt objectstorage.Receipt) error {
 	if source.pinErr != nil {
 		return source.pinErr
@@ -28,17 +32,24 @@ func (source *recoverySourceFixture) PinProjectPurgeRecovery(_ context.Context, 
 	source.receipt = receipt
 	return nil
 }
+
+// FinishProjectPurgeRecovery records only the recovery outcome supplied by the processor; it is a unit receipt spy, not a database owner transition.
+// FinishProjectPurgeRecovery записывает лишь переданный процессором результат восстановления; это unit spy квитанции, а не переход владельца БД.
 func (source *recoverySourceFixture) FinishProjectPurgeRecovery(_ context.Context, _ string, _ platform.ProjectPurgeRecoveryClaim, outcome string) error {
 	source.outcome = outcome
 	return nil
 }
 
+// recoveryObjectFixture wraps synthetic object storage with a delete counter and the recovery receipt spy so tests can forbid deletion before a matching pin.
+// recoveryObjectFixture оборачивает синтетическое хранилище счётчиком удалений и spy квитанции восстановления, позволяя запретить удаление до совпадающего pin.
 type recoveryObjectFixture struct {
 	*objectstoragetest.Store
 	source  *recoverySourceFixture
 	deletes int
 }
 
+// Delete increments the deletion observation, rejects calls without a pinned matching key/version and delegates only confirmed deletes to the synthetic store.
+// Delete увеличивает счётчик наблюдения удаления, отклоняет вызов без привязанных совпадающих key/version и передаёт лишь подтверждённое удаление синтетическому хранилищу.
 func (objects *recoveryObjectFixture) Delete(ctx context.Context, key, version string) error {
 	objects.deletes++
 	if !objects.source.pinned || objects.source.receipt.Key != key || objects.source.receipt.VersionID != version {
@@ -47,6 +58,8 @@ func (objects *recoveryObjectFixture) Delete(ctx context.Context, key, version s
 	return objects.Store.Delete(ctx, key, version)
 }
 
+// TestRecoveryAbsenceIsObservationAndLateObjectIsDeleted distinguishes initial unpinned ABSENT from exact late-object deletion and proves a replacement worker can finish a pinned absent version without another delete.
+// TestRecoveryAbsenceIsObservationAndLateObjectIsDeleted различает начальное непривязанное ABSENT и удаление точного позднего объекта, доказывая завершение отсутствующей привязанной версии новым worker без повторного Delete.
 func TestRecoveryAbsenceIsObservationAndLateObjectIsDeleted(t *testing.T) {
 	source := &recoverySourceFixture{}
 	objects := &recoveryObjectFixture{Store: objectstoragetest.New(), source: source}
@@ -69,6 +82,8 @@ func TestRecoveryAbsenceIsObservationAndLateObjectIsDeleted(t *testing.T) {
 	}
 }
 
+// TestRecoveryRejectsForeignBytesAndPinFailure requires FAILED with no storage deletion for either a mismatched content digest or failure to persist the exact recovery receipt.
+// TestRecoveryRejectsForeignBytesAndPinFailure требует FAILED без удаления хранилища как при несовпадении digest содержимого, так и при отказе сохранения точной квитанции восстановления.
 func TestRecoveryRejectsForeignBytesAndPinFailure(t *testing.T) {
 	for _, pinFails := range []bool{false, true} {
 		t.Run(map[bool]string{false: "digest mismatch", true: "durable pin failed"}[pinFails], func(t *testing.T) {

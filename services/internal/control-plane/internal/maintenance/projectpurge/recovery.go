@@ -10,6 +10,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 )
 
+// recoverObject validates a bounded exact recovery claim and reserves a safety margin before its lease deadline, executes at most fifteen seconds of storage work, then records the outcome with a separate three-second child context of the caller. This receipt budget does not outlive a cancelled parent and does not authorize more external effects.
+// recoverObject проверяет ограниченный точный захват восстановления и оставляет запас до срока аренды, выполняет до пятнадцати секунд работы хранилища и фиксирует результат отдельным трёхсекундным дочерним контекстом вызывающего. Бюджет квитанции не переживает отменённого родителя и не разрешает новые внешние действия.
 func (processor *Processor) recoverObject(ctx context.Context, owner string, claim platform.ProjectPurgeRecoveryClaim) error {
 	if !objectstorage.ValidKey(claim.Key) || !strings.HasPrefix(claim.Key, "organizations/") ||
 		claim.Generation < 1 || claim.SizeBytes < 0 || claim.Deadline.IsZero() || !claim.Deadline.After(time.Now().Add(5*time.Second)) {
@@ -31,6 +33,8 @@ func (processor *Processor) recoverObject(ctx context.Context, owner string, cla
 	return effectErr
 }
 
+// recoverExactObject distinguishes unpinned absence from deletion of an already pinned version, validates exact digest/size/version/ETag, durably pins the receipt before Delete and verifies version absence. A foreign replacement or pin/readback failure yields FAILED without an unproven successful cleanup.
+// recoverExactObject различает непривязанное отсутствие и удаление уже привязанной версии, сверяет точные digest/size/version/ETag, устойчиво фиксирует квитанцию до Delete и проверяет отсутствие версии. Чужая замена либо отказ pin/readback дают FAILED без недоказанного успешного завершения очистки.
 func (processor *Processor) recoverExactObject(ctx context.Context, owner string, claim platform.ProjectPurgeRecoveryClaim) (string, error) {
 	receipt, err := processor.objects.Head(ctx, claim.Key, claim.Version)
 	if errors.Is(err, objectstorage.ErrNotFound) {
