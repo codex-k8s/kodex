@@ -9,6 +9,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestRuntimeEnvironmentAuthenticationIsFresh checks exact five-minute expiry and thirty-second positive clock-skew boundaries, rejecting zero/stale/further-future timestamps through the shared environment freshness helper.
+// TestRuntimeEnvironmentAuthenticationIsFresh проверяет точные границы пятиминутного срока и тридцатисекундного положительного смещения часов, отклоняя нулевое/устаревшее/более будущее время общим helper свежести окружения.
 func TestRuntimeEnvironmentAuthenticationIsFresh(t *testing.T) {
 	t.Parallel()
 
@@ -36,6 +38,8 @@ func TestRuntimeEnvironmentAuthenticationIsFresh(t *testing.T) {
 	}
 }
 
+// privilegedRuntimeEnvironmentPolicy builds a canonical synthetic full-public web policy with only the necessary service destinations and no Kubernetes privileges; tests still need owner authorization before using this policy.
+// privilegedRuntimeEnvironmentPolicy строит каноническую синтетическую policy полного публичного web-доступа с необходимыми служебными направлениями без привилегий Kubernetes; использование policy в тестах ещё требует авторизации владельца.
 func privilegedRuntimeEnvironmentPolicy(t *testing.T) runtimecontract.RuntimeEnvironmentPolicy {
 	t.Helper()
 	defaults := runtimecontract.DefaultRuntimeEnvironmentPolicyWithoutDigests()
@@ -56,6 +60,8 @@ func privilegedRuntimeEnvironmentPolicy(t *testing.T) runtimecontract.RuntimeEnv
 	return policy
 }
 
+// TestRuntimeEnvironmentAdmissionRejectsRetiredAccessBeforeAuthorization uses nil repository/transaction dependencies to prove an unsupported Kubernetes access profile is rejected as Invalid before database or authority access.
+// TestRuntimeEnvironmentAdmissionRejectsRetiredAccessBeforeAuthorization с nil зависимостями репозитория/транзакции доказывает отклонение неподдержанного профиля Kubernetes как Invalid до обращения к БД и полномочиям.
 func TestRuntimeEnvironmentAdmissionRejectsRetiredAccessBeforeAuthorization(t *testing.T) {
 	t.Parallel()
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicyWithoutDigests()

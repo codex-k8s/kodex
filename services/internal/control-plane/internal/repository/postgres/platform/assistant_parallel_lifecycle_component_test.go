@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -49,33 +48,7 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	repository := newConfiguredAssistantComponentRepository(t, pool, "gpt-5")
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
-	prepareObservedWarmFixture(t, ctx, repository)
-	principal := func(workload, operation, actor, tenant string) value.Principal {
-		t.Helper()
-		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-			ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation,
-		}, workload)
-	}
-	owner := principal("control-api-gateway", "platform.assistant.turns.add", "20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002")
-	worker := principal("runtime-controller", "platform.runtime.execution.claim", "kodex-system-subject", "kodex-installation")
-	warmWorker := principal("runtime-controller", "platform.runtime.warm.report", "kodex-system-subject", "kodex-installation")
-	service, err := platformservice.New(repository)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
-		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	repository, service, owner, worker, assistant := newReadyAssistantComponentService(t, ctx, pool)
 	execute := func(kind command.Kind, actor value.Principal, key string, version *int64, payload any) command.Result {
 		t.Helper()
 		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor,
