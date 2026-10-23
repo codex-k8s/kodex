@@ -1,4 +1,5 @@
-// Package httptransport отображает canonical OpenAPI на generated gRPC clients.
+// Package httptransport maps canonical OpenAPI operations to generated owner gRPC clients and bounded public JSON projections.
+// Package httptransport отображает канонические OpenAPI-операции на generated gRPC clients владельца и ограниченные публичные JSON-проекции.
 package httptransport
 
 import (
@@ -24,8 +25,12 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// maximumJSONBody is the one-MiB nominal budget used by JSON decoders, which read through LimitReader with one extra byte; this constant alone is not proof of exact request-length rejection.
+// maximumJSONBody задаёт номинальный бюджет JSON в один МиБ; decoder читает через LimitReader ещё один байт, поэтому сама константа не доказывает точный отказ по полной длине запроса.
 const maximumJSONBody = 1 << 20
 
+// Server adapts generated HTTP operations to owner clients, secret brokers, optional speech/realtime and the browser boundary. Dependencies are attached during construction; fields are not synchronized for concurrent reconfiguration.
+// Server связывает generated HTTP-операции с клиентами владельца, secret brokers, необязательными speech/realtime и браузерной границей. Зависимости подключаются при сборке; конкурентная перенастройка полей не синхронизирована.
 type Server struct {
 	control      *controlplaneclient.Client
 	secrets      secretbrokerv1.SecretBrokerServiceClient
@@ -37,6 +42,8 @@ type Server struct {
 	texts        *texti18n.Localizer
 }
 
+// New requires nonnil control client, boundary, logger and localizer and retains them without dialing upstream services or checking every client field; optional attachments remain unset.
+// New требует непустые control client, boundary, logger и localizer, сохраняя их без соединения с сервисами и проверки каждого поля клиента; необязательные зависимости остаются неподключёнными.
 func New(control *controlplaneclient.Client, security *boundary.Boundary, logger *slog.Logger, texts *texti18n.Localizer) (*Server, error) {
 	if control == nil || security == nil || logger == nil || texts == nil {
 		return nil, errors.New("control API HTTP server configuration is invalid")
@@ -44,6 +51,8 @@ func New(control *controlplaneclient.Client, security *boundary.Boundary, logger
 	return &Server{control: control, boundary: security, logger: logger, texts: texts}, nil
 }
 
+// AttachSecretBroker sets the secret-operation client exactly once and rejects nil or replacement; callers must attach it before serving concurrent requests.
+// AttachSecretBroker однократно задаёт клиент операций с секретами, отклоняя nil и замену; подключение должно предшествовать конкурентной обработке запросов.
 func (server *Server) AttachSecretBroker(client secretbrokerv1.SecretBrokerServiceClient) error {
 	if client == nil || server.secrets != nil {
 		return errors.New("secret broker attachment is invalid")
@@ -52,6 +61,8 @@ func (server *Server) AttachSecretBroker(client secretbrokerv1.SecretBrokerServi
 	return nil
 }
 
+// AttachSecretDraftBroker independently sets the secret-draft client once, rejecting nil or replacement without changing the main secret-operation client.
+// AttachSecretDraftBroker отдельно и однократно задаёт клиент черновиков секретов, отклоняя nil и замену без изменения основного клиента секретов.
 func (server *Server) AttachSecretDraftBroker(client secretbrokerv1.SecretBrokerServiceClient) error {
 	if client == nil || server.secretDrafts != nil {
 		return errors.New("secret draft broker attachment is invalid")
@@ -60,10 +71,14 @@ func (server *Server) AttachSecretDraftBroker(client secretbrokerv1.SecretBroker
 	return nil
 }
 
+// AttachRealtime replaces the optional stream handler without validation or synchronization; Handler snapshots its current presence when building the router.
+// AttachRealtime заменяет необязательный обработчик потока без проверки и синхронизации; Handler учитывает его текущее наличие при построении router.
 func (server *Server) AttachRealtime(session http.Handler) {
 	server.realtime = session
 }
 
+// Handler builds a fresh mux with optional session stream and generated HTTP routes, maps route decoding failures to INVALID_REQUEST, and wraps it in boundary middleware inside localization. It does not start a listener.
+// Handler создаёт новый mux с необязательным потоком и generated HTTP-маршрутами, превращает ошибки разбора маршрута в INVALID_REQUEST и оборачивает его границей внутри локализации. Слушатель не запускается.
 func (server *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	if server.realtime != nil {
@@ -75,22 +90,32 @@ func (server *Server) Handler() http.Handler {
 	return server.localizationMiddleware(server.boundary.Middleware(mux))
 }
 
+// localizedResponseWriter carries the selected locale and shared localizer while wrapping ResponseWriter; Unwrap preserves access to the underlying writer for response controllers.
+// localizedResponseWriter хранит выбранный язык и общий localizer поверх ResponseWriter; Unwrap сохраняет доступ response controllers к исходному writer.
 type localizedResponseWriter struct {
 	http.ResponseWriter
 	texts  *texti18n.Localizer
 	locale string
 }
 
+// Localize resolves a message identifier with the request-selected locale and no template data; it does not expose upstream diagnostic text.
+// Localize переводит идентификатор сообщения на выбранный язык запроса без template data и без выдачи диагностического текста upstream.
 func (writer *localizedResponseWriter) Localize(messageID string) string {
 	return writer.texts.Localize(writer.locale, messageID, nil)
 }
 
+// LocalizeFor delegates an explicit locale and message identifier to the shared catalog without changing this writer's selected locale.
+// LocalizeFor передаёт явные язык и идентификатор сообщения общему каталогу без изменения выбранного языка writer.
 func (writer *localizedResponseWriter) LocalizeFor(locale, messageID string) string {
 	return writer.texts.Localize(locale, messageID, nil)
 }
 
+// Unwrap exposes the wrapped ResponseWriter for standard response-controller capability discovery without independently implementing flush or hijack.
+// Unwrap выдаёт исходный ResponseWriter для штатного поиска возможностей response controller без отдельной реализации flush или hijack.
 func (writer *localizedResponseWriter) Unwrap() http.ResponseWriter { return writer.ResponseWriter }
 
+// localizationMiddleware resolves Accept-Language through the bounded locale policy and passes a localizing response wrapper to the next handler; it does not authenticate requests.
+// localizationMiddleware выбирает язык Accept-Language по ограниченной политике и передаёт следующему handler wrapper локализации; аутентификацию не выполняет.
 func (server *Server) localizationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		locale := texti18n.ResolveAcceptLanguage(request.Header.Get("Accept-Language"))
@@ -98,6 +123,8 @@ func (server *Server) localizationMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// CreateOwnerSession requires verified authorization context, decodes optional purpose and delegates session issuance to the boundary. It maps rate, purpose and fresh-auth failures, then sets secure session/CSRF cookies, revision ETag and a no-store 204 response.
+// CreateOwnerSession требует проверенный контекст авторизации, разбирает необязательную цель и поручает выпуск сессии границе. Отображает отказы лимита, цели и свежего входа, затем задаёт cookies сессии/CSRF, ETag ревизии и no-store ответ204.
 func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *http.Request, _ generated.CreateOwnerSessionParams) {
 	principal, bearer, ok := boundary.VerifiedAuthorizationFromContext(request.Context())
 	if !ok {
@@ -132,10 +159,14 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 	writer.WriteHeader(http.StatusNoContent)
 }
 
+// RenewOwnerSession reuses GetOwnerSession and its existing boundary-managed renewal behavior rather than issuing a separate session or trusting a client revision.
+// RenewOwnerSession использует GetOwnerSession с существующим обновлением под управлением границы вместо выпуска отдельной сессии и доверия клиентской ревизии.
 func (server *Server) RenewOwnerSession(writer http.ResponseWriter, request *http.Request, _ generated.RenewOwnerSessionParams) {
 	server.GetOwnerSession(writer, request)
 }
 
+// DeleteOwnerSession requires verified identity and an exact quoted revision, revokes through the boundary before expiring both secure cookies, and emits no-store 204 only after success. A failed revoke leaves cookie cleanup unperformed here.
+// DeleteOwnerSession требует проверенную личность и точную ревизию в кавычках, отзывает сессию через границу до удаления двух защищённых cookies и выдаёт no-store204 только при успехе. При ошибке отзыва cookies здесь не очищаются.
 func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *http.Request, parameters generated.DeleteOwnerSessionParams) {
 	identity, ok := boundary.IdentityFromContext(request.Context())
 	if !ok || string(parameters.IfMatch) != fmt.Sprintf("\"%d\"", identity.SessionRevision) {
@@ -156,10 +187,14 @@ func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *ht
 	writer.WriteHeader(http.StatusNoContent)
 }
 
+// decodeJSON delegates required-body decoding with the nominal one-MiB budget and preserves the decoder's value/ok contract; false results must not be used.
+// decodeJSON передаёт разбор обязательного тела с номинальным бюджетом один МиБ и сохраняет пару value/ok; результат при false использовать нельзя.
 func decodeJSON[T any](writer http.ResponseWriter, request *http.Request) (T, bool) {
 	return decodeJSONWithLimit[T](writer, request, maximumJSONBody)
 }
 
+// decodeJSONWithLimit rejects unknown struct fields and a second JSON value while reading at most maximumBody+1 bytes. Failure writes INVALID_REQUEST and may return partial T with false; duplicate keys and total length beyond the limited reader are not independently checked.
+// decodeJSONWithLimit отклоняет неизвестные поля структуры и второе JSON-значение, читая не более maximumBody+1 байт. При ошибке пишет INVALID_REQUEST и может вернуть частичный T с false; повторные ключи и полная длина за пределами reader отдельно не проверяются.
 func decodeJSONWithLimit[T any](writer http.ResponseWriter, request *http.Request, maximumBody int64) (T, bool) {
 	var result T
 	decoder := json.NewDecoder(io.LimitReader(request.Body, maximumBody+1))
@@ -176,6 +211,8 @@ func decodeJSONWithLimit[T any](writer http.ResponseWriter, request *http.Reques
 	return result, true
 }
 
+// decodeOptionalJSON accepts an empty/whitespace-only limited body as nil, otherwise requires one closed-field JSON document. It reads at most the nominal budget plus one byte, returning nil/false after INVALID_REQUEST on decoding or trailing-value failure.
+// decodeOptionalJSON принимает пустое либо пробельное ограниченное тело как nil, иначе требует один JSON-документ без неизвестных полей. Читает не более бюджета плюс один байт; при ошибке разбора или лишнем значении пишет INVALID_REQUEST и возвращает nil/false.
 func decodeOptionalJSON[T any](writer http.ResponseWriter, request *http.Request) (*T, bool) {
 	decoder := json.NewDecoder(io.LimitReader(request.Body, maximumJSONBody+1))
 	decoder.DisallowUnknownFields()
@@ -194,6 +231,8 @@ func decodeOptionalJSON[T any](writer http.ResponseWriter, request *http.Request
 	return &result, true
 }
 
+// mutation copies the idempotency key and optionally parses one quoted positive int64 ETag into ExpectedVersion. It does not validate key syntax, resolve ownership or enforce idempotency itself.
+// mutation копирует ключ идемпотентности и при наличии разбирает положительный int64 ETag в кавычках в ExpectedVersion. Формат ключа, владение и исполнение идемпотентности здесь не проверяются.
 func mutation(idempotency, etag string) (*controlplanev1.MutationContext, bool) {
 	result := &controlplanev1.MutationContext{IdempotencyKey: idempotency}
 	if etag == "" {
@@ -210,6 +249,8 @@ func mutation(idempotency, etag string) (*controlplanev1.MutationContext, bool) 
 	return result, true
 }
 
+// requireMutation wraps mutation and emits INVALID_REQUEST for malformed version syntax; successful construction is not authorization or an owner-side concurrency check.
+// requireMutation оборачивает mutation и выдаёт INVALID_REQUEST при неверном формате версии; успешная сборка не является авторизацией или проверкой конкуренции владельца.
 func requireMutation(writer http.ResponseWriter, idempotency, etag string) (*controlplanev1.MutationContext, bool) {
 	result, ok := mutation(idempotency, etag)
 	if !ok {
@@ -218,6 +259,8 @@ func requireMutation(writer http.ResponseWriter, idempotency, etag string) (*con
 	return result, ok
 }
 
+// page creates a fresh page request defaulting to fifty and copies optional size/token without range validation; the int-to-int32 conversion is unchecked here.
+// page создаёт новый запрос страницы с размером пятьдесят по умолчанию и копирует размер и token без проверки диапазона; преобразование int в int32 здесь не проверяется.
 func page(size *int, token *string) *controlplanev1.PageRequest {
 	result := &controlplanev1.PageRequest{PageSize: 50}
 	if size != nil {
@@ -229,6 +272,8 @@ func page(size *int, token *string) *controlplanev1.PageRequest {
 	return result
 }
 
+// stringValue converts an optional string-like value to string, using an empty string for nil without validating enum membership or reference syntax.
+// stringValue преобразует необязательное строкоподобное значение в string, возвращая пустую строку для nil без проверки enum или формата ссылки.
 func stringValue[T ~string](value *T) string {
 	if value == nil {
 		return ""
@@ -236,6 +281,8 @@ func stringValue[T ~string](value *T) string {
 	return string(*value)
 }
 
+// withProjectReference attaches a syntactically accepted project selector to the request context or writes INVALID_REQUEST; it does not establish membership or mutate the original request.
+// withProjectReference добавляет допустимый по формату селектор проекта в контекст нового запроса либо пишет INVALID_REQUEST; членство не устанавливается, исходный запрос не меняется.
 func withProjectReference(writer http.ResponseWriter, request *http.Request, reference string) (*http.Request, bool) {
 	ctx, err := controlplaneclient.WithProjectReference(request.Context(), reference)
 	if err != nil {
@@ -245,6 +292,8 @@ func withProjectReference(writer http.ResponseWriter, request *http.Request, ref
 	return request.WithContext(ctx), true
 }
 
+// writeMessage projects and validates an owner protobuf response, optionally selects a nested field and reshapes a page with approved metadata, then localizes safe errors and writes no-store JSON/ETag. Invalid known public shapes map to bad gateway; encoding errors after headers are ignored, so success is not a delivery receipt.
+// writeMessage проецирует и проверяет protobuf-ответ владельца, при необходимости выбирает вложенное поле и перестраивает страницу с разрешённой metadata, затем локализует безопасные ошибки и пишет no-store JSON/ETag. Известные неверные публичные формы дают bad gateway; ошибка encoding после заголовков игнорируется, поэтому доставка не подтверждается.
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
@@ -264,8 +313,8 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 			items = present
 		}
 		output := map[string]any{"items": items}
-		// Только страницы с обязательным terminal cursor по OpenAPI; optional
-		// страницы сохраняют прежнюю форму без нового поля.
+		// Only explicitly required OpenAPI pages receive a terminal cursor; optional pages retain field absence.
+		// Только явно требуемые OpenAPI-страницы получают terminal cursor; необязательные страницы сохраняют отсутствие поля.
 		if requiresTerminalCursor(message) {
 			output["nextPageToken"] = ""
 		}
@@ -304,6 +353,8 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 	_ = json.NewEncoder(writer).Encode(value)
 }
 
+// messageMap validates the typed runtime catalog, marshals lowerCamelCase proto JSON, checks/normalizes the public shape and applies browser projections in a fresh map. Run graph response snapshots are removed; on failure no projected map is returned, and this is not an owner authorization operation.
+// messageMap проверяет типизированный runtime-каталог, сериализует proto JSON с lowerCamelCase, проверяет и нормализует публичную форму и применяет браузерные проекции в новой map. Снимки ответов графа удаляются; при ошибке проекция не возвращается. Это не авторизация владельца.
 func messageMap(message proto.Message) (map[string]any, error) {
 	if err := validateRuntimeCatalogMessage(message.ProtoReflect(), 0); err != nil {
 		slog.Warn("upstream response validation failed", "error_class", "runtime_catalog", "safe_reason", err.Error())
@@ -327,15 +378,27 @@ func messageMap(message proto.Message) (map[string]any, error) {
 	return value, nil
 }
 
+// maximumSafeJSONInteger is the largest positive integer exactly representable by browser JSON numbers; ordinary 64-bit protobuf values outside its symmetric range are rejected.
+// maximumSafeJSONInteger — наибольшее положительное целое, точно представимое числом браузерного JSON; обычные64-битные protobuf-значения вне симметричного диапазона отклоняются.
 const maximumSafeJSONInteger = int64(1<<53 - 1)
 
 var (
-	errPublicSecretDescriptor        = errors.New("public Secret descriptor revision is invalid")
-	errPublicProviderStatusReason    = errors.New("public provider status reason is invalid")
-	errPublicAvatarShape             = errors.New("public agent avatar response is invalid")
+	// errPublicSecretDescriptor classifies an invalid public secret-descriptor revision for closed upstream-response error mapping without exposing secret data.
+	// errPublicSecretDescriptor обозначает неверную публичную ревизию описателя секрета для закрытого отображения upstream-ошибки без раскрытия секрета.
+	errPublicSecretDescriptor = errors.New("public Secret descriptor revision is invalid")
+	// errPublicProviderStatusReason rejects provider status reasons outside the explicit public vocabulary rather than forwarding arbitrary provider diagnostics.
+	// errPublicProviderStatusReason отклоняет причины состояния вне явного публичного словаря вместо передачи произвольной диагностики провайдера.
+	errPublicProviderStatusReason = errors.New("public provider status reason is invalid")
+	// errPublicAvatarShape classifies invalid public avatar source/enum shapes and is mapped to an invalid upstream response, not a missing-image fallback.
+	// errPublicAvatarShape обозначает неверный публичный source или enum аватара и отображается как неверный upstream-ответ, а не запасная картинка.
+	errPublicAvatarShape = errors.New("public agent avatar response is invalid")
+	// errPublicRuntimeEnvironmentShape classifies an invalid runtime-environment public enum shape without exposing the source response as user text.
+	// errPublicRuntimeEnvironmentShape обозначает неверную публичную форму enum окружения без выдачи исходного ответа как пользовательского текста.
 	errPublicRuntimeEnvironmentShape = errors.New("public runtime environment response is invalid")
 )
 
+// normalizeProtoJSONShape mutates decoded JSON according to its protobuf descriptor, restoring selected required defaults, normalizing typed fields and validating public source, scope, revision and binding invariants. It redacts private secret/image pins and delegates specialized validators; errors may follow partial mutation, so callers must discard the projection rather than treat it as authorization.
+// normalizeProtoJSONShape меняет разобранный JSON по protobuf-описателю: восстанавливает выбранные обязательные defaults, нормализует типы и проверяет публичные source, scope, ревизии и привязки. Удаляет закрытые поля секретов и образов и вызывает профильные validators; ошибка может следовать за частичной правкой, поэтому проекцию надо отбросить, а не считать авторизацией.
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) (normalizationErr error) {
 	if descriptor.FullName() == "controlplane.v1.RunMessage" || descriptor.FullName() == "controlplane.v1.AssistantTurn" {
 		if source, ok := value["source"].(map[string]any); !ok || source["origin"] == nil {
@@ -387,14 +450,14 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		delete(value, "namespace")
 	}
 	if descriptor.FullName() == "controlplane.v1.RuntimeSecret" {
-		// Точная Kubernetes identity текущей ревизии нужна только owner-side
-		// операциям и не входит в browser-facing RuntimeSecret.
+		// The exact Kubernetes identity of the current revision belongs only to owner-side operations, not the browser RuntimeSecret.
+		// Точная Kubernetes identity текущей ревизии нужна только операциям владельца и не входит в браузерный RuntimeSecret.
 		delete(value, "namespace")
 		delete(value, "currentRevisionDescriptor")
 	}
 	if descriptor.FullName() == "controlplane.v1.RoleImageRecipe" {
-		// Supply-chain pins принадлежат внутреннему lifecycle сборки. Публичный
-		// контракт сообщает только готовность и безопасную ссылку promotion.
+		// Supply-chain pins belong to the internal build lifecycle; the public contract exposes only readiness and the safe promotion reference.
+		// Supply-chain pins принадлежат внутреннему жизненному циклу сборки; публичный контракт сообщает только готовность и безопасную ссылку promotion.
 		for _, field := range []string{
 			"specSha256",
 			"policyRevision",
@@ -512,6 +575,8 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 	return normalizeIntegrationShape(value, descriptor)
 }
 
+// requiredProtoScalarDefault supplies zero/empty defaults only for explicit message-and-field pairs required by the public contract. Other omitted scalars retain absence; financial optional fields deliberately remain omitted rather than inventing data.
+// requiredProtoScalarDefault задаёт нулевые и пустые defaults только для явных пар message/field публичного контракта. Остальные пропущенные scalar сохраняют отсутствие; необязательные финансовые поля намеренно не заполняются выдуманными данными.
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
 	if descriptor.FullName() == "controlplane.v1.ProviderFinancialOverview" && isProto64BitInteger(field.Kind()) {
 		return float64(0), true
@@ -576,8 +641,8 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	if descriptor.FullName() == "controlplane.v1.AgentInstructionsBinding" && field.Kind() == protoreflect.BoolKind && field.JSONName() == "effective" {
 		return false, true
 	}
-	// Некоторым proto3 zero values соответствует обязательное поле OpenAPI.
-	// Список явный: другие пустые scalar могут означать отсутствующую ссылку.
+	// Some proto3 zero values correspond to required OpenAPI fields; the list is explicit because other empty scalars may mean an absent reference.
+	// Некоторым нулевым proto3-значениям соответствует обязательное OpenAPI-поле; список явный, поскольку другие пустые scalar могут означать отсутствие ссылки.
 	if field.JSONName() == "total" && field.Kind() == protoreflect.Int64Kind {
 		switch descriptor.FullName() {
 		case "controlplane.v1.ListRunsResponse", "controlplane.v1.ListArtifactsResponse", "controlplane.v1.ListConfigOverlayRevisionsResponse":
@@ -667,6 +732,8 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	return nil, false
 }
 
+// normalizeProtoField recursively normalizes maps and ordinary message objects, preserving well-known arbitrary JSON values, and handles closed enum projections and exact safe integer conversion. Only integration minimum/maximum may retain signed out-of-safe-range integers as strings; non-map message JSON passes through here, so this helper is not a universal schema validator.
+// normalizeProtoField рекурсивно нормализует map и обычные message-объекты, сохраняя well-known произвольный JSON, и преобразует закрытые enum и точные безопасные целые. Только integration minimum/maximum могут сохранить signed целые вне безопасного диапазона строкой; message JSON не в форме map здесь проходит без изменений, поэтому helper не заменяет всю проверку схемы.
 func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, error) {
 	if field.IsMap() {
 		items, ok := value.(map[string]any)
@@ -744,7 +811,8 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 			return nil, errors.New("public protobuf int64 exceeds JSON safe range")
 		}
 		if parsed < -maximumSafeJSONInteger || parsed > maximumSafeJSONInteger {
-			// Метаданные диапазона сохраняют полный int64 без округления в браузере.
+			// Range metadata retains the full int64 as text without browser rounding.
+			// Метаданные диапазона сохраняют полный int64 строкой без округления в браузере.
 			if field.ContainingMessage().FullName() == "controlplane.v1.IntegrationConfigurationField" && (field.Name() == "minimum" || field.Name() == "maximum") {
 				return strconv.FormatInt(parsed, 10), nil
 			}
@@ -766,6 +834,8 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 }
 
+// runtimeEnvironmentEnumPrefixes binds the five supported runtime enum descriptors to exact wire prefixes, requiring known nonzero values before prefix removal; it is not a network or Kubernetes permission registry.
+// runtimeEnvironmentEnumPrefixes связывает пять поддерживаемых описателей runtime enum с точными wire-префиксами и требует известные ненулевые значения до удаления префикса; это не реестр сетевых или Kubernetes-прав.
 var runtimeEnvironmentEnumPrefixes = map[protoreflect.FullName]string{
 	"controlplane.v1.RuntimeVolumeKind":           "RUNTIME_VOLUME_KIND_",
 	"controlplane.v1.RuntimeNetworkDestination":   "RUNTIME_NETWORK_DESTINATION_",
@@ -774,6 +844,8 @@ var runtimeEnvironmentEnumPrefixes = map[protoreflect.FullName]string{
 	"controlplane.v1.RuntimeKubernetesAccessKind": "RUNTIME_KUBERNETES_ACCESS_KIND_",
 }
 
+// isProto64BitInteger recognizes signed, unsigned, zigzag and fixed-width 64-bit protobuf integer kinds for safe-number/default handling, excluding 32-bit and floating kinds.
+// isProto64BitInteger распознаёт signed, unsigned, zigzag и fixed64 виды protobuf для безопасных чисел и defaults, исключая32-битные и дробные виды.
 func isProto64BitInteger(kind protoreflect.Kind) bool {
 	switch kind {
 	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind,
@@ -784,13 +856,12 @@ func isProto64BitInteger(kind protoreflect.Kind) bool {
 	}
 }
 
-// ProtoMap используется realtime transport для того же публичного enum и
-// redaction mapping, что и HTTP readback.
+// ProtoMap exposes the same validated public protobuf projection to realtime and HTTP, including typed enums and redaction; it does not authorize resource access or mutate the protobuf input.
+// ProtoMap предоставляет realtime и HTTP одну проверяемую публичную protobuf-проекцию с типизированными enum и удалением закрытых полей; доступ не авторизует и исходный protobuf не меняет.
 func ProtoMap(message proto.Message) (map[string]any, error) { return messageMap(message) }
 
-// LocalizeSafeErrors заменяет только безопасное отображаемое сообщение по
-// стабильному коду. Raw provider/runtime payload никогда не используется как
-// пользовательский текст.
+// LocalizeSafeErrors recursively replaces explicit i18n markers, mail health summaries and safeErrorCode messages in a public JSON projection. It preserves message text/references and typed intent/readiness exclusions, and treats assistant pins specially; this is formatting of already projected data, not arbitrary upstream-error sanitization.
+// LocalizeSafeErrors рекурсивно заменяет явные i18n-маркеры, почтовые health-сводки и сообщения safeErrorCode публичной JSON-проекции. Сохраняет текст и ссылки сообщений и исключения typed intent/readiness, отдельно обрабатывая assistant pins; это оформление уже спроецированных данных, а не очистка произвольных upstream-ошибок.
 func LocalizeSafeErrors(value any, localize func(string) string) {
 	if localize == nil {
 		return
@@ -801,8 +872,8 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 			LocalizeSafeErrors(item, localize)
 		}
 	case map[string]any:
-		// AssistantRunPin содержит literal identity, а не enum-подобные
-		// пользовательские строки. Нормализуется только его closed scope.
+		// AssistantRunPin carries literal identity, not enum-like user strings; only its closed scope is normalized.
+		// AssistantRunPin содержит literal identity, а не enum-подобные пользовательские строки; нормализуется только его закрытый scope.
 		_, pinConversation := current["conversationRef"]
 		_, pinAssistant := current["assistantRef"]
 		_, pinOrganization := current["organizationRef"]
@@ -817,8 +888,8 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 			if publishedMessage && (key == "text" || key == "ref") {
 				continue
 			}
-			// Session readiness — закрытая code-only проекция: добавление
-			// generic safeErrorMessage нарушает её публичный контракт.
+			// Session readiness is a closed code-only projection; a generic safeErrorMessage would violate its public contract.
+			// Session readiness — закрытая code-only проекция; общий safeErrorMessage нарушил бы её публичный контракт.
 			if key == "integrationIntent" || key == "sessionReadiness" {
 				continue
 			}
@@ -837,6 +908,8 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 	}
 }
 
+// enumPrefixes is the ordered list of public enum prefixes used by heuristic normalization; the first matching prefix is stripped and unrelated strings are retained.
+// enumPrefixes — упорядоченный список публичных enum-префиксов эвристической нормализации; удаляется первый совпавший префикс, посторонние строки сохраняются.
 var enumPrefixes = []string{
 	"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTION_", "ENTITY_LIFECYCLE_",
 	"AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_",
@@ -855,6 +928,8 @@ var enumPrefixes = []string{
 	"ACCESS_DECISION_", "ACTION_", "TYPE_",
 }
 
+// normalize recursively mutates public JSON maps/lists, strips known enum prefixes outside explicit literal-data exclusions, renames catalog fields, flattens runtime/workflow views and restores selected collection defaults. Shape-presence heuristics are projection rules, not schema validation, eligibility or mutation of authoritative protobuf state.
+// normalize рекурсивно меняет публичные JSON map/list, убирает известные enum-префиксы вне явных исключений literal data, переименовывает поля каталогов, разворачивает runtime/workflow и восстанавливает выбранные коллекции. Эвристики наличия полей задают проекцию, а не проверку схемы, допуск или изменение авторитетного protobuf.
 func normalize(value any) {
 	switch current := value.(type) {
 	case []any:
@@ -866,21 +941,24 @@ func normalize(value any) {
 		}
 	case map[string]any:
 		for key, item := range current {
-			// Публичный текст и стабильные идентификаторы сообщения — literal data.
-			// Их нельзя превращать в enum даже при совпадении с его префиксом.
+			// Public message text and stable references are literal data, even when they match an enum prefix.
+			// Публичные текст и стабильные ссылки сообщения — literal data даже при совпадении с enum-префиксом.
 			_, publishedMessage := current["phase"]
 			if publishedMessage && (key == "text" || key == "ref") {
 				continue
 			}
-			// Ссылка — literal owner data, даже если совпала с префиксом enum.
+			// A reference is literal owner data even when it matches an enum prefix.
+			// Ссылка — literal data владельца даже при совпадении с enum-префиксом.
 			if key == "currentRunRef" {
 				continue
 			}
-			// Typed intent уже проверен по Proto; его owner data не являются enum.
+			// The typed intent was already checked against Proto; its owner data is not an enum.
+			// Типизированный intent уже проверен по Proto; его данные владельца не являются enum.
 			if key == "integrationIntent" || key == "decisionConsequences" {
 				continue
 			}
-			// Имена и ссылки контекста — literal owner data, не enum.
+			// Context names and references are literal owner data, not enums.
+			// Имена и ссылки контекста — literal data владельца, а не enum.
 			_, contextRoute := current["route"]
 			_, contextOperations := current["allowedOperations"]
 			if contextRoute && contextOperations && (key == "route" || key == "entityKind" || key == "entityRef" || key == "entityName") {
@@ -942,6 +1020,8 @@ func normalize(value any) {
 	}
 }
 
+// normalizeAssistantShape restores route/plan/receipt defaults and reshapes recognized plan-operation targets in place, removing obsolete source keys only on matching shapes. It neither applies a plan nor treats selected/permitted display booleans as an execution grant.
+// normalizeAssistantShape восстанавливает defaults маршрута, плана и receipt и перестраивает распознанные цели операций на месте, удаляя исходные ключи только при совпавшей форме. План не применяется, отображаемые selected/permitted не становятся grant выполнения.
 func normalizeAssistantShape(value map[string]any) {
 	if _, hasRoute := value["route"]; hasRoute {
 		if _, hasOperations := value["allowedOperations"]; hasOperations {
@@ -1016,6 +1096,8 @@ func normalizeAssistantShape(value map[string]any) {
 	}
 }
 
+// normalizeEnum strips only the first matching configured prefix and otherwise returns the original string; callers must exempt literal data before calling it.
+// normalizeEnum убирает только первый настроенный совпавший префикс, иначе возвращая исходную строку; literal data вызывающий должен исключить заранее.
 func normalizeEnum(value string) string {
 	for _, prefix := range enumPrefixes {
 		if strings.HasPrefix(value, prefix) {
@@ -1025,6 +1107,8 @@ func normalizeEnum(value string) string {
 	return value
 }
 
+// ensureRequiredCollections fills absent collections selected by shape heuristics and missing workflow-step scalar defaults. Present values, even of an unexpected type, are not repaired or validated here.
+// ensureRequiredCollections заполняет отсутствующие коллекции по эвристике формы и пропущенные scalar defaults шага процесса. Уже присутствующие значения, даже неверного типа, здесь не исправляются и не проверяются.
 func ensureRequiredCollections(value map[string]any) {
 	for _, key := range requiredCollectionKeys(value) {
 		if _, exists := value[key]; !exists {
@@ -1047,6 +1131,8 @@ func ensureRequiredCollections(value map[string]any) {
 	}
 }
 
+// requiredCollectionKeys returns fresh required-key candidates for recognized workflow-step, complete-agent, membership and graph shapes without editing the map or validating its values.
+// requiredCollectionKeys возвращает новый список обязательных ключей для распознанных шага, полного сотрудника, членства и графа без изменения map и проверки значений.
 func requiredCollectionKeys(value map[string]any) []string {
 	keys := []string{}
 	if _, isStep := value["position"]; isStep {
@@ -1072,10 +1158,11 @@ func requiredCollectionKeys(value map[string]any) []string {
 	return keys
 }
 
+// target recognizes only the closed RunTarget key set with exactly one agent/workflow/system-assistant selector, returning its raw value. Unknown keys or ambiguous selector presence reject the shape; reference type, syntax and authority remain unchecked here.
+// target распознаёт только закрытый набор ключей RunTarget с единственным селектором сотрудника, процесса либо помощника, возвращая исходное значение. Неизвестные ключи и неоднозначное наличие селекторов отклоняются; тип, формат ссылки и полномочия здесь не проверяются.
 func target(value map[string]any) (string, any, bool) {
-	// RunTarget является закрытым oneof с тремя собственными scalar-полями.
-	// RunNode, WorkflowStep и grant тоже имеют agentRef, поэтому неизвестный
-	// ключ закрыто исключает такую map из target-нормализации.
+	// RunTarget is a closed oneof with three selectors; RunNode, WorkflowStep and grants also have agentRef, so any unknown key excludes that map from target projection.
+	// RunTarget — закрытый oneof с тремя селекторами; у RunNode, WorkflowStep и grants тоже есть agentRef, поэтому неизвестный ключ исключает такую map из проекции цели.
 	for key := range value {
 		switch key {
 		case "agentRef", "workflowRef", "systemAssistantRef", "displayName", "targetVersion":
@@ -1102,6 +1189,8 @@ func target(value map[string]any) (string, any, bool) {
 	return "WORKFLOW", workflowRef, true
 }
 
+// flattenWorkflow preserves separate published/draft pins, copies a bounded draft view and selects the published body when present, otherwise the draft. It flattens selected fields, supplies missing collections and removes nested source snapshots without changing owner revision state.
+// flattenWorkflow сохраняет раздельные published/draft pins, копирует ограниченный draft-view и выбирает опубликованное тело при наличии, иначе черновик. Разворачивает выбранные поля, заполняет отсутствующие коллекции и удаляет вложенные исходные снимки без изменения ревизий владельца.
 func flattenWorkflow(value map[string]any) {
 	for source, field := range map[string]string{"publishedVersion": "publishedRevisionRef", "draftVersion": "draftRevisionRef"} {
 		if snapshot, ok := value[source].(map[string]any); ok {
@@ -1138,6 +1227,8 @@ func flattenWorkflow(value map[string]any) {
 	delete(value, "draftVersion")
 }
 
+// targetProto maps AGENT to its typed oneof and every other input kind to WORKFLOW, without validating the reference or supporting a system-assistant branch; callers must validate their allowed kinds first.
+// targetProto преобразует AGENT в соответствующий oneof, а любой другой вид — в WORKFLOW без проверки ссылки и без ветви помощника; допустимые виды обязан заранее проверить вызывающий.
 func targetProto(kind, reference string) *controlplanev1.RunTarget {
 	result := &controlplanev1.RunTarget{}
 	if kind == "AGENT" {
@@ -1148,6 +1239,8 @@ func targetProto(kind, reference string) *controlplanev1.RunTarget {
 	return result
 }
 
+// permissions maps known public project-permission names into a newly allocated protobuf slice, preserving order and duplicates while silently omitting unknown values; it does not grant those permissions.
+// permissions преобразует известные публичные project-permission имена в новый protobuf slice с сохранением порядка и дубликатов и молчаливым пропуском неизвестных значений; права при этом не выдаются.
 func permissions[T ~string](values []T) []controlplanev1.ProjectPermission {
 	result := make([]controlplanev1.ProjectPermission, 0, len(values))
 	for _, item := range values {
@@ -1158,18 +1251,24 @@ func permissions[T ~string](values []T) []controlplanev1.ProjectPermission {
 	return result
 }
 
+// platformRole looks up the prefixed protobuf role name, yielding the zero enum for an unknown name rather than returning a validation error or assigning membership.
+// platformRole ищет protobuf-роль по имени с префиксом, возвращая нулевой enum для неизвестного имени без ошибки проверки и назначения членства.
 func platformRole(value string) controlplanev1.PlatformRole {
 	return controlplanev1.PlatformRole(controlplanev1.PlatformRole_value["PLATFORM_ROLE_"+value])
 }
 
+// gateDecision looks up the prefixed owner-decision enum, returning zero for an unknown name; it does not record, approve or execute a decision.
+// gateDecision ищет enum решения владельца по имени с префиксом и возвращает ноль для неизвестного; решение не записывается, не подтверждается и не выполняется.
 func gateDecision(value string) controlplanev1.OwnerGateDecision {
 	return controlplanev1.OwnerGateDecision(controlplanev1.OwnerGateDecision_value["OWNER_GATE_DECISION_"+value])
 }
 
+// jsonEncoder constructs the standard streaming JSON encoder for the supplied writer with default escaping; encoding and write errors remain the caller's responsibility.
+// jsonEncoder создаёт стандартный потоковый JSON encoder для writer с обычным escaping; ошибки encoding и записи остаются ответственностью вызывающего.
 func jsonEncoder(writer io.Writer) *json.Encoder { return json.NewEncoder(writer) }
 
-// Реестр связывает обязательное public поле с типом owner response,
-// а не с неоднозначными именами collections вроде revisions/definitions.
+// requiresTerminalCursor recognizes the explicit seven owner response types whose public pages require nextPageToken even at the terminal empty cursor. Other page types retain their existing optional-field shape regardless of collection names.
+// requiresTerminalCursor распознаёт семь явных типов ответов владельца, страницы которых требуют nextPageToken даже при пустом terminal cursor. Остальные страницы сохраняют необязательное поле независимо от названий коллекций.
 func requiresTerminalCursor(message proto.Message) bool {
 	switch message.(type) {
 	case *controlplanev1.ListIntegrationConnectionsResponse,

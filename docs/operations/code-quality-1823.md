@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.313.0
+version: 1.314.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,92 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста четырнадцатая волна — HTTP-проекция и её unit-оснастка
+
+Предыдущий опубликованный SHA — `57ecdd463ab111c63ab09c190d330a063131d2e5`.
+Exact0m1MXh:6639 sources,222 excluded,1806 raw/728 retained/
+1078 unresolved; Go13802/21293,missing7491. Push и Draft PR body/head313
+подтверждены точным readback; основная ветка и основной клон неизменны.
+
+Прочитаны целиком HTTP server.go1186 и normalization_test.go952 исходных
+строк. Все90 declarations (51 production/39 test) получили предметные
+EN→RU комментарии; package и13 прежних inline блоков тоже двуязычны.
+AST2 и //go: directives равны313: изменены только comments/formatting,
+не контроль доступа, значения, ветви, assertions или контракты.
+
+Пояснения отражают реальное исполнение:
+- конструктор проверяет nonnil dependencies, не upstream connectivity
+  и не каждое поле client. Attach выполняется до конкурентного serving;
+  AttachRealtime допускает замену без synchronization/validation;
+- session create использует verified authorization context и boundary,
+  delete — exact revision и revoke до cookie cleanup; helper mutation
+  только разбирает version, но не доказывает ownership/idempotency;
+- decodeJSON читает через LimitReader(maximum+1), запрещает unknown struct
+  fields/второе JSON-значение; false может сопровождаться partial T.
+  Duplicate keys и полная длина за limited reader отдельно не проверяются:
+  комментарии не выдают nominal budget за строгую проверку Content-Length;
+- page копирует size с unchecked int32 conversion; permissions пропускает
+  неизвестные значения, role/decision lookup даёт zero enum, targetProto
+  любой non-AGENT превращает в WORKFLOW. Это преобразования, не admission;
+- messageMap валидирует typed catalog, делает новую lowerCamelCase map,
+  descriptor-based public redaction/normalization и убирает internal runs.
+  normalize меняет map/list, но не authoritative protobuf/owner state;
+- ошибки normalizer возможны после partial map mutation: такую проекцию
+  caller обязан отбросить. WKT arbitrary JSON, optional presence, safe
+  integers и узкое string исключение для integration range описаны точно;
+- generic literal-data exclusions, RunTarget closed key set, workflow
+  selected revision/body и required defaults не названы универсальной
+  schema validation. Present values requiredCollection helper не чинит;
+- writeMessage сохраняет типизированную metadata страницы, ETag и no-store;
+  encode error после headers игнорируется, поэтому доставка не доказана;
+- LocalizeSafeErrors оформляет уже публичную проекцию, не очищает
+  произвольный upstream payload и не заменяет authorization;
+- synthetic tests не названы live proof. Run-events test использует real
+  generated route с fake RPC, проверяет пустую/500/66 страницы, request
+  pins, порядок/identity и ровно три public keys, но не durable event store;
+- имя вложения очищается для отображения, а не confinement файловой
+  системы; точки сохраняются. Тест не объявлен полной path-защитой.
+
+Матрица неизменённых сценариев:
+
+| Вход | Действие и авторитетный слой | Выход/ограничение |
+| --- | --- | --- |
+| verified session create/delete | boundary issue/revoke, exact session revision | secure cookies/no-store; при revoke failure cleanup здесь не выполняется |
+| JSON mutation/page input | bounded reader, quoted positive version, selector context | parsing не authority; false/partial result отбрасывается |
+| owner protobuf | typed validation -> protojson -> descriptor normalization -> public map | private secret/image identity redacted; partial projection error закрывается |
+| HTTP/realtime public response | общий ProtoMap и safe localization | enum/literal exclusions и optional presence сохранены |
+| workflow/assistant views | exact supplied revisions, selected published-or-draft, closed target shape | никакого apply/grant или изменения owner state |
+| fake catalog/run-events response | generated HTTP route и counted RPC fixture | только unit wire mapping, не service eligibility/durability/readiness |
+
+Context7: /protocolbuffers/protobuf-go (protojson options/default presence)
+и /golang/go (Decoder, duplicate keys, LimitReader EOF, ResponseController
+Unwrap). Проверены локальные go doc с Go1.26.6 и pinned protobuf
+v1.36.12-0.20260120151049-f2248ac996af. Dependencies не менялись.
+
+584 верхних/2677 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP.17 Node unit, Go checker unit, AST2/scope90/90,
+5 addressed ignores, gofmt и git diff --check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Рабочий6sVkIJ:6639 sources,222 excluded,1806 raw/728 retained/
+1078 unresolved; Go13892/21293,missing7401.
+Raw SHA256 `5f95f5118ee21dc5b0b220cd3266a9dbf33ac47d2f9aabe25f266f13af1d2e62`;
+все1806 clone keys/counts и clone-set
+`d807eab60395bcbe1d2c4a0f418a4d78a19f980877fff814a2e7130e0dd86e62`
+равны313. Registry610/728 и ignored regions не менялись; новых исключений
+нет. Удаление clone groups в этой comments-only волне не заявляется.
+После коммита exact scan/unit/build и push/PR readback повторяются.
+Остаток Go:gateway1169,CP6232; общий -check ещё не пройден.
+Historical FAIL/finding293 не исправлены; component/browser/model/STT/
+provider/mail/deploy/full acceptance NOT RUN. Generated/contracts/SQL/
+migrations/live state не менялись. Полный объём задачи не завершён, PR Draft.
 
 ## Триста тринадцатая волна — сервер WebSocket и его границы
 
