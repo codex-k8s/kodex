@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.323.0
+version: 1.324.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,85 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцать четвёртая волна — SQL bindings команд и memberships
+
+Предыдущий опубликованный SHA — `34f8b319df5451a30ba0e4659ef8752d0efe63bb`.
+ExactEnERRZ:6645sources/222excluded,1799raw/741retained/1058unresolved;
+Go14294/21315,missing7021. Push/PR head/body323 подтверждены readback.
+Предыдущая итерация — progress: severity helper и35 docs опубликованы.
+
+Прочитаны29 точных SQL-файлов и соответствующие Go embed bindings из начала
+platform/queries_commands.go: run graph-facing read, idempotency/audit,
+onboarding/project create/update, trash/restore/purge request/receipt,
+project/platform memberships. Эти29 declarations получили предметные EN→RU
+комментарии, не пересказ имён. Каталог содержит141 declaration:29/141
+документированы,112 остаются открытыми; весь каталог не объявлен покрытым.
+Оставшиеся SQL не названы семантически прочитанными только из-за hash check.
+
+Комментарии отражают actual predicates:
+- graph-facing read фильтрует tenant/run ref, собирает metadata/ordered refs,
+  но не locks/полную actor eligibility;
+- advisory xact lock сериализует hash четырёх scope strings, не заменяет
+  durable receipt. Receipt query требует exact scope и future expiry,
+  INSERT задаёт24h по database clock; audit фиксирует SUCCEEDED metadata;
+- onboarding COALESCE сохраняет первое completion time; project UPDATE
+  требует ACTIVE и exact version. Embedded string сам ничего не исполняет;
+- active-run selection возвращает один active ref/version на root и может
+  выбрать child, если root уже terminal; отмена occurrence отдельно очищает
+  leases/fences/workload pins и продвигает версии;
+- trash задаёт30days; restore возможен только до purge_after; PURGE_PENDING
+  и PENDING receipt не равны физической очистке. Archive task cancellation
+  затрагивает лишь READY, не claimed/running;
+- membership SQL различает verified active subject, exact binding scope,
+  current system-role selection, row locks и version fences;
+- supplied actor role для can-grant не является identity proof; last-owner
+  count имеет validity windows, но сам не блокирует и не проверяет every
+  subject eligibility. Broad subject project revocation не содержит
+  per-binding OCC и зависит от owner transaction fence.
+
+| SQL family | Что документировано | Что НЕ выполнялось |
+| --- | --- | --- |
+| execute/idempotency/audit | lock scope, exact receipt, TTL, atomicity obligations | transaction/replay/concurrency live execution |
+| project lifecycle | scoped locks/version/retention/request versus completion | trash/restore/purge/cancellation в БД |
+| project/platform membership | verified subject, stored-function/role/version predicates | выдача/отзыв прав, last-owner live race |
+| embed bindings | exact SQL sources and unchanged directives | изменение queries/migrations/runtime state |
+
+Целый Go AST файла и все141 //go:embed directives прежние. Byte compare
+всех141 embedded SQL с323 подтверждён, aggregate path/content SHA-256:
+`8a0460ed60625d156809be20013252750e1e231fe4ad7de3dde96b8b59e5ee43`.
+Это proof неизменности, не SQL execution. Context7 PostgreSQL17 затем18
+проверены; установленный repo image18.3 соответствует итоговым
+[advisory locks](https://www.postgresql.org/docs/18/explicit-locking.html) и
+[clock/statement time](https://www.postgresql.org/docs/18/functions-datetime.html).
+
+Шесть выбранных hermetic platform unit и полный control-plane build -p=2 —
+PASS LOCAL,0 FAIL/SKIP. Это не все unit пакета и не PostgreSQL component.
+Команда из control-plane module (DSN удалён из child env):
+```bash
+env -u KODEX_CONTROL_PLANE_TEST_DSN GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s ./internal/repository/postgres/platform -run '^(TestListProjectsQueryDoesNotMixNamedAndPositionalArguments|TestAssistantConversationTitleSQLKeepsExistingNames|TestAssistantTaskSessionSQLKeepsCanonicalSourceEligibilityAndBudget|TestProviderCompensationQueryWaitsForOwnerTransactionAndMatchesExactDescriptor|TestRuntimeSecretCursorBindsProjectAndQuery|TestArtifactCatalogCursorKeepsTimeAndAuthorityScope)$'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+17 Node unit, Go checker unit, AST1/141 directives/141 SQL bytes,
+selected-doc scope29/29,5 addressed ignores, gofmt/diff-check — PASS LOCAL.
+Начальные локальные AST/unit wrappers имели syntax errors до проверки
+application; wrappers исправлены и заново исполнены. Продуктовый FAIL
+от этих syntax errors не заявлен и прежний historical FAIL не скрыт.
+
+Raw1799/741retained/1058unresolved не изменились.5 raw keys сменили hash
+только из-за comments внутри embed declaration windows; tokens/algorithms
+не удалялись,1794 остальных keys/counts прежние. Никаких новых exclusions:
+все9 групп с queries_commands.go остаются на дальнейший semantic разбор.
+Registry623entries/741occurrences и ignore boundaries прежние.
+Рабочий canonical8tVsJg:6645sources/222excluded; Go14323/21315,missing6992;
+clone-set `815ad8d6c54f886fe23bbdd7826503028b91c8e92d9f979d3d8c1c6ee2e91df7`.
+После commit повторяются exact-SHA canonical и scoped build/unit; PR readback.
+
+Остаток Go:gateway789,CP6203. Общий -check не пройден; цель active, PR Draft.
+Generated/contracts/deps/SQL/migrations/live state неизменны. Historical
+FAIL/finding293 не исправлены; DB/owner transaction/component/live/
+browser/model/mail/STT/deploy/full acceptance — NOT RUN. Merge/ready/
+owner approve не выполняются.
 
 ## Триста двадцать третья волна — risk/report проекции и secret impact
 
