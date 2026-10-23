@@ -4,11 +4,41 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.342.0
+version: 1.343.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 343 — RPC секретов и credential projections
+
+Код `c67f297f4cebcb0be33371ce811eb57dd82a7e33`: прочитаны все transport
+методы `grpc/runtime_secrets.go`, добавлены 36 предметных EN→RU пар.
+Описаны exact RPC principal, separate metadata/reveal authority, grant и claim
+receipts, provider/runtime descriptors, nil/enum/timestamp mapping и границы
+ready endpoint без ложного обещания проверки Kubernetes. Payload authority
+DTO не объявляется доказательством: provenance/eligibility проверяет домен.
+
+Go AST до/после без комментариев и позиций совпадает. Unit grpc и build
+всего control-plane — PASS LOCAL. Восемь оставшихся окон явных nominal DTO /
+RPC adapters разобраны: общие principal/page/transportError и prepare helper
+уже вынесены, новая generic dispatcher-оболочка не выделяет предметный
+алгоритм. Добавлены только exact paths/fragment hash/count1 и причины;
+одно прежнее пересечение с session archive повторно прочитано и обновлено
+по content hash после комментария, без расширения исключения.
+
+PASS LOCAL: assessor unit, пять ignore guards, gofmt/diff-check. Первый
+запуск grpc unit из корня worktree ошибочно указал несуществующий локальный
+пакет; повтор из Go-модуля control-plane успешно выполнил unit и build.
+Отдельная scratch AST-утилита также потребовала компиляции перед передачей
+пути Go-файла как argv; успешное сравнение выполнено с готовым бинарём.
+
+Замер: **6651 own / 222 excluded, 1780 raw / 788 retained /
+992 unresolved; Go 15232/21338, missing 6106**. Clone-set SHA256
+`8716108a3f43d36e528cba93189ab0063e764b8f7a0b0f5ecf1076648606125b`.
+Общий финальный `-check`, общий build/unit и незакрытые historical FAIL/finding
+остаются открытыми. В #1824 нет заявления о готовности/приёмке или merge.
+Секреты и generated output не менялись; новых live/ИИ-запусков нет.
 
 ## Волна 342 — интеграция исправлений и операции секретов
 
