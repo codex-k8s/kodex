@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.337.0
+version: 1.338.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,37 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста тридцать восьмая волна — каталог управляемых конфигураций
+
+Предыдущий опубликованный SHA — `ca3a08e8d59dc754784dc4a28c3d3b920a08d18b`.
+Прочитаны все 23 SQL-файла, встроенных в `queries_managed_configuration.go`,
+и связанные вызовы публикации; каждому Go-объявлению дана предметная пара
+EN→RU. Разделены CAS-путь привязки потребителя и upsert-путь без
+expected-version, создание Git/UI-owned наборов, проверка допустимых видов
+потребителей, снимок привязок с дайджестом полного scope и отображение
+STT без provider request. Для публикации комментарий ограничен фактическим
+SQL: строка возвращается лишь при успешных publication и set update;
+ошибку и транзакционный rollback обрабатывает вызывающий код. Список и
+чтение набора не превращены в выдачу прав.
+
+Go AST совпал; все 23 `go:embed` директивы и SQL-байты прежние. SHA-256
+путей и содержимого SQL:
+`d89693bd87ba9f62c981caebf4c9d1fadcfc6d8563b424304d9766524f762c46`.
+Четыре выбранных hermetic unit по конфигурации/привязкам/STT и полный
+build control-plane (`-p 2`) — PASS LOCAL; это не PostgreSQL component.
+17 Node unit, Go checker unit, AST, 23/23 пары, пять точных ignore-маркеров,
+`gofmt` и `git diff --check` — PASS LOCAL.
+
+Canonical LE9E6w до коммита: 6647 собственных файлов, 222 исключения,
+1795 raw, 763 retained, 1032 unresolved. Clone-set SHA-256 прежний
+`8d9727aa5e1bd5fd7d0173098419aed13f96f84a8b0bd5a8c6cb622b8f25d437`.
+Go: 15002/21320 двуязычных объявлений, непокрыты 6318. Raw report
+SHA-256 `b41f5ef8133f4f1fe493f11fc29e9f5aaccc3ad9331593848cb45cc068ef4f28`.
+Полный Go `-check` и разбор 1032 групп открыты. Historical
+FAIL/finding293 не закрыты; browser, live, model, mail, STT, component,
+deploy и полная приёмка — NOT RUN. Issue открыт, PR Draft;
+до общей приёмки и merge ещё не готов.
 
 ## Триста тридцать седьмая волна — каталог SQL runtime-секретов
 
