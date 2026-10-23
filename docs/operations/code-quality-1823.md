@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.327.0
+version: 1.328.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,80 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцать восьмая волна — gRPC casters и два номинальных повтора
+
+Предыдущий опубликованный SHA — `b9acafd71325fcb068d118d23a7e6c29ac24a7de`.
+Exact AYhUMV:6645 sources/222 excluded,1799 raw/750 retained/1049 unresolved;
+Go14589/21315,missing6726. Issue open/Draft head/body327 подтверждены.
+Предыдущий goal-ход — progress:79 runtime SQL bindings опубликованы.
+
+Весь caster.go прочитан; все89 его объявлений, включая constant и private
+functions, получили содержательные EN→RU комментарии. Дополнительно описан
+castProviderDefinition в mvp_queries.go — полный второй конец clone window.
+Другие объявления mvp_queries.go этой волной не названы покрытыми.
+
+Описаны реальные особенности, не только имена:
+- нулевой timestamp означает absence; timestamppb.New не вызывает CheckValid;
+  structure игнорирует ошибку преобразования и возвращает пустой Struct;
+  gate preview проходит JSON-нормализацию с nil при ошибке;
+- разные enum fallbacks: unknown→zero, пустой artifact lifecycle→ACTIVE,
+  volume fallback→disk, protocol fallback→TCP, Kubernetes только NONE;
+- nextActions/projectPermissions пропускают неизвестные, gateDecisions
+  сохраняет их как zero; порядок, duplicates и nil/empty не переписываются;
+- runtime/config/image/credential descriptors — проекции, не загрузка
+  секретов, admission, исполнение либо новая выдача grants;
+- workflow step position/timeout defaults, optional activity/published/draft
+  presence, bound schedule target version и authoritative readiness сохранены;
+- event actor/tool-call/message/execution deltas не создают новое provenance;
+  OwnerGate read не является решением человека либо исполнением эффекта;
+- file content redaction — shallow copy без top-level content, не рекурсивная
+  универсальная очистка; title bounded по160 Unicode code points с ellipsis,
+  summary неизменен; plans вставляются в историю по сохранённым timestamps;
+- receipt conflict conversion сохраняет фактическое игнорирование ошибок;
+  assistant display summary имеет BUSY/Ready/recovering precedence;
+  bootstrap передаёт STT Eligible/Reason, но Available остаётся false.
+
+AST обоих полных Go-файлов совпал до/после; исполняемые выражения, порядок,
+wire types/fields и поведение не менялись. Context7
+`/websites/pkg_go_dev_google_golang_org_protobuf` проверен:
+[Struct/NewValue](https://pkg.go.dev/google.golang.org/protobuf/types/known/structpb)
+и [Timestamp/New/CheckValid](https://pkg.go.dev/google.golang.org/protobuf/types/known/timestamppb).
+Дополнительно прочитан фактически закреплённый protobuf Go source
+v1.36.12-0.20260120151049-f2248ac996af; dependency/version не менялись.
+
+Два nominal/type-2 совпадения получили точные retained decisions:
+1. castGraph nodes/edges loops + return/начало castGate против конца
+   castDefinition capabilities/fields loops + начала castGrant. Окно пересекает
+   разные объявления; общего бизнес-алгоритма нет.
+2. integration capability/configuration fields против provider authorization
+   methods/models. Четыре nominal input/output types и разные enum/metadata
+   границы; generic mapper скрыл бы только тривиальный обход.
+Оба конца каждого окна прочитаны целиком. Не добавлялись общий dispatcher,
+новый generic framework или broad ignore. Registry634 entries/752 occurrences,
+unresolved1047. Raw1799 прежние:2 hash keys изменились от comments на границах
+объявлений и сохранены exact decisions, остальные1797 keys/counts прежние.
+Это классификация нецелесообразного выноса, не устранение двух алгоритмов.
+
+Все unit gRPC пакета:88 top-level PASS,226 PASS с подтестами,0 FAIL,3 SKIP.
+Пропущены TestAssistantWarmRuntimeOwnerSnapshotTransport (нет disposable
+wire files), TestLegacyEmailClaimCasterFixture (opt-in fixture не включён),
+TestSecretOwnerLoopbackHarness (нет disposable composition). Они не PASS.
+Полный control-plane build -p=2,17 Node unit,Go checker unit,AST2,
+scope90/90,5 addressed ignores,gofmt/diff-check — PASS LOCAL.
+Команда: Go1.26.6/GOWORK=off/GOENV=off,GOMAXPROCS=4,
+go test -mod=readonly -count=1 -timeout120s -json ./internal/transport/grpc;
+go build -mod=readonly -p=2 ./... . DSN и opt-in fixture env явно unset;
+component/live не выполняются. Exact SHA проверки повторяются после commit.
+
+Canonical UypD8t:6645sources/222excluded,1799raw/752retained/1047unresolved;
+Go14679/21315,missing6636:gateway789,control-plane5847.
+Raw SHA-256 `166da0e984bce7b8a42b61cc22e23689601d95cb994c8f20851b1bd850e06d58`;
+clone-set `9860de8b29ec89be6be9106401509c819a9a75f960f620b3ae2899248cbda82f`.
+Generated/contracts/SQL/deps/migrations/live state неизменны; общий -check
+не пройден. Historical FAIL/finding293 открыты; DB/component/browser/live/
+model/mail/STT/deploy/full acceptance NOT RUN. Цель active, PR Draft,
+не готов к общей приёмке; merge/ready/owner approve нет.
 
 ## Триста двадцать седьмая волна — полный каталог SQL runtime
 

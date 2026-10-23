@@ -100,6 +100,8 @@ func (server *Server) GetProviderAccount(ctx context.Context, request *controlpl
 	return &controlplanev1.GetProviderAccountResponse{Account: account}, nil
 }
 
+// castProviderDefinition projects provider availability/readiness and ordered authorization-method/model catalogs through distinct typed casters, without probing the provider or selecting an eligible account.
+// castProviderDefinition отображает доступность и готовность провайдера и упорядоченные каталоги способов авторизации и моделей через разные типизированные преобразователи без проверки провайдера или выбора подходящего аккаунта.
 func castProviderDefinition(value entity.ProviderDefinition) *controlplanev1.ProviderDefinition {
 	result := &controlplanev1.ProviderDefinition{
 		Key: value.Key, Name: value.Name, Description: value.Description, ModelIds: value.ModelIDs,

@@ -5056,6 +5056,22 @@
       "fragmentSHA256": "21dba62a2b80fa2efc25c87aae9d9b965f8e41f295dab7e5fba2d29ab38f0ceb",
       "count": 1,
       "reason": "Точное100-token окно хвоста командных go:embed bindings сопоставлено с окном queries_workers.go. Прочитаны оба полных Go-каталога: окна состоят только из индивидуальных named string declarations и embed directives, без функций или общего исполняемого алгоритма. Удалять явные compiler-bound SQL bindings ради runtime map/FS lookup означает вводить новые key/init/error paths, а не устранять повтор SQL. Сами SQL statements и остальные группы не исключены. Только эта пара путей/fragment/count1, не catalogs целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/caster.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/caster.go",
+      "fragmentSHA256": "1f8d1cacd73b1746ed7551adb727185d3e53a10a35c3248b552f027437bd8fb2",
+      "count": 1,
+      "reason": "Прочитаны целиком castGraph, castGate, castDefinition и castGrant. Type-2 окно захватывает результат графа, отдельные циклы nodes/edges, return и начало следующего caster, сравнивая их с концом metadata literal определения, циклами capabilities/configuration fields, return и началом grant caster. Это четыре разные типизированные проекции с разными полями и enum fallback, не повтор одного алгоритма. Общий map/composer заменил бы лишь тривиальный обход и искусственно связал graph и integration contracts; общей бизнес-операции здесь нет. Сохранены явные named casters; исключено только точное окно по паре путей, fragment SHA-256 и count1, не файл или все циклы."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/caster.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/mvp_queries.go",
+      "fragmentSHA256": "c6f9897d457b4167f9ec3b1633a81f99bbd20288257093ab41d1015baf3b3b27",
+      "count": 1,
+      "reason": "Прочитаны целиком castDefinition и castProviderDefinition и примыкающие объявления обоих окон. Совпадает форма двух последовательных typed loops и return после разных metadata literals: integration capabilities/configuration fields против provider authorization methods/models. Поля, входные/выходные типы, enum-преобразования, readiness и версии независимы; общей проверки или бизнес-вычисления не дублируется. Универсальный mapper лишь скроет тривиальные циклы без объединения смыслового поведения; общий каталог provider/integration нарушил бы точность контрактов. Оставлены отдельные casters, исключены только эти пути, точный fragment SHA-256 и count1; другие RPC/caster groups остаются в анализе."
     }
   ]
 }
