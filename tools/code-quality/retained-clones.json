@@ -4920,6 +4920,30 @@
       "fragmentSHA256": "ca36b877f957f46c8cdeb6c787595318053b10d87520929a3196f07a6292d6e0",
       "count": 1,
       "reason": "Сопоставлены перекрывающиеся со сдвигом на один элемент окна ОДНОГО выбранного RPC-method oracle. Повторяются форма selector и разделители, но каждый method constant задаёт отдельный ожидаемый защищённый RPC. Второго исполняемого блока нет; сокращение до общего production registry сделало бы authority projection test самоподтверждающимся. Оставлен exact window с digest и count, а не весь тест или каталог."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "fragmentSHA256": "b46f92d2da9b68be3b08c5d0924de1c707cd070d144b679d1229923c5a450257",
+      "count": 1,
+      "reason": "После вынесения общего exact conversation/ref/version/target-state результата archive/restore осталось261-token перекрывающееся окно конца archive, полного restore и начала purge. Совпадают opaque-ref guard, requireVersionedMutation и writeRPCProblem, уже общие primitives. Три команды имеют разные generated requests/owner methods, ARCHIVED/ACTIVE против bodyless purge204 и отдельного exact purge receipt. Универсальный callback dispatcher скрыл бы явные lifecycle команды без нового общего алгоритма. Исключён только exact fragment двух координат этого файла, count1; общий validator и остальные handlers не скрыты."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "fragmentSHA256": "c6f3269d0a2f3aacfef48c3cd12b332c6c7be11257c01ec78f3e844fde8d96dd",
+      "count": 1,
+      "reason": "Окно125tokens сравнивает archive preconditions/RPC/error и начало общего state-result helper с cancel-turn preconditions/RPC/error до собственной проверки cancelled/run-ref. Opaque-ref, mandatory versioned mutation и error mapping уже общие; archive state-result вынесен отдельно. Отмена turn закрывает другой owner graph и проверяет другой response shape. Общий command wrapper связал бы разные полномочия и postconditions ради нескольких typed строк. Сохранён только exact path/fragment/count1, не cancellation или lifecycle методы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/interaction_identity_endpoints.go",
+      "fragmentSHA256": "3ead855b5df07e3ce276ce0cb0b8863f65f7950415a0cfaf31761e0edbb1aa47",
+      "count": 1,
+      "reason": "Окно126tokens сопоставляет restore-conversation preconditions и typed Assistant RPC с revoke-interaction-identity preconditions и typed Command RPC до проверки identityView. Versioned mutation и RPC problem уже общие; exact conversation state-result вынесен в helper. Восстановление диалога и отзыв внешней identity имеют разные owner boundaries, refs, postconditions и public projections. Generic mutation dispatcher здесь спрятал бы маршрутизацию без общего связного алгоритма. Только эти два пути, fragment SHA-256 и count1."
     }
   ]
 }

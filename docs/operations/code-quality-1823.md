@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.320.0
+version: 1.321.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,65 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцать первая волна — exact state-result диалога
+
+Предыдущий опубликованный SHA — `4c0881daa181b937c65fdd52ff4f0116cc59c034`.
+Exactz7xelz:6643sources/222excluded,1799raw/733retained/1066unresolved;
+Go14212/21308,missing7096. Issue open/Draft head/body320 прочитаны readback.
+Прошлая итерация — progress: два image-page повтора и54 docs опубликованы.
+
+Полностью перечитаны assistant_endpoints.go и assistant_archive_test.go,
+specialized caller/error branches и общий writeMessage. Общая проверка
+exact conversation ref, positive safe version и ожидаемого ACTIVE/ARCHIVED
+плюс public response вынесена в private writeAssistantConversationState.
+Constraint допускает только два concrete archive/restore reply pointers с
+nil-safe generated getter и proto.Message; runtime reflection/any dispatcher
+не добавлены. Original RPC error branch остаётся до helper.
+Пять прежних test declarations и все5 новых helper/test declarations EN→RU;
+scope33/33. Inverse actual helper expansion даёт прежние целые AST2;
+директивы //go: прежние.
+
+| Команда | До helper | Ответ/переход владельца | Сохраняемая граница |
+| --- | --- | --- | --- |
+| archive | opaque ref + mandatory versioned mutation -> exact Archive RPC | exact ref/safe version/ARCHIVED |200 no-store/ETag, не локальная смена state |
+| restore | opaque ref + mandatory versioned mutation -> exact Restore RPC | exact ref/safe version/ACTIVE |200 no-store/ETag, без optimistic recovery |
+| purge | отдельный exact Purge RPC и проверка ConversationRef |204 без тела |helper не применяется, owner cleanup не выполняется transport |
+| cancel turn | отдельный Cancel RPC и cancelled/run-ref consistency |свой публичный reply |helper не применяется, grants/graph у владельца |
+| revoke identity | другой Command RPC и identity view/state |REVOKED identity |не объединён с conversation lifecycle |
+
+64 новых test results:24 reply-shape cases для двух concrete types,
+32 non-OK gRPC errors по обеим synthetic HTTP routes,6 missing mutation
+headers и2 top-level tests. Проверены typed nil, absent/foreign conversation,
+нулевая/отрицательная/unsafe и предельные допустимые версии, неверный state,
+точные headers/JSON с прежним public projector, отсутствие input mutation.
+Owner RPC methods и idempotency/version barriers не ослаблены. Это unit,
+не live archive/restore/purge и не owner PostgreSQL transaction.
+
+591 верхних/2852 всех выбранных gateway unit,0 FAIL/SKIP, полный gateway
+build -p=2,17 Node unit, Go checker unit, inverse AST2, scope33/33,
+5 addressed ignores, gofmt/diff-check — PASS LOCAL. Selected команда
+и packages прежние как в318. Context7 /golang/go: General interfaces/type
+sets и method sets проверены для закрытого constraint.
+
+Raw detector сохраняет1799 групп:318-token перекрывающееся окно сократилось
+до261 после выноса реального state-result; ещё два соседних окна сменили
+границы/hash (141->125 и126->126). Это НЕ три удалённых алгоритма.
+Все остальные1796 keys/counts прежние; новых test/helper clones нет.
+После чтения обоих концов три остаточных typed command-glue окна261/125/126
+получили exact retained decisions: refs/versioned mutation/error primitives
+уже общие, а generic command dispatcher скрыл бы разные owner methods и
+postconditions archive/restore/purge/cancel/revoke identity.
+Только exact paths/fragment/count1; файлы/классы команд не исключены.
+Registry618entries/736occurrences, unresolved1063.
+Рабочий canonicaldiZPd5:6645sources/222excluded; Go14222/21313,missing7091;
+clone-set `3a35fc900be199c3f41600ca0973cb0373d5521b9a1e4c01ded541ea3405ee25`.
+После commit повторяются exact-SHA canonical/build/unit, SHA/readback в PR.
+
+Остаток Go:gateway859,CP6232; общий -check не пройден. Generated/contracts/
+deps/SQL/migrations/live state неизменны. Historical FAIL и finding293 не
+исправлены; browser/component/live/model/STT/mail/deploy/full acceptance —
+NOT RUN. Цель active, PR Draft; merge/ready/owner approve не выполняются.
 
 ## Триста двадцатая волна — metadata секретов, draft lifecycle и кандидаты интеграций
 

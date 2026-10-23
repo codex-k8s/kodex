@@ -161,12 +161,7 @@ func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *htt
 		writeRPCProblem(w, err)
 		return
 	}
-	conversation := response.GetConversation()
-	if conversation == nil || conversation.Ref != ref || !validManagedVersion(conversation.Version) || conversation.State != controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ARCHIVED {
-		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "conversation", "")
+	writeAssistantConversationState(w, response, ref, controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ARCHIVED)
 }
 
 // RestoreAssistantConversation requires exact reference/versioned mutation and validates the returned conversation identity, version and ACTIVE state rather than optimistically restoring client data.
@@ -185,12 +180,7 @@ func (server *Server) RestoreAssistantConversation(w http.ResponseWriter, r *htt
 		writeRPCProblem(w, err)
 		return
 	}
-	conversation := response.GetConversation()
-	if conversation == nil || conversation.Ref != ref || !validManagedVersion(conversation.Version) || conversation.State != controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE {
-		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "conversation", "")
+	writeAssistantConversationState(w, response, ref, controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE)
 }
 
 // PurgeAssistantConversation invokes the dedicated owner purge with versioned mutation and requires its exact conversation reference before HTTP204; it does not directly erase history or claim unrelated resources are removed.
