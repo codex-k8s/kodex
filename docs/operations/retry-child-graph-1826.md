@@ -131,7 +131,7 @@ terminal callback остаётся авторитетным переходом; 
 
 Владелец разрешил штатную доставку и слияние #1827, чтобы открытым остался
 только PR рефакторинга #1824. Для stable runtime-controller и PWA в закрытый
-local importer добавлены только два точных repository; проверка digest,
+local importer добавлены только три точных repository (controller, PWA, gateway); проверка digest,
 платформы, pin и обеих нод сохранена. Shell source проверен `bash -n`.
 
 Первый новый runner `sha256:54008254165f1cbd0afb4319f9cfdcf942c23222094ba647222236bc47e5de5c`
