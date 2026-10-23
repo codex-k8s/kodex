@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -62,12 +63,12 @@ func normalizeWorkspaceAccess(ctx context.Context, directory *os.File, policy ru
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemDirectoryIdentity)
 	}
 	usage := workspaceAccessUsage{entries: 1}
-	return normalizeWorkspaceAccessTree(ctx, directory, policy, runnerUID, providerUID, group, &usage)
+	return normalizeWorkspaceAccessTree(ctx, directory, int(directory.Fd()), "", policy, runnerUID, providerUID, group, &usage)
 }
 
 type workspaceAccessUsage struct{ entries, bytes int64 }
 
-func normalizeWorkspaceAccessTree(ctx context.Context, directory *os.File, policy runtimecontract.RuntimeWorkspacePolicy, runnerUID, providerUID, group uint32, usage *workspaceAccessUsage) error {
+func normalizeWorkspaceAccessTree(ctx context.Context, directory *os.File, workFD int, relative string, policy runtimecontract.RuntimeWorkspacePolicy, runnerUID, providerUID, group uint32, usage *workspaceAccessUsage) error {
 	if ctx.Err() != nil {
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemContext)
 	}
@@ -116,13 +117,28 @@ func normalizeWorkspaceAccessTree(ctx context.Context, directory *os.File, polic
 			if unix.Fstatat(int(directory.Fd()), name, &after, unix.AT_SYMLINK_NOFOLLOW) != nil || !sameWorkspaceAccessStat(before, after) {
 				return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemMetadataChanged)
 			}
+		case unix.S_IFLNK:
+			if before.Nlink != 1 {
+				return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemLinkCount)
+			}
+			if err := workspacepolicy.CheckWorkLink(workFD, path.Join(relative, name)); err != nil {
+				return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemFileType)
+			}
+			if before.Size < 0 || before.Size > policy.MaximumWritableBytes-usage.bytes {
+				return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemByteQuota)
+			}
+			usage.bytes += before.Size
+			var after unix.Stat_t
+			if unix.Fstatat(int(directory.Fd()), name, &after, unix.AT_SYMLINK_NOFOLLOW) != nil || !sameWorkspaceAccessStat(before, after) {
+				return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemMetadataChanged)
+			}
 		case unix.S_IFDIR:
 			fd, err := openWorkspaceAccessDirectory(int(directory.Fd()), name)
 			if err != nil {
 				return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemEntryOpen)
 			}
 			child := os.NewFile(uintptr(fd), "runtime-working-descendant")
-			err = normalizeWorkspaceAccessChild(ctx, directory, child, name, before, policy, runnerUID, providerUID, group, usage)
+			err = normalizeWorkspaceAccessChild(ctx, directory, child, name, before, workFD, path.Join(relative, name), policy, runnerUID, providerUID, group, usage)
 			closeErr := child.Close()
 			if err != nil {
 				return err
@@ -137,7 +153,7 @@ func normalizeWorkspaceAccessTree(ctx context.Context, directory *os.File, polic
 	return nil
 }
 
-func normalizeWorkspaceAccessChild(ctx context.Context, parent, child *os.File, name string, before unix.Stat_t, policy runtimecontract.RuntimeWorkspacePolicy, runnerUID, providerUID, group uint32, usage *workspaceAccessUsage) error {
+func normalizeWorkspaceAccessChild(ctx context.Context, parent, child *os.File, name string, before unix.Stat_t, workFD int, relative string, policy runtimecontract.RuntimeWorkspacePolicy, runnerUID, providerUID, group uint32, usage *workspaceAccessUsage) error {
 	var opened unix.Stat_t
 	if unix.Fstat(int(child.Fd()), &opened) != nil || !sameWorkspaceAccessStat(before, opened) || opened.Mode&unix.S_IFMT != unix.S_IFDIR {
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemMetadataChanged)
@@ -145,7 +161,7 @@ func normalizeWorkspaceAccessChild(ctx context.Context, parent, child *os.File, 
 	if opened.Uid == runnerUID && opened.Uid != providerUID && (opened.Gid != group || opened.Mode&0o050 != 0o050) {
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemDirectoryIdentity)
 	}
-	if err := normalizeWorkspaceAccessTree(ctx, child, policy, runnerUID, providerUID, group, usage); err != nil {
+	if err := normalizeWorkspaceAccessTree(ctx, child, workFD, relative, policy, runnerUID, providerUID, group, usage); err != nil {
 		return err
 	}
 	if ctx.Err() != nil {

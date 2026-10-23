@@ -246,8 +246,8 @@ export const serverTokenTranslations = {
     "Runtime input exceeds the size limit",
   ],
   RUNTIME_ARTIFACT_INVALID: [
-    "Не удалось подготовить файлы результата",
-    "Could not prepare result files",
+    "Не удалось проверить или сохранить файлы рабочего каталога",
+    "Could not validate or save workspace files",
   ],
   RUNTIME_WORKFLOW_INCOMPLETE: [
     "Процесс завершился до выполнения всех этапов",

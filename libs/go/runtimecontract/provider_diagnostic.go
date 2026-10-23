@@ -36,8 +36,13 @@ type ProviderFailureDiagnostic struct {
 func (value ProviderFailureDiagnostic) Validate() error {
 	if value.Schema != ProviderFailureDiagnosticSchema || !sha256Pattern.MatchString(value.RuntimeRevisionDigest) ||
 		!sha256Pattern.MatchString(value.InputDigest) || !sha256Pattern.MatchString(value.ExecutionBindingDigest) ||
-		!opaqueReferencePattern.MatchString(value.SessionRef) || !opaqueReferencePattern.MatchString(value.TurnRef) || value.Attempt < 1 ||
-		!slices.Contains(strings.Fields("SELECTION CONTEXT BROKER_REQUEST AUTH_READ MCP_BINDING MCP_BRIDGE HOME_PREPARE ACCOUNT_PIN ARCHIVE_RESTORE PROCESS_START INITIALIZE SKILLS ACCOUNT_READ THREAD_CALL THREAD_BIND MCP_READINESS USAGE_BASELINE TURN_PARAMETERS TURN_START TERMINAL_WAIT THREAD_READ PROCESS_STOP TERMINAL_RESULT ARCHIVE_CAPTURE UNKNOWN"), value.Stage) ||
+		!opaqueReferencePattern.MatchString(value.SessionRef) || !opaqueReferencePattern.MatchString(value.TurnRef) || value.Attempt < 1 {
+		return errProviderDiagnostic
+	}
+	if value.Kind == "TERMINAL_FAILURE" && value.Class == "WORKSPACE" {
+		return value.validateWorkspaceFailure()
+	}
+	if !slices.Contains(strings.Fields("SELECTION CONTEXT BROKER_REQUEST AUTH_READ MCP_BINDING MCP_BRIDGE HOME_PREPARE ACCOUNT_PIN ARCHIVE_RESTORE PROCESS_START INITIALIZE SKILLS ACCOUNT_READ THREAD_CALL THREAD_BIND MCP_READINESS USAGE_BASELINE TURN_PARAMETERS TURN_START TERMINAL_WAIT THREAD_READ PROCESS_STOP TERMINAL_RESULT ARCHIVE_CAPTURE UNKNOWN"), value.Stage) ||
 		!slices.Contains(strings.Fields("AUTHENTICATION AUTHORITY MCP CONFIGURATION PROVIDER ACCOUNT_RESPONSE_SCHEMA"), value.Class) ||
 		!slices.Contains(strings.Fields("NONE REQUEST_WRITE CONTEXT_CANCELLED STREAM_CLOSED STREAM_INVALID NOTIFICATION_INVALID REQUEST_REJECTED RESPONSE_CORRELATION MESSAGE_KIND RPC_ERROR RESUME_SOURCE_SCHEMA RESUME_SOURCE_ID RESUME_SOURCE_LOCATOR RESUME_SOURCE_OPEN RESUME_SOURCE_METADATA RESUME_SOURCE_IDENTITY"), value.Detail) ||
 		!slices.Contains([]string{"NONE", "UNKNOWN", "thread/tokenUsage/updated", "rawResponse/completed"}, value.Notification) ||
@@ -91,5 +96,28 @@ func (value *ProviderFailureDiagnostic) UnmarshalJSON(raw []byte) error {
 		return errProviderDiagnostic
 	}
 	*value = ProviderFailureDiagnostic(decoded)
+	return nil
+}
+
+// validateWorkspaceFailure accepts only guard-selected completion stages and
+// reasons. It does not admit paths, exception messages or caller-supplied text.
+// validateWorkspaceFailure допускает только назначенные проверкой этапы и причины
+// завершения, без путей, сообщений исключений и произвольного текста.
+func (value ProviderFailureDiagnostic) validateWorkspaceFailure() error {
+	if value.TerminalCode != "RUNTIME_ARTIFACT_INVALID" || value.Notification != "NONE" || value.NotificationError != "NONE" || value.AccountRead != "NONE" {
+		return errProviderDiagnostic
+	}
+	reasons := ""
+	switch value.Stage {
+	case "WORKSPACE_NORMALIZATION", "OUTBOX_PUBLICATION":
+		reasons = "UNKNOWN CONTEXT_DONE POLICY_INVALID LOCK_UNAVAILABLE DIRECTORY_UNAVAILABLE DIRECTORY_IDENTITY_INVALID ENTRY_COUNT_EXCEEDED ENTRY_NAME_INVALID ENTRY_OPEN_DENIED FILE_TYPE_INVALID OWNER_INVALID LINK_COUNT_INVALID FILE_SIZE_INVALID BYTE_QUOTA_EXCEEDED MOUNT_INVALID PERMISSION_UPDATE_FAILED METADATA_CHANGED FILESYSTEM_IO_FAILED"
+	case "CHECK_WORKSPACE", "PUBLISH_RESULT":
+		reasons = "READ_ONLY QUOTA_EXCEEDED PATH_OUTSIDE_WORKSPACE RUNTIME_IO_ERROR"
+	default:
+		return errProviderDiagnostic
+	}
+	if !slices.Contains(strings.Fields(reasons), value.Detail) {
+		return errProviderDiagnostic
+	}
 	return nil
 }
