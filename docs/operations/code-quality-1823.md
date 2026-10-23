@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.335.0
+version: 1.336.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,38 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста тридцать шестая волна — каталог SQL артефактов
+
+Предыдущий опубликованный SHA — `8d76c2626149841fe8ab0615fadb28741b5ea6c2`.
+Прочитаны все 30 SQL-файлов, встроенных в `queries_artifacts.go`; каждому
+Go-объявлению дана предметная пара EN→RU. Явно разграничены выборка ACTIVE
+артефакта для download grant (ещё без требования CLEAN), одноразовое
+погашение grant с повторной проверкой CLEAN/ACTIVE/view/download и чтение
+объекта после этого. Отдельно описаны 30-дневное окно удаления, ограничение
+запроса queued dependencies, impact read model и последовательность purge;
+финальный SQL PURGED не содержит собственного expected-version предиката.
+Комментарии не превращают SQL-проекцию в решение о полномочиях или допуске.
+
+Go AST совпал; все 30 `go:embed` директив и SQL-байты прежние. SHA-256
+путей и содержимого SQL:
+`cc4ec0fedbac03c011ded9a754671fcc0031ba4eaa1a2fd7fc3e77bf21e8807b`.
+Четыре выбранных hermetic unit по artifact download/cursor/purge и полный
+build control-plane (`-p 2`) — PASS LOCAL; это не PostgreSQL component.
+17 Node unit, Go checker unit, AST, 30/30 пар, пять точных ignore-маркеров,
+`gofmt` и `git diff --check` — PASS LOCAL.
+
+Canonical faE5AB до коммита: 6647 собственных файлов, 222 исключения,
+1795 raw, 763 retained, 1032 unresolved. Все точные
+`format/path/fragment SHA/count` группы прежние. Go: 14953/21320
+двуязычных объявлений, непокрыты 6367. Raw report SHA-256
+`7cd766113061c30bf8e0ad07953aadf881f1adc01fd073e8bdfb31c8402c6582`,
+clone-set SHA-256 прежний
+`8d9727aa5e1bd5fd7d0173098419aed13f96f84a8b0bd5a8c6cb622b8f25d437`.
+Полный Go `-check` и разбор 1032 групп открыты. Historical
+FAIL/finding293 не закрыты; browser, live, model, mail, STT, component,
+deploy и полная приёмка — NOT RUN. Issue открыт, PR Draft;
+до общей приёмки и merge ещё не готов.
 
 ## Триста тридцать пятая волна — единый фильтр состояния памяти и навыков
 
