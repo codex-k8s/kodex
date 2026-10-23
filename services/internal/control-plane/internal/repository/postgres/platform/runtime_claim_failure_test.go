@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// TestRuntimeCandidateEligibilityDoesNotHideInfrastructureFailure checks all six wrapped domain outcomes against infrastructure and joined-error counterexamples so a provider/database interruption cannot be treated as revoked eligibility.
+// TestRuntimeCandidateEligibilityDoesNotHideInfrastructureFailure проверяет все шесть обёрнутых доменных исходов и инфраструктурные/объединённые контрпримеры, чтобы перебой провайдера/БД не трактовался как отзыв доступности.
 func TestRuntimeCandidateEligibilityDoesNotHideInfrastructureFailure(t *testing.T) {
 	for _, err := range []error{errs.ErrConflict, errs.ErrVersionMismatch, errs.ErrNotFound, errs.ErrForbidden, errs.ErrCapabilityRequired, errs.ErrInvalid} {
 		if !runtimeCandidateEligibilityFailure(fmt.Errorf("candidate eligibility: %w", err)) {
@@ -28,6 +30,8 @@ func TestRuntimeCandidateEligibilityDoesNotHideInfrastructureFailure(t *testing.
 	}
 }
 
+// TestRuntimeEligibilityErrorClassIsBounded verifies the fixed domain class mapping, wrapped-sentinel support and unknown fallback without leaking an arbitrary diagnostic string into class output.
+// TestRuntimeEligibilityErrorClassIsBounded проверяет фиксированное отображение доменных классов, поддержку обёрнутой sentinel и unknown без переноса произвольной диагностической строки в класс.
 func TestRuntimeEligibilityErrorClassIsBounded(t *testing.T) {
 	for _, test := range []struct {
 		err  error

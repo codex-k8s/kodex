@@ -9,7 +9,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestArtifactDownloadDiagnosticClosesUnknownValuesAndDropsRawCause proves stage/class/SQLSTATE/attempt normalization and retention of only a canonical domain cause even when the original error contains synthetic private SQL/token-like text.
+// TestArtifactDownloadDiagnosticClosesUnknownValuesAndDropsRawCause доказывает нормализацию stage/class/SQLSTATE/attempt и сохранение лишь канонической доменной причины даже при синтетическом приватном SQL/token-like тексте исходной ошибки.
 func TestArtifactDownloadDiagnosticClosesUnknownValuesAndDropsRawCause(t *testing.T) {
+	// private is deliberately synthetic sensitive-looking text used to prove that canonical diagnostic errors discard the original cause.
+	// private — намеренно синтетический текст, похожий на чувствительные данные, для доказательства удаления исходной причины канонической диагностикой.
 	const private = "token=PRIVATE_DIAGNOSTIC_SENTINEL user@example.test SELECT secret"
 	for _, test := range []struct {
 		input               Diagnostic
@@ -35,6 +39,8 @@ func TestArtifactDownloadDiagnosticClosesUnknownValuesAndDropsRawCause(t *testin
 	}
 }
 
+// TestArtifactDownloadDiagnosticKeepsExpectedDenialAndRejectsUntypedError checks that expected denials/nil retain identity, forged diagnostic-looking text gains no typed authority and bounded attempt metadata preserves the domain outcome.
+// TestArtifactDownloadDiagnosticKeepsExpectedDenialAndRejectsUntypedError проверяет неизменность ожидаемых отказов/nil, отсутствие типизированных полномочий у похожего на диагностику текста и сохранение доменного результата при добавлении ограниченной попытки.
 func TestArtifactDownloadDiagnosticKeepsExpectedDenialAndRejectsUntypedError(t *testing.T) {
 	for _, outcome := range []error{errs.ErrForbidden, errs.ErrNotFound, errs.ErrVersionMismatch, errs.ErrInvalid, nil} {
 		if WithFailure(outcome, NewDiagnostic(StageSelect, ClassPostgres, "40001")) != outcome {
