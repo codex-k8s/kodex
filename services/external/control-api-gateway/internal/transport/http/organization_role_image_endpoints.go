@@ -108,30 +108,7 @@ func (server *Server) ListSystemRoleImageRecipes(writer http.ResponseWriter, req
 		writeRPCProblem(writer, err)
 		return
 	}
-	if response == nil || response.GetTotal() < int64(len(response.GetRecipes())) || response.GetTotal() > maximumSafeJSONInteger || len(response.GetRecipes()) > 100 ||
-		parameters.PageSize != nil && len(response.GetRecipes()) > *parameters.PageSize {
-		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	result := generated.RoleImageRecipePage{Items: make([]generated.RoleImageRecipe, 0, len(response.GetRecipes())), Total: response.GetTotal()}
-	seen := make(map[string]bool, len(response.GetRecipes()))
-	for _, recipe := range response.GetRecipes() {
-		if recipe == nil || !validOrganizationRoleImageRecipe(recipe) || !effectiveCapabilityRef(recipe.GetRef()) || seen[recipe.GetRef()] ||
-			!validRoleImageLineage(recipe.GetManagedLineage()) || !validRoleImageSource(recipe) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		seen[recipe.GetRef()] = true
-		result.Items = append(result.Items, publicRoleImageRecipe(recipe))
-	}
-	if token := response.GetPage().GetNextPageToken(); token != "" {
-		if !boundedModelText(token, 512) || token == stringValue(parameters.PageToken) || len(result.Items) == 0 {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		result.NextPageToken = &token
-	}
-	writeJSON(writer, http.StatusOK, result)
+	writeRoleImageRecipePage(writer, response, parameters.PageSize, parameters.PageToken, validOrganizationRoleImageRecipe)
 }
 
 // GetSystemRoleImageRecipe requires the exact recipe and organization scope, validates related build/artifact ownership, lineage/source and risk history, then projects detail/admission failure with version ETag without performing admission itself.

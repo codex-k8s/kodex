@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.318.0
+version: 1.319.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,71 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста девятнадцатая волна — общая страница рецептов образов
+
+Предыдущий опубликованный SHA — `5f97af66884c452a18954b27a86cb2bd840e31f0`.
+Exactj1L2N4:6641 sources,222 excluded,1801 raw/733 retained/
+1068 unresolved; Go14150/21300,missing7150. Issue open, Draft PR
+head/body318 подтверждены GitHub readback; worktree/main чистые до правок.
+
+Два реальных повтора197/185tokens в ListRoleImageRecipes и
+ListSystemRoleImageRecipes вынесены в private writeRoleImageRecipePage.
+Общий алгоритм — error-free owner reply -> count/page bounds -> ordered
+unique scoped recipes -> lineage/source consistency -> advancing cursor ->
+public JSON. Partial page при любом отказе не выдаётся.
+Закрытый generic constraint принимает только два конкретных protobuf reply
+pointer, поэтому typed nil проверяется до getters без reflection.
+Пять production declarations и три test declarations описаны EN→RU;
+scope38/38. Новых бессодержательных комментариев к старым declarations нет.
+
+Полномочия не стали generic: project binding и typed project RPC остались
+в проектном endpoint, отдельный organization RPC и прежний
+validOrganizationRoleImageRecipe — в системном. Project predicate по-прежнему
+сравнивает только projectRef; дополнительные ScopeKind/organization checks
+туда не добавлялись. Organization predicate сохраняет свою точную проверку.
+Input validation, RPC error path, порядок short-circuit, getter evaluation,
+source redaction, HTTP status и JSON allocation сохранены. Helper не пишет
+business state/events, не допускает и не продвигает образ.
+
+| Путь | До helper | Внутри helper | Результат |
+| --- | --- | --- | --- |
+| project recipe list | verified project context, bounded filters/page, typed owner RPC | count/unique/old project predicate/lineage/source/cursor | полный public page либо прежний502, no write/event |
+| organization recipe list | specialized organization owner RPC, no client organization authority field | count/unique/old organization predicate/lineage/source/cursor | полный public page либо прежний502, no write/event |
+
+Два новых unit-теста дают54 новых test results с subcases: оба reply types,
+typed nil, empty array, safe-total boundary,100-item/request limits,
+nil/duplicate/foreign refs, invalid lineage/environment/source, valid source,
+advancing/repeated/oversized/invalid UTF-8/control/empty-page cursor.
+Отдельно проверены исходный порядок scope predicate, отсутствие partial
+source metadata, неизменность protobuf, разные project/org predicates,
+ordered items и отсутствие retained seen state между запросами.
+Это synthetic unit, не проверка реального image admission.
+
+Inverse actual helper expansion восстанавливает целые AST обоих старых
+файлов до318; //go: directives прежние. Context7 /golang/go:
+General interfaces/type sets, comparison operators и method sets проверены;
+два точных pointer types допускают typed-nil comparison, не any/reflection.
+
+589 верхних/2788 всех выбранных gateway unit,0 FAIL/SKIP, и полный gateway
+build -p=2 — PASS LOCAL. Команда и selected packages прежние как в318.
+17 Node unit, Go checker unit, inverse AST2, scope38/38,5 addressed ignores,
+gofmt и diff-check — PASS LOCAL.
+Canonicalcn9Fz9 рабочего дерева:6643 sources,222 excluded,1799 raw/
+733 retained/1066 unresolved; Go14158/21308,missing7150.
+Удалены ровно две исходные группы197/185tokens; added raw groups0,
+все остальные keys/counts прежние. Registry615entries/733occurrences и
+ignore markers не менялись, широких exclusions нет.
+RawSHA `fb72ca6bd242e1a7789ff9b7edaa4c10236023062ad62f4a0cff9465f5567671`;
+clone-set `df074cff99ad91e916f0665c090a7155b842aa36541d4102ba545f8aeeab4957`.
+После commit выполняются exact-SHA canonical и повторные build/unit;
+итоговый sourceSHA/readback фиксируется в текущем PR.
+
+Остаток Go:gateway918 иCP6232. Image detail и другие повторы ещё предстоит
+разобрать, общий go-docs -check не пройден. Generated/contracts/deps/SQL/
+migrations/live state не менялись. Historical FAIL и finding293 не
+исправлены; component/browser/models/image build/promotion/STT/mail/deploy/
+full acceptance — NOT RUN. Цель остаётся active, PR Draft; merge/approve нет.
 
 ## Триста восемнадцатая волна — access/assistant/image HTTP surfaces
 

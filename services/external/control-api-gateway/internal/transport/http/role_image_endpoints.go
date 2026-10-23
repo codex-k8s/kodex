@@ -51,30 +51,9 @@ func (server *Server) ListRoleImageRecipes(writer http.ResponseWriter, request *
 		writeRPCProblem(writer, err)
 		return
 	}
-	if response == nil || response.GetTotal() < int64(len(response.GetRecipes())) || response.GetTotal() > maximumSafeJSONInteger || len(response.GetRecipes()) > 100 ||
-		parameters.PageSize != nil && len(response.GetRecipes()) > *parameters.PageSize {
-		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	result := generated.RoleImageRecipePage{Items: make([]generated.RoleImageRecipe, 0, len(response.GetRecipes())), Total: response.GetTotal()}
-	seen := make(map[string]bool, len(response.GetRecipes()))
-	for _, recipe := range response.GetRecipes() {
-		if recipe == nil || recipe.GetProjectRef() != projectRef || !effectiveCapabilityRef(recipe.GetRef()) || seen[recipe.GetRef()] ||
-			!validRoleImageLineage(recipe.GetManagedLineage()) || !validRoleImageSource(recipe) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		seen[recipe.GetRef()] = true
-		result.Items = append(result.Items, publicRoleImageRecipe(recipe))
-	}
-	if token := response.GetPage().GetNextPageToken(); token != "" {
-		if !boundedModelText(token, 512) || token == stringValue(parameters.PageToken) || len(result.Items) == 0 {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		result.NextPageToken = &token
-	}
-	writeJSON(writer, http.StatusOK, result)
+	writeRoleImageRecipePage(writer, response, parameters.PageSize, parameters.PageToken, func(recipe *controlplanev1.RoleImageRecipe) bool {
+		return recipe.GetProjectRef() == projectRef
+	})
 }
 
 // GetRoleImageRecipe requires a returned recipe in the route project, validates lineage/source, builds and optional risk history, then maps detail and admission failure with version ETag. Project mismatch is NOT_FOUND; this endpoint's local check does not independently compare recipeRef to the returned recipe ref.
