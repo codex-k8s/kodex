@@ -4,7 +4,7 @@ title: Исправления повторов и завершения запу�
 type: operational-report
 status: approved
 owner: developer
-version: 1.2.0
+version: 1.3.0
 updated: 2026-10-23
 ---
 
@@ -180,3 +180,60 @@ controller callback/workload unit/build, CP platform domain/repository unit/buil
 устаревший oracle schedule preview ожидал continuation-task-projection-v1
 при уже существующем production v2: исправлен oracle, v1 явно проверяется
 как отклоняемая версия. Исполняемый continuation protocol не менялся.
+
+
+## Финальная доставка и выбранные окружения
+
+Код финальных приложений и runner: `e26e30855b41e58d7c34ae930e826bd3b19c6fad`.
+Поставлены штатными build/import/scoped-release; release
+`a0b5f6f8-63ac-4d16-98a8-fd54c03bd80d` — PASS, 2/2 Ready каждого приложения:
+
+| Компонент | Exact image digest |
+|---|---|
+| control-plane | `sha256:5fb88dc0bd780b746e5a47c90370ada7e03c7b0203451753350b616dede7b4cb` |
+| runtime-controller | `sha256:ed66619df5bed073db38389e184fc3b6549bdbbc447f8ba02c53d31ddc79386e` |
+| control-api-gateway | `sha256:bbb2a07f6a54da283adcafc49e45d8b3965af3f71ec4c9aceee60370c720bbc9` |
+| staff-control-center | `sha256:3b2a3c47e37bb547bb0a5cd14c6ed515352e664d57642b042772bc9859ac800f` |
+| platform runner | `sha256:5f99a312c24a1db213b470c2ade509c4a17711ea8aa4198582b6e3a05f9c88b0` |
+
+Runner binary SHA256 `96d4fc3d096c9e1db4503f2791b13f4e358ace334ce210586195c77e3de71c20`,
+provenance/node import/publication — PASS. Новая immutable policy
+`2b5416fb46da1fd2bed5895cfa9dada73801fc75bafa058f0e8587d92991e93e`;
+девять фаз перехода, runtime-role binding и default readback — PASS.
+Все фазы предварительно проверяли отсутствие активных runs/leases и внешних
+build/admission/promotion effects; Kubernetes Secret и DB state вручную не менялись.
+
+Образ разработки построен поверх нового runner обычной recipe generation 2,
+прошёл реальный scan/admission и отдельный promotion. Artifact
+`imgart_VMj14nhmgevDtXJChymenLoU`, digest
+`sha256:fb6c8ca4cf29aca03969eedebbea8fec891225077a61939965810868e63dda8d`.
+Оба проектных окружения опубликованы через DRAFT → VALID → impact plan →
+PUBLISHED. Все четыре exact AGENT consumers имеют outcome APPLIED; EOF
+страниц impact прочитан. Окружения revision 2 Ready, blockers пусты;
+менеджер/рецензент и архитектор/разработчик закреплены за новой версией.
+Выбран лимит 50000 файлов, byte quota 1073741824. Переменные, инструменты,
+secret descriptors и network/RBAC/volume settings сверены с прежними immutable
+версиями: сохранены. Из сравнения исключены только намеренно изменённая квота
+и её производный resourcesDigest; смена image/version/ref ожидаема.
+Штатный процесс остаётся PUBLISHED и имеет LAUNCH.
+
+Сервер потребовал FRESH_AUTHENTICATION_REQUIRED на чувствительной операции;
+выполнен штатный свежий OIDC вход владельца, затем оба validation/publication
+успешны. Защита не отключалась. Operator-only helper поддерживает явный
+private dotenv source без поиска/fallback; 25 положительных и отрицательных
+unit — PASS, включая file metadata, selected keys, TLS/Origin/peer и native
+форму. Реквизиты и содержимое private файлов в отчёт не включены.
+
+Chrome MCP после финальной поставки: точный проблемный child retry, graph/events,
+bootstrap/session/ticket/owner-gates — HTTP 200; ошибок и warnings консоли нет.
+Скриншот после вывода собственной вкладки на передний план получен и просмотрен:
+граф и предыдущая попытка доступны, карточки крупнее прежнего узкого fit.
+Первый фоновый capture не завершился и был отменён; успешный повтор выполнялся
+на той же вкладке. Другие вкладки не закрывались. Новые реальные ИИ-запуски,
+STT и полный QA не выполнялись.
+
+Во время старта новых CP/gateway Pods наблюдались 1–2 restart до Ready;
+финально обе реплики готовы, в последних 5 минутах их текущих логов новых
+ошибок нет. Controller и PWA имеют 0 restart. Это не обещание полной
+приёмки рабочего процесса; первоначальная историческая MCP-причина остаётся
+UNKNOWN и не объявляется исправленной. Старые run states/audit не изменялись.
