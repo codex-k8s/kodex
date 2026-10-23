@@ -4,11 +4,42 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.344.0
+version: 1.345.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 345 — очистка проектов и восстановление внешних объектов
+
+Код `716a184d446f6523f61fabadce1a55aa703618c8`: прочитаны четыре файла
+projectpurge (worker/recovery и их unit tests), предметно описаны все
+**61/61** объявление пакета EN→RU, включая metadata port/interface methods,
+приватные fixtures и новый helper. Документация различает owner lineage,
+контекст операции/receipt, unpinned ABSENT/pinned DELETED, точную версию и
+UID, snapshot потребителей, shared object и разные artifact/archive stores.
+Не заявляется, что подставной fixture доказывает SQL commit или live cleanup.
+
+Два одинаковых guard имени PVC объединены в `Processor.pvcName`: прежние
+SessionPVCName → exact target → nonempty namespace и текст отказа сохранены.
+Проверка всех Pod consumers до внешних effects, metadata hashes, moved-system
+lineage, UID precondition и readback остались в явных вызывающих методах.
+AST остальных трёх файлов без комментариев/позиций совпадает.
+
+PASS LOCAL: unit projectpurge, полный build control-plane, assessor unit,
+пять адресных ignore guards, gofmt/diff-check и полный новый scan.
+Перед записью source script закрылся на неоднозначном имени `source`
+(type против одноимённого struct field); match сужен до type declaration,
+после чего все нужные объявления описаны и подтверждены реестром.
+
+Замер: **6651 own / 222 excluded; 1780 raw / 788 retained /
+992 unresolved; Go 15371/21340, missing 5969**. Clone-set SHA256 прежний:
+`8716108a3f43d36e528cba93189ab0063e764b8f7a0b0f5ecf1076648606125b`.
+Реестр исключений и пороги не расширялись. Генерируемый код, SQL и applied
+миграции не менялись; нового deploy, component/live/ИИ-прогона нет.
+Следующие обязательные действия: оставшиеся 992 группы и 5969 объявлений,
+общий финальный build/unit/-check, разбор historical FAIL/finding и приёмка
+единственного #1824 владельцем. Задача не объявляется завершённой.
 
 ## Волна 344 — закрытая диагностика чтения и отказа runtime claim
 
