@@ -5367,7 +5367,7 @@
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_environment.sql",
       "fragmentSHA256": "34569df236c5cea2d11e1408b25e3b91bd413dd1c9020e4d9c6f2b95f7468d9d",
       "count": 1,
-      "reason": "Окно сравнивает environment/image/policy columns внутри agent runtime view и exact environment read. Agent view выбирает binding-pinned revision либо отдельно оговорённый system-assistant current, environment read — текущую ревизию exact окружения; одна current-only проекция подменила бы pin. Общий typed scanner уже выделен. Go SQL fragments запрещены, новая DB view/function только ради списка столбцов увеличит schema/grant surface без предметного общего алгоритма. Сохранена только точная пара/hash/count1, не eligibility, WHERE или queries целиком."
+      "reason": "Окно сравнивает environment/image/policy columns внутри agent runtime view и exact environment read. Agent view выбирает binding-pinned revision либо отдельно оговорённый system-assistant current, environment read — текущую ревизию exact окружения; одна current-only проекция подменила бы pin. Typed scanners отделены от SQL; agent view имеет составной row layout, environment read — отдельный. Go SQL fragments запрещены, новая DB view/function только ради списка столбцов увеличит schema/grant surface без предметного общего алгоритма. Сохранена только точная пара/hash/count1, не eligibility, WHERE или queries целиком."
     },
     {
       "format": "sql",
@@ -5375,7 +5375,7 @@
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_environment_lifecycle_snapshot.sql",
       "fragmentSHA256": "568db9f3b4417fc7541d3253f1d3ea1cdd13c872db26bc01b3505fe5f5347eb4",
       "count": 1,
-      "reason": "Совпадает декларативный environment snapshot column layout agent view и lifecycle snapshot. Первый читает exact agent binding revision с config/overlay и отдельной assistant-null semantics; второй — current revision nondeleted project environment для уже авторизованной lifecycle-команды, включая DISABLED. Унификация запроса смешает pinned/current и read/mutation authority. Common scanners уже есть, SQL concatenation запрещена; DB view ради списка полей непропорциональна. Исключена лишь точная пара/hash/count1, не state/authorization predicates."
+      "reason": "Совпадает декларативный environment snapshot column layout agent view и lifecycle snapshot. Первый читает exact agent binding revision с config/overlay и отдельной assistant-null semantics; второй — current revision nondeleted project environment для уже авторизованной lifecycle-команды, включая DISABLED. Унификация запроса смешает pinned/current и read/mutation authority. Сканеры составного agent view и отдельной environment row уже отделены от SQL; SQL concatenation запрещена, DB view ради списка полей непропорциональна. Исключена лишь точная пара/hash/count1, не state/authorization predicates."
     },
     {
       "format": "sql",
