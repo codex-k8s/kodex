@@ -4,11 +4,48 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.348.0
+version: 1.349.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 349 — чтение версий и решение владельца о доставке/слиянии
+
+По новому прямому указанию владельца от 23.10.2026 готовые изменения
+публикуются, доставляются и сливаются сейчас. Прежнее ограничение на merge
+#1824 снято этим указанием; это не утверждение о завершении всей #1823.
+Остаток дедубликации/комментирования и прежние незакрытые findings остаются
+в этой задаче и журнале. Новые параллельные PR не создаются.
+
+В runtime_configuration_queries.go две одинаковые коллекции SQL rows
+объединены в типизированный scanRuntimeVersionRows. Caller сохраняет прежние
+Close, cursor, scope и commit. Три проверки core/full environment digest
+используют runtimeEnvironmentVersionDigestsMatch; исключение projectless
+agent без image и прежние сообщения ошибок остаются у callers. К 21 прежнему
+и двум новым объявлениям добавлены предметные EN→RU комментарии. Не меняются
+SQL, permissions, immutable pins, транзакции и фактическое поведение
+существующего decodeStrict: decoder по-прежнему не проверяет EOF отдельно.
+
+PASS LOCAL: go test ./internal/repository/postgres/platform -count=1;
+go build ./... всего control-plane, gofmt/diff-check, точный assessor.
+Замер исходников этого этапа: **6651 own / 222 excluded; 1778 raw /
+795 retained / 983 unresolved; Go 15504/21345, missing 5841**.
+Raw report SHA256
+`b78922cef1c4eed7a20534403b1e7e6d1475778d35572542a8fbb5731f56849c`.
+Адресные исключения и пороги не расширялись. Component/full QA и новые
+реальные ИИ-запуски NOT RUN. Исторические watch-image-admission/STT FAIL
+и finding293 не считаются устранёнными.
+
+Chrome MCP снова доступен. До новой поставки точный проблемный run
+run_cotQz5RRx6XkRcMJIK00Sm86 открыт штатной перезагрузкой: один document
+request 200, graph/events/bootstrap/session HTTP 200, консоль без warn/error,
+граф отображается. Это проверка отображения существующего запуска, а не
+новый бизнес-прогон. Функциональные исправления #1827 уже слиты в main
+9339e3081bc40da194e019b4e0846d55fdd51d89 и ранее поставлены с 2/2 Ready
+у четырёх приложений; точные digest в retry-child-graph-1826.md.
+Результат новой поставки и merge фиксируется отдельной записью после
+авторитетного readback; подготовка образа сама по себе не означает доставку.
 
 ## Волна 348 — SQL-привязки runtime-конфигурации
 
