@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.336.0
+version: 1.337.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,40 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста тридцать седьмая волна — каталог SQL runtime-секретов
+
+Предыдущий опубликованный SHA — `38dd30f43d3f712cd2a2d6beb3a1b0b285afec49`.
+Прочитаны все 26 SQL-файлов, встроенных в `queries_runtime_secrets.go`;
+каждому Go-объявлению дана предметная пара EN→RU. Разделены обзорные
+project/organization выборки и чтение конкретного секрета, которое само
+не проверяет права вызывающего. Описаны точные ключи блокировки
+идемпотентной операции, сроки допуска, claimant/generation lease, CAS
+активации и отзыва, метаданные версий Kubernetes без открытых значений.
+Запрос `runtime_secret_is_referenced` отмечен как ограниченная проверка
+трёх видов ссылок, не как полное доказательство отсутствия зависимостей.
+Ни один комментарий не приписывает SQL создание либо удаление внешнего
+Kubernetes Secret или выдачу полномочий.
+
+Go AST совпал; все 26 `go:embed` директив и SQL-байты прежние. SHA-256
+путей и содержимого SQL:
+`bc9a4ae27063749d64962d55723ff3b31c37bb2079c910e1e0832eb8c5a48cec`.
+Пять выбранных hermetic unit по digest/cursor/scope/capabilities и полный
+build control-plane (`-p 2`) — PASS LOCAL; это не PostgreSQL component.
+17 Node unit, Go checker unit, AST, 26/26 пар, пять точных ignore-маркеров,
+`gofmt` и `git diff --check` — PASS LOCAL.
+
+Canonical a49drp до коммита: 6647 собственных файлов, 222 исключения,
+1795 raw, 763 retained, 1032 unresolved. Все точные
+`format/path/fragment SHA/count` группы прежние. Go: 14979/21320
+двуязычных объявлений, непокрыты 6341. Raw report SHA-256
+`7023d7bf62e9b25faf4765119f737b16718cfe421593f6626138caf9a4deb044`,
+clone-set SHA-256 прежний
+`8d9727aa5e1bd5fd7d0173098419aed13f96f84a8b0bd5a8c6cb622b8f25d437`.
+Полный Go `-check` и разбор 1032 групп открыты. Historical
+FAIL/finding293 не закрыты; browser, live, model, mail, STT, component,
+deploy и полная приёмка — NOT RUN. Issue открыт, PR Draft;
+до общей приёмки и merge ещё не готов.
 
 ## Триста тридцать шестая волна — каталог SQL артефактов
 
