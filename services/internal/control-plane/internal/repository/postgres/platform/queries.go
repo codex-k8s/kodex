@@ -1516,6 +1516,15 @@ func (repository *Repository) getRunGraph(ctx context.Context, principal value.P
 			node.InputSummary = callbackContinuationPublicText
 		}
 	}
+	if run.RetryOfRunRef != "" {
+		previous, readErr := repository.readRunWithIncidents(ctx, tx, scope, run.RetryOfRunRef)
+		if readErr != nil {
+			return entity.Run{}, entity.RunGraph{}, readErr
+		}
+		if err := projectChildRetryGraph(&graph, run, previous); err != nil {
+			return entity.Run{}, entity.RunGraph{}, err
+		}
+	}
 	if err := projectArtifactResults(ctx, tx, scope, &command.Result{Graph: &graph}); err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}

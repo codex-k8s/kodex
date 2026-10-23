@@ -729,7 +729,7 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, 
 		reverse.ServeHTTP(writer, request)
 	})
 	done := make(chan error, 1)
-	server := &http.Server{Handler: handler, ReadHeaderTimeout: 3 * time.Second,
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: 3 * time.Second, IdleTimeout: 90 * time.Second,
 		MaxHeaderBytes: 16 << 10, BaseContext: func(net.Listener) context.Context { return ctx }}
 	bridge := &providerMCPBridge{server: server, transport: transport, done: done,
 		url: "http://" + listener.Addr().String() + "/mcp"}

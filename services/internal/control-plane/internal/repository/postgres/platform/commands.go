@@ -2660,28 +2660,33 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunsRetryOfRunIdAttempt, newRunID, runID, attempt+1); err != nil {
 		return commandOutcome{}, fmt.Errorf("link retry run attempt: %w", errs.ErrUnavailable)
 	}
-	if targetType == "SYSTEM_ASSISTANT" {
-		if err := tx.QueryRow(ctx, queryAssistantRetryRootNode, scope.organizationID, rootRunID).Scan(&oldRootNodeID); err != nil {
-			return commandOutcome{}, fmt.Errorf("read prior assistant retry node: %w", errs.ErrUnavailable)
+	// Повтор дочернего запуска становится самостоятельным корнем. Его прежний
+	// процесс не является повторяемым запуском: связь доступна через RetryOfRunRef.
+	if runID == rootRunID {
+		if targetType == "SYSTEM_ASSISTANT" {
+			if err := tx.QueryRow(ctx, queryAssistantRetryRootNode, scope.organizationID, rootRunID).Scan(&oldRootNodeID); err != nil {
+				return commandOutcome{}, fmt.Errorf("read prior assistant retry node: %w", errs.ErrUnavailable)
+			}
+			if err := tx.QueryRow(ctx, queryAssistantRetryRootNode, scope.organizationID, newRootID).Scan(&newRootNodeID); err != nil {
+				return commandOutcome{}, fmt.Errorf("read new assistant retry node: %w", errs.ErrUnavailable)
+			}
+		} else {
+			if err := tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID); err != nil {
+				return commandOutcome{}, fmt.Errorf("read prior retry root node: %w", errs.ErrUnavailable)
+			}
+			if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID); err != nil {
+				return commandOutcome{}, fmt.Errorf("read new retry root node: %w", errs.ErrUnavailable)
+			}
 		}
-		if err := tx.QueryRow(ctx, queryAssistantRetryRootNode, scope.organizationID, newRootID).Scan(&newRootNodeID); err != nil {
-			return commandOutcome{}, fmt.Errorf("read new assistant retry node: %w", errs.ErrUnavailable)
+		edgeRef, _ := newRef("edg")
+		if _, err := tx.Exec(ctx, queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, oldRootNodeID, newRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("insert retry lineage edge: %w", errs.ErrUnavailable)
 		}
-	} else {
-		if err := tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID); err != nil {
-			return commandOutcome{}, fmt.Errorf("read prior retry root node: %w", errs.ErrUnavailable)
-		}
-		if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID); err != nil {
-			return commandOutcome{}, fmt.Errorf("read new retry root node: %w", errs.ErrUnavailable)
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "i18n:RUN_RETRY_CREATED", "QUEUED", ""); err != nil {
+			return commandOutcome{}, err
 		}
 	}
-	edgeRef, _ := newRef("edg")
-	if _, err := tx.Exec(ctx, queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, oldRootNodeID, newRootNodeID); err != nil {
-		return commandOutcome{}, fmt.Errorf("insert retry lineage edge: %w", errs.ErrUnavailable)
-	}
-	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "i18n:RUN_RETRY_CREATED", "QUEUED", ""); err != nil {
-		return commandOutcome{}, err
-	}
+
 	retryRun, graph, err := repository.readRunGraphTx(ctx, tx, scope, outcome.result.Run.Ref)
 	if err != nil {
 		return commandOutcome{}, err
