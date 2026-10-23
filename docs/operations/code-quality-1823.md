@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.324.0
+version: 1.325.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,96 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцать пятая волна — полный каталог SQL команд
+
+Предыдущий опубликованный SHA — `44fa57d633b39c0d4a1d530b1fcf4ac888c6995d`.
+ExactaQPZVe:6645sources/222excluded,1799raw/741retained/1058unresolved;
+Go14323/21315,missing6992. Issue open/Draft head/body324 подтверждены readback.
+Предыдущий goal-ход323/324 — progress: severity helper и64 docs опубликованы.
+
+Прочитаны все оставшиеся112 SQL sources и весь хвост Go-каталога.
+Их112 declarations EN→RU дополняют29 из324: queries_commands.go теперь
+141/141. Это полное покрытие именно Go bindings данного каталога, не всего
+control-plane. SQL sources других каталогов не названы прочитанными только
+из-за чтения их Go declaration lists.
+
+Комментарии привязаны к actual SQL:
+- agent create/change различает READY metadata и actual runtime readiness,
+  non-system/OCC guards, same-project role lookup и ref-only readback;
+- editable instruction states, next-version max-plus-one, rollback parent,
+  publication time и отдельное agent version advancement описаны без
+  выдуманной самостоятельной tenant/actor/serialization защиты ID-only SQL;
+- capability grant проверяет closed capability/permission mapping, а array
+  append/remove, integration grant enable/revoke и version update — разные
+  statement. Scope аргументы не являются authentication proof;
+- workflow draft/validation/publication/archive сохраняют разные guards:
+  coordinator READY/enabled, version row/spec pins, active-run guard и
+  отдельная schedule suspension. Meta-state не равен готовой workload;
+- launch queries проверяют published instruction/target/runtime contract,
+  session reuse без active turn, unique ACTIVE CLEAN input coverage/512MiB;
+  QUEUED run/session-turn/graph insertion — не provider claim или запуск;
+- platform/run event sequence и outbox insert — durable owner transaction,
+  не прямой publish. safe_delta/tool_call JSON не очищается самим SQL;
+- node-delta child refs зависят от materialized delegation/callback либо
+  required-workflow provenance joins, не просто client parent IDs;
+- root cancellation отдельно закрывает runs/nodes/leases/turns/occurrences/
+  gates/integration effects; running writes и claimed deliveries сохраняют
+  UNKNOWN_OUTCOME вместо ложного завершения внешней отмены;
+- continuation/retry anchor lookup с LIMIT1 не доказывает uniqueness/lineage,
+  связывание edge и fresh runtime authority остаются owner lifecycle;
+- gate resolution использует exact waiting invocation/grant/definition/scope
+  pins, scoped approval24h/max100/reserved1 и отдельное scope attachment;
+- change-request requeue очищает progress/errors/time, увеличивает attempt,
+  а gate/root completion statements сами не проверяют весь граф.
+
+| Семейство | Сохраняемые ограничения | Граница доказательств |
+| --- | --- | --- |
+| agents/instructions/capabilities | actual tenant/ref/version/state, отдельные locks и selectors | comments/SQL bytes, не live grant/profile update |
+| workflow/launch/session | target readiness predicates и immutable selected version, graph/turn composition | no provider claim, DB concurrency NOT RUN |
+| events/deltas/outbox | exact IDs/sequences/provenance и supplied safe JSON | no broker publish/rejoin test |
+| cancel/continue/retry | отдельные owner graph statements, uncertain effect outcome | no live cancellation or new grants |
+| Human Gate | locked OPEN gate и exact waiting invocation/scope pins | no real decision/send approval |
+
+AST всего Go-файла, все141 go:embed directives и байты всех141 SQL прежние.
+SQL-set SHA-256 по точным путям/content:
+`8a0460ed60625d156809be20013252750e1e231fe4ad7de3dde96b8b59e5ee43`.
+Context7 PostgreSQL18 [row locks](https://www.postgresql.org/docs/18/explicit-locking.html)
+и [SELECT locking clause](https://www.postgresql.org/docs/18/sql-select.html)
+проверены; SQL не исполнялся ради проверки комментариев.
+
+Шесть выбранных hermetic platform unit из324 и полный control-plane build
+-p=2 — PASS LOCAL,0 FAIL/SKIP. Это не все unit пакета и не PostgreSQL component.
+17 Node unit, Go checker unit, AST1/141 directives/141 exact SQL byte checks,
+full-doc scope141/141,5 addressed ignores, gofmt/diff-check — PASS LOCAL.
+Команда scoped tests/build и DSN-unset прежние как в324; после commit
+повторяются exact-SHA проверки и PR readback.
+
+Также полностью прочитаны Go declaration catalogs configuration156,
+runtime164, workers106, role_images112 строк. Все9 raw groups, связанные
+с queries_commands.go, получили exact retained decisions:
+-157/165/107/102 tokens: compiler-bound named string/embed lists разных
+  command/config/runtime/worker/supply-chain statements, не executable helper;
+-280 tokens: перекрывающиеся со сдвигом на declaration окна одного списка,
+  второго исполняемого блока нет;
+-четыре100-token окна: такие же точные declaration tails против соседних
+  каталогов. Runtime FS/key map ради формы declarations добавил бы новые
+  init/error paths, а не устранил SQL-алгоритм.
+Сами SQL statements и их clone groups не исключены. Полных файлов,
+директорий, embed-профиля или SQL формата в exclusions нет.
+Registry632entries/750occurrences, unresolved1049; ignore markers прежние.
+
+Raw1799 неизменны:9 old/new hashes изменились только от docs внутри
+declaration windows,1790 остальных keys/counts прежние; алгоритмы не удалялись.
+Рабочий canonicalBLVk6I:6645sources/222excluded; Go14435/21315,missing6880;
+clone-set `6be1e12fd72bfec85a0a63486add21846c828df54d56704b69ca6caaa13d4676`.
+После commit exact sourceSHA/fingerprints фиксируются в текущем PR.
+
+Остаток Go:gateway789,CP6091. Общий -check не пройден, цель active, PR Draft.
+Generated/contracts/deps/SQL/migrations/live state неизменны. Historical
+FAIL/finding293 не исправлены; DB/transaction/component/broker/browser/
+live/model/mail/STT/deploy/full acceptance — NOT RUN. Merge/ready/
+owner approve не выполняются.
 
 ## Триста двадцать четвёртая волна — SQL bindings команд и memberships
 

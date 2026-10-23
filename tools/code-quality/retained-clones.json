@@ -4984,6 +4984,78 @@
       "fragmentSHA256": "515f434f98b6f92b3e3b06478a186e045b4f3a05f80caa5365516862d668c0dc",
       "count": 1,
       "reason": "После выноса severity conversion в общий pure helper192-token окно сократилось до180tokens. Оставшиеся project/organization report handlers создают разные nominal requests и выбирают разные owner RPC; project ref и ожидаемая owner область остаются явными. Общий writeImageVulnerabilityReport уже проверяет scope, READY/UNAVAILABLE, canonical page и findings; error mapper также общий. Новый generic RPC dispatcher ради nil/error guards скрыл бы область и exact owner method без нового общего алгоритма. Исключено только это точное окно двух методов, fragment/count1, не отчёты и не validation целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_configuration.go",
+      "fragmentSHA256": "24a4a858d2a8ab5f8392157ab727a8178c3bce8c01187fceae823c08f0debf1c",
+      "count": 1,
+      "reason": "Окно157tokens сравнивает форму named go:embed string bindings командного каталога с queries_configuration.go. Прочитаны оба полных Go-каталога; это декларации отдельных command/config/runtime/worker/supply-chain statements, не общий алгоритм. Переход к генератору или runtime FS/key lookup ради синтаксиса declarations добавит новый init/error source of truth и скроет точные связи caller-variable-file. Семантические SQL-дубли остаются отдельным объектом анализа, их никто не исключает. Только exact paths/fragment/count1, не все embed или SQL."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_runtime.go",
+      "fragmentSHA256": "1dc1c424ab4e9fe4c48a2957a1aacba26ffab65f9c3d85e522602b5810975279",
+      "count": 1,
+      "reason": "Окно165tokens сравнивает форму named go:embed string bindings командного каталога с queries_runtime.go. Прочитаны оба полных Go-каталога; это декларации отдельных command/config/runtime/worker/supply-chain statements, не общий алгоритм. Переход к генератору или runtime FS/key lookup ради синтаксиса declarations добавит новый init/error source of truth и скроет точные связи caller-variable-file. Семантические SQL-дубли остаются отдельным объектом анализа, их никто не исключает. Только exact paths/fragment/count1, не все embed или SQL."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_workers.go",
+      "fragmentSHA256": "38bc821870d26ca356e82ca354375e3a621165978eaf52d5c15a43ab601db5cd",
+      "count": 1,
+      "reason": "Окно107tokens сравнивает форму named go:embed string bindings командного каталога с queries_workers.go. Прочитаны оба полных Go-каталога; это декларации отдельных command/config/runtime/worker/supply-chain statements, не общий алгоритм. Переход к генератору или runtime FS/key lookup ради синтаксиса declarations добавит новый init/error source of truth и скроет точные связи caller-variable-file. Семантические SQL-дубли остаются отдельным объектом анализа, их никто не исключает. Только exact paths/fragment/count1, не все embed или SQL."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_role_images.go",
+      "fragmentSHA256": "5386a36aa9314e497f842759a6aabc6cc2c36ad72a83991be25c09f252b8b843",
+      "count": 1,
+      "reason": "Окно102tokens сравнивает форму named go:embed string bindings командного каталога с queries_role_images.go. Прочитаны оба полных Go-каталога; это декларации отдельных command/config/runtime/worker/supply-chain statements, не общий алгоритм. Переход к генератору или runtime FS/key lookup ради синтаксиса declarations добавит новый init/error source of truth и скроет точные связи caller-variable-file. Семантические SQL-дубли остаются отдельным объектом анализа, их никто не исключает. Только exact paths/fragment/count1, не все embed или SQL."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "fragmentSHA256": "23a298f57bd00507c4df3ce5376f64c82e1e30cd7264e19e33b8893ab393802c",
+      "count": 1,
+      "reason": "Перекрывающиеся280-token окна одного полного списка141 go:embed string declarations сдвинуты на одно объявление. Второго исполняемого блока нет: это разные именованные bindings одного каталога, а не повторный запуск команды. Их SQL-файлы читаются и анализируются отдельно. Вынос одного повторяющегося токена string либо генерация деклараций не извлекает общего алгоритма и размывает явную compiler-bound связь имени с SQL. Сохранены только exact два окна, hash/count1; не весь каталог или формат Go/SQL."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_configuration.go",
+      "fragmentSHA256": "21dba62a2b80fa2efc25c87aae9d9b965f8e41f295dab7e5fba2d29ab38f0ceb",
+      "count": 1,
+      "reason": "Точное100-token окно хвоста командных go:embed bindings сопоставлено с окном queries_configuration.go. Прочитаны оба полных Go-каталога: окна состоят только из индивидуальных named string declarations и embed directives, без функций или общего исполняемого алгоритма. Удалять явные compiler-bound SQL bindings ради runtime map/FS lookup означает вводить новые key/init/error paths, а не устранять повтор SQL. Сами SQL statements и остальные группы не исключены. Только эта пара путей/fragment/count1, не catalogs целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_role_images.go",
+      "fragmentSHA256": "21dba62a2b80fa2efc25c87aae9d9b965f8e41f295dab7e5fba2d29ab38f0ceb",
+      "count": 1,
+      "reason": "Точное100-token окно хвоста командных go:embed bindings сопоставлено с окном queries_role_images.go. Прочитаны оба полных Go-каталога: окна состоят только из индивидуальных named string declarations и embed directives, без функций или общего исполняемого алгоритма. Удалять явные compiler-bound SQL bindings ради runtime map/FS lookup означает вводить новые key/init/error paths, а не устранять повтор SQL. Сами SQL statements и остальные группы не исключены. Только эта пара путей/fragment/count1, не catalogs целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_runtime.go",
+      "fragmentSHA256": "21dba62a2b80fa2efc25c87aae9d9b965f8e41f295dab7e5fba2d29ab38f0ceb",
+      "count": 1,
+      "reason": "Точное100-token окно хвоста командных go:embed bindings сопоставлено с окном queries_runtime.go. Прочитаны оба полных Go-каталога: окна состоят только из индивидуальных named string declarations и embed directives, без функций или общего исполняемого алгоритма. Удалять явные compiler-bound SQL bindings ради runtime map/FS lookup означает вводить новые key/init/error paths, а не устранять повтор SQL. Сами SQL statements и остальные группы не исключены. Только эта пара путей/fragment/count1, не catalogs целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries_workers.go",
+      "fragmentSHA256": "21dba62a2b80fa2efc25c87aae9d9b965f8e41f295dab7e5fba2d29ab38f0ceb",
+      "count": 1,
+      "reason": "Точное100-token окно хвоста командных go:embed bindings сопоставлено с окном queries_workers.go. Прочитаны оба полных Go-каталога: окна состоят только из индивидуальных named string declarations и embed directives, без функций или общего исполняемого алгоритма. Удалять явные compiler-bound SQL bindings ради runtime map/FS lookup означает вводить новые key/init/error paths, а не устранять повтор SQL. Сами SQL statements и остальные группы не исключены. Только эта пара путей/fragment/count1, не catalogs целиком."
     }
   ]
 }
