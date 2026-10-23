@@ -4,11 +4,35 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.343.0
+version: 1.344.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 344 — закрытая диагностика чтения и отказа runtime claim
+
+Код `5adcb0a99fad476e228a8679658a0f2fa11be4ad`: подробно описаны 78
+учитываемых объявлений в artifactread diagnostic, runtime claim failure и
+их unit-тестах, включая новую общую константу UNKNOWN; дополнительно описан
+локальный synthetic privacy sentinel. Stage/class/SQLSTATE allowlists,
+privacy/error-chain границы, порядок инфраструктурных отказов, graph SQL,
+lease expiry, audit/event и transaction ownership сверены с кодом/SQL.
+
+Повтор списка шести domain outcomes устранён через существующий
+`runtimeEligibilityErrorClass`: PostgreSQL/cancel/deadline/Unavailable по-прежнему
+проверяются первыми. Сохранены порядок errors.Is и итоговые значения;
+классификатор сам не становится terminal decision. Повтор UNKNOWN вынесен в
+узкую константу закрытой диагностики. AST трёх файлов с одними комментариями
+совпадает; SQL и applied migrations не менялись.
+
+PASS LOCAL: artifactread и platform repository unit, полный build
+control-plane, точный clone assessment, gofmt/diff-check. Замер:
+**6651 own / 222 excluded; 1780 raw / 788 retained / 992 unresolved;
+Go 15310/21339, missing 6029**. Clone-set SHA256 прежний:
+`8716108a3f43d36e528cba93189ab0063e764b8f7a0b0f5ecf1076648606125b`.
+Новые широкие исключения не добавлены. Общий конечный build/unit, Go -check,
+остальные группы/объявления и historical FAIL/finding остаются открытыми.
 
 ## Волна 343 — RPC секретов и credential projections
 
