@@ -9,6 +9,8 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
 )
 
+// TestHeartbeatMixedCatalogReadsHaveIndependentDeadlines requires fresh assistant and RUN catalog contexts with independent bounded deadlines, exact delta order and canceled child contexts without canceling the session parent.
+// TestHeartbeatMixedCatalogReadsHaveIndependentDeadlines требует отдельные ограниченные сроки свежих контекстов каталогов помощника и RUN, точный порядок delta и отмену дочерних контекстов без отмены родителя сессии.
 func TestHeartbeatMixedCatalogReadsHaveIndependentDeadlines(t *testing.T) {
 	m, c := heartbeatRunBatchFixture(t)
 	m.server.assistant = cp.NewSystemAssistantServiceClient(c)
@@ -63,6 +65,8 @@ func TestHeartbeatMixedCatalogReadsHaveIndependentDeadlines(t *testing.T) {
 	}
 }
 
+// TestHeartbeatCatalogReadsCannotExtendShortSessionParent pins catalog and subscribed-run reads to an earlier session deadline, checking child cleanup without extending or canceling that parent.
+// TestHeartbeatCatalogReadsCannotExtendShortSessionParent привязывает чтения каталогов и зарегистрированных запусков к раннему сроку сессии, проверяя очистку дочерних контекстов без продления и отмены родителя.
 func TestHeartbeatCatalogReadsCannotExtendShortSessionParent(t *testing.T) {
 	m, c := heartbeatRunBatchFixture(t)
 	m.server.assistant = cp.NewSystemAssistantServiceClient(c)
@@ -99,6 +103,8 @@ func TestHeartbeatCatalogReadsCannotExtendShortSessionParent(t *testing.T) {
 	}
 }
 
+// TestHeartbeatMixedCatalogPrefixHasFixedAggregateBound checks the four-wake/two-second-per-read/eight-second aggregate limits and leaves the fifth queued wake untouched while releasing each distinct catalog context.
+// TestHeartbeatMixedCatalogPrefixHasFixedAggregateBound проверяет пределы четырёх событий, двух секунд чтения и восьми секунд общего бюджета, оставляя пятое событие в очереди и освобождая отдельные контексты каталогов.
 func TestHeartbeatMixedCatalogPrefixHasFixedAggregateBound(t *testing.T) {
 	if maximumHeartbeatWakes != 4 || heartbeatWakeTimeout != 2*time.Second || heartbeatWakeDrainTimeout != 8*time.Second {
 		t.Fatal("catalog prefix changed its approved per-read or aggregate bound")

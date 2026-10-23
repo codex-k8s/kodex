@@ -7,6 +7,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestIntegrationActionBindingRealtimeProjection preserves a valid invocation ref and localized summary, keeps a historical absent binding absent and rejects a ref from the wrong resource namespace.
+// TestIntegrationActionBindingRealtimeProjection сохраняет допустимую ссылку вызова и локализованную сводку, не выдумывает отсутствующую историческую привязку и отклоняет ссылку другого пространства ресурсов.
 func TestIntegrationActionBindingRealtimeProjection(t *testing.T) {
 	event := &cp.RunEvent{Type: cp.RunEventType_RUN_EVENT_TYPE_TURN_PROGRESS, Summary: "i18n:INTEGRATION_ACTION_SUCCEEDED", IntegrationInvocationRef: proto.String("inv_fixture01")}
 	got, err := projectRunEvent(event, func(string) string { return "Действие выполнено" })

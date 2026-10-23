@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.311.0
+version: 1.312.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,74 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двенадцатая волна — оснастки heartbeat, wake/rejoin и доступности
+
+Предыдущий опубликованный SHA — `b30222dbf31ef648a5383c56c38a713e69ea5c36`.
+ExactQp02DR:6639 sources,222 excluded,1803 raw/725 retained/
+1078 unresolved; Go13618/21293,missing7675. Source SHA, push и Draft PR
+body/head311 подтверждены GET. Весь объём задачи ещё не завершён.
+
+Полностью прочитаны8 оставшихся misc WebSocket test files,1298 исходных строк.
+Все43 declarations получили предметные EN→RU комментарии; четыре прежних
+inline пояснения cold cache, grant fixture и wake ordering тоже двуязычны.
+AST8 и //go: directives равны311; исполняемый код и assertions прежние.
+
+Описаны реальные ограничения оснастки:
+- heartbeatRunBatchRecorder сериализует callback/ответы под mutex и сам по
+  себе не доказывает настоящий параллелизм RPC сервера или authorization;
+- platformWakeRaceRecorder — synthetic owner cursor/run data, не durable
+  event store или живой NATS. platformWakeRaceSignal проверяет настоящий
+  decoder, но не sender authentication; некоторые helpers меняют kind/event
+  ПОСЛЕ исходного decode, что явно отражено;
+- child context cancellation не названа доказательством остановки внешнего
+  сервера. Separate per-catalog deadlines/aggregate prefix и более ранний
+  session parent — именно проверяемые synthetic свойства;
+- integration grant snapshot сохраняет public metadata/version/recipient,
+  но не выдаёт executable grant; historical absent binding не выдумывается;
+- financial recorder проверяет точный typed oversized-catalog fallback
+  и сохранение остальных kinds, не скрывая generic auth/network failures;
+- leaseSpeechClient/Stream выдаёт READY по fake probe deadline, не проверяет
+  настоящий protected backend и не транскрибирует аудио. Тест lease дольше
+  heartbeat не назван реальным STT acceptance.
+
+Матрица проверяемых текущими tests сценариев:
+
+| Оснастка/сценарий | Фактически проверяемое | Не заявлено |
+| --- | --- | --- |
+| cold assistant bootstrap/skip/new socket | старт25, fresh reads, whole page/cursors, no borrowed hint | live browser cache/session |
+| mixed heartbeat catalogs | отдельные child deadlines, prefix4,2s/read,8s aggregate, short-parent ceiling | wall-clock гарантия некооперативной внешней зависимости |
+| contiguous/duplicate/foreign wakes | bounded FIFO prefix, cursor-only denial/foreign scope, authoritative gap/resync | настоящий broker delivery/durability |
+| queued backlog/owner rejection | unchanged FIFO, fresh eligibility before body, rejection сильнее queued hints | право из самого payload |
+| RUN batch/recovery | один owner bundle/read, shared sibling budget, closed incomplete snapshot, no delta-only revival | real service concurrency/permissions |
+| integration/finance/STT projections | typed metadata pins, closed fields, exact fallback и fake lease | external effect, provider access или ready backend |
+
+584 верхних/2677 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP.17 Node unit, Go checker unit, AST8, scope43/43,
+5 addressed ignores, gofmt и git diff --check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+Новые library APIs и зависимости не добавлялись; semantics описаны по
+прочитанным fixtures и прежним bounded read paths. Browser/real broker/owner
+service/IdP/STT/audio/model/credentials, component/deploy/full acceptance
+NOT RUN. Исторические FAIL/finding293 не исправлены. Generated/contracts/
+dependencies/SQL/migrations/live state не менялись.
+
+Рабочий H6PhS8:6639 sources,222 excluded,1803 raw/725 retained/
+1078 unresolved; Go13661/21293,missing7632. Raw SHA256:
+`f25c0938945b6ae25beea0fcfc502c13c1c85afd96fe2f47a098952acb1bfa0d`.
+Все1803 clone keys/counts и clone-set
+`39441cde4926945f8ab65f604929475462754411f3772c4519a71673f3bc677f`
+совпадают311; registry607/725 без новых exclusions. Устранение clone groups
+в этой comments-only волне не заявляется.
+После коммита exact scan/unit/build и remote readback повторяются.
+Остаток Go:gateway1400,CP6232; в WebSocket остались server.go120 и
+server_test.go21 declarations. Общий -check ещё не пройден.
 
 ## Триста одиннадцатая волна — полные снимки запусков и завершение чтений
 

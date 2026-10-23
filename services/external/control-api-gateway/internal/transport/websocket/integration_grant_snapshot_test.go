@@ -6,9 +6,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// integrationGrantSnapshotFixture builds synthetic connected integration/grant metadata matching the owner projection shape, with fixed parent/version pins and a supplied agent recipient; it does not issue an executable grant.
+// integrationGrantSnapshotFixture создаёт тестовую metadata подключённой интеграции и grant в форме проекции владельца с фиксированными версиями и переданным получателем; исполняемый grant не выдаётся.
 func integrationGrantSnapshotFixture(t *testing.T, recipient string) map[string]any {
 	t.Helper()
-	// Та же форма, которую CP caster выдаёт после attachConnection.
+	// This is the shape emitted by the CP caster after attachConnection, not an actual connection attachment.
+	// Это форма, которую CP caster выдаёт после attachConnection, а не настоящее подключение интеграции.
 	response := &cp.ListIntegrationConnectionsResponse{Connections: []*cp.IntegrationConnection{{
 		Ref: "con_fixture01", Version: 12, DefinitionKey: "context7", DefinitionVersion: "1.0",
 		Name: "Context7", State: cp.ConnectionState_CONNECTION_STATE_CONNECTED,
@@ -31,6 +34,8 @@ func integrationGrantSnapshotFixture(t *testing.T, recipient string) map[string]
 	return map[string]any{"definitions": definitions, "connections": connections}
 }
 
+// TestIntegrationGrantSnapshotAcceptsPublicSystemAndProjectGrant preserves declared grant/connection versions, enabled state and recipient identity for both snapshot kinds and synthetic system/project agents, without proving runtime permission.
+// TestIntegrationGrantSnapshotAcceptsPublicSystemAndProjectGrant сохраняет объявленные версии grant и подключения, enabled и личность получателя обоих видов снимков для тестовых системного и проектного агентов без доказательства runtime-разрешения.
 func TestIntegrationGrantSnapshotAcceptsPublicSystemAndProjectGrant(t *testing.T) {
 	for _, recipient := range []string{"agt_systemfixture", "agt_projectfixture"} {
 		for _, kind := range []string{"INTEGRATION_CONNECTION", "INTEGRATION_GRANT"} {
@@ -51,6 +56,8 @@ func TestIntegrationGrantSnapshotAcceptsPublicSystemAndProjectGrant(t *testing.T
 	}
 }
 
+// TestIntegrationGrantSnapshotStillRejectsUndeclaredNestedFields rejects added internal version/authority/credential fields inside public grant JSON instead of silently accepting them through the generated payload schema.
+// TestIntegrationGrantSnapshotStillRejectsUndeclaredNestedFields отклоняет добавленные внутренние поля версии, полномочий и credentials внутри публичного grant JSON вместо молчаливого принятия generated-схемой.
 func TestIntegrationGrantSnapshotStillRejectsUndeclaredNestedFields(t *testing.T) {
 	for _, field := range []string{"connectionVersion", "unknownAuthority", "credentialValue"} {
 		t.Run(field, func(t *testing.T) {

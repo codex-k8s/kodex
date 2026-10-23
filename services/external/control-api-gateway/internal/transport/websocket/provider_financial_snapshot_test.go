@@ -15,12 +15,16 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// financialSnapshotRecorder counts separate synthetic financial-summary and provider-catalog reads, returning a configured catalog error without hiding it behind the summary fixture.
+// financialSnapshotRecorder считает отдельные тестовые чтения финансовой сводки и каталога провайдера, возвращая настроенную ошибку каталога без её скрытия сводкой.
 type financialSnapshotRecorder struct {
 	assistantSnapshotSizeRecorder
 	catalogError                 error
 	financialReads, catalogReads int
 }
 
+// Invoke requires an unpaginated summary-only request before supplying synthetic display metadata; catalog reads return the configured error and unrelated calls delegate to the assistant fixture.
+// Invoke требует запрос только сводки без пагинации перед тестовой display metadata; каталог возвращает настроенную ошибку, остальные вызовы передаются оснастке помощника.
 func (c *financialSnapshotRecorder) Invoke(ctx context.Context, method string, request, response any, opts ...grpc.CallOption) error {
 	if out, ok := response.(*cp.ListProviderAccountsResponse); ok {
 		input := request.(*cp.ListProviderAccountsRequest)
@@ -39,6 +43,8 @@ func (c *financialSnapshotRecorder) Invoke(ctx context.Context, method string, r
 	return c.assistantSnapshotSizeRecorder.Invoke(ctx, method, request, response, opts...)
 }
 
+// TestFinancialSnapshotOversizedCatalogKeepsOtherKinds supplies the exact typed oversized-catalog outcome and requires one bounded financial summary plus unaffected assistant bootstrap, without retrying the catalog.
+// TestFinancialSnapshotOversizedCatalogKeepsOtherKinds подставляет точный типизированный исход чрезмерного каталога и требует одну ограниченную финансовую сводку с неизменным bootstrap помощника без повтора каталога.
 func TestFinancialSnapshotOversizedCatalogKeepsOtherKinds(t *testing.T) {
 	oversized, _ := status.New(codes.Unavailable, "provider catalog too large").WithDetails(&errdetails.ErrorInfo{Domain: "kodex.control-plane", Reason: "PROVIDER_CATALOG_TOO_LARGE"})
 	c := &financialSnapshotRecorder{catalogError: oversized.Err()}
@@ -72,6 +78,8 @@ func TestFinancialSnapshotOversizedCatalogKeepsOtherKinds(t *testing.T) {
 	}
 }
 
+// TestFinancialSnapshotDoesNotSuppressArbitraryFailure preserves generic unavailability, permission and authentication status instead of interpreting them as the optional typed oversized-catalog outcome.
+// TestFinancialSnapshotDoesNotSuppressArbitraryFailure сохраняет общую недоступность, запрет и отказ входа, не превращая их в необязательный типизированный исход чрезмерного каталога.
 func TestFinancialSnapshotDoesNotSuppressArbitraryFailure(t *testing.T) {
 	for _, failure := range []error{status.Error(codes.Unavailable, "network failure"), status.Error(codes.PermissionDenied, "owner denial"), status.Error(codes.Unauthenticated, "auth failure")} {
 		c := &financialSnapshotRecorder{catalogError: failure}

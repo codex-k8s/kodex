@@ -16,6 +16,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// platformWakeRaceRecorder decorates assistant fixtures with a configurable authoritative-cursor response, call hook and optional full run response. Its synthetic counters are not a durable event store or live broker.
+// platformWakeRaceRecorder дополняет оснастку помощника настраиваемым ответом авторитетного курсора, callback и необязательным полным ответом запуска. Тестовые счётчики не являются event store или настоящим брокером.
 type platformWakeRaceRecorder struct {
 	assistantSnapshotSizeRecorder
 	current      int64
@@ -26,6 +28,8 @@ type platformWakeRaceRecorder struct {
 	runSnapshot  *cp.GetRunGraphResponse
 }
 
+// Invoke applies the optional read hook, supplies configured cursor/run data or errors, then delegates other response types to the assistant-size fixture without opening a connection.
+// Invoke применяет необязательный callback чтения, выдаёт настроенные курсор, запуск или ошибки и передаёт остальные типы оснастке размеров помощника без соединения.
 func (c *platformWakeRaceRecorder) Invoke(ctx context.Context, method string, request, response any, options ...grpc.CallOption) error {
 	if c.beforeInvoke != nil {
 		if err := c.beforeInvoke(ctx, response); err != nil {
@@ -47,6 +51,8 @@ func (c *platformWakeRaceRecorder) Invoke(ctx context.Context, method string, re
 	return c.assistantSnapshotSizeRecorder.Invoke(ctx, method, request, response, options...)
 }
 
+// platformWakeRaceFixture constructs a fake owner query/assistant client, exact synthetic organization/project, cursor seven and bounded wake/outbound queues; it does not initialize a real subscription.
+// platformWakeRaceFixture создаёт тестовые query/assistant clients, точные организацию и проект, курсор семь и ограниченные очереди событий и кадров без настоящей подписки.
 func platformWakeRaceFixture(t *testing.T, current int64) (*sessionMultiplexer, *platformWakeRaceRecorder) {
 	t.Helper()
 	c := &platformWakeRaceRecorder{current: current, organization: "org_fixture01"}
@@ -58,9 +64,12 @@ func platformWakeRaceFixture(t *testing.T, current int64) (*sessionMultiplexer, 
 		localize: func(code string) string { return code }, runs: map[string]*runSubscription{}}, c
 }
 
+// platformWakeRaceSignal serializes and decodes a synthetic SYSTEM_ASSISTANT_CHANGED envelope with the actual bounded parser, failing setup if rejected; this tests wire shape, not sender authentication.
+// platformWakeRaceSignal сериализует и разбирает тестовый SYSTEM_ASSISTANT_CHANGED настоящим ограниченным parser, завершая подготовку ошибкой при отказе; проверяется формат, а не аутентификация отправителя.
 func platformWakeRaceSignal(t *testing.T, sequence int64) platformSignal {
 	t.Helper()
-	// Очередь получает только сигнал, прошедший настоящий закрытый decoder.
+	// The queue receives only a fixture signal that passed the actual closed decoder.
+	// Очередь получает только тестовый сигнал, прошедший настоящий закрытый decoder.
 	envelope := platformBusEnvelope{EventID: "d561fbb0-02c0-4be7-af7c-5998925632bd",
 		EventName: "SYSTEM_ASSISTANT_CHANGED", EventVersion: 1, OrganizationRef: "org_fixture01",
 		ProjectRef: "prj_fixture01", AggregateRef: "agt_fixture01", AggregateVersion: 1,
@@ -77,6 +86,8 @@ func platformWakeRaceSignal(t *testing.T, sequence int64) platformSignal {
 	return signal
 }
 
+// platformWakeRaceFrames drains currently buffered fixture frame values in FIFO order without waiting for future writes or representing real socket delivery.
+// platformWakeRaceFrames извлекает текущие тестовые кадры из буфера в FIFO-порядке без ожидания будущих записей и без доказательства доставки сокетом.
 func platformWakeRaceFrames(c *platformWakeRaceRecorder) []any {
 	var values []any
 	for len(c.frames) > 0 {
@@ -85,6 +96,8 @@ func platformWakeRaceFrames(c *platformWakeRaceRecorder) []any {
 	return values
 }
 
+// assertPlatformWakeRaceDelta checks exact fixture cursor, mode, project, kind/event and conversation-section presence on one typed delta, failing on a different frame shape.
+// assertPlatformWakeRaceDelta сверяет точные тестовые курсор, режим, проект, вид, событие и наличие раздела диалогов одного delta, отклоняя другой формат кадра.
 func assertPlatformWakeRaceDelta(t *testing.T, value any, sequence int64) {
 	t.Helper()
 	delta, ok := value.(generated.PlatformSnapshotEnvelope)
@@ -95,11 +108,14 @@ func assertPlatformWakeRaceDelta(t *testing.T, value any, sequence int64) {
 	}
 }
 
+// TestPlatformHeartbeatProcessesAlreadyQueuedOwnerWakesBeforeGapCheck selects heartbeat with two contiguous wakes already queued, requiring both deltas before one owner cursor read and no false resync.
+// TestPlatformHeartbeatProcessesAlreadyQueuedOwnerWakesBeforeGapCheck вызывает heartbeat с двумя готовыми непрерывными событиями и требует оба delta до единственного чтения курсора владельца без ложного resync.
 func TestPlatformHeartbeatProcessesAlreadyQueuedOwnerWakesBeforeGapCheck(t *testing.T) {
 	m, c := platformWakeRaceFixture(t, 9)
 	m.platformSignals <- platformWakeRaceSignal(t, 8)
 	m.platformSignals <- platformWakeRaceSignal(t, 9)
-	// Детерминированно выбираем heartbeat, пока оба wake уже готовы в select.
+	// Select the heartbeat deterministically while both wakes are already ready for the event loop.
+	// Детерминированно выбираем heartbeat, пока оба wake уже готовы циклу событий.
 	if !m.heartbeat(time.Unix(1, 0)) {
 		t.Fatal("heartbeat failed")
 	}
@@ -119,6 +135,8 @@ func TestPlatformHeartbeatProcessesAlreadyQueuedOwnerWakesBeforeGapCheck(t *test
 	}
 }
 
+// TestPlatformHeartbeatWakeRaceControls covers wake-first order, missing/noncontiguous signals and invalid owner/rollback/denied cursor responses, preserving exact resync or closed failure instead of invented deltas.
+// TestPlatformHeartbeatWakeRaceControls проверяет порядок событий перед heartbeat, отсутствие и разрыв сигналов, неверного владельца, откат и запрет курсора, сохраняя точные resync или закрытый отказ без выдуманных delta.
 func TestPlatformHeartbeatWakeRaceControls(t *testing.T) {
 	t.Run("wake-selected-before-heartbeat", func(t *testing.T) {
 		m, c := platformWakeRaceFixture(t, 9)
@@ -195,6 +213,8 @@ func TestPlatformHeartbeatWakeRaceControls(t *testing.T) {
 	}
 }
 
+// TestPlatformHeartbeatWakeDrainBudget caps the initial drain prefix at four and prevents newly arriving signals from extending it, preserving remaining FIFO backlog and exact applied cursor.
+// TestPlatformHeartbeatWakeDrainBudget ограничивает исходный префикс четырьмя и запрещает новым событиям его продлевать, сохраняя FIFO-хвост и точный применённый курсор.
 func TestPlatformHeartbeatWakeDrainBudget(t *testing.T) {
 	t.Run("four-wakes-only-then-contiguous-backlog-catchup", func(t *testing.T) {
 		m, c := platformWakeRaceFixture(t, 12)
@@ -243,6 +263,8 @@ func TestPlatformHeartbeatWakeDrainBudget(t *testing.T) {
 	})
 }
 
+// TestPlatformHeartbeatContiguousBacklog tests five, nine and 128 queued wakes, retaining a four-item heartbeat prefix and then catching up through fresh owner reads without a false gap or unapplied cursor.
+// TestPlatformHeartbeatContiguousBacklog проверяет очередь из пяти, девяти и 128 событий, сохраняя префикс heartbeat из четырёх и догоняя свежими чтениями без ложного разрыва или неприменённого курсора.
 func TestPlatformHeartbeatContiguousBacklog(t *testing.T) {
 	for _, count := range []int{5, 9, 128} {
 		t.Run(fmt.Sprintf("queued-%d", count), func(t *testing.T) {
@@ -278,6 +300,8 @@ func TestPlatformHeartbeatContiguousBacklog(t *testing.T) {
 	}
 }
 
+// TestPlatformHeartbeatBacklogRecoveryControls distinguishes duplicate/covered backlog from missing/reordered gaps, preserves owner cursor rejection over queued signals and rechecks eligibility before publishing a queued projection.
+// TestPlatformHeartbeatBacklogRecoveryControls отличает дубликаты и покрытый хвост от отсутствующих или переставленных событий, сохраняет отказ владельца курсора поверх очереди и повторно проверяет допуск до публикации проекции.
 func TestPlatformHeartbeatBacklogRecoveryControls(t *testing.T) {
 	for _, test := range []struct {
 		name    string
@@ -351,6 +375,8 @@ func TestPlatformHeartbeatBacklogRecoveryControls(t *testing.T) {
 	})
 }
 
+// TestPlatformBacklogInspectionConcurrentEnqueue inspects bounded coverage while one joined goroutine enqueues signals, then verifies complete queue length and unchanged FIFO values; it is not a live NATS test.
+// TestPlatformBacklogInspectionConcurrentEnqueue проверяет покрытие при добавлении событий одной ожидаемой goroutine, затем сверяет полноту очереди и неизменный FIFO; это не тест настоящего NATS.
 func TestPlatformBacklogInspectionConcurrentEnqueue(t *testing.T) {
 	m, _ := platformWakeRaceFixture(t, 31)
 	signals := make([]platformSignal, 24)
@@ -379,6 +405,8 @@ func TestPlatformBacklogInspectionConcurrentEnqueue(t *testing.T) {
 	}
 }
 
+// TestPlatformHeartbeatWakeDrainScopedControls verifies duplicate budget accounting, foreign-project and denied-projection cursor-only responses, and exact authoritative resync for a noncontiguous prefix.
+// TestPlatformHeartbeatWakeDrainScopedControls проверяет расход бюджета дубликатами, ответы только с курсором для чужого проекта и запрещённой проекции и точный авторитетный resync при разрыве префикса.
 func TestPlatformHeartbeatWakeDrainScopedControls(t *testing.T) {
 	t.Run("duplicate-consumes-budget-without-owner-projection", func(t *testing.T) {
 		m, c := platformWakeRaceFixture(t, 8)
@@ -439,6 +467,8 @@ func TestPlatformHeartbeatWakeDrainScopedControls(t *testing.T) {
 	})
 }
 
+// TestPlatformHeartbeatWakeDrainFailureAndContext checks dependency/deadline/cancellation and preexisting overflow paths, preserving queued tail and session context, canceling child contexts and avoiding later cursor reads or fabricated frames.
+// TestPlatformHeartbeatWakeDrainFailureAndContext проверяет отказы зависимости, срока, отмены и прежнего переполнения, сохраняя хвост и контекст сессии, отменяя дочерние контексты без следующих чтений курсора и выдуманных кадров.
 func TestPlatformHeartbeatWakeDrainFailureAndContext(t *testing.T) {
 	for _, condition := range []string{"projection-unavailable", "projection-deadline"} {
 		t.Run(condition, func(t *testing.T) {
@@ -526,6 +556,8 @@ func TestPlatformHeartbeatWakeDrainFailureAndContext(t *testing.T) {
 	})
 }
 
+// TestPlatformHeartbeatWakeDrainRunRefreshDeadline separates gap/cursor catalog time from full run refresh time, preserving the authoritative resync and either a complete lineage snapshot or closed run-unavailable problem.
+// TestPlatformHeartbeatWakeDrainRunRefreshDeadline отделяет время каталога и курсора при разрыве от полного обновления запуска, сохраняя авторитетный resync и полный снимок связей либо закрытый отказ запуска.
 func TestPlatformHeartbeatWakeDrainRunRefreshDeadline(t *testing.T) {
 	for _, denied := range []bool{false, true} {
 		t.Run(map[bool]string{false: "gap-refresh-has-separate-owner-budget", true: "run-deadline-remains-closed"}[denied], func(t *testing.T) {
