@@ -5344,6 +5344,22 @@
       "fragmentSHA256": "0d477efaadce011950b3ca3ff07223cde62aa0afa66be7a5d2cd6da560c94105",
       "count": 1,
       "reason": "Окно129 tokens сравнивает завершение и отказ secret operation: общие principal/transportError уже helpers, совпадает краткий exact operation/claim/generation DTO scaffold. Complete передаёт материализацию и возвращает Secret; Fail — закрытую причину и state receipt. Единый command dispatcher смешал бы разные transitions/response authority ради glue без общего предметного алгоритма. Сохранены только эта внутрефайловая пара/hash/count1, не broker commands целиком."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getrun_select_runs_organization_id_ref_project_id.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_listruns_select_runs_organization_id_ref_project_id.sql",
+      "fragmentSHA256": "20df97a1108ed0eeae7ab2ecf2df60b9c28e4b4aae083a84d7588eba015551de",
+      "count": 1,
+      "reason": "Общее SQL-окно включает конец разных permission hints и одинаковые joins run/session/root/parent/retry/actor/target/attachment для канонической run row. Get читает exact ref с actor/authority-project eligibility; List применяет text/state/keyset и свои hints. Общий row scanner уже отделён от запросов. Вынесение декларативного JOIN scaffold потребовало бы нового DB view/function с grants/migration либо запрещённой сборки SQL fragments в Go, без выноса общего предметного перехода. Оставлена только точная пара/hash/count1, не SELECT, WHERE или файлы целиком."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getschedule_select_schedules_organization_id_ref.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_listschedules_select_schedules_organization_id_ref_project_id.sql",
+      "fragmentSHA256": "b1dd78ec87c3722a04e1d81b4a96447c2694bea4c45a43fc417341b772075396",
+      "count": 1,
+      "reason": "Общие78 строк — типизированная schedule/current_revision/continuation/last-occurrence проекция и joins для одного row scanner. Exact Get и paged List различаются WHERE, authority/eligibility условиями и keyset/filter/limit; объединение этих команд изменит действующие контракты чтения. Строковая сборка SQL запрещена, а новая DB view/function только ради проекции добавит схему/grants/migration и отдельную security surface без удаления общего бизнесового алгоритма. Сохранены лишь эти два точных пути/fragment/count1; shared eligibility, WHERE и иные queries не исключаются."
     }
   ]
 }
