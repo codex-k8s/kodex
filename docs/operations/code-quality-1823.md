@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.322.0
+version: 1.323.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,81 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцать третья волна — risk/report проекции и secret impact
+
+Предыдущий опубликованный SHA — `bcbcf20a1c813d36bad7c7723ecba80167754e2e`.
+ExactbCibDF:6645sources/222excluded,1799raw/740retained/1059unresolved;
+Go14259/21313,missing7054. Issue open/Draft head/body322 подтверждены
+readback; предыдущая goal-итерация — progress, не completion.
+
+Полностью прочитаны image_risk_endpoints.go345,
+image_risk_endpoints_test.go174, runtime_secret_draft_impact.go108,
+runtime_secret_draft_impact_test.go210 исходных строк (837 total).
+Также прочитаны actual canonical vulnerability Validate и consumer/owner-key
+helpers в используемой области. Все33 прежних declarations и2 новых
+helper/test declarations EN→RU; scope35/35.
+
+Одинаковый closed severity name-table conversion в project/organization
+report queries вынесен в pure imageRiskSeverity. Optional nil ветвь,
+pointer assignment, typed owner RPC, error/nil-reply paths и ожидание
+scope в общем report writer сохранены. Helper не выбирает RPC и не выдаёт
+разрешений. Новый unit даёт13 results:6 supported severities, включая UNKNOWN,
+и6 invalid/unspecified/case/space/prefixed strings; invalid input проверен
+на обоих specialized endpoint до любого RPC. Inverse actual helper/boolean
+expansion восстанавливает целые AST4 после удаления только нового теста и
+его единственного import; //go: directives прежние.
+
+Комментарии разделяют реальные shape checks и owner authority:
+- risk request проверяет action/reason, artifact OCC, positive safe pins,
+  build attempt1..10 и refs/digests; selected pins не являются human authority;
+- public converter требует правильно выбранный public DTO, нормализует
+  known enum fields и strict public JSON, но не содержит type registry,
+  не проверяет подписи и не допускает образ;
+- risk-decision reply проверяет перечисленные scope/identity/evidence/policy
+  pins и exact PENDING/CLAIMED attempt при ACCEPT_RISK. Metadata acceptance
+  не является завершённым admission/promotion;
+- UNAVAILABLE отчёт остаётся явным, READY требует complete metadata и
+  canonical page validation. Whole-report metadata не пересчитывается из
+  одной страницы и original scanner evidence не хешируется в mapper;
+- canonical page validator проверяет ordered finding refs, advisory URLs,
+  counts и version tuple; caller предварительно требует6 severity counts;
+- optional history проверяет только явно перечисленные связи и синтаксис,
+  не recomputed binding digest/signature и не current actor eligibility;
+- impact prepare/read сохраняют immutable plan versus filtered total,
+  exact draft/version pins, unique item refs и один consumer owner tuple;
+- impact plan view проверяет expiry timestamp shape, не текущее время;
+  item view различает APPLIED и другие outcomes, environment-only versus
+  agent binding, требует новые environment и advanced exact binding pins.
+
+| Путь | Сохраняемая authority/lifecycle граница | Результат |
+| --- | --- | --- |
+| organization/project risk decision | dedicated owner command + version/evidence pins | checked metadata и pending/claimed admission, не promotion |
+| vulnerability reports | отдельный scoped owner query + shared canonical public writer | READY/UNAVAILABLE page, no scan/state event |
+| prepare impact | versioned owner command, exact draft/version | immutable no-store plan201, не применение |
+| read impact | owner filtering/page, exact plan/consumer lineage | полный validated page либо прежний problem |
+| publish selection unit | plan ref и explicit unique item refs | malformed input не доходит до owner, no live publish |
+
+592 верхних/2865 всех выбранных gateway unit,0 FAIL/SKIP, полный gateway
+build -p=2,17 Node unit, Go checker unit, inverse AST4, scope35/35,
+5 addressed ignores, gofmt/diff-check — PASS LOCAL. Selected команда прежняя
+как в318. Real scanner/approval/model/broker/owner DB не запускались.
+
+Raw1799: одно192-token окно сократилось до180 после severity extraction,
+одно old/new raw key; остальные1798 keys/counts прежние. Это НЕ удаление
+целой raw-группы. После чтения обоих концов residual180 exact retained:
+typed requests/project pin/owner RPC различны, общий severity/report/error
+primitive уже есть; generic RPC dispatcher скрыл бы область.
+Registry623entries/741occurrences, unresolved1058.
+Рабочий canonical0AbKTX:6645sources/222excluded; Go14294/21315,missing7021;
+clone-set `9ba20d0e1b3d76e894e27f2de08218b47f0d1a8af216a0caef8eab7084094764`.
+После commit выполняются exact-SHA canonical и build/unit; readback в PR.
+
+Остаток Go:gateway789,CP6232. Общий -check не пройден. Generated/contracts/
+deps/SQL/migrations/live state неизменны. Historical FAIL/finding293 не
+исправлены; real risk approval/image admission/scanning/secret impact/
+external mail/model/STT/component/browser/deploy/full acceptance — NOT RUN.
+Цель active, PR Draft; merge/ready/owner approve нет.
 
 ## Триста двадцать вторая волна — конфигурация почты и Git source
 

@@ -4976,6 +4976,14 @@
       "fragmentSHA256": "df83cfebfbf92781fabe845616ec9362c3f69c47c251d2806e8088b62301b9a3",
       "count": 1,
       "reason": "Окно325tokens сравнивает configure+refresh для role image и integration definition. Source location/mutation validation и checked queued-Git result уже общие; DTO имеют разные nominal ContentFormat types, owner requests/RPCs и expected configuration kind. Оставшиеся строки явно связывают command с видом ресурса. Generic lifecycle dispatcher либо reflection ради двух коротких DTO literals скрыл бы authority routing и response kind. Только exact два окна этого файла, digest/count1; общий source validation и весь вид конфигурации не скрыты."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/image_risk_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/image_risk_endpoints.go",
+      "fragmentSHA256": "515f434f98b6f92b3e3b06478a186e045b4f3a05f80caa5365516862d668c0dc",
+      "count": 1,
+      "reason": "После выноса severity conversion в общий pure helper192-token окно сократилось до180tokens. Оставшиеся project/organization report handlers создают разные nominal requests и выбирают разные owner RPC; project ref и ожидаемая owner область остаются явными. Общий writeImageVulnerabilityReport уже проверяет scope, READY/UNAVAILABLE, canonical page и findings; error mapper также общий. Новый generic RPC dispatcher ради nil/error guards скрыл бы область и exact owner method без нового общего алгоритма. Исключено только это точное окно двух методов, fragment/count1, не отчёты и не validation целиком."
     }
   ]
 }

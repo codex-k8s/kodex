@@ -8,12 +8,59 @@ import (
 	"time"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestImageRiskSeverityKeepsClosedMapping checks all supported filter severities, including UNKNOWN, and rejects unspecified, case variants and arbitrary strings. It pins values independently of the production name-table lookup and verifies invalid filters cannot reach either specialized owner RPC.
+// TestImageRiskSeverityKeepsClosedMapping проверяет все поддерживаемые severity фильтра, включая UNKNOWN, отклоняет unspecified, иной регистр и произвольные строки. Закрепляет значения независимо от production lookup и проверяет, что неверный фильтр не достигает обоих отдельных owner RPC.
+func TestImageRiskSeverityKeepsClosedMapping(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		input generated.ImageVulnerabilitySeverity
+		want  cp.ImageVulnerabilitySeverity
+	}{
+		{input: "CRITICAL", want: cp.ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_CRITICAL},
+		{input: "HIGH", want: cp.ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_HIGH},
+		{input: "MEDIUM", want: cp.ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_MEDIUM},
+		{input: "LOW", want: cp.ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_LOW},
+		{input: "NEGLIGIBLE", want: cp.ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_NEGLIGIBLE},
+		{input: "UNKNOWN", want: cp.ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_UNKNOWN},
+		{input: ""}, {input: "UNSPECIFIED"}, {input: "high"}, {input: " HIGH "},
+		{input: "IMAGE_VULNERABILITY_SEVERITY_HIGH"}, {input: "invalid"},
+	} {
+		t.Run(string(test.input), func(t *testing.T) {
+			before := test.input
+			actual, ok := imageRiskSeverity(test.input)
+			if actual != test.want || ok != (test.want != 0) || test.input != before {
+				t.Fatal("severity mapping changed")
+			}
+			if ok {
+				return
+			}
+			for _, organization := range []bool{false, true} {
+				client := &catalogRPCRecorder{}
+				server := &Server{control: &controlplaneclient.Client{RoleImages: cp.NewRoleImageServiceClient(client)}}
+				writer := httptest.NewRecorder()
+				request := httptest.NewRequest("GET", "/synthetic/report", nil)
+				if organization {
+					server.GetOrganizationImageVulnerabilityReport(writer, request, "imgrec_fixture01", "imgart_fixture01", generated.GetOrganizationImageVulnerabilityReportParams{Severity: &test.input})
+				} else {
+					server.GetImageVulnerabilityReport(writer, request, "prj_fixture01", "imgrec_fixture01", "imgart_fixture01", generated.GetImageVulnerabilityReportParams{Severity: &test.input})
+				}
+				if writer.Code != 400 || client.method != "" {
+					t.Fatal("invalid severity reached owner")
+				}
+			}
+		})
+	}
+}
+
+// TestImageRiskHTTPBodyKeepsArtifactOCCAndClosedAction checks the risk input builder against independent valid pins, rejecting unknown action, empty/control reason and mismatched or negative artifact version. It proves transport input validation, not a real owner risk decision, scanner result or promotion.
+// TestImageRiskHTTPBodyKeepsArtifactOCCAndClosedAction проверяет risk input builder с независимыми допустимыми pins, отклоняет неизвестный action, пустую/control reason, несовпадающую и отрицательную artifact version. Доказывает transport input validation, не реальное owner risk decision, результат scanner и promotion.
 func TestImageRiskHTTPBodyKeepsArtifactOCCAndClosedAction(t *testing.T) {
 	body := generated.ImageAdmissionRiskDecisionInput{Action: generated.ImageAdmissionRiskAction("ACCEPT_RISK"), ExpectedArtifactVersion: 2, ExpectedAdmissionRevision: 1, ExpectedRecipeVersion: 1, ExpectedRecipeGeneration: 1, ExpectedBuildAttempt: 1, PolicyRevision: 1, Reason: "Owner decision"}
 	body.ExpectedBuildRef = "imgbld_12345678"
@@ -50,6 +97,8 @@ func TestImageRiskHTTPBodyKeepsArtifactOCCAndClosedAction(t *testing.T) {
 	}
 }
 
+// TestImageVulnerabilityHTTPUnavailableIsExplicitAndScoped keeps an unavailable organization report explicit with allocated empty findings, while rejecting foreign scope/ref and contradictory READY or row metadata. All replies are in-memory; no scanner or stored report is consulted.
+// TestImageVulnerabilityHTTPUnavailableIsExplicitAndScoped сохраняет явный unavailable organization report с выделенным пустым findings, отклоняет чужие scope/ref и противоречивые READY или rows metadata. Ответы in-memory; scanner и сохранённый отчёт не используются.
 func TestImageVulnerabilityHTTPUnavailableIsExplicitAndScoped(t *testing.T) {
 	base := &cp.ImageVulnerabilityReport{ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION, OrganizationRef: "org_12345678", RecipeRef: "imgrec_12345678", ArtifactRef: "imgart_12345678", ArtifactVersion: 2, State: cp.ImageVulnerabilityReportState_IMAGE_VULNERABILITY_REPORT_STATE_UNAVAILABLE, NextActions: []string{"REBUILD_FOR_REPORT"}}
 	for _, name := range []string{"valid", "mixed_project", "foreign_recipe", "ready_missing_counts", "unavailable_rows"} {
@@ -85,6 +134,8 @@ func TestImageVulnerabilityHTTPUnavailableIsExplicitAndScoped(t *testing.T) {
 	}
 }
 
+// TestImageRiskPublicEnumNormalizationDoesNotRewriteReason verifies enum normalization changes the action field but preserves human reason text even when it resembles an enum prefix. This checks public projection, not approval authority.
+// TestImageRiskPublicEnumNormalizationDoesNotRewriteReason проверяет, что enum normalization меняет action, но сохраняет human reason, даже похожую на enum prefix. Это публичная проекция, не approval authority.
 func TestImageRiskPublicEnumNormalizationDoesNotRewriteReason(t *testing.T) {
 	in := &cp.ImageAdmissionRiskDecision{ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION, Action: cp.ImageAdmissionRiskAction_IMAGE_ADMISSION_RISK_ACTION_ACCEPT_RISK, Reason: "IMAGE_ADMISSION_RISK_ACTION_REJECT_RISK"}
 	out, ok := imageRiskPublic[generated.ImageAdmissionRiskDecision](in)
@@ -93,6 +144,8 @@ func TestImageRiskPublicEnumNormalizationDoesNotRewriteReason(t *testing.T) {
 	}
 }
 
+// TestImageVulnerabilityHTTPReadyUsesCanonicalSafeFinding builds an actual canonical projection from a synthetic scanner-shaped fixture and checks READY public output plus malformed scope, advisory URL, severity, counts and duplicate rows. It exercises canonical code locally without running an external scanner or admitting an image.
+// TestImageVulnerabilityHTTPReadyUsesCanonicalSafeFinding строит настоящую canonical projection из synthetic scanner-shaped fixture и проверяет READY public output, неверные scope, advisory URL, severity, counts и duplicate rows. Выполняет canonical code локально без внешнего scanner и допуска образа.
 func TestImageVulnerabilityHTTPReadyUsesCanonicalSafeFinding(t *testing.T) {
 	policy := strings.Repeat("a", 64)
 	image := "sha256:" + strings.Repeat("b", 64)
@@ -142,6 +195,8 @@ func TestImageVulnerabilityHTTPReadyUsesCanonicalSafeFinding(t *testing.T) {
 	}
 }
 
+// TestImageRiskHTTPDecisionPreservesPendingInsteadOfPromoting projects a synthetic exact risk-decision/artifact/attempt tuple and requires the public admission verdict and attempt to remain PENDING. Foreign digest/attempt or unknown attempt state fail; success is not a signed live risk approval or completed admission.
+// TestImageRiskHTTPDecisionPreservesPendingInsteadOfPromoting проецирует synthetic exact risk-decision/artifact/attempt tuple и требует сохранения PENDING у публичных verdict и attempt. Чужие digest/attempt и неизвестный attempt state отклоняются; успех не является signed live approval и завершённым admission.
 func TestImageRiskHTTPDecisionPreservesPendingInsteadOfPromoting(t *testing.T) {
 	in := &cp.DecideOrganizationImageAdmissionRiskRequest{RecipeRef: "imgrec_12345678", ArtifactRef: "imgart_12345678", ExpectedArtifactVersion: 3, ExpectedAdmissionRevision: 1, ExpectedRecipeVersion: 1, ExpectedRecipeGeneration: 1, ExpectedBuildRef: "imgbld_12345678", ExpectedBuildAttempt: 1, ManifestDigest: "sha256:" + strings.Repeat("a", 64), VulnerabilityEvidenceSha256: strings.Repeat("b", 64), PriorAdmissionReceiptSha256: strings.Repeat("c", 64), PriorEvidenceManifestDigest: "sha256:" + strings.Repeat("d", 64), PolicyRevision: 1, PolicySha256: strings.Repeat("e", 64), Action: cp.ImageAdmissionRiskAction_IMAGE_ADMISSION_RISK_ACTION_ACCEPT_RISK, Reason: "Human reviewed fixed report"}
 	d := &cp.ImageAdmissionRiskDecision{Ref: "imgrisk_12345678", Version: 1, ArtifactVersion: 3, AdmissionRevision: 1, RecipeVersion: 1, RecipeGeneration: 1, BuildRef: in.ExpectedBuildRef, BuildVersion: 3, BuildAttempt: 1, ArtifactRef: in.ArtifactRef, RecipeRef: in.RecipeRef, ManifestDigest: in.ManifestDigest, VulnerabilityEvidenceSha256: in.VulnerabilityEvidenceSha256, PriorAdmissionReceiptSha256: in.PriorAdmissionReceiptSha256, PriorEvidenceManifestDigest: in.PriorEvidenceManifestDigest, PolicyRevision: 1, PolicySha256: in.PolicySha256, Action: in.Action, Reason: in.Reason, ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION, OrganizationRef: "org_12345678", DecidedByActorRef: "usr_12345678", DecidedAt: timestamppb.New(time.Now().UTC()), BindingSha256: strings.Repeat("f", 64)}
