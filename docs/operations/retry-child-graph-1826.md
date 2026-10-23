@@ -109,3 +109,19 @@ terminal callback остаётся авторитетным переходом; 
 
 Открыто: NOTIFICATION_INVALID требует точного нового диагностического события,
 а исходные исторические причины файловых отказов восстановить нельзя.
+
+
+Проверки нового файлового исправления на коде
+`8c8f05dc127cb4d64cdb1223fc38902993c53e3d`:
+
+- PASS LOCAL: `libs/go/runtimecontract`: `go test ./...`, `go build ./...`.
+- PASS LOCAL: `agent-runner`: `go test ./internal/app ./internal/codex ./internal/workspace -count=1`, `go build ./...`.
+- PASS LOCAL: `runtime-controller`: `go test ./internal/callback -count=1`, `go build ./...`.
+- PASS LOCAL: PWA catalog unit (12 tests), ESLint/Prettier двух изменённых файлов,
+  `npm run build` вместе с typecheck. Vite сообщает прежнее предупреждение о
+  chunks крупнее 500 kB; это не новое падение сборки.
+- Проверены kernel-confined dependency links, запрещённые цели, строгий outbox,
+  квотный учёт, closed diagnostic schema, exact execution binding, сохранение
+  расхода, передача через private IPC/callback и запись controller до cleanup.
+- NOT RUN: новый runner в кластере, новые реальные ИИ-запуски, полная приёмка.
+  Предыдущая доставка control-plane не включает это файловое исправление.
