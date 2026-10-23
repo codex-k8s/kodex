@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.333.0
+version: 1.334.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,39 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста тридцать четвёртая волна — SQL каталога ролей и привязок
+
+Предыдущий опубликованный SHA — `8c677ca8526dccdf01c7f0170721f36339cbcc19`.
+Прочитаны все 30 SQL-файлов, встроенных в `queries_access.go`.
+Каждая SQL-привязка получила предметную пару комментариев EN→RU. Отдельно
+обозначены границы каталожного чтения и фактического допуска: чтение привязок
+не проверяет срок действия и жизненный цикл роли; разрешение субъекта и цели
+не даёт полномочий само по себе; изменение и отзыв требуют отдельной
+проверки владельца. Для синхронизации OIDC явно отмечены блокировка субъекта,
+свежесть членства и обязанность восстановить удалённые записи в транзакции.
+Комментарии описывают существующие SQL-предикаты и не подменяют ими проверку
+полномочий в командах.
+
+Go AST совпал с предыдущим SHA; все 30 `go:embed` директив и SQL-байты
+прежние. SHA-256 путей и содержимого SQL:
+`6ed7e5d41f3b80a876243569e80f80109f3ebf115b27884a8abf7147522c02c2`.
+Четыре выбранных hermetic unit по access/role boundary и полный build
+control-plane (`-p 2`) — PASS LOCAL; это не PostgreSQL component.
+17 Node unit, Go checker unit, AST, 30/30 пар, пять точных ignore-маркеров,
+`gofmt` и `git diff --check` — PASS LOCAL.
+
+Canonical YwL9R1 до коммита: 6645 собственных файлов, 222 исключения,
+1796 raw, 752 retained, 1044 unresolved. Все точные группы
+`format/path/fragment SHA/count` прежние. Go: 14894/21318
+двуязычных объявлений, непокрыты 6424. Raw report SHA-256
+`16bfcb2345dd4e764a183ec8f63c2486caad2a2861e4eb6a33557df65e366d97`,
+clone-set SHA-256 прежний
+`960f0906e6d8250ec0bc9203c4b2b3b1c5b365060ff5fb3a2d77c2673aa8c8d3`.
+Полный Go `-check` и разбор 1044 групп открыты. Historical
+FAIL/finding293 не закрыты; browser, live, model, mail, STT, component,
+deploy и полная приёмка — NOT RUN. Issue открыт, PR Draft;
+до общей приёмки и merge ещё не готов.
 
 ## Триста тридцать третья волна — SQL bootstrap и доказательств полномочий
 
