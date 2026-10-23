@@ -70,7 +70,7 @@ func TestAssistantWorkspaceLimitsRejectUnknownAndExcessiveFields(t *testing.T) {
 	for _, limits := range []map[string]any{
 		{"maxBytes": float64(0), "maxFiles": float64(10)},
 		{"maxBytes": float64(1<<30) + 1, "maxFiles": float64(10)},
-		{"maxBytes": float64(4096), "maxFiles": float64(10001)},
+		{"maxBytes": float64(4096), "maxFiles": float64(runtimecontract.RuntimeWorkspaceMaximumFiles + 1)},
 		{"maxBytes": float64(1.5), "maxFiles": float64(10)},
 		{"maxBytes": float64(4096)},
 		{"maxBytes": float64(4096), "maxFiles": float64(10), "root": "/outside"},

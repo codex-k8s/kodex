@@ -73,8 +73,8 @@ describe("полнота закрытого реестра server tokens", () =>
     },
   );
   it.each([
-    ["ru", "Не удалось подготовить файлы результата"],
-    ["en", "Could not prepare result files"],
+    ["ru", "Не удалось проверить или сохранить файлы рабочего каталога"],
+    ["en", "Could not validate or save workspace files"],
   ] as const)(
     "показывает отказ файлов результата, а не ошибку ответа модели, в %s",
     async (locale, expected) => {

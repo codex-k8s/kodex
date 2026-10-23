@@ -21,6 +21,7 @@ func normalizeCompletedProviderWorkspace(ctx context.Context, input model.Input,
 		logProviderFilesystemDenial(providerWorkspaceStage, err)
 		if result.Outcome == "SUCCEEDED" {
 			result.Outcome, result.FailureCode, result.FinalMessage = "FAILED", "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
+			result = result.WithWorkspaceDiagnostic(input, providerWorkspaceStage, filesystemDenialReason(providerWorkspaceStage, err).String())
 		}
 	}
 	return result
@@ -122,10 +123,16 @@ func writeProviderFilesystemDenial(logger *slog.Logger, stage string, err error)
 	if stage != providerOutboxStage && stage != providerWorkspaceStage {
 		stage = "UNKNOWN"
 	}
-	reason := filesystemUnknown
+	reason := filesystemDenialReason(stage, err)
+	logger.Warn(providerFilesystemDenialMessage, providerFilesystemStageKey, stage, providerFilesystemReasonKey, reason.String())
+}
+
+// filesystemDenialReason recovers only a typed reason under the matching guard sentinel.
+// filesystemDenialReason извлекает типизированную причину только с маркером соответствующей проверки.
+func filesystemDenialReason(stage string, err error) providerFilesystemReason {
 	var denied *providerFilesystemError
 	if (stage == providerOutboxStage && errors.Is(err, errProviderOutboxPublication) || stage == providerWorkspaceStage && errors.Is(err, errProviderWorkspaceAccess)) && errors.As(err, &denied) && denied != nil {
-		reason = denied.reason
+		return denied.reason
 	}
-	logger.Warn(providerFilesystemDenialMessage, providerFilesystemStageKey, stage, providerFilesystemReasonKey, reason.String())
+	return filesystemUnknown
 }

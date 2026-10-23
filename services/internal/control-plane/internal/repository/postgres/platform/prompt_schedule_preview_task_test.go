@@ -54,7 +54,7 @@ func validateSchedulePreviewTask(raw, task string, continued bool, sessionRef st
 		return fmt.Errorf("prospective task projection is invalid")
 	}
 	digest := sha256.Sum256([]byte(task))
-	want := continuationTaskProjectionPin{Revision: "continuation-task-projection-v1", Mode: "PROSPECTIVE", SessionRef: sessionRef,
+	want := continuationTaskProjectionPin{Revision: "continuation-task-projection-v2", Mode: "PROSPECTIVE", SessionRef: sessionRef,
 		TaskSHA256: hex.EncodeToString(digest[:]), TaskBytes: len(task)}
 	if sessionRef == "" || pin != want {
 		return fmt.Errorf("prospective task projection does not match exact task and session")
@@ -94,6 +94,9 @@ func TestSchedulePreviewTaskProjection(t *testing.T) {
 					t.Fatal(err)
 				}
 				pin[field] = "wrong"
+				if field == "revision" {
+					pin[field] = "continuation-task-projection-v1"
+				}
 				if field == "taskBytes" || field == "attempt" {
 					pin[field] = 1
 				}

@@ -93,6 +93,21 @@ function sampleCurve(path: string): Array<{ x: number; y: number }> {
 }
 
 describe("layoutRunGraph", () => {
+  it("не сжимает небольшой граф между боковыми резервами в узком canvas", () => {
+    const bounds = { x: 0, y: 0, width: 984, height: 450 };
+    const options = runGraphFitViewOptions(809);
+    const viewport = runGraphFitTransform(bounds, 809, 596, options);
+    expect(viewport.zoom).toBeGreaterThan(0.5);
+    expect(viewport.x).toBeGreaterThanOrEqual(32);
+    expect(viewport.x + bounds.width * viewport.zoom).toBeLessThanOrEqual(
+      809 - 32,
+    );
+    expect(viewport.y).toBeGreaterThanOrEqual(180);
+    expect(viewport.y + bounds.height * viewport.zoom).toBeLessThanOrEqual(
+      596 - 160,
+    );
+  });
+
   it.each([1920, 1201, 700, 412])(
     "активный Architect читаем при ширине %i; 24 узла и 26 связей остаются доступны",
     (width) => {

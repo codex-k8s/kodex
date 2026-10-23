@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -149,7 +150,7 @@ func TestProviderWorkspaceAccessRejectsReplacedDirectory(t *testing.T) {
 		t.Fatal("replace child")
 	}
 	usage := workspaceAccessUsage{entries: 2}
-	assertProviderFilesystemReason(t, normalizeWorkspaceAccessChild(t.Context(), directory, child, "child", before, runtimecontract.RuntimeWorkspacePolicyV1(), uid, uid, group, &usage), errProviderWorkspaceAccess, filesystemMetadataChanged)
+	assertProviderFilesystemReason(t, normalizeWorkspaceAccessChild(t.Context(), directory, child, "child", before, int(directory.Fd()), "child", runtimecontract.RuntimeWorkspacePolicyV1(), uid, uid, group, &usage), errProviderWorkspaceAccess, filesystemMetadataChanged)
 	info, _ := os.Stat(filepath.Join(path, "child"))
 	if info.Mode().Perm() != 0o700 {
 		t.Fatal("replacement inode modified")
@@ -324,5 +325,74 @@ func workspaceAccessKernelChild(t *testing.T, mode string) {
 		}
 	default:
 		t.Fatal("unknown fixture stage")
+	}
+}
+
+// TestProviderWorkspaceDependencyLinks keeps ordinary package-manager links usable
+// after provider completion without granting access outside the work directory.
+// TestProviderWorkspaceDependencyLinks сохраняет обычные ссылки зависимостей после
+// завершения провайдера, не предоставляя доступ за пределами work.
+func TestProviderWorkspaceDependencyLinks(t *testing.T) {
+	root, directory, uid, group := workspaceAccessFixture(t)
+	if err := os.MkdirAll(filepath.Join(root, "node_modules/.bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "node_modules/pkg/bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "node_modules/pkg/bin/cli")
+	if err := os.WriteFile(target, []byte("synthetic cli"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "node_modules/.bin/cli")
+	if err := os.Symlink("../pkg/bin/cli", link); err != nil {
+		t.Fatal(err)
+	}
+	if err := normalizeWorkspaceAccess(t.Context(), directory, runtimecontract.RuntimeWorkspacePolicyV1(), uid, uid, group); err != nil {
+		t.Fatal(err)
+	}
+	if value, err := os.Readlink(link); err != nil || value != "../pkg/bin/cli" {
+		t.Fatal("dependency link changed")
+	}
+	if info, err := os.Stat(target); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatal("target permissions changed")
+	}
+}
+
+// TestProviderWorkspaceExplicitRepositoryQuota exercises a real metadata walk
+// above the default file count while keeping both the default denial and timeout.
+// TestProviderWorkspaceExplicitRepositoryQuota проверяет реальный обход метаданных
+// сверх default-квоты, сохраняя отказ по умолчанию и ограничение времени.
+func TestProviderWorkspaceExplicitRepositoryQuota(t *testing.T) {
+	root, _, uid, group := workspaceAccessFixture(t)
+	for index := int64(0); index <= runtimecontract.RuntimeWorkspaceDefaultFiles; index++ {
+		if err := os.WriteFile(filepath.Join(root, "entry-"+strconv.FormatInt(index, 10)), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expanded, err := runtimecontract.RuntimeWorkspacePolicyWithLimits(&runtimecontract.RuntimeWorkspaceLimits{MaxBytes: runtimecontract.RuntimeWorkspaceWritableBytes, MaxFiles: 50_000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name    string
+		policy  runtimecontract.RuntimeWorkspacePolicy
+		allowed bool
+	}{
+		{"default", runtimecontract.RuntimeWorkspacePolicyV1(), false}, {"explicit", expanded, true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			directory, err := os.Open(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer directory.Close()
+			ctx, cancel := context.WithTimeout(t.Context(), workspaceAccessBudget)
+			defer cancel()
+			err = normalizeWorkspaceAccess(ctx, directory, scenario.policy, uid, uid, group)
+			if (err == nil) != scenario.allowed {
+				t.Fatalf("allowed=%v err=%v", scenario.allowed, err)
+			}
+		})
 	}
 }

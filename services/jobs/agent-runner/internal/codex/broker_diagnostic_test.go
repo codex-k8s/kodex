@@ -2,6 +2,7 @@ package codex
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -124,5 +125,29 @@ func TestBrokerDiagnosticRejectsForeignPeerPinsAndMalformedTerminal(t *testing.T
 				t.Fatal("foreign or malformed terminal produced diagnostic")
 			}
 		})
+	}
+}
+
+// TestWorkspaceDiagnosticSurvivesBroker proves that a post-join filesystem denial
+// retains its closed cause, measured usage and binding through the private IPC.
+// TestWorkspaceDiagnosticSurvivesBroker доказывает сохранение закрытой причины,
+// расхода и привязки отказа файловой проверки через приватный IPC.
+func TestWorkspaceDiagnosticSurvivesBroker(t *testing.T) {
+	input := diagnosticInput()
+	result := normalizeCompletedProviderWorkspace(t.Context(), input, Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic final answer", Usage: runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}}, func(_ context.Context, _ model.Input) error {
+		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemByteQuota)
+	})
+	diagnostic := result.ProviderDiagnostic(input)
+	if diagnostic == nil || diagnostic.Class != "WORKSPACE" || diagnostic.Detail != "BYTE_QUOTA_EXCEEDED" {
+		t.Fatal("guard cause lost")
+	}
+	var wire bytes.Buffer
+	writer := &brokerFrameWriter{writer: &wire, input: &input}
+	if writer.finish(brokerResponse{Result: result, OK: true, Diagnostic: diagnostic}) != nil {
+		t.Fatal("write diagnostic")
+	}
+	actual, err := readBoundProviderBrokerResponse(bytes.NewReader(wire.Bytes()), &input, providerWriterUID)
+	if err != nil || actual.ProviderDiagnostic(input) == nil || *actual.ProviderDiagnostic(input) != *diagnostic || actual.Usage != result.Usage || actual.Outcome != "FAILED" {
+		t.Fatal("workspace IPC diagnostic lost", err)
 	}
 }

@@ -98,6 +98,18 @@ func (result Result) ProviderDiagnostic(input model.Input) *runtimecontract.Prov
 	return &value
 }
 
+// WithWorkspaceDiagnostic attaches bounded runner-owned completion diagnostics to
+// the exact execution tuple; invalid pins/reasons cannot produce a diagnostic.
+// WithWorkspaceDiagnostic прикрепляет ограниченную диагностику завершения runner
+// к точной попытке; неверные pins или причины не создают диагностическую запись.
+func (result Result) WithWorkspaceDiagnostic(input model.Input, stage, reason string) Result {
+	result.providerDiagnostic = bindProviderDiagnostic(input, runtimecontract.ProviderFailureDiagnostic{
+		Kind: "TERMINAL_FAILURE", Stage: stage, Class: "WORKSPACE", Detail: reason,
+		Notification: "NONE", NotificationError: "NONE", AccountRead: "NONE", TerminalCode: "RUNTIME_ARTIFACT_INVALID",
+	})
+	return result
+}
+
 type messageKind uint8
 
 const (
