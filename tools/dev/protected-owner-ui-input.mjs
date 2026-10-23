@@ -7,7 +7,7 @@ import {
 import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { createServer } from "node:https";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, normalize } from "node:path";
 import { createSecureContext } from "node:tls";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
@@ -31,8 +31,20 @@ function requireInput(valid) {
 
 export function parseInputCLI(args) {
   requireInput(
-    args.length === 2 && args[0] === "--confirm" && args[1] === inputIntent,
+    [2, 4].includes(args.length) &&
+      args[0] === "--confirm" &&
+      args[1] === inputIntent,
   );
+  if (args.length === 2) return undefined;
+  const source = args[3];
+  requireInput(
+    args[2] === "--secrets-file" &&
+      typeof source === "string" &&
+      isAbsolute(source) &&
+      normalize(source) === source &&
+      !/[\0\r\n]/.test(source),
+  );
+  return source;
 }
 
 export function assertInputEnvironment(environment, argumentsList = []) {
@@ -427,7 +439,7 @@ export async function main(args, secretReader = readPrivateAgentSecrets) {
   let material;
   let server;
   try {
-    parseInputCLI(args);
+    const sourcePath = parseInputCLI(args);
     requireInput(
       process.platform === "linux" && typeof process.getuid === "function",
     );
@@ -494,7 +506,7 @@ export async function main(args, secretReader = readPrivateAgentSecrets) {
     const handler = createInputHandler({
       port,
       deadline,
-      readSecrets: secretReader,
+      readSecrets: (keys) => secretReader(keys, {}, sourcePath),
       readPeer: async (socket) =>
         assertPeerUID(
           await readFile("/proc/net/tcp", "utf8"),
