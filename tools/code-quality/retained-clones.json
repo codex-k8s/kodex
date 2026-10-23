@@ -5360,6 +5360,46 @@
       "fragmentSHA256": "b1dd78ec87c3722a04e1d81b4a96447c2694bea4c45a43fc417341b772075396",
       "count": 1,
       "reason": "Общие78 строк — типизированная schedule/current_revision/continuation/last-occurrence проекция и joins для одного row scanner. Exact Get и paged List различаются WHERE, authority/eligibility условиями и keyset/filter/limit; объединение этих команд изменит действующие контракты чтения. Строковая сборка SQL запрещена, а новая DB view/function только ради проекции добавит схему/grants/migration и отдельную security surface без удаления общего бизнесового алгоритма. Сохранены лишь эти два точных пути/fragment/count1; shared eligibility, WHERE и иные queries не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_agent_view.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_environment.sql",
+      "fragmentSHA256": "34569df236c5cea2d11e1408b25e3b91bd413dd1c9020e4d9c6f2b95f7468d9d",
+      "count": 1,
+      "reason": "Окно сравнивает environment/image/policy columns внутри agent runtime view и exact environment read. Agent view выбирает binding-pinned revision либо отдельно оговорённый system-assistant current, environment read — текущую ревизию exact окружения; одна current-only проекция подменила бы pin. Общий typed scanner уже выделен. Go SQL fragments запрещены, новая DB view/function только ради списка столбцов увеличит schema/grant surface без предметного общего алгоритма. Сохранена только точная пара/hash/count1, не eligibility, WHERE или queries целиком."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_agent_view.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_environment_lifecycle_snapshot.sql",
+      "fragmentSHA256": "568db9f3b4417fc7541d3253f1d3ea1cdd13c872db26bc01b3505fe5f5347eb4",
+      "count": 1,
+      "reason": "Совпадает декларативный environment snapshot column layout agent view и lifecycle snapshot. Первый читает exact agent binding revision с config/overlay и отдельной assistant-null semantics; второй — current revision nondeleted project environment для уже авторизованной lifecycle-команды, включая DISABLED. Унификация запроса смешает pinned/current и read/mutation authority. Common scanners уже есть, SQL concatenation запрещена; DB view ради списка полей непропорциональна. Исключена лишь точная пара/hash/count1, не state/authorization predicates."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_environment.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__list_environments.sql",
+      "fragmentSHA256": "ac5c24dd93c8e198ea71ac3b1cf2fe57af2bb3677065583d6e41e694f856c02f",
+      "count": 1,
+      "reason": "Exact GetEnvironment и ListEnvironments повторяют каноническую current revision/image/tool/policy row projection. Get поддерживает organization/project через LEFT JOIN и assistant_context eligibility, List — проектный каталог с project.view/authority-project и ref pagination. Shared row scanning уже вынесен; полное объединение изменит scope/visibility, а SQL string fragments запрещены. Новый DB schema object только ради SELECT columns добавит лишние grants/migration. Сохранены только эти два пути/hash/count1, не WHERE, scope либо полные файлы."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_environment.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_environment_lifecycle_snapshot.sql",
+      "fragmentSHA256": "28a0db16d98f4727c358e149b7ec5eb05147fe5520acb8b75991ba8895a54cfe",
+      "count": 1,
+      "reason": "Общий хвост image/tool/resource/network digest columns сравнивает публичное exact environment read с внутренним lifecycle snapshot. У первого nullable project и свежая context projection, у второго обязательный project и authority уже проверенной команды; эти границы нельзя скрыть общей getter-оболочкой. Общий scanner существующий, а SQL columns fragment потребует запрещённой Go сборки либо нового DB view/grants ради декларации. Оставлена точная пара/hash/count1, не lifecycle/read проверки."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__get_environment_lifecycle_snapshot.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__list_environments.sql",
+      "fragmentSHA256": "35d85acb9c45ed358ed16710572faadf581ca98eaa51ee35d2209616c2d5ba49",
+      "count": 1,
+      "reason": "Совпадает часть immutable environment-version columns и joins lifecycle snapshot и paginated project environment catalog. Snapshot относится к уже авторизованной заблокированной mutation цели; каталог самостоятельно фильтрует actor project.view/authority-project/query/cursor до LIMIT. Common row scanner уже отделён, универсальный SQL getter скроет разные authority и cardinality без общего бизнесового алгоритма. Новый DB view лишь ради columns/grants нецелесообразен; исключена только данная точная пара/hash/count1, не SQL файлы или predicates."
     }
   ]
 }
