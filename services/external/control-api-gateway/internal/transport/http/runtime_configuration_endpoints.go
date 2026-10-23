@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
@@ -331,7 +332,7 @@ func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput
 	}, KubernetesAccess: runtimeKubernetesAccessKind(string(input.KubernetesAccess)),
 		WebAccess: &controlplanev1.RuntimeWebAccess{Mode: runtimeWebAccessMode(string(input.WebAccess.Mode))}}
 	if limits := input.Resources.WorkspaceLimits; limits != nil {
-		if limits.MaxBytes < 1 || limits.MaxBytes > 1<<30 || limits.MaxFiles < 1 || limits.MaxFiles > 10_000 {
+		if limits.MaxBytes < 1 || limits.MaxBytes > runtimecontract.RuntimeWorkspaceWritableBytes || limits.MaxFiles < 1 || limits.MaxFiles > runtimecontract.RuntimeWorkspaceMaximumFiles {
 			return nil, false
 		}
 		result.Resources.WorkspaceLimits = &controlplanev1.RuntimeWorkspaceLimits{MaxBytes: limits.MaxBytes, MaxFiles: limits.MaxFiles}

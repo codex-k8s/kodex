@@ -13,7 +13,12 @@ const (
 	RuntimeWorkspaceRoot                = "/workspace"
 	RuntimeWorkspaceWorkingRoot         = RuntimeWorkspaceRoot + "/work"
 	RuntimeWorkspaceWritableBytes int64 = 1 << 30
-	RuntimeWorkspaceMaximumFiles  int64 = 10_000
+	// RuntimeWorkspaceDefaultFiles keeps the default metadata quota unchanged for environments without explicit limits.
+	// RuntimeWorkspaceDefaultFiles сохраняет прежнюю квоту метаданных для окружений без явного лимита.
+	RuntimeWorkspaceDefaultFiles int64 = 10_000
+	// RuntimeWorkspaceMaximumFiles bounds an explicitly selected repository workspace quota; it does not change protected paths or byte limits.
+	// RuntimeWorkspaceMaximumFiles ограничивает явно выбранную квоту файлов репозитория, не меняя защищённые пути и лимит байтов.
+	RuntimeWorkspaceMaximumFiles int64 = 100_000
 
 	RuntimeWorkspaceReadOnly             = "READ_ONLY"
 	RuntimeWorkspaceWritable             = "WRITABLE"
@@ -34,8 +39,10 @@ type RuntimeWorkspacePathRule struct {
 	Access string `json:"access"`
 }
 
-// RuntimeWorkspaceLimits сужает только ресурсные квоты platform policy.
-// Root, protected paths и источники томов не настраиваются владельцем.
+// RuntimeWorkspaceLimits selects resource quotas inside platform ceilings; omitted limits retain the defaults.
+// Root, protected paths and volume origins are not configurable by the owner.
+// RuntimeWorkspaceLimits задаёт квоты ресурсов в пределах платформенных потолков; отсутствие сохраняет значения по умолчанию.
+// Корень, защищённые пути и источники томов не настраиваются владельцем.
 type RuntimeWorkspaceLimits struct {
 	MaxBytes int64 `json:"max_bytes"`
 	MaxFiles int64 `json:"max_files"`
@@ -84,7 +91,7 @@ func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 			{Path: RuntimeWorkspaceRoot + "/.kodex/state/codex-home/auth.json", Access: RuntimeWorkspaceReadOnly},
 			{Path: RuntimeWorkspaceRoot, Access: RuntimeWorkspaceWritable},
 		},
-		MaximumWritableBytes: RuntimeWorkspaceWritableBytes, MaximumFileCount: RuntimeWorkspaceMaximumFiles,
+		MaximumWritableBytes: RuntimeWorkspaceWritableBytes, MaximumFileCount: RuntimeWorkspaceDefaultFiles,
 		DenialReasons: append([]string(nil), runtimeWorkspaceDenialReasons[:]...)}
 	raw, _ := json.Marshal(policy)
 	digest := sha256.Sum256(raw)

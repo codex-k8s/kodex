@@ -2176,6 +2176,13 @@ UID и lifecycle. Ошибка создания mountpoint до entrypoint ис�
 непересекающегося пути, а не снятием read-only или запуском от root. Render
 проверяет согласованность ConfigMap и mountPath обоих профилей.
 
+Квота файлов рабочего дерева имеет отдельные default и абсолютный потолок.
+Отсутствие явного значения сохраняет default; увеличение владелец задаёт
+через опубликованную версию окружения в пределах общего ceiling. Gateway,
+assistant tool schema, CP и runner используют одну границу; byte quota,
+protected paths и типы mounts этим не расширяются. Изменение квоты входит
+в resources/revision digest и не применяется к уже закреплённой attempt.
+
 Рабочее дерево репозитория может содержать относительные ссылки зависимостей.
 Их разрешение допускается только под уже открытым work-fd через kernel-enforced
 `RESOLVE_BENEATH|RESOLVE_NO_MAGICLINKS|RESOLVE_NO_XDEV`, с целью обычного файла

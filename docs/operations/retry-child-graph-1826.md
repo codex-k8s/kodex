@@ -4,7 +4,7 @@ title: Исправления повторов и завершения запу�
 type: operational-report
 status: approved
 owner: developer
-version: 1.1.0
+version: 1.2.0
 updated: 2026-10-23
 ---
 
@@ -125,3 +125,58 @@ terminal callback остаётся авторитетным переходом; 
   расхода, передача через private IPC/callback и запись controller до cleanup.
 - NOT RUN: новый runner в кластере, новые реальные ИИ-запуски, полная приёмка.
   Предыдущая доставка control-plane не включает это файловое исправление.
+
+
+## Доработки при выкладке 23.10.2026
+
+Владелец разрешил штатную доставку и слияние #1827, чтобы открытым остался
+только PR рефакторинга #1824. Для stable runtime-controller и PWA в закрытый
+local importer добавлены только два точных repository; проверка digest,
+платформы, pin и обеих нод сохранена. Shell source проверен `bash -n`.
+
+Первый новый runner `sha256:54008254165f1cbd0afb4319f9cfdcf942c23222094ba647222236bc47e5de5c`
+собран из `6fe3f9b93c1c2d1321be2be566e4d91ee53eb2e2`, опубликован штатным
+seed, проверен на обеих нодах. Все девять фаз runner-policy-transition,
+runtime binding и default transition прошли PASS. Control-plane сохраняет
+ранее исправленный граф; новый controller и PWA доставлены scoped release
+`8b5f2acc-6448-408a-a893-901819f58eb7` с 2/2 Ready. Это промежуточная поставка:
+следующее исправление квот требует нового runner и совместимых приложений.
+
+Во время импорта runner завершение скрипта оборвалось при изменении его
+allowlist. Перед продолжением выполнен отдельный авторитетный readback того
+же digest на обеих нодах — PASS. Pin состояния восстановлен из проверенной
+provenance, нового импорта с неизвестным результатом не выполняли. Далее
+script source во время запущенного shell-процесса не меняется.
+
+Проверка в Chrome MCP: проблемный child retry имеет HTTP 200, граф стабилен,
+консоль пуста. При ширине canvas 809px кнопка «Весь граф» давала zoom≈0.223:
+горизонтальные резервы для панелей оставляли слишком мало места. Для canvas
+до 1100px теперь используются боковые отступы компактного размещения,
+вертикальные панели учитываются по-прежнему. Регрессия проверяет геометрию
+и читаемый размер небольшого графа; 62 графовых unit — PASS LOCAL.
+
+Дополнительный подтверждённый барьер: собственная рабочая копия репозитория
+с зависимостями содержит 26074 файла, ≈431MB. Существующий абсолютный потолок
+10000 файлов делает обычный metadata walk недостижимым даже после исправления
+ссылок. Default остаётся 10000, но явный owner-selected `workspaceLimits.maxFiles`
+теперь допускает до 100000. Для выбранных окружений разработки планируется
+50000 файлов. Byte quota и размер тома остаются прежними (1GiB), защищённые
+пути/owner/symlink/mount проверки не меняются.
+
+Путь квоты: owner HTTP или assistant policy input → специализированный publish
+окружения → immutable resources/digest → новая RuntimeRevision → workload
+volume/input → runner normalization/canary/outbox. OpenAPI и оба generated
+клиента пересобраны; gateway использует общий runtimecontract ceiling,
+controller tool schema и CP/runner валидируют ту же константу. Отсутствие
+поля сохраняет default, прошлые версии/attempts не переписываются. Нового
+события/authority нет: используются прежние публикация, impact/rebind и
+version-pinned read paths.
+
+PASS LOCAL: runtimecontract unit/build, runner app/workspace/codex unit/build,
+controller callback/workload unit/build, CP platform domain/repository unit/build,
+74 frontend unit/typecheck/build. Реальный kernel fixture с 10001 файлами
+отклоняется default-квотой и проходит с явной квотой в прежний timeout.
+Старая отрицательная quota-fixture обновлена на новый потолок. Обнаруженный
+устаревший oracle schedule preview ожидал continuation-task-projection-v1
+при уже существующем production v2: исправлен oracle, v1 явно проверяется
+как отклоняемая версия. Исполняемый continuation protocol не менялся.
