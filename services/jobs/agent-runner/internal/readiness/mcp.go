@@ -157,7 +157,7 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 	})
 	done := make(chan error, 1)
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 3 * time.Second,
-		IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16 << 10,
+		MaxHeaderBytes: 16 << 10,
 		BaseContext: func(net.Listener) context.Context { return ctx }}
 	secured := &peerCredentialListener{Listener: listener}
 	localTransport := &http.Transport{DisableCompression: true, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
