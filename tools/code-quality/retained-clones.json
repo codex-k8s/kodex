@@ -3,6 +3,30 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
+      "fragmentSHA256": "59ac741cd6a3c3a9624caccca856a580108d180b65a87463cdd1de3ed7d32fac",
+      "count": 1,
+      "reason": "После реального выноса error-first response shaping остаётся126-token окно разных generated membership/schedule query handlers. Общие catalogRequest, page/string conversion и writeReadRPCResult уже вынесены; повторяются лишь их вызовы вокруг разных nominal RPC request/response types. Универсальный query dispatcher или callback-оболочка ради трёх строк скрыл бы конкретный owner method и публичную collection mapping без удаления нового самостоятельного алгоритма. Сохранено только данное точное внутрефайловое окно/hash/count1; остальные handlers, валидация и файл целиком не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
+      "fragmentSHA256": "7657c57c353422ec2a58ff2fd6430672eae1c26ff6930f12b49b90305fe4bb0a",
+      "count": 1,
+      "reason": "Остаточное127-token окно пересекает хвост предыдущего handler и разные schedule/environment catalog RPC. Catalog validation и error/public response алгоритмы уже общие, но nominal ListSchedules/ListRuntimeEnvironmentSets и ключи schedules/environments должны оставаться явными. Generic dispatcher потребовал бы callbacks либо отражения полей generated request и ухудшил бы чтение scope/method связи ради короткого glue. Исключена только точная внутрефайловая пара по content hash/count1, не RPC, mapper или файл в целом."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
+      "fragmentSHA256": "816e4cd443e0e2a4ae2d0e1ba3304af80b114cbffffee1ad50e97110d4698756",
+      "count": 1,
+      "reason": "Перекрывающееся117-token окно тех же каталогов заканчивается до response mapping и сравнивает schedule и secret metadata query. У секретов намеренно остаётся specialized writeRuntimeSecretPage, а у schedule общий read-result helper; общий executable алгоритм prevalidation уже catalogRequest. Универсальная обработка полного handler смешала бы разные typed owner методы и secret projection policy. Оставлено только это точное окно/hash/count1 после реального выноса общих primitives; secret response и другие участки не исключены."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/websocket/server.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/websocket/server.go",
       "fragmentSHA256": "dc0c79a56788644c9e9f5e95d270f29a773e91a0155913c22a06a172f677c079",

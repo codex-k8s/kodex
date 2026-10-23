@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.315.0
+version: 1.316.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,106 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста шестнадцатая волна — каталоги организации и runtime/provider HTTP
+
+Предыдущий опубликованный SHA — `544cec0ff333643409483b88e9a44b96c226247a`.
+ExactOzLXye:6640 sources,222 excluded,1804 raw/728 retained/
+1076 unresolved; Go13939/21298,missing7359. Push, Issue open, Draft PR
+head/body315 подтверждены readback. Предыдущая goal-итерация — progress
+с реальным выносом25 response tails и двух artifact filter blocks.
+
+Полностью прочитаны3 files: organization_catalog_endpoints.go130,
+runtime_configuration_endpoints.go411 и mvp_endpoints.go604 исходных строк.
+Все66 declarations (8+25+33) получили предметные EN→RU комментарии.
+Четырнадцать read-only хвостов переиспользуют writeReadRPCResult из315:
+organization5, runtime configuration4, MVP5. Typed owner RPC, context,
+input prevalidation и specialized response paths сохранены. Команды
+publish/delete/device auth/API key и handler со специальной projection
+не заменяются общей read-функцией.
+
+Inverse разворачивает14 actual helper calls и сравнивает целые AST3 с315:
+PASS LOCAL, //go: directives прежние. Изменение ветвей mutation, значений,
+private credential transport, upload sequence, owner grants/claims либо
+runtime policy не выполнялось. Scope3files66/66, новых declarations нет.
+
+Комментарии отражают ограничения:
+- catalogRequest проверяет UTF-8,200runes query, page1..100, token512bytes
+  и optional project context; это не eligibility/organization authority;
+- configuration response требует exact agent/version и не более128
+  unique context bindings/resources, но display metadata не выдаёт grants;
+- provider candidates проверяют1..32 unique pacc, weights1..100 и exact
+  catalog pins; lookup не получает credential и не выбирает default effort;
+- environment policy mapper проверяет свои enum/workspace bounds1GiB/
+  10000files, но copied resource/web fields ещё требуют owner validation
+  и реального network enforcement. Не заявлено, что mapper применяет policy;
+- avatar upload сначала metadata, затем counted/digested chunks и commit;
+  ранние возвраты не добавляют отдельный stream abort/CloseSend здесь.
+  MIME/length checks не названы антивирусом или admission изображения;
+- fallback avatar — deterministic64x64 PNG, не signature/identity proof.
+  Content route использует owner read и escaped internal preview redirect;
+- API key decoded field очищается и mutable bytes best-effort зануляются,
+  но immutable decoder/string copies не объявлены гарантированно стёртыми;
+- provider concurrency1..256 требует explicit ExpectedVersion, а claims/
+  снижение ёмкости остаются в owner state machine;
+- refresh/start/reauth и promotion HTTP202 — accepted, не proof завершения
+  внешнего действия. Dedicated error profiles и exact reply refs сохранены;
+- prompt validation/preview проверяют exact context/selection и continuation
+  session pin; preview не назван apply или grant;
+- UpdateIntegrationConnection сохраняет прежнее игнорирование structpb
+  conversion error: comments не выдают это за исправленную обработку.
+
+Матрица неизменённых сценариев:
+
+| Инициатор | Источник полномочий/проверки | Передача результата |
+| --- | --- | --- |
+| organization catalog | verified request context -> optional project selector -> owner eligibility | typed query, common read writer; secrets через specialized metadata writer |
+| agent runtime config/version | owner agent/version/context bindings, query либо dedicated mutation command | exact agent projection; grants/materialization не из payload |
+| environment create/publish/rollback | route/owner scope, mutation pins, secret revision bounds, typed policy | dedicated owner command и прежний status; no direct cluster writes |
+| provider auth/delete/concurrency | owner command + exact version/ref + existing device/API-key profile | HTTP200/201/202 по исходному path; не ложный ready/completed |
+| prompt preview | bounded template + exact owner context pins + session diff binding | safe preview JSON без apply |
+| avatar upload/content | owner context, explicit length/MIME, counted/digested stream либо owner-visible artifact | dedicated stream/preview/fallback; admission/storage lifecycle у owner |
+| image promotion | project context, mutation/version, artifact/provenance pins -> owner supply chain | accepted receipt, не автоматический human decision |
+
+586 верхних/2723 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP.17 Node unit, Go checker unit, inverse AST3,
+scope66/66,5 addressed ignores, gofmt/git diff --check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Рабочий SGRahe:6640 sources,222 excluded,1800 raw/731 retained/
+1069 unresolved; Go14005/21298,missing7293.
+Raw SHA256 `a71846025ecb98bae89daec6b34872d25129c82efd71bc0837784e9368becf96`,
+clone-set `0ed9274517359f66ff767d8a1b0c7862bda07840c6c858b0d3d0b9b7b5bd5e4d`.
+Raw multiset delta:17 старых occurrences ушли,13 появились; все изменения
+затрагивают только3 scoped files и их пары. Это НЕ названо устранением17
+исполняемых копий: из-за комментариев изменились hashes межметодных окон.
+Сопоставление fragment без whole-line comments/whitespace сохраняет
+остальные окна и показывает7 снятых code windows и3 остаточных organization
+окна после выноса response tails. Это лишь диагностика detector, не proof
+поведения; поведение отдельно проверено inverse AST3 и unit.
+
+Три остаточных окна126/127/117tokens организации прочитаны по обоим концам:
+validation/page/string и response алгоритмы уже общие, остаются разные
+nominal RPC request/response и collection keys; у secret path намеренно
+specialized writer. Ещё один generic dispatcher скрывал бы method/scope/
+secret projection policy ради короткого glue. Добавлены ровно3 content-
+pinned entries/count1 с отдельными причинами (registry613/731), без новых
+ignore markers или исключений файлов. Остальные ещё неразобранные clones
+остаются unresolved, а изменившиеся comment hashes не считаются решёнными.
+
+После commit exact scan/unit/build/push/PR readback повторяются.
+Остаток Go:gateway1061,CP6232; общий -check ещё не пройден.
+Historical FAIL/finding293 не исправлены. Новые dependencies/library APIs
+не добавлены, pinned API semantics сверены с текущим исходником; прежние
+Context7/go doc из314/315 сохраняют область. Component/browser/provider/
+device-code/API-key/model/STT/mail/deploy/full acceptance NOT RUN.
+Generated/contracts/SQL/migrations/live state прежние. Цель active, PR Draft.
 
 ## Триста пятнадцатая волна — типизированные HTTP reads и вынос повторов
 
