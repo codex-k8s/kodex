@@ -4,11 +4,47 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.346.0
+version: 1.347.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 347 — SQL-привязки публичных каталогов и истории
+
+Код `c2543dbaa50b78294a644ec869ea8294e34e7846`: прочитаны все 39 SQL-файлов
+из `queries_queries.go` (1040 строк), а также потребители поиска и action
+permissions. Все 39 Go-привязок получили предметные EN→RU комментарии:
+организация/проект, lifecycle, actor eligibility, cursor/order/limit, immutable
+revision/lineage и реальная граница последующей проверки вызывающим.
+
+Комментарии прямо различают SQL search candidates и последующий
+resourceVisible до пагинации; membership presentation и permission; metadata
+и отдельный owner download; identity графа и server-owned delegation/callback;
+organization assistant gates и project gates; latest plan receipt и новое
+решение. Не приписывается actor authorization aggregate/bootstrap запросам,
+а read predicates Get/List расписания описаны фактически, без ложного обещания
+их одинаковости. Go AST без comments/positions, все 39 embed paths и байты
+каждого SQL относительно предшествующего HEAD совпадают.
+
+Разобраны два SQL clone окна. Run Get/List повторяют JOIN-проекцию канонической
+строки, которую уже читает общий scanner; schedule Get/List — явную
+current-revision/session/occurrence проекцию при разных WHERE/cursor/eligibility.
+Сохранены только exact paths/hash/count1 с причиной: Go SQL concatenation
+запрещена, а новая DB view/function только ради декларативного row layout
+увеличит schema/grant/migration surface без общего предметного алгоритма.
+Ни целые SQL-файлы, ни predicates или каталоги не исключены.
+
+PASS LOCAL: platform repository unit и полный build control-plane, assessor
+unit, пять ignore guards, gofmt/diff-check; свежий полный scan на code SHA.
+**6651 own / 222 excluded; 1779 raw / 790 retained / 989 unresolved;
+Go 15448/21343, missing 5895**. Raw SHA256
+`e62998c18a94a2eb7395d6a4005a1b34462c55d0048fec92ff934a7731757781`,
+clone-set SHA256
+`3335e704acdca7f6977b173d4dac625e2b2fd386c980098af217758b2f86ae6a`.
+SQL и applied migrations не менялись; component/live/ИИ/deploy NOT RUN.
+Общий итоговый Go -check/build/unit, 989 групп, 5895 объявлений и прежние
+незакрытые FAIL/finding остаются обязательными; #1824 остаётся Draft.
 
 ## Волна 346 — подготовка окружений и помощников component fixtures
 
