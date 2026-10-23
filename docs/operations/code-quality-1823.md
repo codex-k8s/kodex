@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.331.0
+version: 1.332.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,46 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста тридцать вторая волна — общий разбор тела и контекста изменения доступа
+
+Предыдущий опубликованный SHA — `4559f22e637a386d2e7cbf5244d30a2c346be28c`.
+В `control-api-gateway/internal/transport/http` добавлен узкий
+`decodeMutationBody[T]`: прежний `decodeJSON[T]` выполняется строго перед
+`requireMutation`; первый отказ пишет прежнюю локальную проблему и
+останавливает обработчик. Helper не выбирает actor, owner, RPC или
+идемпотентную операцию. В четырёх методах доступа сохранены отдельные
+типизированные преобразования и вызовы владельца:
+
+| Путь | Локальный вход | Неизменённый owner path |
+| --- | --- | --- |
+| CreateAccessRole | AccessRoleInput, ключ без If-Match | CreateAccessRole, HTTP 201 |
+| CreateAccessRoleVersion | AccessRoleInput, ключ + If-Match, roleRef | CreateAccessRoleVersion, HTTP 201 |
+| CreateAccessBinding | AccessBindingInput, ключ без If-Match | CreateAccessBinding, HTTP 201 |
+| ChangeAccessBinding | AccessBindingChangeInput, ключ + If-Match, bindingRef | ChangeAccessBinding, HTTP 200 |
+
+Проверенная transport identity и owner policy/RPC остаются источниками
+полномочий. Payload, ключ и ETag не создают authority. Gateway не пишет
+состояние, audit или event; отказ JSON/ETag остаётся локальным HTTP 400 до
+RPC, а ошибки RPC по-прежнему проходят прежний `writeRPCProblem`.
+Новый unit проверяет строгий JSON, неизвестные поля, второе JSON-значение,
+неверный ETag, create без версии и точные ключ/версию при успехе.
+
+Detector после выноса: 6645 собственных файлов/222 исключения,
+1796 raw/752 retained/1044 unresolved. Исчезли 13 прежних occurrence,
+возникли 10 новых узких окон вокруг оставшихся typed handlers; net −3.
+Все 752 ранее принятых occurrence продолжают совпадать с адресным реестром;
+новые окна остаются открытыми, не скрыты broad ignore. Go-реестр:
+14820/21318 двуязычных объявлений, непокрыты 6498; три новых объявления
+и два прежних локальных тестовых типа описаны. Raw SHA-256
+`00f35081b90b7f82f4aa70cf4b40682b27ff7a2a533d1042862de0fd4b096575`,
+clone-set SHA-256
+`960f0906e6d8250ec0bc9203c4b2b3b1c5b365060ff5fb3a2d77c2673aa8c8d3`.
+Полный unit пакета HTTP и полный gateway build (`-p 2`), 5 точных ignore,
+`gofmt` и `git diff --check` — PASS LOCAL. PostgreSQL, browser, live,
+model, mail, STT, deploy и полный QA — NOT RUN. Historical FAIL/finding293
+не закрыты; полный Go `-check` и 1044 групп ещё открыты. Issue открыт,
+PR Draft; не готов к общей приёмке/merge.
 
 ## Триста тридцать первая волна — SQL контекстных привязок, навыков и памяти
 

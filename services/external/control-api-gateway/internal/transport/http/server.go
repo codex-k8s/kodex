@@ -259,6 +259,17 @@ func requireMutation(writer http.ResponseWriter, idempotency, etag string) (*con
 	return result, ok
 }
 
+// decodeMutationBody decodes the request body before parsing mutation headers and stops at the first local error. It only prepares syntax for a typed owner command; it does not authorize the caller or resolve the target.
+// decodeMutationBody разбирает тело запроса перед контекстом изменения и останавливается на первой локальной ошибке. Он лишь готовит синтаксис для типизированной команды владельца, не авторизуя вызывающего и не разрешая цель.
+func decodeMutationBody[T any](writer http.ResponseWriter, request *http.Request, idempotency, etag string) (T, *controlplanev1.MutationContext, bool) {
+	body, ok := decodeJSON[T](writer, request)
+	if !ok {
+		return body, nil, false
+	}
+	mutationContext, ok := requireMutation(writer, idempotency, etag)
+	return body, mutationContext, ok
+}
+
 // page creates a fresh page request defaulting to fifty and copies optional size/token without range validation; the int-to-int32 conversion is unchecked here.
 // page создаёт новый запрос страницы с размером пятьдесят по умолчанию и копирует размер и token без проверки диапазона; преобразование int в int32 здесь не проверяется.
 func page(size *int, token *string) *controlplanev1.PageRequest {

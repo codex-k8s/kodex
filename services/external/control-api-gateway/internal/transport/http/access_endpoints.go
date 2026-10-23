@@ -137,11 +137,7 @@ func (server *Server) SimulateAccess(writer http.ResponseWriter, request *http.R
 // CreateAccessRole copies requested permission keys/scopes with editable metadata and create idempotency context into the dedicated owner command, returning HTTP201 without treating requested privileges as self-issued authority.
 // CreateAccessRole копирует permission keys и scopes с metadata и идемпотентным create в отдельную команду владельца и выдаёт HTTP201 без принятия запрошенных прав за самовыданные полномочия.
 func (server *Server) CreateAccessRole(writer http.ResponseWriter, request *http.Request, parameters generated.CreateAccessRoleParams) {
-	body, ok := decodeJSON[generated.AccessRoleInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, "")
+	body, mutation, ok := decodeMutationBody[generated.AccessRoleInput](writer, request, parameters.IdempotencyKey, "")
 	if !ok {
 		return
 	}
@@ -158,11 +154,7 @@ func (server *Server) CreateAccessRole(writer http.ResponseWriter, request *http
 // CreateAccessRoleVersion sends full proposed role metadata and mutation/version pins to the owner version command; it does not overwrite historical versions locally.
 // CreateAccessRoleVersion передаёт полную предлагаемую metadata роли и mutation/version pins команде версий владельца без локального перезаписывания истории.
 func (server *Server) CreateAccessRoleVersion(writer http.ResponseWriter, request *http.Request, roleRef generated.AccessRoleRef, parameters generated.CreateAccessRoleVersionParams) {
-	body, ok := decodeJSON[generated.AccessRoleInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.AccessRoleInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}
@@ -194,11 +186,7 @@ func (server *Server) ArchiveAccessRole(writer http.ResponseWriter, request *htt
 // CreateAccessBinding maps subject, exact role-version selector, scope and conditions under create mutation context for owner authorization. Payload subject/scope never assigns the caller's own identity or permissions.
 // CreateAccessBinding преобразует subject, точную role-version, scope и conditions с create mutation для авторизации владельцем. Subject и scope payload не назначают личность и права вызывающего.
 func (server *Server) CreateAccessBinding(writer http.ResponseWriter, request *http.Request, parameters generated.CreateAccessBindingParams) {
-	body, ok := decodeJSON[generated.AccessBindingInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, "")
+	body, mutation, ok := decodeMutationBody[generated.AccessBindingInput](writer, request, parameters.IdempotencyKey, "")
 	if !ok {
 		return
 	}
@@ -216,11 +204,7 @@ func (server *Server) CreateAccessBinding(writer http.ResponseWriter, request *h
 // ChangeAccessBinding sends exact binding, role version, scope/conditions and mutation pins to the specialized owner update, leaving old/new scope eligibility to owner policy.
 // ChangeAccessBinding передаёт точные binding, role version, scope/conditions и mutation pins отдельному update владельца, оставляя допуск прежней и новой области его политике.
 func (server *Server) ChangeAccessBinding(writer http.ResponseWriter, request *http.Request, bindingRef generated.AccessBindingRef, parameters generated.ChangeAccessBindingParams) {
-	body, ok := decodeJSON[generated.AccessBindingChangeInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.AccessBindingChangeInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}
