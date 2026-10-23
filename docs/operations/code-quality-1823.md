@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.312.0
+version: 1.313.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,93 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста тринадцатая волна — сервер WebSocket и его границы
+
+Предыдущий опубликованный SHA — `14a877608c2e98bbf1144bcfcb5b2d7c0a9def52`.
+Exact6Bcpvu:6639 sources,222 excluded,1803 raw/725 retained/
+1078 unresolved; Go13661/21293,missing7632. Issue открыт, PR Draft/head/body312
+подтверждены GET. Основной клон чист; работа только в выделенном worktree.
+
+Прочитаны целиком server.go1268 и server_test.go333 исходных строк.
+141 недостающее declaration получило предметный EN→RU комментарий; scope
+двух файлов142/142 (queryClient уже был описан). Документированы package и
+inline-пояснения. Однострочный marker interface разложен на строки, чтобы
+его метод имел собственный Doc. AST2 и //go: directives равны312:
+исполнение, значения лимитов, типы, contracts и assertions не менялись.
+
+Зафиксированы фактические ограничения без заявления об их исправлении:
+- request cancellation отделена через WithoutCancel; handler запрашивает
+  отмену reader/writer, но явного join этих goroutines здесь нет;
+- outbound enqueue и written — допуск и завершение попытки, в том числе
+  ошибочной; это не ACK доставки браузеру или durable broker receipt;
+- decodeClosed запрещает unknown fields и trailing documents, но не
+  duplicate keys; при ошибке возможен частичный T, который надо отбросить;
+- readCatchUp допускает потреблённый префикс до поздней ошибки; сам не
+  добавляет deadline, не откатывает consumer effects и не проверяет все
+  поля каждого события. Snapshot/local cursor и enqueue не транзакционны;
+- platform authority wakes требуют owner cursor/read и адресного rejoin,
+  а metadata payload и safeRef не выдают permission;
+- queued FIFO inspection сохраняет порядок, cursor не продвигает.
+  Heartbeat обрабатывает фиксированный prefix4, отдельные catalog child
+  budgets и deferred full-run refresh; новые поступления prefix не растят;
+- Check проверяет только connected NATS и bounded flush с обязательным
+  deadline вызывающего, не owner RPC, durability или browser readiness;
+- существующий v1 cutoff не включался, не продлевался и не добавлялся.
+  Protocol parser и actual CSRF/ticket binding остаются разными проверками;
+- fake ListRunEvents игнорирует context/root/limit и не моделирует настоящий
+  event store, authorization или pagination. Synthetic locale/protocol/
+  encoding/gap tests не названы live-проверкой.
+
+Матрица неизменённых путей:
+
+| Инициатор | Проверка/источник состояния | Частичный исход и потребитель |
+| --- | --- | --- |
+| browser upgrade/resume | verified boundary identity, CSRF, v2 one-use ticket, owner cursor/root reads | initial failure/terminal best effort; ранее queued frames не откатываются |
+| NATS wake | exact expected org/root + bounded decode, затем owner query | сигнал не authority; gap/denial -> cursor-only/resync/problem |
+| subscribe/rejoin | owner graph до/после подписки, bounded catch-up, fresh complete graph | при поздней ошибке возможен ранее потреблённый prefix; browser не получает выдуманный READY |
+| heartbeat | fixed FIFO prefix, owner cursor, separate catalog/full-run contexts | full snapshot failure не восстанавливается одними delta того же tick |
+| unsubscribe/close | socket-local interests/queue state | best-effort NATS unsubscribe; нет закрытия shared connection или заявления о join всех workers |
+
+Через Context7 проверены coder/websocket и nats.go; фактические pinned
+версии модуля v1.8.14 и v1.52.0. Дополнительно go doc: CloseNow без handshake,
+FlushWithContext требует deadline. Flush roundtrip не назван durable ACK,
+Unsubscribe не назван Drain; Accept host-pattern не заменяет exact boundary.
+
+584 верхних/2677 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP.17 Node unit, Go checker unit, AST2, scope142/142,
+5 addressed ignores, gofmt и git diff --check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Рабочий mFoVbh:6639 sources,222 excluded,1806 raw/728 retained/
+1078 unresolved; Go13802/21293,missing7491. Raw SHA256
+`fc7f94cc455e8b4026e2545f7f0eb3e69e1a5db0ccbae978541ca8e761b787be`,
+clone-set `d807eab60395bcbe1d2c4a0f418a4d78a19f980877fff814a2e7130e0dd86e62`.
+Все1803 прежних keys/counts сохранены. Три добавленных окна (135/109/100
+tokens) содержат только различные nominal query/runtime interface
+signatures; комментарии увеличили physical minLines при прежнем AST.
+Проверены оба конца, в том числе scheduleRuntimeClient claim/renew/
+materialize/fail, а не ошибочно названный read-only port. Общего
+исполняемого алгоритма нет; новый dispatcher стёр бы типы и узкие порты.
+В retained-clones добавлены только точные paths/hash/count1 с отдельными
+причинами:610 entries/728 occurrences. Новых широких ignores нет.
+У уже существующего queryClient ignore те же границы/typed signatures:
+только comment bytes потребовали rebaseline84 lines и exact SHA256
+`e9205cb4ca231dc6e8040c385e2feec010143f203446305f1475655339e9e362`.
+Checker не ослаблен. Устранение executable clone в этой волне не заявляется.
+
+После коммита exact scan/unit/build и remote readback повторяются.
+Остаток Go:gateway1259,CP6232; WebSocket без missing. Общий -check
+ещё не пройден. Historical FAIL/finding293 не исправлены, component/live/
+broker/browser/STT/model/deploy/full acceptance NOT RUN. Generated, SQL,
+migrations, dependencies, runtime configuration и живые данные не менялись.
+PR остаётся Draft; полный объём цели ещё не завершён.
 
 ## Триста двенадцатая волна — оснастки heartbeat, wake/rejoin и доступности
 

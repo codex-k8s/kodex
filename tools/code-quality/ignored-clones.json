@@ -9,8 +9,8 @@
     },
     {
       "path": "services/external/control-api-gateway/internal/transport/websocket/server.go",
-      "maxLines": 40,
-      "sha256": "7d0cdcdf5dbd5f6f7c37178a4901236ca6ca4e81d03b7f84df2a179f9b70d9c8",
+      "maxLines": 84,
+      "sha256": "e9205cb4ca231dc6e8040c385e2feec010143f203446305f1475655339e9e362",
       "reason": "Интерфейс сохраняет разные точные generated RPC-сигнатуры; универсальный dispatcher стёр бы типы запросов и ответов."
     },
     {

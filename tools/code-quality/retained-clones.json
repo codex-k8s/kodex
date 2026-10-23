@@ -3,6 +3,30 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/websocket/server.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/websocket/server.go",
+      "fragmentSHA256": "dc0c79a56788644c9e9f5e95d270f29a773e91a0155913c22a06a172f677c079",
+      "count": 1,
+      "reason": "Окно135 tokens пересекает границы трёх независимых typed query ports помощника, образов и доступа. Исполняемых тел здесь нет: разные generated request/response signatures описывают отдельные ресурсы, а нормализация идентификаторов делает их похожими. Предметные комментарии увеличили физическую длину прежнего неизменённого AST до порога detector. Универсальный dispatcher стёр бы типы и границы портов, не удалив дублируемый алгоритм. Исключено только это точное внутрефайловое окно/hash/count1, не интерфейсы или файл целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/websocket/server.go",
+      "secondPath": "services/jobs/automation-scheduler/internal/app/app.go",
+      "fragmentSHA256": "df0c49ece6a3651bfe0b0564507c268cdceb581a109cf1f1ee63b9b6f06a171f",
+      "count": 1,
+      "reason": "Окно109 tokens сравнивает явные generated RPC-сигнатуры каталога доступа WebSocket и независимого runtime-порта планировщика, включая границу объявления. Совпадают формы context/request/options/response/error, а не самостоятельный исполняемый алгоритм; nominal messages и методы различаются. Порты намеренно минимальны для разных consumers: чтение каталога против claim/renew/materialize/fail, общий широкий интерфейс создал бы ненужную зависимость. Новые комментарии сделали прежний AST видимым по minLines; сохранены лишь эти два пути/fragment/count1, без исключения реализаций и остального кода."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/websocket/server.go",
+      "secondPath": "services/jobs/automation-scheduler/internal/app/app.go",
+      "fragmentSHA256": "17ce360a241a8c7c9165f5a6751e6bb701be0155bf137caefe93e44c8f910c74",
+      "count": 1,
+      "reason": "Перекрывающееся окно100 tokens содержит последние разные nominal query signatures и закрывающую скобку независимых портов доступа и планировщика. Вызовов и тел нет; context, variadic options и response/error задаются generated контрактом. Переиспользуемой бизнесовой копии для выноса нет, а общий dispatcher/reflection ухудшил бы проверяемость отдельных типов. Комментарии увеличили число строк при неизменном AST. Исключены только точные два пути/fragment/count1, не весь интерфейс или похожие сигнатуры в других местах."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/internal-rpc-authority/internal/transport/grpc/authority.go",
       "secondPath": "services/internal/internal-rpc-authority/internal/transport/grpc/authority.go",
       "fragmentSHA256": "fc2b4bff8bb94f70565590d11a64d0013d1ee9502fa9356951767b212553e2e3",
