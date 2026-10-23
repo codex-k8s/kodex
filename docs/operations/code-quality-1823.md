@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.321.0
+version: 1.322.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,85 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста двадцать вторая волна — конфигурация почты и Git source
+
+Предыдущий опубликованный SHA — `c71c75f4897f5d285d5a39ddcadc4e679688c6b1`.
+ExactzQ3Za0:6645sources/222excluded,1799raw/736retained/1063unresolved;
+Go14222/21313,missing7091. Push/PR head/body321 подтверждены readback.
+Предыдущая итерация — progress: common archive/restore result и64 новых
+unit results опубликованы, цель не объявлялась завершённой.
+
+Полностью прочитаны managed_git_source_endpoints.go105,
+email_mailbox_commands.go140, email_mailbox_specification.go346,
+email_mailbox_views.go154 исходных строк (745 total). Все37 declarations,
+включая mailboxEnum.Valid, описаны EN→RU. AST всех4 файлов и //go: directives
+прежние, application поведение не менялось.
+
+Зафиксированы действительные границы:
+- Git source проверяет bounded combined UTF-8, явные ref/path запреты и
+  canonical relative path, не делает checkout/lookup и не устанавливает
+  connection/repository authority. Configure/refresh — отдельные RPC для
+  ROLE_IMAGE и INTEGRATION_DEFINITION, result требует advanced version/GIT/
+  QUEUED/exact source pins; QUEUED не равен успешному import/build;
+- mailbox draft requires ровно specification либо YAML; YAML ограничен
+  256KiB, но этот converter его не разбирает. Save может вернуть новую
+  revision, validate/publish/discard требуют requested exact revision;
+- mailbox publish acceptance и binding metadata не являются proof READY,
+  внешней отправкой либо human approval. Unbind требует valid publication
+  без configuration revision и безопасную returned connection version;
+- credential views содержат только references/generation, не values.
+  Generation shape check не доказывает существование/доступность credential;
+- scalar optional mapping сохраняет zero/default и alias semantics;
+  input slices могут разделяться, view copies для folders/recipients
+  выделены явно. Неверный boolean нельзя игнорировать даже с nonnil result;
+- limits converters локально проверяют byte safe bounds, не все count/
+  timeout ranges и не effective quotas. Endpoint mapping не DNS allowlist,
+  не dial и не TLS handshake; runtime/owner проверки не придуманы;
+- enum mapping отличается absent/zero от explicit invalid, спецификация
+  проверяет collection limits100/1000/21 и marshaled256KiB;
+- diagnostics допускают только3 exact code/message пары,16 элементов,
+  пустой path/nonnegative positions; arbitrary upstream diagnostics отвергаются;
+- publication state/time/failure consistency, action count/unique/reason
+  и exact selected view pins проверяются как owner metadata, не recomputed
+  integrity, actor eligibility и не live readiness.
+
+| Путь | Authority и selected pins | Сохраняемый результат |
+| --- | --- | --- |
+| Git configure/refresh | dedicated kind-specific owner RPC, mutation/connection/source pins | checked GIT/QUEUED summary и ETag, без Git fetch |
+| mailbox create/save | dedicated owner draft command, exact configuration/connection | no-store checked draft view, без publication/send |
+| validate/publish/discard | exact configuration/revision/versioned mutation | checked view, разные owner transitions остаются явными |
+| bind/unbind | exact connection/version/configuration/revision pins | owner publication metadata, не локальная смена доставки |
+| schema/view converters | typed public/protobuf representations | bounded metadata only; network/secret/approval authority не создаётся |
+
+591 верхних/2852 всех выбранных gateway unit,0 FAIL/SKIP, полный gateway
+build -p=2,17 Node unit, Go checker unit, AST4, scope37/37,5 addressed ignores,
+gofmt/diff-check — PASS LOCAL. Selected команда прежняя как в318.
+
+Все1799 detector groups остались:4 raw hashes сменились только из-за
+вставленных предметных комментариев внутри окон328/119/126/325tokens,
+не из-за удаления алгоритмов. Остальные1795 keys/counts прежние.
+Эти4 группы прочитаны с двух сторон и получили exact retained decisions:
+-328 — перекрывающиеся specialized validate/publish/discard command wrappers,
+  общие header/mutation/error/result helpers уже есть;
+-119 — форма разных struct assignments limits/specification через общий
+  mailboxValue, не один связный исполняемый алгоритм;
+-126 — разные направления endpoint input/view и границы следующих converters,
+  credential/enum primitives уже общие, nil/pointer semantics различны;
+-325 — role-image/integration-definition configure/refresh с разными nominal
+  DTO enum/owner methods/expected kind и общими validators/result helper.
+Generic command dispatcher/reflection ухудшили бы явный typed mapping.
+Только exact paths/fragment/count1; широких exclusions/новых ignore markers нет.
+Registry622entries/740occurrences, unresolved1059.
+Рабочий canonicaluShiko:6645sources/222excluded; Go14259/21313,missing7054;
+clone-set `9f143893ab55befea08b36588ce0086e89b11ffdc76304058ce01c41b26e0425`.
+После commit повторяются exact-SHA canonical и build/unit, readback в PR.
+
+Остаток Go:gateway822,CP6232; общий -check не пройден. Generated/vendor/
+contracts/deps/SQL/migrations/live state неизменны. Historical FAIL и
+finding293 не исправлены; actual Git fetch/import, mailbox delivery,
+credentials, external mail/model/STT/component/browser/deploy/full
+acceptance — NOT RUN. PR Draft, цель active; merge/ready/approve нет.
 
 ## Триста двадцать первая волна — exact state-result диалога
 

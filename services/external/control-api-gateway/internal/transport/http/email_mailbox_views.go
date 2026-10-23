@@ -8,6 +8,8 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// mailboxDiagnostics admits at most 16 diagnostics with exact code/message pairs, empty paths and nonnegative source positions, returning a fresh empty array when none exist. Arbitrary upstream messages and file paths are rejected instead of redacted heuristically.
+// mailboxDiagnostics допускает не более 16 diagnostics с точными code/message pairs, пустыми paths и неотрицательными позициями, при отсутствии возвращает новый пустой массив. Произвольные upstream messages и file paths отклоняются, а не эвристически очищаются.
 func mailboxDiagnostics(values []*cp.EmailMailboxDiagnostic) ([]generated.EmailMailboxDiagnostic, bool) {
 	result := []generated.EmailMailboxDiagnostic{}
 	if len(values) > 16 {
@@ -36,6 +38,8 @@ func mailboxDiagnostics(values []*cp.EmailMailboxDiagnostic) ([]generated.EmailM
 	return result, true
 }
 
+// mailboxPublicationView validates optional publication identity/revision/digest/times, closed state and failure-code consistency, including READY/PENDING ready-time rules. It checks an owner's metadata snapshot, not recomputed content integrity or a live delivery readiness probe.
+// mailboxPublicationView проверяет optional publication identity/revision/digest/time, закрытый state и согласованность failure code, включая ready-time правила READY/PENDING. Это owner metadata snapshot, не пересчёт целостности content и не live delivery readiness probe.
 func mailboxPublicationView(v *cp.EmailMailboxPublication) (*generated.EmailMailboxPublication, bool) {
 	if v == nil {
 		return nil, true
@@ -70,6 +74,8 @@ func mailboxPublicationView(v *cp.EmailMailboxPublication) (*generated.EmailMail
 	return result, true
 }
 
+// mailboxConfigurationView validates connection/mailbox refs and versions, the EMAIL_MAILBOX kind, JSON revision, bounded specification, optional publication, diagnostics and action availability. It constructs public metadata only; selected route pins are checked separately by the writer and owner eligibility is not reconstructed here.
+// mailboxConfigurationView проверяет connection/mailbox refs и versions, EMAIL_MAILBOX kind, JSON revision, bounded specification, optional publication, diagnostics и action availability. Создаёт только публичные metadata; selected route pins отдельно сверяет writer, owner eligibility здесь не восстанавливается.
 func mailboxConfigurationView(v *cp.EmailMailboxConfigurationView) (generated.EmailMailboxConfigurationView, bool) {
 	result := generated.EmailMailboxConfigurationView{}
 	if v == nil || !opaqueHTTPReference.MatchString(v.GetConnectionRef()) || len(v.GetConnectionRef()) > 96 || !validManagedVersion(v.GetConnectionVersion()) || !opaqueHTTPReference.MatchString(v.GetMailboxRef()) || len(v.GetMailboxRef()) > 96 || v.GetConfiguration().GetKind() != cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_EMAIL_MAILBOX {
@@ -105,6 +111,8 @@ func mailboxConfigurationView(v *cp.EmailMailboxConfigurationView) (generated.Em
 	return generated.EmailMailboxConfigurationView{ConnectionRef: v.GetConnectionRef(), ConnectionVersion: v.GetConnectionVersion(), MailboxRef: v.GetMailboxRef(), Configuration: configuration, Revision: revision, Specification: *spec, Publication: publication, BoundRevisionRef: v.GetBoundRevisionRef(), Diagnostics: diagnostics, NextActions: actions}, true
 }
 
+// mailboxActionViews requires exactly one CREATE_DRAFT action for lists or nine unique valid actions for detail, each with a valid reason and enabled exactly when reason is NONE. It preserves order and describes availability without authorizing execution.
+// mailboxActionViews требует ровно один CREATE_DRAFT для списков либо девять уникальных допустимых actions для detail, с допустимой reason и enabled ровно при NONE. Сохраняет порядок и описывает доступность, не разрешая исполнение.
 func mailboxActionViews(values []*cp.EmailMailboxActionAvailability, list bool) ([]generated.EmailMailboxActionAvailability, bool) {
 	expected := 9
 	if list {
@@ -130,6 +138,8 @@ func mailboxActionViews(values []*cp.EmailMailboxActionAvailability, list bool) 
 	return result, true
 }
 
+// writeMailboxConfiguration sets no-store headers, validates the owner view and any supplied exact connection/configuration/revision pins, then writes the configuration version ETag and requested status. It does not locally transition draft or publication state.
+// writeMailboxConfiguration задаёт no-store headers, проверяет owner view и переданные exact connection/configuration/revision pins, затем выдаёт ETag версии configuration и заданный status. Локально draft и publication state не меняет.
 func writeMailboxConfiguration(w http.ResponseWriter, status int, v *cp.EmailMailboxConfigurationView, connection, configuration, revision string) {
 	setRuntimeSecretHeaders(w)
 	result, ok := mailboxConfigurationView(v)
@@ -141,6 +151,8 @@ func writeMailboxConfiguration(w http.ResponseWriter, status int, v *cp.EmailMai
 	writeJSON(w, status, result)
 }
 
+// mailboxCredentialView requires the selected connection, safe connection version and equal generation, valid reference name and optional exact kind before projecting value-free metadata. It does not load the credential, check its secret contents or grant an employee access.
+// mailboxCredentialView требует выбранный connection, safe connection version и равную generation, допустимое reference name и необязательный exact kind до проекции metadata без значения. Credential не загружает, secret contents не проверяет и доступ сотруднику не выдаёт.
 func mailboxCredentialView(v *cp.EmailMailboxCredential, connection string, kind cp.EmailMailboxCredentialKind) (generated.EmailMailboxCredential, bool) {
 	result := generated.EmailMailboxCredential{}
 	if v == nil || v.GetConnectionRef() != connection || !validManagedVersion(v.GetConnectionVersion()) || v.GetGeneration() != v.GetConnectionVersion() || !opaqueHTTPReference.MatchString(v.GetName()) || len(v.GetName()) > 128 || kind != 0 && v.GetKind() != kind {

@@ -4944,6 +4944,38 @@
       "fragmentSHA256": "3ead855b5df07e3ce276ce0cb0b8863f65f7950415a0cfaf31761e0edbb1aa47",
       "count": 1,
       "reason": "Окно126tokens сопоставляет restore-conversation preconditions и typed Assistant RPC с revoke-interaction-identity preconditions и typed Command RPC до проверки identityView. Versioned mutation и RPC problem уже общие; exact conversation state-result вынесен в helper. Восстановление диалога и отзыв внешней identity имеют разные owner boundaries, refs, postconditions и public projections. Generic mutation dispatcher здесь спрятал бы маршрутизацию без общего связного алгоритма. Только эти два пути, fragment SHA-256 и count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_commands.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_commands.go",
+      "fragmentSHA256": "566b9eed6399ee1a6ab234b91d8fd430d9b2389d9e780a41d6f14867cb0cac44",
+      "count": 1,
+      "reason": "Перекрывающиеся окна328tokens проходят через отдельные Validate/Publish/DiscardEmailMailboxDraft. Header/mutation/error/writeMailboxConfiguration уже общие; остаётся по одному nominal request и точному owner RPC с configuration/revision pins. Проверка, публикация и discard имеют разные lifecycle postconditions у владельца, хотя transport похож. Generic callback dispatcher скрыл бы closed command mapping и различие переходов без извлечения нового алгоритма. Только эти exact windows/hash/count1, не mailbox commands целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_specification.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_specification.go",
+      "fragmentSHA256": "54436b609896a729b8e9767177a7725b6eaf12313e3589f0bf1174075476cbf5",
+      "count": 1,
+      "reason": "Weak detector сопоставил119tokens optional limits struct assignment с концом operation-policy view и началом specification struct assignment. Поля byte/count/timeout против enabled/folders/sender имеют разные типы и проверки; mailboxValue/mailboxPointer уже общие. Полного общего связного алгоритма в пересекающем объявления окне нет. Reflection либо positional field-builder ради формы присваиваний скрыл бы schema mapping и не уменьшил semantic duplication. Оставлен exact fragment/count1 данного файла; остальные specification converters не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_specification.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_specification.go",
+      "fragmentSHA256": "efdbf06c550b77cc60aa7ee3a9975ddb7e1cdb35e24e651b24e5a83519df173b",
+      "count": 1,
+      "reason": "Окно126tokens пересекает хвост endpoint input/view: credential-reference mapping, возврат endpoint и начало следующего converter. Input переводит optional DTO references в protobuf и сохраняет zero/default semantics, view возвращает explicit public pointers; следующие host/port и policy folders не один алгоритм. Credential-reference/enum/value primitives уже вынесены. Callback/reflect converter с множеством типов ухудшил бы явные направления и nil/error guards ради коротких typed присваиваний. Только exact path/hash/count1, не парсер и не политики почты целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/managed_git_source_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_git_source_endpoints.go",
+      "fragmentSHA256": "df83cfebfbf92781fabe845616ec9362c3f69c47c251d2806e8088b62301b9a3",
+      "count": 1,
+      "reason": "Окно325tokens сравнивает configure+refresh для role image и integration definition. Source location/mutation validation и checked queued-Git result уже общие; DTO имеют разные nominal ContentFormat types, owner requests/RPCs и expected configuration kind. Оставшиеся строки явно связывают command с видом ресурса. Generic lifecycle dispatcher либо reflection ради двух коротких DTO literals скрыл бы authority routing и response kind. Только exact два окна этого файла, digest/count1; общий source validation и весь вид конфигурации не скрыты."
     }
   ]
 }
