@@ -845,7 +845,8 @@ type RunnerCompletionRequest struct {
 // дайджесты и имена артефактов и общий байтовый бюджет завершения.
 func (request RunnerCompletionRequest) Validate() error {
 	if request.ProviderDiagnostic != nil && (request.Success || request.ProviderDiagnostic.Validate() != nil ||
-		request.ProviderDiagnostic.RuntimeRevisionDigest != request.RuntimeRevisionDigest || request.ProviderDiagnostic.Attempt != request.Attempt) {
+		request.ProviderDiagnostic.RuntimeRevisionDigest != request.RuntimeRevisionDigest || request.ProviderDiagnostic.Attempt != request.Attempt ||
+		(request.ProviderDiagnostic.Class == "WORKSPACE" && request.SafeErrorCode != "RUNTIME_ARTIFACT_INVALID")) {
 		return errProviderDiagnostic
 	}
 	if !sha256Pattern.MatchString(request.RuntimeRevisionDigest) || request.Attempt < 1 || len(request.ResultSummary) > 64<<10 ||

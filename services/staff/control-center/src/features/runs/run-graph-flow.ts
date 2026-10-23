@@ -30,7 +30,7 @@ export function runGraphFitViewOptions(
     padding:
       viewportWidth <= 760
         ? 0.14
-        : compact
+        : compact || viewportWidth <= 1100
           ? {
               top: "180px",
               right: "32px",

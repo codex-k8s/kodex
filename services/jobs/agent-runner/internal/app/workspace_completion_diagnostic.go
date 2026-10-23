@@ -37,12 +37,7 @@ func logWorkspaceCompletionDenial(ctx context.Context, logger *slog.Logger, stag
 	if stage != workspaceCompletionCheck && stage != workspaceCompletionPublish {
 		stage = "UNKNOWN"
 	}
-	reason := workspacepolicy.DenialReason(err)
-	var artifactDenial *completionArtifactDenial
-	if errors.As(err, &artifactDenial) {
-		reason = artifactDenial.reason
-	}
-	reason = closedWorkspaceReason(reason)
+	reason := workspaceCompletionDenialReason(err)
 	logger.WarnContext(ctx, workspaceCompletionMessage,
 		workspaceCompletionStage, stage, workspaceCompletionReason, reason)
 }
@@ -78,4 +73,17 @@ func closedWorkspaceReason(reason string) string {
 	default:
 		return runtimecontract.RuntimeWorkspaceIOError
 	}
+}
+
+// workspaceCompletionDenialReason returns the same closed reason for the local log
+// and the bound completion receipt, so Pod cleanup does not erase the cause.
+// workspaceCompletionDenialReason возвращает одну закрытую причину для локального
+// лога и привязанной квитанции завершения, чтобы удаление Pod не стирало причину.
+func workspaceCompletionDenialReason(err error) string {
+	reason := workspacepolicy.DenialReason(err)
+	var artifactDenial *completionArtifactDenial
+	if errors.As(err, &artifactDenial) {
+		reason = artifactDenial.reason
+	}
+	return closedWorkspaceReason(reason)
 }

@@ -1,5 +1,6 @@
 import { constants, openSync, fstatSync, readSync, closeSync } from "node:fs";
 import { parseEnv } from "node:util";
+import { isAbsolute, normalize } from "node:path";
 
 export const agentSecretPath = "/home/s/.codex/agent-secrets.env";
 export const allowedSecretKeys = Object.freeze([
@@ -76,9 +77,21 @@ export function parseSelectedAgentSecrets(source, keys) {
   return selected;
 }
 
-// Dependency injection предназначен только для synthetic unit, путь неизменяем.
-export function readPrivateAgentSecrets(keys, io = {}) {
+// IO injection предназначен для synthetic unit. Явный sourcePath выбирает только
+// оператор; поиска и fallback к другому хранилищу при ошибке нет.
+export function readPrivateAgentSecrets(
+  keys,
+  io = {},
+  sourcePath = agentSecretPath,
+) {
   requireSelectedKeys(keys);
+  if (
+    typeof sourcePath !== "string" ||
+    !isAbsolute(sourcePath) ||
+    normalize(sourcePath) !== sourcePath ||
+    /[\0\r\n]/.test(sourcePath)
+  )
+    invalid();
   const open = io.open ?? openSync;
   const stat = io.stat ?? fstatSync;
   const read = io.read ?? readSync;
@@ -88,7 +101,7 @@ export function readPrivateAgentSecrets(keys, io = {}) {
   let buffer;
   try {
     descriptor = open(
-      agentSecretPath,
+      sourcePath,
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
     const info = stat(descriptor);

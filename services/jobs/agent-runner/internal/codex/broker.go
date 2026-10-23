@@ -726,8 +726,8 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
-	var diagnostic *runtimecontract.ProviderFailureDiagnostic
-	if result.Outcome != "SUCCEEDED" {
+	diagnostic := result.ProviderDiagnostic(request.Input)
+	if result.Outcome != "SUCCEEDED" && diagnostic == nil {
 		diagnostic = bindProviderDiagnostic(request.Input, runtimecontract.ProviderFailureDiagnostic{
 			Kind: "TERMINAL_FAILURE", Stage: "TERMINAL_RESULT", Class: "PROVIDER", Detail: "NONE",
 			Notification: "NONE", NotificationError: "NONE", AccountRead: "NONE", TerminalCode: result.FailureCode})
@@ -823,9 +823,8 @@ func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, 
 	if executionErr == nil && result.Outcome == "SUCCEEDED" && !input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) {
 		if err := publishProviderOutbox(ctx, input); err != nil {
 			logProviderFilesystemDenial(providerOutboxStage, err)
-			result.Outcome = "FAILED"
-			result.FailureCode = "RUNTIME_ARTIFACT_INVALID"
-			result.FinalMessage = "i18n:RUNTIME_ARTIFACT_INVALID"
+			result.Outcome, result.FailureCode, result.FinalMessage = "FAILED", "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
+			result = result.WithWorkspaceDiagnostic(input, providerOutboxStage, filesystemDenialReason(providerOutboxStage, err).String())
 		}
 	}
 	return result, executionErr

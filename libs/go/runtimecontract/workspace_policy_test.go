@@ -105,3 +105,18 @@ func TestRuntimeWorkspaceLimitsBoundsAndNilPreserveCanonicalPolicy(t *testing.T)
 		t.Fatal("quota did not preserve protected policy or digest binding")
 	}
 }
+
+// TestRepositoryWorkspaceFileQuota preserves the default while allowing an owner
+// to select a larger bounded metadata quota for a dependency-heavy repository.
+// TestRepositoryWorkspaceFileQuota сохраняет default и разрешает владельцу
+// выбрать большую ограниченную квоту метаданных для репозитория с зависимостями.
+func TestRepositoryWorkspaceFileQuota(t *testing.T) {
+	base := RuntimeWorkspacePolicyV1()
+	if base.MaximumFileCount != 10_000 {
+		t.Fatal("default workspace quota changed")
+	}
+	selected, err := RuntimeWorkspacePolicyWithLimits(&RuntimeWorkspaceLimits{MaxBytes: base.MaximumWritableBytes, MaxFiles: 50_000})
+	if err != nil || selected.Validate() != nil || selected.MaximumFileCount != 50_000 || selected.Digest == base.Digest || !reflect.DeepEqual(selected.Rules, base.Rules) {
+		t.Fatal("explicit repository quota lost its protected policy or binding")
+	}
+}

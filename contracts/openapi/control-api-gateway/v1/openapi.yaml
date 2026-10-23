@@ -12644,7 +12644,7 @@ components:
       required: [maxBytes, maxFiles]
       properties:
         maxBytes: { type: integer, format: int64, minimum: 1, maximum: 1073741824 }
-        maxFiles: { type: integer, format: int64, minimum: 1, maximum: 10000 }
+        maxFiles: { type: integer, format: int64, minimum: 1, maximum: 100000 }
     RuntimeVolumeInput:
       type: object
       additionalProperties: false

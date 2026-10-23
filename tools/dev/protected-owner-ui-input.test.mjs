@@ -783,3 +783,33 @@ test("raw exception чтения ключей не утекает, истече�
   assert.equal(timeout.status, 403);
   assert.equal(expired.reads.length, 0);
 });
+
+test("CLI допускает явный private dotenv оператора без произвольных аргументов", () => {
+  assert.equal(
+    parseInputCLI([
+      "--confirm",
+      inputIntent,
+      "--secrets-file",
+      "/private/project/.env",
+    ]),
+    "/private/project/.env",
+  );
+  for (const args of [
+    ["--confirm", inputIntent, "--secrets-file", "relative.env"],
+    ["--confirm", inputIntent, "--secrets-file", "/private/../other.env"],
+    ["--confirm", inputIntent, "--secrets-file", "/private/file\n.env"],
+    ["--confirm", inputIntent, "--unexpected", "/private/project/.env"],
+    [
+      "--confirm",
+      inputIntent,
+      "--secrets-file",
+      "/private/project/.env",
+      "--extra",
+      "value",
+    ],
+  ])
+    assert.throws(
+      () => parseInputCLI(args),
+      /^Error: OWNER_UI_INPUT_REJECTED$/,
+    );
+});

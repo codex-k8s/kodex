@@ -1,0 +1,239 @@
+---
+id: OPS-DOC-1826
+title: Исправления повторов и завершения запусков
+type: operational-report
+status: approved
+owner: developer
+version: 1.3.0
+updated: 2026-10-23
+---
+
+# Повтор дочернего запуска
+
+Issue #1826, PR #1827. При повторе дочернего запуска `retryOfRunRef`
+указывал на точного ребёнка, но `RETRY_OF` соединял новый корень с прежним
+корнем процесса. Проверки полного WebSocket snapshot отклоняли несовпадение.
+PWA удаляла недоступный снимок и повторяла HTTP чтение, визуально мигая.
+
+Граф самостоятельного повтора ребёнка теперь содержит только его выполнение.
+Ссылка на точный исходный запуск сохраняется в `retryOfRunRef` и интерфейсе.
+Прежний корень процесса не является повторяемым запуском и не включается в
+его граф. Исторические события не переписываются. Обычный повтор корневого
+запуска сохраняет прежнее ребро и все проверки lineage.
+
+## Путь и жизненный цикл
+
+- Инициатор: авторизованный пользователь; штатная команда RetryRun проверяет
+  проект, права, ожидаемую версию и ключ идемпотентности.
+- Control plane создаёт новый самостоятельный run, сохраняет retryOf/attempt.
+  Для повторного корня создаётся EDGE_ADDED; для повтора ребёнка ребра между
+  корнями нет, авторитетная связь читается из Run.retryOfRunRef.
+- HTTP GetRunGraph и WebSocket GetRunGraphSnapshot используют одну проекцию:
+  прежний процесс исключается только после точного owner read исходного ребёнка
+  и проверки проекта, source/target/type ребра. Неподтверждённая связь отклоняется.
+- Snapshot сохраняет состояния, дочерние выполнения, readiness, cursor и
+  проверки полномочий. Работающие execution, leases и grants не изменяются.
+- Retry/cancel/terminal текущего выполнения не меняются; старые audit/events
+  сохраняются, данные в БД вручную не редактируются.
+
+## Проверки
+
+PASS локально: TestChildRetryGraphProjection, TestGraphRetrySnapshotExactLineage,
+TestGraphContinuationSnapshotExactLineage. Включены отрицательные случаи:
+другой проект, неправильная ссылка, source/target и дополнительная связь.
+Полный QA не запускался по запросу владельца о срочном исправлении.
+Сборка и проверка в браузере фиксируются после доставки.
+
+Из PR убрана неподтверждённая гипотеза изменения MCP IdleTimeout: повторный
+ход менеджера успешно работал дольше 90 секунд и передал задачу архитектору.
+Первоначальный NOTIFICATION_INVALID/MCP требует отдельной диагностики при повторении.
+Секреты в отчёт и код не включены.
+
+## Доставка 23.10.2026
+
+- Исполняемый SHA `43b8db0be2d6f08ebefdc3185981fe76243d0970`.
+- PASS: штатная сборка `build-stable-local.sh` и импорт exact digest
+  `sha256:e5d5264502dd5b861371b8b3f414607962863e6139987364924de95abfb0395b`.
+- PASS: scoped-release `6ddedaa4-74ed-4165-a0c4-c553e2fe88b0`, обе реплики
+  control-plane готовы и обслуживают этот digest. Остальные компоненты не менялись.
+- PASS: Chrome MCP, точный проблемный запуск после штатной перезагрузки страницы:
+  HTTP 200, RUN_GRAPH_SNAPSHOT и RUN_READY, один WebSocket без закрытий,
+  пустая консоль, нет повторных document requests. Скриншот просмотрен;
+  граф отображается, ссылка «Открыть предыдущую попытку» сохранена.
+- Во время старта первой реплики было два restart до подключения PostgreSQL;
+  затем readiness восстановилась, rollout завершился с 2/2 готовыми репликами.
+- Проверка относится к отображению существующего запуска. Полный бизнес-процесс
+  и повторная отправка задач не запускались, это не полная приёмка сценария.
+
+
+## Файловое завершение после демонстрации
+
+В двух проверенных запусках итоговый ответ рецензента записан до отказа
+`RUNTIME_ARTIFACT_INVALID`. Это отказ файловой границы после работы модели,
+а не доказательство ошибки самого заключения. Исходные Pod и их stderr уже
+удалены, поэтому точная причина этих двух исторических отказов неизвестна.
+Повторные запуски и ручное изменение статусов не выполнялись.
+
+Локально воспроизведён самостоятельный дефект: штатная относительная ссылка
+`node_modules/.bin` отклонялась проверкой work даже при цели внутри каталога.
+Теперь для work разрешены только относительные ссылки, разрешаемые ядром
+под открытым work-fd с `RESOLVE_BENEATH|RESOLVE_NO_MAGICLINKS|RESOLVE_NO_XDEV`.
+Цель должна быть обычным файлом или каталогом. Абсолютные, выходящие наружу,
+циклические, отсутствующие цели и специальные файлы отклоняются. Квоты остаются
+обязательными; ссылка учитывается по размеру, её цель не обходится повторно.
+Outbox, archive, read-only inputs и credential mounts сохраняют прежние запреты.
+Защита hardlink, owner, mount и metadata replacement не снимается.
+
+Матрица пути отказа:
+
+| Этап | Источник полномочий и чтение | Переход и потребитель |
+|---|---|---|
+| Завершение provider | Stop/join процесса, существующий workspace lock, точные UID/GID и immutable policy | Нормализация work; при отказе SUCCEEDED → FAILED, существующий расход и source pins сохраняются |
+| Публикация outbox | Существующая файловая проверка точного outbox | Отказ остаётся RUNTIME_ARTIFACT_INVALID, никакой подмены успехом |
+| Private IPC | Проверенный peer и точные revision/input/execution/session/turn/attempt | Закрытые stage/reason доставляются runner; произвольные строки запрещены |
+| Проверка runner | Canary и публикация результата в прежнем порядке | Диагностика связывается с той же попыткой; новый grant не создаётся |
+| Completion callback | Существующие mTLS/ticket/fence/attempt и owner CompleteExecution | Только после commit владельца controller пишет закрытую причину до cleanup Pod |
+| PWA | Существующий safe error code и опубликованные сообщения | Понятная ошибка проверки/сохранения рабочего каталога; итоговый ответ остаётся в истории |
+
+Create/claim/renew/cancel/delete/retry и доменные события не изменяются.
+Диагностика не назначает authority, не меняет receipt идемпотентности и не
+выдаёт доступ к содержимому файлов. Отдельного нового события нет: существующий
+terminal callback остаётся авторитетным переходом; этап/причина наблюдаются в
+контроллере. Гарантия вечного хранения логов этим изменением не создаётся.
+
+Документация системного вызова проверена через Context7 `/golang/sys`,
+`unix.Openat2`/`OpenHow`. Fallback на обычный небезопасный open отсутствует.
+Новый runner требуется выпускать совместно с controller, принимающим закрытый
+класс WORKSPACE; старый controller такой payload отклонит. До штатной сборки,
+проверки допуска и раскатки новые изменения не считаются доставленными.
+
+Открыто: NOTIFICATION_INVALID требует точного нового диагностического события,
+а исходные исторические причины файловых отказов восстановить нельзя.
+
+
+Проверки нового файлового исправления на коде
+`8c8f05dc127cb4d64cdb1223fc38902993c53e3d`:
+
+- PASS LOCAL: `libs/go/runtimecontract`: `go test ./...`, `go build ./...`.
+- PASS LOCAL: `agent-runner`: `go test ./internal/app ./internal/codex ./internal/workspace -count=1`, `go build ./...`.
+- PASS LOCAL: `runtime-controller`: `go test ./internal/callback -count=1`, `go build ./...`.
+- PASS LOCAL: PWA catalog unit (12 tests), ESLint/Prettier двух изменённых файлов,
+  `npm run build` вместе с typecheck. Vite сообщает прежнее предупреждение о
+  chunks крупнее 500 kB; это не новое падение сборки.
+- Проверены kernel-confined dependency links, запрещённые цели, строгий outbox,
+  квотный учёт, closed diagnostic schema, exact execution binding, сохранение
+  расхода, передача через private IPC/callback и запись controller до cleanup.
+- NOT RUN: новый runner в кластере, новые реальные ИИ-запуски, полная приёмка.
+  Предыдущая доставка control-plane не включает это файловое исправление.
+
+
+## Доработки при выкладке 23.10.2026
+
+Владелец разрешил штатную доставку и слияние #1827, чтобы открытым остался
+только PR рефакторинга #1824. Для stable runtime-controller и PWA в закрытый
+local importer добавлены только три точных repository (controller, PWA, gateway); проверка digest,
+платформы, pin и обеих нод сохранена. Shell source проверен `bash -n`.
+
+Первый новый runner `sha256:54008254165f1cbd0afb4319f9cfdcf942c23222094ba647222236bc47e5de5c`
+собран из `6fe3f9b93c1c2d1321be2be566e4d91ee53eb2e2`, опубликован штатным
+seed, проверен на обеих нодах. Все девять фаз runner-policy-transition,
+runtime binding и default transition прошли PASS. Control-plane сохраняет
+ранее исправленный граф; новый controller и PWA доставлены scoped release
+`8b5f2acc-6448-408a-a893-901819f58eb7` с 2/2 Ready. Это промежуточная поставка:
+следующее исправление квот требует нового runner и совместимых приложений.
+
+Во время импорта runner завершение скрипта оборвалось при изменении его
+allowlist. Перед продолжением выполнен отдельный авторитетный readback того
+же digest на обеих нодах — PASS. Pin состояния восстановлен из проверенной
+provenance, нового импорта с неизвестным результатом не выполняли. Далее
+script source во время запущенного shell-процесса не меняется.
+
+Проверка в Chrome MCP: проблемный child retry имеет HTTP 200, граф стабилен,
+консоль пуста. При ширине canvas 809px кнопка «Весь граф» давала zoom≈0.223:
+горизонтальные резервы для панелей оставляли слишком мало места. Для canvas
+до 1100px теперь используются боковые отступы компактного размещения,
+вертикальные панели учитываются по-прежнему. Регрессия проверяет геометрию
+и читаемый размер небольшого графа; 62 графовых unit — PASS LOCAL.
+
+Дополнительный подтверждённый барьер: собственная рабочая копия репозитория
+с зависимостями содержит 26074 файла, ≈431MB. Существующий абсолютный потолок
+10000 файлов делает обычный metadata walk недостижимым даже после исправления
+ссылок. Default остаётся 10000, но явный owner-selected `workspaceLimits.maxFiles`
+теперь допускает до 100000. Для выбранных окружений разработки планируется
+50000 файлов. Byte quota и размер тома остаются прежними (1GiB), защищённые
+пути/owner/symlink/mount проверки не меняются.
+
+Путь квоты: owner HTTP или assistant policy input → специализированный publish
+окружения → immutable resources/digest → новая RuntimeRevision → workload
+volume/input → runner normalization/canary/outbox. OpenAPI и оба generated
+клиента пересобраны; gateway использует общий runtimecontract ceiling,
+controller tool schema и CP/runner валидируют ту же константу. Отсутствие
+поля сохраняет default, прошлые версии/attempts не переписываются. Нового
+события/authority нет: используются прежние публикация, impact/rebind и
+version-pinned read paths.
+
+PASS LOCAL: runtimecontract unit/build, runner app/workspace/codex unit/build,
+controller callback/workload unit/build, CP platform domain/repository unit/build,
+74 frontend unit/typecheck/build. Реальный kernel fixture с 10001 файлами
+отклоняется default-квотой и проходит с явной квотой в прежний timeout.
+Старая отрицательная quota-fixture обновлена на новый потолок. Обнаруженный
+устаревший oracle schedule preview ожидал continuation-task-projection-v1
+при уже существующем production v2: исправлен oracle, v1 явно проверяется
+как отклоняемая версия. Исполняемый continuation protocol не менялся.
+
+
+## Финальная доставка и выбранные окружения
+
+Код финальных приложений и runner: `e26e30855b41e58d7c34ae930e826bd3b19c6fad`.
+Поставлены штатными build/import/scoped-release; release
+`a0b5f6f8-63ac-4d16-98a8-fd54c03bd80d` — PASS, 2/2 Ready каждого приложения:
+
+| Компонент | Exact image digest |
+|---|---|
+| control-plane | `sha256:5fb88dc0bd780b746e5a47c90370ada7e03c7b0203451753350b616dede7b4cb` |
+| runtime-controller | `sha256:ed66619df5bed073db38389e184fc3b6549bdbbc447f8ba02c53d31ddc79386e` |
+| control-api-gateway | `sha256:bbb2a07f6a54da283adcafc49e45d8b3965af3f71ec4c9aceee60370c720bbc9` |
+| staff-control-center | `sha256:3b2a3c47e37bb547bb0a5cd14c6ed515352e664d57642b042772bc9859ac800f` |
+| platform runner | `sha256:5f99a312c24a1db213b470c2ade509c4a17711ea8aa4198582b6e3a05f9c88b0` |
+
+Runner binary SHA256 `96d4fc3d096c9e1db4503f2791b13f4e358ace334ce210586195c77e3de71c20`,
+provenance/node import/publication — PASS. Новая immutable policy
+`2b5416fb46da1fd2bed5895cfa9dada73801fc75bafa058f0e8587d92991e93e`;
+девять фаз перехода, runtime-role binding и default readback — PASS.
+Все фазы предварительно проверяли отсутствие активных runs/leases и внешних
+build/admission/promotion effects; Kubernetes Secret и DB state вручную не менялись.
+
+Образ разработки построен поверх нового runner обычной recipe generation 2,
+прошёл реальный scan/admission и отдельный promotion. Artifact
+`imgart_VMj14nhmgevDtXJChymenLoU`, digest
+`sha256:fb6c8ca4cf29aca03969eedebbea8fec891225077a61939965810868e63dda8d`.
+Оба проектных окружения опубликованы через DRAFT → VALID → impact plan →
+PUBLISHED. Все четыре exact AGENT consumers имеют outcome APPLIED; EOF
+страниц impact прочитан. Окружения revision 2 Ready, blockers пусты;
+менеджер/рецензент и архитектор/разработчик закреплены за новой версией.
+Выбран лимит 50000 файлов, byte quota 1073741824. Переменные, инструменты,
+secret descriptors и network/RBAC/volume settings сверены с прежними immutable
+версиями: сохранены. Из сравнения исключены только намеренно изменённая квота
+и её производный resourcesDigest; смена image/version/ref ожидаема.
+Штатный процесс остаётся PUBLISHED и имеет LAUNCH.
+
+Сервер потребовал FRESH_AUTHENTICATION_REQUIRED на чувствительной операции;
+выполнен штатный свежий OIDC вход владельца, затем оба validation/publication
+успешны. Защита не отключалась. Operator-only helper поддерживает явный
+private dotenv source без поиска/fallback; 25 положительных и отрицательных
+unit — PASS, включая file metadata, selected keys, TLS/Origin/peer и native
+форму. Реквизиты и содержимое private файлов в отчёт не включены.
+
+Chrome MCP после финальной поставки: точный проблемный child retry, graph/events,
+bootstrap/session/ticket/owner-gates — HTTP 200; ошибок и warnings консоли нет.
+Скриншот после вывода собственной вкладки на передний план получен и просмотрен:
+граф и предыдущая попытка доступны, карточки крупнее прежнего узкого fit.
+Первый фоновый capture не завершился и был отменён; успешный повтор выполнялся
+на той же вкладке. Другие вкладки не закрывались. Новые реальные ИИ-запуски,
+STT и полный QA не выполнялись.
+
+Во время старта новых CP/gateway Pods наблюдались 1–2 restart до Ready;
+финально обе реплики готовы, в последних 5 минутах их текущих логов новых
+ошибок нет. Controller и PWA имеют 0 restart. Это не обещание полной
+приёмки рабочего процесса; первоначальная историческая MCP-причина остаётся
+UNKNOWN и не объявляется исправленной. Старые run states/audit не изменялись.

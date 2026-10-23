@@ -365,6 +365,9 @@ func completeMeasuredFailure(ctx context.Context, input model.Input, client *cal
 func completeExecutedTurn(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, checkWorkspace func(context.Context) error, logger *slog.Logger) error {
 	if err := checkWorkspace(ctx); err != nil {
 		logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionCheck, err)
+		if result.ProviderDiagnostic(input) == nil {
+			result = result.WithWorkspaceDiagnostic(input, workspaceCompletionCheck, workspaceCompletionDenialReason(err))
+		}
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID")
 	}
 	if result.Outcome != "SUCCEEDED" {
@@ -384,12 +387,14 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 			Attempt: input.Attempt, ExecutionBindingDigest: input.ExecutionBindingDigest,
 		}); err != nil {
 			logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionPublish, err)
+			result = result.WithWorkspaceDiagnostic(input, workspaceCompletionPublish, workspaceCompletionDenialReason(err))
 			return completeExecutedFailure(ctx, input, client, result, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID")
 		}
 	}
 	artifacts, err := completionArtifacts(input, result.FinalMessage)
 	if err != nil {
 		logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionPublish, err)
+		result = result.WithWorkspaceDiagnostic(input, workspaceCompletionPublish, workspaceCompletionDenialReason(err))
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID")
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}

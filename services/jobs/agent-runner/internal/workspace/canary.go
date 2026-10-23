@@ -323,7 +323,18 @@ func writableUsageContext(ctx context.Context, root string, policy runtimecontra
 			return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
-			return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
+			if !strings.HasPrefix(filepath.ToSlash(relative), "work/") {
+				return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
+			}
+			directory, openErr := openDirectory(root, "work")
+			if openErr != nil {
+				return classify(openErr)
+			}
+			linkErr := CheckWorkLink(directory, strings.TrimPrefix(filepath.ToSlash(relative), "work/"))
+			unix.Close(directory)
+			if linkErr != nil {
+				return linkErr
+			}
 		}
 		// Session state находится на отдельном PVC с собственной ёмкостью и
 		// содержит provider-owned каталоги. Они намеренно могут быть недоступны
@@ -346,7 +357,7 @@ func writableUsageContext(ctx context.Context, root string, policy runtimecontra
 		if entries > policy.MaximumFileCount {
 			return &Denial{Reason: runtimecontract.RuntimeWorkspaceQuotaExceeded}
 		}
-		if entry.Type().IsRegular() {
+		if entry.Type().IsRegular() || entry.Type()&os.ModeSymlink != 0 {
 			info, err := entry.Info()
 			if err != nil {
 				return classify(err)

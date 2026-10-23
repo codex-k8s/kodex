@@ -141,3 +141,49 @@ test("ошибки открытия/symlink и изменение файла н�
   );
   assert.ok(f.buffer().every((byte) => byte === 0));
 });
+
+test("явный файл оператора сохраняет guards и не вызывает fallback", () => {
+  const f = fixture(`${key}='${sentinel}'\n`);
+  const source = "/private/project/.env";
+  let opened = 0;
+  f.io.open = (path, flags) => {
+    opened++;
+    assert.equal(path, source);
+    assert.ok(flags & constants.O_NOFOLLOW);
+    return 7;
+  };
+  assert.equal(readPrivateAgentSecrets([key], f.io, source)[key], sentinel);
+  assert.equal(opened, 1);
+  assert.equal(f.closed(), 1);
+  assert.ok(f.buffer().every((byte) => byte === 0));
+  for (const path of [
+    "relative.env",
+    "/private/../other.env",
+    "/private/file\n.env",
+  ])
+    assert.throws(
+      () =>
+        readPrivateAgentSecrets(
+          [key],
+          { open: () => assert.fail("unsafe path must not open") },
+          path,
+        ),
+      /^Error: SECRET_INPUT_INVALID$/,
+    );
+  let failedOpens = 0;
+  assert.throws(
+    () =>
+      readPrivateAgentSecrets(
+        [key],
+        {
+          open: () => {
+            failedOpens++;
+            throw Error("SYNTHETIC");
+          },
+        },
+        source,
+      ),
+    /^Error: SECRET_INPUT_INVALID$/,
+  );
+  assert.equal(failedOpens, 1);
+});

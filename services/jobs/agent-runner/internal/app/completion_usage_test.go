@@ -23,6 +23,7 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/testfixture"
+	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
 // TestExecutedTurnFailurePreservesUsageInRetriedCallback exercises successful and post-execution failure modes against a synthetic TLS callback that loses its first acknowledgement, requiring byte-identical retries with exact usage, archive policy and no forged private diagnostic.
@@ -424,5 +425,39 @@ func TestExecutedTurnRejectsInvalidArchiveBindings(t *testing.T) {
 				t.Fatal("completion validation or terminal failure semantics changed")
 			}
 		})
+	}
+}
+
+// TestWorkspaceDiagnosticCompletion checks the authenticated callback with complete
+// execution pins, preserving measured usage and the guard-selected failure cause.
+// TestWorkspaceDiagnosticCompletion проверяет авторизованный callback с полными
+// привязками выполнения, сохранением расхода и причины отказа файловой проверки.
+func TestWorkspaceDiagnosticCompletion(t *testing.T) {
+	input := model.Input{RuntimeRevisionDigest: strings.Repeat("a", 64), InputDigest: strings.Repeat("b", 64),
+		ExecutionBindingDigest: strings.Repeat("c", 64), SessionRef: "ses_fixture1", TurnRef: "trn_fixture1", Attempt: 3, LeaseRef: "lease_fixture"}
+	result := codex.Result{Outcome: "SUCCEEDED", FinalMessage: "review completed", Usage: runtimecontract.TokenUsage{InputTokens: 2, OutputTokens: 1, TotalTokens: 3}}
+	calls := 0
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var payload runtimecontract.RunnerCompletionRequest
+		if json.NewDecoder(r.Body).Decode(&payload) != nil || payload.Validate() != nil || payload.Success || payload.SafeErrorCode != "RUNTIME_ARTIFACT_INVALID" || payload.Usage != result.Usage {
+			t.Error("workspace failure lost its completion or measured usage")
+		}
+		diagnostic := payload.ProviderDiagnostic
+		if diagnostic == nil || diagnostic.Class != "WORKSPACE" || diagnostic.Stage != "CHECK_WORKSPACE" || diagnostic.Detail != "QUOTA_EXCEEDED" ||
+			!diagnostic.Matches(input) {
+			t.Error("workspace callback lost the bound guard diagnostic")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	server.TLS = &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAnyClientCert}
+	server.StartTLS()
+	defer server.Close()
+	client := completionTestClient(t, &input, server)
+	check := func(context.Context) error {
+		return &workspacepolicy.Denial{Reason: runtimecontract.RuntimeWorkspaceQuotaExceeded}
+	}
+	if err := completeExecutedTurn(t.Context(), input, client, result, check, nil); err != nil || calls != 1 {
+		t.Fatalf("workspace completion failed: calls=%d err=%v", calls, err)
 	}
 }

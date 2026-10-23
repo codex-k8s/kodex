@@ -138,3 +138,44 @@ func TestProviderDiagnosticResumeSourceClosedReasons(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkspaceDiagnosticBoundaries verifies stage/reason pairs and prevents
+// private payloads or workspace diagnostics attached to unrelated failure codes.
+// TestWorkspaceDiagnosticBoundaries проверяет пары этап/причина и запрещает
+// приватный текст либо диагностику workspace с посторонним кодом отказа.
+func TestWorkspaceDiagnosticBoundaries(t *testing.T) {
+	input, base := diagnosticFixture()
+	base.Kind, base.Class, base.TerminalCode = "TERMINAL_FAILURE", "WORKSPACE", "RUNTIME_ARTIFACT_INVALID"
+	base.Notification, base.NotificationError = "NONE", "NONE"
+	for _, pair := range [][2]string{{"WORKSPACE_NORMALIZATION", "FILE_TYPE_INVALID"}, {"OUTBOX_PUBLICATION", "FILE_SIZE_INVALID"}, {"CHECK_WORKSPACE", "QUOTA_EXCEEDED"}, {"PUBLISH_RESULT", "READ_ONLY"}} {
+		value := base
+		value.Stage, value.Detail = pair[0], pair[1]
+		raw, err := json.Marshal(value)
+		var decoded ProviderFailureDiagnostic
+		if err != nil || json.Unmarshal(raw, &decoded) != nil || !decoded.Matches(input) {
+			t.Fatal("valid workspace diagnostic rejected")
+		}
+		completion := RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, SafeErrorCode: "RUNTIME_ARTIFACT_INVALID", ProviderDiagnostic: &value}
+		if completion.Validate() != nil {
+			t.Fatal("workspace completion rejected")
+		}
+		completion.SafeErrorCode = "PROVIDER_UNAVAILABLE"
+		if completion.Validate() == nil {
+			t.Fatal("workspace diagnostic attached to unrelated failure")
+		}
+		for _, mutation := range []func(*ProviderFailureDiagnostic){
+			func(v *ProviderFailureDiagnostic) { v.Stage = "PRIVATE_SENTINEL" },
+			func(v *ProviderFailureDiagnostic) { v.Detail = "PRIVATE_SENTINEL" },
+			func(v *ProviderFailureDiagnostic) { v.Class = "PROVIDER" },
+			func(v *ProviderFailureDiagnostic) { v.Kind = "REQUEST_FAILURE" },
+			func(v *ProviderFailureDiagnostic) { v.TerminalCode = "provider_bad_request" },
+			func(v *ProviderFailureDiagnostic) { v.Notification = "UNKNOWN" },
+		} {
+			invalid := value
+			mutation(&invalid)
+			if invalid.Validate() == nil {
+				t.Fatal("invalid workspace diagnostic accepted")
+			}
+		}
+	}
+}
