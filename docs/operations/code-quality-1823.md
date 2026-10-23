@@ -4,11 +4,52 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.347.0
+version: 1.348.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 348 — SQL-привязки runtime-конфигурации
+
+Go/SQL code SHA `2c94e220bf34451a291e24b25125ab1fb87de130`; окончательный
+реестр причин — `d83ecb6da2ab6ac1210e65b1beb1e38deb29a9f5` (разница только
+в двух текстах обоснования, Go и SQL идентичны). Прочитаны все 33 SQL-файла
+из `queries_runtime_configuration.go` (936 строк), consumer commands из
+предшествующей волны и составной/отдельный environment row scanners.
+Все 33 Go-привязки подробно описаны EN→RU: current против pinned revision,
+mutable/published overlay, tenant/project identity, row locks/OCC,
+forward-only publication/rollback, bootstrap и provider account ordering.
+
+Не приписывается самостоятельная authority lookup/lock SQL: её проверяет
+внешняя команда. Отдельно указано, что materialize-system-image записывает
+platform-owned bootstrap metadata с COMPLETED/ACCEPTED/PROMOTED из доверенных
+release inputs, но не исполняет build/scan/signature verification; metadata
+не объявляются новым фактическим сканированием. Bootstrap нового агента не
+продвигает уже опубликованную общую environment revision; system-assistant
+NULL binding и проектная pinned binding описаны явно. Go AST, все 33 embed
+paths и байты каждого SQL относительно предшествующего HEAD совпадают.
+
+Разобраны пять точных SELECT projection окон agent view / environment Get /
+List / lifecycle snapshot. Составной agent view и отдельные environment
+scanners не названы одним scanner: тексты причин сверены с реализациями.
+Общий row layout сохранён адресно, поскольку predicates/cardinality и
+pinned/current semantics различны, SQL concatenation запрещена, а новый DB
+view/function ради columns добавит schema/grant/migration surface без общего
+предметного алгоритма. SQL, WHERE и файлы целиком не исключены.
+
+PASS LOCAL: platform repository unit и build всего control-plane на указанном
+Go code SHA; assessor unit, пять ignore guards, gofmt/diff-check. Финальный
+полный scan/assessment/Go inventory на окончательном реестре:
+**6651 own / 222 excluded; 1779 raw / 795 retained / 984 unresolved;
+Go 15481/21343, missing 5862**. Raw report SHA256
+`d3da9b708c8c8e5a921efad186c645998c581464021e3f8e294a0eebc1130491`,
+clone-set SHA256
+`3335e704acdca7f6977b173d4dac625e2b2fd386c980098af217758b2f86ae6a`.
+Пороги не менялись, широких исключений нет. Остальные 984 группы / 5862
+объявления, общий конечный -check/build/unit и прежние незакрытые FAIL/finding
+остаются обязательными. Component/live/ИИ/deploy/полная приёмка NOT RUN;
+единственный #1824 сохраняется Draft до завершения и решения владельца.
 
 ## Волна 347 — SQL-привязки публичных каталогов и истории
 
