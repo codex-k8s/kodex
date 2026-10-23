@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.317.0
+version: 1.318.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,116 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста восемнадцатая волна — access/assistant/image HTTP surfaces
+
+Предыдущий опубликованный SHA — `f8c65f9171800db79cbca696ebb97c2a47b32985`.
+ExactqzXKw4:6641 sources,222 excluded,1799 raw/731 retained/
+1068 unresolved; Go14073/21300,missing7227. Issue open, Draft PR
+head/body317 и push подтверждены readback. Предыдущая goal-итерация —
+progress: upload-error повтор устранён,68 docs опубликованы.
+
+Полностью прочитаны access_endpoints.go291, assistant_endpoints.go443,
+role_image_endpoints.go467 и organization_role_image_endpoints.go262
+исходных строк (1463 total). Все77 declarations (24+23+19+11) описаны EN→RU.
+Недостающий из-за truncation конец image mapper и начало organization
+scope validators перечитаны отдельно, не заменены предположением.
+
+Десять read-only tails используют writeReadRPCResult: шесть access Lists,
+QueryEffectiveAccess/ExplainAccess/SimulateAccess и GetSystemAssistant.
+POST evaluation/simulation здесь read-only; никакие access mutations,
+conversation state/plan commands или supply-chain handlers не унифицированы.
+Typed owner method, request context, selector/permission input и exact
+specialized reply checks остаются явными. Inverse actual helper/callers
+даёт равные целые AST4 с317; //go: directives прежние.
+
+Описаны реальные limits и non-goals:
+- access scope/subject/resource/time mappers копируют selection metadata,
+  zero enum и optional fields, не caller authority; simulation не создаёт
+  role/binding. Conditions RequireOwner не является proof владельца;
+- assistant project profile проверяет scope/ref/version/name/timestamps/
+  state, не runtime readiness. Conversation list сверяет page/cursor и
+  requested project/state/assistant pins; visibility остаётся у owner;
+- archive/restore/purge/move/cancel используют отдельные owner commands
+  и mandatory versioned mutation там, где она была. Expected refs/state/
+  cancelled-run consistency не ослаблены, HTTP204 не создаётся до readback;
+- AddAssistantTurn проверяет actual UTF-8 bytes и shared content, выбирает
+  QUEUE либо explicit INTERRUPT_ACTIVE и HTTP202, не объявляет завершённый
+  model turn. Plan validate/apply/reject и owner instructions остаются
+  явными revision-pinned командами, client context не grant;
+- draft plan2MiB — nominal shared decoder budget, не выдуманная строгая
+  total-length/duplicate-key validation. Struct conversion errors и shared
+  optional version pointers в casters по-прежнему не исправлялись;
+- project image detail локально проверяет project, но не independently
+  exact returned recipe ref; organization detail сверяет exact ref и
+  organization/build/artifact bindings. NOT_FOUND/502 различия сохранены;
+- source visibility, lineage и risk-history predicates не названы запуском
+  scanner, подписью или human risk approval. VERIFIED inventory mapper
+  лишь переносит owner metadata, сам подписи/digests/tools не проверяет;
+- optional risk-record conversion в artifact mapper при error пропускается:
+  callers обязаны сначала проверять history. Safe diagnostics mapper сам
+  arbitrary source text не очищает; upstream validation не подменяется;
+- promotion HTTP202 — acceptance receipt, не завершённая публикация.
+  Exact recipe/artifact/provenance checks organization path сохранены;
+- protoTime nil-interface даёт zero, typed-nil поведение принадлежит
+  AsTime receiver; CheckValid не добавлен. ETag helper только оформляет
+  positive uint64, не проверяет domain safe-version bounds.
+
+Матрица неизменённых authority/lifecycle paths:
+
+| Surface | Authority/данные | Операция и readback |
+| --- | --- | --- |
+| access catalog/effective/explain/simulate | verified context, owner filtering; proposed subject/scope лишь case selectors | typed read + shared public response, no grants/state writes |
+| role/binding create/version/change/revoke | dedicated owner command + mutation/version pins | role/binding public result; no generic self-authorization |
+| project/system assistant и conversations | exact project/profile и requested scope pins, owner state | separate create/archive/restore/purge/move/cancel, checked reply states |
+| assistant turns/plans | bounded content, revision/mutation, immutable owner policy | queued/interrupt admission либо explicit plan command, no model run here |
+| recipe list/detail | owner typed query + existing scope/lineage/source/risk validators | public map и advancing cursor/ETag, no admission inferred from display |
+| recipe create/update/command/promotion | project context либо separate organization RPC, mutation/provenance pins | specialized scoped receipts; no automatic risk approval |
+
+587 верхних/2734 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP.17 Node unit, Go checker unit, inverse AST4,
+scope77/77,5 addressed ignores, gofmt/diff-check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Первый3Odqbt canonical scan был FAIL на stale retained assistant/managed
+config hash. Повторно прочитаны оба конца UpdateAssistantConversationTitle
+и Git detach/copy. Только digest прежних exact paths/count1 обновлён на
+`ce697f3f829fce682b09248e0e8261d43154e4e3e779ac7178c73556ea8dc0c5`;
+checker не ослаблен. Полный последующий f2rOKR canonical прошёл.
+
+Рабочий f2rOKR:6641 sources,222 excluded,1801 raw/733 retained/
+1068 unresolved; Go14150/21300,missing7150. Raw SHA256
+`732ad0d90ec96fd529a7a0f7daa61cd508d3c7d80e1ab624b3d801b8e3a36b9a`,
+clone-set `3e822aa7aa464c12bcbf8027780535485ae292c9e3f08fdd14c94b77fefafee9`.
+Raw delta30removed/32added только внутри4 scoped files/их пар. Она включает
+comment/hash shifts и сокращённые read tails перед следующим mutation
+handler: это НЕ30 устранённых алгоритмов. Диагностическое сравнение без
+whole-line comments/whitespace показывает5 replaced old/7new windows;
+authority/behavior доказываются отдельно inverse AST4 и unit, не этим hash.
+
+Два новых окна106/100tokens прочитаны по обоим концам: versions read вокруг
+разных nominal role/environment RPC и хвост разных create-role/version
+requests с generated handler boundary. Common page/error/response и
+decode/mutation/enum primitives уже отдельные helpers; generic dispatcher
+скрыл бы method/resource/version связь ради glue. Добавлены только2
+content-pinned paths/hash/count1 entries с отдельными причинами:
+registry615/733, никаких новых ignore markers/файловых exclusions.
+Уменьшение unresolved clones в этой волне не заявляется; остальные реальные
+повторы, включая крупные image page/detail mappings, остаются к разбору.
+
+После commit exact scan/unit/build/push/PR readback повторяются.
+Остаток Go:gateway918,CP6232; общий -check не пройден. Historical FAIL/
+finding293 не исправлены. Dependencies и library APIs не менялись;
+semantics pinned protobuf/stdlib из314/317 сверены с actual source.
+Component/browser/real access/assistant/provider/image build/promotion/
+model/STT/mail/deploy/full acceptance NOT RUN. Generated/contracts/SQL/
+migrations/live state прежние. Цель active, PR Draft, merge/approve нет.
 
 ## Триста семнадцатая волна — команды HTTP и ошибки потоковой загрузки
 

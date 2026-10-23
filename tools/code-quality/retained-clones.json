@@ -3,6 +3,22 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "fragmentSHA256": "a886a0d49e62d67ff1f1646c4db93b7a02f90429888bb955d5d83af511cd96cf",
+      "count": 1,
+      "reason": "Окно106 tokens пересекает конец предшествующего метода, короткий role/runtime versions read и начало следующего handler. Сам error-first response алгоритм уже writeReadRPCResult, pagination уже page; остаются разные typed ListAccessRoleVersions/ListRuntimeEnvironmentVersions requests и exact resource fields. Содержательные comments подняли прежнее окно выше minLines. Универсальный query dispatcher либо callback wrapper ради двух glue-строк скрыл бы nominal owner method/ref связь. Исключено только это точное окно двух путей/hash/count1, не handlers/файлы или validation."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "fragmentSHA256": "a546d076c695db2c593d513363359848ac2ecce217ba5d11bb02f4f3cec59c05",
+      "count": 1,
+      "reason": "Окно100 tokens сравнивает хвост typed role create/version request, общую error/public response форму и следующую generated handler signature. Самостоятельного общего бизнесового алгоритма на всём окне нет: создание role и новой revision имеют разные nominal requests, RoleRef и expected-version context. Decode/requireMutation/permission-scope conversion/error mapper уже отдельные helpers; generic mutation dispatcher скрыл бы owner transition ради короткого glue. Комментарии увеличили physical lines при прежнем AST. Сохранены только данный внутрефайловый fragment/hash/count1, не role команды целиком."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
       "fragmentSHA256": "59ac741cd6a3c3a9624caccca856a580108d180b65a87463cdd1de3ed7d32fac",
@@ -4357,7 +4373,7 @@
       "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
-      "fragmentSHA256": "3a3d12468cc5a3dc38a1473c6d6a616505cb31fbaffb003d858f74cb8eea8f9a",
+      "fragmentSHA256": "ce697f3f829fce682b09248e0e8261d43154e4e3e779ac7178c73556ea8dc0c5",
       "count": 1,
       "reason": "Окно139 tokens сравнивает UpdateAssistantConversationTitle с хвостом Git detach и CopyGitManagedConfiguration. Различаются generated JSON body, точный Assistant/Command RPC, ConversationRef против ConfigurationRef, writeMessage против checked writeManagedResult и HTTP200/201. Decode/mutation/error/result primitives уже общие; полного связного алгоритма на всём окне нет. Generic callback mutation wrapper ради коротких typed guards скроет маршрутизацию и разную проверку ответа. Сохранены только exact paths/hash/count1, не HTTP mutation endpoints целиком."
     },
