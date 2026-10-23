@@ -4,11 +4,55 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.341.0
+version: 1.342.0
 updated: 2026-10-23
 ---
 
 # Подготовка кода к построчному ревью
+
+## Волна 342 — интеграция исправлений и операции секретов
+
+По прямому решению владельца функциональный PR #1827 доставлен и слит:
+main `9339e3081bc40da194e019b4e0846d55fdd51d89`. Открытым остался только
+рефакторинг #1824. Точные runtime/app digests, штатная recipe admission,
+публикация двух окружений и четырёх bindings, Chrome screenshot/Console/Network
+и границы NOT RUN находятся в `retry-child-graph-1826.md`. Результат доставки
+не является полной приёмкой рефакторинга или успешным новым ИИ-запуском.
+
+Main интегрирован merge-коммитом `8c9bcb357`: разрешены шесть конфликтов с
+сохранением выносов и EN→RU комментариев. Default 10000 / явный maximum
+100000 файлов сохранены; новые work-only symlinks используют прежние
+kernel guards. Общий `closedWorkspaceReason` используется и новым bound
+completion diagnostic. Прежний отрицательный test pin v1 остаётся неверным
+относительно текущего v2, без смены production-протокола.
+
+PASS LOCAL на интегрированном дереве: unit/build runtimecontract, runner
+app/codex/workspace, controller callback/workload, gateway HTTP, control-plane
+platform/repository/grpc; 25 Node tests штатного private input helper;
+74 frontend unit и полный frontend typecheck/build. Vite сохранил известное
+предупреждение о чанках >500KB; оно не скрыто и не названо ошибкой сборки.
+
+В `runtime_secrets.go` прочитаны и предметно описаны 58 объявлений: grant TTL,
+claim lease, exact revision/namespace, idempotency, owner revalidation,
+materialization, recovery KEEP/DELETE, metadata-only read, audit и cursors.
+Новый `runtimeSecretOperationTransaction` также описан EN→RU и объединяет
+только одинаковые resolveScope → SERIALIZABLE BeginTx пяти команд. Их guards,
+rollback/commit, locks, transition/audit/event остаются у владельца-команды;
+helper не добавляет retry и не меняет ошибку resolveScope. Удалено 11 raw
+clone groups. Шесть остаточных scaffold окон разобраны и сохранены адресно;
+одно прежнее исключение test spy повторно прочитано после новых workspace
+сценариев #1827 и получило новый hash, без расширения путей/count.
+
+Код волны: `8af41bf7e2fb98d0dfcc0b942c7cabc7ea024bb9`.
+PASS LOCAL: platform repository unit и полный build control-plane,
+assess-clones unit, пять адресных ignore guards, gofmt/diff-check.
+Новый замер: **6651 own / 222 excluded; 1780 raw / 780 retained /
+1000 unresolved; Go 15196/21338, missing 6142**. Clone-set SHA256
+`95912a3ea36e86ea6f4202950e440842f4c99283c459ef21ed16e5da09eda0f0`.
+Итоговый `-check`, полный конечный build/unit и старые незакрытые FAIL/finding
+по-прежнему открыты. Следующий шаг — 1000 групп и 6142 объявления;
+слияние #1824 и построчное ревью допускаются только после завершения и решения
+владельца. Generated, applied SQL и секреты не менялись.
 
 ## Волна 341 — границы сервиса рецептов образов
 
