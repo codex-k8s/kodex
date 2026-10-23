@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.314.0
+version: 1.315.0
 updated: 2026-10-23
 ---
 
@@ -1703,6 +1703,106 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Триста пятнадцатая волна — типизированные HTTP reads и вынос повторов
+
+Предыдущий опубликованный SHA — `0fc219c8ba725f2a23771d832e40429ac9316fe3`.
+ExactTYJw15:6639 sources,222 excluded,1806 raw/728 retained/
+1078 unresolved; Go13892/21293,missing7401. Issue1823 открыт,
+Draft PR1824/head/body314 проверены GET; main и основной клон неизменны.
+Предыдущая goal-итерация — progress: опубликованы313/314 с exact evidence.
+
+Полностью прочитан query_endpoints.go607 исходных строк, повторно проверены
+writeMessage/messageMap и закрытый writeRPCProblem. Все42 прежних query
+declarations получили предметные EN→RU комментарии; новые2 production
+helpers и3 test declarations тоже двуязычны. Scope3files98/98.
+Generated поля/enum проверены чтением pinned output, вручную не менялись.
+GO-DOC-006 подтверждает минимальную локальную область: только gateway
+public response/filter policy, не новая общая библиотека или dispatcher.
+
+Реально вынесены повторы:
+- writeReadRPCResult в уже существующем server.go объединяет25 одинаковых
+  error-first хвостов read RPC. RPC уже завершён, helper не выбирает
+  метод, context или actor и не делает retries. При err сначала
+  writeRPCProblem, только при успехе прежний writeMessage с HTTP200 и
+  точными field/page arguments. Typed queries и их prevalidation остались;
+- artifactCatalogFilters объединяет два одинаковых прохода пяти прежних
+  pure parsers в исходном порядке. Отдельные ~string parameters позволяют
+  использовать разные generated project/organization query types без
+  reflection. Успех выдаёт fresh ListArtifactsRequest только с фильтрами;
+  ProjectRef/RunRef/Page/Query назначаются соответствующим endpoint.
+  Организационный путь не получает project/run. Входные optional presence,
+  unspecified различия, лимит5, unique/order и запрет single+group прежние;
+- специальные проверки trash lifecycle, resumable/count/run pins,
+  owner gate identity/page, artifact nil page, graph redaction, run-events
+  completeness и preview остаются явными. Они НЕ заменены generic writer.
+
+Обратное разворачивание actual helpers и25+2 caller sites сравнивает целые
+AST двух production files с314: PASS LOCAL, //go: directives прежние.
+Проверяются actual helper body/condition/return fields и точные25 вызовов,
+а не удаление произвольного diff ради совпадения. Lifecycle/authority,
+RPC request поля/порядок, status mapping, response redaction и comments
+вне scope не менялись. Новый test-file — отдельная synthetic оснастка.
+
+Новые unit:
+- сравнение whole/nested/page/invalid-shape/unsafe-int projections с
+  прежней ветвью, exact headers/status/public JSON и protobuf non-mutation;
+- все error gRPC codes, nil/typed-nil/partial reply плюс обычная ошибка:
+  error reply не попадает в projector. OK отдельно покрыт successful cases;
+- correlationId намеренно новый: canonical nonzero UUID и independence
+  проверяются отдельно, все прочие fields сравниваются без нормализации;
+- artifact filters: nil/empty/explicit unspecified, known lifecycle/type/
+  scan/source, ordered/max5 group, invalid/duplicate/oversized group и
+  single/group conflict; invalid не выдаёт partial request, successful
+  requests/slices независимы и не назначают scope/query/page.
+
+Первый новый comparison unit был FAIL: он неверно требовал byte equality
+случайных correlationId, а nested fixture не проходил существующий
+Project-card validator. Это не объявлено production regression или PASS:
+оснастка исправлена на независимую canonical UUID проверку с exact
+остальным JSON и допустимый typed Agent response. Нормализатор production
+и UUID generator не ослаблялись; subsequent focused/full unit PASS.
+
+Матрица прежних read-путей:
+
+| Инициатор | Authority/проверки остаются | Общая операция и потребитель |
+| --- | --- | --- |
+| browser bootstrap | verified identity + positive session revision, owner query | specialized bootstrap + exact session ETag |
+| project/org catalog | boundary context, explicit selector/filters, owner eligibility | только read-result error/public shaping, browser JSON |
+| artifact catalog | catalogRequest и5 typed pure filters; scope из route/owner | fresh filter request, затем exact project/run/page/query и nil-page check |
+| resumable runs/gates/trash | state uniqueness, target/version/count/identity/lifecycle checks | прежние specialized projections, не generic admission |
+| graph/events/preview | typed owner response и специальные shape/pin checks | internal graph runs redacted, completeness preserved, no external effect |
+| RPC error с partial reply | существующий closed error profile | response не inspected, no retry, no store mutation/events |
+
+586 верхних/2723 всех выбранных gateway unit и полный gateway build -p=2 —
+PASS LOCAL,0 FAIL/SKIP.17 Node unit, Go checker unit, inverse AST2,
+scope98/98,5 addressed ignores, gofmt/git diff --check — PASS LOCAL.
+Команда из gateway module:
+```bash
+set -e
+set -o pipefail
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go test -mod=readonly -count=1 -timeout 120s -json ./internal/app ./internal/secretbroker ./internal/sttclient ./internal/usertext ./internal/security/session ./internal/security/boundary ./internal/transport/http ./internal/transport/problemresponse ./internal/transport/websocket ./cmd/control-api-gateway | node --input-type=module -e 'import readline from "node:readline";const counts={pass:0,skip:0,fail:0,topLevelPass:0};for await(const line of readline.createInterface({input:process.stdin})){const e=JSON.parse(line);if(e.Test&&e.Action in counts){counts[e.Action]++;if(e.Action==="pass"&&!e.Test.includes("/"))counts.topLevelPass++;if(e.Action!=="pass")console.log(JSON.stringify({action:e.Action,test:e.Test}));}if(!e.Test&&e.Action==="fail")process.exitCode=1;}console.log(JSON.stringify(counts));'
+GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6 GOMAXPROCS=4 go build -mod=readonly -p=2 ./...
+```
+
+Рабочий AkaT20:6640 sources,222 excluded,1804 raw/728 retained/
+1076 unresolved; Go13939/21298,missing7359. Raw SHA256
+`267c5f071955835aa51f1b06a683b028e69ce39d8be8a80136396e6c8764dacc`,
+clone-set `f8644414758a873af1cfe3b071ae63c1af9ec8188b47d561091f1ee07e6b396e`.
+Два прежних окна103/136tokens фактически исчезли:
+`619a3dc5d7aaadcc7c1c0a47e647b59a253d9df46c7116075571c39d0934aed4`
+и `fde602f88292ae92a6cf875593c3a93fb47a83ed936083948d4e27e866c2fd0a`.
+Все1804 остальных keys/counts сохранены, новых нет. Registry610/728,
+ignore regions и detector settings не менялись; новых exclusions нет.
+Количество declarations выросло на5 (2helpers+2unit+assert helper);
+нет искусственного улучшения missing за счёт удаления именованных сущностей.
+
+После commit exact scan/unit/build/push/PR readback повторяются.
+Остаток Go:gateway1127,CP6232; общий -check ещё не пройден. Цель остаётся
+active, PR Draft. Historical FAIL/finding293 не исправлены. Новые API или
+dependencies не добавлены; semantics прежних APIs из314 и current source
+не менялись. Component/browser/NATS/provider/model/STT/mail/deploy/full
+acceptance NOT RUN; generated/contracts/SQL/migrations/live state прежние.
 
 ## Триста четырнадцатая волна — HTTP-проекция и её unit-оснастка
 
