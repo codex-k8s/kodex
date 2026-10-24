@@ -5748,17 +5748,28 @@ func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *pl
 	}
 }
 
+// testNestedDelegation seeds a synthetic workflow with an authorized coordinator and two pinned
+// child targets, rejecting unknown runtime/capability and attachment launch without Files.
+// Children receive distinct sessions and exact nil/empty Human Gate capability layers. Coordinator
+// and child completions queue one parent-session continuation behind owner approval; replay
+// preserves callbacks and usage, long callback content remains whole while event summaries stay
+// bounded. Approval resumes the parent with exactly two callbacks and no completed delegation
+// targets, then closes the root with aggregated usage. A separate failed-child branch cancels
+// siblings and rejects late parent/child completions without creating gates or continuations.
+// Commands simulate the graph lifecycle; no agent process is executed.
+// testNestedDelegation подготавливает синтетический workflow с уполномоченным coordinator и двумя
+// закреплёнными child targets, отклоняя неизвестные runtime/capability и launch с attachment без
+// Files. Children получают разные sessions и точные nil/empty слои Human Gate capabilities.
+// Завершения coordinator и children ставят одну continuation в родительской session за owner
+// approval; replay сохраняет callbacks и usage, длинный callback остаётся целым при ограниченных
+// event summaries. Approval продолжает parent ровно с двумя callbacks без завершённых delegation
+// targets, затем закрывает root с суммарным usage. Отдельная ветка failed child отменяет siblings
+// и запрещает поздние parent/child completions без создания gates или continuations. Команды
+// моделируют жизненный цикл графа; процесс агента не исполняется.
 func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
-	}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
+	owner, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
 	toolWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.tool-call.record",
@@ -6177,6 +6188,12 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	}
 }
 
+// graphNodeState returns the state of the first node whose type matches nodeType, preserving slice
+// order. Nil/empty input or no match returns the empty string; duplicate node types are neither
+// aggregated nor validated.
+// graphNodeState возвращает state первого узла с type, совпадающим с nodeType, сохраняя порядок
+// slice. Nil/empty input или отсутствие совпадения даёт пустую строку; повторные node types не
+// агрегируются и не валидируются.
 func graphNodeState(nodes []entity.RunNode, nodeType string) string {
 	for _, node := range nodes {
 		if node.Type == nodeType {
@@ -6186,7 +6203,19 @@ func graphNodeState(nodes []entity.RunNode, nodeType string) string {
 	return ""
 }
 
-func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+// resolveExecutionLifecycleTestPrincipals resolves and returns the fixture launch owner followed
+// by the runtime execution worker with the exact actor/tenant/workload/operation inputs shared by
+// nested delegation, provider refresh/rejection and direct-run scenarios. It preserves the
+// existing resolvedTestPrincipal fixture OwnerClaim behavior and returns the principals unchanged.
+// Test helper marking adds no service construction, credential access, claim, transaction or role
+// merging; callers retain their distinct lifecycle actions.
+// resolveExecutionLifecycleTestPrincipals разрешает и возвращает тестового launch owner, затем
+// worker исполнения runtime с точными actor/tenant/workload/operation inputs общими для nested
+// delegation, provider refresh/rejection и direct-run scenarios. Сохраняет существующее тестовое
+// поведение OwnerClaim в resolvedTestPrincipal и возвращает principals без изменения. Пометка test
+// helper не добавляет создание сервиса, чтение credentials, claim, транзакцию или объединение
+// ролей; разные lifecycle actions остаются у callers.
+func resolveExecutionLifecycleTestPrincipals(t *testing.T, ctx context.Context, repository *Repository) (value.Principal, value.Principal) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
@@ -6196,6 +6225,28 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
+	return owner, worker
+}
+
+// testProviderCredentialRefreshAndCapacity sets every fixture provider capacity to one and
+// restores it to thirty-two on exit, then races two claims and requires one lease with an
+// exhausted-capacity projection that still allows submission. An active lease blocks account
+// revocation. Exact-fenced refresh creates one immutable descriptor, retains the superseded
+// descriptor for about one day, replays idempotently and rejects a late changed callback.
+// Completing the first lease permits another claim with the new revision; after both completions
+// the runtime-lease cleanup guard must be false even if a warm consumer remains. Inputs and usage
+// are synthetic; no OAuth exchange or external secret rotation occurs.
+// testProviderCredentialRefreshAndCapacity задаёт всем тестовым providers capacity один и
+// возвращает тридцать два при выходе, затем сталкивает два claim и требует один lease с
+// exhausted-capacity projection, которая всё ещё допускает submission. Активный lease запрещает
+// отзыв account. Refresh с точным fence создаёт один immutable descriptor, сохраняет superseded
+// descriptor примерно на сутки, повторяется идемпотентно и отклоняет поздний изменённый callback.
+// Завершение первого lease допускает следующий claim с новой revision; после обоих завершений
+// runtime-lease cleanup guard должен быть false даже при оставшемся warm consumer. Inputs и usage
+// синтетические; OAuth exchange и ротация внешнего секрета не выполняются.
+func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	owner, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct provider refresh service: %v", err)
@@ -6227,6 +6278,12 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 			t.Fatalf("launch provider refresh run %d: run=%#v err=%v", index, launched.Run, launchErr)
 		}
 	}
+	// claimResult couples one concurrent ClaimExecution result with its error in the two-slot channel.
+	// The receiver checks the error before counting RuntimeItems and selecting the sole claimed lease;
+	// the value supplies neither authority nor synchronization beyond that channel.
+	// claimResult связывает результат одного параллельного ClaimExecution с его ошибкой в канале на
+	// два элемента. Получатель проверяет ошибку до подсчёта RuntimeItems и выбора единственного
+	// claimed lease; значение не даёт полномочий и не синхронизирует работу за пределами канала.
 	type claimResult struct {
 		result command.Result
 		err    error
@@ -6673,16 +6730,25 @@ func testProviderCredentialCleanupLifecycle(t *testing.T, ctx context.Context, r
 	testProviderDeletionTerminalReadback(t, ctx, repository, service, deleteOwner)
 }
 
+// testProviderAuthRejectionLifecycle pins an initial runtime credential, rotates only fixture
+// descriptor metadata and proves that a stale authentication rejection cannot disable the new
+// revision. Rejection of the current revision must require reauthorization while a fresh agent
+// selection uses another eligible account. Device reauthorization keeps the old descriptor pending
+// until the exact attempt installs a new one, advances versions and restores AUTHORIZED. The test
+// delays pending cleanup and temporarily disables/restores the fallback to verify exact restored
+// selection; it does not call a device provider, read secret payloads or infer authority from the
+// rotation inputs.
+// testProviderAuthRejectionLifecycle закрепляет исходный runtime credential, ротирует только
+// метаданные тестового descriptor и проверяет, что устаревший отказ аутентификации не выключает
+// новую revision. Отказ текущей revision должен потребовать reauthorization, а свежий выбор
+// account агента использует другой допустимый account. Device reauthorization сохраняет старый
+// descriptor в ожидании, пока точный attempt не установит новый, повысит versions и вернёт
+// AUTHORIZED. Тест откладывает pending cleanup и временно выключает/восстанавливает fallback для
+// проверки точного restored selection; не обращается к device provider, не читает secret payloads
+// и не выводит полномочия из rotation inputs.
 func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
-	}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
+	owner, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct provider rejection service: %v", err)
@@ -6873,6 +6939,15 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 	}
 }
 
+// createLifecycleAgent creates a project-scoped fixture agent through CreateAgent with the caller
+// principal/key/name, fixed bounded-task purpose/instructions and the name as role description. It
+// fails the test on command error or a missing Agent and returns a value copy of the server
+// result; it does not publish instructions, claim work or deep-copy nested data.
+// createLifecycleAgent создаёт тестового агента проекта через CreateAgent с переданными
+// principal/key/name, фиксированными purpose/instructions ограниченной задачи и name как role
+// description. Завершает тест при ошибке команды или отсутствии Agent и возвращает копию значения
+// серверного результата; не публикует instructions, не claim работу и не копирует вложенные данные
+// глубоко.
 func createLifecycleAgent(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, key, name string) entity.Agent {
 	t.Helper()
 	result, err := service.Execute(ctx, command.Command{Kind: command.CreateAgent, Principal: owner,
@@ -6886,17 +6961,30 @@ func createLifecycleAgent(t *testing.T, ctx context.Context, service *platformse
 	return *result.Agent
 }
 
+// testDirectRunLifecycle creates an agent and clean/quarantined artifact fixtures, checks
+// filtered/keyset catalogs and canonical source-group cursors, then requires Files capability for
+// bindings and attachment launches. It verifies immutable revision/idempotency, VFS projections, a
+// materialized run graph, session FIFO and preservation of a user-edited title. Exact lease-bound
+// artifact reads reject a wrong fence; successful completion closes the root with synthetic usage
+// and a downloadable one-time-grant result. A stable prospective preview has no fabricated runtime
+// identity, invalid/stale context pins are rejected and exact continuation input reuse preserves
+// producer RESULT classification. Cancel/retry retains lineage with attempt two and authoritative
+// monotonic event deltas. Delegated checks and storage reads are fixture operations, not live
+// provider execution.
+// testDirectRunLifecycle создаёт агента и clean/quarantined artifact fixtures, проверяет
+// filtered/keyset catalogs и canonical source-group cursors, затем требует Files capability для
+// bindings и launch с attachments. Проверяет immutable revision/idempotency, VFS projections,
+// materialized run graph, FIFO session и сохранение пользовательского заголовка. Artifact reads по
+// точному lease отклоняют неверный fence; успешное завершение закрывает root с синтетическим usage
+// и результатом для скачивания по одноразовому grant. Устойчивый prospective preview не выдумывает
+// runtime identity, неправильные/устаревшие context pins запрещены, повторное использование
+// точного continuation input сохраняет классификацию producer RESULT. Cancel/retry сохраняет
+// lineage со второй attempt и авторитетными монотонными event deltas. Делегированные проверки и
+// storage reads являются операциями оснастки, а не исполнением живого provider.
 func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
-	}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
+	owner, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
 	runtimeReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read",
@@ -7232,6 +7320,14 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	}
 }
 
+// claimAndCompleteRun claims at most one execution for the fixed fixture workload using the
+// derived claim key, requires exactly one item for expectedRunRef and delegates
+// progress/completion with the same worker, context, key and artifact option. Any mismatch fails
+// the test; the helper does not launch a run or choose a different claim.
+// claimAndCompleteRun claim не более одного execution для фиксированного тестового workload с
+// производным claim key, требует ровно один item для expectedRunRef и делегирует
+// progress/completion с теми же worker, context, key и artifact option. Любое несовпадение
+// завершает тест; helper не запускает run и не выбирает другой claim.
 func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, expectedRunRef, key string, artifact bool) command.Result {
 	t.Helper()
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
@@ -7242,10 +7338,26 @@ func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformser
 	return completeClaimedExecution(t, ctx, service, worker, claimed.RuntimeItems[0], key, artifact)
 }
 
+// completeClaimedExecution forwards the supplied fixture lease, context, worker, key and artifact
+// flag to the summary-aware completion helper with its fixed customer-response summary. It adds no
+// independent command, validation, usage accounting or test-helper marking.
+// completeClaimedExecution передаёт тестовые lease, context, worker, key и artifact flag в helper
+// завершения с фиксированным резюме ответа клиенту. Не добавляет самостоятельную команду,
+// валидацию, учёт usage или пометку test helper.
 func completeClaimedExecution(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, key string, artifact bool) command.Result {
 	return completeClaimedExecutionWithSummary(t, ctx, service, worker, lease, key, artifact, "Customer response prepared")
 }
 
+// completeClaimedExecutionWithSummary reports progress and then completes the exact
+// lease/fence/generation successfully using separate derived idempotency keys and synthetic usage.
+// If requested, it attaches fixed text bytes with matching SHA-256, size, filename and media type;
+// otherwise the artifact slice is empty. It fails on either command error and returns the
+// completion result without asserting a particular run state or executing a provider.
+// completeClaimedExecutionWithSummary сообщает progress, затем успешно завершает точные
+// lease/fence/generation с разными производными idempotency keys и синтетическим usage. По запросу
+// прикладывает фиксированные текстовые байты с совпадающими SHA-256, size, filename и media type;
+// иначе artifact slice пуст. Завершает тест при ошибке любой команды и возвращает completion
+// result без требования конкретного run state или исполнения provider.
 func completeClaimedExecutionWithSummary(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, key string, artifact bool, resultSummary string) command.Result {
 	t.Helper()
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: worker,
@@ -7273,6 +7385,14 @@ func completeClaimedExecutionWithSummary(t *testing.T, ctx context.Context, serv
 	return completed
 }
 
+// turnUsageFixture returns fixed internally related token counters and a model context window for
+// component completion accounting: total input/output plus cached/cache-write and reasoning
+// subsets. These synthetic observations are reusable values and are not measured provider
+// consumption or billing evidence.
+// turnUsageFixture возвращает фиксированные связанные token counters и model context window для
+// компонентного учёта завершения: total input/output с cached/cache-write и reasoning subsets. Эти
+// синтетические наблюдения являются повторно используемыми значениями, а не измеренным расходом
+// provider или доказательством биллинга.
 func turnUsageFixture() entity.TokenUsage {
 	return entity.TokenUsage{
 		TotalTokens: 120, InputTokens: 100, CachedInputTokens: 40,
@@ -7656,6 +7776,18 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 }
 
+// resolvedTestPrincipal enables OwnerClaim on a copy of the proof input when the supplied workload
+// is control-api-gateway, resolves authority through the repository and fails the test on error.
+// It builds a fixture Principal from the authoritative actor/organization, input operation,
+// derived correlation, supplied workload and credential revision one. The injected owner-claim
+// flag is fixture behavior, not a production bearer/signature or permission inferred from payload
+// identity.
+// resolvedTestPrincipal включает OwnerClaim в копии proof input, когда переданный workload равен
+// control-api-gateway, разрешает authority через repository и завершает тест при ошибке. Строит
+// тестовый Principal из авторитетных actor/organization, input operation, производной correlation,
+// переданного workload и credential revision один. Добавленный owner-claim flag является
+// поведением оснастки, а не production bearer/signature или полномочием, выведенным из identity
+// payload.
 func resolvedTestPrincipal(t *testing.T, ctx context.Context, repository *Repository, input platformrepo.ProofPrincipalInput, workload string) value.Principal {
 	t.Helper()
 	if workload == "control-api-gateway" {
@@ -7669,6 +7801,18 @@ func resolvedTestPrincipal(t *testing.T, ctx context.Context, repository *Reposi
 		Permission: input.Operation, CorrelationRef: input.Operation + "-component", CallerWorkload: workload, CredentialRevision: 1}
 }
 
+// assertBootstrapReadback reads the shared bootstrap aggregate and requires the initial fixture
+// cardinalities: one organization, pending owner contract, ready system assistant, published core
+// prompt, starting runtime, provider definition/account/first credential revision and completed
+// installation, plus nine capabilities and ten enabled optional integration definitions. Query
+// errors or any count mismatch fail the test. Database READY/STARTING rows do not prove a running
+// assistant or external provider readiness.
+// assertBootstrapReadback читает общий bootstrap aggregate и требует начальные cardinalities
+// оснастки: по одной organization, pending owner contract, ready system assistant, published core
+// prompt, starting runtime, provider definition/account/first credential revision и completed
+// installation, плюс девять capabilities и десять включённых optional integration definitions.
+// Ошибка запроса или несовпадение любого счётчика завершает тест. Строки READY/STARTING в БД не
+// доказывают работу ассистента или готовность внешнего provider.
 func assertBootstrapReadback(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 	var organizationCount, ownerContractCount, systemAssistantCount, corePromptCount int

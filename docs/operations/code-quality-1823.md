@@ -4,11 +4,72 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.406.0
+version: 1.407.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Bootstrap: execution principals и общие lifecycle fixtures — 25.10.2026
+
+На основе `40c92bfbe463471fe67e9142171003edbddfe569` полностью прочитаны
+12 функций bootstrap_component_test.go(1267 исходных строк): nested delegation,
+provider refresh/capacity, provider auth rejection, direct run, createLifecycleAgent,
+graphNodeState, claimAndCompleteRun, completeClaimedExecution,
+completeClaimedExecutionWithSummary, turnUsageFixture, resolvedTestPrincipal и
+assertBootstrapReadback. Внутренний claimResult также прочитан/описан.
+Все13 прежних объявлений и новый resolveExecutionLifecycleTestPrincipals получили
+предметные EN→RU описания. Остальные10 bootstrap declarations остаются в работе.
+
+Четыре одинаковых подготовки launch-owner и runtime execution worker заменены
+узким helper. Все actor/tenant/workload/operation inputs, порядок вызовов/возврата,
+локальные owner/worker bindings и контексты сохранены. Отдельные tool/artifact/
+revoke/device principals не объединены: у них другие operations. Service creation,
+concurrency barriers, lease/grant/claim state и cleanup остаются в callers.
+Документация resolvedTestPrincipal явно фиксирует исходную fixture особенность:
+OwnerClaim=true только при workload argument control-api-gateway, авторитетные
+actor/org берутся из repository; test principal не объявляется bearer/signature
+или production authority из payload. Исполняемое поведение этого helper не менялось.
+
+Полный HEAD-derived expected-AST/directive proof bootstrap и независимое
+сравнение восьми прежних principal calls с двумя общими, порядка возврата и
+assignment/args четырёх callers — PASS. Все SQL bytes и28 embeds неизменны.
+
+| Путь / переход | Описанные сохранённые границы |
+| --- | --- |
+| Provider capacity | Всем fixture accounts задаётся1, deferred cleanup возвращает32. Два concurrent claims→один lease, CAPACITY_EXHAUSTED ещё допускает submit; активный lease запрещает revoke |
+| Refresh | Exact fence/previous descriptor, одна immutable revision, повтор без дубликата, late changed callback Conflict. Superseded snapshot удерживается примерно сутки; после двух completions runtime-lease guard false, warm guard может остаться |
+| Auth rejection | Stale revision rejection не выключает новую credential; current rejection→REAUTHORIZATION_REQUIRED. Новый выбор агента использует eligible fallback, что не подменяет session affinity |
+| Device reauthorization | Pending attempt сохраняет старый descriptor до точной замены, version/OCC и AUTHORIZED readback. Cleanup eligibility сдвигается fixture SQL; fallback временно disabled и deferred restored. Внешний device provider не вызывается |
+| Nested children | Pinned targets, отдельные child sessions, exact nil/empty gate capability layers, coordinator completion не закрывает root до callbacks. Одна continuation ждёт owner approval, два whole callbacks exactly once, usage суммируется |
+| Failure graph | Failed child закрывает root/отменяет sibling; поздние coordinator/child completions Forbidden, не создают HUMAN_GATE или CONTINUES |
+| Direct run/files | Clean/quarantine, filter-before-limit/keyset/source-group cursor, Files capability, immutable revisions и content-idempotency; lease-bound artifact read закрывает wrong fence. USER_EDITED title не перезаписывается |
+| Continuation/retry | Prospective preview без fabricated runtime identity, exact context pin, output reuse не меняет producer RESULT. Cancel/retry сохраняет lineage с attempt2; event sequence и run/node/edge deltas авторитетны |
+| Completion fixtures | Exact lease/fence/generation, раздельные progress/complete keys, fixed bytes/digest/size optional artifact и synthetic usage. Wrapper не проверяет дополнительный run state, глубокое копирование не обещается |
+| Readback helpers | graphNodeState выбирает первое совпадение или empty; bootstrap aggregate требует начальные cardinalities. READY/STARTING rows не доказывают работающий workload |
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks407-final`),15 external fixture/admin/template inputs исключены.
+Это test-only glue без новых зеркальных tests. PostgreSQL provider/concurrency/
+delegation/direct-run/component scenarios — NOT RUN/SKIP; static и unit evidence
+не подменяют их исполнение. gofmt/diff check,17 analyzer unit и5 exact-ignore
+guards — PASS. Новых library API/dependencies/production SQL нет.
+Browser/full E2E/deploy/live — NOT RUN.
+
+Inventory6683 own sources/222 exclusions:19968/21482 Go declarations описаны,
+missing1514 — PostgreSQL adapter control-plane. Текущий PR153 Go-файла:
+1837/1847 описаны,10 оставшихся — только bootstrap_component_test.go(68/78);
+прочие152 Go-файла diff полностью описаны. Detector1796 raw/904 retained/
+892 unresolved, registry778 неизменен. Удалены122-token de36fe419939 и100-token
+2a860367e6af bootstrap fragments; новых fragment/format/kind/path-pair keys нет.
+Thresholds/ignore regions/exclusions не расширены, тесты остаются в inventory.
+
+Production behavior, contracts/generated, dependencies, migrations и deploy
+inputs сохранены. Прикладные секреты не читались и не переносились; необходимые
+bot-role credentials/identity передаются только нужным GitHub children без вывода
+значений. Whole-blob проверка допускает только4 прежних inert title-test markers
+по exact main bytes/count, неизвестных совпадений нет. Issue#1823 открыт,
+PR Draft; основной клон и QA baseline f2e64eb не менялись.
 
 ## Bootstrap: integration effect и scoped approval — 25.10.2026
 
