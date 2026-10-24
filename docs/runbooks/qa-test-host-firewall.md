@@ -50,6 +50,7 @@ systemd-networkd lease; helper повторно проверяет эту при
 
    ```bash
    sudo -n unshare --net python3 tools/qa/test-host-firewall-network-test.py
+   sudo -n unshare --net python3 tools/qa/test_host_firewall_lifecycle.py
    ```
 
    Тест проверяет отличие network namespace от PID1 до первого изменения.
@@ -64,15 +65,23 @@ systemd-networkd lease; helper повторно проверяет эту при
 5. Открыть **второе независимое SSH-соединение** с тем же management IP.
    Проверить доступ и передать план в `confirm --plan-digest <digest>`.
    Helper проверяет другой SSH tuple, остаток времени, exact nft readback и
-   активный timer. Затем устанавливает собственную boot-службу и останавливает
-   rollback timer/service. `CONFIRMED` означает подтверждённый периметр,
+   активный timer. Затем устанавливает собственную boot-службу, атомарно
+   публикует и синхронизирует durable receipt, после чего останавливает
+   rollback timer/service. Boot-служба применяет правила только при наличии
+   этого receipt и отсутствии rollback intent; ранняя загрузка до commit
+   не применяет firewall. `CONFIRMED` означает подтверждённый периметр,
    но не успешный релиз приложения или webhook delivery.
 6. Сверить nft readback, disabled rollback timer и enabled boot-service.
    Фактическую проверку после reboot планировать отдельно с сохранением
    состояния приложения; одна enabled unit не доказывает boot acceptance.
 
 Если второе соединение/confirm не завершились, **не повторять apply**.
-Дождаться автоматического возврата и прочитать фактическое состояние.
+Сначала выполнить `inspect --plan-digest <digest>`: это readback записанного
+commit/rollback intent, отдельно требуется сверить фактическую nft-таблицу.
+Без commit timer выполняет возврат; после commit timer безопасно ничего
+не меняет, даже если ответ confirm потерян. Повтор exact confirm после commit
+возвращает прежний receipt без новой mutation. При недоступном SSH дождаться
+timer и проверить состояние после восстановления связи.
 Журнал сохраняется в root-only `/var/lib/kodex-qa-firewall` и препятствует
 слепой повторной установке. Повтор после завершённого rollback требует
 отдельной проверенной архивации этой установки и нового исходного snapshot;
@@ -81,10 +90,16 @@ systemd-networkd lease; helper повторно проверяет эту при
 ## Возврат
 
 `rollback --plan-digest <digest>` не требует stdin и доступен от root.
-Проверяет собственный журнал и table ownership comment, удаляет только свою
-таблицу. Если boot-service уже создана, сверяет её точное содержимое,
+Проверяет собственный журнал и сохраняет durable rollback intent до первого
+внешнего эффекта. Intent запрещает boot/reconfirm даже при прерывании очистки.
+Проверяет table ownership comment и удаляет только свою таблицу.
+Если boot-service уже создана, сверяет её точное содержимое,
 отключает и удаляет только эту службу. Журнал сохраняется для диагностики.
 Чужая таблица с тем же именем и другим ownership marker закрыто отклоняется.
+Прерванный rollback допускает exact повтор очистки по прежнему digest;
+он не применяет firewall заново и не удаляет журнал. `expire` является
+внутренним режимом таймера: после commit без rollback intent он не выполняет
+внешних эффектов. `boot` — внутренний режим собственной systemd-службы.
 
 Изменение DHCP-server, интерфейса, management IP, SSH host key или webhook
 ranges не принимается молча; нужен новый проверенный план. Существующая

@@ -6,6 +6,7 @@ plan/apply/confirm читают JSON из stdin; rollback читает толь�
 """
 
 import argparse
+import ctypes
 import fcntl
 import hashlib
 import ipaddress
@@ -16,6 +17,7 @@ import re
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -96,28 +98,76 @@ def run(arguments, data=None):
 
 
 def private_write(path, content):
-    """Создаёт новый owned regular файл без перезаписи и перехода по symlink."""
-    fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as handle:
-        handle.write(content)
-        handle.flush()
-        os.fsync(handle.fileno())
+    """Атомарно публикует новый durable receipt без перезаписи существующего."""
+    fd, temporary = tempfile.mkstemp(prefix=".receipt-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        rename = ctypes.CDLL(None, use_errno=True).renameat2
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        if rename(-100, os.fsencode(temporary), -100, os.fsencode(path), 1) != 0:
+            raise OSError(ctypes.get_errno(), "Atomic receipt publication failed")
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def read_state():
     """Читает единственный закрытый журнал текущей установки firewall."""
-    fd = os.open(ROOT / "state.json", os.O_RDONLY | os.O_NOFOLLOW)
+    return private_read(ROOT / "state.json")
+
+
+def private_read(path):
+    """Читает bounded owned receipt, не переходя по ссылкам."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     with os.fdopen(fd) as handle:
         info = os.fstat(handle.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > 16384:
             raise ValueError("PRIVATE_STATE_REQUIRED")
         return json.load(handle)
+
+
+def confirmed(state):
+    """Определяет durable commit, не принимая чужой или неполный receipt."""
+    path = ROOT / "confirmed.json"
+    if not path.exists():
+        return False
+    receipt = private_read(path)
+    if set(receipt) != {"planDigest", "servingSHA256", "connection"} or receipt["planDigest"] != state["planDigest"] or receipt["connection"] == state["applyConnection"]:
+        raise ValueError("CONFIRMATION_RECEIPT_INVALID")
+    if not re.fullmatch(r"[a-f0-9]{64}", receipt["servingSHA256"]):
+        raise ValueError("CONFIRMATION_RECEIPT_INVALID")
+    return True
+
+
+def rollback_started(state):
+    """Durable intent запрещает boot/reconfirm даже при неполном cleanup."""
+    path = ROOT / "rollback-intent.json"
+    if not path.exists():
+        return False
+    if private_read(path) != {"planDigest": state["planDigest"]}:
+        raise ValueError("ROLLBACK_RECEIPT_INVALID")
+    return True
 
 
 def table_state():
     """Возвращает статическую конфигурацию только собственной таблицы."""
     result = json.loads(run(["nft", "-s", "-j", "list", "table", "inet", TABLE]))
-    return [entry for entry in result["nftables"] if "metainfo" not in entry]
+    def stable(value):
+        if isinstance(value, dict):
+            return {key: stable(item) for key, item in value.items() if key != "handle"}
+        if isinstance(value, list):
+            return [stable(item) for item in value]
+        return value
+    return [stable(entry) for entry in result["nftables"] if "metainfo" not in entry]
 
 
 def ssh_connection(config):
@@ -153,10 +203,31 @@ def installed_helper():
 
 def execute(mode, supplied, expected_digest):
     """Выполняет ограниченный переход plan/apply/confirm/rollback под lock."""
-    if mode == "rollback":
+    if mode in {"rollback", "expire", "boot", "inspect"}:
         state = read_state()
         if state["planDigest"] != expected_digest:
             raise ValueError("ROLLBACK_IDENTITY_MISMATCH")
+        reverting = rollback_started(state)
+        committed = confirmed(state)
+        if mode == "inspect":
+            return {"status": "ROLLBACK_STARTED" if reverting else "CONFIRMED" if committed else "UNCONFIRMED", "planDigest": expected_digest}
+        if mode == "expire" and committed and not reverting:
+            return {"status": "CONFIRMED_NO_ROLLBACK", "planDigest": expected_digest}
+        if mode == "boot":
+            if not committed or reverting:
+                return {"status": "BOOT_NOT_AUTHORIZED", "planDigest": expected_digest}
+            tables = json.loads(run(["nft", "-j", "list", "tables"]))["nftables"]
+            present = any(item.get("table", {}).get("name") == TABLE and item["table"].get("family") == "inet" for item in tables)
+            if not present:
+                rules = render(state["config"])
+                if hashlib.sha256(rules.encode()).hexdigest() != state["rulesSHA256"]:
+                    raise ValueError("BOOT_RULES_MISMATCH")
+                run(["nft", "--file", "-"], rules)
+            if digest(table_state()) != private_read(ROOT / "confirmed.json")["servingSHA256"]:
+                raise ValueError("BOOT_READBACK_MISMATCH")
+            return {"status": "BOOT_CONFIRMED", "planDigest": expected_digest}
+        if not reverting:
+            private_write(ROOT / "rollback-intent.json", json.dumps({"planDigest": expected_digest}))
         tables = json.loads(run(["nft", "-j", "list", "tables"]))["nftables"]
         present = any(item.get("table", {}).get("name") == TABLE and item["table"].get("family") == "inet" for item in tables)
         if present:
@@ -171,6 +242,8 @@ def execute(mode, supplied, expected_digest):
             run(["systemctl", "disable", UNIT + ".service"])
             UNIT_PATH.unlink()
             run(["systemctl", "daemon-reload"])
+        if not (ROOT / "rolledback.json").exists():
+            private_write(ROOT / "rolledback.json", json.dumps({"planDigest": expected_digest}))
         return {"status": "ROLLED_BACK", "planDigest": expected_digest}
 
     config = checked_config(supplied["config"] if mode != "plan" else supplied)
@@ -190,20 +263,26 @@ def execute(mode, supplied, expected_digest):
             raise ValueError("FRESH_FIREWALL_INSTALL_REQUIRED")
         run(["nft", "--check", "--file", "-"], rules)
         rules_path = ROOT / "rules.nft"
-        unit = ("[Unit]\nDescription=Isolated QA host firewall\nBefore=network-pre.target\nWants=network-pre.target\n"
-                "[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/sbin/nft -f " + str(rules_path) +
+        unit = ("[Unit]\nDescription=Isolated QA host firewall\nDefaultDependencies=no\nAfter=local-fs.target\nBefore=network-pre.target shutdown.target\nWants=network-pre.target\nConflicts=shutdown.target\n"
+                "[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/bin/python3 " + str(HELPER) + " boot --plan-digest " + plan_digest +
                 "\n[Install]\nWantedBy=multi-user.target\n")
         state = {**plan, "planDigest": plan_digest, "applyConnection": connection,
                  "deadlineMonotonic": time.monotonic() + 120, "persistentUnit": unit}
         private_write(ROOT / "state.json", json.dumps(state))
         private_write(rules_path, rules)
         run(["systemd-run", "--unit=" + TIMER, "--on-active=120s", "--timer-property=AccuracySec=1s",
-             "/usr/bin/python3", str(HELPER), "rollback", "--plan-digest", plan_digest])
+             "/usr/bin/python3", str(HELPER), "expire", "--plan-digest", plan_digest])
         run(["nft", "--file", "-"], rules)
         private_write(ROOT / "serving.sha256", digest(table_state()))
         return {"status": "APPLIED_UNCONFIRMED", "planDigest": plan_digest, "rollbackSeconds": 120}
     if mode == "confirm":
         state = read_state()
+        if state["planDigest"] != plan_digest:
+            raise ValueError("CONFIRMATION_PLAN_MISMATCH")
+        if rollback_started(state):
+            raise ValueError("ROLLBACK_ALREADY_STARTED")
+        if confirmed(state):
+            return {"status": "CONFIRMED", "planDigest": plan_digest}
         if state["planDigest"] != plan_digest or state["applyConnection"] == connection or time.monotonic() >= state["deadlineMonotonic"] - 10:
             raise ValueError("FRESH_SECOND_SSH_CONNECTION_REQUIRED")
         if digest(table_state()) != (ROOT / "serving.sha256").read_text():
@@ -212,8 +291,9 @@ def execute(mode, supplied, expected_digest):
         private_write(UNIT_PATH, state["persistentUnit"])
         run(["systemctl", "daemon-reload"])
         run(["systemctl", "enable", UNIT + ".service"])
+        private_write(ROOT / "confirmed.json", json.dumps({"planDigest": plan_digest, "connection": connection,
+                                                          "servingSHA256": digest(table_state())}))
         run(["systemctl", "stop", TIMER + ".timer", TIMER + ".service"])
-        private_write(ROOT / "confirmed.json", json.dumps({"planDigest": plan_digest, "connection": connection}))
         return {"status": "CONFIRMED", "planDigest": plan_digest}
     raise ValueError("UNSUPPORTED_MODE")
 
@@ -221,7 +301,7 @@ def execute(mode, supplied, expected_digest):
 def main():
     """Ограничивает CLI, права и общий бюджет входного JSON; секреты не читает."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["plan", "apply", "confirm", "rollback"])
+    parser.add_argument("mode", choices=["plan", "apply", "confirm", "rollback", "expire", "boot", "inspect"])
     parser.add_argument("--plan-digest", default="")
     args = parser.parse_args()
     if os.getuid() != 0:
@@ -231,7 +311,7 @@ def main():
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
         raise ValueError("PRIVATE_DIRECTORY_REQUIRED")
     supplied = None
-    if args.mode != "rollback":
+    if args.mode in {"plan", "apply", "confirm"}:
         raw = sys.stdin.read(16385)
         if len(raw) > 16384:
             raise ValueError("INPUT_TOO_LARGE")
