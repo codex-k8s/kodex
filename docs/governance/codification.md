@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.11
-updated: 2026-10-21
+version: 2.2.12
+updated: 2026-10-24
 ---
 
 # Кодификация документов и задач
@@ -137,6 +137,8 @@ updated: 2026-07-28
 | `OPS-PUBLIC-STABLE-001` | `docs/operations/public-stable-1810.md` |
 | `QA-DOC-SELFDEV-001` | `docs/qa/full-qa-task.md` |
 | `QA-DOC-SELFDEV-002` | `docs/qa/bootstrap-1797-evidence-ledger.md` |
+| `QA-PDLC-1830` | `docs/qa/staging-pdlc-1830.md` |
+| `RUN-QA-HOST-1837` | `docs/runbooks/qa-test-host-firewall.md` |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |
 | `ADR-DOC-004`      | `docs/decisions/0014-domain-events-transactional-outbox.md` |
 | `GUIDE-MC-001`     | `docs/guides/README.md`                                     |
