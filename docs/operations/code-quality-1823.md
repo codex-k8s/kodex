@@ -4,11 +4,97 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.399.1
+version: 1.400.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Avatar compensation, artifact delete/readback и catalog proof — 25.10.2026
+
+На основе `0a8a8cd38ef2b51c2573cfbe8200382362df0883` полностью прочитаны
+avatar_upload.go, avatar_component_test.go,
+artifact_content_read_diagnostic_test.go и model_catalog_proof.go:42 прежних
+неописанных объявления. Одно удалено при выносе,41 получило предметные EN→RU
+описания. Описаны также пять новых объявлений: общий helper, object-store stub,
+его два метода и unit-тест. Уточнён комментарий прежнего14-case digest test,
+его тело прочитано полностью. У artifacts.go полностью прочитаны затронутый
+PurgeArtifact и mapper; остальные части файла защищены expected-AST без
+заявления нового полного смыслового аудита.
+
+`deleteArtifactObjectAndVerify` объединяет три Delete→Head алгоритма:
+PurgeArtifact, request compensation и expired avatar cleanup. Сохранены точный
+caller context, key/version и прежний допустимый empty version selector.
+Delete NotFound/wrapped не заменяет обязательный Head того же selector;
+существующий объект даёт Conflict, прочие ошибки — прежний domain mapper без
+retry и driver detail. Старый avatar-only verify helper удалён. Общий helper
+не назначает owner/claim, не создаёт TX/context и не пишет ACK или terminal.
+Purge сохраняет first-error stop и pending receipt; foreground compensation —
+свой WithoutCancel5-second context и durable claim; background — caller context,
+продолжение следующих задач и errors.Join. ACK/OCC/anti-adoption guards остаются
+в прежних callers после подтверждённого отсутствия.
+
+`validModelCatalogDigest` использует существующий exactSHA256 →
+runtimecontract.ValidSHA256Text вместо повторного lowercase64 hex цикла.
+Прежний14-case literal corpus дополнен одним model-catalog predicate вызовом.
+Workload/operation/no-project, five-second identity resolution, live CLAIMED
+catalog task, current account/version/credential, active system subject/OWNER
+binding и exact actor/org match сохранены. Lexical digest не выдаёт authority,
+не является lookup receipt и не выполняет hashing или secret access.
+
+Полные HEAD-derived expected-AST сравнения avatar_upload.go, artifacts.go,
+model_catalog_proof.go и изменённого corpus test подтвердили только эти
+выносы/удаление wrapper и новый predicate. Avatar component и artifact diagnostic
+tests прошли полное AST/directive сравнение: только комментарии, fixtures и
+исходные assertions не менялись. Прочитаны17 production SQL плюс inline SQL
+существующего avatar component; единственный go:embed неизменён.
+SQL/API/generated/dependencies/migrations/deploy inputs и runtime errors/logs
+не менялись. Новый synthetic unit не выполняет SQL.
+
+| Путь / жизненный цикл | Сохранённая граница |
+| --- | --- |
+| Reserve / replay | ReadCommitted, actor/operation/key advisory lock, exact agent/project и avatar.manage до receipt. Matching intent/resource и fresh agent.view/action filtering для replay; новая работа требует agent OCC, server reservation/key и15-minute expiry |
+| Scan / materialize | Scan до object materialization, infected rejection. MATERIALIZED требует exact version/ETag/digest/size; existing reserved key сравнивает digest/size/ETag. Ошибка Head кроме NotFound не разрешает повторный Put |
+| Finalize | Serializable, idempotency/reservation/agent locks, fresh owner access/OCC и scan/receipt pins. Artifact/content/avatar binding/readback/FINALIZED/audit/event/cards/receipt одной TX; commit failure не доказывает отсутствие принятия |
+| Foreground compensate | Отдельный5-second WithoutCancel context. Claim exact receipt и отсутствие adopted content фиксируются до Delete. Delete и authoritative absence до guarded version/descriptor ACK; неизвестный исход остаётся durable work |
+| Background cleanup | Batch1..100, expired или stale5-minute compensation claim с SKIP LOCKED/anti-adoption; rows закрыты и claim committed до external I/O. Missing descriptor получает Head/pin/OCC; ошибка одной задачи не скрывает следующие |
+| Delete / readback | Один Delete, затем только при nil/NotFound обязательный Head. Тот же selector/context без нового retry; presence Conflict, failures mapped. Empty version не становится новым fallback, прежняя семантика сохраняется |
+| ACK | Exact COMPENSATING/version/key/version/ETag/digest и no-adopted-content, ровно одна строка; ACK не выполняет Delete. Прежние request-context rollback errors и ignored ref/JSON helper errors не исправлялись |
+| Diagnostic / retry | Closed stage/class/SQLSTATE projection, raw PostgreSQL/storage details не выдаются. Существующие tests проверяют все6 SQL-boundaries, bounded retry/rollback и non-retry cleanup/storage/deadlock/unknown paths |
+| Catalog proof | Exact authenticated control-plane/catalog/no-project scope, task request digest и current credential/account pins. Пустой task/mismatch Forbidden, read failure Unavailable; ActorVersion1 и stored org version, не task claim или provider call |
+
+Новый TestArtifactDeleteRequiresAuthoritativeAbsence проверяет13 буквальных
+Delete/Head исходов: success/absent/wrapped, still present, invalid/conflict/
+unknown/canceled failures и empty version selector. Проверены exact context/
+key/version, calls/order, отсутствие retry и raw detail. Nil embedded methods
+и nil repository pool не позволяют незаметно добавить storage operations или
+owner ACK. Это unit оснастка без storage/PostgreSQL; прежний avatar component
+контур и его OCC/revocation/expiry assertions только описаны, не объявлены
+выполненными без БД.
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks400-final`);13 external fixture keys и2 admin/template inputs исключены.
+Diagnostic unit, новый13-case cleanup unit и расширенный14-case digest corpus
+входят в полный unit. Полные AST/directives, gofmt, diff check,17 analyzer unit
+и5 exact-ignore guards — PASS. Context7 /jackc/pgx Row/Scan/ErrNoRows/BeginTx и
+explicit rollback проверены; общий objectstorage port/mapper прочитаны.
+Real PostgreSQL/reservation/OCC/anti-adoption races, object versioning/Delete/Head,
+scanner/AV/provider/catalog worker, Kubernetes cleanup/readback, browser/full E2E
+и deploy/live — NOT RUN/SKIP. QA baseline f2e64eb сохранён.
+
+Inventory6682 sources/222 exclusions:19854/21476 Go declarations описаны,
+missing1622 — PostgreSQL adapter control-plane. Все148 Go-файлов PR содержат
+1723/1723 описаний. Detector1802 raw/904 retained/898 unresolved; registry778
+entries неизменен. Actual Delete→Head copies заменены helper ниже detector
+threshold, поэтому fragment keys не исчезли и новых нет; clone count не выдан
+за снижение. Bootstrap/avatar/MVP fixture setup окна остаются открытыми.
+Thresholds/ignore regions/whole-file exclusions не расширены.
+
+Прикладные секреты не читались и не переносились. Для GitHub используются
+только необходимые bot-role credentials/author identity без вывода значений.
+Полные изменённые blobs проверяются с учётом четырёх прежних synthetic markers
+из title test в main по exact bytes/count и comments-only AST; неизвестных
+совпадений нет. Issue#1823 открыт, PR Draft, полный объём не завершён.
 
 ## Заголовки бесед, runtime deadline и provider accounts — 25.10.2026
 

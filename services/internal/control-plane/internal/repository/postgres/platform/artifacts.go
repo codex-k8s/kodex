@@ -537,17 +537,34 @@ func (repository *Repository) PurgeArtifact(ctx context.Context, principal value
 		return receipt.LifecycleState, nil
 	}
 	for _, object := range receipt.Objects {
-		if err := repository.objects.Delete(ctx, object.ObjectKey, object.ObjectVersion); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
-			return "", mapObjectStorageError(err)
-		}
-		if _, err := repository.objects.Head(ctx, object.ObjectKey, object.ObjectVersion); !errors.Is(err, objectstorage.ErrNotFound) {
-			if err == nil {
-				return "", errs.ErrConflict
-			}
-			return "", mapObjectStorageError(err)
+		if err := repository.deleteArtifactObjectAndVerify(ctx, object.ObjectKey, object.ObjectVersion); err != nil {
+			return "", err
 		}
 	}
 	return repository.finalizeArtifactPurge(ctx, scope, mutation, receipt)
+}
+
+// deleteArtifactObjectAndVerify deletes the caller-resolved key/version and, even after NotFound,
+// requires Head on the same selector to confirm authoritative absence. Existing objects cause
+// Conflict; other failures use the existing domain mapping and stop without retry. It preserves
+// the supplied context and optional empty version selector, creates no transaction/claim and
+// performs no owner ACK, authorization or terminal transition.
+// deleteArtifactObjectAndVerify удаляет разрешённые вызывающим key и version и даже после NotFound
+// требует Head того же selector для подтверждения отсутствия. Существующий объект даёт Conflict;
+// остальные ошибки сохраняют доменное отображение и останавливают путь без повтора. Сохраняет
+// context и допустимый пустой version selector, не создаёт transaction и claim, не выполняет owner
+// ACK, авторизацию и terminal transition.
+func (repository *Repository) deleteArtifactObjectAndVerify(ctx context.Context, objectKey, objectVersion string) error {
+	if err := repository.objects.Delete(ctx, objectKey, objectVersion); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
+		return mapObjectStorageError(err)
+	}
+	if _, err := repository.objects.Head(ctx, objectKey, objectVersion); !errors.Is(err, objectstorage.ErrNotFound) {
+		if err == nil {
+			return errs.ErrConflict
+		}
+		return mapObjectStorageError(err)
+	}
+	return nil
 }
 
 // prepareArtifactPurge locks actor idempotency and resolves fresh artifact.purge authority in

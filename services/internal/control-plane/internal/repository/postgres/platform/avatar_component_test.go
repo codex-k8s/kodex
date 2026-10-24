@@ -24,11 +24,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// avatarLifecycleObjectStore wraps the in-memory versioned object fixture with an optional
+// one-shot afterPut hook for controlled OCC/permission races. It stores synthetic objects only and
+// does not represent a live object-store adapter.
+// avatarLifecycleObjectStore оборачивает memory fixture версионированных объектов одноразовым
+// afterPut hook для управляемых OCC и permission races. Хранит только синтетические объекты, не
+// представляет живой storage adapter.
 type avatarLifecycleObjectStore struct {
 	*objectstoragetest.Store
 	afterPut func(objectstorage.Receipt)
 }
 
+// Put delegates to the fixture store and invokes a successful-write callback once, clearing it
+// before invocation to prevent recursive uploads from reusing the hook. The original receipt/error
+// is returned unchanged.
+// Put делегирует запись fixture store и однократно вызывает callback после успеха, очищая hook до
+// вызова ради рекурсивных загрузок. Исходные receipt и error сохраняются.
 func (store *avatarLifecycleObjectStore) Put(ctx context.Context, input objectstorage.PutInput) (objectstorage.Receipt, error) {
 	receipt, err := store.Store.Put(ctx, input)
 	if err == nil && store.afterPut != nil {
@@ -39,6 +50,15 @@ func (store *avatarLifecycleObjectStore) Put(ctx context.Context, input objectst
 	return receipt, err
 }
 
+// TestAvatarLifecycleComponent uses the isolated PostgreSQL contour plus synthetic
+// storage/scanner/provider/image metadata to exercise avatar upload/replay/OCC compensation,
+// expiry cleanup, attachment rejection, immutable revisions, replacement/removal and fresh receipt
+// authority. It skips when that contour is absent and never proves live object storage, antivirus,
+// Kubernetes or browser acceptance.
+// TestAvatarLifecycleComponent использует isolated PostgreSQL и синтетические storage, scanner,
+// provider и image metadata для upload, replay, OCC compensation, expiry cleanup, rejection,
+// immutable revisions, replacement, removal и fresh receipt authority. Без контура пропускается;
+// не доказывает живые storage, antivirus, Kubernetes и browser acceptance.
 func TestAvatarLifecycleComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
@@ -126,6 +146,14 @@ func TestAvatarLifecycleComponent(t *testing.T) {
 	testUploadReceiptFreshAuthority(t, ctx, repository, service, objects, owner, updated, primary.Ref)
 }
 
+// testUploadReceiptFreshAuthority creates narrow actor bindings, proves initial avatar/artifact
+// replay, revokes permissions and requires hidden NotFound with empty results on later access. A
+// one-shot storage callback also creates a receipt/revocation race before outer finalization. It
+// relies on its caller disposable database and synthetic objects.
+// testUploadReceiptFreshAuthority создаёт узкие bindings субъекта, проверяет avatar и artifact
+// replay, отзывает права и требует скрытый NotFound с пустым результатом. Одноразовый storage
+// callback также создаёт receipt/revocation race до внешнего finalize. Использует disposable БД
+// вызывающего и синтетические объекты.
 func testUploadReceiptFreshAuthority(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, objects *avatarLifecycleObjectStore, owner value.Principal, agent entity.Agent, projectRef string) {
 	t.Helper()
 	reader := contextProjectReader(t, ctx, repository, service, owner, projectRef, "UPLOAD_RECEIPT")
@@ -189,6 +217,13 @@ func testUploadReceiptFreshAuthority(t *testing.T, ctx context.Context, reposito
 	}
 }
 
+// testAtomicAvatarUpload requires one avatar version advance and stable exact replay, then changes
+// the agent version after object Put to force OCC failure. It verifies COMPENSATED state, no
+// artifact row and authoritative object absence before returning the current agent from the caller
+// component contour.
+// testAtomicAvatarUpload требует один шаг версии avatar и точный стабильный replay, затем меняет
+// версию агента после Put ради OCC failure. Проверяет COMPENSATED, отсутствие artifact row и
+// объекта до возврата текущего агента из component-контура.
 func testAtomicAvatarUpload(
 	t *testing.T,
 	ctx context.Context,
@@ -259,6 +294,14 @@ func testAtomicAvatarUpload(
 	return current
 }
 
+// testExpiredAvatarReservationCleanup creates a server reservation and materialized fixture object
+// without finalization, expires the row explicitly in disposable PostgreSQL, then requires bounded
+// cleanup to persist COMPENSATED and remove the exact object version. It simulates an abandoned
+// upload, not elapsed wall time or a live cleanup worker.
+// testExpiredAvatarReservationCleanup создаёт reservation и fixture object без finalize, явно
+// истекает строку disposable PostgreSQL и требует bounded cleanup с COMPENSATED и отсутствием
+// точной object version. Моделирует брошенную загрузку, не реальное ожидание и не живой cleanup
+// worker.
 func testExpiredAvatarReservationCleanup(
 	t *testing.T,
 	ctx context.Context,
@@ -316,6 +359,12 @@ func testExpiredAvatarReservationCleanup(
 	}
 }
 
+// createAvatarProject creates one synthetic English-language project through the real component
+// service command with the supplied idempotency key and requires a project result. It does not
+// bypass principal/command validation or create a live environment.
+// createAvatarProject создаёт синтетический англоязычный проект через service command контура с
+// заданным idempotency key и требует project result. Не обходит principal и command validation и
+// не создаёт живую среду.
 func createAvatarProject(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, key string) entity.Project {
 	t.Helper()
 	result, err := service.Execute(ctx, command.Command{
@@ -328,6 +377,10 @@ func createAvatarProject(t *testing.T, ctx context.Context, service *platformser
 	return *result.Project
 }
 
+// avatarPNG encodes a deterministic two-by-two RGBA image into PNG bytes for upload fixtures,
+// failing the test on encoding error. No filesystem or external image service is used.
+// avatarPNG кодирует детерминированное RGBA изображение 2×2 в PNG для fixture загрузок, завершая
+// тест при ошибке кодирования. Файлы и внешний image service не используются.
 func avatarPNG(t *testing.T) []byte {
 	t.Helper()
 	var body bytes.Buffer
@@ -339,6 +392,12 @@ func avatarPNG(t *testing.T) []byte {
 	return body.Bytes()
 }
 
+// uploadAvatarFixture uploads caller-supplied synthetic bytes through the component service with
+// exact project/name/media/size and a new bytes reader, returning the artifact or failing the
+// test. Digest and upload authority are resolved by the service path.
+// uploadAvatarFixture загружает синтетические байты через component service с точными project,
+// name, media и size и новым bytes reader, возвращая artifact либо завершая тест. Digest и upload
+// authority разрешает service path.
 func uploadAvatarFixture(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, fileName, mediaType string, body []byte, key string) entity.Artifact {
 	t.Helper()
 	artifact, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: key}, platformrepo.ArtifactUpload{
@@ -351,6 +410,11 @@ func uploadAvatarFixture(t *testing.T, ctx context.Context, service *platformser
 	return artifact
 }
 
+// setAvatar issues the specialized SetAgentAvatar command with the current agent version and exact
+// artifact ref, requiring an agent result. It exercises caller contour OCC/authorization rather
+// than writing avatar metadata directly.
+// setAvatar вызывает SetAgentAvatar с текущей версией агента и точной artifact ref и требует agent
+// result. Проверяет OCC и authorization контура, не пишет avatar metadata напрямую.
 func setAvatar(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, agent entity.Agent, artifact entity.Artifact, key string) entity.Agent {
 	t.Helper()
 	version := agent.Version
@@ -365,6 +429,12 @@ func setAvatar(t *testing.T, ctx context.Context, service *platformservice.Servi
 	return *result.Agent
 }
 
+// removeAvatar issues RemoveAgentAvatar with the current version and caller idempotency key,
+// requiring the returned agent. Fallback and prior artifact retirement are asserted separately by
+// the component caller.
+// removeAvatar вызывает RemoveAgentAvatar с текущей версией и idempotency key, требуя
+// возвращённого агента. Fallback и retirement прежнего artifact отдельно проверяет component
+// caller.
 func removeAvatar(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, agent entity.Agent, key string) entity.Agent {
 	t.Helper()
 	version := agent.Version
@@ -379,6 +449,12 @@ func removeAvatar(t *testing.T, ctx context.Context, service *platformservice.Se
 	return *result.Agent
 }
 
+// assertRetiredAvatar reads the selected artifact lifecycle and exact agent binding count from
+// disposable PostgreSQL and requires DELETED with zero bindings. This checks logical retirement
+// only, not physical object deletion.
+// assertRetiredAvatar читает lifecycle выбранного artifact и число bindings точного агента из
+// disposable PostgreSQL, требуя DELETED и ноль bindings. Проверяет логический retirement, не
+// физическое удаление объекта.
 func assertRetiredAvatar(t *testing.T, ctx context.Context, pool *pgxpool.Pool, artifactRef, agentRef string) {
 	t.Helper()
 	var lifecycle string
@@ -400,6 +476,12 @@ func assertRetiredAvatar(t *testing.T, ctx context.Context, pool *pgxpool.Pool, 
 	}
 }
 
+// assertAvatarUpdateError submits an ordinary UpdateAgent containing the proposed avatar URL and
+// current version, preserving the other agent fields, then requires the specified rejection. It
+// checks that unsafe URL assignment cannot bypass the specialized avatar flow.
+// assertAvatarUpdateError передаёт обычному UpdateAgent предложенный avatar URL и текущую версию,
+// сохраняя остальные поля, затем требует заданный отказ. Проверяет невозможность обхода
+// специализированного avatar flow через небезопасный URL.
 func assertAvatarUpdateError(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, agent entity.Agent, avatarURL, key string, expected error) {
 	t.Helper()
 	version := agent.Version
@@ -415,6 +497,12 @@ func assertAvatarUpdateError(t *testing.T, ctx context.Context, service *platfor
 	}
 }
 
+// deleteAvatarArtifact obtains the caller contour DELETE impact, then soft-deletes at exact
+// artifact version and impact digest and requires DELETED metadata. Permitted is a preflight hint,
+// while the command remains authoritative; no physical purge is executed here.
+// deleteAvatarArtifact получает DELETE impact контура, затем soft-delete точных artifact version и
+// impact digest и требует DELETED metadata. Permitted — предварительная подсказка, команда
+// остаётся авторитетной; физический purge здесь не выполняется.
 func deleteAvatarArtifact(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, artifact entity.Artifact, key string) {
 	t.Helper()
 	impact, err := service.GetArtifactImpact(ctx, owner, artifact.Ref, "DELETE")
