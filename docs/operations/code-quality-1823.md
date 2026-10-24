@@ -4,12 +4,61 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.362.0
+version: 1.363.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Комментарии фоновых процессов и операторской очистки — 24.10.2026
+
+На основе `984377cae91d53d510712d5fc5851bc5feebdb79` описаны166 объявлений
+в14 Go-файлах: providercredentialcleanup53, providermodelcatalog35,
+assistantconversationpurge3 и runtimeorphan75. Во всех четырёх пакетах
+собственные объявления, включая private, tests и interface methods, теперь
+имеют EN→RU комментарии. Исполняемый код не менялся: AST и директивы каждого
+файла совпали с исходным SHA; `go:embed orphan_references.sql` сохранён.
+
+Комментарии фиксируют фактические границы, не обещая общую транзакцию между
+owner, provider и Kubernetes. Cleanup health относится к claim path, а пустой
+claim не доказывает работоспособность materializer. ErrorInfo CAS marker
+проверяет закрытую форму ошибки; аутентификация RPC остаётся у client boundary.
+Пятсекундный idle ceiling повышается до configured poll minimum, если тот
+больше. Metadata descriptor не читает Secret data/type/immutable, но неожиданный
+полный Secret ответ на HTTP boundary отклоняется уже после получения ответа.
+JSON receipt ограничивает размер и известные поля, не проверяя повторные ключи.
+
+| Процесс и переход | Сохранённое поведение и авторитетный результат |
+| --- | --- |
+| Credential cleanup claim → effect → finalize | Owner назначает task/account/generation/descriptor; четыре task kind выбирают закрытые client operations. При отмене parent финализация не выполняется, claim остаётся владельцу. Metadata observation не объявлена terminal receipt |
+| Catalog claim → observation → complete | Перед claim действует startup barrier; lease ограничивает observation с секундным резервом. Transport error не создаёт observation; typed provider failure может завершиться через owner complete |
+| Renewal claim → write / recovery | Ошибка write становится UNKNOWN_OUTCOME; completion получает отдельный пятисекундный бюджет без parent cancellation. Recovery читает outcome и не повторяет OAuth write |
+| Assistant purge cycle | Немедленный цикл и минутный ticker используют тридцатисекундный бюджет и batch25; отмена прекращает цикл без нового владельца lifecycle |
+| Orphan prepare → PLANNED | Операторский путь связывает cluster/namespace/Secret/writer snapshot и отсутствие owner references и фактических consumers. Source/tree строки сохраняются без самостоятельной проверки Git provenance |
+| PLANNED → pause/delete uncertainty | Receipt фиксируется до каждого эффекта; UID, resource version, spec, metadata и references перечитываются. Delete выполняется только из исходного PLANNED path |
+| Возобновление неопределённого исхода | Delete не повторяется; absence проверяет сохранённые namespace identities. PAUSE_UNKNOWN и PAUSED отклоняются закрыто. Guarded restore получает отдельный тридцатисекундный бюджет; уже COMPLETE+Restored возвращается без нового чтения |
+| Namespace reset | Операторская операция проверяет local profile и identity namespace, удаляет runtime перед system с UID/version preconditions и после каждой цели сверяет UID сохраняемых namespace |
+| Events и consumers | Новых commands/events/grants/leases нет; исходные owner RPC и Kubernetes reads остаются источниками результата. Комментарии не добавляют событие либо новый read path |
+
+Полные локальные `GOWORK=off go build ./...` и `go test ./...` control-plane —
+PASS. Флаг `KODEX_ORPHAN_API_FIXTURE` явно удалён из окружения запуска; real-API
+fixture пропущен, его результат — NOT RUN. Остальные unit используют fake,
+private temporary filesystem либо loopback HTTP. AST/directives14 файлов,
+форматирование и diff check — PASS. Тесты не доказывают live cleanup/reset;
+операторские команды и чтение живых Secret не запускались.
+
+Context7: grpc-go status/typed ErrorInfo и Kubernetes client-go DeleteOptions
+UID/resourceVersion preconditions, List limit/continue. Metadata HTTP contract
+сверен с реализацией и существующими loopback negative tests.
+
+Повторный полный scan:6659 sources,222 excluded,1792 raw groups,
+813 retained и979 unresolved. Clone set не изменился; registry и detector
+не менялись. Все5 exact-ignore guards — PASS. Go inventory:17287/21369,
+missing4082. Во всём maintenance scope0 missing и0 unresolved clones.
+Merge/deploy/startup, image build, browser и ручной QA — NOT RUN.
+Разрешение владельца на последующие merge/deploy сохраняется, но вся задача
+#1823 ещё не завершена.
 
 ## Завершение app и общие HTTP probes — 24.10.2026
 
