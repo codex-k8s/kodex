@@ -302,6 +302,17 @@ var (
 	// сохранённый результат reconciliation без запуска runtime или доказательства его готовности.
 	//go:embed testdata/sql/bootstrap_component_runtime_environment_reconcile_readback.sql
 	bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery string
+	// bootstrapComponentProviderRestartReadbackQuery embeds the fixture read of an account UUID joined
+	// to its credential revisions, returning state, current credential UUID, account version and
+	// revision count grouped by the account fields. The inner join preserves the original no-row
+	// behavior when no revision exists; the query neither locks nor repairs the account and reads no
+	// credential payload.
+	// bootstrapComponentProviderRestartReadbackQuery содержит встроенное тестовое чтение account по
+	// UUID с join его credential revisions: возвращает state, UUID текущего credential, version
+	// account и число ревизий с группировкой по полям account. Inner join сохраняет прежнее отсутствие
+	// строки без ревизий; запрос не блокирует и не исправляет account и не читает credential payload.
+	//go:embed testdata/sql/bootstrap_component_provider_restart_readback.sql
+	bootstrapComponentProviderRestartReadbackQuery string
 )
 
 // finalizedAttachmentSetRef creates and finalizes a fixture attachment-set draft through
@@ -1632,6 +1643,27 @@ func testStaleRoleRuntimeContractRejectsLaunch(
 	}
 }
 
+// testSystemAssistantWarmRuntimeProviderFailover arranges a rejected default account and alternate
+// catalog-backed provider and proves that broad agent permissions cannot read or publish system
+// runtime configuration. Reconcile must atomically close the old session, create one active
+// fallback, clear warm evidence and append one exact provider-policy version; two Bootstrap calls
+// must preserve rejected credential metadata. READY reports and lifecycle heartbeats keep
+// specification identity stable, while dependency changes and content reversion each create a
+// fresh revision and reject stale reports. The final conversation must follow eligible provider
+// policy. Deferred cleanup restores the configured credential descriptor and default account
+// eligibility; SQL/service readbacks and reported READY are component evidence, not a running
+// provider or workload.
+// testSystemAssistantWarmRuntimeProviderFailover подготавливает rejected default account и
+// альтернативный provider с catalog и проверяет, что общие agent permissions не разрешают чтение
+// или публикацию system runtime configuration. Reconcile должен атомарно закрыть старую session,
+// создать одну активную fallback session, очистить warm evidence и добавить одну точную
+// provider-policy version; два Bootstrap должны сохранить метаданные rejected credential. READY
+// reports и lifecycle heartbeats сохраняют identity спецификации, а изменение зависимости и
+// возврат содержимого каждый создают свежую revision и отклоняют устаревшие reports. Итоговая
+// conversation должна следовать допустимой provider policy. Deferred cleanup восстанавливает
+// настроенный credential descriptor и eligibility default account; SQL/service readbacks и
+// переданный READY являются компонентными наблюдениями без доказательства работы provider или
+// workload.
 func testSystemAssistantWarmRuntimeProviderFailover(
 	t *testing.T,
 	ctx context.Context,
@@ -1938,45 +1970,27 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		t.Fatalf("warm provider failover is not atomic: old=%s/%s current=%s/%s instance=%v heartbeat=%v active=%d",
 			oldState, oldProviderID, currentState, currentProviderID, currentWarmInstance, currentHeartbeat, activeSessions)
 	}
-	var rejectedState, rejectedCredentialID string
-	var rejectedVersion, rejectedRevisionCount int64
-	if err := pool.QueryRow(ctx, `
-		SELECT account.state, account.current_credential_revision_id::text, account.version,
-		       count(revision.id)::bigint
-		FROM control_plane.provider_accounts account
-		JOIN control_plane.provider_credential_revisions revision
-		  ON revision.provider_account_id = account.id
-		WHERE account.id = $1::uuid
-		GROUP BY account.state, account.current_credential_revision_id, account.version
-	`, currentAccountID).Scan(&rejectedState, &rejectedCredentialID, &rejectedVersion, &rejectedRevisionCount); err != nil {
+	rejected, err := readBootstrapProviderRestartState(ctx, pool, currentAccountID)
+	if err != nil {
 		t.Fatalf("read rejected default provider before bootstrap restart: %v", err)
 	}
-	if rejectedState != "REAUTHORIZATION_REQUIRED" {
-		t.Fatalf("default provider state before bootstrap restart = %q", rejectedState)
+	if rejected.state != "REAUTHORIZATION_REQUIRED" {
+		t.Fatalf("default provider state before bootstrap restart = %q", rejected.state)
 	}
 	for attempt := 1; attempt <= 2; attempt++ {
 		if err := repository.Bootstrap(ctx); err != nil {
 			t.Fatalf("bootstrap after warm provider failover attempt %d: %v", attempt, err)
 		}
 	}
-	var restartedState, restartedCredentialID string
-	var restartedVersion, restartedRevisionCount int64
-	if err := pool.QueryRow(ctx, `
-		SELECT account.state, account.current_credential_revision_id::text, account.version,
-		       count(revision.id)::bigint
-		FROM control_plane.provider_accounts account
-		JOIN control_plane.provider_credential_revisions revision
-		  ON revision.provider_account_id = account.id
-		WHERE account.id = $1::uuid
-		GROUP BY account.state, account.current_credential_revision_id, account.version
-	`, currentAccountID).Scan(&restartedState, &restartedCredentialID, &restartedVersion, &restartedRevisionCount); err != nil {
+	restarted, err := readBootstrapProviderRestartState(ctx, pool, currentAccountID)
+	if err != nil {
 		t.Fatalf("read rejected default provider after bootstrap restart: %v", err)
 	}
-	if restartedState != rejectedState || restartedCredentialID != rejectedCredentialID ||
-		restartedVersion != rejectedVersion || restartedRevisionCount != rejectedRevisionCount {
+	if restarted.state != rejected.state || restarted.credentialRevisionID != rejected.credentialRevisionID ||
+		restarted.accountVersion != rejected.accountVersion || restarted.credentialRevisionCount != rejected.credentialRevisionCount {
 		t.Fatalf("bootstrap restart changed rejected default provider: state=%s->%s credential=%s->%s version=%d->%d revisions=%d->%d",
-			rejectedState, restartedState, rejectedCredentialID, restartedCredentialID,
-			rejectedVersion, restartedVersion, rejectedRevisionCount, restartedRevisionCount)
+			rejected.state, restarted.state, rejected.credentialRevisionID, restarted.credentialRevisionID,
+			rejected.accountVersion, restarted.accountVersion, rejected.credentialRevisionCount, restarted.credentialRevisionCount)
 	}
 	reported, err := service.ReportWarmRuntime(ctx, reportWorker, command.WarmRuntimeInput{
 		WorkloadInstance: workloadInstance, RuntimeRevision: failedOver.DesiredRuntimeRevision, State: "READY",
@@ -2078,6 +2092,39 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		t.Fatalf("assistant conversation bypassed provider policy: provider_account_id=%s provider_account_ref=%s",
 			conversationProviderID, conversationProviderRef)
 	}
+}
+
+// bootstrapProviderRestartState holds the four comparable metadata observations used to detect
+// bootstrap changes to a rejected provider: state, current credential revision identity, account
+// version and total revision count. It is a test readback value, not an authorization grant or
+// external secret snapshot.
+// bootstrapProviderRestartState хранит четыре сравнимых наблюдения метаданных для обнаружения
+// изменений rejected provider после bootstrap: state, identity текущей credential revision,
+// version account и общее число ревизий. Это тестовое значение readback, а не grant полномочий или
+// snapshot внешнего секрета.
+type bootstrapProviderRestartState struct {
+	state                   string
+	credentialRevisionID    string
+	accountVersion          int64
+	credentialRevisionCount int64
+}
+
+// readBootstrapProviderRestartState reads the exact account UUID with the shared component query
+// and scans state, current credential UUID, account version and revision count in their original
+// order. It returns the possibly partial value and unchanged query/scan error; callers retain
+// phase-specific test failures. The supplied context/pool are used directly with no transaction,
+// retry, mutation or secret access.
+// readBootstrapProviderRestartState читает точный UUID account общим компонентным запросом и
+// сканирует state, UUID текущего credential, version account и число ревизий в прежнем порядке.
+// Возвращает возможно частичное значение и неизменённую ошибку query/scan; вызывающие сохраняют
+// сообщения теста для своей фазы. Переданные context/pool используются напрямую без транзакции,
+// retry, записи или чтения секрета.
+func readBootstrapProviderRestartState(ctx context.Context, pool *pgxpool.Pool, accountID string) (bootstrapProviderRestartState, error) {
+	var observed bootstrapProviderRestartState
+	err := pool.QueryRow(ctx, bootstrapComponentProviderRestartReadbackQuery, accountID).Scan(
+		&observed.state, &observed.credentialRevisionID, &observed.accountVersion, &observed.credentialRevisionCount,
+	)
+	return observed, err
 }
 
 // testSystemAssistantRuntimeEnvironmentReconciliation leaves a new default system image configured

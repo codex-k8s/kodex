@@ -4,11 +4,64 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.403.0
+version: 1.404.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Bootstrap: общий readback rejected provider при restart — 25.10.2026
+
+На основе `966f2027981ae26a455ff4b16608ee8f4ad9baac` полностью прочитана
+448-строчная testSystemAssistantWarmRuntimeProviderFailover. Добавлено её
+предметное EN→RU описание: отдельная system-runtime authority, provider policy
+reconcile, атомарная смена session, сохранение rejected credential при restart,
+стабильность immutable revision на heartbeat, новые refs при изменении/возврате
+зависимости, stale-report rejection, conversation policy и deferred cleanup.
+Переданный READY не является доказательством работающего workload.
+
+Два одинаковых QueryRow/Scan перед и после двух Bootstrap объединены в
+readBootstrapProviderRestartState. Узкий test-only helper возвращает типизированные
+state/current credential UUID/account version/revision count и исходную ошибку.
+Точные ctx/pool/account UUID, порядок Scan и сравнения всех четырёх значений,
+сообщения before/after и порядок Bootstrap сохранены. Helper не создаёт TX,
+не блокирует, не повторяет запрос и не исправляет account. Новый SQL embed
+содержит прежний SELECT/INNER JOIN/GROUP BY с изменёнными только отступами;
+отсутствие credential revision по-прежнему даёт отсутствие строки.
+
+Описаны также три новых объявления: query variable, readback type и helper.
+Полный HEAD-derived expected-AST/directive proof подтверждает только этот вынос
+и комментарии; независимая AST-проверка двух старых SQL/Scan bindings, типов и
+порядка новых полей, QueryRow args, result/error — PASS. Все27 прежних embeds
+и их SQL bytes неизменны; добавлен28-й fixture embed. Production SQL, authority,
+transaction/lifecycle implementation и API не менялись.
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks404-final`),15 внешних fixture/admin/template inputs исключены.
+Это простой readback glue без новых зеркальных unit-тестов. Реальный
+PostgreSQL warm-failover/restart/claim/session cardinality scenario — NOT RUN/SKIP.
+Compile/static/unit результат не выдаётся за исполнение fixture helper в БД.
+gofmt/diff check,17 analyzer unit и5 exact-ignore guards — PASS.
+Через Context7 проверены /jackc/pgx и закреплённая в модуле /jackc/pgx/v5.10.0:
+Pool.QueryRow signature/args, Row.Scan и ErrNoRows/deferred query errors.
+Использован рабочий connected Context7 после отказа другого MCP endpoint;
+ключи или env для этого не читались и не переносились.
+Browser/full E2E/deploy/live — NOT RUN.
+
+Inventory6683 own sources/222 exclusions:19940/21480 Go declarations описаны,
+missing1540 — PostgreSQL adapter control-plane. Текущий PR152 Go-файла:
+1809/1843 описаны,34 оставшихся — только bootstrap_component_test.go(43/77).
+Все прочие151 Go-файл diff полностью описаны. Detector1799 raw/904 retained/
+895 unresolved, registry778 неизменен. Один117-token bootstrap restart fragment
+816d21e6327d исчез; новых fragment/format/kind/path-pair keys нет. Новый fixture
+SQL входит в inventory; thresholds/ignore regions/exclusions не расширены.
+
+Contracts/generated, dependencies, migrations и deploy inputs сохранены.
+Прикладные секреты не читались и не переносились; необходимые bot-role
+credentials/identity передаются только нужным GitHub children без вывода значений.
+Whole-blob проверка допускает только4 прежних inert title-test markers по exact
+main bytes/count, неизвестных совпадений нет. Issue#1823 открыт, PR Draft;
+основной клон и QA baseline f2e64eb не менялись.
 
 ## Bootstrap: managed configuration и runtime policy — 25.10.2026
 
