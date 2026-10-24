@@ -17,7 +17,7 @@ const registryObjects = [["deployment", "kodex-image-registry-promotion"], ["ser
   ["deployment", "kodex-image-registry-pull"], ["service", "kodex-image-registry-pull"]];
 const components = new Set(["control-plane", "secret-broker", "email-bridge", "runtime-controller", "integration-gateway",
   "integration-synthetic", "control-api-gateway", "staff-control-center", "egress-gateway", "automation-scheduler",
-  "artifact-retention", "session-archive", "registry-pull-authorizer", "image-admission-controller"]);
+  "artifact-retention", "session-archive", "backup-controller", "registry-pull-authorizer", "image-admission-controller"]);
 function requireValue(value, code) { if (!value) throw Error(code); }
 const env = () => Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
 async function run(program, args, timeout = 35000) {

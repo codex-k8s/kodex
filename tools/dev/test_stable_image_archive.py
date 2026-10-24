@@ -93,6 +93,17 @@ class StableArchive(unittest.TestCase):
         self.assertEqual(self.receipt["target"], "admission-controller-runtime")
         self.assertEqual(self.verify().returncode, 0)
 
+    def test_backup_controller_recipe_and_closed_outcome_are_supported(self):
+        self.component = "backup-controller"
+        self.prepare()
+        self.assertEqual(self.receipt["dockerfile"], "services/jobs/backup-controller/Dockerfile")
+        self.assertEqual(self.verify().returncode, 0)
+        self.assertEqual(self.output.read_bytes(), self.archive.read_bytes())
+        self.output.unlink()
+        self.receipt["nodePull"] = "PASS"
+        self.save_receipt()
+        self.assertNotEqual(self.verify().returncode, 0)
+
     def test_corrupt_layer_rejected_even_with_matching_archive_receipt(self):
         self.prepare()
         self.members["blobs/sha256/" + self.layer["digest"][7:]] = b"PRIVATE_CORRUPT_LAYER_SENTINEL"

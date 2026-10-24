@@ -22,6 +22,17 @@ test("publication receipt has a closed component registry and immutable source-s
     assert.throws(() => validateStableReceipt({ ...receipt, ...patch }));
 });
 
+test("backup controller publication keeps exact identity and rejects fake outcomes and unknown sibling", () => {
+  const receipt = { schema: "kodex.stable-local-build/v1", component: "backup-controller", sourceSHA: "a".repeat(40),
+    contextSHA256: "b".repeat(64), archiveSHA256: "c".repeat(64), imageDigest: "sha256:" + "d".repeat(64),
+    admission: "NOT_RUN", publication: "NOT_RUN", nodePull: "NOT_RUN" };
+  assert.deepEqual(validateStableReceipt(receipt), { component: "backup-controller", sourceSHA: receipt.sourceSHA,
+    digest: receipt.imageDigest, tag: `stable-${receipt.sourceSHA}-${"d".repeat(12)}` });
+  for (const patch of [{ component: "backup-controller-foreign" }, { publication: "PASS" }, { admission: "PASS" },
+    { nodePull: "PASS" }, { sourceSHA: "0".repeat(40) }, { imageDigest: "backup:latest" }])
+    assert.throws(() => validateStableReceipt({ ...receipt, ...patch }));
+});
+
 test("verified archive descriptor rejects writable files links and unexpected ownership shape", async () => {
   const directory = await mkdtemp(join(tmpdir(), "kodex-stable-archive-node-"));
   try {

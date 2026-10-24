@@ -4,8 +4,8 @@ title: Backup controller
 type: service
 status: approved
 owner: backend
-version: 1.0.1
-updated: 2026-10-24
+version: 1.0.2
+updated: 2026-10-25
 ---
 
 # Backup controller
@@ -81,3 +81,12 @@ archive. Неизменённый источник сохраняет прежн
 не обращается к кластеру, не читает credentials и не заменяет restore drill.
 Связанные задачи: [#1003](https://github.com/codex-k8s/kodex/issues/1003),
 [#1830](https://github.com/codex-k8s/kodex/issues/1830).
+
+
+Штатная OCI-only сборка: `tools/release/build-stable-local.sh --component
+backup-controller --source-sha <чистый-SHA> --output-directory <новый-приватный-каталог>`.
+Она использует credential-free `git archive`, создаёт private `build.json` с
+source/context/archive/manifest digests и не выполняет import, admission,
+publication или node pull. Тот же закрытый component registry должен
+допускаться проверкой OCI и publication receipt; незарегистрированные
+компоненты и выдуманные результаты проверок остаются запрещены.

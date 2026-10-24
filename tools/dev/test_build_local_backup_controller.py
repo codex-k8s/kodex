@@ -1,5 +1,6 @@
 """Контракт Docker-контекста и cache invalidation backup unit без Docker и кластера."""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools/dev/build-local-backup-controller.sh"
 DOCKERFILE = ROOT / "services/jobs/backup-controller/Dockerfile"
 MODULE = ROOT / "services/jobs/backup-controller/go.mod"
+STABLE_SCRIPT = ROOT / "tools/release/build-stable-local.sh"
 MOCK = r'''#!/usr/bin/env python3
 import hashlib, io, json, os, pathlib, sys, tarfile
 root = pathlib.Path(os.environ["BACKUP_BUILD_FIXTURE"])
@@ -21,11 +23,18 @@ with (root / "calls.jsonl").open("a") as stream:
     stream.write(json.dumps({"name": name, "args": args}) + "\n")
 if name in ("ensure-local-buildx-builder.sh", "import-local-image.sh"):
     sys.exit(0)
-if name == "docker" and args == ["buildx", "version"]:
+if name == "docker" and (args == ["buildx", "version"] or args[:2] == ["buildx", "inspect"]):
     sys.exit(0)
 assert name == "docker" and args[:2] == ["buildx", "build"], "unexpected fixture command"
 output = args[args.index("--output") + 1].split("dest=", 1)[1]
 tag = args[args.index("--tag") + 1]
+if os.environ.get("BACKUP_EXPECTED_SOURCE"):
+    source = os.environ["BACKUP_EXPECTED_SOURCE"]
+    assert "SOURCE_SHA=" + source in args and "VERSION=" + source in args
+    assert tag == "registry.local.kodex/kodex/backup-controller:" + source
+    context = pathlib.Path(args[-1])
+    assert not (context / ".env").exists() and not (context / ".git").exists()
+    assert (context / "services/jobs/backup-controller/fixture.txt").is_file()
 manifest = "sha256:" + hashlib.sha256(tag.encode()).hexdigest()
 body = json.dumps({"manifests": [{"digest": manifest}]}).encode()
 with tarfile.open(output, "w") as archive:
@@ -81,7 +90,10 @@ class BackupBuildContract(unittest.TestCase):
         return (self.state / "backup-controller-image").read_text()
 
     def builds(self):
-        return [call for call in map(json.loads, (self.root / "calls.jsonl").read_text().splitlines())
+        trace = self.root / "calls.jsonl"
+        if not trace.exists():
+            return []
+        return [call for call in map(json.loads, trace.read_text().splitlines())
                 if call["name"] == "docker" and call["args"][:2] == ["buildx", "build"]]
 
     def test_objectstorage_source_change_invalidates_cached_archive(self):
@@ -97,6 +109,59 @@ class BackupBuildContract(unittest.TestCase):
         first, second = self.build(), self.build()
         self.assertEqual(first, second)
         self.assertEqual(len(self.builds()), 1)
+
+    def stable_fixture(self):
+        for name in ("tools/release/images.json", "tools/release/validate-image-dockerfile-path.sh"):
+            target = self.source / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+            target.chmod(0o755 if name.endswith(".sh") else 0o644)
+        for args in (["init", "--quiet"], ["add", "."],
+                     ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                      "commit", "--quiet", "-m", "synthetic fixture"]):
+            subprocess.run(["git", *args], cwd=self.source, env=self.env, check=True,
+                           capture_output=True, timeout=5)
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.source,
+                                       env=self.env, text=True).strip()
+
+    def stable_build(self, source, component="backup-controller"):
+        return subprocess.run(["bash", str(STABLE_SCRIPT), "--component", component,
+                               "--source-sha", source, "--output-directory", str(self.root / "stable")],
+                              cwd=self.source, env=dict(self.env, BACKUP_EXPECTED_SOURCE=source),
+                              capture_output=True, text=True, timeout=15)
+
+    def test_stable_backup_uses_exact_clean_archive_and_truthful_receipt(self):
+        source = self.stable_fixture()
+        (self.source / ".env").write_text("NONSECRET_UNTRACKED_FIXTURE")
+        result = self.stable_build(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads((self.root / "stable/build.json").read_text())
+        self.assertEqual(receipt["component"], "backup-controller")
+        self.assertEqual(receipt["sourceSHA"], source)
+        context = subprocess.check_output(["git", "archive", source], cwd=self.source, env=self.env)
+        self.assertEqual(receipt["contextSHA256"], hashlib.sha256(context).hexdigest())
+        archive = self.root / "stable/backup-controller.oci.tar"
+        self.assertEqual(receipt["archiveSHA256"], hashlib.sha256(archive.read_bytes()).hexdigest())
+        for phase in ("admission", "publication", "nodePull"):
+            self.assertEqual(receipt[phase], "NOT_RUN")
+        self.assertEqual(len(self.builds()), 1)
+        self.assertFalse(any(call["name"] == "import-local-image.sh" for call in
+                             map(json.loads, (self.root / "calls.jsonl").read_text().splitlines())))
+
+    def test_stable_backup_rejects_dirty_source_before_build(self):
+        source = self.stable_fixture()
+        (self.source / "services/jobs/backup-controller/fixture.txt").write_text("changed")
+        result = self.stable_build(source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("clean exact source is required", result.stderr)
+        self.assertEqual(self.builds(), [])
+
+    def test_stable_build_rejects_unknown_backup_sibling(self):
+        source = self.stable_fixture()
+        result = self.stable_build(source, "backup-controller-foreign")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("component is not in the stable platform registry", result.stderr)
+        self.assertEqual(self.builds(), [])
 
 
 if __name__ == "__main__":

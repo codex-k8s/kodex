@@ -13,7 +13,7 @@ while (($#)); do
 done
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ && "$output" == /* && "$output" != / ]] || fail 'exact source and output directory are required'
 case "$component" in
-  control-plane|secret-broker|stt-tts-service|email-bridge|runtime-controller|integration-gateway|integration-synthetic|interaction-gateway|control-api-gateway|egress-gateway|automation-scheduler|artifact-retention|session-archive|staff-control-center|registry-pull-authorizer|image-admission-controller) ;;
+  control-plane|secret-broker|stt-tts-service|email-bridge|runtime-controller|integration-gateway|integration-synthetic|interaction-gateway|control-api-gateway|egress-gateway|automation-scheduler|artifact-retention|session-archive|backup-controller|staff-control-center|registry-pull-authorizer|image-admission-controller) ;;
   *) fail 'component is not in the stable platform registry' ;;
 esac
 for program in docker git jq tar sha256sum stat realpath df; do command -v "$program" >/dev/null || fail 'required program is absent'; done
