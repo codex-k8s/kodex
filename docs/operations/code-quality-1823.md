@@ -4,11 +4,67 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.385.0
+version: 1.386.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие команды, receipts и membership lock — 24.10.2026
+
+На основе `09fad440c067aa82c9c65730e80515dcc3e25a93` описаны73 прежних
+объявления commands.go, включая локальные cancelledEffect/cancelledGate.
+Два новых lock helpers и один test также описаны:76/76 в двух Go-файлах.
+Общий inventory19013/21441, missing2428 — PostgreSQL adapter control-plane.
+
+`lockProjectMembership` объединяет два exact tenant/project/binding reads
+с11 Scan destinations; `lockPlatformMembership` — два organization/platform
+reads с отдельными10 destinations. Сохранены query/context/arguments,
+NotFound для обычного/wrapped ErrNoRows и Unavailable для scan failure.
+При отказе IDs пусты, partial item остаётся внутренним и отбрасывается caller.
+Platform helper не меняет Permissions; project и platform authority не
+объединяются. Caller сохраняет OCC, self-change, owner-role/last-owner,
+project revocation, разные update/deactivate SQL и их no-row mappings.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Execute / replay | Scope и prepared objects до ReadCommitted TX; project/idempotency locks. Terminal delete имеет отдельную deleted-resource authorization, обычный replay следует после current authorization. Receipt digest не выдаёт права; selected metadata/actions refresh и deadline receipt error сохраняются |
+| New command | Specialized dispatcher → workflow launch reconciliation → action projection → audit/platform outbox/receipt → commit. Prepared objects сохраняются лишь после commit; пустой unchanged runtime poll не создаёт audit/receipt |
+| Membership | Project permission subset с VIEW и проверкой права grant; разные project/platform lock projections. OCC/self/owner/last-owner checks остаются явными. Platform deactivation отзывает project bindings; last-owner count сам не доказывает eligibility каждого subject |
+| Agent / instructions | Initial capability/avatar/runtime authority, canonical bootstrap и published instruction binding; later capability/grant mutation до OCC. Protected assistants не архивируются обычным путём; publication/forward rollback используют prompt/impact/binding checks |
+| Workflow / launch | Closed structural/executable checks, ordered earlier-step dependencies, exact published version/catalog/runtime/attachment pins и server-owned session/run/node/edge lineage. Placeholder не считается исполненным; coordinator guidance не выдаёт authority |
+| Events | Exact authoritative delta/usage/execution/actor/message readback, ordered run event store/outbox, limited organization RUN_CHANGED invalidation. Caller message source ORDINARY, explicit integration binding, closed categories и existing retry error mapping сохраняются |
+| Session / retry / cancel | Exact preview/dependency pins и CONTINUES; cancel блокирует nodes до runs, закрывает leases/turns/gates/effects, сохраняя UNKNOWN_OUTCOME. Retry создаёт новую попытку и server lineage; child retry становится отдельным root |
+| Owner gate | Specialized delivery/integration gate paths, OCC/allowed decisions/attachments. REQUEST_CHANGES создаёт turn и requeues canonical predecessor; terminal effects/deliveries/events и readback принадлежат caller TX |
+
+Новый test проверяет десять исходов двух lock helpers: success, no rows,
+wrapped no rows, scan failure и partial failure. Проверены exact owner/
+project/ref arguments,11/10 columns, раздельные User.Active/binding Active,
+permissions и IDs, отсутствие commit/других policy/write calls и raw driver
+text. Полный expected-AST compare commands.go — PASS: только четыре lock
+read prefixes заменены на два helpers; caller guards/write/revocation/events
+и остальные исполняемые ветви сохранены. Commands file не имеет go:embed;
+SQL/API/generated/dependencies/applied migrations/deploy inputs не менялись.
+
+Адресный test и полный GOWORK=off control-plane build/unit `-count=1` — PASS
+LOCAL.15 external fixture/admin/template inputs исключены. Real PostgreSQL
+locks/last-owner concurrency, receipt races, broker delivery, runtime/provider/
+image/bootstrap и полный E2E/browser/deploy/live — NOT RUN/SKIP. Прочитаны
+membership lock/count и idempotency lock/read SQL; прежние Context7
+pgx/v5.10.0 Row/Scan/transaction правила сохраняются. Исторические read-error
+conflation/ignored rollback/optional JSON и message-substring fallbacks
+описаны, не исправлены.
+
+Scan6673 own sources,222 excluded,1809 raw,899 retained occurrences и910
+unresolved. Три прежних membership окна183/100/191 tokens исчезли; два новых
+policy/write окна129/145 остаются открытыми. Новое124-token окно полных
+launchRun/addAssistantTurnCommand wrappers разобрано и сохранено только по
+exact pair/hash/count1: каждая normal/retry реализация уже специализированно
+общая, а wrapper содержит одну строку с false и следующий nominal signature.
+Ни implementation/validation, ни файлы целиком не исключены.773 registry
+entries действительны; thresholds/ignore regions не менялись.17 analyzer
+unit,5 exact-ignore guards и gofmt/diff check — PASS. QA baseline f2e64eb
+сохранён; Issue#1823 открыт.
 
 ## Исполнение, RuntimeRevision и продолжения сессий — 24.10.2026
 

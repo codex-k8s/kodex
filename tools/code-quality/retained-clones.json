@@ -6176,6 +6176,14 @@
       "fragmentSHA256": "fc99f9a9a0f9e97a453573c94c707d02b9e2cc227c1e96ea98a5f4b81064bf37",
       "count": 1,
       "reason": "Окно121 tokens пересекает разные typed read wrappers ListAssistantConfigurationCatalog/ReadAssistantTaskSession и начало следующей сигнатуры. Оба полных wrapper прочитаны: общий bounded retry/context/backoff алгоритм уже retryAssistantLockedRead; каждый передаёт только собственный once-reader с разными nominal request/response types. Catalog возвращает configuration catalog, task-session — страницу опубликованных сообщений с отдельным курсором/run.view; helper завершения catalog намеренно не применяется к task-session. Новый generic dispatcher либо callback wrapper поверх уже общего retry ради одной строки скрыл бы конкретный owner reader, не удаляя самостоятельный алгоритм. Сохранено только это точное pair/hash/count1 окно, без исключения lease resolver, once-read bodies или файлов целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",
+      "fragmentSHA256": "0412082a31dba074844d257a0deb991759b0b32ca0f46ae1b53cfd41ecc63014",
+      "count": 1,
+      "reason": "Окно124 tokens пересекает полные короткие launchRun/addAssistantTurnCommand wrappers и начало следующих специализированных signatures/validation. Оба прочитаны: они передают false существующим launchRunWithAttachmentPolicy/addAssistantTurnWithAttachmentPolicy, где общий для normal/retry алгоритм каждого вида уже вынесен. Run launch разрешает project/AGENT/WORKFLOW/session/catalog/attachment policy; assistant turn дополнительно связан с conversation identity, собственным context и interrupt lifecycle. Общего самостоятельного алгоритма у wrapper нет; generic callback dispatcher поверх одной строки скрыл бы разные payload/authority transitions. Сохранена лишь точная pair/hash/count1, без исключения реализаций validation, attachment policy либо файлов целиком."
     }
   ]
 }

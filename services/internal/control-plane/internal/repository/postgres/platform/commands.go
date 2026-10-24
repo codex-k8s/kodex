@@ -23,6 +23,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// commandOutcome carries a specialized command result with resolved project/resource routing,
+// audit/platform-event metadata and runtime maintenance flags for Execute; it does not persist or
+// authorize anything by itself.
+// commandOutcome несёт специализированный command result с разрешёнными project/resource routing,
+// audit/platform-event metadata и runtime maintenance flags для Execute; сам ничего не сохраняет и
+// не авторизует.
 type commandOutcome struct {
 	result                                                                   command.Result
 	projectID, projectRef, resourceKind, resourceRef, summary, platformEvent string
@@ -32,8 +38,26 @@ type commandOutcome struct {
 	runtimeReadinessChanged                                                  bool
 }
 
+// defaultAgentRunConcurrency sets the default concurrency of direct-agent runs; published
+// workflows supply their own bounded concurrency instead.
+// defaultAgentRunConcurrency задаёт default concurrency прямых agent runs; опубликованные
+// workflows передают собственную ограниченную concurrency.
 const defaultAgentRunConcurrency = 8
 
+// Execute resolves actor scope, prepares object receipts and opens the ReadCommitted owner
+// transaction with project/idempotency locks. Authorized terminal-delete replay is special;
+// ordinary replay follows current command authorization and refreshes selected receipt
+// metadata/actions. Fresh commands apply state, reconcile workflow launches, write
+// audit/outbox/receipt and commit atomically; an empty unchanged runtime poll commits without
+// receipt/audit. Prepared-object retention is set only after successful commit; historical ignored
+// rollback and commit-error mappings remain unchanged.
+// Execute разрешает actor scope, готовит object receipts и открывает ReadCommitted owner
+// transaction с project/idempotency locks. Авторизованный terminal-delete replay выделен отдельно;
+// обычный replay следует после текущей command authorization и обновляет некоторые receipt
+// metadata/actions. Новые команды атомарно применяют state, reconcile workflow launches,
+// записывают audit/outbox/receipt и commit; пустой неизменяющий runtime poll фиксируется без
+// receipt/audit. Prepared objects сохраняются лишь после успешного commit; прежние ignored
+// rollback и commit-error mappings не меняются.
 func (repository *Repository) Execute(ctx context.Context, input command.Command) (command.Result, error) {
 	scope, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -188,6 +212,10 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	return outcome.result, executionDeadlineReceiptError(outcome.result)
 }
 
+// clearDeletedResultActions clears only next-action hints on deleted connection, schedule or
+// runtime-environment results, tolerating a nil result without changing other metadata.
+// clearDeletedResultActions очищает лишь next-action hints у deleted connection, schedule либо
+// runtime-environment result, допуская nil result без изменения остальных metadata.
 func clearDeletedResultActions(result *command.Result) {
 	if result == nil {
 		return
@@ -203,6 +231,15 @@ func clearDeletedResultActions(result *command.Result) {
 	}
 }
 
+// replayDeletedCommand handles only three terminal-delete kinds after authoritative
+// deleted-resource authorization. It requires a usable matching receipt and exact resulting
+// version, refreshes deleted connection metadata and clears actions. Missing, malformed,
+// wrong-digest or mismatched receipts return a miss rather than supplying authority; the caller
+// owns commit.
+// replayDeletedCommand обрабатывает лишь три terminal-delete kind после авторитетной проверки
+// удалённого ресурса. Требует пригодную совпадающую receipt и точную resulting version, обновляет
+// deleted connection metadata и очищает actions. Отсутствующая, повреждённая, wrong-digest либо
+// несовпавшая receipt даёт отсутствие replay, не authority; commit принадлежит caller.
 func (repository *Repository) replayDeletedCommand(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -255,6 +292,12 @@ func (repository *Repository) replayDeletedCommand(
 	return result, true, nil
 }
 
+// matchesDeletedCommand compares a typed delete payload against a complete deleted result, exact
+// ref and expected-version-plus-one. The caller must supply nonnil ExpectedVersion; structural
+// completeness is not fresh authorization.
+// matchesDeletedCommand сравнивает typed delete payload с полным deleted result, точным ref и
+// expected-version-plus-one. Caller обязан передать nonnil ExpectedVersion; структурная полнота не
+// является свежей authorization.
 func matchesDeletedCommand(input command.Command, result command.Result) bool {
 	expectedVersion := *input.Mutation.ExpectedVersion + 1
 	switch payload := input.Payload.(type) {
@@ -282,10 +325,20 @@ func matchesDeletedCommand(input command.Command, result command.Result) bool {
 	}
 }
 
+// exposesActorActions permits actor-specific next-action enrichment only for the exact
+// control-api-gateway workload, leaving machine responses free of browser action hints.
+// exposesActorActions разрешает actor-specific next-action enrichment лишь точному
+// control-api-gateway workload, оставляя machine responses без browser action hints.
 func exposesActorActions(workload string) bool {
 	return workload == "control-api-gateway"
 }
 
+// applyCommand dispatches the closed command registry to specialized domain handlers in the
+// existing transaction, preserving nominal payload checks and rejecting unknown kinds as Invalid;
+// no generic lifecycle mutation or commit is introduced.
+// applyCommand направляет закрытый command registry специализированным domain handlers в
+// существующей транзакции, сохраняя nominal payload checks и отклоняя неизвестные kinds как
+// Invalid; не создаёт generic lifecycle mutation либо commit.
 func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	switch input.Kind {
 	case command.CreateMemoryRecord, command.ReviseMemoryRecord, command.ArchiveMemoryRecord, command.RestoreMemoryRecord, command.PurgeMemoryRecord:
@@ -450,6 +503,12 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	}
 }
 
+// completeOnboarding updates installation onboarding completion and returns organization routing
+// with an assistant-change invalidation outcome; it does not run bootstrap or prove runtime
+// readiness.
+// completeOnboarding обновляет installation onboarding completion и возвращает organization
+// routing с assistant-change invalidation outcome; не запускает bootstrap и не доказывает runtime
+// readiness.
 func (repository *Repository) completeOnboarding(ctx context.Context, tx pgx.Tx, scope scope) (commandOutcome, error) {
 	if _, err := tx.Exec(ctx, queryCommandsCompleteonboardingUpdateInstallationOnboardingCompletedAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -457,6 +516,12 @@ func (repository *Repository) completeOnboarding(ctx context.Context, tx pgx.Tx,
 	return commandOutcome{result: command.Result{CreatedRefs: []string{scope.organizationRef}}, resourceKind: "INSTALLATION", resourceRef: scope.organizationRef, summary: "i18n:ONBOARDING_COMPLETED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
+// createProject validates a typed nonempty bounded name, defaults language to ru, inserts the
+// project and grants its creator the existing full project permission set in the caller
+// transaction. The returned routing/actions do not replace outer command authorization.
+// createProject проверяет typed непустое ограниченное name, назначает ru при отсутствии language,
+// вставляет project и выдаёт создателю существующий полный project permission set в транзакции
+// caller. Возвращаемые routing/actions не заменяют внешнюю command authorization.
 func (repository *Repository) createProject(ctx context.Context, tx pgx.Tx, scope scope, payload any) (commandOutcome, error) {
 	input, ok := payload.(command.ProjectInput)
 	if !ok || strings.TrimSpace(input.Name) == "" || len(input.Name) > 160 {
@@ -483,6 +548,12 @@ func (repository *Repository) createProject(ctx context.Context, tx pgx.Tx, scop
 	return commandOutcome{result: command.Result{Project: &item}, projectID: mustProjectID(ctx, tx, scope.organizationID, ref), projectRef: ref, resourceKind: "PROJECT", resourceRef: ref, summary: "i18n:PROJECT_CREATED", platformEvent: "PROJECT_CHANGED"}, nil
 }
 
+// updateProject requires typed ref/expected version and performs the tenant/OCC update with
+// trimmed name/purpose, returning canonical metadata and event routing. No row maps to
+// VersionMismatch and other write errors retain the shared mapper.
+// updateProject требует typed ref/expected version и выполняет tenant/OCC update с trim
+// name/purpose, возвращая канонические metadata и event routing. Отсутствие строки даёт
+// VersionMismatch, остальные write errors сохраняют общий mapper.
 func (repository *Repository) updateProject(ctx context.Context, tx pgx.Tx, scope scope, mutation value.Mutation, payload any) (commandOutcome, error) {
 	input, ok := payload.(command.ProjectInput)
 	if !ok || input.Ref == "" || mutation.ExpectedVersion == nil {
@@ -501,6 +572,14 @@ func (repository *Repository) updateProject(ctx context.Context, tx pgx.Tx, scop
 	return commandOutcome{result: command.Result{Project: &item}, projectID: projectID, projectRef: item.Ref, resourceKind: "PROJECT", resourceRef: item.Ref, summary: "i18n:PROJECT_UPDATED", platformEvent: "PROJECT_CHANGED"}, nil
 }
 
+// changeMembership handles project membership add/change/remove after project resolution and
+// permission-grant eligibility for nonremoval. Change/remove lock exact project bindings, check
+// OCC and reject self mutation; distinct update/deactivate SQL and no-row mappings remain
+// explicit. It returns membership action hints and one outer event outcome without committing.
+// changeMembership обрабатывает project membership add/change/remove после project resolution и
+// permission-grant eligibility для nonremoval. Change/remove блокируют точные project bindings,
+// сверяют OCC и отклоняют self mutation; разные update/deactivate SQL и no-row mappings остаются
+// явными. Возвращает membership action hints и один внешний event outcome без commit.
 func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.MembershipInput)
 	if !ok || payload.ProjectRef == "" || (input.Kind != command.RemoveMembership && !validProjectPermissions(payload.Permissions)) {
@@ -556,21 +635,9 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		var membershipID, subjectID string
-		err := tx.QueryRow(ctx, queryProjectMembershipResolveForUpdate, pgx.StrictNamedArgs{
-			"organization_id": scope.organizationID,
-			"project_id":      projectID,
-			"membership_ref":  payload.MembershipRef,
-		}).Scan(
-			&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName,
-			&item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions,
-			&item.Active, &item.Version,
-		)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrNotFound
-		}
+		membershipID, subjectID, err := lockProjectMembership(ctx, tx, scope.organizationID, projectID, payload.MembershipRef, &item)
 		if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+			return commandOutcome{}, err
 		}
 		if item.Version != *input.Mutation.ExpectedVersion {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -597,21 +664,9 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		var membershipID, subjectID string
-		err := tx.QueryRow(ctx, queryProjectMembershipResolveForUpdate, pgx.StrictNamedArgs{
-			"organization_id": scope.organizationID,
-			"project_id":      projectID,
-			"membership_ref":  payload.MembershipRef,
-		}).Scan(
-			&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName,
-			&item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions,
-			&item.Active, &item.Version,
-		)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrNotFound
-		}
+		membershipID, subjectID, err := lockProjectMembership(ctx, tx, scope.organizationID, projectID, payload.MembershipRef, &item)
 		if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+			return commandOutcome{}, err
 		}
 		if item.Version != *input.Mutation.ExpectedVersion {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -637,6 +692,14 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 	return commandOutcome{result: command.Result{Membership: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "MEMBERSHIP", resourceRef: item.Ref, summary: "i18n:PROJECT_ACCESS_UPDATED", platformEvent: "MEMBERSHIP_CHANGED"}, nil
 }
 
+// changePlatformMembership handles organization membership add/change/remove with closed roles,
+// owner-role restrictions, OCC, self-demotion/removal prevention and last-owner protection.
+// Deactivation also revokes project memberships, while returned permissions are empty;
+// project-specific grant policy is not reused here.
+// changePlatformMembership обрабатывает organization membership add/change/remove с закрытыми
+// roles, owner-role restrictions, OCC, запретом self-demotion/removal и last-owner protection.
+// Deactivation также отзывает project memberships, возвращаемые permissions пусты;
+// project-specific grant policy здесь не используется.
 func (repository *Repository) changePlatformMembership(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.PlatformMembershipInput)
 	if !ok {
@@ -678,17 +741,10 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		err := tx.QueryRow(ctx, queryPlatformMembershipResolveForUpdate, pgx.StrictNamedArgs{
-			"organization_id": scope.organizationID,
-			"membership_ref":  payload.MembershipRef,
-		}).Scan(
-			&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
-			&item.User.Active, &item.Role, &item.Active, &item.Version)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrNotFound
-		}
+		var err error
+		membershipID, subjectID, err = lockPlatformMembership(ctx, tx, scope.organizationID, payload.MembershipRef, &item)
 		if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+			return commandOutcome{}, err
 		}
 		if item.Version != *input.Mutation.ExpectedVersion {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -719,17 +775,10 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		err := tx.QueryRow(ctx, queryPlatformMembershipResolveForUpdate, pgx.StrictNamedArgs{
-			"organization_id": scope.organizationID,
-			"membership_ref":  payload.MembershipRef,
-		}).Scan(
-			&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
-			&item.User.Active, &item.Role, &item.Active, &item.Version)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrNotFound
-		}
+		var err error
+		membershipID, subjectID, err = lockPlatformMembership(ctx, tx, scope.organizationID, payload.MembershipRef, &item)
 		if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+			return commandOutcome{}, err
 		}
 		if item.Version != *input.Mutation.ExpectedVersion {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -765,6 +814,12 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 	return commandOutcome{result: command.Result{Membership: &item}, resourceKind: "PLATFORM_MEMBERSHIP", resourceRef: item.Ref, summary: "i18n:PLATFORM_ACCESS_UPDATED", platformEvent: "PLATFORM_MEMBERSHIP_CHANGED"}, nil
 }
 
+// protectLastOwner checks other active in-window OWNER bindings only when an active owner would be
+// demoted or disabled, returning Conflict for zero and Unavailable on read error. It relies on
+// caller locking and does not independently prove every subject eligibility.
+// protectLastOwner считает прочие active in-window OWNER bindings лишь при понижении либо
+// отключении активного owner, возвращая Conflict при нуле и Unavailable при read error. Полагается
+// на caller locking и не доказывает отдельно eligibility каждого subject.
 func (repository *Repository) protectLastOwner(ctx context.Context, tx pgx.Tx, organizationID, membershipID string, current entity.Membership, nextRole string, nextActive bool) error {
 	if current.Role != "OWNER" || !current.Active || (nextRole == "OWNER" && nextActive) {
 		return nil
@@ -782,6 +837,10 @@ func (repository *Repository) protectLastOwner(ctx context.Context, tx pgx.Tx, o
 	return nil
 }
 
+// validPlatformRole accepts exactly OWNER, ADMINISTRATOR, OPERATOR, MEMBER or AUDITOR without case
+// normalization or role assignment.
+// validPlatformRole принимает ровно OWNER, ADMINISTRATOR, OPERATOR, MEMBER либо AUDITOR без
+// нормализации регистра или назначения роли.
 func validPlatformRole(role string) bool {
 	switch role {
 	case "OWNER", "ADMINISTRATOR", "OPERATOR", "MEMBER", "AUDITOR":
@@ -791,6 +850,11 @@ func validPlatformRole(role string) bool {
 	}
 }
 
+// validProjectPermissions requires a nonempty bounded duplicate-free subset of the canonical
+// legacy permission list containing VIEW; it validates shape, not the actor right to grant those
+// permissions.
+// validProjectPermissions требует непустое ограниченное подмножество канонического legacy
+// permission list без повторов и с VIEW; проверяет форму, не право actor выдавать permissions.
 func validProjectPermissions(permissions []string) bool {
 	if len(permissions) == 0 || len(permissions) > len(allPermissions()) {
 		return false
@@ -813,6 +877,14 @@ func validProjectPermissions(permissions []string) bool {
 	return canView
 }
 
+// createAgent checks project, initial capability authority, avatar and enabled runtime, resolves
+// or creates a role and inserts the agent with canonical runtime bootstrap. It creates published
+// instructions and binding, validates prompt context and returns initial metadata/actions in the
+// same transaction; no provider execution or runtime Pod is launched.
+// createAgent сверяет project, initial capability authority, avatar и enabled runtime, разрешает
+// либо создаёт role и вставляет agent с каноническим runtime bootstrap. Создаёт published
+// instructions и binding, проверяет prompt context и возвращает initial metadata/actions в той же
+// транзакции; provider execution или runtime Pod не запускаются.
 func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope scope, payload any) (commandOutcome, error) {
 	input, ok := payload.(command.AgentInput)
 	if !ok || strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.Instructions) == "" {
@@ -900,6 +972,12 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: input.ProjectRef, resourceKind: "AGENT", resourceRef: ref, summary: "i18n:AGENT_CREATED_READY", platformEvent: "AGENT_CHANGED"}, nil
 }
 
+// resolveEnabledRuntime reads the enabled runtime profile selection, returning zero/NotFound for
+// no row and zero/Unavailable for read failure. Ready marks this catalog selection only and is not
+// an external provider probe.
+// resolveEnabledRuntime читает enabled runtime profile selection, возвращая zero/NotFound при
+// отсутствии строки и zero/Unavailable при read failure. Ready помечает лишь этот catalog
+// selection и не является внешним provider probe.
 func resolveEnabledRuntime(ctx context.Context, tx pgx.Tx, ref string) (entity.RuntimeSelection, error) {
 	var runtime entity.RuntimeSelection
 	err := tx.QueryRow(ctx, queryCommandsResolveEnabledRuntimeProfile, ref).Scan(&runtime.Ref, &runtime.Name, &runtime.Provider, &runtime.Model, &runtime.RuntimeRevision)
@@ -913,6 +991,13 @@ func resolveEnabledRuntime(ctx context.Context, tx pgx.Tx, ref string) (entity.R
 	return runtime, nil
 }
 
+// mapWriteError maps serialization/deadlock conflicts to the existing retry marker plus
+// Unavailable, uniqueness to Conflict and foreign/check constraints to Invalid. It preserves
+// legacy message-substring fallbacks and returns Unavailable for unknown errors without exposing
+// raw driver text.
+// mapWriteError отображает serialization/deadlock conflicts в прежний retry marker с Unavailable,
+// uniqueness в Conflict, foreign/check constraints в Invalid. Сохраняет legacy message-substring
+// fallbacks и возвращает Unavailable для неизвестных ошибок без выдачи raw driver text.
 func mapWriteError(err error) error {
 	if err == nil {
 		return nil
@@ -938,6 +1023,11 @@ func mapWriteError(err error) error {
 	}
 	return errs.ErrUnavailable
 }
+
+// mustProjectID returns the tenant/ref project ID or empty on any query/scan error, preserving the
+// historical absent-versus-infrastructure conflation; it does not authorize access.
+// mustProjectID возвращает tenant/ref project ID либо пустую строку при любой query/scan error,
+// сохраняя прежнее смешение отсутствия и инфраструктурного отказа; доступ не авторизует.
 func mustProjectID(ctx context.Context, tx pgx.Tx, organizationID, ref string) string {
 	var id string
 	if tx.QueryRow(ctx, queryCommandsMustprojectidSelectProjectsOrganizationIdRefLifecycle, organizationID, ref).Scan(&id) != nil {
@@ -946,6 +1036,14 @@ func mustProjectID(ctx context.Context, tx pgx.Tx, organizationID, ref string) s
 	return id
 }
 
+// changeAgent handles update/enable/archive with typed ref/OCC, runtime-profile immutability,
+// avatar validation and protected assistant archive checks. It reads authoritative
+// runtime/role/avatar metadata and suspends target schedules on disable/archive, retaining
+// distinct Conflict/VersionMismatch mappings and caller transaction ownership.
+// changeAgent обрабатывает update/enable/archive с typed ref/OCC, неизменностью runtime-profile,
+// avatar validation и protected assistant archive checks. Читает авторитетные runtime/role/avatar
+// metadata и при disable/archive приостанавливает target schedules, сохраняя разные
+// Conflict/VersionMismatch mappings и caller transaction ownership.
 func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AgentInput)
 	if !ok || payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
@@ -1025,6 +1123,11 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: item.ProjectRef, resourceKind: "AGENT", resourceRef: item.Ref, summary: "i18n:AGENT_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
 
+// suspendTargetSchedules updates schedules for the exact tenant/project/target and emits one
+// schedule invalidation only when the SQL reports a change; it does not launch or claim an
+// occurrence.
+// suspendTargetSchedules обновляет schedules точных tenant/project/target и создаёт одну schedule
+// invalidation лишь при изменении по SQL readback; occurrence не запускает и не выдаёт.
 func (repository *Repository) suspendTargetSchedules(ctx context.Context, tx pgx.Tx, scope scope, projectID, projectRef, targetType, targetRef string) error {
 	var suspended int64
 	var scheduleRef string
@@ -1037,6 +1140,16 @@ func (repository *Repository) suspendTargetSchedules(ctx context.Context, tx pgx
 	return repository.emitPlatformEvent(ctx, tx, scope, "SCHEDULE_CHANGED", projectRef, scheduleRef, "i18n:SCHEDULE_UPDATED")
 }
 
+// changeInstructions handles ordinary agent draft create/validate/publish/forward rollback with
+// protected-system rejection, agent OCC and prompt-context checks. Publication applies the exact
+// impact plan/binding receipts; rollback creates a new published revision. It increments agent
+// version and returns an event outcome, preserving historical read-error handling rather than
+// silently fixing it.
+// changeInstructions обрабатывает обычные agent draft create/validate/publish/forward rollback с
+// protected-system rejection, agent OCC и prompt-context checks. Publication применяет точные
+// impact plan/binding receipts; rollback создаёт новую published revision. Увеличивает agent
+// version и возвращает event outcome, сохраняя прежнюю обработку read errors без неявного
+// исправления.
 func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AgentInput)
 	if !ok || payload.Ref == "" {
@@ -1163,6 +1276,14 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 	return commandOutcome{result: command.Result{Agent: &agent, RevisionImpactPlan: impactPlan}, projectID: projectID, projectRef: projectRef, resourceKind: "INSTRUCTIONS", resourceRef: payload.Ref, summary: "i18n:AGENT_INSTRUCTIONS_UPDATED", platformEvent: event, platformAggregateVersion: agent.Version}, nil
 }
 
+// changeAgentBinding resolves the agent and enabled capability or exact integration grant
+// authority before OCC, then changes only the specialized capability/grant binding. It increments
+// agent version and reads the canonical runtime/avatar/capability result; payload binding refs do
+// not confer grant authority.
+// changeAgentBinding разрешает agent и enabled capability либо exact integration grant authority
+// до OCC, затем меняет лишь специализированный capability/grant binding. Увеличивает agent version
+// и читает канонический runtime/avatar/capability result; payload binding refs не выдают grant
+// authority.
 func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AgentBindingInput)
 	if !ok || payload.AgentRef == "" || payload.BindingRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -1241,6 +1362,16 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	return commandOutcome{result: command.Result{Agent: &agent}, projectID: projectID, projectRef: projectRef, resourceKind: "AGENT", resourceRef: payload.AgentRef, summary: "i18n:AGENT_PERMISSIONS_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
 
+// changeWorkflow creates or updates server-identified drafts and handles
+// validation/publication/archive under workflow OCC. Validation checks coordinator/step
+// capabilities; publication requires VALID and freezes exact raw spec/digest in a new version;
+// archive suspends target schedules. It rereads canonical workflow metadata and leaves
+// commit/event emission to the owner.
+// changeWorkflow создаёт либо обновляет drafts с серверной identity и обрабатывает
+// validation/publication/archive под workflow OCC. Validation проверяет coordinator/step
+// capabilities; publication требует VALID и закрепляет точные raw spec/digest в новой version;
+// archive приостанавливает target schedules. Перечитывает канонические workflow metadata и
+// оставляет commit/event emission владельцу.
 func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.WorkflowInput)
 	if !ok {
@@ -1369,17 +1500,38 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 	return commandOutcome{result: command.Result{Workflow: &workflow}, projectID: projectID, projectRef: projectRef, resourceKind: "WORKFLOW", resourceRef: payload.Ref, summary: "i18n:WORKFLOW_UPDATED", platformEvent: "WORKFLOW_CHANGED"}, nil
 }
 
+// validWorkflowVersion accepts only versions whose closed structural/executable invariant checker
+// returns no error code; it does not query agent eligibility.
+// validWorkflowVersion принимает лишь versions без кода ошибки закрытой structural/executable
+// invariant проверки; agent eligibility не запрашивает.
 func validWorkflowVersion(version entity.WorkflowVersion) bool {
 	return workflowVersionInvalidField(version) == ""
 }
 
 const (
-	workflowInvalidStepsInstructions   = "STEPS_INSTRUCTIONS"
+	// workflowInvalidStepsInstructions names the fixed safe validation category for empty or
+	// oversized/invalid step instructions without exposing their content or index.
+	// workflowInvalidStepsInstructions задаёт фиксированную безопасную validation category пустых либо
+	// чрезмерных/невалидных step instructions без раскрытия содержимого или индекса.
+	workflowInvalidStepsInstructions = "STEPS_INSTRUCTIONS"
+	// workflowInvalidStepsExpectedResult names the fixed safe validation category for invalid or
+	// oversized step expected-result text.
+	// workflowInvalidStepsExpectedResult задаёт фиксированную безопасную validation category
+	// невалидного либо чрезмерного step expected-result text.
 	workflowInvalidStepsExpectedResult = "STEPS_EXPECTED_RESULT"
-	workflowInvalidInvariants          = "WORKFLOW_INVARIANTS"
+	// workflowInvalidInvariants names the generic closed workflow invariant failure category for
+	// structure, capability and profile checks.
+	// workflowInvalidInvariants задаёт общую закрытую workflow invariant failure category для
+	// structure, capability и profile checks.
+	workflowInvalidInvariants = "WORKFLOW_INVARIANTS"
 )
 
-// Закрытый код не раскрывает содержимое поля или индекс этапа.
+// workflowVersionInvalidField returns the first closed structural error, then rejects delegation
+// capability on steps when no distinct-agent delegation is required. It never returns payload text
+// or a step index as diagnostics.
+// workflowVersionInvalidField возвращает первую закрытую structural error, затем отклоняет
+// delegation capability у steps, когда distinct-agent delegation не требуется. Никогда не
+// возвращает payload text либо step index в диагностике.
 func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 	if field := workflowVersionStructureInvalidField(version); field != "" {
 		return field
@@ -1394,8 +1546,16 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 	return ""
 }
 
-// Структурно корректный, но неисполнимый профиль остаётся доступным для
-// исправления. Это не даёт ему права на публикацию или запуск.
+// workflowVersionStructureInvalidField checks Unicode text/rune bounds,
+// coordinator/concurrency/timeouts/input shape, one-to-two-hundred ordered unique steps,
+// backward-only dependencies, gate decisions and capability grammar. It enforces the aggregate
+// byte budget but performs no database eligibility check, allowing structurally repairable catalog
+// profiles to remain distinguishable from executable acceptance.
+// workflowVersionStructureInvalidField проверяет Unicode text/rune bounds,
+// coordinator/concurrency/timeouts/input shape, от одного до двухсот ordered unique steps,
+// зависимости лишь на прежние steps, gate decisions и capability grammar. Ограничивает общий byte
+// budget, но не выполняет database eligibility check, отличая структурное исправление catalog
+// profiles от допуска исполнения.
 func workflowVersionStructureInvalidField(version entity.WorkflowVersion) string {
 	// maxLength считается в Unicode-символах, общий бюджет ниже остаётся байтовым.
 	if !validWorkflowText(version.Name, 160) || !validWorkflowText(version.Purpose, 2000) || !validWorkflowText(version.CompletionCriteria, 2000) || !utf8.ValidString(version.Instructions) {
@@ -1446,13 +1606,22 @@ func workflowVersionStructureInvalidField(version entity.WorkflowVersion) string
 	return ""
 }
 
+// validWorkflowText requires valid UTF-8 and at most the supplied Unicode rune count; empty text
+// is allowed unless the caller separately requires content.
+// validWorkflowText требует валидный UTF-8 и не более переданного Unicode rune count; пустой текст
+// разрешён, если caller отдельно не требует содержимое.
 func validWorkflowText(value string, maximumCharacters int) bool {
 	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= maximumCharacters
 }
 
-// Draft identity назначает server. Старые записи использовали literal
-// "draft"; детерминированное значение сохраняет стабильный readback без
-// изменения опубликованных immutable revisions.
+// normalizeWorkflowDraftIdentity preserves a plausible bounded wfv_ reference or derives a
+// deterministic workflow-owned draft ref and ensures a positive version number. Nil is ignored and
+// published immutable revisions are not rewritten; prefix/length acceptance is not full reference
+// validation.
+// normalizeWorkflowDraftIdentity сохраняет подходящую по prefix/length wfv_ reference либо выводит
+// детерминированный workflow-owned draft ref и обеспечивает положительный version number. Nil
+// игнорируется, published immutable revisions не переписываются; prefix/length acceptance не
+// является полной reference validation.
 func normalizeWorkflowDraftIdentity(workflowRef string, version *entity.WorkflowVersion) {
 	if version == nil {
 		return
@@ -1466,6 +1635,12 @@ func normalizeWorkflowDraftIdentity(workflowRef string, version *entity.Workflow
 	}
 }
 
+// validWorkflowInputFields validates unique field keys, bounded labels/help/options and the closed
+// TEXT/LONG_TEXT/NUMBER/BOOLEAN/DATE/SELECT schema. Options are unique and present only for
+// SELECT; user-supplied runtime values are checked separately.
+// validWorkflowInputFields проверяет уникальные field keys, ограниченные labels/help/options и
+// закрытую TEXT/LONG_TEXT/NUMBER/BOOLEAN/DATE/SELECT schema. Options уникальны и присутствуют лишь
+// у SELECT; пользовательские runtime values проверяются отдельно.
 func validWorkflowInputFields(fields []entity.WorkflowInputField) bool {
 	known := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
@@ -1493,6 +1668,10 @@ func validWorkflowInputFields(fields []entity.WorkflowInputField) bool {
 	return true
 }
 
+// validWorkflowInputKey accepts a one-to-eighty-byte lowercase ASCII key starting with a letter
+// and continuing with letters/digits/underscore/hyphen, without normalization.
+// validWorkflowInputKey принимает lowercase ASCII key длиной от одного до восьмидесяти bytes,
+// начинающийся с буквы и продолжающийся буквами/digits/underscore/hyphen, без normalization.
 func validWorkflowInputKey(key string) bool {
 	if len(key) < 1 || len(key) > 80 || key[0] < 'a' || key[0] > 'z' {
 		return false
@@ -1506,6 +1685,12 @@ func validWorkflowInputKey(key string) bool {
 	return true
 }
 
+// validWorkflowRunInput requires known input keys and every required nonempty value, then applies
+// the declared field-specific value rules. It does not fill defaults or revalidate the field
+// schema itself.
+// validWorkflowRunInput требует известные input keys и все обязательные непустые values, затем
+// применяет объявленные field-specific value rules. Не назначает defaults и не перепроверяет саму
+// field schema.
 func validWorkflowRunInput(fields []entity.WorkflowInputField, input map[string]any) bool {
 	if len(input) > len(fields) {
 		return false
@@ -1527,11 +1712,21 @@ func validWorkflowRunInput(fields []entity.WorkflowInputField, input map[string]
 	return true
 }
 
+// emptyWorkflowInputValue treats only nil or whitespace-only string values as empty; false, zero
+// and other dynamic types are not empty by this predicate.
+// emptyWorkflowInputValue считает пустыми лишь nil либо whitespace-only string values; false, zero
+// и другие dynamic types этим predicate не считаются пустыми.
 func emptyWorkflowInputValue(value any) bool {
 	text, isText := value.(string)
 	return value == nil || isText && strings.TrimSpace(text) == ""
 }
 
+// validWorkflowRunInputValue checks per-type string byte limits, finite float64 numbers, bools,
+// exact parseable YYYY-MM-DD dates or SELECT membership. It neither coerces dynamic values nor
+// applies requiredness itself.
+// validWorkflowRunInputValue проверяет per-type string byte limits, конечные float64 numbers,
+// bools, точные разбираемые YYYY-MM-DD dates либо SELECT membership. Не преобразует dynamic values
+// и сам не применяет requiredness.
 func validWorkflowRunInputValue(field entity.WorkflowInputField, value any) bool {
 	switch field.Type {
 	case "TEXT":
@@ -1561,6 +1756,11 @@ func validWorkflowRunInputValue(field entity.WorkflowInputField, value any) bool
 	}
 }
 
+// validBoundedRunInput requires at most one hundred keys and successful JSON encoding within64
+// KiB, permitting nil maps while rejecting marshal errors; it does not authorize or interpret the
+// values.
+// validBoundedRunInput требует не более ста ключей и успешный JSON encoding в пределах64 KiB,
+// допуская nil maps и отклоняя marshal errors; значения не авторизует и не интерпретирует.
 func validBoundedRunInput(input map[string]any) bool {
 	if len(input) > 100 {
 		return false
@@ -1569,6 +1769,10 @@ func validBoundedRunInput(input map[string]any) bool {
 	return err == nil && len(raw) <= 64<<10
 }
 
+// workflowRequiresDelegation reports whether any step agent differs from the coordinator; it does
+// not infer permissions from that relationship.
+// workflowRequiresDelegation показывает, отличается ли agent хотя бы одного step от coordinator;
+// permissions из этой связи не выводит.
 func workflowRequiresDelegation(version entity.WorkflowVersion) bool {
 	for _, step := range version.Steps {
 		if step.AgentRef != version.CoordinatorAgentRef {
@@ -1578,6 +1782,10 @@ func workflowRequiresDelegation(version entity.WorkflowVersion) bool {
 	return false
 }
 
+// validCapabilityKey accepts a nonempty bounded already-trimmed lowercase ASCII capability key
+// with digits/dot/underscore/hyphen; grammar alone does not register or grant the capability.
+// validCapabilityKey принимает непустой ограниченный уже обрезанный lowercase ASCII capability key
+// с digits/dot/underscore/hyphen; grammar сама не регистрирует и не выдаёт capability.
 func validCapabilityKey(value string) bool {
 	if value == "" || len(value) > 80 || strings.TrimSpace(value) != value {
 		return false
@@ -1591,6 +1799,12 @@ func validCapabilityKey(value string) bool {
 	return true
 }
 
+// agentsHaveCapabilities checks each distinct nonempty project agent through the canonical
+// capability query, stopping on denial/error and requiring at least one checked agent. Driver
+// errors are returned unchanged for caller classification.
+// agentsHaveCapabilities проверяет каждого distinct непустого project agent каноническим
+// capability query, останавливается при отказе/ошибке и требует хотя бы одного проверенного agent.
+// Driver errors передаются без изменения для классификации caller.
 func (repository *Repository) agentsHaveCapabilities(ctx context.Context, tx pgx.Tx, organizationID, projectID string, agentRefs, capabilities []string) (bool, error) {
 	seen := make(map[string]struct{}, len(agentRefs))
 	for _, agentRef := range agentRefs {
@@ -1612,10 +1826,24 @@ func (repository *Repository) agentsHaveCapabilities(ctx context.Context, tx pgx
 	return len(seen) > 0, nil
 }
 
+// launchRun delegates normal launch with finalized attachment snapshot reuse disabled;
+// target/runtime/catalog/lineage checks remain in the specialized shared implementation.
+// launchRun передаёт обычный launch с отключённым finalized attachment snapshot reuse;
+// target/runtime/catalog/lineage checks остаются в общей специализированной реализации.
 func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	return repository.launchRunWithAttachmentPolicy(ctx, tx, scope, input, false)
 }
 
+// launchRunWithAttachmentPolicy validates project/task/source and exact AGENT or published
+// WORKFLOW target, model/runtime contracts and attachment eligibility before binding a new or
+// matching existing session. It inserts root run/turn/process and agent/coordinator/planned
+// workflow lineage, emits RUN_CREATED and returns graph readback in the caller transaction. Reuse
+// changes only attachment snapshot policy; no provider execution or runtime claim occurs here.
+// launchRunWithAttachmentPolicy проверяет project/task/source и точные AGENT либо published
+// WORKFLOW target, model/runtime contracts и attachment eligibility до связи с новой либо
+// совпавшей existing session. Вставляет root run/turn/process и agent/coordinator/planned workflow
+// lineage, создаёт RUN_CREATED и возвращает graph readback в транзакции caller. Reuse меняет лишь
+// attachment snapshot policy; provider execution либо runtime claim здесь нет.
 func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
 	if !ok || payload.ProjectRef == "" || !runtimecontract.ValidAssistantTurnContent(payload.Task) || len([]rune(payload.Title)) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
@@ -1813,6 +2041,12 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 	return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "RUN", resourceRef: runRef, summary: "i18n:RUN_CREATED"}, nil
 }
 
+// insertPlannedWorkflowNodes creates all immutable-version step placeholders, then ordered
+// coordinator/dependency edges with server IDs. Missing dependency lookup is Conflict; it plans
+// the graph without claiming work or treating a placeholder as executed.
+// insertPlannedWorkflowNodes создаёт все step placeholders immutable-version, затем ordered
+// coordinator/dependency edges с серверными IDs. Отсутствие dependency lookup даёт Conflict;
+// планирует graph без claim work и без признания placeholder исполненным.
 func (repository *Repository) insertPlannedWorkflowNodes(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, coordinatorNodeID string, workflow entity.WorkflowVersion) error {
 	nodeIDs := make(map[string]string, len(workflow.Steps))
 	for _, step := range workflow.Steps {
@@ -1861,6 +2095,14 @@ func (repository *Repository) insertPlannedWorkflowNodes(ctx context.Context, tx
 	return nil
 }
 
+// workflowCoordinatorTask builds bounded coordinator guidance from the exact workflow version
+// ref/digest, instructions, every step assignment/result and completion criteria. It requires
+// separate keyed delegation/callback handling in text, but the prose itself grants no authority
+// and is rune-truncated at the existing bound.
+// workflowCoordinatorTask строит ограниченное coordinator guidance из точных workflow version
+// ref/digest, instructions, каждого step assignment/result и completion criteria. Текст требует
+// отдельное keyed delegation/callback handling, но сама проза не выдаёт authority и обрезается по
+// прежней rune-границе.
 func workflowCoordinatorTask(task, versionRef, versionDigest string, version entity.WorkflowVersion) string {
 	var builder strings.Builder
 	builder.WriteString(strings.TrimSpace(task))
@@ -1898,6 +2140,10 @@ func workflowCoordinatorTask(task, versionRef, versionDigest string, version ent
 	return truncate(builder.String(), 96<<10)
 }
 
+// workflowHasHumanGate reports whether any published step requests a human gate, without opening a
+// gate or selecting its decisions.
+// workflowHasHumanGate показывает, требует ли хотя бы один published step human gate, без открытия
+// gate либо выбора decisions.
 func workflowHasHumanGate(version entity.WorkflowVersion) bool {
 	for _, step := range version.Steps {
 		if step.HumanGateAfter {
@@ -1907,6 +2153,12 @@ func workflowHasHumanGate(version entity.WorkflowVersion) bool {
 	return false
 }
 
+// insertAgentNode resolves an eligible tenant agent, creates its execution node and parent edge,
+// and returns node ID/ref inside the caller transaction. Target read errors retain Invalid
+// mapping, while insert failures map to Unavailable.
+// insertAgentNode разрешает допустимого tenant agent, создаёт execution node и parent edge,
+// возвращая node ID/ref в транзакции caller. Target read errors сохраняют Invalid mapping, insert
+// failures отображаются в Unavailable.
 func (repository *Repository) insertAgentNode(ctx context.Context, tx pgx.Tx, scope scope, rootRunID, runID, parentNodeID, agentRef, displayName, turnID, summary string) (string, string, error) {
 	var agentID, role string
 	if err := tx.QueryRow(ctx, queryCommandsInsertagentnodeSelectAgentsOrganizationIdRefState, scope.organizationID, agentRef).Scan(&agentID, &role); err != nil {
@@ -1924,6 +2176,12 @@ func (repository *Repository) insertAgentNode(ctx context.Context, tx pgx.Tx, sc
 	return nodeID, nodeRef, nil
 }
 
+// truncate trims surrounding whitespace and returns at most the supplied rune count, reserving one
+// rune for an ellipsis when truncated. Nonpositive limits yield empty and rune conversion
+// preserves the historical replacement of invalid UTF-8 bytes.
+// truncate обрезает окружающие пробелы и возвращает не более переданного rune count, резервируя
+// одну rune под многоточие при обрезке. Неположительный limit даёт пустую строку, rune conversion
+// сохраняет прежнюю замену invalid UTF-8 bytes.
 func truncate(value string, maximum int) string {
 	runes := []rune(strings.TrimSpace(value))
 	if maximum <= 0 {
@@ -1938,6 +2196,12 @@ func truncate(value string, maximum int) string {
 	return string(runes[:maximum-1]) + "…"
 }
 
+// boundedRunTitle preserves titles within240 bytes and otherwise removes complete trailing UTF-8
+// runes to fit an ellipsis within that byte cap; it does not generally trim short titles or
+// validate their content.
+// boundedRunTitle сохраняет titles в пределах240 bytes, иначе удаляет целые завершающие UTF-8
+// runes, чтобы многоточие уместилось в byte cap; короткие titles в общем случае не обрезает по
+// пробелам и не проверяет содержимое.
 func boundedRunTitle(title string) string {
 	const maximumBytes = 240
 	if len(title) <= maximumBytes {
@@ -1951,10 +2215,20 @@ func boundedRunTitle(title string) string {
 	return strings.TrimSpace(prefix) + "…"
 }
 
+// emitPlatformEvent delegates a default version-one/stateless platform invalidation to the shared
+// snapshot outbox writer in the caller transaction.
+// emitPlatformEvent передаёт platform invalidation с default version-one/без state общему snapshot
+// outbox writer в транзакции caller.
 func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string) error {
 	return repository.emitPlatformEventSnapshot(ctx, tx, scope, eventName, projectRef, aggregateRef, summary, 1, "")
 }
 
+// emitCommandOutcomePlatformEvent uses the command aggregate version or one as fallback; artifact
+// revision creation additionally reads the exact revision pin before platform event emission. It
+// does not commit or publish directly to a broker.
+// emitCommandOutcomePlatformEvent использует command aggregate version либо one как fallback;
+// artifact revision creation дополнительно читает exact revision pin до platform event emission.
+// Не делает commit и не публикует напрямую в broker.
 func (repository *Repository) emitCommandOutcomePlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, outcome commandOutcome) error {
 	version := outcome.platformAggregateVersion
 	if version < 1 {
@@ -1972,10 +2246,22 @@ func (repository *Repository) emitCommandOutcomePlatformEvent(ctx context.Contex
 	return repository.emitPlatformEventSnapshot(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary, version, outcome.platformState)
 }
 
+// emitPlatformEventSnapshot forwards version/state platform invalidation without an
+// artifact-revision pin to the canonical outbox writer.
+// emitPlatformEventSnapshot передаёт version/state platform invalidation без artifact-revision pin
+// каноническому outbox writer.
 func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string, aggregateVersion int64, state string) error {
 	return repository.emitPlatformEventSnapshotWithRevision(ctx, tx, scope, eventName, projectRef, aggregateRef, summary, aggregateVersion, state, nil)
 }
 
+// emitPlatformEventSnapshotWithRevision requires a supported closed event kind, increments
+// installation sequence and appends the organization-ordered safe invalidation envelope to outbox.
+// Optional artifact revision metadata must match exact aggregate/type/digest shape. SQL errors
+// retain retry classification; no broker call or commit occurs.
+// emitPlatformEventSnapshotWithRevision требует поддерживаемый закрытый event kind, увеличивает
+// installation sequence и добавляет organization-ordered safe invalidation envelope в outbox.
+// Необязательные artifact revision metadata должны совпасть по exact aggregate/type/digest shape.
+// SQL errors сохраняют retry classification; broker call либо commit отсутствуют.
 func (repository *Repository) emitPlatformEventSnapshotWithRevision(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string, aggregateVersion int64, state string, revision *entity.ArtifactRevision) error {
 	kind := platformEventKind(eventName)
 	if kind == "" {
@@ -2007,18 +2293,38 @@ func (repository *Repository) emitPlatformEventSnapshotWithRevision(ctx context.
 	return nil
 }
 
+// emitRunEvent forwards an ordinary run event with no incident to the canonical activity/binding
+// writer, preserving all caller locators and metadata.
+// emitRunEvent передаёт обычный run event без incident каноническому activity/binding writer,
+// сохраняя все caller locators и metadata.
 func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, summary, runState, nodeState string) (entity.RunEvent, error) {
 	return repository.emitRunEventWithIncident(ctx, tx, scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, nil, summary, runState, nodeState)
 }
 
+// emitRunEventWithIncident forwards an optional incident without a message to the shared run event
+// writer; it does not persist the incident separately here.
+// emitRunEventWithIncident передаёт optional incident без message общему run event writer;
+// отдельно incident здесь не сохраняет.
 func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, summary, runState, nodeState string) (entity.RunEvent, error) {
 	return repository.emitRunEventWithActivity(ctx, tx, scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, incident, nil, summary, runState, nodeState)
 }
 
+// emitRunEventWithActivity forwards optional incident/message activity without assigning an
+// integration invocation binding; the shared writer owns authoritative readback and outbox
+// shaping.
+// emitRunEventWithActivity передаёт optional incident/message activity без назначения integration
+// invocation binding; общий writer владеет authoritative readback и outbox shaping.
 func (repository *Repository) emitRunEventWithActivity(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState string) (entity.RunEvent, error) {
 	return repository.emitRunEventWithBinding(ctx, tx, scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, incident, message, summary, runState, nodeState, "")
 }
 
+// emitIntegrationActionEvent accepts only succeeded/failed/unknown terminal integration summaries
+// bound to an exact invocation ref, then emits the dedicated progress event. The ref must
+// originate in a verified locked owner row; syntax validation alone does not authorize it.
+// emitIntegrationActionEvent принимает лишь succeeded/failed/unknown terminal integration
+// summaries, связанные с точным invocation ref, затем создаёт специализированный progress event.
+// Ref должен происходить из проверенной locked owner row; один syntax validation его не
+// авторизует.
 func (repository *Repository) emitIntegrationActionEvent(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, invocationRef, nodeRef, state string) (entity.RunEvent, error) {
 	if !validIntegrationActionBinding("TURN_PROGRESS", integrationActionOutcomeMessage(state), invocationRef) ||
 		(state != "SUCCEEDED" && state != "FAILED" && state != "UNKNOWN_OUTCOME") {
@@ -2029,6 +2335,10 @@ func (repository *Repository) emitIntegrationActionEvent(ctx context.Context, tx
 	return repository.emitRunEventWithBinding(ctx, tx, scope, projectID, rootRunID, invocationRef, "TURN_PROGRESS", nodeRef, "", "", "", nil, nil, integrationActionOutcomeMessage(state), "RUNNING", "RUNNING", invocationRef)
 }
 
+// validIntegrationActionBinding checks TURN_PROGRESS, bounded inv_ reference grammar and one of
+// three closed terminal integration outcome summaries without resolving the invocation itself.
+// validIntegrationActionBinding проверяет TURN_PROGRESS, ограниченную inv_ reference grammar и
+// одну из трёх закрытых terminal integration outcome summaries без разрешения самого invocation.
 func validIntegrationActionBinding(eventType, summary, ref string) bool {
 	if eventType != "TURN_PROGRESS" || len(ref) < 8 || len(ref) > 96 || !strings.HasPrefix(ref, "inv_") {
 		return false
@@ -2041,6 +2351,16 @@ func validIntegrationActionBinding(eventType, summary, ref string) bool {
 	return summary == "i18n:INTEGRATION_ACTION_SUCCEEDED" || summary == "i18n:INTEGRATION_ACTION_FAILED" || summary == "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"
 }
 
+// emitRunEventWithBinding validates explicit integration binding, closes terminal tool activity
+// and advances root event/graph sequences before authoritative delta readback. It binds
+// execution/actor/message provenance, derives current run/node state, stores the full run event
+// and ordered run outbox envelope, then emits a limited organization RUN_CHANGED invalidation.
+// Caller message source is forced to ORDINARY; no commit or direct broker publish occurs.
+// emitRunEventWithBinding проверяет явную integration binding, закрывает terminal tool activity и
+// продвигает root event/graph sequences до authoritative delta readback. Связывает
+// execution/actor/message provenance, выводит текущие run/node state, сохраняет полный run event и
+// ordered run outbox envelope, затем создаёт ограниченную organization RUN_CHANGED invalidation.
+// Caller message source принудительно ORDINARY; commit либо direct broker publish отсутствуют.
 func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState, integrationInvocationRef string) (entity.RunEvent, error) {
 	if integrationInvocationRef != "" && (integrationInvocationRef != aggregateRef || !validIntegrationActionBinding(eventType, summary, integrationInvocationRef)) {
 		return entity.RunEvent{}, errs.ErrInvalid
@@ -2173,6 +2493,11 @@ func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pg
 	return event, nil
 }
 
+// runEventPresentation selects agent/user/platform display identity from the authoritative
+// delta/scope and a closed event-specific message kind. These presentation hints do not establish
+// actor authority.
+// runEventPresentation выбирает agent/user/platform display identity из authoritative delta/scope
+// и закрытый event-specific message kind. Эти presentation hints не устанавливают actor authority.
 func runEventPresentation(scope scope, eventType string, delta entity.RunEventDelta) (entity.RunEventActor, string) {
 	actor := entity.RunEventActor{Kind: "PLATFORM", Ref: "platform", Name: "Kodex"}
 	if delta.Node != nil && delta.Node.AgentRef != "" {
@@ -2202,6 +2527,14 @@ func runEventPresentation(scope scope, eventType string, delta entity.RunEventDe
 	}
 }
 
+// readRunEventDelta reads current run usage/state and requested node/edge/gate/artifact
+// projections inside the owner transaction, bounding public text/ref lists and projecting gate
+// intent. Any required read/decode failure closes with zero delta; it does not authorize a public
+// read or replace the full event snapshot.
+// readRunEventDelta читает текущие run usage/state и запрошенные node/edge/gate/artifact
+// projections в owner transaction, ограничивает публичные text/ref lists и проецирует gate intent.
+// Любой обязательный read/decode failure закрывается с zero delta; публичное чтение не авторизует
+// и полный event snapshot не заменяет.
 func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, organizationID, rootRunID, nodeRef, edgeRef, gateRef, artifactRef string) (entity.RunEventDelta, error) {
 	var run entity.RunDelta
 	var usage []byte
@@ -2278,6 +2611,10 @@ func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, 
 	return delta, nil
 }
 
+// boundedStrings returns an independent append-to-nil copy of at most the nonnegative maximum
+// prefix, preserving order and empty/nil shape under the historical copy semantics.
+// boundedStrings возвращает независимую append-to-nil копию не более nonnegative maximum элементов
+// prefix, сохраняя порядок и empty/nil shape по прежним copy semantics.
 func boundedStrings(values []string, maximum int) []string {
 	if len(values) > maximum {
 		values = values[:maximum]
@@ -2285,6 +2622,10 @@ func boundedStrings(values []string, maximum int) []string {
 	return append([]string(nil), values...)
 }
 
+// platformEventKind maps only registered platform event names to closed public resource kinds and
+// returns empty for unsupported events so the writer can reject them.
+// platformEventKind отображает лишь зарегистрированные platform event names в закрытые публичные
+// resource kinds, возвращая пустое для неподдерживаемых events, чтобы writer их отклонил.
 func platformEventKind(eventName string) string {
 	switch eventName {
 	case "PROJECT_CHANGED":
@@ -2326,6 +2667,10 @@ func platformEventKind(eventName string) string {
 	}
 }
 
+// eventRunState maps internal WAITING_HUMAN to public WAITING_OWNER, preserves the five supported
+// ordinary run states and omits unknown states.
+// eventRunState отображает внутреннее WAITING_HUMAN в публичное WAITING_OWNER, сохраняет пять
+// поддерживаемых обычных run states и пропускает неизвестные states.
 func eventRunState(value string) string {
 	switch value {
 	case "WAITING_HUMAN":
@@ -2336,6 +2681,11 @@ func eventRunState(value string) string {
 		return ""
 	}
 }
+
+// eventKind maps known run event types to closed delta categories and uses RUN for all remaining
+// types, keeping public category cardinality bounded.
+// eventKind отображает известные run event types в закрытые delta categories, используя RUN для
+// остальных types и сохраняя ограниченную публичную category cardinality.
 func eventKind(eventType string) string {
 	switch eventType {
 	case "NODE_ADDED", "NODE_STATE_CHANGED":
@@ -2363,6 +2713,12 @@ func eventKind(eventType string) string {
 	}
 }
 
+// readRunGraphTx reads the internal run snapshot, assistant pin and root cursor, then all
+// node/edge rows with explicit closure/error checks. It returns zero values on failure and relies
+// on the caller authorization/transaction boundary rather than granting public access itself.
+// readRunGraphTx читает внутренние run snapshot, assistant pin и root cursor, затем все node/edge
+// rows с явными closure/error checks. Возвращает zero values при ошибке и полагается на caller
+// authorization/transaction boundary, сам публичный доступ не выдаёт.
 func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, scope scope, runRef string) (entity.Run, entity.RunGraph, error) {
 	run, err := scanRun(tx.QueryRow(ctx, queryCommandsGetrunforgraphSelectRunsOrganizationIdRef, scope.organizationID, runRef), false)
 	if err != nil {
@@ -2412,6 +2768,14 @@ func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, sco
 	return run, graph, nil
 }
 
+// addSessionTurn resolves an active session target and exact continuation preview pin,
+// reauthorizes the nested launch and preserves workflow input. It pins the new turn dependencies
+// and, when requested, records the server-owned previous/new root CONTINUES edge and fresh graph
+// readback in the caller transaction.
+// addSessionTurn разрешает active session target и exact continuation preview pin, повторно
+// авторизует nested launch и сохраняет workflow input. Закрепляет dependencies нового turn и при
+// запросе записывает server-owned previous/new root CONTINUES edge со свежим graph readback в
+// транзакции caller.
 func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.SessionTurnInput)
 	if !ok || payload.SessionRef == "" || strings.TrimSpace(payload.Task) == "" {
@@ -2484,6 +2848,16 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	return outcome, nil
 }
 
+// changeRun handles cancel/retry with exact run OCC. Cancellation locks nodes before runs to match
+// claim order, closes root/nodes/leases/occurrences/turns/gates and integration effects while
+// retaining uncertain WRITE outcomes, then emits authoritative transitions. Retry creates a new
+// launch/session attempt with preserved attachment policy and explicit retry lineage; a child
+// retry becomes an independent root. It does not retry provider calls or commit here.
+// changeRun обрабатывает cancel/retry с точным run OCC. Cancellation блокирует nodes до runs в
+// порядке claim, закрывает root/nodes/leases/occurrences/turns/gates и integration effects,
+// сохраняя uncertain WRITE outcomes, затем создаёт authoritative transitions. Retry создаёт новый
+// launch/session attempt с прежней attachment policy и явной retry lineage; child retry становится
+// независимым root. Provider calls не повторяет и commit здесь не делает.
 func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.RunCommandInput)
 	if !ok || payload.RunRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -2563,6 +2937,11 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		// cancelledEffect holds one local invocation/node/outcome tuple returned by cancellation for
+		// subsequent progress events; UNKNOWN_OUTCOME is preserved rather than declared externally
+		// cancelled.
+		// cancelledEffect хранит локальный invocation/node/outcome tuple результата cancellation для
+		// последующих progress events; UNKNOWN_OUTCOME сохраняется, не объявляясь внешне отменённым.
 		type cancelledEffect struct{ invocationRef, nodeRef, state string }
 		var cancelledEffects []cancelledEffect
 		for effectRows.Next() {
@@ -2582,6 +2961,10 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		// cancelledGate holds one local cancelled gate/node tuple for exact OWNER_GATE_RESOLVED emission
+		// after the cancellation transaction changes state.
+		// cancelledGate хранит локальный cancelled gate/node tuple для точного OWNER_GATE_RESOLVED после
+		// изменения state в cancellation transaction.
 		type cancelledGate struct{ gateRef, nodeRef string }
 		var cancelledGates []cancelledGate
 		for gateRows.Next() {
@@ -2697,6 +3080,18 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	return outcome, nil
 }
 
+// resolveGate routes delivery gates separately, otherwise locks the owner gate, checks OCC/allowed
+// decision and finalized attachments, and applies specialized integration or ordinary workflow
+// effects. REQUEST_CHANGES creates a new turn/requeues the canonical predecessor; terminal
+// decisions update root/deliveries, emit gate/node events and return gate/run/graph readback.
+// Source actor authority remains the verified command scope and all effects belong to the caller
+// transaction.
+// resolveGate отдельно направляет delivery gates, иначе блокирует owner gate, проверяет
+// OCC/allowed decision и finalized attachments, применяет специализированные integration либо
+// обычные workflow effects. REQUEST_CHANGES создаёт новый turn/повторно ставит канонический
+// predecessor; terminal decisions обновляют root/deliveries, создают gate/node events и возвращают
+// gate/run/graph readback. Source actor authority остаётся проверенным command scope, все effects
+// принадлежат транзакции caller.
 func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.GateResolutionInput)
 	if !ok || payload.GateRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -2905,10 +3300,60 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	return commandOutcome{result: command.Result{Gate: &gate, Run: &run, Graph: &graph, Event: &event}, projectID: projectID, projectRef: projectRef, resourceKind: "OWNER_GATE", resourceRef: payload.GateRef, summary: "i18n:OWNER_GATE_RESOLVED"}, nil
 }
 
+// mustRunRef reads a run reference by an already resolved internal ID, mapping any lookup error to
+// empty/Unavailable without resolving tenant authority itself.
+// mustRunRef читает run reference по уже разрешённому внутреннему ID, отображая любую lookup error
+// в empty/Unavailable без самостоятельного разрешения tenant authority.
 func mustRunRef(ctx context.Context, tx pgx.Tx, id string) (string, error) {
 	var ref string
 	if err := tx.QueryRow(ctx, queryCommandsMustrunrefSelectRunsId, id).Scan(&ref); err != nil {
 		return "", errs.ErrUnavailable
 	}
 	return ref, nil
+}
+
+// lockProjectMembership reads the exact tenant/project/binding through the existing locking SQL
+// and eleven destinations. Missing rows, including wrapped ErrNoRows, map to NotFound; other scan
+// failures map to Unavailable with empty internal IDs. Callers discard partial item data on error
+// and retain OCC, self-mutation/grant policy, write SQL, action hints and transaction ownership.
+// lockProjectMembership читает точные tenant/project/binding прежним locking SQL и одиннадцатью
+// destinations. Отсутствие строки, включая wrapped ErrNoRows, даёт NotFound; прочие scan failures
+// дают Unavailable с пустыми внутренними IDs. Callers отбрасывают частичный item при ошибке и
+// сохраняют OCC, self-mutation/grant policy, write SQL, action hints и владение transaction.
+func lockProjectMembership(ctx context.Context, tx pgx.Tx, organizationID, projectID, ref string, item *entity.Membership) (string, string, error) {
+	var membershipID, subjectID string
+	err := tx.QueryRow(ctx, queryProjectMembershipResolveForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID, "membership_ref": ref,
+	}).Scan(&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName,
+		&item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", errs.ErrNotFound
+	}
+	if err != nil {
+		return "", "", errs.ErrUnavailable
+	}
+	return membershipID, subjectID, nil
+}
+
+// lockPlatformMembership reads the exact organization/platform binding with its distinct ten-field
+// projection, leaving project permissions untouched. It preserves NotFound/Unavailable mapping
+// and returns empty IDs on failure; the caller owns partial-data discard, OCC, owner/self/last-owner
+// guards, project revocation, write SQL and commit. It never substitutes project binding authority.
+// lockPlatformMembership читает точные organization/platform binding отдельной проекцией десяти
+// полей, не меняя project permissions. Сохраняет NotFound/Unavailable mapping и возвращает пустые
+// IDs при ошибке; caller владеет отбрасыванием partial data, OCC, owner/self/last-owner guards,
+// project revocation, write SQL и commit. Project binding authority не подставляется.
+func lockPlatformMembership(ctx context.Context, tx pgx.Tx, organizationID, ref string, item *entity.Membership) (string, string, error) {
+	var membershipID, subjectID string
+	err := tx.QueryRow(ctx, queryPlatformMembershipResolveForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "membership_ref": ref,
+	}).Scan(&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName,
+		&item.User.EmailMasked, &item.User.Active, &item.Role, &item.Active, &item.Version)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", errs.ErrNotFound
+	}
+	if err != nil {
+		return "", "", errs.ErrUnavailable
+	}
+	return membershipID, subjectID, nil
 }
