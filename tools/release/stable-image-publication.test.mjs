@@ -89,7 +89,7 @@ if(program==='git'){
 }else process.exit(10);
 `;
 
-async function setup(retainedComponent) {
+async function setup(retainedComponent, builtComponent = "control-plane") {
   const directory = await mkdtemp(join(tmpdir(), "kodex-stable-publication-test-"));
   await mkdir(join(directory, "bin")); await mkdir(join(directory, "tools"), { mode: 0o700 });
   for (const name of ["git", "kubectl", "docker"]) await writeFile(join(directory, "bin", name), mock, { mode: 0o700 });
@@ -103,10 +103,10 @@ async function setup(retainedComponent) {
     const name = "blobs/sha256/" + digest; await writeFile(join(layout, name), bytes); files.push(name);
     return { mediaType, digest: "sha256:" + digest, size: Buffer.byteLength(bytes) };
   };
-  const component = retainedComponent ?? "control-plane", referenceTag = retainedComponent ? "local-" + "c".repeat(64) : "a".repeat(40);
+  const component = retainedComponent ?? builtComponent, referenceTag = retainedComponent ? "local-" + "c".repeat(64) : "a".repeat(40);
   const config = await document({ os: "linux", architecture: "amd64", config: { User: "10001:10001",
     ...(retainedComponent ? { Cmd: ["/bin/sh"], Labels: { "org.opencontainers.image.revision": "a".repeat(40) } } :
-      { Entrypoint: ["/usr/local/bin/control-plane"] }) } }, "application/vnd.oci.image.config.v1+json");
+      { Entrypoint: ["/usr/local/bin/" + component] }) } }, "application/vnd.oci.image.config.v1+json");
   const layer = await document("synthetic layer", "application/vnd.oci.image.layer.v1.tar");
   const manifest = await document({ schemaVersion: 2, config, layers: [layer] }, "application/vnd.oci.image.manifest.v1+json");
   manifest.annotations = { "org.opencontainers.image.ref.name": referenceTag,
@@ -115,9 +115,10 @@ async function setup(retainedComponent) {
   await writeFile(join(layout, "oci-layout"), '{"imageLayoutVersion":"1.0.0"}'); files.push("index.json", "oci-layout");
   const archive = join(directory, retainedComponent ? component + "-" + "c".repeat(64) + ".oci.tar" : "image.tar");
   execFileSync("tar", ["-cf", archive, "-C", layout, ...files]); await chmod(archive, 0o600);
-  const receipt = { schema: "kodex.stable-local-build/v1", component: "control-plane", sourceSHA: "a".repeat(40),
+  const receipt = { schema: "kodex.stable-local-build/v1", component, sourceSHA: "a".repeat(40),
     contextSHA256: sha("synthetic git archive"), archiveSHA256: sha(await readFile(archive)), imageDigest: manifest.digest,
-    dockerfile: "services/internal/control-plane/Dockerfile", target: "", admission: "NOT_RUN", publication: "NOT_RUN", nodePull: "NOT_RUN" };
+    dockerfile: component === "backup-controller" ? "services/jobs/backup-controller/Dockerfile" : "services/internal/control-plane/Dockerfile",
+    target: "", admission: "NOT_RUN", publication: "NOT_RUN", nodePull: "NOT_RUN" };
   if (!retainedComponent) await writeFile(join(directory, "receipt.json"), JSON.stringify(receipt), { mode: 0o600 });
   else {
     const name = component === "image-admission" ? "image-admission-controller" : "kodex-image-registry-promotion";
@@ -163,8 +164,8 @@ test("capability-free publication container reads private inputs only as their a
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test("real publication CLI and worker keep credentials private and readback never imports again", async () => {
-  const { directory, run, plan } = await setup();
+for (const component of ["control-plane", "backup-controller"]) test(`real publication CLI and worker keep credentials private and readback never imports again: ${component}`, async () => {
+  const { directory, run, plan } = await setup(undefined, component);
   try {
     const planned = plan(); assert.equal(planned.status, 0, planned.output);
     const encoded = await readFile(join(directory, "plan", "plan.json"), "utf8"), value = JSON.parse(encoded);

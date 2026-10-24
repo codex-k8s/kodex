@@ -18,7 +18,7 @@ for program in kubectl docker jq sha256sum timeout realpath grep; do command -v 
 component=$(jq -er '.image.component' "$plan")
 profile=$(jq -er '.artifactProfile' "$plan")
 case "$component" in
-  control-plane|secret-broker|email-bridge|runtime-controller|integration-gateway|integration-synthetic|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|artifact-retention|session-archive|registry-pull-authorizer|image-admission-controller) [[ "$profile" == built ]] || fail 'build profile is required' ;;
+  control-plane|secret-broker|email-bridge|runtime-controller|integration-gateway|integration-synthetic|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|artifact-retention|session-archive|backup-controller|registry-pull-authorizer|image-admission-controller) [[ "$profile" == built ]] || fail 'build profile is required' ;;
   image-admission|image-admission-tools) [[ "$profile" == retained ]] || fail 'retained profile is required' ;;
   *) fail 'component is not a stable platform image' ;;
 esac
