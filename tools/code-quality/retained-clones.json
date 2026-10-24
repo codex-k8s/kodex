@@ -5509,9 +5509,9 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/project_assistant_integration_grant_candidates.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/system_assistant_integration_grant_candidates.go",
-      "fragmentSHA256": "7f4a3d5dfc8c26ee8d046e2b1d78c063e70805537990f709b47474e2b398f2b6",
+      "fragmentSHA256": "8293b2e9839aa06a8fc1d37001de39a534b27222186506d4e98a997b20de2a28",
       "count": 1,
-      "reason": "После выноса scan rows, cursor decode, capability projection и page logic осталось окно между scope commitment и началом capability loop. PROJECT commitment включает Project, Profile, PublicScope, ProfileVersion и owner profile pins, SYSTEM имеет собственный шестипольный scope и другой recipient owner. Caller checks и project public scope decoration остаются разными. Общие cursor/row/schema/page primitives уже едины; объединение scope authority ради этого133-token стыка смешивает разные контракты. Полные оба метода и источник contextDigest прочитаны; допускается только точный fragment этой пары."
+      "reason": "После реального выноса JSON Marshal/SHA-256 в jsonValueDigest прежнее133-token окно исчезло. Полные PROJECT и SYSTEM candidate methods повторно прочитаны; новое112-token окно включает хвост разных commitment structs и переход к уже общим cursor/schema/page primitives. PROJECT сохраняет Project/Profile/PublicScope/ProfileVersion и executable gate, SYSTEM имеет отдельные organization owner и readiness; scope fields и порядок bytes не объединены. Общий алгоритм хеширования теперь действительно один. Generic loop dispatcher смешал бы разные public scope и package refusal policies ради склейки boundaries. Обновлено только пересмотренное точное окно этой пары с count1; соседние новые cross-file окна не включены."
     },
     {
       "format": "go",
@@ -6136,6 +6136,22 @@
       "fragmentSHA256": "7c53e21980d1b7211edd3cb262e1da7350440d306b66799e9278aceb3e2027e0",
       "count": 1,
       "reason": "Окно109 tokens сравнивает21 позиционный Scan destination durable inbox с21 полем source/intent binding подготовленного содержимого. Полные scanInboxRow и readPreparedContentBindingTx прочитаны: первое возвращает inbox row и исходную driver error, второе читает exact plan/revision/operation owner query под shared lock, возвращает отдельную binding structure и преобразует отсутствие строки в conflict, прочие ошибки в unavailable. Общего исполняемого алгоритма кроме pgx.Row.Scan нет. Generic reflection scanner скрыл бы разные nominal SQL column contracts, а helper с callbacks добавил бы обёртку без удаления алгоритма. Сохранена только точная пара путей/hash/count1; eligibility, TTL и lifecycle не подавлены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/file_binding_targets.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/run_attachment_eligibility.go",
+      "fragmentSHA256": "7e5a749c2b0743b405072a425084c64841d948b75deab142350c6347c08b788f",
+      "count": 1,
+      "reason": "Окно105 tokens сравнивает короткий вход двух read-only repeatable-read запросов: validation tail, общий resolveScope, pgx BeginTx и deferred rollback. Полные ListArtifactBindingTargets и GetRunAttachmentEligibility прочитаны: первый проверяет artifact.bind/agent.view и строит каталог целей, второй отдельно authorizeCommand LaunchRun и run.view, затем собирает pinned dependencies без выдачи grant. Общие технические вызовы уже pgx/resolveScope; callback transaction dispatcher скрыл бы отдельные typed результаты, authority checks и error/commit paths ради этого короткого glue. Общий JSON digest алгоритм этих запросов вынесен отдельно. Сохранена только точная пара/hash/count1, не handlers, access rules или lifecycle."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/file_binding_targets.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/system_assistant_integration_grant_candidates.go",
+      "fragmentSHA256": "a8a092029622fde34e5bf5f1035630b96f8f36023b93b890c918abd22204c51a",
+      "count": 1,
+      "reason": "Окно118 tokens сравнивает общий вход resolveScope/BeginTx/rollback двух разных read-only RR методов. Полные функции прочитаны: artifact binding проверяет artifact.bind и видимость каждого project agent; system assistant candidates требует отдельного organization owner, exact connection/package pins и readiness. Сами алгоритмы authority, построения страницы и cursor раздельны, общий JSON hash теперь использует jsonValueDigest. Generic callback runner смешал бы typed results и скрывал собственные owner/eligibility steps, не удаляя общего бизнесового алгоритма. Оставлена только эта точная пара путей/hash/count1; scopes, SQL, rollback и grant policies не подавляются целиком."
     }
   ]
 }

@@ -322,9 +322,7 @@ func roleImageActions(recipe entity.RoleImageRecipe, canManage bool) []string {
 // roleImageDigest хеширует существующее JSON encoding строчным SHA-256, сохраняя игнорирование
 // marshal errors и их nil-byte hash fallback.
 func roleImageDigest(value any) string {
-	encoded, _ := json.Marshal(value)
-	sum := sha256.Sum256(encoded)
-	return hex.EncodeToString(sum[:])
+	return jsonValueDigest(value)
 }
 
 // roleImageToken HMAC-signs the NUL-delimited purpose, reference, attempt, fence, generation and
