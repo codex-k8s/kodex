@@ -13,18 +13,38 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// workflowCatalogRepository counts successful domain workflow-catalog reads while supplying an
+// inert principal resolver for local boundary tests.
+// workflowCatalogRepository подсчитывает успешные чтения доменного каталога workflow с неактивным
+// разрешением principal для локальных тестов границы.
 type workflowCatalogRepository struct {
 	port.Repository
 	calls int
 }
 
+// ResolvePrincipal returns the supplied synthetic workflow-catalog principal unchanged to isolate
+// workload and typed input validation.
+// ResolvePrincipal возвращает переданный синтетический principal каталога workflow без изменений
+// для отдельной проверки workload и типизированного ввода.
 func (r *workflowCatalogRepository) ResolvePrincipal(_ context.Context, p value.Principal) (value.Principal, error) {
 	return p, nil
 }
+
+// GetExecutionWorkflowCatalog counts the owner query and returns an empty synthetic workflow
+// catalog without reading execution state.
+// GetExecutionWorkflowCatalog подсчитывает query владельца и возвращает пустой синтетический
+// каталог workflow без чтения состояния выполнения.
 func (r *workflowCatalogRepository) GetExecutionWorkflowCatalog(_ context.Context, _ value.Principal, _ query.ExecutionWorkflowCatalog) (entity.ExecutionWorkflowCatalog, error) {
 	r.calls++
 	return entity.ExecutionWorkflowCatalog{}, nil
 }
+
+// TestExecutionWorkflowCatalogDomainBoundary checks a 200-rune query succeeds while malformed
+// generation, lease, encoding, cursor or typed mode fails before owner reads and foreign workloads
+// are denied.
+// TestExecutionWorkflowCatalogDomainBoundary проверяет успех запроса из 200 Unicode-символов и
+// отказ до чтения владельца неверным поколению, lease, кодировке, курсору либо типизированному
+// режиму с запретом чужого workload.
 func TestExecutionWorkflowCatalogDomainBoundary(t *testing.T) {
 	r := &workflowCatalogRepository{}
 	service, err := New(r)
@@ -60,6 +80,12 @@ func TestExecutionWorkflowCatalogDomainBoundary(t *testing.T) {
 	}
 }
 
+// TestExecutionWorkflowCatalogTypedModes checks immutable publication and active-run modes with
+// exact pins, rejecting mixed modes, publication pagination and active-run text search before
+// owner reads.
+// TestExecutionWorkflowCatalogTypedModes проверяет immutable-режимы publication и active runs с
+// точными pins и отказ до чтений владельца смешанным режимам, пагинации publication и текстовому
+// поиску active runs.
 func TestExecutionWorkflowCatalogTypedModes(t *testing.T) {
 	r := &workflowCatalogRepository{}
 	service, _ := New(r)

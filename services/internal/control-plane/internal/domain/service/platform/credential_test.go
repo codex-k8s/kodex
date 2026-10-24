@@ -13,6 +13,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// integrationCredentialRepository maps synthetic external principal to owner identity and records
+// owner reads and commands for integration credential boundary tests.
+// integrationCredentialRepository переводит синтетический внешний principal в identity владельца и
+// записывает чтения и команды для тестов границы реквизитов интеграции.
 type integrationCredentialRepository struct {
 	platformrepo.Repository
 	resolveCalls  int
@@ -21,6 +25,10 @@ type integrationCredentialRepository struct {
 	connection    *entity.IntegrationConnection
 }
 
+// ResolvePrincipal accepts only the synthetic external identity, counts resolution and replaces
+// actor and tenant with fixture owner values.
+// ResolvePrincipal принимает только синтетическую внешнюю identity, подсчитывает разрешение и
+// заменяет actor и tenant тестовыми значениями владельца.
 func (repository *integrationCredentialRepository) ResolvePrincipal(_ context.Context, principal value.Principal) (value.Principal, error) {
 	repository.resolveCalls++
 	if principal.ActorID != "external-actor" || principal.AuthorityTenant != "external-tenant" {
@@ -31,6 +39,10 @@ func (repository *integrationCredentialRepository) ResolvePrincipal(_ context.Co
 	return principal, nil
 }
 
+// GetIntegrationConnection records the resolved read principal and returns an override connection
+// or a synthetic configure-credential-capable GitHub connection.
+// GetIntegrationConnection записывает разрешённый principal чтения и возвращает заданное
+// подключение либо синтетическое GitHub-подключение с действием configure credential.
 func (repository *integrationCredentialRepository) GetIntegrationConnection(_ context.Context, principal value.Principal, ref string) (entity.IntegrationConnection, error) {
 	repository.readPrincipal = principal
 	if repository.connection != nil {
@@ -41,6 +53,12 @@ func (repository *integrationCredentialRepository) GetIntegrationConnection(_ co
 	}, nil
 }
 
+// TestConfigureIntegrationCredentialRequiresPublishedOpenAPIPin checks an unmodified shipped
+// OpenAPI template cannot configure credentials while an owner-read published-definition pin
+// enables the typed command.
+// TestConfigureIntegrationCredentialRequiresPublishedOpenAPIPin проверяет запрет настройки
+// реквизитов для неизменённого shipped OpenAPI-шаблона и допуск типизированной команды по
+// прочитанному владельцем pin опубликованного определения.
 func TestConfigureIntegrationCredentialRequiresPublishedOpenAPIPin(t *testing.T) {
 	t.Parallel()
 	definitions, err := integrationpackage.LoadShipped()
@@ -71,14 +89,26 @@ func TestConfigureIntegrationCredentialRequiresPublishedOpenAPIPin(t *testing.T)
 	}
 }
 
+// Execute records the integration command and returns a synthetic version-four connection matching
+// its payload reference.
+// Execute записывает команду интеграции и возвращает синтетическое подключение четвёртой версии со
+// ссылкой из payload.
 func (repository *integrationCredentialRepository) Execute(_ context.Context, input command.Command) (command.Result, error) {
 	repository.executed = input
 	connection := entity.IntegrationConnection{Ref: input.Payload.(command.ConnectionInput).Ref, Version: 4}
 	return command.Result{Connection: &connection}, nil
 }
 
+// integrationCredentialMaterializer supplies fixed synthetic storage metadata for local
+// integration credential tests without storing plaintext.
+// integrationCredentialMaterializer предоставляет фиксированные синтетические метаданные хранения
+// для локальных тестов реквизитов интеграции без сохранения plaintext.
 type integrationCredentialMaterializer struct{}
 
+// Materialize returns a fixed synthetic immutable descriptor without using the supplied identity
+// or credential bytes.
+// Materialize возвращает фиксированный синтетический immutable-дескриптор без использования
+// переданных identity либо байтов реквизитов.
 func (integrationCredentialMaterializer) Materialize(_ context.Context, _ string, _ []byte) (MaterializedCredential, error) {
 	return MaterializedCredential{
 		SecretRef: "integration-credentials", SecretUID: "secret-uid", SecretResourceVersion: "12",
@@ -86,6 +116,12 @@ func (integrationCredentialMaterializer) Materialize(_ context.Context, _ string
 	}, nil
 }
 
+// TestConfigureIntegrationCredentialDoesNotResolveOpaquePrincipalAgain checks credential reads and
+// commands use the once-resolved owner identity with operation/intent pins instead of resolving
+// opaque identity a second time.
+// TestConfigureIntegrationCredentialDoesNotResolveOpaquePrincipalAgain проверяет использование
+// единожды разрешённой identity владельца с pins operation и intent в чтении и командах реквизитов
+// без второго разрешения opaque identity.
 func TestConfigureIntegrationCredentialDoesNotResolveOpaquePrincipalAgain(t *testing.T) {
 	t.Parallel()
 	repository := &integrationCredentialRepository{}

@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestEmailCredentialValueBoundsAndNoImplicitTrimming checks significant secret whitespace remains
+// valid while empty values, controls, oversized bodies, noncertificate/private-key input and
+// unknown kinds are rejected.
+// TestEmailCredentialValueBoundsAndNoImplicitTrimming проверяет допустимость значимых пробелов
+// секрета с отказом пустым значениям, управляющим символам, чрезмерным телам, несертификатному
+// вводу, private key и неизвестным видам.
 func TestEmailCredentialValueBoundsAndNoImplicitTrimming(t *testing.T) {
 	for _, test := range []struct {
 		kind, value string

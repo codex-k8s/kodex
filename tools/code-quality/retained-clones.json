@@ -5496,6 +5496,46 @@
       "fragmentSHA256": "7c142db62bcb4445eb12bcaeceed93fd2a98b2165fdf05e8abec659de6194793",
       "count": 1,
       "reason": "После предметных комментариев physical minLines достигнут у105-token окна явных nominal DTO assignments и границ соседних функций. FromSnapshot переносит immutable owner snapshot в доменный renderer, тогда как castPromptContextPin переводит domain dependency pin в protobuf-ответ. В первом окне начало Validate, во втором начало castPromptSlot: самостоятельного общего алгоритма всего окна нет. Наборы полей и направления различны; общий converter в libs заставил бы домен зависеть от transport/generated либо стёр бы типы через reflection. Оставлено только это точное окно двух путей/hash/count1, не authority checks, casters или файлы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/configuration_source.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/configuration_writeback.go",
+      "fragmentSHA256": "97e52245cbdbd11e2b60eb4de77401c561e99af4fa90bb374ca488349a91ba2a",
+      "count": 1,
+      "reason": "100-token окно сравнивает разные authority adapters: sourceWorker всегда требует integration-gateway и exact source-work permission; writeBackOwner применяет worker boundary лишь для непустого действия, сохраняя отдельный разрешённый read path. Repository ports и domain results различны. principal уже общий. Универсальный owner dispatcher скрыл бы обязательность worker проверки и nominal port; самостоятельного общего алгоритма сверх короткого wiring нет. Сохранена только точная пара/hash/count1 после полного чтения обоих файлов."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/configuration_source.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/configuration_writeback.go",
+      "fragmentSHA256": "58f234426e67cdf69f2334703528f425570cf3225970cf5f1f6220ee1d2124f8",
+      "count": 1,
+      "reason": "Общее ограничение claimant и batch реально вынесено в validConfigurationWorkClaim; AST соответствует точному переносу исходного предиката с двумя вызовами. Оставшиеся196 tokens пересекают specialized claim/renew и начало следующей операции двух разных владельцев source и write-back. Exact permissions, lease/result types и owner методы различны. Generic callback factory ради return guards стёрла бы явную карту команд; общий выбор leases здесь не выполняется. Сохранено только точное окно/hash/count1, не исходный дубликат условия или файлы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/configuration_source.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/configuration_writeback.go",
+      "fragmentSHA256": "fcc96ad13ab05a3a370229954e12a897504f793f3f2c1ec146d9d2ba36d0fd70",
+      "count": 1,
+      "reason": "157-token окно пересекает хвост renew/begin, complete и fail разных специализированных owner ports. Source completion принимает immutable source observation; write-back completion принимает effect input и завершает иной lifecycle. Отказ и lease types также различны. Совпадают проверки ошибок и nominal forwarding, а не реализация переходов: атомарность принадлежит отдельным repository methods. Общий command dispatcher скрыл бы эти различия. Сохранены только exact два пути/hash/count1 после чтения полного контекста."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/memory.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/skill.go",
+      "fragmentSHA256": "c8d0b55b75f403c4c1bf1a948228f18cf6e9a00d0feb24b5288a1cda1e94e8e7",
+      "count": 1,
+      "reason": "118-token окно связывает хвост фильтра списка и чтение ревизий памяти и skill bundles. Общий principal resolution уже существует; дальнейшие repository методы, entities и visibility владельцев различны. Memory допускает EXPIRED, skill bundle такого состояния не имеет: объединять lifecycle validation нельзя. Generic pager ради коротких return guards потребовал бы callbacks с разными типами и не устранил самостоятельный алгоритм. Сохранена лишь точная пара/hash/count1, без исключения целых memory/skill файлов."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/platform/provider_renewal.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/platform/provider_renewal.go",
+      "fragmentSHA256": "b70177e0b74eac5f22cc6408cb57911a30bb9ca0de2fc7edc478645a4cc6d9b6",
+      "count": 1,
+      "reason": "115-token окно сравнивает две явно раздельные команды AuthorizeProviderCredentialRenewal и ValidateProviderCredentialRenewalObservation. Обе требуют secret-broker и пустой project scope, но exact operation и owner method различны: допуск задачи не равен проверке наблюдения. principal уже общий, собственно lifecycle проверяется owner port. Перенос обёрток в универсальный dispatcher спрятал бы соответствие permission и команды ради нескольких guards; общий самостоятельный алгоритм здесь отсутствует. Сохранено только это внутрефайловое окно/hash/count1."
     }
   ]
 }

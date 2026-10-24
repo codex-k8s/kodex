@@ -9,8 +9,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// runtimeDiffReference checks only an eight-to-ninety-six-character ASCII reference shape shared
+// by local read validators, without proving ownership.
+// runtimeDiffReference проверяет только ASCII-форму ссылки длиной от восьми до девяноста шести
+// символов для локальных валидаторов чтения без подтверждения владения.
 var runtimeDiffReference = regexp.MustCompile(`^[A-Za-z0-9_-]{8,96}$`)
 
+// GetRuntimeRevisionDiff validates run and optional revision locators, resolves principal and
+// reads the authoritative public current/predecessor pair before computing safe component
+// differences.
+// GetRuntimeRevisionDiff проверяет locators выполнения и необязательной ревизии, разрешает
+// principal и читает авторитетную публичную текущую и предыдущую пару до вычисления безопасных
+// различий компонентов.
 func (service *Service) GetRuntimeRevisionDiff(ctx context.Context, p value.Principal, runRef, revisionRef string) (entity.RuntimeRevisionDiff, error) {
 	if !runtimeDiffReference.MatchString(runRef) || revisionRef != "" && !runtimeDiffReference.MatchString(revisionRef) {
 		return entity.RuntimeRevisionDiff{}, errs.ErrInvalid
@@ -26,6 +36,10 @@ func (service *Service) GetRuntimeRevisionDiff(ctx context.Context, p value.Prin
 	return runtimeRevisionDiff(current, previous), nil
 }
 
+// runtimeRevisionDiff compares eleven closed public components in stable order, including every
+// current component when no predecessor exists and only changed values otherwise.
+// runtimeRevisionDiff сравнивает одиннадцать закрытых публичных компонентов в устойчивом порядке,
+// включая все текущие без предшественника и только изменённые значения при его наличии.
 func runtimeRevisionDiff(current entity.RuntimeRevisionPublicProjection, previous *entity.RuntimeRevisionPublicProjection) entity.RuntimeRevisionDiff {
 	result := entity.RuntimeRevisionDiff{Current: current.Identity}
 	var old entity.RuntimeRevisionPublicProjection

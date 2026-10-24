@@ -12,6 +12,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// artifactTransferRepository supplies resolved synthetic authority and counts exact
+// execution-artifact reads with an injected principal failure.
+// artifactTransferRepository предоставляет разрешённые синтетические полномочия и подсчитывает
+// точные чтения артефакта выполнения с задаваемой ошибкой principal.
 type artifactTransferRepository struct {
 	platformrepo.Repository
 	resolved value.Principal
@@ -19,10 +23,18 @@ type artifactTransferRepository struct {
 	reads    int
 }
 
+// ResolvePrincipal returns configured authoritative fixture identity or its failure, ignoring the
+// incoming transport identity.
+// ResolvePrincipal возвращает заданную авторитетную тестовую identity либо её ошибку, игнорируя
+// входную identity transport.
 func (repository *artifactTransferRepository) ResolvePrincipal(context.Context, value.Principal) (value.Principal, error) {
 	return repository.resolved, repository.failure
 }
 
+// ReadExecutionArtifact requires the resolved principal and exact lease/fence/generation/artifact
+// tuple before returning a synthetic artifact download descriptor.
+// ReadExecutionArtifact требует разрешённый principal и точный кортеж lease, fence, поколения и
+// артефакта до возврата синтетического дескриптора скачивания.
 func (repository *artifactTransferRepository) ReadExecutionArtifact(_ context.Context, p value.Principal, lease, fence string, generation int64, ref string) (platformrepo.ArtifactDownload, error) {
 	repository.reads++
 	if !reflect.DeepEqual(p, repository.resolved) || lease != "lease_exact" || fence != "fence_exact" || generation != 7 || ref != "art_exact" {
@@ -31,6 +43,12 @@ func (repository *artifactTransferRepository) ReadExecutionArtifact(_ context.Co
 	return platformrepo.ArtifactDownload{Artifact: entity.Artifact{Ref: ref}}, nil
 }
 
+// TestArtifactTransferRequiresResolvedExactOperationAndWorkload checks streaming uses resolved
+// runtime-controller authority distinct from unary reads, rejecting malformed pins before owner
+// reads and preserving an owner conflict.
+// TestArtifactTransferRequiresResolvedExactOperationAndWorkload проверяет разрешённые
+// runtime-controller полномочия streaming, отличные от unary-чтения, отказ неверным pins до чтения
+// владельца и сохранение conflict владельца.
 func TestArtifactTransferRequiresResolvedExactOperationAndWorkload(t *testing.T) {
 	for _, scenario := range []string{"exact", "unary permission", "other workload", "identity failure", "empty lease", "empty fence", "zero generation", "empty artifact", "owner mismatch"} {
 		t.Run(scenario, func(t *testing.T) {

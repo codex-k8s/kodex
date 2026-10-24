@@ -4,12 +4,53 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.357.0
+version: 1.358.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Полное описание domain/service/platform — 24.10.2026
+
+На основе `918711b7a6f2ac8361a90983483a014d981db797` описаны 158 оставшихся
+объявлений domain/service/platform в33 файлах, включая private/test declarations
+и методы materializer interfaces. Новый общий helper также имеет EN→RU
+комментарий. Inventory:16712/21350, missing4638; в platform и prompt, как и во
+всём handwritten Go gateway, пропусков нет. Остаток принадлежит control-plane.
+
+Комментарии явно сохраняют различия API key с запретом edge whitespace,
+обычного integration credential с trim и email credential с сохранением
+whitespace; durable reservation/replay и внешней materialization; trusted
+worker permissions и owner read path; revision-qualified file prefixes и
+полномочий lease; full prompt и safe transport view. Компенсация provider
+материала описана точно: отдельный bounded context, authoritative readback,
+сохранение материала при отсутствии reference port либо подтверждённой ссылке.
+Missing port не объявлен ошибкой, а копия secret buffer не названа очисткой
+памяти caller. Context7: проверены Go context.WithoutCancel и WithTimeout.
+
+Одинаковый технический предикат ограничений claimant (1..128 bytes без NUL/
+CR/LF) и batch (1..16) вынесен в validConfigurationWorkClaim для source-work
+и write-back. Набор rejected inputs, порядок authority и owner вызовов не
+меняются. Scope остаётся локальным: business-specific правила не вынесены в
+общую библиотеку. AST/directives31 файлов совпали с исходным head; два
+изменённых executable файла совпали после точной ожидаемой замены предиката
+на два вызова одного helper. Контракты, state transitions и deploy не менялись.
+
+Прочитаны и адресно сохранены пять точных clone windows: source/write-back
+owner wiring, claim/renew после выноса предиката, completion/failure разных
+ports, memory/skill revision forwarding и две разные renewal команды. Их
+nominal DTO, permissions, lifecycle и owner методы различны; общий алгоритм
+не скрыт через generic dispatcher. Registry сохраняет exact hash/count/stale
+проверки; новых broad ignores нет. Raw1795, retained812, unresolved983. Сам
+вынос уменьшил clone claim/renew с224 до196 tokens, количество групп прежнее.
+
+Локально на Go-содержимом этого этапа: полный `go build ./...` и
+`go test ./...` control-plane — PASS;17 analyzer unit — PASS; AST/directives и
+`git diff --check` — PASS. Пустой GitHub checks не считается CI PASS.
+Слияние, deployment, startup/browser acceptance и ручной QA — NOT RUN.
+Полная задача#1823 не завершена; разрешение владельца на merge/deploy после
+окончания задачи сохраняется, повторного запроса не требуется.
 
 ## Материализация prompt и соседние границы — 24.10.2026
 
