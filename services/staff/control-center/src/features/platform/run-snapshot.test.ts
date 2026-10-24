@@ -263,6 +263,80 @@ describe("полный owner run snapshot", () => {
     store.applyRunReadinessSnapshot(value.graph, value.runs);
     expect(store.runs.run_child001?.state).toBe("CANCELLED");
   });
+  it.each(["SYSTEM", "PROJECT"] as const)(
+    "принимает повтор %s помощника только с точной привязкой",
+    (scope) => {
+      for (const defect of [
+        "",
+        "agent",
+        "parent",
+        "target",
+        "pin",
+        "session",
+        "attempt",
+        "continuation",
+        "missing pin",
+      ]) {
+        const store = usePlatformStore(),
+          value = retryFixture();
+        store.bootstrap = { organizationRef: "org_fixture1" } as NonNullable<
+          typeof store.bootstrap
+        >;
+        const root = requiredFixture(value.runs[0]),
+          old = requiredFixture(value.runs[1]);
+        for (const run of value.runs) {
+          run.source = "SYSTEM_ASSISTANT";
+          run.target = {
+            type: "SYSTEM_ASSISTANT",
+            ref: "agt_fixture1",
+            displayName: "Помощник",
+            version: 1,
+          };
+          run.assistantPin = {
+            scope,
+            organizationRef: "org_fixture1",
+            conversationRef: "cnv_fixture1",
+            assistantRef: "agt_fixture1",
+            projectRef: run.projectRef,
+            ...(scope === "PROJECT" ? { profileRef: "asp_fixture1" } : {}),
+          };
+        }
+        old.sessionRef = root.sessionRef;
+        requiredFixture(old.sessionReadiness).sessionRef = requiredFixture(
+          root.sessionRef,
+        );
+        old.attempt = 1;
+        root.attempt = 2;
+        for (const node of value.graph.nodes) {
+          node.type = "AGENT_EXECUTION";
+          node.agentRef = "agt_fixture1";
+          delete node.parentNodeRef;
+        }
+        const node = requiredFixture(value.graph.nodes[0]);
+        if (defect === "agent") node.agentRef = "agt_foreign1";
+        if (defect === "parent") node.parentNodeRef = "nod_foreign1";
+        if (defect === "target") old.target.type = "AGENT";
+        if (defect === "pin")
+          requiredFixture(root.assistantPin).conversationRef = "cnv_foreign1";
+        if (defect === "session") root.sessionRef = "ses_foreign1";
+        if (defect === "attempt") root.attempt = 1;
+        if (defect === "missing pin") delete old.assistantPin;
+        if (defect === "continuation") {
+          requiredFixture(value.graph.edges[0]).type = "CONTINUES";
+          old.state = "SUCCEEDED";
+          delete root.retryOfRunRef;
+        }
+        if (!defect)
+          expect(() =>
+            store.applyRunReadinessSnapshot(value.graph, value.runs),
+          ).not.toThrow();
+        else
+          expect(() =>
+            store.applyRunReadinessSnapshot(value.graph, value.runs),
+          ).toThrow();
+      }
+    },
+  );
   const continuationFixture = () => {
     const value = retryFixture(),
       root = requiredFixture(value.runs[0]),

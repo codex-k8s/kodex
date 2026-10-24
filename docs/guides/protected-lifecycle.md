@@ -26,6 +26,15 @@ CONTINUES: оба owner-readable root относятся к одной непу�
 закрыто отклоняются на owner, gateway и frontend boundaries. Это проверка
 авторитетного чтения, без нового grant или события.
 
+Корневой узел помощника имеет тип `AGENT_EXECUTION`, поэтому проверка
+`RETRY_OF` не может отождествлять корень с `ROOT_PROCESS`. Для такого ребра
+оба узла не имеют родителя и принадлежат точным owner-readable root runs
+помощника; сотрудник узла совпадает с `AssistantRunPin`, обе привязки целиком
+равны, сессия непустая и общая, номер попытки увеличен ровно на один.
+Это узкое правило чтения применяется одинаково в control-plane, WebSocket
+проекции и PWA; произвольный `AGENT_EXECUTION` не подтверждает lineage.
+Оно не расширяет допуск `CONTINUES`, не создаёт grant и не меняет retry policy.
+
 Окончательный PermissionDenied точного CompleteExecution закрывает собственные
 runtime Pod/ticket/projection/сеть и tracker независимо от наличия deadline:
 cancel/interrupt также отзывают lease. Transient outage не подменяется отзывом,

@@ -96,3 +96,65 @@ func TestGraphContinuationSnapshotExactLineage(t *testing.T) {
 		})
 	}
 }
+
+// TestAssistantRetrySnapshotExactLineage verifies assistant execution anchors with exact immutable pins and rejects unrelated agents, sessions and attempts without authorizing any mutation.
+// TestAssistantRetrySnapshotExactLineage проверяет узлы помощника с точными неизменяемыми привязками и отклоняет чужих сотрудников, сессии и попытки, не разрешая изменений.
+func TestAssistantRetrySnapshotExactLineage(t *testing.T) {
+	for _, scope := range []string{"SYSTEM", "PROJECT"} {
+		t.Run(scope, func(t *testing.T) {
+			fixture := func() (*entity.RunGraph, map[string]entity.Run) {
+				pin := entity.AssistantRunPin{Scope: scope, OrganizationRef: "org_fixture1", ConversationRef: "cnv_fixture1", AssistantRef: "agt_fixture1"}
+				if scope == "PROJECT" {
+					pin.ProjectRef = "prj_fixture1"
+					pin.ProfileRef = "asp_fixture1"
+				}
+				previousPin := pin
+				old := entity.Run{Ref: "run_previous", RootRunRef: "run_previous", SessionRef: "ses_fixture1", Source: "SYSTEM_ASSISTANT", Target: entity.RunTarget{Type: "SYSTEM_ASSISTANT", Ref: pin.AssistantRef}, AssistantPin: &previousPin, Attempt: 1}
+				fresh := old
+				fresh.Ref = "run_current1"
+				fresh.RootRunRef = fresh.Ref
+				fresh.RetryOfRunRef = old.Ref
+				fresh.Attempt = 2
+				fresh.AssistantPin = &pin
+				graph := &entity.RunGraph{Nodes: []entity.RunNode{{Ref: "nod_previous", RunRef: old.Ref, Type: "AGENT_EXECUTION", AgentRef: pin.AssistantRef}, {Ref: "nod_current1", RunRef: fresh.Ref, Type: "AGENT_EXECUTION", AgentRef: pin.AssistantRef}}, Edges: []entity.RunEdge{{RunRef: fresh.Ref, SourceNodeRef: "nod_previous", TargetNodeRef: "nod_current1", Type: "RETRY_OF"}}}
+				return graph, map[string]entity.Run{old.Ref: old, fresh.Ref: fresh}
+			}
+			for _, defect := range []string{"", "agent", "parent", "target", "pin", "session", "attempt", "continuation", "missing pin"} {
+				t.Run(defect, func(t *testing.T) {
+					g, r := fixture()
+					old, fresh := r["run_previous"], r["run_current1"]
+					switch defect {
+					case "agent":
+						g.Nodes[0].AgentRef = "agt_foreign1"
+					case "parent":
+						g.Nodes[0].ParentNodeRef = "nod_foreign1"
+					case "target":
+						old.Target.Type = "AGENT"
+					case "pin":
+						fresh.AssistantPin.ConversationRef = "cnv_foreign1"
+					case "session":
+						fresh.SessionRef = "ses_foreign1"
+					case "attempt":
+						fresh.Attempt = 1
+					case "continuation":
+						g.Edges[0].Type = "CONTINUES"
+						old.State = "SUCCEEDED"
+						fresh.RetryOfRunRef = ""
+					case "missing pin":
+						old.AssistantPin = nil
+					}
+					r[old.Ref] = old
+					r[fresh.Ref] = fresh
+					previous, ok := graphRetryPredecessors(g, r)
+					if defect == "" {
+						if !ok || !previous[old.Ref] {
+							t.Fatal("canonical assistant retry rejected")
+						}
+					} else if ok {
+						t.Fatal("unproven assistant retry accepted")
+					}
+				})
+			}
+		})
+	}
+}

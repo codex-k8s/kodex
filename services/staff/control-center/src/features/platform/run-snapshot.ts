@@ -1,5 +1,9 @@
-import type { Run, RunGraph } from "@/shared/api/generated/openapi/types.gen";
-import { assertRunOwner } from "@/features/runs/run-owner";
+import type {
+  Run,
+  RunGraph,
+  RunNode,
+} from "@/shared/api/generated/openapi/types.gen";
+import { assertRunOwner, sameAssistantRunPin } from "@/features/runs/run-owner";
 
 const refPattern = /^[A-Za-z0-9_-]{8,128}$/;
 const storageStates = new Set([
@@ -177,8 +181,7 @@ function snapshotRetryPredecessors(
     if (
       !old ||
       !fresh ||
-      oldNode.type !== "ROOT_PROCESS" ||
-      newNode.type !== "ROOT_PROCESS" ||
+      !validPredecessorAnchors(edge.type, oldNode, newNode, old, fresh) ||
       old.ref !== old.rootRunRef ||
       fresh.ref !== fresh.rootRunRef ||
       edge.runRef !== fresh.ref ||
@@ -217,4 +220,41 @@ function snapshotRetryPredecessors(
     }
   }
   return predecessors;
+}
+
+// Узел исполнения разрешён только для подтверждённого повтора того же помощника.
+function validPredecessorAnchors(
+  edgeType: string,
+  oldNode: RunNode,
+  newNode: RunNode,
+  old: Run,
+  fresh: Run,
+): boolean {
+  if (oldNode.type === "ROOT_PROCESS" && newNode.type === "ROOT_PROCESS")
+    return true;
+  const pin = old.assistantPin;
+  return (
+    edgeType === "RETRY_OF" &&
+    oldNode.type === "AGENT_EXECUTION" &&
+    newNode.type === "AGENT_EXECUTION" &&
+    !oldNode.parentNodeRef &&
+    !newNode.parentNodeRef &&
+    old.source === "SYSTEM_ASSISTANT" &&
+    fresh.source === "SYSTEM_ASSISTANT" &&
+    old.target.type === "SYSTEM_ASSISTANT" &&
+    fresh.target.type === "SYSTEM_ASSISTANT" &&
+    !!pin?.assistantRef &&
+    !!fresh.assistantPin &&
+    sameAssistantRunPin(old, fresh) &&
+    old.target.ref === pin.assistantRef &&
+    fresh.target.ref === pin.assistantRef &&
+    oldNode.agentRef === pin.assistantRef &&
+    newNode.agentRef === pin.assistantRef &&
+    !!old.sessionRef &&
+    old.sessionRef === fresh.sessionRef &&
+    Number.isSafeInteger(old.attempt) &&
+    Number.isSafeInteger(fresh.attempt) &&
+    old.attempt > 0 &&
+    fresh.attempt === old.attempt + 1
+  );
 }

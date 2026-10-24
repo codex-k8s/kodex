@@ -226,3 +226,62 @@ func TestRunSnapshotRefreshAfterLostOrganizationWake(t *testing.T) {
 		t.Fatal("unchanged org cursor introduced snapshot polling")
 	}
 }
+
+// TestAssistantRetrySnapshotAnchors checks both assistant scopes at the complete WebSocket projection boundary and rejects changes to agent, parent, owner pin, session or attempt.
+// TestAssistantRetrySnapshotAnchors проверяет обе области помощника на полной WebSocket-проекции и отклоняет изменения сотрудника, родителя, привязки владельца, сессии и попытки.
+func TestAssistantRetrySnapshotAnchors(t *testing.T) {
+	for _, scope := range []cp.AssistantScope{cp.AssistantScope_ASSISTANT_SCOPE_SYSTEM, cp.AssistantScope_ASSISTANT_SCOPE_PROJECT} {
+		for _, defect := range []string{"", "agent", "parent", "target", "pin", "session", "attempt", "continuation", "missing pin"} {
+			t.Run(scope.String()+"/"+defect, func(t *testing.T) {
+				v := completeRunSnapshotFixture()
+				fresh, old := v.Run, v.Runs[1]
+				old.RootRunRef = old.Ref
+				old.ParentRunRef = ""
+				old.State = cp.RunState_RUN_STATE_CANCELLED
+				fresh.RetryOfRunRef = old.Ref
+				fresh.Attempt = 2
+				old.Attempt = 1
+				old.SessionRef = fresh.SessionRef
+				old.SessionReadiness.SessionRef = fresh.SessionRef
+				for _, run := range v.Runs {
+					run.Source = cp.RunSource_RUN_SOURCE_SYSTEM_ASSISTANT
+					run.Target = &cp.RunTarget{Target: &cp.RunTarget_SystemAssistantRef{SystemAssistantRef: "agt_fixture1"}}
+					run.AssistantPin = &cp.AssistantRunPin{Scope: scope, OrganizationRef: "org_fixture1", ConversationRef: "cnv_fixture1", AssistantRef: "agt_fixture1", ProjectRef: run.ProjectRef}
+					if scope == cp.AssistantScope_ASSISTANT_SCOPE_PROJECT {
+						run.AssistantPin.ProfileRef = "asp_fixture1"
+					}
+				}
+				v.Graph.Nodes = []*cp.RunNode{{Ref: "nod_previous", RunRef: old.Ref, Type: cp.RunNodeType_RUN_NODE_TYPE_AGENT_EXECUTION, AgentRef: "agt_fixture1"}, {Ref: "nod_current1", RunRef: fresh.Ref, Type: cp.RunNodeType_RUN_NODE_TYPE_AGENT_EXECUTION, AgentRef: "agt_fixture1"}}
+				v.Graph.Edges = []*cp.RunEdge{{Ref: "edg_retry001", RunRef: fresh.Ref, SourceNodeRef: "nod_previous", TargetNodeRef: "nod_current1", Type: cp.RunEdgeType_RUN_EDGE_TYPE_RETRY_OF}}
+				switch defect {
+				case "agent":
+					v.Graph.Nodes[0].AgentRef = "agt_foreign1"
+				case "parent":
+					v.Graph.Nodes[0].ParentNodeRef = "nod_foreign1"
+				case "target":
+					old.Target = &cp.RunTarget{Target: &cp.RunTarget_AgentRef{AgentRef: "agt_fixture1"}}
+				case "pin":
+					fresh.AssistantPin.ConversationRef = "cnv_foreign1"
+				case "session":
+					fresh.SessionRef = "ses_foreign1"
+				case "attempt":
+					fresh.Attempt = 1
+				case "continuation":
+					v.Graph.Edges[0].Type = cp.RunEdgeType_RUN_EDGE_TYPE_CONTINUES
+					old.State = cp.RunState_RUN_STATE_SUCCEEDED
+					fresh.RetryOfRunRef = ""
+				case "missing pin":
+					old.AssistantPin = nil
+				}
+				_, err := projectCompleteRunSnapshot(v, &runSubscription{rootRef: v.Run.Ref}, nil)
+				if defect == "" {
+					if err != nil {
+						t.Fatal("canonical assistant retry rejected", err)
+					}
+				} else if err == nil {
+					t.Fatal("unproven assistant retry accepted")
+				}
+			})
+		}
+	}
+}

@@ -185,6 +185,10 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 			retried.Run.AssistantPin.OrganizationRef == "" || retried.Run.AssistantPin.ProfileRef != "" || retried.Run.AssistantPin.ProjectRef != "" {
 			t.Fatal("assistant retry changed the immutable conversation/profile pin")
 		}
+		_, snapshot, snapshotErr := service.GetRunGraphSnapshot(ctx, owner, retried.Run.Ref)
+		if snapshotErr != nil || len(snapshot.Runs) != 2 {
+			t.Fatalf("assistant retry full snapshot unavailable: %v", snapshotErr)
+		}
 		retryClaims := claim("retry-a", 10)
 		if len(retryClaims) != 1 || stringMap(retryClaims[0], "runRef") != retried.Run.Ref ||
 			stringMap(retryClaims[0], "sessionRef") != a.SessionRef || stringMap(retryClaims[0], "runtimeRevisionRef") == stringMap(aFirst, "runtimeRevisionRef") {

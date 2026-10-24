@@ -93,7 +93,7 @@ func graphRetryPredecessors(graph *entity.RunGraph, runs map[string]entity.Run) 
 		}
 		old, oldRunOK := runs[oldNode.RunRef]
 		fresh, newRunOK := runs[newNode.RunRef]
-		if !oldOK || !newOK || !oldRunOK || !newRunOK || oldNode.Type != "ROOT_PROCESS" || newNode.Type != "ROOT_PROCESS" || old.RootRunRef != old.Ref || fresh.RootRunRef != fresh.Ref || edge.RunRef != fresh.Ref || old.Ref == fresh.Ref || links[fresh.Ref] != "" {
+		if !oldOK || !newOK || !oldRunOK || !newRunOK || !validPredecessorAnchors(edge.Type, oldNode, newNode, old, fresh) || old.RootRunRef != old.Ref || fresh.RootRunRef != fresh.Ref || edge.RunRef != fresh.Ref || old.Ref == fresh.Ref || links[fresh.Ref] != "" {
 			return nil, false
 		}
 		if (edge.Type == "RETRY_OF" && fresh.RetryOfRunRef != old.Ref) ||
@@ -120,4 +120,22 @@ func graphRetryPredecessors(graph *entity.RunGraph, runs map[string]entity.Run) 
 		}
 	}
 	return predecessors, true
+}
+
+// validPredecessorAnchors accepts ordinary process roots or exact assistant retry anchors. Assistant identity, session and increasing attempt come from owner-read runs; no caller field grants cross-root access.
+// validPredecessorAnchors принимает корни обычного процесса либо точные узлы повтора помощника. Помощник, сессия и возрастающая попытка берутся из прочитанных владельцем запусков; поле клиента не даёт межкорневого доступа.
+func validPredecessorAnchors(edgeType string, oldNode, newNode entity.RunNode, old, fresh entity.Run) bool {
+	if oldNode.Type == "ROOT_PROCESS" && newNode.Type == "ROOT_PROCESS" {
+		return true
+	}
+	if edgeType != "RETRY_OF" || oldNode.Type != "AGENT_EXECUTION" || newNode.Type != "AGENT_EXECUTION" || oldNode.ParentNodeRef != "" || newNode.ParentNodeRef != "" {
+		return false
+	}
+	pin, next := old.AssistantPin, fresh.AssistantPin
+	return old.Source == "SYSTEM_ASSISTANT" && fresh.Source == "SYSTEM_ASSISTANT" &&
+		old.Target.Type == "SYSTEM_ASSISTANT" && fresh.Target.Type == "SYSTEM_ASSISTANT" &&
+		pin != nil && next != nil && *pin == *next && pin.AssistantRef != "" &&
+		old.Target.Ref == pin.AssistantRef && fresh.Target.Ref == pin.AssistantRef &&
+		oldNode.AgentRef == pin.AssistantRef && newNode.AgentRef == pin.AssistantRef &&
+		old.SessionRef != "" && old.SessionRef == fresh.SessionRef && old.Attempt > 0 && fresh.Attempt > old.Attempt && fresh.Attempt-old.Attempt == 1
 }

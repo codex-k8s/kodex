@@ -269,7 +269,7 @@ func snapshotRetryPredecessors(graph *controlplanev1.RunGraph, values []*control
 			continue
 		}
 		old, fresh := runs[oldNode.GetRunRef()], runs[newNode.GetRunRef()]
-		if old == nil || fresh == nil || oldNode.GetType() != controlplanev1.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS || newNode.GetType() != controlplanev1.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS || old.GetRef() != old.GetRootRunRef() || fresh.GetRef() != fresh.GetRootRunRef() || edge.GetRunRef() != fresh.GetRef() || old.GetRef() == fresh.GetRef() || links[fresh.GetRef()] != "" {
+		if old == nil || fresh == nil || !validPredecessorAnchors(edge.GetType(), oldNode, newNode, old, fresh) || old.GetRef() != old.GetRootRunRef() || fresh.GetRef() != fresh.GetRootRunRef() || edge.GetRunRef() != fresh.GetRef() || old.GetRef() == fresh.GetRef() || links[fresh.GetRef()] != "" {
 			return nil, false
 		}
 		if (edge.GetType() == controlplanev1.RunEdgeType_RUN_EDGE_TYPE_RETRY_OF && fresh.GetRetryOfRunRef() != old.GetRef()) ||
@@ -294,4 +294,21 @@ func snapshotRetryPredecessors(graph *controlplanev1.RunGraph, values []*control
 		}
 	}
 	return previous, true
+}
+
+// validPredecessorAnchors projects only ordinary process roots or an exact assistant retry. It checks immutable owner pins, root-node agent bindings and session/attempt continuity without accepting arbitrary execution nodes.
+// validPredecessorAnchors проецирует только корни обычного процесса либо точный повтор помощника. Проверяет неизменяемые привязки владельца, сотрудника корневого узла и последовательность сессии/попытки, не принимая произвольные узлы исполнения.
+func validPredecessorAnchors(edgeType controlplanev1.RunEdgeType, oldNode, newNode *controlplanev1.RunNode, old, fresh *controlplanev1.Run) bool {
+	if oldNode.GetType() == controlplanev1.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS && newNode.GetType() == controlplanev1.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS {
+		return true
+	}
+	if edgeType != controlplanev1.RunEdgeType_RUN_EDGE_TYPE_RETRY_OF || oldNode.GetType() != controlplanev1.RunNodeType_RUN_NODE_TYPE_AGENT_EXECUTION || newNode.GetType() != controlplanev1.RunNodeType_RUN_NODE_TYPE_AGENT_EXECUTION || oldNode.GetParentNodeRef() != "" || newNode.GetParentNodeRef() != "" {
+		return false
+	}
+	pin, next := old.GetAssistantPin(), fresh.GetAssistantPin()
+	return old.GetSource() == controlplanev1.RunSource_RUN_SOURCE_SYSTEM_ASSISTANT && fresh.GetSource() == controlplanev1.RunSource_RUN_SOURCE_SYSTEM_ASSISTANT &&
+		pin != nil && next != nil && proto.Equal(pin, next) && pin.GetAssistantRef() != "" &&
+		old.GetTarget().GetSystemAssistantRef() == pin.GetAssistantRef() && fresh.GetTarget().GetSystemAssistantRef() == pin.GetAssistantRef() &&
+		oldNode.GetAgentRef() == pin.GetAssistantRef() && newNode.GetAgentRef() == pin.GetAssistantRef() &&
+		old.GetSessionRef() != "" && old.GetSessionRef() == fresh.GetSessionRef() && old.GetAttempt() > 0 && fresh.GetAttempt() > old.GetAttempt() && fresh.GetAttempt()-old.GetAttempt() == 1
 }
