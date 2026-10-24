@@ -3805,6 +3805,23 @@ FROM revision WHERE connection.id=revision.connection_id`, connection.Connection
 	}
 }
 
+// testIntegrationConfigurationAndGrants checks typed integration definitions, closed capability
+// risks and rejection of secret-like public fields, then creates a synthetic
+// connection/project/agent. Direct fixture readiness enables grant OCC/target/capability checks,
+// revoke/update/reenable and TESTING mutation restrictions. Disabling must cancel the pending test
+// and revoke grants atomically. Deletion preserves a terminal snapshot and exact replay, rejects
+// revoked/inexact/other-actor/tenant receipt reads, hides the deleted connection and records one
+// matching audit/outbox event with a disabled tombstone. SQL arranges or observes component state;
+// no external integration or real credentials are exercised.
+// testIntegrationConfigurationAndGrants проверяет типизированные integration definitions, закрытые
+// risk capabilities и запрет похожих на секреты public fields, затем создаёт синтетические
+// connection/project/agent. Прямая тестовая готовность позволяет проверить OCC, target и
+// capability grants, revoke/update/reenable и ограничения записи в TESTING. Выключение должно
+// атомарно отменить ожидающий тест и отозвать grants. Удаление сохраняет terminal snapshot и exact
+// replay, запрещает чтение receipt при отзыве полномочий, неточной version, другом actor/tenant,
+// скрывает удалённый connection и фиксирует по одному подходящему audit/outbox event с disabled
+// tombstone. SQL подготавливает или наблюдает компонентное состояние; внешняя интеграция и
+// реальные credentials не используются.
 func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -4063,20 +4080,27 @@ WHERE connection.ref = $1`, created.Connection.Ref).Scan(
 	}
 }
 
+// testIntegrationEffectLifecycle creates separate READ/NONE and WRITE/HUMAN_EACH_EFFECT grants and
+// proves pinned runtime materialization plus isolation between integration and interaction
+// workers. Reads run without a gate; rejected writes create no receipt and keep the root graph
+// running until explicit cleanup. Approval permits one claimed write with exact
+// effect/input/response digests; matching duplicate completion preserves one receipt and changed
+// digest is Invalid. Both explicit unknown outcome and expired lease recover only through
+// RECOVER_READ_ONLY, then become terminal and unclaimable. Grant revocation blocks queued reads;
+// gate single/list/event/receipt paths retain exact intent and signed project masking. All results
+// are synthetic completion metadata, not executed external effects.
+// testIntegrationEffectLifecycle создаёт раздельные READ/NONE и WRITE/HUMAN_EACH_EFFECT grants и
+// проверяет закреплённую runtime materialization с изоляцией integration и interaction workers.
+// Чтение проходит без gate; rejected write не создаёт receipt и оставляет root graph активным до
+// явной очистки. Approval допускает один claimed write с точными effect/input/response digests;
+// совпадающий повтор completion сохраняет один receipt, изменённый digest даёт Invalid. Явный
+// unknown outcome и истёкший lease восстанавливаются только через RECOVER_READ_ONLY, затем
+// становятся terminal и недоступны claim. Отзыв grant блокирует queued read;
+// single/list/event/receipt пути gate сохраняют точный intent и signed project masking. Все
+// результаты являются синтетическими completion metadata, а не исполненными внешними эффектами.
 func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
-	}, "control-api-gateway")
-	runtimeWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
-	gateway := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "integration-gateway", Operation: "platform.runtime.integrations.claim",
-	}, "integration-gateway")
+	owner, runtimeWorker, gateway := resolveIntegrationEffectTestPrincipals(t, ctx, repository)
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)

@@ -23,6 +23,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestScopedIntegrationApprovalComponent opens only the isolated component PostgreSQL fixture
+// under a sixty-second test context, configures synthetic provider and role-image descriptors and
+// runs Bootstrap twice before seeding the observed catalog. Deferred cancellation/pool close bound
+// its resources; the delegated scoped-approval scenario tests owner state without starting a
+// provider, image build or external transport.
+// TestScopedIntegrationApprovalComponent открывает только изолированную компонентную PostgreSQL
+// fixture с тестовым контекстом на шестьдесят секунд, настраивает синтетические provider и
+// role-image descriptors и дважды вызывает Bootstrap перед подготовкой observed catalog.
+// Отложенные cancellation/pool close ограничивают ресурсы; делегированный scoped-approval scenario
+// проверяет состояние владельца без запуска provider, image build или внешнего transport.
 func TestScopedIntegrationApprovalComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
@@ -61,6 +71,54 @@ func TestScopedIntegrationApprovalComponent(t *testing.T) {
 	testScopedIntegrationApproval(t, ctx, repository, pool)
 }
 
+// resolveIntegrationEffectTestPrincipals resolves and returns application owner, runtime execution
+// worker and integration invocation worker in that order using the exact fixture
+// actor/tenant/workload/operation inputs shared by both effect scenarios. It marks itself as a
+// test helper and preserves each resolved principal without merging roles, changing authority
+// inputs, constructing the service or reading credentials. The caller still owns context,
+// repository, commands and cleanup.
+// resolveIntegrationEffectTestPrincipals разрешает и возвращает владельца приложения, worker
+// исполнения runtime и worker integration invocation в этом порядке с точными тестовыми
+// actor/tenant/workload/operation inputs двух effect scenarios. Помечает себя тестовым helper и
+// сохраняет каждый principal без объединения ролей, изменения authority inputs, создания сервиса
+// или чтения credentials. Context, repository, команды и очистка остаются у вызывающего.
+func resolveIntegrationEffectTestPrincipals(t *testing.T, ctx context.Context, repository *Repository) (value.Principal, value.Principal, value.Principal) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
+	}, "control-api-gateway")
+	runtimeWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	gateway := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "integration-gateway", Operation: "platform.runtime.integrations.claim",
+	}, "integration-gateway")
+	return owner, runtimeWorker, gateway
+}
+
+// testScopedIntegrationApproval temporarily installs a synthetic HUMAN_SCOPED definition and
+// reconciles it serializably, then checks duplicate scope-path rejection and pinned grant
+// materialization. Owner single/list/terminal previews retain bounded typed inputs;
+// view-only/event/outbox projections redact them and preserve invocation bindings/cardinality on
+// completion replay. An approved typed scope may serve a new effect, while exhaustion or changed
+// selected values require new gates. Active path changes are rejected, grant revocation blocks
+// queued work/stale approval and a pinned gate preview survives later grant revisions. Retired
+// executable packages reject OPEN reads/approval; after run cancellation, terminal history remains
+// safely readable without decision actions or schema expansion. Deferred cleanup restores the
+// in-memory definition; no external effect is sent.
+// testScopedIntegrationApproval временно устанавливает синтетическую HUMAN_SCOPED definition и
+// выполняет serializable reconciliation, затем проверяет запрет повторных scope paths и
+// закреплённую materialization grant. Owner single/list/terminal previews сохраняют ограниченные
+// типизированные inputs; view-only/event/outbox projections скрывают их и сохраняют invocation
+// bindings/cardinality при replay completion. Одобренный typed scope может обслужить новый effect,
+// но исчерпание или изменение выбранных значений требует новых gates. Изменение активных paths
+// запрещено, отзыв grant блокирует queued work и устаревшее approval, а закреплённый gate preview
+// переживает поздние grant revisions. Retired executable packages запрещают OPEN reads/approval;
+// после отмены run terminal history читается безопасно без decision actions и расширения схемы.
+// Отложенная очистка восстанавливает definition в памяти; внешний effect не отправляется.
 func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	original := repository.integrationDefinitions["synthetic"]
@@ -102,18 +160,7 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 		t.Fatal(err)
 	}
 
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
-	}, "control-api-gateway")
-	runtimeWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
-	gateway := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "integration-gateway", Operation: "platform.runtime.integrations.claim",
-	}, "integration-gateway")
+	owner, runtimeWorker, gateway := resolveIntegrationEffectTestPrincipals(t, ctx, repository)
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)

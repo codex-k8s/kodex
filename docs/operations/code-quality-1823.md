@@ -4,11 +4,71 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.405.0
+version: 1.406.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Bootstrap: integration effect и scoped approval — 25.10.2026
+
+На основе `eaaa9ab7d22b5e7f9bb4eb61e26e45a39aada921` полностью прочитаны
+bootstrap testIntegrationConfigurationAndGrants(258 строк),
+testIntegrationEffectLifecycle(408) и весь integration_approval_scope_component_test.go
+(527). Четыре прежних объявления и новый resolveIntegrationEffectTestPrincipals
+получили предметные EN→RU описания. Прочие bootstrap declarations и внешние
+helpers не объявляются в этом этапе полностью проверенными.
+
+Helper заменяет два одинаковых блока разрешения application owner,
+runtime-controller execution worker и integration-gateway invocation worker.
+Порядок трёх вызовов и возврата, точные actor/tenant/workload/operation inputs
+и привязка локальных owner/runtimeWorker/gateway сохранены. Добавлен только
+t.Helper для корректного указания тестового caller. Создание сервиса, commands,
+claims, Human Gate, receipts и cleanup остаются в callers. Helper не читает
+credentials и не объединяет полномочия ролей.
+
+Два полных HEAD-derived expected-AST/directive сравнения подтверждают только
+вынос и комментарии. Независимый AST proof сравнивает все шесть прежних
+resolvedTestPrincipal calls с тремя общими, порядок assignment/return и точные
+args обоих callers — PASS. Первоначальный запуск этой вспомогательной оснастки
+остановился из-за чтения typed-nil source; исправлен только private reader,
+после чего проверка выполнена. Исполняемый код репозитория из-за этого не менялся.
+Все SQL bytes и28 bootstrap embeds сохранены.
+
+| Переход / граница | Сохранённые assertions |
+| --- | --- |
+| Configuration/grants | Typed fields/closed risks, secret-like public-field Invalid, connection OCC, один target, exact capability, revoke/update/reenable. TESTING запрещает update/delete; disable атомарно отменяет тест и отзывает grants |
+| Connection delete/replay | Exact terminal projection и receipt, fresh/revoked/inexact/other-actor/tenant masking, отсутствие get/list eligibility; disabled tombstone и1 matching audit/1 outbox event |
+| Read invocation | READ/NONE без gate, pinned runtime grants/digests; interaction worker не claim и не complete integration work даже с раскрытым fence |
+| Reject gate | Exact intent сохраняется в single/list/event/receipt, signed project маскирует результат; rejected invocation не получает effect receipt и не завершает root graph, который отдельно отменяется |
+| Approve/complete | WRITE/HUMAN_EACH_EFFECT требует gate, exact effect/input/response pins и1 durable receipt. Совпадающий duplicate completion не повторяет effect; изменённый digest Invalid |
+| Unknown/expiry | Явный unknown outcome и expired lease дают только RECOVER_READ_ONLY; успешный recovery завершает invocation с receipt, повторный claim отсутствует. Внешняя повторная отправка не моделируется |
+| Scoped reuse | HUMAN_SCOPED typed selected value допускает новый effect; duplicate paths Invalid, exhausted/changed selected scope требует нового gate. Active path mutation Conflict; revoke блокирует queued work/stale approval |
+| Preview/history | Owner видит bounded inputs, view-only/event/outbox скрывают их; exact invocation binding и event cardinality сохраняются при replay. Pinned preview не меняется поздней grant revision |
+| Retired package | OPEN reads/approval запрещены; после cancel terminal history читается безопасным snapshot без decision actions, executable package или расширения retired schema |
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks406-final`),15 external fixture/admin/template inputs исключены.
+Это test-only glue без новых зеркальных tests. PostgreSQL integration/scoped
+approval/claim/receipt/recovery scenarios — NOT RUN/SKIP, а не выполненная приёмка.
+gofmt/diff check,17 analyzer unit и5 exact-ignore guards — PASS.
+Новых library API/dependencies/production SQL нет; прежние документы Context7
+для pgx не требовали обновления. Browser/full E2E/deploy/live — NOT RUN.
+
+Inventory6683 own sources/222 exclusions:19954/21481 Go declarations описаны,
+missing1527 — PostgreSQL adapter control-plane. Текущий PR153 Go-файла:
+1823/1846 описаны,23 оставшихся — только bootstrap_component_test.go(54/77);
+остальные152 Go-файла diff полностью описаны. Detector1798 raw/904 retained/
+894 unresolved, registry778 неизменен. Один162-token bootstrap/scoped fragment
+71d646993f6f исчез; новых fragment/format/kind/path-pair keys нет.
+Thresholds/ignore regions/exclusions не расширены, тесты остаются в inventory.
+
+Production behavior, contracts/generated, dependencies, migrations и deploy
+inputs сохранены. Прикладные секреты не читались и не переносились; необходимые
+bot-role credentials/identity передаются только нужным GitHub children без вывода
+значений. Whole-blob проверка допускает только4 прежних inert title-test markers
+по exact main bytes/count, неизвестных совпадений нет. Issue#1823 открыт,
+PR Draft; основной клон и QA baseline f2e64eb не менялись.
 
 ## Bootstrap: session affinity, environments и access fixtures — 25.10.2026
 
