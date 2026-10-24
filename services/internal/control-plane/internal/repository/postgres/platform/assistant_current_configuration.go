@@ -12,10 +12,23 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantCurrentConfigurationOwnerInstructions embeds exact enabled organization
+// system-assistant core revision and owner-instruction metadata lookup without runtime secret
+// values.
+// queryAssistantCurrentConfigurationOwnerInstructions встраивает точное чтение core revision и
+// owner-instruction metadata включённого organization system-assistant без runtime secret values.
+//
 //go:embed sql/assistant_current_configuration__owner_instructions.sql
 var queryAssistantCurrentConfigurationOwnerInstructions string
 
-// Lease и собственный target уже разрешены каталогом; view eligibility не расширяется.
+// assistantCurrentConfigurationTx reads scope-only prompt context and the current runtime view
+// under already resolved own-target eligibility, verifies available artifact owner/image admission
+// pins and, for SYSTEM, exact core prompt revision. It adds only public own metadata and
+// stage-coded failures, without new grants or side effects.
+// assistantCurrentConfigurationTx читает scope-only prompt context и текущий runtime view под уже
+// разрешённой own-target eligibility, сверяет имеющиеся artifact owner/image admission pins и для
+// SYSTEM точную core prompt revision. Добавляет только публичные собственные metadata и
+// stage-coded failures без новых grants или побочных эффектов.
 func (repository *Repository) assistantCurrentConfigurationTx(ctx context.Context, tx pgx.Tx, current scope, ref, assistantScope string) (entity.AssistantCurrentConfiguration, error) {
 	snapshot, err := repository.promptPreviewContextTx(ctx, tx, current, promptservice.TargetAgent, ref, query.PromptPreviewContext{ScopeOnly: true})
 	if err != nil {
@@ -47,6 +60,15 @@ func (repository *Repository) assistantCurrentConfigurationTx(ctx context.Contex
 	return result, nil
 }
 
+// projectAssistantCurrentConfiguration copies current configuration/environment and full published
+// template into the own-assistant response, replacing Kubernetes secret descriptors with
+// name/ref/revision bindings. It derives variable availability from the materialization snapshot,
+// suppresses absent file groups and preserves explicit unavailability reasons without mutating
+// source descriptors.
+// projectAssistantCurrentConfiguration копирует текущие configuration/environment и полный
+// опубликованный шаблон в собственный assistant response, заменяя Kubernetes secret descriptors на
+// name/ref/revision bindings. Выводит variable availability из materialization snapshot, скрывает
+// отсутствующие file groups и сохраняет явные причины недоступности, не меняя source descriptors.
 func projectAssistantCurrentConfiguration(view entity.AgentRuntimeConfigurationView, snapshot entity.PromptMaterializationSnapshot) entity.AssistantCurrentConfiguration {
 	result := entity.AssistantCurrentConfiguration{AgentVersion: view.AgentVersion, Configuration: view.Configuration,
 		PublishedOverlay: view.PublishedOverlay, EnvironmentBinding: view.EnvironmentBinding,

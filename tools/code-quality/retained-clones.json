@@ -6168,6 +6168,14 @@
       "fragmentSHA256": "899f1422c11f0cd2471cb55bb7fd2a7d25ff5ebeabe9e39a5db3b10fa3aea9c8",
       "count": 1,
       "reason": "После общего applyAssistantImageManage и inheritAssistantImageOptions остаётся140-token окно orchestration двух разных protected commands: project UPDATE и system-assistant ORGANIZATION CREATE/UPDATE. Полностью прочитаны оба input resolver и command path: они по-разному разрешают agent/organization authority, source/OCC и immutable plan pins. Само окно вызывает разные typed input resolvers, общий managed target и уже общий apply/lineage helper, проверяет наличие build и формирует разные nominal результаты: project UPDATE без CreatedRefs, system path с CreatedRefs и точным organization scope/runtime metadata. Универсальный dispatcher с mode/callback ради этих glue-вызовов связал бы разные authority/payload/response contracts; самостоятельный алгоритм изменения рецепта и lineage уже вынесен. Сохранено только это точное pair/hash/count1 окно после выноса; остальные методы, проверки и файлы не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_configuration_catalog.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_task_session.go",
+      "fragmentSHA256": "fc99f9a9a0f9e97a453573c94c707d02b9e2cc227c1e96ea98a5f4b81064bf37",
+      "count": 1,
+      "reason": "Окно121 tokens пересекает разные typed read wrappers ListAssistantConfigurationCatalog/ReadAssistantTaskSession и начало следующей сигнатуры. Оба полных wrapper прочитаны: общий bounded retry/context/backoff алгоритм уже retryAssistantLockedRead; каждый передаёт только собственный once-reader с разными nominal request/response types. Catalog возвращает configuration catalog, task-session — страницу опубликованных сообщений с отдельным курсором/run.view; helper завершения catalog намеренно не применяется к task-session. Новый generic dispatcher либо callback wrapper поверх уже общего retry ради одной строки скрыл бы конкретный owner reader, не удаляя самостоятельный алгоритм. Сохранено только это точное pair/hash/count1 окно, без исключения lease resolver, once-read bodies или файлов целиком."
     }
   ]
 }

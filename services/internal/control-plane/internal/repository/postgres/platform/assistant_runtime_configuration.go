@@ -18,13 +18,34 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// assistantRuntimeEditable defines the closed user-editable runtime proposal fields, including
+// model/profile/account choices and optional web-search mode; owner pins are supplied separately.
+// assistantRuntimeEditable задаёт закрытые редактируемые поля runtime proposal, включая
+// model/profile/account choices и необязательный web-search mode; owner pins назначаются отдельно.
 var assistantRuntimeEditable = []string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts"}
+
+// assistantRuntimeOwnerFields defines assistant identity/scope/organization/project/profile pins
+// that edits must preserve and hydration resolves from authoritative state.
+// assistantRuntimeOwnerFields задаёт assistant identity/scope/organization/project/profile pins,
+// которые правки должны сохранять и hydration разрешает по авторитетному состоянию.
 var assistantRuntimeOwnerFields = []string{"agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef"}
 
-// Маркер относится только к полностью проверенной подготовке; обычный conflict
-// и ошибки готовности не означают отсутствие изменений.
+// errAssistantRuntimeConfigurationNoChange marks only a fully validated unchanged proposal while
+// retaining Conflict compatibility; ordinary conflict/readiness failures must not be interpreted
+// as this marker.
+// errAssistantRuntimeConfigurationNoChange помечает только полностью проверенное неизменённое
+// предложение, сохраняя совместимость с Conflict; обычные conflict/readiness failures нельзя
+// трактовать как этот маркер.
 var errAssistantRuntimeConfigurationNoChange = errors.Join(errs.ErrConflict, errors.New("assistant runtime configuration is unchanged"))
 
+// assistantRuntimeConfigurationUnchanged compares exact runtime/search/profile/account settings
+// and nonempty persisted catalog pins. Copies are sorted by account after clearing only the two
+// fields publication does not persist; provider identity, catalog revision/digest and caller
+// slices remain intact.
+// assistantRuntimeConfigurationUnchanged сравнивает точные runtime/search/profile/account settings
+// и непустые сохранённые catalog pins. Копии сортируются по account после очистки лишь двух полей,
+// которые publication не сохраняет; provider identity, catalog revision/digest и slices caller
+// сохраняются.
 func assistantRuntimeConfigurationUnchanged(before, after map[string]any, persisted []entity.ProviderAccountCandidate) bool {
 	if assistantString(before, "webSearchMode") != assistantString(after, "webSearchMode") {
 		return false
@@ -58,7 +79,14 @@ func assistantRuntimeConfigurationUnchanged(before, after map[string]any, persis
 	return assistantJSONEqual(canonical(persisted), canonical(prepared))
 }
 
-// Пустой mode означает отсутствие изменения, а не произвольный SDK режим.
+// assistantRuntimeOverlay parses the existing restricted TOML overlay, replaces reasoning effort
+// and changes search mode only when supplied, then encodes/canonicalizes it. Existing parse
+// failure is Conflict; unsupported mode or encoding/canonicalization failure is Invalid,
+// preserving unrelated supported settings.
+// assistantRuntimeOverlay разбирает существующий ограниченный TOML overlay, заменяет reasoning
+// effort и меняет search mode лишь при передаче, затем кодирует/канонизирует. Ошибка разбора
+// исходника даёт Conflict; неподдерживаемый mode либо encoding/canonicalization failure даёт
+// Invalid, сохраняя остальные поддерживаемые настройки.
 func assistantRuntimeOverlay(current, effort, mode string) (string, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(current)
 	if err != nil {
@@ -82,6 +110,12 @@ func assistantRuntimeOverlay(current, effort, mode string) (string, error) {
 	return canonical, nil
 }
 
+// assistantRuntimeAccounts decodes a required one-to-128 account array through JSON, permits only
+// accountRef/weight and integer weights1..100, then sorts by accountRef. Account existence,
+// uniqueness and catalog eligibility are validated later.
+// assistantRuntimeAccounts декодирует обязательный массив от одного до128 accounts через JSON,
+// разрешает только accountRef/weight и целые веса1..100, затем сортирует по accountRef.
+// Существование account, уникальность и catalog eligibility проверяются позднее.
 func assistantRuntimeAccounts(parameters map[string]any) ([]entity.ProviderAccountCandidate, error) {
 	raw, exists := parameters["providerAccounts"]
 	if !exists {
@@ -110,6 +144,12 @@ func assistantRuntimeAccounts(parameters map[string]any) ([]entity.ProviderAccou
 	return result, nil
 }
 
+// minimalAssistantRuntimeAccounts copies only accountRef/weight into a new ordered map slice for
+// editable parameters, excluding server-owned provider/catalog pins and returning an empty nonnil
+// slice for no candidates.
+// minimalAssistantRuntimeAccounts копирует только accountRef/weight в новый упорядоченный map
+// slice для editable parameters, исключая серверные provider/catalog pins и возвращая пустой
+// ненулевой slice при отсутствии candidates.
 func minimalAssistantRuntimeAccounts(candidates []entity.ProviderAccountCandidate) []map[string]any {
 	result := make([]map[string]any, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -118,6 +158,11 @@ func minimalAssistantRuntimeAccounts(candidates []entity.ProviderAccountCandidat
 	return result
 }
 
+// assistantRuntimeOwner builds the server-owned assistant identity map from the resolved
+// target/current organization, translating organization scope to SYSTEM and other target scope to
+// PROJECT.
+// assistantRuntimeOwner строит серверную assistant identity map по разрешённому target/current
+// organization, преобразуя organization scope в SYSTEM, остальные target scope в PROJECT.
 func assistantRuntimeOwner(target assistantConfigurationTarget, current scope, agentRef string) map[string]any {
 	assistantScope := "PROJECT"
 	if target.scopeKind == "ORGANIZATION" {
@@ -126,9 +171,21 @@ func assistantRuntimeOwner(target assistantConfigurationTarget, current scope, a
 	return map[string]any{"agentRef": agentRef, "assistantScope": assistantScope, "scopeKind": target.scopeKind, "organizationRef": current.organizationRef, "projectRef": target.projectRef, "assistantProfileRef": target.profileRef}
 }
 
+// queryAssistantConfigurationProfilePin embeds stable-key profile version/runtime-revision/enabled
+// lookup with FOR SHARE, keeping profile publication stable within the caller transaction.
+// queryAssistantConfigurationProfilePin встраивает stable-key чтение profile
+// version/runtime-revision/enabled с FOR SHARE, сохраняя profile publication стабильной внутри
+// транзакции caller.
+//
 //go:embed sql/assistant_configuration__profile_pin.sql
 var queryAssistantConfigurationProfilePin string
 
+// assistantRuntimeProfilePin reads the locked profile pin, mapping any lookup failure to NotFound;
+// requested enablement, positive version and nonempty runtime revision are required or Conflict is
+// returned.
+// assistantRuntimeProfilePin читает profile pin с блокировкой, отображая любую ошибку поиска в
+// NotFound; требуемое enablement, положительная version и непустая runtime revision обязательны,
+// иначе Conflict.
 func assistantRuntimeProfilePin(ctx context.Context, tx pgx.Tx, profileRef string, requireEnabled bool) (entity.AssistantRuntimeProfilePin, error) {
 	var pin entity.AssistantRuntimeProfilePin
 	var enabled bool
@@ -141,6 +198,14 @@ func assistantRuntimeProfilePin(ctx context.Context, tx pgx.Tx, profileRef strin
 	return pin, nil
 }
 
+// assistantRuntimeBefore captures owner, agent/configuration/profile/overlay/catalog-choice
+// metadata and optional draft pins from the current view. Published overlay parse success adds
+// effort and nonempty search mode; parse failure leaves those optional fields absent without
+// granting readiness.
+// assistantRuntimeBefore сохраняет owner, agent/configuration/profile/overlay/catalog-choice
+// metadata и optional draft pins текущего view. Успешный published overlay parse добавляет effort
+// и непустой search mode; ошибка оставляет необязательные поля отсутствующими, не подтверждая
+// readiness.
 func assistantRuntimeBefore(target assistantConfigurationTarget, current scope, view entity.AgentRuntimeConfigurationView, pin entity.AssistantRuntimeProfilePin) map[string]any {
 	before := assistantRuntimeOwner(target, current, view.Configuration.AgentRef)
 	before["runtimeProfilePin"] = pin
@@ -163,6 +228,14 @@ func assistantRuntimeBefore(target assistantConfigurationTarget, current scope, 
 	return before
 }
 
+// prepareAssistantRuntimeCandidates validates account/model/policy shape, checks all selected
+// accounts against the tenant runtime profile, loads exact provider catalog revisions/digests and
+// validates normalized model/overlay capabilities. It returns current pinned candidates without
+// opening a provider session.
+// prepareAssistantRuntimeCandidates проверяет account/model/policy shape, сверяет все выбранные
+// accounts с tenant runtime profile, загружает точные provider catalog revisions/digests и
+// проверяет нормализованные model/overlay capabilities. Возвращает текущие закреплённые candidates
+// без открытия provider session.
 func (repository *Repository) prepareAssistantRuntimeCandidates(ctx context.Context, tx pgx.Tx, current scope, parameters map[string]any, overlay string) ([]entity.ProviderAccountCandidate, error) {
 	candidates, err := assistantRuntimeAccounts(parameters)
 	if err != nil || !validProviderPolicy(assistantString(parameters, "providerPolicyMode"), candidates) || !validModel(assistantString(parameters, "model")) {
@@ -190,6 +263,15 @@ func (repository *Repository) prepareAssistantRuntimeCandidates(ctx context.Cont
 	return normalized, err
 }
 
+// hydrateAssistantRuntimeConfiguration accepts only editable fields, resolves authoritative
+// assistant target/current view and rejects existing overlay drafts. It prepares exact
+// model/account/profile pins and before/after/version snapshots, preserving omitted search mode; a
+// fully validated identical proposal returns the dedicated no-change marker without persistence.
+// hydrateAssistantRuntimeConfiguration принимает лишь editable fields, разрешает авторитетные
+// assistant target/current view и отклоняет существующий overlay draft. Готовит точные
+// model/account/profile pins и before/after/version snapshots, сохраняя пропущенный search mode;
+// полностью проверенное идентичное предложение возвращает отдельный no-change marker без
+// сохранения.
 func (repository *Repository) hydrateAssistantRuntimeConfiguration(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if !onlyAssistantFields(operation.Parameters, assistantRuntimeEditable...) {
 		return operation, errs.ErrInvalid
@@ -257,6 +339,14 @@ func (repository *Repository) hydrateAssistantRuntimeConfiguration(ctx context.C
 	return operation, nil
 }
 
+// assistantRuntimeConfigurationCommand converts closed frozen input to
+// PublishAssistantRuntimeConfig after validating sorted account/weight matches, catalog pins,
+// positive expected version, search mode, exact strict profile pin and model/policy shape.
+// Actor/tenant authority is still resolved by the command owner.
+// assistantRuntimeConfigurationCommand преобразует закрытый frozen input в
+// PublishAssistantRuntimeConfig после проверки совпадения sorted account/weight, catalog pins,
+// положительной expected version, search mode, точного strict profile pin и model/policy shape.
+// Actor/tenant authority по-прежнему разрешает command owner.
 func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	if !onlyAssistantFields(operation.Input, "agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts", "providerCatalogPins", "runtimeProfilePin", "expectedVersion") {
 		return command.Command{}, errs.ErrInvalid
@@ -307,11 +397,21 @@ func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperatio
 	return command.Command{Kind: command.PublishAssistantRuntimeConfig, Payload: payload, Mutation: operationMutation(expected)}, nil
 }
 
+// operationMutation creates mutation metadata carrying only the expected version pointer; it does
+// not assign an idempotency key, principal or authority.
+// operationMutation создаёт mutation metadata только с указателем expected version; не назначает
+// idempotency key, principal или authority.
 func operationMutation(version int64) (mutation value.Mutation) {
 	mutation.ExpectedVersion = &version
 	return
 }
 
+// authorizeAssistantRuntimeConfiguration resolves the canonical mutation target and requires
+// payload scope/project/profile/organization pins to match authoritative state, hiding mismatches
+// as NotFound.
+// authorizeAssistantRuntimeConfiguration разрешает канонический mutation target и требует
+// совпадения payload scope/project/profile/organization pins с авторитетным состоянием, скрывая
+// несовпадения как NotFound.
 func (repository *Repository) authorizeAssistantRuntimeConfiguration(ctx context.Context, tx pgx.Tx, current scope, payload command.AssistantRuntimeConfigurationInput) (assistantConfigurationTarget, error) {
 	target, err := repository.assistantConfigurationTarget(ctx, tx, current, payload.Configuration.AgentRef)
 	if err != nil {
@@ -323,6 +423,14 @@ func (repository *Repository) authorizeAssistantRuntimeConfiguration(ctx context
 	return target, nil
 }
 
+// assistantRuntimeConfigurationSnapshotMatches decodes the frozen command, revalidates authority
+// and both profile pins, then compares agent version, absence of draft, exact before snapshot and
+// parameters/after equality. It recomputes overlay/account catalogs and compares fresh pins
+// without applying configuration.
+// assistantRuntimeConfigurationSnapshotMatches декодирует frozen command, повторно проверяет
+// authority и оба profile pins, затем сравнивает agent version, отсутствие draft, точный before
+// snapshot и равенство parameters/after. Повторно вычисляет overlay/account catalogs и сравнивает
+// свежие pins без применения configuration.
 func (repository *Repository) assistantRuntimeConfigurationSnapshotMatches(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (bool, error) {
 	planned, err := assistantRuntimeConfigurationCommand(operation)
 	if err != nil {
@@ -359,6 +467,16 @@ func (repository *Repository) assistantRuntimeConfigurationSnapshotMatches(ctx c
 	return assistantJSONEqual(fresh, operation.Parameters["providerCatalogPins"]), nil
 }
 
+// publishAssistantRuntimeConfiguration checks typed payload, canonical authority, OCC, enabled
+// profile pin and no draft, then recomputes exact account/overlay eligibility. It clears only
+// nonpersisted capability fields on a copy, publishes model configuration and, if overlay bytes
+// changed, runs draft/create-validate-publish in the same caller transaction; no commit or
+// provider execution occurs here.
+// publishAssistantRuntimeConfiguration проверяет typed payload, канонические authority, OCC,
+// enabled profile pin и отсутствие draft, затем заново вычисляет точную account/overlay
+// eligibility. Очищает лишь несохраняемые capability fields на копии, публикует model
+// configuration и при изменении overlay bytes выполняет draft/create-validate-publish в той же
+// транзакции caller; commit или provider execution здесь нет.
 func (repository *Repository) publishAssistantRuntimeConfiguration(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantRuntimeConfigurationInput)
 	if !ok {

@@ -14,30 +14,82 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantConfigurationCatalogSource embeds the lease-owned conversation scope and source
+// agent lookup; lease liveness/fence checks are performed by the preceding resolver.
+// queryAssistantConfigurationCatalogSource встраивает поиск принадлежащих lease conversation scope
+// и source agent; liveness/fence проверяются предшествующим resolver.
+//
 //go:embed sql/assistant_configuration_catalog__source.sql
 var queryAssistantConfigurationCatalogSource string
 
+// queryAssistantConfigurationCatalogAssistants embeds the scope/actor/project-filtered active
+// assistant page, including runtime/profile/environment locators and an eleventh pagination row;
+// it does not grant mutation authority.
+// queryAssistantConfigurationCatalogAssistants встраивает страницу активных assistants с фильтрами
+// scope/actor/project, включая runtime/profile/environment locators и одиннадцатую строку для
+// пагинации; не выдаёт mutation authority.
+//
 //go:embed sql/assistant_configuration_catalog__assistants.sql
 var queryAssistantConfigurationCatalogAssistants string
 
+// queryAssistantConfigurationCatalogProfiles embeds enabled stable-key runtime profile search with
+// version and default provider/model, ordered and limited to eleven rows.
+// queryAssistantConfigurationCatalogProfiles встраивает поиск включённых stable-key runtime
+// profiles с version и default provider/model, упорядоченный и ограниченный одиннадцатью строками.
+//
 //go:embed sql/assistant_configuration_catalog__profiles.sql
 var queryAssistantConfigurationCatalogProfiles string
 
+// queryAssistantConfigurationCatalogProfile embeds enabled profile-to-provider lookup for
+// account/model catalog filtering, returning no credential material.
+// queryAssistantConfigurationCatalogProfile встраивает поиск provider включённого profile для
+// фильтрации account/model catalog, без credential material.
+//
 //go:embed sql/assistant_configuration_catalog__profile.sql
 var queryAssistantConfigurationCatalogProfile string
 
+// queryAssistantConfigurationCatalogAccounts embeds tenant/provider-authorized account search
+// requiring enabled definitions, current credentials and actor visibility; only public
+// locators/versions are returned.
+// queryAssistantConfigurationCatalogAccounts встраивает tenant/provider поиск авторизованных
+// accounts с enabled definitions, current credentials и actor visibility; возвращаются только
+// публичные locators/versions.
+//
 //go:embed sql/assistant_configuration_catalog__accounts.sql
 var queryAssistantConfigurationCatalogAccounts string
 
+// queryAssistantConfigurationCatalogImages embeds active scoped recipe/artifact search with source
+// visibility, current recipe generation/spec and accepted/promoted/readback evidence gates for
+// artifacts; decoder verification still follows.
+// queryAssistantConfigurationCatalogImages встраивает поиск активных scoped recipe/artifact с
+// source visibility, текущими recipe generation/spec и accepted/promoted/readback evidence gates
+// для artifacts; далее выполняется проверка decoder.
+//
 //go:embed sql/assistant_configuration_catalog__images.sql
 var queryAssistantConfigurationCatalogImages string
 
+// ListAssistantConfigurationCatalog runs the whole owner/lease-locked catalog read through the
+// existing bounded retry wrapper; each retry starts a new transaction and preserves caller
+// selectors.
+// ListAssistantConfigurationCatalog выполняет полное owner/lease-locked чтение каталога через
+// существующий ограниченный retry wrapper; каждая попытка начинает новую транзакцию и сохраняет
+// selectors caller.
 func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
 	return retryAssistantLockedRead(ctx, func(attemptCtx context.Context) (entity.AssistantConfigurationCatalogResponse, error) {
 		return repository.listAssistantConfigurationCatalogOnce(attemptCtx, principal, leaseRef, fence, generation, input)
 	})
 }
 
+// listAssistantConfigurationCatalogOnce opens RepeatableRead, resolves the exact lease
+// fence/generation and fresh root membership, then dispatches only permitted source/helper/target
+// catalog paths. It preserves distinct context-bound instructions and view-only metadata, closes
+// rows before evidence reads, caps pages at ten plus one and commits before returning; deferred
+// bounded rollback may override an error.
+// listAssistantConfigurationCatalogOnce открывает RepeatableRead, разрешает точные lease
+// fence/generation и свежее root membership, затем направляет только допустимые
+// source/helper/target catalog paths. Сохраняет раздельные context-bound instructions и view-only
+// metadata, закрывает rows до evidence reads, ограничивает страницу десятью плюс одной и фиксирует
+// транзакцию перед возвратом; deferred bounded rollback может заменить ошибку.
 func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, input entity.AssistantConfigurationCatalogRequest) (_ entity.AssistantConfigurationCatalogResponse, resultError error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -71,53 +123,23 @@ func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.
 	}
 	if input.Kind == "WORKFLOW_METADATA" {
 		result, readErr := repository.assistantResolvedWorkflowMetadataTx(ctx, tx, current, sourceScope, sourceProjectRef, input)
-		if readErr != nil {
-			return result, readErr
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return result, assistantLockedReadError(err, errs.ErrUnavailable)
-		}
-		return result, nil
+		return finishAssistantConfigurationCatalog(ctx, tx, result, readErr)
 	}
 	if input.Kind == "AGENT_RUNTIME_CONFIGURATION" {
 		result, readErr := repository.assistantResolvedAgentRuntimeConfigurationTx(ctx, tx, current, sourceScope, sourceProjectRef, input)
-		if readErr != nil {
-			return result, readErr
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return result, assistantLockedReadError(err, errs.ErrUnavailable)
-		}
-		return result, nil
+		return finishAssistantConfigurationCatalog(ctx, tx, result, readErr)
 	}
 	if input.Kind == "AGENT_CONFIGURATION" {
 		result, readErr := repository.assistantAgentConfigurationCatalogTx(ctx, tx, current, leaseRef, input)
-		if readErr != nil {
-			return result, readErr
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return result, assistantLockedReadError(err, errs.ErrUnavailable)
-		}
-		return result, nil
+		return finishAssistantConfigurationCatalog(ctx, tx, result, readErr)
 	}
 	if input.Kind == "RECIPIENT_INTEGRATION_GRANTS" {
 		result, readErr := repository.assistantRecipientIntegrationCatalogTx(ctx, tx, current, leaseRef, input)
-		if readErr != nil {
-			return result, readErr
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return result, assistantLockedReadError(err, errs.ErrUnavailable)
-		}
-		return result, nil
+		return finishAssistantConfigurationCatalog(ctx, tx, result, readErr)
 	}
 	if input.Kind == "WORKFLOW_CONFIGURATION" {
 		result, readErr := repository.assistantWorkflowConfigurationCatalogTx(ctx, tx, current, leaseRef, input)
-		if readErr != nil {
-			return result, readErr
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return result, assistantLockedReadError(err, errs.ErrUnavailable)
-		}
-		return result, nil
+		return finishAssistantConfigurationCatalog(ctx, tx, result, readErr)
 	}
 	target, err := repository.assistantConfigurationTargetForRead(ctx, tx, current, input.AssistantRef, input.Kind == "CURRENT_CONFIGURATION")
 	if err != nil {
@@ -270,12 +292,15 @@ func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.
 			}
 		}
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return result, assistantLockedReadError(err, errs.ErrUnavailable)
-	}
-	return result, nil
+	return finishAssistantConfigurationCatalog(ctx, tx, result, nil)
 }
 
+// projectAssistantCatalogArtifact requires exact catalog/artifact reference, version, recipe
+// generation, owner/scope/project, digest/reference and accepted/promoted readback evidence before
+// attaching tool inventory metadata; failure leaves the entry unmodified.
+// projectAssistantCatalogArtifact требует точные catalog/artifact reference, version, recipe
+// generation, owner/scope/project, digest/reference и accepted/promoted readback evidence до
+// присоединения tool inventory metadata; ошибка оставляет entry неизменённым.
 func projectAssistantCatalogArtifact(entry *entity.AssistantConfigurationCatalogEntry, artifact entity.ImageArtifact) error {
 	if entry.Version < 1 || entry.RecipeGeneration < 1 || artifact.Ref != entry.Ref || artifact.Version != uint64(entry.Version) || artifact.RecipeGeneration != uint64(entry.RecipeGeneration) ||
 		artifact.OrganizationRef != entry.OrganizationRef || artifact.ScopeKind != entry.ScopeKind || artifact.ProjectRef != entry.ProjectRef ||
@@ -286,4 +311,33 @@ func projectAssistantCatalogArtifact(entry *entity.AssistantConfigurationCatalog
 	entry.AdmissionVerdict, entry.PromotionState = artifact.AdmissionVerdict, artifact.PromotionState
 	entry.ToolInventory, entry.ToolInventorySHA256 = artifact.ToolInventory, artifact.ToolInventorySHA256
 	return nil
+}
+
+// finishAssistantConfigurationCatalog preserves a completed reader result and its error without
+// committing on read failure; otherwise it commits once using the caller context and maps commit
+// failure through the existing locked-read classifier. It owns no rollback, retry or authority
+// checks, and a populated result may accompany an error exactly as in the original catalog paths.
+// finishAssistantConfigurationCatalog сохраняет результат завершённого reader и его ошибку без
+// commit при ошибке чтения; иначе один раз фиксирует транзакцию с caller context и отображает
+// commit failure через прежний locked-read classifier. Не владеет rollback, retry или authority
+// checks; заполненный результат может сопровождать ошибку, как в исходных catalog paths.
+func finishAssistantConfigurationCatalog(ctx context.Context, tx pgx.Tx, result entity.AssistantConfigurationCatalogResponse, readErr error) (entity.AssistantConfigurationCatalogResponse, error) {
+	if readErr != nil {
+		return result, readErr
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return result, assistantLockedReadError(err, errs.ErrUnavailable)
+	}
+	return result, nil
+}
+
+// assistantConfigurationSHA256 returns the lowercase SHA-256 of already selected projection
+// bytes. It preserves exact JSON or nil bytes without re-encoding, validation or authority checks;
+// callers enforce publication, snapshot and size constraints before attaching this integrity hash.
+// assistantConfigurationSHA256 возвращает строчный SHA-256 уже выбранных projection bytes.
+// Сохраняет точные JSON либо nil bytes без повторного кодирования, validation или authority checks;
+// callers проверяют publication, snapshot и size constraints до добавления integrity hash.
+func assistantConfigurationSHA256(raw []byte) string {
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:])
 }

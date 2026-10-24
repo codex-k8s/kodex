@@ -12,6 +12,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// assistantAgentConfigurationCatalogTx reads the exact AGENT screen context for
+// CREATE_INSTRUCTION_DRAFT or UPDATE_AGENT, falling back only on no rows. It rechecks nonsystem
+// agent/project/version and selects the canonical effective publication before returning full
+// bounded instruction JSON and its hash in the caller transaction.
+// assistantAgentConfigurationCatalogTx читает точный AGENT screen context для
+// CREATE_INSTRUCTION_DRAFT либо UPDATE_AGENT, переходя ко второму варианту только при отсутствии
+// строки. Перепроверяет nonsystem agent/project/version и выбирает каноническую действующую
+// публикацию перед возвратом полного ограниченного instruction JSON и его hash в транзакции
+// caller.
 func (repository *Repository) assistantAgentConfigurationCatalogTx(ctx context.Context, tx pgx.Tx, current scope, leaseRef string, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
 	result := entity.AssistantConfigurationCatalogResponse{Kind: input.Kind, AssistantRef: input.AssistantRef, ScopeKind: "PROJECT", OrganizationRef: current.organizationRef, Entries: []entity.AssistantConfigurationCatalogEntry{}}
 	var contextKind, contextRef, name string
@@ -56,13 +65,18 @@ func (repository *Repository) assistantAgentConfigurationCatalogTx(ctx context.C
 	if err != nil {
 		return result, err
 	}
-	digest := sha256.Sum256(raw)
-	result.AgentConfiguration = &entity.AssistantAgentConfiguration{AgentRef: contextRef, ProjectRef: result.ProjectRef, Version: contextVersion, ConfigurationJSON: raw, ConfigurationSHA256: hex.EncodeToString(digest[:])}
+	result.AgentConfiguration = &entity.AssistantAgentConfiguration{AgentRef: contextRef, ProjectRef: result.ProjectRef, Version: contextVersion, ConfigurationJSON: raw, ConfigurationSHA256: assistantConfigurationSHA256(raw)}
 	return result, nil
 }
 
-// Переиспользуется тот же agent.view SQL и чтение инструкций, что у GetAgent.
-// Grants, runtime environment, secrets и materialized prompt сюда не входят.
+// readAssistantAgentConfigurationSnapshot reuses the ordinary agent.view row and instruction
+// attachment readers, maps missing rows to NotFound and locked-read failures to Unavailable/retry
+// classification. It marks system identity from SystemKey; grants, secrets, materialized prompts
+// and runtime environments are outside this snapshot.
+// readAssistantAgentConfigurationSnapshot повторно использует обычное agent.view чтение строки и
+// присоединение инструкций, отображает отсутствие строки в NotFound, locked-read ошибки в
+// Unavailable/retry classification. Определяет system identity по SystemKey; grants, secrets,
+// materialized prompts и runtime environments не входят в snapshot.
 func (repository *Repository) readAssistantAgentConfigurationSnapshot(ctx context.Context, tx pgx.Tx, current scope, ref string) (entity.Agent, error) {
 	var item entity.Agent
 	var canManage, canLaunch bool
@@ -81,6 +95,14 @@ func (repository *Repository) readAssistantAgentConfigurationSnapshot(ctx contex
 	return item, nil
 }
 
+// assistantAgentConfigurationJSON projects fourteen explicit agent/instruction fields, requiring a
+// binding and valid published version/content hashes. Native content is capped at64 KiB, effective
+// content at256 KiB and JSON at1 MiB; effective binding must match the selected publication. It
+// preserves full templates without runtime materialization or private fields.
+// assistantAgentConfigurationJSON проецирует четырнадцать явных agent/instruction fields, требуя
+// binding и корректные published version/content hashes. Native content ограничено64 KiB,
+// effective content256 KiB, JSON1 MiB; effective binding должен совпасть с выбранной публикацией.
+// Сохраняет полные шаблоны без runtime materialization или приватных полей.
 func assistantAgentConfigurationJSON(agent entity.Agent, effective entity.InstructionVersion) ([]byte, error) {
 	if agent.InstructionBinding == nil {
 		return nil, errs.ErrUnavailable

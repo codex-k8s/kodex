@@ -2,8 +2,6 @@ package platform
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 
@@ -12,6 +10,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// assistantWorkflowConfigurationCatalogTx requires the exact UPDATE_WORKFLOW screen context and
+// matching entity/version, reads the canonical project workflow snapshot and returns bounded full
+// JSON/hash in the caller transaction. Missing/mismatched context is NotFound; no workflow
+// mutation or publication occurs.
+// assistantWorkflowConfigurationCatalogTx требует точный UPDATE_WORKFLOW screen context и
+// совпадающие entity/version, читает канонический project workflow snapshot и возвращает
+// ограниченный полный JSON/hash в транзакции caller. Отсутствующий/несовпавший context даёт
+// NotFound; workflow mutation или publication не выполняется.
 func (repository *Repository) assistantWorkflowConfigurationCatalogTx(ctx context.Context, tx pgx.Tx, current scope, leaseRef string, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
 	result := entity.AssistantConfigurationCatalogResponse{Kind: input.Kind, AssistantRef: input.AssistantRef, ScopeKind: "PROJECT", OrganizationRef: current.organizationRef, Entries: []entity.AssistantConfigurationCatalogEntry{}}
 	var contextKind, contextRef, name string
@@ -37,7 +43,6 @@ func (repository *Repository) assistantWorkflowConfigurationCatalogTx(ctx contex
 	if err != nil || len(raw) > 1<<20 {
 		return result, errs.ErrUnavailable
 	}
-	digest := sha256.Sum256(raw)
-	result.WorkflowConfiguration = &entity.AssistantWorkflowConfiguration{WorkflowRef: contextRef, ProjectRef: result.ProjectRef, Version: version, ConfigurationJSON: raw, ConfigurationSHA256: hex.EncodeToString(digest[:])}
+	result.WorkflowConfiguration = &entity.AssistantWorkflowConfiguration{WorkflowRef: contextRef, ProjectRef: result.ProjectRef, Version: version, ConfigurationJSON: raw, ConfigurationSHA256: assistantConfigurationSHA256(raw)}
 	return result, nil
 }

@@ -4,11 +4,71 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.382.0
+version: 1.383.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Конфигурация помощников: каталоги, runtime и неизменяемые планы — 24.10.2026
+
+На основе `be2b69d8ead6eaf9889f789d51ef35b04e9e2082` описаны65 прежних
+объявлений тринадцати Go-файлов и два новых helper. Все67/67 объявлений
+выбранных файлов имеют EN→RU описание. Общий inventory18832/21430,
+missing2598 — PostgreSQL adapter control-plane. Два отдельных больших
+assistant configuration component-файла пока остаются в общем backlog;
+описанные component helpers в соседних test-файлах не считаются исполненными.
+
+`finishAssistantConfigurationCatalog` объединяет пять одинаковых
+read-error → commit → mapped-error → result завершений специальных catalog
+веток и финальный commit обычного каталога. Ошибка reader передаётся без
+commit, успешное чтение делает один commit в прежнем caller context;
+commit failure проходит тот же assistantLockedReadError. Caller сохраняет
+named result и deferred bounded rollback, который может заменить ошибку;
+retry, lease/authority и rows ownership не перенесены и не изменены.
+
+`assistantConfigurationSHA256` объединяет три SHA-256 вычисления уже
+проверенных agent/instruction, agent/runtime и workflow projection bytes.
+JSON не перекодируется, validation/size/authority не заменяются hash;
+точные исходные bytes и lowercase hex сохраняются. Full-instruction content
+hash и lease fence hashing остаются отдельными исходными проверками.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Catalog entry | RepeatableRead, exact lease fence/generation, fresh actor/membership и source/helper identity разрешаются до dispatch. Сохраняются bounded retry и independent rollback budget |
+| Instructions | Exact AGENT screen intent CREATE_INSTRUCTION_DRAFT либо UPDATE_AGENT, fallback только по no rows; canonical managed publication приоритетнее native binding. Полные native/effective templates с разными limits, digest/state/version и binding checks |
+| Named runtime metadata | Отдельный metadata-only locator без screen requirement, ordinary agent.view и project source boundary; exact runtime/environment versions, admitted/promoted artifact owner/image/recipe generation pins |
+| Runtime projection |18 public fields, configured tool names отдельно от verified inventory. Source inventory receipt SHA и canonical delivered inventory SHA различаются; values, secret descriptors, commands и effective config не попадают в whitelist |
+| Own current configuration | Scope-only prompt context, runtime view и exact artifact admission; SYSTEM дополнительно требует текущую core revision. Secret descriptors заменяются name/ref/revision bindings, variable availability сохраняет явные причины и отсутствие file groups |
+| Target / project plans | Обычный agent не превращается в assistant. Server-owned owner/profile/project и dependency pins сохраняются в Parameters/Before/After. Нормальная правка сохраняет snapshot/version/target; явный STALE refresh меняет dependencies, сохраняя identity и Selected |
+| Runtime proposal / no-change | Closed editable fields, exact profile/catalog/model/account pins, отсутствие overlay draft. No-change marker выдаётся лишь после полной проверки; comparison очищает только два неперсистентных поля на копиях, сохраняя provider/catalog identity |
+| Runtime publish | Fresh canonical target/OCC/enabled profile/catalog checks; model configuration и при изменённых bytes overlay create/validate/publish выполняются в одной caller transaction. Provider session и commit здесь не запускаются |
+
+Девять comments-only AST/directives comparisons и четыре expected-AST
+comparisons — PASS: пять catalog веток и финальный commit используют общий
+finish, три projection hash используют общий byte-hash helper. Десять
+embedded SQL/fixture directives неизменны. SQL/API/generated, dependencies,
+applied migrations и deploy inputs не менялись. Прочитаны профильные target,
+profile/catalog/owner-core SQL, оба typed retry wrappers и применимые
+retry/error/rollback implementations. Ранее проверенные через Context7
+pgx/v5.10.0 caller transaction/rollback/Row/Scan правила сохраняются.
+
+Полный GOWORK=off control-plane build и unit `-count=1` после обоих helpers
+— PASS LOCAL. Существующие проверки full instruction preservation,
+canonical admission inventory/shared contract golden, private sentinel
+exclusion, safe current metadata и exact no-change/profile/account pins
+входят в полный unit run.15 external fixture/admin/template inputs исключены.
+Disposable PostgreSQL/lease races, реальные image admission/provider/model
+запуски, E2E/browser и deploy/live — NOT RUN/SKIP.
+
+Scan6671 own sources,222 excluded,1813 raw,898 retained occurrences и915
+unresolved. Прежнее101-token agent/workflow окно исчезло после hash reuse.
+Новое121-token окно typed catalog/task-session retry wrappers разобрано
+адресно: bounded retry/context/backoff уже общие, nominal readers и response
+типы различны. Сохранена только точная пара/hash/count1; теперь772 registry
+entries покрывают898 occurrences. Ни once-read bodies, ни lease resolver,
+ни файлы целиком не исключены.17 analyzer tests,5 exact-ignore guards,
+gofmt и diff check — PASS. QA baseline f2e64eb сохранён, Issue#1823 открыт.
 
 ## Обратная запись конфигурации: authority, effects и recovery — 24.10.2026
 

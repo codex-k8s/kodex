@@ -9,10 +9,25 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// assistantConfigurationOperationType recognizes only the six supported assistant
+// configuration/image/integration operation kinds; it does not validate payloads or grant
+// authority.
+// assistantConfigurationOperationType распознаёт только шесть поддерживаемых assistant
+// configuration/image/integration operation kinds; не проверяет payloads и не выдаёт authority.
 func assistantConfigurationOperationType(kind string) bool {
 	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == prepareProjectAssistantConnection || kind == changeProjectAssistantIntegrationGrant
 }
 
+// rehydrateEditedAssistantConfiguration requires unchanged type/key and typed parameters, routes
+// grant/connection edits to dedicated handlers and rehydrates runtime/image proposals from
+// editable fields. Normal edits preserve frozen before/version/target pins; explicit stale refresh
+// permits dependency revisions but preserves resource identity/owner/action and selected state,
+// never applying the proposal here.
+// rehydrateEditedAssistantConfiguration требует неизменные type/key и параметры, направляет
+// grant/connection edits отдельным обработчикам и заново готовит runtime/image proposals из
+// редактируемых полей. Обычная правка сохраняет frozen before/version/target pins; явный stale
+// refresh допускает новые dependency revisions, но сохраняет resource identity/owner/action и
+// selected state, не применяя предложение здесь.
 func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.Context, tx pgx.Tx, current scope, original, edited entity.AssistantPlanOperation, refreshStale bool) (entity.AssistantPlanOperation, error) {
 	if original.Type != edited.Type || original.Key != edited.Key || edited.Parameters == nil {
 		return edited, errs.ErrForbidden
