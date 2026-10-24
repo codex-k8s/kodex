@@ -21,27 +21,70 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryRoleImageRiskActor locks an active USER and organization-scoped OWNER/ADMINISTRATOR binding
+// with valid time bounds; transport and permission checks remain separate.
+// queryRoleImageRiskActor блокирует активного USER и организационную OWNER/ADMINISTRATOR binding с
+// допустимым сроком; transport и permission checks остаются отдельными.
+//
 //go:embed sql/role_images_risk_actor.sql
 var queryRoleImageRiskActor string
 
+// queryRoleImageRiskReport reads saved projection, source version and receipt/evidence pins for
+// the exact organization/artifact/admission revision.
+// queryRoleImageRiskReport читает сохранённые projection, source version и receipt/evidence pins
+// точных organization/artifact/admission revision.
+//
 //go:embed sql/role_images_risk_report.sql
 var queryRoleImageRiskReport string
 
+// queryRoleImageRiskStoreReport persists the exact admission report projection and source
+// receipt/evidence pins in the caller transaction without publishing externally.
+// queryRoleImageRiskStoreReport сохраняет точные admission report projection и source
+// receipt/evidence pins в транзакции caller без внешней публикации.
+//
 //go:embed sql/role_images_risk_store_report.sql
 var queryRoleImageRiskStoreReport string
 
+// queryRoleImageRiskStoreDecision inserts the actor-bound decision and optional accepted-risk
+// bytes/digest using authoritative server time, returning the internal decision ID.
+// queryRoleImageRiskStoreDecision добавляет привязанное к actor решение и необязательные
+// accepted-risk bytes/digest с авторитетным временем сервера, возвращая внутренний ID решения.
+//
 //go:embed sql/role_images_risk_store_decision.sql
 var queryRoleImageRiskStoreDecision string
 
+// queryRoleImageRiskInsertAttempt assigns the next per-artifact attempt number while storing
+// source admission revision, receipt/evidence and artifact snapshot beside an optional risk
+// decision.
+// queryRoleImageRiskInsertAttempt назначает следующий номер attempt артефакта, сохраняя source
+// admission revision, receipt/evidence и artifact snapshot рядом с необязательным risk decision.
+//
 //go:embed sql/role_images_risk_insert_attempt.sql
 var queryRoleImageRiskInsertAttempt string
 
+// queryRoleImageRiskRestartAdmission moves an exact-version REJECTED artifact back to PENDING,
+// fences and clears old admission/promotion claims and authorization, and advances artifact
+// version.
+// queryRoleImageRiskRestartAdmission переводит REJECTED артефакт точной версии в PENDING, повышает
+// fences и очищает прежние admission/promotion claims и authorization, увеличивая artifact
+// version.
+//
 //go:embed sql/role_images_risk_restart_admission.sql
 var queryRoleImageRiskRestartAdmission string
 
+// queryRoleImageRiskHistoryView projects the latest artifact attempt and latest admission-revision
+// risk decision under the exact tenant/artifact reference, preserving absent history as
+// null/empty.
+// queryRoleImageRiskHistoryView формирует последние artifact attempt и risk decision по admission
+// revision в точной tenant/artifact области, сохраняя отсутствие истории как null/empty.
+//
 //go:embed sql/role_images_risk_history_view.sql
 var queryRoleImageRiskHistoryView string
 
+// hydrateImageRiskHistory decodes latest attempt/decision history into the artifact and rejects
+// decision scope or owner pins inconsistent with the artifact.
+// hydrateImageRiskHistory декодирует последние attempt/decision в артефакт и отклоняет
+// несовпадение scope либо owner pins решения и артефакта.
 func (repository *Repository) hydrateImageRiskHistory(ctx context.Context, querier roleImageQuerier, current scope, artifact *entity.ImageArtifact) error {
 	var attemptJSON []byte
 	var decisionJSON string
@@ -62,6 +105,12 @@ func (repository *Repository) hydrateImageRiskHistory(ctx context.Context, queri
 	return nil
 }
 
+// requireImageRiskAuthority requires an unscoped control-api-gateway caller, a live organization
+// OWNER/ADMINISTRATOR, organization.manage and exact scoped recipe target; no payload field grants
+// authority.
+// requireImageRiskAuthority требует caller control-api-gateway без project scope, действующего
+// организационного OWNER/ADMINISTRATOR, organization.manage и точную scoped recipe target; payload
+// не выдаёт полномочия.
 func (repository *Repository) requireImageRiskAuthority(ctx context.Context, tx pgx.Tx, current scope, principal value.Principal, scopeKind, projectRef, recipeRef string) (resolvedAccessTarget, error) {
 	if principal.CallerWorkload != "control-api-gateway" || principal.ProjectRef != "" || current.authorityProjectID != "" {
 		return resolvedAccessTarget{}, errs.ErrNotFound
@@ -82,6 +131,12 @@ func (repository *Repository) requireImageRiskAuthority(ctx context.Context, tx 
 	return target, nil
 }
 
+// readImageVulnerabilityReport checks saved projection bytes and recipe/build/policy/owner pins
+// for the admission revision, returning REBUILD_FOR_REPORT when absent; the stored source version
+// is read but not used as an OCC check.
+// readImageVulnerabilityReport проверяет сохранённые projection bytes и recipe/build/policy/owner
+// pins admission revision, выдавая REBUILD_FOR_REPORT при отсутствии; сохранённая source version
+// читается, но не используется как OCC check.
 func (repository *Repository) readImageVulnerabilityReport(ctx context.Context, tx pgx.Tx, current scope, artifact lockedArtifact) (entity.ImageVulnerabilityReport, error) {
 	result := entity.ImageVulnerabilityReport{Artifact: artifact.Artifact, ArtifactVersion: artifact.Artifact.Version, AdmissionRevision: artifact.Artifact.AdmissionRevision}
 	var raw string
@@ -106,11 +161,19 @@ func (repository *Repository) readImageVulnerabilityReport(ctx context.Context, 
 	return result, nil
 }
 
+// imageReportDigest hashes the exact supplied report/decision bytes as lowercase SHA-256 without
+// JSON re-encoding or semantic validation.
+// imageReportDigest хеширует точные переданные report/decision bytes строчным SHA-256 без
+// повторного JSON encoding либо смысловой проверки.
 func imageReportDigest(raw string) string {
 	digest := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(digest[:])
 }
 
+// imageVulnerabilityReportMatchesArtifact compares exact artifact, owner scope, recipe generation,
+// build attempt and policy/evidence pins; it does not replace report schema validation.
+// imageVulnerabilityReportMatchesArtifact сравнивает точные artifact, owner scope, recipe
+// generation, build attempt и policy/evidence pins; не заменяет проверку схемы отчёта.
 func imageVulnerabilityReportMatchesArtifact(report runtimecontract.ImageVulnerabilityReport, a entity.ImageArtifact) bool {
 	return report.ArtifactRef == a.Ref && report.ImageDigest == a.ManifestDigest && report.ReportSHA256 == a.VulnerabilityEvidenceSHA256 && report.SBOMSHA256 == a.SBOMSHA256 &&
 		report.ScopeKind == a.ScopeKind && report.OrganizationRef == a.OrganizationRef && report.ProjectRef == a.ProjectRef &&
@@ -118,6 +181,12 @@ func imageVulnerabilityReportMatchesArtifact(report runtimecontract.ImageVulnera
 		report.BuildRef == a.BuildRef && report.BuildVersion == a.BuildVersion && report.BuildAttempt == a.BuildAttempt && report.PolicyRevision == a.PolicyRevision && report.PolicySHA256 == a.PolicySHA256
 }
 
+// GetVulnerabilityReport uses repeatable read and exact risk authority/artifact scope, disables
+// action hints for stale admission policy, checks an optional report pin and commits the filtered
+// page.
+// GetVulnerabilityReport использует repeatable read и точные risk authority/artifact scope,
+// отключает action hints при устаревшей admission policy, проверяет необязательный report pin и
+// фиксирует отфильтрованную страницу.
 func (repository *Repository) GetVulnerabilityReport(ctx context.Context, principal value.Principal, filter roleimagerepo.VulnerabilityReportFilter) (entity.ImageVulnerabilityReport, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -131,15 +200,9 @@ func (repository *Repository) GetVulnerabilityReport(ctx context.Context, princi
 	if _, err := repository.requireImageRiskAuthority(ctx, tx, current, principal, filter.ScopeKind, filter.ProjectRef, filter.RecipeRef); err != nil {
 		return entity.ImageVulnerabilityReport{}, err
 	}
-	a, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact, current.organizationID, filter.ArtifactRef))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ImageVulnerabilityReport{}, errs.ErrNotFound
-	}
+	a, err := lockImageRiskArtifact(ctx, tx, current, filter.ArtifactRef, filter.RecipeRef, filter.ScopeKind, filter.ProjectRef)
 	if err != nil {
-		return entity.ImageVulnerabilityReport{}, errs.ErrUnavailable
-	}
-	if a.Artifact.RecipeRef != filter.RecipeRef || a.Artifact.ScopeKind != filter.ScopeKind || a.Artifact.ProjectRef != filter.ProjectRef {
-		return entity.ImageVulnerabilityReport{}, errs.ErrNotFound
+		return entity.ImageVulnerabilityReport{}, err
 	}
 	result, err := repository.readImageVulnerabilityReport(ctx, tx, current, a)
 	if err != nil {
@@ -166,6 +229,12 @@ func (repository *Repository) GetVulnerabilityReport(ctx context.Context, princi
 	return result, nil
 }
 
+// pageImageVulnerabilityReport filters findings and binds actor, tenant, projection and filter to
+// an HMAC offset cursor; accepts pages of one to one hundred with a default of fifty and does not
+// treat the expected report pin as a filter.
+// pageImageVulnerabilityReport фильтрует findings и связывает actor, tenant, projection и filter с
+// HMAC offset cursor; принимает страницы от одного до ста с default пятьдесят и не считает
+// expected report pin фильтром.
 func (repository *Repository) pageImageVulnerabilityReport(result *entity.ImageVulnerabilityReport, current scope, filter roleimagerepo.VulnerabilityReportFilter) error {
 	page := filter.Page
 	filter.Page.Token = ""
@@ -216,16 +285,30 @@ func (repository *Repository) pageImageVulnerabilityReport(result *entity.ImageV
 	return nil
 }
 
+// imageReportCursorMAC HMAC-signs a domain-separated projection/filter digest and canonical offset
+// using the configured image lease key; no raw report content enters the cursor.
+// imageReportCursorMAC подписывает HMAC разделённые доменом projection/filter digest и
+// канонический offset настроенным image lease key; сырое содержимое отчёта в cursor не входит.
 func (repository *Repository) imageReportCursorMAC(filterDigest, offset string) string {
 	mac := hmac.New(sha256.New, repository.roleImages.LeaseSigningKey)
 	_, _ = mac.Write([]byte("image-vulnerability-report\x00" + filterDigest + "\x00" + offset))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// DecideAdmissionRisk delegates the complete risk decision to the existing bounded role-image
+// transaction retry policy without changing its error eligibility.
+// DecideAdmissionRisk передаёт полное risk decision существующей ограниченной role-image
+// transaction retry policy, не меняя допустимость ошибок для повтора.
 func (repository *Repository) DecideAdmissionRisk(ctx context.Context, input roleimagerepo.AdmissionRiskInput) (entity.ImageAdmissionRiskResult, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.ImageAdmissionRiskResult, error) { return repository.decideAdmissionRisk(ctx, input) })
 }
 
+// decideAdmissionRisk performs serializable owner/policy resolution before idempotent replay,
+// checks exact artifact/recipe/evidence pins and server time, then stores decision, optional new
+// admission attempt, audit, receipt and event in one commit.
+// decideAdmissionRisk выполняет serializable owner/policy resolution до idempotent replay,
+// проверяет точные artifact/recipe/evidence pins и время сервера, затем сохраняет решение,
+// необязательную новую admission attempt, audit, receipt и event одним commit.
 func (repository *Repository) decideAdmissionRisk(ctx context.Context, input roleimagerepo.AdmissionRiskInput) (entity.ImageAdmissionRiskResult, error) {
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -247,15 +330,9 @@ func (repository *Repository) decideAdmissionRisk(ctx context.Context, input rol
 	if err != nil {
 		return entity.ImageAdmissionRiskResult{}, errs.ErrUnavailable
 	}
-	a, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact, current.organizationID, input.ArtifactRef))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ImageAdmissionRiskResult{}, errs.ErrNotFound
-	}
+	a, err := lockImageRiskArtifact(ctx, tx, current, input.ArtifactRef, input.RecipeRef, input.ScopeKind, input.ProjectRef)
 	if err != nil {
-		return entity.ImageAdmissionRiskResult{}, errs.ErrUnavailable
-	}
-	if a.Artifact.RecipeRef != input.RecipeRef || a.Artifact.ScopeKind != input.ScopeKind || a.Artifact.ProjectRef != input.ProjectRef {
-		return entity.ImageAdmissionRiskResult{}, errs.ErrNotFound
+		return entity.ImageAdmissionRiskResult{}, err
 	}
 	var active bool
 	if err := tx.QueryRow(ctx, queryRoleImagesAdmissionCurrent, pgx.StrictNamedArgs{"organization_id": current.organizationID, "artifact_id": a.ID}).Scan(&active); err != nil {
@@ -359,9 +436,20 @@ func (repository *Repository) decideAdmissionRisk(ctx context.Context, input rol
 	return result, nil
 }
 
+// queryImageRiskServerTime reads PostgreSQL clock time for the persisted owner decision instead of
+// trusting request or process timestamps.
+// queryImageRiskServerTime читает время часов PostgreSQL для сохраняемого решения владельца вместо
+// доверия времени запроса либо процесса.
+//
 //go:embed sql/role_images_risk_server_time.sql
 var queryImageRiskServerTime string
 
+// insertImageAdmissionAttempt creates a fresh attempt reference, stores immutable source
+// artifact/evidence and optional decision pins and returns the server-assigned number/time without
+// committing itself.
+// insertImageAdmissionAttempt создаёт свежую ссылку attempt, сохраняет неизменяемые source
+// artifact/evidence и необязательные decision pins и возвращает назначенные сервером номер/время
+// без собственного commit.
 func (repository *Repository) insertImageAdmissionAttempt(ctx context.Context, tx pgx.Tx, current scope, artifact entity.ImageArtifact, artifactID, decisionID, decisionRef, state string) (entity.ImageAdmissionAttempt, error) {
 	ref, err := newRef("imgadm")
 	if err != nil {
@@ -374,17 +462,36 @@ func (repository *Repository) insertImageAdmissionAttempt(ctx context.Context, t
 	return result, nil
 }
 
+// queryRoleImageRiskGetAttempt locks the latest numbered attempt for the exact tenant/artifact and
+// returns its optional decision and immutable source evidence pins.
+// queryRoleImageRiskGetAttempt блокирует последнюю нумерованную attempt точных tenant/artifact и
+// возвращает необязательное решение и неизменяемые source evidence pins.
+//
 //go:embed sql/role_images_risk_get_attempt.sql
 var queryRoleImageRiskGetAttempt string
 
+// queryRoleImageRiskClaimAttempt claims only the exact PENDING attempt reference/number within its
+// tenant/artifact and advances version while assigning the supplied fence.
+// queryRoleImageRiskClaimAttempt забирает только точную PENDING attempt по reference/number внутри
+// tenant/artifact, увеличивая version и назначая переданный fence.
+//
 //go:embed sql/role_images_risk_claim_attempt.sql
 var queryRoleImageRiskClaimAttempt string
 
+// imageAdmissionAttemptSnapshot holds the locked attempt plus stored decision, accepted-risk
+// bytes/digest and original admission receipt/evidence used for exact claim validation.
+// imageAdmissionAttemptSnapshot хранит заблокированную attempt, сохранённое решение, accepted-risk
+// bytes/digest и исходные admission receipt/evidence для точной проверки claim.
 type imageAdmissionAttemptSnapshot struct {
 	Attempt                                                        entity.ImageAdmissionAttempt
 	DecisionJSON, RiskJSON, RiskSHA, SourceReceipt, SourceEvidence string
 }
 
+// readImageAdmissionAttempt reads and locks the latest attempt for one tenant/artifact, supplies
+// the caller artifact reference and preserves the raw row error for distinct missing/error
+// handling.
+// readImageAdmissionAttempt читает и блокирует последнюю attempt одного tenant/artifact, задаёт
+// ссылку артефакта caller и сохраняет исходную row error для различения отсутствия и отказа.
 func (repository *Repository) readImageAdmissionAttempt(ctx context.Context, tx pgx.Tx, current scope, artifactID, artifactRef string) (imageAdmissionAttemptSnapshot, error) {
 	var result imageAdmissionAttemptSnapshot
 	result.Attempt.ArtifactRef = artifactRef
@@ -392,6 +499,12 @@ func (repository *Repository) readImageAdmissionAttempt(ctx context.Context, tx 
 	return result, err
 }
 
+// ensureImageAdmissionAttempt creates a missing PENDING attempt, validates any
+// accepted-risk/report binding and claims exactly one PENDING reference/number with the supplied
+// fence; returns the original source receipt/evidence.
+// ensureImageAdmissionAttempt создаёт отсутствующую PENDING attempt, проверяет
+// accepted-risk/report binding и забирает ровно одну PENDING reference/number с переданным fence;
+// возвращает исходные source receipt/evidence.
 func (repository *Repository) ensureImageAdmissionAttempt(ctx context.Context, tx pgx.Tx, current scope, artifact entity.ImageArtifact, artifactID string, fence uint64) (entity.ImageAdmissionAttempt, string, string, string, string, error) {
 	stored, err := repository.readImageAdmissionAttempt(ctx, tx, current, artifactID, artifact.Ref)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -430,6 +543,11 @@ func (repository *Repository) ensureImageAdmissionAttempt(ctx context.Context, t
 	return stored.Attempt, stored.RiskJSON, stored.RiskSHA, stored.SourceReceipt, stored.SourceEvidence, nil
 }
 
+// matchImageAdmissionAttempt requires a nonempty reference and positive number matching the
+// current locked attempt and requested state, mapping absent/mismatched identity to forbidden.
+// matchImageAdmissionAttempt требует непустую reference и положительный number текущей
+// заблокированной attempt с заданным state, преобразуя отсутствие либо несовпадение identity в
+// forbidden.
 func (repository *Repository) matchImageAdmissionAttempt(ctx context.Context, tx pgx.Tx, current scope, artifactID, ref string, number uint32, state string) error {
 	if ref == "" || number == 0 {
 		return errs.ErrForbidden
@@ -447,6 +565,12 @@ func (repository *Repository) matchImageAdmissionAttempt(ctx context.Context, tx
 	return nil
 }
 
+// validateAdmissionVulnerabilityReport validates report schema/raw digest and artifact pins, then
+// checks exact stored risk digest/report binding; accepted reports with blocking findings require
+// matching accepted-risk evidence.
+// validateAdmissionVulnerabilityReport проверяет schema/raw digest отчёта и artifact pins, затем
+// точные сохранённые risk digest/report binding; принятый отчёт с blocking findings требует
+// совпадающего accepted-risk evidence.
 func (repository *Repository) validateAdmissionVulnerabilityReport(ctx context.Context, tx pgx.Tx, current scope, locked lockedArtifact, input roleimagerepo.AdmissionRecordInput) error {
 	report, err := runtimecontract.DecodeImageVulnerabilityReport([]byte(input.VulnerabilityReportJSON))
 	artifact := locked.Artifact
@@ -473,6 +597,11 @@ func (repository *Repository) validateAdmissionVulnerabilityReport(ctx context.C
 	return nil
 }
 
+// storeAdmissionVulnerabilityReport writes the supplied validated report and exact admission
+// source receipt/evidence through the caller transaction and uses the existing role-image
+// write-error mapping.
+// storeAdmissionVulnerabilityReport записывает переданный проверенный отчёт и точные admission
+// source receipt/evidence в транзакции caller с прежним role-image write-error mapping.
 func (repository *Repository) storeAdmissionVulnerabilityReport(ctx context.Context, tx pgx.Tx, current scope, artifactID string, artifact entity.ImageArtifact, input roleimagerepo.AdmissionRecordInput) error {
 	_, err := tx.Exec(ctx, queryRoleImageRiskStoreReport, pgx.StrictNamedArgs{"artifact_id": artifactID, "admission_revision": artifact.AdmissionRevision, "organization_id": current.organizationID, "projection_json": input.VulnerabilityReportJSON, "projection_sha256": input.VulnerabilityReportProjectionSHA256, "artifact_version": artifact.Version, "receipt_sha256": artifact.AdmissionReceiptSHA256, "evidence_manifest_digest": artifact.AdmissionReceiptOCIManifestDigest})
 	if err != nil {
@@ -481,6 +610,10 @@ func (repository *Repository) storeAdmissionVulnerabilityReport(ctx context.Cont
 	return nil
 }
 
+// decodeImageRiskDecision returns nil for absent decision text and otherwise decodes the stored
+// decision, mapping malformed JSON to conflict without granting authority.
+// decodeImageRiskDecision возвращает nil при отсутствии текста решения, иначе декодирует
+// сохранённое решение, преобразуя неверный JSON в conflict без выдачи полномочий.
 func decodeImageRiskDecision(raw string) (*entity.ImageAdmissionRiskDecision, error) {
 	if raw == "" {
 		return nil, nil
@@ -492,6 +625,12 @@ func decodeImageRiskDecision(raw string) (*entity.ImageAdmissionRiskDecision, er
 	return &d, nil
 }
 
+// canonicalImageRiskAcceptance returns an empty risk body and decision digest for REJECT_RISK;
+// otherwise builds the versioned canonical acceptance and requires its exact report binding before
+// returning bytes/digest.
+// canonicalImageRiskAcceptance возвращает пустое risk body и decision digest для REJECT_RISK;
+// иначе собирает версионированное каноническое acceptance и требует его точную привязку к отчёту
+// до возврата bytes/digest.
 func canonicalImageRiskAcceptance(d entity.ImageAdmissionRiskDecision, report runtimecontract.ImageVulnerabilityReport) (string, string, error) {
 	if d.Action == "REJECT_RISK" {
 		raw := string(asJSON(d))
@@ -503,4 +642,24 @@ func canonicalImageRiskAcceptance(d entity.ImageAdmissionRiskDecision, report ru
 		return "", "", errs.ErrConflict
 	}
 	return string(raw), imageReportDigest(string(raw)), nil
+}
+
+// lockImageRiskArtifact reads the exact tenant/artifact locked tuple and enforces recipe/scope/
+// project equality, preserving not-found versus unavailable mapping; caller-owned risk authority
+// checks and transaction lifecycle stay outside this helper.
+// lockImageRiskArtifact читает точный заблокированный tenant/artifact tuple и требует равенство
+// recipe/scope/project, сохраняя not-found и unavailable; risk authority checks и жизненный цикл
+// транзакции остаются у caller.
+func lockImageRiskArtifact(ctx context.Context, tx pgx.Tx, current scope, artifactRef, recipeRef, scopeKind, projectRef string) (lockedArtifact, error) {
+	a, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact, current.organizationID, artifactRef))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return lockedArtifact{}, errs.ErrNotFound
+	}
+	if err != nil {
+		return lockedArtifact{}, errs.ErrUnavailable
+	}
+	if a.Artifact.RecipeRef != recipeRef || a.Artifact.ScopeKind != scopeKind || a.Artifact.ProjectRef != projectRef {
+		return lockedArtifact{}, errs.ErrNotFound
+	}
+	return a, nil
 }

@@ -4,11 +4,71 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.374.0
+version: 1.375.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Role-image risk, managed lineage, impact и attachment sets — 24.10.2026
+
+На основе `1d7b1eb114d4f8521e79fd2cfdce700d7f04e405` описаны114 прежних
+объявлений в семи файлах: risk29, managed19, impact19, attachment sets26,
+attachment queries17, managed component fixture3 и impact commitment test1.
+Описаны также три новых production helpers и три новых теста. Полный
+Go inventory18407/21412, missing3005 — PostgreSQL adapter control-plane.
+Все восемь выбранных Go-файлов имеют0missing;46 go:embed сохранены.
+
+Общие выносы сохраняют прежний порядок и точные nominal поля:
+
+- `sourceRoleImageInput` объединяет catalog availability → strict parse →
+  resolve → managed recipe validation для validation и publish. Он формирует
+  прежний PROJECT/CREATE input без проверки существования project/role и без
+  выдачи image.build; publish проверяет permission в прежнем месте.
+- `scanAttachmentSetItem` объединяет десять одинаковых Scan destinations и
+  назначение INPUT scope при resolve/list items. Исходная row error возвращается
+  caller для прежнего unavailable mapping; частичный item не выдаётся.
+- `lockImageRiskArtifact` объединяет tenant-bound artifact lock/error mapping и
+  точное recipe/scope/project равенство в risk report и risk decision. Owner
+  authority, RR либо Serializable transaction и commit остаются у callers.
+
+| Сценарий / lifecycle | Описанное фактическое поведение |
+| --- | --- |
+| Risk authority / report | Unscoped control-api-gateway, активный USER с OWNER/ADMINISTRATOR binding и organization.manage предшествуют scoped recipe/artifact. Report pins и HMAC cursor не заменяют authority; source version читается без отдельного OCC сравнения |
+| Decision / replay | Текущие owner/policy проверяются до receipt replay. Replay сохраняет исходный decision outcome и обновляет artifact/history readback, не создавая новую attempt |
+| Accept / reject risk | Новый decision получает PostgreSQL clock time. ACCEPT_RISK создаёт PENDING attempt и restart admission с fencing/revoke старых claims/authorization. REJECT_RISK не создаёт attempt. Decision, audit, receipt и recipe event фиксируются прежним общим commit |
+| Attempt claim / report | Latest attempt должен быть PENDING; accepted-risk bytes/digest проверяются относительно report. Exact reference/number/fence и source receipt/evidence остаются привязанными к прежней attempt |
+| Managed source | UI/GIT ownership, archived и SHIPPED/BASELINE lineage раздельны. CREATE/UPDATE/RESTORE не перезаписывают параллельный draft; restore создаёт новую immutable source revision для новой recipe generation |
+| Impact plan | Actor-bound immutable commitment исключает mutable outcomes/timestamps/result fields. Read повторно проверяет target/policy, owner snapshot и current consumer eligibility; EXPIRED здесь проекция, не новая запись перехода |
+| Attachment revisions | DRAFT create/add/remove/finalize сохраняют family lock/OCC, per-mutation100 refs и512MiB. Finalize блокирует exact clean content pins и строит новый canonical manifest перед insert |
+| Attachment access / binding | Get читает metadata до read-only access/items transaction, не объявлен единым RR snapshot. Organization/project и каждый artifact view проверяются отдельно. Empty optional set не создаёт binding; непустой set связывается с отдельной purpose target column |
+
+Новые unit проверки: восемь managed-source случаев через helper и настоящий
+validation entrypoint, включая unavailable-before-parse, unknown fields,
+resolver failure, invalid recipe/project/role и exact valid result; десять
+позиционных attachment values плюс scan failure с нулевым result; восемь
+artifact lookup случаев с exact tenant/query/context, organization/project
+scope, missing/driver/decode errors и отсутствием commit. Переиспользованы
+существующие pure catalog и callback-row/transaction fixtures; новых дублей
+mock types нет. Прежний impact commitment test также прошёл targeted запуск.
+
+Полные локальные GOWORK=off control-plane build/unit после окончательного
+risk helper — PASS. Четыре comments-only файла совпали с baseline AST/directives,
+три production файла — с ожидаемыми точными выносами. SQL/API/generated,
+зависимости и deploy inputs не менялись. Context7: pgx/v5.10.0 transactions,
+deferred rollback и QueryRow/ErrNoRows. Credentials и13 external env/fixture
+inputs исключены. Реальные SQL lock/race, report restart, object storage,
+owner/warm/legacy и полный E2E/browser — NOT RUN/SKIP; pure units не доказывают
+эти внешние сценарии, их сквозная приёмка выделена QA-агенту.
+
+Scan6669 own sources,222 excluded,1820 raw,895 retained,925 unresolved.
+Внутренний повтор risk artifact lookup устранён. Пять cross-file окон
+выбранной области остаются открытыми: source accept, revision impact,
+admission и gRPC artifact transfer. Новых либо изменённых решений registry нет,
+порогов/ignore regions не меняли.17 analyzer unit и5 exact-ignore guards — PASS.
+Это продолжение Draft PR#1829; Issue#1823 и полный остаток остаются открытыми.
+Исходный merge SHA для независимого QA по-прежнему f2e64eb; этот этап его не меняет.
+
 
 ## Продолжение в отдельном worktree: файловые привязки и runtime reads — 24.10.2026
 

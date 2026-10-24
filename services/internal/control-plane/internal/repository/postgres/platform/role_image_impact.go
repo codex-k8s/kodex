@@ -23,28 +23,77 @@ import (
 )
 
 var (
+	// queryRoleImageImpactTarget locks the latest admitted/promoted artifact mapped to the exact
+	// published managed revision, scope and current policy/runtime contract pins.
+	// queryRoleImageImpactTarget блокирует последний admitted/promoted artifact точной опубликованной
+	// managed revision, области и текущих policy/runtime contract pins.
 	//go:embed sql/role_image_impact__target.sql
 	queryRoleImageImpactTarget string
+	// queryRoleImageImpactConsumers lists up to1001 eligible current environment or agent-binding
+	// consumers of the same scoped recipe and a different artifact, preserving exact owner and version
+	// pins.
+	// queryRoleImageImpactConsumers перечисляет до1001 допустимого current environment либо
+	// agent-binding consumer того же scoped recipe и другого artifact с точными owner и version pins.
 	//go:embed sql/role_image_impact__consumers.sql
 	queryRoleImageImpactConsumers string
+	// queryRoleImageImpactGet reads only the exact tenant/actor plan with owner snapshot revision2 and
+	// joined configuration/revision/artifact ownership.
+	// queryRoleImageImpactGet читает только точный tenant/actor plan с owner snapshot revision2 и
+	// согласованным владением configuration/revision/artifact.
 	//go:embed sql/role_image_impact__get.sql
 	queryRoleImageImpactGet string
+	// queryRoleImageImpactInsert stores immutable owner-snapshot revision2 and digest while leaving
+	// creation/expiry timestamps to PostgreSQL.
+	// queryRoleImageImpactInsert сохраняет неизменяемые owner-snapshot revision2 и digest, оставляя
+	// creation/expiry timestamps PostgreSQL.
 	//go:embed sql/role_image_impact__insert.sql
 	queryRoleImageImpactInsert string
+	// queryRoleImageImpactItems reads all plan item snapshots in reference order together with mutable
+	// outcomes and result binding/version fields.
+	// queryRoleImageImpactItems читает все snapshots элементов плана в порядке reference вместе с
+	// изменяемыми outcomes и result binding/version fields.
 	//go:embed sql/role_image_impact__items.sql
 	queryRoleImageImpactItems string
+	// queryRoleImageImpactInsertItem inserts a fixed item reference and immutable snapshot into the
+	// exact plan without applying consumer effects.
+	// queryRoleImageImpactInsertItem добавляет фиксированные reference и неизменяемый snapshot
+	// элемента в точный план без применения эффектов consumer.
 	//go:embed sql/role_image_impact__insert_item.sql
 	queryRoleImageImpactInsertItem string
+	// queryRoleImageImpactOutcome updates exactly a PENDING item and records the resulting
+	// environment/binding pins, returning its reference for transition confirmation.
+	// queryRoleImageImpactOutcome обновляет ровно PENDING item и записывает результирующие
+	// environment/binding pins, возвращая reference для подтверждения перехода.
 	//go:embed sql/role_image_impact__outcome.sql
 	queryRoleImageImpactOutcome string
+	// queryRoleImageImpactFinish moves an unexpired PREPARED plan to APPLIED only after every item has
+	// left PENDING and advances plan version.
+	// queryRoleImageImpactFinish переводит неистёкший PREPARED plan в APPLIED только после выхода всех
+	// элементов из PENDING и увеличивает plan version.
 	//go:embed sql/role_image_impact__finish.sql
 	queryRoleImageImpactFinish string
+	// queryRoleImageImpactSearchItems searches saved plan items through joined
+	// environment/project/agent names with literal case-insensitive matching; caller eligibility
+	// remains a separate authoritative check.
+	// queryRoleImageImpactSearchItems ищет сохранённые элементы плана по связанным
+	// environment/project/agent names буквальным совпадением без учёта регистра; eligibility caller
+	// проверяется отдельно.
 	//go:embed sql/role_image_impact__search_items.sql
 	queryRoleImageImpactSearchItems string
 )
 
+// maximumRoleImageImpactItems caps prepared and decoded impact snapshots at one thousand items;
+// SQL fetches one extra row to detect an excessive consumer set.
+// maximumRoleImageImpactItems ограничивает подготовленные и декодированные impact snapshots
+// тысячей элементов; SQL читает одну лишнюю строку для обнаружения чрезмерного набора consumers.
 const maximumRoleImageImpactItems = 1000
 
+// roleImageImpactDigest hashes actor plus normalized plan and reference-sorted copies of items,
+// excluding mutable state/timestamps/outcomes/result fields while preserving all original consumer
+// pins; marshal failure returns unavailable.
+// roleImageImpactDigest хеширует actor, нормализованный план и отсортированные по reference копии
+// элементов, исключая mutable state/timestamps/outcomes/result fields и сохраняя исходные consumer
+// pins; ошибка Marshal даёт unavailable.
 func roleImageImpactDigest(plan entity.RoleImageImpactPlan, actor string, items []entity.RoleImageImpactItem) (string, error) {
 	plan.Version, plan.State, plan.Digest = 1, "PREPARED", ""
 	plan.CreatedAt, plan.ExpiresAt = time.Time{}, time.Time{}
@@ -68,6 +117,12 @@ func roleImageImpactDigest(plan entity.RoleImageImpactPlan, actor string, items 
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// authorizeRoleImageImpact distinguishes prepared-plan rebind from target preparation, requiring
+// authoritative set/revision access and exact configuration/revision/digest for rebind without
+// granting permission from the plan locator.
+// authorizeRoleImageImpact различает rebind подготовленного плана и подготовку target, требуя
+// авторитетный доступ к set/revision и точные configuration/revision/digest для rebind без выдачи
+// полномочий по locator плана.
 func (r *Repository) authorizeRoleImageImpact(ctx context.Context, tx pgx.Tx, s scope, input command.Command) error {
 	payload, ok := input.Payload.(command.ManagedConfigurationInput)
 	if !ok {
@@ -106,11 +161,19 @@ func (r *Repository) authorizeRoleImageImpact(ctx context.Context, tx pgx.Tx, s 
 	return err
 }
 
+// roleImageImpactRow pairs the public plan snapshot with internal
+// plan/configuration/revision/artifact identifiers used for exact owner joins and writes.
+// roleImageImpactRow связывает публичный snapshot плана с внутренними идентификаторами
+// plan/configuration/revision/artifact для точных owner joins и writes.
 type roleImageImpactRow struct {
 	public                                      entity.RoleImageImpactPlan
 	id, configurationID, revisionID, artifactID string
 }
 
+// roleImageImpactTarget requires a published role-image revision, resolves its admitted/promoted
+// target using current policy/contract pins and copies the managed set/revision OCC fields.
+// roleImageImpactTarget требует опубликованную role-image revision, разрешает её admitted/promoted
+// target по текущим policy/contract pins и копирует managed set/revision OCC fields.
 func (r *Repository) roleImageImpactTarget(ctx context.Context, tx pgx.Tx, s scope, set managedSet, revision lockedManagedRevision) (roleImageImpactRow, error) {
 	row := roleImageImpactRow{configurationID: set.id, revisionID: revision.RefID}
 	if set.Kind != revisionservice.KindRoleImage || revision.PublishedAt == nil {
@@ -133,6 +196,12 @@ func (r *Repository) roleImageImpactTarget(ctx context.Context, tx pgx.Tx, s sco
 	return row, nil
 }
 
+// prepareRoleImageImpact rejects caller-supplied plan or selected consumers, snapshots up to one
+// thousand authoritative consumers with server references and actor-bound digest, then stores
+// plan/items in the caller transaction.
+// prepareRoleImageImpact отклоняет заданные caller план либо выбранных consumers, снимает snapshot
+// до тысячи авторитетных consumers с серверными references и actor-bound digest, затем сохраняет
+// plan/items в транзакции caller.
 func (r *Repository) prepareRoleImageImpact(ctx context.Context, tx pgx.Tx, s scope, set managedSet, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ManagedConfigurationInput)
 	if !ok || payload.PlanRef != "" || len(payload.Consumers) > 0 || len(payload.SelectedItemRefs) > 0 {
@@ -202,6 +271,11 @@ func (r *Repository) prepareRoleImageImpact(ctx context.Context, tx pgx.Tx, s sc
 	return outcome, nil
 }
 
+// roleImageImpact reads the exact actor-owned plan, validates immutable snapshot
+// identity/count/digest shape, overlays mutable row state and projects expiry without writing a
+// transition.
+// roleImageImpact читает точный actor-owned plan, проверяет identity/count/digest неизменяемого
+// snapshot, накладывает mutable row state и отображает expiry без записи перехода.
 func (r *Repository) roleImageImpact(ctx context.Context, tx pgx.Tx, s scope, ref string) (roleImageImpactRow, error) {
 	var row roleImageImpactRow
 	if !strings.HasPrefix(ref, "riip_") || len(ref) > 96 || len(ref) < 13 {
@@ -229,6 +303,11 @@ func (r *Repository) roleImageImpact(ctx context.Context, tx pgx.Tx, s scope, re
 	return row, nil
 }
 
+// roleImageImpactItems decodes ordered immutable item snapshots, validates reference/count and
+// explicit owner scope, then overlays mutable outcomes and resulting binding/version pins.
+// roleImageImpactItems декодирует упорядоченные неизменяемые snapshots элементов, проверяет
+// reference/count и явную owner scope, затем накладывает mutable outcomes и результирующие
+// binding/version pins.
 func (r *Repository) roleImageImpactItems(ctx context.Context, tx pgx.Tx, id string) ([]entity.RoleImageImpactItem, error) {
 	rows, err := tx.Query(ctx, queryRoleImageImpactItems, pgx.StrictNamedArgs{"plan_id": id})
 	if err != nil {
@@ -256,6 +335,11 @@ func (r *Repository) roleImageImpactItems(ctx context.Context, tx pgx.Tx, id str
 	return items, nil
 }
 
+// roleImageImpactAccess re-resolves managed set/revision authority and the current admitted
+// target, requiring exact stored internal IDs, recipe/build and digest pins before using the plan.
+// roleImageImpactAccess повторно разрешает managed set/revision authority и текущую admitted
+// target, требуя точные сохранённые internal IDs, recipe/build и digest pins до использования
+// плана.
 func (r *Repository) roleImageImpactAccess(ctx context.Context, tx pgx.Tx, s scope, row roleImageImpactRow) (managedSet, lockedManagedRevision, error) {
 	set, err := r.resolveRoleImageImpactSet(ctx, tx, s, command.ManagedConfigurationInput{ConfigurationRef: row.public.ConfigurationRef})
 	if err != nil {
@@ -286,6 +370,12 @@ func (r *Repository) roleImageImpactAccess(ctx context.Context, tx pgx.Tx, s sco
 	return set, revision, nil
 }
 
+// GetRoleImageImpactPlan uses a five-second repeatable read to recheck authority and immutable
+// commitment, filters current environment/consumer eligibility before search and cursor paging and
+// commits before returning visible items.
+// GetRoleImageImpactPlan использует пятисекундный repeatable read для повторной проверки authority
+// и неизменяемого commitment, фильтрует текущую environment/consumer eligibility до поиска и
+// cursor paging и выполняет commit до выдачи видимых элементов.
 func (r *Repository) GetRoleImageImpactPlan(ctx context.Context, p value.Principal, ref, search string, page query.Page) (entity.RoleImageImpactPage, error) {
 	var result entity.RoleImageImpactPage
 	search = strings.TrimSpace(search)

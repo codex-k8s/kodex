@@ -16,9 +16,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryRoleImageManagedReadback embeds the disposable-component lineage readback linking
+// recipe/build to the exact published managed source revision.
+// queryRoleImageManagedReadback встраивает disposable-component lineage readback, связывающий
+// recipe/build с точной опубликованной managed source revision.
+//
 //go:embed testdata/sql/role_image_managed_readback.sql
 var queryRoleImageManagedReadback string
 
+// assertManagedRoleImageBuild checks the real component readback for published state,
+// generation/build pins and typed source content matching the recipe; it requires the test
+// database fixture.
+// assertManagedRoleImageBuild проверяет реальный component readback на published state,
+// generation/build pins и совпадение типизированного source content с рецептом; требует тестовую
+// БД.
 func assertManagedRoleImageBuild(t *testing.T, ctx context.Context, repository *Repository, recipe entity.RoleImageRecipe, build entity.ImageBuild) {
 	t.Helper()
 	var configurationRef, revisionRef, state, content, buildRef string
@@ -33,6 +44,11 @@ func assertManagedRoleImageBuild(t *testing.T, ctx context.Context, repository *
 	}
 }
 
+// testManagedRoleImageDraftFence creates a parallel managed draft and proves direct recipe update
+// returns conflict without changing published build lineage, then discards the draft through the
+// owner command.
+// testManagedRoleImageDraftFence создаёт параллельный managed draft и проверяет conflict прямого
+// recipe update без изменения published build lineage, затем удаляет draft командой владельца.
 func testManagedRoleImageDraftFence(t *testing.T, ctx context.Context, repository *Repository, owner, resolvedOwner value.Principal, recipe entity.RoleImageRecipe, build entity.ImageBuild) {
 	t.Helper()
 	service, err := platformservice.New(repository)
