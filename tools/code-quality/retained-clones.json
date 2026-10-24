@@ -5544,6 +5544,22 @@
       "fragmentSHA256": "b588fbb40762999b8c3b51b8421eb1620386259ba233d196e452266da5bda68e",
       "count": 1,
       "reason": "113-token окно совпадает лишь в каркасе и начале самостоятельных negative endpoint tables двух application packages. Production endpoint algorithm уже общий objectstorage.ValidEndpoint; CP дополнительно проверяет region и два bucket names, controller сохраняет свои production opt-in и worker namespace guards. Оба полных тестовых файла и оба boundary predicates прочитаны; локальный plaintext-without-opt-in fixture даже различается hostname. Generic test API через libs потребует экспортировать fixture/runner только ради короткого табличного префикса и свяжет независимые подтверждения правильной caller policy. Сохранена только exact пара/hash/count1, не test files или объектное хранилище целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/integration_grant_candidate_queries.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/integration_grant_candidate_queries.go",
+      "fragmentSHA256": "32d469286d7c9bbaee3da1dafa10ca4ff6902a1496c6e6a01d49f7aa212b24b2",
+      "count": 1,
+      "reason": "Два тонких типизированных adapters ListIntegrationGrantProjectCandidates и ListIntegrationGrantRecipientCandidates уже вызывают общий integrationCandidates, который владеет scope, eligibility и paging. Окно пересекает конец project caster и начало recipient caster; DTO различаются: PROJECT возвращает ProjectRef, RECIPIENT — RecipientRef, RecipientKind и ProjectRef. Полные методы прочитаны; универсальный dispatcher или reflection ради append/return скрывает typed mapping без удаления бизнесового повтора. Решение относится только к этой паре и точному107-token fragment."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/project_assistant_integration_grant_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/system_assistant_integration_grant_candidates.go",
+      "fragmentSHA256": "7f4a3d5dfc8c26ee8d046e2b1d78c063e70805537990f709b47474e2b398f2b6",
+      "count": 1,
+      "reason": "После выноса scan rows, cursor decode, capability projection и page logic осталось окно между scope commitment и началом capability loop. PROJECT commitment включает Project, Profile, PublicScope, ProfileVersion и owner profile pins, SYSTEM имеет собственный шестипольный scope и другой recipient owner. Caller checks и project public scope decoration остаются разными. Общие cursor/row/schema/page primitives уже едины; объединение scope authority ради этого133-token стыка смешивает разные контракты. Полные оба метода и источник contextDigest прочитаны; допускается только точный fragment этой пары."
     }
   ]
 }

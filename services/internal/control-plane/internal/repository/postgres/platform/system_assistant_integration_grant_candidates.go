@@ -1,16 +1,12 @@
 package platform
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -22,12 +18,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// querySystemAssistantIntegrationGrantsConnection embeds the owner-scoped connection version, exact definition pins and readiness query.
+// querySystemAssistantIntegrationGrantsConnection встраивает ограниченный владельцем запрос connection version, точных definition pins и readiness.
+//
 //go:embed sql/system_assistant_integration_grants__connection.sql
 var querySystemAssistantIntegrationGrantsConnection string
 
+// querySystemAssistantIntegrationGrantsCurrent embeds the six-column grant query restricted to one organization, connection and target agent.
+// querySystemAssistantIntegrationGrantsCurrent встраивает шестиколоночный grant query, ограниченный одной organization, connection и target agent.
+//
 //go:embed sql/system_assistant_integration_grants__current.sql
 var querySystemAssistantIntegrationGrantsCurrent string
 
+// GetSystemAssistantIntegrationGrantCandidates resolves the trusted principal and system assistant
+// owner in a read-only repeatable-read transaction, preserving exact package/connection pins and
+// readiness before shared projection/paging and commit.
+// GetSystemAssistantIntegrationGrantCandidates разрешает trusted principal и владельца системного
+// помощника в read-only repeatable-read transaction, сохраняя точные package и connection pins и
+// readiness до общих projection, paging и commit.
 func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx context.Context, principal value.Principal, connectionRef, search string, page query.Page) (entity.SystemAssistantIntegrationGrantCandidates, error) {
 	result := entity.SystemAssistantIntegrationGrantCandidates{Items: []entity.SystemAssistantIntegrationGrantCandidate{}}
 	if connectionRef == "" || len(connectionRef) > 96 || strings.ContainsAny(connectionRef, "\x00\r\n/ ") || !utf8.ValidString(search) || len([]rune(search)) > 200 || strings.ContainsRune(search, '\x00') || page.Size < 0 || page.Size > 100 || len(page.Token) > 512 {
@@ -61,23 +69,13 @@ func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx c
 	if err != nil {
 		return result, err
 	}
-	grants := map[string]entity.SystemAssistantIntegrationGrantCandidate{}
 	rows, err := tx.Query(ctx, querySystemAssistantIntegrationGrantsCurrent, current.organizationID, connectionRef, target.ref)
 	if err != nil {
 		return result, errs.ErrUnavailable
 	}
-	for rows.Next() {
-		var key string
-		var grant entity.SystemAssistantIntegrationGrantCandidate
-		if rows.Scan(&grant.CurrentGrantRef, &grant.CurrentGrantVersion, &key, &grant.CurrentApprovalPolicy, &grant.CurrentApprovalScopePaths, &grant.CurrentGrantEnabled) != nil {
-			rows.Close()
-			return result, errs.ErrUnavailable
-		}
-		grants[key] = grant
-	}
-	rows.Close()
-	if rows.Err() != nil {
-		return result, errs.ErrUnavailable
+	grants, err := scanAssistantIntegrationGrants(rows)
+	if err != nil {
+		return result, err
 	}
 	encoded, _ := json.Marshal(struct {
 		Tenant, Actor, Connection, Assistant, Definition, Search string
@@ -85,16 +83,9 @@ func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx c
 	}{current.organizationID, current.actorID, connectionRef, target.ref, result.DefinitionDigest, search, result.ConnectionVersion, target.version})
 	digest := sha256.Sum256(encoded)
 	contextDigest := hex.EncodeToString(digest[:])
-	after := ""
-	if page.Token != "" {
-		raw, err := base64.RawURLEncoding.DecodeString(page.Token)
-		var cursor integrationCandidateCursor
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.DisallowUnknownFields()
-		if err != nil || decoder.Decode(&cursor) != nil || decoder.Decode(new(any)) != io.EOF || cursor.Scope != contextDigest || !validCapabilityKey(cursor.After) {
-			return result, errs.ErrInvalid
-		}
-		after = cursor.After
+	after, err := assistantIntegrationCandidateAfter(page.Token, contextDigest)
+	if err != nil {
+		return result, err
 	}
 	items := []entity.SystemAssistantIntegrationGrantCandidate{}
 	for _, capability := range definition.Spec.Capabilities {
@@ -110,34 +101,13 @@ func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx c
 		} else if !target.ready {
 			item.Reason = "RECIPIENT_UNAVAILABLE"
 		}
-		schema, err := capability.InputSchema()
+		item.Capability, err = integrationCapabilityProjection(capability)
 		if err != nil {
-			return result, errs.ErrUnavailable
+			return result, err
 		}
-		schemaDigest, err := capability.InputSchemaDigest()
-		if err != nil {
-			return result, errs.ErrUnavailable
-		}
-		item.Capability = entity.IntegrationCapability{Key: capability.Key, Name: capability.Name, Description: capability.Description, Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy, AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...), ResourceKind: capability.ResourceScope.Kind, InputFields: integrationConfigurationFields(capability.InputFields), InputSchema: string(schema), InputSchemaSHA256: schemaDigest}
 		items = append(items, item)
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Capability.Key < items[j].Capability.Key })
-	result.Total = int64(len(items))
-	limit := page.Size
-	if limit == 0 {
-		limit = 50
-	}
-	for _, item := range items {
-		if item.Capability.Key <= after {
-			continue
-		}
-		if len(result.Items) == int(limit) {
-			cursor, _ := json.Marshal(integrationCandidateCursor{Scope: contextDigest, After: result.Items[len(result.Items)-1].Capability.Key})
-			result.NextPageToken = base64.RawURLEncoding.EncodeToString(cursor)
-			break
-		}
-		result.Items = append(result.Items, item)
-	}
+	result.Items, result.Total, result.NextPageToken = assistantIntegrationCandidatePage(items, page.Size, contextDigest, after)
 	if err = tx.Commit(ctx); err != nil {
 		return result, errs.ErrUnavailable
 	}

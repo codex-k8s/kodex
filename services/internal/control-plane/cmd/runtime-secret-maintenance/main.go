@@ -21,6 +21,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// main bounds the operator command by three minutes and emits only fixed success/failure
+// diagnostics without printing dependency errors.
+// main ограничивает операторскую команду тремя минутами и выводит только фиксированную диагностику
+// успеха либо отказа без печати dependency errors.
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -30,6 +34,13 @@ func main() {
 	}
 	fmt.Println("Runtime secret maintenance completed")
 }
+
+// run guards clean source SHA/tree, the fixed root-owned cluster marker and exact
+// kubeconfig/CA/cluster identity before operator plan/apply/reset; apply binds the private receipt
+// and namespace identities.
+// run проверяет чистые source SHA и tree, фиксированный root-owned cluster marker и точные
+// kubeconfig, CA и cluster identity до операторских plan, apply либо reset; apply связывает
+// private receipt и namespace identities.
 func run(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("runtime-secret-maintenance", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -149,6 +160,11 @@ func run(ctx context.Context, args []string) error {
 	k.Runtime = r
 	return op.Apply(ctx, k, &p, func() error { return store.Save(p, false) })
 }
+
+// command captures trimmed stdout from one context-bound subprocess and maps execution failure to
+// a fixed maintenance source-read error.
+// command получает обрезанный stdout одного привязанного к контексту subprocess и отображает
+// ошибку исполнения в фиксированную maintenance source-read ошибку.
 func command(ctx context.Context, name string, args ...string) (string, error) {
 	out, err := exec.CommandContext(ctx, name, args...).Output()
 	if err != nil {

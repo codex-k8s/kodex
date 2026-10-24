@@ -10,13 +10,22 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// snapshot embeds the synthetic owner snapshot shared by module fixtures; it contains no live data.
+// snapshot встраивает синтетический owner snapshot для межмодульных fixtures без живых данных.
+//
 //go:embed snapshot.json
 var snapshot []byte
 
+// Claim embeds the synthetic claim envelope paired with the snapshot for consumer contract tests.
+// Claim встраивает синтетический claim envelope, связанный со snapshot для consumer contract tests.
+//
 //go:embed claim.json
 var Claim []byte
 
-// Snapshot восстанавливает точные типы owner map, не вычисляя и не обновляя digest.
+// Snapshot decodes the embedded synthetic snapshot and restores exact typed runtime values without
+// recomputing its existing digest or reading live owner data.
+// Snapshot декодирует встроенный синтетический snapshot и восстанавливает точные типизированные
+// runtime значения без пересчёта существующего digest либо чтения живых данных owner.
 func Snapshot(t testing.TB) map[string]any {
 	t.Helper()
 	var values map[string]any

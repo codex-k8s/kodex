@@ -20,13 +20,25 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// errProtocol reports a fixed scanner protocol failure without reflecting scanner replies or
+// uploaded content.
+// errProtocol обозначает фиксированную ошибку протокола сканирования без отражения ответов сканера
+// либо загруженного содержимого.
 var errProtocol = errors.New("skill malware scanner protocol failed")
 
+// Client holds the absolute local clamd socket and bounded per-operation timeout; it owns no
+// persistent connection or background worker.
+// Client хранит абсолютный путь локального clamd socket и ограниченный timeout операции;
+// постоянным соединением либо фоновым worker не владеет.
 type Client struct {
 	socket  string
 	timeout time.Duration
 }
 
+// New validates a clean absolute socket pathname and positive timeout no greater than one minute
+// without connecting to the scanner.
+// New проверяет чистый абсолютный socket pathname и положительный timeout не больше минуты без
+// подключения к сканеру.
 func New(socket string, timeout time.Duration) (*Client, error) {
 	if !filepath.IsAbs(socket) || filepath.Clean(socket) != socket || strings.ContainsAny(socket, "\x00\n\r") || timeout <= 0 || timeout > time.Minute {
 		return nil, errors.New("invalid skill scanner configuration")
@@ -34,6 +46,10 @@ func New(socket string, timeout time.Duration) (*Client, error) {
 	return &Client{socket: socket, timeout: timeout}, nil
 }
 
+// connect dials the Unix socket under a timeout, sets the connection deadline and closes it on
+// cancellation; the returned cleanup releases the callback, connection and context.
+// connect подключается к Unix socket под timeout, задаёт deadline соединения и закрывает его при
+// отмене; возвращённый cleanup освобождает callback, соединение и контекст.
 func (client *Client) connect(ctx context.Context) (net.Conn, func(), error) {
 	ctx, cancel := context.WithTimeout(ctx, client.timeout)
 	connection, err := (&net.Dialer{}).DialContext(ctx, "unix", client.socket)
@@ -51,6 +67,10 @@ func (client *Client) connect(ctx context.Context) (net.Conn, func(), error) {
 	return connection, func() { stop(); _ = connection.Close(); cancel() }, nil
 }
 
+// readReply reads one NUL-terminated record capped at4096 bytes, rejecting transport failure,
+// oversized replies and embedded CR/LF.
+// readReply читает одну запись с конечным NUL и пределом4096 bytes, отклоняя transport failure,
+// слишком длинный ответ и внутренние CR либо LF.
 func readReply(connection net.Conn) (string, error) {
 	reader := bufio.NewReader(io.LimitReader(connection, 4097))
 	reply, err := reader.ReadString(0)
@@ -60,6 +80,10 @@ func readReply(connection net.Conn) (string, error) {
 	return strings.TrimSuffix(reply, "\x00"), nil
 }
 
+// version requires a framed ClamAV reply with a positive database revision, no older than seven
+// days or more than twenty-four hours ahead; the accepted reply pins both scan observations.
+// version требует ответ ClamAV с framing, положительной database revision и датой не старше
+// семи дней и не более суток в будущем; принятый ответ закрепляет обе проверки вокруг scan.
 func (client *Client) version(ctx context.Context) (string, error) {
 	connection, closeConnection, err := client.connect(ctx)
 	if err != nil {
@@ -87,6 +111,10 @@ func (client *Client) version(ctx context.Context) (string, error) {
 	return reply, nil
 }
 
+// Scan keeps the skill byte-slice limit at32 MiB, delegates exact streaming validation and
+// projects only engine and infection verdict.
+// Scan сохраняет предел32 MiB для skill byte slice, передаёт точную проверку потока и возвращает
+// только engine и infection verdict.
 func (client *Client) Scan(ctx context.Context, body []byte) (skillpolicy.ScanVerdict, error) {
 	if len(body) > 32<<20 {
 		return skillpolicy.ScanVerdict{}, errProtocol
@@ -98,8 +126,12 @@ func (client *Client) Scan(ctx context.Context, body []byte) (skillpolicy.ScanVe
 	return skillpolicy.ScanVerdict{Engine: report.Engine, Infected: report.Infected}, nil
 }
 
-// ScanReader не загружает большой artifact в память и не считает усечённый
-// поток успешным. Один общий deadline охватывает VERSION/INSTREAM/VERSION.
+// ScanReader streams exactly the declared0..512 MiB through bounded INSTREAM frames, requires EOF
+// and identical fresh VERSION replies, and reports digest/size under one timeout without granting
+// publication authority.
+// ScanReader передаёт ровно заявленные0..512 MiB ограниченными INSTREAM frames, требует EOF и
+// одинаковые свежие VERSION ответы и возвращает digest и size под одним timeout без выдачи
+// полномочий публикации.
 func (client *Client) ScanReader(ctx context.Context, body io.Reader, sizeBytes int64) (value.ArtifactScan, error) {
 	ctx, cancel := context.WithTimeout(ctx, client.timeout)
 	defer cancel()

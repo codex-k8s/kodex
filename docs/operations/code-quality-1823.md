@@ -4,12 +4,76 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.363.0
+version: 1.364.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Общие проекции integration candidates и оставшиеся локальные клиенты — 24.10.2026
+
+На основе `a9d02610a154ddc04cf82ef482beb0cb2c890160` описаны58 прежних
+объявлений: skillscanclient13, systemassistant18, две cmd entrypoints5,
+runtime-snapshot fixture3 и четыре PostgreSQL candidate/catalog файла19.
+Все собственные объявления этих файлов завершены, включая local types,
+private/tests и embedded SQL/JSON/prompt variables. Добавлены4 общих production
+helpers и10 тестовых объявлений, все с EN→RU комментариями. Inventory:
+17359/21383, missing4024. Prompt bytes, SQL и директивы embed не менялись.
+
+`skillscanclient` описывает32 MiB skill limit и512 MiB streamed artifact limit,
+точный EOF, bounded INSTREAM frames, общий timeout, закрытые protocol errors
+и VERSION до/после scan. Database revision должна быть положительной,
+дата не старше7дней и не более суток в будущем; обе VERSION replies совпадают.
+Это проверка переданных bytes, не полномочие публикации и не обещание полного
+обнаружения угроз. Тесты используют private temporary Unix socket с fake clamd.
+Комментарии core prompt и тестов не меняют instructions, owner text, runtime
+capabilities, исторические revisions либо safe projection.
+
+Четыре одинаковых блока двух assistant candidate методов вынесены в локальные
+helpers: `scanAssistantIntegrationGrants`, `assistantIntegrationCandidateAfter`,
+`integrationCapabilityProjection`, `assistantIntegrationCandidatePage`.
+Проекция capability применяется также в recipient catalog и обычном capability
+candidate query: всего4 потребителя одной формы. Это бизнесовый adapter одного
+сервиса, поэтому общая библиотека и новый module не добавлены.
+
+| Сценарий / граница | Сохранённое поведение |
+| --- | --- |
+| Principal → owner → package → grants | Каждый исходный метод сам разрешает trusted principal, organization/project/profile/recipient и точную package revision до общего чтения/проекции. SQL, request и transaction options не менялись |
+| Six-column grant rows | Точный порядок ref/version/capability/policy/paths/enabled; nonnil пустая map, прежний приоритет последней строки одного ключа; Close до Err и фиксированный unavailable без частичного результата |
+| Cursor | Прежние RawURL base64, один JSON document, known fields, context digest и capability-key guard. Повторные JSON keys сохраняют прежнее last-key-wins; cursor не является authority и не заменяет новый owner read |
+| Capability | Все advertised поля, schema bytes/digest, копии approval options и nil/empty semantics сохранены. Eligibility, resource scope и executable admission остаются у callers |
+| Paging | Прежняя сортировка по key, total до cursor, exclusive after, default50, exact next-token bytes, nonnil пустая страница. Commit остаётся после сборки результата |
+| Project / system различия | PROJECT сохраняет profile/project/public-scope commitment, public scopes и PACKAGE_UNAVAILABLE; SYSTEM сохраняет свою owner boundary и connection/recipient readiness. Их context digests не объединены |
+| Lifecycle / events | Новых writes, lifecycle transitions, retries, grants либо событий нет. Helpers не открывают transaction, не делают внешние вызовы; rows принадлежат уже выполненному caller query |
+
+Исходные четыре блока обоих методов побайтно совпали до выноса. Expected
+AST/directives четырёх consumer файлов и helper совпали после только описанных
+замен. Отдельное AST-сравнение исходных4 capability literals с общей формой
+подтвердило все поля после нормализации порядка полей и имени digest variable.
+AST/directives9 comments-only файлов совпали с исходным SHA.
+
+Четыре meaningful unit tests проверяют позиционные columns, close/error и
+отсутствие частичного результата; cursor negatives и прежний decode;
+сортировку, totals, default limit, exact tokens и пустые страницы; фиксированную
+schema, digest, поля, копирование options и отказ unsupported schema.
+Полные локальные `GOWORK=off` build/unit control-plane — PASS, как и targeted
+новые tests. Actual-API orphan flag явно удалён; real-API fixture — NOT RUN.
+17 analyzer unit и5 exact-ignore guards — PASS, detector/guards не ослаблены.
+Context7: ClamAV INSTREAM framing/limits и pgx/v5 Rows Close/Next/Scan/Err.
+
+Три прежние clone groups удалены. Детектор выявил два новых коротких стыка:
+107 tokens между типизированными PROJECT/RECIPIENT wrappers и133 tokens между
+разными context commitment и началом candidate loop. Полные методы и новые
+окна прочитаны; общие rows/cursor/schema/page уже вынесены. Два точных решения
+фиксируют разные DTO и authority pins; broad ignores отсутствуют. Результат:
+6661 own sources,222 excluded,1791 raw,815 retained,976 unresolved.
+В четырёх выбранных PostgreSQL consumer файлах и двух helper/test файлах
+0 missing. Три прежних cross-file окна начала owner transaction остаются
+unresolved с file_binding_targets, integration_grant_candidates и revision_impact;
+они не скрыты новым решением. В skillscanclient/systemassistant0 missing.
+Merge/deploy/startup, image build, browser и ручной QA — NOT RUN.
+Вся задача#1823 остаётся в работе, разрешение владельца на выпуск сохраняется.
 
 ## Комментарии фоновых процессов и операторской очистки — 24.10.2026
 
