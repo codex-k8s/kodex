@@ -4,12 +4,77 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.365.0
+version: 1.366.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## gRPC core, source/write-back и secret draft mappings — 24.10.2026
+
+На основе `5e418cf28efcf1380472d9989043059bc6e4b5a5` описаны125 прежних
+объявлений в6 Go-файлах: server16, commands_core35, configuration_source13,
+configuration_writeback16, runtime_secret_drafts21 и runtime_configuration24.
+Новый общий expiry helper и его тест тоже описаны. Inventory:17641/21386,
+missing3745 — PostgreSQL3331 и gRPC414. Все8 выбранных Go-файлов имеют0missing.
+
+Комментарии различают transport conversion и owner validation. Principal
+приходит из проверенного context точного метода; request resource locators
+не назначают actor/tenant/authority. Mutation сохраняет expected-version
+presence, а correlation-derived fallback idempotency key ограничен128 bytes.
+Read после CompleteOnboarding может отказать после успешной команды и не
+означает её rollback. Generated enum lookup в casts не объявлен проверкой
+unknown state; domain validators и transport policy остаются самостоятельными.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Command → owner | Closed method/command pair → execute → verified principal/mutation → domain Execute → typed response. Common error mapping уже единый, owner transaction не переносилась |
+| Source configure/refresh | SourceInput/sourceMutation уже общие; role-image и integration-definition сохраняют специализированные RPC/commands. Refresh не выполняет Git fetch в transport |
+| Source claim/renew/complete/fail | Owner назначает work/source generation/attempt/claim/fence; request tuple и reported commit/content/ancestry не доказывают полномочия. Struct conversion failure не выдаёт частичный response |
+| Write-back prepare/approve/reject/cancel | Proposal/content/source-version и approval pins передаются владельцу; payload/URL не доказывают внешний Git effect |
+| Write-back begin/complete/recovery | Owner begin получает commit/tree/blob/parent/content pins, возвращает already-started; complete получает exact effect/commit/content/PR locators. Lease renewal и failure остаются отдельными owner methods |
+| Secret draft prepare/consume/finish | SAVE/VALIDATE/PUBLISH/DISCARD и COMPLETE/FAIL/RECOVER/CLEANUP сохраняют отдельные намерения, claim generation и descriptors. Operation grant остаётся privileged value назначенного получателя, не обычным metadata |
+| Runtime environment/configuration | Public values, logical Secret revision bindings и tools копируются отдельно от secret values; canonical policy validator сохраняется. Create PROJECT scope и publication existing Ref не объединяются |
+| Cancel/retry/gate | Специализированные commands сохраняют owner graph closure, fresh attempt/lineage и gate decisions; generic transition dispatcher не добавлен |
+| Readiness / events | Новых workers, side effects, tasks, grants, idempotency scopes либо событий нет. Readiness ответ подтверждает owner operation, а не внешнюю live-проверку materializer |
+
+Одинаковое преобразование expiry source и write-back lease вынесено в локальный
+`leaseExpiryOrZero`. Только absent/CheckValid/AsTime правило общее: прежний
+invalid/absent timestamp становится time.Time{}, корректный сохраняет точный
+момент. WorkRef/SourceGeneration и ProposalRef, attempt, claimant, generation и
+fence остаются в отдельных typed casters. Не добавлены expiry admission,
+unknown-field validation, lease authentication или новый источник полномочий.
+Тест через оба настоящих caster проверяет7 случаев: absent, nanosecond instant,
+epoch, negative/overflow nanos и seconds ниже/выше допустимого диапазона;
+отдельно проверяется nil целой lease и сохранение всех различных pins.
+
+AST/directives4 comments-only файлов совпали с исходным SHA. Два lease файла
+совпали с ожидаемой точной заменой expiry block/call и удалением time import.
+Полные локальные GOWORK=off build/unit control-plane и targeted expiry test —
+PASS. Все4 внешние fixture flags/DSN явно удалены: real-API orphan и3 dedicated
+migration contours SKIP/NOT RUN. SQL, Proto sources, generated code и API не
+менялись. Context7: protobuf-go timestamppb CheckValid/AsTime; дополнительно
+прочитаны CONTRACT-DOC-002 authority/mutation/presence/error/server-path rules.
+
+Scanner guard обнаружил2 stale retained hashes после комментариев. Оба окна
+и полные затронутые методы GetWriteBack/ClaimImageBuild и secret recovery/archive
+renew перечитаны; обновлены только exact hashes с прежними pairs/count1 и
+уточнённой причиной. Новые18 адресных решений покрывают20 occurrence внутри
+выбранных файлов, включая3 прочитанных membership стыка одного hash. Это typed
+RPC adapters и стыки разных commands/DTO, где execute, sourceMutation,
+writeBackMutation, domainEnvironment/policy уже общие. Universal dispatcher,
+reflection либо семипольный getter interface ради этого glue не добавлены.
+
+Полный scan:6663 own sources,222 excluded,1810 raw,835 retained,
+975 unresolved. Рост raw после комментариев связан с новыми окнами физического
+min-lines и изменёнными стыками; реального увеличения бизнесового кода из-за
+этих комментариев нет. Общий expiry вынос не объявлен удалением всех detector
+окон typed leases. Внутри8 выбранных файлов0unresolved;54cross-file совпадения
+с другими файлами остаются в работе, не скрыты новыми решениями.
+17 analyzer unit и5 exact-ignore guards — PASS; detector/guards не ослаблены.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN.
+Задача#1823 остаётся активной, разрешение на последующий выпуск сохраняется.
 
 ## Завершение комментариев CLI, authorization и проекций — 24.10.2026
 

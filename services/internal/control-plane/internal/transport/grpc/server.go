@@ -24,11 +24,25 @@ import (
 )
 
 const (
-	controlPlaneErrorDomain           = "kodex.control-plane"
+	// controlPlaneErrorDomain pins the ErrorInfo domain for the safe reason details emitted by this
+	// transport.
+	// controlPlaneErrorDomain закрепляет ErrorInfo domain безопасных reason details этого transport.
+	controlPlaneErrorDomain = "kodex.control-plane"
+	// freshAuthenticationRequiredReason names the closed fresh-authentication reason attached to a
+	// PermissionDenied response.
+	// freshAuthenticationRequiredReason обозначает закрытый fresh-authentication reason ответа
+	// PermissionDenied.
 	freshAuthenticationRequiredReason = "FRESH_AUTHENTICATION_REQUIRED"
-	resourceInUseReason               = "RESOURCE_IN_USE"
+	// resourceInUseReason names the closed resource-in-use reason attached to a FailedPrecondition
+	// response.
+	// resourceInUseReason обозначает закрытый resource-in-use reason ответа FailedPrecondition.
+	resourceInUseReason = "RESOURCE_IN_USE"
 )
 
+// Server adapts generated control-plane RPCs to the platform and role-image domain services;
+// embedded unimplemented servers preserve unsupported RPC behavior.
+// Server адаптирует generated control-plane RPC к platform и role-image domain services;
+// встроенные unimplemented servers сохраняют поведение неподдержанных RPC.
 type Server struct {
 	sttv1.UnimplementedTranscriptionAuthorityServiceServer
 	sttv1.UnimplementedTranscriptionPolicyProjectionServiceServer
@@ -48,6 +62,10 @@ type Server struct {
 	roleImages *roleimageservice.Service
 }
 
+// NewServer requires both domain services before constructing the transport without opening
+// listeners or creating its own lifecycle.
+// NewServer требует оба domain services до создания transport без открытия listeners либо
+// собственного lifecycle.
 func NewServer(service *platformservice.Service, roleImages *roleimageservice.Service) (*Server, error) {
 	if service == nil || roleImages == nil {
 		return nil, errors.New("platform and role image services are required")
@@ -55,6 +73,10 @@ func NewServer(service *platformservice.Service, roleImages *roleimageservice.Se
 	return &Server{service: service, roleImages: roleImages}, nil
 }
 
+// principal resolves the already verified exact-method domain principal and maps any
+// missing/invalid authorization context to one fixed Unauthenticated error.
+// principal разрешает уже проверенный доменный principal точного метода и отображает отсутствующий
+// либо неверный authorization context в фиксированный Unauthenticated.
 func principal(ctx context.Context, method string) (value.Principal, error) {
 	result, err := authorization.Principal(ctx, method)
 	if err != nil {
@@ -63,6 +85,10 @@ func principal(ctx context.Context, method string) (value.Principal, error) {
 	return result, nil
 }
 
+// mutation copies expected-version presence and trims the idempotency key; nil input yields an
+// empty domain mutation without assigning authority.
+// mutation копирует presence expected version и обрезает idempotency key; nil input даёт пустую
+// доменную mutation без назначения полномочий.
 func mutation(input *controlplanev1.MutationContext) value.Mutation {
 	if input == nil {
 		return value.Mutation{}
@@ -70,6 +96,10 @@ func mutation(input *controlplanev1.MutationContext) value.Mutation {
 	return value.Mutation{IdempotencyKey: strings.TrimSpace(input.GetIdempotencyKey()), ExpectedVersion: input.ExpectedVersion}
 }
 
+// page defaults nil or zero-sized pages to fifty while preserving the supplied token and leaving
+// invalid nonzero size checks to the domain.
+// page назначает размер пятьдесят для nil либо zero-sized page, сохраняя token и оставляя проверку
+// неверного ненулевого размера домену.
 func page(input *controlplanev1.PageRequest) query.Page {
 	if input == nil {
 		return query.Page{Size: 50}
@@ -81,6 +111,10 @@ func page(input *controlplanev1.PageRequest) query.Page {
 	return query.Page{Size: size, Token: input.GetPageToken()}
 }
 
+// asMap converts a protobuf Struct to a domain map and returns a nonnil empty map for absent
+// input.
+// asMap преобразует protobuf Struct в доменную map и возвращает nonnil пустую map для
+// отсутствующего input.
 func asMap(input *structpb.Struct) map[string]any {
 	if input == nil {
 		return map[string]any{}
@@ -88,10 +122,17 @@ func asMap(input *structpb.Struct) map[string]any {
 	return input.AsMap()
 }
 
+// enumSuffix removes the requested generated enum prefix without validating the remaining value or
+// inventing a fallback.
+// enumSuffix снимает заданный generated enum prefix без проверки остатка либо назначения fallback.
 func enumSuffix(value fmt.Stringer, prefix string) string {
 	return strings.TrimPrefix(value.String(), prefix)
 }
 
+// domainProjectPermissions drops only UNSPECIFIED project permissions and preserves the order of
+// remaining enum suffixes for domain validation.
+// domainProjectPermissions отбрасывает только UNSPECIFIED project permissions и сохраняет порядок
+// остальных enum suffixes для доменной проверки.
 func domainProjectPermissions(values []controlplanev1.ProjectPermission) []string {
 	result := make([]string, 0, len(values))
 	for _, item := range values {
@@ -103,6 +144,10 @@ func domainProjectPermissions(values []controlplanev1.ProjectPermission) []strin
 	return result
 }
 
+// runTarget maps only agent/workflow oneof targets with their display name, returning an empty
+// target for absent or unsupported variants.
+// runTarget преобразует только agent и workflow oneof targets с display name, возвращая пустую
+// цель для отсутствующего либо неподдержанного варианта.
 func runTarget(input *controlplanev1.RunTarget) entity.RunTarget {
 	if input == nil {
 		return entity.RunTarget{}
@@ -117,6 +162,12 @@ func runTarget(input *controlplanev1.RunTarget) entity.RunTarget {
 	}
 }
 
+// domainWorkflowVersion copies workflow draft fields, allocates missing input/step keys and
+// derives sequential/parallel dependencies while leaving semantic graph and authority validation
+// to the domain.
+// domainWorkflowVersion копирует workflow draft fields, назначает недостающие input и step keys и
+// выводит sequential и parallel dependencies, оставляя проверку семантики графа и полномочий
+// домену.
 func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.WorkflowVersion {
 	if input == nil {
 		return nil
@@ -187,6 +238,12 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 	return result
 }
 
+// execute binds the exact-method principal and mutation to a specialized command, supplies the
+// bounded correlation-derived fallback idempotency key and maps domain errors without moving the
+// owner transaction.
+// execute связывает principal точного метода и mutation со специализированной командой, назначает
+// ограниченный correlation-derived fallback idempotency key и преобразует доменные ошибки без
+// переноса owner transaction.
 func execute(ctx context.Context, service *platformservice.Service, method string, kind command.Kind, requestMutation *controlplanev1.MutationContext, payload any) (command.Result, error) {
 	p, err := principal(ctx, method)
 	if err != nil {
@@ -209,6 +266,11 @@ func execute(ctx context.Context, service *platformservice.Service, method strin
 	return result, nil
 }
 
+// transportError maps ordered context/domain error categories to fixed gRPC codes/messages and
+// selected closed reasons, discarding arbitrary error text and using Internal for unknown errors.
+// transportError отображает упорядоченные context и domain error categories в фиксированные gRPC
+// codes и messages и выбранные закрытые reasons, отбрасывая произвольный error text и используя
+// Internal для неизвестной ошибки.
 func transportError(err error) error {
 	switch {
 	case err == nil:
@@ -250,6 +312,10 @@ func transportError(err error) error {
 	}
 }
 
+// statusErrorWithReason attaches one domain-scoped ErrorInfo reason to a status and retains the
+// base status if detail encoding fails.
+// statusErrorWithReason прикрепляет один domain-scoped ErrorInfo reason к status и сохраняет base
+// status при ошибке кодирования details.
 func statusErrorWithReason(code codes.Code, message, reason string) error {
 	base := status.New(code, message)
 	withDetails, err := base.WithDetails(&errdetails.ErrorInfo{Reason: reason, Domain: controlPlaneErrorDomain})
