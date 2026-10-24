@@ -10,18 +10,32 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// MaxMailboxSpecificationBytes limits encoded mailbox specification input and draft serialization
+// to two hundred fifty-six KiB before persistence.
+// MaxMailboxSpecificationBytes ограничивает закодированный ввод спецификации mailbox и
+// сериализацию черновика двумястами пятьюдесятью шестью KiB до сохранения.
 const MaxMailboxSpecificationBytes = 256 << 10
 
-// Публичный JSON readback сохраняет целочисленные значения без округления.
+// maxMailboxPublicInteger caps public JSON integer values at the largest exactly represented
+// IEEE-754 integer so generation and byte limits survive browser readback.
+// maxMailboxPublicInteger ограничивает целые публичного JSON наибольшим точно представимым целым
+// IEEE-754 для сохранения поколения и байтовых лимитов при чтении браузером.
 const maxMailboxPublicInteger int64 = 1<<53 - 1
 
-// MailboxBinding передаётся только после разрешения существующего owner в CP.
+// MailboxBinding supplies exact server-owned mailbox, organization, connection, revision and
+// credential-generation pins after existing ownership is resolved.
+// MailboxBinding предоставляет точные server-owned pins mailbox, организации, подключения, ревизии
+// и поколения credentials после разрешения существующего владения.
 type MailboxBinding struct {
 	Ref, OrganizationRef, ConnectionRef string
 	Revision, CredentialGeneration      int64
 }
 
-// BoundSpecification допускает неполный черновик, но ограничивает размер до записи.
+// BoundSpecification allows incomplete drafts while bounding nonnegative ports, public integers,
+// collection sizes and encoded bytes; full executable validation remains a publication step.
+// BoundSpecification допускает неполные черновики с ограничением неотрицательных портов, публичных
+// целых, размеров коллекций и закодированных байт; полная исполняемая проверка остаётся этапом
+// публикации.
 func BoundSpecification(spec entity.EmailMailboxSpecification) error {
 	for _, endpoint := range []*api.Endpoint{&spec.SMTP, spec.IMAP, spec.POP} {
 		if endpoint != nil && (endpoint.Port < 0 || endpoint.Port > math.MaxInt32) {
@@ -59,8 +73,12 @@ func BoundSpecification(spec entity.EmailMailboxSpecification) error {
 	return nil
 }
 
-// MaterializeMailbox не принимает owner-поля из пользовательской спецификации.
-// EnvelopeFrom выводится из Sender, а коллекции не разделяют память с черновиком.
+// MaterializeMailbox combines user specification with server-owned binding, copies mutable
+// collections/endpoints, forces legacy mark to deny and validates bridge configuration and exact
+// network routes.
+// MaterializeMailbox объединяет пользовательскую спецификацию с binding сервера, копирует
+// изменяемые коллекции и endpoints, принудительно запрещает legacy mark и проверяет конфигурацию
+// bridge и точные сетевые маршруты.
 func MaterializeMailbox(spec entity.EmailMailboxSpecification, binding MailboxBinding) (api.Mailbox, error) {
 	if err := BoundSpecification(spec); err != nil {
 		return api.Mailbox{}, err
@@ -102,7 +120,10 @@ func MaterializeMailbox(spec entity.EmailMailboxSpecification, binding MailboxBi
 	return mailbox, nil
 }
 
-// Закрытая матрица соответствует исполняемым SMTP/IMAP/POP3 маршрутам #1029.
+// mailboxNetworkShape accepts only executable implicit-TLS or STARTTLS port/mode pairs for SMTP,
+// IMAP and POP3; omitted optional receive endpoints are allowed.
+// mailboxNetworkShape принимает только исполняемые пары порта и режима implicit TLS либо STARTTLS
+// для SMTP, IMAP и POP3; отсутствующие необязательные receive endpoints допускаются.
 func mailboxNetworkShape(mailbox api.Mailbox) bool {
 	valid := func(endpoint *api.Endpoint, implicit, startTLS int) bool {
 		return endpoint == nil || endpoint.Port == implicit && endpoint.TlsMode == "implicit" || endpoint.Port == startTLS && endpoint.TlsMode == "starttls"

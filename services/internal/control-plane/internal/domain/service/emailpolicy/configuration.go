@@ -5,7 +5,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
-// MailboxProjection не содержит endpoint, credential descriptors или содержимое писем.
+// MailboxProjection carries validated mailbox identity, generation and policy plus source digest
+// while omitting network endpoints, credential descriptors and message contents.
+// MailboxProjection содержит проверенные identity, поколение и policy mailbox и digest источника
+// без сетевых endpoints, дескрипторов credentials и содержимого писем.
 type MailboxProjection struct {
 	Ref                  string                `json:"ref"`
 	OrganizationRef      string                `json:"organization_ref"`
@@ -23,12 +26,20 @@ type MailboxProjection struct {
 	SourceDigest         string                `json:"source_digest"`
 }
 
+// ConfigurationProjection groups validated mailbox policy views with the configuration revision
+// and a digest committing the complete source configuration.
+// ConfigurationProjection объединяет проверенные policy-проекции mailbox с ревизией конфигурации и
+// digest полного исходного документа конфигурации.
 type ConfigurationProjection struct {
 	Revision  int64
 	Digest    string
 	Mailboxes []MailboxProjection
 }
 
+// DecodeConfiguration validates the bridge document and executable network matrix before
+// projecting policies; configuration and mailbox digests still commit omitted source fields.
+// DecodeConfiguration проверяет документ bridge и исполняемую сетевую матрицу до проекции policy;
+// digests конфигурации и mailbox продолжают учитывать исключённые из проекции поля источника.
 func DecodeConfiguration(raw []byte) (ConfigurationProjection, error) {
 	var config api.Configuration
 	if api.Decode(raw, &config) != nil || api.ValidateConfiguration(config) != nil {

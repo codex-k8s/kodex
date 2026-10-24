@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestSystemSTTImmutableParametersAndLimits checks typed transcription parameters and default
+// budgets survive parsing, rejecting streaming, unsupported model/parameter combinations, unsafe
+// limits and credential fields.
+// TestSystemSTTImmutableParametersAndLimits проверяет сохранение типизированных параметров
+// транскрипции и бюджетов по умолчанию при parsing с отказом streaming, неподдерживаемым
+// сочетаниям модели и параметров, небезопасным лимитам и credential полям.
 func TestSystemSTTImmutableParametersAndLimits(t *testing.T) {
 	content := `{"name":"Dictation","stt":{"enabled":true,"providerAccountRef":"pacc_fixture","model":"gpt-transcribe","permissionKey":"platform.stt.use","parameters":{"languages":["ru","en"],"keywords":["Kodex"],"prompt":"Names","temperature":0.2,"chunkingStrategy":"auto","stream":false}}}`
 	specification, err := ParseSystemSTT(content)

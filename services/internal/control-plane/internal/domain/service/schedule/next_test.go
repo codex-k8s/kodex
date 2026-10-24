@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+// TestNormalizeAndNext checks hourly, daily, weekday, weekly and custom schedules produce exact
+// UTC instants, including shifting a nonexistent Berlin local minute forward.
+// TestNormalizeAndNext проверяет точные UTC моменты hourly, daily, weekday, weekly и custom
+// расписаний, включая сдвиг несуществующей локальной минуты Берлина вперёд.
 func TestNormalizeAndNext(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -30,6 +34,10 @@ func TestNormalizeAndNext(t *testing.T) {
 	}
 }
 
+// TestNormalizeRejectsInvalidInput rejects out-of-range clock values, missing weekly weekday,
+// unsupported presets, malformed cron and unavailable timezone identifiers.
+// TestNormalizeRejectsInvalidInput отклоняет значения часов вне диапазона, отсутствующий weekly
+// день недели, неподдерживаемые presets, повреждённый cron и недоступные timezone identifiers.
 func TestNormalizeRejectsInvalidInput(t *testing.T) {
 	for _, spec := range []Spec{
 		{Preset: "DAILY", TimeOfDay: "25:00", Timezone: "UTC"},
@@ -45,6 +53,11 @@ func TestNormalizeRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+// TestPreviewUsesNormalizedCustomCronAndRunsDSTFoldOnce checks custom Berlin fold preview selects
+// the earlier repeated local minute and schedules the following day rather than the second fold
+// instant.
+// TestPreviewUsesNormalizedCustomCronAndRunsDSTFoldOnce проверяет выбор ранней повторяющейся
+// локальной минуты custom preview Берлина и следующего дня вместо второго fold момента.
 func TestPreviewUsesNormalizedCustomCronAndRunsDSTFoldOnce(t *testing.T) {
 	after := mustTime(t, "2026-10-25T00:20:00Z")
 	values, err := Preview(Spec{
@@ -61,6 +74,10 @@ func TestPreviewUsesNormalizedCustomCronAndRunsDSTFoldOnce(t *testing.T) {
 	}
 }
 
+// TestPreviewShiftsCustomCronAcrossDSTGap checks custom cron shifts the missing local minute to
+// the first valid post-gap time and resumes the original wall clock on the next day.
+// TestPreviewShiftsCustomCronAcrossDSTGap проверяет сдвиг отсутствующей локальной минуты custom
+// cron на первое существующее время после gap и возврат исходных часов на следующий день.
 func TestPreviewShiftsCustomCronAcrossDSTGap(t *testing.T) {
 	values, err := Preview(Spec{
 		Preset: "CUSTOM", CronExpression: "30 2 * * *", Timezone: "Europe/Berlin",
@@ -75,6 +92,10 @@ func TestPreviewShiftsCustomCronAcrossDSTGap(t *testing.T) {
 	}
 }
 
+// TestResolveDueMisfirePolicies checks coalesce returns one old occurrence with a future cursor,
+// catch-up advances one interval and skip returns no delayed occurrence.
+// TestResolveDueMisfirePolicies проверяет один старый запуск и будущий cursor для coalesce,
+// продвижение на один интервал для catch-up и отсутствие delayed запуска для skip.
 func TestResolveDueMisfirePolicies(t *testing.T) {
 	scheduled := mustTime(t, "2026-09-04T09:00:00Z")
 	now := mustTime(t, "2026-09-04T12:30:00Z")
@@ -104,6 +125,10 @@ func TestResolveDueMisfirePolicies(t *testing.T) {
 	}
 }
 
+// TestNormalizeRejectsUnknownExecutionPolicies checks unsupported gap, fold, misfire and overlap
+// policy values fail rather than silently falling back to defaults.
+// TestNormalizeRejectsUnknownExecutionPolicies проверяет отказ неподдерживаемым gap, fold, misfire
+// и overlap policy вместо молчаливого перехода к default.
 func TestNormalizeRejectsUnknownExecutionPolicies(t *testing.T) {
 	base := Spec{Preset: "CUSTOM", CronExpression: "0 * * * *", Timezone: "UTC"}
 	for _, mutate := range []func(*Spec){
@@ -120,6 +145,10 @@ func TestNormalizeRejectsUnknownExecutionPolicies(t *testing.T) {
 	}
 }
 
+// mustTime parses a test RFC3339 instant and marks parse failures at the caller through the
+// testing helper boundary.
+// mustTime разбирает тестовый RFC3339 момент и указывает ошибку parsing у caller через границу
+// testing helper.
 func mustTime(t *testing.T, value string) time.Time {
 	t.Helper()
 	parsed, err := time.Parse(time.RFC3339, value)
@@ -129,6 +158,12 @@ func mustTime(t *testing.T, value string) time.Time {
 	return parsed
 }
 
+// TestCronParserAndPersistedSemantics checks steps, named ranges and day matching survive
+// persisted due resolution, rejects unsupported/impossible cron and reconstructs preset display
+// fields from storage.
+// TestCronParserAndPersistedSemantics проверяет сохранение steps, именованных ranges и day
+// matching при persisted due resolution, отклоняет неподдерживаемый либо невозможный cron и
+// восстанавливает display поля preset из хранения.
 func TestCronParserAndPersistedSemantics(t *testing.T) {
 	for _, test := range []struct{ expression, after, want string }{
 		{"5/15 * * * *", "2026-09-04T09:06:00Z", "2026-09-04T09:20:00Z"},
@@ -169,6 +204,10 @@ func TestCronParserAndPersistedSemantics(t *testing.T) {
 	}
 }
 
+// TestDSTPresetCustomParityAndHalfHourFold checks preset and equivalent custom cron agree across
+// Berlin gaps/folds and the non-hour offset fold of Lord Howe.
+// TestDSTPresetCustomParityAndHalfHourFold проверяет совпадение preset и эквивалентного custom
+// cron при gaps и folds Берлина и fold Lord Howe со смещением не в час.
 func TestDSTPresetCustomParityAndHalfHourFold(t *testing.T) {
 	for _, test := range []struct{ zone, after, cron, preset, clock, want string }{
 		{"Europe/Berlin", "2026-10-25T00:01:00Z", "0 * * * *", "HOURLY", "", "2026-10-25T02:00:00Z"},
@@ -188,6 +227,10 @@ func TestDSTPresetCustomParityAndHalfHourFold(t *testing.T) {
 	}
 }
 
+// TestSkipAllowsCurrentCronMinuteAndNormalizesDefault checks SKIP permits ordinary polling jitter
+// inside the due minute and omitted misfire policy advances with default coalescing.
+// TestSkipAllowsCurrentCronMinuteAndNormalizesDefault проверяет допуск обычной задержки polling
+// внутри due минуты при SKIP и продвижение default coalesce при отсутствующей misfire policy.
 func TestSkipAllowsCurrentCronMinuteAndNormalizesDefault(t *testing.T) {
 	due := mustTime(t, "2026-09-04T09:00:00Z")
 	spec := Spec{Preset: "CUSTOM", CronExpression: "0 * * * *", Timezone: "UTC", MisfirePolicy: MisfireSkip}

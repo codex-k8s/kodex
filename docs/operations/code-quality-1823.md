@@ -4,12 +4,55 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.358.0
+version: 1.359.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Почтовые policies, RPC principal, ревизии и расписания — 24.10.2026
+
+На основе `97d8bf160ad0a9f88155f79e94e224a67d614497` описаны все оставшиеся
+139 объявлений четырёх domain service packages: emailpolicy55, rpcprincipal20,
+revision29, schedule35. Включены private declarations, constants, interface
+methods, test fixtures и тесты. Изменён21 Go-файл; AST/directives каждого
+совпали с исходным head. Исполняемых изменений и новых helpers этого этапа нет.
+Общий inventory:16851/21350, missing4499. Все четыре пакета имеют0missing;
+весь оставшийся Go-объём принадлежит control-plane.
+
+Почтовая policy описывает неполный draft отдельно от исполняемой публикации,
+owner binding отдельно от пользовательской specification, immutable copy и
+legacy mark deny отдельно от публичных capabilities. Projection не содержит
+endpoints или credential descriptors, но её digest продолжает учитывать полный
+источник. AuthorizeCommand связывает semantic input, effect, sender, revision,
+folders и recipients с точной операцией и gate; locator либо request не названы
+источником полномочий. Не заявлена защита decodeStrict от duplicate JSON keys:
+данный decoder проверяет unknown fields и trailing document, а mailbox editor
+дополнительно обходит YAML AST и проверяет дубликаты.
+
+RPC principal сохраняет distinction admitted transport, verified credential и
+owner-resolved domain authority, отдельные service generation и user session
+revision и отказ task downgrade. Тест broker projection описан по фактическому
+вызову verifier, без приписывания локальной проверки возраста аутентификации.
+KindEmailMailbox не назван поддерживаемой ветвью generic validateDocument.
+Comments не расширяют фактические гарантии реализации.
+
+В schedule описаны единые preset/custom nominal calendar, earliest fold,
+bounded gap search, five-year horizon, минутный минимум и разные misfire
+cursors. Исправлена неточность старого комментария ResolveDue: nil occurrence
+возвращается также до наступления scheduledFor, а не только для SKIP. Runtime
+логика осталась прежней. Overlap constants не названы enforcement: admission
+остаётся у владельца. Context7: robfig/cron v3 standard five-field parser и
+custom parser options; YAML classic Decoder.Decode/Node.Decode. Ответ Context7
+содержал также v4 guidance; используемые v3 KnownFields/Decode/EOF дополнительно
+сверены с исходниками установленного go.yaml.in/yaml/v3@v3.0.5, миграции нет.
+
+Полный локальный build/unit control-plane — PASS на исполняемом Go-содержимом
+этого этапа; AST/directives21 файлов и diff check — PASS. Повторный detector:
+1795raw,812retained,983unresolved; clone-set fingerprint не изменился после
+комментариев, новых групп и решений retained нет. Результат остаётся частичным:
+merge/deploy/startup, browser acceptance и ручной QA — NOT RUN.
 
 ## Полное описание domain/service/platform — 24.10.2026
 

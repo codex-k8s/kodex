@@ -10,6 +10,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// TestReceiptAndReconciliationBounds checks lowercase receipt/digest grammar, Unicode rather than
+// byte note limits, malformed notes and rejection of unconfirmed reconciliation outcomes.
+// TestReceiptAndReconciliationBounds проверяет строчную грамматику квитанции и digest, Unicode
+// вместо байтового лимита примечания, повреждённые примечания и отказ неподтверждённым исходам
+// согласования.
 func TestReceiptAndReconciliationBounds(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	if ValidateExternalReceipt(strings.Repeat("b", 32), digest) != nil {
@@ -40,6 +45,11 @@ func TestReceiptAndReconciliationBounds(t *testing.T) {
 	}
 }
 
+// TestReconciliationRequiresVerifiedInteractiveFreshness accepts fresh verified interactive
+// context and rejects absent/stale/future timestamps, missing ACR and blank AMR evidence.
+// TestReconciliationRequiresVerifiedInteractiveFreshness допускает свежий проверенный
+// interactive-контекст и отклоняет отсутствующее, устаревшее либо будущее время, отсутствие ACR и
+// пустое свидетельство AMR.
 func TestReconciliationRequiresVerifiedInteractiveFreshness(t *testing.T) {
 	now := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
 	valid := value.Principal{CredentialAuthenticatedAt: now.Add(-time.Minute), CredentialACR: "urn:example:interactive", CredentialAMR: []string{"pwd"}}
@@ -61,6 +71,11 @@ func TestReconciliationRequiresVerifiedInteractiveFreshness(t *testing.T) {
 	}
 }
 
+// TestEffectKeyIsOpaqueAndByteBounded checks opaque effect keys preserve punctuation and spaces
+// while enforcing UTF-8, NUL rejection and byte limits for both ASCII and multibyte text.
+// TestEffectKeyIsOpaqueAndByteBounded проверяет сохранение пунктуации и пробелов непрозрачным
+// ключом эффекта с проверкой UTF-8, отказом NUL и байтовыми лимитами ASCII и многобайтового
+// текста.
 func TestEffectKeyIsOpaqueAndByteBounded(t *testing.T) {
 	for _, key := range []string{"x", "eff_opaque:with/slashes and spaces", strings.Repeat("x", 128), strings.Repeat("\u044f", 64)} {
 		if err := ValidateEffectKey(key); err != nil {
@@ -74,6 +89,10 @@ func TestEffectKeyIsOpaqueAndByteBounded(t *testing.T) {
 	}
 }
 
+// TestReceiptTransitionMatrix checks every pair of empty, unknown, confirmed and invalid receipt
+// states against initial-unknown, confirmation and identical-replay transition rules.
+// TestReceiptTransitionMatrix проверяет каждую пару пустого, unknown, подтверждённых и неверного
+// состояния квитанции по правилам начального unknown, подтверждения и одинакового replay.
 func TestReceiptTransitionMatrix(t *testing.T) {
 	states := []string{"", OutcomeUnknown, OutcomeEffectConfirmed, OutcomeNoEffectConfirmed, "INVALID"}
 	for _, previous := range states {
