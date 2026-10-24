@@ -4,11 +4,78 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.379.0
+version: 1.380.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Managed configuration, revision impact и Git source — 24.10.2026
+
+На основе `1740259734f029e8b178c049125d948b1ba904d1` описаны84 прежних
+объявления: managed configuration30, revision impact17, Git source16,
+source acceptance6, CFG lifecycle12 и три прежних unit tests. Два новых
+production helpers и два новых tests также описаны. В выбранных девяти
+Go-файлах88/88 объявлений имеют EN→RU описание. Общий inventory18688/21424,
+missing2736 — PostgreSQL adapter control-plane; полный объём остаётся открыт.
+
+`managedRevisionScanTargets` задаёт один список двенадцати revision columns
+для пяти scan paths: обычная revision, publication, copy, effective binding
+и history. Prefix/trailing fields остаются явными у callers; helper только
+собирает pointers. Сохранены прежние разные decode/error/partial-result
+контракты: обычный scanner при JSON error даёт zero/Unavailable, publication
+и binding — partial/Unavailable, copy — partial/raw JSON error. Row error
+передаётся без изменения и не запускает diagnostics decoding. History
+сохраняет свой total и прежний закрытый отказ при scan/JSON failure.
+
+`managedContentFormatAllowed` объединяет только одинаковый CREATE/SAVE
+format predicate: TEXT для prompt, OPENAPI_IMPORT дополнительно для
+integration, JSON/YAML/TOML для остальных kinds. Normalization и отдельные
+size/UTF8/NUL/nonempty/UI ownership checks остаются у callers. В частности,
+CREATE и SAVE не объявляются одинаковой content validation, а unknown kind
+не получает нового запрета внутри чистого predicate: общий command registry
+по-прежнему отдельно закрыт.
+
+| Сценарий / lifecycle | Описанный и сохранённый контракт |
+| --- | --- |
+| Managed command | Closed kind/action mapping, exact set scope и shipped/archive/UI/OCC guards до специализированных effects. SAVE/DISCARD, Validate, Publish, Rebind, Detach и Copy сохраняют свои отдельные source/consumer contracts и owner transaction |
+| Publication / rebind | Current VALID source, kind-specific validation, RoleImage owner effect до managed publication; prompt impact и exact consumer absence/version/revision проверяются отдельно. Authority и immutable binding expectation не заменяют друг друга |
+| History / effective source | Current access до configuration-bound history cursor, role-image/prompt content redaction и action projection; эффективная binding читается с прежними owner/context checks. History cursor не становится authority token |
+| CFG copy / archive | Source read отделён от target copy authority, точные origin/version/digest и parent provenance сохраняются; COPY и ARCHIVE hints независимы. Organization role-image generic actions закрыты, immutable receipt revision не заменяется current set metadata |
+| Git configure / refresh | Current configuration/source/connection authority и set/connection OCC, exact READ capability, immutable work/root actor/credential metadata. Configure завершает DRAFT/VALID candidates и open work; refresh использует сохранённый repository/ref/path, не произвольный payload |
+| Git completion | Exact saved receipt возвращается до fresh lease/eligibility; новая операция проверяет lease/generation/content/predecessor, повторяет root eligibility и typed validation. INITIAL/UNCHANGED/FAST_FORWARD — проверяемая классификация worker, не обход Git graph внутри CP. Новая revision/RoleImage effect, source state/audit и work receipt принадлежат одной Serializable TX |
+| Invalid / revoked source | INVALID candidate либо SYNC_BLOCKED не заменяют текущую published revision. UNCHANGED повторно валидируется без новой publication; READY raw content пишется только по exact accepted commit/digest с affected-row check |
+| Revision impact | Exact tenant/actor/ref, immutable owner snapshot revision2, полный bounded item count и actor-bound digest до per-item access/count/page. EXPIRED — read projection, не новое событие либо grant; только NotFound/Forbidden отдельных access checks пропускаются |
+| STT / prompt reads | Сохранены текущие organization/agent read paths и commit error mappings. STT Ready вычисляется из fixed blockers и сохранённого content/digest, без provider probe и без оценки decoded capability-map; это не новое доказательство live STT readiness |
+
+Два новых unit tests проверяют28 исходов четырёх настоящих scanners и84
+буквальные kind/format пары. Проверены positional types/values, nullable
+times, nil/empty/partial JSON diagnostics, частичный driver error, ErrNoRows,
+разные zero/partial outputs и raw JSON versus Unavailable. Прежние cursor,
+CFG actions и immutable impact commitment tests сохранены. Пять адресных
+tests, полный локальный GOWORK=off control-plane build/unit с `-count=1` —
+PASS. Credentials и15 external fixture/admin/template inputs исключены.
+PostgreSQL transactions/locks/races, source providers, bootstrap/live STT,
+полный E2E/browser и deploy/live — NOT RUN/SKIP; synthetic row scans их
+не заменяют.
+
+Семь comments-only AST/directives comparisons и expected-AST comparison
+managed configuration — PASS. Последний подтверждает ровно пять destination
+выносов, два format predicate substitutions и два новых helpers; все прежние
+guards, decode/error branches и SQL argument order сохранены.22 go:embed
+directives неизменны. SQL/API/generated, dependencies и deploy inputs
+не менялись. Через Context7 проверены pgx/v5.10.0 variadic Scan/Row/ErrNoRows
+и caller transaction/deferred rollback; прочитаны owner/source/impact и
+пять managed-revision projection SQL. Прежние partial commit/read contracts
+и readiness limitations не объявлены исправленными этим рефакторингом.
+
+Scan6670 own sources,222 excluded,1816 raw,897 retained,919 unresolved.
+Новый handwritten test остаётся в inventory. Все771 прежних решения для897
+occurrences действительны, новых исключений либо перепривязки нет.
+Thresholds/ignore regions не менялись. Девять cross-file окон выбранной
+области остаются открытыми: read/transaction prefixes, source-work/writeback
+и typed impact commitments.17 analyzer tests и5 exact-ignore guards — PASS.
+Основной клон и независимый QA baseline f2e64eb не менялись; Issue#1823 открыт.
 
 ## Assistant и organization RoleImage — 24.10.2026
 

@@ -7,6 +7,12 @@ import (
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestManagedHistoryCursorIsBoundToConfiguration checks version-boundary roundtrip for one
+// configuration and exact rejection of the same cursor for another configuration, without using
+// the cursor as identity.
+// TestManagedHistoryCursorIsBoundToConfiguration проверяет version-boundary roundtrip одной
+// configuration и точный отказ тому же cursor для другой configuration без использования cursor
+// как identity.
 func TestManagedHistoryCursorIsBoundToConfiguration(t *testing.T) {
 	token := encodeManagedHistoryCursor("mcfg_example01", 7)
 	cursor, err := decodeManagedHistoryCursor(token, "mcfg_example01")

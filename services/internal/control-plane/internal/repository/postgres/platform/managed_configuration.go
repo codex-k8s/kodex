@@ -20,17 +20,39 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// managedSet pairs public configuration metadata with internal set/project/current-revision IDs
+// needed by owner SQL; neither stored ownership fields nor this projection grant authority.
+// managedSet связывает публичные configuration metadata с внутренними set/project/current-revision
+// IDs для owner SQL; сохранённые owner fields и само представление не выдают полномочий.
 type managedSet struct {
 	entity.ManagedConfigurationSet
 	id, projectID, currentRevisionID string
 }
 
+// managedHistoryCursor encodes version1, a configuration-reference fingerprint and the exclusive
+// revision boundary for managed history; it is a locator checked after current access, not an
+// authority token.
+// managedHistoryCursor кодирует version1, fingerprint configuration reference и исключающую
+// границу revision для managed history; это locator, проверяемый после текущего доступа, а не
+// authority token.
 type managedHistoryCursor struct {
 	Version int    `json:"v"`
 	Filter  string `json:"f"`
 	Before  int64  `json:"b"`
 }
 
+// changeManagedConfiguration dispatches the closed managed command/action mapping within the
+// caller transaction, resolving typed ownership, shipped/archive/UI guards and set OCC before
+// specialized draft, validation, publication, impact/rebind, detach or copy effects. It preserves
+// kind-specific source validation, immutable revisions, exact consumer expectations and prompt
+// scope, returning the managed outcome for outer audit/event/receipt/commit; SAVE and CREATE
+// retain their different content checks.
+// changeManagedConfiguration исполняет закрытое соответствие managed command/action в транзакции
+// вызывающего метода, разрешая typed ownership, shipped/archive/UI guards и set OCC до
+// специализированных draft, validation, publication, impact/rebind, detach либо copy effects.
+// Сохраняет проверки source по kind, неизменяемые revisions, точные consumer expectations и prompt
+// scope, возвращая managed outcome для внешних audit/event/receipt/commit; SAVE и CREATE сохраняют
+// разные content checks.
 func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ManagedConfigurationInput)
 	if !ok {
@@ -105,9 +127,7 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		if action == "SAVE" {
 			format := strings.ToUpper(strings.TrimSpace(payload.ContentFormat))
 			if len(payload.Content) > 256<<10 || !utf8.ValidString(payload.Content) || strings.ContainsRune(payload.Content, 0) ||
-				kind == revisionservice.KindPromptTemplate && format != "TEXT" ||
-				kind != revisionservice.KindPromptTemplate && format != "JSON" && format != "YAML" && format != "TOML" &&
-					(kind != revisionservice.KindIntegrationDefinition || format != "OPENAPI_IMPORT") {
+				!managedContentFormatAllowed(kind, format) {
 				return commandOutcome{}, errs.ErrInvalid
 			}
 			content := strings.TrimSpace(payload.Content)
@@ -143,9 +163,7 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		format := strings.ToUpper(strings.TrimSpace(payload.ContentFormat))
-		if kind == revisionservice.KindPromptTemplate && format != "TEXT" ||
-			kind != revisionservice.KindPromptTemplate && format != "JSON" && format != "YAML" && format != "TOML" &&
-				(kind != revisionservice.KindIntegrationDefinition || format != "OPENAPI_IMPORT") {
+		if !managedContentFormatAllowed(kind, format) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		if configuration.ManagedBy != "UI" {
@@ -449,15 +467,31 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 	return outcome, nil
 }
 
+// lockedManagedRevision carries a managed revision and its internal locked-row ID for exact
+// set/revision writes; the value itself does not acquire or keep a database lock.
+// lockedManagedRevision содержит managed revision и внутренний locked-row ID для точных
+// set/revision writes; само значение не получает и не удерживает блокировку БД.
 type lockedManagedRevision struct {
 	entity.ManagedConfigurationRevision
 	RefID string
 }
 
+// resolveManagedSet selects PROJECT scope for the common managed-set resolver; it resolves owner
+// metadata but leaves operation authorization to the caller.
+// resolveManagedSet выбирает PROJECT scope общего managed-set resolver; разрешает owner metadata,
+// оставляя авторизацию операции вызывающему методу.
 func (repository *Repository) resolveManagedSet(ctx context.Context, tx pgx.Tx, current scope, payload command.ManagedConfigurationInput, kind string, create bool) (managedSet, error) {
 	return repository.resolveManagedSetScope(ctx, tx, current, payload, kind, create, "PROJECT")
 }
 
+// resolveManagedSetScope locks an exact tenant/configuration, checks optional kind and explicit
+// role-image project/organization scope, hydrates source and requires a valid current published
+// revision when pinned. With no reference it requires create/kind and inserts the UI set using
+// trimmed project/name; it does not perform a general access check or commit.
+// resolveManagedSetScope блокирует точные tenant/configuration, проверяет необязательный kind и
+// явный role-image project/organization scope, добавляет source и требует допустимую current
+// published revision при наличии pin. Без reference требует create/kind и вставляет UI set с
+// очищенными project/name; общей проверки доступа и commit не выполняет.
 func (repository *Repository) resolveManagedSetScope(ctx context.Context, tx pgx.Tx, current scope, payload command.ManagedConfigurationInput, kind string, create bool, scopeKind string) (managedSet, error) {
 	if payload.ConfigurationRef != "" {
 		item, err := scanManagedSet(tx.QueryRow(ctx, queryManagedConfigurationLockSet, pgx.StrictNamedArgs{
@@ -502,6 +536,12 @@ func (repository *Repository) resolveManagedSetScope(ctx context.Context, tx pgx
 	return item, nil
 }
 
+// lockManagedRevision reads the exact tenant/set/revision locked tuple with distinct
+// NotFound/Unavailable mapping, hydrates prompt scope only for prompt templates and exposes its
+// internal ID without owning commit.
+// lockManagedRevision читает locked tuple точных tenant/set/revision с разными
+// NotFound/Unavailable, добавляет prompt scope только для prompt templates и возвращает внутренний
+// ID без владения commit.
 func (repository *Repository) lockManagedRevision(ctx context.Context, tx pgx.Tx, current scope, set managedSet, ref string) (lockedManagedRevision, error) {
 	item, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationLockRevision, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "configuration_set_id": set.id, "revision_ref": ref,
@@ -520,6 +560,15 @@ func (repository *Repository) lockManagedRevision(ctx context.Context, tx pgx.Tx
 	return lockedManagedRevision{ManagedConfigurationRevision: item.ManagedConfigurationRevision, RefID: item.internalID}, nil
 }
 
+// copyManagedConfiguration requires expected version, source reference and nonempty copy name,
+// resolves a GIT set with current revision, normalizes integration content for UI and atomically
+// copies set/draft through owner SQL. Mailbox copies additionally resolve connection ownership and
+// create a fresh mailbox mapping; current operation authority and final transaction lifecycle
+// remain outside.
+// copyManagedConfiguration требует expected version, source reference и непустое имя копии,
+// разрешает GIT set с current revision, нормализует integration content для UI и атомарно копирует
+// set/draft через owner SQL. Mailbox copies дополнительно разрешают connection ownership и создают
+// новую mailbox mapping; текущие полномочия операции и финальная транзакция остаются снаружи.
 func (repository *Repository) copyManagedConfiguration(ctx context.Context, tx pgx.Tx, current scope, input command.Command, payload command.ManagedConfigurationInput) (commandOutcome, error) {
 	if input.Mutation.ExpectedVersion == nil || payload.ConfigurationRef == "" || strings.TrimSpace(payload.Name) == "" {
 		return commandOutcome{}, errs.ErrInvalid
@@ -564,6 +613,12 @@ func (repository *Repository) copyManagedConfiguration(ctx context.Context, tx p
 	return managedOutcome(set, &revision), nil
 }
 
+// managedCommand maps only registered command kinds to configuration kind and specialized action,
+// including copy/archive/impact and Git detach/copy; unknown commands return two empty strings
+// rather than a generic mutation.
+// managedCommand сопоставляет только зарегистрированные command kinds с configuration kind и
+// специализированным action, включая copy/archive/impact и Git detach/copy; неизвестные команды
+// дают две пустые строки вместо generic mutation.
 func managedCommand(kind command.Kind) (string, string) {
 	mapping := map[command.Kind][2]string{
 		command.CopyRoleImageConfiguration:                {revisionservice.KindRoleImage, "COPY_CFG"},
@@ -595,6 +650,12 @@ func managedCommand(kind command.Kind) (string, string) {
 	return value[0], value[1]
 }
 
+// managedConsumerAllowed checks a nonempty consumer reference against the closed kind-to-consumer
+// registry for prompt, role image, integration and STT metadata; this structural check does not
+// establish current consumer eligibility.
+// managedConsumerAllowed проверяет непустую consumer reference по закрытому kind-to-consumer
+// registry для prompt, role image, integration и STT metadata; структурная проверка не
+// устанавливает текущую consumer eligibility.
 func managedConsumerAllowed(kind string, consumer entity.ManagedConfigurationConsumer) bool {
 	allowed := map[string][]string{
 		revisionservice.KindPromptTemplate:        {"AGENT", "AGENT_CONTINUATION", "WORKFLOW", "SCHEDULE"},
@@ -613,6 +674,12 @@ func managedConsumerAllowed(kind string, consumer entity.ManagedConfigurationCon
 	return false
 }
 
+// validManagedBindingExpectation requires zero version/empty revision for expected absence,
+// otherwise a positive JSON-safe version and valid mrev history reference; an expected-absence
+// flag is not proof of actual absence.
+// validManagedBindingExpectation требует нулевые version/пустую revision для expected absence,
+// иначе положительную JSON-safe version и допустимую mrev history reference; expected-absence flag
+// не доказывает фактическое отсутствие.
 func validManagedBindingExpectation(consumer entity.ManagedConfigurationConsumer) bool {
 	if consumer.ExpectedAbsent {
 		return consumer.Version == 0 && consumer.RevisionRef == ""
@@ -620,6 +687,12 @@ func validManagedBindingExpectation(consumer entity.ManagedConfigurationConsumer
 	return consumer.Version > 0 && consumer.Version <= 9007199254740991 && strings.HasPrefix(consumer.RevisionRef, "mrev_") && validOverlayHistoryRef(consumer.RevisionRef)
 }
 
+// managedOutcome projects set/revision metadata and the existing managed-change event descriptor,
+// setting CurrentRevision only for PUBLISHED input; it does not persist an event or infer
+// permissions.
+// managedOutcome формирует set/revision metadata и прежний managed-change event descriptor,
+// назначая CurrentRevision только для PUBLISHED input; событие не сохраняет и полномочий не
+// выводит.
 func managedOutcome(set managedSet, revision *entity.ManagedConfigurationRevision) commandOutcome {
 	if revision != nil && revision.State == "PUBLISHED" {
 		set.CurrentRevision = revision
@@ -629,65 +702,100 @@ func managedOutcome(set managedSet, revision *entity.ManagedConfigurationRevisio
 		summary: "i18n:MANAGED_CONFIGURATION_CHANGED", platformEvent: "MANAGED_CONFIGURATION_CHANGED"}
 }
 
+// managedRevisionScan adds an internal revision ID to public revision fields for ordered SQL
+// scanning; decode and partial-result policy are selected by each scanner.
+// managedRevisionScan добавляет внутренний revision ID к публичным revision fields для
+// упорядоченного SQL scanning; decode и partial-result policy выбирает каждый scanner.
 type managedRevisionScan struct {
 	entity.ManagedConfigurationRevision
 	internalID string
 }
 
+// scanManagedRevision scans twelve revision columns and decodes diagnostics; malformed diagnostics
+// after successful scanning return a zero revision with Unavailable, while row-scan errors
+// preserve the partially assigned revision and original error.
+// scanManagedRevision сканирует двенадцать revision columns и декодирует diagnostics; неверные
+// diagnostics после успешного scan дают нулевую revision с Unavailable, row-scan errors сохраняют
+// частично присвоенную revision и исходную ошибку.
 func scanManagedRevision(row rowScanner) (managedRevisionScan, error) {
 	var item managedRevisionScan
 	var raw []byte
-	err := row.Scan(&item.internalID, &item.Ref, &item.Revision, &item.State, &item.ContentFormat, &item.Content,
-		&item.Digest, &item.ParentRevisionRef, &raw, &item.CreatedAt, &item.ValidatedAt, &item.PublishedAt)
+	err := row.Scan(managedRevisionScanTargets(&item, &raw)...)
 	if err == nil && json.Unmarshal(raw, &item.ValidationDiagnostics) != nil {
 		return managedRevisionScan{}, errs.ErrUnavailable
 	}
 	return item, err
 }
+
+// scanPublishedManagedRevision scans revision plus set version/update time and maps malformed
+// diagnostics to Unavailable while preserving the assigned revision and extra outputs; scan errors
+// remain unchanged.
+// scanPublishedManagedRevision сканирует revision с set version/update time и преобразует неверные
+// diagnostics в Unavailable, сохраняя присвоенные revision и дополнительные результаты; scan
+// errors не меняются.
 func scanPublishedManagedRevision(row rowScanner) (managedRevisionScan, int64, time.Time, error) {
 	var item managedRevisionScan
 	var raw []byte
 	var version int64
 	var updated time.Time
-	err := row.Scan(&item.internalID, &item.Ref, &item.Revision, &item.State, &item.ContentFormat, &item.Content,
-		&item.Digest, &item.ParentRevisionRef, &raw, &item.CreatedAt, &item.ValidatedAt, &item.PublishedAt, &version, &updated)
+	targets := append(managedRevisionScanTargets(&item, &raw), &version, &updated)
+	err := row.Scan(targets...)
 	if err == nil && json.Unmarshal(raw, &item.ValidationDiagnostics) != nil {
 		err = errs.ErrUnavailable
 	}
 	return item, version, updated, err
 }
 
+// scanManagedSet scans fourteen ordered managed-set columns including internal IDs, archive flag
+// and copy provenance, returning any partial assignments with the original scan error without
+// authority checks.
+// scanManagedSet сканирует четырнадцать упорядоченных managed-set columns с внутренними IDs,
+// archive flag и copy provenance, возвращая частичные присваивания с исходной scan error без
+// проверок полномочий.
 func scanManagedSet(row rowScanner) (managedSet, error) {
 	var item managedSet
 	err := row.Scan(&item.id, &item.Ref, &item.projectID, &item.ProjectRef, &item.Kind, &item.Name,
 		&item.ManagedBy, &item.Source, &item.SourceRevision, &item.Version, &item.UpdatedAt, &item.currentRevisionID, &item.Archived, &item.CopyProvenance)
 	return item, err
 }
+
+// scanManagedCopy scans the copied set prefix and revision tuple, then decodes diagnostics only
+// after successful scanning; it preserves partial set/revision outputs and the raw JSON decode
+// error rather than remapping it.
+// scanManagedCopy сканирует copied set prefix и revision tuple, затем декодирует diagnostics
+// только после успешного scan; сохраняет частичные set/revision outputs и исходную JSON decode
+// error без преобразования.
 func scanManagedCopy(row rowScanner) (managedSet, entity.ManagedConfigurationRevision, error) {
 	var set managedSet
 	var revision managedRevisionScan
 	var raw []byte
-	err := row.Scan(&set.id, &set.Ref, &set.projectID, &set.ProjectRef, &set.Kind, &set.Name, &set.ManagedBy,
-		&set.Source, &set.SourceRevision, &set.Version, &set.UpdatedAt, &revision.internalID, &revision.Ref,
-		&revision.Revision, &revision.State, &revision.ContentFormat, &revision.Content, &revision.Digest,
-		&revision.ParentRevisionRef, &raw, &revision.CreatedAt, &revision.ValidatedAt, &revision.PublishedAt)
+	targets := []any{&set.id, &set.Ref, &set.projectID, &set.ProjectRef, &set.Kind, &set.Name, &set.ManagedBy,
+		&set.Source, &set.SourceRevision, &set.Version, &set.UpdatedAt}
+	targets = append(targets, managedRevisionScanTargets(&revision, &raw)...)
+	err := row.Scan(targets...)
 	if err == nil {
 		err = json.Unmarshal(raw, &revision.ValidationDiagnostics)
 	}
 	return set, revision.ManagedConfigurationRevision, err
 }
 
+// scanManagedBinding scans binding identity, managed owner metadata, revision and trailing
+// archive/provenance fields, then projects public configuration/revision even on error; malformed
+// diagnostics map to Unavailable without discarding other assigned fields.
+// scanManagedBinding сканирует binding identity, managed owner metadata, revision и завершающие
+// archive/provenance fields, затем формирует публичные configuration/revision даже при ошибке;
+// неверные diagnostics дают Unavailable без удаления остальных присвоенных fields.
 func scanManagedBinding(row rowScanner) (entity.ManagedConfigurationBindingSnapshot, error) {
 	var result entity.ManagedConfigurationBindingSnapshot
 	var set managedSet
 	var revision managedRevisionScan
 	var diagnostics []byte
-	err := row.Scan(&result.Ref, &result.Version, &result.ConsumerKind, &result.ConsumerRef,
+	targets := []any{&result.Ref, &result.Version, &result.ConsumerKind, &result.ConsumerRef,
 		&set.id, &set.Ref, &set.projectID, &set.ProjectRef, &set.Kind, &set.Name, &set.ManagedBy,
-		&set.Source, &set.SourceRevision, &set.Version, &set.UpdatedAt, &set.currentRevisionID,
-		&revision.internalID, &revision.Ref, &revision.Revision, &revision.State, &revision.ContentFormat,
-		&revision.Content, &revision.Digest, &revision.ParentRevisionRef, &diagnostics,
-		&revision.CreatedAt, &revision.ValidatedAt, &revision.PublishedAt, &set.Archived, &set.CopyProvenance)
+		&set.Source, &set.SourceRevision, &set.Version, &set.UpdatedAt, &set.currentRevisionID}
+	targets = append(targets, managedRevisionScanTargets(&revision, &diagnostics)...)
+	targets = append(targets, &set.Archived, &set.CopyProvenance)
+	err := row.Scan(targets...)
 	if err == nil && json.Unmarshal(diagnostics, &revision.ValidationDiagnostics) != nil {
 		err = errs.ErrUnavailable
 	}
@@ -696,6 +804,16 @@ func scanManagedBinding(row rowScanner) (entity.ManagedConfigurationBindingSnaps
 	return result, err
 }
 
+// ListManagedConfigurationHistory resolves current owner access before source hydration and
+// configuration-bound pagination, separately redacting role-image source or full prompt content.
+// It decodes immutable history with total/cursor, hydrates prompt scopes and current action hints,
+// guards a repeated next token and commits before returning; the cursor itself is not actor
+// authority.
+// ListManagedConfigurationHistory разрешает текущий owner access до source hydration и
+// configuration-bound pagination, отдельно скрывая role-image source либо полный prompt content.
+// Декодирует immutable history с total/cursor, добавляет prompt scopes и текущие action hints,
+// отклоняет повторный next token и делает commit до ответа; cursor сам не является actor
+// authority.
 func (repository *Repository) ListManagedConfigurationHistory(ctx context.Context, principal value.Principal, ref string, page query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -775,8 +893,8 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 	for rows.Next() {
 		var item managedRevisionScan
 		var raw []byte
-		if scanErr := rows.Scan(&item.internalID, &item.Ref, &item.Revision, &item.State, &item.ContentFormat, &item.Content,
-			&item.Digest, &item.ParentRevisionRef, &raw, &item.CreatedAt, &item.ValidatedAt, &item.PublishedAt, &total); scanErr != nil || json.Unmarshal(raw, &item.ValidationDiagnostics) != nil {
+		targets := append(managedRevisionScanTargets(&item, &raw), &total)
+		if scanErr := rows.Scan(targets...); scanErr != nil || json.Unmarshal(raw, &item.ValidationDiagnostics) != nil {
 			return entity.ManagedConfigurationSet{}, nil, 0, "", errs.ErrUnavailable
 		}
 		if !includeContent {
@@ -815,16 +933,31 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 	return set.ManagedConfigurationSet, items, total, next, nil
 }
 
+// managedHistoryFilterDigest trims the configuration reference and returns the raw-URL-base64
+// first twelve SHA256 bytes as a history cursor binding fingerprint, without signing the token.
+// managedHistoryFilterDigest очищает configuration reference и возвращает первые двенадцать SHA256
+// bytes в raw-URL-base64 как fingerprint привязки history cursor без подписи токена.
 func managedHistoryFilterDigest(configurationRef string) string {
 	digest := sha256.Sum256([]byte(strings.TrimSpace(configurationRef)))
 	return base64.RawURLEncoding.EncodeToString(digest[:12])
 }
 
+// encodeManagedHistoryCursor serializes the version1 configuration fingerprint and exclusive
+// revision boundary to raw URL base64, preserving the existing ignored JSON-marshal error
+// convention.
+// encodeManagedHistoryCursor сериализует version1 configuration fingerprint и исключающую revision
+// boundary в raw URL base64, сохраняя прежнее игнорирование JSON-marshal error.
 func encodeManagedHistoryCursor(configurationRef string, before int64) string {
 	raw, _ := json.Marshal(managedHistoryCursor{Version: 1, Filter: managedHistoryFilterDigest(configurationRef), Before: before})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
+// decodeManagedHistoryCursor accepts an omitted whitespace-only token as the initial page,
+// otherwise bounds decoded bytes and requires valid JSON version, exact configuration fingerprint
+// and positive revision boundary.
+// decodeManagedHistoryCursor принимает пропущенный либо пробельный token как первую страницу,
+// иначе ограничивает decoded bytes и требует допустимые JSON version, точный configuration
+// fingerprint и положительную revision boundary.
 func decodeManagedHistoryCursor(token, configurationRef string) (managedHistoryCursor, error) {
 	if strings.TrimSpace(token) == "" {
 		return managedHistoryCursor{}, nil
@@ -841,6 +974,14 @@ func decodeManagedHistoryCursor(token, configurationRef string) (managedHistoryC
 	return cursor, nil
 }
 
+// GetManagedConfigurationImpact bounds the read at five seconds, validates trimmed search and
+// current scoped management access, then reads the target revision impact in the caller-derived
+// transaction. It preserves NotFound on set-read failure and returns the populated impact together
+// with the raw commit error when commit fails.
+// GetManagedConfigurationImpact ограничивает чтение пятью секундами, проверяет очищенный search и
+// текущий scoped management access, затем читает target revision impact в транзакции от
+// разрешённого caller. Сохраняет NotFound при set-read failure и возвращает заполненный impact
+// вместе с исходной commit error при отказе commit.
 func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context, principal value.Principal, ref, revisionRef string, filter query.Filter) (entity.ManagedConfigurationImpact, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -871,6 +1012,14 @@ func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context,
 	return impact, tx.Commit(ctx)
 }
 
+// GetEffectiveManagedConfiguration reads the exact kind/consumer binding in a read-only
+// RepeatableRead transaction, using explicit runtime-environment context and source projection for
+// role images. Missing binding and infrastructure errors stay distinct; current read authorization
+// is not inferred from binding metadata, and commit failure returns zero output with Conflict.
+// GetEffectiveManagedConfiguration читает binding точных kind/consumer в read-only RepeatableRead
+// транзакции, используя явный runtime-environment context и source projection для role images.
+// Отсутствие binding и инфраструктурные ошибки различаются; текущая read authorization не
+// выводится из binding metadata, отказ commit даёт нулевой результат с Conflict.
 func (repository *Repository) GetEffectiveManagedConfiguration(ctx context.Context, principal value.Principal, kind, consumerKind, consumerRef string) (entity.ManagedConfigurationBindingSnapshot, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -913,6 +1062,12 @@ func (repository *Repository) GetEffectiveManagedConfiguration(ctx context.Conte
 	return result, nil
 }
 
+// requireManagedSetAccess uses mailbox connection integration.manage for mailbox sets, otherwise
+// the caller-supplied organization permission for empty project or exact project permission for
+// project-owned sets; metadata resolution alone does not grant access.
+// requireManagedSetAccess использует integration.manage connection владельца для mailbox sets,
+// иначе переданный organization permission при пустом project либо точный project permission для
+// project-owned sets; одно разрешение metadata не выдаёт доступа.
 func (repository *Repository) requireManagedSetAccess(ctx context.Context, tx pgx.Tx, current scope, set managedSet, projectPermission, organizationPermission string) error {
 	if set.Kind == revisionservice.KindEmailMailbox {
 		var connectionRef, mailboxRef string
@@ -928,6 +1083,15 @@ func (repository *Repository) requireManagedSetAccess(ctx context.Context, tx pg
 		Kind: "RESOURCE_INSTANCE", ProjectRef: set.ProjectRef, ResourceKind: "PROJECT", ResourceRef: set.ProjectRef,
 	})
 }
+
+// managedImpactTx locks the set and exact revision, binds the catalog cursor to
+// actor/configuration/revision/query, then reads SQL-filtered eligible consumers with
+// authoritative total/digest and bounded next page. It performs no consumer rebind and leaves
+// permission and commit ownership with callers.
+// managedImpactTx блокирует set и точную revision, связывает catalog cursor с
+// actor/configuration/revision/query, затем читает отфильтрованных SQL eligible consumers с
+// авторитетными total/digest и ограниченной next page. Не выполняет consumer rebind, оставляя
+// полномочия и commit вызывающим методам.
 func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, current scope, ref, revisionRef string, filter query.Filter) (entity.ManagedConfigurationImpact, error) {
 	set, err := scanManagedSet(tx.QueryRow(ctx, queryManagedConfigurationLockSet, pgx.StrictNamedArgs{"organization_id": current.organizationID, "configuration_ref": ref}))
 	if err != nil {
@@ -974,6 +1138,12 @@ func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, cu
 	return result, nil
 }
 
+// GetSystemSTTConfiguration uses organization.view normally and platform.stt.use only for the
+// exact stt-tts-service policy-resolve path, performs authorized organization reading and maps
+// commit failure to Conflict before returning configuration readiness.
+// GetSystemSTTConfiguration обычно использует organization.view, а platform.stt.use — только для
+// точного stt-tts-service policy-resolve path; выполняет авторизованное чтение организации и
+// возвращает Conflict при отказе commit до выдачи readiness конфигурации.
 func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, principal value.Principal) (entity.SystemSTTConfiguration, error) {
 	permission := "organization.view"
 	if principal.CallerWorkload == "stt-tts-service" && principal.Permission == "platform.stt.policy.resolve" {
@@ -996,6 +1166,16 @@ func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, pri
 	return result, nil
 }
 
+// getSystemSTTConfigurationTx reads current STT source/provider metadata and assembles fixed
+// readiness blockers for permission, enablement, account and credential status. It requires
+// decodable provider capabilities, parses and digest-checks stored content to project
+// parameters/limits, and derives Ready only from blocker absence; this method performs no provider
+// network probe or capability-map evaluation.
+// getSystemSTTConfigurationTx читает текущие STT source/provider metadata и собирает фиксированные
+// readiness blockers по permission, enablement, account и credential status. Требует декодируемые
+// provider capabilities, разбирает и сверяет digest сохранённого content для проекции
+// parameters/limits и выводит Ready только из отсутствия blockers; provider network probe и оценку
+// capability-map не выполняет.
 func (repository *Repository) getSystemSTTConfigurationTx(ctx context.Context, tx pgx.Tx, current scope) (entity.SystemSTTConfiguration, error) {
 	var result entity.SystemSTTConfiguration
 	var eligible, providerEnabled, apiKey, enabled bool
@@ -1050,11 +1230,20 @@ func (repository *Repository) getSystemSTTConfigurationTx(ctx context.Context, t
 	return result, nil
 }
 
-// Профиль совпадает с исполняемым adapter stt-tts-service, а не каталогом LLM агента.
+// systemSTTModelSupported delegates model/language support to the executable STT parameter
+// validator rather than the agent LLM catalog, without contacting a provider.
+// systemSTTModelSupported передаёт проверку model/language исполняемому STT parameter validator
+// вместо agent LLM catalog без обращения к provider.
 func systemSTTModelSupported(model, language string) bool {
 	return (value.STTParameters{}).Validate(model, language) == nil
 }
 
+// GetEffectivePromptTemplate authorizes exact agent.view before selecting its effective immutable
+// prompt projection, maps missing/read errors separately, marks the result PUBLISHED and commits
+// before returning; it does not publish a new instruction version.
+// GetEffectivePromptTemplate проверяет точный agent.view до выбора effective immutable prompt
+// projection, различает missing/read errors, отмечает результат PUBLISHED и делает commit до
+// ответа; новую instruction version не публикует.
 func (repository *Repository) GetEffectivePromptTemplate(ctx context.Context, principal value.Principal, agentRef string) (entity.InstructionVersion, error) {
 	current, tx, err := repository.authorizedRead(ctx, principal, "agent.view", func(current scope) entity.AccessScope {
 		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: agentRef}
@@ -1078,4 +1267,33 @@ func (repository *Repository) GetEffectivePromptTemplate(ctx context.Context, pr
 		return entity.InstructionVersion{}, errs.ErrConflict
 	}
 	return item, nil
+}
+
+// managedRevisionScanTargets returns a fresh ordered list for the twelve shared revision columns,
+// including raw diagnostics and nullable validation/publication times. Each scanner appends its
+// own prefix or trailing columns and retains its original decode, error and partial-result policy;
+// assembling pointers neither queries SQL nor clears assigned fields.
+// managedRevisionScanTargets возвращает новый упорядоченный список двенадцати общих revision
+// columns, включая raw diagnostics и nullable validation/publication times. Каждый scanner добавляет
+// собственные prefix либо trailing columns и сохраняет прежние decode, error и partial-result policy;
+// сборка pointers не выполняет SQL и не очищает присвоенные fields.
+func managedRevisionScanTargets(item *managedRevisionScan, diagnostics *[]byte) []any {
+	return []any{&item.internalID, &item.Ref, &item.Revision, &item.State, &item.ContentFormat, &item.Content,
+		&item.Digest, &item.ParentRevisionRef, diagnostics, &item.CreatedAt, &item.ValidatedAt, &item.PublishedAt}
+}
+
+// managedContentFormatAllowed preserves the shared CREATE/SAVE format predicate: prompt templates
+// use TEXT, integration definitions additionally accept OPENAPI_IMPORT, and all other kinds retain
+// JSON/YAML/TOML. It neither normalizes format nor validates kind/content; caller-specific size,
+// UTF8, NUL, nonempty and ownership checks remain separate.
+// managedContentFormatAllowed сохраняет общий CREATE/SAVE format predicate: prompt templates
+// используют TEXT, integration definitions дополнительно принимают OPENAPI_IMPORT, остальные kinds
+// сохраняют JSON/YAML/TOML. Не нормализует format и не проверяет kind/content; разные size, UTF8, NUL,
+// nonempty и ownership checks остаются у callers.
+func managedContentFormatAllowed(kind, format string) bool {
+	if kind == revisionservice.KindPromptTemplate {
+		return format == "TEXT"
+	}
+	return format == "JSON" || format == "YAML" || format == "TOML" ||
+		kind == revisionservice.KindIntegrationDefinition && format == "OPENAPI_IMPORT"
 }

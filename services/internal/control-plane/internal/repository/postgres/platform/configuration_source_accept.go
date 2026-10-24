@@ -18,15 +18,37 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryConfigurationSourceAccept pins an accepted commit/content digest and published revision on
+// the exact source, refreshes sync time and clears its previous raw content before the matching
+// raw write.
+// queryConfigurationSourceAccept закрепляет accepted commit/content digest и published revision
+// точного source, обновляет sync time и очищает прежний raw content перед соответствующей raw
+// write.
+//
 //go:embed sql/configuration_source__accept.sql
 var queryConfigurationSourceAccept string
 
+// queryConfigurationSourceAcceptSet updates only the exact GIT-managed set source revision after
+// accepted source publication without modifying UI-owned sets.
+// queryConfigurationSourceAcceptSet обновляет source revision только точного GIT-managed set после
+// accepted source publication без изменения UI-owned sets.
+//
 //go:embed sql/configuration_source__accept_set.sql
 var queryConfigurationSourceAcceptSet string
 
+// queryConfigurationSourceAcceptRaw stores raw accepted content only when source ID, accepted
+// commit and content digest still match, allowing affected-row confirmation in the owner
+// transaction.
+// queryConfigurationSourceAcceptRaw сохраняет raw accepted content только при совпадении source
+// ID, accepted commit и content digest для проверки affected-row в owner transaction.
+//
 //go:embed sql/configuration_source__accept_raw.sql
 var queryConfigurationSourceAcceptRaw string
 
+// validSourceCommit accepts exactly forty or sixty-four lowercase hexadecimal characters as a Git
+// commit locator, rejecting prefixes and all other characters without verifying ancestry.
+// validSourceCommit принимает ровно сорок либо шестьдесят четыре lowercase hexadecimal символа как
+// Git commit locator, отклоняя prefixes и остальные символы без проверки ancestry.
 func validSourceCommit(commit string) bool {
 	if len(commit) != 40 && len(commit) != 64 {
 		return false
@@ -39,6 +61,14 @@ func validSourceCommit(commit string) bool {
 	return true
 }
 
+// sourceCompletionValid checks bounded nonempty UTF8/NUL-free content, exact content SHA256 and
+// the server-pinned predecessor. It accepts only INITIAL for no predecessor, UNCHANGED with
+// identical digest for the same commit, otherwise FAST_FORWARD; this validates a supplied ancestry
+// classification rather than independently traversing Git history.
+// sourceCompletionValid проверяет ограниченный непустой UTF8/NUL-free content, точный content
+// SHA256 и server-pinned predecessor. Принимает только INITIAL без predecessor, UNCHANGED с тем же
+// digest для того же commit, иначе FAST_FORWARD; проверяет переданную ancestry classification, а
+// не самостоятельно обходит Git history.
 func sourceCompletionValid(row sourceWorkRow, source configurationSource, input platformrepo.ConfigurationSourceCompletion) bool {
 	if !validSourceCommit(input.CommitSHA) || len(input.Content) == 0 || len(input.Content) > int(row.work.MaximumContentBytes) ||
 		!utf8.Valid(input.Content) || strings.ContainsRune(string(input.Content), 0) {
@@ -57,6 +87,19 @@ func sourceCompletionValid(row sourceWorkRow, source configurationSource, input 
 	return input.Ancestry == "FAST_FORWARD"
 }
 
+// completeConfigurationSource locks exact source work in a Serializable transaction and returns a
+// matching stored completion before fresh lease/eligibility checks. New completion validates live
+// lease, source generation and content/provenance; lost root eligibility blocks source, unchanged
+// content is revalidated without publication, and new valid content publishes a revision plus any
+// role-image effect. Invalid content retains an INVALID candidate and blocks sync; ready raw
+// content, source state/audit and durable work receipt are finalized together before commit.
+// completeConfigurationSource блокирует точную source work в Serializable транзакции и возвращает
+// совпавшее сохранённое completion до новых lease/eligibility checks. Новое completion проверяет
+// live lease, source generation и content/provenance; потеря root eligibility блокирует source,
+// неизменённый content повторно проверяется без публикации, новый допустимый content публикует
+// revision и возможный role-image effect. Неверный content сохраняет INVALID candidate и блокирует
+// sync; ready raw content, source state/audit и устойчивая work receipt завершаются вместе до
+// commit.
 func (repository *Repository) completeConfigurationSource(ctx context.Context, p value.Principal, input platformrepo.ConfigurationSourceCompletion) (entity.ManagedConfigurationGitSource, error) {
 	current, err := repository.resolveScope(ctx, p)
 	if err != nil {

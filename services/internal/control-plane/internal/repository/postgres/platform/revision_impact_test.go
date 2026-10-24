@@ -6,6 +6,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestRevisionImpactCommitmentPreservesIntent checks terminal publication/outcome metadata and
+// item order do not change immutable commitment, while actor, draft version and binding version
+// changes do; it uses pure synthetic snapshots without PostgreSQL.
+// TestRevisionImpactCommitmentPreservesIntent проверяет неизменность immutable commitment при
+// terminal publication/outcome metadata и порядке items с изменением digest при смене actor, draft
+// version и binding version; использует чистые synthetic snapshots без PostgreSQL.
 func TestRevisionImpactCommitmentPreservesIntent(t *testing.T) {
 	plan := entity.RevisionImpactPlan{Ref: "rvip_test00001", Kind: "RUNTIME_ENVIRONMENT", Version: 1, State: "PREPARED", DraftRef: "draft", DraftVersion: 3, SourceRef: "env", SourceVersion: 2, TargetDigest: "target", Total: 2}
 	items := []entity.RevisionImpactItem{{Ref: "rvit_a0000001", ConsumerRef: "agent1", ConsumerVersion: 4, BindingRef: "binding1", BindingVersion: 2}, {Ref: "rvit_b0000001", ConsumerRef: "agent2", ConsumerVersion: 5, BindingRef: "binding2", BindingVersion: 3}}
