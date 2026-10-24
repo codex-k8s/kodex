@@ -15,11 +15,34 @@ import (
 )
 
 const (
-	providerCredentialCleanupRetention   = 24 * time.Hour
-	providerCredentialCleanupLease       = 2 * time.Minute
+	// providerCredentialCleanupRetention Defines the 24-hour grace period used when scheduling retired
+	// credential revisions after rotation/renewal. It is an eligibility delay, not permission to
+	// delete a credential still referenced by an owner/runtime consumer.
+	// providerCredentialCleanupRetention Задаёт 24-часовую отсрочку очистки прежних ревизий credential
+	// после ротации или обновления. Это задержка пригодности, а не разрешение удалить ревизию, ещё
+	// используемую владельцем или runtime.
+	providerCredentialCleanupRetention = 24 * time.Hour
+	// providerCredentialCleanupLease Defines the two-minute claim duration added to the claim cycle
+	// application time before SQL returns the exact stored deadline. Owner/generation/expiry checks
+	// remain required for completion.
+	// providerCredentialCleanupLease Задаёт двухминутную аренду от времени приложения в цикле захвата;
+	// SQL возвращает точный сохранённый срок. При завершении остаются обязательны проверки владельца,
+	// поколения и срока.
+	providerCredentialCleanupLease = 2 * time.Minute
+	// providerCredentialCleanupMaxAttempts Supplies five maximum attempts when scheduling new
+	// credential cleanup tasks. Existing locked tasks keep their own persisted limit and dead-letter
+	// policy.
+	// providerCredentialCleanupMaxAttempts Задаёт максимум пять попыток для новых задач очистки
+	// credential. Существующие заблокированные задачи сохраняют свой предел и правило dead-letter.
 	providerCredentialCleanupMaxAttempts = 5
 )
 
+// providerCredentialCleanupCandidate Buffers resolved task/account/object/materializer metadata
+// and recovery identity after candidate rows close and before claim updates. It contains
+// descriptors rather than secret bytes and does not independently authorize cleanup.
+// providerCredentialCleanupCandidate Буферизует разрешённые метаданные задачи, аккаунта, объекта,
+// материализатора и recovery identity после закрытия rows до обновления захвата. Содержит
+// дескрипторы вместо значений секретов и самостоятельно не разрешает очистку.
 type providerCredentialCleanupCandidate struct {
 	recovery                                                                            entity.ProviderCleanupRecoveryIdentity
 	id, ref, accountRef                                                                 string
@@ -27,6 +50,12 @@ type providerCredentialCleanupCandidate struct {
 	targetKind, authorizationRef, materializerRef, materializerUID, materializerVersion string
 }
 
+// lockedProviderCredentialCleanupTask Carries locked owner/account/task lifecycle, lease
+// generation/deadline, attempt policy and terminal receipt/completion descriptor for replay and
+// fresh-claim checks. These internal fields are not caller authority.
+// lockedProviderCredentialCleanupTask Хранит заблокированные владение, аккаунт, жизненный цикл
+// задачи, поколение и срок аренды, предел попыток, итоговую квитанцию и дескриптор для replay и
+// свежей проверки. Внутренние поля не назначают полномочия клиента.
 type lockedProviderCredentialCleanupTask struct {
 	state, leaseOwner, safeErrorCode, terminalReceipt string
 	organizationID, accountID, accountRef, targetKind string
@@ -37,6 +66,16 @@ type lockedProviderCredentialCleanupTask struct {
 	leaseExpiresAt                                    *time.Time
 }
 
+// ClaimProviderCredentialCleanupTasks Validates owner/limit 1..16, begins ReadCommitted, advances
+// reservations/deletions and terminal expirations, then locks accounts and eligible tasks with
+// closed rows before claim updates. Returns bounded descriptor-only tasks after commit, preserving
+// per-candidate recovery identity. An empty poll may commit maintenance changes; no external
+// deletion occurs here.
+// ClaimProviderCredentialCleanupTasks Проверяет владельца и предел 1..16, открывает ReadCommitted,
+// продвигает reservations, удаления аккаунтов и истечения, блокирует аккаунты и пригодные задачи.
+// Закрывает rows до обновления захватов и возвращает ограниченные дескрипторы после commit с
+// recovery identity каждого кандидата. Пустой опрос может сохранить служебные изменения; внешнего
+// удаления здесь нет.
 func (repository *Repository) ClaimProviderCredentialCleanupTasks(
 	ctx context.Context,
 	leaseOwner string,
@@ -146,6 +185,16 @@ func (repository *Repository) ClaimProviderCredentialCleanupTasks(
 	return items, nil
 }
 
+// CompleteProviderCredentialCleanupTask Validates completion shape, locks account then task and
+// accepts exact generation/receipt terminal replay with canonical descriptor comparison when
+// stored. Fresh completion requires a live owner claim, applies owner-specific completion and
+// records one terminal task update before commit. Replay does not repeat cleanup; commit failure
+// stays conflict.
+// CompleteProviderCredentialCleanupTask Проверяет форму завершения, блокирует аккаунт затем
+// задачу, допускает terminal replay точных поколения и квитанции со сверкой сохранённого
+// канонического дескриптора. Свежее завершение требует действующий захват владельца, применяет
+// профильное завершение и одну terminal-запись до commit. Replay не повторяет очистку; ошибка
+// commit даёт Conflict.
 func (repository *Repository) CompleteProviderCredentialCleanupTask(
 	ctx context.Context,
 	taskRef, leaseOwner string,
@@ -203,6 +252,16 @@ func (repository *Repository) CompleteProviderCredentialCleanupTask(
 	return providerCredentialCleanupResult(taskRef, task, false), nil
 }
 
+// FailProviderCredentialCleanupTask Replays matching terminal/pending generation/error outcomes,
+// otherwise requires a live exact claim and a closed safe code. Exhausted attempts dead-letter
+// first; eligible authorization CAS changes create a successor and close no-effect parent,
+// otherwise bounded backoff schedules retry. Requires one fenced update before commit without
+// performing remote cleanup.
+// FailProviderCredentialCleanupTask Повторно читает совпавший terminal/pending исход поколения и
+// кода, иначе требует действующий точный захват и закрытый безопасный код. Исчерпание попыток
+// сначала ведёт в dead-letter; допустимый authorization CAS создаёт преемника и закрывает родителя
+// без эффекта, иначе повтор откладывается. Требует одну fenced-запись до commit без внешней
+// очистки.
 func (repository *Repository) FailProviderCredentialCleanupTask(
 	ctx context.Context,
 	taskRef, leaseOwner string,
@@ -273,6 +332,14 @@ func (repository *Repository) FailProviderCredentialCleanupTask(
 	return providerCredentialCleanupResult(taskRef, task, state == "PENDING"), nil
 }
 
+// lockProviderCredentialCleanupTask Begins ReadCommitted and locks account before task by the
+// internal task ref, returning the live transaction only after both scans succeed. Missing rows
+// are not-found; other reads unavailable. Error paths roll back with the request context and
+// preserve the existing partial first-scan result contract.
+// lockProviderCredentialCleanupTask Открывает ReadCommitted и блокирует аккаунт перед задачей по
+// внутренней ссылке, возвращая транзакцию лишь после двух успешных чтений. Отсутствие строки даёт
+// NotFound, другой сбой — Unavailable. При ошибке откатывает с контекстом запроса и сохраняет
+// прежний частичный результат первого чтения.
 func (repository *Repository) lockProviderCredentialCleanupTask(
 	ctx context.Context,
 	taskRef string,
@@ -306,11 +373,23 @@ func (repository *Repository) lockProviderCredentialCleanupTask(
 	return tx, task, nil
 }
 
+// validProviderCredentialCleanupClaim Requires CLAIMED state, exact owner/generation and a nonnil
+// deadline strictly after the application clock. Terminal replay uses separate receipt rules;
+// equality with now is expired.
+// validProviderCredentialCleanupClaim Требует CLAIMED, точные owner и generation, непустой срок
+// строго позже часов приложения. Terminal replay имеет отдельные правила квитанции; равенство
+// текущему времени означает истечение.
 func validProviderCredentialCleanupClaim(task lockedProviderCredentialCleanupTask, owner string, generation int64) bool {
 	return task.state == "CLAIMED" && task.leaseOwner == owner && task.generation == generation &&
 		task.leaseExpiresAt != nil && task.leaseExpiresAt.After(time.Now())
 }
 
+// providerCredentialCleanupResult Projects only task ref/state/safe code/terminal receipt and the
+// caller-selected retry flag. It omits object descriptors, credentials and internal owner/account
+// identifiers.
+// providerCredentialCleanupResult Проецирует только ссылку задачи, состояние, безопасный код,
+// terminal-квитанцию и выбранный вызывающим признак повтора. Дескрипторы объектов, credential и
+// внутренние ID владельца с аккаунтом не выдаёт.
 func providerCredentialCleanupResult(
 	ref string,
 	task lockedProviderCredentialCleanupTask,
@@ -322,6 +401,12 @@ func providerCredentialCleanupResult(
 	}
 }
 
+// providerCredentialCleanupBackoff Returns a five-second exponential delay, clamping the shift
+// to 0..6 and final duration to five minutes; attempts at or below one use five seconds. It does
+// not itself schedule or authorize retry.
+// providerCredentialCleanupBackoff Возвращает экспоненциальную задержку от пяти секунд,
+// ограничивает степень диапазоном 0..6 и итог пятью минутами. Для попытки не выше первой даёт пять
+// секунд; сам повтор не планирует и не разрешает.
 func providerCredentialCleanupBackoff(attempt int32) time.Duration {
 	shift := max(attempt-1, 0)
 	if shift > 6 {
@@ -331,6 +416,11 @@ func providerCredentialCleanupBackoff(attempt int32) time.Duration {
 	return min(backoff, 5*time.Minute)
 }
 
+// providerAuthorizationCleanupKind Maps the AUTHORIZATION_METADATA successor kind to the existing
+// empty broker cleanup kind and preserves every other value. This compatibility mapping does not
+// choose target ownership.
+// providerAuthorizationCleanupKind Преобразует AUTHORIZATION_METADATA преемника в прежний пустой
+// вид очистки broker, остальные значения сохраняет. Совместимость не назначает владельца цели.
 func providerAuthorizationCleanupKind(kind string) string {
 	if kind == "AUTHORIZATION_METADATA" {
 		return ""
@@ -338,6 +428,12 @@ func providerAuthorizationCleanupKind(kind string) string {
 	return kind
 }
 
+// validProviderCredentialCleanupError Accepts only the five closed cleanup failure codes, keeping
+// arbitrary remote text out of the persisted safe-error field. It does not prove whether an
+// external cleanup effect happened.
+// validProviderCredentialCleanupError Допускает только пять закрытых кодов ошибки очистки, не
+// пропуская произвольный внешний текст в безопасное поле. Не доказывает, произошёл ли внешний
+// эффект очистки.
 func validProviderCredentialCleanupError(value string) bool {
 	switch value {
 	case "PROVIDER_CREDENTIAL_CLEANUP_UNAVAILABLE",
@@ -351,6 +447,12 @@ func validProviderCredentialCleanupError(value string) bool {
 	}
 }
 
+// scheduleProviderCredentialCleanup Skips an empty credential revision and otherwise schedules its
+// exact organization/account descriptor with caller expiry and the fixed attempt policy in the
+// supplied transaction. SQL failure is unavailable; neither claim nor external deletion occurs.
+// scheduleProviderCredentialCleanup Пропускает пустую ревизию credential, иначе планирует её
+// точный дескриптор организации и аккаунта со сроком вызывающего и фиксированным пределом попыток
+// в переданной транзакции. SQL-сбой даёт Unavailable; захвата или внешнего удаления нет.
 func (repository *Repository) scheduleProviderCredentialCleanup(
 	ctx context.Context,
 	tx pgx.Tx,

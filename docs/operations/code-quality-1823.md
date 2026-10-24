@@ -4,11 +4,83 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.395.0
+version: 1.396.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Чтение mailbox, Git-владение и очистка credential — 25.10.2026
+
+На основе `c7ea8bcb3cdd78e0977d41d78406fc6ec93eae39` полностью прочитаны
+provider_credential_cleanup.go, queries_provider_accounts.go,
+email_mailbox_queries.go и email_mailbox_git.go:15+15+13+14 прежних объявлений.
+Все57 получили предметные EN→RU описания; новый helper также описан.
+Четыре Go-файла этапа имеют58/58 описаний. Общий inventory19672/21469,
+missing1797 — PostgreSQL adapter control-plane. Все131 Go-файл текущего PR
+имеют1541/1541 EN→RU описаний.
+
+`beginEmailMailboxRead` объединяет пять префиксов scope → ordinary Begin →
+integration.manage → exact email connection lock. Используется Preview,
+ListCredentials, GetConfiguration, ListConfigurations и GetCredentialReceipt.
+Сохранены точный context/principal/connection ref, отсутствие новых TxOptions,
+прежние ошибки resolve/begin/access/lock и версия соединения. При ошибке
+проверки helper откатывает ту же транзакцию с request context; при успехе
+caller сохраняет прежний defer rollback без commit. Ошибка rollback как прежде
+игнорируется. Никакой provider/mailbox эффект или новый grant не создаётся.
+
+Все специальные SQL и ветви после префикса остаются явными: preview diagnostics
+и credential reference checks даже при выключенной доставке, scope-bound
+cursors/total/limit+1, nil пустой страницы, закрытие rows перед hydration,
+owner set/revision projection, publication/actions и actor-bound receipt
+с дополнительным совпадением connection. Чтение не объявлено ReadOnly либо
+RepeatableRead: обычный Begin и row locks сохранены.
+
+Пять старых prefix blocks заменены общим методом в полном expected-AST
+преобразовании исходного email_mailbox_queries.go. Остальные ветви и запросы
+совпали. Cleanup, provider-account embeds и Git importer прошли полное
+AST/directive сравнение с исходным SHA: только комментарии. Три пробела в
+английской прозе после unit не меняют исполняемую часть; сравнение повторено.
+Все30 go:embed сохранены. Прочитаны40 SQL:30 встроенных,7 cleanup work queries,
+account lock, CAS successor и email connection lock. SQL/API/generated/
+dependencies/migrations/deploy inputs не менялись.
+
+| Путь / жизненный цикл | Зафиксированная граница |
+| --- | --- |
+| Mailbox read authority | Current scope и integration.manage, точная организация и nondeleted email connection FOR UPDATE; неверный доступ скрывается как NotFound. Успешный reader откатывает транзакцию, commit не добавлен |
+| Preview / receipt | Временный mailbox/canonical YAML и credential refs проверяются независимо от Enabled; preview не публикует. Receipt ограничен org/actor/operation/key/expiry и проверкой exact connection, возвращает только метаданные |
+| Query / pagination | Owned configuration/revision/binding, закрытые diagnostic codes и next-action hints. Rows закрываются до чтения views, partial errors отбрасывают весь результат; подсказки и курсор не авторизуют команду |
+| Provider account | Enabled definition до PENDING_AUTHORIZATION, account lock и caller authority/OCC до activate/lifecycle. Reserved attempt требует exact actor/account/method/deadline/pinned account version; credential descriptor не содержит значения |
+| Cleanup schedule / claim | 24-hour grace для retired credential, root-task uniqueness и только приближение PENDING eligibility. ReadCommitted, account-before-task locks, current task eligibility, lease generation/attempt и 2-minute application deadline. Пустой poll может сохранить служебные переходы |
+| Complete / fail / replay | Terminal replay по generation/receipt и canonical descriptor, свежий live claim для изменений. Exhausted attempts → dead-letter раньше CAS branch; допустимый authorization CAS создаёт successor и закрывает no-effect parent; обычный retry получает ограниченный backoff |
+| Git source / ownership | Только configured startup source, не RPC; installation identity, global publication lock и монотонные revision/digest receipts. UI-owned и UI-bound объекты не перезаписываются; stable mailbox/connection identity сохраняется |
+| Git publication | Текущие accepted mailboxes вне replacement сохраняются, credential refs проверяются, effect connections упорядочены и OCC-touched. Child managed revisions и GIT source pins, GIT_SYNC publication bindings/receipt/audit/events одной TX; внешнего apply здесь нет |
+
+Исторические ограничения описаны без заявления об исправлении: rollback
+использует request context с игнорированием ошибки, часть owner reads скрывает
+ошибки как NotFound/Conflict, Git importer возвращает direct commit errors.
+Provider account update SQL по внутреннему ID опирается на surrounding owner
+lock и не выдаётся за самостоятельную tenant/actor проверку. Cleanup terminal
+replay имеет отдельные правила от live lease; descriptor/receipt не разрешают
+повтор внешнего удаления. Git и mailbox UI actions не заменяют effect authority.
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL;13
+external fixture keys и2 admin/template inputs исключены. Для перемещения
+простого transaction glue новые зеркальные тесты не добавлены; сохранение
+пяти caller paths подтверждено полным AST и существующим unit набором.
+17 analyzer unit,5 exact-ignore guards, gofmt и diff check — PASS.
+Через Context7 /jackc/pgx проверены Begin/TxOptions/Row/Scan/ErrNoRows/errors.Is
+и отсутствие автоматического rollback при отмене BEGIN context.
+Real PostgreSQL/RLS/connection locks/cursor consistency/cleanup races,
+remote materializer/provider deletion, Git source startup/publication,
+Kubernetes/mailbox apply/readback, browser/full E2E и deploy/live — NOT RUN/SKIP.
+QA baseline f2e64eb сохранён.
+
+Scan6679 own sources,222 excluded:1804 raw,902 retained occurrences и902
+unresolved. Прежние139/117-token окна mailbox read prefix исчезли, новых
+fragment keys нет. Registry776 entries не менялся и остаётся валидным;
+thresholds/ignore regions/whole-file exclusions не расширены. Issue#1823
+открыт, PR остаётся Draft до завершения полного объёма.
 
 ## Свежие assistant grant requests, mailbox publication и continuation — 25.10.2026
 
