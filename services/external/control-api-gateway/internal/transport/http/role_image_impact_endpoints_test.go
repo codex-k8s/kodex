@@ -13,12 +13,22 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// roleImpactFixture builds a fixed-time prepared image impact plan pinned to configuration,
+// revision, recipe generation, build, artifact and admission-policy digests.
+// roleImpactFixture создаёт подготовленный план влияния образа с фиксированным временем и pins
+// конфигурации, ревизии, поколения рецепта, сборки, артефакта и дайджеста admission policy.
 func roleImpactFixture() *cp.RoleImageImpactPlan {
 	now := time.Unix(1000, 0)
 	digest := strings.Repeat("a", 64)
 	return &cp.RoleImageImpactPlan{Ref: "riip_fixture01", Version: 1, ConfigurationRef: "mcfg_fixture01", ConfigurationVersion: 3, RevisionRef: "mrev_fixture01", RevisionDigest: digest, RecipeRef: "recipe_fixture01", RecipeGeneration: 2, BuildRef: "build_fixture01", ArtifactRef: "image_fixture01", ArtifactDigest: "sha256:" + digest, AdmissionPolicyDigest: digest, Digest: digest, Total: 2, State: cp.RoleImageImpactPlanState_ROLE_IMAGE_IMPACT_PLAN_STATE_PREPARED, CreatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(time.Hour))}
 }
 
+// TestRoleImageImpactGetRejectsInvalidPlanAndPage checks exact impact-plan query and pagination
+// plus rejection of unknown state, unsafe version, missing admission, mutable image tags and
+// invalid bounds.
+// TestRoleImageImpactGetRejectsInvalidPlanAndPage проверяет точные запрос и пагинацию плана
+// влияния и отказ неизвестному состоянию, небезопасной версии, отсутствию admission, изменяемым
+// тегам образа и неверным границам.
 func TestRoleImageImpactGetRejectsInvalidPlanAndPage(t *testing.T) {
 	plan := roleImpactFixture()
 	client := &catalogRPCRecorder{response: &cp.GetRoleImageImpactPlanResponse{Plan: plan, Total: 2, Page: &cp.PageInfo{NextPageToken: "owner-next"}}}
@@ -45,6 +55,13 @@ func TestRoleImageImpactGetRejectsInvalidPlanAndPage(t *testing.T) {
 		})
 	}
 }
+
+// TestRoleImageImpactPrepareAndRebindUseImmutablePlan checks typed prepare and selected-item
+// rebind through an immutable impact plan, rejecting legacy consumer payloads and duplicate
+// selections before RPC.
+// TestRoleImageImpactPrepareAndRebindUseImmutablePlan проверяет типизированные prepare и
+// перепривязку выбранных элементов через immutable-план влияния с отказом старому payload
+// потребителей и повторному выбору до RPC.
 func TestRoleImageImpactPrepareAndRebindUseImmutablePlan(t *testing.T) {
 	plan := roleImpactFixture()
 	client := &catalogRPCRecorder{response: &cp.PrepareRoleImageImpactPlanResponse{Plan: plan}}
@@ -81,6 +98,13 @@ func TestRoleImageImpactPrepareAndRebindUseImmutablePlan(t *testing.T) {
 		}
 	}
 }
+
+// TestRoleImageImpactItemsKeepEnvironmentAndAgentOutcomes checks environment-only and agent
+// outcomes, advanced binding versions and clean conflicts without effects, rejecting terminal
+// outcomes in prepared plans.
+// TestRoleImageImpactItemsKeepEnvironmentAndAgentOutcomes проверяет результаты окружения без
+// агента и с агентом, рост версии привязки и чистые конфликты без эффектов с отказом
+// terminal-результатам подготовленных планов.
 func TestRoleImageImpactItemsKeepEnvironmentAndAgentOutcomes(t *testing.T) {
 	source := &cp.RoleImageImpactItem{Ref: "riitem_fixture01", EnvironmentRef: "env_fixture01", EnvironmentVersion: 2, SourceVersionRef: "envv_fixture01", SourceVersionDigest: strings.Repeat("a", 64), Consumer: &cp.RuntimeEnvironmentConsumer{ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", VersionRef: "envv_fixture01"}, Outcome: cp.RoleImageImpactOutcome_ROLE_IMAGE_IMPACT_OUTCOME_APPLIED, ResultEnvironmentVersionRef: "envv_new0001"}
 	item, ok := roleImageImpactItemView(source, "APPLIED")

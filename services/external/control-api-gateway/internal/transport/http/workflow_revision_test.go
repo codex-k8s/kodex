@@ -11,6 +11,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestWorkflowSaveAndReadPreserveDraftAlongsidePublication checks save and read retain separate
+// draft and published bodies/revision pins without granting the draft published launch readiness.
+// TestWorkflowSaveAndReadPreserveDraftAlongsidePublication проверяет сохранение отдельных тел и
+// pins ревизий черновика и публикации при сохранении и чтении без переноса готовности
+// опубликованного запуска на черновик.
 func TestWorkflowSaveAndReadPreserveDraftAlongsidePublication(t *testing.T) {
 	workflow := &cp.Workflow{Ref: "wfl_fixture01", Version: 4, State: cp.WorkflowState_WORKFLOW_STATE_DRAFT,
 		DraftVersion: &cp.WorkflowVersion{Ref: "wfv_draft01", Version: 3, Revision: 3, State: cp.WorkflowState_WORKFLOW_STATE_DRAFT,
@@ -52,6 +57,11 @@ func TestWorkflowSaveAndReadPreserveDraftAlongsidePublication(t *testing.T) {
 	}
 }
 
+// TestWorkflowReadRejectsMalformedDraftBesideValidPublication checks a valid published workflow
+// cannot hide an invalid draft reference, version, revision or state from response validation.
+// TestWorkflowReadRejectsMalformedDraftBesideValidPublication проверяет невозможность скрыть
+// неверные ссылку, версию, ревизию либо состояние черновика за корректно опубликованным workflow
+// при проверке ответа.
 func TestWorkflowReadRejectsMalformedDraftBesideValidPublication(t *testing.T) {
 	for _, draft := range []*cp.WorkflowVersion{
 		{Ref: "bad/ref", Version: 3, Revision: 3, State: cp.WorkflowState_WORKFLOW_STATE_DRAFT},

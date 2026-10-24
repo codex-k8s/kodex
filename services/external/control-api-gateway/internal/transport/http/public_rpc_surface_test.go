@@ -14,7 +14,12 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// Структурная полнота дополняет, но не заменяет поведенческие route/authority tests.
+// TestPublicRPCSurfaceHasHTTPConsumer checks generated public methods have an authority profile
+// and handwritten HTTP or cursor-WebSocket consumer, excluding worker-only RPCs; structural
+// coverage complements behavioral tests.
+// TestPublicRPCSurfaceHasHTTPConsumer проверяет профиль полномочий и собственный HTTP либо
+// cursor-WebSocket consumer у generated публичных методов, исключая worker RPC; структурная
+// полнота дополняет поведенческие тесты.
 func TestPublicRPCSurfaceHasHTTPConsumer(t *testing.T) {
 	used := map[string]bool{}
 	files, err := filepath.Glob("*.go")

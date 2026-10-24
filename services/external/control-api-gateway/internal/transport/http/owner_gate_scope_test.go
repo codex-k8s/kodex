@@ -8,6 +8,10 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestOwnerGateOrganizationScopePreservesNoProjectOnEveryPath checks organization gates retain
+// their explicit owner tuple across get, list and resolve without inventing a project field.
+// TestOwnerGateOrganizationScopePreservesNoProjectOnEveryPath проверяет сохранение явного кортежа
+// владельца у шлюзов организации в get, list и resolve без создания поля проекта.
 func TestOwnerGateOrganizationScopePreservesNoProjectOnEveryPath(t *testing.T) {
 	for _, kind := range []string{"get", "list", "resolve"} {
 		t.Run(kind, func(t *testing.T) {
@@ -26,6 +30,11 @@ func TestOwnerGateOrganizationScopePreservesNoProjectOnEveryPath(t *testing.T) {
 	}
 }
 
+// TestOwnerGateRejectsInvalidOwnerScopeOnEveryPath checks unknown, missing, malformed or
+// contradictory gate owner scopes fail closed on every projection path without partial metadata.
+// TestOwnerGateRejectsInvalidOwnerScopeOnEveryPath проверяет закрытый отказ неизвестным,
+// отсутствующим, неверным либо противоречивым областям владельца шлюза во всех путях проекции без
+// частичных метаданных.
 func TestOwnerGateRejectsInvalidOwnerScopeOnEveryPath(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.OwnerGate){
 		"unknown scope": func(g *cp.OwnerGate) { g.ScopeKind = cp.RuntimeResourceScopeKind(999) },
@@ -53,6 +62,10 @@ func TestOwnerGateRejectsInvalidOwnerScopeOnEveryPath(t *testing.T) {
 	}
 }
 
+// TestOwnerGateOrganizationCannotSatisfyProjectFilteredCatalog checks an organization gate cannot
+// satisfy a project-specific catalog request and is rejected without exposing its reference.
+// TestOwnerGateOrganizationCannotSatisfyProjectFilteredCatalog проверяет невозможность выдать шлюз
+// организации в ответ каталога конкретного проекта с отказом без раскрытия его ссылки.
 func TestOwnerGateOrganizationCannotSatisfyProjectFilteredCatalog(t *testing.T) {
 	response := gateCatalogFixture()
 	response.Gates[0].ScopeKind = cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION

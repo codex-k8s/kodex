@@ -11,10 +11,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// variableFixture builds an unavailable synthetic agent-name variable whose registered reason
+// requires agent context.
+// variableFixture создаёт недоступную синтетическую переменную имени агента с зарегистрированной
+// причиной необходимости контекста агента.
 func variableFixture() *cp.TemplateVariable {
 	return &cp.TemplateVariable{Name: "agent.name", ValueType: "string", Source: "AGENT", Reason: cp.TemplateVariableAvailabilityReason_TEMPLATE_VARIABLE_AVAILABILITY_REASON_AGENT_CONTEXT_REQUIRED}
 }
 
+// TestTemplateVariablesProducerVocabulary checks producer source/type vocabulary and typed
+// collection descriptors map to canonical public enums on project and global catalog routes.
+// TestTemplateVariablesProducerVocabulary проверяет отображение словаря source и type producer и
+// типизированных дескрипторов коллекций в канонические публичные enum маршрутов каталога проекта и
+// глобального каталога.
 func TestTemplateVariablesProducerVocabulary(t *testing.T) {
 	for _, path := range []string{"/api/v1/projects/prj_fixture01/template-variables", "/api/v1/prompt-templates/catalog"} {
 		for _, source := range []string{"AGENT", "AUTOMATION", "RUNTIME", "GATE", "INPUT", "RUN", "ORGANIZATION", "PROJECT", "SESSION", "USER", "WORKFLOW"} {
@@ -49,6 +58,10 @@ func TestTemplateVariablesProducerVocabulary(t *testing.T) {
 	}
 }
 
+// TestTemplateVariablesOwnerContext checks exact context, search and pagination forwarding and
+// owner availability reasons, preserving global empty-array behavior.
+// TestTemplateVariablesOwnerContext проверяет точную передачу контекста, поиска и пагинации и
+// причин доступности владельца с сохранением пустого массива глобального каталога.
 func TestTemplateVariablesOwnerContext(t *testing.T) {
 	for _, path := range []string{"/api/v1/projects/prj_fixture01/template-variables?", "/api/v1/prompt-templates/catalog?projectRef=prj_fixture01&"} {
 		for reason := int32(1); reason <= 5; reason++ {
@@ -85,6 +98,10 @@ func TestTemplateVariablesOwnerContext(t *testing.T) {
 	}
 }
 
+// TestTemplateVariablesRejectMalformed checks query rejection before RPC and rejects invalid
+// producer vocabulary, availability contradictions, totals, duplicates and cursor bounds.
+// TestTemplateVariablesRejectMalformed проверяет отказ запросу до RPC и некорректному словарю
+// producer, противоречиям доступности, счётчикам, повторам и нарушениям границ курсора.
 func TestTemplateVariablesRejectMalformed(t *testing.T) {
 	for _, path := range []string{"/api/v1/projects/prj_fixture01/template-variables", "/api/v1/prompt-templates/catalog"} {
 		for _, query := range []string{"agentRef=bad!", "runtimeRevisionRef=bad!", "query=%00", "source=UNKNOWN", "pageSize=101", "pageSize=0", "pageToken=" + strings.Repeat("x", 513)} {
@@ -129,6 +146,10 @@ func TestTemplateVariablesRejectMalformed(t *testing.T) {
 	}
 }
 
+// TestTemplateVariablesOwnerErrors checks concrete HTTP mapping of variable catalog owner errors
+// without returning private upstream diagnostics.
+// TestTemplateVariablesOwnerErrors проверяет конкретное HTTP-отображение ошибок владельца каталога
+// переменных без возврата внутренней диагностики upstream.
 func TestTemplateVariablesOwnerErrors(t *testing.T) {
 	for code, expected := range map[codes.Code]int{codes.PermissionDenied: 403, codes.NotFound: 404, codes.InvalidArgument: 400, codes.Unavailable: 503} {
 		client := &catalogRPCRecorder{failure: status.Error(code, "private upstream detail")}

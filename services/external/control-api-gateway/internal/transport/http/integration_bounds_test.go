@@ -13,6 +13,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// TestIntegrationCatalogShippedInputBoundsRemainLossless checks actual shipped package input
+// bounds beyond safe JSON integers remain exact decimal strings in HTTP and are accepted by
+// realtime projection.
+// TestIntegrationCatalogShippedInputBoundsRemainLossless проверяет сохранение границ ввода
+// настоящих shipped-пакетов сверх безопасных JSON-чисел точными десятичными строками в HTTP и
+// допустимость realtime-проекции.
 func TestIntegrationCatalogShippedInputBoundsRemainLossless(t *testing.T) {
 	packages, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -69,6 +75,12 @@ func TestIntegrationCatalogShippedInputBoundsRemainLossless(t *testing.T) {
 	}
 }
 
+// TestIntegrationBoundExactEdgesAndOtherIntegerGuards checks full int64 metadata bounds use
+// numbers only within the safe range, rejecting overflow strings without weakening
+// mutation-version guards.
+// TestIntegrationBoundExactEdgesAndOtherIntegerGuards проверяет числовую форму metadata-границ
+// int64 только в безопасном диапазоне и отказ строкам переполнения без ослабления ограничений
+// версии изменения.
 func TestIntegrationBoundExactEdgesAndOtherIntegerGuards(t *testing.T) {
 	for _, bound := range []int64{math.MinInt64, -maximumSafeJSONInteger - 1, -maximumSafeJSONInteger, 0, maximumSafeJSONInteger, maximumSafeJSONInteger + 1, math.MaxInt64} {
 		value, err := messageMap(&cp.IntegrationConfigurationField{Minimum: bound, Maximum: bound, HasMinimum: true, HasMaximum: true})

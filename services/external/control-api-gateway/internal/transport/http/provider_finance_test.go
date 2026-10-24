@@ -6,6 +6,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestFinancialProjectionPreservesKnownZeroAndUnknown checks explicit zero and false financial
+// measurements survive projection while absent balances, reset times and spend flags remain
+// unknown.
+// TestFinancialProjectionPreservesKnownZeroAndUnknown проверяет сохранение явных нуля и false
+// финансовых измерений в проекции с сохранением неизвестности отсутствующих балансов, времени
+// сброса и флагов расходов.
 func TestFinancialProjectionPreservesKnownZeroAndUnknown(t *testing.T) {
 	ordinary := false
 	value, err := ProtoMap(&cp.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []*cp.ProviderFinancialWindow{{UsedPercent: new(int32(0))}}, Credits: &cp.ProviderFinancialCredits{HasCredits: new(false), Unlimited: new(false)}, OrdinaryUsageAllowed: &ordinary})

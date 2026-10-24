@@ -12,10 +12,18 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// assistantCatalogHandler connects generated assistant HTTP routes to the dedicated
+// system-assistant client backed by a local RPC recorder.
+// assistantCatalogHandler соединяет generated HTTP-маршруты помощника с отдельным клиентом system
+// assistant на локальной заглушке записи RPC.
 func assistantCatalogHandler(client *catalogRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Assistant: cp.NewSystemAssistantServiceClient(client)}})
 }
 
+// TestAssistantHistoryPreservesPagination checks exact project, page size and input cursor
+// forwarding to the assistant owner while retaining conversation rows and the next cursor.
+// TestAssistantHistoryPreservesPagination проверяет точную передачу проекта, размера страницы и
+// входного курсора владельцу помощника с сохранением строк диалогов и следующего курсора.
 func TestAssistantHistoryPreservesPagination(t *testing.T) {
 	client := &catalogRPCRecorder{response: &cp.ListAssistantConversationsResponse{Conversations: []*cp.AssistantConversation{{Ref: "conv_fixture01", ProjectRef: "prj_fixture01", State: cp.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE}}, Page: &cp.PageInfo{NextPageToken: "opaque-next"}}}
 	w := httptest.NewRecorder()
@@ -36,6 +44,11 @@ func TestAssistantHistoryPreservesPagination(t *testing.T) {
 	}
 }
 
+// TestAssistantHistoryRejectsMalformedPages checks page bounds before RPC and rejects foreign
+// project results, malformed conversation references and oversized owner cursors without
+// disclosure.
+// TestAssistantHistoryRejectsMalformedPages проверяет границы страницы до RPC и отказ чужим
+// результатам проекта, неверным ссылкам диалога и чрезмерным курсорам владельца без раскрытия.
 func TestAssistantHistoryRejectsMalformedPages(t *testing.T) {
 	for _, query := range []string{"pageSize=0", "pageSize=101", "pageToken=" + strings.Repeat("x", 513)} {
 		client := &catalogRPCRecorder{}

@@ -17,12 +17,21 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// historyOverlayFixture builds a fixed-time superseded overlay revision with exact content SHA-256
+// and publication time for history readback tests.
+// historyOverlayFixture создаёт замещённую ревизию overlay с фиксированным временем, точным
+// SHA-256 содержимого и временем публикации для тестов чтения истории.
 func historyOverlayFixture() *cp.ConfigOverlayVersion {
 	content := "personality = \"friendly\"\n"
 	digest := sha256.Sum256([]byte(content))
 	at := timestamppb.New(time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC))
 	return &cp.ConfigOverlayVersion{Ref: "cov_fixture01", Version: 3, Revision: 3, State: "SUPERSEDED", Content: content, Digest: hex.EncodeToString(digest[:]), CreatedAt: at, PublishedAt: at}
 }
+
+// TestConfigOverlayHistoryHTTP checks overlay history filters and pagination, exact agent/revision
+// references, content preservation and revision ETag.
+// TestConfigOverlayHistoryHTTP проверяет фильтры и пагинацию истории overlay, точные ссылки агента
+// и ревизии, сохранение содержимого и ETag ревизии.
 func TestConfigOverlayHistoryHTTP(t *testing.T) {
 	item := historyOverlayFixture()
 	client := &catalogRPCRecorder{response: &cp.ListConfigOverlayRevisionsResponse{Revisions: []*cp.ConfigOverlayVersion{item}, Total: 7, Page: &cp.PageInfo{NextPageToken: "next"}}}
@@ -47,6 +56,11 @@ func TestConfigOverlayHistoryHTTP(t *testing.T) {
 		t.Fatal("exact history refs lost")
 	}
 }
+
+// TestConfigOverlayHistoryRejectsUnsafeProducer checks content, publication and version pins, page
+// consistency and concrete owner errors without disclosing private diagnostics.
+// TestConfigOverlayHistoryRejectsUnsafeProducer проверяет pins содержимого, публикации и версии,
+// согласованность страницы и конкретные ошибки владельца без раскрытия внутренней диагностики.
 func TestConfigOverlayHistoryRejectsUnsafeProducer(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.ConfigOverlayVersion){
 		"digest":              func(v *cp.ConfigOverlayVersion) { v.Digest = strings.Repeat("a", 64) },
@@ -90,6 +104,12 @@ func TestConfigOverlayHistoryRejectsUnsafeProducer(t *testing.T) {
 		}
 	}
 }
+
+// TestHomeCatalogTotalsHTTP checks run and artifact catalogs preserve exact owner totals and
+// explicit zero, forwarding global artifact filters and rejecting unsafe counts.
+// TestHomeCatalogTotalsHTTP проверяет сохранение точных счётчиков владельца и явного нуля в
+// каталогах выполнений и артефактов с передачей глобальных фильтров и отказом небезопасным
+// счётчикам.
 func TestHomeCatalogTotalsHTTP(t *testing.T) {
 	for _, test := range []struct {
 		path     string
@@ -139,6 +159,12 @@ func TestHomeCatalogTotalsHTTP(t *testing.T) {
 		}
 	}
 }
+
+// TestEnvironmentDraftBaseAndSavedAtHTTP checks draft base revision/version and save timestamp
+// projection, rejecting partial base tuples, negative revisions and invalid times.
+// TestEnvironmentDraftBaseAndSavedAtHTTP проверяет проекцию базовой ревизии и версии и времени
+// сохранения черновика с отказом частичным кортежам базы, отрицательным ревизиям и неверному
+// времени.
 func TestEnvironmentDraftBaseAndSavedAtHTTP(t *testing.T) {
 	at := timestamppb.New(time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC))
 	client := &environmentDraftRecorder{mutate: func(v *cp.RuntimeEnvironmentDraft) {

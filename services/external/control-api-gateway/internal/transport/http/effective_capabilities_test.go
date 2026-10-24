@@ -14,11 +14,22 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// effectiveCapabilitiesFixture builds synthetic runtime-ready capability results with independent
+// platform/integration eligibility, exact grant pins and a long owner cursor.
+// effectiveCapabilitiesFixture создаёт синтетические результаты capabilities готового runtime с
+// независимыми доступностью платформы и интеграций, точными pins grant и длинным курсором
+// владельца.
 func effectiveCapabilitiesFixture() *cp.GetAgentEffectiveCapabilitiesResponse {
 	return &cp.GetAgentEffectiveCapabilitiesResponse{AgentRef: "agt_fixture01", AgentVersion: 3, RuntimeConfigurationRef: "arc_fixture01", RuntimeConfigurationVersion: 2, EnvironmentVersionRef: "envver_fixture01", Digest: strings.Repeat("a", 64), EvaluatedAt: timestamppb.New(time.Now().UTC()), RuntimeReady: true, Total: 9, Page: &cp.PageInfo{NextPageToken: strings.Repeat("a", 700)},
 		Capabilities: []*cp.EffectiveCapability{{Key: "platform.run.launch", Name: "Запуск", Source: "PLATFORM", Reason: "AVAILABLE", Requested: true, Effective: true, Grantable: true}, {Key: "synthetic.journal.write", Name: "Журнал", Source: "INTEGRATION", Reason: "ACTOR_PERMISSION_REQUIRED", Requested: true, ConnectionRef: "int_fixture01", GrantRef: "grant_fixture01", ConnectionVersion: 4, GrantVersion: 5, DefinitionDigest: strings.Repeat("b", 64)}}}
 }
 
+// TestEffectiveCapabilitiesHTTPPreservesOwnerProjection checks exact capability query and
+// pagination forwarding, owner eligibility and no-store, retaining required empty, zero and false
+// fields.
+// TestEffectiveCapabilitiesHTTPPreservesOwnerProjection проверяет точную передачу запроса
+// capabilities и пагинации, доступность владельца и no-store с сохранением обязательных пустых,
+// нулевых и false-полей.
 func TestEffectiveCapabilitiesHTTPPreservesOwnerProjection(t *testing.T) {
 	response := effectiveCapabilitiesFixture()
 	client := &catalogRPCRecorder{response: response}
@@ -43,6 +54,12 @@ func TestEffectiveCapabilitiesHTTPPreservesOwnerProjection(t *testing.T) {
 	}
 }
 
+// TestEffectiveCapabilitiesHTTPRejectsInvalidScopeAndUpstream checks malformed workflow scope
+// before RPC and rejects foreign identity, unsafe pins, unknown registries and contradictory
+// effective eligibility.
+// TestEffectiveCapabilitiesHTTPRejectsInvalidScopeAndUpstream проверяет отказ некорректной области
+// workflow до RPC и чужой identity, небезопасным pins, неизвестным реестрам и противоречивой
+// фактической доступности.
 func TestEffectiveCapabilitiesHTTPRejectsInvalidScopeAndUpstream(t *testing.T) {
 	for _, suffix := range []string{"?workflowRef=wfl_fixture01", "?stepKey=step", "?workflowRef=bad!&stepKey=step", "?workflowRef=wfl_fixture01&stepKey=%00", "?pageSize=0", "?pageToken=" + strings.Repeat("a", 2049)} {
 		client := &catalogRPCRecorder{}
@@ -79,6 +96,10 @@ func TestEffectiveCapabilitiesHTTPRejectsInvalidScopeAndUpstream(t *testing.T) {
 	}
 }
 
+// TestEffectiveCapabilitiesHTTPPreservesOwnerErrors checks concrete HTTP mapping of
+// effective-capability owner errors without disclosing private diagnostic details.
+// TestEffectiveCapabilitiesHTTPPreservesOwnerErrors проверяет конкретное HTTP-отображение ошибок
+// владельца effective capabilities без раскрытия внутренних диагностических подробностей.
 func TestEffectiveCapabilitiesHTTPPreservesOwnerErrors(t *testing.T) {
 	for code, want := range map[codes.Code]int{codes.NotFound: 404, codes.PermissionDenied: 403, codes.InvalidArgument: 400, codes.Unavailable: 503} {
 		client := &catalogRPCRecorder{failure: status.Error(code, "private owner detail")}
@@ -90,6 +111,12 @@ func TestEffectiveCapabilitiesHTTPPreservesOwnerErrors(t *testing.T) {
 	}
 }
 
+// TestEffectiveCapabilitiesHTTPPreservesWorkflowAndReadOnlyGrant checks exact workflow stage and
+// version projection and preserves effective read access without converting it into
+// grant-management permission.
+// TestEffectiveCapabilitiesHTTPPreservesWorkflowAndReadOnlyGrant проверяет точную проекцию стадии
+// и версии workflow и сохраняет фактический доступ чтения без преобразования в полномочия
+// управления grant.
 func TestEffectiveCapabilitiesHTTPPreservesWorkflowAndReadOnlyGrant(t *testing.T) {
 	response := effectiveCapabilitiesFixture()
 	response.WorkflowRef, response.WorkflowVersionRef, response.StepKey = "wfl_fixture01", "wver_fixture01", "review"

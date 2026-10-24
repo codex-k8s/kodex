@@ -15,6 +15,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestFailedProviderDeletionRemainsRetryableOnlyByOwnerAction checks failed cleanup remains
+// nonterminal, retains only owner-supplied actions and exact caller replay/version pins, rejecting
+// false completion metadata.
+// TestFailedProviderDeletionRemainsRetryableOnlyByOwnerAction проверяет незавершённость ошибочной
+// очистки, сохранение только действий владельца и точных pins повтора и версии клиента с отказом
+// ложным метаданным завершения.
 func TestFailedProviderDeletionRemainsRetryableOnlyByOwnerAction(t *testing.T) {
 	d := &cp.ProviderAccountDeletion{Ref: "pdel_fixture01", Version: 3,
 		State:          cp.ProviderAccountDeletionState_PROVIDER_ACCOUNT_DELETION_STATE_FAILED,
@@ -57,6 +63,12 @@ func TestFailedProviderDeletionRemainsRetryableOnlyByOwnerAction(t *testing.T) {
 	}
 }
 
+// TestRetryRunForwardsFreshOwnerDenialOnEveryExactReplay checks repeated RETRY requests preserve
+// exact idempotency/version and fresh owner denial, while public next actions never invent retry
+// authority.
+// TestRetryRunForwardsFreshOwnerDenialOnEveryExactReplay проверяет сохранение точных
+// идемпотентности, версии и нового отказа владельца у повторных RETRY без создания права повтора в
+// публичных следующих действиях.
 func TestRetryRunForwardsFreshOwnerDenialOnEveryExactReplay(t *testing.T) {
 	client := &catalogRPCRecorder{failure: status.Error(codes.PermissionDenied, "private owner detail")}
 	server := &Server{control: &controlplaneclient.Client{Command: cp.NewPlatformCommandServiceClient(client)}}
@@ -76,6 +88,12 @@ func TestRetryRunForwardsFreshOwnerDenialOnEveryExactReplay(t *testing.T) {
 	}
 }
 
+// TestProviderVerificationAttemptSurvivesSingleListAndCommandReadback checks pending verification
+// identity and version survive direct, single, list and command envelopes while unknown nested
+// state is rejected.
+// TestProviderVerificationAttemptSurvivesSingleListAndCommandReadback проверяет сохранение
+// identity и версии ожидающей проверки в прямом, одиночном, списочном и командном ответах с
+// отказом неизвестному вложенному состоянию.
 func TestProviderVerificationAttemptSurvivesSingleListAndCommandReadback(t *testing.T) {
 	a := providerTestAccount()
 	a.Verification = &cp.ProviderAccountVerification{Ref: "pver_fixture01", AccountVersion: a.Version, CredentialRevision: 2,

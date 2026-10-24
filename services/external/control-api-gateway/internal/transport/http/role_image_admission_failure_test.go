@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// TestPublicRoleImageAdmissionFailureRequiresExactCurrentScope checks optional technical admission
+// failures bind to the current recipe generation, latest build attempt and owner scope with a
+// registered safe code.
+// TestPublicRoleImageAdmissionFailureRequiresExactCurrentScope проверяет привязку необязательных
+// технических ошибок admission к текущему поколению рецепта, последней попытке сборки и области
+// владельца с зарегистрированным безопасным кодом.
 func TestPublicRoleImageAdmissionFailureRequiresExactCurrentScope(t *testing.T) {
 	now := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
 	scope := cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION

@@ -13,6 +13,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestImpactSearchTypedMappingAndBounds checks environment and secret impact queries remain
+// literal with exact pagination/ETag/no-store and reject invalid text or expose only safe owner
+// failures.
+// TestImpactSearchTypedMappingAndBounds проверяет буквальные запросы влияния окружения и секрета с
+// точными пагинацией, ETag и no-store, отказ неверному тексту и выдачу только безопасных ошибок
+// владельца.
 func TestImpactSearchTypedMappingAndBounds(t *testing.T) {
 	for _, route := range []struct {
 		path, method string

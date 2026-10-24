@@ -10,6 +10,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestRunGateStateFilters checks all known run and gate state filters, repeated run states,
+// literal search and exact owner pagination survive HTTP mapping.
+// TestRunGateStateFilters проверяет сохранение всех известных фильтров состояний выполнений и
+// шлюзов, повторных параметров состояний, буквального поиска и точной пагинации владельца.
 func TestRunGateStateFilters(t *testing.T) {
 	for value := int32(1); value <= 7; value++ {
 		state := cp.RunState(value)
@@ -45,6 +49,11 @@ func TestRunGateStateFilters(t *testing.T) {
 	}
 }
 
+// TestRunGateFiltersRejectMalformed checks unknown, unspecified, empty or duplicate states and
+// invalid project, query or pagination bounds fail before run/gate catalog RPC.
+// TestRunGateFiltersRejectMalformed проверяет отказ неизвестным, неопределённым, пустым либо
+// повторным состояниям и неверным проекту, запросу либо пагинации до RPC каталогов выполнений и
+// шлюзов.
 func TestRunGateFiltersRejectMalformed(t *testing.T) {
 	for _, path := range []string{
 		"runs?states=UNKNOWN", "runs?states=UNSPECIFIED", "runs?states=", "runs?states=RUNNING&states=RUNNING", "runs?query=%00", "runs?projectRef=bad!", "runs?pageSize=101", "runs?pageToken=" + strings.Repeat("x", 513),
@@ -59,6 +68,10 @@ func TestRunGateFiltersRejectMalformed(t *testing.T) {
 	}
 }
 
+// TestRunGateFilterOwnerErrors checks authoritative run and gate filter failures map to concrete
+// HTTP statuses without exposing private upstream details.
+// TestRunGateFilterOwnerErrors проверяет отображение авторитетных ошибок фильтров выполнений и
+// шлюзов в конкретные HTTP-статусы без раскрытия внутренних подробностей upstream.
 func TestRunGateFilterOwnerErrors(t *testing.T) {
 	for _, path := range []string{"runs?states=RUNNING", "owner-gates?state=OPEN", "owner-gates?query=review&states=APPROVED&states=REJECTED&pageToken=stale_snapshot"} {
 		for code, want := range map[codes.Code]int{codes.PermissionDenied: 403, codes.NotFound: 404, codes.InvalidArgument: 400, codes.Unavailable: 503} {

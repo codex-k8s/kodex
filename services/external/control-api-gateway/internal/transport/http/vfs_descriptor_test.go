@@ -8,6 +8,11 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// TestVFSForwardsOwnerFiltersWithoutLocalFiltering checks exact path, literal query, lifecycle and
+// multi-kind VFS filter forwarding and rejects unknown, repeated or traversal filters before RPC.
+// TestVFSForwardsOwnerFiltersWithoutLocalFiltering проверяет точную передачу пути, буквального
+// запроса, lifecycle и нескольких видов фильтра VFS и отказ неизвестным, повторным либо обходящим
+// путь фильтрам до RPC.
 func TestVFSForwardsOwnerFiltersWithoutLocalFiltering(t *testing.T) {
 	client := &catalogRPCRecorder{response: &cp.ListVFSNodesResponse{Total: 43}}
 	w := httptest.NewRecorder()
@@ -26,6 +31,12 @@ func TestVFSForwardsOwnerFiltersWithoutLocalFiltering(t *testing.T) {
 	}
 }
 
+// TestVFSDescriptorRejectsUnknownAndContradictoryAuthority checks owner descriptor versions,
+// revision and actions while rejecting unknown registries, repeated actions and contradictory
+// selection availability.
+// TestVFSDescriptorRejectsUnknownAndContradictoryAuthority проверяет версии, ревизию и действия
+// дескриптора владельца с отказом неизвестным реестрам, повторным действиям и противоречивой
+// доступности выбора.
 func TestVFSDescriptorRejectsUnknownAndContradictoryAuthority(t *testing.T) {
 	fixture := func() *cp.VFSNode {
 		return &cp.VFSNode{Version: 4, Revision: 2, RevisionRef: "arv_fixture01", LifecycleState: "DELETED", ScanState: "CLEAN", ResourceKind: "ARTIFACT", Selectable: true, SelectionReason: "AVAILABLE", NextActions: []string{"RESTORE", "PURGE"}}

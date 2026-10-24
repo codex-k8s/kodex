@@ -10,9 +10,20 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// fileTargetFixture builds synthetic artifact binding targets with exact owner pins and an
+// archived bound agent that can be unbound but cannot be bound again.
+// fileTargetFixture создаёт синтетические цели привязки артефакта с точными pins владельца и
+// архивным привязанным агентом, которому разрешена отвязка, но не новая привязка.
 func fileTargetFixture() *cp.ListArtifactBindingTargetsResponse {
 	return &cp.ListArtifactBindingTargetsResponse{ArtifactRef: "art_fixture01", ArtifactVersion: 3, ProjectRef: "prj_fixture01", Digest: strings.Repeat("a", 64), EvaluatedAt: timestamppb.New(time.Unix(1000, 0)), Total: 12, Page: &cp.PageInfo{NextPageToken: "next"}, Items: []*cp.ArtifactBindingTarget{{AgentRef: "agt_fixture01", AgentVersion: 2, Name: "Цель", State: cp.AgentState_AGENT_STATE_ARCHIVED, Bound: true, CanUnbind: true, BindReason: cp.ArtifactBindingTargetReason_ARTIFACT_BINDING_TARGET_REASON_AGENT_ARCHIVED, UnbindReason: cp.ArtifactBindingTargetReason_ARTIFACT_BINDING_TARGET_REASON_AVAILABLE}}}
 }
+
+// TestFileTargetHTTPPreservesOwnerEligibility checks binding-target query and pagination and
+// rejects foreign artifact identity, unknown eligibility, contradictory permissions and invalid
+// observation pins.
+// TestFileTargetHTTPPreservesOwnerEligibility проверяет запрос и пагинацию целей привязки и отказ
+// чужой identity артефакта, неизвестной доступности, противоречивым полномочиям и неверным pins
+// наблюдения.
 func TestFileTargetHTTPPreservesOwnerEligibility(t *testing.T) {
 	client := &catalogRPCRecorder{response: fileTargetFixture()}
 	w := httptest.NewRecorder()
@@ -40,6 +51,13 @@ func TestFileTargetHTTPPreservesOwnerEligibility(t *testing.T) {
 		})
 	}
 }
+
+// TestRunAttachmentEligibilityHTTPChecksExactTarget checks exact workflow/project attachment
+// eligibility and rejects foreign targets, unknown reasons, false readiness and invented run
+// versions.
+// TestRunAttachmentEligibilityHTTPChecksExactTarget проверяет точную доступность вложений workflow
+// и проекта и отказ чужим целям, неизвестным причинам, ложной готовности и выдуманным версиям
+// выполнения.
 func TestRunAttachmentEligibilityHTTPChecksExactTarget(t *testing.T) {
 	fixture := func() *cp.GetRunAttachmentEligibilityResponse {
 		return &cp.GetRunAttachmentEligibilityResponse{ProjectRef: "prj_fixture01", Target: targetProto("WORKFLOW", "wfl_fixture01"), WorkflowVersionRef: "wfv_fixture01", Eligible: false, Reason: cp.RunAttachmentEligibilityReason_RUN_ATTACHMENT_ELIGIBILITY_REASON_RUNTIME_NOT_READY, Digest: strings.Repeat("a", 64), EvaluatedAt: timestamppb.New(time.Unix(1000, 0))}

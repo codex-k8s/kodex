@@ -22,26 +22,47 @@ import (
 	"google.golang.org/grpc"
 )
 
+// scopedRevealCommand counts local reveal preparation calls without issuing a real owner grant or
+// contacting control-plane.
+// scopedRevealCommand подсчитывает локальные вызовы подготовки раскрытия без выдачи настоящего
+// grant владельца и обращения к control-plane.
 type scopedRevealCommand struct {
 	controlplanev1.PlatformCommandServiceClient
 	calls int
 }
 
+// PrepareRevealRuntimeSecret counts preparation and returns a synthetic scoped operation-grant
+// marker for the HTTP elevation fixture.
+// PrepareRevealRuntimeSecret подсчитывает подготовку и возвращает синтетический маркер целевого
+// operation grant для HTTP-оснастки повышения полномочий.
 func (client *scopedRevealCommand) PrepareRevealRuntimeSecret(context.Context, *controlplanev1.PrepareRevealRuntimeSecretRequest, ...grpc.CallOption) (*controlplanev1.PrepareRevealRuntimeSecretResponse, error) {
 	client.calls++
 	return &controlplanev1.PrepareRevealRuntimeSecretResponse{Operation: &controlplanev1.RuntimeSecretOperationReceipt{OperationGrant: "synthetic-scoped-grant"}}, nil
 }
 
+// scopedRevealBroker counts local broker reveal calls without reading a real secret value.
+// scopedRevealBroker подсчитывает локальные вызовы раскрытия broker без чтения настоящего значения
+// секрета.
 type scopedRevealBroker struct {
 	secretbrokerv1.SecretBrokerServiceClient
 	calls int
 }
 
+// RevealSecret counts reveal and returns synthetic string bytes through the generated broker
+// response interface.
+// RevealSecret подсчитывает раскрытие и возвращает синтетические байты строки через
+// generated-интерфейс ответа broker.
 func (client *scopedRevealBroker) RevealSecret(context.Context, *secretbrokerv1.RevealSecretRequest, ...grpc.CallOption) (*secretbrokerv1.RevealSecretResponse, error) {
 	client.calls++
 	return &secretbrokerv1.RevealSecretResponse{Value: []byte("synthetic-scoped-value"), ValueType: secretbrokerv1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING}, nil
 }
 
+// TestOrganizationRevealUsesAuthoritativeScopeBeforeOneTimeElevation checks authoritative scope
+// matching before consumption or effects, exact one-time organization reveal, replacement cookies
+// and replay denial.
+// TestOrganizationRevealUsesAuthoritativeScopeBeforeOneTimeElevation проверяет авторитетное
+// совпадение области до потребления либо эффектов, точное однократное раскрытие организации,
+// замещающие cookies и отказ повтору.
 func TestOrganizationRevealUsesAuthoritativeScopeBeforeOneTimeElevation(t *testing.T) {
 	for _, test := range []struct {
 		name, organization, project, reference, header string

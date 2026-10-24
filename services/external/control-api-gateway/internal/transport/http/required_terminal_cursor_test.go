@@ -10,6 +10,10 @@ import (
 	"testing"
 )
 
+// TestRequiredTerminalCursorPages checks seven required-cursor response families retain explicit
+// empty item arrays and both terminal-empty and continuing cursor strings.
+// TestRequiredTerminalCursorPages проверяет сохранение явных пустых массивов и строк
+// terminal-пустого и продолжающего курсоров в семи семействах ответов с обязательным курсором.
 func TestRequiredTerminalCursorPages(t *testing.T) {
 	for _, next := range []string{"", "next-fixture"} {
 		page := &cp.PageInfo{NextPageToken: next}
@@ -43,6 +47,10 @@ func TestRequiredTerminalCursorPages(t *testing.T) {
 	}
 }
 
+// TestIntegrationConnectionsEndpointTerminalCursor checks the integration connection list returns
+// its required nextPageToken as an explicit empty string on the terminal page.
+// TestIntegrationConnectionsEndpointTerminalCursor проверяет возврат обязательного nextPageToken
+// явной пустой строкой на последней странице списка подключений интеграций.
 func TestIntegrationConnectionsEndpointTerminalCursor(t *testing.T) {
 	client := &catalogRPCRecorder{response: &cp.ListIntegrationConnectionsResponse{}}
 	handler := generated.Handler(&Server{control: &controlplaneclient.Client{Query: cp.NewPlatformQueryServiceClient(client)}})
@@ -57,6 +65,10 @@ func TestIntegrationConnectionsEndpointTerminalCursor(t *testing.T) {
 	}
 }
 
+// TestOptionalCursorPagePreservesOmission checks a project page with an optional cursor does not
+// gain a nextPageToken field when the owner supplies no cursor.
+// TestOptionalCursorPagePreservesOmission проверяет отсутствие добавленного nextPageToken у
+// страницы проектов с необязательным курсором, если владелец курсор не передал.
 func TestOptionalCursorPagePreservesOmission(t *testing.T) {
 	w := httptest.NewRecorder()
 	writeMessage(w, 200, &cp.ListProjectsResponse{}, "", "projects")

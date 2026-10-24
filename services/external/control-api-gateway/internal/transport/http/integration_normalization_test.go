@@ -10,6 +10,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestIntegrationPublicEnumsAndRiskPreserveAuthorityMeaning checks canonical risk, approval,
+// resource kind and origin enums while preserving recipient identity and explicit false fields
+// without internal duplicates.
+// TestIntegrationPublicEnumsAndRiskPreserveAuthorityMeaning проверяет канонические enum риска,
+// согласования, вида ресурса и происхождения с сохранением identity получателя и явных false-полей
+// без внутренних дубликатов.
 func TestIntegrationPublicEnumsAndRiskPreserveAuthorityMeaning(t *testing.T) {
 	for risk, riskName := range map[cp.IntegrationRisk]string{cp.IntegrationRisk_INTEGRATION_RISK_READ: "READ", cp.IntegrationRisk_INTEGRATION_RISK_WRITE: "WRITE", cp.IntegrationRisk_INTEGRATION_RISK_SENSITIVE: "SENSITIVE", cp.IntegrationRisk_INTEGRATION_RISK_DESTRUCTIVE: "DESTRUCTIVE"} {
 		for policy, policyName := range map[cp.IntegrationApprovalPolicy]string{cp.IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_NONE: "NONE", cp.IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT: "HUMAN_EACH_EFFECT"} {
@@ -36,6 +42,11 @@ func TestIntegrationPublicEnumsAndRiskPreserveAuthorityMeaning(t *testing.T) {
 	}
 }
 
+// TestIntegrationRejectsUnknownEnumsAndContradictoryRisk checks that unknown risk, approval,
+// resource kind or origin and conflicting typed/legacy risk return bad gateway.
+// TestIntegrationRejectsUnknownEnumsAndContradictoryRisk проверяет ответ bad gateway для
+// неизвестных риска, согласования, вида ресурса либо происхождения и конфликтующего typed и legacy
+// риска.
 func TestIntegrationRejectsUnknownEnumsAndContradictoryRisk(t *testing.T) {
 	for _, capability := range []*cp.IntegrationCapability{
 		{TypedRisk: cp.IntegrationRisk(999)},
@@ -57,6 +68,11 @@ func TestIntegrationRejectsUnknownEnumsAndContradictoryRisk(t *testing.T) {
 	}
 }
 
+// TestIntegrationOptionalZeroBoundsRemainExplicit checks optional zero minimum/maximum presence
+// independently of value, hides internal presence flags and preserves required=false.
+// TestIntegrationOptionalZeroBoundsRemainExplicit проверяет наличие необязательных нулевых minimum
+// и maximum независимо от значения, скрывает внутренние флаги присутствия и сохраняет
+// required=false.
 func TestIntegrationOptionalZeroBoundsRemainExplicit(t *testing.T) {
 	for _, present := range []bool{false, true} {
 		value, err := messageMap(&cp.IntegrationConfigurationField{Key: "limit", ValueType: "INTEGER", HasMinimum: present, HasMaximum: present})
@@ -84,6 +100,10 @@ func TestIntegrationOptionalZeroBoundsRemainExplicit(t *testing.T) {
 	}
 }
 
+// TestIntegrationInputSchemaRequiresExactDigest checks exact schema bytes and SHA-256 projection
+// and rejects incomplete pairs, mismatched digests, invalid JSON and oversized schema.
+// TestIntegrationInputSchemaRequiresExactDigest проверяет точные байты схемы и проекцию SHA-256 с
+// отказом неполным парам, несовпадающим дайджестам, некорректному JSON и чрезмерной схеме.
 func TestIntegrationInputSchemaRequiresExactDigest(t *testing.T) {
 	schema := `{"type":"object","properties":{"value":{"type":"string"}}}`
 	sum := sha256.Sum256([]byte(schema))
@@ -117,6 +137,12 @@ func TestIntegrationInputSchemaRequiresExactDigest(t *testing.T) {
 	}
 }
 
+// TestIntegrationConnectionDoesNotExposeInternalCredentialDescriptor checks public credential
+// readiness and hint survive projection while the internal revision and secret storage descriptor
+// remain hidden.
+// TestIntegrationConnectionDoesNotExposeInternalCredentialDescriptor проверяет сохранение
+// публичных готовности и подсказки учётных данных в проекции со скрытием внутреннего описателя
+// ревизии и хранения секрета.
 func TestIntegrationConnectionDoesNotExposeInternalCredentialDescriptor(t *testing.T) {
 	value, err := messageMap(&cp.IntegrationConnection{Ref: "conn_fixture01", CredentialsConfigured: true, CredentialsHint: "configured", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "cred_fixture01", SecretRef: "internal-secret", SecretUid: "internal-uid", SecretResourceVersion: "123", ContentSha256: strings.Repeat("a", 64)}})
 	if err != nil || value["credentialsConfigured"] != true || value["credentialsHint"] != "configured" {

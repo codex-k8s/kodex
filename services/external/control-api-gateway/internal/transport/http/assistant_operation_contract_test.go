@@ -8,6 +8,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// TestAssistantOperationRegistryRoundTripsEveryOwnerOperation enumerates every known owner
+// operation across generated HTTP enums, context and plan input conversion and public plan
+// projection.
+// TestAssistantOperationRegistryRoundTripsEveryOwnerOperation перебирает все известные операции
+// владельца в generated HTTP enum, преобразованиях ввода контекста и плана и публичной проекции
+// плана.
 func TestAssistantOperationRegistryRoundTripsEveryOwnerOperation(t *testing.T) {
 	for number, name := range cp.AssistantPlanOperation_Type_name {
 		if number == 0 {
@@ -37,6 +43,10 @@ func TestAssistantOperationRegistryRoundTripsEveryOwnerOperation(t *testing.T) {
 	}
 }
 
+// TestAssistantUpdateProjectOperationContract checks UPDATE_PROJECT identity across context and
+// plan boundaries and rejects unknown operation names in the closed HTTP contract.
+// TestAssistantUpdateProjectOperationContract проверяет identity UPDATE_PROJECT на границах
+// контекста и плана и отказ неизвестным именам операций в закрытом HTTP-контракте.
 func TestAssistantUpdateProjectOperationContract(t *testing.T) {
 	if !generated.AssistantPlanOperationType("UPDATE_PROJECT").Valid() || !generated.AssistantContextDescriptorAllowedOperations("UPDATE_PROJECT").Valid() {
 		t.Fatal("existing owner operation missing from HTTP contract")
@@ -62,6 +72,10 @@ func TestAssistantUpdateProjectOperationContract(t *testing.T) {
 	}
 }
 
+// TestAssistantUpdateAgentOperationContract checks UPDATE_AGENT identity survives generated enum
+// validation, context input and readback and plan projection.
+// TestAssistantUpdateAgentOperationContract проверяет сохранение identity UPDATE_AGENT при
+// валидации generated enum, вводе и чтении контекста и проекции плана.
 func TestAssistantUpdateAgentOperationContract(t *testing.T) {
 	if !generated.AssistantPlanOperationType("UPDATE_AGENT").Valid() || !generated.AssistantContextDescriptorAllowedOperations("UPDATE_AGENT").Valid() {
 		t.Fatal("agent update operation missing from HTTP contract")
@@ -84,6 +98,10 @@ func TestAssistantUpdateAgentOperationContract(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanOperationPreservesDistinctTargetVersion checks target version eight and
+// expected mutation version three remain separate in public projection and generated owner input.
+// TestAssistantPlanOperationPreservesDistinctTargetVersion проверяет независимость версии цели
+// восемь и ожидаемой версии изменения три в публичной проекции и generated-вводе владельца.
 func TestAssistantPlanOperationPreservesDistinctTargetVersion(t *testing.T) {
 	t.Parallel()
 	targetVersion, expectedVersion := int64(8), int64(3)

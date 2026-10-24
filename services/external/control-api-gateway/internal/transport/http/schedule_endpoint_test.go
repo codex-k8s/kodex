@@ -16,11 +16,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// scheduleQueryStub captures a schedule preview query and supplies a fixed synthetic occurrence
+// without invoking an actual scheduler.
+// scheduleQueryStub сохраняет запрос предпросмотра расписания и выдаёт фиксированное синтетическое
+// срабатывание без вызова настоящего планировщика.
 type scheduleQueryStub struct {
 	pb.PlatformQueryServiceClient
 	request *pb.PreviewScheduleRequest
 }
 
+// PreviewSchedule records preview input and returns a fixed UTC occurrence with explicit DST
+// gap/fold, misfire and overlap policies.
+// PreviewSchedule записывает ввод предпросмотра и возвращает фиксированное срабатывание UTC с
+// явными политиками DST gap/fold, misfire и пересечений.
 func (stub *scheduleQueryStub) PreviewSchedule(_ context.Context, request *pb.PreviewScheduleRequest, _ ...grpc.CallOption) (*pb.PreviewScheduleResponse, error) {
 	stub.request = request
 	return &pb.PreviewScheduleResponse{NormalizedCronExpression: "30 2 * * *", DstGapPolicy: "SHIFT_FORWARD",
@@ -28,6 +36,12 @@ func (stub *scheduleQueryStub) PreviewSchedule(_ context.Context, request *pb.Pr
 		Occurrences: []*timestamppb.Timestamp{timestamppb.New(time.Date(2026, 3, 29, 1, 0, 0, 0, time.UTC))}}, nil
 }
 
+// TestSchedulePreviewMapsCanonicalPoliciesAndRejectsPayloadAuthority checks cron, timezone, after
+// and limit mapping with owner occurrence projection while rejecting caller organization authority
+// before RPC.
+// TestSchedulePreviewMapsCanonicalPoliciesAndRejectsPayloadAuthority проверяет отображение cron,
+// часового пояса, after и лимита с проекцией срабатывания владельца и отказом полномочиям
+// организации клиента до RPC.
 func TestSchedulePreviewMapsCanonicalPoliciesAndRejectsPayloadAuthority(t *testing.T) {
 	stub := &scheduleQueryStub{}
 	server := &Server{control: &controlplaneclient.Client{Query: stub}}

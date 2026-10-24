@@ -14,6 +14,10 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// runtimeContextFixture builds a synthetic agent runtime view with the owner overlay schema and
+// distinct skill/memory bindings and revision pins.
+// runtimeContextFixture создаёт синтетический runtime-вид агента со схемой overlay владельца и
+// отдельными привязками и pins ревизий навыка и памяти.
 func runtimeContextFixture() *controlplanev1.AgentRuntimeConfigurationView {
 	_, _, skill := contextFixtures()
 	memory := proto.Clone(skill).(*controlplanev1.AgentContextBinding)
@@ -25,6 +29,11 @@ func runtimeContextFixture() *controlplanev1.AgentRuntimeConfigurationView {
 	}
 }
 
+// TestRuntimeContextBindingsEveryResponse checks seven runtime mutation/read envelopes retain
+// agent version/ETag and explicit skill/memory arrays with exact binding revisions.
+// TestRuntimeContextBindingsEveryResponse проверяет сохранение версии и ETag агента и явных
+// массивов навыков и памяти с точными ревизиями привязок в семи ответах чтения и изменения
+// runtime.
 func TestRuntimeContextBindingsEveryResponse(t *testing.T) {
 	for _, tc := range []struct {
 		method, suffix, body string
@@ -76,6 +85,12 @@ func TestRuntimeContextBindingsEveryResponse(t *testing.T) {
 	}
 }
 
+// TestRuntimeContextBindingsRejectCorruptResponse checks foreign agents, unsafe versions,
+// incomplete or invalid pins, nil or duplicate bindings and aggregate overflow reject the whole
+// runtime snapshot.
+// TestRuntimeContextBindingsRejectCorruptResponse проверяет отказ всему runtime snapshot при чужих
+// агентах, небезопасных версиях, неполных либо неверных pins, nil либо повторных привязках и
+// превышении общего лимита.
 func TestRuntimeContextBindingsRejectCorruptResponse(t *testing.T) {
 	for name, mutate := range map[string]func(*controlplanev1.AgentRuntimeConfigurationView){
 		"agent":           func(v *controlplanev1.AgentRuntimeConfigurationView) { v.Configuration.AgentRef = "agt_other01" },

@@ -4,12 +4,42 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.355.0
+version: 1.356.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Полнота комментариев всего HTTP-шлюза — 24.10.2026
+
+На основе `5c49ea07f3e6c048e5381b3978b12348401a7060` описаны последние
+139 тестовых объявлений control-api-gateway в 45 файлах. Собственный
+production- и тестовый Go-код этого модуля теперь полностью покрыт
+предметными EN→RU комментариями: машинный реестр показывает **0 пропусков**
+в модуле. Generated исключён по прежней границе. Общий Go inventory:
+16408/21348, missing 4940; весь оставшийся объём относится к control-plane.
+
+Прочитаны оставшиеся тестовые файлы целиком: artifact streaming, overlay
+history, configuration copy/provenance, effective capabilities, email
+credentials/specification/health, integration normalization/bounds/binding,
+organization reveal/image, owner gate scope/catalog, owner repair, runtime
+diff/activity/context, template variables, access queries, assistant
+operations/pagination/input, impact plans/search, project trash, VFS,
+scheduler и workflow revision/readiness. Комментарии поясняют фактические
+проверки, формат безопасного readback и отличия unknown от known zero,
+byte от rune, обязательного terminal cursor от отсутствующего optional
+cursor. Структурный RPC consumer test прямо назван дополнением к
+поведенческим проверкам, а не их заменой.
+
+Во всех 45 файлах AST без comments/positions и полный набор Go directives
+совпали с исходным head. Исполняемый код, imports и fixtures не менялись;
+новых retained решений, ignores и изменений detector thresholds нет.
+Это закрывает комментирование одного модуля, но не всю #1823. Следующий
+объём: 4940 объявлений control-plane и 991 unresolved clone-группа в том
+же Draft PR #1828. Прежние findings остаются открытыми; merge/deploy,
+browser/live и полный пользовательский QA продолжения NOT RUN.
+Проверки итогового SHA фиксируются в описании PR.
 
 ## Остаток тестовых проекций и lifecycle — 24.10.2026
 

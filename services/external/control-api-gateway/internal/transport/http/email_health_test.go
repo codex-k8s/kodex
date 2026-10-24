@@ -9,6 +9,10 @@ import (
 	"testing"
 )
 
+// TestEmailHealthPublicReadback checks Russian/English protocol health summaries and legacy
+// localization while suppressing raw private report text and internal localization markers.
+// TestEmailHealthPublicReadback проверяет русские и английские сводки готовности протоколов и
+// старую локализацию со скрытием внутреннего текста отчёта и маркеров локализации.
 func TestEmailHealthPublicReadback(t *testing.T) {
 	texts, err := usertext.New()
 	if err != nil {

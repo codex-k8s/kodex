@@ -10,6 +10,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestManagedRoleImageSourceReadback checks explicit source editability and availability in full,
+// JSON and summary projections for both admitted and redacted role-image source.
+// TestManagedRoleImageSourceReadback проверяет явные редактируемость и доступность исходника в
+// полной, JSON и сводной проекциях для разрешённого и скрытого исходника образа роли.
 func TestManagedRoleImageSourceReadback(t *testing.T) {
 	for _, available := range []bool{false, true} {
 		c := gitSourceFixture(cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE)
@@ -33,6 +37,12 @@ func TestManagedRoleImageSourceReadback(t *testing.T) {
 	}
 }
 
+// TestManagedRoleImageSourceContradictions checks missing source flags, hidden content or
+// diagnostics and wrong managed kind reject both direct and command readback without exposing
+// source.
+// TestManagedRoleImageSourceContradictions проверяет отказ прямого и командного чтения
+// отсутствующим флагам исходника, скрытым содержимому либо диагностике и неверному виду
+// конфигурации без раскрытия исходника.
 func TestManagedRoleImageSourceContradictions(t *testing.T) {
 	for name, corrupt := range map[string]func(*cp.ManagedConfigurationSet){
 		"missing-editability":  func(c *cp.ManagedConfigurationSet) { c.SourceEditable = nil },
@@ -62,6 +72,10 @@ func TestManagedRoleImageSourceContradictions(t *testing.T) {
 	}
 }
 
+// TestManagedRoleImageHistorySourceAccess checks history preserves explicit redacted source
+// availability and rejects private validation diagnostics on a redacted revision.
+// TestManagedRoleImageHistorySourceAccess проверяет сохранение явной недоступности скрытого
+// исходника в истории и отказ внутренней диагностике валидации скрытой ревизии.
 func TestManagedRoleImageHistorySourceAccess(t *testing.T) {
 	for _, invalid := range []bool{false, true} {
 		c := gitSourceFixture(cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE)

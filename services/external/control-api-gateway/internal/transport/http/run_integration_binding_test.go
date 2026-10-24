@@ -8,6 +8,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestRunIntegrationBindingProjection checks exact invocation references only accompany
+// integration completion progress events, preserving absent historical bindings and rejecting
+// malformed or premature ones.
+// TestRunIntegrationBindingProjection проверяет точные ссылки вызова только у progress-событий
+// завершения интеграции с сохранением отсутствующих исторических связей и отказом неверным либо
+// преждевременным.
 func TestRunIntegrationBindingProjection(t *testing.T) {
 	for _, summary := range []string{"i18n:INTEGRATION_ACTION_SUCCEEDED", "i18n:INTEGRATION_ACTION_FAILED", "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"} {
 		event := &cp.RunEvent{Type: cp.RunEventType_RUN_EVENT_TYPE_TURN_PROGRESS, Summary: summary, IntegrationInvocationRef: proto.String("inv_fixture01")}

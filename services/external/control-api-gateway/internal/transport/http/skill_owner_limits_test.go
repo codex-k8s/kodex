@@ -11,6 +11,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestSkillOwnerPathAndDescriptionLimits checks canonical manifest/path byte limits and allowed
+// file kinds while measuring description limits in Unicode characters in both directions.
+// TestSkillOwnerPathAndDescriptionLimits проверяет канонические manifest, байтовые ограничения
+// пути и допустимые виды файлов с измерением описания в Unicode-символах в обоих направлениях.
 func TestSkillOwnerPathAndDescriptionLimits(t *testing.T) {
 	for _, tc := range []struct {
 		name, path string
@@ -53,6 +57,11 @@ func TestSkillOwnerPathAndDescriptionLimits(t *testing.T) {
 	}
 }
 
+// TestSkillOwnerRejectsIncompleteOrAliasedFilesBeforeRPC checks absent manifest, empty bundles,
+// case-aliased paths and executable scripts fail before skill revision save RPC.
+// TestSkillOwnerRejectsIncompleteOrAliasedFilesBeforeRPC проверяет отказ отсутствующему manifest,
+// пустым наборам, путям с совпадением без учёта регистра и исполняемым скриптам до RPC сохранения
+// ревизии навыка.
 func TestSkillOwnerRejectsIncompleteOrAliasedFilesBeforeRPC(t *testing.T) {
 	for _, paths := range [][]string{
 		{}, {"references/notes.md"}, {"SKILL.md", "references/Notes.md", "references/notes.md"}, {"SKILL.md", "scripts/run.sh"},
@@ -74,6 +83,10 @@ func TestSkillOwnerRejectsIncompleteOrAliasedFilesBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestSkillOwnerResponseFileSizeLimits checks inclusive thirty-two MiB per-file and sixty-four MiB
+// aggregate limits on projected owner skill revision files.
+// TestSkillOwnerResponseFileSizeLimits проверяет включительные лимиты тридцать два MiB на файл и
+// шестьдесят четыре MiB суммарно у файлов проекции ревизии навыка владельца.
 func TestSkillOwnerResponseFileSizeLimits(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -106,6 +119,11 @@ func TestSkillOwnerResponseFileSizeLimits(t *testing.T) {
 	}
 }
 
+// TestSkillOwnerArtifactDigestUsesExactReceipt checks the qualified sha256 artifact receipt digest
+// survives projection and rejects an unqualified digest with the same bytes.
+// TestSkillOwnerArtifactDigestUsesExactReceipt проверяет сохранение квалифицированного дайджеста
+// sha256 квитанции артефакта при проекции и отказ неквалифицированному дайджесту с теми же
+// байтами.
 func TestSkillOwnerArtifactDigestUsesExactReceipt(t *testing.T) {
 	skill, _, _ := contextFixtures()
 	w := httptest.NewRecorder()

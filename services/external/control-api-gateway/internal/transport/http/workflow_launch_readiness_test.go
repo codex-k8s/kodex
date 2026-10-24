@@ -9,6 +9,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// workflowReadinessFixture adds an empty owner card summary and blocked launch-readiness pins,
+// marking workflows without a published revision as unpublished.
+// workflowReadinessFixture добавляет пустую сводку карточки владельца и pins заблокированной
+// готовности запуска, отмечая workflow без опубликованной ревизии как unpublished.
 func workflowReadinessFixture(w *cp.Workflow) {
 	w.CardSummary = &cp.WorkflowCardSummary{}
 	w.LaunchReadiness = &cp.WorkflowLaunchReadiness{WorkflowVersion: w.Version, RevisionRef: w.GetPublishedVersion().GetRef(), ContextDigest: strings.Repeat("c", 64), Reason: "DEPENDENCY_UNAVAILABLE", OperationalState: "BLOCKED"}
@@ -17,6 +21,12 @@ func workflowReadinessFixture(w *cp.Workflow) {
 	}
 }
 
+// TestWorkflowLaunchReadinessKeepsSubmissionSeparateFromOperations checks submission permission
+// remains independent of READY/UNKNOWN/BLOCKED operational state and preserves explicit false with
+// registered denial reasons.
+// TestWorkflowLaunchReadinessKeepsSubmissionSeparateFromOperations проверяет независимость
+// разрешения отправки от операционного состояния READY/UNKNOWN/BLOCKED и сохранение явного false с
+// зарегистрированными причинами отказа.
 func TestWorkflowLaunchReadinessKeepsSubmissionSeparateFromOperations(t *testing.T) {
 	for _, operational := range []string{"READY", "UNKNOWN", "BLOCKED"} {
 		w := &cp.Workflow{Ref: "wfl_fixture01", Version: 4, State: cp.WorkflowState_WORKFLOW_STATE_PUBLISHED, PublishedVersion: &cp.WorkflowVersion{Ref: "wfv_published01", Version: 2, Revision: 2, State: cp.WorkflowState_WORKFLOW_STATE_PUBLISHED}}
@@ -41,6 +51,12 @@ func TestWorkflowLaunchReadinessKeepsSubmissionSeparateFromOperations(t *testing
 	}
 }
 
+// TestWorkflowLaunchReadinessRejectsStaleAndUnknownOwnerProjection checks missing readiness, stale
+// workflow/revision pins, unknown reason/state and contradictory submission permission return bad
+// gateway.
+// TestWorkflowLaunchReadinessRejectsStaleAndUnknownOwnerProjection проверяет ответ bad gateway при
+// отсутствии readiness, устаревших pins workflow и ревизии, неизвестных причине и состоянии и
+// противоречивом разрешении отправки.
 func TestWorkflowLaunchReadinessRejectsStaleAndUnknownOwnerProjection(t *testing.T) {
 	for _, mutate := range []func(*cp.Workflow){
 		func(w *cp.Workflow) { w.LaunchReadiness = nil },
