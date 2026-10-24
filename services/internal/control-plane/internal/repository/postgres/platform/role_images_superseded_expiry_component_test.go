@@ -20,20 +20,47 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// querySupersededAdmissionExpiryClock advances only the disposable CLAIMED artifact clock for
+// exact ref/version/fence, preserving production TTL and triggers and never rewriting already
+// revoked superseded authority.
+// querySupersededAdmissionExpiryClock сдвигает только clock disposable CLAIMED artifact для точных
+// ref/version/fence, сохраняя production TTL и triggers и не переписывая уже отозванные superseded
+// authority.
+//
 //go:embed testdata/sql/role_images_superseded_expiry_clock.sql
 var querySupersededAdmissionExpiryClock string
 
+// querySupersededAdmissionExpiryReadback reads exact artifact/attempt terminal, claim/promotion
+// revocation and immutable source/terminal snapshot checks with tenant-scoped expiry audit/receipt
+// counts; its result reports booleans and counts rather than token values.
+// querySupersededAdmissionExpiryReadback читает terminal состояние точных artifact/attempt, отзыв
+// claim/promotion и проверки неизменяемых source/terminal snapshots с tenant-scoped expiry
+// audit/receipt counts; результат содержит flags и количества вместо token values.
+//
 //go:embed testdata/sql/role_images_superseded_expiry_readback.sql
 var querySupersededAdmissionExpiryReadback string
 
-// Issue #1797: отдельная disposable БД; production TTL и triggers не меняются.
-// Матрица разделяет native раннее закрытие B1 при B2 и обычный exact expiry.
-// PASS repository не подтверждает cleanup consumer image-admission recovery.
+// TestRoleImageSupersededAdmissionExpiryComponent separates issue1797 native B2 early cancellation
+// from ordinary exact expiry/replay, each using its own isolated database. Repository outcomes do
+// not establish that the image-admission recovery consumer performed cleanup.
+// TestRoleImageSupersededAdmissionExpiryComponent разделяет native раннюю отмену B2 из issue1797 и
+// обычный exact expiry/replay, выделяя каждому собственную изолированную БД. Результаты repository
+// не подтверждают cleanup со стороны image-admission recovery consumer.
 func TestRoleImageSupersededAdmissionExpiryComponent(t *testing.T) {
 	t.Run("native-b2-early-terminal", func(t *testing.T) { testRoleImageAdmissionTerminal(t, true) })
 	t.Run("ordinary-exact-expiry-replay", func(t *testing.T) { testRoleImageAdmissionTerminal(t, false) })
 }
 
+// testRoleImageAdmissionTerminal creates a native B1 claim within a ninety-second isolated fixture
+// and optionally requests same-generation B2 to cancel B1. It checks exact terminal/source pins
+// and revoked grants, rejects stale callbacks and foreign/mismatched expiry, then either preserves
+// B1 while claiming B2 or advances only the disposable lease clock and verifies atomic expiry
+// audit/receipt plus side-effect-free replay.
+// testRoleImageAdmissionTerminal создаёт native B1 claim в изолированной оснастке на девяносто
+// секунд и при необходимости запрашивает B2 той же generation для отмены B1. Проверяет точные
+// terminal/source pins и отозванные grants, отклоняет stale callbacks и foreign/mismatched expiry,
+// затем либо сохраняет B1 при claim B2, либо сдвигает только disposable lease clock и проверяет
+// атомарные expiry audit/receipt и replay без новых эффектов.
 func testRoleImageAdmissionTerminal(t *testing.T, superseded bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
@@ -219,6 +246,12 @@ func testRoleImageAdmissionTerminal(t *testing.T, superseded bool) {
 	}
 }
 
+// admissionExpiryReadback stores comparable artifact/attempt state, versions/fences, revocation
+// and snapshot-match booleans with expiry effect counts, enabling whole-observation equality
+// before and after denied/replayed callbacks without retaining token values.
+// admissionExpiryReadback хранит сравнимые artifact/attempt state, versions/fences, revocation и
+// snapshot-match flags с количеством expiry effects, позволяя целиком сравнивать наблюдения до и
+// после denied/replayed callbacks без token values.
 type admissionExpiryReadback struct {
 	State, Verdict, AttemptState                                                                           string
 	Version, Fence                                                                                         uint64

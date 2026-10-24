@@ -12,10 +12,24 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryRoleImageExpiryOutcomeReadback reads exact tenant/build expiry audit and actor/key claim
+// receipt counts plus receipt type, alongside the fixture outbox total, for atomic
+// negative-outcome and no-repeat assertions.
+// queryRoleImageExpiryOutcomeReadback читает количества expiry audit точных tenant/build и claim
+// receipt точных actor/key, а также тип квитанции и общий fixture outbox count для проверок
+// атомарного отрицательного исхода и отсутствия повторных эффектов.
+//
 //go:embed testdata/sql/role_images_expiry_outcome_readback.sql
 var queryRoleImageExpiryOutcomeReadback string
 
-// Вызывается из изолированного ORG suite, отдельно для обоих владельцев образа.
+// testRoleImageExpiryOutcome runs the same expiry-only claim receipt contract for organization or
+// project ownership in the caller isolated suite. It requires atomic audit/event/negative receipt,
+// repeated and concurrent NotFound without taking new work, fresh-key progress, no receipt for
+// true idle and rejection of renewal with the old terminal lease.
+// testRoleImageExpiryOutcome проверяет один контракт expiry-only claim receipt для organization
+// либо project ownership в изолированном suite вызывающей стороны. Требует атомарные
+// audit/event/negative receipt, повторный и конкурентный NotFound без захвата новой работы, работу
+// со свежим key, отсутствие receipt при настоящем idle и отказ renew со старым terminal lease.
 func testRoleImageExpiryOutcome(t *testing.T, ctx context.Context, repository *Repository,
 	owner, uiOwner, worker value.Principal, projectRef string,
 ) {

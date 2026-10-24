@@ -16,6 +16,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestRoleImageBuildFreshCorrelationComponent runs complete/fail build scenarios in an isolated
+// database with a forty-five-second budget. Fresh CorrelationRef must replay progress, renew and
+// terminal results exactly, while changed actor/workload/credential revision/tenant is denied;
+// final owner readback requires one persisted build at the original terminal version.
+// TestRoleImageBuildFreshCorrelationComponent выполняет complete/fail build сценарии в
+// изолированной БД с бюджетом сорок пять секунд. Свежий CorrelationRef должен точно повторять
+// progress, renew и terminal results, а смена actor/workload/credential revision/tenant
+// отклоняется; финальный owner readback требует единственную сохранённую сборку с исходной
+// terminal version.
 func TestRoleImageBuildFreshCorrelationComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()

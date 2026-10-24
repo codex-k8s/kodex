@@ -4,11 +4,70 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.377.0
+version: 1.378.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Компонентная оснастка RoleImage — 24.10.2026
+
+На основе `60094a8037596398f7136b9b0f5beeb6c105da56` описаны27 прежних
+объявлений в десяти тестовых файлах: access6, promotion6, superseded expiry5,
+policy rotation2, terminal2, expiry receipt2, maintenance1, fresh correlation1,
+impact1 и restored impact1. Новый helper также описан:28/28 в выбранной
+области. Общий inventory18553/21417, missing2864 — PostgreSQL adapter
+control-plane. Собственные файлы семейства `role_image*.go` теперь имеют
+0missing, но соседние `assistant_*role_image*` и `organization_role_image*`
+и весь прочий backlog этим не объявляются завершёнными.
+
+`seedCompletedRoleImageArtifact` объединяет общий test prefix двух сценариев:
+чтение сохранённой сборки → синтетическое завершение → вставка артефакта →
+чтение pending projection. Сохранены четыре SQL/context/owner/build/provenance
+вызова и их порядок, исходные Scan destinations, новая server ref и digests
+обоих callers. Policy rotation сохраняет свои разные digest characters,
+promotion — прежние e/f pins; отдельный admission decision остаётся у caller.
+PENDING возвращается до записи admission. Helper использует прежние pool
+queries без новой транзакции и без обещания длительной row lock; оснастка
+не запускает worker lease, scanner, image build либо registry push.
+Новые общие test diagnostics указывают только этап без raw driver error
+либо содержимого строки. Production-код и его ошибки не менялись.
+
+| Оснастка / lifecycle | Описанная проверяемая граница |
+| --- | --- |
+| Access | Signed project scope, metadata/source/build permissions, actor/filter cursor, literal search, archive/restore/cancel и source redaction после revoke, включая replay и managed history |
+| Policy rotation / maintenance | Expired/live/pending старой policy, foreign tenant и rollback без эффекта, точные closed attempt/receipt pins, три audit без нового event, повторный/idle NotFound и native rebuild с новой policy; прежняя policy и claim восстанавливаются/закрываются |
+| Terminal / recovery | Native B1/B2 cancellation и original actor-bound receipt; отдельная controller authority, immutable JSON-equivalent proof, mismatch/live/foreign отказы, fresh credential read и отсутствие возобновления grants через stale callbacks |
+| Expiry / superseded | Разделены раннее закрытие B1 при B2 и обычный exact expiry. Меняется только clock disposable CLAIMED artifact; audit/event/negative receipt и concurrent replay проверяются отдельно от true idle и fresh key |
+| Promotion | Synthetic build/admission evidence отделено от owner request/claim/authorize/complete. Проверяются concurrent same-key replay, expired reclaim/stale token, exact revision linkage, две audit и одно event с версией активированного recipe |
+| Fresh correlation | Новая transport CorrelationRef не меняет progress/renew/complete/fail replay; смена actor/workload/credential revision/tenant отклоняется, сохранённая build version остаётся прежней |
+| Impact / restore | Exact generation/source lineage и restore replay, immutable plan/items, selected environment/binding effects, NOT_SELECTED, stale conflict и rollback failed-only group, current policy/tenant gate до replay; empty restored plan не означает применение образа потребителю |
+
+Восемь comments-only AST/directives comparisons, два expected-AST сравнения
+и отдельное сравнение четырёх ordered QueryRow с обоими исходными prefix —
+PASS. Все прежние assertions сохранены; изменены общий test prefix и его
+безопасные diagnostics. Три embedded SQL directives сохранены; production
+SQL/API/generated, зависимости и deploy inputs не менялись.
+Через Context7 проверены pgx/v5.10.0 pool QueryRow/Scan; прочитаны три SQL
+файла expiry readback/clock и isolation helper с bounded disposable template.
+
+Полные локальные GOWORK=off control-plane build/unit с `-count=1` после
+окончательных diagnostics — PASS. Credentials и13 внешних fixture/env inputs
+исключены. Отдельный verbose запуск подтвердил пять PostgreSQL scenarios
+как SKIP из-за отсутствия disposable DSN: maintenance, terminal, fresh
+correlation и две superseded/ordinary expiry branches. Внешний родительский
+тест завершился PASS после двух SKIP, что не доказывает прохождение этих
+ветвей. Actual PostgreSQL/locks/races, bootstrap lifecycle, registry,
+full E2E/browser, deploy/live — NOT RUN/SKIP; новая оснастка только
+скомпилирована и статически сопоставлена с исходной.
+
+Scan6669 own sources,222 excluded,1816 raw,896 retained,920 unresolved:
+два прежних complete/insert clone windows устранены реальным общим helper.
+Все прежние исключения действительны; новых исключений, thresholds либо
+ignore regions нет. Пять cross-file окон выбранной области с соседней
+component-оснасткой остаются открытыми, включая configuration/bootstrap
+prefix и отдельные owner authority сценарии.17 analyzer tests и5 exact-ignore
+guards — PASS. Независимый QA baseline f2e64eb сохранён; Issue#1823 открыт.
 
 ## Admission, terminal proof, inventory и применение RoleImage — 24.10.2026
 

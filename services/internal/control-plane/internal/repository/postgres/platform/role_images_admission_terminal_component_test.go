@@ -20,8 +20,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Issue #1797: native PROJECT B1→B2 ранний terminal; proof только читает
-// exact original claim receipt/attempt и не возобновляет отозванный grant.
+// TestRoleImageAdmissionTerminalComponent uses an isolated migrated database with a ninety-second
+// budget to create native project B1/B2 attempts and read B1 cancellation through its original
+// actor-bound claim receipt. It checks immutable JSON-equivalent proof, separate controller
+// recovery authority, live/foreign/mismatched denials and fresh credential readback, while
+// snapshot equality ensures proof reads and stale callbacks never revive grants or mutate owner
+// state.
+// TestRoleImageAdmissionTerminalComponent использует изолированную мигрированную БД с бюджетом
+// девяносто секунд для создания native project B1/B2 attempts и чтения отмены B1 по исходной
+// actor-bound claim receipt. Проверяет неизменяемый JSON-equivalent proof, отдельные полномочия
+// controller recovery, отказы live/foreign/mismatched и чтение со свежими credentials; равенство
+// snapshots подтверждает отсутствие возобновления grants либо изменения owner state при чтении
+// proof и stale callbacks.
 func TestRoleImageAdmissionTerminalComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -113,8 +123,11 @@ func TestRoleImageAdmissionTerminalComponent(t *testing.T) {
 	if _, err := r.resolveScope(ctx, foreignActor); err != nil {
 		t.Fatalf("same-tenant actor fixture is not active: %v", err)
 	}
-	// Снимок сравнивает все artifact/attempt поля, receipts/audit/outbox,
-	// но не выводит synthetic claim token hashes или JSON в диагностику.
+	// snapshot captures opaque hashes of both artifact/attempt rows and global audit/receipt/outbox
+	// counts for terminal-read nonmutation checks; it contains no raw claim JSON or token material.
+	// snapshot сохраняет непрозрачные hashes обеих artifact/attempt строк и общие количества
+	// audit/receipt/outbox для проверки неизменности terminal read; raw claim JSON либо token material
+	// не содержит.
 	type snapshot struct {
 		artifacts, attempts      string
 		audits, receipts, events int

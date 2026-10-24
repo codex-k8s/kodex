@@ -17,6 +17,16 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testRoleImageImpactLifecycle exercises promoted-image impact in the supplied disposable
+// database: prepare/read/pagination and immutable snapshots, selective environment/agent effects,
+// replay, stale-binding conflict rollback, exact managed lineage and foreign-tenant/policy denial.
+// Synthetic admission/readback seeds do not build or publish registry images; the scenario checks
+// persisted owner effects and preserved environment values.
+// testRoleImageImpactLifecycle проверяет impact опубликованного образа в переданной disposable БД:
+// prepare/read/pagination и неизменяемые snapshots, выборочные environment/agent effects, replay,
+// rollback при stale-binding conflict, точную managed lineage и отказы foreign tenant/policy.
+// Синтетические admission/readback seeds не собирают и не публикуют образы в registry; сценарий
+// проверяет сохранённые эффекты владельца и прежние environment values.
 func testRoleImageImpactLifecycle(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, images *roleimageservice.Service, owner, resolved value.Principal, recipe entity.RoleImageRecipe, old entity.ImageArtifact, agent entity.Agent) {
 	t.Helper()
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateRuntimeEnvironment, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "role-impact-environment"}, Payload: command.RuntimeEnvironmentInput{ProjectRef: recipe.ProjectRef, Name: "Role impact", ImageArtifactRef: old.Ref, Values: []entity.RuntimeEnvironmentValue{{Name: "MODE", Value: "retained"}}}})
