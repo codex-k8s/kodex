@@ -7,8 +7,14 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
-// InspectOpenAPIIntegration выполняет только ограниченный локальный разбор.
-// Admission, сохранение и полномочия исполняемой интеграции принадлежат CP.
+// InspectOpenAPIIntegration performs bounded local parsing of supplied OpenAPI source and checks
+// public inspection field sizes before returning candidate operations. Inspection neither saves an
+// executable definition nor grants admission, network access or integration permissions; those
+// belong to CP.
+// InspectOpenAPIIntegration выполняет ограниченный локальный разбор переданного OpenAPI и
+// проверяет размеры публичных полей inspection до выдачи операций-кандидатов. Inspection не
+// сохраняет исполняемое определение и не даёт admission, network access или прав интеграции; ими
+// владеет CP.
 func (server *Server) InspectOpenAPIIntegration(w http.ResponseWriter, r *http.Request, _ generated.InspectOpenAPIIntegrationParams) {
 	body, ok := decodeJSON[generated.OpenAPIInspectionInput](w, r)
 	if !ok {

@@ -9,6 +9,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// vfsRequest validates the VFS-specific longer UTF-8 cursor limit before applying common
+// project/search/page controls without the common shorter cursor check. It preserves the original
+// request token for owner pagination.
+// vfsRequest проверяет отдельный более длинный UTF-8 cursor лимит VFS до общих project/search/page
+// проверок без их более короткого cursor ограничения. Исходный токен сохраняется для пагинации
+// владельца.
 func vfsRequest(w http.ResponseWriter, r *http.Request, projectRef, query *string, pageSize *int, pageToken *string) (*http.Request, bool) {
 	if pageToken != nil && (len(*pageToken) > 2048 || !utf8.ValidString(*pageToken)) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -17,6 +23,12 @@ func vfsRequest(w http.ResponseWriter, r *http.Request, projectRef, query *strin
 	return catalogRequest(w, r, projectRef, query, pageSize, nil)
 }
 
+// ListVFSNodes validates project/page/search, path and kind/lifecycle selectors, defaults an empty
+// path to /projects and queries owner-visible VFS nodes. Project consistency and public node shape
+// are checked before output.
+// ListVFSNodes проверяет project/page/search, path и kind/lifecycle selectors, заменяет пустой
+// path на /projects и запрашивает видимые у владельца VFS nodes. Согласованность проекта и
+// публичная форма узлов проверяются до выдачи.
 func (server *Server) ListVFSNodes(w http.ResponseWriter, r *http.Request, p generated.ListVFSNodesParams) {
 	r, ok := vfsRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
 	if !ok {
@@ -53,6 +65,12 @@ func (server *Server) ListVFSNodes(w http.ResponseWriter, r *http.Request, p gen
 	writeVFSPage(w, response.GetNodes(), response.GetTotal(), response.GetPage().GetNextPageToken())
 }
 
+// SearchVFS requires at least two nonpadding query runes and valid optional path/kind/lifecycle
+// controls before owner search. The exact returned project page is validated without filtering
+// hidden or malformed nodes locally.
+// SearchVFS требует не менее двух рун запроса без внешних пробелов и корректные optional
+// path/kind/lifecycle до поиска владельца. Возвращённая проектная страница проверяется без
+// локальной фильтрации скрытых и неверных узлов.
 func (server *Server) SearchVFS(w http.ResponseWriter, r *http.Request, p generated.SearchVFSParams) {
 	r, ok := vfsRequest(w, r, p.ProjectRef, &p.Query, p.PageSize, p.PageToken)
 	if !ok {
@@ -85,6 +103,11 @@ func (server *Server) SearchVFS(w http.ResponseWriter, r *http.Request, p genera
 	writeVFSPage(w, response.GetNodes(), response.GetTotal(), response.GetPage().GetNextPageToken())
 }
 
+// vfsProjectPage checks the requested result-count bound and that every present node belongs to
+// the optional selected project. It does not authorize the project or validate the remaining node
+// fields.
+// vfsProjectPage проверяет ограничение числа результатов и принадлежность каждого ненулевого узла
+// необязательно выбранному проекту. Проект не авторизуется и прочие поля узла не проверяются.
 func vfsProjectPage(nodes []*controlplanev1.VFSNode, project string, limit int) bool {
 	if len(nodes) > limit {
 		return false
@@ -97,11 +120,23 @@ func vfsProjectPage(nodes []*controlplanev1.VFSNode, project string, limit int) 
 	return true
 }
 
+// validVFSPath requires a bounded UTF-8 absolute virtual path without any double-dot substring,
+// NUL, line breaks or backslashes. It does not resolve a filesystem path, normalize segments or
+// provide host filesystem access.
+// validVFSPath требует ограниченный UTF-8 абсолютный виртуальный путь без любого
+// двойного-точечного фрагмента, NUL, переводов строк и обратных слешей. Путь файловой системы не
+// разрешается, сегменты не нормализуются и доступ к хосту не выдаётся.
 func validVFSPath(value string) bool {
 	return len(value) <= 1000 && utf8.ValidString(value) && strings.HasPrefix(value, "/") &&
 		!strings.Contains(value, "..") && !strings.ContainsAny(value, "\x00\r\n\\")
 }
 
+// writeVFSPage validates total/cursor bounds, every node path/text/size/kind and public descriptor
+// plus optional timestamp before returning JSON. An invalid node rejects the entire owner page;
+// the gateway never reads bytes from the virtual path.
+// writeVFSPage проверяет total/cursor, path/text/size/kind каждого узла, публичный descriptor и
+// optional время до JSON. Неверный узел отклоняет всю страницу владельца; gateway не читает байты
+// по виртуальному пути.
 func writeVFSPage(w http.ResponseWriter, nodes []*controlplanev1.VFSNode, total int64, next string) {
 	if len(nodes) > 100 || total < int64(len(nodes)) || total > maximumSafeJSONInteger || len(next) > 2048 || !utf8.ValidString(next) {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
@@ -152,9 +187,18 @@ func writeVFSPage(w http.ResponseWriter, nodes []*controlplanev1.VFSNode, total 
 	writeJSON(w, http.StatusOK, result)
 }
 
+// vfsStateRequest allows only omitted, ACTIVE or DELETED request lifecycle filters. ARCHIVED may
+// exist in read projections but is not accepted as a request filter here.
+// vfsStateRequest допускает только отсутствие фильтра lifecycle либо ACTIVE и DELETED. ARCHIVED
+// возможен в проекции чтения, но здесь не принимается как фильтр запроса.
 func vfsStateRequest(state string) bool {
 	return state == "" || state == "ACTIVE" || state == "DELETED"
 }
+
+// vfsKindsRequest maps an optional list to at most twelve distinct nonzero known protobuf VFS
+// kinds, preserving input order and an explicit empty slice for no filter.
+// vfsKindsRequest преобразует необязательный список в не более двенадцати уникальных ненулевых
+// известных protobuf видов VFS, сохраняя порядок и явный пустой срез при отсутствии фильтра.
 func vfsKindsRequest(input *generated.VFSKinds) ([]controlplanev1.VFSNodeKind, bool) {
 	result := []controlplanev1.VFSNodeKind{}
 	if input == nil {
@@ -174,6 +218,13 @@ func vfsKindsRequest(input *generated.VFSKinds) ([]controlplanev1.VFSNodeKind, b
 	}
 	return result, true
 }
+
+// vfsDescriptor checks safe version/revision bounds, lifecycle/scan/resource/selection allowlists
+// and up to six unique actions, then updates the public node metadata. Selectable must agree with
+// AVAILABLE; these UI facts do not authorize a subsequent command.
+// vfsDescriptor проверяет безопасные version/revision, закрытые lifecycle/scan/resource/selection
+// и до шести уникальных actions, затем заполняет публичные metadata узла. Selectable соответствует
+// AVAILABLE; UI факты не авторизуют следующую команду.
 func vfsDescriptor(node *controlplanev1.VFSNode, item *generated.VFSNode) bool {
 	if node.Version < 0 || node.Version > maximumSafeJSONInteger || node.Revision < 0 || node.Revision > maximumSafeJSONInteger || len(node.RevisionRef) > 128 || node.RevisionRef != "" && !opaqueHTTPReference.MatchString(node.RevisionRef) {
 		return false

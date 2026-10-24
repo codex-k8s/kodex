@@ -4,12 +4,63 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.352.0
+version: 1.353.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Полнота production-комментариев HTTP-шлюза — 24.10.2026
+
+На основе `f23a899650ff4e0d497c0bae7db07bef85946a86` завершён остаток
+комментирования собственного production-кода control-api-gateway. Машинный
+реестр подтверждает **0 непокрытых production-объявлений этого модуля**;
+generated по-прежнему исключён. После текущего этапа остаются 478 тестовых
+объявлений шлюза и 4940 объявлений control-plane: общий остаток 5418.
+Это не завершение всей #1823 и не продуктовая либо live-приёмка.
+
+Прочитаны и подробно описаны prompt/context/variable pins, browser session,
+interaction identity, file binding eligibility, configuration copy/writeback,
+environment draft/impact, mail credentials/receipts/reconciliation, VFS,
+системные секреты и assistant grants, recovery удаления и STT. Комментарии
+отделяют форму ref/digest от authority, чтение receipt от повтора эффекта,
+preview от publication, metadata каталога от фактического provider runtime.
+Часть web-policy полей draft mapper лишь переносит: полная доменная проверка
+не приписывается HTTP converter. Для secret buffer описана очистка изменяемой
+копии, без обещания уничтожения всех immutable string copies в памяти.
+
+Две копии regexp SHA-256 заменены существующим локальным validManagedDigest
+в 12 вызовах шести файлов. Принимаемый набор тот же: ровно 64 lowercase
+hex bytes, без prefix, whitespace и иных символов. Проверка provenance,
+контекста, содержания, owner и revision остаётся у исходных callers;
+политики доступа и порядок проверок не меняются. Удалены два собственных
+объявления, поэтому общий Go total стал 21348. Библиотека не добавлялась:
+это общий технический validator уже существующего HTTP package.
+
+Адресно разобрано одно окно typed negative tests system/project assistant
+candidate responses. Project converter отдельно проверяет project/profile/version
+и unknown fields; system converter проверяет организационную проекцию.
+Разные nominal DTO и независимые fixtures сохранены; точные пути/hash/count1
+добавлены в retained, без исключения файлов или тестового контура.
+Предметно описаны также 43 тестовых объявления session/run identity,
+service-code localization, assistant grants и STT upload/catalog/configuration.
+
+PASS LOCAL на содержимом рабочего дерева: полный build/unit шлюза,
+целевые negative model/usage/grant tests; AST/directives совпали в 40 файлах
+только с comments, ещё в шести — после ровно ожидаемых 12 замен validator,
+удаления двух regexp declarations и неиспользуемого import. Итоговый detector:
+6655 own / 222 excluded; 1795 raw / 804 retained / 991 unresolved;
+Go 15930/21348, missing 5418. Raw SHA256
+`3b009bd67ea50558340872f71d6f630cfcbf7519032bdca0077139a464f8b847`;
+clone-set `4100e0b8b625b69b689a04ee1206780ea732b879149053fe0325a27ab7cca3e6`.
+Новых broad ignores нет; пороги detector не менялись.
+
+Через Context7 дополнительно проверены protobuf-go protojson.UnmarshalOptions
+и обработка unknown fields. На живую STT/почту/интеграции тесты не обращались;
+merge/deploy/browser/full QA текущего PR NOT RUN. Прежние findings остаются
+открытыми. Следующий остаток — тестовые объявления шлюза, control-plane и
+991 адресная clone-группа в том же Draft PR #1828.
 
 ## HTTP-проекции и каталоги — 24.10.2026
 

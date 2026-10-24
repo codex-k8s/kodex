@@ -11,17 +11,40 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// writeBackContentDigest hashes the exact UTF-8 string bytes with SHA-256 and returns lowercase
+// hexadecimal, without newline normalization or content reformatting.
+// writeBackContentDigest хэширует точные байты UTF-8 строки через SHA-256 и возвращает hex нижнего
+// регистра без нормализации переводов строк и переформатирования содержимого.
 func writeBackContentDigest(content string) string {
 	digest := sha256.Sum256([]byte(content))
 	return hex.EncodeToString(digest[:])
 }
+
+// validWriteBackContent requires valid UTF-8 without NUL and at most 256 KiB; the explicit empty
+// flag permits absent base content while proposed content must remain nonempty.
+// validWriteBackContent требует корректный UTF-8 без NUL и не более 256 KiB; явный флаг empty
+// допускает пустое base содержимое, тогда как предлагаемое остаётся непустым.
 func validWriteBackContent(content string, empty bool) bool {
 	return (empty || len(content) > 0) && len(content) <= 262144 && utf8.ValidString(content) && !strings.ContainsRune(content, 0)
 }
+
+// validWriteBackCommit accepts only full lowercase hexadecimal Git commit IDs of 40 or 64
+// characters. It validates syntax without resolving a commit or proving repository ownership.
+// validWriteBackCommit допускает только полные Git commit ID из hex нижнего регистра длиной 40
+// либо 64 символа. Проверяется синтаксис без разрешения коммита и доказательства владения
+// репозиторием.
 func validWriteBackCommit(value string) bool {
 	return (len(value) == 40 || len(value) == 64) && strings.Trim(value, "0123456789abcdef") == ""
 }
 
+// configurationWriteBackView validates immutable configuration/source/connection pins, distinct
+// source/proposal branches, known state/failure/action values and evidence timestamps. SUCCEEDED
+// requires confirmed branch and PR plus completion with no failure; uncertain states retain
+// failure metadata and never imply a confirmed external effect.
+// configurationWriteBackView проверяет immutable pins configuration/source/connection, разные
+// source/proposal branches, известные state/failure/action и временные отметки evidence. SUCCEEDED
+// требует подтверждённых branch и PR и завершения без ошибки; неопределённые состояния сохраняют
+// failure metadata и не означают подтверждённый внешний эффект.
 func configurationWriteBackView(v *cp.ManagedConfigurationGitWriteBack) (generated.ConfigurationWriteBack, bool) {
 	result := generated.ConfigurationWriteBack{}
 	if v == nil || !validManagedVersion(v.Version) || !validManagedVersion(v.ConfigurationVersion) || !validManagedVersion(v.SourceVersion) || !validManagedVersion(v.ConnectionVersion) || !validGitSourceLocation(v.RepositoryRef, v.SourceRefName, v.Path) || !validGitSourceLocation(v.RepositoryRef, v.ProposalBranch, v.Path) || v.ProposalBranch == v.SourceRefName || !validWriteBackCommit(v.BaseCommitSha) || v.CreatedAt == nil || v.CreatedAt.CheckValid() != nil || v.ExpiresAt == nil || v.ExpiresAt.CheckValid() != nil || !v.ExpiresAt.AsTime().After(v.CreatedAt.AsTime()) {

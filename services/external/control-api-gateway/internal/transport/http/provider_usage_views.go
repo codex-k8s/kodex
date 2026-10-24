@@ -30,7 +30,7 @@ var providerUsageModel = regexp.MustCompile(`^[a-zA-Z0-9._:/-]{1,128}$`)
 func validProviderUsage(u *cp.ProviderAccountUsage) bool {
 	if u == nil || u.AccountVersion < 1 || u.AccountVersion > maximumSafeJSONInteger || u.AgentVersion < 0 || u.AgentVersion > maximumSafeJSONInteger ||
 		u.MaximumConcurrentExecutions < 1 || u.MaximumConcurrentExecutions > maximumSafeJSONInteger || u.ActiveExecutions < 0 || u.ActiveExecutions > maximumSafeJSONInteger ||
-		!modelCatalogDigest.MatchString(u.ContextDigest) || !modelCatalogDigest.MatchString(u.CatalogDigest) || u.CatalogRevision != "mcat_"+u.CatalogDigest ||
+		!validManagedDigest(u.ContextDigest) || !validManagedDigest(u.CatalogDigest) || u.CatalogRevision != "mcat_"+u.CatalogDigest ||
 		u.ObservedAt == nil || u.ExpiresAt == nil || u.ObservedAt.CheckValid() != nil || u.ExpiresAt.CheckValid() != nil || !u.ExpiresAt.AsTime().After(u.ObservedAt.AsTime()) ||
 		u.CatalogStatus == nil || u.ProviderHealthScope != cp.ProviderHealthScope_PROVIDER_HEALTH_SCOPE_CREDENTIALED_CATALOG_REACHABILITY {
 		return false
@@ -52,7 +52,7 @@ func validProviderUsage(u *cp.ProviderAccountUsage) bool {
 	} else if !validProviderUsageContext(u.Context) || u.AgentVersion < 1 {
 		return false
 	}
-	if u.RuntimeConfigurationRef != "" && (!fileTargetRef(u.RuntimeConfigurationRef) || !modelCatalogDigest.MatchString(u.RuntimeConfigurationDigest)) || u.RuntimeConfigurationRef == "" && u.RuntimeConfigurationDigest != "" {
+	if u.RuntimeConfigurationRef != "" && (!fileTargetRef(u.RuntimeConfigurationRef) || !validManagedDigest(u.RuntimeConfigurationDigest)) || u.RuntimeConfigurationRef == "" && u.RuntimeConfigurationDigest != "" {
 		return false
 	}
 	if u.ProviderHealth.State == ready {

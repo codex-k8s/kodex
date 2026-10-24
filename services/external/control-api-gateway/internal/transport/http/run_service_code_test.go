@@ -10,6 +10,11 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// TestRunCancellationServiceCodeProjection checks each canonical cancellation summary gains its
+// closed machine code, survives localization and leaves the original protobuf event unchanged.
+// TestRunCancellationServiceCodeProjection проверяет назначение закрытого машинного кода каждой
+// канонической сводке отмены, его сохранение при локализации и неизменность исходного protobuf
+// события.
 func TestRunCancellationServiceCodeProjection(t *testing.T) {
 	for _, code := range []string{"RUN_CANCELLED", "RUN_NODE_CANCELLED", "ASSISTANT_TURN_CANCELLED"} {
 		t.Run(code, func(t *testing.T) {
@@ -29,6 +34,10 @@ func TestRunCancellationServiceCodeProjection(t *testing.T) {
 	}
 }
 
+// cancellationProjectionEvent builds a minimal synthetic cancelled turn-progress intermediate
+// event with a selected canonical i18n summary, without content-bearing fields.
+// cancellationProjectionEvent собирает минимальное синтетическое cancelled turn-progress
+// intermediate событие с выбранной канонической i18n сводкой без полей содержимого.
 func cancellationProjectionEvent(code string) *cp.RunEvent {
 	return &cp.RunEvent{
 		Type: cp.RunEventType_RUN_EVENT_TYPE_TURN_PROGRESS, MessageKind: cp.RunEventMessageKind_RUN_EVENT_MESSAGE_KIND_INTERMEDIATE_MESSAGE,
@@ -36,6 +45,12 @@ func cancellationProjectionEvent(code string) *cp.RunEvent {
 	}
 }
 
+// TestRootCompletionServiceCodeProjection checks all terminal root states receive the canonical
+// completion code and rejects mismatched node/type/state, content-bearing and noncanonical
+// completion events.
+// TestRootCompletionServiceCodeProjection проверяет канонический код завершения для всех terminal
+// root состояний и отказ для несовпадающих node/type/state, содержательных и неканонических
+// событий завершения.
 func TestRootCompletionServiceCodeProjection(t *testing.T) {
 	for _, state := range []cp.RunNodeState{cp.RunNodeState_RUN_NODE_STATE_FAILED, cp.RunNodeState_RUN_NODE_STATE_SUCCEEDED, cp.RunNodeState_RUN_NODE_STATE_CANCELLED} {
 		event := rootCompletionProjectionEvent()
@@ -73,6 +88,10 @@ func TestRootCompletionServiceCodeProjection(t *testing.T) {
 	}
 }
 
+// rootCompletionProjectionEvent builds one matching synthetic failed root-process state event with
+// identical outer/nested node coordinates and the canonical completion summary.
+// rootCompletionProjectionEvent собирает согласованное синтетическое событие failed root-process с
+// одинаковыми внешними и вложенными координатами узла и канонической сводкой завершения.
 func rootCompletionProjectionEvent() *cp.RunEvent {
 	return &cp.RunEvent{
 		Type:        cp.RunEventType_RUN_EVENT_TYPE_NODE_STATE_CHANGED,
@@ -83,6 +102,12 @@ func rootCompletionProjectionEvent() *cp.RunEvent {
 	}
 }
 
+// TestRunCancellationServiceCodeDoesNotClassifyContent proves cancellation-looking text, unknown
+// summaries, ordinary messages, tool/artifact/progress data and incompatible event/state kinds
+// never acquire a service cancellation code.
+// TestRunCancellationServiceCodeDoesNotClassifyContent доказывает, что похожий на отмену текст,
+// неизвестные сводки, обычные сообщения, tool/artifact/progress и несовместимые event/state виды
+// не получают служебный код отмены.
 func TestRunCancellationServiceCodeDoesNotClassifyContent(t *testing.T) {
 	for _, summary := range []string{"RUN_CANCELLED", "Запуск отменён", "Run cancelled", "i18n:RUN_CANCELLED extra", "i18n:FUTURE_CANCELLATION"} {
 		event := cancellationProjectionEvent("RUN_CANCELLED")
@@ -115,6 +140,12 @@ func TestRunCancellationServiceCodeDoesNotClassifyContent(t *testing.T) {
 	}
 }
 
+// TestRunCancellationServiceCodeNestedHTTPProjection checks nested owner event-list projection and
+// localization preserve canonical cancellation codes for run/node state and turn-progress event
+// shapes.
+// TestRunCancellationServiceCodeNestedHTTPProjection проверяет сохранение канонических кодов
+// отмены при вложенной проекции списка событий владельца и локализации для run/node state и
+// turn-progress форм.
 func TestRunCancellationServiceCodeNestedHTTPProjection(t *testing.T) {
 	for _, shape := range []struct {
 		kind        cp.RunEventType
@@ -139,6 +170,12 @@ func TestRunCancellationServiceCodeNestedHTTPProjection(t *testing.T) {
 	}
 }
 
+// TestRunCancellationServiceCodeHTTPOutput writes a localized event through the real HTTP message
+// writer and decodes the generated DTO to verify status, localized summary and valid typed
+// serviceCode.
+// TestRunCancellationServiceCodeHTTPOutput выдаёт локализованное событие настоящим HTTP writer и
+// декодирует generated DTO для проверки статуса, переведённой сводки и корректного typed
+// serviceCode.
 func TestRunCancellationServiceCodeHTTPOutput(t *testing.T) {
 	writer := &localizingRecorder{ResponseRecorder: httptest.NewRecorder()}
 	writeMessage(writer, http.StatusOK, cancellationProjectionEvent("RUN_CANCELLED"), "", "")
@@ -151,6 +188,12 @@ func TestRunCancellationServiceCodeHTTPOutput(t *testing.T) {
 	}
 }
 
+// assertNoCancellationServiceCode uses the real message projection and fails if any serviceCode
+// appears on the supplied content/unknown event. Helper attribution keeps failures at the caller
+// scenario.
+// assertNoCancellationServiceCode использует настоящую проекцию сообщения и отклоняет появление
+// любого serviceCode у переданного содержательного или неизвестного события. Отметка Helper
+// относит ошибку к сценарию caller.
 func assertNoCancellationServiceCode(t *testing.T, event *cp.RunEvent) {
 	t.Helper()
 	got, err := messageMap(event)

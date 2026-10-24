@@ -23,12 +23,6 @@ var modelProviderKey = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,79}$`)
 // исключая произвольную диагностику из этого публичного поля.
 var modelBlocker = regexp.MustCompile(`^[A-Z0-9_]{1,80}$`)
 
-// modelCatalogDigest recognizes exactly 64 lowercase hexadecimal characters used for catalog and
-// related content digests; callers separately verify the digest relationship.
-// modelCatalogDigest распознаёт ровно 64 шестнадцатеричных символа нижнего регистра для дайджестов
-// каталога и связанного содержимого; связь дайджеста отдельно проверяют callers.
-var modelCatalogDigest = regexp.MustCompile(`^[a-f0-9]{64}$`)
-
 // ListModelCapabilities validates optional provider/account and expected catalog pins, queries CP
 // and rejects malformed pages, duplicate model identities or scope mismatches before output.
 // Eligibility comes from the owner response rather than the requested account ref.
@@ -42,7 +36,7 @@ func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Reque
 	}
 	key, account := stringValue(p.ProviderDefinitionKey), stringValue(p.ProviderAccountRef)
 	revision, digest := stringValue(p.ExpectedCatalogRevision), stringValue(p.ExpectedCatalogDigest)
-	if (p.ExpectedCatalogRevision != nil || p.ExpectedCatalogDigest != nil) && (!modelCatalogDigest.MatchString(digest) || revision != "mcat_"+digest) {
+	if (p.ExpectedCatalogRevision != nil || p.ExpectedCatalogDigest != nil) && (!validManagedDigest(digest) || revision != "mcat_"+digest) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
@@ -59,7 +53,7 @@ func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Reque
 		writeRPCProblem(w, err)
 		return
 	}
-	if response == nil || !modelCatalogDigest.MatchString(response.GetCatalogDigest()) || response.GetCatalogRevision() != "mcat_"+response.GetCatalogDigest() ||
+	if response == nil || !validManagedDigest(response.GetCatalogDigest()) || response.GetCatalogRevision() != "mcat_"+response.GetCatalogDigest() ||
 		revision != "" && (response.GetCatalogRevision() != revision || response.GetCatalogDigest() != digest) || response.Total < int64(len(response.Models)) || response.Total > maximumSafeJSONInteger ||
 		len(response.Models) > int(page(p.PageSize, p.PageToken).PageSize) || len(response.GetPage().GetNextPageToken()) > 512 || !utf8.ValidString(response.GetPage().GetNextPageToken()) {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)

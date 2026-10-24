@@ -10,6 +10,14 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// ConfigureEmailMailboxCredential validates kind-specific credential bounds, clears its copied
+// mutable value buffer on return and delegates the exact connection mutation to the owner. Success
+// requires the expected next connection version/generation and returns metadata only; the function
+// does not claim complete erasure of all string copies.
+// ConfigureEmailMailboxCredential проверяет ограничения credential по виду, очищает скопированный
+// изменяемый value буфер при возврате и поручает точную мутацию connection владельцу. Успех
+// требует следующую ожидаемую версию/generation и возвращает только metadata; полное удаление всех
+// строковых копий из памяти не гарантируется.
 func (server *Server) ConfigureEmailMailboxCredential(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.ConfigureEmailMailboxCredentialParams) {
 	if !opaqueHTTPReference.MatchString(ref) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)

@@ -8,6 +8,13 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// writeOwnerGatePage checks owner page counts/cursor and distinct gate identity, scope, version
+// and requested state filters, then uses the shared normalized gate projection. Empty items remain
+// an array; malformed data rejects the whole page without inferring gate-resolution authority.
+// writeOwnerGatePage проверяет counts/cursor страницы владельца, уникальность gate identity,
+// область, версию и запрошенные state фильтры, затем использует общую нормализованную проекцию
+// шлюза. Пустые items остаются массивом; неверные данные отклоняют всю страницу без вывода права
+// решения шлюза.
 func writeOwnerGatePage(w http.ResponseWriter, response *cp.ListOwnerGatesResponse, project string, state cp.OwnerGateState, states []cp.OwnerGateState, limit int) {
 	next := response.GetPage().GetNextPageToken()
 	if response == nil || response.Total < int64(len(response.Gates)) || response.Total > maximumSafeJSONInteger || len(response.Gates) > limit || len(next) > 512 || !utf8.ValidString(next) {

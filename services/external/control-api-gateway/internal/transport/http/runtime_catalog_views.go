@@ -71,7 +71,7 @@ type canonicalOverlaySchema struct {
 // владельца и связь cos_ revision. Проверяется заявленная схема без изменения исполняемой политики
 // overlay.
 func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
-	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 5 || !modelCatalogDigest.MatchString(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
+	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 5 || !validManagedDigest(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
 		return false
 	}
 	canonical := canonicalOverlaySchema{MaximumBytes: schema.MaximumBytes, Fields: []canonicalOverlayField{}}
@@ -195,7 +195,7 @@ func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) erro
 		}
 	case *cp.ProviderAccountCandidate:
 		unpinned := item.CatalogRevision == "" && item.CatalogDigest == "" && item.ProviderDefinitionKey == ""
-		if !unpinned && (!modelCatalogDigest.MatchString(item.CatalogDigest) || item.CatalogRevision != "mcat_"+item.CatalogDigest || !modelProviderKey.MatchString(item.ProviderDefinitionKey)) || item.DefaultReasoningEffort != "" && (!runtimeEffortPattern.MatchString(item.DefaultReasoningEffort) || unpinned) {
+		if !unpinned && (!validManagedDigest(item.CatalogDigest) || item.CatalogRevision != "mcat_"+item.CatalogDigest || !modelProviderKey.MatchString(item.ProviderDefinitionKey)) || item.DefaultReasoningEffort != "" && (!runtimeEffortPattern.MatchString(item.DefaultReasoningEffort) || unpinned) {
 			return invalidRuntimeCatalogView("provider_account_candidate")
 		}
 	case *cp.ProviderAccountUsage:
@@ -211,7 +211,7 @@ func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) erro
 			return invalidRuntimeCatalogView("workflow")
 		}
 	case *cp.ConfigOverlayVersion:
-		if len(item.Diagnostics) > 16 || (item.SchemaRevision != "" || item.SchemaDigest != "") && (!modelCatalogDigest.MatchString(item.SchemaDigest) || item.SchemaRevision != "cos_"+item.SchemaDigest) {
+		if len(item.Diagnostics) > 16 || (item.SchemaRevision != "" || item.SchemaDigest != "") && (!validManagedDigest(item.SchemaDigest) || item.SchemaRevision != "cos_"+item.SchemaDigest) {
 			return invalidRuntimeCatalogView("config_overlay")
 		}
 		for _, diagnostic := range item.Diagnostics {

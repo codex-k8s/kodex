@@ -6,6 +6,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// promptContextPinView projects optional bounded refs, versions and digests only when their
+// required companion fields are present together. The overall context digest is mandatory; the
+// result describes owner-pinned state without fetching prompt contents.
+// promptContextPinView проецирует необязательные ограниченные refs, версии и digests только при
+// согласованном наличии связанных полей. Общий digest контекста обязателен; результат описывает
+// закреплённое владельцем состояние без чтения prompt содержимого.
 func promptContextPinView(v *cp.PromptContextPin) (map[string]any, bool) {
 	if v == nil {
 		return nil, true
@@ -50,6 +56,12 @@ func promptContextPinView(v *cp.PromptContextPin) (map[string]any, bool) {
 	return result, true
 }
 
+// promptDiagnosticViews converts at most 100 bounded ERROR/WARNING diagnostics with valid codes
+// and positive source positions, omitting absent variable names and preserving an explicit empty
+// result array.
+// promptDiagnosticViews преобразует не более 100 ограниченных ERROR/WARNING diagnostics с
+// корректными кодами и положительными координатами, пропуская отсутствующие имена переменных и
+// сохраняя явный пустой массив результата.
 func promptDiagnosticViews(values []*cp.PromptTemplateDiagnostic) ([]any, bool) {
 	if len(values) > 100 {
 		return nil, false
@@ -68,6 +80,10 @@ func promptDiagnosticViews(values []*cp.PromptTemplateDiagnostic) ([]any, bool) 
 	return result, true
 }
 
+// validPromptDiagnosticCode accepts one to eighty ASCII uppercase letters, digits or underscores
+// without expanding an arbitrary error string into a public diagnostic code.
+// validPromptDiagnosticCode допускает от одного до восьмидесяти ASCII букв верхнего регистра, цифр
+// и подчёркиваний без преобразования произвольной ошибки в публичный диагностический код.
 func validPromptDiagnosticCode(value string) bool {
 	if len(value) < 1 || len(value) > 80 {
 		return false
@@ -80,6 +96,12 @@ func validPromptDiagnosticCode(value string) bool {
 	return true
 }
 
+// promptValidationView validates diagnostics and optional context pin before projecting validity.
+// A response marked valid cannot contain ERROR diagnostics; invalid responses may still carry safe
+// warnings and pin metadata.
+// promptValidationView проверяет diagnostics и необязательный context pin до проекции valid. Ответ
+// с valid не может содержать ERROR; неверный результат может переносить безопасные предупреждения
+// и метаданные pin.
 func promptValidationView(v *cp.ValidatePromptTemplateResponse) (map[string]any, bool) {
 	if v == nil {
 		return nil, false
@@ -106,6 +128,10 @@ func promptValidationView(v *cp.ValidatePromptTemplateResponse) (map[string]any,
 	return result, true
 }
 
+// promptSlotName maps only the explicit semantic platform slot allowlist from protobuf to public
+// names, rejecting unknown and unspecified values rather than accepting an arbitrary enum suffix.
+// promptSlotName преобразует только явный разрешённый набор semantic platform slot из protobuf в
+// публичные имена, отклоняя неизвестные и unspecified значения вместо произвольного enum суффикса.
 func promptSlotName(v cp.PromptSemanticSlot) (string, bool) {
 	name, ok := cp.PromptSemanticSlot_name[int32(v)]
 	name = strings.TrimPrefix(name, "PROMPT_SEMANTIC_SLOT_")
@@ -120,6 +146,10 @@ func promptSlotName(v cp.PromptSemanticSlot) (string, bool) {
 	}
 }
 
+// promptSourceName maps only PLATFORM and USER_TEMPLATE section sources, keeping an unknown source
+// distinct from either trusted platform content or user text.
+// promptSourceName преобразует только источники секций PLATFORM и USER_TEMPLATE, не смешивая
+// неизвестный источник с доверенным platform содержимым или пользовательским текстом.
 func promptSourceName(v cp.PromptSectionSource) (string, bool) {
 	switch v {
 	case cp.PromptSectionSource_PROMPT_SECTION_SOURCE_PLATFORM:
@@ -131,6 +161,14 @@ func promptSourceName(v cp.PromptSectionSource) (string, bool) {
 	}
 }
 
+// promptPreviewView validates preview/full-output mode, immutable digests, context pin and ordered
+// semantic slots/sections with consistent user-template provenance. Complete previews cannot carry
+// blocking diagnostics; runtime diff must match its previous revision pin. Full content is emitted
+// only in the explicitly requested full mode.
+// promptPreviewView проверяет режим preview/full, immutable digests, context pin и упорядоченные
+// semantic slots/sections с согласованным происхождением пользовательских шаблонов. Полный preview
+// не содержит блокирующих diagnostics; runtime diff совпадает с pin прошлой ревизии. Полное
+// содержимое выдаётся только в явно запрошенном full режиме.
 func promptPreviewView(v *cp.PreviewPromptTemplateResponse, full bool) (map[string]any, bool) {
 	if v == nil || !fileTargetRef(v.TemplateRef) || !promptText(v.SafePreview, 256<<10) || !promptText(v.FullMaterializedPrompt, 1<<20) || !full && v.FullMaterializedPrompt != "" || full && v.FullMaterializedPrompt == "" || !promptText(v.ServiceTemplateRevision, 128) || v.ServiceTemplateRevision == "" || !promptText(v.Locale, 16) || v.Locale == "" || len(v.Slots) < 1 || len(v.Slots) > 11 || len(v.Sections) < 1 || len(v.Sections) > 32 || len(v.EffectiveCapabilities) > 128 {
 		return nil, false

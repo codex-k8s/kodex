@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// PrepareInstructionsImpact delegates exact agent-instruction impact preparation under mutation
+// headers and accepts only a PREPARED AGENT_INSTRUCTIONS plan bound to the requested agent and
+// expected source version.
+// PrepareInstructionsImpact поручает подготовку impact точных инструкций агента с mutation
+// заголовками и принимает только PREPARED AGENT_INSTRUCTIONS plan с запрошенным агентом и
+// ожидаемой source version.
 func (s *Server) PrepareInstructionsImpact(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.PrepareInstructionsImpactParams) {
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -30,6 +36,12 @@ func (s *Server) PrepareInstructionsImpact(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, plan)
 }
 
+// PreparePromptTemplateImpact prepares impact for an exact configuration revision and requires the
+// PREPARED PROMPT_TEMPLATE plan to match configuration, expected source version and selected
+// revision. No publication or rebinding occurs here.
+// PreparePromptTemplateImpact готовит impact точной revision конфигурации и требует совпадения
+// PREPARED PROMPT_TEMPLATE plan с configuration, ожидаемой source version и выбранной revision.
+// Публикация и rebind здесь не выполняются.
 func (s *Server) PreparePromptTemplateImpact(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, revision generated.ConfigurationRevisionRef, p generated.PreparePromptTemplateImpactParams) {
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -52,6 +64,12 @@ func (s *Server) PreparePromptTemplateImpact(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, plan)
 }
 
+// validRevisionImpactSelection requires a valid plan ref and an explicitly present selection of at
+// most 1000 unique valid item refs. An empty selection is allowed, while nil is rejected to
+// preserve intentional selection semantics.
+// validRevisionImpactSelection требует корректный plan ref и явно присутствующий выбор не более
+// 1000 уникальных корректных item refs. Пустой выбор разрешён, а nil отклоняется для сохранения
+// явного намерения выбора.
 func validRevisionImpactSelection(ref string, items []string) bool {
 	if !fileTargetRef(ref) || items == nil || len(items) > 1000 {
 		return false
@@ -66,6 +84,13 @@ func validRevisionImpactSelection(ref string, items []string) bool {
 	return true
 }
 
+// publishInstructionsWithImpact requires explicit plan/selected items without a caller-assigned
+// published instruction ref and delegates the specialized owner publication. It validates an
+// APPLIED version-two plan and the exact advanced agent version before emitting agent metadata and
+// plan with ETag.
+// publishInstructionsWithImpact требует явные plan/selected items без назначенного caller
+// published instruction ref и поручает специализированную публикацию владельцу. До metadata агента
+// и plan с ETag проверяются APPLIED plan версии два и точная возросшая версия агента.
 func (s *Server) publishInstructionsWithImpact(w http.ResponseWriter, r *http.Request, ref string, mutation *cp.MutationContext, body generated.InstructionCommand) {
 	if body.PlanRef == nil || body.SelectedItemRefs == nil || body.PublishedInstructionRef != nil || !validRevisionImpactSelection(*body.PlanRef, *body.SelectedItemRefs) {
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)

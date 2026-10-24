@@ -8,6 +8,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestProjectAssistantGrantCandidateProjectionRequiresExactProfile checks the project-profile
+// wrapper preserves the shared organization candidate projection and rejects foreign project,
+// absent profile/version plus malformed shared owner/connection/grant pins.
+// TestProjectAssistantGrantCandidateProjectionRequiresExactProfile проверяет сохранение общей
+// организационной проекции кандидатов проектным profile wrapper и отказ для чужого проекта,
+// отсутствующих profile/version и неверных общих owner/connection/grant pins.
 func TestProjectAssistantGrantCandidateProjectionRequiresExactProfile(t *testing.T) {
 	base := &cp.GetProjectAssistantIntegrationGrantCandidatesResponse{
 		ScopeKind:       cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION,

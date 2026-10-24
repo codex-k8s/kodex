@@ -8,6 +8,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// systemRunIdentityFixture builds a synthetic system-assistant run with explicit
+// organization/conversation/assistant pins and no project/profile by default. It contains identity
+// metadata only, without a live execution or grant.
+// systemRunIdentityFixture собирает синтетический запуск системного помощника с явными
+// organization/conversation/assistant pins и без project/profile по умолчанию. Это только identity
+// metadata без живого исполнения и grant.
 func systemRunIdentityFixture() *cp.Run {
 	return &cp.Run{
 		Ref: "run_fixture01", Source: cp.RunSource_RUN_SOURCE_SYSTEM_ASSISTANT,
@@ -17,6 +23,12 @@ func systemRunIdentityFixture() *cp.Run {
 	}
 }
 
+// TestAssistantRunIdentityIsClosedAndPreserved checks system and project assistant runs retain
+// exact target/version and context-pin fields through graph projection, with absent optional
+// system project/profile omitted and valid public JSON.
+// TestAssistantRunIdentityIsClosedAndPreserved проверяет сохранение точных target/version и
+// context-pin полей system и project помощников через проекцию графа, отсутствие пустых optional
+// system project/profile и корректный публичный JSON.
 func TestAssistantRunIdentityIsClosedAndPreserved(t *testing.T) {
 	t.Parallel()
 	for _, scope := range []cp.AssistantScope{cp.AssistantScope_ASSISTANT_SCOPE_SYSTEM, cp.AssistantScope_ASSISTANT_SCOPE_PROJECT} {
@@ -50,6 +62,12 @@ func TestAssistantRunIdentityIsClosedAndPreserved(t *testing.T) {
 	}
 }
 
+// TestAssistantRunIdentityRejectsMixedPins mutates missing/unknown assistant pins, foreign
+// organization context, profile/source and target disguises and requires graph projection failure
+// rather than accepting mixed run identity.
+// TestAssistantRunIdentityRejectsMixedPins меняет отсутствующие и неизвестные assistant pins,
+// чужой context, profile/source и маскировку target и требует отказа проекции графа вместо
+// принятия смешанной identity запуска.
 func TestAssistantRunIdentityRejectsMixedPins(t *testing.T) {
 	t.Parallel()
 	cases := map[string]func(*cp.Run){

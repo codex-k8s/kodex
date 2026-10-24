@@ -5464,6 +5464,14 @@
       "fragmentSHA256": "0d04478501c792921a11aa132354ada2bdb940feab01d773aca785bb5f98d507",
       "count": 1,
       "reason": "129-token окно сравнивает CreateAccessBinding и ChangeAccessBinding: create включает subject kind/ref, change сохраняет subject и принимает bindingRef; команды, full method и owner lifecycle различны. execute уже общий для principal, mutation и ошибок, а domainAccessScope/domainAccessConditions общие для значений. Остался specialized command wiring с nominal response, не независимый алгоритм. Универсальный dispatcher спрятал бы различие authority/input. Исключена только exact пара/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/project_assistant_integration_endpoints_test.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/system_assistant_integration_endpoints_test.go",
+      "fragmentSHA256": "5269ebbe6616dba4825944174de363584aca9334fdc072884f93f5e77105cd1c",
+      "count": 1,
+      "reason": "Точное окно таблиц отрицательных сценариев проверяет одинаковые повреждения общих owner/connection/grant полей в разных nominal protobuf responses: project и system assistant candidates. Project-тест дополнительно проверяет собственные project/profile/version pins и отдельный wrapper, system-тест — организационную проекцию. Оба полных теста прочитаны; generic mutator потребует reflection/переупаковки разных DTO либо общего production converter и ослабит независимость fixtures от проверяемой проекции. Сохранены отдельные типизированные mutations и asserts, а не исключены файлы или все тесты."
     }
   ]
 }

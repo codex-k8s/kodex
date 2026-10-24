@@ -25,6 +25,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// speechClientStub records transcription call count and context and returns a configured synthetic
+// stream/error while embedding unused generated client methods. It contacts no STT service.
+// speechClientStub сохраняет число вызовов транскрипции и контекст и возвращает заданные
+// синтетические stream/error, встраивая неиспользуемые generated методы. STT сервис не вызывается.
 type speechClientStub struct {
 	sttv1.SpeechToTextServiceClient
 	stream *speechStreamStub
@@ -33,12 +37,20 @@ type speechClientStub struct {
 	err    error
 }
 
+// Transcribe records the caller context and increments the stub invocation count before returning
+// the configured stream and startup error. Context cancellation can then be asserted by the test.
+// Transcribe сохраняет контекст caller и увеличивает число вызовов stub перед возвратом заданных
+// stream и startup ошибки. Тест затем может проверить отмену контекста.
 func (client *speechClientStub) Transcribe(ctx context.Context, _ ...grpc.CallOption) (sttv1.SpeechToTextService_TranscribeClient, error) {
 	client.calls++
 	client.ctx = ctx
 	return client.stream, client.err
 }
 
+// speechStreamStub stores sent typed messages and configured response/send/receive errors,
+// allowing transport envelope and early server-denial behavior to be tested without a provider.
+// speechStreamStub хранит отправленные typed сообщения и заданные response/send/receive ошибки для
+// проверки transport envelope и раннего отказа сервера без провайдера.
 type speechStreamStub struct {
 	grpc.ClientStream
 	messages []*sttv1.TranscribeRequest
@@ -47,6 +59,10 @@ type speechStreamStub struct {
 	recvErr  error
 }
 
+// Send returns the configured send error before recording a message, otherwise appends the exact
+// request pointer for later envelope/chunk assertions.
+// Send возвращает заданную send ошибку до сохранения сообщения, иначе добавляет точный указатель
+// request для последующих проверок envelope/chunks.
 func (stream *speechStreamStub) Send(message *sttv1.TranscribeRequest) error {
 	if stream.sendErr != nil {
 		return stream.sendErr
@@ -55,10 +71,20 @@ func (stream *speechStreamStub) Send(message *sttv1.TranscribeRequest) error {
 	return nil
 }
 
+// CloseAndRecv returns the configured terminal response and receive error without inventing a
+// successful receipt or performing stream I/O.
+// CloseAndRecv возвращает заданные terminal response и receive ошибку без выдуманного успешного
+// receipt и без stream I/O.
 func (stream *speechStreamStub) CloseAndRecv() (*sttv1.TranscribeResponse, error) {
 	return stream.response, stream.recvErr
 }
 
+// TestForwardAudioPartUsesBoundedBackpressure checks bounded chunk sizes and exact digest/count,
+// then injects a downstream send failure and proves forwarding does not read beyond the first
+// chunk after backpressure failure.
+// TestForwardAudioPartUsesBoundedBackpressure проверяет ограниченные chunks и точные digest/count,
+// затем задаёт отказ downstream send и доказывает отсутствие чтения дальше первого chunk после
+// backpressure ошибки.
 func TestForwardAudioPartUsesBoundedBackpressure(t *testing.T) {
 	raw := bytes.Repeat([]byte("a"), maximumAudioChunkBytes*2+7)
 	chunkSizes := make([]int, 0)
@@ -85,17 +111,31 @@ func TestForwardAudioPartUsesBoundedBackpressure(t *testing.T) {
 	}
 }
 
+// countingReader wraps a byte reader with an observed-byte counter for detecting read-ahead after
+// a failed send, without changing the underlying read semantics.
+// countingReader оборачивает byte reader счётчиком наблюдённых байтов для обнаружения read-ahead
+// после отказа send без изменения исходной семантики чтения.
 type countingReader struct {
 	reader *bytes.Reader
 	bytes  int
 }
 
+// Read forwards the underlying reader result and increments the observed count by returned bytes,
+// including reads that return an error alongside data.
+// Read передаёт результат исходного reader и увеличивает наблюдённый count на полученные байты,
+// включая чтение с данными вместе с ошибкой.
 func (reader *countingReader) Read(output []byte) (int, error) {
 	count, err := reader.reader.Read(output)
 	reader.bytes += count
 	return count, err
 }
 
+// TestTranscribeSpeechStreamsMultipartAndReturnsSafeReceipt checks a multipart project upload
+// produces metadata/chunks/commit with the exact declared size and returns transcript without
+// private actor/tenant/project/provider receipt fields.
+// TestTranscribeSpeechStreamsMultipartAndReturnsSafeReceipt проверяет передачу multipart загрузки
+// проекта как metadata/chunks/commit с точным объявленным размером и выдачу текста без приватных
+// actor/tenant/project/provider полей receipt.
 func TestTranscribeSpeechStreamsMultipartAndReturnsSafeReceipt(t *testing.T) {
 	audio := bytes.Repeat([]byte("audio"), 20_000)
 	body := &bytes.Buffer{}
@@ -143,6 +183,11 @@ func TestTranscribeSpeechStreamsMultipartAndReturnsSafeReceipt(t *testing.T) {
 	}
 }
 
+// TestTranscribeSpeechRejectsEnvelopeBeforeRPC requires unsupported nonmultipart input to return a
+// problem+json 415 without invoking the STT client, proving envelope rejection precedes downstream
+// work.
+// TestTranscribeSpeechRejectsEnvelopeBeforeRPC требует problem+json 415 для неподдерживаемого
+// немultipart входа без вызова STT клиента, доказывая отказ envelope до downstream работы.
 func TestTranscribeSpeechRejectsEnvelopeBeforeRPC(t *testing.T) {
 	client := &speechClientStub{stream: &speechStreamStub{}}
 	server := &Server{speech: client}
@@ -157,6 +202,12 @@ func TestTranscribeSpeechRejectsEnvelopeBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestOrganizationSpeechSupportsBrowserFormatsAndCancelsStream exercises supported browser audio
+// MIME aliases/codecs through the generated organization route and proves an upstream send failure
+// returns 503 while cancelling the stream context.
+// TestOrganizationSpeechSupportsBrowserFormatsAndCancelsStream проверяет поддерживаемые browser
+// audio MIME aliases/codecs через generated организационный маршрут и доказывает 503 при upstream
+// send ошибке с отменой stream контекста.
 func TestOrganizationSpeechSupportsBrowserFormatsAndCancelsStream(t *testing.T) {
 	for _, mediaType := range []string{"audio/mp3", "audio/mpga", "audio/webm; codecs=opus", "audio/ogg; codecs=opus", "audio/mp4", "audio/x-m4a", "audio/flac", "audio/wav"} {
 		t.Run(mediaType, func(t *testing.T) {
@@ -188,6 +239,12 @@ func TestOrganizationSpeechSupportsBrowserFormatsAndCancelsStream(t *testing.T) 
 	}
 }
 
+// TestSpeechPreservesEmptySingularHintAndRejectsUploadPolicy keeps empty and explicit language
+// hints intact, rejects invalid receipt language and caller-supplied model/timeout parts, and
+// verifies rejected policy fields never reach commit and cancel the stream.
+// TestSpeechPreservesEmptySingularHintAndRejectsUploadPolicy сохраняет пустой и явный language
+// hint, отклоняет неверный язык receipt и переданные caller model/timeout части и проверяет
+// отсутствие commit и отмену stream при отказе policy полям.
 func TestSpeechPreservesEmptySingularHintAndRejectsUploadPolicy(t *testing.T) {
 	for _, tc := range []struct {
 		name, language, extra string
@@ -252,6 +309,12 @@ func TestSpeechPreservesEmptySingularHintAndRejectsUploadPolicy(t *testing.T) {
 	}
 }
 
+// TestSpeechAvailabilityUsesProtectedStreamWithoutAudio checks bootstrap availability uses one
+// protected availability-only stream message, preserves the bounded expiry, cancels the context
+// and omits internal eligibility under no-store.
+// TestSpeechAvailabilityUsesProtectedStreamWithoutAudio проверяет единственное защищённое
+// availability-only stream сообщение для bootstrap, сохранение ограниченного expiry, отмену
+// контекста и отсутствие внутреннего eligibility под no-store.
 func TestSpeechAvailabilityUsesProtectedStreamWithoutAudio(t *testing.T) {
 	until := time.Now().Add(20 * time.Second)
 	client := &speechClientStub{stream: &speechStreamStub{response: &sttv1.TranscribeResponse{Availability: &sttv1.CheckProtectedPathResponse{
@@ -276,6 +339,12 @@ func TestSpeechAvailabilityUsesProtectedStreamWithoutAudio(t *testing.T) {
 	}
 }
 
+// TestSpeechAvailabilityFailsClosedWithoutBreakingBootstrap covers absent/denied owner policy,
+// unknown reasons, transport denial, missing/stale/oversized lease and credential-stage failure,
+// requiring unavailable results with closed reasons and expected RPC counts.
+// TestSpeechAvailabilityFailsClosedWithoutBreakingBootstrap проверяет отсутствие/отказ policy
+// владельца, неизвестные причины, transport denial, отсутствующий/истёкший/длинный lease и
+// credential отказ, требуя unavailable с закрытыми причинами и ожидаемым числом RPC.
 func TestSpeechAvailabilityFailsClosedWithoutBreakingBootstrap(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -305,6 +374,12 @@ func TestSpeechAvailabilityFailsClosedWithoutBreakingBootstrap(t *testing.T) {
 	}
 }
 
+// TestSpeechRejectsUnsupportedFormatsAndMalformedLengthBeforeRPC rejects unsupported MIME/codec
+// parameters and impossible/oversized content lengths with their expected HTTP statuses before any
+// transcription RPC.
+// TestSpeechRejectsUnsupportedFormatsAndMalformedLengthBeforeRPC отклоняет неподдерживаемые
+// MIME/codec параметры и невозможные либо длинные content lengths с ожидаемыми HTTP статусами до
+// любого RPC транскрипции.
 func TestSpeechRejectsUnsupportedFormatsAndMalformedLengthBeforeRPC(t *testing.T) {
 	for _, tc := range []struct {
 		mediaType     string
@@ -344,6 +419,12 @@ func TestSpeechRejectsUnsupportedFormatsAndMalformedLengthBeforeRPC(t *testing.T
 	}
 }
 
+// TestUnavailableSpeechBootstrapHasExplicitFalseAndNoError proves an absent attached STT client
+// preserves successful bootstrap HTTP 200 while explicitly reporting available false and a safe
+// unavailable reason.
+// TestUnavailableSpeechBootstrapHasExplicitFalseAndNoError доказывает сохранение успешного
+// bootstrap HTTP 200 при отсутствии STT клиента с явными available false и безопасной причиной
+// недоступности.
 func TestUnavailableSpeechBootstrapHasExplicitFalseAndNoError(t *testing.T) {
 	server := &Server{}
 	response := httptest.NewRecorder()
@@ -353,6 +434,12 @@ func TestUnavailableSpeechBootstrapHasExplicitFalseAndNoError(t *testing.T) {
 	}
 }
 
+// TestSpeechEarlyStreamClosurePreservesServerDenial checks Send EOF resolves the receive-side
+// PermissionDenied/ResourceExhausted statuses and treats an unexpectedly successful close as
+// invalid upstream 502.
+// TestSpeechEarlyStreamClosurePreservesServerDenial проверяет разрешение Send EOF в receive-side
+// статусы PermissionDenied/ResourceExhausted и трактовку неожиданно успешного закрытия как
+// неверного upstream 502.
 func TestSpeechEarlyStreamClosurePreservesServerDenial(t *testing.T) {
 	for _, tc := range []struct {
 		err  error

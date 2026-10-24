@@ -66,7 +66,7 @@ func validProviderBlockerKind(kind cp.ProviderAccountBlockerKind) bool {
 func validProviderBlockerPage(p *cp.ListProviderAccountBlockersResponse, kind cp.ProviderAccountBlockerKind, size *int, cursor string) bool {
 	if p == nil || !validManagedVersion(p.AccountVersion) || p.DeletionIntentVersion < 0 || p.DeletionIntentVersion > maximumSafeJSONInteger ||
 		p.Total < int64(len(p.Items)) || p.Total > maximumSafeJSONInteger || p.HiddenCount < 0 || p.HiddenCount > maximumSafeJSONInteger ||
-		!modelCatalogDigest.MatchString(p.ContextDigest) || len(p.Items) > 100 || size != nil && len(p.Items) > *size {
+		!validManagedDigest(p.ContextDigest) || len(p.Items) > 100 || size != nil && len(p.Items) > *size {
 		return false
 	}
 	seen := map[string]bool{}
@@ -112,7 +112,7 @@ func (server *Server) CancelProviderAccountQueuedWork(w http.ResponseWriter, r *
 		seen[value] = true
 		refs = append(refs, value)
 	}
-	if !effectiveCapabilityRef(ref) || len(refs) < 1 || len(refs) > 64 || !modelCatalogDigest.MatchString(body.BlockersDigest) {
+	if !effectiveCapabilityRef(ref) || len(refs) < 1 || len(refs) > 64 || !validManagedDigest(body.BlockersDigest) {
 		writeLocalProblem(w, http.StatusBadRequest, "INPUT_INVALID", false)
 		return
 	}

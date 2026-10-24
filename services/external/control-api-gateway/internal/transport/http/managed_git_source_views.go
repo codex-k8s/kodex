@@ -6,6 +6,14 @@ import (
 	"strings"
 )
 
+// managedGitSourceView validates Git source metadata only for supported configuration kinds,
+// including provider/location, state/failure consistency and complete accepted
+// commit/content/revision/time pins. UI ownership must correspond to DETACHED; no source
+// synchronization or write is performed.
+// managedGitSourceView проверяет Git source metadata только поддерживаемых видов конфигурации,
+// включая provider/location, согласованность state/failure и полные принятые
+// commit/content/revision/time pins. UI владение соответствует DETACHED; синхронизация и запись
+// источника не выполняются.
 func managedGitSourceView(configuration *cp.ManagedConfigurationSet) (*generated.ManagedConfigurationGitSource, error) {
 	value := configuration.GetGitSource()
 	if value == nil {
