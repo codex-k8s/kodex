@@ -4495,6 +4495,25 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	}
 }
 
+// testProjectMembershipCandidate checks existing-owner authority resolution under an unrelated
+// organization lock, then onboards a synthetic subject through separate organization and project
+// memberships. Canonical access-binding projections and immutable role versions must match
+// presentation permissions; assigned candidates disappear and read-only resource actions remain
+// OPEN. Audit/search/VFS/project visibility, cross-project references, self-change, overgrant and
+// administrator-to-owner boundaries are checked independently. Direct binding commands cannot
+// bypass protected membership projections. Organization suspension must revoke both
+// platform/project presentation bindings and subsequent proof authority. These component commands
+// exercise fixture identities, not a live OIDC login or workload execution.
+// testProjectMembershipCandidate проверяет разрешение полномочий существующего владельца при
+// посторонней блокировке организации, затем подключает синтетический subject через отдельные
+// organization и project memberships. Канонические access-binding projections и immutable role
+// versions должны соответствовать отображаемым permissions; назначенные candidates исчезают,
+// read-only resource actions остаются OPEN. Отдельно проверяются audit/search/VFS/project
+// visibility, чужие project refs, изменение собственных прав, overgrant и administrator-to-owner
+// boundaries. Прямые binding commands не обходят защищённые membership projections. Приостановка
+// organization membership должна отозвать platform/project presentation bindings и последующие
+// proof authority. Компонентные команды используют тестовые identities без живого OIDC login или
+// исполнения workload.
 func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
@@ -4918,6 +4937,24 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	}
 }
 
+// testScheduleLifecycle normalizes a schedule and pins occurrence revision, input and prompt
+// binding across configuration changes and expired-lease recovery. A new lease/generation
+// preserves the captured revision; stale materialization is NotFound, successful materialization
+// clears claim fields and cancellation closes its occurrence. Disabling the target cancels its
+// claim and disables the schedule without implicit reenable. Archive preserves revision/history,
+// records one audit/event and prevents mutation/materialization/future claims. Delete returns an
+// exact terminal snapshot/replay with revoked-authority masking and removes read eligibility;
+// pause/archive OCC and explicit reenable are checked separately. Direct SQL only arranges
+// due/expiry/readback fixtures; no scheduler process or agent is started.
+// testScheduleLifecycle нормализует расписание и закрепляет occurrence revision, input и prompt
+// binding при изменении конфигурации и восстановлении истёкшего lease. Новый lease/generation
+// сохраняет captured revision; устаревшая materialization даёт NotFound, успешная очищает claim
+// fields, отмена закрывает occurrence. Выключение цели отменяет claim и выключает расписание без
+// автоматического включения. Archive сохраняет revision/history, фиксирует по одному audit/event и
+// запрещает mutation/materialization/future claims. Delete возвращает точный terminal
+// snapshot/replay с masking при отзыве полномочий и убирает read eligibility; отдельно проверяются
+// pause/archive OCC и явное включение. Прямой SQL только подготавливает due/expiry/readback
+// fixtures; scheduler process и агент не запускаются.
 func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)
@@ -5227,6 +5264,20 @@ WHERE schedule.ref = $1`, archiveCandidate.Schedule.Ref).Scan(
 	}
 }
 
+// testScheduleContractReadback creates a CONTINUE_ONE schedule, requires a complete first
+// immutable revision and checks a changed second revision through detail reads. It creates a
+// reusable session and binds its identity using a fixture UPDATE constrained by
+// organization/project, then compares detail/list projections and continuation session with the
+// same revision. Cleanup uses a separate two-second context without cancellation inheritance and
+// cancels only a nonterminal fixture run. Readback consistency does not execute an occurrence or
+// grant session authority from the SQL assignment.
+// testScheduleContractReadback создаёт CONTINUE_ONE schedule, требует полную первую immutable
+// revision и проверяет изменённую вторую revision через detail reads. Создаёт повторно
+// используемую session и связывает её identity тестовым UPDATE с ограничением по
+// organization/project, затем сравнивает detail/list projections и continuation session с той же
+// revision. Очистка использует отдельный двухсекундный context без наследования отмены и отменяет
+// только нетерминальный тестовый run. Согласованность чтения не исполняет occurrence и не выдаёт
+// session authority из SQL assignment.
 func testScheduleContractReadback(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)
@@ -5355,6 +5406,16 @@ WHERE schedule.ref = $1
 	t.Fatalf("created schedule %q is absent from list readback", created.Schedule.Ref)
 }
 
+// assertScheduleContractReadback requires the expected continuation-session ref and exact
+// current-revision identity, number, digest, name, target, schedule expression/timezone, deeply
+// equal input and session/notification policies. CreatedAt must be nonzero but is not compared to
+// the expected timestamp. Any mismatch fails the test; the helper neither recomputes the digest
+// nor validates runtime authority or scheduling execution.
+// assertScheduleContractReadback требует ожидаемый continuation-session ref и точные identity,
+// номер, digest, name, target, schedule expression/timezone текущей revision, глубоко равный input
+// и session/notification policies. CreatedAt должен быть ненулевым, но не сравнивается с ожидаемым
+// timestamp. Любое несовпадение завершает тест; helper не пересчитывает digest и не проверяет
+// runtime authority или исполнение расписания.
 func assertScheduleContractReadback(t *testing.T, item entity.Schedule, expectedRevision entity.ScheduleRevision, expectedSessionRef string) {
 	t.Helper()
 	if item.ContinueSessionRef != expectedSessionRef {
@@ -5372,6 +5433,19 @@ func assertScheduleContractReadback(t *testing.T, item entity.Schedule, expected
 	}
 }
 
+// testIdempotencyOCCAndConcurrentRuns replays an identical project command, rejects changed intent
+// under the same key and verifies current/stale project versions. Two goroutine submissions of one
+// run command must resolve to one ref and consistent project detail/list counters; after
+// cancellation, two distinct keys/inputs must create different refs. It checks every returned
+// error/Run and cancels all created runs. Buffered result channels collect outcomes without an
+// explicit start barrier, so this component fixture is not a proof of every race interleaving or
+// actual runtime execution.
+// testIdempotencyOCCAndConcurrentRuns повторяет одинаковую project command, запрещает изменённый
+// intent с тем же key и проверяет текущую/устаревшую project version. Две отправки одной run
+// command из goroutines должны дать один ref и согласованные project detail/list counters; после
+// отмены два разных keys/inputs должны создать разные refs. Проверяет каждую ошибку/Run и отменяет
+// все созданные runs. Buffered result channels собирают результаты без явного start barrier,
+// поэтому компонентная оснастка не доказывает все варианты гонки или реальное исполнение runtime.
 func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -5414,6 +5488,14 @@ func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repo
 		t.Fatalf("accept stale project version: %v", err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, first.Project.Ref, "concurrent-run-agent", "Procurement analyst")
+	// runResult pairs the Result and error of one asynchronous LaunchRun submission for same-intent
+	// and distinct-intent channel collectors. Receivers reject errors/missing Run before copying run
+	// values and comparing refs; the envelope carries no authority, ordering guarantee or
+	// synchronization outside its channel.
+	// runResult связывает Result и ошибку одной асинхронной отправки LaunchRun для channel collectors
+	// одинакового и разного intent. Получатели отклоняют ошибки/отсутствующий Run до копирования run
+	// values и сравнения refs; оболочка не несёт полномочий, гарантии порядка или синхронизации вне
+	// канала.
 	type runResult struct {
 		result command.Result
 		err    error
@@ -5501,6 +5583,18 @@ func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repo
 	}
 }
 
+// testHumanGateLifecycle publishes a one-step gated workflow and requires execution completion to
+// leave one WAITING_HUMAN run/gate with matching project/workflow card counters. APPROVE must
+// close the root graph; a new resolution key on the terminal gate is AlreadyResolved. A separate
+// REQUEST_CHANGES path requeues the agent while keeping the run active, creates a second gate
+// after rework and completes on final approval. It delegates historical-consequence/list checks;
+// these fixture commands do not represent a human review or running agent.
+// testHumanGateLifecycle публикует одношаговый workflow с gate и требует после completion один
+// WAITING_HUMAN run/gate с соответствующими project/workflow card counters. APPROVE должен закрыть
+// root graph; новый resolution key для terminal gate даёт AlreadyResolved. Отдельный путь
+// REQUEST_CHANGES возвращает агента в очередь при активном run, создаёт второй gate после
+// доработки и завершается после итогового approval. Делегирует проверки исторических последствий и
+// списка; тестовые команды не являются ручным review или работающим агентом.
 func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
@@ -5635,6 +5729,20 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }
 
+// testCoordinatorOwnedWorkflow publishes a workflow whose only stage belongs to its coordinator
+// and verifies that this exact stage is available without a global delegation capability. Bounded
+// polling allows up to sixteen empty cleanup-progress results but never accepts a foreign run.
+// Completing before executing the stage must fail with RUNTIME_WORKFLOW_INCOMPLETE and leave no
+// planned execution. The valid path materializes a child without inherited delegation targets,
+// keeps the root active after coordinator completion, then completes child and parent continuation
+// successfully with no planned nodes. No external coordinator process is executed.
+// testCoordinatorOwnedWorkflow публикует workflow с единственной стадией собственного coordinator
+// и проверяет доступность этой точной стадии без общей delegation capability. Ограниченный polling
+// допускает до шестнадцати пустых результатов продвижения cleanup, но не принимает чужой run.
+// Completion до исполнения стадии должен дать RUNTIME_WORKFLOW_INCOMPLETE без оставшегося planned
+// execution. Допустимый путь материализует child без унаследованных delegation targets, оставляет
+// root активным после coordinator completion, затем успешно завершает child и parent continuation
+// без planned nodes. Внешний coordinator process не исполняется.
 func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *platformservice.Service, owner, worker value.Principal, projectRef string, coordinator entity.Agent) {
 	t.Helper()
 	draft := entity.WorkflowVersion{
@@ -6428,6 +6536,24 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 	}
 }
 
+// testProviderCredentialCleanupLifecycle checks warm-consumer revoke protection, restores the warm
+// fixture and stages a locked active lease before concurrent revoke, which must fail closed.
+// Synthetic authorization retains the superseded descriptor for about a day; account deletion
+// accelerates three cleanup tasks. Claimed descriptor/generation pins survive expiry/reclaim,
+// stale completion is Conflict and terminal receipt replay is exact. Failure retries advance
+// attempt/generation while retaining the descriptor, eventually producing stable DEAD_LETTER
+// without another retry; authorization cleanup and terminal account readback are delegated. SQL
+// only arranges metadata/lease timing, and synthetic receipts do not prove external secret
+// deletion.
+// testProviderCredentialCleanupLifecycle проверяет защиту revoke при warm consumer,
+// восстанавливает warm fixture и подготавливает заблокированный активный lease перед параллельным
+// revoke, который должен закрыто отклоняться. Синтетическая авторизация сохраняет superseded
+// descriptor примерно сутки; удаление account ускоряет три cleanup tasks. Закреплённые
+// descriptor/generation сохраняются при expiry/reclaim, устаревший completion даёт Conflict,
+// terminal receipt повторяется точно. Retry после failure повышает attempt/generation при
+// сохранённом descriptor, затем даёт устойчивый DEAD_LETTER без следующего retry; authorization
+// cleanup и terminal account readback делегируются. SQL подготавливает только метаданные/lease
+// timing, синтетические receipts не доказывают удаление внешнего секрета.
 func testProviderCredentialCleanupLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	service, err := platformservice.New(repository)
@@ -7401,6 +7527,25 @@ func turnUsageFixture() entity.TokenUsage {
 	}
 }
 
+// testSystemAssistantTypedPlan checks effect-free repeated warm heartbeats and exact operation
+// permissions, then queues a system conversation without keyword-generated plans and preserves its
+// meaningful title. A queued immutable attachment survives soft deletion for its captured runtime
+// while new turns/ordinary reads reject it and active purge is blocked. Lease-bound
+// resource/schema search enforces fence/generation/permission and stops after completion. The
+// worker proposes a typed draft, the owner edits/validates/applies the exact revision, tool events
+// reach outbox and the final conversation retains the exact operation receipt. Terminal purge and
+// organization-scoped output download are checked independently. READY reports, synthetic
+// execution output and persisted APPLIED do not imply an external model or live assistant ran.
+// testSystemAssistantTypedPlan проверяет отсутствие новых эффектов при повторных warm heartbeats и
+// точные operation permissions, затем ставит system conversation в очередь без планов по ключевым
+// словам и сохраняет содержательный заголовок. Queued immutable attachment переживает soft
+// deletion для captured runtime, но новые turns/обычное чтение запрещены, active purge
+// заблокирован. Поиск ресурсов/схем по lease требует fence/generation/permission и прекращается
+// после completion. Worker предлагает typed draft, владелец редактирует/валидирует/применяет
+// точную revision, tool events попадают в outbox, итоговая conversation сохраняет точный operation
+// receipt. Terminal purge и скачивание organization-scoped output проверяются отдельно. READY
+// reports, синтетический execution output и сохранённый APPLIED не означают запуск внешней модели
+// или живого ассистента.
 func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

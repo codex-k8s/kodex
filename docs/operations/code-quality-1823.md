@@ -4,11 +4,67 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.407.0
+version: 1.408.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Bootstrap: завершение описаний membership, schedule и lifecycle — 25.10.2026
+
+На основе `eb0a8f35f7c8dfcdf25517e53c3d91f2249919d4` полностью прочитаны
+последние девять функций bootstrap_component_test.go(1930 исходных строк):
+testProjectMembershipCandidate, testScheduleLifecycle,
+testScheduleContractReadback, assertScheduleContractReadback,
+testIdempotencyOCCAndConcurrentRuns, testHumanGateLifecycle,
+testCoordinatorOwnedWorkflow, testProviderCredentialCleanupLifecycle и
+testSystemAssistantTypedPlan. Вложенный runResult также прочитан/описан.
+Все10 объявлений получили предметные EN→RU описания. Другие объявления этого
+файла прочитаны и описаны на предшествующих этапах; внешние вызываемые helpers
+не объявляются заново полностью проверенными только по факту их вызова.
+
+Полный AST/directive proof bootstrap относительно исходного HEAD — PASS:
+только145 строк комментариев, все assertions, SQL bytes,28 embeds, signatures,
+fixtures, порядок subtests и cleanup сохранены. Новых helpers/tests нет.
+
+| Путь / переход | Описанные границы и ограничения |
+| --- | --- |
+| Membership onboarding | Existing owner fast path при organization lock; unbound subject не получает authority. Organization membership отдельно от project membership, canonical access-binding projection и immutable role versions |
+| Read/management | OPEN-only resource actions, audit/search/VFS eligibility, чужие project refs, запрет self-change/overgrant/administrator-to-owner. Direct binding commands не обходят protected membership projection |
+| Suspension | Organization suspension закрывает platform/project presentation bindings и proof authority; list readback не оставляет active project membership |
+| Schedule capture | Нормализация, captured revision/input/template сохраняются после source change и expiry. Новые lease/generation, старый claim NotFound, materialization/cancel очищают claim; target reenable не включает schedule автоматически |
+| Archive/delete | Immutable revision/history,1 matching audit/1 event на переход, запрет future claim/mutation/materialization. Exact terminal snapshot/replay и revoked-authority masking; pause/archive OCC и explicit reenable отдельны |
+| Schedule readback | Revision1→2, detail/list/session ref equality, nonzero CreatedAt без сравнения timestamp. Fixture session UPDATE ограничен org/project; cleanup получает отдельный bounded WithoutCancel context |
+| Idempotency/OCC | Один project intent replay, reuse другого intent запрещён; current/stale versions. Same-intent goroutines→один ref/counters, different keys→разные refs, затем cancel. Явного start barrier нет, все варианты гонок не заявляются |
+| Human Gate | WAITING_HUMAN/cards, APPROVE закрывает graph, новый terminal resolution key AlreadyResolved; REQUEST_CHANGES requeues execution и создаёт новый gate после rework |
+| Own coordinator stage | Exact own stage без global delegation capability, не более16 polls с учётом cleanup progress. Пропуск стадии→RUNTIME_WORKFLOW_INCOMPLETE; child не наследует targets, parent continuation завершает graph без PLANNED nodes |
+| Provider cleanup | Warm/active-lease revoke guards, captured descriptor retention, acceleration при delete, expiry/reclaim с новой generation/attempt, stale completion Conflict, exact terminal receipt replay и stable DEAD_LETTER после bounded retries. Synthetic receipt не доказывает удаление секрета |
+| Typed plan/attachments | Heartbeat без новых audit/outbox/version effects, exact permissions. Soft-deleted captured input доступен прежнему runtime, запрещён новым turns/обычному чтению, active purge blocked. Fence/generation/permission-bound search закрывается после completion |
+| Plan apply | Worker DRAFT→owner edit точной revision→VALID→APPLIED, tool event/outbox и exact receipt в conversation. Title сохраняется; terminal purge/download отдельны. Persisted READY/APPLIED не означает живой ИИ-запуск |
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks408-final`),15 external fixture/admin/template inputs исключены.
+Перечисленные PostgreSQL/claim/concurrency/graph/plan/component scenarios —
+NOT RUN/SKIP; unit/static результаты не подменяют их исполнение.
+gofmt/diff check,17 analyzer unit и5 exact-ignore guards — PASS.
+Новых library API/dependencies/production SQL нет.
+Browser/full E2E/deploy/live — NOT RUN.
+
+Bootstrap теперь78/78 описан. Во всём текущем PR153 Go-файла,1847/1847
+объявлений описаны, missing0. Это полнота комментариев текущего diff,
+а не завершение всего Issue или развёрнутая приёмка.
+Inventory6683 own sources/222 exclusions:19978/21482 Go declarations описаны,
+missing1504 — оставшиеся PostgreSQL adapter files control-plane вне текущего diff.
+Detector1796 raw/904 retained/892 unresolved, registry778 неизменен;
+fragment/format/kind/path-pair keyset совпадает сeb0a8f3, новых/удалённых keys нет.
+Thresholds/ignore regions/exclusions не расширены, тесты остаются в inventory.
+
+Production behavior, contracts/generated, dependencies, migrations и deploy
+inputs сохранены. Прикладные секреты не читались и не переносились; необходимые
+bot-role credentials/identity передаются только нужным GitHub children без вывода
+значений. Whole-blob проверка допускает только4 прежних inert title-test markers
+по exact main bytes/count, неизвестных совпадений нет. Issue#1823 открыт,
+PR Draft; основной клон и QA baseline f2e64eb не менялись.
 
 ## Bootstrap: execution principals и общие lifecycle fixtures — 25.10.2026
 
