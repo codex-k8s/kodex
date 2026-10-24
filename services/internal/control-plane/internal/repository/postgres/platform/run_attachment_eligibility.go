@@ -16,21 +16,58 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryRunAttachmentAgentDependencies reads exact agent version/capabilities and effective
+// instruction pins, preferring managed prompt-template bindings over legacy published
+// instructions.
+// queryRunAttachmentAgentDependencies читает точные agent version/capabilities и effective
+// instruction pins, предпочитая managed prompt-template bindings прежним опубликованным
+// инструкциям.
+//
 //go:embed sql/run_attachment_agent_dependencies.sql
 var queryRunAttachmentAgentDependencies string
 
+// queryRunAttachmentAccountDependencies reads the exact tenant/account version, enabled state and
+// current credential revision identifier as digest dependencies, without credential material.
+// queryRunAttachmentAccountDependencies читает точные tenant/account version, enabled state и
+// идентификатор текущей credential revision как зависимости дайджеста, без материала реквизитов.
+//
 //go:embed sql/run_attachment_account_dependencies.sql
 var queryRunAttachmentAccountDependencies string
 
+// queryRunAttachmentImageDependencies projects a JSON tuple of the agent environment image and
+// recipe admission/promotion/runtime pins; left joins preserve absent dependencies.
+// queryRunAttachmentImageDependencies формирует JSON tuple image окружения агента и recipe
+// admission/promotion/runtime pins; left joins сохраняют отсутствие зависимостей.
+//
 //go:embed sql/run_attachment_image_dependencies.sql
 var queryRunAttachmentImageDependencies string
 
 const (
-	runAttachmentTargetUnavailable  = "TARGET_UNAVAILABLE"
-	runAttachmentRuntimeNotReady    = "RUNTIME_NOT_READY"
+	// runAttachmentTargetUnavailable marks an absent or invalid launch target/workflow snapshot in the
+	// eligibility projection without granting any launch authority.
+	// runAttachmentTargetUnavailable помечает отсутствующую либо неверную launch target/workflow
+	// snapshot в проекции допустимости, не выдавая полномочий запуска.
+	runAttachmentTargetUnavailable = "TARGET_UNAVAILABLE"
+	// runAttachmentRuntimeNotReady marks unavailable runtime contract or agent/provider dependencies
+	// after preserving any earlier refusal reason.
+	// runAttachmentRuntimeNotReady помечает недоступный runtime contract либо зависимости
+	// agent/provider с сохранением более ранней причины отказа.
+	runAttachmentRuntimeNotReady = "RUNTIME_NOT_READY"
+	// runAttachmentSessionUnavailable marks an existing run that does not expose ADD_TURN before later
+	// target/runtime checks can supply their own reason.
+	// runAttachmentSessionUnavailable помечает существующий run без ADD_TURN до того, как последующие
+	// target/runtime проверки смогут задать свою причину.
 	runAttachmentSessionUnavailable = "SESSION_UNAVAILABLE"
 )
 
+// GetRunAttachmentEligibility evaluates exact project/target and optional run under a five-second
+// read-only repeatable-read transaction with launch/view authorization, ordered dependency pins
+// and refusal precedence; commits a digest-bound hint without creating a grant or changing run
+// state.
+// GetRunAttachmentEligibility оценивает точные project/target и необязательный run в пятисекундной
+// read-only repeatable-read транзакции с launch/view authorization, упорядоченными dependency pins
+// и приоритетом отказов; возвращает после commit подсказку с дайджестом без создания grant или
+// изменения run state.
 func (repository *Repository) GetRunAttachmentEligibility(ctx context.Context, principal value.Principal, projectRef string, target entity.RunTarget, runRef string) (entity.RunAttachmentEligibility, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -143,13 +180,19 @@ func (repository *Repository) GetRunAttachmentEligibility(ctx context.Context, p
 		result.Eligible = true
 	}
 	parts = append(parts, result.Reason)
-	result.Digest, result.EvaluatedAt = fileTargetDigest(parts), time.Now().UTC()
+	result.Digest, result.EvaluatedAt = jsonValueDigest(parts), time.Now().UTC()
 	if err := tx.Commit(ctx); err != nil {
 		return entity.RunAttachmentEligibility{}, errs.ErrUnavailable
 	}
 	return result, nil
 }
 
+// resolveAttachmentLaunchTarget resolves an agent or validates the published workflow snapshot and
+// exact coordinator, returning coordinator plus step agents and version/digest pins; missing or
+// invalid targets become a denial hint.
+// resolveAttachmentLaunchTarget разрешает агента либо проверяет опубликованный workflow snapshot и
+// точного coordinator, возвращая coordinator и step agents с version/digest pins; отсутствие либо
+// неверная цель даёт подсказку отказа.
 func (repository *Repository) resolveAttachmentLaunchTarget(ctx context.Context, tx pgx.Tx, current scope, projectID string, target entity.RunTarget) ([]string, string, string, string, error) {
 	if target.Type == "AGENT" {
 		var name string
@@ -180,6 +223,10 @@ func (repository *Repository) resolveAttachmentLaunchTarget(ctx context.Context,
 	return refs, versionRef, digest, "", nil
 }
 
+// attachmentRuntimeContractReady checks all target agents against the configured role-runtime
+// contract revision/digest and default image through the dedicated authoritative SQL.
+// attachmentRuntimeContractReady проверяет всех целевых агентов относительно настроенных
+// role-runtime contract revision/digest и default image через отдельный авторитетный SQL.
 func (repository *Repository) attachmentRuntimeContractReady(ctx context.Context, tx pgx.Tx, organizationID, projectID string, refs []string) (bool, error) {
 	var ready bool
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateAgentRuntimeContract, pgx.StrictNamedArgs{
@@ -193,10 +240,22 @@ func (repository *Repository) attachmentRuntimeContractReady(ctx context.Context
 	return ready, nil
 }
 
+// attachmentAgentsAllowed requires the artifact capability for the exact tenant/project agent list
+// through the shared capability predicate, without granting capabilities.
+// attachmentAgentsAllowed требует artifact capability для точного списка агентов tenant/project
+// через общий capability predicate, не выдавая capabilities.
 func (repository *Repository) attachmentAgentsAllowed(ctx context.Context, tx pgx.Tx, organizationID, projectID string, refs []string) (bool, error) {
 	return repository.agentsHaveCapabilities(ctx, tx, organizationID, projectID, refs, []string{runtimecontract.ArtifactCapability})
 }
 
+// attachmentAgentDependencies collects sorted capability, instruction, image, runtime/environment
+// and provider-account pins; optionally validates current model catalogs, preserving
+// frozen-catalog continuation behavior and distinguishing ineligible dependencies from read
+// failures.
+// attachmentAgentDependencies собирает отсортированные capability, instruction, image,
+// runtime/environment и provider-account pins; необязательно проверяет текущие model catalogs,
+// сохраняя frozen-catalog поведение продолжения и различая недопустимые зависимости и ошибки
+// чтения.
 func (repository *Repository) attachmentAgentDependencies(ctx context.Context, tx pgx.Tx, current scope, projectID, agentRef string, checkCatalog bool) ([]any, bool, error) {
 	var version int64
 	var capabilities []string

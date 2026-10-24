@@ -2,10 +2,7 @@ package platform
 
 import (
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -112,12 +109,10 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 	if err != nil {
 		return result, err
 	}
-	encoded, _ := json.Marshal(struct {
+	contextDigest := jsonValueDigest(struct {
 		Tenant, Actor, Connection, Assistant, Definition, Search, Project, Profile, PublicScope string
 		ConnectionVersion, AssistantVersion, ProfileVersion                                     int64
 	}{current.organizationID, current.actorID, connectionRef, target.ref, result.DefinitionDigest, search, target.projectRef, target.profileRef, scopeCommitment, result.ConnectionVersion, target.version, target.profileVersion})
-	digest := sha256.Sum256(encoded)
-	contextDigest := hex.EncodeToString(digest[:])
 	after, err := assistantIntegrationCandidateAfter(page.Token, contextDigest)
 	if err != nil {
 		return result, err

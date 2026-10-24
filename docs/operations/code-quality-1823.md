@@ -4,11 +4,65 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.373.0
+version: 1.374.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Продолжение в отдельном worktree: файловые привязки и runtime reads — 24.10.2026
+
+После разрешённого владельцем слияния PR#1828 в
+`f2e64eb556276211e74e4ccd718fd4614ee1c04e` основной локальный main обновлён
+fast-forward. Git tree слияния совпал с проверенным HEAD предыдущего PR.
+Оставшаяся работа#1823 продолжается в новой ветке и отдельном worktree;
+QA использует независимую копию исходного merge SHA. Это продолжение не
+подменяет сквозную приёмку QA-агента и не меняет уже переданный ему снимок.
+
+Описаны47 прежних объявлений: file_binding_targets.go17, runtime_files.go19
+и run_attachment_eligibility.go11. Один прежний неописанный fileTargetDigest
+удалён, два новых объявления общего helper и регрессионного теста описаны.
+Всего18287/21406 Go declarations, missing3119 — PostgreSQL adapter control-plane.
+
+`jsonValueDigest` сохраняет прежний encoding/json → SHA-256 lowercase алгоритм
+для пяти областей: binding-target pagination, run-attachment eligibility,
+role-image commitments и SYSTEM/PROJECT integration candidates. Точные типы
+и порядок полей commitment не меняются; PROJECT сохраняет дополнительные
+project/profile/public-scope pins. Это прежний JSON encoding, не JCS либо
+межъязыковая каноника. Сохранён и прежний hash nil bytes при ошибке Marshal.
+Пять буквальных goldens проверяют nil, nil/empty slices, sorted map keys,
+HTML escaping и неподдерживаемый channel через общий helper и прежний
+role-image facade. Новых dependencies, SQL/API/generated или Docker inputs нет.
+
+| Сценарий / lifecycle | Сохранённое поведение |
+| --- | --- |
+| Binding targets | Artifact bind access предшествует exact tenant/project read; agent.view проверяется для каждой цели. Archived tombstones не расширяют общий каталог |
+| Подсказки | Bind требует ACTIVE/CLEAN и capability; unbind требует ACTIVE и существующую связь, сохраняя снятие с archived/incapable agent и без CLEAN condition |
+| Пагинация | Read-only RR,5s budget, отказ при чтении свыше10000; scope/result digest связан с caller/artifact/query, cursor не назначает authority |
+| Runtime files | Exact live lease/fence/generation, frozen catalog и owner actor/project предшествуют fetch. Один audit row и commit обязательны до выдачи результата; retry принадлежит прежнему rollback helper |
+| Preview | Object receipt pins и bounded limit+1 read с Close. Полный результат сверяет content SHA-256; truncated результат проверяет только допустимый UTF-8 prefix и возвращает его digest |
+| Run attachment | Launch/run-view authority, distinct AGENT/WORKFLOW target и dependency pins остаются прежними. Projection не создаёт grant, event, attempt или новый run |
+| Integration candidates | SYSTEM и PROJECT owner/package/readiness/public-scope predicates раздельны; общий только byte-preserving JSON hash |
+
+Полные локальные GOWORK=off control-plane build/unit после последнего выноса
+прошли. Первый targeted compile обнаружил дополнительного caller удаляемого
+helper в run attachments; он переведён на общий helper, после чего targeted
+и полный модуль прошли. AST runtime_files.go и directives неизменны; пять
+прочих существующих Go-файлов совпали с ожидаемыми точными выносами.
+Context7: pgx/v5.10.0 transaction rollback и Rows.Scan/Err lifecycle.
+Credentials и13 external inputs исключены. Реальные API/DSN/object storage,
+owner/warm/legacy и full E2E/browser — SKIP/NOT RUN.
+
+Scan6668 own sources,222 excluded,1821 raw,895 retained,926 unresolved.
+Два точных окна RR entry glue рассмотрены и сохранены по path/hash/count1.
+Guard отклонил устаревшее133-token PROJECT/SYSTEM окно после выноса; оба полных
+метода повторно прочитаны, новый112-token стык разных commitment shapes и
+общих cursor/projection primitives зарегистрирован отдельно. Слепой замены
+hash или ослабления detector/thresholds/ignore regions не было.
+17 analyzer unit и5 exact-ignore guards — PASS. Два cross-file окна выбранной
+области с integration_grant_candidates.go и revision_impact.go остаются открытыми,
+остальной общий backlog также не объявлен разобранным. Issue#1823 остаётся открыт.
+
 
 ## Передача текущего этапа перед независимым QA — 24.10.2026
 
