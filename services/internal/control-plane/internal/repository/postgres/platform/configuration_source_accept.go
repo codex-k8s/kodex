@@ -101,13 +101,9 @@ func sourceCompletionValid(row sourceWorkRow, source configurationSource, input 
 // sync; ready raw content, source state/audit и устойчивая work receipt завершаются вместе до
 // commit.
 func (repository *Repository) completeConfigurationSource(ctx context.Context, p value.Principal, input platformrepo.ConfigurationSourceCompletion) (entity.ManagedConfigurationGitSource, error) {
-	current, err := repository.resolveScope(ctx, p)
+	current, tx, err := repository.beginSourceWorkTransaction(ctx, p)
 	if err != nil {
 		return entity.ManagedConfigurationGitSource{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return entity.ManagedConfigurationGitSource{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	row, err := lockSourceWork(ctx, tx, current, input.Lease.WorkRef)

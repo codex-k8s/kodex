@@ -4,11 +4,80 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.380.0
+version: 1.381.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Source work: claim, renew, replay, failure и refresh — 24.10.2026
+
+На основе `2c5b843bdeaa7913b94b36a8fbebf91ca62364d3` описаны26 прежних
+объявлений в четырёх файлах: work15, completion6, refresh3 и component2.
+Новый transaction helper и два новых tests тоже описаны; соседний acceptance
+file сохраняет прежние шесть описаний. Во всех шести затронутых Go-файлах
+35/35 объявлений имеют EN→RU описание. Общий inventory18717/21427,
+missing2710 — PostgreSQL adapter control-plane. Исходный полный объём открыт.
+
+`sourceActionDigest` и `lockSourceWork` используют существующий
+`jsonValueDigest` вместо двух отдельных JSON/SHA-256 вычислений. Сохранены
+typed Action/Lease/Content envelope, все lease fields/order, encoding/json
+HTML/base64/nil/time shape и прежний nil-byte hash при Marshal error.
+Snapshot по-прежнему сначала декодируется, затем повторно кодируется в
+typed JSON и сверяется с сохранённым digest. Это не JCS и не authority proof.
+
+`beginSourceWorkTransaction` объединяет четыре одинаковых resolveScope →
+Serializable BeginTx начала source claim/renew/fail/complete. Principal,
+caller context и TxOptions не меняются; scope resolve остаётся до begin,
+resolve errors передаются, begin failure даёт Unavailable. Work locking,
+fresh authority, replay ordering, deferred rollback и commit остаются в
+прежних caller paths. Read-only/RepeatableRead и write-back операции к
+этому специализированному helper не переподключены.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Work lock | Exact tenant/work и14 SQL columns, unknown/trailing snapshot JSON denial, отдельные work/configuration/deadline/digest pins, nullable expiry и zero result при отказе. Hash не заменяет operation/root authority |
+| Root eligibility | Current source generation/ref/non-detached, root membership/tenant/actor, configuration/connection READ capability и exact definition/credential/public configuration проверяются из owner state |
+| Claim / maintenance | Сначала due refresh, затем bounded candidates и закрытие rows до locks. Ineligible/deadline/exhausted work завершается, eligible получает fresh fence/claim generation и минутный lease до immutable deadline. Maintenance commit возможен без нового claim; domain service отдельно проверяет worker/claimant/limit |
+| Renew | Exact lease и current root eligibility; expiry не сокращается и не выходит за deadline. Submitted older expiry ограничен сверху stored expiry, а liveness проверяется по stored expiry/deadline. Отдельная renew receipt в текущем методе не создаётся |
+| Replay / failure | Receipt key — attempt/claim generation, полный digest связывает action/lease/content. Existing receipt возвращается до fresh lease/eligibility. Только eligible UNAVAILABLE до третьей attempt и с остатком больше минуты получает retry; остальные случаи блокируют source, потеря eligibility записывает ACCESS |
+| Periodic refresh | Due READY с GIT mapping, без open source work/active write-back; current root и set version восстанавливаются до canonical refresh. Expected authority/content conflicts дают BLOCKED/ACCESS, инфраструктурные ошибки передаются |
+| Source state / signals | Текущий sourceState увеличивает version, очищает public failure вне BLOCKED и записывает source audit плюс существующий MANAGED_CONFIGURATION_CHANGED snapshot в той же TX. Повторные state labels не удаляют эти эффекты |
+| Component fixture | Synthetic immutable credential descriptor, configure/claim/complete/unchanged/retry/detach и exact queued RoleImage build проверяются только при disposable owner suite; реальные Git fetch, credential value и registry build оснасткой не исполняются |
+
+Старая `configuration-source-lifecycle-1046.md` содержит формулировки
+«события нет» для source transitions и описание renew receipt. Фактический
+`sourceState` уже до этого рефакторинга вызывал audit и существующий generic
+event writer, а Renew не сохранял отдельную receipt. Наблюдение сохранено
+для последующей сверки документации/QA; новая event policy не выбиралась,
+исходные effects/receipts не добавлялись и не удалялись. Исполнение consumers
+либо соответствие старой матрице этим этапом не объявлены подтверждёнными.
+
+Два новых unit tests проверяют шесть буквальных wire envelopes, включая
+Marshal-error nil hash, и13 synthetic work-lock исходов: exact tuple/query/
+context/tenant/ref, strict snapshot parsing, nullable expiry, digest/work/
+configuration/deadline mismatches, receipt JSON и zero output/error mapping.
+Reader не делает commit. После окончательного transaction helper оба
+адресных tests, полный локальный GOWORK=off control-plane build/unit с
+`-count=1` — PASS. Credentials и15 external fixture/admin/template inputs
+исключены. Real PostgreSQL/locks/reclaim races, provider fetch, source
+event delivery, bootstrap, полный E2E/browser и deploy/live — NOT RUN/SKIP.
+
+Два comments-only AST/directives comparisons и три expected-AST comparisons
+— PASS: два hash replacements, четыре прежних transaction prefixes и один
+новый helper; исходные branch order, SQL/lock/rollback/commit и component
+assertions сохранены.11 embedded SQL directives неизменны. SQL/API/generated,
+dependencies и deploy inputs не менялись. Через Context7 проверены
+pgx/v5.10.0 Row/Scan/ErrNoRows и caller transactions; прочитаны восемь work/
+refresh/retry SQL и domain worker boundary с лимитом1..16.
+
+Scan6671 own sources,222 excluded,1813 raw,897 retained,916 unresolved:
+raw count уменьшился на3 после общего начала четырёх source transactions.
+Новый handwritten test включён. Все771 прежних решения для897 occurrences
+действительны; новых исключений, перепривязки, thresholds либо ignore regions
+нет. Три cross-file окна с access/runtime read и write-back work остаются
+открытыми.17 analyzer tests и5 exact-ignore guards — PASS. QA baseline
+f2e64eb и основной клон не менялись; Issue#1823 открыт.
 
 ## Managed configuration, revision impact и Git source — 24.10.2026
 
