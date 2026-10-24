@@ -94,9 +94,7 @@ function applyRealtime(): boolean {
       filter: filter.value,
       pageSize: pageSize.value,
     },
-    Object.values(platform.runs).filter(
-      (run) => !projectRef.value || run.projectRef === projectRef.value,
-    ),
+    platform.realtimeRuns(projectRef.value),
     Boolean(snapshot.nextPageToken),
   );
   return true;

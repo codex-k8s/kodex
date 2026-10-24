@@ -20,6 +20,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 import { resetOwnerRequests } from "@/shared/api/owner-lifetime";
+import { homeFailedRuns } from "@/features/home/model";
 import type {
   AssistantConversation,
   SystemAssistant,
@@ -386,6 +387,70 @@ function auditEvent(ref: string, occurredAt: string): AuditEvent {
 }
 
 describe("platform store", () => {
+  it("заменяет страницу после purge, сохраняя SYSTEM ошибки и detail cache", () => {
+    const store = usePlatformStore();
+    selectProjectRef(undefined);
+    store.bootstrap = { organizationRef: "org_synthetic" } as BootstrapState;
+    const system: Run = {
+      ...run(1),
+      ref: "run_system01",
+      rootRunRef: "run_system01",
+      projectRef: undefined,
+      state: "FAILED",
+      source: "SYSTEM_ASSISTANT",
+      target: { ...run(1).target, type: "SYSTEM_ASSISTANT" },
+      assistantPin: {
+        scope: "SYSTEM",
+        organizationRef: "org_synthetic",
+        conversationRef: "cnv_system01",
+        assistantRef: "agent_owner",
+      },
+    };
+    const failed: Run = { ...run(1), state: "FAILED" };
+    const resumable: Run = {
+      ...run(1),
+      ref: "run_resumable01",
+      state: "SUCCEEDED",
+      nextActions: ["ADD_TURN"],
+    };
+    const applyPage = (values: Run[], nextPageToken?: string) =>
+      store.applyPlatformSnapshot("RUN", undefined, {
+        catalog: {
+          runs: values,
+          gates: [],
+          gatesPage: {},
+          page: { nextPageToken },
+          total: nextPageToken ? 50 : values.length,
+        },
+      });
+    applyPage([system, failed, resumable]);
+    expect(homeFailedRuns(store.realtimeRunList)).toHaveLength(2);
+
+    applyPage([system]);
+
+    expect(
+      homeFailedRuns(store.realtimeRunList).map((item) => item.ref),
+    ).toEqual([system.ref]);
+    expect(
+      store.realtimeRunList.filter((item) =>
+        item.nextActions.includes("ADD_TURN"),
+      ),
+    ).toEqual([]);
+    expect(store.runs[resumable.ref]).toEqual(resumable);
+    expect(store.runs[failed.ref]).toEqual(failed);
+
+    applyPage([system], "next-page");
+    expect(store.realtimeRunList.map((item) => item.ref)).toEqual([system.ref]);
+    expect(store.runs[resumable.ref]).toEqual(resumable);
+
+    applyPage([]);
+    expect(store.realtimeRunList).toEqual([]);
+    expect(store.runs[system.ref]).toEqual(system);
+    store.clearOwnerState();
+    expect(store.realtimeRunList).toEqual([]);
+    expect(store.runs).toEqual({});
+  });
+
   it("unavailable помощника очищает page cache и rejoin scope", () => {
     const store = usePlatformStore();
     selectProjectRef(undefined);

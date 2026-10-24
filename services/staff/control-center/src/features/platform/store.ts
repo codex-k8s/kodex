@@ -183,6 +183,7 @@ export interface RealtimeCatalogSnapshot {
   scopeKey: string;
   total?: number;
   nextPageToken?: string;
+  runRefs?: string[];
 }
 
 const runHistorySupersededMessage = "Run history read superseded";
@@ -2748,6 +2749,10 @@ export const usePlatformStore = defineStore("platform", () => {
       scopeKey: scopeProjectRef ?? "",
     };
     if (response) {
+      if (kind === "RUN")
+        snapshot.runRefs = snapshotArray<Run>(response, "runs").map(
+          (run) => run.ref,
+        );
       const total = response.total;
       const numericTotal =
         typeof total === "number"
@@ -2793,6 +2798,19 @@ export const usePlatformStore = defineStore("platform", () => {
     scopeProjectRef?: string,
   ): RealtimeCatalogSnapshot | undefined {
     return realtimeCatalogSnapshots[realtimeCatalogKey(kind, scopeProjectRef)];
+  }
+
+  // Членство страницы принадлежит свежему снимку. Подробный кэш может содержать
+  // запуски вне страницы и потому не определяет состав сводных каталогов.
+  function realtimeRuns(scopeProjectRef?: string): Run[] {
+    return (realtimeSnapshot("RUN", scopeProjectRef)?.runRefs ?? []).flatMap(
+      (ref) => {
+        const run = runs[ref];
+        return run && (!scopeProjectRef || run.projectRef === scopeProjectRef)
+          ? [run]
+          : [];
+      },
+    );
   }
 
   function applyRealtimeAvailability(
@@ -3132,6 +3150,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const projectList = computed(() => Object.values(projects));
   const projectTrashList = computed(() => Object.values(trashedProjects));
   const runList = computed(() => Object.values(runs));
+  const realtimeRunList = computed(() => realtimeRuns(selectedProjectRef()));
   const gateList = computed(() => Object.values(gates));
 
   return {
@@ -3200,6 +3219,7 @@ export const usePlatformStore = defineStore("platform", () => {
     projectList,
     projectTrashList,
     runList,
+    realtimeRunList,
     gateList,
     loadBootstrap,
     applyAuthenticatedBootstrap,
@@ -3280,6 +3300,7 @@ export const usePlatformStore = defineStore("platform", () => {
     applyPlatformSnapshot,
     markRealtimeSnapshot,
     realtimeSnapshot,
+    realtimeRuns,
     realtimeAvailableKinds,
     applyRealtimeAvailability,
     applySpeechAvailability,

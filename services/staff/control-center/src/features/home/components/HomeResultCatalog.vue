@@ -71,7 +71,7 @@ const cachedDashboardItems = computed<HomeResultItem[]>(() => {
           : {}),
       }));
   const resumable = props.kind === "SESSION";
-  return platform.runList
+  return platform.realtimeRunList
     .filter((item) =>
       resumable
         ? item.state === "SUCCEEDED" &&

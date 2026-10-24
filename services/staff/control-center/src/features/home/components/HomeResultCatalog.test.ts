@@ -51,6 +51,7 @@ async function render(runs: Run[]) {
   const pinia = createPinia();
   const platform = usePlatformStore(pinia);
   for (const item of runs) platform.runs[item.ref] = item;
+  platform.markRealtimeSnapshot("RUN", undefined, { runs });
   const app = createSSRApp({
     render: () => h(HomeResultCatalog, { kind: "RUN", dashboard: true }),
   });

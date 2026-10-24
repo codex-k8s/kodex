@@ -49,7 +49,7 @@ const providerAccountsNeedingAuthorization = computed(() =>
 const pendingGates = computed(() => platform.overview?.pendingGates ?? []);
 const openGates = computed(() => homeOpenGates(pendingGates.value));
 const failedRuns = computed(() =>
-  homeFailedRuns(platform.runList, platform.runList.length),
+  homeFailedRuns(platform.realtimeRunList, platform.realtimeRunList.length),
 );
 const dashboardProjects = computed(() =>
   prioritizeHomeProjects(visibleProjects.value, 4),
