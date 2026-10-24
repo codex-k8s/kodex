@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestRoleImageQueriesDoNotContainLegacyMembershipAuthorization inspects
+// list/detail/role-resolution/lock SQL for forbidden legacy membership and role fragments; this
+// parallel static check does not replace authoritative access-context tests.
+// TestRoleImageQueriesDoNotContainLegacyMembershipAuthorization проверяет SQL
+// list/detail/role-resolution/lock на запрещённые прежние membership и role fragments;
+// параллельная статическая проверка не заменяет тесты авторитетного access context.
 func TestRoleImageQueriesDoNotContainLegacyMembershipAuthorization(t *testing.T) {
 	t.Parallel()
 	queries := map[string]string{

@@ -73,13 +73,9 @@ func (repository *Repository) requestPromotion(ctx context.Context, input roleim
 		return replay, nil
 	}
 
-	lockedArtifact, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact,
-		current.organizationID, input.ArtifactRef))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.RoleImagePromotionReceipt{}, errs.ErrNotFound
-	}
+	lockedArtifact, err := lockRoleImageArtifact(ctx, tx, current, input.ArtifactRef)
 	if err != nil {
-		return entity.RoleImagePromotionReceipt{}, errs.ErrUnavailable
+		return entity.RoleImagePromotionReceipt{}, err
 	}
 	lockedRecipe, err := scanLockedRecipe(tx.QueryRow(ctx, queryRoleImagesLockRecipe,
 		current.organizationID, input.RecipeRef))

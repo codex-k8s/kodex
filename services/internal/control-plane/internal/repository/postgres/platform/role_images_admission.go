@@ -12,6 +12,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// GetSupplyWorkAvailability reads tenant-scoped admission and promotion availability under the
+// configured policy; maintenance work counts as available, and this query neither claims nor
+// mutates artifacts.
+// GetSupplyWorkAvailability читает доступность допуска и публикации в области организации при
+// настроенной policy; обслуживание тоже считается работой, но запрос не выдаёт claim и не изменяет
+// артефакты.
 func (repository *Repository) GetSupplyWorkAvailability(ctx context.Context, principal value.Principal) (roleimagerepo.SupplyWorkAvailability, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -30,12 +36,25 @@ func (repository *Repository) GetSupplyWorkAvailability(ctx context.Context, pri
 	return result, nil
 }
 
+// ClaimAdmission runs a complete admission claim through the existing bounded transaction retry
+// policy; each attempt resolves scope and owns its transaction.
+// ClaimAdmission выполняет полный запрос admission claim через прежнюю ограниченную политику
+// повтора транзакций; каждая попытка разрешает область и владеет своей транзакцией.
 func (repository *Repository) ClaimAdmission(ctx context.Context, principal value.Principal, key string) (entity.ImageAdmissionClaim, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.ImageAdmissionClaim, error) {
 		return repository.claimAdmission(ctx, principal, key)
 	})
 }
 
+// claimAdmission serializes actor/key in a Serializable transaction, replays only a current-policy
+// live admission claim, then rejects stale policy and expires leases before selecting a pending
+// artifact. It stores maintenance-only or exact artifact/attempt/risk receipts and commits before
+// returning the reconstructed token; maintenance may commit while returning NotFound.
+// claimAdmission сериализует actor/key в Serializable транзакции, повторно выдаёт только живой
+// admission claim текущей policy, затем отклоняет старую policy и завершает истёкшие leases до
+// выбора ожидающего артефакта. Сохраняет квитанцию обслуживания либо точные artifact/attempt/risk
+// данные и делает commit до выдачи восстановленного токена; обслуживание может завершиться commit
+// с ответом NotFound.
 func (repository *Repository) claimAdmission(ctx context.Context, principal value.Principal, key string) (entity.ImageAdmissionClaim, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -154,12 +173,22 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 	return repository.admissionClaimFromReceipt(receipt), nil
 }
 
-// Stale maintenance принадлежит claim-транзакции, но не выдаёт устаревший claim.
+// rejectStaleRoleImageAdmissions collects SQL-rejected artifact/project references and closes rows
+// before loading hydrated artifacts and recording policy-change audits. It uses the caller
+// transaction, returns no stale claim and does not invent a scanner verdict or commit.
+// rejectStaleRoleImageAdmissions собирает отклонённые SQL ссылки artifact/project и закрывает rows
+// до чтения артефактов с историей риска и записи аудита смены policy. Использует транзакцию
+// вызывающего метода, не выдаёт устаревший claim, не придумывает вердикт сканера и не делает
+// commit.
 func (repository *Repository) rejectStaleRoleImageAdmissions(ctx context.Context, tx pgx.Tx, current scope, arguments pgx.StrictNamedArgs) ([]entity.ImageArtifact, error) {
 	rows, err := tx.Query(ctx, queryRoleImagesRejectStaleAdmissionCandidates, arguments)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	// rejectedArtifact retains each rejected public artifact reference and internal project ID until
+	// the result rows are closed, so subsequent reads and audits can reuse the same transaction.
+	// rejectedArtifact хранит публичную ссылку отклонённого артефакта и внутренний project ID до
+	// закрытия rows, чтобы последующие чтения и аудит использовали ту же транзакцию.
 	type rejectedArtifact struct{ ref, projectID string }
 	var rejected []rejectedArtifact
 	for rows.Next() {
@@ -193,6 +222,12 @@ func (repository *Repository) rejectStaleRoleImageAdmissions(ctx context.Context
 	return result, nil
 }
 
+// admissionClaimFromReceipt reconstructs the admission token from saved artifact, fence, authority
+// generation and expiry, and projects original attempt/risk/source pins; it does not verify that
+// the saved lease remains live.
+// admissionClaimFromReceipt восстанавливает admission token по сохранённым artifact, fence,
+// authority generation и expiry и переносит исходные attempt/risk/source pins; сама не проверяет,
+// что сохранённый lease ещё действует.
 func (repository *Repository) admissionClaimFromReceipt(receipt admissionClaimReceipt) entity.ImageAdmissionClaim {
 	token := repository.roleImageToken("image-admission", receipt.Artifact.Ref, 0,
 		receipt.Fence, receipt.AuthorityGeneration, receipt.ClaimExpiresAt)
@@ -204,6 +239,14 @@ func (repository *Repository) admissionClaimFromReceipt(receipt admissionClaimRe
 		SourceEvidenceManifestDigest: receipt.SourceEvidenceManifestDigest}
 }
 
+// RecordAdmission requires an attempt identity, resolves scope and replays the exact receipt
+// before fresh-transition checks. A new result locks artifact/version and current attempt, checks
+// live token/fence/policy and bound inventory/report, then atomically records verdict,
+// vulnerability history, receipt and recipe-change event; commit stays inside this method.
+// RecordAdmission требует identity попытки, разрешает область и возвращает точную квитанцию до
+// проверок нового перехода. Новый результат блокирует artifact/version и текущую попытку,
+// проверяет живой token/fence/policy и связанные inventory/report, затем атомарно сохраняет
+// вердикт, историю уязвимостей, квитанцию и событие изменения рецепта; commit выполняется здесь.
 func (repository *Repository) RecordAdmission(ctx context.Context, input roleimagerepo.AdmissionRecordInput) (entity.ImageArtifact, error) {
 	if input.ExpectedAdmissionAttemptRef == "" || input.ExpectedAdmissionAttempt == 0 {
 		return entity.ImageArtifact{}, errs.ErrForbidden
@@ -229,13 +272,9 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 		}
 		return replay, nil
 	}
-	locked, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact,
-		current.organizationID, input.ArtifactRef))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ImageArtifact{}, errs.ErrNotFound
-	}
+	locked, err := lockRoleImageArtifact(ctx, tx, current, input.ArtifactRef)
 	if err != nil {
-		return entity.ImageArtifact{}, errs.ErrUnavailable
+		return entity.ImageArtifact{}, err
 	}
 	if locked.Artifact.Version != input.ExpectedVersion {
 		return entity.ImageArtifact{}, errs.ErrVersionMismatch
@@ -310,12 +349,24 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 	return locked.Artifact, nil
 }
 
+// ClaimPromotion applies the existing bounded transaction retry policy to the entire promotion
+// claim; the inner method owns scope, idempotent replay and candidate selection.
+// ClaimPromotion применяет прежнюю ограниченную политику повтора транзакций ко всему promotion
+// claim; внутренний метод владеет областью, повторной выдачей квитанции и выбором кандидата.
 func (repository *Repository) ClaimPromotion(ctx context.Context, principal value.Principal, key string) (entity.ImagePromotionClaim, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.ImagePromotionClaim, error) {
 		return repository.claimPromotion(ctx, principal, key)
 	})
 }
 
+// claimPromotion locks actor/key and replays a stored promotion claim without rechecking its
+// liveness. A new claim locks candidate, request and recipe, validates their exact snapshot and
+// reclaim eligibility, advances artifact version/fence, marks the request PROMOTING and stores its
+// token coordinates before commit; a missing candidate rolls back with NotFound.
+// claimPromotion блокирует actor/key и повторно выдаёт сохранённый promotion claim без новой
+// проверки срока. Новый claim блокирует кандидат, запрос и рецепт, проверяет точный snapshot и
+// допустимость повторного claim, увеличивает version/fence артефакта, переводит запрос в PROMOTING
+// и сохраняет координаты токена до commit; отсутствие кандидата даёт rollback и NotFound.
 func (repository *Repository) claimPromotion(ctx context.Context, principal value.Principal, key string) (entity.ImagePromotionClaim, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -411,6 +462,11 @@ func (repository *Repository) claimPromotion(ctx context.Context, principal valu
 	return repository.promotionClaimFromReceipt(receipt), nil
 }
 
+// promotionClaimFromReceipt reconstructs the request-bound promotion token from immutable receipt
+// coordinates and returns saved artifact/fence/generation/expiry without querying current state.
+// promotionClaimFromReceipt восстанавливает связанный с запросом promotion token по неизменяемым
+// координатам квитанции и возвращает сохранённые artifact/fence/generation/expiry без чтения
+// текущего состояния.
 func (repository *Repository) promotionClaimFromReceipt(receipt promotionClaimReceipt) entity.ImagePromotionClaim {
 	token := repository.roleImagePromotionToken("image-promotion", receipt.Artifact,
 		receipt.PromotionRequestReceiptSHA256, receipt.Fence, receipt.AuthorityGeneration, receipt.ClaimExpiresAt)
@@ -419,12 +475,25 @@ func (repository *Repository) promotionClaimFromReceipt(receipt promotionClaimRe
 		ClaimExpiresAt: receipt.ClaimExpiresAt}
 }
 
+// AuthorizePromotion runs the complete claim-to-authorization transition under the existing
+// bounded transaction retry policy rather than retrying an individual write.
+// AuthorizePromotion выполняет полный переход от claim к authorization в прежней ограниченной
+// политике повтора транзакций, повторяя целую операцию.
 func (repository *Repository) AuthorizePromotion(ctx context.Context, input roleimagerepo.PromotionAuthorizeInput) (entity.ImagePromotionAuthorization, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.ImagePromotionAuthorization, error) {
 		return repository.authorizePromotion(ctx, input)
 	})
 }
 
+// authorizePromotion serializes actor/key and returns exact receipt replay before fresh checks. It
+// locks artifact/request/recipe, verifies OCC, unexpired request-bound claim, exact credential
+// generation and promotion snapshot, then replaces the claim with a version-bound expiring
+// authorization and persists its receipt in the same transaction; it performs no registry push.
+// authorizePromotion сериализует actor/key и возвращает точную квитанцию до проверок нового
+// перехода. Блокирует artifact/request/recipe, проверяет OCC, неистёкший связанный с запросом
+// claim, точное поколение credentials и promotion snapshot, затем заменяет claim ограниченной по
+// сроку и версии authorization и сохраняет квитанцию в той же транзакции; push в registry не
+// выполняется.
 func (repository *Repository) authorizePromotion(ctx context.Context, input roleimagerepo.PromotionAuthorizeInput) (entity.ImagePromotionAuthorization, error) {
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -450,13 +519,9 @@ func (repository *Repository) authorizePromotion(ctx context.Context, input role
 		}
 		return repository.promotionAuthorizationFromReceipt(replay), nil
 	}
-	locked, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact,
-		current.organizationID, input.ArtifactRef))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ImagePromotionAuthorization{}, errs.ErrNotFound
-	}
+	locked, err := lockRoleImageArtifact(ctx, tx, current, input.ArtifactRef)
 	if err != nil {
-		return entity.ImagePromotionAuthorization{}, errs.ErrUnavailable
+		return entity.ImagePromotionAuthorization{}, err
 	}
 	promotionRequest, err := scanLockedPromotionRequest(tx.QueryRow(ctx,
 		queryRoleImagesLockPromotionRequest, pgx.StrictNamedArgs{
@@ -524,6 +589,12 @@ func (repository *Repository) authorizePromotion(ctx context.Context, input role
 	return repository.promotionAuthorizationFromReceipt(receipt), nil
 }
 
+// promotionAuthorizationFromReceipt rebuilds the authorization token with the saved artifact
+// version, request receipt, fence, generation and expiry; projection alone does not establish
+// current authority or lease liveness.
+// promotionAuthorizationFromReceipt восстанавливает authorization token по сохранённым версии
+// артефакта, квитанции запроса, fence, generation и expiry; само преобразование не подтверждает
+// текущие полномочия либо действующий lease.
 func (repository *Repository) promotionAuthorizationFromReceipt(receipt promotionAuthorizationReceipt) entity.ImagePromotionAuthorization {
 	token := repository.roleImagePromotionToken("image-promotion-authorization", receipt.Artifact,
 		receipt.PromotionRequestReceiptSHA256, receipt.Fence, receipt.AuthorityGeneration,
@@ -532,12 +603,28 @@ func (repository *Repository) promotionAuthorizationFromReceipt(receipt promotio
 		AuthorizationToken: token, AuthorizationExpiresAt: receipt.AuthorizationExpiresAt}
 }
 
+// CompletePromotion runs the entire promotion completion through the existing bounded transaction
+// retry policy; durable receipt replay remains the inner transaction responsibility.
+// CompletePromotion выполняет полное завершение публикации через прежнюю ограниченную политику
+// повтора транзакций; повторная выдача устойчивой квитанции остаётся обязанностью внутренней
+// транзакции.
 func (repository *Repository) CompletePromotion(ctx context.Context, input roleimagerepo.PromotionCompleteInput) (entity.ImageArtifact, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.ImageArtifact, error) {
 		return repository.completePromotion(ctx, input)
 	})
 }
 
+// completePromotion replays an exact completion receipt or locks artifact/request/recipe and
+// verifies OCC, live version-bound authorization, credential generation, evidence and exact
+// promoted repository/digest. It atomically completes artifact/request, activates the recipe,
+// inserts an immutable promoted revision and records audit/event/receipt, validating returned
+// versions and identities before commit; external registry readback is supplied by the caller.
+// completePromotion возвращает точную квитанцию завершения либо блокирует artifact/request/recipe
+// и проверяет OCC, живую связанную с версией authorization, credential generation, evidence и
+// точные promoted repository/digest. Атомарно завершает artifact/request, активирует рецепт,
+// вставляет неизменяемую опубликованную revision и сохраняет audit/event/receipt, проверяя
+// возвращённые версии и identity до commit; результат внешнего registry readback передаёт
+// вызывающая сторона.
 func (repository *Repository) completePromotion(ctx context.Context, input roleimagerepo.PromotionCompleteInput) (entity.ImageArtifact, error) {
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -563,13 +650,9 @@ func (repository *Repository) completePromotion(ctx context.Context, input rolei
 		}
 		return replay, nil
 	}
-	locked, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact,
-		current.organizationID, input.ArtifactRef))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ImageArtifact{}, errs.ErrNotFound
-	}
+	locked, err := lockRoleImageArtifact(ctx, tx, current, input.ArtifactRef)
 	if err != nil {
-		return entity.ImageArtifact{}, errs.ErrUnavailable
+		return entity.ImageArtifact{}, err
 	}
 	promotionRequest, err := scanLockedPromotionRequest(tx.QueryRow(ctx,
 		queryRoleImagesLockPromotionRequest, pgx.StrictNamedArgs{

@@ -79,12 +79,9 @@ func (repository *Repository) terminalAdmission(ctx context.Context, input rolei
 	if err := repository.lockRoleImageIdempotency(ctx, tx, current, operation, input.IdempotencyKey); err != nil {
 		return entity.RoleImageAdmissionFailure{}, err
 	}
-	locked, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact, current.organizationID, input.ArtifactRef))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.RoleImageAdmissionFailure{}, errs.ErrNotFound
-	}
+	locked, err := lockRoleImageArtifact(ctx, tx, current, input.ArtifactRef)
 	if err != nil {
-		return entity.RoleImageAdmissionFailure{}, errs.ErrUnavailable
+		return entity.RoleImageAdmissionFailure{}, err
 	}
 	attempt, err := repository.readImageAdmissionAttempt(ctx, tx, current, locked.ID, locked.Artifact.Ref)
 	if err != nil || attempt.Attempt.Ref != input.ExpectedAdmissionAttemptRef || attempt.Attempt.Number != input.ExpectedAdmissionAttempt {

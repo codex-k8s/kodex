@@ -4,11 +4,66 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.376.0
+version: 1.377.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Admission, terminal proof, inventory и применение RoleImage — 24.10.2026
+
+На основе `3150708afafdf10494461cfcecd025c9082f576d` описаны33 прежних
+объявления в восьми файлах: admission15, terminal6, inventory3,
+impact apply2 и семь тестовых объявлений. Новый lock helper и его regression
+test тоже описаны. Во всех13 затронутых Go-файлах121/121 объявление имеет
+двуязычное описание. Общий inventory18525/21416, missing2891 — только
+PostgreSQL adapter control-plane; весь исходный объём пока не завершён.
+
+`lockRoleImageArtifact` объединяет шесть одинаковых tenant/artifact lock
+и error-mapping blocks: RecordAdmission, AuthorizePromotion, CompletePromotion,
+RequestPromotion, terminalAdmission и risk lookup. Последний сохраняет
+собственные recipe/scope/project comparisons. Helper возвращает NotFound
+при обычном либо wrapped ErrNoRows и Unavailable при scan/decoding error;
+не меняет порядок SQL, authority/OCC/lease checks, transaction ownership
+и commit. ClaimPromotion сохраняет отдельное чтение, поскольку его прежний
+ответ при отсутствии locked candidate — Unavailable.
+
+| Сценарий / lifecycle | Описанное и сохранённое поведение |
+| --- | --- |
+| Availability / admission claim | Read-only availability включает обслуживание. Claim сериализует actor/key, повторно выдаёт только live claim текущей policy; stale-policy/expiry maintenance может сделать commit с ответом NotFound. Maintenance-only receipt не становится новым claim |
+| Record admission | Receipt replay отделён от нового перехода. Новый переход проверяет version/attempt, current artifact, live token/fence/generation/policy и bound inventory/report, сохраняет verdict/history/receipt/event одной транзакцией |
+| Promotion claim / authorize / complete | Сохранённый claim replay не выполняет новую проверку срока; новый claim проверяет exact snapshot/request и reclaim eligibility. Authorization/completion отдельно проверяют точное credential generation, version-bound token, срок и request/evidence. Completion атомарно меняет artifact/request/recipe, создаёт promoted revision и audit/event/receipt; внешний registry readback поступает от caller |
+| Terminal / recovery | Обычное чтение сравнивает19 исходных координат и ограничивает receipt generation текущей credential revision. Recovery требует отдельные exact workload/permission и берёт координаты из actor-bound claim receipt; общий read-only RR проверяет authoritative terminal attempt. Missing/invalid proof даёт Forbidden, инфраструктурный отказ — Unavailable |
+| Inventory / tools | Историческое отсутствие evidence не восполняется declarations. Привязка проверяется до присваивания inventory pointer; выбранные команды — verified executable basenames из пересечения всех платформ. Shape/uniqueness проверяет отдельный строгий decoder |
+| Impact apply | Повторная authority, plan/source digest и OCC предшествуют effect. Группы environment/source упорядочены, savepoints изолируют ожидаемые item failures; группа без успеха откатывается. Все outcomes, завершение плана и set OCC принадлежат внешней TX, вместе с окончательными commit/command receipt у caller |
+
+Новый synthetic lock test проверяет шесть исходов: exact tuple с внутренними
+claim pins и recipe provenance, missing/wrapped missing, частичный driver
+result, неверные specification и inventory. Проверяются точные SQL/context/
+tenant/ref, нулевой результат при отказе и отсутствие commit. Прежние восемь
+risk-scope cases прошли через общий helper. Terminal predicate test теперь
+отдельно изменяет все19 координат, включая четыре risk/source pins.
+Восемь адресных tests и полный локальный GOWORK=off control-plane build/unit
+с `-count=1` — PASS. Credentials и13 внешних fixture/env inputs исключены.
+
+Шесть comments-only AST/directives comparisons и семь expected-AST
+comparisons — PASS: шесть прежних lock blocks заменены общим helper,
+существующие тесты сохранены, добавлен regression test и расширен terminal
+corpus. SQL/API/generated, зависимости и deploy inputs не менялись.
+Context7 через рабочий connector: pgx/v5.10.0 QueryRow/ErrNoRows,
+deferred rollback и nested transactions/savepoints. Прочитаны применимые
+claim/replay/record/authorize/complete/activation/revision/terminal/impact SQL.
+Реальные SQL locks/races, API/DSN, registry push/readback, owner/warm/legacy,
+полный E2E/browser и deploy/live — NOT RUN/SKIP. Ignored rollback errors
+и прежняя классификация ambiguous commit как retry не объявлены исправленными.
+
+Scan6669 own sources,222 excluded,1818 raw,896 retained,922 unresolved.
+Все прежние решения точных исключений действительны; новых исключений,
+изменений thresholds либо ignore regions нет. Десять окон, затрагивающих
+выбранную область, остаются открытыми: transaction/replay prefixes,
+artifact/request lookup и границы с queries, source accept, workers и gRPC.
+17 analyzer tests и5 exact-ignore guards — PASS. Основной клон и независимый
+QA baseline f2e64eb этим продолжением не меняются; Issue#1823 остаётся открыт.
 
 ## Role-image source, команды, worker lifecycle и promotion — 24.10.2026
 

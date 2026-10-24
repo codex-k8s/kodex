@@ -286,6 +286,25 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 	return result, nil
 }
 
+// lockRoleImageArtifact reads and locks one exact tenant/artifact using the caller transaction,
+// mapping missing rows to NotFound and all scan/decoding failures to Unavailable without exposing
+// partial state. It does not check operation authority, scope, OCC or lease eligibility, and does
+// not own commit; candidate-selection paths with different missing-row semantics use their own read.
+// lockRoleImageArtifact читает и блокирует точный tenant/artifact в транзакции вызывающего метода,
+// возвращая NotFound при отсутствии строки и Unavailable при scan/decoding error без частичного
+// результата. Не проверяет полномочия операции, scope, OCC либо допустимость lease и не владеет
+// commit; выбор кандидата с другим ответом на отсутствие строки сохраняет собственное чтение.
+func lockRoleImageArtifact(ctx context.Context, tx pgx.Tx, current scope, artifactRef string) (lockedArtifact, error) {
+	artifact, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact, current.organizationID, artifactRef))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return lockedArtifact{}, errs.ErrNotFound
+	}
+	if err != nil {
+		return lockedArtifact{}, errs.ErrUnavailable
+	}
+	return artifact, nil
+}
+
 // scanLockedPromotionRequest scans the exact promotion request identity, evidence, receipt, state,
 // requester and creation columns, returning a zero value on scan failure.
 // scanLockedPromotionRequest сканирует точные колонки identity, evidence, receipt, state,

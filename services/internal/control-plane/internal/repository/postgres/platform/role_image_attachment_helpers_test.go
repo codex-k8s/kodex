@@ -2,7 +2,7 @@ package platform
 
 import (
 	"errors"
-	"github.com/jackc/pgx/v5"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/jackc/pgx/v5"
 )
 
 // TestManagedRoleImageSourcePreservesValidationOrder checks catalog availability before parsing,
@@ -168,6 +169,58 @@ func TestImageRiskArtifactLookupPreservesOwnerAndScope(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatal("image risk lookup changed projection or leaked partial owner state")
+			}
+		})
+	}
+}
+
+// TestRoleImageArtifactLockPreservesTupleAndErrors checks the common lock query's exact tenant,
+// artifact and caller context, full decoded projection, wrapped missing-row mapping and zero output
+// for driver/JSON/inventory failures. The synthetic transaction rejects unexpected calls and the
+// helper must not commit or add scope/authority checks.
+// TestRoleImageArtifactLockPreservesTupleAndErrors проверяет точные tenant, artifact и caller
+// context общего lock query, полное декодированное представление, wrapped missing-row mapping и
+// нулевой результат при driver/JSON/inventory error. Синтетическая транзакция отклоняет неожиданные
+// вызовы; helper не должен делать commit либо добавлять scope/authority checks.
+func TestRoleImageArtifactLockPreservesTupleAndErrors(t *testing.T) {
+	failure := errors.New("synthetic artifact lock failure")
+	for _, test := range []struct {
+		name      string
+		rowError  error
+		spec      string
+		inventory string
+		want      error
+	}{
+		{name: "exact tuple", spec: `{"SourceSHA256":"source-pin"}`},
+		{name: "missing", rowError: pgx.ErrNoRows, want: errs.ErrNotFound},
+		{name: "wrapped missing", rowError: fmt.Errorf("synthetic wrapped row: %w", pgx.ErrNoRows), want: errs.ErrNotFound},
+		{name: "partial driver result", rowError: failure, want: errs.ErrUnavailable},
+		{name: "invalid specification", spec: "{", want: errs.ErrUnavailable},
+		{name: "invalid inventory", spec: "{}", inventory: "{", want: errs.ErrUnavailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := t.Context()
+			tx := &proofResolutionTx{t: t, ctx: ctx, query: queryRoleImagesLockArtifact, args: []any{"tenant-id", "artifact-ref"}}
+			tx.row = proofResolutionRow(func(dest ...any) error {
+				if len(dest) != 51 {
+					t.Fatal("artifact lock column count changed")
+				}
+				*dest[0].(*string), *dest[1].(*string), *dest[2].(*string) = "artifact-id", "artifact-ref", "recipe-ref"
+				*dest[9].(*[]byte), *dest[10].(*string) = []byte(test.spec), test.inventory
+				*dest[23].(*uint64), *dest[34].(*string) = 7, "CLAIMED"
+				*dest[35].(*string), *dest[36].(*uint64) = "synthetic-token-digest", 9
+				*dest[39].(*string), *dest[46].(*string), *dest[47].(*string) = "PENDING", "recipe-id", "request-id"
+				*dest[48].(*string), *dest[49].(*string), *dest[50].(*string) = "PROJECT", "organization-ref", "project-ref"
+				return test.rowError
+			})
+			got, err := lockRoleImageArtifact(ctx, tx, scope{organizationID: "tenant-id"}, "artifact-ref")
+			want := lockedArtifact{}
+			if test.want == nil {
+				want = lockedArtifact{ID: "artifact-id", RecipeID: "recipe-id", AdmissionState: "CLAIMED", AdmissionTokenSHA256: "synthetic-token-digest", AdmissionFence: 9, PromotionState: "PENDING", PromotionRequestID: "request-id",
+					Artifact: entity.ImageArtifact{Ref: "artifact-ref", RecipeRef: "recipe-ref", Version: 7, SourceSHA256: "source-pin", ScopeKind: "PROJECT", OrganizationRef: "organization-ref", ProjectRef: "project-ref", PromotionState: "PENDING", PromotionRequested: true}}
+			}
+			if !errors.Is(err, test.want) || !reflect.DeepEqual(got, want) || tx.queryCalls != 1 || tx.commitCalls != 0 {
+				t.Fatal("artifact lock changed query, projection, error mapping or transaction ownership")
 			}
 		})
 	}

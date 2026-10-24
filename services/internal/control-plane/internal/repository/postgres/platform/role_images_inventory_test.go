@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// imageInventoryFixture builds a synthetic one-platform inventory with every registered probe
+// MISSING, binding canonical manifest and outer JSON digests to supplied artifact pins; it neither
+// probes a real image nor creates verified tools.
+// imageInventoryFixture строит синтетический inventory одной платформы, где все зарегистрированные
+// probes имеют MISSING, связывая digest manifest и внешнего JSON с переданными artifact pins;
+// реальный образ не проверяется, VERIFIED tools не создаются.
 func imageInventoryFixture(artifact entity.ImageArtifact) (string, string) {
 	manifest := runtimecontract.ImageToolManifest{Schema: runtimecontract.ImageInventorySchema, SpecSHA256: artifact.SpecSHA256, ImmutableBuildSHA256: artifact.ImmutableBuildSHA256, RuntimeContractSHA256: artifact.RoleRuntimeContractSHA256, Platform: "linux/amd64"}
 	for _, probe := range runtimecontract.ImageToolProbes() {
@@ -20,6 +26,12 @@ func imageInventoryFixture(artifact entity.ImageArtifact) (string, string) {
 	return string(raw), runtimecontract.ImageInventorySHA256(raw)
 }
 
+// TestArtifactInventoryDoesNotTrustDeclaredToolsOrForeignBinding accepts the exact synthetic
+// inventory but rejects foreign image/spec/runtime/hash and fabricated declared tools, and checks
+// that historical absence remains absent without recipe-based evidence.
+// TestArtifactInventoryDoesNotTrustDeclaredToolsOrForeignBinding принимает точный синтетический
+// inventory, отклоняет чужие image/spec/runtime/hash и выдуманные declared tools и проверяет
+// сохранение исторического отсутствия без evidence из деклараций рецепта.
 func TestArtifactInventoryDoesNotTrustDeclaredToolsOrForeignBinding(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	artifact := entity.ImageArtifact{SpecSHA256: digest, ImmutableBuildSHA256: digest, RoleRuntimeContractSHA256: digest, ManifestDigest: "sha256:" + digest, ProvenanceSHA256: digest, Platforms: []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}}}
@@ -49,6 +61,12 @@ func TestArtifactInventoryDoesNotTrustDeclaredToolsOrForeignBinding(t *testing.T
 	}
 }
 
+// TestEnvironmentSelectedToolsUseVerifiedPlatformIntersection checks that a verified ripgrep probe
+// selects executable rg, not its display name, and that a missing observation on another platform
+// or nil inventory removes command eligibility.
+// TestEnvironmentSelectedToolsUseVerifiedPlatformIntersection проверяет выбор executable rg по
+// VERIFIED probe ripgrep без выдачи полномочий display name и удаление команды при MISSING на
+// другой платформе либо nil inventory.
 func TestEnvironmentSelectedToolsUseVerifiedPlatformIntersection(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	artifact := entity.ImageArtifact{SpecSHA256: digest, ImmutableBuildSHA256: digest, RoleRuntimeContractSHA256: digest, ManifestDigest: "sha256:" + digest, ProvenanceSHA256: digest, Platforms: []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}}}

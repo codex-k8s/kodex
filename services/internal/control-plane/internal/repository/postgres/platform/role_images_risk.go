@@ -651,12 +651,9 @@ func canonicalImageRiskAcceptance(d entity.ImageAdmissionRiskDecision, report ru
 // recipe/scope/project, сохраняя not-found и unavailable; risk authority checks и жизненный цикл
 // транзакции остаются у caller.
 func lockImageRiskArtifact(ctx context.Context, tx pgx.Tx, current scope, artifactRef, recipeRef, scopeKind, projectRef string) (lockedArtifact, error) {
-	a, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact, current.organizationID, artifactRef))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return lockedArtifact{}, errs.ErrNotFound
-	}
+	a, err := lockRoleImageArtifact(ctx, tx, current, artifactRef)
 	if err != nil {
-		return lockedArtifact{}, errs.ErrUnavailable
+		return lockedArtifact{}, err
 	}
 	if a.Artifact.RecipeRef != recipeRef || a.Artifact.ScopeKind != scopeKind || a.Artifact.ProjectRef != projectRef {
 		return lockedArtifact{}, errs.ErrNotFound
