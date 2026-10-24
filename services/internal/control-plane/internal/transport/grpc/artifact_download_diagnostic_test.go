@@ -11,6 +11,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestArtifactDownloadDiagnosticPreservesExactGRPCStatus checks diagnostic wrapping preserves
+// status text/code/details and sentinel identity, carries safe retry metadata and invents no
+// diagnostic for expected denials.
+// TestArtifactDownloadDiagnosticPreservesExactGRPCStatus проверяет сохранение текста, кода,
+// деталей status и sentinel при диагностической обёртке, передачу безопасных retry metadata и
+// отсутствие вымышленной диагностики для ожидаемых отказов.
 func TestArtifactDownloadDiagnosticPreservesExactGRPCStatus(t *testing.T) {
 	for _, outcome := range []error{errs.ErrUnavailable, errs.ErrConflict} {
 		err := artifactread.WithFailure(outcome, artifactread.NewDiagnostic(artifactread.StageAudit, artifactread.ClassPostgres, "40001"))
@@ -35,6 +41,12 @@ func TestArtifactDownloadDiagnosticPreservesExactGRPCStatus(t *testing.T) {
 	}
 }
 
+// TestArtifactDownloadDiagnosticTransportDropsJoinedRawCause checks joined private causes are
+// absent from the mapped error chain and text while the domain sentinel survives and unknown
+// SQLSTATE is closed to OTHER.
+// TestArtifactDownloadDiagnosticTransportDropsJoinedRawCause проверяет отсутствие приватной
+// joined-причины в цепочке и тексте ошибки при сохранении доменного sentinel и замене неизвестного
+// SQLSTATE на OTHER.
 func TestArtifactDownloadDiagnosticTransportDropsJoinedRawCause(t *testing.T) {
 	safe := artifactread.WithFailure(errs.ErrUnavailable, artifactread.NewDiagnostic(artifactread.StageAudit, artifactread.ClassPostgres, "PRIVATE_SQLSTATE"))
 	raw := errors.New("PRIVATE_TOKEN PRIVATE_QUERY user@example.test")

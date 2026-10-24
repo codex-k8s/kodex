@@ -2,6 +2,10 @@ package grpc
 
 import "testing"
 
+// TestLaunchRunTitleSource checks empty or whitespace-only run titles use SERVER_DEFAULT while a
+// supplied user title uses USER_EDITED.
+// TestLaunchRunTitleSource проверяет SERVER_DEFAULT для пустых и пробельных заголовков запуска и
+// USER_EDITED для переданного пользовательского заголовка.
 func TestLaunchRunTitleSource(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {

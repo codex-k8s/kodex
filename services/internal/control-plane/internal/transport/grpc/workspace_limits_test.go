@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestWorkspaceLimitsProtoPolicyRoundTripAndBounds checks normalized workspace byte/file quotas
+// and resource digest survive typed policy roundtrip and a caller cannot exceed the platform
+// writable-byte maximum.
+// TestWorkspaceLimitsProtoPolicyRoundTripAndBounds проверяет сохранение нормализованных workspace
+// byte/file quotas и resource digest в typed policy roundtrip и запрет превышения platform
+// writable-byte maximum.
 func TestWorkspaceLimitsProtoPolicyRoundTripAndBounds(t *testing.T) {
 	base := runtimecontract.DefaultRuntimeEnvironmentPolicy()
 	base.Resources.WorkspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}

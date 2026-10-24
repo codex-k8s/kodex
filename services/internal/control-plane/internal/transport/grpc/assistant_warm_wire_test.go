@@ -12,7 +12,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Публичная точка входа: scripts/tests/assistant-warm-wire-test.sh.
+// TestAssistantWarmRuntimeOwnerSnapshotTransport is the opt-in
+// scripts/tests/assistant-warm-wire-test.sh bridge: restores typed synthetic owner fields, checks
+// image/revision pins and protobuf roundtrip, then creates private exclusive JSON output.
+// TestAssistantWarmRuntimeOwnerSnapshotTransport является opt-in мостом
+// scripts/tests/assistant-warm-wire-test.sh: восстанавливает типы синтетического owner snapshot,
+// проверяет image/revision pins и protobuf roundtrip, затем создаёт приватный exclusive JSON
+// output.
 func TestAssistantWarmRuntimeOwnerSnapshotTransport(t *testing.T) {
 	input, output := os.Getenv("KODEX_TEST_WARM_OWNER_SNAPSHOT_PATH"), os.Getenv("KODEX_TEST_WARM_WIRE_PATH")
 	if input == "" || output == "" {

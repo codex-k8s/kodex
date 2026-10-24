@@ -4,12 +4,60 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.369.0
+version: 1.370.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Завершение комментариев тестов gRPC — 24.10.2026
+
+На основе `d4179fdd94ccdbfc6e295bfec907c218067c1830` описаны69
+сохранившихся объявлений в37 handwritten gRPC test files. Лишний
+`verifiedExpiryTimestamp`, без изменений вызывавший timestamppb.New,
+удалён; единственный caller использует библиотечный constructor напрямую.
+Новых tests ради этого простого изменения не добавлено.
+
+Полный Go inventory18061/21392, missing3331. Все пропуски находятся только
+в PostgreSQL adapter control-plane; во всём собственном gRPC production,
+private helpers и tests0missing. Fixture types с именем generatedArtifact
+остаются handwritten source и не исключены как generated output.
+
+| Группа проверок | Что фактически проверяется |
+| --- | --- |
+| Diagnostics/status | Code/text/details, sentinel identity, context cancellation, fresh authentication и bounded ErrorInfo metadata. Private joined cause и неизвестный SQLSTATE не выдаются наружу; это unit-boundary proof |
+| Upload/stream | Metadata/chunk/commit order, bounded spool/reader, size/digest/EOF, immutable chunks, close и confirm до Complete; negative partial/revoke/cancel/send/close/oversize paths |
+| Transcription | Настоящий unary authorization path с synthetic owner/token resolvers проверяет exact method, session/profile/caller/project и lifetime. Caller metadata не создаёт authority; digest fixture не объявлена signed proof |
+| Mailbox/effects | Known/unknown enum и exact lease oneof, public credential descriptor без private materialization, receipt outcomes и wire roundtrips. Настоящая локальная JS fixture проверяет IMAP/POP3 materialization и deny legacy policy |
+| Context/environment | Skill/memory pins, JSON roundtrip, project/digest mismatch; policy absence и publication result consistency. Grants/catalog hints не превращаются в authority |
+| Workflow/prompt/gates | Server-owned dependencies/keys, closed slot/source/reason enums, user provenance, scoped approval preview, optional invocation binding и workspace quota bounds |
+| External fixtures | Warm owner snapshot/file output, legacy stdin→gateway binary и owner loopback требуют отдельных opt-in inputs. Их отсутствие не доказывает integration acceptance |
+
+AST/directives36 comments-only файлов совпали с исходной ревизией;
+transcription policy test совпал с ожидаемой заменой единственного вызова
+и удалением прозрачной timestamp wrapper. Production-код, assertions,
+fixtures data, API/Proto/SQL/generated sources и lifecycle не менялись.
+Context7: protobuf-go timestamppb.New и CheckValid; constructor conversion
+не объявлено дополнительной timestamp validation.
+
+Полные локальные GOWORK=off control-plane build/unit — PASS. Child environment
+очищен от credentials и13 external fixture/env inputs: прежние orphan,
+migration, owner-composition и внешний CP DSN, дополнительно warm input/output
+paths и legacy claim/binary/kind. Отдельный -v запуск трёх opt-in gRPC entrypoints
+явно дал SKIP каждому; warm-wire, legacy-claim и owner-loopback — NOT RUN.
+Real-API orphan и3 migration fixtures также SKIP/NOT RUN. Локальный JS mailbox
+helper исполнялся на synthetic input, его source прочитан; внешних provider
+или HTTP вызовов эта fixture не выполняет.
+
+Scan6664 own sources,222 excluded,1823 raw,890 retained,933 unresolved.
+Clone-set fingerprint не изменился относительно исходного SHA:
+`5a8b4691a841c926bf8d1e2e76af3ab4eeb3653ef14a2d135cef255df71f93cb`.
+Новых/stale решений нет; registry и detector/guards не менялись. Внутри37
+выбранных файлов и с другими файлами0unresolved.17 analyzer unit и5 exact-ignore
+guards — PASS. Это завершение комментариев слоя, не всей задачи#1823.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN;
+разрешение владельца на последующий полный выпуск сохраняется.
 
 ## Завершение комментариев production gRPC и общие projections — 24.10.2026
 

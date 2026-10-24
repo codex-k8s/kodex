@@ -13,6 +13,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestAssistantPlanDiagnosticsExportOnlyBoundedMetadata checks supported plan stages preserve
+// canonical status precedence and expose only matching category and optional operation index,
+// never the private operation payload.
+// TestAssistantPlanDiagnosticsExportOnlyBoundedMetadata проверяет сохранение приоритета canonical
+// status поддерживаемыми этапами плана и выдачу только согласованных category и необязательного
+// индекса операции без приватного payload.
 func TestAssistantPlanDiagnosticsExportOnlyBoundedMetadata(t *testing.T) {
 	for _, stage := range []string{errs.AssistantPlanHydrate, errs.AssistantPlanNormalize, errs.AssistantPlanBind, errs.AssistantPlanAuthorize, errs.AssistantPlanEmpty, errs.AssistantPlanCommand} {
 		for _, cause := range []error{errs.ErrConflict, errs.ErrVersionMismatch, errs.ErrInvalid} {
@@ -58,6 +64,11 @@ func TestAssistantPlanDiagnosticsExportOnlyBoundedMetadata(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanInvalidFieldTransportIsMetadataOnly checks typed invalid-field diagnostics are
+// limited to exact ErrorInfo metadata and bare invalid errors do not invent guard details.
+// TestAssistantPlanInvalidFieldTransportIsMetadataOnly проверяет ограничение типизированной
+// диагностики неверного поля точными ErrorInfo metadata и отсутствие вымышленных guard details у
+// обычной invalid-ошибки.
 func TestAssistantPlanInvalidFieldTransportIsMetadataOnly(t *testing.T) {
 	failure := errs.WithAssistantPlanStage(errs.WithAssistantPlanField(errors.Join(errs.ErrInvalid, errors.New("PRIVATE_INPUT")), "STEPS_INSTRUCTIONS"), errs.AssistantPlanHydrate, 1)
 	value := status.Convert(assistantPlanTransportError(failure))

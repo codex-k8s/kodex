@@ -9,6 +9,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestAssistantTaskSessionSelectorClosedMode checks absent, mixed and unknown-field task-session
+// selectors fail InvalidArgument before reaching any domain dependency.
+// TestAssistantTaskSessionSelectorClosedMode проверяет InvalidArgument для отсутствующих,
+// смешанных и содержащих unknown fields selectors сессии задачи до обращения к доменной
+// зависимости.
 func TestAssistantTaskSessionSelectorClosedMode(t *testing.T) {
 	for name, mutate := range map[string]func(*controlplanev1.SearchAssistantResourcesRequest){
 		"query":            func(r *controlplanev1.SearchAssistantResourcesRequest) { r.Query = "previous task" },

@@ -9,6 +9,12 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+// TestEmailCredentialCasterExcludesPrivateMaterialization checks three credential kinds expose
+// only the five public descriptor fields and omit private materialization references and content
+// digest from JSON.
+// TestEmailCredentialCasterExcludesPrivateMaterialization проверяет выдачу только пяти публичных
+// descriptor fields для трёх видов credential и отсутствие приватных materialization references и
+// content digest в JSON.
 func TestEmailCredentialCasterExcludesPrivateMaterialization(t *testing.T) {
 	for _, kind := range []string{"CA_CERTIFICATE", "USERNAME", "AUTH_SECRET"} {
 		item := castEmailMailboxCredential(entity.EmailMailboxCredential{Name: "email-" + strings.Repeat("a", 32), Generation: 3, Kind: kind,

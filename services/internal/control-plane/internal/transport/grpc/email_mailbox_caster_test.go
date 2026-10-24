@@ -7,6 +7,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestMailboxSpecificationTypedRoundtrip checks endpoint credential generations, folders,
+// addressing, limits and all twenty-one public operation policies survive typed mailbox
+// conversion.
+// TestMailboxSpecificationTypedRoundtrip проверяет сохранение endpoint credential generations,
+// папок, адресации, лимитов и всех двадцати одной публичных operation policies при преобразовании
+// ящика.
 func TestMailboxSpecificationTypedRoundtrip(t *testing.T) {
 	endpoint := &cp.EmailMailboxEndpoint{Host: "mail.example.test", Port: 993, ServerName: "mail.example.test",
 		TlsMode: cp.EmailMailboxTLSMode_EMAIL_MAILBOX_TLS_MODE_IMPLICIT, AuthMethod: cp.EmailMailboxAuthMethod_EMAIL_MAILBOX_AUTH_METHOD_OAUTHBEARER,
@@ -28,6 +34,12 @@ func TestMailboxSpecificationTypedRoundtrip(t *testing.T) {
 	}
 }
 
+// TestMailboxSpecificationUnknownEnumsFailClosed checks unknown protocol/TLS/auth/operation/policy
+// enums and absent content are rejected while an incomplete but representable draft remains
+// convertible.
+// TestMailboxSpecificationUnknownEnumsFailClosed проверяет отказ для неизвестных protocol, TLS,
+// auth, operation и policy enums и отсутствующего content, сохраняя преобразуемость неполного
+// представимого черновика.
 func TestMailboxSpecificationUnknownEnumsFailClosed(t *testing.T) {
 	for _, mutate := range []func(*cp.EmailMailboxSpecification){
 		func(s *cp.EmailMailboxSpecification) { s.ReceiveProtocol = 99 },

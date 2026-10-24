@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestModelCatalogCasterPinsEmptyAndNonemptyPages checks empty and populated model pages preserve
+// catalog revision/digest, total, continuation token and model count.
+// TestModelCatalogCasterPinsEmptyAndNonemptyPages проверяет сохранение catalog revision и digest,
+// общего числа, токена продолжения и числа моделей пустой и заполненной страницами.
 func TestModelCatalogCasterPinsEmptyAndNonemptyPages(t *testing.T) {
 	for _, models := range [][]entity.ModelCapability{nil, {{ID: "model", Available: true}}} {
 		v := entity.ModelCatalog{Models: models, Total: int64(len(models)), NextPageToken: "next", Revision: "mcat_" + strings.Repeat("a", 64), Digest: strings.Repeat("a", 64)}

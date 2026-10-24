@@ -8,6 +8,12 @@ import (
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 )
 
+// TestPromptSectionPreservesTypedUserProvenance checks user-template kinds and base-template
+// fallback preserve reference/digest provenance while malformed source, slot, kind or digest
+// combinations are rejected.
+// TestPromptSectionPreservesTypedUserProvenance проверяет сохранение reference/digest provenance
+// видов user template и base-template fallback, отклоняя неверные сочетания source, slot, kind
+// либо digest.
 func TestPromptSectionPreservesTypedUserProvenance(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	for _, kind := range []string{"WORKFLOW_CONTEXT", "AUTOMATION_TASK"} {

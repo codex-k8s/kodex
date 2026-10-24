@@ -14,6 +14,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestTrustedTranscriptionLocatorBindsFreshSessionAndSnapshot checks the valid deterministic
+// trusted snapshot and rejects changed identity, project, provenance, digest, expiry, credential
+// revision, workload or permission.
+// TestTrustedTranscriptionLocatorBindsFreshSessionAndSnapshot проверяет допустимый deterministic
+// trusted snapshot и отказ при изменении identity, project, provenance, digest, срока, ревизии
+// credential, workload либо permission.
 func TestTrustedTranscriptionLocatorBindsFreshSessionAndSnapshot(t *testing.T) {
 	p := value.Principal{ActorID: "11111111-1111-4111-8111-111111111111", AuthorityTenant: "22222222-2222-4222-8222-222222222222",
 		CallerWorkload: "stt-tts-service", Permission: "platform.stt.policy.resolve", CredentialRevision: 9}
@@ -63,6 +69,11 @@ func TestTrustedTranscriptionLocatorBindsFreshSessionAndSnapshot(t *testing.T) {
 	}
 }
 
+// TestTranscriptionLocatorAcceptsBoundedContinuationDeadline checks a verified continuation may
+// expire sooner than its locator but cannot extend root lifetime or change actor provenance.
+// TestTranscriptionLocatorAcceptsBoundedContinuationDeadline проверяет возможность более раннего
+// срока verified continuation относительно locator без продления root lifetime либо изменения
+// actor provenance.
 func TestTranscriptionLocatorAcceptsBoundedContinuationDeadline(t *testing.T) {
 	now := time.Now()
 	locator, verified := transcriptionAuthorityFixture(now.Add(30*time.Second), now.Add(20*time.Second))
@@ -82,6 +93,10 @@ func TestTranscriptionLocatorAcceptsBoundedContinuationDeadline(t *testing.T) {
 	}
 }
 
+// transcriptionAuthorityFixture constructs matching synthetic locator and verified context with
+// actor/tenant provenance, source pins and separately supplied expiries.
+// transcriptionAuthorityFixture создаёт согласованные синтетические locator и verified context с
+// происхождением actor и tenant, привязками источника и раздельно заданными сроками.
 func transcriptionAuthorityFixture(locatorExpiry, verifiedExpiry time.Time) (*sttv1.DelegatedAuthorityLocator, *authorityv1.VerifiedAuthorizationContext) {
 	const actorID = "1c70bbfd-c5db-401f-9332-ed6008d78a22"
 	const tenantID = "a3038aa6-8ab4-4e7c-980a-42a55d2464e6"
@@ -89,20 +104,16 @@ func transcriptionAuthorityFixture(locatorExpiry, verifiedExpiry time.Time) (*st
 	actor := &authorityv1.AuthorityProvenance{Source: authorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION, Reference: "actor", Revision: 3, DigestSha256: digest}
 	tenant := &authorityv1.AuthorityProvenance{Source: authorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE, Reference: "tenant", Revision: 4, DigestSha256: digest}
 	return &sttv1.DelegatedAuthorityLocator{
-			RequestId: "b05d9c6e-9d1b-4ae5-842a-b741662a18b0", CorrelationId: "stt-policy-test",
-			RootActorId: actorID, TenantId: tenantID, SourceRevision: 7, SourceDigestSha256: digest,
-			Actor:     &sttv1.AuthorityIdentityProvenance{Source: int32(actor.Source), Reference: actor.Reference, Revision: actor.Revision, DigestSha256: actor.DigestSha256},
-			Tenant:    &sttv1.AuthorityIdentityProvenance{Source: int32(tenant.Source), Reference: tenant.Reference, Revision: tenant.Revision, DigestSha256: tenant.DigestSha256},
-			ExpiresAt: timestamppb.New(locatorExpiry),
-		}, &authorityv1.VerifiedAuthorizationContext{
-			ExpiresAt: verifiedExpiryTimestamp(verifiedExpiry), SourceRevision: 7, SourceDigestSha256: digest,
-			Authority: &authorityv1.CallerAuthority{
-				Actor:  &authorityv1.AuthorityIdentity{Id: actorID, Provenance: actor},
-				Tenant: &authorityv1.AuthorityIdentity{Id: tenantID, Provenance: tenant},
-			},
-		}
-}
-
-func verifiedExpiryTimestamp(value time.Time) *timestamppb.Timestamp {
-	return timestamppb.New(value)
+		RequestId: "b05d9c6e-9d1b-4ae5-842a-b741662a18b0", CorrelationId: "stt-policy-test",
+		RootActorId: actorID, TenantId: tenantID, SourceRevision: 7, SourceDigestSha256: digest,
+		Actor:     &sttv1.AuthorityIdentityProvenance{Source: int32(actor.Source), Reference: actor.Reference, Revision: actor.Revision, DigestSha256: actor.DigestSha256},
+		Tenant:    &sttv1.AuthorityIdentityProvenance{Source: int32(tenant.Source), Reference: tenant.Reference, Revision: tenant.Revision, DigestSha256: tenant.DigestSha256},
+		ExpiresAt: timestamppb.New(locatorExpiry),
+	}, &authorityv1.VerifiedAuthorizationContext{
+		ExpiresAt: timestamppb.New(verifiedExpiry), SourceRevision: 7, SourceDigestSha256: digest,
+		Authority: &authorityv1.CallerAuthority{
+			Actor:  &authorityv1.AuthorityIdentity{Id: actorID, Provenance: actor},
+			Tenant: &authorityv1.AuthorityIdentity{Id: tenantID, Provenance: tenant},
+		},
+	}
 }

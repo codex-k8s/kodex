@@ -14,8 +14,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Только мост test profile: старый producer передаёт свою исходную owner map,
-// typed поля восстанавливаются без изменения значений перед production caster.
+// TestLegacyEmailClaimCasterFixture is an opt-in bounded stdin-to-gateway test bridge that
+// restores typed legacy owner fields, casts health/invocation claims and invokes a separately
+// supplied test binary with a deadline.
+// TestLegacyEmailClaimCasterFixture является opt-in мостом stdin-to-gateway с ограничением
+// размера: восстанавливает типы прежнего owner map, преобразует health/invocation claims и
+// запускает отдельно заданный тестовый binary с deadline.
 func TestLegacyEmailClaimCasterFixture(t *testing.T) {
 	if os.Getenv("KODEX_EMAIL_LEGACY_CLAIM") != "1" {
 		t.Skip("legacy CP producer entrypoint required")

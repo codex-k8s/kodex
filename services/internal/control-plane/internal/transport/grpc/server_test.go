@@ -10,6 +10,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestTransportErrorDistinguishesMissingCapabilityFromConcurrentConflict checks capability,
+// already-resolved and in-use failures map to FailedPrecondition while concurrent conflict maps to
+// Aborted.
+// TestTransportErrorDistinguishesMissingCapabilityFromConcurrentConflict проверяет
+// FailedPrecondition для отсутствующей capability, уже принятого решения и занятого ресурса, а
+// Aborted — для конкурентного конфликта.
 func TestTransportErrorDistinguishesMissingCapabilityFromConcurrentConflict(t *testing.T) {
 	t.Parallel()
 
@@ -34,6 +40,10 @@ func TestTransportErrorDistinguishesMissingCapabilityFromConcurrentConflict(t *t
 	}
 }
 
+// TestTransportErrorMarksResourceInUse checks in-use failures preserve FailedPrecondition and the
+// closed resource-in-use reason.
+// TestTransportErrorMarksResourceInUse проверяет сохранение FailedPrecondition и закрытой причины
+// resource-in-use для занятого ресурса.
 func TestTransportErrorMarksResourceInUse(t *testing.T) {
 	t.Parallel()
 
@@ -46,6 +56,10 @@ func TestTransportErrorMarksResourceInUse(t *testing.T) {
 	}
 }
 
+// TestTransportErrorPreservesRequestCancellation checks caller cancellation and deadline failures
+// retain their distinct Canceled and DeadlineExceeded transport codes.
+// TestTransportErrorPreservesRequestCancellation проверяет сохранение отдельных transport codes
+// Canceled и DeadlineExceeded для отмены и истечения срока caller.
 func TestTransportErrorPreservesRequestCancellation(t *testing.T) {
 	t.Parallel()
 
@@ -66,6 +80,10 @@ func TestTransportErrorPreservesRequestCancellation(t *testing.T) {
 	}
 }
 
+// TestTransportErrorPreservesAuthenticationBoundary checks ordinary unauthenticated failure has no
+// fresh-auth reason while fresh-auth rejection is PermissionDenied with the exact reason.
+// TestTransportErrorPreservesAuthenticationBoundary проверяет отсутствие fresh-auth reason у
+// обычного unauthenticated-отказа и PermissionDenied с точной причиной у требования свежего входа.
 func TestTransportErrorPreservesAuthenticationBoundary(t *testing.T) {
 	t.Parallel()
 
@@ -86,6 +104,10 @@ func TestTransportErrorPreservesAuthenticationBoundary(t *testing.T) {
 	}
 }
 
+// errorInfoReason returns the first ErrorInfo reason in the control-plane domain, ignoring other
+// detail types and domains.
+// errorInfoReason возвращает первую причину ErrorInfo домена control-plane, пропуская другие типы
+// деталей и домены.
 func errorInfoReason(err error) string {
 	for _, detail := range status.Convert(err).Details() {
 		if info, ok := detail.(*errdetails.ErrorInfo); ok && info.GetDomain() == controlPlaneErrorDomain {

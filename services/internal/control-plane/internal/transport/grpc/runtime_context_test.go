@@ -9,6 +9,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestRuntimeContextProjectionPreservesPins checks skill/memory pins survive typed and
+// persisted-JSON snapshot projection, rejecting another project and mutated content with the old
+// digest.
+// TestRuntimeContextProjectionPreservesPins проверяет сохранение skill/memory pins в
+// типизированном и сохранённом JSON snapshot, отклоняя другой проект и изменённое содержимое со
+// старым digest.
 func TestRuntimeContextProjectionPreservesPins(t *testing.T) {
 	now := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
 	context := runtimecontract.RuntimeContextSnapshot{Schema: runtimecontract.RuntimeContextSchema, OrganizationRef: "org_fixture", ProjectRef: "prj_fixture", AgentRef: "agt_fixture",

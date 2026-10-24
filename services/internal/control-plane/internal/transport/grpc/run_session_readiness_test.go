@@ -7,6 +7,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestRunSessionReadinessCasterPreservesExactBinding checks absent session readiness stays nil and
+// storage/error/archive-task pins and canonical PURGED state survive run projection.
+// TestRunSessionReadinessCasterPreservesExactBinding проверяет сохранение nil отсутствующей
+// session readiness, привязок storage, error и archive task и canonical PURGED state при
+// преобразовании запуска.
 func TestRunSessionReadinessCasterPreservesExactBinding(t *testing.T) {
 	t.Parallel()
 	if castRun(entity.Run{}).SessionReadiness != nil {
