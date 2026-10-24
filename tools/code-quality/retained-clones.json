@@ -6160,6 +6160,14 @@
       "fragmentSHA256": "1122f331eb98125b3a86fc3b097beb20af781ee7e649736ab043ed9b35bb8f85",
       "count": 1,
       "reason": "238-token окно является самоперекрытием одного promotionRequestDigest initializer со сдвигом на одну строку. Полная функция прочитана: каждый named field фиксированной commitment structure связывается с отдельным immutable artifact field, включая provenance, evidence, policy/runtime, platform/tool pins; второго алгоритма или второго producer здесь нет. Normalization identifiers делает разные обязательные присваивания похожими. Reflection mapper либо удаление полей изменили бы ясную wire/commitment форму; общий JSON hash уже roleImageDigest/jsonValueDigest. Сохранено только точное внутрефайловое overlap окно/hash/count1, не digest validation или функция целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_role_images.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_system_role_images.go",
+      "fragmentSHA256": "899f1422c11f0cd2471cb55bb7fd2a7d25ff5ebeabe9e39a5db3b10fa3aea9c8",
+      "count": 1,
+      "reason": "После общего applyAssistantImageManage и inheritAssistantImageOptions остаётся140-token окно orchestration двух разных protected commands: project UPDATE и system-assistant ORGANIZATION CREATE/UPDATE. Полностью прочитаны оба input resolver и command path: они по-разному разрешают agent/organization authority, source/OCC и immutable plan pins. Само окно вызывает разные typed input resolvers, общий managed target и уже общий apply/lineage helper, проверяет наличие build и формирует разные nominal результаты: project UPDATE без CreatedRefs, system path с CreatedRefs и точным organization scope/runtime metadata. Универсальный dispatcher с mode/callback ради этих glue-вызовов связал бы разные authority/payload/response contracts; самостоятельный алгоритм изменения рецепта и lineage уже вынесен. Сохранено только это точное pair/hash/count1 окно после выноса; остальные методы, проверки и файлы не исключаются."
     }
   ]
 }

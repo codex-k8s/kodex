@@ -4,11 +4,79 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.378.0
+version: 1.379.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Assistant и organization RoleImage — 24.10.2026
+
+На основе `8153b0c95d7e18af728f03823c008042c1feaee9` описаны44 прежних
+объявления в семи файлах: project assistant11, system assistant8, два unit
+tests, organization wrapper10, organization component9 и impact component4.
+Два новых production helpers и новый test тоже описаны:47/47 в выбранных
+семи Go-файлах. Общий inventory18600/21420, missing2820 — PostgreSQL adapter
+control-plane; исходный полный объём остаётся открытым.
+
+`inheritAssistantImageOptions` объединяет прежнее сохранение package/tool/
+installation options project и system update только при совпадении
+environment key. Сохранены append-to-nil копии, порядок и дубликаты,
+empty-to-nil форма, точные Dockerfile bytes и переданные options другого
+окружения. Helper не проверяет ключ и не выдаёт authority; empty-key equality
+остаётся прежним чистым сравнением, вход проверяют callers.
+
+`applyAssistantImageManage` объединяет три последовательности apply recipe
+→ record managed source/build lineage в прежней caller transaction: project
+create/update и system create/update. Сохранены nil/existing managed-set
+pointer и все проверки до/после; helper не делает audit/event/receipt,
+rollback либо commit. Project create продолжает проверять recipe ref и
+возвращать CreatedRefs, project update не добавляет CreatedRefs, system
+сохраняет organization scope/runtime metadata и прежний CreatedRefs.
+Обычный Manage с audit между apply и lineage не переподключён к helper:
+его собственный порядок сохраняется, как и отдельная source publication.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Project create | Exact agent.view target и active agent role/version до catalog validation и image manage authority; только PROJECT/CREATE input, effect и command outcome остаются в owner TX |
+| Project update | Management authority до source read, current active nonshipped visible source и editable UI mapping; сохранённый recipe/digest не пересобирается новым каталогом, новый spec pin проверяется отдельно. OCC исполняется при apply |
+| Plan hydrate / edit / refresh | Closed editable fields, server before/after/target/version, сохранение точных Dockerfile bytes, no-op denial. Edited immutable project/recipe/spec pins проверяются до owner refresh; refreshStale отдельно управляет повторной проверкой исходного snapshot |
+| System image | Authoritative assistant target должен иметь ORGANIZATION scope и current organization; exact assistant version и source/recipe OCC проверяются отдельно. Create может использовать recommended selection, update сохраняет прежние options и generation/spec snapshot |
+| Command materialization | Closed server-resolved Input, positive agent version и exact spec pin; update требует recipe/expectedVersion, create отклоняет прежний recipe и operation expected version. Payload locators не выдают principal authority |
+| Organization wrappers | Явный scope вместо вывода по пустому projectRef; project-bound principal и не OWNER/ADMINISTRATOR скрываются NotFound до organization.manage. Source revisions требуют image.source.view, их RR commit выполняется делегированным reader |
+| Organization component | Disposable owner recipe/build/admission/promotion, stale lease/OCC/owner denial, immutable parent, negative expiry receipts; synthetic callbacks не объявлены registry/scanner acceptance |
+| Organization impact | Zero-consumer apply/replay проверяет owner gate до digest/receipt; bound/unbound environments и system assistant требуют точные owner tuples и новые версии. Отзыв binding не заменяется сохранённой квитанцией |
+
+Новый unit задаёт шесть буквальных исходов options inheritance: same key с
+populated/nil/empty списками, другой key с populated/nil и два empty keys.
+Проверяет точные metadata, Dockerfile bytes, duplicate order, отсутствие
+изменения caller input и независимость populated copies. Три адресных tests,
+полные локальные GOWORK=off control-plane build/unit с `-count=1` — PASS.
+После них менялось только уточнение комментария без изменения Go AST.
+Credentials,13 прежних external fixture inputs и дополнительные admin DSN/
+template inputs исключены. Отдельный verbose запуск organization component
+подтвердил SKIP без disposable runtime DSN. Actual SQL/locks/races,
+bootstrap/organization lifecycle, registry, полный E2E/browser и deploy/live
+— NOT RUN/SKIP, не PASS.
+
+Четыре comments-only AST/directives comparisons и три expected-AST
+comparisons — PASS. Сохранены все прежние assertions, добавлены чистый test
+и два узких helpers; девять go:embed directives неизменны. SQL/API/generated,
+dependencies и deploy inputs не менялись. Context7 pgx/v5.10.0: caller Tx,
+QueryRow/Scan/ErrNoRows и deferred rollback; прочитаны три owner SQL, семь
+organization fixture SQL и делегированный revision reader.
+
+Scan6669 own sources,222 excluded,1816 raw,897 retained,919 unresolved.
+Общий apply/lineage и options алгоритмы вынесены, но detector по-прежнему
+видит короткую orchestration typed callers. После чтения обоих input
+resolvers и command paths сохранено только одно140-token окно по точным
+двум путям/hash/count1: разные project/system authority/payload и результаты
+оставлены явными, общий алгоритм уже в helper.770 прежних решений для896
+occurrences сохранены без перепривязки; новая запись не исключает методы
+либо файлы. Два соседних cross-file окна organization component configuration/
+bootstrap остаются открытыми. Thresholds/ignore regions не менялись.
+17 analyzer tests и5 exact-ignore guards — PASS. Issue#1823 остаётся открыт,
+основной клон и независимый QA baseline f2e64eb этим PR не меняются.
 
 ## Компонентная оснастка RoleImage — 24.10.2026
 
