@@ -10,12 +10,22 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// resumableRunFixture builds a synthetic successful run with a specified session, agent target and
+// explicit open/add-turn next actions.
+// resumableRunFixture создаёт синтетическое успешное выполнение с указанной сессией, целью агента
+// и явными следующими действиями открытия и добавления turn.
 func resumableRunFixture(ref, session string) *cp.Run {
 	return &cp.Run{Ref: ref, Version: 3, ProjectRef: "prj_fixture01", SessionRef: session,
 		State: cp.RunState_RUN_STATE_SUCCEEDED, NextActions: []cp.NextAction{cp.NextAction_NEXT_ACTION_OPEN, cp.NextAction_NEXT_ACTION_ADD_TURN},
 		Target: &cp.RunTarget{Target: &cp.RunTarget_AgentRef{AgentRef: "agent_fixture01"}}}
 }
 
+// TestResumableSessionsForwardOwnerCatalog checks resumable catalog flags,
+// project/search/pagination and optional agent/workflow target forwarding without synthesizing run
+// state filters.
+// TestResumableSessionsForwardOwnerCatalog проверяет передачу признака каталога продолжений,
+// проекта, поиска, пагинации и необязательной цели агента либо workflow без создания фильтров
+// состояния выполнения.
 func TestResumableSessionsForwardOwnerCatalog(t *testing.T) {
 	for _, target := range []string{"", "&targetType=AGENT&targetRef=agent_fixture01", "&targetType=WORKFLOW&targetRef=workflow_fixture01"} {
 		item := resumableRunFixture("run_fixture01", "session_fixture01")
@@ -36,6 +46,11 @@ func TestResumableSessionsForwardOwnerCatalog(t *testing.T) {
 	}
 }
 
+// TestResumableSessionsRejectInvalidInput checks invalid resumability flags, conflicting states
+// and incomplete, unsupported or malformed target filters fail before owner RPC.
+// TestResumableSessionsRejectInvalidInput проверяет отказ неверным признакам продолжения,
+// конфликтующим состояниям и неполным, неподдерживаемым либо некорректным фильтрам цели до RPC
+// владельца.
 func TestResumableSessionsRejectInvalidInput(t *testing.T) {
 	for _, query := range []string{
 		"resumableSessionsOnly=invalid", "resumableSessionsOnly=true&states=SUCCEEDED",
@@ -53,6 +68,10 @@ func TestResumableSessionsRejectInvalidInput(t *testing.T) {
 	}
 }
 
+// TestResumableSessionsEmptyAndOrdinaryModes checks empty resumable pages retain a zero total
+// while ordinary run mode preserves its explicit RUNNING state filter.
+// TestResumableSessionsEmptyAndOrdinaryModes проверяет нулевое число результатов пустых страниц
+// продолжений и сохранение явного фильтра RUNNING в обычном режиме выполнений.
 func TestResumableSessionsEmptyAndOrdinaryModes(t *testing.T) {
 	for _, query := range []string{"resumableSessionsOnly=true", "resumableSessionsOnly=false&states=RUNNING"} {
 		client := &catalogRPCRecorder{response: &cp.ListRunsResponse{}}
@@ -68,6 +87,11 @@ func TestResumableSessionsEmptyAndOrdinaryModes(t *testing.T) {
 	}
 }
 
+// TestResumableSessionsRejectInvalidOwnerPage checks rejection of repeated sessions, nonresumable
+// runs, missing next actions, foreign project or target, repeated cursor and inconsistent totals.
+// TestResumableSessionsRejectInvalidOwnerPage проверяет отказ повторным сессиям, непродолжаемым
+// выполнениям, отсутствию действий, чужим проекту либо цели, повторному курсору и противоречивым
+// счётчикам.
 func TestResumableSessionsRejectInvalidOwnerPage(t *testing.T) {
 	for _, mutate := range []func(*cp.ListRunsResponse){
 		func(p *cp.ListRunsResponse) {
@@ -93,6 +117,10 @@ func TestResumableSessionsRejectInvalidOwnerPage(t *testing.T) {
 	}
 }
 
+// TestResumableSessionsOwnerErrors checks concrete HTTP mapping of authoritative resumable catalog
+// errors without returning private owner details.
+// TestResumableSessionsOwnerErrors проверяет конкретное HTTP-отображение авторитетных ошибок
+// каталога продолжений без возврата внутренних подробностей владельца.
 func TestResumableSessionsOwnerErrors(t *testing.T) {
 	for code, want := range map[codes.Code]int{codes.PermissionDenied: 403, codes.NotFound: 404, codes.InvalidArgument: 400, codes.Aborted: 412, codes.FailedPrecondition: 409, codes.Unavailable: 503, codes.DeadlineExceeded: 504} {
 		client := &catalogRPCRecorder{failure: status.Error(code, "private owner detail")}

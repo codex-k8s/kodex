@@ -17,14 +17,28 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// roleImageHTTPHandler wires the generated HTTP router to the dedicated role-image client backed
+// by the shared local RPC recorder.
+// roleImageHTTPHandler связывает generated HTTP-маршрутизатор с отдельным клиентом образов роли на
+// общей локальной заглушке записи RPC.
 func roleImageHTTPHandler(client *catalogRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{RoleImages: controlplanev1.NewRoleImageServiceClient(client)}})
 }
 
+// roleImageRecipeFixture builds a synthetic active custom image recipe with explicit source
+// availability, generation and UI-managed revision lineage.
+// roleImageRecipeFixture создаёт синтетический активный рецепт custom-образа с явной доступностью
+// исходника, поколением и происхождением ревизии под управлением UI.
 func roleImageRecipeFixture() *controlplanev1.RoleImageRecipe {
 	return &controlplanev1.RoleImageRecipe{SourceAvailable: true, Ref: "imgrec_fixture01", ProjectRef: "prj_fixture01", RoleDefinitionRef: "role_fixture01", Version: 2, Generation: 3, Name: "Окружение", State: "ACTIVE", CreatedAt: timestamppb.New(time.Now().UTC()), UpdatedAt: timestamppb.New(time.Now().UTC()), Environment: &controlplanev1.RoleEnvironmentSelection{EnvironmentKey: "custom", Dockerfile: "FROM scratch"}, ManagedLineage: &controlplanev1.RoleImageManagedLineage{ConfigurationRef: "cfg_fixture01", RevisionRef: "cfr_fixture01", Revision: 4, ManagedBy: "UI", Origin: "MANAGED", SourceRef: "ui:recipe", SourceRevision: "4"}}
 }
 
+// TestRoleImageMetadataAndSourceAdmissionStaySeparate checks source redaction independently of
+// metadata and rejects contradictory source admission in recipe details, lists and mutation
+// receipts.
+// TestRoleImageMetadataAndSourceAdmissionStaySeparate проверяет скрытие исходника независимо от
+// метаданных и отказ противоречивому допуску исходника в деталях рецепта, списках и квитанциях
+// изменения.
 func TestRoleImageMetadataAndSourceAdmissionStaySeparate(t *testing.T) {
 	missing := roleImageRecipeFixture()
 	missing.Environment.Dockerfile = ""
@@ -87,6 +101,12 @@ func TestRoleImageMetadataAndSourceAdmissionStaySeparate(t *testing.T) {
 	}
 }
 
+// TestRoleImageCatalogPreservesServerFilterTotalAndLineage checks owner filters, pagination,
+// total, managed revision lineage and no-store, preserving required arrays and zero counts on an
+// empty page.
+// TestRoleImageCatalogPreservesServerFilterTotalAndLineage проверяет фильтры владельца, пагинацию,
+// число результатов, происхождение управляемой ревизии и no-store с сохранением обязательных
+// массивов и нулевых счётчиков пустой страницы.
 func TestRoleImageCatalogPreservesServerFilterTotalAndLineage(t *testing.T) {
 	response := &controlplanev1.ListRoleImageRecipesResponse{Recipes: []*controlplanev1.RoleImageRecipe{roleImageRecipeFixture()}, Total: 21, Page: &controlplanev1.PageInfo{NextPageToken: "owner-next"}}
 	client := &catalogRPCRecorder{response: response}
@@ -112,6 +132,11 @@ func TestRoleImageCatalogPreservesServerFilterTotalAndLineage(t *testing.T) {
 	}
 }
 
+// TestRoleImageCatalogRejectsInvalidInputAndUpstream checks query byte bounds before RPC and
+// rejects foreign, duplicated or malformed owner pages, lineage and cursor metadata.
+// TestRoleImageCatalogRejectsInvalidInputAndUpstream проверяет байтовые ограничения запроса до RPC
+// и отказ чужим, повторным либо повреждённым страницам владельца, происхождению и метаданным
+// курсора.
 func TestRoleImageCatalogRejectsInvalidInputAndUpstream(t *testing.T) {
 	path := "/api/v1/projects/prj_fixture01/role-image-recipes"
 	for _, query := range []string{"state=UNKNOWN", "pageSize=0", "pageSize=101", "query=" + strings.Repeat("a", 129), "query=" + url.QueryEscape(strings.Repeat("я", 65)), "roleDefinitionRef=bad!", "pageToken=" + strings.Repeat("a", 513)} {
@@ -147,6 +172,11 @@ func TestRoleImageCatalogRejectsInvalidInputAndUpstream(t *testing.T) {
 	}
 }
 
+// TestRoleImageDetailAndReceiptPreserveBuildRevision checks build revision linkage and
+// UI/GIT/SHIPPED lineage, allowing absent legacy lineage but rejecting unbound mutation receipts.
+// TestRoleImageDetailAndReceiptPreserveBuildRevision проверяет связь ревизии сборки и
+// происхождение UI/GIT/SHIPPED, допуская отсутствие старого lineage и отклоняя несвязанные
+// квитанции изменения.
 func TestRoleImageDetailAndReceiptPreserveBuildRevision(t *testing.T) {
 	recipe := roleImageRecipeFixture()
 	build := &controlplanev1.ImageBuild{ConfigurationRevisionRef: recipe.ManagedLineage.RevisionRef}
@@ -189,6 +219,10 @@ func TestRoleImageDetailAndReceiptPreserveBuildRevision(t *testing.T) {
 	}
 }
 
+// TestRoleImageCatalogPreservesOwnerDenials checks concrete HTTP mapping of role-image catalog
+// errors without returning private owner diagnostic text.
+// TestRoleImageCatalogPreservesOwnerDenials проверяет конкретное HTTP-отображение ошибок каталога
+// образов роли без возврата внутренней диагностики владельца.
 func TestRoleImageCatalogPreservesOwnerDenials(t *testing.T) {
 	for code, expected := range map[codes.Code]int{codes.NotFound: 404, codes.PermissionDenied: 403, codes.InvalidArgument: 400, codes.Unavailable: 503} {
 		w := httptest.NewRecorder()
@@ -199,6 +233,12 @@ func TestRoleImageCatalogPreservesOwnerDenials(t *testing.T) {
 	}
 }
 
+// TestPublicRoleImageArtifactPreservesPromotionIdentity checks exact build, provenance and
+// manifest identity for promotion candidates and active artifacts, omitting promotion receipts
+// until promoted.
+// TestPublicRoleImageArtifactPreservesPromotionIdentity проверяет точные identity сборки,
+// provenance и manifest у кандидатов promotion и активных артефактов без выдачи
+// promotion-квитанций до продвижения.
 func TestPublicRoleImageArtifactPreservesPromotionIdentity(t *testing.T) {
 	t.Parallel()
 	for _, promoted := range []bool{false, true} {

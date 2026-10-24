@@ -4,12 +4,41 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.354.0
+version: 1.355.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Остаток тестовых проекций и lifecycle — 24.10.2026
+
+На основе `d96b1dcb936a1527d7d3c6c3b5b9e3fcce61d7e5` подробно описаны
+ещё 111 собственных тестовых объявлений в 16 файлах шлюза. Область:
+секреты организации и secret drafts, owner gate, role images, avatar upload,
+карточки каталогов, configuration write-back, integration candidates,
+scoped impact consumers, поиск, инструкции, помощник проекта, resumable
+sessions, revision impact, session storage readiness и schedule prompt preview.
+
+Отдельно пояснены prepared/terminal replay без повторного эффекта,
+проверяемая очистка только изменяемого буфера, source admission отдельно
+от метаданных, promotion candidate отдельно от promoted artifact, назначение
+GRANT отдельно от USE и binding-only update без изменения версии consumer.
+Runtime readiness и archive task проверяются закрытыми enum и кодами;
+их тесты не объявляются доказательством живого хранения сессии.
+Предпросмотр расписания не создаёт runtime attempt и не даёт payload actor
+источника полномочий. Generated response inventory карточек описан по
+реально перечисляемым wrappers, без изменения утверждённых cardinality.
+
+Во всех 16 файлах AST без comments/positions и полный набор Go directives
+совпали с исходным head. Исполняемый код и тестовые fixtures не менялись;
+новых helper, retained решений, broad ignores либо порогов detector нет.
+Go inventory рабочего дерева: 16269/21348, missing 5079; шлюз: 0 production
+и 139 тестовых пропусков; control-plane: 4940 пропусков. Полнота #1823
+пока не достигнута. Предыдущие незакрытые findings остаются открытыми;
+merge/deploy/browser/live/full QA продолжения NOT RUN. Следующий этап —
+оставшиеся тесты шлюза, control-plane и адресный разбор clone-групп в том же
+Draft PR #1828. Проверки итогового SHA фиксируются в описании PR.
 
 ## Комментарии тестовых сценариев HTTP-шлюза — 24.10.2026
 

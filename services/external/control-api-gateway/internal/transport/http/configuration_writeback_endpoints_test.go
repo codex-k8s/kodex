@@ -13,9 +13,23 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// writeBackBaseFixture holds synthetic original JSON content whose digest is pinned by the local
+// Git write-back proposal fixture.
+// writeBackBaseFixture хранит исходное синтетическое JSON-содержимое с дайджестом, закреплённым в
+// локальном тестовом предложении Git write-back.
 const writeBackBaseFixture = `{"name":"old"}`
+
+// writeBackProposedFixture holds synthetic proposed JSON content whose digest is pinned by the
+// local Git write-back proposal fixture.
+// writeBackProposedFixture хранит предложенное синтетическое JSON-содержимое с дайджестом,
+// закреплённым в локальном тестовом предложении Git write-back.
 const writeBackProposedFixture = `{"name":"new"}`
 
+// writeBackFixture builds a fixed-time waiting-approval proposal with independent configuration,
+// source and connection versions, content pins and disabled owner actions.
+// writeBackFixture создаёт предложение waiting approval с фиксированным временем, независимыми
+// версиями конфигурации, источника и подключения, pins содержимого и запрещёнными действиями
+// владельца.
 func writeBackFixture() *cp.ManagedConfigurationGitWriteBack {
 	now := time.Unix(1000, 0)
 	result := &cp.ManagedConfigurationGitWriteBack{Ref: "wb_fixture01", Version: 1, ConfigurationRef: "mcfg_fixture01", Kind: cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE, ConfigurationVersion: 3, SourceRef: "src_fixture01", SourceVersion: 2, ConnectionRef: "conn_fixture01", ConnectionVersion: 4, RepositoryRef: "owner/repository", SourceRefName: "main", Path: "role.json", BaseCommitSha: strings.Repeat("a", 40), BaseContentSha256: writeBackContentDigest(writeBackBaseFixture), ProposedContentSha256: writeBackContentDigest(writeBackProposedFixture), ContentFormat: "JSON", ProposalBranch: "kodex/writeback/wb_fixture01", ApprovalDigest: strings.Repeat("b", 64), State: cp.ManagedConfigurationGitWriteBackState_MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_WAITING_APPROVAL, CreatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(time.Hour))}
@@ -25,6 +39,10 @@ func writeBackFixture() *cp.ManagedConfigurationGitWriteBack {
 	return result
 }
 
+// TestWriteBackDedicatedHTTPCommandsAndReadback checks dedicated prepare, approve, reject, cancel,
+// get and list RPCs with mutation fencing, no-store and list content redaction.
+// TestWriteBackDedicatedHTTPCommandsAndReadback проверяет отдельные RPC prepare, approve, reject,
+// cancel, get и list с ограничениями изменения, no-store и скрытием содержимого в списке.
 func TestWriteBackDedicatedHTTPCommandsAndReadback(t *testing.T) {
 	prepare := `{"expectedSourceVersion":2,"content":"{\"name\":\"new\"}"}`
 	decision := `{"approvalDigest":"` + strings.Repeat("b", 64) + `"}`
@@ -90,6 +108,11 @@ func TestWriteBackDedicatedHTTPCommandsAndReadback(t *testing.T) {
 	}
 }
 
+// TestWriteBackProjectionRejectsUnsafeUpstream checks closed state/action/failure registries, safe
+// paths and URLs, separate proposal branch and branch-versus-PR receipt requirements.
+// TestWriteBackProjectionRejectsUnsafeUpstream проверяет закрытые реестры состояния, действий и
+// ошибок, безопасные пути и URL, отдельную ветку предложения и разные требования к квитанциям
+// ветки и PR.
 func TestWriteBackProjectionRejectsUnsafeUpstream(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.ManagedConfigurationGitWriteBack){
 		"unknown state":          func(v *cp.ManagedConfigurationGitWriteBack) { v.State = 999 },
@@ -136,6 +159,10 @@ func TestWriteBackProjectionRejectsUnsafeUpstream(t *testing.T) {
 	}
 }
 
+// TestWriteBackInvalidInputStopsBeforeOwner checks that absent source version, empty content and
+// forged actor fields fail before the owner prepare RPC.
+// TestWriteBackInvalidInputStopsBeforeOwner проверяет отказ до prepare RPC владельца при
+// отсутствии версии источника, пустом содержимом и поддельном поле actor.
 func TestWriteBackInvalidInputStopsBeforeOwner(t *testing.T) {
 	for _, body := range []string{`{"expectedSourceVersion":0,"content":"{}"}`, `{"expectedSourceVersion":2,"content":""}`, `{"expectedSourceVersion":2,"content":"{}","actorRef":"actor_caller"}`} {
 		client := &catalogRPCRecorder{}
@@ -148,6 +175,10 @@ func TestWriteBackInvalidInputStopsBeforeOwner(t *testing.T) {
 	}
 }
 
+// TestWriteBackGetDoesNotEchoUnboundContent checks that base content inconsistent with the
+// proposal digest is rejected without echoing its private source text.
+// TestWriteBackGetDoesNotEchoUnboundContent проверяет отказ базовому содержимому, не совпадающему
+// с дайджестом предложения, без возврата его внутреннего текста.
 func TestWriteBackGetDoesNotEchoUnboundContent(t *testing.T) {
 	client := &catalogRPCRecorder{response: &cp.GetManagedConfigurationGitWriteBackResponse{Proposal: writeBackFixture(), BaseContent: "unbound private source", ProposedContent: writeBackProposedFixture}}
 	w := httptest.NewRecorder()

@@ -9,6 +9,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// sessionReadinessWireFixture adds synthetic storage-not-live readiness and a dead-letter snapshot
+// task at its attempt limit to the shared run fixture.
+// sessionReadinessWireFixture добавляет к общему тестовому выполнению синтетическую готовность
+// storage not live и snapshot-задачу dead letter с исчерпанным пределом попыток.
 func sessionReadinessWireFixture() *cp.Run {
 	run := systemRunIdentityFixture()
 	run.SessionRef = "ses_fixture01"
@@ -16,6 +20,11 @@ func sessionReadinessWireFixture() *cp.Run {
 		LatestArchiveTask: &cp.RunSessionArchiveTask{Ref: "sat_fixture01", Kind: cp.SessionArchiveTaskKind_SESSION_ARCHIVE_TASK_KIND_SNAPSHOT, State: cp.RunSessionArchiveTaskState_RUN_SESSION_ARCHIVE_TASK_STATE_DEAD_LETTER, Attempt: 5, MaximumAttempts: 5, SafeErrorCode: "SESSION_ARCHIVE_SOURCE_INVALID"}}
 	return run
 }
+
+// TestRunSessionReadinessWireClosed checks canonical session/task enums and exact session/attempt
+// projection, accepting a READY archive task with attempt zero.
+// TestRunSessionReadinessWireClosed проверяет канонические enum сессии и задачи и точную проекцию
+// сессии и попытки, допуская архивную задачу READY с нулевой попыткой.
 func TestRunSessionReadinessWireClosed(t *testing.T) {
 	t.Parallel()
 	value, err := messageMap(&cp.GetRunResponse{Run: sessionReadinessWireFixture()})
@@ -36,6 +45,13 @@ func TestRunSessionReadinessWireClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestRunSessionReadinessWireRejectsUnknownAndLeak checks foreign sessions, unknown states,
+// contradictory readiness, unsupported task kinds, attempt overflow and private error codes are
+// rejected without disclosure.
+// TestRunSessionReadinessWireRejectsUnknownAndLeak проверяет отказ чужим сессиям, неизвестным
+// состояниям, противоречивой готовности, неподдерживаемым видам задач, переполнению попыток и
+// внутренним кодам ошибки без раскрытия.
 func TestRunSessionReadinessWireRejectsUnknownAndLeak(t *testing.T) {
 	t.Parallel()
 	cases := map[string]func(*cp.Run){
@@ -71,6 +87,10 @@ func TestRunSessionReadinessWireRejectsUnknownAndLeak(t *testing.T) {
 	}
 }
 
+// TestRunSessionReadinessPurgedRemainsBlocked checks that purged session storage retains its
+// storage-not-live reason instead of being projected as ready.
+// TestRunSessionReadinessPurgedRemainsBlocked проверяет сохранение причины storage not live для
+// удалённого хранения сессии без подмены готовностью.
 func TestRunSessionReadinessPurgedRemainsBlocked(t *testing.T) {
 	t.Parallel()
 	run := sessionReadinessWireFixture()
@@ -85,6 +105,10 @@ func TestRunSessionReadinessPurgedRemainsBlocked(t *testing.T) {
 	}
 }
 
+// TestRunSessionReadinessEnumsPinned pins enum cardinalities and checks unknown diagnostic fields
+// are rejected without returning their private values.
+// TestRunSessionReadinessEnumsPinned фиксирует мощности enum и проверяет отказ неизвестным
+// диагностическим полям без возврата их внутренних значений.
 func TestRunSessionReadinessEnumsPinned(t *testing.T) {
 	t.Parallel()
 	for _, item := range []struct {
@@ -106,6 +130,11 @@ func TestRunSessionReadinessEnumsPinned(t *testing.T) {
 	}
 }
 
+// TestRunSessionReadinessLocalizationKeepsClosedWire checks ordinary run error localization while
+// preserving the archive task code-only shape and avoiding undeclared error-message fields.
+// TestRunSessionReadinessLocalizationKeepsClosedWire проверяет локализацию обычной ошибки
+// выполнения с сохранением формы архивной задачи только с кодом и без незаявленного поля текста
+// ошибки.
 func TestRunSessionReadinessLocalizationKeepsClosedWire(t *testing.T) {
 	t.Parallel()
 	fixture := sessionReadinessWireFixture()

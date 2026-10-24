@@ -13,27 +13,47 @@ import (
 	"google.golang.org/grpc"
 )
 
+// avatarCommandStub counts synthetic avatar upload stream openings and returns the configured
+// local stream without contacting the platform.
+// avatarCommandStub подсчитывает открытия синтетического потока загрузки аватара и возвращает
+// заданный локальный поток без обращения к платформе.
 type avatarCommandStub struct {
 	controlplanev1.PlatformCommandServiceClient
 	stream *avatarStreamStub
 	calls  int
 }
 
+// UploadAgentAvatar records one upload RPC opening and returns the configured synthetic client
+// stream without transferring real avatar data.
+// UploadAgentAvatar записывает открытие одного RPC загрузки и возвращает заданный синтетический
+// клиентский поток без передачи настоящих данных аватара.
 func (client *avatarCommandStub) UploadAgentAvatar(context.Context, ...grpc.CallOption) (controlplanev1.PlatformCommandService_UploadAgentAvatarClient, error) {
 	client.calls++
 	return client.stream, nil
 }
 
+// avatarStreamStub collects outgoing synthetic avatar frames behind the generated gRPC upload
+// stream interface.
+// avatarStreamStub собирает исходящие синтетические кадры аватара за generated-интерфейсом
+// gRPC-потока загрузки.
 type avatarStreamStub struct {
 	grpc.ClientStream
 	messages []*controlplanev1.UploadAgentAvatarRequest
 }
 
+// Send appends the supplied avatar frame to the fixture message list for metadata and commit
+// assertions.
+// Send добавляет переданный кадр аватара в тестовый список сообщений для проверок метаданных и
+// commit.
 func (stream *avatarStreamStub) Send(message *controlplanev1.UploadAgentAvatarRequest) error {
 	stream.messages = append(stream.messages, message)
 	return nil
 }
 
+// CloseAndRecv returns a synthetic version-five agent with an artifact-backed avatar and public
+// content path after the test upload closes.
+// CloseAndRecv возвращает синтетического агента пятой версии с аватаром из артефакта и публичным
+// путём содержимого после закрытия тестовой загрузки.
 func (stream *avatarStreamStub) CloseAndRecv() (*controlplanev1.UploadAgentAvatarResponse, error) {
 	return &controlplanev1.UploadAgentAvatarResponse{Agent: &controlplanev1.Agent{
 		Ref: "agt_employee01", Version: 5,
@@ -41,6 +61,11 @@ func (stream *avatarStreamStub) CloseAndRecv() (*controlplanev1.UploadAgentAvata
 	}}, nil
 }
 
+// TestUploadAgentAvatarUsesAtomicStreamingRPC checks one upload RPC with metadata, content and
+// commit frames, exact size/version pins and canonical public avatar-source enum.
+// TestUploadAgentAvatarUsesAtomicStreamingRPC проверяет один RPC загрузки с кадрами метаданных,
+// содержимого и commit, точными pins размера и версии и каноническим публичным enum источника
+// аватара.
 func TestUploadAgentAvatarUsesAtomicStreamingRPC(t *testing.T) {
 	raw := bytes.Repeat([]byte("png"), 30_000)
 	stream := &avatarStreamStub{}
@@ -68,6 +93,10 @@ func TestUploadAgentAvatarUsesAtomicStreamingRPC(t *testing.T) {
 	}
 }
 
+// TestUploadAgentAvatarRejectsOversizeBeforeRPC checks that an advertised body length beyond the
+// avatar limit returns payload too large before opening an upload RPC.
+// TestUploadAgentAvatarRejectsOversizeBeforeRPC проверяет ответ payload too large при объявленной
+// длине тела сверх лимита аватара до открытия RPC загрузки.
 func TestUploadAgentAvatarRejectsOversizeBeforeRPC(t *testing.T) {
 	command := &avatarCommandStub{stream: &avatarStreamStub{}}
 	server := &Server{control: &controlplaneclient.Client{Command: command}}

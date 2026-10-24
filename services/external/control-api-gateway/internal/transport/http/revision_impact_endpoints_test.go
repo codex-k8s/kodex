@@ -12,13 +12,26 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// revisionImpactPublishBody provides an explicit synthetic impact plan selection with an empty
+// item list for environment publication HTTP tests.
+// revisionImpactPublishBody задаёт явный выбор синтетического плана влияния с пустым списком
+// элементов для HTTP-тестов публикации окружения.
 const revisionImpactPublishBody = `{"planRef":"rip_fixture01","selectedItemRefs":[]}`
 
+// revisionImpactFixture builds a fixed-time prepared environment impact plan with exact draft
+// version, target digest, plan digest and one-hour expiry.
+// revisionImpactFixture создаёт подготовленный план влияния окружения с фиксированным временем,
+// точной версией черновика, дайджестами цели и плана и сроком один час.
 func revisionImpactFixture() *cp.RevisionImpactPlan {
 	now := time.Unix(1000, 0)
 	return &cp.RevisionImpactPlan{Ref: "rip_fixture01", Version: 1, Kind: cp.RevisionImpactKind_REVISION_IMPACT_KIND_RUNTIME_ENVIRONMENT, DraftRef: "renvd_fixture01", DraftVersion: 3, TargetDigest: strings.Repeat("a", 64), Digest: strings.Repeat("b", 64), Total: 1, State: cp.RevisionImpactState_REVISION_IMPACT_STATE_PREPARED, CreatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(time.Hour))}
 }
 
+// TestRevisionImpactPrepareAndFilteredRead checks typed environment impact preparation and literal
+// filtered read mapping while retaining explicit empty items and zero filtered total.
+// TestRevisionImpactPrepareAndFilteredRead проверяет типизированную подготовку влияния окружения и
+// отображение буквального фильтра чтения с сохранением явных пустого массива и нулевого числа
+// отфильтрованных элементов.
 func TestRevisionImpactPrepareAndFilteredRead(t *testing.T) {
 	plan := revisionImpactFixture()
 	client := &catalogRPCRecorder{response: &cp.PrepareEnvironmentDraftImpactResponse{Plan: plan}}
@@ -38,6 +51,11 @@ func TestRevisionImpactPrepareAndFilteredRead(t *testing.T) {
 	}
 }
 
+// TestRevisionImpactRejectsInventedPinsAndOutcomes checks closed plan kinds and states, complete
+// source/publication pins, safe versions and exact resulting binding lineage.
+// TestRevisionImpactRejectsInventedPinsAndOutcomes проверяет закрытые виды и состояния плана,
+// полные pins источника и публикации, безопасные версии и точное происхождение результирующей
+// привязки.
 func TestRevisionImpactRejectsInventedPinsAndOutcomes(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.RevisionImpactPlan){
 		"partial source":        func(p *cp.RevisionImpactPlan) { p.SourceVersion = 1 },
@@ -70,6 +88,12 @@ func TestRevisionImpactRejectsInventedPinsAndOutcomes(t *testing.T) {
 	}
 }
 
+// TestRevisionImpactPublicationRejectsLegacyAndDuplicateSelectionBeforeOwner checks environment
+// publication requires an explicit plan and selected-item array and rejects repeated selected
+// references before owner RPC.
+// TestRevisionImpactPublicationRejectsLegacyAndDuplicateSelectionBeforeOwner проверяет
+// обязательные явный план и массив выбранных элементов публикации окружения и отказ повторяющимся
+// выбранным ссылкам до RPC владельца.
 func TestRevisionImpactPublicationRejectsLegacyAndDuplicateSelectionBeforeOwner(t *testing.T) {
 	for _, body := range []string{"", `{}`, `{"planRef":"rip_fixture01"}`, `{"planRef":"rip_fixture01","selectedItemRefs":["rii_fixture01","rii_fixture01"]}`} {
 		client := &environmentDraftRecorder{}
@@ -81,6 +105,12 @@ func TestRevisionImpactPublicationRejectsLegacyAndDuplicateSelectionBeforeOwner(
 	}
 }
 
+// TestRevisionImpactPublicationRejectsMismatchedOwnerReceipt checks that stale draft version,
+// changed validated content or a different published target rejects the environment publication
+// receipt.
+// TestRevisionImpactPublicationRejectsMismatchedOwnerReceipt проверяет отказ квитанции публикации
+// окружения при устаревшей версии черновика, изменённом валидированном содержимом либо другой
+// опубликованной цели.
 func TestRevisionImpactPublicationRejectsMismatchedOwnerReceipt(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.RuntimeEnvironmentDraft){
 		"stale draft version":         func(d *cp.RuntimeEnvironmentDraft) { d.Version = 3 },

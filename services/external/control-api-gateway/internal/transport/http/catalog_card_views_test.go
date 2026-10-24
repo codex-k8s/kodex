@@ -16,8 +16,16 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// cardActivityTime pins the fixed public activity timestamp used to distinguish owner activity
+// from unrelated update metadata in card tests.
+// cardActivityTime фиксирует публичное время активности для различения активности владельца и
+// несвязанных метаданных обновления в тестах карточек.
 const cardActivityTime = "2026-09-06T10:00:00Z"
 
+// catalogCardFixtures builds project, agent and workflow cards with literal owner data and
+// deliberately nonlocal workflow summary counts.
+// catalogCardFixtures создаёт карточки проекта, агента и workflow с буквальными данными владельца
+// и счётчиками сводки workflow, намеренно отличными от локальных steps.
 func catalogCardFixtures() (*cp.Project, *cp.Agent, *cp.Workflow) {
 	activity := timestamppb.New(time.Date(2026, 9, 6, 10, 0, 0, 0, time.UTC))
 	project := &cp.Project{Ref: "prj_fixture01", Version: 4, IntegrationState: "NONE", LastActivityAt: activity,
@@ -32,6 +40,10 @@ func catalogCardFixtures() (*cp.Project, *cp.Agent, *cp.Workflow) {
 	return project, agent, workflow
 }
 
+// assertCatalogCard checks required zero/false fields, owner summary counts and activity presence
+// without inventing missing run references or timestamps.
+// assertCatalogCard проверяет обязательные нулевые и false-поля, счётчики сводки владельца и
+// наличие активности без создания отсутствующих ссылок выполнения либо времён.
 func assertCatalogCard(t *testing.T, name protoreflect.FullName, value map[string]any, empty bool) {
 	t.Helper()
 	switch name {
@@ -85,6 +97,12 @@ func assertCatalogCard(t *testing.T, name protoreflect.FullName, value map[strin
 	}
 }
 
+// TestCatalogCardsPreserveEveryProducerResponseEnvelope enumerates generated producer response
+// wrappers and checks active and empty card projections across singular and repeated fields with
+// exact inventory counts.
+// TestCatalogCardsPreserveEveryProducerResponseEnvelope перебирает generated-обёртки ответов
+// producer и проверяет активные и пустые карточки в одиночных и repeated-полях с точным числом
+// форматов.
 func TestCatalogCardsPreserveEveryProducerResponseEnvelope(t *testing.T) {
 	counts := map[protoreflect.FullName]int{}
 	// Перебираются generated Go wrappers, включая команды и replay, а не копия списка RPC.
@@ -139,6 +157,12 @@ func TestCatalogCardsPreserveEveryProducerResponseEnvelope(t *testing.T) {
 	}
 }
 
+// TestCatalogCardHTTPProjectGlobalAndSingleKeepOwnerProjection checks organization, project and
+// single-resource HTTP card projections, preserving owner cursors or ETags and authoritative
+// summary fields.
+// TestCatalogCardHTTPProjectGlobalAndSingleKeepOwnerProjection проверяет HTTP-проекции карточек
+// организации, проекта и отдельного ресурса с сохранением курсоров либо ETag владельца и
+// авторитетных полей сводки.
 func TestCatalogCardHTTPProjectGlobalAndSingleKeepOwnerProjection(t *testing.T) {
 	project, agent, workflow := catalogCardFixtures()
 	page := &cp.PageInfo{NextPageToken: "owner_cursor"}
@@ -180,6 +204,12 @@ func TestCatalogCardHTTPProjectGlobalAndSingleKeepOwnerProjection(t *testing.T) 
 	}
 }
 
+// TestCatalogCardsRejectMalformedProjectionBeforeHTTPResponse checks known integration states and
+// rejects exactly the damaged card when state, counters, timestamps, run identity or workflow
+// summary is invalid.
+// TestCatalogCardsRejectMalformedProjectionBeforeHTTPResponse проверяет известные состояния
+// интеграции и отказ именно повреждённой карточке при неверных состоянии, счётчиках, времени,
+// identity выполнения либо сводке workflow.
 func TestCatalogCardsRejectMalformedProjectionBeforeHTTPResponse(t *testing.T) {
 	for _, state := range []string{"NONE", "READY", "DEGRADED", "UNKNOWN"} {
 		project, _, _ := catalogCardFixtures()
@@ -225,6 +255,12 @@ func TestCatalogCardsRejectMalformedProjectionBeforeHTTPResponse(t *testing.T) {
 	}
 }
 
+// TestRuntimeLeaseExpiredSummaryUsesBothHTTPMessageCatalogs checks that the runtime lease expiry
+// summary resolves to distinct nonempty Russian and English catalog messages without exposing its
+// localization key.
+// TestRuntimeLeaseExpiredSummaryUsesBothHTTPMessageCatalogs проверяет разрешение сводки истечения
+// runtime lease в разные непустые сообщения русского и английского каталогов без выдачи ключа
+// локализации.
 func TestRuntimeLeaseExpiredSummaryUsesBothHTTPMessageCatalogs(t *testing.T) {
 	texts, err := usertext.New()
 	if err != nil {
