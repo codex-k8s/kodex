@@ -63,6 +63,7 @@ import type {
   Project,
   SystemAssistant,
   IntegrationDefinition,
+  IntegrationConnection,
   RuntimeEnvironmentSet,
   RevisionImpactPlan,
   RevisionImpactPage,
@@ -522,6 +523,9 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       | ((agents: Agent[], projectRef?: string, workflows?: Workflow[]) => void)
       | undefined;
     let invalidateRuns: ((runs: Run[], projectRef: string) => void) | undefined;
+    let invalidateConnections:
+      | ((connections: IntegrationConnection[]) => void)
+      | undefined;
     let managedCatalog: ManagedConfigurationSummary[] = [];
     let integrationCatalogReady = false;
     const integrationDefinitions = {
@@ -614,6 +618,20 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
               projectRef,
               mode: "DELTA",
               snapshot: { catalog: { runs, gates: [], gatesPage: {} } },
+            });
+          invalidateConnections = (connections) =>
+            sendSnapshot({
+              type: "PLATFORM_SNAPSHOT",
+              requestRef: input.requestRef,
+              streamKind: "PLATFORM",
+              streamRef: "PLATFORM",
+              cursor: ++invalidationCursor,
+              eventName: "INTEGRATION_CONNECTION_CHANGED",
+              kind: "INTEGRATION_CONNECTION",
+              mode: "DELTA",
+              snapshot: {
+                connections: { connections, nextActions: [], page: {} },
+              },
             });
           const snapshots: Array<
             [
@@ -2034,7 +2052,16 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
           },
           installSnapshot,
         );
-        await checkGrantCandidates(page, project.ref, installSnapshot);
+        await checkGrantCandidates(
+          page,
+          project.ref,
+          installSnapshot,
+          (connections) => {
+            if (!invalidateConnections)
+              throw new Error("Missing connection invalidation fixture");
+            invalidateConnections(connections);
+          },
+        );
       }
     }
     const catalogProject = projects[0];

@@ -1,4 +1,12 @@
-import { defineComponent, type Ref, type SetupContext } from "vue";
+import {
+  createRenderer,
+  defineComponent,
+  nextTick,
+  reactive,
+  ssrContextKey,
+  type Ref,
+  type SetupContext,
+} from "vue";
 import { createI18n } from "vue-i18n";
 import { beforeEach, expect, it, vi } from "vitest";
 import { captureSetupState } from "@/test-utils/setup-harness";
@@ -154,6 +162,123 @@ beforeEach(() => {
   vi.resetAllMocks();
   loaders.connections.mockResolvedValue({ items: [] });
 });
+
+// Сохраняет живые watchers и имитирует controlled props настоящего родителя.
+// SSR capture не выполняет этот цикл обновления после первоначального render.
+async function controlledPanel() {
+  const props = reactive({
+    grants: [],
+    selectedConnection: { ...connection } as IntegrationConnection | undefined,
+    projectRef: "",
+    targetKind: "AGENT" as const,
+    targetRef: "",
+    capabilityKey: "",
+    busy: false,
+  });
+  const emit = vi.fn((name: string, value: unknown) => {
+    if (name === "update:projectRef") props.projectRef = String(value);
+    if (name === "update:targetRef") props.targetRef = String(value);
+    if (name === "update:capabilityKey") props.capabilityKey = String(value);
+  });
+  type ControlledProps = typeof props;
+  const setup = (
+    IntegrationGrantsPanel as unknown as {
+      setup: (props: ControlledProps, context: SetupContext) => unknown;
+    }
+  ).setup;
+  let state!: State;
+  const renderer = createRenderer<object, object>({
+    patchProp() {},
+    insert() {},
+    remove() {},
+    createElement: () => ({}),
+    createText: () => ({}),
+    createComment: () => ({}),
+    setText() {},
+    setElementText() {},
+    parentNode: () => null,
+    nextSibling: () => null,
+  });
+  const app = renderer.createApp(
+    defineComponent({
+      setup(_props, context) {
+        state = setup(props, { ...context, emit }) as State;
+        return () => null;
+      },
+    }),
+  );
+  app.use(createI18n({ legacy: false, locale: "ru", messages: { ru: {} } }));
+  app.provide(ssrContextKey, {});
+  app.mount({});
+  loaders.projects.mockResolvedValue({ items: [project], pins, total: 1 });
+  loaders.recipients.mockResolvedValue({ items: [recipient], pins, total: 1 });
+  loaders.capabilities.mockResolvedValue({
+    items: [capability],
+    pins,
+    total: 1,
+  });
+  const signal = new AbortController().signal;
+  await state.loadProjects("", undefined, signal);
+  state.chooseProject({ ref: "project", title: "Проект" });
+  await state.loadRecipients("", undefined, signal);
+  state.chooseRecipient({ ref: "agent", title: "Агент" });
+  await state.loadCapabilities("", undefined, signal);
+  state.chooseCapability({ ref: "read", title: "Чтение" });
+  await nextTick();
+  emit.mockClear();
+  return { props, state, emit, unmount: () => app.unmount() };
+}
+
+it("сохраняет весь выбор и pins при новом объекте той же версии подключения", async () => {
+  const panel = await controlledPanel();
+  try {
+    panel.props.selectedConnection = { ...connection };
+    await nextTick();
+    expect(panel.props.projectRef).toBe("project");
+    expect(panel.props.targetRef).toBe("agent");
+    expect(panel.props.capabilityKey).toBe("read");
+    expect(panel.state.projectCandidate.value).toEqual(project);
+    expect(panel.state.recipientCandidate.value).toEqual(recipient);
+    expect(panel.state.capabilityCandidate.value).toEqual(capability);
+    expect(panel.emit).not.toHaveBeenCalled();
+    panel.state.submit();
+    expect(panel.emit).toHaveBeenCalledWith(
+      "save",
+      expect.objectContaining({
+        capabilityKey: "read",
+      }),
+    );
+  } finally {
+    panel.unmount();
+  }
+});
+
+it.each(["version", "ref", "removed"] as const)(
+  "немедленно отзывает выбор и submit при изменении подключения: %s",
+  async (change) => {
+    const panel = await controlledPanel();
+    try {
+      panel.props.selectedConnection =
+        change === "removed"
+          ? undefined
+          : {
+              ...connection,
+              ...(change === "version" ? { version: 4 } : { ref: "other" }),
+            };
+      expect(panel.props.projectRef).toBe("");
+      expect(panel.props.targetRef).toBe("");
+      expect(panel.props.capabilityKey).toBe("");
+      expect(panel.state.projectCandidate.value).toBeUndefined();
+      expect(panel.state.recipientCandidate.value).toBeUndefined();
+      expect(panel.state.capabilityCandidate.value).toBeUndefined();
+      panel.emit.mockClear();
+      panel.state.submit();
+      expect(panel.emit).not.toHaveBeenCalled();
+    } finally {
+      panel.unmount();
+    }
+  },
+);
 it.each([
   "clearProject",
   "clearRecipient",

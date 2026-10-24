@@ -171,7 +171,7 @@ async function revoke(): Promise<void> {
   }
 }
 watch(
-  () => [props.connection.ref, props.connection.version],
+  [() => props.connection.ref, () => props.connection.version],
   () => {
     items.value = [];
     cursor.value = "";
