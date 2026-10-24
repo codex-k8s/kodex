@@ -15,6 +15,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// GetRuntimeEnvironmentDraft reads the draft through the principal verified for this query and
+// projects the returned domain snapshot.
+// GetRuntimeEnvironmentDraft читает черновик с principal, проверенным для данного query, и
+// преобразует возвращённый доменный снимок.
 func (server *Server) GetRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentDraftRequest) (*controlplanev1.GetRuntimeEnvironmentDraftResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName)
 	if err != nil {
@@ -27,6 +31,10 @@ func (server *Server) GetRuntimeEnvironmentDraft(ctx context.Context, request *c
 	return &controlplanev1.GetRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(&draft)}, nil
 }
 
+// CreateRuntimeEnvironmentDraft requires a convertible specification and assigns PROJECT scope
+// before the dedicated draft-create command.
+// CreateRuntimeEnvironmentDraft требует преобразуемую спецификацию и назначает область PROJECT до
+// отдельной команды создания черновика.
 func (server *Server) CreateRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.CreateRuntimeEnvironmentDraftRequest) (*controlplanev1.CreateRuntimeEnvironmentDraftResponse, error) {
 	spec, err := domainEnvironmentDraftSpecification(request.GetSpecification())
 	if err != nil {
@@ -40,6 +48,11 @@ func (server *Server) CreateRuntimeEnvironmentDraft(ctx context.Context, request
 	}
 	return &controlplanev1.CreateRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
 }
+
+// CreateOrganizationRuntimeEnvironmentDraft requires a convertible specification and assigns
+// ORGANIZATION scope without taking organization identity from request fields.
+// CreateOrganizationRuntimeEnvironmentDraft требует преобразуемую спецификацию и назначает область
+// ORGANIZATION без получения identity организации из полей запроса.
 func (server *Server) CreateOrganizationRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.CreateOrganizationRuntimeEnvironmentDraftRequest) (*controlplanev1.CreateOrganizationRuntimeEnvironmentDraftResponse, error) {
 	spec, err := domainEnvironmentDraftSpecification(request.GetSpecification())
 	if err != nil {
@@ -53,6 +66,11 @@ func (server *Server) CreateOrganizationRuntimeEnvironmentDraft(ctx context.Cont
 	}
 	return &controlplanev1.CreateOrganizationRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
 }
+
+// SaveRuntimeEnvironmentDraft converts the specification before sending the draft locator and
+// replacement specification to the dedicated save command.
+// SaveRuntimeEnvironmentDraft преобразует спецификацию до передачи ссылки черновика и замещающей
+// спецификации отдельной команде сохранения.
 func (server *Server) SaveRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.SaveRuntimeEnvironmentDraftRequest) (*controlplanev1.SaveRuntimeEnvironmentDraftResponse, error) {
 	spec, err := domainEnvironmentDraftSpecification(request.GetSpecification())
 	if err != nil {
@@ -65,6 +83,11 @@ func (server *Server) SaveRuntimeEnvironmentDraft(ctx context.Context, request *
 	}
 	return &controlplanev1.SaveRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
 }
+
+// ValidateRuntimeEnvironmentDraft executes the dedicated validation command for the draft locator
+// and projects its resulting draft.
+// ValidateRuntimeEnvironmentDraft выполняет отдельную команду проверки по ссылке черновика и
+// преобразует полученный черновик.
 func (server *Server) ValidateRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.ValidateRuntimeEnvironmentDraftRequest) (*controlplanev1.ValidateRuntimeEnvironmentDraftResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName,
 		command.ValidateRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()})
@@ -73,6 +96,11 @@ func (server *Server) ValidateRuntimeEnvironmentDraft(ctx context.Context, reque
 	}
 	return &controlplanev1.ValidateRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
 }
+
+// PublishRuntimeEnvironmentDraft copies selected impact items into the dedicated publication
+// command and requires a consistent published result.
+// PublishRuntimeEnvironmentDraft копирует выбранные элементы влияния в отдельную команду
+// публикации и требует согласованный опубликованный результат.
 func (server *Server) PublishRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.PublishRuntimeEnvironmentDraftRequest) (*controlplanev1.PublishRuntimeEnvironmentDraftResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName,
 		command.PublishRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef(), PlanRef: request.GetPlanRef(), SelectedItemRefs: append([]string{}, request.GetSelectedItemRefs()...)})
@@ -82,6 +110,10 @@ func (server *Server) PublishRuntimeEnvironmentDraft(ctx context.Context, reques
 	return castPublishedEnvironmentDraft(result)
 }
 
+// castPublishedEnvironmentDraft rejects incomplete or mismatched published draft, environment and
+// applied impact-plan pins before returning all three projections.
+// castPublishedEnvironmentDraft отклоняет неполные либо несогласованные привязки опубликованного
+// черновика, среды и применённого плана влияния до возврата трёх представлений.
 func castPublishedEnvironmentDraft(result command.Result) (*controlplanev1.PublishRuntimeEnvironmentDraftResponse, error) {
 	if result.RuntimeEnvironment == nil || result.RuntimeEnvironmentDraft == nil || result.RuntimeEnvironment.Ref == "" ||
 		result.RuntimeEnvironment.Version < 1 || result.RuntimeEnvironmentDraft.Version < 1 || result.RuntimeEnvironmentDraft.ValidationDigest == "" ||
@@ -95,6 +127,11 @@ func castPublishedEnvironmentDraft(result command.Result) (*controlplanev1.Publi
 	}
 	return &controlplanev1.PublishRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft), Environment: castRuntimeEnvironment(*result.RuntimeEnvironment), Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
 }
+
+// DiscardRuntimeEnvironmentDraft passes the draft locator through the dedicated discard command
+// and returns its resulting draft projection.
+// DiscardRuntimeEnvironmentDraft передаёт ссылку черновика отдельной команде отбрасывания и
+// возвращает полученное представление черновика.
 func (server *Server) DiscardRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.DiscardRuntimeEnvironmentDraftRequest) (*controlplanev1.DiscardRuntimeEnvironmentDraftResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName,
 		command.DiscardRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()})
@@ -104,6 +141,10 @@ func (server *Server) DiscardRuntimeEnvironmentDraft(ctx context.Context, reques
 	return &controlplanev1.DiscardRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
 }
 
+// domainEnvironmentDraftSpecification requires input, copies values, secret references and tools,
+// and validates policy only when policy is explicitly present.
+// domainEnvironmentDraftSpecification требует вход, копирует значения, ссылки секретов и
+// инструменты, проверяя политику только при её явном наличии.
 func domainEnvironmentDraftSpecification(input *controlplanev1.RuntimeEnvironmentDraftSpecification) (entity.RuntimeEnvironmentDraftSpecification, error) {
 	if input == nil {
 		return entity.RuntimeEnvironmentDraftSpecification{}, errs.ErrInvalid
@@ -121,6 +162,10 @@ func domainEnvironmentDraftSpecification(input *controlplanev1.RuntimeEnvironmen
 	return result, nil
 }
 
+// castEnvironmentDraft preserves absent draft and saved time, projects nonzero policy with
+// distinct network destinations and copies draft version and publication pins.
+// castEnvironmentDraft сохраняет отсутствие черновика и времени сохранения, преобразует ненулевую
+// политику с уникальными сетевыми направлениями и копирует версии и привязки публикации.
 func castEnvironmentDraft(input *entity.RuntimeEnvironmentDraft) *controlplanev1.RuntimeEnvironmentDraft {
 	if input == nil {
 		return nil

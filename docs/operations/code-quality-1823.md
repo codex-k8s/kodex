@@ -4,12 +4,72 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.367.0
+version: 1.368.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## gRPC mailbox, provider и integration candidates — 24.10.2026
+
+На основе `753d99deb331527e548c11b812b091a33ddba038` описаны102
+сохранившихся объявления в9 Go-файлах: mailbox caster11, mailbox commands9,
+email receipts8, environment draft10, provider accounts10, integration
+candidates8, interaction7, secret owner composition20 и caster tests19.
+Прежний восьмой interaction helper удалён как точный дубль. Все9 файлов
+имеют0missing; полный Go inventory17869/21385, missing3516 — PostgreSQL3331
+и gRPC185. Generated code не менялся.
+
+`itemString` удалён,30 вызовов в interaction используют существующий
+`mapString` с тем же type assertion/string-or-empty контрактом. `itemStrings`
+и interactionPackageBytes оставлены: они создают отдельные копии slices;
+mapStrings принимает дополнительные типы и не обещает такой copy contract.
+Новая универсальная библиотека для scalar getter не создавалась.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Mailbox content → draft | Oneof YAML сохраняется, specification кодируется в JSON; enum membership, nil specification/policy и integer byte-limit conversion проверяются прежними casters. Credential descriptors содержат ссылки, не secret bytes |
+| Mailbox create/save/validate/publish/discard | Typed method/command pairs → mailboxCommand → verified principal и supplied mutation → owner Execute → required mailbox view. В отличие от execute helper здесь нет correlation-derived fallback idempotency key; объединение изменило бы контракт |
+| Mailbox bind/unbind/readback | Connection version/configuration revision pins передаются owner; unbind требует publication result и возвращает connection version. Worker readback подтверждается только после domain success, transport не проверяет внешний materializer |
+| Email effect/reconciliation | Binding → report с semantic/external receipt digests → owner receipt; reconcile проверяет expected digest у владельца; resolve использует отдельный worker RPC. Unknown outcome не подменяется confirmed effect |
+| Environment draft | PROJECT/ORGANIZATION scope назначается server; optional policy presence сохраняется. Published environment/draft/applied impact plan проверяются на exact refs/version/digests; preview hints не создают authority |
+| Provider account | Create/verify/revoke/delete/enable/concurrency остаются closed commands; start/reauthorize имеют разные RPC principals и общий domain start. Временная API-key copy очищается defer clear, входной request buffer не объявлен очищенным |
+| Integration candidates | Connection purpose может быть явным, остальные GRANT. Context/pins/reason casters общие; неизвестный/nonzero reason закрыто отклоняется, per-item и response pins сохраняются. Результат списка не выдаёт grant |
+| Interaction delivery | Required typed credential revision, definition/package pins и независимые package/capability slices сохраняются. Claim/complete/accept передают exact lease/gate/effect/external thread fields owner; CoreRunAffected=false остаётся прежним |
+| Secret owner test harness | Явная synthetic isolated DB, private rendezvous и150s lifetime; реальные owner transactions/production casters с fixture principals. Это не production bearer/mTLS acceptance и не live broker proof |
+| Cancel/retry/terminal/events | Transport transitions, tasks, grants, event schemas и owner transaction не менялись; сохраняются специализированные lifecycle methods, никакой generic transition не введён |
+
+AST/directives8 comments-only файлов совпали с исходным SHA. Interaction
+совпал с ожидаемым удалением точного getter и30 заменами имени вызова.
+Локальные GOWORK=off control-plane build и полный unit-набор — PASS.
+Child environment очищен от credentials;4 прежних внешних fixture flags/DSN,
+3 owner-composition env и внешний control-plane test DSN исключены.
+Отдельный запуск TestSecretOwnerLoopbackHarness явно дал SKIP: изолированные
+DB/rendezvous не подключались. Real-API orphan и3 migration fixtures также
+SKIP/NOT RUN. Никаких новых тестов ради тривиальной замены getter не добавлено.
+
+Context7: protobuf-go generated getter nil/default behavior, optional presence,
+oneof и protoreflect.Has. Локальный production getter и generated API сверены;
+документация не подменяет фактическую проверку field presence. Прочитаны
+CONTRACT-DOC-002 authority/mutation/presence и применимые части GO-DOC-001,
+GO-DOC-003/006, GUIDE-DOC-003/006; GOV-DOC-003 сохраняет границы доказательств.
+
+Exact guard обнаружил одно stale решение с2 occurrence после комментариев.
+GetEmailEffectReceipt и полные ClaimImageAdmission/ClaimImagePromotion перечитаны;
+обновлён только fragment hash при прежних pair/count2. Новые12 точных решений
+покрывают13 прочитанных внутренних окон; один hash имеет2 reviewed occurrence.
+Это typed wrappers/стыки разных RPC/commands/DTO, где общий parser/caster,
+principal/error/page и execute либо mailboxCommand уже существуют.
+
+Полный scan:6663 own sources,222 excluded,1820 raw,879 retained,
+941 unresolved. Рост raw1816→1820 — окна после комментариев, не обещание
+удаления detector groups выносом короткого scalar getter. Внутри9 выбранных
+файлов0unresolved;15cross-file групп остаются открытыми. 17 analyzer unit и
+5 exact-ignore guards — PASS. Detector thresholds/guards не ослаблены.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN.
+Chrome MCP разрешён и доступен; задача#1823 и разрешённый последующий выпуск
+остаются активными, частичный PR не сливается.
 
 ## gRPC queries, runtime и system assistant — 24.10.2026
 

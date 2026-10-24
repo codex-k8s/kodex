@@ -4165,9 +4165,9 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/email_receipts.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "1055cdf1fb7f4d2321f6bbae40a1b99485a0e831ac5f5df825e1e3e03b1b046e",
+      "fragmentSHA256": "6b398bd17c5116cc164ed3ff8826a1b783ca2286733075e052333785a9a797ea",
       "count": 2,
-      "reason": "Два110-token совпадения одной пары paths сравнивают конец GetEmailEffectReceipt и начала ClaimImageAdmission/ClaimImagePromotion. Receipt/decision read и выдача двух разных image claims имеют разные FullMethod, principal permission, domain input/output и lifecycle. Повторяется только каркас специализированного RPC с уже общими principal/transportError; общий claim dispatcher или function registry не создаётся. Проверены оба occurrence, exact fragment/count2, не все email/image handlers."
+      "reason": "Два110-token совпадения одной пары paths сравнивают конец GetEmailEffectReceipt и начала ClaimImageAdmission/ClaimImagePromotion. Receipt/decision read и выдача двух разных image claims имеют разные FullMethod, principal permission, domain input/output и lifecycle. Повторяется только каркас специализированного RPC с уже общими principal/transportError; общий claim dispatcher или function registry не создаётся. Проверены оба occurrence, exact fragment/count2, не все email/image handlers. После комментариев перечитаны оба exact occurrence и полные ClaimImageAdmission/ClaimImagePromotion/GetEmailEffectReceipt; pair/count2 сохранены."
     },
     {
       "format": "go",
@@ -5920,6 +5920,102 @@
       "fragmentSHA256": "7ea41acb5a05608f8d5d2871c6761b0c90859540aff4e1a07987648a5b414650",
       "count": 1,
       "reason": "UpdateAssistantPlanDraft/ValidateAssistantPlan и ValidateAssistantPlan/RejectAssistantPlan совпадают стыком execute/typed response. Draft operations, plan revision и rejection receipt различны; общий execute уже обрабатывает principal/mutation/errors без универсального transition. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_commands.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_commands.go",
+      "fragmentSHA256": "3a23a4a6b0af4b02a1dcb308adc6b34ca0e7f3a397aa2ceb3eea62099e0bb609",
+      "count": 1,
+      "reason": "Повтор проходит через Save/Validate/Publish/Discard/BindEmailMailboxDraft. Общая часть уже в mailboxCommand и mailboxContent; configuration/revision inputs, FullMethod и command.Kind различают save, validation, publication и binding. Dispatch по generic transition изменил бы видимость контрактов, а замена mailboxCommand на execute дополнительно назначила бы отсутствующий idempotency key. Typed wrappers сохранены. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
+      "fragmentSHA256": "0b425517fdca44a4d973ced5c8cf73c2a56ef94cce4a2cc7648c91e723432537",
+      "count": 1,
+      "reason": "Project и organization CreateRuntimeEnvironmentDraft используют разные server-owned ScopeKind, FullMethod и command.Kind; save адресует уже существующий DraftRef. domainEnvironmentDraftSpecification и execute уже общие. Нельзя назначать scope из payload ради объединения двух wrappers; совпадение захватывает границы typed методов. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
+      "fragmentSHA256": "e626a8d593ab42c61a1cc5dd69cf5012845073dff1d8d4b728b7d601d6c1c266",
+      "count": 1,
+      "reason": "Save/ValidateRuntimeEnvironmentDraft и конец publication-result validation/Discard совпадают transport return/execute стыком. Save несёт новую specification, validate/discard разные closed commands; consistency checks published environment/draft/impact plan не перемещены в generic setter. Общие caster и execute уже единые. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
+      "fragmentSHA256": "0b4067cea676918b9c845e2cc5081001a687e6b5b5711f360be74ca30a795011",
+      "count": 1,
+      "reason": "Хвосты ListIntegrationGrantConnectionCandidates и ProjectCandidates имеют общий integrationCandidateReason и pins caster. Typed connection/project candidate DTO различаются definition/provider/credential/resourceScope/usable полями; result page/context/pins не являются отдельным повторяемым бизнесовым алгоритмом. Отдельные typed append оставлены. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
+      "fragmentSHA256": "97705ada43900e7b9247639fd9d8c66b8a86b7e6686773bbf9e80c2a967d20e8",
+      "count": 2,
+      "reason": "Стыки Connection→Project и Project→Recipient списков сохраняют разные exact RPC/service reads и типы Items. Common input/context/pins/reason/page casters уже есть; connection purpose допускает явный выбор, остальные GRANT. Новый callback dispatcher скрыл бы эту разницу ради response boilerplate. Connection/Project и Recipient/Capability стыки совпадают общей сборкой page/context/pins и проверкой reason. Recipient kind/name и capability/grant version требуют разных nominal DTO; reason уже закрыто проверяется одним helper. Полностью общий list function потребовал бы передачи всей операции в callbacks. Решение ограничено прочитанными точными paths/fragment/count2; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "637090ab8b5df342fb303844cbd09f21db31fa540388768fa78f0efe4ce0c47d",
+      "count": 1,
+      "reason": "CreateProviderAccount/StartDeviceAuthorization и SetEnabled/SetConcurrency образуют окно через boundaries. Definition+name, enabled и concurrency имеют разные command inputs и owner eligibility. execute/castProviderAccount уже общие; generic setter не вводится ради коротких wrappers. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "03e86cb0f2fc4e47fe594c461a283b58cec943a2106a595262568a3d959c3186",
+      "count": 1,
+      "reason": "Create/StartDevice/APIKey и VerifyDevice/Reauthorize/Revoke сравниваются через границы методов. Start и reauthorize используют один domain start method с разными exact RPC principals; verify/revoke имеют closed command pairs. Общая projection/error boundary не делает permission или lifecycle одинаковыми. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "5475e8d3b80925bf24ec15456b3bb0ee362a04ab9cc8e2bb778cb0557eab51d7",
+      "count": 1,
+      "reason": "Create/Start/APIKey и конец APIKey/Refresh/Verify совпадают principal/error/result стыком. APIKey создаёт и очищает временную копию secret bytes, refresh не должен наследовать этот путь. execute и transportError уже общие; новый generic authorization callback затруднил бы проверку clear ownership. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "a8d0f3fa935e44e790d33b467596b571784bedb15aebaa5f004821fbc6f63d6b",
+      "count": 1,
+      "reason": "Refresh/Verify/Reauthorize и Reauthorize/Revoke/Delete состоят из разных authorization lifecycle commands. Exact RPC principal, mutation и account locator остаются явными; общий start service method и account caster уже используются. Не вводится универсальный transition над authority-bearing account. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "0f6dfaa18f616983742620b13757a5ccd4d9f6bd4435a8de12677f93f027ad17",
+      "count": 1,
+      "reason": "Refresh/Verify/Reauthorize и Revoke/Delete/SetEnabled совпадают standard wrapper границами. Разные owner operations и input schemas имеют самостоятельные eligibility rules; общий execute/error/account caster достаточен без generic callback dispatch. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "59aa9d12b7f573959e4bee81176f418eb99dcbbb574f2d6af99d81bc69f11eb4",
+      "count": 1,
+      "reason": "Revoke/Delete и Delete/SetEnabled пересекаются через closed command adapters. Отзыв и удаление не заменяют переключение enabled и не делят owner transaction семантику. Повторяется только execute/error/account projection, которые уже вынесены в helpers. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "3d8df24d820687e2a728a0f7aac72a35a811bd4c99998c428de7cd4fb0b39ef3",
+      "count": 1,
+      "reason": "Delete/SetEnabled и SetEnabled/SetConcurrency различают account delete, boolean flag и numeric concurrency input. Общая command execution и castProviderAccount уже единые; искусственный generic update input размывает специализированные command.Kind/FullMethod bindings. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
     }
   ]
 }

@@ -11,6 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestMessageSourceCasterPreservesClosedOrigins checks supported ordinary/callback origins and the
+// unspecified fallback for absent or unknown origins.
+// TestMessageSourceCasterPreservesClosedOrigins проверяет поддерживаемые ordinary/callback origins
+// и неопределённую замену для отсутствующих либо неизвестных origins.
 func TestMessageSourceCasterPreservesClosedOrigins(t *testing.T) {
 	for origin, want := range map[string]controlplanev1.MessageOrigin{
 		"ORDINARY":              controlplanev1.MessageOrigin_MESSAGE_ORIGIN_ORDINARY,
@@ -24,6 +28,10 @@ func TestMessageSourceCasterPreservesClosedOrigins(t *testing.T) {
 	}
 }
 
+// TestConnectionCasterPreservesDefinitionBindingPresence checks absent binding stays nil while
+// explicit ABSENT and MATCH snapshots preserve their configuration, revision and binding version.
+// TestConnectionCasterPreservesDefinitionBindingPresence проверяет сохранение nil привязки и полей
+// конфигурации, ревизии и версии в явных снимках ABSENT и MATCH.
 func TestConnectionCasterPreservesDefinitionBindingPresence(t *testing.T) {
 	if castConnection(entity.IntegrationConnection{}).DefinitionConfigurationBinding != nil {
 		t.Fatal("omitted binding became authoritative absence")
@@ -40,6 +48,12 @@ func TestConnectionCasterPreservesDefinitionBindingPresence(t *testing.T) {
 	}
 }
 
+// TestCatalogCardsPreserveAbsentActivityAndOwnerProjection checks optional activity, unknown
+// integration state, workflow summary counters and the agent current-run link survive card
+// casting.
+// TestCatalogCardsPreserveAbsentActivityAndOwnerProjection проверяет сохранение необязательной
+// активности, неизвестного состояния интеграции, счётчиков процесса и ссылки текущего запуска
+// агента.
 func TestCatalogCardsPreserveAbsentActivityAndOwnerProjection(t *testing.T) {
 	t.Parallel()
 	empty := castProject(entity.Project{IntegrationState: "NONE"})
@@ -60,6 +74,10 @@ func TestCatalogCardsPreserveAbsentActivityAndOwnerProjection(t *testing.T) {
 	}
 }
 
+// TestCastScheduleUsesPublicLifecycleStates checks enabled, paused, archived, deleted and unknown
+// domain schedules map to their public lifecycle states.
+// TestCastScheduleUsesPublicLifecycleStates проверяет перевод включённых, приостановленных,
+// архивных, удалённых и неизвестных расписаний в публичные состояния.
 func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	t.Parallel()
 
@@ -80,6 +98,10 @@ func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	}
 }
 
+// TestCastMembershipPreservesOnlyActualProjectScope checks that absent and explicit project
+// references are copied without inventing a membership scope.
+// TestCastMembershipPreservesOnlyActualProjectScope проверяет копирование отсутствующей и явной
+// ссылки проекта без создания вымышленной области участника.
 func TestCastMembershipPreservesOnlyActualProjectScope(t *testing.T) {
 	for _, project := range []string{"", "prj_catalog"} {
 		if got := castMembership(entity.Membership{Ref: "member", ProjectRef: project}).GetProjectRef(); got != project {
@@ -88,6 +110,10 @@ func TestCastMembershipPreservesOnlyActualProjectScope(t *testing.T) {
 	}
 }
 
+// TestCastRuntimeEnvironmentPreservesReadinessAndActions checks the not-ready flag, image blocker
+// and ordered next actions survive environment casting.
+// TestCastRuntimeEnvironmentPreservesReadinessAndActions проверяет сохранение признака
+// неготовности, препятствия образа и порядка следующих действий при преобразовании среды.
 func TestCastRuntimeEnvironmentPreservesReadinessAndActions(t *testing.T) {
 	t.Parallel()
 
@@ -108,6 +134,10 @@ func TestCastRuntimeEnvironmentPreservesReadinessAndActions(t *testing.T) {
 	}
 }
 
+// TestCastRuntimeSecretPreservesAuthorizedActions checks ordered rotate, reveal and revoke action
+// hints survive the secret metadata projection.
+// TestCastRuntimeSecretPreservesAuthorizedActions проверяет сохранение упорядоченных подсказок
+// rotate, reveal и revoke при преобразовании метаданных секрета.
 func TestCastRuntimeSecretPreservesAuthorizedActions(t *testing.T) {
 	t.Parallel()
 	secret := castRuntimeSecret(entity.RuntimeSecret{State: "ACTIVE", NextActions: []string{"ROTATE", "REVEAL", "REVOKE"}})
@@ -121,6 +151,10 @@ func TestCastRuntimeSecretPreservesAuthorizedActions(t *testing.T) {
 	}
 }
 
+// TestCastScheduleMaterializesRevisionAndContinuationContract checks revision pins, input,
+// timestamp, continuation session and target version, including generated descriptor presence.
+// TestCastScheduleMaterializesRevisionAndContinuationContract проверяет привязки ревизии, ввод,
+// время, сессию продолжения и версию цели, включая наличие generated descriptor полей.
 func TestCastScheduleMaterializesRevisionAndContinuationContract(t *testing.T) {
 	t.Parallel()
 
@@ -158,6 +192,11 @@ func TestCastScheduleMaterializesRevisionAndContinuationContract(t *testing.T) {
 	}
 }
 
+// TestCastConnectionUsesCompletePublicStatesAndSnapshot checks testing/degraded/deleted and
+// unknown state mappings and preservation of terminal credential and timestamp metadata.
+// TestCastConnectionUsesCompletePublicStatesAndSnapshot проверяет преобразование
+// testing/degraded/deleted и неизвестного состояния, сохранение terminal credential и метаданных
+// времени.
 func TestCastConnectionUsesCompletePublicStatesAndSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -183,6 +222,10 @@ func TestCastConnectionUsesCompletePublicStatesAndSnapshot(t *testing.T) {
 	}
 }
 
+// TestCastBootstrapIncludesResolvedPlatformIdentity checks the resolved owner role and minimized
+// current-user display name and masked email are projected.
+// TestCastBootstrapIncludesResolvedPlatformIdentity проверяет преобразование разрешённой роли
+// владельца и минимизированных имени и маскированного email текущего пользователя.
 func TestCastBootstrapIncludesResolvedPlatformIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -199,6 +242,10 @@ func TestCastBootstrapIncludesResolvedPlatformIdentity(t *testing.T) {
 	}
 }
 
+// TestNextActionsPreserveAllDomainLifecycleCommands checks selected update, restore, build and
+// purge actions preserve their enum values and order.
+// TestNextActionsPreserveAllDomainLifecycleCommands проверяет сохранение enum и порядка выбранных
+// действий update, restore, build и purge.
 func TestNextActionsPreserveAllDomainLifecycleCommands(t *testing.T) {
 	t.Parallel()
 
@@ -219,6 +266,10 @@ func TestNextActionsPreserveAllDomainLifecycleCommands(t *testing.T) {
 	}
 }
 
+// TestCastRunIncludesTypedTokenUsage checks run and delta projections preserve complementary
+// token-usage counters and the model context window.
+// TestCastRunIncludesTypedTokenUsage проверяет сохранение взаимодополняющих счётчиков токенов и
+// контекстного окна модели в представлениях запуска и delta.
 func TestCastRunIncludesTypedTokenUsage(t *testing.T) {
 	t.Parallel()
 
@@ -243,6 +294,10 @@ func TestCastRunIncludesTypedTokenUsage(t *testing.T) {
 	}
 }
 
+// TestCastRunPreservesArtifactAndGateReadback checks input attachment set, output artifacts, owner
+// gates and title provenance survive run projection.
+// TestCastRunPreservesArtifactAndGateReadback проверяет сохранение входного набора вложений,
+// выходных артефактов, шлюзов владельца и происхождения заголовка запуска.
 func TestCastRunPreservesArtifactAndGateReadback(t *testing.T) {
 	t.Parallel()
 
@@ -267,6 +322,10 @@ func TestCastRunPreservesArtifactAndGateReadback(t *testing.T) {
 	}
 }
 
+// TestCastPlanUsesBoundedHumanReadableOperationTitles checks known operation display fields and
+// safe-summary fallback for unsupported operations or mistyped display fields.
+// TestCastPlanUsesBoundedHumanReadableOperationTitles проверяет отображаемые поля известных
+// операций и замену безопасным описанием для неподдерживаемых операций либо неверного типа поля.
 func TestCastPlanUsesBoundedHumanReadableOperationTitles(t *testing.T) {
 	t.Parallel()
 
@@ -305,6 +364,10 @@ func TestCastPlanUsesBoundedHumanReadableOperationTitles(t *testing.T) {
 	}
 }
 
+// TestCastPlanBoundsOperationTitleWithoutChangingSummary checks a long Unicode title is
+// rune-bounded with an ellipsis while the complete summary remains unchanged.
+// TestCastPlanBoundsOperationTitleWithoutChangingSummary проверяет ограничение длинного
+// Unicode-заголовка по рунам с многоточием при сохранении полного описания.
 func TestCastPlanBoundsOperationTitleWithoutChangingSummary(t *testing.T) {
 	t.Parallel()
 
@@ -325,6 +388,10 @@ func TestCastPlanBoundsOperationTitleWithoutChangingSummary(t *testing.T) {
 	}
 }
 
+// TestCastPlanIncludesPersistedReceipt checks the applied plan projection preserves persisted plan
+// and created-resource references in the receipt.
+// TestCastPlanIncludesPersistedReceipt проверяет сохранение ссылок сохранённого плана и созданного
+// ресурса в квитанции применённого плана.
 func TestCastPlanIncludesPersistedReceipt(t *testing.T) {
 	t.Parallel()
 	plan := castPlan(&entity.AssistantPlan{Ref: "pln_exact", Revision: 2, State: "APPLIED",
@@ -337,6 +404,12 @@ func TestCastPlanIncludesPersistedReceipt(t *testing.T) {
 	}
 }
 
+// TestCastPlanRedactsHistoricalFileBodyWithoutChangingReceipt checks historical file bodies
+// disappear from parameters/input replay and after projections without mutating stored fields or
+// the receipt.
+// TestCastPlanRedactsHistoricalFileBodyWithoutChangingReceipt проверяет удаление прежнего тела
+// файла из parameters/input replay и after-проекций без изменения сохранённых полей либо
+// квитанции.
 func TestCastPlanRedactsHistoricalFileBodyWithoutChangingReceipt(t *testing.T) {
 	t.Parallel()
 	fields := map[string]any{"fileName": "note.md", "content": "historical body"}
@@ -359,6 +432,10 @@ func TestCastPlanRedactsHistoricalFileBodyWithoutChangingReceipt(t *testing.T) {
 	}
 }
 
+// TestCastConversationUsesPublicAssistantTurnShape checks public assistant roles, sequence reuse
+// and inserted plan variants preserve conversation and project lineage.
+// TestCastConversationUsesPublicAssistantTurnShape проверяет публичные роли ассистента, сохранение
+// последовательности и вставленные варианты планов с происхождением беседы и проекта.
 func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
 	t.Parallel()
 
@@ -399,6 +476,12 @@ func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
 	}
 }
 
+// TestAssistantEditingOperationsAreRepresentableOnRuntimeTransport checks the selected
+// instruction, integration, workflow and schedule edit operations exist as nonzero generated enum
+// values.
+// TestAssistantEditingOperationsAreRepresentableOnRuntimeTransport проверяет наличие выбранных
+// операций редактирования инструкции, интеграции, процесса и расписания в ненулевых generated
+// enum.
 func TestAssistantEditingOperationsAreRepresentableOnRuntimeTransport(t *testing.T) {
 	t.Parallel()
 

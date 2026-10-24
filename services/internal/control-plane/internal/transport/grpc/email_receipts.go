@@ -11,6 +11,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// ReportEmailEffectReceipt validates the invocation binding before executing the effect report
+// with external receipt and semantic input digests, requiring a receipt result.
+// ReportEmailEffectReceipt проверяет привязку вызова до команды отчёта об эффекте с digest внешней
+// квитанции и семантического ввода, требуя квитанцию в результате.
 func (server *Server) ReportEmailEffectReceipt(ctx context.Context, request *controlplanev1.ReportEmailEffectReceiptRequest) (*controlplanev1.ReportEmailEffectReceiptResponse, error) {
 	binding, err := emailBindingFromProto(request.GetBinding())
 	if err != nil {
@@ -30,6 +34,10 @@ func (server *Server) ReportEmailEffectReceipt(ctx context.Context, request *con
 	return &controlplanev1.ReportEmailEffectReceiptResponse{Receipt: castEmailReceipt(*result.EmailReceipt)}, nil
 }
 
+// GetEmailEffectReceipt reads the invocation receipt through the verified query principal and
+// projects its optional reconciliation decision.
+// GetEmailEffectReceipt читает квитанцию вызова с проверенным query principal и преобразует её
+// необязательное решение сверки.
 func (server *Server) GetEmailEffectReceipt(ctx context.Context, request *controlplanev1.GetEmailEffectReceiptRequest) (*controlplanev1.GetEmailEffectReceiptResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName)
 	if err != nil {
@@ -42,6 +50,10 @@ func (server *Server) GetEmailEffectReceipt(ctx context.Context, request *contro
 	return &controlplanev1.GetEmailEffectReceiptResponse{Receipt: castEmailReceipt(view.Receipt), Decision: castEmailDecision(view.Decision)}, nil
 }
 
+// ReconcileEmailEffect passes receipt reference, expected digest, reported outcome and note
+// through the dedicated reconciliation command and requires a decision.
+// ReconcileEmailEffect передаёт ссылку квитанции, ожидаемый digest, сообщённый исход и примечание
+// отдельной команде сверки и требует решение.
 func (server *Server) ReconcileEmailEffect(ctx context.Context, request *controlplanev1.ReconcileEmailEffectRequest) (*controlplanev1.ReconcileEmailEffectResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ReconcileEmailEffect_FullMethodName,
 		command.ReconcileEmailEffect, request.GetMutation(), command.EmailReconciliationInput{
@@ -57,6 +69,10 @@ func (server *Server) ReconcileEmailEffect(ctx context.Context, request *control
 	return &controlplanev1.ReconcileEmailEffectResponse{Decision: castEmailDecision(result.EmailDecision)}, nil
 }
 
+// ResolveEmailReconciliation passes exact receipt, decision and external receipt locators to the
+// authorized worker resolution and projects the returned view.
+// ResolveEmailReconciliation передаёт точные ссылки квитанции, решения и внешней квитанции
+// авторизованному разрешению worker и преобразует результат.
 func (server *Server) ResolveEmailReconciliation(ctx context.Context, request *controlplanev1.ResolveEmailReconciliationRequest) (*controlplanev1.ResolveEmailReconciliationResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ResolveEmailReconciliation_FullMethodName)
 	if err != nil {
@@ -69,6 +85,10 @@ func (server *Server) ResolveEmailReconciliation(ctx context.Context, request *c
 	return &controlplanev1.ResolveEmailReconciliationResponse{Receipt: castEmailReceipt(view.Receipt), Decision: castEmailDecision(view.Decision)}, nil
 }
 
+// emailOutcomeFromProto maps the three supported wire effect outcomes to domain constants and
+// returns an empty string for all other values.
+// emailOutcomeFromProto переводит три поддерживаемых исхода эффекта протокола в доменные константы
+// и возвращает пустую строку для прочих значений.
 func emailOutcomeFromProto(input controlplanev1.EmailEffectOutcome) string {
 	switch input {
 	case controlplanev1.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_UNKNOWN_OUTCOME:
@@ -82,6 +102,10 @@ func emailOutcomeFromProto(input controlplanev1.EmailEffectOutcome) string {
 	}
 }
 
+// emailOutcomeProto maps the three domain effect outcomes to protobuf and uses UNSPECIFIED for
+// every unknown string.
+// emailOutcomeProto переводит три доменных исхода эффекта в Protobuf и использует UNSPECIFIED для
+// неизвестной строки.
 func emailOutcomeProto(input string) controlplanev1.EmailEffectOutcome {
 	switch input {
 	case emailpolicy.OutcomeUnknown:
@@ -95,6 +119,10 @@ func emailOutcomeProto(input string) controlplanev1.EmailEffectOutcome {
 	}
 }
 
+// castEmailReceipt projects persisted receipt identity, version, invocation, effect and
+// configuration pins with outcome and timestamps.
+// castEmailReceipt преобразует сохранённые identity, версию и привязки вызова, эффекта и
+// конфигурации квитанции вместе с исходом и временем.
 func castEmailReceipt(r entity.EmailEffectReceipt) *controlplanev1.EmailEffectReceipt {
 	return &controlplanev1.EmailEffectReceipt{Ref: r.Ref, Version: r.Version, InvocationRef: r.InvocationRef,
 		ExternalReceiptRef: r.ExternalReceiptRef, ExternalReceiptDigest: r.ExternalReceiptDigest,
@@ -103,6 +131,10 @@ func castEmailReceipt(r entity.EmailEffectReceipt) *controlplanev1.EmailEffectRe
 		ProjectRef: r.ProjectRef, CreatedAt: timestamppb.New(r.CreatedAt), UpdatedAt: timestamppb.New(r.UpdatedAt)}
 }
 
+// castEmailDecision preserves an absent decision and projects receipt/version/digest pins,
+// invocation, outcome, grant, actor and creation/expiry timestamps.
+// castEmailDecision сохраняет отсутствие решения и преобразует привязки квитанции, версии и
+// digest, вызов, исход, grant, actor и время создания и истечения.
 func castEmailDecision(d *entity.EmailReconciliationDecision) *controlplanev1.EmailReconciliationDecision {
 	if d == nil {
 		return nil

@@ -11,6 +11,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// mailboxEnum rejects numeric values absent from the enum table, maps zero to an empty string and
+// lowercases the known prefixed name.
+// mailboxEnum отклоняет числа вне таблицы enum, переводит ноль в пустую строку и приводит
+// известное имя без префикса к нижнему регистру.
 func mailboxEnum(value int32, names map[int32]string, prefix string) (string, error) {
 	name, ok := names[value]
 	if !ok {
@@ -22,10 +26,18 @@ func mailboxEnum(value int32, names map[int32]string, prefix string) (string, er
 	return strings.ToLower(strings.TrimPrefix(name, prefix)), nil
 }
 
+// mailboxDescriptor copies only credential reference name and generation, using generated getter
+// defaults for nil input.
+// mailboxDescriptor копирует только имя и поколение ссылки credential, используя нулевые значения
+// generated getters для nil.
 func mailboxDescriptor(input *cp.EmailMailboxCredentialReference) api.Descriptor {
 	return api.Descriptor{Name: input.GetName(), Generation: input.GetGeneration()}
 }
 
+// mailboxEndpoint preserves an absent endpoint and rejects unknown authentication or TLS enums
+// before copying connection fields and credential references.
+// mailboxEndpoint сохраняет отсутствие endpoint и отклоняет неизвестные enum авторизации либо TLS
+// до копирования подключения и ссылок credential.
 func mailboxEndpoint(input *cp.EmailMailboxEndpoint) (*api.Endpoint, error) {
 	if input == nil {
 		return nil, nil
@@ -43,6 +55,10 @@ func mailboxEndpoint(input *cp.EmailMailboxEndpoint) (*api.Endpoint, error) {
 		Ca: mailboxDescriptor(input.GetCa()), Username: mailboxDescriptor(input.GetUsername()), Secret: mailboxDescriptor(input.GetSecret())}, nil
 }
 
+// mailboxSpecification requires a specification, validates enum membership and integer byte-limit
+// conversion, and projects endpoints, limits and nonnil operation policies.
+// mailboxSpecification требует спецификацию, проверяет значения enum и преобразование
+// целочисленных лимитов байтов, затем переносит endpoints, лимиты и ненулевые политики операций.
 func mailboxSpecification(input *cp.EmailMailboxSpecification) (entity.EmailMailboxSpecification, error) {
 	if input == nil {
 		return entity.EmailMailboxSpecification{}, errs.ErrInvalid
@@ -96,6 +112,10 @@ func mailboxSpecification(input *cp.EmailMailboxSpecification) (entity.EmailMail
 	return result, nil
 }
 
+// mailboxContent preserves a YAML oneof verbatim or encodes the typed specification as JSON;
+// absent or unsupported content is invalid.
+// mailboxContent сохраняет YAML из oneof без изменения либо кодирует типизированную спецификацию в
+// JSON; отсутствующее или неподдерживаемое содержимое недопустимо.
 func mailboxContent(input *cp.EmailMailboxDraftContent) (string, string, error) {
 	switch content := input.GetContent().(type) {
 	case *cp.EmailMailboxDraftContent_Yaml:
@@ -112,9 +132,18 @@ func mailboxContent(input *cp.EmailMailboxDraftContent) (string, string, error) 
 	}
 }
 
+// castMailboxDescriptor projects credential reference name and generation without reading or
+// embedding credential values.
+// castMailboxDescriptor преобразует имя и поколение ссылки credential без чтения либо включения
+// значений credential.
 func castMailboxDescriptor(input api.Descriptor) *cp.EmailMailboxCredentialReference {
 	return &cp.EmailMailboxCredentialReference{Name: input.Name, Generation: input.Generation}
 }
+
+// castMailboxEndpoint preserves nil endpoint presence and projects host, TLS/authentication enums
+// and credential descriptors using generated enum lookup.
+// castMailboxEndpoint сохраняет nil endpoint и преобразует host, enum TLS/авторизации и описатели
+// credential через generated enum lookup.
 func castMailboxEndpoint(input *api.Endpoint) *cp.EmailMailboxEndpoint {
 	if input == nil {
 		return nil
@@ -124,6 +153,11 @@ func castMailboxEndpoint(input *api.Endpoint) *cp.EmailMailboxEndpoint {
 		TlsMode:    cp.EmailMailboxTLSMode(cp.EmailMailboxTLSMode_value["EMAIL_MAILBOX_TLS_MODE_"+strings.ToUpper(string(input.TlsMode))]),
 		Ca:         castMailboxDescriptor(input.Ca), Username: castMailboxDescriptor(input.Username), Secret: castMailboxDescriptor(input.Secret)}
 }
+
+// castMailboxSpecification projects the domain mailbox specification, preserving optional receive
+// endpoints and ordered policies without revalidating domain semantics.
+// castMailboxSpecification преобразует доменную спецификацию ящика, сохраняя необязательные
+// receive endpoints и порядок политик без повторной проверки доменной семантики.
 func castMailboxSpecification(input entity.EmailMailboxSpecification) *cp.EmailMailboxSpecification {
 	result := &cp.EmailMailboxSpecification{Enabled: input.Enabled,
 		ReceiveProtocol: cp.EmailMailboxReceiveProtocol(cp.EmailMailboxReceiveProtocol_value["EMAIL_MAILBOX_RECEIVE_PROTOCOL_"+strings.ToUpper(string(input.ReceiveProtocol))]),
@@ -139,6 +173,11 @@ func castMailboxSpecification(input entity.EmailMailboxSpecification) *cp.EmailM
 	}
 	return result
 }
+
+// castMailboxDiagnostics allocates an ordered diagnostic list preserving each code, path, message
+// and source position, including empty input.
+// castMailboxDiagnostics создаёт упорядоченный список диагностики с сохранением кода, пути,
+// сообщения и позиции источника, включая пустой вход.
 func castMailboxDiagnostics(input []entity.EmailMailboxDiagnostic) []*cp.EmailMailboxDiagnostic {
 	result := make([]*cp.EmailMailboxDiagnostic, 0, len(input))
 	for _, item := range input {
@@ -146,6 +185,11 @@ func castMailboxDiagnostics(input []entity.EmailMailboxDiagnostic) []*cp.EmailMa
 	}
 	return result
 }
+
+// castMailboxView projects configuration, revision, specification and action hints, preserving
+// optional publication and nonzero ready time.
+// castMailboxView преобразует конфигурацию, ревизию, спецификацию и подсказки действий, сохраняя
+// необязательную публикацию и ненулевое время готовности.
 func castMailboxView(input entity.EmailMailboxConfigurationView) *cp.EmailMailboxConfigurationView {
 	result := &cp.EmailMailboxConfigurationView{ConnectionRef: input.ConnectionRef, ConnectionVersion: input.ConnectionVersion,
 		MailboxRef: input.MailboxRef, Configuration: castManagedConfiguration(&input.Configuration), Revision: castManagedRevision(&input.Revision),
@@ -163,6 +207,10 @@ func castMailboxView(input entity.EmailMailboxConfigurationView) *cp.EmailMailbo
 	return result
 }
 
+// castMailboxActions projects ordered action availability and reasons through generated enum
+// tables without granting command authority.
+// castMailboxActions преобразует упорядоченную доступность действий и причины через generated enum
+// tables без выдачи полномочий на команды.
 func castMailboxActions(input []entity.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability {
 	result := make([]*cp.EmailMailboxActionAvailability, 0, len(input))
 	for _, item := range input {
