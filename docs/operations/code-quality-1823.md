@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.399.0
+version: 1.399.1
 updated: 2026-10-25
 ---
 
@@ -87,7 +87,9 @@ interface change. Thresholds/ignore regions/whole-file exclusions не расш�
 Полные изменённые blobs проверены: четыре совпадения scanner — только прежние
 синтетические token-like/private-key-header markers title test, с точным
 совпадением байтов и количества с main и comments-only AST. Неизвестных
-совпадений нет; значения из env не читались, не переносились и не публиковались.
+совпадений нет. Прикладные секреты не читались и не переносились; для операций
+GitHub выбирались только необходимые ключи роли бота и identity автора без
+вывода значений.
 Issue#1823 открыт, PR Draft; полный объём и deploy не объявлены завершёнными.
 
 ## Lease чтения помощника, порядок поиска и catalog pins — 25.10.2026
