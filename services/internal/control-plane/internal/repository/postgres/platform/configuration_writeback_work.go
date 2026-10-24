@@ -10,6 +10,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// writeBackWork projects pinned provider inputs and effect metadata for a worker, selecting
+// RECOVER_READ_ONLY only for UNKNOWN_OUTCOME. EXECUTE deadline is capped by the proposal deadline;
+// recovery uses lease expiry and preserves candidate identities and deterministic commit metadata.
+// writeBackWork проецирует закреплённый ввод провайдера и метаданные эффекта для worker, выбирая
+// RECOVER_READ_ONLY только для UNKNOWN_OUTCOME. EXECUTE deadline ограничен deadline предложения;
+// recovery использует lease expiry и сохраняет candidate identities и детерминированные commit
+// metadata.
 func writeBackWork(row writeBackRow) entity.ConfigurationWriteBackWork {
 	s := row.snapshot.Source
 	mode := "EXECUTE"
@@ -27,14 +34,21 @@ func writeBackWork(row writeBackRow) entity.ConfigurationWriteBackWork {
 		CommitTime: row.proposal.CreatedAt, CandidateTreeSHA: row.tree, CandidateBlobSHA: row.blob, EffectStartedAt: row.started, Deadline: deadline}
 }
 
+// ClaimConfigurationWriteBackWork selects candidate refs under Serializable and locks/rechecks
+// each using one database time. It expires unapproved work, fails exhausted/ineligible unstarted
+// work, and sends any started effect to UNKNOWN_OUTCOME recovery before those checks. Fresh
+// fences/generations are always issued, attempts increment only for execution, and
+// state/audit/events commit even for an empty returned batch.
+// ClaimConfigurationWriteBackWork выбирает ссылки candidates в Serializable и
+// блокирует/перепроверяет каждую по одному времени БД. Завершает истёкшую неодобренную работу,
+// отклоняет исчерпанную/недопустимую неначатую работу, а любой начатый эффект направляет в
+// UNKNOWN_OUTCOME recovery до этих проверок. Всегда выдаёт свежие fences/generations, attempts
+// увеличивает лишь для execution; state/audit/events фиксирует даже при пустом возвращаемом
+// пакете.
 func (repository *Repository) ClaimConfigurationWriteBackWork(ctx context.Context, p value.Principal, claimant string, limit int32) ([]entity.ConfigurationWriteBackWork, error) {
-	current, err := repository.resolveScope(ctx, p)
+	current, tx, err := repository.beginWriteBackWorkTransaction(ctx, p)
 	if err != nil {
 		return nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var now time.Time
@@ -107,14 +121,18 @@ func (repository *Repository) ClaimConfigurationWriteBackWork(ctx context.Contex
 	return result, tx.Commit(ctx)
 }
 
+// RenewConfigurationWriteBackWork verifies the fenced live lease, requiring fresh eligibility and
+// deadline only outside UNKNOWN_OUTCOME, then grants one minute capped by the execution deadline.
+// Saving increments proposal version and emits audit/event; a raw commit error may accompany the
+// populated lease.
+// RenewConfigurationWriteBackWork проверяет fenced живой lease, требуя свежие eligibility и
+// deadline только вне UNKNOWN_OUTCOME, затем выдаёт минуту с ограничением execution deadline.
+// Сохранение увеличивает версию proposal и создаёт audit/event; исходная ошибка commit может
+// сопровождать заполненный lease.
 func (repository *Repository) RenewConfigurationWriteBackWork(ctx context.Context, p value.Principal, lease entity.ConfigurationWriteBackLease) (entity.ConfigurationWriteBackLease, error) {
-	current, err := repository.resolveScope(ctx, p)
+	current, tx, err := repository.beginWriteBackWorkTransaction(ctx, p)
 	if err != nil {
 		return entity.ConfigurationWriteBackLease{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return entity.ConfigurationWriteBackLease{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	row, err := lockWriteBack(ctx, tx, current, lease.ProposalRef)
@@ -141,6 +159,10 @@ func (repository *Repository) RenewConfigurationWriteBackWork(ctx context.Contex
 	return row.lease, tx.Commit(ctx)
 }
 
+// validWriteBackFailure accepts only the ten declared worker failure strings; it neither selects
+// retry policy nor validates provider error text.
+// validWriteBackFailure принимает только десять объявленных строк ошибок worker; не выбирает retry
+// policy и не проверяет текст ошибки провайдера.
 func validWriteBackFailure(failure string) bool {
 	switch failure {
 	case "UNAVAILABLE", "CREDENTIAL_REJECTED", "ACCESS_DENIED", "SOURCE_CHANGED", "CONTENT_INVALID", "RESPONSE_INVALID", "AUTHORITY_CHANGED", "DEADLINE_EXCEEDED", "BRANCH_CONFLICT", "OUTCOME_UNCONFIRMED":
@@ -150,17 +172,23 @@ func validWriteBackFailure(failure string) bool {
 	}
 }
 
+// FailConfigurationWriteBackWork validates the failure code and replays a matching LAST_FAIL
+// receipt before checking the live lease. A digest mismatch continues through lease validation;
+// started effects become UNKNOWN_OUTCOME, while only bounded pre-effect UNAVAILABLE may requeue.
+// It clears claimant/fence, applies a one-minute retry pause and saves response
+// receipt/audit/event without external actions.
+// FailConfigurationWriteBackWork проверяет код ошибки и воспроизводит совпадающую LAST_FAIL
+// receipt до проверки живого lease. Несовпадение digest продолжает проверку lease; начатый эффект
+// становится UNKNOWN_OUTCOME, а только ограниченный UNAVAILABLE до эффекта допускает очередь.
+// Очищает claimant/fence, назначает минутную паузу и сохраняет response receipt/audit/event без
+// внешних действий.
 func (repository *Repository) FailConfigurationWriteBackWork(ctx context.Context, p value.Principal, lease entity.ConfigurationWriteBackLease, failure string) (entity.ConfigurationWriteBack, error) {
 	if !validWriteBackFailure(failure) {
 		return entity.ConfigurationWriteBack{}, errs.ErrInvalid
 	}
-	current, err := repository.resolveScope(ctx, p)
+	current, tx, err := repository.beginWriteBackWorkTransaction(ctx, p)
 	if err != nil {
 		return entity.ConfigurationWriteBack{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return entity.ConfigurationWriteBack{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	row, err := lockWriteBack(ctx, tx, current, lease.ProposalRef)
@@ -200,4 +228,24 @@ func (repository *Repository) FailConfigurationWriteBackWork(ctx context.Context
 		return entity.ConfigurationWriteBack{}, err
 	}
 	return row.proposal, tx.Commit(ctx)
+}
+
+// beginWriteBackWorkTransaction resolves the existing principal scope before opening the
+// Serializable transaction shared by five write-back worker actions. It preserves resolve errors
+// and maps only begin failure to Unavailable; callers retain locks, replay/authority ordering,
+// rollback and commit. It neither starts effects nor grants authority or a new context budget.
+// beginWriteBackWorkTransaction разрешает прежний principal scope до открытия общей Serializable
+// transaction пяти write-back worker actions. Сохраняет resolve errors и преобразует только begin
+// failure в Unavailable; callers сохраняют блокировки, порядок replay/authority, rollback и commit.
+// Не запускает эффекты, не выдаёт полномочия и не назначает новый context budget.
+func (repository *Repository) beginWriteBackWorkTransaction(ctx context.Context, p value.Principal) (scope, pgx.Tx, error) {
+	current, err := repository.resolveScope(ctx, p)
+	if err != nil {
+		return scope{}, nil, err
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return scope{}, nil, errs.ErrUnavailable
+	}
+	return current, tx, nil
 }

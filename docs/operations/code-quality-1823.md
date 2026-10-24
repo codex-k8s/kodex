@@ -4,11 +4,55 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.381.0
+version: 1.382.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Обратная запись конфигурации: authority, effects и recovery — 24.10.2026
+
+На основе `ce55fb711fe6d6ee236e3d33a09771c83252e6ec` описаны47 прежних
+объявлений восьми configuration_writeback Go-файлов и новый helper.
+Все48/48 объявлений блока имеют предметные EN→RU комментарии. Общий
+inventory18765/21428, missing2663 — PostgreSQL adapter control-plane.
+
+`beginWriteBackWorkTransaction` объединяет пять прежних resolveScope →
+Serializable BeginTx начал claim/renew/fail/begin/complete. Resolve errors
+сохраняются, только begin failure преобразуется в Unavailable. Principal,
+context и TxOptions прежние; locks, replay, authority, deferred rollback и
+commit принадлежат исходным callers. Read-only RepeatableRead и source
+worker paths не переподключены. Нового внешнего действия или authority нет.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Prepare / approve | Tenant set visibility/manage/build/source и integration.manage; current accepted READY Git source, exact set/source/connection/credential/package pins. Approval digest не включает собственное позднейшее значение; storage digest включает. Approval требует digest/OCC/expiry и fresh root/approver eligibility, назначает15 минут execution deadline |
+| Claim / renew | Exact worker workload/action permission и batch1..16 проверяет domain service. Candidate selection не выдаёт authority; work row блокируется отдельно. Fresh fence/generation всегда, attempt лишь для execution. Started effect направляется в UNKNOWN_OUTCOME до deadline/authority checks; recovery lease не ограничен execution deadline и не разрешает resend |
+| Begin | Receipt replay до fresh checks; новый effect требует live claim, deadline, eligibility, точные candidate/content/package inputs. EFFECT_STARTED, receipt, audit/event атомарны; внешний provider call здесь не выполняется |
+| Complete | Exact fenced started effect и candidate/content pins. Branch confirmation разрешает следующий PR только при живых deadline/authority; PR confirmation не добавляет fresh eligibility. Recovery может записать известную квитанцию без нового внешнего действия. Runtime configuration revision не публикуется |
+| Fail / replay | Matching LAST_FAIL возвращается до lease check; digest mismatch не является немедленным Conflict и продолжает lease validation. Started effect остаётся UNKNOWN_OUTCOME; только bounded UNAVAILABLE до эффекта допускает retry. Claim очищается, сохраняется минутная пауза |
+| Cancel / withdrawal | Configuration-only cancellation started/unknown даёт Conflict; connection withdrawal сохраняет UNKNOWN_OUTCOME/AUTHORITY_CHANGED для read-only recovery и отзывает прежний claim. Неначатые proposals отменяются |
+| Read / list | RepeatableRead, scope-bound unsigned cursor, tenant/configuration count/page и locked snapshot validation. Detail отдельно проверяет content/source permission; list возвращает metadata без текста. Raw commit error может сопровождать заполненный результат |
+| Save / signals | Version-guarded UPDATE, version increment и audit всегда; generic MANAGED_CONFIGURATION_CHANGED snapshot только по emitRealtime. Outer command использует собственный event outcome без дублирования |
+
+Шесть comments-only AST/directives comparisons и два expected-AST
+comparisons — PASS: изменены только пять transaction prefixes и добавлен
+один helper, восемь go:embed directives сохранены. SQL, API, applied
+migrations, generated output, dependencies и deploy inputs не менялись.
+Полный локальный GOWORK=off control-plane build и unit `-count=1`,17
+analyzer tests,5 exact-ignore guards, gofmt и diff check — PASS.
+Credentials и15 external fixture/admin/template inputs исключены.
+Disposable PostgreSQL component, concurrency/locks, provider writes/readback,
+полный E2E/browser и deploy/live — NOT RUN/SKIP; component helper описан,
+его исполнение не объявлено подтверждённым. Проверенные ранее Context7
+pgx/v5.10.0 transaction/rollback/Row/Scan правила сохраняются.
+
+Scan6671 own sources,222 excluded,1813 raw,897 retained occurrences и916
+unresolved; все771 прежних решения действительны, registry не менялся.
+Четыре старых transaction окна исчезли, четыре новых окна с source
+accept/completion/renew/helper появились и оставлены открытыми. Это не
+сокращение общего backlog. Thresholds/ignore regions не менялись. QA baseline
+f2e64eb и основной клон сохранены; Issue#1823 и полный объём остаются открыты.
 
 ## Source work: claim, renew, replay, failure и refresh — 24.10.2026
 

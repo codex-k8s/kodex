@@ -17,33 +17,75 @@ import (
 )
 
 var (
+	// queryWriteBackBase embeds the tenant/source/version/commit/content-pinned accepted raw content
+	// query; it requires READY and does not read a provider.
+	// queryWriteBackBase встраивает чтение принятого исходного содержимого по
+	// tenant/source/version/commit/content; требует READY и не обращается к провайдеру.
 	//go:embed sql/configuration_writeback__base.sql
 	queryWriteBackBase string
+	// queryWriteBackInsert embeds insertion of immutable proposal/source/content pins in
+	// WAITING_APPROVAL, returning the server ID and timestamps without approval or external effects.
+	// queryWriteBackInsert встраивает создание неизменяемых proposal/source/content pins в
+	// WAITING_APPROVAL; возвращает серверные ID и время без одобрения или внешних эффектов.
 	//go:embed sql/configuration_writeback__insert.sql
 	queryWriteBackInsert string
+	// queryWriteBackLock embeds the exact tenant/proposal join through configuration, source,
+	// connection and credential, locking only the work row; decoder checks follow separately.
+	// queryWriteBackLock встраивает точное tenant/proposal соединение с configuration, source,
+	// connection и credential, блокируя только строку work; проверки decoder выполняются отдельно.
 	//go:embed sql/configuration_writeback__lock.sql
 	queryWriteBackLock string
+	// queryWriteBackUpdate embeds the tenant/ID/version-guarded mutable work update and version
+	// increment, leaving the immutable snapshot intact.
+	// queryWriteBackUpdate встраивает обновление изменяемой работы с tenant/ID/version guard и
+	// увеличением версии, сохраняя неизменяемый snapshot.
 	//go:embed sql/configuration_writeback__update.sql
 	queryWriteBackUpdate string
+	// queryWriteBackList embeds ordered proposal-reference pagination inside one tenant/configuration;
+	// it returns references for subsequent locked decoding, not content or authority.
+	// queryWriteBackList встраивает упорядоченную пагинацию ссылок предложений внутри
+	// tenant/configuration; возвращает ссылки для последующего чтения с блокировкой, а не содержимое
+	// или полномочия.
 	//go:embed sql/configuration_writeback__list.sql
 	queryWriteBackList string
+	// queryWriteBackCount embeds the total proposal count for the exact tenant/configuration,
+	// including historical terminal proposals.
+	// queryWriteBackCount встраивает общий счётчик предложений точного tenant/configuration, включая
+	// исторические завершённые предложения.
 	//go:embed sql/configuration_writeback__count.sql
 	queryWriteBackCount string
+	// queryWriteBackCandidates embeds bounded updated-time/ID selection of expired approvals, queued
+	// work and expired/null claims; selection does not grant authority or lock the selected rows.
+	// queryWriteBackCandidates встраивает ограниченный выбор по updated-time/ID для истёкших
+	// одобрений, очереди и истёкших/null claims; выбор не выдаёт полномочия и не блокирует выбранные
+	// строки.
 	//go:embed sql/configuration_writeback__candidates.sql
 	queryWriteBackCandidates string
 )
 
+// writeBackSnapshot stores the immutable proposal, source work and base/proposed text used for
+// approval and integrity hashes; mutable lifecycle columns are overlaid only after validation.
+// writeBackSnapshot хранит неизменяемые proposal, source work и исходный/предлагаемый текст для
+// approval и integrity hashes; изменяемые lifecycle columns накладываются только после проверки.
 type writeBackSnapshot struct {
 	Proposal                     entity.ConfigurationWriteBack
 	Source                       entity.ManagedConfigurationSourceWork
 	BaseContent, ProposedContent string
 }
 
+// writeBackReceipt binds one action digest to its historical proposal response for replay; the
+// receipt alone does not authorize another external effect.
+// writeBackReceipt связывает digest действия с историческим ответом proposal для replay; сама
+// квитанция не разрешает новый внешний эффект.
 type writeBackReceipt struct {
 	Digest   string
 	Proposal entity.ConfigurationWriteBack
 }
 
+// writeBackRow combines decoded immutable input, current proposal/lease/effect columns, actor
+// references and receipt history under a work-row lock; callers retain transaction ownership.
+// writeBackRow объединяет декодированный неизменяемый ввод, текущие proposal/lease/effect columns,
+// ссылки actors и историю квитанций под блокировкой work; транзакцией владеют callers.
 type writeBackRow struct {
 	id, rootRef, approverRef, organizationRef, projectRef string
 	snapshot                                              writeBackSnapshot
@@ -54,11 +96,23 @@ type writeBackRow struct {
 	receipts                                              map[string]writeBackReceipt
 }
 
+// writeBackDigest returns lowercase SHA-256 of the supplied bytes, including nil; JSON encoding,
+// content validation and authority belong to callers.
+// writeBackDigest возвращает строчный SHA-256 переданных bytes, включая nil; JSON-кодирование,
+// проверка содержимого и полномочия принадлежат callers.
 func writeBackDigest(raw []byte) string {
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:])
 }
 
+// lockWriteBack locks the tenant/proposal row, strictly decodes one snapshot JSON value, decodes
+// receipts and verifies re-encoded snapshot/content hashes and relational pins. It overlays
+// current lifecycle fields and nullable lease expiry only after these checks; no rows maps to
+// NotFound and other failures to Unavailable, possibly with a partial internal row.
+// lockWriteBack блокирует строку tenant/proposal, строго декодирует одно snapshot JSON value,
+// декодирует receipts и сверяет hashes повторно закодированного snapshot/содержимого и relational
+// pins. Накладывает текущие lifecycle fields и nullable lease expiry после проверок; отсутствие
+// строки даёт NotFound, остальные ошибки Unavailable, возможно с частичной внутренней строкой.
 func lockWriteBack(ctx context.Context, tx pgx.Tx, current scope, ref string) (writeBackRow, error) {
 	var row writeBackRow
 	var raw, receipts []byte
@@ -99,6 +153,14 @@ func lockWriteBack(ctx context.Context, tx pgx.Tx, current scope, ref string) (w
 	return row, nil
 }
 
+// saveWriteBack updates one version-guarded work row, increments the in-memory proposal version,
+// appends audit and optionally a generic MANAGED_CONFIGURATION_CHANGED snapshot event in the
+// caller transaction. Zero affected rows is Conflict; it neither commits nor performs provider
+// writes.
+// saveWriteBack обновляет одну строку work с version guard, увеличивает версию proposal в памяти,
+// добавляет audit и при запросе общее событие-снимок MANAGED_CONFIGURATION_CHANGED в транзакции
+// caller. Ноль обновлённых строк даёт Conflict; не фиксирует транзакцию и не выполняет запись
+// провайдеру.
 func (repository *Repository) saveWriteBack(ctx context.Context, tx pgx.Tx, current scope, row *writeBackRow, emitRealtime bool) error {
 	var lease *time.Time
 	if !row.lease.ExpiresAt.IsZero() {
@@ -137,6 +199,10 @@ func (repository *Repository) saveWriteBack(ctx context.Context, tx pgx.Tx, curr
 	return nil
 }
 
+// writeBackTerminal recognizes only succeeded, rejected, cancelled, expired and failed states;
+// UNKNOWN_OUTCOME remains recoverable and is deliberately nonterminal.
+// writeBackTerminal распознаёт только succeeded, rejected, cancelled, expired и failed;
+// UNKNOWN_OUTCOME допускает восстановление и намеренно не считается завершением.
 func writeBackTerminal(state string) bool {
 	switch state {
 	case entity.WriteBackSucceeded, entity.WriteBackRejected, entity.WriteBackCancelled, entity.WriteBackExpired, entity.WriteBackFailed:

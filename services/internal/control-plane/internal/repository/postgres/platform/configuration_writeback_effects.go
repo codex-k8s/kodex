@@ -14,13 +14,28 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5"
 )
 
+// writeBackCommitMessage fixes the provider-facing commit/PR/MR message used by approved effect
+// validation and worker instructions.
+// writeBackCommitMessage задаёт фиксированное сообщение commit/PR/MR для провайдера, используемое
+// проверкой одобренного эффекта и инструкциями worker.
 const writeBackCommitMessage = "Update managed configuration"
 
+// writeBackMarker creates the stable proposal marker for provider receipt discovery; the marker is
+// not an authorization token.
+// writeBackMarker создаёт устойчивый маркер предложения для поиска квитанции провайдера; маркер не
+// является токеном полномочий.
 func writeBackMarker(ref string) string { return "kodex-configuration-writeback:" + ref }
 
+// writeBackLeaseMatches requires a claimed/started/unknown proposal, exact
+// proposal/attempt/generation/claimant/nonempty fence and a live stored expiry. A nonzero
+// submitted expiry may be older than the stored expiry, including already past; deadline and actor
+// eligibility are checked elsewhere.
+// writeBackLeaseMatches требует claimed/started/unknown proposal, точные
+// proposal/attempt/generation/claimant/непустой fence и живой сохранённый expiry. Ненулевой
+// переданный expiry может быть старше сохранённого, включая уже прошедший; deadline и actor
+// eligibility проверяются отдельно.
 func writeBackLeaseMatches(row writeBackRow, lease entity.ConfigurationWriteBackLease, now time.Time) bool {
 	return (row.proposal.State == entity.WriteBackClaimed || row.proposal.State == entity.WriteBackStarted || row.proposal.State == entity.WriteBackUnknown) &&
 		lease.ProposalRef == row.proposal.Ref && lease.Attempt == row.lease.Attempt && lease.ClaimGeneration == row.lease.ClaimGeneration &&
@@ -28,10 +43,20 @@ func writeBackLeaseMatches(row writeBackRow, lease entity.ConfigurationWriteBack
 		!lease.ExpiresAt.After(row.lease.ExpiresAt) && now.Before(row.lease.ExpiresAt)
 }
 
+// writeBackReceiptKey joins attempt, generation, action and effect into the historical receipt
+// key; claimant/fence/content binding belongs to the separately stored digest.
+// writeBackReceiptKey объединяет attempt, generation, action и effect в ключ исторической
+// квитанции; привязка claimant/fence/content принадлежит отдельно сохранённому digest.
 func writeBackReceiptKey(lease entity.ConfigurationWriteBackLease, action, effect string) string {
 	return fmt.Sprintf("%d/%d/%s/%s", lease.Attempt, lease.ClaimGeneration, action, effect)
 }
 
+// writeBackReplay returns the stored proposal for an exact receipt digest, Conflict for an
+// existing key with another digest, and a miss otherwise. It does not refresh authority, lease or
+// deadline and must not authorize a resend.
+// writeBackReplay возвращает сохранённое proposal при точном digest квитанции, Conflict при
+// существующем ключе с другим digest, иначе отсутствие записи. Не обновляет authority, lease или
+// deadline и не разрешает повторную внешнюю отправку.
 func writeBackReplay(row writeBackRow, key, digest string) (entity.ConfigurationWriteBack, bool, error) {
 	receipt, found := row.receipts[key]
 	if !found {
@@ -43,6 +68,14 @@ func writeBackReplay(row writeBackRow, key, digest string) (entity.Configuration
 	return receipt.Proposal, true, nil
 }
 
+// validateWriteBackEffectInput checks effect/content/parent and fixed-length commit/tree/blob pins
+// against the snapshot, then validates the actual pinned package inputs for GitHub or GitLab
+// operations. Branch input additionally binds the GitHub base blob; unsupported providers or
+// missing/invalid capabilities close without external calls.
+// validateWriteBackEffectInput сверяет effect/content/parent и pins commit/tree/blob фиксированной
+// длины со snapshot, затем проверяет ввод операций GitHub или GitLab по фактическому закреплённому
+// package. Для ветки дополнительно проверяет GitHub base blob; неподдерживаемый провайдер или
+// отсутствующие/невалидные capabilities закрывают путь без внешних вызовов.
 func validateWriteBackEffectInput(row writeBackRow, input platformrepo.ConfigurationWriteBackEffectInput) error {
 	p := row.proposal
 	if input.Effect != row.effect || input.ContentSHA256 != p.ProposedContentSHA256 || input.ParentCommitSHA != p.BaseCommitSHA ||
@@ -87,14 +120,20 @@ func validateWriteBackEffectInput(row writeBackRow, input platformrepo.Configura
 	return nil
 }
 
+// BeginConfigurationWriteBackEffect replays an exact BEGIN receipt before fresh checks, otherwise
+// requires the live claimed lease, no started effect, live deadline, current eligibility and
+// validated candidate pins. It records EFFECT_STARTED and a response receipt atomically with
+// audit/event; the boolean means prior receipt found, including a conflicting one, and never
+// starts the provider call here.
+// BeginConfigurationWriteBackEffect воспроизводит точную BEGIN receipt до свежих проверок, иначе
+// требует живой claimed lease, отсутствие начатого эффекта, живой deadline, текущую eligibility и
+// проверенные candidate pins. Атомарно записывает EFFECT_STARTED и квитанцию ответа с audit/event;
+// bool означает найденную прежнюю квитанцию, включая конфликтную, а вызов провайдера здесь не
+// запускается.
 func (repository *Repository) BeginConfigurationWriteBackEffect(ctx context.Context, principal value.Principal, input platformrepo.ConfigurationWriteBackEffectInput) (entity.ConfigurationWriteBack, bool, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginWriteBackWorkTransaction(ctx, principal)
 	if err != nil {
 		return entity.ConfigurationWriteBack{}, false, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return entity.ConfigurationWriteBack{}, false, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	row, err := lockWriteBack(ctx, tx, current, input.Lease.ProposalRef)
@@ -132,6 +171,14 @@ func (repository *Repository) BeginConfigurationWriteBackEffect(ctx context.Cont
 	return row.proposal, false, tx.Commit(ctx)
 }
 
+// validWriteBackPullRequest requires a canonical positive int32 reference and exact HTTPS
+// repository receipt URL without userinfo, query, fragment or RawPath. GitHub uses its fixed host;
+// the other branch matches the configured HTTPS base host/path. This validates syntax, not a
+// provider readback.
+// validWriteBackPullRequest требует каноническую положительную int32 ссылку и точный HTTPS URL
+// квитанции репозитория без userinfo, query, fragment или RawPath. GitHub использует фиксированный
+// host; другая ветка сверяет настроенные HTTPS base host/path. Проверяет синтаксис, а не readback
+// провайдера.
 func validWriteBackPullRequest(row writeBackRow, ref, rawURL string) bool {
 	id, err := strconv.ParseInt(ref, 10, 32)
 	if err != nil || id < 1 || strconv.FormatInt(id, 10) != ref {
@@ -152,14 +199,20 @@ func validWriteBackPullRequest(row writeBackRow, ref, rawURL string) bool {
 	return err == nil && b.Scheme == "https" && b.User == nil && u.Host == b.Host && u.Path == strings.TrimSuffix(b.Path, "/")+"/"+row.proposal.RepositoryRef+"/-/merge_requests/"+ref
 }
 
+// CompleteConfigurationWriteBackEffect replays the completion receipt first, otherwise verifies
+// the live fenced started effect and candidate/content pins. Branch confirmation queues PR
+// creation only while deadline/authority remain valid; PR confirmation succeeds without a new
+// eligibility check. It clears the claim and saves receipt/audit/event, allowing read-only
+// recovery to record a known effect without resending or publishing runtime configuration.
+// CompleteConfigurationWriteBackEffect сначала воспроизводит completion receipt, иначе сверяет
+// живой fenced started effect и candidate/content pins. Подтверждение ветки ставит создание PR в
+// очередь лишь при живых deadline/authority; подтверждение PR завершается без новой eligibility
+// check. Очищает claim и сохраняет receipt/audit/event, позволяя read-only recovery записать
+// известный эффект без повторной отправки или публикации runtime configuration.
 func (repository *Repository) CompleteConfigurationWriteBackEffect(ctx context.Context, principal value.Principal, input platformrepo.ConfigurationWriteBackEffectInput) (entity.ConfigurationWriteBack, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginWriteBackWorkTransaction(ctx, principal)
 	if err != nil {
 		return entity.ConfigurationWriteBack{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return entity.ConfigurationWriteBack{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	row, err := lockWriteBack(ctx, tx, current, input.Lease.ProposalRef)

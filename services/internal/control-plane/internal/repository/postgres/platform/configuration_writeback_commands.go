@@ -13,6 +13,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// writeBackKind maps only the two prepare command kinds to supported managed configuration kinds;
+// other commands return empty and resolve their proposal separately.
+// writeBackKind отображает только два prepare command kind в поддерживаемые виды управляемой
+// конфигурации; остальные возвращают пустую строку и отдельно разрешают proposal.
 func writeBackKind(kind command.Kind) string {
 	switch kind {
 	case command.PrepareRoleImageGitWriteBack:
@@ -24,6 +28,12 @@ func writeBackKind(kind command.Kind) string {
 	}
 }
 
+// writeBackSetAuthority resolves the tenant-owned supported set and hides missing visibility as
+// NotFound. Mutation additionally requires manage/build/source access, rejects shipped role-image
+// changes and archived sets; source/version freshness remains separate.
+// writeBackSetAuthority разрешает принадлежащий tenant поддерживаемый set и скрывает отсутствие
+// видимости как NotFound. Mutation дополнительно требует manage/build/source access, отклоняет
+// изменение shipped role-image и архивные sets; свежесть source/version проверяется отдельно.
 func (repository *Repository) writeBackSetAuthority(ctx context.Context, tx pgx.Tx, current scope, ref, kind string, mutation bool) (managedSet, error) {
 	set, err := repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: ref}, kind, false)
 	if err != nil {
@@ -59,6 +69,14 @@ func (repository *Repository) writeBackSetAuthority(ctx context.Context, tx pgx.
 	return set, nil
 }
 
+// writeBackCommandAuthority requires the typed payload, resolves configuration/kind from the
+// prepare input or locked existing proposal, checks mutation set authority and exact
+// integration.manage access. Payload references select resources but do not establish actor or
+// tenant authority.
+// writeBackCommandAuthority требует типизированный payload, разрешает configuration/kind по
+// prepare input либо заблокированному существующему proposal, проверяет mutation set authority и
+// точный integration.manage access. Ссылки payload выбирают ресурсы, но не устанавливают actor или
+// tenant authority.
 func (repository *Repository) writeBackCommandAuthority(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (managedSet, error) {
 	payload, ok := input.Payload.(command.ConfigurationWriteBackInput)
 	if !ok {
@@ -91,6 +109,14 @@ func (repository *Repository) writeBackCommandAuthority(ctx context.Context, tx 
 	return set, nil
 }
 
+// writeBackSource requires the currently accepted READY Git source/revision and integration
+// management access, builds fresh source input and checks pinned package write capabilities with
+// HUMAN_EACH_EFFECT. GitHub additionally requires the exact Git network destination; it returns
+// source/generation pins and internal connection/credential IDs without contacting the provider.
+// writeBackSource требует текущий принятый READY Git source/revision и integration management
+// access, строит свежий source input и проверяет write capabilities закреплённого package с
+// HUMAN_EACH_EFFECT. GitHub дополнительно требует точное Git network destination; возвращает
+// source/generation pins и внутренние connection/credential IDs без обращения к провайдеру.
 func (repository *Repository) writeBackSource(ctx context.Context, tx pgx.Tx, current scope, set managedSet) (configurationSource, entity.ManagedConfigurationSourceWork, string, string, error) {
 	source, err := readConfigurationSource(ctx, tx, current.organizationID, set.Ref)
 	if err != nil {
@@ -134,6 +160,16 @@ func (repository *Repository) writeBackSource(ctx context.Context, tx pgx.Tx, cu
 	return source, work, connectionID, credentialID, nil
 }
 
+// changeConfigurationWriteBack checks command authority and expected version, then prepares or
+// handles approval/rejection/cancellation in the caller transaction. Approval binds digest, expiry
+// and fresh eligibility with a fifteen-minute execution deadline; cancelling a started effect
+// preserves UNKNOWN_OUTCOME and clears its claim. It saves audit without a duplicate realtime
+// event and returns an outer command outcome.
+// changeConfigurationWriteBack проверяет command authority и expected version, затем готовит либо
+// обрабатывает одобрение/отказ/отмену в транзакции caller. Одобрение связывает digest, expiry и
+// свежую eligibility с пятнадцатиминутным execution deadline; отмена начатого эффекта сохраняет
+// UNKNOWN_OUTCOME и очищает claim. Сохраняет audit без дублирующего realtime event и возвращает
+// outcome внешней команды.
 func (repository *Repository) changeConfigurationWriteBack(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	set, err := repository.writeBackCommandAuthority(ctx, tx, current, input)
 	if err != nil {
@@ -192,6 +228,16 @@ func (repository *Repository) changeConfigurationWriteBack(ctx context.Context, 
 	return writeBackOutcome(set, row.proposal), nil
 }
 
+// prepareConfigurationWriteBack checks set/source versions, bounded nonempty UTF-8 content without
+// NUL and the exact accepted base hash, then validates changed role-image or integration content.
+// It creates a unique WAITING_APPROVAL branch proposal and immutable source/content snapshot;
+// approval digest excludes its own later value, storage digest includes it. No provider write or
+// runtime revision publication occurs.
+// prepareConfigurationWriteBack сверяет set/source versions, ограниченный непустой UTF-8 текст без
+// NUL и точный hash принятого исходника, затем проверяет изменённое role-image либо integration
+// содержимое. Создаёт уникальное WAITING_APPROVAL предложение ветки и неизменяемый source/content
+// snapshot; approval digest исключает своё позднейшее значение, storage digest включает его. Не
+// записывает провайдеру и не публикует runtime revision.
 func (repository *Repository) prepareConfigurationWriteBack(ctx context.Context, tx pgx.Tx, current scope, set managedSet, input command.Command, payload command.ConfigurationWriteBackInput) (commandOutcome, error) {
 	if set.Version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
@@ -244,6 +290,11 @@ func (repository *Repository) prepareConfigurationWriteBack(ctx context.Context,
 	return writeBackOutcome(set, row.proposal), nil
 }
 
+// writeBackOutcome wraps the proposal with set/project routing and generic managed-configuration
+// audit/event metadata for the outer command transaction; it does not emit or commit itself.
+// writeBackOutcome оборачивает proposal с set/project routing и общими managed-configuration
+// audit/event metadata для внешней command transaction; сам не создаёт событие и не фиксирует
+// транзакцию.
 func writeBackOutcome(set managedSet, proposal entity.ConfigurationWriteBack) commandOutcome {
 	return commandOutcome{result: command.Result{ConfigurationWriteBack: &proposal}, projectID: set.projectID, projectRef: set.ProjectRef,
 		resourceKind: "MANAGED_CONFIGURATION_WRITEBACK", resourceRef: proposal.Ref, summary: "i18n:MANAGED_CONFIGURATION_CHANGED",
