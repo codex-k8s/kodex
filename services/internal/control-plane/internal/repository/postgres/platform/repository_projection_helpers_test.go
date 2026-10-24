@@ -52,10 +52,14 @@ func TestRoleImageRecipeProjectionPreservesPinsAndCopiesSlices(t *testing.T) {
 	}
 }
 
-// TestRoleImageAndProviderDigestGrammar checks literal digest boundaries through role-image/artifact,
-// manifest and provider configuration paths, retaining exact accepted metadata and failure state.
-// TestRoleImageAndProviderDigestGrammar проверяет буквальные digest boundaries через role-image/artifact,
-// manifest и provider configuration paths, сохраняя точные принятые метаданные и состояние при отказе.
+// TestRoleImageAndProviderDigestGrammar checks the same fourteen literal digest boundaries through
+// role-image/artifact, manifest/object and provider-authorization validators plus provider
+// configuration. It retains exact accepted metadata and failure state, and exercises only lexical
+// validation with synthetic descriptors, not live credentials or content verification.
+// TestRoleImageAndProviderDigestGrammar проверяет четырнадцать буквальных границ хеша через
+// role-image и artifact, manifest и object, provider authorization validators и provider
+// configuration. Сохраняет точные metadata при допуске и состояние при отказе; проверяет только
+// лексику синтетических дескрипторов, не живые credentials и содержимое.
 func TestRoleImageAndProviderDigestGrammar(t *testing.T) {
 	cases := digestfixture.SHA256TextCases()
 	if len(cases) != 14 {
@@ -63,7 +67,7 @@ func TestRoleImageAndProviderDigestGrammar(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.Name, func(t *testing.T) {
-			if exactSHA256(test.Text) != test.Valid || exactManifestDigest("sha256:"+test.Text) != test.Valid || objectDigestValid("sha256:"+test.Text) != test.Valid {
+			if exactSHA256(test.Text) != test.Valid || validProviderSHA256(test.Text) != test.Valid || exactManifestDigest("sha256:"+test.Text) != test.Valid || objectDigestValid("sha256:"+test.Text) != test.Valid {
 				t.Fatal("role-image digest grammar changed")
 			}
 			previous := ProviderCredentialConfig{SecretName: "bootstrap-provider", SecretUID: "00000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("9", 64)}

@@ -6216,6 +6216,14 @@
       "fragmentSHA256": "7826fdc7db5ac994368f57b35741e4d71b7aaeeb2453a8fa4d6ac98ebb366b05",
       "count": 1,
       "reason": "Окно115 tokens пересекает конец разных scanner/owner-scope методов и начало GetRuntimeEnvironmentDraft/GetRuntimeSecretDraft; нормализатор уравнивает разные entity/scope и Unavailable/Forbidden returns. Полностью прочитаны оба Get: общий префикс лишь resolveScope и ReadOnly RepeatableRead BeginTx с typed empty-on-error; дальше разные scanners, environment owner access против exact secret-draft owner/create/view и разные commit errors. Самостоятельного общего алгоритма сквозь окно нет; универсальный typed transaction wrapper потребовал бы callback либо промежуточный tuple/error glue и скрыл бы различия без удаления содержательной копии. Сохранена только точная пара/hash/count1; authority, SQL и прочие окна не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_deadline.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_deadline.go",
+      "fragmentSHA256": "0a14a7765a807fc39761faa98b2c2ac58872f667fb5adad00fae02512d6e985b",
+      "count": 1,
+      "reason": "Окно208 tokens перекрывает соседние case разных nominal command payloads в executionDeadlineCommand: каждый явно проецирует собственные LeaseRef/Fence/Generation в command.LeaseInput. Полностью прочитаны функция и deadline SQL, сохранены fresh authority/replay-before-effect, actual lease resolution, отдельный GateResolution owner lookup и canonical graph expiry. У разных Go struct нет общего доступа к полям без изменения domain types, отражения либо нового широкого интерфейса. Constructor wrapper только заменил бы трёхпольный literal вызовом без самостоятельного алгоритма и скрыл бы проверяемый набор lifecycle payloads. Сохранена только эта точная внутрефайловая пара/hash/count1, не весь switch, command handler, другие payloads или проверки полномочий."
     }
   ]
 }

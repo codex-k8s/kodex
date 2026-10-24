@@ -4,11 +4,91 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.398.0
+version: 1.399.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Заголовки бесед, runtime deadline и provider accounts — 25.10.2026
+
+На основе `10bab442f363ae1f3cc781aacae18b8adb5ad6eb` полностью прочитаны
+assistant_conversation_title.go, его test, runtime_deadline.go и
+provider_accounts.go:48 прежних объявлений. Все48 получили предметные EN→RU
+описания, новый helper также описан; дополнен комментарий существующего
+TestRoleImageAndProviderDigestGrammar после полного чтения его тела.
+25 связанных SQL прочитаны полностью:5 deadline,4 usage/archive,14 provider/
+cleanup и2 title writes. Все5 go:embed сохранены. Остальная часть test-файла
+защищена full expected-AST, её новый полный смысловой аудит не заявляется.
+
+`assistantNormalizedTitleText` объединяет прежние whitespace/heading/list
+normalization, reserved i18n и оставшиеся Unicode control/format guards.
+Public filter сохраняет full-source size/UTF-8/protected/braces/code guards до
+helper; USER URL fallback сохраняет иные raw guards и требует URL-only matches
+по всему нормализованному источнику до выбора темы. Structured fallback
+не объединён: его whole-source protected checks и извлечение человеческого
+начала остаются отдельными. Generic/progress/technical filters, minimum8 runes,
+80-rune word-aware bounding, manual-title и exact SQL placeholder/USER_EDITED
+guards не менялись. Это эвристика проекции темы, не универсальная redaction
+или доказательство authority; новые строки credentials не добавлены.
+
+`validProviderSHA256` теперь использует существующий exactSHA256 →
+runtimecontract.ValidSHA256Text: ровно64 lowercase unprefixed ASCII hex bytes,
+с тем же zero digest и отказами на длину/case/controls/Unicode. Прежний14-case
+literal digest corpus дополнительно проверяет provider authorization validator.
+Новых тестовых файлов или зеркальных tests нет; descriptor provenance,
+Kubernetes readback, сравнение содержимого и полномочия не подменяются лексикой.
+
+Полные HEAD-derived expected-AST сравнения title, provider accounts и изменённого
+корпуса подтвердили только эти выносы и один дополнительный вызов валидатора.
+Runtime deadline и весь title test прошли полное AST/directive сравнение:
+только комментарии, включая неизменность всех синтетических fixtures.
+SQL/API/contract/generated/dependencies/migrations/deploy inputs и runtime
+errors/logs не менялись.
+
+| Путь / жизненный цикл | Фактическая граница |
+| --- | --- |
+| Title sources | Только обычный USER текст и отдельные автоматические темы; URL-only prefix и structured prose сохраняют whole-source запреты. Runtime, attachments и protected forms не становятся источником metadata |
+| Title writes | USER fallback только для точного SERVER_DEFAULT placeholder и осмысленного имени; explicit proposal сохраняет USER_EDITED. Фильтр не выполняет сохранение и не исполняет shell-текст test fixtures |
+| Deadline clocks | Start once для pinned workflow/root/step; same-org/project lineage≤128 плюс roots, UTC clocks/minimum deadline и database expiry. Пустое чтение nil/false, invalid deadline contract Conflict |
+| Deadline reconcile | Bounded SKIP LOCKED candidates с active roots, rows закрыты до canonical failRuntimeGraph; root обрабатывается один раз. Частичная работа внутри TX требует caller rollback при ошибке |
+| Deadline command | Fresh authority/replay до effect; явные9 lease payload forms и отдельный gate lookup. Late completion сохраняет validated usage/archive pins до full-graph timeout; expired receipt отображается в Forbidden только после commit |
+| Late completion | Usage/error consistency, archive identity/size и лишь64-character digest length в этой проверке. Exact turn usage, root totals и optional one-row session storage с30-day retention; без artifact publication и изменения timeout verdict |
+| Provider transitions | Exact org/account lock/OCC; specialized create/cancel/concurrency/device/API-key/refresh/revoke/enable/delete paths, прежние role/state/descriptor guards и hints. Pending poll не создаёт event; внешний command владеет authority/audit/idempotency/outbox/commit |
+| Provider activation | Descriptor UID/RV/hash metadata, next revision и account activation под caller lock; предыдущая credential получает durable cleanup после retention grace. Secret bytes, provider network и Kubernetes apply/delete отсутствуют |
+| Provider materialization read | ReadCommitted account lock, exact account view, attempt XOR descriptor; RESERVED authorization сохраняет интерес, ошибку чтения нельзя трактовать как разрешение удалить. Missing account false/nil, denied access NotFound, rollback без commit |
+| Provider predicates | Pending checks лишь presence/prefix/method/state, terminal predicate не валидирует descriptor. URI trust/future expiry/provenance и effective permissions проверяются вне этих shape helpers |
+
+Исторические ограничения описаны без исправлений: некоторые internal-ID SQL
+опираются на surrounding tenant/owner lock; request-context rollback errors
+игнорируются; deadline completion проверяет длину archive digest без алфавита;
+provider pending shape не проверяет URI trust и future expiry. Внешние вызовы
+удаления/материализации не повторяются по одному locator или boolean hint.
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks399-final`);13 external fixture keys и2 admin/template inputs исключены.
+Существующие12 title tests и расширенный14-case digest corpus входят в полный
+unit. Полные AST/directives, gofmt, diff check,17 analyzer unit и5 exact-ignore
+guards — PASS. Context7 /jackc/pgx Row/Scan/ErrNoRows/TxOptions и explicit rollback
+проверены; общий runtimecontract lexical validator и его tests прочитаны.
+Real PostgreSQL/deadline races/graph expiry/late completion archives/provider
+materialization/revoke, Kubernetes cleanup/readback, browser/full E2E и
+deploy/live — NOT RUN/SKIP. QA baseline f2e64eb сохранён.
+
+Inventory6681 sources/222 exclusions:19808/21472 Go declarations описаны,
+missing1664 — PostgreSQL adapter control-plane. Все143 Go-файла PR содержат
+1677/1677 описаний. Detector1802 raw/904 retained/898 unresolved; registry778
+entries. Старое110-token title normalization окно удалено реальным выносом,
+новых fragment keys нет. Одно208-token overlapping deadline type-switch окно
+сохранено по exact path/hash/count1: разные nominal payloads, явные lease fields,
+нет самостоятельного общего алгоритма без constructor glue/reflection/domain
+interface change. Thresholds/ignore regions/whole-file exclusions не расширены.
+
+Полные изменённые blobs проверены: четыре совпадения scanner — только прежние
+синтетические token-like/private-key-header markers title test, с точным
+совпадением байтов и количества с main и comments-only AST. Неизвестных
+совпадений нет; значения из env не читались, не переносились и не публиковались.
+Issue#1823 открыт, PR Draft; полный объём и deploy не объявлены завершёнными.
 
 ## Lease чтения помощника, порядок поиска и catalog pins — 25.10.2026
 
