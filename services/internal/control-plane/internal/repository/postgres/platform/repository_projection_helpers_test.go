@@ -52,9 +52,9 @@ func TestRoleImageRecipeProjectionPreservesPinsAndCopiesSlices(t *testing.T) {
 	}
 }
 
-// TestRoleImageAndProviderDigestGrammar checks literal digest boundaries through role-image,
+// TestRoleImageAndProviderDigestGrammar checks literal digest boundaries through role-image/artifact,
 // manifest and provider configuration paths, retaining exact accepted metadata and failure state.
-// TestRoleImageAndProviderDigestGrammar проверяет буквальные digest boundaries через role-image,
+// TestRoleImageAndProviderDigestGrammar проверяет буквальные digest boundaries через role-image/artifact,
 // manifest и provider configuration paths, сохраняя точные принятые метаданные и состояние при отказе.
 func TestRoleImageAndProviderDigestGrammar(t *testing.T) {
 	cases := digestfixture.SHA256TextCases()
@@ -63,7 +63,7 @@ func TestRoleImageAndProviderDigestGrammar(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.Name, func(t *testing.T) {
-			if exactSHA256(test.Text) != test.Valid || exactManifestDigest("sha256:"+test.Text) != test.Valid {
+			if exactSHA256(test.Text) != test.Valid || exactManifestDigest("sha256:"+test.Text) != test.Valid || objectDigestValid("sha256:"+test.Text) != test.Valid {
 				t.Fatal("role-image digest grammar changed")
 			}
 			previous := ProviderCredentialConfig{SecretName: "bootstrap-provider", SecretUID: "00000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("9", 64)}

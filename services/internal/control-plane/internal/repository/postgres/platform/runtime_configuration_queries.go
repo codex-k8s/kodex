@@ -684,10 +684,7 @@ func decodeRuntimeEnvironmentPolicy(
 // runtimeEnvironmentContract copies non-secret values and secret object-identity/digest descriptors in their original order into non-nil runtime-contract slices, including empty input. It does not read secret material, reorder bindings or validate ownership.
 // runtimeEnvironmentContract копирует несекретные значения и secret object-identity/digest дескрипторы в исходном порядке в non-nil runtime-contract срезы, включая пустой вход. Значения секретов не читает, привязки не сортирует и владение не проверяет.
 func runtimeEnvironmentContract(version entity.RuntimeEnvironmentVersion) ([]runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection) {
-	values := make([]runtimecontract.RuntimeEnvironmentValue, 0, len(version.Values))
-	for _, item := range version.Values {
-		values = append(values, runtimecontract.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
-	}
+	values := runtimeEnvironmentValuesContract(version.Values)
 	secrets := make([]runtimecontract.RuntimeSecretProjection, 0, len(version.SecretDescriptors))
 	for _, item := range version.SecretDescriptors {
 		secrets = append(secrets, runtimecontract.RuntimeSecretProjection{Name: item.Name, SecretName: item.SecretName,
@@ -719,4 +716,18 @@ func versionCursor(token string) (int64, error) {
 		return 0, errors.New("invalid version cursor")
 	}
 	return value, nil
+}
+
+// runtimeEnvironmentValuesContract copies public environment name/value pairs into an independent,
+// ordered runtime-contract slice, keeping duplicates for the caller validator and allocating an
+// empty slice even for nil input. It performs no validation, normalization, secret read or hashing.
+// runtimeEnvironmentValuesContract копирует публичные пары имени и значения в независимый
+// упорядоченный срез runtime-контракта, сохраняя повторы для проверки вызывающим и создавая пустой
+// срез даже при nil на входе. Не проверяет, не нормализует, не читает секреты и не хеширует данные.
+func runtimeEnvironmentValuesContract(input []entity.RuntimeEnvironmentValue) []runtimecontract.RuntimeEnvironmentValue {
+	values := make([]runtimecontract.RuntimeEnvironmentValue, 0, len(input))
+	for _, item := range input {
+		values = append(values, runtimecontract.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
+	}
+	return values
 }

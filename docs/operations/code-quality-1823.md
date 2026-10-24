@@ -4,11 +4,97 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.392.0
+version: 1.393.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Поля окружения, ревизии файлов и действующие возможности — 25.10.2026
+
+На основе `56464cc486ec2a434ba1f8093ec408da4eb54f57` полностью прочитаны
+assistant_environment_fields.go, assistant_file_revisions.go и
+effective_capabilities.go, описаны17+17+17 прежних объявлений. Две новые
+функции и два теста также описаны:55 новых описаний. Все7 изменённых Go-файлов
+этого этапа имеют120/120 EN→RU описаний, включая65 ранее описанных объявлений.
+Общий inventory19479/21460, missing1981 — PostgreSQL adapter control-plane.
+Все115 Go-файлов текущего PR имеют1348/1348 EN→RU описаний.
+
+`runtimeEnvironmentValuesContract` объединяет четыре копирования публичных
+name/value в runtime-контракт: чтение RuntimeEnvironmentVersion, проверку
+обычного environment payload, разбор publicValues и частичный patch.
+Сохранены порядок, повторы для последующего валидатора, независимый срез и
+созданный пустой срез даже при nil. Валидация остаётся после полного разбора;
+публичные значения не нормализуются, секреты не читаются. Преобразование
+внутренних entity остаётся локальным адаптеру; зависимости библиотек не менялись.
+
+`assistantEnvironmentSensitiveName` объединяет два прежних фильтра имён
+добавления и удаления. Сохранён чувствительный к регистру substring match
+по прежнему закрытому списку. Проверка формы имён и значений остаётся у
+вызывающих; фильтр не объявлен анализатором содержимого или доказательством
+несекретности значения. При удалении по-прежнему отклоняются повторные имена
+и конфликт с одновременным обновлением.
+
+`objectDigestValid` использует прежний буквальный sha256: prefix и общий
+exactSHA256 → runtimecontract.ValidSHA256Text вместо собственного цикла.
+Сохранены ровно64 строчных hex-байта суффикса, нулевой digest и отказ
+верхнему регистру, пробелам, другой длине и неправильному префиксу. Короткий
+вход безопасно отклоняется до среза. В существующую проверку14 буквальных
+случаев добавлен файловый валидатор; исторические digests не пересчитывались.
+
+Два новых теста проверяют настоящие пути чтения и записи:
+
+- 6 случаев nil/empty/ordered/duplicate/invalid-name/NUL: порядок и буквальный
+JSON, форма []/non-nil runtime slices, независимость копий, отсутствие
+валидации при проекции чтения и прежние точные ошибки без частичного
+результата при записи;
+- 8 обычных или чувствительных имён через publicValues и partial removal,
+сохранение снимка и проверка конфликта update/removal. Все данные синтетические
+и публичные; хранилища секретов не используются.
+
+| Путь / жизненный цикл | Зафиксированная граница |
+| --- | --- |
+| Tools / policy | Закрытые поля и пределы tools/resources/volumes/network/web rules, runtimecontract normalization. Наличие инструмента в образе и применение Kubernetes policy здесь не выполняются |
+| Публичные значения / секреты | Отсутствие поля отличается от явного пустого списка; частичные изменения сохраняют порядок. Привязки хранят только secret ref/revision, проверяют имена и коллизии, actual owner/revision eligibility разрешается позднее |
+| Snapshot equality | JSON compatibility decode и DeepEqual; nil/empty values/bindings различаются, пустые tools эквивалентны. Совпадение не является полномочием или свежим допуском |
+| File plan / edit | Точные target/before/expected version и серверные content pins. Сырые UTF-8 тела до1MiB допускаются лишь в памяти; input очищается, content удаляется из публичных проекций без переписывания исторических строк |
+| Persistence / create revision | Серверный ledger и prepared descriptor до SQL; fresh authorize до lock/OCC, точный source head, CLEAN/AV digest/size, immutable revision/content descriptors, один head CAS и ledger adoption в caller TX |
+| Effective capabilities | read-only RepeatableRead,5 секунд, scope/view/actor/workflow/runtime/catalog зависимости. AVAILABLE/Grantable/readiness объясняют снимок; provider execution и capacity не резервируются |
+| Workflow / catalog | Тот же проект, workflow.view, точный step/agent и published spec; каждый account candidate должен совпасть с current catalog/model capability pins. Неизвестное требование этапа явно показывается |
+| Cursor / errors | Digest полного отсортированного снимка без времени/страницы и scope org/actor/project/agent/workflow/step/query; неподписанный token не выдаёт authority. Частичные метаданные при ошибках сохраняются как прежде, не считаются успехом |
+
+Прочитаны все8 встроенных SQL, общий runtimecontract validator и14-case
+корпус хешей. Все8 go:embed сохранены. Пять полных expected-AST сравнений
+assistant fields/file revisions, runtime queries/commands и существующего
+projection test подтверждают только указанные выносы и дополнительную
+проверку digest. effective_capabilities.go прошёл полное сравнение AST и
+directives с исходным SHA: только комментарии. Содержимое прочих ветвей,
+SQL/API/generated/dependencies/migrations/deploy inputs не менялось.
+Через Context7 /jackc/pgx проверены Row/Scan/ErrNoRows/errors.Is и отсутствие
+автоматического rollback при отмене BEGIN context.
+
+Исторические ограничения описаны без заявления об исправлении: JSON
+snapshot decoder совместимости допускает неизвестные поля; decodeStrict
+проверяет неизвестные поля, но отдельно не отклоняет повторные ключи и остаток
+входа. Runtime read cursor marshal/rollback ошибки остаются игнорируемыми,
+revision lock по-прежнему скрывает любой read error как NotFound. Курсор,
+снимок плана, совпадение digest и подсказка Grantable не заменяют fresh
+command authority, ledger adoption или реальный provider/runtime proof.
+
+GOWORK=off control-plane build и unit `-count=1` — PASS LOCAL;13 внешних
+fixture keys и2 admin/template inputs исключены. Новые6+8 сценариев с
+конфликтом patch и14-case digest regression входят в этот запуск.
+17 analyzer unit,5 exact-ignore guards, gofmt и diff check — PASS.
+Real PostgreSQL/RLS/OCC/concurrent head/ledger adoption, AV/object store,
+policy application/image-tool availability, catalog refresh/provider/runtime,
+browser/full E2E и deploy/live — NOT RUN/SKIP. QA baseline f2e64eb сохранён.
+
+Scan6677 own sources,222 excluded:1804 raw,900 retained occurrences и904
+unresolved. Устранены ручные семантические повторы ниже detector windows.
+Набор ключей format/path-pair/fragment-hash не изменился; различаются позиции.
+135-token read-префикс effective capabilities и overlay history остаётся
+открытым.774 registry entries, thresholds, ignore regions и whole-file
+exclusions не менялись. Issue#1823 открыт, PR остаётся Draft.
 
 ## Квитанции взаимодействия и использование провайдеров — 25.10.2026
 

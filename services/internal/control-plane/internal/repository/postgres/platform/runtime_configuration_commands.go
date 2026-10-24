@@ -923,10 +923,7 @@ func validateEnvironmentPayload(values []entity.RuntimeEnvironmentValue, secrets
 	copy(normalizedValues, values)
 	normalizedSecrets := make([]entity.RuntimeSecretDescriptor, len(secrets))
 	copy(normalizedSecrets, secrets)
-	contractValues := make([]runtimecontract.RuntimeEnvironmentValue, 0, len(values))
-	for _, item := range normalizedValues {
-		contractValues = append(contractValues, runtimecontract.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
-	}
+	contractValues := runtimeEnvironmentValuesContract(normalizedValues)
 	contractSecrets := make([]runtimecontract.RuntimeSecretProjection, 0, len(secrets))
 	for _, item := range normalizedSecrets {
 		contractSecrets = append(contractSecrets, runtimecontract.RuntimeSecretProjection{Name: item.Name,

@@ -15,10 +15,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// createProjectFileRevision Names the closed assistant operation that creates an immutable
+// revision of an existing project file. The string selects a specialized command path rather than
+// generic artifact mutation.
+// createProjectFileRevision Задаёт закрытый вид операции ассистента для создания неизменяемой
+// ревизии существующего файла проекта. Строка выбирает специализированную команду, а не
+// произвольное изменение артефакта.
 const createProjectFileRevision = "CREATE_PROJECT_FILE_REVISION"
 
-// Применённые исторические строки и их digest остаются неизменными. Публичная
-// история и будущая проекция prompt не возвращают историческое содержимое файла.
+// redactAssistantFilePlanOperations For file operations, shallow-copies parameters/after maps,
+// removes historical content fields and clears input in the returned slice entries. Stored
+// historical rows/digests are not rewritten; non-file operations remain untouched.
+// redactAssistantFilePlanOperations Для файловых операций поверхностно копирует карты
+// parameters/after, удаляет исторические поля content и очищает input в элементах переданного
+// среза. Сохранённые исторические строки и их хеши не переписываются; прочие операции не меняются.
 func redactAssistantFilePlanOperations(operations []entity.AssistantPlanOperation) {
 	for index, operation := range operations {
 		if !assistantFileOperation(operation.Type) {
@@ -33,12 +43,20 @@ func redactAssistantFilePlanOperations(operations []entity.AssistantPlanOperatio
 	}
 }
 
+// assistantFileOperation Recognizes only CREATE_PROJECT_FILE and CREATE_PROJECT_FILE_REVISION for
+// file-specific persistence/redaction guards. Unknown operation names do not enter this path.
+// assistantFileOperation Распознаёт только CREATE_PROJECT_FILE и CREATE_PROJECT_FILE_REVISION для
+// файловых проверок сохранения и сокрытия. Неизвестные имена операций в этот путь не входят.
 func assistantFileOperation(kind string) bool {
 	return kind == "CREATE_PROJECT_FILE" || kind == createProjectFileRevision
 }
 
-// Граница проверяется до первого SQL write: даже незавершённая транзакция
-// не должна передавать тело файла в PostgreSQL.
+// assistantFilePersistenceReady Before the first SQL write, requires prepared metadata and a
+// server ledger mapping for every file operation, rejecting content in input or after. Other
+// operation kinds are skipped; this check does not adopt content or authorize the later command.
+// assistantFilePersistenceReady До первой SQL-записи требует подготовленные метаданные и серверную
+// привязку ledger для каждой файловой операции, отклоняя content в input или after. Прочие виды
+// пропускаются; содержимое не принимается и последующая команда не авторизуется.
 func assistantFilePersistenceReady(operations []entity.AssistantPlanOperation, prepared map[string]string) error {
 	for _, operation := range operations {
 		if !assistantFileOperation(operation.Type) {
@@ -57,6 +75,14 @@ func assistantFilePersistenceReady(operations []entity.AssistantPlanOperation, p
 	return nil
 }
 
+// rehydrateEditedAssistantFile Preserves target/before/expected-version identity during owner
+// edits, distinguishes server-prepared descriptors from raw proposals and reconstructs permitted
+// after metadata without persisting bodies. Rejects forged content pins or cross-project/artifact
+// changes and clears input before return.
+// rehydrateEditedAssistantFile Сохраняет target, before и ожидаемую версию при правках владельца,
+// отличает подготовленный сервером дескриптор от сырого предложения и восстанавливает допустимые
+// метаданные after без сохранения тела. Отклоняет подменённые привязки содержимого и смену проекта
+// или артефакта, очищает input перед возвратом.
 func rehydrateEditedAssistantFile(original, edited entity.AssistantPlanOperation, serverPrepared bool) (entity.AssistantPlanOperation, error) {
 	if !assistantJSONEqual(original.Target, edited.Target) || !assistantJSONEqual(original.Before, edited.Before) ||
 		!assistantJSONEqual(original.ExpectedVersion, edited.ExpectedVersion) {
@@ -106,6 +132,12 @@ func rehydrateEditedAssistantFile(original, edited entity.AssistantPlanOperation
 	return edited, nil
 }
 
+// assistantFileRevisionSnapshotMatches Reads the current eligible artifact head and requires both
+// expected version and full before-projection equality. Read failures propagate distinctly; a
+// matching snapshot does not reserve the head or replace later command authorization/OCC.
+// assistantFileRevisionSnapshotMatches Читает текущую пригодную головную ревизию артефакта,
+// требует совпадения ожидаемой версии и всей проекции before. Ошибка чтения возвращается отдельно;
+// совпадение снимка не резервирует head и не заменяет авторизацию или OCC команды.
 func (repository *Repository) assistantFileRevisionSnapshotMatches(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (bool, error) {
 	item, err := repository.artifactRevisionReadHead(ctx, tx, current, operation.Target.Ref)
 	if err != nil {
@@ -114,21 +146,62 @@ func (repository *Repository) assistantFileRevisionSnapshotMatches(ctx context.C
 	return operation.ExpectedVersion != nil && item.Version == *operation.ExpectedVersion && assistantJSONEqual(assistantRevisionBefore(item), operation.Before), nil
 }
 
+// queryArtifactRevisionCreateLock Embeds an exact organization/ref ACTIVE-head lookup with FOR
+// UPDATE, returning internal artifact/project IDs and version. The caller performs fresh authority
+// first and compares immutable source/version after locking.
+// queryArtifactRevisionCreateLock Встраивает поиск ACTIVE head точных организации и ссылки с FOR
+// UPDATE, возвращая внутренние ID артефакта, проекта и версию. Вызывающий заранее проверяет свежие
+// полномочия, после блокировки сравнивает исходную ревизию и версию.
+//
 //go:embed sql/artifact_revision_create_lock.sql
 var queryArtifactRevisionCreateLock string
 
+// queryArtifactRevisionCreate Embeds immutable revision insertion with caller-resolved
+// artifact/actor IDs, prepared metadata and database transaction time, returning the internal
+// revision ID. It does not advance the head or store file bytes.
+// queryArtifactRevisionCreate Встраивает вставку неизменяемой ревизии с разрешёнными ID артефакта
+// и субъекта, подготовленными метаданными и временем транзакции БД, возвращая внутренний ID
+// ревизии. Head не продвигает, байты файла не хранит.
+//
 //go:embed sql/artifact_revision_create.sql
 var queryArtifactRevisionCreate string
 
+// queryArtifactRevisionCreateContent Embeds insertion of exact prepared object identity, digest,
+// size and antivirus report under a revision ID. It stores descriptors rather than the file body;
+// caller transaction and ledger adoption bind ownership.
+// queryArtifactRevisionCreateContent Встраивает запись точной идентичности подготовленного
+// объекта, хеша, размера и отчёта антивируса по ID ревизии. Хранит дескрипторы вместо тела файла;
+// транзакция вызывающего и принятие ledger связывают владение.
+//
 //go:embed sql/artifact_revision_create_content.sql
 var queryArtifactRevisionCreateContent string
 
+// queryArtifactRevisionAdvanceHead Embeds an ACTIVE-head compare-and-swap by internal artifact ID
+// and exact version, advancing the revision pointer and version. Callers require exactly one
+// affected row; no independent actor/tenant check exists in this update.
+// queryArtifactRevisionAdvanceHead Встраивает условное обновление ACTIVE head по внутреннему ID
+// артефакта и точной версии, продвигая указатель ревизии и версию. Вызывающий требует ровно одну
+// изменённую строку; самостоятельной проверки субъекта или организации в UPDATE нет.
+//
 //go:embed sql/artifact_revision_advance_head.sql
 var queryArtifactRevisionAdvanceHead string
 
+// queryArtifactRevisionCurrentID Embeds exact organization/artifact/current-revision-ref
+// resolution for an ACTIVE head. Matching the current revision is a locator check; download or
+// revision-create authority remains outside SQL.
+// queryArtifactRevisionCurrentID Встраивает разрешение текущей ревизии ACTIVE head по точным
+// организации, артефакту и ссылке ревизии. Совпадение является проверкой указателя; право
+// скачивания или создания ревизии проверяется вне SQL.
+//
 //go:embed sql/artifact_revision_current_id.sql
 var queryArtifactRevisionCurrentID string
 
+// assistantRevisionBefore Builds the canonical artifact head snapshot of identity/current
+// revision, counters, content metadata and lifecycle/scan state for plan OCC. It includes no file
+// body or object-store credential.
+// assistantRevisionBefore Строит канонический снимок head: идентичность, текущая ревизия,
+// счётчики, метаданные содержимого, жизненный цикл и состояние сканирования для OCC плана. Тела
+// файла и credential объектного хранилища нет.
 func assistantRevisionBefore(item entity.Artifact) map[string]any {
 	return map[string]any{"artifactRef": item.Ref, "currentRevisionRef": item.CurrentRevisionRef,
 		"revision": item.Revision, "version": item.Version, "digest": item.Digest,
@@ -136,6 +209,12 @@ func assistantRevisionBefore(item entity.Artifact) map[string]any {
 		"scanState": item.ScanState, "lifecycleState": item.LifecycleState}
 }
 
+// assistantRevisionAfter Builds proposed immutable-revision metadata from typed parameter
+// accessors and protected before fields, retaining content locator and previous revision pin. It
+// does not include raw body or prove the locator was prepared by the server.
+// assistantRevisionAfter Строит предложенные метаданные неизменяемой ревизии через типизированные
+// параметры и защищённые поля before, сохраняя указатель содержимого и прежнюю ревизию. Тело не
+// включает и серверную подготовку указателя не доказывает.
 func assistantRevisionAfter(operation entity.AssistantPlanOperation) map[string]any {
 	return map[string]any{"artifactRef": assistantString(operation.Parameters, "artifactRef"),
 		"fileName": assistantString(operation.Before, "fileName"), "mediaType": assistantString(operation.Parameters, "mediaType"),
@@ -144,6 +223,13 @@ func assistantRevisionAfter(operation entity.AssistantPlanOperation) map[string]
 		"previousRevisionRef": assistantString(operation.Before, "currentRevisionRef"), "createsImmutableRevision": true}
 }
 
+// hydrateAssistantFileRevision Resolves a clean file head in the exact project, requires
+// artifact.download and artifact.revision.create, then assigns server-owned UPDATE
+// target/before/expected-version/after metadata and selects the operation. It prepares a plan
+// snapshot without writing a revision.
+// hydrateAssistantFileRevision Разрешает чистый head файла точного проекта, требует
+// artifact.download и artifact.revision.create, затем назначает серверные UPDATE target, before,
+// ожидаемую версию и after, выбирает операцию. Готовит снимок плана без записи ревизии.
 func (repository *Repository) hydrateAssistantFileRevision(ctx context.Context, tx pgx.Tx, current scope, projectRef string, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	ref := assistantString(operation.Parameters, "artifactRef")
 	item, err := repository.artifactRevisionReadHead(ctx, tx, current, ref)
@@ -172,6 +258,15 @@ func (repository *Repository) hydrateAssistantFileRevision(ctx context.Context, 
 	return operation, nil
 }
 
+// assistantFileRevisionCommand Maps closed typed input to CreateProjectFileRevision with positive
+// expected version and an immutable source pin. Raw UTF-8/NUL-free bodies up to 1MiB are hashed in
+// memory and cannot mix with prepared metadata; descriptor mode requires bounded size, content ref
+// and exact digest grammar. No body is persisted here.
+// assistantFileRevisionCommand Преобразует закрытый типизированный вход в
+// CreateProjectFileRevision с положительной ожидаемой версией и закреплённой исходной ревизией.
+// Сырое тело UTF-8 без NUL до 1MiB хешируется в памяти и не смешивается с подготовленными
+// метаданными. Режим дескриптора требует ограниченный размер, ссылку содержимого и точный формат
+// хеша; сохранения тела здесь нет.
 func assistantFileRevisionCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	p := operation.Input
 	if !onlyAssistantFields(p, "artifactRef", "mediaType", "contentEncoding", "content", "contentRef", "digest", "sizeBytes", "expectedVersion") ||
@@ -209,18 +304,25 @@ func assistantFileRevisionCommand(operation entity.AssistantPlanOperation) (comm
 	return command.Command{Kind: command.CreateProjectFileRevision, Payload: input, Mutation: value.Mutation{ExpectedVersion: &expected}}, nil
 }
 
+// objectDigestValid Requires the literal sha256: prefix and exactly 64 lowercase hexadecimal
+// suffix bytes through the shared lexical validator. It checks representation only, without
+// hashing bytes, resolving an object or validating authority.
+// objectDigestValid Требует буквальный префикс sha256: и ровно 64 байта нижнего hex-регистра через
+// общий лексический валидатор. Проверяет только представление без хеширования байтов, разрешения
+// объекта или проверки полномочий.
 func objectDigestValid(digest string) bool {
-	if len(digest) != 71 || !strings.HasPrefix(digest, "sha256:") {
-		return false
-	}
-	for _, r := range digest[7:] {
-		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
-			return false
-		}
-	}
-	return true
+	return strings.HasPrefix(digest, "sha256:") && exactSHA256(digest[7:])
 }
 
+// createProjectFileRevision Requires server-prepared body-free input/ledger, repeats fresh command
+// authority before head lock/OCC, validates source revision and exact clean antivirus/object pins,
+// inserts revision/content descriptors, advances one head row and adopts the prepared ledger.
+// Returns fresh artifact metadata/event intent; outer execution owns audit/idempotency/commit.
+// createProjectFileRevision Требует подготовленный сервером вход без тела и ledger, повторяет
+// свежую авторизацию до блокировки head и OCC, проверяет исходную ревизию и точные чистые
+// антивирусные привязки объекта. Вставляет ревизию и дескрипторы, продвигает одну строку head и
+// принимает ledger. Возвращает свежие метаданные и намерение события; аудит, идемпотентность и
+// commit принадлежат внешней команде.
 func (repository *Repository) createProjectFileRevision(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ProjectFileRevisionInput)
 	if !ok || payload.Content != nil || input.Mutation.ExpectedVersion == nil || payload.Prepared == nil || payload.PreparedLedgerID == "" || payload.PreparedRevisionRef == "" {
