@@ -12,11 +12,19 @@ import (
 	"google.golang.org/grpc"
 )
 
+// artifactQueryStub captures artifact-list requests and supplies an empty synthetic page through
+// the platform query client interface.
+// artifactQueryStub сохраняет запросы списка артефактов и выдаёт пустую синтетическую страницу
+// через интерфейс query-клиента платформы.
 type artifactQueryStub struct {
 	controlplanev1.PlatformQueryServiceClient
 	request *controlplanev1.ListArtifactsRequest
 }
 
+// ListArtifacts records the supplied list request and returns an empty page without querying
+// artifact storage.
+// ListArtifacts записывает переданный запрос списка и возвращает пустую страницу без обращения к
+// хранилищу артефактов.
 func (stub *artifactQueryStub) ListArtifacts(
 	_ context.Context,
 	request *controlplanev1.ListArtifactsRequest,
@@ -26,11 +34,19 @@ func (stub *artifactQueryStub) ListArtifacts(
 	return &controlplanev1.ListArtifactsResponse{Page: &controlplanev1.PageInfo{}}, nil
 }
 
+// launchRunCommandStub captures launch requests through the platform command interface without
+// starting a real run.
+// launchRunCommandStub сохраняет запросы запуска через command-интерфейс платформы без старта
+// настоящего выполнения.
 type launchRunCommandStub struct {
 	controlplanev1.PlatformCommandServiceClient
 	request *controlplanev1.LaunchRunRequest
 }
 
+// LaunchRun records the launch command and returns an empty synthetic response without scheduling
+// execution.
+// LaunchRun записывает команду запуска и возвращает пустой синтетический ответ без планирования
+// выполнения.
 func (stub *launchRunCommandStub) LaunchRun(
 	_ context.Context,
 	request *controlplanev1.LaunchRunRequest,
@@ -40,6 +56,10 @@ func (stub *launchRunCommandStub) LaunchRun(
 	return &controlplanev1.LaunchRunResponse{}, nil
 }
 
+// TestListArtifactsMapsProjectFilters checks project and run scope, lifecycle, type, scan and
+// source enums, literal query and pagination forwarding to the owner.
+// TestListArtifactsMapsProjectFilters проверяет передачу владельцу областей проекта и выполнения,
+// enum жизненного цикла, типа, сканирования и источника, буквального запроса и пагинации.
 func TestListArtifactsMapsProjectFilters(t *testing.T) {
 	t.Parallel()
 	queryClient := &artifactQueryStub{}
@@ -69,6 +89,10 @@ func TestListArtifactsMapsProjectFilters(t *testing.T) {
 	}
 }
 
+// TestListOrganizationArtifactsKeepsOrganizationScope checks organization-wide artifact filters
+// without inventing a project or run locator in the owner query.
+// TestListOrganizationArtifactsKeepsOrganizationScope проверяет фильтры артефактов организации без
+// назначения ссылки проекта либо выполнения в запросе владельца.
 func TestListOrganizationArtifactsKeepsOrganizationScope(t *testing.T) {
 	t.Parallel()
 	queryClient := &artifactQueryStub{}
@@ -90,6 +114,10 @@ func TestListOrganizationArtifactsKeepsOrganizationScope(t *testing.T) {
 	}
 }
 
+// TestListArtifactsRejectsUnknownClosedEnum checks that an unregistered artifact type fails with
+// bad request before invoking the list RPC.
+// TestListArtifactsRejectsUnknownClosedEnum проверяет ответ bad request для незарегистрированного
+// типа артефакта до вызова RPC списка.
 func TestListArtifactsRejectsUnknownClosedEnum(t *testing.T) {
 	t.Parallel()
 	queryClient := &artifactQueryStub{}
@@ -104,6 +132,10 @@ func TestListArtifactsRejectsUnknownClosedEnum(t *testing.T) {
 	}
 }
 
+// TestArtifactSourceGroupRejectsAmbiguousFilters checks rejection of duplicate, unknown,
+// unspecified, empty, oversized and mutually exclusive source-group filters.
+// TestArtifactSourceGroupRejectsAmbiguousFilters проверяет отказ повторяющимся, неизвестным,
+// неопределённым, пустым, чрезмерным и взаимоисключающим фильтрам группы источников.
 func TestArtifactSourceGroupRejectsAmbiguousFilters(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -126,6 +158,12 @@ func TestArtifactSourceGroupRejectsAmbiguousFilters(t *testing.T) {
 	}
 }
 
+// TestArtifactSourceGroupUsesOneOwnerQuery checks both scope variants forward the two-source
+// group, literal query and owner cursor together without setting the exclusive single-source
+// filter.
+// TestArtifactSourceGroupUsesOneOwnerQuery проверяет передачу обеими областями группы из двух
+// источников, буквального запроса и курсора владельца без установки исключающего фильтра одного
+// источника.
 func TestArtifactSourceGroupUsesOneOwnerQuery(t *testing.T) {
 	t.Parallel()
 	for _, project := range []bool{false, true} {
@@ -148,6 +186,10 @@ func TestArtifactSourceGroupUsesOneOwnerQuery(t *testing.T) {
 	}
 }
 
+// TestCreateRunAcceptsMissingTitle checks that a valid launch request without an optional title
+// reaches the owner with an empty title and returns created.
+// TestCreateRunAcceptsMissingTitle проверяет передачу владельцу корректного запроса запуска без
+// необязательного названия с пустым title и ответом created.
 func TestCreateRunAcceptsMissingTitle(t *testing.T) {
 	t.Parallel()
 	commandClient := &launchRunCommandStub{}

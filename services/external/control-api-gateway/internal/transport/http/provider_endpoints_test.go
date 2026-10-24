@@ -15,6 +15,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// providerCommandStub captures dedicated provider account command requests and supplies a
+// configurable synthetic account response.
+// providerCommandStub сохраняет запросы отдельных команд аккаунта провайдера и выдаёт
+// настраиваемый синтетический ответ аккаунта.
 type providerCommandStub struct {
 	controlplanev1.PlatformCommandServiceClient
 	verify      *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest
@@ -24,6 +28,10 @@ type providerCommandStub struct {
 	account     func() *controlplanev1.ProviderAccount
 }
 
+// replyAccount returns the configured account fixture or the default synthetic authorized provider
+// account.
+// replyAccount возвращает настроенный тестовый аккаунт либо синтетический авторизованный аккаунт
+// провайдера по умолчанию.
 func (stub *providerCommandStub) replyAccount() *controlplanev1.ProviderAccount {
 	if stub.account != nil {
 		return stub.account()
@@ -31,6 +39,10 @@ func (stub *providerCommandStub) replyAccount() *controlplanev1.ProviderAccount 
 	return providerTestAccount()
 }
 
+// SetProviderAccountConcurrency records the command, applies its requested execution limit to the
+// fixture account and returns that account without changing a real provider.
+// SetProviderAccountConcurrency записывает команду, задаёт запрошенный предел выполнений тестовому
+// аккаунту и возвращает его без изменения настоящего провайдера.
 func (stub *providerCommandStub) SetProviderAccountConcurrency(_ context.Context, request *controlplanev1.SetProviderAccountConcurrencyRequest, _ ...grpc.CallOption) (*controlplanev1.SetProviderAccountConcurrencyResponse, error) {
 	stub.concurrency = request
 	account := stub.replyAccount()
@@ -38,6 +50,12 @@ func (stub *providerCommandStub) SetProviderAccountConcurrency(_ context.Context
 	return &controlplanev1.SetProviderAccountConcurrencyResponse{Account: account}, nil
 }
 
+// TestProviderConcurrencyMappingRequiresExactVersionAndBounds checks account, limit, version and
+// idempotency mapping and rejects absent, zero, excessive or fractional limits and missing version
+// before RPC.
+// TestProviderConcurrencyMappingRequiresExactVersionAndBounds проверяет отображение аккаунта,
+// лимита, версии и идемпотентности и отказ до RPC отсутствующему, нулевому, чрезмерному либо
+// дробному лимиту и отсутствию версии.
 func TestProviderConcurrencyMappingRequiresExactVersionAndBounds(t *testing.T) {
 	stub := &providerCommandStub{}
 	server := &Server{control: &controlplaneclient.Client{Command: stub}}
@@ -68,25 +86,45 @@ func TestProviderConcurrencyMappingRequiresExactVersionAndBounds(t *testing.T) {
 	}
 }
 
+// VerifyProviderAccountDeviceAuthorization captures the verify-device command and returns the
+// configured account without contacting a device authorization provider.
+// VerifyProviderAccountDeviceAuthorization сохраняет команду проверки device authorization и
+// возвращает заданный аккаунт без обращения к провайдеру авторизации устройства.
 func (stub *providerCommandStub) VerifyProviderAccountDeviceAuthorization(_ context.Context, request *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest, _ ...grpc.CallOption) (*controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse, error) {
 	stub.verify = request
 	return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: stub.replyAccount()}, nil
 }
 
+// ReauthorizeProviderAccountDeviceCode captures the device reauthorization command and returns a
+// synthetic account without initiating real device authorization.
+// ReauthorizeProviderAccountDeviceCode сохраняет команду повторной авторизации устройства и
+// возвращает синтетический аккаунт без запуска настоящей авторизации устройства.
 func (stub *providerCommandStub) ReauthorizeProviderAccountDeviceCode(_ context.Context, request *controlplanev1.ReauthorizeProviderAccountDeviceCodeRequest, _ ...grpc.CallOption) (*controlplanev1.ReauthorizeProviderAccountDeviceCodeResponse, error) {
 	stub.reauthorize = request
 	return &controlplanev1.ReauthorizeProviderAccountDeviceCodeResponse{Account: stub.replyAccount()}, nil
 }
 
+// DeleteProviderAccount captures the delete command and returns the fixture account without
+// deleting provider resources.
+// DeleteProviderAccount сохраняет команду удаления и возвращает тестовый аккаунт без удаления
+// ресурсов провайдера.
 func (stub *providerCommandStub) DeleteProviderAccount(_ context.Context, request *controlplanev1.DeleteProviderAccountRequest, _ ...grpc.CallOption) (*controlplanev1.DeleteProviderAccountResponse, error) {
 	stub.delete = request
 	return &controlplanev1.DeleteProviderAccountResponse{Account: stub.replyAccount()}, nil
 }
 
+// providerTestAccount builds a version-four synthetic authorized account used by the provider
+// command mapping tests.
+// providerTestAccount создаёт синтетический авторизованный аккаунт четвёртой версии для тестов
+// отображения команд провайдера.
 func providerTestAccount() *controlplanev1.ProviderAccount {
 	return &controlplanev1.ProviderAccount{Ref: "pacc_primary01", Version: 4, State: controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_AUTHORIZED}
 }
 
+// TestProviderDeviceAndDeleteMappingsUseExactRPCs checks dedicated verify, reauthorize and delete
+// calls with the requested account and their distinct successful HTTP statuses.
+// TestProviderDeviceAndDeleteMappingsUseExactRPCs проверяет отдельные вызовы проверки, повторной
+// авторизации и удаления с запрошенным аккаунтом и разными успешными HTTP-статусами.
 func TestProviderDeviceAndDeleteMappingsUseExactRPCs(t *testing.T) {
 	command := &providerCommandStub{}
 	server := &Server{control: &controlplaneclient.Client{Command: command}}
@@ -110,6 +148,11 @@ func TestProviderDeviceAndDeleteMappingsUseExactRPCs(t *testing.T) {
 	}
 }
 
+// TestProviderAccountSafeStatusReasonMatchesOwnerRegistry checks the closed owner status-reason
+// registry in list and single-account reads, rejecting future or private unregistered reason text.
+// TestProviderAccountSafeStatusReasonMatchesOwnerRegistry проверяет закрытый реестр причин статуса
+// владельца в списке и чтении аккаунта с отказом будущим либо внутренним незарегистрированным
+// причинам.
 func TestProviderAccountSafeStatusReasonMatchesOwnerRegistry(t *testing.T) {
 	for _, reason := range []string{"AUTHORIZED", "ACCOUNT_DISABLED", "ACCOUNT_REVOKED", "REAUTHORIZATION_REQUIRED", "DEVICE_AUTHORIZATION_PENDING", "CREDENTIAL_CONFIGURATION_REQUIRED", "ACCOUNT_STATE_UNKNOWN", "DEVICE_AUTHORIZATION_EXPIRED", "DEVICE_AUTHORIZATION_FAILED", "CREDENTIAL_MATERIALIZATION_FAILED", "private upstream text", "FUTURE_REASON"} {
 		account := providerTestAccount()
@@ -155,6 +198,11 @@ func TestProviderAccountSafeStatusReasonMatchesOwnerRegistry(t *testing.T) {
 	}
 }
 
+// TestProviderCommandsRejectUnboundAccountReadback checks verify, reauthorize and delete response
+// rejection when the owner account is missing or foreign, without exposing foreign metadata.
+// TestProviderCommandsRejectUnboundAccountReadback проверяет отказ ответам проверки, повторной
+// авторизации и удаления при отсутствии либо чужом аккаунте владельца без раскрытия чужих
+// метаданных.
 func TestProviderCommandsRejectUnboundAccountReadback(t *testing.T) {
 	for _, missing := range []bool{false, true} {
 		stub := &providerCommandStub{account: func() *controlplanev1.ProviderAccount {

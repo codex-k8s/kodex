@@ -15,6 +15,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// TestRuntimeResourceScopeClosedTuple checks the closed organization/project scope tuple,
+// requiring exact valid locators and rejecting unspecified, unknown or contradictory combinations.
+// TestRuntimeResourceScopeClosedTuple проверяет закрытый кортеж областей организации и проекта с
+// точными корректными ссылками и отказом неопределённым, неизвестным и противоречивым комбинациям.
 func TestRuntimeResourceScopeClosedTuple(t *testing.T) {
 	for _, tc := range []struct {
 		name, kind, organization, project string
@@ -42,17 +46,31 @@ func TestRuntimeResourceScopeClosedTuple(t *testing.T) {
 	}
 }
 
+// scopedCreateBrokerStub captures the create-secret broker request and supplies configurable
+// synthetic metadata for scope-boundary tests.
+// scopedCreateBrokerStub сохраняет запрос broker создания секрета и выдаёт настраиваемые
+// синтетические метаданные для тестов границы области.
 type scopedCreateBrokerStub struct {
 	sb.SecretBrokerServiceClient
 	result *sb.RuntimeSecretMetadata
 	input  *sb.CreateSecretRequest
 }
 
+// CreateSecret records the synthetic broker create command and returns the configured metadata
+// without storing secret material.
+// CreateSecret записывает синтетическую команду создания broker и возвращает заданные метаданные
+// без сохранения секретного материала.
 func (c *scopedCreateBrokerStub) CreateSecret(_ context.Context, input *sb.CreateSecretRequest, _ ...grpc.CallOption) (*sb.CreateSecretResponse, error) {
 	c.input = input
 	return &sb.CreateSecretResponse{Secret: c.result}, nil
 }
 
+// TestRuntimeSecretImmediateCreateRejectsMalformedScopeAndForeignProject checks scope and project
+// binding in immediate broker results and terminal replays, preserving the grant path and
+// suppressing invalid metadata.
+// TestRuntimeSecretImmediateCreateRejectsMalformedScopeAndForeignProject проверяет привязку
+// области и проекта в непосредственном ответе broker и terminal replay с сохранением пути grant и
+// скрытием некорректных метаданных.
 func TestRuntimeSecretImmediateCreateRejectsMalformedScopeAndForeignProject(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.RuntimeSecret){
 		"missing scope":        func(s *cp.RuntimeSecret) { s.ScopeKind = 0 },
@@ -92,6 +110,12 @@ func TestRuntimeSecretImmediateCreateRejectsMalformedScopeAndForeignProject(t *t
 	}
 }
 
+// TestRuntimeSecretDraftScopeDTOClosedAndExplicit checks explicit organization/project draft DTO
+// scopes and rejects missing, unknown or contradictory owner tuples without inferring legacy
+// scope.
+// TestRuntimeSecretDraftScopeDTOClosedAndExplicit проверяет явные области организации и проекта
+// DTO черновика и отказ отсутствующим, неизвестным либо противоречивым кортежам владельца без
+// вывода старой области.
 func TestRuntimeSecretDraftScopeDTOClosedAndExplicit(t *testing.T) {
 	for _, organization := range []bool{false, true} {
 		draft := draftFixture()
@@ -123,6 +147,10 @@ func TestRuntimeSecretDraftScopeDTOClosedAndExplicit(t *testing.T) {
 	}
 }
 
+// TestRuntimeSecretMetadataDTOCarriesSameExplicitScopeFromOwnerAndBroker checks that owner and
+// broker metadata produce identical explicit public scope tuples without protobuf enum prefixes.
+// TestRuntimeSecretMetadataDTOCarriesSameExplicitScopeFromOwnerAndBroker проверяет одинаковые
+// явные публичные кортежи области из метаданных владельца и broker без префиксов protobuf enum.
 func TestRuntimeSecretMetadataDTOCarriesSameExplicitScopeFromOwnerAndBroker(t *testing.T) {
 	for _, organization := range []bool{false, true} {
 		s := scopedSecretFixture(organization)
@@ -143,6 +171,12 @@ func TestRuntimeSecretMetadataDTOCarriesSameExplicitScopeFromOwnerAndBroker(t *t
 	}
 }
 
+// TestRuntimeSecretDraftFinishRequiresExactScopeAndOrganization checks that draft validation
+// rejects malformed or foreign broker scope receipts for both owner scopes after the expected
+// three-step call sequence.
+// TestRuntimeSecretDraftFinishRequiresExactScopeAndOrganization проверяет отказ валидации
+// черновика некорректным либо чужим квитанциям области broker для обеих областей владельца после
+// ожидаемых трёх вызовов.
 func TestRuntimeSecretDraftFinishRequiresExactScopeAndOrganization(t *testing.T) {
 	for _, organization := range []bool{false, true} {
 		for name, mutate := range map[string]func(*sb.RuntimeSecretDraftMetadata){
@@ -172,6 +206,12 @@ func TestRuntimeSecretDraftFinishRequiresExactScopeAndOrganization(t *testing.T)
 	}
 }
 
+// TestRuntimeSecretPublicationPinsScopeAcrossEffectAndTerminalReplay checks exact organization and
+// scope binding in publication effect and terminal-replay receipts without exposing a mismatched
+// secret.
+// TestRuntimeSecretPublicationPinsScopeAcrossEffectAndTerminalReplay проверяет точную привязку
+// организации и области в квитанциях эффекта публикации и terminal replay без раскрытия
+// несовпадающего секрета.
 func TestRuntimeSecretPublicationPinsScopeAcrossEffectAndTerminalReplay(t *testing.T) {
 	for _, organization := range []bool{false, true} {
 		for name, mutate := range map[string]func(*sb.RuntimeSecretMetadata){
@@ -218,6 +258,12 @@ func TestRuntimeSecretPublicationPinsScopeAcrossEffectAndTerminalReplay(t *testi
 	}
 }
 
+// TestProjectRuntimeSecretPageRejectsForeignScopeAndOwnerAtomically checks that a second malformed
+// or foreign secret rejects the entire project page without partially returning the first valid
+// secret.
+// TestProjectRuntimeSecretPageRejectsForeignScopeAndOwnerAtomically проверяет отказ всей странице
+// проекта при втором некорректном либо чужом секрете без частичной выдачи первого корректного
+// секрета.
 func TestProjectRuntimeSecretPageRejectsForeignScopeAndOwnerAtomically(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.RuntimeSecret){
 		"missing scope":   func(s *cp.RuntimeSecret) { s.ScopeKind = 0 },
@@ -245,6 +291,11 @@ func TestProjectRuntimeSecretPageRejectsForeignScopeAndOwnerAtomically(t *testin
 	}
 }
 
+// TestRuntimeSecretGetRejectsMissingOrMalformedScope checks that single-secret readback rejects
+// missing, unknown or contradictory scopes and mismatched references without exposing metadata.
+// TestRuntimeSecretGetRejectsMissingOrMalformedScope проверяет отказ чтения одного секрета
+// отсутствующим, неизвестным либо противоречивым областям и несовпадающим ссылкам без выдачи
+// метаданных.
 func TestRuntimeSecretGetRejectsMissingOrMalformedScope(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.RuntimeSecret){
 		"missing scope": func(s *cp.RuntimeSecret) { s.ScopeKind = 0 },

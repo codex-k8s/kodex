@@ -18,6 +18,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// artifactRevisionQueryStub captures revision-list and exact-revision reads and injects a shared
+// owner error for local HTTP mapping tests.
+// artifactRevisionQueryStub сохраняет запросы списка ревизий и чтения точной ревизии и задаёт
+// общую ошибку владельца для локальных HTTP-тестов отображения.
 type artifactRevisionQueryStub struct {
 	controlplanev1.PlatformQueryServiceClient
 	list *controlplanev1.ListArtifactRevisionsRequest
@@ -25,32 +29,56 @@ type artifactRevisionQueryStub struct {
 	err  error
 }
 
+// ListArtifactRevisions records the revision-list request and returns an empty synthetic page
+// together with the configured error.
+// ListArtifactRevisions записывает запрос списка ревизий и возвращает пустую синтетическую
+// страницу вместе с заданной ошибкой.
 func (stub *artifactRevisionQueryStub) ListArtifactRevisions(_ context.Context, request *controlplanev1.ListArtifactRevisionsRequest, _ ...grpc.CallOption) (*controlplanev1.ListArtifactRevisionsResponse, error) {
 	stub.list = request
 	return &controlplanev1.ListArtifactRevisionsResponse{Page: &controlplanev1.PageInfo{}}, stub.err
 }
 
+// GetArtifactRevision records exact artifact and revision references and mirrors them into a
+// synthetic result with the configured error.
+// GetArtifactRevision записывает точные ссылки артефакта и ревизии и переносит их в синтетический
+// результат с заданной ошибкой.
 func (stub *artifactRevisionQueryStub) GetArtifactRevision(_ context.Context, request *controlplanev1.GetArtifactRevisionRequest, _ ...grpc.CallOption) (*controlplanev1.GetArtifactRevisionResponse, error) {
 	stub.get = request
 	return &controlplanev1.GetArtifactRevisionResponse{Revision: &controlplanev1.ArtifactRevision{Ref: request.RevisionRef, ArtifactRef: request.ArtifactRef}}, stub.err
 }
 
+// artifactRevisionCommandStub captures exact-revision download commands and injects a
+// start-of-stream failure without reading object storage.
+// artifactRevisionCommandStub сохраняет команды скачивания точной ревизии и задаёт сбой начала
+// потока без чтения объектного хранилища.
 type artifactRevisionCommandStub struct {
 	controlplanev1.PlatformCommandServiceClient
 	request *controlplanev1.DownloadArtifactRevisionRequest
 	err     error
 }
 
+// DownloadArtifactRevision records the download request and supplies synthetic metadata and old
+// content frames with the configured stream-opening error.
+// DownloadArtifactRevision записывает запрос скачивания и выдаёт синтетические кадры метаданных и
+// старого содержимого с заданной ошибкой открытия потока.
 func (stub *artifactRevisionCommandStub) DownloadArtifactRevision(_ context.Context, request *controlplanev1.DownloadArtifactRevisionRequest, _ ...grpc.CallOption) (controlplanev1.PlatformCommandService_DownloadArtifactRevisionClient, error) {
 	stub.request = request
 	return &artifactRevisionStreamStub{frames: []*controlplanev1.DownloadArtifactRevisionResponse{{FileName: "note.md", MediaType: "text/markdown", SizeBytes: 3}, {Data: []byte("old")}}}, stub.err
 }
 
+// artifactRevisionStreamStub holds a finite synthetic sequence of revision-download frames behind
+// the generated gRPC stream interface.
+// artifactRevisionStreamStub хранит конечную синтетическую последовательность кадров скачивания
+// ревизии за generated-интерфейсом gRPC-потока.
 type artifactRevisionStreamStub struct {
 	grpc.ClientStream
 	frames []*controlplanev1.DownloadArtifactRevisionResponse
 }
 
+// Recv returns and removes the next synthetic frame, reporting EOF after the fixture frame list is
+// exhausted.
+// Recv возвращает и удаляет следующий синтетический кадр, сообщая EOF после исчерпания тестового
+// списка кадров.
 func (stub *artifactRevisionStreamStub) Recv() (*controlplanev1.DownloadArtifactRevisionResponse, error) {
 	if len(stub.frames) == 0 {
 		return nil, io.EOF
@@ -60,6 +88,11 @@ func (stub *artifactRevisionStreamStub) Recv() (*controlplanev1.DownloadArtifact
 	return frame, nil
 }
 
+// TestArtifactRevisionHTTPPreservesExactPinsAndPaging checks artifact and revision locators, page
+// size and owner cursor plus stale-cursor mapping to the canonical version conflict.
+// TestArtifactRevisionHTTPPreservesExactPinsAndPaging проверяет ссылки артефакта и ревизии, размер
+// страницы и курсор владельца, а также отображение устаревшего курсора в канонический конфликт
+// версии.
 func TestArtifactRevisionHTTPPreservesExactPinsAndPaging(t *testing.T) {
 	t.Parallel()
 	query := &artifactRevisionQueryStub{}
@@ -83,6 +116,10 @@ func TestArtifactRevisionHTTPPreservesExactPinsAndPaging(t *testing.T) {
 	}
 }
 
+// TestArtifactRevisionOpenAPIUsesCanonicalDefaultProblem checks that all three revision routes
+// declare the shared default Problem response in the canonical OpenAPI source.
+// TestArtifactRevisionOpenAPIUsesCanonicalDefaultProblem проверяет объявление общего ответа
+// default Problem у всех трёх маршрутов ревизий в каноническом исходнике OpenAPI.
 func TestArtifactRevisionOpenAPIUsesCanonicalDefaultProblem(t *testing.T) {
 	t.Parallel()
 	_, currentFile, _, ok := runtime.Caller(0)
@@ -107,6 +144,12 @@ func TestArtifactRevisionOpenAPIUsesCanonicalDefaultProblem(t *testing.T) {
 	}
 }
 
+// TestArtifactRevisionHTTPDownloadUsesExplicitRevisionWithoutLatestFallback checks exact revision
+// content and purpose forwarding with private no-store and closed not-found behavior for
+// unavailable revision pins.
+// TestArtifactRevisionHTTPDownloadUsesExplicitRevisionWithoutLatestFallback проверяет точное
+// содержимое ревизии и передачу purpose с private no-store и закрытым ответом not found для
+// недоступной указанной ревизии.
 func TestArtifactRevisionHTTPDownloadUsesExplicitRevisionWithoutLatestFallback(t *testing.T) {
 	t.Parallel()
 	command := &artifactRevisionCommandStub{}

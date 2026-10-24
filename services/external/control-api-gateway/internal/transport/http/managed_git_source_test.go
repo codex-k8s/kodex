@@ -15,8 +15,16 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// gitSourceBody provides synthetic Git source intent with a connection-version pin, exact
+// repository ref, path and YAML format for local HTTP tests.
+// gitSourceBody задаёт синтетическое намерение Git source с версией подключения, точными
+// repository ref, путём и форматом YAML для локальных HTTP-тестов.
 const gitSourceBody = `{"connectionRef":"conn_fixture01","expectedConnectionVersion":7,"repositoryRef":"owner/repository","refName":"refs/heads/main","path":"kodex/source.yaml","contentFormat":"YAML"}`
 
+// gitSourceFixture builds a Git-managed configuration with versioned queued source metadata and
+// source editability flags for role images.
+// gitSourceFixture создаёт конфигурацию под управлением Git с версионированными метаданными
+// ожидающего источника и признаками редактирования исходника образа роли.
 func gitSourceFixture(kind cp.ManagedConfigurationKind) *cp.ManagedConfigurationSet {
 	configuration, revision := managedFixture()
 	configuration.Kind = kind
@@ -31,16 +39,29 @@ func gitSourceFixture(kind cp.ManagedConfigurationKind) *cp.ManagedConfiguration
 	configuration.GitSource = &cp.ManagedConfigurationGitSource{Ref: configuration.Source, Version: 2, Generation: 3, ConnectionRef: "conn_fixture01", ProviderKey: "github", RepositoryRef: "owner/repository", RefName: "refs/heads/main", Path: "kodex/source.yaml", State: cp.ManagedConfigurationSourceState_MANAGED_CONFIGURATION_SOURCE_STATE_QUEUED}
 	return configuration
 }
+
+// gitSourceHandler wires generated query and command clients to the shared catalog recorder for
+// Git-source HTTP tests.
+// gitSourceHandler связывает generated query- и command-клиенты с общей заглушкой записи запросов
+// каталога для HTTP-тестов Git source.
 func gitSourceHandler(client *catalogRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: cp.NewPlatformQueryServiceClient(client), Command: cp.NewPlatformCommandServiceClient(client)}})
 }
 
+// gitSourceRoute describes one configure or refresh route, its managed kind, synthetic input and
+// typed protobuf response constructor.
+// gitSourceRoute описывает один маршрут настройки либо обновления, вид конфигурации, синтетический
+// ввод и конструктор типизированного protobuf-ответа.
 type gitSourceRoute struct {
 	path, method, body string
 	kind               cp.ManagedConfigurationKind
 	response           func(*cp.ManagedConfigurationSet) proto.Message
 }
 
+// gitSourceRoutes enumerates dedicated configure and refresh RPC cases for role-image and
+// integration-definition Git sources.
+// gitSourceRoutes перечисляет отдельные RPC настройки и обновления Git sources для образов роли и
+// определений интеграций.
 func gitSourceRoutes() []gitSourceRoute {
 	return []gitSourceRoute{
 		{"role-image", "ConfigureRoleImageGitSource", gitSourceBody, cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE, func(c *cp.ManagedConfigurationSet) proto.Message {
@@ -57,6 +78,11 @@ func gitSourceRoutes() []gitSourceRoute {
 		}},
 	}
 }
+
+// url builds the configuration Git-source route, appending the refresh suffix for cases without a
+// configure body.
+// url собирает маршрут Git source конфигурации и добавляет суффикс refresh для сценариев без тела
+// настройки.
 func (value gitSourceRoute) url() string {
 	result := "/api/v1/" + value.path + "-configurations/mcfg_fixture01/git-source"
 	if value.body == "" {
@@ -65,6 +91,12 @@ func (value gitSourceRoute) url() string {
 	return result
 }
 
+// TestGitSourceCommandsPreserveExactIntentAndSafeMetadata checks dedicated command mapping,
+// separate version pins and idempotency with safe queued receipts, ETags and no private source
+// content.
+// TestGitSourceCommandsPreserveExactIntentAndSafeMetadata проверяет отдельные команды, независимые
+// версии и идемпотентность с безопасными квитанциями QUEUED, ETag и отсутствием внутреннего
+// содержимого источника.
 func TestGitSourceCommandsPreserveExactIntentAndSafeMetadata(t *testing.T) {
 	for _, route := range gitSourceRoutes() {
 		t.Run(route.method, func(t *testing.T) {
@@ -102,6 +134,11 @@ func TestGitSourceCommandsPreserveExactIntentAndSafeMetadata(t *testing.T) {
 	}
 }
 
+// TestGitSourceCommandsRejectInvalidInputBeforeRPC checks mutation headers, safe connection
+// versions, repository/ref/path syntax, content formats and unknown credential fields before RPC.
+// TestGitSourceCommandsRejectInvalidInputBeforeRPC проверяет заголовки изменения, безопасные
+// версии подключения, синтаксис repository/ref/path, форматы содержимого и неизвестные поля
+// учётных данных до RPC.
 func TestGitSourceCommandsRejectInvalidInputBeforeRPC(t *testing.T) {
 	for _, route := range gitSourceRoutes() {
 		for _, header := range []string{"If-Match", "Idempotency-Key"} {
@@ -134,6 +171,10 @@ func TestGitSourceCommandsRejectInvalidInputBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestGitSourceCommandsPreserveSafeRPCErrors checks concrete gRPC-to-HTTP error mapping for each
+// source command without exposing private upstream details.
+// TestGitSourceCommandsPreserveSafeRPCErrors проверяет конкретное отображение ошибок gRPC в HTTP
+// для каждой команды источника без раскрытия внутренних подробностей upstream.
 func TestGitSourceCommandsPreserveSafeRPCErrors(t *testing.T) {
 	for _, route := range gitSourceRoutes() {
 		for code, want := range map[codes.Code]int{codes.InvalidArgument: 400, codes.Unauthenticated: 401, codes.PermissionDenied: 403, codes.NotFound: 404, codes.AlreadyExists: 409, codes.Aborted: 412, codes.FailedPrecondition: 409, codes.Unavailable: 503, codes.DeadlineExceeded: 504} {
@@ -147,6 +188,10 @@ func TestGitSourceCommandsPreserveSafeRPCErrors(t *testing.T) {
 	}
 }
 
+// TestGitSourceCommandsRejectUnboundReceipt checks that foreign configuration identity or kind,
+// unchanged version and missing Git-source metadata reject command receipts.
+// TestGitSourceCommandsRejectUnboundReceipt проверяет отказ квитанциям команды при чужом
+// идентификаторе либо виде конфигурации, неизменившейся версии и отсутствии метаданных Git source.
 func TestGitSourceCommandsRejectUnboundReceipt(t *testing.T) {
 	for _, route := range gitSourceRoutes() {
 		for _, change := range []func(*cp.ManagedConfigurationSet){
@@ -169,6 +214,12 @@ func TestGitSourceCommandsRejectUnboundReceipt(t *testing.T) {
 	}
 }
 
+// TestGitSourceHistoryRejectsForeignOrMalformedPage checks history rejection for foreign
+// configurations, inconsistent totals, repeated revisions and oversized cursors without exposing
+// source metadata.
+// TestGitSourceHistoryRejectsForeignOrMalformedPage проверяет отказ истории с чужой конфигурацией,
+// противоречивым числом строк, повтором ревизий и чрезмерным курсором без выдачи метаданных
+// источника.
 func TestGitSourceHistoryRejectsForeignOrMalformedPage(t *testing.T) {
 	for _, change := range []func(*cp.ListManagedConfigurationHistoryResponse){
 		func(r *cp.ListManagedConfigurationHistoryResponse) { r.Configuration.Ref = "mcfg_other01" },
@@ -193,6 +244,10 @@ func TestGitSourceHistoryRejectsForeignOrMalformedPage(t *testing.T) {
 	}
 }
 
+// TestGitSourceReadbackPreservesStatesAndPins checks accepted commit and revision pins through
+// every known source state in catalog and history, keeping catalog content private.
+// TestGitSourceReadbackPreservesStatesAndPins проверяет принятые commit и revision pins для всех
+// известных состояний источника в каталоге и истории со скрытием содержимого в каталоге.
 func TestGitSourceReadbackPreservesStatesAndPins(t *testing.T) {
 	for state := cp.ManagedConfigurationSourceState_MANAGED_CONFIGURATION_SOURCE_STATE_QUEUED; state <= cp.ManagedConfigurationSourceState_MANAGED_CONFIGURATION_SOURCE_STATE_DETACHED; state++ {
 		configuration := gitSourceFixture(cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE)
@@ -230,6 +285,11 @@ func TestGitSourceReadbackPreservesStatesAndPins(t *testing.T) {
 	}
 }
 
+// TestGitSourceReadbackRejectsMalformedProjection checks rejection of unknown source states,
+// invalid ownership or versions, incomplete pins and contradictory failure metadata.
+// TestGitSourceReadbackRejectsMalformedProjection проверяет отказ неизвестным состояниям
+// источника, некорректному владению либо версиям, неполным pins и противоречивым метаданным
+// ошибки.
 func TestGitSourceReadbackRejectsMalformedProjection(t *testing.T) {
 	for name, change := range map[string]func(*cp.ManagedConfigurationSet){
 		"unknown state": func(c *cp.ManagedConfigurationSet) { c.GitSource.State = cp.ManagedConfigurationSourceState(99) },

@@ -4,12 +4,40 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.353.0
+version: 1.354.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Комментарии тестовых сценариев HTTP-шлюза — 24.10.2026
+
+На основе `e5864401f3890249b3601b5eceeed272e5ddffac` предметно описаны
+228 собственных тестовых объявлений в 17 файлах control-api-gateway.
+Прочитаны полные сценарии и заглушки: runtime secrets и environment drafts,
+почтовые mailbox/effect/elevation, browser sessions, каталоги организации,
+Git source, interaction identity, runtime catalog/overlay, prompt context,
+provider accounts, secret impact, артефакты и recovery удаления проекта.
+
+Комментарии фиксируют точные version/digest/scope pins, независимые OCC,
+идемпотентность, фильтрацию публичных квитанций, no-store, отказ без частичной
+выдачи и границу caller authority. Для конкурентной почтовой сверки прямо
+указаны два локальных обработчика и общее хранилище в памяти: это не
+проверка настоящих реплик, постоянного revocation backend или живого SSO.
+Почтовые и provider stubs не выполняют внешних действий. Эталон overlay
+остаётся полученным от owner; директива embed сохранена побайтно.
+
+Во всех 17 файлах AST без comments/positions и полный набор Go directives
+совпадают с исходным head. Исполняемый код, imports, fixtures, контракты,
+retained registry, detector thresholds и ignore boundaries не менялись.
+PASS LOCAL: полный build/unit control-api-gateway; изменения комментариев,
+добавленные после запуска, дополнительно связаны с той же исполняемой AST.
+Машинный Go inventory: 16158/21348, missing 5190; это 250 тестовых
+объявлений шлюза и 4940 объявлений control-plane. Production шлюза остаётся
+полностью покрытым. Это промежуточное продолжение #1823 в Draft PR #1828,
+а не завершение всей задачи или acceptance. Merge/deploy/browser/live/full
+QA текущего продолжения NOT RUN. Прежние findings остаются открытыми.
 
 ## Полнота production-комментариев HTTP-шлюза — 24.10.2026
 

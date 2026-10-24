@@ -24,23 +24,39 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// emailOnceStore models shared, mutex-protected one-time session consumption and an injected
+// storage failure for local elevation tests.
+// emailOnceStore моделирует общее для тестовых обработчиков однократное потребление сессии под
+// mutex и позволяет задать ошибку хранилища.
 type emailOnceStore struct {
 	mu         sync.Mutex
 	consumed   map[string]bool
 	consumeErr error
 }
 
+// Revoke marks the synthetic session as consumed under the fixture mutex without calling a
+// persistent revocation backend.
+// Revoke отмечает синтетическую сессию потреблённой под mutex тестового хранилища без обращения к
+// постоянному хранилищу отзыва.
 func (s *emailOnceStore) Revoke(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.consumed[id] = true
 	return nil
 }
+
+// Revoked reads the synthetic session consumption flag while holding the fixture mutex.
+// Revoked читает признак потребления синтетической сессии под mutex тестового хранилища.
 func (s *emailOnceStore) Revoked(_ context.Context, id string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.consumed[id], nil
 }
+
+// ConsumeOnce atomically accepts one fixture session consumption, rejecting repeats or returning
+// the configured storage error.
+// ConsumeOnce атомарно разрешает одно потребление тестовой сессии, отклоняет повторы либо
+// возвращает заданную ошибку хранилища.
 func (s *emailOnceStore) ConsumeOnce(_ context.Context, id string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -54,11 +70,19 @@ func (s *emailOnceStore) ConsumeOnce(_ context.Context, id string) (bool, error)
 	return true, nil
 }
 
+// emailSessionStore adds an injectable replacement-session issuance failure to the existing
+// runtime-secret session stub.
+// emailSessionStore добавляет управляемый сбой выдачи замещающей сессии к существующей заглушке
+// сессий runtime secrets.
 type emailSessionStore struct {
 	runtimeSecretSessionStoreStub
 	issueErr error
 }
 
+// Issue returns the configured issuance error or delegates synthetic replacement-session creation
+// to the embedded stub.
+// Issue возвращает заданную ошибку выдачи либо передаёт создание синтетической замещающей сессии
+// встроенной заглушке.
 func (s *emailSessionStore) Issue(a, b, c string, d uint64, e string, f time.Time) (session.Claims, string, string, error) {
 	if s.issueErr != nil {
 		return session.Claims{}, "", "", s.issueErr
@@ -66,6 +90,10 @@ func (s *emailSessionStore) Issue(a, b, c string, d uint64, e string, f time.Tim
 	return s.runtimeSecretSessionStoreStub.Issue(a, b, c, d, e, f)
 }
 
+// emailHTTPFixture groups synthetic identity, CSRF, session and shared consumption state with the
+// email reconciliation HTTP handler.
+// emailHTTPFixture объединяет синтетические identity, CSRF, сессию и общее состояние её
+// потребления с HTTP-обработчиком сверки почтового эффекта.
 type emailHTTPFixture struct {
 	handler   http.Handler
 	client    *emailEffectRecorder
@@ -75,6 +103,10 @@ type emailHTTPFixture struct {
 	csrf      string
 }
 
+// newEmailHTTPFixture builds a local authenticated fixture with receipt-, version- and
+// digest-bound email elevation and a replacement session.
+// newEmailHTTPFixture создаёт локальную аутентифицированную оснастку с почтовым повышением
+// полномочий, привязанным к квитанции, версии и дайджесту, и замещающей сессией.
 func newEmailHTTPFixture(client *emailEffectRecorder) *emailHTTPFixture {
 	now := time.Now().UTC()
 	csrf := strings.Repeat("c", 43)
@@ -93,6 +125,11 @@ func newEmailHTTPFixture(client *emailEffectRecorder) *emailHTTPFixture {
 	f.handler = f.replica()
 	return f
 }
+
+// replica builds another local handler over the same session and consumption stubs to test
+// competing reconciliation requests.
+// replica создаёт ещё один локальный обработчик над общими заглушками сессий и потребления для
+// проверки конкурирующих запросов сверки.
 func (f *emailHTTPFixture) replica() http.Handler {
 	security, err := boundary.New(boundary.Config{Origins: []string{"https://control.example.test"}, Verifier: runtimeSecretOIDCStub{principal: f.principal}, Sessions: f.store, Revocations: f.once,
 		Limiter: ratelimit.New(ratelimit.Config{Window: time.Minute, Limit: 100, MaximumKeys: 10, PreAuthConcurrency: 16, GlobalHTTPConcurrency: 32, PerSubjectHTTPConcurrency: 16, GlobalWebSocketConcurrency: 8, PerSubjectWebSocketConcurrency: 4}), Timeout: 5 * time.Second})
@@ -102,18 +139,32 @@ func (f *emailHTTPFixture) replica() http.Handler {
 	server := &Server{boundary: security, control: &controlplaneclient.Client{Query: cp.NewPlatformQueryServiceClient(f.client), Command: cp.NewPlatformCommandServiceClient(f.client)}}
 	return security.Middleware(generated.Handler(server))
 }
+
+// authorizeRequest attaches the fixture origin, CSRF proof and synthetic session cookies to a
+// request without contacting an identity provider.
+// authorizeRequest добавляет к запросу тестовый origin, подтверждение CSRF и синтетические cookies
+// сессии без обращения к провайдеру identity.
 func (f *emailHTTPFixture) authorizeRequest(r *http.Request) {
 	r.Header.Set("Origin", "https://control.example.test")
 	r.Header.Set("X-CSRF-Token", f.csrf)
 	r.AddCookie(&http.Cookie{Name: boundary.SessionCookieName, Value: "fixture-session"})
 	r.AddCookie(&http.Cookie{Name: boundary.CSRFCookieName, Value: f.csrf})
 }
+
+// request creates an authorized reconciliation POST with the fixture receipt digest and an
+// EFFECT_CONFIRMED decision.
+// request создаёт авторизованный POST сверки с дайджестом тестовой квитанции и решением
+// EFFECT_CONFIRMED.
 func (f *emailHTTPFixture) request() *http.Request {
 	r := managedTestRequest("POST", emailDecisionPath, emailDecisionBody("EFFECT_CONFIRMED"))
 	f.authorizeRequest(r)
 	return r
 }
 
+// TestEmailReconciliationRequiresExactElevation checks that absent, expired or mismatched
+// elevation fails before RPC, session consumption and replacement cookies.
+// TestEmailReconciliationRequiresExactElevation проверяет отказ при отсутствии, истечении либо
+// несовпадении повышения полномочий до RPC, потребления сессии и выдачи замещающих cookies.
 func TestEmailReconciliationRequiresExactElevation(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -142,6 +193,11 @@ func TestEmailReconciliationRequiresExactElevation(t *testing.T) {
 	}
 }
 
+// TestEmailReconciliationConsumesBeforeRPCAndKeepsDenial checks consumption before successful or
+// failed owner RPC, replacement cookies and replay rejection by another local handler.
+// TestEmailReconciliationConsumesBeforeRPCAndKeepsDenial проверяет потребление до успешного либо
+// ошибочного RPC владельца, замещающие cookies и отказ повторному запросу через другой локальный
+// обработчик.
 func TestEmailReconciliationConsumesBeforeRPCAndKeepsDenial(t *testing.T) {
 	for _, failure := range []error{nil, status.Error(codes.PermissionDenied, "private denial"), status.Error(codes.DeadlineExceeded, "private timeout")} {
 		f := newEmailHTTPFixture(&emailEffectRecorder{failure: failure})
@@ -172,6 +228,10 @@ func TestEmailReconciliationConsumesBeforeRPCAndKeepsDenial(t *testing.T) {
 	}
 }
 
+// TestEmailReconciliationStoreFailureDoesNotCallRPC checks that consumption or session-issuance
+// errors return unavailable without RPC or cookies, preserving any prior consumption.
+// TestEmailReconciliationStoreFailureDoesNotCallRPC проверяет отказ недоступности без RPC и
+// cookies при ошибках потребления либо выдачи сессии с сохранением уже совершённого потребления.
 func TestEmailReconciliationStoreFailureDoesNotCallRPC(t *testing.T) {
 	for _, afterConsumption := range []bool{false, true} {
 		f := newEmailHTTPFixture(&emailEffectRecorder{})
@@ -188,6 +248,11 @@ func TestEmailReconciliationStoreFailureDoesNotCallRPC(t *testing.T) {
 	}
 }
 
+// TestEmailReconciliationHasOneWinnerAcrossReplicas checks that eight concurrent requests through
+// two local handlers sharing an in-memory store produce one owner RPC and one success.
+// TestEmailReconciliationHasOneWinnerAcrossReplicas проверяет единственный RPC владельца и
+// единственный успех среди восьми конкурентных запросов к двум локальным обработчикам с общим
+// хранилищем в памяти.
 func TestEmailReconciliationHasOneWinnerAcrossReplicas(t *testing.T) {
 	f := newEmailHTTPFixture(&emailEffectRecorder{})
 	replicas := []http.Handler{f.handler, f.replica()}
@@ -217,6 +282,10 @@ func TestEmailReconciliationHasOneWinnerAcrossReplicas(t *testing.T) {
 	}
 }
 
+// TestEmailReceiptReadDoesNotRequireOrConsumeElevation checks that receipt reading succeeds
+// without email elevation and leaves one-time session consumption untouched.
+// TestEmailReceiptReadDoesNotRequireOrConsumeElevation проверяет успешное чтение квитанции без
+// почтового повышения полномочий и без однократного потребления сессии.
 func TestEmailReceiptReadDoesNotRequireOrConsumeElevation(t *testing.T) {
 	f := newEmailHTTPFixture(&emailEffectRecorder{})
 	f.store.claims.Elevation = nil

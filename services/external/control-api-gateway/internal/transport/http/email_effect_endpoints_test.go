@@ -20,10 +20,22 @@ import (
 )
 
 const (
-	emailReceiptPath  = "/api/v1/integration-invocations/inv_fixture01/email-effect-receipt"
+	// emailReceiptPath names the synthetic invocation receipt read route used by local email effect
+	// mapping tests.
+	// emailReceiptPath задаёт маршрут чтения квитанции синтетического вызова для локальных тестов
+	// отображения почтового эффекта.
+	emailReceiptPath = "/api/v1/integration-invocations/inv_fixture01/email-effect-receipt"
+	// emailDecisionPath names the synthetic receipt reconciliation route shared by HTTP mapping and
+	// elevation tests.
+	// emailDecisionPath задаёт маршрут сверки синтетической квитанции для HTTP-тестов отображения и
+	// повышения полномочий.
 	emailDecisionPath = "/api/v1/email-effect-receipts/erc_fixture01/reconciliation"
 )
 
+// emailEffectRecorder records cloned email RPC requests and invocation counts with configurable
+// owner failures, read outcomes and corrupt response hooks.
+// emailEffectRecorder записывает копии почтовых RPC и число вызовов, задавая ошибки владельца,
+// результаты чтения и изменения ответов для отрицательных сценариев.
 type emailEffectRecorder struct {
 	grpc.ClientConnInterface
 	method       string
@@ -36,6 +48,10 @@ type emailEffectRecorder struct {
 	calls        atomic.Int32
 }
 
+// emailReceiptFixture builds a fixed-time synthetic unknown-outcome receipt with private worker
+// fields to test public projection filtering.
+// emailReceiptFixture создаёт синтетическую квитанцию неизвестного результата с фиксированным
+// временем и внутренними полями worker для проверки публичной проекции.
 func emailReceiptFixture() *controlplanev1.EmailEffectReceipt {
 	created := timestamppb.New(time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC))
 	return &controlplanev1.EmailEffectReceipt{
@@ -46,6 +62,10 @@ func emailReceiptFixture() *controlplanev1.EmailEffectReceipt {
 	}
 }
 
+// emailDecisionFixture builds a fixed-time synthetic reconciliation decision tied to the fixture
+// receipt version and digest, including a private grant marker.
+// emailDecisionFixture создаёт синтетическое решение сверки с фиксированным временем, версией и
+// дайджестом тестовой квитанции и внутренним маркером grant.
 func emailDecisionFixture() *controlplanev1.EmailReconciliationDecision {
 	created := time.Date(2026, 9, 5, 0, 0, 10, 0, time.UTC)
 	return &controlplanev1.EmailReconciliationDecision{
@@ -55,6 +75,10 @@ func emailDecisionFixture() *controlplanev1.EmailReconciliationDecision {
 	}
 }
 
+// Invoke counts and records supported email RPCs, applies fixture outcomes or failures and merges
+// an optionally corrupted response into the generated client result.
+// Invoke подсчитывает и записывает поддерживаемые почтовые RPC, задаёт тестовый результат либо
+// ошибку и переносит при необходимости повреждённый ответ в результат generated-клиента.
 func (client *emailEffectRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	client.calls.Add(1)
 	if client.beforeInvoke != nil {
@@ -89,6 +113,10 @@ func (client *emailEffectRecorder) Invoke(_ context.Context, method string, requ
 	return nil
 }
 
+// emailEffectHandler wraps the local email fixture handler with synthetic request authorization
+// for endpoint mapping tests.
+// emailEffectHandler оборачивает локальный почтовый обработчик синтетической авторизацией запросов
+// для тестов отображения endpoints.
 func emailEffectHandler(client *emailEffectRecorder) http.Handler {
 	fixture := newEmailHTTPFixture(client)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -97,10 +125,18 @@ func emailEffectHandler(client *emailEffectRecorder) http.Handler {
 	})
 }
 
+// emailDecisionBody encodes a synthetic receipt digest, the requested decision outcome and a fixed
+// Russian owner note into test JSON.
+// emailDecisionBody помещает в тестовый JSON синтетический дайджест квитанции, требуемый результат
+// решения и фиксированную русскую заметку владельца.
 func emailDecisionBody(outcome string) string {
 	return `{"expectedReceiptDigest":"` + strings.Repeat("a", 64) + `","outcome":"` + outcome + `","note":"Проверено владельцем"}`
 }
 
+// TestEmailEffectExactReadback checks all public receipt outcomes, optional decisions, exact query
+// mapping, ETag and no-store while hiding worker-only fields.
+// TestEmailEffectExactReadback проверяет публичные результаты квитанции, необязательное решение,
+// точное отображение query, ETag и no-store со скрытием внутренних полей worker.
 func TestEmailEffectExactReadback(t *testing.T) {
 	for _, outcome := range []controlplanev1.EmailEffectOutcome{
 		controlplanev1.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_UNKNOWN_OUTCOME,
@@ -128,6 +164,10 @@ func TestEmailEffectExactReadback(t *testing.T) {
 	}
 }
 
+// TestEmailEffectExactReconciliation checks both explicit reconciliation outcomes, receipt digest
+// and version fencing, idempotency and public response filtering.
+// TestEmailEffectExactReconciliation проверяет оба явных результата сверки, дайджест и версию
+// квитанции, идемпотентность и фильтрацию публичного ответа.
 func TestEmailEffectExactReconciliation(t *testing.T) {
 	for _, outcome := range []string{"EFFECT_CONFIRMED", "NO_EFFECT_CONFIRMED"} {
 		client := &emailEffectRecorder{}
@@ -149,6 +189,10 @@ func TestEmailEffectExactReconciliation(t *testing.T) {
 	}
 }
 
+// TestEmailEffectInvalidInputDoesNotInvokeRPC checks that malformed decisions, digests, authority
+// fields, notes, mutation headers and route references fail before owner RPC.
+// TestEmailEffectInvalidInputDoesNotInvokeRPC проверяет отказ до RPC владельца для некорректных
+// решений, дайджестов, полей полномочий, заметок, заголовков изменения и ссылок маршрута.
 func TestEmailEffectInvalidInputDoesNotInvokeRPC(t *testing.T) {
 	valid := emailDecisionBody("EFFECT_CONFIRMED")
 	for _, tc := range []struct{ name, body, header, value string }{
@@ -201,6 +245,10 @@ func TestEmailEffectInvalidInputDoesNotInvokeRPC(t *testing.T) {
 	}
 }
 
+// TestEmailEffectUnicodeNoteBoundary checks unchanged round trips for an empty note, the 2000-rune
+// Cyrillic boundary and multiline text.
+// TestEmailEffectUnicodeNoteBoundary проверяет передачу без изменений пустой заметки, предельных
+// 2000 кириллических символов и многострочного текста.
 func TestEmailEffectUnicodeNoteBoundary(t *testing.T) {
 	for _, note := range []string{"", strings.Repeat("я", 2000), "Строка 1\nСтрока 2"} {
 		body, _ := json.Marshal(map[string]string{"expectedReceiptDigest": strings.Repeat("a", 64), "outcome": "EFFECT_CONFIRMED", "note": note})
@@ -213,6 +261,10 @@ func TestEmailEffectUnicodeNoteBoundary(t *testing.T) {
 	}
 }
 
+// TestEmailEffectAuthorityFailuresStayClosed checks concrete HTTP denials for owner errors without
+// private details and preserves the explicit fresh-authentication-required reason.
+// TestEmailEffectAuthorityFailuresStayClosed проверяет конкретные HTTP-отказы для ошибок владельца
+// без внутренних подробностей и сохраняет явную причину необходимости свежей аутентификации.
 func TestEmailEffectAuthorityFailuresStayClosed(t *testing.T) {
 	for _, method := range []string{"GET", "POST"} {
 		for _, code := range []codes.Code{codes.PermissionDenied, codes.NotFound, codes.Unauthenticated, codes.Aborted, codes.FailedPrecondition, codes.Unavailable} {
@@ -237,6 +289,10 @@ func TestEmailEffectAuthorityFailuresStayClosed(t *testing.T) {
 	}
 }
 
+// TestEmailEffectRejectsCorruptOwnerReceipt checks that broken receipt identities, versions,
+// digests, times and decision lineage return bad gateway without an ETag.
+// TestEmailEffectRejectsCorruptOwnerReceipt проверяет ответ bad gateway без ETag при повреждении
+// identity, версий, дайджестов, времени квитанции и происхождения решения.
 func TestEmailEffectRejectsCorruptOwnerReceipt(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -280,6 +336,11 @@ func TestEmailEffectRejectsCorruptOwnerReceipt(t *testing.T) {
 	}
 }
 
+// TestEmailEffectRejectsCorruptOwnerDecision checks that mismatched receipt binding, outcome,
+// unsafe versions or missing actor and expiry reject the owner reconciliation response.
+// TestEmailEffectRejectsCorruptOwnerDecision проверяет отказ ответу сверки владельца при
+// несовпадении привязки квитанции, результата, небезопасных версиях либо отсутствии actor и срока
+// действия.
 func TestEmailEffectRejectsCorruptOwnerDecision(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

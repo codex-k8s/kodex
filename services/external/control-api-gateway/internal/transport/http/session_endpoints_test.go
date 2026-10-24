@@ -20,26 +20,50 @@ import (
 	"google.golang.org/grpc"
 )
 
+// bootstrapQueryStub supplies the bootstrap query fixture while embedding unsupported platform
+// query methods for local session tests.
+// bootstrapQueryStub предоставляет тестовый bootstrap query и встраивает остальные
+// неподдерживаемые методы query платформы для локальных тестов сессии.
 type bootstrapQueryStub struct {
 	controlplanev1.PlatformQueryServiceClient
 }
 
+// GetBootstrapState returns an empty synthetic bootstrap state so the HTTP test can isolate the
+// authenticated session revision.
+// GetBootstrapState возвращает пустое синтетическое bootstrap-состояние для отдельной проверки
+// ревизии аутентифицированной сессии на HTTP-границе.
 func (*bootstrapQueryStub) GetBootstrapState(context.Context, *controlplanev1.GetBootstrapStateRequest, ...grpc.CallOption) (*controlplanev1.GetBootstrapStateResponse, error) {
 	return &controlplanev1.GetBootstrapStateResponse{State: &controlplanev1.BootstrapState{}}, nil
 }
 
+// ownerSessionOIDCStub holds a synthetic principal for local owner-session issuance tests without
+// verifying a real OIDC token.
+// ownerSessionOIDCStub хранит синтетический principal для локальных тестов выдачи сессии владельца
+// без проверки настоящего OIDC token.
 type ownerSessionOIDCStub struct {
 	principal oidcauth.Principal
 }
 
+// VerifyAuthorization returns the configured synthetic principal and bearer marker for the fixture
+// authorization path.
+// VerifyAuthorization возвращает заданный синтетический principal и маркер bearer для тестового
+// пути авторизации.
 func (stub ownerSessionOIDCStub) VerifyAuthorization(context.Context, string) (oidcauth.Principal, string, error) {
 	return stub.principal, "fresh-bearer", nil
 }
 
+// VerifyToken returns an empty synthetic principal for the unused token-verification branch of
+// this issuance fixture.
+// VerifyToken возвращает пустой синтетический principal для неиспользуемой ветки проверки token в
+// оснастке выдачи сессии.
 func (ownerSessionOIDCStub) VerifyToken(context.Context, string) (oidcauth.Principal, error) {
 	return oidcauth.Principal{}, nil
 }
 
+// ownerSessionStoreStub counts ordinary and elevated issuance separately and captures the
+// elevation purpose using a controlled fixture clock.
+// ownerSessionStoreStub раздельно подсчитывает обычную и повышенную выдачу сессий и сохраняет
+// назначение повышения с управляемым тестовым временем.
 type ownerSessionStoreStub struct {
 	normalCalls   int
 	elevatedCalls int
@@ -47,29 +71,54 @@ type ownerSessionStoreStub struct {
 	now           time.Time
 }
 
+// Issue counts ordinary issuance and returns synthetic claims and cookie markers with no elevation
+// purpose.
+// Issue подсчитывает обычную выдачу и возвращает синтетические claims и маркеры cookies без
+// назначения повышения полномочий.
 func (store *ownerSessionStoreStub) Issue(string, string, string, uint64, string, time.Time) (session.Claims, string, string, error) {
 	store.normalCalls++
 	return ownerSessionClaims(store.now, nil), "normal-session", "normal-csrf", nil
 }
 
+// IssueWithElevation counts elevated issuance, captures its exact purpose and returns synthetic
+// claims and cookie markers bound to that purpose.
+// IssueWithElevation подсчитывает повышенную выдачу, сохраняет точное назначение и возвращает
+// связанные с ним синтетические claims и маркеры cookies.
 func (store *ownerSessionStoreStub) IssueWithElevation(_ string, _ string, _ string, _ uint64, _ string, _ time.Time, elevation *session.Elevation) (session.Claims, string, string, error) {
 	store.elevatedCalls++
 	store.elevation = elevation
 	return ownerSessionClaims(store.now, elevation), "elevated-session", "elevated-csrf", nil
 }
 
+// Open returns empty claims for the unused cookie-opening branch of the owner-session issuance
+// fixture.
+// Open возвращает пустые claims для неиспользуемой ветки открытия cookie в оснастке выдачи сессии
+// владельца.
 func (*ownerSessionStoreStub) Open(string) (session.Claims, error) {
 	return session.Claims{}, nil
 }
 
+// Renew keeps the supplied fixture claims unchanged and reports no renewed session cookie.
+// Renew сохраняет переданные тестовые claims без изменений и сообщает об отсутствии обновлённой
+// cookie сессии.
 func (*ownerSessionStoreStub) Renew(claims session.Claims, _ time.Time) (session.Claims, string, bool, error) {
 	return claims, "", false, nil
 }
 
+// ownerSessionClaims builds revision-five synthetic session claims with a fresh UUID,
+// fifteen-minute lifetime and optional purpose-bound elevation.
+// ownerSessionClaims создаёт синтетические claims сессии пятой ревизии с новым UUID, сроком
+// пятнадцать минут и необязательным целевым повышением полномочий.
 func ownerSessionClaims(now time.Time, elevation *session.Elevation) session.Claims {
 	return session.Claims{SessionRevision: 5, SessionID: uuid.NewString(), IssuedAt: now.Unix(), ExpiresAt: now.Add(15 * time.Minute).Unix(), Elevation: elevation}
 }
 
+// TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose checks normal login, exact secret and email
+// purposes, their distinct authentication freshness limits and malformed-purpose rejection before
+// issuance.
+// TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose проверяет обычный вход, точные назначения
+// секретов и почты, разные пределы свежести аутентификации и отказ неверным назначениям до выдачи
+// сессии.
 func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	emailPurpose := `{"purpose":{"kind":"EMAIL_EFFECT_RECONCILIATION","receiptRef":"erc_fixture01","receiptVersion":3,"receiptDigest":"` + strings.Repeat("a", 64) + `"}}`
@@ -135,6 +184,10 @@ func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 	}
 }
 
+// TestBootstrapReturnsAuthenticatedSessionRevision checks that bootstrap exposes revision five
+// from the authenticated fixture session as its HTTP ETag.
+// TestBootstrapReturnsAuthenticatedSessionRevision проверяет выдачу пятой ревизии
+// аутентифицированной тестовой сессии в HTTP ETag ответа bootstrap.
 func TestBootstrapReturnsAuthenticatedSessionRevision(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	claims := ownerSessionClaims(now, nil)

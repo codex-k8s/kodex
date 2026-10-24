@@ -19,9 +19,22 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// mailboxConnectionPath names the synthetic connection mailbox route shared by local configuration
+// and credential HTTP tests.
+// mailboxConnectionPath задаёт маршрут почтового ящика синтетического подключения для локальных
+// HTTP-тестов конфигурации и учётных данных.
 const mailboxConnectionPath = "/api/v1/integration-connections/conn_fixture01/email-mailbox"
+
+// mailboxRevisionPath names the synthetic configuration revision route used to test draft
+// mutations and binding.
+// mailboxRevisionPath задаёт маршрут синтетической ревизии конфигурации для проверки изменений
+// черновика и привязки.
 const mailboxRevisionPath = "/api/v1/email-mailbox-configurations/mcfg_fixture01/revisions/mrev_fixture01"
 
+// mailboxViewFixture builds synthetic mailbox configuration metadata, a selected JSON revision and
+// the complete owner action availability list.
+// mailboxViewFixture создаёт синтетические метаданные конфигурации ящика, выбранную JSON-ревизию и
+// полный список доступности действий владельца.
 func mailboxViewFixture() *cp.EmailMailboxConfigurationView {
 	configuration, revision := managedFixture()
 	configuration.Kind = cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_EMAIL_MAILBOX
@@ -32,6 +45,10 @@ func mailboxViewFixture() *cp.EmailMailboxConfigurationView {
 	return &cp.EmailMailboxConfigurationView{ConnectionRef: "conn_fixture01", ConnectionVersion: 9, MailboxRef: "mbx_fixture01", Configuration: configuration, Revision: revision, Specification: &cp.EmailMailboxSpecification{}, NextActions: mailboxActionsFixture()}
 }
 
+// mailboxActionsFixture builds the nine known mailbox actions with only draft creation enabled and
+// state-based reasons for the others.
+// mailboxActionsFixture создаёт девять известных действий почтового ящика, разрешая только
+// создание черновика и задавая остальным причину состояния.
 func mailboxActionsFixture() []*cp.EmailMailboxActionAvailability {
 	result := make([]*cp.EmailMailboxActionAvailability, 0, 9)
 	for action := cp.EmailMailboxAction_EMAIL_MAILBOX_ACTION_CREATE_DRAFT; action <= cp.EmailMailboxAction_EMAIL_MAILBOX_ACTION_COPY; action++ {
@@ -40,10 +57,19 @@ func mailboxActionsFixture() []*cp.EmailMailboxActionAvailability {
 	result[0].Enabled, result[0].Reason = true, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_NONE
 	return result
 }
+
+// mailboxPublicationFixture builds a pending synthetic publication with its own revision, digest
+// and configuration revision reference.
+// mailboxPublicationFixture создаёт ожидающую синтетическую публикацию с собственной ревизией,
+// дайджестом и ссылкой на ревизию конфигурации.
 func mailboxPublicationFixture() *cp.EmailMailboxPublication {
 	return &cp.EmailMailboxPublication{Ref: "mpub_fixture01", Revision: 2, Digest: strings.Repeat("b", 64), State: cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_PENDING, ConfigurationRevisionRef: "mrev_fixture01", CreatedAt: timestamppb.New(time.Now().Add(-time.Minute))}
 }
 
+// mailboxRecorder records cloned generated-client requests and supplies configurable mailbox
+// views, publication, preview and credential responses.
+// mailboxRecorder записывает копии запросов generated-клиента и задаёт ответы с видами почтового
+// ящика, публикацией, предпросмотром и учётными данными.
 type mailboxRecorder struct {
 	grpc.ClientConnInterface
 	method         string
@@ -56,6 +82,10 @@ type mailboxRecorder struct {
 	configurations *cp.ListEmailMailboxConfigurationsResponse
 }
 
+// Invoke records the typed RPC and populates its synthetic mailbox response, applying configured
+// failures or view mutations before returning.
+// Invoke записывает типизированный RPC и заполняет его синтетический почтовый ответ с заданными
+// ошибками либо изменениями вида перед возвратом.
 func (c *mailboxRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	c.method = method
 	c.request = proto.Clone(request.(proto.Message))
@@ -113,10 +143,19 @@ func (c *mailboxRecorder) Invoke(_ context.Context, method string, request, resp
 	}
 	return nil
 }
+
+// mailboxHandler wires the generated HTTP router to query and command clients backed by the
+// mailbox recorder.
+// mailboxHandler связывает generated HTTP-маршрутизатор с query- и command-клиентами,
+// использующими почтовую заглушку записи запросов.
 func mailboxHandler(c *mailboxRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: cp.NewPlatformQueryServiceClient(c), Command: cp.NewPlatformCommandServiceClient(c)}})
 }
 
+// TestMailboxCredentialIdentityIncludesGeneration checks that equal credential names in different
+// generations remain distinct while duplicate name-generation identities fail closed.
+// TestMailboxCredentialIdentityIncludesGeneration проверяет различение одинаковых имён учётных
+// данных по поколениям и закрытый отказ при повторе пары имени и поколения.
 func TestMailboxCredentialIdentityIncludesGeneration(t *testing.T) {
 	for _, duplicate := range []bool{false, true} {
 		first := &cp.EmailMailboxCredential{Name: "cred_fixture01", Generation: 9, Kind: cp.EmailMailboxCredentialKind_EMAIL_MAILBOX_CREDENTIAL_KIND_AUTH_SECRET, ConnectionRef: "conn_fixture01", ConnectionVersion: 9}
@@ -138,6 +177,12 @@ func TestMailboxCredentialIdentityIncludesGeneration(t *testing.T) {
 	}
 }
 
+// TestMailboxPublicationClosedFailureCodesAndIndependentHistory checks the closed publication
+// failure-code registry and keeps the selected draft revision separate from published binding
+// history.
+// TestMailboxPublicationClosedFailureCodesAndIndependentHistory проверяет закрытый реестр кодов
+// отказа публикации и независимость выбранной ревизии черновика от истории опубликованной
+// привязки.
 func TestMailboxPublicationClosedFailureCodesAndIndependentHistory(t *testing.T) {
 	for _, code := range []string{"", "EMAIL_MAILBOX_DELIVERY_EXPIRED", "EMAIL_MAILBOX_CONNECTION_CHANGED", "EMAIL_MAILBOX_DELIVERY_REJECTED", "FUTURE_FAILURE", "private failure text"} {
 		for _, state := range []cp.EmailMailboxPublicationState{cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_FAILED, cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_PENDING, cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_SUPERSEDED} {
@@ -160,6 +205,10 @@ func TestMailboxPublicationClosedFailureCodesAndIndependentHistory(t *testing.T)
 	}
 }
 
+// TestMailboxActionsPreserveOwnerAvailabilityAndEmptyListCreate checks owner action reasons
+// without reinterpretation and preserves create availability when the configuration list is empty.
+// TestMailboxActionsPreserveOwnerAvailabilityAndEmptyListCreate проверяет сохранение причин
+// доступности действий владельца и разрешения создания при пустом списке конфигураций.
 func TestMailboxActionsPreserveOwnerAvailabilityAndEmptyListCreate(t *testing.T) {
 	for _, reason := range []cp.EmailMailboxActionReason{cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_NONE, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_STATE, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_GIT_MANAGED, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_DELIVERY_PENDING, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_NO_BINDING, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_CONNECTION_DISABLED} {
 		actions := mailboxActionsFixture()
@@ -177,6 +226,12 @@ func TestMailboxActionsPreserveOwnerAvailabilityAndEmptyListCreate(t *testing.T)
 	}
 }
 
+// TestMailboxActionsRejectMissingUnknownAndContradictoryProjection checks that incomplete,
+// repeated, unknown or contradictory owner action projections are rejected before returning
+// mailbox metadata.
+// TestMailboxActionsRejectMissingUnknownAndContradictoryProjection проверяет отклонение неполных,
+// повторяющихся, неизвестных либо противоречивых проекций действий владельца до выдачи метаданных
+// ящика.
 func TestMailboxActionsRejectMissingUnknownAndContradictoryProjection(t *testing.T) {
 	for _, mutate := range []func([]*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability{
 		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability { return nil },
@@ -218,6 +273,11 @@ func TestMailboxActionsRejectMissingUnknownAndContradictoryProjection(t *testing
 	}
 }
 
+// TestMailboxRoutesPreserveTypedRPCAndIndependentOCC checks dedicated mailbox RPC mapping,
+// no-store, pagination, revision selection, idempotency and separate configuration and connection
+// versions.
+// TestMailboxRoutesPreserveTypedRPCAndIndependentOCC проверяет отдельные почтовые RPC, no-store,
+// пагинацию, выбор ревизии, идемпотентность и независимые версии конфигурации и подключения.
 func TestMailboxRoutesPreserveTypedRPCAndIndependentOCC(t *testing.T) {
 	for _, test := range []struct {
 		method, path, body, rpc string
@@ -292,6 +352,12 @@ func TestMailboxRoutesPreserveTypedRPCAndIndependentOCC(t *testing.T) {
 	}
 }
 
+// TestMailboxRejectsCallerAuthorityUnknownContentAndMissingFences checks rejection of caller
+// authority, unknown mailbox content and missing mutation headers before RPC, while retaining
+// revision creation OCC.
+// TestMailboxRejectsCallerAuthorityUnknownContentAndMissingFences проверяет отказ до RPC для
+// полномочий из payload, неизвестных полей почтового содержимого и отсутствующих заголовков
+// изменения, сохраняя OCC создания ревизии.
 func TestMailboxRejectsCallerAuthorityUnknownContentAndMissingFences(t *testing.T) {
 	for _, body := range []string{`{"specification":{},"yaml":"{}"}`, `{}`, `{"specification":{"tenant":"org_other"}}`, `{"specification":{"smtp":{"value":"forbidden"}}}`, `{"specification":{"receiveProtocol":"SMTP"}}`} {
 		c := &mailboxRecorder{}
@@ -319,6 +385,10 @@ func TestMailboxRejectsCallerAuthorityUnknownContentAndMissingFences(t *testing.
 	}
 }
 
+// TestMailboxRejectsBrokenReadbackAndMapsConcreteOwnerErrors checks corrupt owner readback
+// rejection and concrete gRPC-to-HTTP errors without exposing private upstream diagnostic text.
+// TestMailboxRejectsBrokenReadbackAndMapsConcreteOwnerErrors проверяет отказ повреждённому ответу
+// владельца и конкретное отображение ошибок gRPC в HTTP без раскрытия внутренней диагностики.
 func TestMailboxRejectsBrokenReadbackAndMapsConcreteOwnerErrors(t *testing.T) {
 	for _, mutate := range []func(*cp.EmailMailboxConfigurationView){
 		func(v *cp.EmailMailboxConfigurationView) { v.ConnectionRef = "conn_other01" },
@@ -355,6 +425,12 @@ func TestMailboxRejectsBrokenReadbackAndMapsConcreteOwnerErrors(t *testing.T) {
 	}
 }
 
+// TestMailboxPublicationAndDiagnosticsNeverInventReadinessOrEchoValues checks publication
+// timestamps and safe diagnostic allowlists, rejecting invalid-preview content echoes and
+// caller-controlled diagnostic paths.
+// TestMailboxPublicationAndDiagnosticsNeverInventReadinessOrEchoValues проверяет времена
+// публикации и закрытый набор безопасной диагностики, отклоняя возврат содержимого ошибочного
+// предпросмотра и произвольные пути диагностики.
 func TestMailboxPublicationAndDiagnosticsNeverInventReadinessOrEchoValues(t *testing.T) {
 	for _, invalid := range []bool{false, true} {
 		response := &cp.PreviewEmailMailboxConfigurationResponse{Valid: false, Diagnostics: []*cp.EmailMailboxDiagnostic{{Code: "EMAIL_MAILBOX_SYNTAX_INVALID", Message: "Mailbox document syntax or fields are invalid", Line: 2, Column: 3}}}

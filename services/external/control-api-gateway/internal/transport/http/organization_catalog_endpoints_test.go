@@ -18,6 +18,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// catalogRPCRecorder records a cloned generated-client request and returns a configured protobuf
+// response or owner RPC failure for catalog tests.
+// catalogRPCRecorder записывает копию запроса generated-клиента и возвращает заданный
+// protobuf-ответ либо ошибку RPC владельца для тестов каталогов.
 type catalogRPCRecorder struct {
 	grpc.ClientConnInterface
 	method   string
@@ -26,6 +30,10 @@ type catalogRPCRecorder struct {
 	failure  error
 }
 
+// Invoke captures the catalog RPC method and typed request, returning the configured failure or
+// merging the fixture response into the output.
+// Invoke сохраняет метод RPC каталога и типизированный запрос, возвращая заданную ошибку либо
+// перенося тестовый ответ в результат.
 func (client *catalogRPCRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	client.method, client.request = method, proto.Clone(request.(proto.Message))
 	if client.failure != nil {
@@ -35,12 +43,22 @@ func (client *catalogRPCRecorder) Invoke(_ context.Context, method string, reque
 	return nil
 }
 
+// catalogTestHandler wires the generated HTTP router to the platform query client backed by the
+// local catalog recorder.
+// catalogTestHandler связывает generated HTTP-маршрутизатор с query-клиентом платформы на
+// локальной заглушке записи запросов каталога.
 func catalogTestHandler(client *catalogRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{
 		Query: controlplanev1.NewPlatformQueryServiceClient(client),
 	}})
 }
 
+// TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout checks six organization
+// catalogs with optional project filtering, unchanged query and cursor, empty arrays and
+// noncacheable secret metadata.
+// TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout проверяет шесть каталогов
+// организации с необязательным фильтром проекта, неизменными запросом и курсором, пустыми
+// массивами и некэшируемыми метаданными секретов.
 func TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout(t *testing.T) {
 	t.Parallel()
 	next := &controlplanev1.PageInfo{NextPageToken: "next-page"}
@@ -91,6 +109,10 @@ func TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout(t *test
 	}
 }
 
+// TestProjectMembershipsForwardSearchAndPagination checks forwarding of project membership search,
+// page size and input cursor together with the owner next-page token.
+// TestProjectMembershipsForwardSearchAndPagination проверяет передачу поиска участников проекта,
+// размера страницы и входного курсора вместе с курсором следующей страницы владельца.
 func TestProjectMembershipsForwardSearchAndPagination(t *testing.T) {
 	client := &catalogRPCRecorder{response: &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: "next"}}}
 	recorder := httptest.NewRecorder()
@@ -104,6 +126,11 @@ func TestProjectMembershipsForwardSearchAndPagination(t *testing.T) {
 	}
 }
 
+// TestManagedCatalogPreservesSummaryAndFilters checks managed-configuration filters, current
+// revision summary, total and cursor without exposing revision content or allowing caching.
+// TestManagedCatalogPreservesSummaryAndFilters проверяет фильтры управляемых конфигураций, сводку
+// текущей ревизии, число результатов и курсор без раскрытия содержимого ревизии и разрешения
+// кэширования.
 func TestManagedCatalogPreservesSummaryAndFilters(t *testing.T) {
 	configuration, revision := managedFixture()
 	configuration.CurrentRevision = &controlplanev1.ManagedConfigurationRevision{Ref: revision.Ref, Revision: revision.Revision, State: revision.State, Digest: revision.Digest}
@@ -126,6 +153,11 @@ func TestManagedCatalogPreservesSummaryAndFilters(t *testing.T) {
 	}
 }
 
+// TestManagedCatalogRejectsMalformedInputsAndProducer checks query rejection before RPC, malformed
+// owner rows and totals returning bad gateway, and a valid empty catalog returning an array.
+// TestManagedCatalogRejectsMalformedInputsAndProducer проверяет отказ некорректным фильтрам до
+// RPC, ответ bad gateway для повреждённых строк и счётчиков владельца и массив для корректного
+// пустого каталога.
 func TestManagedCatalogRejectsMalformedInputsAndProducer(t *testing.T) {
 	for _, query := range []string{"kind=UNKNOWN", "kind=UNSPECIFIED", "kind=", "pageSize=4294967346", "pageToken=" + strings.Repeat("a", 513)} {
 		client := &catalogRPCRecorder{}
@@ -158,6 +190,10 @@ func TestManagedCatalogRejectsMalformedInputsAndProducer(t *testing.T) {
 	}
 }
 
+// TestOrganizationCatalogRejectsInvalidBoundsBeforeRPC checks page-size, project-reference,
+// Unicode query-length and cursor limits before any catalog RPC is invoked.
+// TestOrganizationCatalogRejectsInvalidBoundsBeforeRPC проверяет ограничения размера страницы,
+// ссылки проекта, длины Unicode-запроса и курсора до любого RPC каталога.
 func TestOrganizationCatalogRejectsInvalidBoundsBeforeRPC(t *testing.T) {
 	t.Parallel()
 	for _, query := range []string{
@@ -174,6 +210,10 @@ func TestOrganizationCatalogRejectsInvalidBoundsBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestOrganizationCatalogPropagatesAuthoritativeDenial checks that an authoritative permission
+// denial becomes HTTP forbidden for the runtime-secret catalog.
+// TestOrganizationCatalogPropagatesAuthoritativeDenial проверяет отображение авторитетного отказа
+// в доступе в HTTP forbidden для каталога runtime secrets.
 func TestOrganizationCatalogPropagatesAuthoritativeDenial(t *testing.T) {
 	client := &catalogRPCRecorder{failure: status.Error(codes.PermissionDenied, "denied")}
 	recorder := httptest.NewRecorder()
@@ -183,6 +223,10 @@ func TestOrganizationCatalogPropagatesAuthoritativeDenial(t *testing.T) {
 	}
 }
 
+// TestMembershipProjectGroupingUsesProducerReference checks that an organization-wide membership
+// result retains the project reference supplied by its owner.
+// TestMembershipProjectGroupingUsesProducerReference проверяет сохранение ссылки проекта из ответа
+// владельца в результате списка участников на уровне организации.
 func TestMembershipProjectGroupingUsesProducerReference(t *testing.T) {
 	client := &catalogRPCRecorder{response: &controlplanev1.ListProjectMembershipsResponse{Memberships: []*controlplanev1.Membership{{
 		Ref: "member_fixture01", ProjectRef: "prj_fixture01", Version: 1,
@@ -199,6 +243,10 @@ func TestMembershipProjectGroupingUsesProducerReference(t *testing.T) {
 	}
 }
 
+// TestVFSIncludesAutomationEnvironmentAndAvatarKinds checks public VFS enum projection for
+// automation, environment and avatar nodes without rewriting the synthetic Russian node name.
+// TestVFSIncludesAutomationEnvironmentAndAvatarKinds проверяет публичные enum VFS для узлов
+// automation, environment и avatar без изменения синтетического русского имени узла.
 func TestVFSIncludesAutomationEnvironmentAndAvatarKinds(t *testing.T) {
 	for _, kind := range []controlplanev1.VFSNodeKind{
 		controlplanev1.VFSNodeKind_VFS_NODE_KIND_AUTOMATION,
@@ -219,6 +267,11 @@ func TestVFSIncludesAutomationEnvironmentAndAvatarKinds(t *testing.T) {
 	}
 }
 
+// TestVFSRoutesPreserveTypedSourceAndPagination checks dedicated VFS list and search RPCs, input
+// pagination, list path and public result metadata with the owner total and cursor.
+// TestVFSRoutesPreserveTypedSourceAndPagination проверяет отдельные RPC списка и поиска VFS,
+// входную пагинацию, путь списка и публичные метаданные результата с числом строк и курсором
+// владельца.
 func TestVFSRoutesPreserveTypedSourceAndPagination(t *testing.T) {
 	t.Parallel()
 	node := &controlplanev1.VFSNode{Ref: "art_fixture01", Path: "/projects/prj_fixture01/results/art_fixture01",
@@ -261,6 +314,10 @@ func TestVFSRoutesPreserveTypedSourceAndPagination(t *testing.T) {
 	}
 }
 
+// TestVFSRejectsMalformedPathAndUnknownProducerKind checks rejection of traversal and invalid
+// search filters before RPC, unknown producer kinds and proper empty-array responses.
+// TestVFSRejectsMalformedPathAndUnknownProducerKind проверяет отказ обходу пути и неверным
+// фильтрам поиска до RPC, неизвестным видам узлов владельца и корректный пустой массив ответа.
 func TestVFSRejectsMalformedPathAndUnknownProducerKind(t *testing.T) {
 	for _, path := range []string{"/api/v1/vfs/nodes?path=/projects/../secret", "/api/v1/vfs/search?query=x"} {
 		client := &catalogRPCRecorder{}
@@ -282,6 +339,10 @@ func TestVFSRejectsMalformedPathAndUnknownProducerKind(t *testing.T) {
 	}
 }
 
+// TestVFSCursorCanCarryNestedProjectPath checks that a 1200-byte VFS cursor round-trips unchanged
+// while a cursor beyond the 2048-byte bound fails before RPC.
+// TestVFSCursorCanCarryNestedProjectPath проверяет передачу 1200-байтового курсора VFS без
+// изменений и отказ до RPC для курсора сверх ограничения 2048 байта.
 func TestVFSCursorCanCarryNestedProjectPath(t *testing.T) {
 	token := strings.Repeat("a", 1200)
 	client := &catalogRPCRecorder{response: &controlplanev1.ListVFSNodesResponse{
