@@ -12,12 +12,24 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+// schedulerUpgradeFixture embeds the historical synthetic schedule fixture applied only inside the gated disposable database.
+// schedulerUpgradeFixture встраивает историческую синтетическую schedule fixture, применяемую только внутри разрешённой disposable database.
+//
 //go:embed testdata/scheduler_upgrade.sql
 var schedulerUpgradeFixture string
 
+// schedulerUpgradeMetadataFixture embeds the metadata guard that checks the dedicated scheduler migration fixture before applying historical state.
+// schedulerUpgradeMetadataFixture встраивает metadata guard отдельной scheduler migration fixture до применения исторического состояния.
+//
 //go:embed testdata/sql/scheduler_upgrade_metadata.sql
 var schedulerUpgradeMetadataFixture string
 
+// TestScheduleProtocolUpgrade requires the dedicated disposable loopback fixture, checks schedule
+// revision/occurrence migration and the pinned default runtime model without changing an unrelated
+// profile.
+// TestScheduleProtocolUpgrade требует отдельную disposable loopback fixture, проверяет schedule
+// revision и occurrence migration и закреплённую default runtime model без изменения постороннего
+// profile.
 func TestScheduleProtocolUpgrade(t *testing.T) {
 	dsn := os.Getenv("KODEX_CONTROL_PLANE_MIGRATION_TEST_DSN")
 	if dsn == "" {

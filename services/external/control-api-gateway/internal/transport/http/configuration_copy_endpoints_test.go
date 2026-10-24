@@ -14,10 +14,20 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// configurationCopyHandler wires the generated HTTP router to a local platform command client for
+// typed copy and archive tests.
+// configurationCopyHandler связывает generated HTTP-маршрутизатор с локальным command-клиентом
+// платформы для типизированных тестов копирования и архивации.
 func configurationCopyHandler(c *catalogRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Command: cp.NewPlatformCommandServiceClient(c)}})
 }
 
+// TestConfigurationCopyAndArchiveTypedBoundary checks dedicated role-image and integration
+// copy/archive RPCs, exclusive source selectors, shipped pins, mutation fences and safe owner
+// errors.
+// TestConfigurationCopyAndArchiveTypedBoundary проверяет отдельные RPC копирования и архивации
+// образов роли и интеграций, исключающие выборы источника, shipped pins, ограничения изменений и
+// безопасные ошибки владельца.
 func TestConfigurationCopyAndArchiveTypedBoundary(t *testing.T) {
 	configuration, revision := managedFixture()
 	configuration.Archived = true
@@ -83,6 +93,12 @@ func TestConfigurationCopyAndArchiveTypedBoundary(t *testing.T) {
 	}
 }
 
+// TestConfigurationCopyRejectsAmbiguousAndAuthorityFields checks copy/archive routes reject
+// ambiguous or null source selectors, forged authority, supplied provenance and invalid shipped
+// pins before RPC.
+// TestConfigurationCopyRejectsAmbiguousAndAuthorityFields проверяет отказ маршрутов копирования и
+// архивации неоднозначному либо null-выбору источника, поддельным полномочиям, provenance клиента
+// и неверным shipped pins до RPC.
 func TestConfigurationCopyRejectsAmbiguousAndAuthorityFields(t *testing.T) {
 	for _, tc := range []struct {
 		path   string
@@ -104,6 +120,10 @@ func TestConfigurationCopyRejectsAmbiguousAndAuthorityFields(t *testing.T) {
 	}
 }
 
+// TestConfigurationCopyProvenanceProjection checks SHIPPED, UI and GIT provenance projection while
+// rejecting unknown origin or missing source reference, revision, version and digest.
+// TestConfigurationCopyProvenanceProjection проверяет проекцию происхождения SHIPPED, UI и GIT с
+// отказом неизвестному origin либо отсутствию ссылки, ревизии, версии и дайджеста источника.
 func TestConfigurationCopyProvenanceProjection(t *testing.T) {
 	for _, origin := range []cp.ManagedConfigurationCopyOrigin{cp.ManagedConfigurationCopyOrigin_MANAGED_CONFIGURATION_COPY_ORIGIN_SHIPPED, cp.ManagedConfigurationCopyOrigin_MANAGED_CONFIGURATION_COPY_ORIGIN_UI, cp.ManagedConfigurationCopyOrigin_MANAGED_CONFIGURATION_COPY_ORIGIN_GIT} {
 		c, r := managedFixture()
@@ -123,6 +143,11 @@ func TestConfigurationCopyProvenanceProjection(t *testing.T) {
 	}
 }
 
+// TestConfigurationAvailableActionsAndCatalogVersion checks separate managed and shipped catalog
+// action registries, explicit empty arrays and safe positive catalog OCC versions.
+// TestConfigurationAvailableActionsAndCatalogVersion проверяет отдельные реестры действий
+// управляемого и shipped каталогов, явные пустые массивы и безопасные положительные OCC версии
+// каталога.
 func TestConfigurationAvailableActionsAndCatalogVersion(t *testing.T) {
 	for _, actions := range [][]string{nil, {"COPY"}, {"COPY", "ARCHIVE"}, {"ARCHIVE"}} {
 		c, _ := managedFixture()

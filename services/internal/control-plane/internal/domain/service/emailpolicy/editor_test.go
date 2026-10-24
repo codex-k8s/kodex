@@ -2,6 +2,11 @@ package emailpolicy
 
 import "testing"
 
+// TestMailboxEditorRejectsUnsafeDocuments rejects unknown/owner fields, duplicate keys, aliases,
+// extra documents, wrong scalar/enums and numeric values unsafe for public representations.
+// TestMailboxEditorRejectsUnsafeDocuments отклоняет неизвестные поля и поля владельца, повторные
+// ключи, aliases, лишние документы, неверные scalar/enum и числа, небезопасные для публичного
+// представления.
 func TestMailboxEditorRejectsUnsafeDocuments(t *testing.T) {
 	for name, content := range map[string]string{
 		"unknown field":     "credentialValue: hidden\n",
@@ -26,6 +31,10 @@ func TestMailboxEditorRejectsUnsafeDocuments(t *testing.T) {
 	}
 }
 
+// TestMailboxEditorKeepsIncompleteDraft checks incomplete JSON/YAML drafts reopen through
+// canonical YAML while duplicate JSON keys and execution of an incomplete draft remain rejected.
+// TestMailboxEditorKeepsIncompleteDraft проверяет повторное открытие неполных JSON/YAML черновиков
+// через канонический YAML при отказе повторным JSON ключам и исполнению неполного черновика.
 func TestMailboxEditorKeepsIncompleteDraft(t *testing.T) {
 	if _, err := DecodeSpecification("JSON", `{"enabled":false,"enabled":true}`); err == nil {
 		t.Fatal("duplicate JSON field accepted")

@@ -11,9 +11,22 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// validCountedCatalogPage checks total against returned count, a safe JSON integer ceiling, at
+// most 100 items and a bounded UTF-8 continuation token. Callers separately validate identities
+// and authorization.
+// validCountedCatalogPage проверяет total относительно числа элементов, безопасный JSON integer
+// потолок, не более 100 элементов и ограниченный UTF-8 токен продолжения. Identity и авторизацию
+// отдельно проверяют callers.
 func validCountedCatalogPage(total int64, count int, paging *cp.PageInfo) bool {
 	return total >= int64(count) && total <= maximumSafeJSONInteger && count <= 100 && len(paging.GetNextPageToken()) <= 512 && utf8.ValidString(paging.GetNextPageToken())
 }
+
+// validPublishedOverlay requires a cov_ revision in PUBLISHED/SUPERSEDED state, matching
+// version/revision, coherent creation/publication timestamps and bounded UTF-8 content whose exact
+// SHA-256 matches the digest.
+// validPublishedOverlay требует cov_ revision в PUBLISHED/SUPERSEDED, совпадения version/revision,
+// согласованных времён создания/публикации и ограниченного UTF-8 содержимого с точным SHA-256
+// digest.
 func validPublishedOverlay(item *cp.ConfigOverlayVersion) bool {
 	if item == nil || !opaqueHTTPReference.MatchString(item.GetRef()) || !strings.HasPrefix(item.GetRef(), "cov_") ||
 		!validManagedVersion(item.GetRevision()) || item.GetVersion() != item.GetRevision() ||
@@ -27,6 +40,13 @@ func validPublishedOverlay(item *cp.ConfigOverlayVersion) bool {
 	digest := sha256.Sum256([]byte(item.GetContent()))
 	return item.GetDigest() == hex.EncodeToString(digest[:])
 }
+
+// ListConfigOverlayRevisions queries owner-filtered overlay history for an agent and rejects
+// malformed pages, duplicate refs or non-descending revisions before public projection. History
+// remains read-only and no revision is reactivated.
+// ListConfigOverlayRevisions запрашивает отфильтрованную владельцем историю overlay агента и
+// отклоняет неверные страницы, повторы refs и неубывающие revisions до публичной проекции. История
+// только читается; прежняя revision не активируется.
 func (server *Server) ListConfigOverlayRevisions(w http.ResponseWriter, r *http.Request, agentRef generated.AgentRef, p generated.ListConfigOverlayRevisionsParams) {
 	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, p.PageToken)
 	if !ok {
@@ -57,6 +77,13 @@ func (server *Server) ListConfigOverlayRevisions(w http.ResponseWriter, r *http.
 	}
 	writeMessage(w, http.StatusOK, response, "", "revisions")
 }
+
+// GetConfigOverlayRevision validates agent/revision locators and the cov_ prefix, then reads
+// exactly that owner revision and verifies its public content digest before output. A revision
+// locator alone conveys no access.
+// GetConfigOverlayRevision проверяет agent/revision locators и префикс cov_, затем читает точную
+// revision владельца и сверяет публичный content digest до выдачи. Locator revision сам доступа не
+// даёт.
 func (server *Server) GetConfigOverlayRevision(w http.ResponseWriter, r *http.Request, agentRef generated.AgentRef, revisionRef generated.OpaqueRef) {
 	if !opaqueHTTPReference.MatchString(agentRef) || !opaqueHTTPReference.MatchString(revisionRef) || !strings.HasPrefix(revisionRef, "cov_") {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)

@@ -15,10 +15,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// providerLifecycleHandler wires generated provider lifecycle routes to local platform query and
+// command clients sharing the RPC recorder.
+// providerLifecycleHandler связывает generated-маршруты жизненного цикла провайдера с локальными
+// query- и command-клиентами платформы общей заглушки записи RPC.
 func providerLifecycleHandler(client *catalogRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: cp.NewPlatformQueryServiceClient(client), Command: cp.NewPlatformCommandServiceClient(client)}})
 }
 
+// TestProviderBlockersPreserveHiddenCountAndOwnerPins checks blocker selection, hidden and total
+// counts, owner context and cursor while rejecting contradictory blocker rows or pagination.
+// TestProviderBlockersPreserveHiddenCountAndOwnerPins проверяет выбор блокирующих объектов,
+// скрытый и общий счётчики, контекст и курсор владельца с отказом противоречивым строкам
+// блокировок либо пагинации.
 func TestProviderBlockersPreserveHiddenCountAndOwnerPins(t *testing.T) {
 	response := &cp.ListProviderAccountBlockersResponse{AccountVersion: 3, ContextDigest: strings.Repeat("a", 64), Total: 12, HiddenCount: 2,
 		Page: &cp.PageInfo{NextPageToken: "next"}, Items: []*cp.ProviderAccountBlocker{{Kind: cp.ProviderAccountBlockerKind_PROVIDER_ACCOUNT_BLOCKER_KIND_QUEUED_TURN,
@@ -53,6 +62,12 @@ func TestProviderBlockersPreserveHiddenCountAndOwnerPins(t *testing.T) {
 	}
 }
 
+// TestProviderQueuedCancellationPreservesExactSelectedOutcomes checks mutation pins and ordered
+// per-run cancellation outcomes, preserving partial denials while rejecting missing, foreign or
+// reordered results.
+// TestProviderQueuedCancellationPreservesExactSelectedOutcomes проверяет pins изменения и
+// упорядоченные результаты отмены выполнений с сохранением частичных отказов и отклонением
+// отсутствующих, чужих либо переставленных результатов.
 func TestProviderQueuedCancellationPreservesExactSelectedOutcomes(t *testing.T) {
 	response := &cp.CancelProviderAccountQueuedWorkResponse{Account: &cp.ProviderAccount{Ref: "pacc_fixture01", Version: 4},
 		Outcomes: []*cp.ProviderAccountQueuedWorkResult{{RunRef: "run_fixture01", Outcome: cp.ProviderAccountQueuedWorkOutcome_PROVIDER_ACCOUNT_QUEUED_WORK_OUTCOME_CANCELLED}, {RunRef: "run_fixture02", Outcome: cp.ProviderAccountQueuedWorkOutcome_PROVIDER_ACCOUNT_QUEUED_WORK_OUTCOME_PERMISSION_REQUIRED}}}
@@ -103,6 +118,12 @@ func TestProviderQueuedCancellationPreservesExactSelectedOutcomes(t *testing.T) 
 	}
 }
 
+// TestProviderLifecycleRejectsFalseTerminalAndStaleVerificationPins checks a deleted tombstone may
+// retain older verification pins but rejects remaining blockers or cleanup, incomplete terminal
+// data and invalid verification metadata.
+// TestProviderLifecycleRejectsFalseTerminalAndStaleVerificationPins проверяет допустимость старых
+// pins проверки у удалённого tombstone с отказом оставшимся блокировкам либо очистке, неполным
+// terminal-данным и неверным метаданным проверки.
 func TestProviderLifecycleRejectsFalseTerminalAndStaleVerificationPins(t *testing.T) {
 	now := time.Now().UTC()
 	d := &cp.ProviderAccountDeletion{Ref: "pdel_fixture01", Version: 2, State: cp.ProviderAccountDeletionState_PROVIDER_ACCOUNT_DELETION_STATE_DELETED,

@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestBootstrapCopyUsesExactCatalogImage checks bootstrap copying preserves exact base pins and
+// Dockerfile, rejecting foreign digests, ambiguous environments and catalog entries that would add
+// packages.
+// TestBootstrapCopyUsesExactCatalogImage проверяет сохранение точных base pins и Dockerfile при
+// bootstrap копировании с отказом чужим digests, неоднозначным окружениям и элементам каталога,
+// добавляющим packages.
 func TestBootstrapCopyUsesExactCatalogImage(t *testing.T) {
 	base := validEnvironmentWithKey("standard", true, true)
 	base.Input.Packages = nil

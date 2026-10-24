@@ -9,6 +9,10 @@ import (
 	"testing"
 )
 
+// TestTrustedSTTAuthorityRoutesAreExplicitAndCallerBound checks the three organization-only STT
+// routes admit only the STT workload as user actor and rejects implicit use under service-v1.
+// TestTrustedSTTAuthorityRoutesAreExplicitAndCallerBound проверяет допуск трёх organization-only
+// STT routes только STT нагрузке как user actor и отказ неявному использованию под service-v1.
 func TestTrustedSTTAuthorityRoutesAreExplicitAndCallerBound(t *testing.T) {
 	authorizer, err := trustedClusterAuthorizer(transportprofile.TrustedCluster)
 	if err != nil {
@@ -37,6 +41,12 @@ func TestTrustedSTTAuthorityRoutesAreExplicitAndCallerBound(t *testing.T) {
 	}
 }
 
+// TestTrustedImageAdmissionControllerRouteIsReadOnlyAndCallerBound checks supply-work availability
+// is an exact controller-only service-actor read without project scope, denying worker and builder
+// callers.
+// TestTrustedImageAdmissionControllerRouteIsReadOnlyAndCallerBound проверяет точное
+// controller-only чтение supply-work availability как service actor без project scope с отказом
+// worker и builder callers.
 func TestTrustedImageAdmissionControllerRouteIsReadOnlyAndCallerBound(t *testing.T) {
 	authorizer, err := trustedClusterAuthorizer(transportprofile.TrustedCluster)
 	if err != nil {

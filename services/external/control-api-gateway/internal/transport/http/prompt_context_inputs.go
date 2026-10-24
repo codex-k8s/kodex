@@ -12,6 +12,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// promptOptional converts an optional string-like API value to a plain string, preserving a
+// supplied value and representing absence as empty text without assigning a default.
+// promptOptional преобразует необязательное строкоподобное API значение в строку, сохраняя
+// переданное значение и представляя отсутствие пустым текстом без назначения default.
 func promptOptional[T ~string](value *T) string {
 	if value == nil {
 		return ""
@@ -19,10 +23,20 @@ func promptOptional[T ~string](value *T) string {
 	return string(*value)
 }
 
+// promptText checks a byte limit, UTF-8 encoding and absence of NUL while allowing empty text.
+// Line breaks and other valid characters remain unchanged.
+// promptText проверяет байтовый лимит, кодировку UTF-8 и отсутствие NUL, допуская пустой текст.
+// Переводы строк и другие корректные символы не меняются.
 func promptText(value string, maximum int) bool {
 	return len(value) <= maximum && utf8.ValidString(value) && !strings.ContainsRune(value, 0)
 }
 
+// promptContextInput converts optional public preview context through bounded JSON to the strict
+// protobuf shape, checking explicitly present positive version pins, locator/text limits and
+// bounded structured input. It supplies context selectors rather than authority.
+// promptContextInput преобразует необязательный публичный preview context через ограниченный JSON
+// в строгую protobuf форму, проверяя явно заданные положительные pins версий, лимиты
+// адресации/текста и структурного входа. Это selectors контекста, а не полномочия.
 func promptContextInput(value *generated.PromptPreviewContext) (*cp.PromptPreviewContext, bool) {
 	if value == nil {
 		return nil, true
@@ -64,6 +78,12 @@ func promptContextInput(value *generated.PromptPreviewContext) (*cp.PromptPrevie
 	return result, true
 }
 
+// validPromptSelection checks target-kind-specific locator/context combinations and an optional
+// expected digest. Synthetic/run/session selectors forbid nonempty preview context; agent and
+// workflow-stage selectors have distinct compatibility rules.
+// validPromptSelection проверяет сочетания адресации и контекста по виду цели и необязательный
+// ожидаемый digest. Synthetic/run/session запрещают непустой preview context; у agent и
+// workflow-stage отдельные правила совместимости.
 func validPromptSelection(kind, ref, expected string, context *cp.PromptPreviewContext) bool {
 	if expected != "" && !validManagedDigest(expected) {
 		return false
@@ -84,6 +104,12 @@ func validPromptSelection(kind, ref, expected string, context *cp.PromptPreviewC
 	}
 }
 
+// validPromptContextReadback matches an expected digest and target-specific agent/workflow
+// identity or previous runtime revision in the owner pin. It does not establish eligibility or
+// validate every pin field; projection validation is separate.
+// validPromptContextReadback сопоставляет ожидаемый digest и agent/workflow identity либо
+// предыдущую runtime revision по виду цели в pin владельца. Допуск и все поля pin здесь не
+// проверяются; валидация проекции выполняется отдельно.
 func validPromptContextReadback(kind, ref, expected string, pin *cp.PromptContextPin) bool {
 	if expected != "" && pin.GetDigest() != expected {
 		return false
@@ -100,6 +126,12 @@ func validPromptContextReadback(kind, ref, expected string, pin *cp.PromptContex
 	}
 }
 
+// validPromptSelectedPin requires each explicitly requested context coordinate and version to
+// equal the owner pin. Empty/zero selectors impose no additional equality condition and never
+// authorize access.
+// validPromptSelectedPin требует совпадения каждой явно запрошенной координаты и версии контекста
+// с pin владельца. Пустые и нулевые selectors не добавляют условий равенства и не авторизуют
+// доступ.
 func validPromptSelectedPin(input *cp.PromptPreviewContext, pin *cp.PromptContextPin) bool {
 	return (input.GetAgentRef() == "" || input.GetAgentRef() == pin.GetAgentRef()) &&
 		(input.GetExpectedAgentVersion() == 0 || input.GetExpectedAgentVersion() == pin.GetAgentVersion()) &&
@@ -109,6 +141,12 @@ func validPromptSelectedPin(input *cp.PromptPreviewContext, pin *cp.PromptContex
 		(input.GetAttachmentSetRef() == "" || input.GetAttachmentSetRef() == pin.GetAttachmentSetRef())
 }
 
+// promptScopeInput maps optional template scope to INSTRUCTIONS/CONTINUATION protobuf input and
+// permits only AGENT or WORKFLOW_STAGE with compatible bounded coordinates. Resource lookup and
+// expected-digest authority remain owner responsibilities.
+// promptScopeInput преобразует необязательную область шаблона во вход protobuf
+// INSTRUCTIONS/CONTINUATION и допускает только AGENT или WORKFLOW_STAGE с совместимыми
+// ограниченными координатами. Поиск ресурса и проверка ожидаемого digest остаются у владельца.
 func promptScopeInput(v *generated.PromptTemplateScopeInput) (*cp.PromptTemplateScopeInput, bool) {
 	if v == nil {
 		return nil, true
@@ -136,6 +174,12 @@ func promptScopeInput(v *generated.PromptTemplateScopeInput) (*cp.PromptTemplate
 	return result, true
 }
 
+// promptScopeView validates the optional owner template scope, requires a consistent context pin
+// and known template/target kinds, then converts the public shape without exposing additional
+// internal fields.
+// promptScopeView проверяет необязательную область шаблона владельца, требует согласованный
+// context pin и известные виды шаблона и цели, затем преобразует публичную форму без
+// дополнительных внутренних полей.
 func promptScopeView(v *cp.PromptTemplateScope) (*generated.PromptTemplateScope, bool) {
 	if v == nil {
 		return nil, true
@@ -162,6 +206,12 @@ func promptScopeView(v *cp.PromptTemplateScope) (*generated.PromptTemplateScope,
 	return &result, true
 }
 
+// validPromptScopeReceipt checks that a nonempty requested scope is reproduced by the owner
+// receipt, including supplied agent/revision/stage/digest constraints. An absent input scope
+// imposes no scope-match requirement.
+// validPromptScopeReceipt проверяет воспроизведение запрошенной области в receipt владельца,
+// включая заданные agent/revision/stage/digest. Отсутствие входной области не добавляет требования
+// её совпадения.
 func validPromptScopeReceipt(input *cp.PromptTemplateScopeInput, output *cp.PromptTemplateScope) bool {
 	if input == nil {
 		return true
@@ -173,6 +223,12 @@ func validPromptScopeReceipt(input *cp.PromptTemplateScopeInput, output *cp.Prom
 		(input.ExpectedContextDigest == "" || input.ExpectedContextDigest == output.GetContextPin().GetDigest())
 }
 
+// QueryPromptTemplateVariables validates target, context and catalog controls, binds optional
+// project routing and queries owner variables. It requires a matching returned context pin before
+// the shared page writer emits data; selectors alone do not grant context access.
+// QueryPromptTemplateVariables проверяет цель, контекст и параметры каталога, связывает
+// необязательный проект маршрутизации и запрашивает переменные владельца. До выдачи общим writer
+// требуется совпадение context pin; сами selectors доступа к контексту не дают.
 func (server *Server) QueryPromptTemplateVariables(w http.ResponseWriter, r *http.Request, _ generated.QueryPromptTemplateVariablesParams) {
 	body, ok := decodeJSON[generated.PromptVariableCatalogInput](w, r)
 	if !ok {

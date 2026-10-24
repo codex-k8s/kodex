@@ -8,6 +8,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// GetRuntimeEnvironmentImpact reads the exact environment/target revision impact, validates
+// totals/digest and unique consumers sharing one owner-scope tuple, then emits the
+// environment-version ETag. It does not rebind or grant access to listed consumers.
+// GetRuntimeEnvironmentImpact читает impact точной environment/target revision, проверяет
+// total/digest и уникальных consumers с одной owner-scope тройкой, затем выдаёт ETag версии среды.
+// Перепривязка и выдача доступа consumers не выполняются.
 func (server *Server) GetRuntimeEnvironmentImpact(w http.ResponseWriter, r *http.Request, environmentRef generated.RuntimeEnvironmentRef, versionRef generated.RuntimeEnvironmentVersionRef, p generated.GetRuntimeEnvironmentImpactParams) {
 	if !opaqueHTTPReference.MatchString(environmentRef) || !opaqueHTTPReference.MatchString(versionRef) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -43,6 +49,13 @@ func (server *Server) GetRuntimeEnvironmentImpact(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, result)
 }
 
+// RebindRuntimeEnvironment validates one bounded unique consumer selection with a common scope
+// tuple under versioned mutation context, then delegates rebind. Returned bindings must cover
+// exactly the selected agents, retain binding identities and advance versions toward the requested
+// target revision.
+// RebindRuntimeEnvironment проверяет ограниченный уникальный выбор consumers с общей тройкой
+// области и versioned mutation context, затем поручает rebind владельцу. Ответ покрывает ровно
+// выбранных агентов, сохраняет identity привязок и повышает версии к запрошенной target revision.
 func (server *Server) RebindRuntimeEnvironment(w http.ResponseWriter, r *http.Request, environmentRef generated.RuntimeEnvironmentRef, versionRef generated.RuntimeEnvironmentVersionRef, p generated.RebindRuntimeEnvironmentParams) {
 	body, ok := decodeJSON[generated.RuntimeEnvironmentRebindInput](w, r)
 	if !ok {
@@ -96,21 +109,41 @@ func (server *Server) RebindRuntimeEnvironment(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, result)
 }
 
+// validEnvironmentConsumer checks the public scope tuple, agent/binding/version refs and safe
+// positive agent/binding versions. Shape compatibility is not proof of tenant ownership or
+// permission to rebind.
+// validEnvironmentConsumer проверяет публичную тройку области, agent/binding/version refs и
+// безопасные положительные версии агента и привязки. Совместимость формы не доказывает tenant
+// владение и право rebind.
 func validEnvironmentConsumer(item generated.RuntimeEnvironmentConsumer) bool {
 	return validRuntimeResourceScope(item.ScopeKind, item.OrganizationRef, item.ProjectRef) && opaqueHTTPReference.MatchString(item.AgentRef) && opaqueHTTPReference.MatchString(item.BindingRef) && opaqueHTTPReference.MatchString(item.VersionRef) &&
 		item.AgentVersion >= 1 && item.AgentVersion <= maximumSafeJSONInteger && item.BindingVersion >= 1 && item.BindingVersion <= maximumSafeJSONInteger
 }
 
+// environmentConsumerView copies consumer identity, scope and version metadata through nil-safe
+// protobuf getters. Callers must validate the resulting public projection before using it.
+// environmentConsumerView копирует identity, область и metadata версий consumer через nil-safe
+// protobuf getters. Caller обязан проверить полученную публичную проекцию до использования.
 func environmentConsumerView(item *controlplanev1.RuntimeEnvironmentConsumer) generated.RuntimeEnvironmentConsumer {
 	return generated.RuntimeEnvironmentConsumer{AgentRef: item.GetAgentRef(), AgentVersion: item.GetAgentVersion(), BindingRef: item.GetBindingRef(),
 		BindingVersion: item.GetBindingVersion(), VersionRef: item.GetVersionRef(), ProjectRef: item.GetProjectRef(),
 		ScopeKind: runtimeResourceScopeKind(item.GetScopeKind().String()), OrganizationRef: item.GetOrganizationRef()}
 }
 
+// consumerScopeProto maps a public scope discriminator through the closed protobuf value table;
+// unknown input becomes unspecified and requires rejection by the caller validator.
+// consumerScopeProto преобразует публичный вид области через закрытую protobuf таблицу значений;
+// неизвестный вход становится unspecified и требует отказа валидатором caller.
 func consumerScopeProto(kind generated.RuntimeResourceScopeKind) controlplanev1.RuntimeResourceScopeKind {
 	return controlplanev1.RuntimeResourceScopeKind(controlplanev1.RuntimeResourceScopeKind_value["RUNTIME_RESOURCE_SCOPE_KIND_"+string(kind)])
 }
 
+// impactConsumerOwnerKey joins the already validated scope kind, organization and project into a
+// comparison key for page/selection consistency. It does not resolve ownership or authenticate
+// those coordinates.
+// impactConsumerOwnerKey соединяет уже проверенные вид области, организацию и проект в ключ
+// сравнения согласованности страницы или выборки. Владение не разрешается и координаты не
+// аутентифицируются.
 func impactConsumerOwnerKey(kind generated.RuntimeResourceScopeKind, organizationRef, projectRef string) string {
 	return string(kind) + "/" + organizationRef + "/" + projectRef
 }

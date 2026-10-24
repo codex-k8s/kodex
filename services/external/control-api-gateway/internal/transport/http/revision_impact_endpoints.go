@@ -9,6 +9,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// PrepareEnvironmentDraftImpact prepares an owner impact plan for the exact environment draft
+// under mutation headers and requires matching draft/expected version, RUNTIME_ENVIRONMENT kind
+// and PREPARED state before 201.
+// PrepareEnvironmentDraftImpact готовит impact plan владельца для точного черновика среды с
+// mutation заголовками и требует совпадения draft/expected version, вида RUNTIME_ENVIRONMENT и
+// PREPARED до 201.
 func (s *Server) PrepareEnvironmentDraftImpact(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.PrepareEnvironmentDraftImpactParams) {
 	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -31,6 +37,12 @@ func (s *Server) PrepareEnvironmentDraftImpact(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusCreated, plan)
 }
 
+// GetRevisionImpactPlan reads a bounded filtered plan page, checks plan identity and page
+// counts/cursor, and validates unique items sharing an organization. Owner-selected eligibility
+// and outcome cardinality are preserved without filtering invalid items.
+// GetRevisionImpactPlan читает ограниченную отфильтрованную страницу plan, проверяет identity
+// плана и counts/cursor и уникальные элементы общей организации. Допуск владельца и cardinality
+// исходов сохраняются без фильтрации неверных элементов.
 func (s *Server) GetRevisionImpactPlan(w http.ResponseWriter, r *http.Request, ref generated.OpaqueRef, p generated.GetRevisionImpactPlanParams) {
 	if !fileTargetRef(ref) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
@@ -63,6 +75,12 @@ func (s *Server) GetRevisionImpactPlan(w http.ResponseWriter, r *http.Request, r
 	writeJSON(w, 200, result)
 }
 
+// revisionImpactPlanView validates bounded plan identity/version/time/digests, kind-specific
+// optional source pins and PREPARED/EXPIRED versus APPLIED publication fields. New environment
+// plans may have no source; template/instruction plans retain their distinct revision rules.
+// revisionImpactPlanView проверяет ограниченные identity/version/time/digests плана, optional
+// source pins по виду и поля публикации PREPARED/EXPIRED против APPLIED. У новой среды может не
+// быть источника; template/instruction планы сохраняют разные правила revision.
 func revisionImpactPlanView(v *cp.RevisionImpactPlan) (generated.RevisionImpactPlan, bool) {
 	result := generated.RevisionImpactPlan{}
 	if v == nil || !validManagedVersion(v.Version) || !validManagedVersion(v.DraftVersion) || !fileTargetRef(v.Ref) || !fileTargetRef(v.DraftRef) || !validManagedDigest(v.TargetDigest) || !validManagedDigest(v.Digest) || v.Total < 0 || v.Total > 1000 || v.CreatedAt == nil || v.CreatedAt.CheckValid() != nil || v.ExpiresAt == nil || v.ExpiresAt.CheckValid() != nil || !v.ExpiresAt.AsTime().After(v.CreatedAt.AsTime()) {
@@ -96,6 +114,12 @@ func revisionImpactPlanView(v *cp.RevisionImpactPlan) (generated.RevisionImpactP
 	return result, true
 }
 
+// revisionImpactItemView validates consumer kind/scope/versions and the item outcome against its
+// plan. APPLIED needs a different published result revision and advanced binding metadata; other
+// outcomes must carry no result pins, preserving partial publication facts.
+// revisionImpactItemView проверяет вид, область и версии consumer и исход элемента по плану.
+// APPLIED требует другую опубликованную result revision и продвинутые metadata привязки; другие
+// исходы не несут result pins, сохраняя факты частичной публикации.
 func revisionImpactItemView(v *cp.RevisionImpactItem, plan generated.RevisionImpactPlan) (generated.RevisionImpactItem, bool) {
 	result := generated.RevisionImpactItem{}
 	if v == nil || !validManagedVersion(v.ConsumerVersion) || !validManagedVersion(v.BindingVersion) {

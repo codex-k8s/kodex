@@ -10,6 +10,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestEmailReceiptProjection checks all three effect outcomes and exact receipt identity/digests
+// survive projection and binary roundtrip, preserving absent decision and unknown-outcome
+// fallback.
+// TestEmailReceiptProjection проверяет сохранение трёх исходов эффекта, точной identity и digest
+// квитанции при projection и binary roundtrip, включая отсутствие решения и unknown fallback.
 func TestEmailReceiptProjection(t *testing.T) {
 	now := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
 	for _, outcome := range []string{"UNKNOWN_OUTCOME", "EFFECT_CONFIRMED", "NO_EFFECT_CONFIRMED"} {

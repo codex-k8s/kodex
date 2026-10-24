@@ -12,6 +12,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// GetOwnerSession reads boundary-verified session metadata, validates the public representation
+// and returns no-store JSON with the authoritative session-revision ETag. It never exposes bearer
+// or refresh credentials.
+// GetOwnerSession читает проверенные boundary метаданные сессии, валидирует публичное
+// представление и возвращает no-store JSON с ETag авторитетной session revision. Bearer и refresh
+// credentials не выдаются.
 func (server *Server) GetOwnerSession(w http.ResponseWriter, r *http.Request) {
 	metadata, err := server.boundary.SessionMetadata(r.Context())
 	if err != nil {
@@ -28,6 +34,12 @@ func (server *Server) GetOwnerSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, body)
 }
 
+// CreateOwnerSessionTicket delegates WebSocket ticket issuance to the session boundary and returns
+// the short-lived ticket with expiry under no-store. Boundary errors use the shared safe session
+// error mapping.
+// CreateOwnerSessionTicket поручает выдачу WebSocket ticket границе сессии и возвращает
+// краткоживущий ticket со сроком под no-store. Ошибки boundary проходят общее безопасное
+// отображение ошибок сессии.
 func (server *Server) CreateOwnerSessionTicket(w http.ResponseWriter, r *http.Request, _ generated.CreateOwnerSessionTicketParams) {
 	ticket, expires, err := server.boundary.IssueWebSocketTicket(r.Context())
 	if err != nil {
@@ -38,6 +50,12 @@ func (server *Server) CreateOwnerSessionTicket(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, generated.OwnerSessionTicket{Ticket: ticket, ExpiresAt: expires})
 }
 
+// BeginOwnerAuthorization maps optional purpose/fresh-authentication input and starts
+// boundary-owned authorization. It sets the secure HttpOnly strict-same-site login cookie for five
+// minutes and returns only the authorization URL under no-store.
+// BeginOwnerAuthorization преобразует необязательные purpose/fresh-authentication и начинает
+// авторизацию под управлением boundary. Устанавливается защищённый HttpOnly strict-same-site login
+// cookie на пять минут и выдаётся только authorization URL под no-store.
 func (server *Server) BeginOwnerAuthorization(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeOptionalJSON[generated.OwnerAuthorizationInput](w, r)
 	if !ok {
@@ -61,6 +79,12 @@ func (server *Server) BeginOwnerAuthorization(w http.ResponseWriter, r *http.Req
 	}{authorization})
 }
 
+// CompleteOwnerAuthorization requires the login cookie and delegates state/code validation to the
+// boundary, then validates returned metadata before setting owner session/CSRF cookies. The
+// response ETag follows the resulting session revision; raw boundary failures remain private.
+// CompleteOwnerAuthorization требует login cookie и поручает проверку state/code границе, затем
+// проверяет метаданные до установки owner session/CSRF cookies. ETag соответствует итоговой
+// session revision; сырые ошибки boundary остаются приватными.
 func (server *Server) CompleteOwnerAuthorization(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeJSON[generated.CompleteOwnerAuthorizationJSONRequestBody](w, r)
 	if !ok {
@@ -86,6 +110,12 @@ func (server *Server) CompleteOwnerAuthorization(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, mapped)
 }
 
+// sessionPurposeMap copies optional purpose, resource/scope coordinates and receipt pins into the
+// boundary input without authorizing those requested resources or manufacturing a missing receipt
+// version.
+// sessionPurposeMap копирует необязательные purpose, координаты ресурса/области и receipt pins во
+// вход boundary без авторизации запрошенных ресурсов и без назначения отсутствующей версии
+// receipt.
 func sessionPurposeMap(source *generated.OwnerSessionPurpose) *boundary.SessionPurpose {
 	if source == nil {
 		return nil
@@ -103,6 +133,12 @@ func sessionPurposeMap(source *generated.OwnerSessionPurpose) *boundary.SessionP
 	return purpose
 }
 
+// sessionMetadataMap validates UUID generation, safe version counters and nonzero/coherent session
+// deadlines, then selects backend-refresh versus reauthentication metadata. It projects timing
+// facts without extending any server-owned session lifetime.
+// sessionMetadataMap проверяет UUID поколения, безопасные счётчики версий и ненулевые
+// согласованные сроки сессии, затем выбирает метаданные backend-refresh либо reauthentication.
+// Проецируются факты времени без продления серверного срока сессии.
 func sessionMetadataMap(source boundary.SessionMetadata) (generated.OwnerSessionMetadata, bool) {
 	generation, err := uuid.Parse(source.Generation)
 	if err != nil || source.Version < 1 || source.Version > 1<<53-1 || source.SessionRevision < 1 || source.SessionRevision > 1<<53-1 ||
@@ -119,6 +155,12 @@ func sessionMetadataMap(source boundary.SessionMetadata) (generated.OwnerSession
 		AbsoluteExpiresAt: source.AbsoluteExpiresAt, RenewAfter: source.RenewAfter, RenewalMode: mode}, true
 }
 
+// writeSessionProblem maps availability/conflict/renewal-pending errors to retryable 503 and rate
+// limiting to 429 with Retry-After one second; other errors become nonretryable 401 without
+// internal details.
+// writeSessionProblem преобразует ошибки availability/conflict/renewal-pending в повторяемый 503,
+// rate limit в 429 с Retry-After одна секунда; прочие ошибки становятся неповторяемым 401 без
+// внутренних подробностей.
 func writeSessionProblem(w http.ResponseWriter, err error) {
 	if errors.Is(err, boundary.ErrSessionValidationUnavailable) || errors.Is(err, browserstate.ErrUnavailable) ||
 		errors.Is(err, browserstate.ErrConflict) || errors.Is(err, session.ErrRenewalPending) {

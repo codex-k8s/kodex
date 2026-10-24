@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+// TestPublicAccessScopeRPCPreservesQueryShape checks organization, project, resource-kind and exact-resource scope round trips against expected domain fields and protobuf equality; these shape fixtures do not prove live authorization.
+// TestPublicAccessScopeRPCPreservesQueryShape проверяет двустороннее преобразование organization, project, resource-kind и exact-resource областей по ожидаемым доменным полям и protobuf equality; эти fixtures формы не доказывают live авторизацию.
 func TestPublicAccessScopeRPCPreservesQueryShape(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -30,6 +32,8 @@ func TestPublicAccessScopeRPCPreservesQueryShape(t *testing.T) {
 	}
 }
 
+// TestBindingManagementKindMapsInternalDirectBinding checks the internal NONE to public DIRECT mapping and preserves the two membership-managed categories, without performing a binding mutation.
+// TestBindingManagementKindMapsInternalDirectBinding проверяет отображение внутреннего NONE в публичный DIRECT и сохранение двух категорий управления членством без изменения привязки.
 func TestBindingManagementKindMapsInternalDirectBinding(t *testing.T) {
 	if got := bindingManagementKindEnum("NONE"); got != cp.AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_DIRECT {
 		t.Fatalf("internal direct binding mapped to %s", got)

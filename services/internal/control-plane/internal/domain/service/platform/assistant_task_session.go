@@ -9,6 +9,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// ReadAssistantTaskSession requires resolved runtime-controller resource-search authority and
+// lease/fence/generation, then validates bounded ASCII run and cursor before the owner read.
+// ReadAssistantTaskSession требует разрешённые полномочия resource search runtime-controller и
+// lease, fence, поколение, затем проверяет ограниченные ASCII-ссылку выполнения и курсор до чтения
+// владельца.
 func (service *Service) ReadAssistantTaskSession(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, input query.AssistantTaskSessionRead) (query.AssistantTaskSessionPage, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

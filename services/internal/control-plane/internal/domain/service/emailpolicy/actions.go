@@ -2,12 +2,19 @@ package emailpolicy
 
 import "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 
-// ActionState поступает только после owner/permission проверки существующего connection.
+// ActionState contains owner-resolved connection and revision state for action projection after
+// resource ownership and permissions have been checked.
+// ActionState содержит разрешённые владельцем состояния подключения и ревизии для проекции
+// действий после проверки владения ресурсом и permissions.
 type ActionState struct {
 	ManagedBy, RevisionState                                                         string
 	HasMutableDraft, HasPublishedRevision, Bound, PendingDelivery, ConnectionEnabled bool
 }
 
+// AvailableActions returns the fixed nine editor actions with lifecycle reasons, preserving Git
+// detach/copy, valid publication and pending-delivery binding restrictions.
+// AvailableActions возвращает девять фиксированных действий редактора с причинами lifecycle,
+// сохраняя detach/copy для Git, публикацию valid и ограничения binding при ожидающей доставке.
 func AvailableActions(state ActionState) []entity.EmailMailboxActionAvailability {
 	result := make([]entity.EmailMailboxActionAvailability, 0, 9)
 	mutable := state.RevisionState == "DRAFT" || state.RevisionState == "VALID" || state.RevisionState == "INVALID"
@@ -54,6 +61,10 @@ func AvailableActions(state ActionState) []entity.EmailMailboxActionAvailability
 	return result
 }
 
+// ActionAllowed returns the enabled flag of the first exact action match and denies actions absent
+// from the supplied availability projection.
+// ActionAllowed возвращает enabled первого точного совпадения действия и запрещает действия,
+// отсутствующие в переданной проекции доступности.
 func ActionAllowed(actions []entity.EmailMailboxActionAvailability, action string) bool {
 	for _, candidate := range actions {
 		if candidate.Action == action {

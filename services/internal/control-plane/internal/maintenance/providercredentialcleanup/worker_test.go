@@ -19,34 +19,69 @@ import (
 )
 
 const (
+	// testLeaseOwner pins the synthetic cleanup claimant used to verify owner identity in repository
+	// calls.
+	// testLeaseOwner фиксирует синтетический cleanup claimant для проверки owner identity в repository
+	// вызовах.
 	testLeaseOwner = "61000000-0000-4000-8000-000000000001"
-	testTaskRef    = "pcct_61000000-0000-4000-8000-000000000002"
+	// testTaskRef pins the synthetic cleanup task reference shared by exact-target and finalization
+	// tests.
+	// testTaskRef фиксирует синтетическую ссылку cleanup task для тестов точной цели и финализации.
+	testTaskRef = "pcct_61000000-0000-4000-8000-000000000002"
+	// testAccountRef pins the synthetic provider account associated with cleanup-task fixtures rather
+	// than any live account.
+	// testAccountRef фиксирует синтетический provider account cleanup task оснастки вместо какого-либо
+	// живого аккаунта.
 	testAccountRef = "pacc_cleanup_account"
-	testReceipt    = "provider-credential-cleanup:61000000-0000-4000-8000-000000000002:g7"
+	// testReceipt supplies a stable synthetic terminal cleanup receipt bound to the fixture task and
+	// generation seven.
+	// testReceipt предоставляет устойчивый синтетический terminal cleanup receipt с привязкой к task
+	// оснастки и поколению семь.
+	testReceipt = "provider-credential-cleanup:61000000-0000-4000-8000-000000000002:g7"
 )
 
+// testCredential holds synthetic Secret identity/version/content pins for exact cleanup forwarding
+// without containing credential material.
+// testCredential содержит синтетические Secret identity, version и content pins для точной
+// передачи cleanup без credential material.
 var testCredential = entity.ProviderCredentialDescriptor{
 	SecretName: "provider-credential-1", SecretUID: "61000000-0000-4000-8000-000000000003",
 	SecretResourceVersion: "cleanup-7", ContentSHA256: strings.Repeat("a", 64),
 }
 
+// completeCall captures exact task/owner/generation and typed receipt/observation completion
+// metadata for owner-finalization assertions.
+// completeCall сохраняет точные task, owner, generation и типизированные receipt либо observation
+// metadata для проверки финализации владельца.
 type completeCall struct {
 	taskRef, leaseOwner, receipt string
 	generation                   int64
 	completion                   entity.ProviderAuthorizationCleanupResult
 }
 
+// failCall captures exact claimed-task coordinates and the closed safe code recorded on cleanup
+// failure.
+// failCall сохраняет точные координаты claimed task и закрытый безопасный код, фиксируемый при
+// отказе cleanup.
 type failCall struct {
 	taskRef, leaseOwner, safeCode string
 	generation                    int64
 }
 
+// cleanupCall captures task/account/generation and credential descriptor supplied to the synthetic
+// materializer.
+// cleanupCall сохраняет task, account, generation и credential descriptor, переданные
+// синтетическому materializer.
 type cleanupCall struct {
 	taskRef, accountRef string
 	generation          int64
 	credential          entity.ProviderCredentialDescriptor
 }
 
+// repositoryStub injects claim behavior and finalization failures and protects recorded
+// complete/fail calls with a mutex for concurrent task tests.
+// repositoryStub задаёт claim поведение и отказы финализации и защищает записанные complete/fail
+// вызовы mutex для тестов параллельных task.
 type repositoryStub struct {
 	mu            sync.Mutex
 	claim         func(context.Context, string, int32) ([]platformrepository.ProviderCredentialCleanupTask, error)
@@ -56,6 +91,10 @@ type repositoryStub struct {
 	failCalls     []failCall
 }
 
+// ClaimProviderCredentialCleanupTasks delegates exact claimant/limit/context to the configured
+// synthetic claim callback without touching durable storage.
+// ClaimProviderCredentialCleanupTasks передаёт точные claimant, limit и context заданному
+// синтетическому claim callback без обращения к durable хранению.
 func (stub *repositoryStub) ClaimProviderCredentialCleanupTasks(
 	ctx context.Context,
 	leaseOwner string,
@@ -64,6 +103,10 @@ func (stub *repositoryStub) ClaimProviderCredentialCleanupTasks(
 	return stub.claim(ctx, leaseOwner, limit)
 }
 
+// CompleteProviderCredentialCleanupTask records exact typed completion under the fixture mutex and
+// returns only the configured completion failure.
+// CompleteProviderCredentialCleanupTask записывает точный типизированный completion под mutex
+// оснастки и возвращает только заданную ошибку завершения.
 func (stub *repositoryStub) CompleteProviderCredentialCleanupTask(
 	_ context.Context,
 	taskRef, leaseOwner string,
@@ -79,6 +122,10 @@ func (stub *repositoryStub) CompleteProviderCredentialCleanupTask(
 	return platformrepository.ProviderCredentialCleanupResult{}, stub.completeErr
 }
 
+// FailProviderCredentialCleanupTask records exact failure coordinates/code under mutex and returns
+// synthetic retry scheduling plus the configured owner failure.
+// FailProviderCredentialCleanupTask записывает точные координаты и код отказа под mutex и
+// возвращает синтетическое retry scheduling и заданную owner ошибку.
 func (stub *repositoryStub) FailProviderCredentialCleanupTask(
 	_ context.Context,
 	taskRef, leaseOwner string,
@@ -93,6 +140,10 @@ func (stub *repositoryStub) FailProviderCredentialCleanupTask(
 	return platformrepository.ProviderCredentialCleanupResult{RetryScheduled: true}, stub.failErr
 }
 
+// materializerStub injects credential cleanup, authorization cleanup and metadata observation
+// independently, with optional synthetic produced-credential metadata.
+// materializerStub независимо задаёт cleanup credentials, cleanup authorization и metadata
+// observation с необязательными синтетическими produced credential metadata.
 type materializerStub struct {
 	cleanup              func(context.Context, string, string, int64, entity.ProviderCredentialDescriptor) (string, error)
 	produced             *entity.ProviderCredentialDescriptor
@@ -100,6 +151,10 @@ type materializerStub struct {
 	cleanupAuthorization func(context.Context, entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupResult, error)
 }
 
+// CleanupProviderCredential forwards exact cleanup coordinates to the fixture callback and returns
+// its terminal receipt with the configured produced descriptor.
+// CleanupProviderCredential передаёт точные cleanup координаты callback оснастки и возвращает его
+// terminal receipt с заданным produced descriptor.
 func (stub *materializerStub) CleanupProviderCredential(
 	ctx context.Context,
 	taskRef, accountRef string,
@@ -111,6 +166,10 @@ func (stub *materializerStub) CleanupProviderCredential(
 	return entity.ProviderAuthorizationCleanupResult{TerminalReceipt: receipt, ProducedCredential: stub.produced}, err
 }
 
+// ObserveAuthorizationCleanup runs only the configured metadata observation callback and rejects
+// an unexpected metadata path instead of inventing a cleanup receipt.
+// ObserveAuthorizationCleanup исполняет только заданный metadata observation callback и отклоняет
+// неожиданный metadata путь вместо выдуманного cleanup receipt.
 func (stub *materializerStub) ObserveAuthorizationCleanup(ctx context.Context, target entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupObservation, error) {
 	if stub.observe == nil {
 		return entity.ProviderAuthorizationCleanupObservation{}, errors.New("unexpected metadata call")
@@ -118,6 +177,10 @@ func (stub *materializerStub) ObserveAuthorizationCleanup(ctx context.Context, t
 	return stub.observe(ctx, target)
 }
 
+// CleanupAuthorization runs the configured authorization-cleanup callback or rejects an unexpected
+// effect path with a fixed fixture error.
+// CleanupAuthorization исполняет заданный authorization cleanup callback либо отклоняет
+// неожиданный effect путь фиксированной ошибкой оснастки.
 func (stub *materializerStub) CleanupAuthorization(ctx context.Context, target entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupResult, error) {
 	if stub.cleanupAuthorization == nil {
 		return entity.ProviderAuthorizationCleanupResult{}, errors.New("unexpected authorization cleanup call")
@@ -125,6 +188,11 @@ func (stub *materializerStub) CleanupAuthorization(ctx context.Context, target e
 	return stub.cleanupAuthorization(ctx, target)
 }
 
+// TestWorkerCompletesSuccessfulCleanup checks exact claimant/batch and
+// task/account/generation/descriptor reach cleanup and one successful typed receipt reaches owner
+// completion with no failure call.
+// TestWorkerCompletesSuccessfulCleanup проверяет точные claimant, batch, task, account, generation
+// и descriptor в cleanup и одну успешную typed receipt финализацию владельца без failure вызова.
 func TestWorkerCompletesSuccessfulCleanup(t *testing.T) {
 	t.Parallel()
 	task := cleanupTask(testTaskRef, 7)
@@ -163,6 +231,12 @@ func TestWorkerCompletesSuccessfulCleanup(t *testing.T) {
 	}
 }
 
+// TestWorkerPreservesProducedCredentialAndMetadataCompletion checks all four cleanup kinds
+// preserve exact targets and produced metadata while metadata-only observation never becomes a
+// terminal cleanup receipt.
+// TestWorkerPreservesProducedCredentialAndMetadataCompletion проверяет сохранение точных целей и
+// produced metadata всеми четырьмя cleanup видами и отсутствие превращения metadata-only
+// observation в terminal cleanup receipt.
 func TestWorkerPreservesProducedCredentialAndMetadataCompletion(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []string{"CREDENTIAL", "AUTHORIZATION_ATTEMPT", "AUTHORIZATION_ABSENCE", "AUTHORIZATION_METADATA"} {
@@ -207,6 +281,10 @@ func TestWorkerPreservesProducedCredentialAndMetadataCompletion(t *testing.T) {
 	}
 }
 
+// TestWorkerFailsRetryableTaskAndContinuesBatch checks one unavailable task gets the exact safe
+// failure tuple while a second task still completes in the joined concurrent batch.
+// TestWorkerFailsRetryableTaskAndContinuesBatch проверяет точный безопасный failure кортеж
+// недоступной task и успешное завершение второй task в ожидаемом параллельном пакете.
 func TestWorkerFailsRetryableTaskAndContinuesBatch(t *testing.T) {
 	t.Parallel()
 	failedTask := cleanupTask(testTaskRef, 7)
@@ -239,6 +317,10 @@ func TestWorkerFailsRetryableTaskAndContinuesBatch(t *testing.T) {
 	}
 }
 
+// TestWorkerCancellationDoesNotFinalizeClaim cancels during materialization, joins the worker and
+// checks neither completion nor failure is recorded for the canceled claim.
+// TestWorkerCancellationDoesNotFinalizeClaim отменяет выполнение во время materialization, ожидает
+// worker и проверяет отсутствие completion и failure для отменённого claim.
 func TestWorkerCancellationDoesNotFinalizeClaim(t *testing.T) {
 	t.Parallel()
 	started := make(chan struct{})
@@ -266,6 +348,10 @@ func TestWorkerCancellationDoesNotFinalizeClaim(t *testing.T) {
 	}
 }
 
+// TestWorkerClaimHealthDegradesAndRecovers uses synchronized claim failure/recovery to verify
+// claim-path readiness transitions and bounded worker shutdown on cancellation.
+// TestWorkerClaimHealthDegradesAndRecovers использует синхронизированные отказ и recovery claim
+// для проверки readiness переходов claim пути и ограниченного завершения worker при отмене.
 func TestWorkerClaimHealthDegradesAndRecovers(t *testing.T) {
 	failed := make(chan struct{})
 	allowRecovery := make(chan struct{})
@@ -311,6 +397,10 @@ func TestWorkerClaimHealthDegradesAndRecovers(t *testing.T) {
 	}
 }
 
+// TestSafeErrorCodeUsesOnlyRepositoryCodes checks representative unavailable, rejected, deadline
+// and generic errors map only to the approved repository-safe classifications.
+// TestSafeErrorCodeUsesOnlyRepositoryCodes проверяет отображение типичных unavailable, rejected,
+// deadline и общих ошибок только в утверждённые безопасные repository классификации.
 func TestSafeErrorCodeUsesOnlyRepositoryCodes(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -339,6 +429,12 @@ func TestSafeErrorCodeUsesOnlyRepositoryCodes(t *testing.T) {
 	}
 }
 
+// TestCASSnapshotRecoveryRequiresExactAuthenticatedDetail checks CAS recovery requires the exact
+// FailedPrecondition ErrorInfo domain/reason with empty metadata, rejecting foreign shape or
+// another RPC code.
+// TestCASSnapshotRecoveryRequiresExactAuthenticatedDetail проверяет требование точных domain и
+// reason ErrorInfo с пустыми metadata и FailedPrecondition для CAS recovery с отказом чужой форме
+// либо другому RPC коду.
 func TestCASSnapshotRecoveryRequiresExactAuthenticatedDetail(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -365,6 +461,10 @@ func TestCASSnapshotRecoveryRequiresExactAuthenticatedDetail(t *testing.T) {
 	}
 }
 
+// cleanupTask builds a synthetic credential-target cleanup task with exact account/descriptor pins
+// and a near-future lease expiry.
+// cleanupTask создаёт синтетическую credential target cleanup task с точными account и descriptor
+// pins и ближайшим будущим истечением lease.
 func cleanupTask(ref string, generation int64) platformrepository.ProviderCredentialCleanupTask {
 	return platformrepository.ProviderCredentialCleanupTask{
 		Ref: ref, AccountRef: testAccountRef, Generation: generation,
@@ -373,6 +473,10 @@ func cleanupTask(ref string, generation int64) platformrepository.ProviderCreden
 	}
 }
 
+// newTestWorker constructs an isolated cleanup worker with synthetic owner, batch sixteen, minimum
+// polling, one-second operation budget and discarded logs.
+// newTestWorker создаёт изолированный cleanup worker с синтетическим owner, пакетом шестнадцать,
+// минимальным polling, секундным бюджетом операции и отброшенными логами.
 func newTestWorker(t *testing.T, repository Repository, materializer Materializer) *Worker {
 	t.Helper()
 	health := serviceruntime.NewReadiness()
@@ -386,10 +490,18 @@ func newTestWorker(t *testing.T, repository Repository, materializer Materialize
 	return worker
 }
 
+// discardLogger returns a local text logger that discards output so synthetic failure assertions
+// never rely on emitted raw error strings.
+// discardLogger возвращает локальный text logger, отбрасывающий вывод, чтобы проверки
+// синтетических отказов не зависели от raw error строк в логах.
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// waitForHealth polls only the in-memory fixture readiness for at most one second and reports
+// final boolean/reason if the expected transition never appears.
+// waitForHealth опрашивает только readiness оснастки в памяти не более секунды и сообщает конечные
+// boolean и reason при отсутствии ожидаемого перехода.
 func waitForHealth(t *testing.T, health *serviceruntime.Readiness, wantReady bool, wantReason string) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)

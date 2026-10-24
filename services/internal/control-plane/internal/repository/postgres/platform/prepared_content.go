@@ -20,8 +20,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Поля привязки назначает вызывающая canonical owner boundary. Контекст и
-// locator здесь только закрепляются и никогда не становятся полномочиями.
+// preparedContentBinding pins owner-assigned actor, tenant, project, source lease and
+// intent/target versions; locator fields alone never establish authority.
+// preparedContentBinding закрепляет назначенные владельцем actor, tenant, project, source lease и
+// версии intent/target; поля locator сами по себе не доказывают полномочия.
 type preparedContentBinding struct {
 	ActorID, OrganizationID, OrganizationRef, ProjectID, ProjectRef      string
 	SourceProfile, SourceProfileRef, SourceContextDigest, SourceLeaseRef string
@@ -31,6 +33,10 @@ type preparedContentBinding struct {
 	SourceProfileVersion, SourceLeaseGeneration, ExpectedArtifactVersion int64
 }
 
+// preparedContentRequest combines immutable binding and inspected metadata with the input reader;
+// the reader itself is excluded from the request commitment.
+// preparedContentRequest объединяет неизменяемую привязку и проверенные метаданные с входным
+// reader; сам reader не включается в commitment запроса.
 type preparedContentRequest struct {
 	Binding                                              preparedContentBinding
 	FileName, MediaType, Digest, ScanState, PreviewState string
@@ -38,6 +44,10 @@ type preparedContentRequest struct {
 	Body                                                 io.Reader
 }
 
+// preparedContent holds ledger identity, prepared artifact/revision references, generation and the
+// accepted object receipt plus antivirus result.
+// preparedContent хранит идентификатор ledger, ссылки подготовленных artifact/revision, поколение
+// и принятую квитанцию объекта с результатом антивируса.
 type preparedContent struct {
 	LedgerID, ContentRef, ArtifactRef, RevisionRef, FileName string
 	Generation                                               int64
@@ -45,28 +55,73 @@ type preparedContent struct {
 }
 
 var (
+	// queryPreparedContentInsert inserts the durable unique intent before object Put, doing nothing on
+	// the exact organization/actor/operation idempotency conflict.
+	// queryPreparedContentInsert добавляет durable unique intent до object Put, ничего не меняя при
+	// точном конфликте organization/actor/operation idempotency.
 	//go:embed sql/prepared_content_insert.sql
 	queryPreparedContentInsert string
+	// queryPreparedContentReplay reads the existing unexpired intent by its original tenant, actor,
+	// intent operation, idempotency key and operation key.
+	// queryPreparedContentReplay читает прежний неистёкший intent по исходным tenant, actor, intent
+	// operation, idempotency key и operation key.
 	//go:embed sql/prepared_content_replay.sql
 	queryPreparedContentReplay string
+	// queryPreparedContentWriterLock locks only an IN_FLIGHT generation-one row whose writer deadline
+	// has not expired before the single external Put.
+	// queryPreparedContentWriterLock блокирует только IN_FLIGHT строку первого поколения с неистёкшим
+	// writer deadline перед единственным внешним Put.
 	//go:embed sql/prepared_content_writer_lock.sql
 	queryPreparedContentWriterLock string
+	// queryPreparedContentStage records STAGED or UNKNOWN and accepted object pins on the original
+	// IN_FLIGHT generation-one ledger row.
+	// queryPreparedContentStage записывает STAGED либо UNKNOWN и принятые object pins в исходную
+	// IN_FLIGHT строку ledger первого поколения.
 	//go:embed sql/prepared_content_stage.sql
 	queryPreparedContentStage string
+	// queryPreparedContentResolve locks unexpired STAGED clean content bound to the exact current plan
+	// revision and operation digest/size tuple before adoption.
+	// queryPreparedContentResolve блокирует неистёкшее чистое STAGED содержимое, привязанное к точным
+	// текущим plan revision и operation digest/size, до принятия.
 	//go:embed sql/prepared_content_resolve.sql
 	queryPreparedContentResolve string
+	// queryPreparedContentLink links STAGED content to an exact current plan operation while
+	// preserving first origin references and forward revision binding.
+	// queryPreparedContentLink привязывает STAGED содержимое к точной операции текущего плана,
+	// сохраняя первые origin references и направленную вперёд привязку ревизии.
 	//go:embed sql/prepared_content_link.sql
 	queryPreparedContentLink string
+	// queryPreparedContentAdopt moves STAGED content to ADOPTED only when tenant/project/target, exact
+	// object receipt and clean antivirus evidence match the saved artifact revision.
+	// queryPreparedContentAdopt переводит STAGED содержимое в ADOPTED только при совпадении
+	// tenant/project/target, точной квитанции объекта и чистого antivirus evidence сохранённой ревизии
+	// артефакта.
 	//go:embed sql/prepared_content_adopt.sql
 	queryPreparedContentAdopt string
+	// queryPreparedContentAbandon expires unadopted STAGED or UNKNOWN content, advances generation and
+	// records ABANDONED within the supplied transaction.
+	// queryPreparedContentAbandon завершает срок не принятого STAGED либо UNKNOWN содержимого,
+	// увеличивает поколение и записывает ABANDONED в переданной транзакции.
 	//go:embed sql/prepared_content_abandon.sql
 	queryPreparedContentAbandon string
+	// queryPreparedContentBinding reads retained origin pins for an exact current draft/stale plan
+	// operation under a shared lock, without returning an object receipt or new authority.
+	// queryPreparedContentBinding читает сохранённые origin pins точной операции текущего draft/stale
+	// плана под shared lock, не выдавая квитанцию объекта или новые полномочия.
 	//go:embed sql/prepared_content_binding.sql
 	queryPreparedContentBinding string
+	// queryPreparedContentBindRevision persists the exact ledger-to-plan-revision binding after
+	// linking STAGED content and ignores an already identical binding.
+	// queryPreparedContentBindRevision сохраняет точную привязку ledger к plan revision после
+	// связывания STAGED содержимого и игнорирует уже существующую такую привязку.
 	//go:embed sql/prepared_content_bind_revision.sql
 	queryPreparedContentBindRevision string
 )
 
+// preparedContentRequestDigest hashes the existing JSON metadata and binding representation,
+// excluding the reader because inspected size and digest commit its body.
+// preparedContentRequestDigest хеширует существующее JSON-представление метаданных и привязки без
+// reader: проверенные размер и дайджест закрепляют его тело.
 func preparedContentRequestDigest(request preparedContentRequest) string {
 	// io.Reader исключён из commitment; digest/size связывают только inspected body.
 	raw, _ := json.Marshal(struct {
@@ -78,6 +133,12 @@ func preparedContentRequestDigest(request preparedContentRequest) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// validPreparedContentRequest checks UUIDs, lowercase digests, bounded source references,
+// version/target consistency and a nonnil reader with declared size from zero to one MiB, clean
+// scan and closed preview states; it does not authorize the caller.
+// validPreparedContentRequest проверяет UUID, строчные дайджесты, ограниченные ссылки источника,
+// согласованность версий/target и ненулевой reader с размером от нуля до одного MiB, CLEAN и
+// закрытым набором preview states; не авторизует caller.
 func validPreparedContentRequest(request preparedContentRequest) bool {
 	b := request.Binding
 	for _, id := range []string{b.ActorID, b.OrganizationID, b.ProjectID} {
@@ -118,6 +179,11 @@ func validPreparedContentRequest(request preparedContentRequest) bool {
 		(request.PreviewState == "AVAILABLE" || request.PreviewState == "UNAVAILABLE" || request.PreviewState == "BLOCKED")
 }
 
+// scanPreparedContent scans the exact ledger/receipt columns and validates saved antivirus
+// evidence against digest and size, rejecting infected or inconsistent evidence as conflict.
+// scanPreparedContent сканирует точные колонки ledger/receipt и проверяет сохранённое antivirus
+// evidence относительно digest и size, отклоняя заражённое либо несогласованное evidence как
+// conflict.
 func scanPreparedContent(row pgx.Row) (preparedContent, string, string, error) {
 	var content preparedContent
 	var state, requestDigest string
@@ -137,9 +203,10 @@ func scanPreparedContent(row pgx.Row) (preparedContent, string, string, error) {
 	return content, state, requestDigest, nil
 }
 
-// SDK подписывает payload и требует io.Seeker. Проверенный bounded снимок
-// остаётся только в памяти; LimitReader не передаётся в S3, поскольку он теряет
-// Seek и ломает signed Put до отправки HTTP даже поверх bytes.Reader.
+// preparedContentSeekableBody reads at most declared size plus one byte, verifies exact size and
+// SHA-256 and returns an in-memory seekable reader required by signed object Put.
+// preparedContentSeekableBody читает не более заявленного размера плюс один байт, проверяет точные
+// размер и SHA-256 и возвращает seekable reader в памяти для подписанного object Put.
 func preparedContentSeekableBody(request preparedContentRequest) (*bytes.Reader, error) {
 	if request.Body == nil || request.SizeBytes < 0 || request.SizeBytes > 1<<20 {
 		return nil, errs.ErrInvalid
@@ -155,8 +222,12 @@ func preparedContentSeekableBody(request preparedContentRequest) (*bytes.Reader,
 	return bytes.NewReader(body), nil
 }
 
-// Durable unique intent фиксируется до одного Put. Повтор RPC читает ledger;
-// никакой исход, включая rollback/timeout/HEAD404, не разрешает второй Put.
+// stagePreparedContent validates and scans the body, reserves a durable unique intent before one
+// Put and exact Head, and accepts only matching STAGED replay; uncertainty never permits another
+// Put even if recording UNKNOWN or commit fails.
+// stagePreparedContent проверяет тело и антивирус, резервирует durable unique intent до одного Put
+// и точного Head, принимает только совпадающий STAGED replay; неопределённость не разрешает новый
+// Put даже при отказе записи UNKNOWN либо commit.
 func (repository *Repository) stagePreparedContent(ctx context.Context, request preparedContentRequest) (preparedContent, error) {
 	if !validPreparedContentRequest(request) {
 		return preparedContent{}, errs.ErrInvalid
@@ -269,12 +340,19 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 			ScanState: request.ScanState, PreviewState: request.PreviewState, Antivirus: scan}}, nil
 }
 
+// exactPreparedReceipt requires the exact key, digest and size plus nonempty version and ETag;
+// callers separately compare the complete authoritative Head receipt.
+// exactPreparedReceipt требует точные key, digest и size и непустые version и ETag; caller
+// отдельно сравнивает полную авторитетную квитанцию Head.
 func exactPreparedReceipt(receipt objectstorage.Receipt, key, digest string, size int64) bool {
 	return receipt.Key == key && receipt.VersionID != "" && receipt.ETag != "" && receipt.Digest == digest && receipt.SizeBytes == size
 }
 
-// Вызывается только после fresh plan/target authority. Создатель ledger
-// неизменен; текущий actor вправе Apply по authority плана, не совпадению IDs.
+// resolvePreparedContentTx resolves an exact plan-bound clean prepared object after caller-owned
+// fresh authority checks, mapping missing rows to conflict and other read failures to unavailable.
+// resolvePreparedContentTx разрешает точный чистый подготовленный объект с привязкой к плану после
+// свежих проверок полномочий caller; отсутствие строки даёт conflict, прочий отказ чтения —
+// unavailable.
 func (repository *Repository) resolvePreparedContentTx(ctx context.Context, tx pgx.Tx, current scope, planID string, planRevision int64, operationKey, contentRef, digest string, sizeBytes int64) (preparedContent, error) {
 	content, _, _, err := scanPreparedContent(tx.QueryRow(ctx, queryPreparedContentResolve, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "plan_id": planID, "plan_revision": planRevision,
@@ -289,6 +367,10 @@ func (repository *Repository) resolvePreparedContentTx(ctx context.Context, tx p
 	return content, nil
 }
 
+// preparedContentTransition executes a supplied prepared-content transition and requires exactly
+// one affected row, keeping database failures distinct from a state mismatch.
+// preparedContentTransition выполняет переданный переход prepared content и требует ровно одну
+// изменённую строку, различая отказ БД и несовпадение состояния.
 func preparedContentTransition(ctx context.Context, tx pgx.Tx, query string, args pgx.StrictNamedArgs) error {
 	result, err := tx.Exec(ctx, query, args)
 	if err != nil {
@@ -300,6 +382,10 @@ func preparedContentTransition(ctx context.Context, tx pgx.Tx, query string, arg
 	return nil
 }
 
+// linkPreparedContentTx links the ledger to the exact plan operation using the one-row transition
+// and then inserts its revision binding in the same caller transaction.
+// linkPreparedContentTx связывает ledger с точной операцией плана через переход одной строки и
+// затем добавляет revision binding в той же транзакции caller.
 func (repository *Repository) linkPreparedContentTx(ctx context.Context, tx pgx.Tx, current scope, ledgerID, planID string, planRevision int64, operationKey string) error {
 	err := preparedContentTransition(ctx, tx, queryPreparedContentLink, pgx.StrictNamedArgs{
 		"id": ledgerID, "organization_id": current.organizationID, "plan_id": planID, "plan_revision": planRevision, "operation_key": operationKey,
@@ -313,16 +399,29 @@ func (repository *Repository) linkPreparedContentTx(ctx context.Context, tx pgx.
 	return nil
 }
 
+// adoptPreparedContentTx applies the dedicated receipt-checked adoption SQL within the caller
+// transaction and requires one matching ledger row.
+// adoptPreparedContentTx применяет отдельный SQL принятия с проверкой receipt в транзакции caller
+// и требует одну подходящую строку ledger.
 func (repository *Repository) adoptPreparedContentTx(ctx context.Context, tx pgx.Tx, current scope, ledgerID, revisionID string) error {
 	return preparedContentTransition(ctx, tx, queryPreparedContentAdopt, pgx.StrictNamedArgs{
 		"id": ledgerID, "organization_id": current.organizationID, "revision_id": revisionID,
 	})
 }
 
+// abandonPreparedContentTx uses the dedicated owner-scoped abandonment transition and requires one
+// eligible unadopted ledger row.
+// abandonPreparedContentTx использует отдельный переход abandonment в области владельца и требует
+// одну подходящую непринятую строку ledger.
 func (repository *Repository) abandonPreparedContentTx(ctx context.Context, tx pgx.Tx, current scope, ledgerID string) error {
 	return preparedContentTransition(ctx, tx, queryPreparedContentAbandon, pgx.StrictNamedArgs{"id": ledgerID, "organization_id": current.organizationID})
 }
 
+// readPreparedContentBindingTx reads exact retained source/intent pins for a plan revision and
+// operation, including after TTL until terminal scrub; lookup does not grant authority or return
+// receipt.
+// readPreparedContentBindingTx читает точные сохранённые source/intent pins ревизии и операции
+// плана, в том числе после TTL до terminal scrub; lookup не выдаёт полномочия или receipt.
 func (repository *Repository) readPreparedContentBindingTx(ctx context.Context, tx pgx.Tx, current scope, planID string, planRevision int64, operationKey, contentRef, digest string, sizeBytes int64) (preparedContentBinding, error) {
 	// До подтверждённого cleanup origin доступен для owner draft после TTL.
 	// Terminal scrub закрывает lookup; это не выдаёт receipt либо полномочия.

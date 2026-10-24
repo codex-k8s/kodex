@@ -7,6 +7,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestIntegrationGrantPublicProjectionKeepsParentPinAndNativeGrant checks public parent/version
+// semantics and recipient grant fields while hiding the internal connection pin without mutating
+// native protobuf authority.
+// TestIntegrationGrantPublicProjectionKeepsParentPinAndNativeGrant проверяет публичные версии
+// родителя и grant и поля получателя со скрытием внутреннего pin подключения без изменения
+// исходных protobuf-полномочий.
 func TestIntegrationGrantPublicProjectionKeepsParentPinAndNativeGrant(t *testing.T) {
 	for _, recipient := range []string{"agt_systemfixture", "agt_projectfixture"} {
 		t.Run(recipient, func(t *testing.T) {
@@ -44,6 +50,10 @@ func TestIntegrationGrantPublicProjectionKeepsParentPinAndNativeGrant(t *testing
 	}
 }
 
+// TestIntegrationGrantPublicProjectionStillRejectsUnknownRisk checks hiding an internal connection
+// pin does not allow an unknown grant risk through the public projection.
+// TestIntegrationGrantPublicProjectionStillRejectsUnknownRisk проверяет сохранение отказа
+// неизвестному риску grant в публичной проекции при скрытии внутреннего pin подключения.
 func TestIntegrationGrantPublicProjectionStillRejectsUnknownRisk(t *testing.T) {
 	_, err := ProtoMap(&cp.IntegrationConnection{Ref: "con_fixture01", Version: 12, Grants: []*cp.IntegrationGrant{{
 		Ref: "igr_fixture01", Version: 1, ConnectionVersion: 12, AgentRef: "agt_systemfixture",

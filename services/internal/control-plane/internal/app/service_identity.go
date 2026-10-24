@@ -13,11 +13,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// serviceIdentityPolicy embeds the target-owned compiled route policy; declarations alone do not
+// authenticate a peer or turn payload identifiers into authority.
+// serviceIdentityPolicy встраивает compiled route policy владельца target; одни declarations не
+// аутентифицируют peer и не превращают payload identifiers в полномочия.
+//
 //go:embed service-identity-policy.json
 var serviceIdentityPolicy []byte
 
-// serviceIdentityReader подключает opt-in reader до смены клиентов. Legacy
-// остаётся отдельным путём; ошибка service-v1 никогда не вызывает legacy retry.
+// serviceIdentityReader builds the opt-in service-v1 policy/principal interceptors and routes only
+// absent profile metadata to legacy; duplicate/unknown profiles and service-v1 failures never
+// trigger legacy retry.
+// serviceIdentityReader создаёт opt-in service-v1 interceptors policy и principal и направляет в
+// legacy только отсутствие profile metadata; дубли, неизвестные profiles и service-v1 отказы не
+// запускают legacy retry.
 func serviceIdentityReader(owner rpcprincipal.Owner, credentials rpcprincipal.CredentialVerifier, legacy grpc.UnaryServerInterceptor, legacyStream grpc.StreamServerInterceptor) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor, error) {
 	const target = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	authorizer, _, err := serviceidentity.FromPolicy(serviceIdentityPolicy, target, serviceidentity.CertificateLifetimeBoundary{})

@@ -72,11 +72,7 @@ func domainSkillSpecification(input *controlplanev1.SkillBundleSpecification) en
 // ValidateSkillBundleDraft sends exact bundle/revision/digest pins to the owner validation command and projects its result; the transport does not perform scanning itself.
 // ValidateSkillBundleDraft передаёт точные пакет, ревизию и дайджест команде проверки владельца и проецирует результат; транспорт самостоятельно не сканирует файлы.
 func (server *Server) ValidateSkillBundleDraft(ctx context.Context, request *controlplanev1.ValidateSkillBundleDraftRequest) (*controlplanev1.ValidateSkillBundleDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ValidateSkillBundleDraft_FullMethodName, command.ValidateSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{BundleRef: request.GetBundleRef(), RevisionRef: request.GetRevisionRef(), ExpectedDigest: request.GetExpectedDigest()})
-	if err != nil {
-		return nil, err
-	}
-	bundle, err := castSkillBundle(result.SkillBundle)
+	bundle, err := server.executeSkillBundle(ctx, controlplanev1.PlatformCommandService_ValidateSkillBundleDraft_FullMethodName, command.ValidateSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{BundleRef: request.GetBundleRef(), RevisionRef: request.GetRevisionRef(), ExpectedDigest: request.GetExpectedDigest()})
 	if err != nil {
 		return nil, err
 	}
@@ -150,11 +146,7 @@ func (server *Server) GetSkillBundle(ctx context.Context, request *controlplanev
 // CreateSkillBundleDraft passes project, optional bundle ref and specification with mutation context to the distinct owner create command, then projects the returned bundle.
 // CreateSkillBundleDraft передаёт проект, необязательную ссылку пакета и спецификацию с контекстом изменения отдельной команде создания владельца, затем проецирует пакет.
 func (server *Server) CreateSkillBundleDraft(ctx context.Context, request *controlplanev1.CreateSkillBundleDraftRequest) (*controlplanev1.CreateSkillBundleDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateSkillBundleDraft_FullMethodName, command.CreateSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{ProjectRef: request.GetProjectRef(), BundleRef: request.GetBundleRef(), Specification: domainSkillSpecification(request.GetSpecification())})
-	if err != nil {
-		return nil, err
-	}
-	bundle, err := castSkillBundle(result.SkillBundle)
+	bundle, err := server.executeSkillBundle(ctx, controlplanev1.PlatformCommandService_CreateSkillBundleDraft_FullMethodName, command.CreateSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{ProjectRef: request.GetProjectRef(), BundleRef: request.GetBundleRef(), Specification: domainSkillSpecification(request.GetSpecification())})
 	if err != nil {
 		return nil, err
 	}
@@ -164,13 +156,21 @@ func (server *Server) CreateSkillBundleDraft(ctx context.Context, request *contr
 // SaveSkillBundleDraft passes the exact bundle/revision refs and replacement specification with mutation context to the owner save command; this transport does not publish the draft.
 // SaveSkillBundleDraft передаёт точные ссылки пакета и ревизии и новую спецификацию с контекстом изменения команде сохранения владельца; транспорт не публикует черновик.
 func (server *Server) SaveSkillBundleDraft(ctx context.Context, request *controlplanev1.SaveSkillBundleDraftRequest) (*controlplanev1.SaveSkillBundleDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SaveSkillBundleDraft_FullMethodName, command.SaveSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{BundleRef: request.GetBundleRef(), RevisionRef: request.GetRevisionRef(), Specification: domainSkillSpecification(request.GetSpecification())})
-	if err != nil {
-		return nil, err
-	}
-	bundle, err := castSkillBundle(result.SkillBundle)
+	bundle, err := server.executeSkillBundle(ctx, controlplanev1.PlatformCommandService_SaveSkillBundleDraft_FullMethodName, command.SaveSkillBundleDraft, request.GetMutation(), command.SkillBundleInput{BundleRef: request.GetBundleRef(), RevisionRef: request.GetRevisionRef(), Specification: domainSkillSpecification(request.GetSpecification())})
 	if err != nil {
 		return nil, err
 	}
 	return &controlplanev1.SaveSkillBundleDraftResponse{Bundle: bundle}, nil
+}
+
+// executeSkillBundle combines the existing exact-method command execution and checked bundle
+// projection; callers retain distinct command kinds, typed inputs and protobuf response wrappers.
+// executeSkillBundle объединяет существующее выполнение команды точного метода и проверенное
+// преобразование пакета; вызывающие сохраняют отдельные kind, типизированный input и protobuf-ответ.
+func (server *Server) executeSkillBundle(ctx context.Context, method string, kind command.Kind, mutationInput *controlplanev1.MutationContext, input command.SkillBundleInput) (*controlplanev1.SkillBundle, error) {
+	result, err := execute(ctx, server.service, method, kind, mutationInput, input)
+	if err != nil {
+		return nil, err
+	}
+	return castSkillBundle(result.SkillBundle)
 }

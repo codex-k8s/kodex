@@ -12,9 +12,24 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// workflowCatalogRefPattern accepts the bounded ASCII reference shape for workflow catalog leases
+// and immutable workflow/publication pins, independently of authority.
+// workflowCatalogRefPattern принимает ограниченную ASCII-форму ссылок leases каталога workflow и
+// immutable pins workflow и публикации независимо от полномочий.
 var workflowCatalogRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,96}$`)
+
+// workflowCatalogDigestPattern accepts exactly sixty-four lowercase hex characters for the pinned
+// workflow specification digest.
+// workflowCatalogDigestPattern принимает ровно шестьдесят четыре lowercase hex-символа
+// закреплённого дайджеста спецификации workflow.
 var workflowCatalogDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+// GetExecutionWorkflowCatalog requires resolved runtime-controller catalog authority and bounded
+// lease/fence/query inputs, enforcing exclusive publication or active-run modes and exact
+// immutable workflow pins before owner access.
+// GetExecutionWorkflowCatalog требует разрешённые полномочия каталога runtime-controller и
+// ограниченный ввод lease, fence и поиска, проверяет исключающие режимы publication либо active
+// runs и точные immutable pins workflow до владельца.
 func (service *Service) GetExecutionWorkflowCatalog(ctx context.Context, p value.Principal, input query.ExecutionWorkflowCatalog) (entity.ExecutionWorkflowCatalog, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

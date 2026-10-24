@@ -17,9 +17,22 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// secretRevisionPath names revision two of the synthetic runtime secret for local impact and
+// consumer-rebinding HTTP tests.
+// secretRevisionPath задаёт маршрут второй ревизии синтетического runtime secret для локальных
+// HTTP-тестов влияния и перепривязки потребителей.
 const secretRevisionPath = "/api/v1/runtime-secrets/sec_fixture01/revisions/2"
+
+// secretRebindBody provides one synthetic environment selection with source-version, scope and
+// agent/binding version pins for secret rebinding.
+// secretRebindBody задаёт выбор одного синтетического окружения с исходной версией, областью и
+// pins версий агента и привязки для перепривязки секрета.
 const secretRebindBody = `{"selections":[{"environmentRef":"env_fixture01","expectedEnvironmentVersion":4,"sourceVersionRef":"ever_fixture01","scopeKind":"PROJECT","organizationRef":"org_fixture01","projectRef":"prj_fixture01","consumers":[{"agentRef":"agt_fixture01","agentVersion":5,"bindingRef":"bind_fixture01","bindingVersion":2,"versionRef":"ever_fixture01","projectRef":"prj_fixture01","scopeKind":"PROJECT","organizationRef":"org_fixture01"}]}]}`
 
+// secretImpactRecorder captures a cloned secret-impact or rebind request and supports injected
+// owner failures and response corruption.
+// secretImpactRecorder сохраняет копию запроса влияния либо перепривязки секрета и поддерживает
+// заданные ошибки владельца и повреждение ответа.
 type secretImpactRecorder struct {
 	grpc.ClientConnInterface
 	request proto.Message
@@ -27,6 +40,10 @@ type secretImpactRecorder struct {
 	corrupt func(proto.Message)
 }
 
+// Invoke returns typed synthetic impact or rebind data after recording the request, including
+// private environment values to test receipt filtering.
+// Invoke возвращает типизированные синтетические данные влияния либо перепривязки после записи
+// запроса, включая внутренние значения окружения для проверки фильтрации квитанции.
 func (client *secretImpactRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	client.request = proto.Clone(request.(proto.Message))
 	if client.failure != nil {
@@ -54,10 +71,20 @@ func (client *secretImpactRecorder) Invoke(_ context.Context, method string, req
 	return nil
 }
 
+// secretImpactHandler connects the generated HTTP router to query and command clients backed by
+// the local secret-impact recorder.
+// secretImpactHandler соединяет generated HTTP-маршрутизатор с query- и command-клиентами
+// локальной заглушки записи влияния секрета.
 func secretImpactHandler(client *secretImpactRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: controlplanev1.NewPlatformQueryServiceClient(client), Command: controlplanev1.NewPlatformCommandServiceClient(client)}})
 }
 
+// TestSecretImpactExactMappingIncludesUnboundEnvironment checks exact secret revision and
+// pagination mapping, preserving both bound and unbound environments, ETag and noncacheable impact
+// metadata.
+// TestSecretImpactExactMappingIncludesUnboundEnvironment проверяет точное отображение ревизии
+// секрета и пагинации, сохранение привязанных и непривязанных окружений, ETag и некэшируемых
+// метаданных влияния.
 func TestSecretImpactExactMappingIncludesUnboundEnvironment(t *testing.T) {
 	client := &secretImpactRecorder{}
 	w := httptest.NewRecorder()
@@ -78,6 +105,11 @@ func TestSecretImpactExactMappingIncludesUnboundEnvironment(t *testing.T) {
 	}
 }
 
+// TestSecretRebindExactMappingAndSafeReceipt checks secret and environment version fencing, source
+// consumer pins and idempotency with new version receipts that omit private environment values.
+// TestSecretRebindExactMappingAndSafeReceipt проверяет ограничения версий секрета и окружения,
+// pins исходных потребителей и идемпотентность с квитанциями новых версий без внутренних значений
+// окружения.
 func TestSecretRebindExactMappingAndSafeReceipt(t *testing.T) {
 	client := &secretImpactRecorder{}
 	w := httptest.NewRecorder()
@@ -102,6 +134,10 @@ func TestSecretRebindExactMappingAndSafeReceipt(t *testing.T) {
 	}
 }
 
+// TestSecretRebindAllowsPublicationWithoutAgentBindings checks successful publication of a
+// selected environment with an explicitly empty consumer list and no returned agent bindings.
+// TestSecretRebindAllowsPublicationWithoutAgentBindings проверяет успешную публикацию выбранного
+// окружения с явно пустым списком потребителей и отсутствием возвращённых привязок агентов.
 func TestSecretRebindAllowsPublicationWithoutAgentBindings(t *testing.T) {
 	client := &secretImpactRecorder{corrupt: func(m proto.Message) { m.(*controlplanev1.RebindRuntimeSecretResponse).Bindings = nil }}
 	w := httptest.NewRecorder()
@@ -112,6 +148,11 @@ func TestSecretRebindAllowsPublicationWithoutAgentBindings(t *testing.T) {
 	}
 }
 
+// TestSecretImpactRejectInvalidInputBeforeRPC checks revision and page bounds, forged authority,
+// empty or repeated selections, missing consumers and mismatched source versions before owner RPC.
+// TestSecretImpactRejectInvalidInputBeforeRPC проверяет границы ревизии и страницы, поддельные
+// полномочия, пустой либо повторный выбор, отсутствие потребителей и несовпадение исходных версий
+// до RPC владельца.
 func TestSecretImpactRejectInvalidInputBeforeRPC(t *testing.T) {
 	for _, tc := range []struct{ name, method, path, body string }{
 		{"zero-revision", "GET", strings.Replace(secretRevisionPath, "/2", "/0", 1) + "/impact", ""},
@@ -135,6 +176,11 @@ func TestSecretImpactRejectInvalidInputBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestSecretImpactRejectUpstreamMismatch checks rejection of foreign secret or target, partial
+// consumer identity, wrong secret descriptors and incomplete or unselected rebind results.
+// TestSecretImpactRejectUpstreamMismatch проверяет отказ чужим секрету либо цели, частичной
+// identity потребителя, неверным дескрипторам секрета и неполным либо невыбранным результатам
+// перепривязки.
 func TestSecretImpactRejectUpstreamMismatch(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, suffix, body string
@@ -164,6 +210,11 @@ func TestSecretImpactRejectUpstreamMismatch(t *testing.T) {
 	}
 }
 
+// TestSecretImpactAuthorityFailureNeverBecomesSuccess checks concrete owner failure mapping on
+// both impact reads and rebind commands without exposing private provider diagnostic text.
+// TestSecretImpactAuthorityFailureNeverBecomesSuccess проверяет конкретное отображение ошибок
+// владельца при чтении влияния и командах перепривязки без раскрытия внутренней диагностики
+// провайдера.
 func TestSecretImpactAuthorityFailureNeverBecomesSuccess(t *testing.T) {
 	for _, code := range []codes.Code{codes.PermissionDenied, codes.Unauthenticated, codes.NotFound, codes.Aborted, codes.Unavailable} {
 		for _, method := range []string{http.MethodGet, http.MethodPost} {

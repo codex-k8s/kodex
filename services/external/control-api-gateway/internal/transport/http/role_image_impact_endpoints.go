@@ -9,6 +9,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// PrepareRoleImageImpactPlan prepares the exact role-image configuration/revision impact under
+// mutation context and accepts only a valid returned plan matching both refs and expected
+// configuration version.
+// PrepareRoleImageImpactPlan готовит impact точных configuration/revision role image с mutation
+// context и принимает только корректный plan, совпадающий по обоим refs и ожидаемой версии
+// конфигурации.
 func (s *Server) PrepareRoleImageImpactPlan(w http.ResponseWriter, r *http.Request, configuration generated.ConfigurationRef, revision generated.ConfigurationRevisionRef, p generated.PrepareRoleImageImpactPlanParams) {
 	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -31,6 +37,12 @@ func (s *Server) PrepareRoleImageImpactPlan(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusCreated, plan)
 }
 
+// GetRoleImageImpactPlan reads an owner plan page and checks identity, total/page bounds and
+// cursor before projecting distinct items from one owner-scope tuple. It does not itself promote
+// an image or rebind workloads.
+// GetRoleImageImpactPlan читает страницу плана владельца и проверяет identity, total/page лимиты и
+// cursor до проекции уникальных элементов одной owner-scope тройки. Самостоятельные promotion
+// образа и rebind workload не выполняются.
 func (s *Server) GetRoleImageImpactPlan(w http.ResponseWriter, r *http.Request, ref generated.OpaqueRef, p generated.GetRoleImageImpactPlanParams) {
 	if !fileTargetRef(ref) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -64,6 +76,12 @@ func (s *Server) GetRoleImageImpactPlan(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, result)
 }
 
+// roleImageImpactPlanView projects validated configuration/revision, recipe/build/artifact and
+// admission-policy digest pins with bounded totals and coherent plan timestamps. Known plan state
+// describes owner evidence and does not execute admission verification here.
+// roleImageImpactPlanView проецирует проверенные configuration/revision, recipe/build/artifact и
+// admission-policy digest pins с ограниченными total и согласованным временем. Известное состояние
+// описывает evidence владельца без исполнения admission verification здесь.
 func roleImageImpactPlanView(v *cp.RoleImageImpactPlan) (generated.RoleImageImpactPlan, bool) {
 	result := generated.RoleImageImpactPlan{}
 	if v == nil || !validManagedVersion(v.Version) || !validManagedVersion(v.ConfigurationVersion) || !validManagedVersion(v.RecipeGeneration) || v.Total < 0 || v.Total > 1000 || v.CreatedAt == nil || v.CreatedAt.CheckValid() != nil || v.ExpiresAt == nil || v.ExpiresAt.CheckValid() != nil || !v.ExpiresAt.AsTime().After(v.CreatedAt.AsTime()) || !strings.HasPrefix(v.ArtifactDigest, "sha256:") || !validManagedDigest(strings.TrimPrefix(v.ArtifactDigest, "sha256:")) {
@@ -89,6 +107,13 @@ func roleImageImpactPlanView(v *cp.RoleImageImpactPlan) (generated.RoleImageImpa
 	return result, true
 }
 
+// roleImageImpactItemView binds each impact item to its source environment revision and optional
+// validated agent consumer, then checks plan/outcome compatibility. APPLIED requires a new
+// environment revision and, for bound agents, the same binding with a higher version; other
+// outcomes omit result pins.
+// roleImageImpactItemView связывает impact элемент с исходной revision среды и необязательным
+// проверенным consumer-агентом, затем сверяет plan/outcome. APPLIED требует новую revision среды и
+// для связанных агентов ту же binding с большей версией; прочие исходы не несут result pins.
 func roleImageImpactItemView(v *cp.RoleImageImpactItem, state generated.RoleImageImpactPlanState) (generated.RoleImageImpactItem, bool) {
 	result := generated.RoleImageImpactItem{}
 	if v == nil || !fileTargetRef(v.Ref) || !fileTargetRef(v.EnvironmentRef) || !validManagedVersion(v.EnvironmentVersion) || !fileTargetRef(v.SourceVersionRef) || !validManagedDigest(v.SourceVersionDigest) || v.Consumer == nil ||

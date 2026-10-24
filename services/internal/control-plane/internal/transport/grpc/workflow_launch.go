@@ -10,6 +10,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// LaunchWorkflowExecution passes execution lease, workflow publication/version/digest and input
+// pins through the dedicated launch command and returns run, graph and launch/callback references.
+// LaunchWorkflowExecution передаёт execution lease, привязки публикации, версии, digest и ввода
+// процесса отдельной команде запуска и возвращает запуск, граф и ссылки launch и callback.
 func (server *Server) LaunchWorkflowExecution(ctx context.Context, request *controlplanev1.LaunchWorkflowExecutionRequest) (*controlplanev1.LaunchWorkflowExecutionResponse, error) {
 	payload := command.LaunchWorkflowInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), WorkflowRef: request.GetWorkflowRef(), Task: request.GetTask(), Title: request.GetTitle(), Input: asMap(request.GetInput()), ExpectedPublishedRef: request.GetExpectedPublishedRef(), ExpectedSpecDigest: request.GetExpectedSpecDigest(), ExpectedWorkflowVersion: request.GetExpectedWorkflowVersion()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_LaunchWorkflowExecution_FullMethodName, command.LaunchWorkflowExecution, request.GetMutation(), payload)
@@ -21,6 +25,10 @@ func (server *Server) LaunchWorkflowExecution(ctx context.Context, request *cont
 	return &controlplanev1.LaunchWorkflowExecutionResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph), LaunchRef: launchRef, CallbackEdgeRef: callbackRef}, nil
 }
 
+// GetExecutionWorkflowCatalog validates wire selectors before the authorized lease-bound catalog
+// read and projects either pinned publication, active runs or catalog entries with readiness.
+// GetExecutionWorkflowCatalog проверяет wire selectors до авторизованного чтения каталога по lease
+// и преобразует закреплённую публикацию, активные запуски либо элементы каталога с готовностью.
 func (server *Server) GetExecutionWorkflowCatalog(ctx context.Context, request *controlplanev1.GetExecutionWorkflowCatalogRequest) (*controlplanev1.GetExecutionWorkflowCatalogResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName)
 	if err != nil {
@@ -64,10 +72,18 @@ func (server *Server) GetExecutionWorkflowCatalog(ctx context.Context, request *
 	return response, nil
 }
 
+// workflowReadPins copies workflow, publication, specification digest and workflow version
+// locators with generated getter defaults for absent input.
+// workflowReadPins копирует ссылки процесса, публикации, digest спецификации и версию процесса с
+// нулевыми generated getter значениями отсутствующего входа.
 func workflowReadPins(pins *controlplanev1.ExecutionWorkflowReadPins) query.ExecutionWorkflowReadPins {
 	return query.ExecutionWorkflowReadPins{WorkflowRef: pins.GetWorkflowRef(), PublishedRef: pins.GetPublishedRef(), SpecDigest: pins.GetSpecDigest(), WorkflowVersion: pins.GetWorkflowVersion()}
 }
 
+// workflowCatalogRequestWireValid rejects absent requests and unknown fields, requiring present
+// known-field pins for publication or active-run selectors and otherwise no selector.
+// workflowCatalogRequestWireValid отклоняет отсутствующий запрос и unknown fields, требуя явные
+// pins без unknown fields для publication либо active-run selectors, иначе отсутствие selector.
 func workflowCatalogRequestWireValid(request *controlplanev1.GetExecutionWorkflowCatalogRequest) bool {
 	if request == nil || len(request.ProtoReflect().GetUnknown()) != 0 {
 		return false

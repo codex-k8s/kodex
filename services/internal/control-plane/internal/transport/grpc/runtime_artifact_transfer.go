@@ -18,8 +18,16 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// artifactTransferContentMismatch names the fixed DataLoss message for truncated, excessive or
+// checksum-mismatched transfer content.
+// artifactTransferContentMismatch задаёт фиксированный текст DataLoss для усечённого, избыточного
+// либо не совпадающего по checksum содержимого передачи.
 const artifactTransferContentMismatch = "runtime artifact transfer content mismatch"
 
+// StreamExecutionArtifact requires a live bounded stream deadline, authorizes the exact lease path
+// and confirms fresh owner metadata before transfer completion.
+// StreamExecutionArtifact требует действующий ограниченный срок stream, авторизует точный путь
+// lease и подтверждает свежие метаданные владельца перед завершением передачи.
 func (server *Server) StreamExecutionArtifact(request *cp.StreamExecutionArtifactRequest, stream cp.RuntimeWorkService_StreamExecutionArtifactServer) error {
 	ctx := stream.Context()
 	deadline, ok := ctx.Deadline()
@@ -50,6 +58,10 @@ func (server *Server) StreamExecutionArtifact(request *cp.StreamExecutionArtifac
 	})
 }
 
+// sameTransferArtifact compares the exact identity, owner references, content metadata, revision,
+// version and source used to confirm an unchanged transfer artifact.
+// sameTransferArtifact сравнивает точные identity, ссылки владельца, метаданные содержимого,
+// ревизию, версию и источник для подтверждения неизменности передаваемого артефакта.
 func sameTransferArtifact(left, right entity.Artifact) bool {
 	return left.Ref == right.Ref && left.ProjectRef == right.ProjectRef && left.RunRef == right.RunRef &&
 		left.SessionRef == right.SessionRef && left.FileName == right.FileName && left.MediaType == right.MediaType &&
@@ -57,8 +69,12 @@ func sameTransferArtifact(left, right entity.Artifact) bool {
 		left.Version == right.Version && left.Source == right.Source
 }
 
-// Complete следует после полного checksum, закрытия source и свежего owner
-// read. Partial chunks до Complete не являются успешно прочитанным файлом.
+// sendExecutionArtifact sends metadata and independent chunks, verifies exact size, EOF and
+// SHA-256, closes the reader and confirms owner state before sending Complete; partial chunks are
+// not completion.
+// sendExecutionArtifact отправляет метаданные и независимые chunks, проверяет точные размер, EOF и
+// SHA-256, закрывает reader и подтверждает owner state до Complete; частичные chunks не означают
+// завершения.
 func sendExecutionArtifact(ctx context.Context, download platformrepo.ArtifactDownload, send func(*cp.StreamExecutionArtifactResponse) error, confirm func() error) error {
 	if download.Reader == nil {
 		return transportError(errs.ErrUnavailable)

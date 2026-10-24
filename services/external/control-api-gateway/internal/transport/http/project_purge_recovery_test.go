@@ -14,8 +14,16 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// projectPurgeRecoveryPath names the synthetic project purge-recovery route shared by local
+// preview, resolution and rejection tests.
+// projectPurgeRecoveryPath задаёт маршрут восстановления очистки синтетического проекта для
+// локальных тестов предпросмотра, решения и отказов.
 const projectPurgeRecoveryPath = "/api/v1/projects/prj_fixture01/purge-recovery"
 
+// TestProjectPurgeRecoveryOpenAPIContract loads the canonical OpenAPI and validates purge-recovery
+// GET/POST operation IDs and their distinct preview and accepted statuses.
+// TestProjectPurgeRecoveryOpenAPIContract загружает канонический OpenAPI и проверяет operation ID
+// GET/POST восстановления очистки и разные статусы предпросмотра и принятого решения.
 func TestProjectPurgeRecoveryOpenAPIContract(t *testing.T) {
 	spec, err := openapi3.NewLoader().LoadFromFile("../../../../../../contracts/openapi/control-api-gateway/v1/openapi.yaml")
 	if err != nil {
@@ -33,15 +41,27 @@ func TestProjectPurgeRecoveryOpenAPIContract(t *testing.T) {
 	}
 }
 
+// projectPurgeRecoveryFixture builds a synthetic WAITING_OWNER recovery snapshot with unresolved
+// cleanup counts, its own version and an independent project version.
+// projectPurgeRecoveryFixture создаёт синтетический snapshot восстановления WAITING_OWNER с
+// незавершёнными счётчиками очистки, собственной версией и независимой версией проекта.
 func projectPurgeRecoveryFixture() *cp.ProjectPurgeRecovery {
 	return &cp.ProjectPurgeRecovery{ProjectRef: "prj_fixture01", Version: 9, SnapshotDigest: strings.Repeat("a", 64),
 		State: "WAITING_OWNER", UnknownContentCount: 1, CleanupPendingCount: 2, ProjectPresent: true, CanResolve: true, ProjectVersion: 13}
 }
 
+// projectPurgeResolutionBody encodes the synthetic snapshot digest and explicit unknown-outcome
+// acknowledgement for local recovery resolution requests.
+// projectPurgeResolutionBody кодирует дайджест синтетического snapshot и явное подтверждение
+// неизвестного результата для локальных запросов решения восстановления.
 func projectPurgeResolutionBody() string {
 	return `{"snapshotDigest":"` + strings.Repeat("a", 64) + `","acknowledgeUnknownOutcome":true}`
 }
 
+// TestProjectPurgeRecoveryTypedRoutes checks separate preview and resolution RPCs, exact owner
+// readback, snapshot acknowledgement, mutation version, idempotency, ETag and no-store.
+// TestProjectPurgeRecoveryTypedRoutes проверяет отдельные RPC предпросмотра и решения, точное
+// чтение владельца, подтверждение snapshot, версию изменения, идемпотентность, ETag и no-store.
 func TestProjectPurgeRecoveryTypedRoutes(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		t.Run(method, func(t *testing.T) {
@@ -75,6 +95,10 @@ func TestProjectPurgeRecoveryTypedRoutes(t *testing.T) {
 	}
 }
 
+// TestProjectPurgeRecoveryReadSurvivesProjectRemoval checks that an observing recovery receipt
+// remains readable after project removal, explicitly returning absence and project version zero.
+// TestProjectPurgeRecoveryReadSurvivesProjectRemoval проверяет доступность чтения наблюдаемой
+// квитанции восстановления после удаления проекта с явным отсутствием проекта и нулевой версией.
 func TestProjectPurgeRecoveryReadSurvivesProjectRemoval(t *testing.T) {
 	value := projectPurgeRecoveryFixture()
 	value.ProjectPresent, value.ProjectVersion, value.CanResolve, value.State = false, 0, false, "OBSERVING"
@@ -87,6 +111,12 @@ func TestProjectPurgeRecoveryReadSurvivesProjectRemoval(t *testing.T) {
 	}
 }
 
+// TestProjectPurgeRecoveryRejectsUnconfirmedOrMalformedInput checks explicit acknowledgement and
+// digest syntax, unknown or trailing input and required version, idempotency and CSRF headers
+// before RPC.
+// TestProjectPurgeRecoveryRejectsUnconfirmedOrMalformedInput проверяет явное подтверждение и
+// синтаксис дайджеста, неизвестный либо лишний ввод и обязательные заголовки версии,
+// идемпотентности и CSRF до RPC.
 func TestProjectPurgeRecoveryRejectsUnconfirmedOrMalformedInput(t *testing.T) {
 	for _, body := range []string{"", `null`, `{}`, `{"snapshotDigest":"` + strings.Repeat("a", 64) + `"}`,
 		`{"snapshotDigest":"` + strings.Repeat("a", 64) + `","acknowledgeUnknownOutcome":false}`,
@@ -113,6 +143,10 @@ func TestProjectPurgeRecoveryRejectsUnconfirmedOrMalformedInput(t *testing.T) {
 	}
 }
 
+// TestProjectPurgeRecoveryRejectsInvalidRecoveryETag checks rejection of wildcard, weak, zero,
+// negative, unsafe and unquoted recovery versions before owner resolution.
+// TestProjectPurgeRecoveryRejectsInvalidRecoveryETag проверяет отказ wildcard, слабым, нулевым,
+// отрицательным, небезопасным и некавыченным версиям восстановления до решения владельца.
 func TestProjectPurgeRecoveryRejectsInvalidRecoveryETag(t *testing.T) {
 	for _, etag := range []string{`*`, `W/"3"`, `"0"`, `"-1"`, `"9007199254740992"`, `3`} {
 		client := &catalogRPCRecorder{}
@@ -126,6 +160,11 @@ func TestProjectPurgeRecoveryRejectsInvalidRecoveryETag(t *testing.T) {
 	}
 }
 
+// TestProjectPurgeRecoveryPreservesOwnerRejections checks concrete HTTP mapping of authoritative
+// recovery failures without disclosing the synthetic private storage descriptor.
+// TestProjectPurgeRecoveryPreservesOwnerRejections проверяет конкретное HTTP-отображение
+// авторитетных отказов восстановления без раскрытия синтетического внутреннего описателя
+// хранилища.
 func TestProjectPurgeRecoveryPreservesOwnerRejections(t *testing.T) {
 	for code, expected := range map[codes.Code]int{codes.NotFound: 404, codes.PermissionDenied: 403, codes.Aborted: 412, codes.AlreadyExists: 409, codes.FailedPrecondition: 409, codes.Unavailable: 503} {
 		client := &catalogRPCRecorder{failure: status.Error(code, "synthetic private storage descriptor")}
@@ -137,6 +176,11 @@ func TestProjectPurgeRecoveryPreservesOwnerRejections(t *testing.T) {
 	}
 }
 
+// TestProjectPurgeRecoveryRejectsInvalidOwnerProjection checks malformed scope, versions, digest,
+// state, counters and contradictory resolution availability return bad gateway without an ETag.
+// TestProjectPurgeRecoveryRejectsInvalidOwnerProjection проверяет ответ bad gateway без ETag при
+// повреждённых области, версиях, дайджесте, состоянии, счётчиках и противоречивой доступности
+// решения.
 func TestProjectPurgeRecoveryRejectsInvalidOwnerProjection(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.ProjectPurgeRecovery){
 		"wrong project":               func(v *cp.ProjectPurgeRecovery) { v.ProjectRef = "prj_other001" },

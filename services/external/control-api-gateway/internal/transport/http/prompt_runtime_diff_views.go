@@ -8,6 +8,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// promptRuntimeDiffView projects a pinned prompt-context comparison with optional current
+// turn/attempt, at most thirteen changes in canonical component order and only USE_CURRENT_CONTEXT
+// actions. It describes a proposal and does not apply a new runtime revision.
+// promptRuntimeDiffView проецирует закреплённое сравнение prompt context с необязательными
+// текущими turn/attempt, не более тринадцати изменений в каноническом порядке и только
+// USE_CURRENT_CONTEXT. Это описание предложения без применения новой runtime revision.
 func promptRuntimeDiffView(v *cp.PromptRuntimeDiff) (map[string]any, bool) {
 	if v == nil || !fileTargetRef(v.PreviousRevisionRef) || !fileTargetRef(v.SessionRef) || !validManagedDigest(v.Digest) || len(v.Changes) > 13 {
 		return nil, false
@@ -50,6 +56,12 @@ func promptRuntimeDiffView(v *cp.PromptRuntimeDiff) (map[string]any, bool) {
 	return result, true
 }
 
+// promptRuntimeDescriptors bounds descriptor arrays and text/version/digest fields, rejects
+// control characters and emits only present optional values. Empty input becomes an empty array
+// rather than hidden content lookup.
+// promptRuntimeDescriptors ограничивает массивы descriptors и поля текста/версии/digest, отклоняет
+// управляющие символы и выдаёт только имеющиеся optional значения. Пустой вход становится пустым
+// массивом без скрытого чтения содержимого.
 func promptRuntimeDescriptors(values []*cp.PromptRuntimeDescriptor) ([]any, bool) {
 	if len(values) > 256 {
 		return nil, false

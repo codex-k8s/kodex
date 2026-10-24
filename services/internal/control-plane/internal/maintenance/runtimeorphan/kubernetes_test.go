@@ -17,6 +17,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// TestMetadataDescriptorCanonicalKey checks a synthetic managed metadata descriptor accepts the
+// canonical value key and rejects a foreign key.
+// TestMetadataDescriptorCanonicalKey проверяет, что синтетический managed metadata descriptor
+// принимает canonical ключ value и отклоняет посторонний ключ.
 func TestMetadataDescriptorCanonicalKey(t *testing.T) {
 	name, _ := runtimesecret.VersionedKubernetesName("sec_fixturekey", 1)
 	m := metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "kodex-runtime", UID: "uid", ResourceVersion: "1", CreationTimestamp: metav1.Now(), Labels: map[string]string{"runtime-secrets.kodex.dev/managed": "true"}, Annotations: map[string]string{
@@ -32,6 +36,10 @@ func TestMetadataDescriptorCanonicalKey(t *testing.T) {
 	}
 }
 
+// TestMetadataOnlyWire checks metadata Accept and exact DELETE preconditions on a loopback server,
+// rejecting unexpected full Secret responses for GET and DELETE.
+// TestMetadataOnlyWire проверяет metadata Accept и точные DELETE preconditions на loopback server,
+// отклоняя неожиданные полные Secret ответы GET и DELETE.
 func TestMetadataOnlyWire(t *testing.T) {
 	for _, method := range []string{"GET", "DELETE"} {
 		t.Run(method, func(t *testing.T) {
@@ -61,6 +69,11 @@ func TestMetadataOnlyWire(t *testing.T) {
 	}
 }
 
+// TestOrphanActualAPI runs destructive namespace/Secret fixtures only when the explicit
+// disposable-API flag equals one; ordinary unit runs skip this operator integration path.
+// TestOrphanActualAPI исполняет разрушающие namespace и Secret fixtures только при явном
+// disposable-API флаге, равном единице; обычный unit запуск пропускает этот операторский
+// integration путь.
 func TestOrphanActualAPI(t *testing.T) {
 	if os.Getenv("KODEX_ORPHAN_API_FIXTURE") != "1" {
 		t.Skip("disposable API fixture not configured")
@@ -178,6 +191,10 @@ func TestOrphanActualAPI(t *testing.T) {
 	}
 }
 
+// TestConsumerGroups checks all eight runtime consumer groups against a loopback paginated-list
+// server with a synthetic nested reference.
+// TestConsumerGroups проверяет все восемь runtime consumer групп через loopback server списков с
+// синтетической вложенной reference.
 func TestConsumerGroups(t *testing.T) {
 	for _, group := range []string{"pods", "serviceaccounts", "deployments", "replicasets", "statefulsets", "daemonsets", "jobs", "cronjobs"} {
 		t.Run(group, func(t *testing.T) {

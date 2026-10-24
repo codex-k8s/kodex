@@ -11,6 +11,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// ResolveEmailAuthorization validates binding and operation before owner resolution, then requires
+// a known nonzero policy, expiry, actor and grant before projecting scopes and pins.
+// ResolveEmailAuthorization проверяет привязку и операцию до разрешения владельцем, затем требует
+// известную ненулевую policy, срок, actor и grant до преобразования областей и привязок.
 func (server *Server) ResolveEmailAuthorization(ctx context.Context, request *cp.ResolveEmailAuthorizationRequest) (*cp.ResolveEmailAuthorizationResponse, error) {
 	p, err := principal(ctx, cp.RuntimeWorkService_ResolveEmailAuthorization_FullMethodName)
 	if err != nil {
@@ -49,6 +53,10 @@ func (server *Server) ResolveEmailAuthorization(ctx context.Context, request *cp
 	return response, nil
 }
 
+// emailBindingFromProto requires exactly one invocation or connection-test locator and a present
+// valid lease expiry before copying the lease tuple; ownership remains domain-validated.
+// emailBindingFromProto требует ровно одну ссылку invocation либо connection test и корректный
+// срок lease до копирования её набора; владение проверяется доменом.
 func emailBindingFromProto(input *cp.EmailExecutionBinding) (entity.EmailExecutionBinding, error) {
 	if input == nil || (input.GetInvocationRef() == "") == (input.GetConnectionTestRef() == "") || input.GetLease() == nil || input.GetLease().GetExpiresAt() == nil || input.GetLease().GetExpiresAt().CheckValid() != nil {
 		return entity.EmailExecutionBinding{}, errs.ErrInvalid
@@ -58,6 +66,10 @@ func emailBindingFromProto(input *cp.EmailExecutionBinding) (entity.EmailExecuti
 		LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), ExpiresAt: lease.GetExpiresAt().AsTime()}, nil
 }
 
+// castEmailBinding projects lease fields and chooses invocation source when present, otherwise
+// connection-test source, without validating the domain binding again.
+// castEmailBinding преобразует поля lease и выбирает invocation при наличии, иначе connection-test
+// source, без повторной проверки доменной привязки.
 func castEmailBinding(input entity.EmailExecutionBinding) *cp.EmailExecutionBinding {
 	result := &cp.EmailExecutionBinding{Lease: &cp.WorkLease{Ref: input.LeaseRef, Fence: input.Fence, Generation: input.Generation, ExpiresAt: timestamppb.New(input.ExpiresAt)}}
 	if input.InvocationRef != "" {
@@ -68,6 +80,10 @@ func castEmailBinding(input entity.EmailExecutionBinding) *cp.EmailExecutionBind
 	return result
 }
 
+// emailOperationFromProto accepts only known nonzero operation enums and lowercases the suffix,
+// returning empty for unsupported values.
+// emailOperationFromProto принимает только известные ненулевые enum операции и приводит суффикс к
+// нижнему регистру, возвращая пустую строку для прочих.
 func emailOperationFromProto(input cp.EmailOperation) string {
 	name, ok := cp.EmailOperation_name[int32(input)]
 	if !ok || input == 0 {
@@ -76,10 +92,18 @@ func emailOperationFromProto(input cp.EmailOperation) string {
 	return strings.ToLower(strings.TrimPrefix(name, "EMAIL_OPERATION_"))
 }
 
+// emailOperationProto looks up the uppercased domain operation with its enum prefix and preserves
+// the generated zero fallback for unknown strings.
+// emailOperationProto ищет доменную операцию в верхнем регистре с префиксом enum и сохраняет
+// нулевую замену generated lookup для неизвестной строки.
 func emailOperationProto(input string) cp.EmailOperation {
 	return cp.EmailOperation(cp.EmailOperation_value["EMAIL_OPERATION_"+strings.ToUpper(input)])
 }
 
+// castEmailScope copies mailbox, sender, folder and recipient restrictions and creates an explicit
+// ordered operation list without issuing authority.
+// castEmailScope копирует ограничения ящика, отправителя, папок и получателей и создаёт явный
+// упорядоченный список операций без выдачи полномочий.
 func castEmailScope(input entity.EmailAuthorizationScope) *cp.EmailAuthorizationScope {
 	result := &cp.EmailAuthorizationScope{MailboxRef: input.MailboxRef, Sender: input.Sender, Folders: input.Folders, Recipients: input.Recipients, Operations: []cp.EmailOperation{}}
 	for _, operation := range input.Operations {

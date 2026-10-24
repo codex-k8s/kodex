@@ -11,6 +11,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// GetRuntimeEnvironmentDraft reads the exact draft through the owner query and passes it to the
+// shared identity/scope/version projection writer. It neither changes draft state nor obtains
+// authority from its locator.
+// GetRuntimeEnvironmentDraft читает точный черновик запросом владельца и передаёт общему writer
+// проверки identity/scope/version. Состояние черновика не меняется, а locator не предоставляет
+// полномочий.
 func (server *Server) GetRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef) {
 	response, err := server.control.Query.GetRuntimeEnvironmentDraft(r.Context(), &controlplanev1.GetRuntimeEnvironmentDraftRequest{DraftRef: ref})
 	if err != nil {
@@ -20,6 +26,13 @@ func (server *Server) GetRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.
 	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
+// CreateSystemRuntimeEnvironmentDraft requires environment ref/version presence to agree,
+// validates the bounded specification and creates an organization draft under create mutation
+// context. Returned scope, environment ref and expected version must match before projection.
+// CreateSystemRuntimeEnvironmentDraft требует согласованного наличия environment ref/version,
+// проверяет ограниченную specification и создаёт организационный черновик с create mutation
+// context. Перед проекцией обязаны совпасть возвращённые scope, environment ref и expected
+// version.
 func (server *Server) CreateSystemRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, p generated.CreateSystemRuntimeEnvironmentDraftParams) {
 	body, ok := decodeJSON[generated.RuntimeEnvironmentDraftCreateInput](w, r)
 	if !ok {
@@ -54,6 +67,13 @@ func (server *Server) CreateSystemRuntimeEnvironmentDraft(w http.ResponseWriter,
 	writeEnvironmentDraft(w, http.StatusCreated, draft, "", "")
 }
 
+// CreateRuntimeEnvironmentDraft binds project routing, validates optional
+// existing-environment/version pairing and specification, then creates the owner draft. The
+// response must match the requested existing environment and project; payload locators do not
+// assign tenant authority.
+// CreateRuntimeEnvironmentDraft связывает проектную маршрутизацию, проверяет пару
+// existing-environment/version и specification, затем создаёт черновик владельца. Ответ совпадает
+// с запрошенными средой и проектом; locators не назначают tenant полномочий.
 func (server *Server) CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateRuntimeEnvironmentDraftParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -94,6 +114,12 @@ func (server *Server) CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *ht
 	writeEnvironmentDraft(w, http.StatusCreated, response.GetDraft(), "", projectRef)
 }
 
+// SaveRuntimeEnvironmentDraft converts a bounded draft specification and forwards it with
+// mutation/version headers to the specialized save command. The response writer checks the same
+// draft ref and owner state; publication is not performed.
+// SaveRuntimeEnvironmentDraft преобразует ограниченную specification черновика и передаёт её с
+// mutation/version заголовками отдельной команде save. Writer проверяет тот же draft ref и
+// состояние владельца; публикация не выполняется.
 func (server *Server) SaveRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.SaveRuntimeEnvironmentDraftParams) {
 	body, ok := decodeJSON[generated.RuntimeEnvironmentDraftSpecification](w, r)
 	if !ok {
@@ -115,6 +141,12 @@ func (server *Server) SaveRuntimeEnvironmentDraft(w http.ResponseWriter, r *http
 	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
+// ValidateRuntimeEnvironmentDraft delegates owner validation of an exact draft under
+// mutation/version headers and writes the validated draft projection. This may change validation
+// metadata at the owner but does not publish an environment.
+// ValidateRuntimeEnvironmentDraft поручает владельцу валидацию точного черновика с
+// mutation/version заголовками и выдаёт проверенную проекцию. Владелец может изменить validation
+// metadata, но среда не публикуется.
 func (server *Server) ValidateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.ValidateRuntimeEnvironmentDraftParams) {
 	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -128,6 +160,14 @@ func (server *Server) ValidateRuntimeEnvironmentDraft(w http.ResponseWriter, r *
 	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
+// PublishRuntimeEnvironmentDraft validates a bounded unique impact selection and delegates
+// publication with exact draft/plan refs. It accepts only coherent APPLIED plan, advanced
+// PUBLISHED draft, matching scope and published environment revision/digest before returning their
+// shared envelope.
+// PublishRuntimeEnvironmentDraft проверяет ограниченный уникальный impact selection и поручает
+// публикацию с точными draft/plan refs. Принимаются только согласованные APPLIED plan, продвинутый
+// PUBLISHED draft, совпадающие область и опубликованные environment revision/digest до общего
+// envelope.
 func (server *Server) PublishRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.PublishRuntimeEnvironmentDraftParams) {
 	body, ok := decodeJSON[generated.RevisionImpactPublicationInput](w, r)
 	if !ok {
@@ -177,6 +217,11 @@ func (server *Server) PublishRuntimeEnvironmentDraft(w http.ResponseWriter, r *h
 	writeEnvironmentDraftResult(w, http.StatusOK, draft, ref, "", map[string]any{"environment": value, "plan": plan})
 }
 
+// DiscardRuntimeEnvironmentDraft delegates discarding an exact draft under mutation/version
+// headers and validates the returned draft through the common writer. It performs no local
+// environment deletion or implicit retry.
+// DiscardRuntimeEnvironmentDraft поручает отбросить точный черновик с mutation/version заголовками
+// и проверяет результат общим writer. Локальное удаление среды и неявный повтор не выполняются.
 func (server *Server) DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.DiscardRuntimeEnvironmentDraftParams) {
 	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
@@ -190,6 +235,12 @@ func (server *Server) DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *h
 	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
+// environmentDraftSpecificationInput bounds serialized input and values/tools/secret-binding
+// counts, maps secret refs without reading their values and validates optional policy input. Owner
+// domain validation remains responsible for the specification semantics.
+// environmentDraftSpecificationInput ограничивает сериализованный вход и число values/tools/secret
+// bindings, преобразует refs секретов без чтения значений и проверяет optional policy input.
+// Предметная семантика specification остаётся у доменной проверки владельца.
 func environmentDraftSpecificationInput(w http.ResponseWriter, input generated.RuntimeEnvironmentDraftSpecification) (*controlplanev1.RuntimeEnvironmentDraftSpecification, bool) {
 	raw, err := json.Marshal(input)
 	if err != nil || len(raw) > 256<<10 || len(input.Tools) > 128 || len(input.Values) > 128 || len(input.SecretBindings) > 128 {
@@ -213,10 +264,22 @@ func environmentDraftSpecificationInput(w http.ResponseWriter, input generated.R
 	return result, true
 }
 
+// writeEnvironmentDraft routes the owner draft to the shared validated result writer without an
+// additional envelope, preserving caller-selected status and optional identity/project
+// constraints.
+// writeEnvironmentDraft направляет черновик владельца общему writer проверенного результата без
+// дополнительного envelope, сохраняя выбранный caller статус и необязательные ограничения
+// identity/project.
 func writeEnvironmentDraft(w http.ResponseWriter, statusCode int, input *controlplanev1.RuntimeEnvironmentDraft, ref, project string) {
 	writeEnvironmentDraftResult(w, statusCode, input, ref, project, nil)
 }
 
+// writeEnvironmentDraftResult validates draft scope/state/version/base pins, collection bounds and
+// optional policy before building public arrays and optional fields. It emits the draft ETag and
+// either a direct draft or supplied envelope; one invalid element prevents output.
+// writeEnvironmentDraftResult проверяет draft scope/state/version/base pins, лимиты коллекций и
+// optional policy до сборки публичных массивов и optional полей. Выдаётся draft ETag и прямой
+// черновик либо переданный envelope; один неверный элемент предотвращает выдачу.
 func writeEnvironmentDraftResult(w http.ResponseWriter, statusCode int, input *controlplanev1.RuntimeEnvironmentDraft, ref, project string, envelope map[string]any) {
 	if input == nil || input.GetSpecification() == nil || input.GetRef() == "" || !validRuntimeResourceScope(runtimeResourceScopeKind(input.GetScopeKind().String()), input.GetOrganizationRef(), input.GetProjectRef()) ||
 		ref != "" && input.GetRef() != ref || project != "" && input.GetProjectRef() != project ||
@@ -312,6 +375,14 @@ func writeEnvironmentDraftResult(w http.ResponseWriter, statusCode int, input *c
 	writeJSON(w, statusCode, result)
 }
 
+// environmentDraftPolicyView maps absent or owner-zero default policy to nil, otherwise checks
+// resource ranges, ephemeral volume kinds and three allowlisted network entries before public
+// conversion. Web policy fields are projected without replacing the owner domain validation or
+// creating workload access.
+// environmentDraftPolicyView преобразует отсутствующую либо нулевую default policy владельца в
+// nil, иначе проверяет диапазоны ресурсов, виды ephemeral volumes и три записи из разрешённого
+// набора сети перед конвертацией. Web policy проецируется без подмены доменной проверки владельца
+// и без выдачи доступа workload.
 func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyInput) (*generated.RuntimeEnvironmentPolicyInput, bool) {
 	if input == nil {
 		return nil, true

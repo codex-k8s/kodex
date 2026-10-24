@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestWorkflowCatalogReadRequestWire checks the typed publication selector is accepted and unknown
+// nested pin fields, missing pins or nil requests fail wire validation.
+// TestWorkflowCatalogReadRequestWire проверяет принятие typed publication selector и отказ wire
+// validation для unknown nested pin fields, отсутствующих pins либо nil request.
 func TestWorkflowCatalogReadRequestWire(t *testing.T) {
 	request := &cp.GetExecutionWorkflowCatalogRequest{Read: &cp.GetExecutionWorkflowCatalogRequest_PublicationRead{PublicationRead: &cp.ExecutionWorkflowPublicationRead{Pins: &cp.ExecutionWorkflowReadPins{WorkflowRef: "wfl_workflow01"}}}}
 	if !workflowCatalogRequestWireValid(request) {

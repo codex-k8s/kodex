@@ -5,6 +5,14 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// publicRoleImageAdmissionFailure returns absent failure as nil/success or validates a FAILED
+// receipt against the exact recipe generation, scope and latest completed build with deterministic
+// tie-breaking. Only allowlisted safe error codes and bounded counters reach the public DTO; the
+// helper does not perform admission itself.
+// publicRoleImageAdmissionFailure возвращает отсутствие ошибки как nil/успех либо проверяет FAILED
+// receipt по точным поколению рецепта, области и последней завершённой сборке с детерминированным
+// разрешением равенства. Публичный DTO получает только разрешённые безопасные коды и ограниченные
+// счётчики; сам допуск helper не выполняет.
 func publicRoleImageAdmissionFailure(failure *controlplanev1.RoleImageAdmissionFailure,
 	recipe *controlplanev1.RoleImageRecipe, builds []*controlplanev1.ImageBuild,
 ) (*generated.RoleImageAdmissionFailure, bool) {

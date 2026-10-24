@@ -14,6 +14,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestCreateAttachmentSetDraftRejectsMissingProject checks missing project input is rejected
+// before a domain call, using an otherwise unconfigured transport server.
+// TestCreateAttachmentSetDraftRejectsMissingProject проверяет отклонение отсутствующего проекта до
+// доменного вызова на transport server без настроенных зависимостей.
 func TestCreateAttachmentSetDraftRejectsMissingProject(t *testing.T) {
 	t.Parallel()
 	server := &Server{}
@@ -23,6 +27,10 @@ func TestCreateAttachmentSetDraftRejectsMissingProject(t *testing.T) {
 	}
 }
 
+// TestReceiveArtifactUploadSpoolsBeyondLegacyLimit checks a seventeen-MiB synthetic upload is
+// spooled with exact size, digest and leading bytes and is closed by test cleanup.
+// TestReceiveArtifactUploadSpoolsBeyondLegacyLimit проверяет spool синтетического upload размером
+// семнадцать MiB с точными размером, digest и начальными байтами и закрытием при очистке теста.
 func TestReceiveArtifactUploadSpoolsBeyondLegacyLimit(t *testing.T) {
 	t.Parallel()
 	const size = int64(17 << 20)
@@ -48,6 +56,10 @@ func TestReceiveArtifactUploadSpoolsBeyondLegacyLimit(t *testing.T) {
 	}
 }
 
+// TestReceiveArtifactUploadRejectsDigestMismatchAndOversize checks digest mismatch is
+// InvalidArgument and a declared artifact above the byte limit is ResourceExhausted.
+// TestReceiveArtifactUploadRejectsDigestMismatchAndOversize проверяет InvalidArgument при
+// несовпадении digest и ResourceExhausted при заявленном размере выше лимита артефакта.
 func TestReceiveArtifactUploadRejectsDigestMismatchAndOversize(t *testing.T) {
 	t.Parallel()
 	mismatch := newGeneratedArtifactUploadStream(64, 'a')
@@ -61,6 +73,10 @@ func TestReceiveArtifactUploadRejectsDigestMismatchAndOversize(t *testing.T) {
 	}
 }
 
+// TestValidateArtifactUploadScope checks permitted project and organization uploads and rejects
+// missing project or project/run locators in organization scope.
+// TestValidateArtifactUploadScope проверяет допустимые project и organization uploads и отказ при
+// отсутствии проекта либо project/run ссылках в области организации.
 func TestValidateArtifactUploadScope(t *testing.T) {
 	t.Parallel()
 	project := &controlplanev1.UploadArtifactMetadata{ProjectRef: "prj_test", RunRef: "run_test"}
@@ -87,6 +103,10 @@ func TestValidateArtifactUploadScope(t *testing.T) {
 	}
 }
 
+// generatedArtifactUploadStream is a handwritten bounded-memory fixture tracking metadata,
+// repeated-byte chunks, commit and EOF; its name does not designate generated source.
+// generatedArtifactUploadStream является рукописной оснасткой с ограниченной памятью для metadata,
+// chunks повторяющегося байта, commit и EOF; имя не обозначает generated source.
 type generatedArtifactUploadStream struct {
 	size, sent int64
 	value      byte
@@ -94,6 +114,10 @@ type generatedArtifactUploadStream struct {
 	state      int
 }
 
+// newGeneratedArtifactUploadStream computes the repeated-byte payload digest in bounded chunks and
+// initializes a synthetic upload without allocating the complete file.
+// newGeneratedArtifactUploadStream вычисляет digest повторяющихся байтов ограниченными chunks и
+// создаёт синтетический upload без выделения полного файла.
 func newGeneratedArtifactUploadStream(size int64, value byte) *generatedArtifactUploadStream {
 	hash := sha256.New()
 	chunk := bytes.Repeat([]byte{value}, 64<<10)
@@ -109,6 +133,10 @@ func newGeneratedArtifactUploadStream(size int64, value byte) *generatedArtifact
 	return &generatedArtifactUploadStream{size: size, value: value, digest: hex.EncodeToString(hash.Sum(nil))}
 }
 
+// Recv emits one metadata frame, bounded repeated-byte chunks, one exact-size/digest commit and
+// then EOF while advancing fixture counters.
+// Recv выдаёт один metadata frame, ограниченные chunks повторяющегося байта, один commit с
+// размером и digest, затем EOF, обновляя счётчики оснастки.
 func (stream *generatedArtifactUploadStream) Recv() (*controlplanev1.UploadArtifactRequest, error) {
 	if stream.state == 0 {
 		stream.state = 1

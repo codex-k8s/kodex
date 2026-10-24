@@ -18,12 +18,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// generatedRuntimeArtifact is a handwritten streaming source fixture with position-dependent chunk
+// bytes, close accounting and injectable close failure.
+// generatedRuntimeArtifact является рукописной потоковой оснасткой источника с зависящими от
+// позиции байтами chunks, учётом закрытий и задаваемой ошибкой Close.
 type generatedRuntimeArtifact struct {
 	size, offset int64
 	closes       int
 	closeErr     error
 }
 
+// Read fills at most the remaining source bytes with a chunk-dependent repeating pattern, advances
+// offset and returns EOF only after the declared source is exhausted.
+// Read заполняет не более оставшихся байтов источника повторяющимся по chunks шаблоном, сдвигает
+// offset и возвращает EOF после исчерпания заявленного источника.
 func (reader *generatedRuntimeArtifact) Read(buffer []byte) (int, error) {
 	if reader.offset >= reader.size {
 		return 0, io.EOF
@@ -35,8 +43,18 @@ func (reader *generatedRuntimeArtifact) Read(buffer []byte) (int, error) {
 	reader.offset += int64(n)
 	return n, nil
 }
+
+// Close increments the close counter on every call and returns the configured synthetic close
+// error.
+// Close увеличивает счётчик закрытий при каждом вызове и возвращает заданную синтетическую ошибку
+// закрытия.
 func (reader *generatedRuntimeArtifact) Close() error { reader.closes++; return reader.closeErr }
 
+// generatedRuntimeArtifactDigest hashes the synthetic streaming reader without materializing the
+// complete file and returns its sha256-prefixed digest, failing the caller test on copy error.
+// generatedRuntimeArtifactDigest хеширует синтетический streaming reader без материализации
+// полного файла и возвращает digest с префиксом sha256, завершая тест caller при ошибке
+// копирования.
 func generatedRuntimeArtifactDigest(t *testing.T, size int64) string {
 	t.Helper()
 	hash := sha256.New()
@@ -46,6 +64,12 @@ func generatedRuntimeArtifactDigest(t *testing.T, size int64) string {
 	return "sha256:" + hex.EncodeToString(hash.Sum(nil))
 }
 
+// TestRuntimeArtifactTransferPreservesLargeFileWithoutUnaryBuffer checks a large transfer's frame
+// order, size/hash, bounded immutable chunks and exact close/owner-confirm-before-Complete
+// ordering.
+// TestRuntimeArtifactTransferPreservesLargeFileWithoutUnaryBuffer проверяет порядок frames большой
+// передачи, размер и hash, ограниченные неизменяемые chunks и точный порядок Close и owner confirm
+// до Complete.
 func TestRuntimeArtifactTransferPreservesLargeFileWithoutUnaryBuffer(t *testing.T) {
 	const size = int64(33<<20) + 7
 	reader := &generatedRuntimeArtifact{size: size}
@@ -90,6 +114,12 @@ func TestRuntimeArtifactTransferPreservesLargeFileWithoutUnaryBuffer(t *testing.
 	}
 }
 
+// TestRuntimeArtifactTransferNeverCompletesPartialOrRevokedSource checks short/extra/wrong-digest,
+// revoked, canceled, send/close failure and oversized sources never complete and close once, with
+// bounded cancellation and no oversized read.
+// TestRuntimeArtifactTransferNeverCompletesPartialOrRevokedSource проверяет отсутствие Complete и
+// однократный Close для short/extra/wrong-digest, отзыва, отмены, send/close failure и oversize,
+// включая ограничение чтения после отмены и до oversize отказа.
 func TestRuntimeArtifactTransferNeverCompletesPartialOrRevokedSource(t *testing.T) {
 	const size = int64(runtimecontract.MaximumArtifactTransferChunkBytes) + 17
 	for _, scenario := range []string{"short", "extra", "digest", "revoked", "cancel", "send failure", "close failure", "oversize"} {

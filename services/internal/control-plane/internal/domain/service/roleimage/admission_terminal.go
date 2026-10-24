@@ -7,6 +7,10 @@ import (
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 )
 
+// GetAdmissionTerminal requires currently resolved exact worker authority and the original claim
+// key, validates complete admission/evidence pins and delegates terminal proof to its owner.
+// GetAdmissionTerminal требует текущие разрешённые точные полномочия worker и исходный claim key,
+// проверяет полные admission и evidence pins и передаёт terminal proof владельцу.
 func (service *Service) GetAdmissionTerminal(ctx context.Context, input repository.AdmissionTerminalInput) (repository.AdmissionTerminalProof, error) {
 	principal, err := service.resolvePrincipal(ctx, input.Principal)
 	if err != nil {

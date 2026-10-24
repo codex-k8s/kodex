@@ -11,6 +11,10 @@ import (
 	"testing"
 )
 
+// fixtureCandidatePins builds synthetic context pins, adding connection/package, project,
+// recipient and workflow versions only when their selection prefix is present.
+// fixtureCandidatePins создаёт синтетические pins контекста, добавляя версии подключения и пакета,
+// проекта, получателя и workflow только при наличии соответствующего префикса выбора.
 func fixtureCandidatePins(c *cp.IntegrationGrantCandidateContext) *cp.IntegrationGrantCandidatePins {
 	p := &cp.IntegrationGrantCandidatePins{ContextDigest: strings.Repeat("a", 64)}
 	if c.ConnectionRef != "" {
@@ -29,6 +33,13 @@ func fixtureCandidatePins(c *cp.IntegrationGrantCandidateContext) *cp.Integratio
 	}
 	return p
 }
+
+// TestIntegrationCandidateRoutesReachExactOwnerContext checks candidate selection stages and
+// GRANT/USE purposes forward the exact owner context and literal query while preserving empty
+// authoritative page fields.
+// TestIntegrationCandidateRoutesReachExactOwnerContext проверяет точную передачу контекста
+// владельца и буквального запроса на стадиях выбора кандидатов и назначений GRANT/USE с
+// сохранением полей пустой авторитетной страницы.
 func TestIntegrationCandidateRoutesReachExactOwnerContext(t *testing.T) {
 	agent := cp.IntegrationGrantRecipientKind_INTEGRATION_GRANT_RECIPIENT_KIND_AGENT
 	contexts := []*cp.IntegrationGrantCandidateContext{{}, {ProjectRef: "prj_fixture01", RecipientKind: agent, RecipientRef: "agt_fixture01", CapabilityKey: "github.read", WorkflowRef: "wfl_fixture01", StepKey: "review"}, {ConnectionRef: "con_fixture01"}, {ConnectionRef: "con_fixture01", ProjectRef: "prj_fixture01", RecipientKind: agent}, {ConnectionRef: "con_fixture01", ProjectRef: "prj_fixture01", RecipientKind: agent, RecipientRef: "agt_fixture01"}}
@@ -76,6 +87,13 @@ func TestIntegrationCandidateRoutesReachExactOwnerContext(t *testing.T) {
 		})
 	}
 }
+
+// TestIntegrationCandidateRejectsInvalidPrefixBeforeRPC checks rejection of missing, conflicting
+// or unknown purposes, invalid dependent selections, duplicate query keys and query/page bounds
+// before RPC.
+// TestIntegrationCandidateRejectsInvalidPrefixBeforeRPC проверяет отказ отсутствующим,
+// конфликтующим либо неизвестным назначениям, неверному зависимому выбору, повторным ключам
+// запроса и нарушениям ограничений до RPC.
 func TestIntegrationCandidateRejectsInvalidPrefixBeforeRPC(t *testing.T) {
 	for _, path := range []string{
 		"connections", "connections?purpose=UNKNOWN", "connections?purpose=GRANT&projectRef=prj_fixture01", "connections?purpose=GRANT&recipientKind=UNKNOWN",
@@ -96,11 +114,23 @@ func TestIntegrationCandidateRejectsInvalidPrefixBeforeRPC(t *testing.T) {
 		})
 	}
 }
+
+// fixtureConnectionCandidatePage builds a single grantable connection candidate with distinct page
+// and item context pins and a registered ready reason.
+// fixtureConnectionCandidatePage создаёт одного кандидата подключения с разрешённой выдачей grant,
+// отдельными pins страницы и элемента и зарегистрированной причиной ready.
 func fixtureConnectionCandidatePage() *cp.ListIntegrationGrantConnectionCandidatesResponse {
 	c := &cp.IntegrationGrantCandidateContext{}
 	itemContext := &cp.IntegrationGrantCandidateContext{ConnectionRef: "con_fixture01"}
 	return &cp.ListIntegrationGrantConnectionCandidatesResponse{Context: c, Pins: fixtureCandidatePins(c), ContextDigest: strings.Repeat("a", 64), Total: 1, Items: []*cp.IntegrationGrantConnectionCandidate{{ConnectionRef: itemContext.ConnectionRef, Name: "Connection", DefinitionKey: "github", ProviderName: "GitHub", Grantable: true, Reason: cp.IntegrationCandidateReason_INTEGRATION_CANDIDATE_REASON_READY, Pins: fixtureCandidatePins(itemContext)}}}
 }
+
+// TestIntegrationCandidateResponseRejectsTampering checks context, digest, version, reason and
+// availability consistency, rejecting premature resource scopes and duplicate rows while retaining
+// false/empty fields.
+// TestIntegrationCandidateResponseRejectsTampering проверяет согласованность контекста, дайджеста,
+// версии, причины и доступности с отказом преждевременным областям ресурса и повторным строкам и
+// сохранением false и пустых полей.
 func TestIntegrationCandidateResponseRejectsTampering(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.ListIntegrationGrantConnectionCandidatesResponse){
 		"foreign context": func(v *cp.ListIntegrationGrantConnectionCandidatesResponse) { v.Context.ProjectRef = "prj_foreign01" },
@@ -147,6 +177,11 @@ func TestIntegrationCandidateResponseRejectsTampering(t *testing.T) {
 		t.Fatal("false/empty contract lost")
 	}
 }
+
+// TestIntegrationCandidateUseCannotBecomeGrant checks a valid USE candidate remains bound to the
+// selected recipient version and cannot expand into grant-issuing availability.
+// TestIntegrationCandidateUseCannotBecomeGrant проверяет привязку корректного кандидата USE к
+// выбранной версии получателя и запрет расширения до доступности выдачи grant.
 func TestIntegrationCandidateUseCannotBecomeGrant(t *testing.T) {
 	c := &cp.IntegrationGrantCandidateContext{ProjectRef: "prj_fixture01", RecipientKind: cp.IntegrationGrantRecipientKind_INTEGRATION_GRANT_RECIPIENT_KIND_AGENT, RecipientRef: "agt_fixture01", CapabilityKey: "github.read"}
 	v := fixtureConnectionCandidatePage()
@@ -172,6 +207,12 @@ func TestIntegrationCandidateUseCannotBecomeGrant(t *testing.T) {
 	}
 }
 
+// TestIntegrationCandidateDependentRowsKeepSelectedPins checks project/package and workflow
+// recipient pins plus capability constraints, zero values, current-grant version and explicit
+// approval policy.
+// TestIntegrationCandidateDependentRowsKeepSelectedPins проверяет pins проекта и пакета и
+// получателя workflow, ограничения capability, нулевые значения, версию текущего grant и явную
+// политику согласования.
 func TestIntegrationCandidateDependentRowsKeepSelectedPins(t *testing.T) {
 	c := &cp.IntegrationGrantCandidateContext{ConnectionRef: "con_fixture01"}
 	ic := proto.Clone(c).(*cp.IntegrationGrantCandidateContext)

@@ -1,5 +1,11 @@
 package app
 
+// workerGrantTrustFilesFor builds the fixed workload-to-trust-file map and adds interaction/email
+// entries only when configured, without loading keys or substituting one workload trust file for
+// another.
+// workerGrantTrustFilesFor строит фиксированную карту workload и trust file и добавляет
+// interaction и email лишь при настройке без загрузки ключей либо подмены trust file одной
+// нагрузки другой.
 func workerGrantTrustFilesFor(config Config) map[string]string {
 	files := map[string]string{
 		"automation-scheduler": config.AutomationGrantTrustFile,

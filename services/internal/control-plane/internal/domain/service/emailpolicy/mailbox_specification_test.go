@@ -10,6 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// mailboxSpecificationFixture decodes the shipped synthetic mailbox example and copies only
+// user-editable specification fields, excluding server-owned binding pins.
+// mailboxSpecificationFixture декодирует поставляемый синтетический пример mailbox и копирует
+// только редактируемые пользователем поля спецификации без pins binding сервера.
 func mailboxSpecificationFixture(t *testing.T) entity.EmailMailboxSpecification {
 	t.Helper()
 	raw, err := os.ReadFile("../../../../../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
@@ -27,6 +31,12 @@ func mailboxSpecificationFixture(t *testing.T) entity.EmailMailboxSpecification 
 		HelloName: m.HelloName, SMTP: m.Smtp, IMAP: m.Imap, POP: m.Pop, Limits: m.Limits, Policies: m.Policies}
 }
 
+// TestMailboxSpecificationOwnerBindingAndIsolation checks server-owned identity/revision pins,
+// sender-derived envelope and isolation of endpoint and collection mutations, with no owner fields
+// in public specification JSON.
+// TestMailboxSpecificationOwnerBindingAndIsolation проверяет identity и pins ревизии сервера,
+// envelope из sender и изоляцию изменений endpoints и коллекций при отсутствии owner полей в
+// публичном JSON спецификации.
 func TestMailboxSpecificationOwnerBindingAndIsolation(t *testing.T) {
 	spec := mailboxSpecificationFixture(t)
 	spec.Policies[0].Folders = []string{"INBOX"}
@@ -56,6 +66,12 @@ func TestMailboxSpecificationOwnerBindingAndIsolation(t *testing.T) {
 	}
 }
 
+// TestMailboxSpecificationDraftAndPublicationBounds distinguishes incomplete draft acceptance from
+// executable publication and covers network/TLS, policy completeness, explicit all-allow policy
+// and encoded size rejection.
+// TestMailboxSpecificationDraftAndPublicationBounds различает допуск неполного черновика и
+// исполняемую публикацию, проверяя network/TLS, полноту policy, явную all-allow policy и отказ
+// превышению закодированного размера.
 func TestMailboxSpecificationDraftAndPublicationBounds(t *testing.T) {
 	if err := BoundSpecification(entity.EmailMailboxSpecification{}); err != nil {
 		t.Fatal("incomplete draft rejected", err)
@@ -91,6 +107,11 @@ func TestMailboxSpecificationDraftAndPublicationBounds(t *testing.T) {
 	}
 }
 
+// TestTrustedMailboxConfigurationUsesExecutableNetworkMatrix checks trusted configuration rejects
+// unsupported SMTP ports and accepts the exact supported implicit TLS port/mode combination.
+// TestTrustedMailboxConfigurationUsesExecutableNetworkMatrix проверяет отказ доверенной
+// конфигурации неподдерживаемым SMTP портам и допуск точной поддерживаемой пары порта и режима
+// implicit TLS.
 func TestTrustedMailboxConfigurationUsesExecutableNetworkMatrix(t *testing.T) {
 	raw, err := os.ReadFile("../../../../../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
 	if err != nil {
@@ -121,6 +142,11 @@ func TestTrustedMailboxConfigurationUsesExecutableNetworkMatrix(t *testing.T) {
 	}
 }
 
+// TestMailboxLegacyMarkNeverExpandsPublicAuthority checks a user-supplied legacy mark allow
+// becomes deny in materialized output without rewriting the immutable public specification.
+// TestMailboxLegacyMarkNeverExpandsPublicAuthority проверяет преобразование пользовательского
+// legacy mark allow в deny материализованного результата без переписывания immutable публичной
+// спецификации.
 func TestMailboxLegacyMarkNeverExpandsPublicAuthority(t *testing.T) {
 	spec := mailboxSpecificationFixture(t)
 	for i := range spec.Policies {

@@ -11,6 +11,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// ListProviderAccountBlockers validates the optional blocker kind, reads an authorized page and
+// rejects unknown or invalid-version output and cancellation flags outside queued turns.
+// ListProviderAccountBlockers проверяет необязательный вид препятствия, читает авторизованную
+// страницу и отклоняет неизвестный либо неверно версионированный результат и отмену вне queued
+// turns.
 func (server *Server) ListProviderAccountBlockers(ctx context.Context, request *cp.ListProviderAccountBlockersRequest) (*cp.ListProviderAccountBlockersResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_ListProviderAccountBlockers_FullMethodName)
 	if err != nil {
@@ -46,6 +51,10 @@ func (server *Server) ListProviderAccountBlockers(ctx context.Context, request *
 	return response, nil
 }
 
+// CancelProviderAccountQueuedWork passes selected run refs and blocker digest to the cancellation
+// command, requiring an account and ordered outcomes matching every selected run.
+// CancelProviderAccountQueuedWork передаёт выбранные ссылки запусков и digest препятствий команде
+// отмены, требуя аккаунт и упорядоченные исходы для каждого выбранного запуска.
 func (server *Server) CancelProviderAccountQueuedWork(ctx context.Context, request *cp.CancelProviderAccountQueuedWorkRequest) (*cp.CancelProviderAccountQueuedWorkResponse, error) {
 	result, err := execute(ctx, server.service, cp.PlatformCommandService_CancelProviderAccountQueuedWork_FullMethodName,
 		command.CancelProviderAccountQueuedWork, request.GetMutation(), command.ProviderAccountInput{
@@ -68,6 +77,10 @@ func (server *Server) CancelProviderAccountQueuedWork(ctx context.Context, reque
 	return response, nil
 }
 
+// castProviderAccountDeletion preserves absent deletion and projects cleanup state, optional
+// completion time and blocker counts from owner metadata.
+// castProviderAccountDeletion сохраняет отсутствие удаления и преобразует состояние очистки,
+// необязательное время завершения и счётчики препятствий из метаданных владельца.
 func castProviderAccountDeletion(value *entity.ProviderAccountDeletion) *cp.ProviderAccountDeletion {
 	if value == nil {
 		return nil
@@ -84,6 +97,10 @@ func castProviderAccountDeletion(value *entity.ProviderAccountDeletion) *cp.Prov
 	return result
 }
 
+// castProviderAccountVerification preserves absent verification and projects account/credential
+// revision pins, state, scope and optional completion metadata.
+// castProviderAccountVerification сохраняет отсутствие проверки и преобразует привязки аккаунта и
+// ревизии credential, состояние, область и необязательные метаданные завершения.
 func castProviderAccountVerification(value *entity.ProviderAccountVerification) *cp.ProviderAccountVerification {
 	if value == nil {
 		return nil

@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestIntegrationFieldPreservesZeroBoundAndConstraints checks zero-valued numeric bounds remain
+// present, other constraints survive and allowed values do not alias input; absent bounds stay
+// absent.
+// TestIntegrationFieldPreservesZeroBoundAndConstraints проверяет наличие числовой границы ноль,
+// сохранение ограничений и независимость allowed values от input; отсутствующие границы не
+// создаются.
 func TestIntegrationFieldPreservesZeroBoundAndConstraints(t *testing.T) {
 	zero, maximum := int64(0), int64(15)
 	field := entity.IntegrationConfigurationField{Key: "limit", Label: "Limit", Help: "Bounded limit", ValueType: "INTEGER", Required: true, Placeholder: "0", Format: "PLAIN", AllowedValues: []string{"example"}, Minimum: &zero, Maximum: &maximum, MaximumLength: 32}
@@ -21,6 +27,10 @@ func TestIntegrationFieldPreservesZeroBoundAndConstraints(t *testing.T) {
 	}
 }
 
+// TestIntegrationDefinitionPreservesAuthoritativeConnectionSummary checks definition projection
+// copies total and healthy connection counts without recomputing the owner summary.
+// TestIntegrationDefinitionPreservesAuthoritativeConnectionSummary проверяет копирование общего и
+// healthy connection counts представлением определения без пересчёта owner summary.
 func TestIntegrationDefinitionPreservesAuthoritativeConnectionSummary(t *testing.T) {
 	result := castDefinition(entity.IntegrationDefinition{
 		ConnectionCount:        41,

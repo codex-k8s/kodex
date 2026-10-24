@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestCanonicalProducerRuntimeConsumer checks real prompt producer output for every target and
+// warm mode is accepted by the runtime decoder while malformed envelopes, slots, capabilities and
+// provenance fail.
+// TestCanonicalProducerRuntimeConsumer проверяет допустимость вывода настоящего prompt producer
+// всех целей и warm-режима для runtime decoder с отказом неверным конвертам, слотам, capabilities
+// и происхождению.
 func TestCanonicalProducerRuntimeConsumer(t *testing.T) {
 	for _, kind := range []string{"WARM", TargetAgent, TargetWorkflowStage, TargetAutomation, TargetSessionContinuation} {
 		t.Run(kind, func(t *testing.T) {

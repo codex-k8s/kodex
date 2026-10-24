@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// GetRuntimeEnvironmentImpact reads affected consumers for the requested environment/version with
+// verified principal and pagination, preserving target digest and version pins.
+// GetRuntimeEnvironmentImpact читает затронутых потребителей заданной среды и версии с проверенным
+// principal и пагинацией, сохраняя digest цели и привязки версий.
 func (server *Server) GetRuntimeEnvironmentImpact(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentImpactRequest) (*controlplanev1.GetRuntimeEnvironmentImpactResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName)
 	if err != nil {
@@ -28,6 +32,10 @@ func (server *Server) GetRuntimeEnvironmentImpact(ctx context.Context, request *
 	return response, nil
 }
 
+// RebindRuntimeEnvironment converts selected consumer pins before executing the dedicated rebind
+// command and projects the owner-returned environment bindings.
+// RebindRuntimeEnvironment преобразует привязки выбранных потребителей до отдельной команды
+// перепривязки и возвращает привязки среды владельца.
 func (server *Server) RebindRuntimeEnvironment(ctx context.Context, request *controlplanev1.RebindRuntimeEnvironmentRequest) (*controlplanev1.RebindRuntimeEnvironmentResponse, error) {
 	input := command.RuntimeEnvironmentRebindInput{EnvironmentRef: request.GetEnvironmentRef(), VersionRef: request.GetVersionRef()}
 	for _, item := range request.GetConsumers() {
@@ -46,18 +54,30 @@ func (server *Server) RebindRuntimeEnvironment(ctx context.Context, request *con
 	return response, nil
 }
 
+// castRuntimeEnvironmentConsumer copies consumer agent, binding, source version and owner scope
+// pins from the domain read model.
+// castRuntimeEnvironmentConsumer копирует привязки агента, связи, версии источника и области
+// владельца из доменной модели чтения потребителя.
 func castRuntimeEnvironmentConsumer(item entity.RuntimeEnvironmentConsumer) *controlplanev1.RuntimeEnvironmentConsumer {
 	return &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: item.AgentRef, AgentVersion: item.AgentVersion,
 		BindingRef: item.BindingRef, BindingVersion: item.BindingVersion, VersionRef: item.VersionRef,
 		ProjectRef: item.ProjectRef, ScopeKind: roleImageScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef}
 }
 
+// runtimeEnvironmentConsumerInput copies requested consumer and scope locators for owner
+// validation without treating those locators as proof of ownership.
+// runtimeEnvironmentConsumerInput копирует запрошенные ссылки потребителя и области для проверки
+// владельцем без признания ссылок доказательством владения.
 func runtimeEnvironmentConsumerInput(item *controlplanev1.RuntimeEnvironmentConsumer) entity.RuntimeEnvironmentConsumer {
 	return entity.RuntimeEnvironmentConsumer{AgentRef: item.GetAgentRef(), AgentVersion: item.GetAgentVersion(),
 		BindingRef: item.GetBindingRef(), BindingVersion: item.GetBindingVersion(), VersionRef: item.GetVersionRef(),
 		ProjectRef: item.GetProjectRef(), ScopeKind: runtimeResourceScopeName(item.GetScopeKind()), OrganizationRef: item.GetOrganizationRef()}
 }
 
+// runtimeResourceScopeName maps only ORGANIZATION and PROJECT enum values to domain scope names
+// and returns empty for every other value.
+// runtimeResourceScopeName переводит только enum ORGANIZATION и PROJECT в доменные имена областей
+// и возвращает пустую строку для прочих значений.
 func runtimeResourceScopeName(kind controlplanev1.RuntimeResourceScopeKind) string {
 	switch kind {
 	case controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION:

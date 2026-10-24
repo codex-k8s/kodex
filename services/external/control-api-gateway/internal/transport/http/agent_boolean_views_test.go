@@ -9,6 +9,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestAgentRequiredBooleanHTTPProjection checks true and false enabled/system flags remain
+// explicit through the actual response normalization path, preserving owner identity and omitting
+// absent current run.
+// TestAgentRequiredBooleanHTTPProjection проверяет явные true и false флагов enabled и system
+// через настоящий путь нормализации ответа с сохранением identity владельца и отсутствием поля
+// пустого текущего выполнения.
 func TestAgentRequiredBooleanHTTPProjection(t *testing.T) {
 	for _, test := range []struct {
 		name    string

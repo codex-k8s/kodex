@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+// TestResultPublicationGuidanceKeepsArchivesOutsideOutbox checks current Russian/English FILES
+// guidance pins the result outbox and publication revision and keeps intermediate archives outside
+// published results.
+// TestResultPublicationGuidanceKeepsArchivesOutsideOutbox проверяет закреплённые каталог outbox и
+// ревизию публикации текущих русских и английских правил FILES и размещение промежуточных архивов
+// вне публикуемых результатов.
 func TestResultPublicationGuidanceKeepsArchivesOutsideOutbox(t *testing.T) {
 	for _, variant := range []struct{ locale, required string }{
 		{"ru", "GZIP, TAR и ZIP"},
@@ -44,6 +50,10 @@ func TestResultPublicationGuidanceKeepsArchivesOutsideOutbox(t *testing.T) {
 	}
 }
 
+// TestResultPublicationGuidancePreservesPinnedFilesSlot checks explicitly pinned historical FILES
+// content is reproduced byte-for-byte instead of receiving current default publication guidance.
+// TestResultPublicationGuidancePreservesPinnedFilesSlot проверяет побайтное воспроизведение явно
+// закреплённого исторического FILES вместо добавления текущих правил публикации по умолчанию.
 func TestResultPublicationGuidancePreservesPinnedFilesSlot(t *testing.T) {
 	const historical = `{"result":{"directory":"/workspace/.kodex/outbox","instruction":"synthetic historical instruction"}}`
 	snapshot := semanticFixture()

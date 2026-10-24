@@ -2,6 +2,10 @@ package emailpolicy
 
 import "testing"
 
+// TestMailboxActionsMatchLifecycle checks exact enabled/disabled action sets for UI draft,
+// valid/published, pending delivery and Git states, including reason consistency.
+// TestMailboxActionsMatchLifecycle проверяет точные разрешённые и запрещённые действия UI draft,
+// valid/published, ожидающей доставки и Git, включая согласованность причины.
 func TestMailboxActionsMatchLifecycle(t *testing.T) {
 	for _, test := range []struct {
 		state           ActionState

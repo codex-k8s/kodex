@@ -8,6 +8,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestSystemAssistantGrantCandidateProjectionRequiresOwnerPins checks an organization candidate
+// snapshot retains terminal/continuation cursor semantics and rejects invalid scope,
+// connection/owner pins, versions, digest, duplicate capabilities and inconsistent grant/approval
+// metadata.
+// TestSystemAssistantGrantCandidateProjectionRequiresOwnerPins проверяет сохранение
+// terminal/continuation cursor семантики организационного снимка кандидатов и отказ для неверных
+// scope, connection/owner pins, версий, digest, дубликатов capabilities и несогласованных
+// grant/approval metadata.
 func TestSystemAssistantGrantCandidateProjectionRequiresOwnerPins(t *testing.T) {
 	base := &cp.GetSystemAssistantIntegrationGrantCandidatesResponse{
 		ScopeKind:       cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION,

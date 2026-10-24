@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// TestMinimumCronIntervalMatchesSchedulerAcrossDST checks minute cron preview and due resolution
+// agree in UTC, DST gap and fold, and every consecutive occurrence remains at least one minute
+// apart.
+// TestMinimumCronIntervalMatchesSchedulerAcrossDST проверяет согласованность preview минутного
+// cron и due resolution в UTC, DST gap и fold и интервал не менее минуты между последовательными
+// запусками.
 func TestMinimumCronIntervalMatchesSchedulerAcrossDST(t *testing.T) {
 	for _, test := range []struct {
 		name, zone, after string
@@ -36,6 +42,10 @@ func TestMinimumCronIntervalMatchesSchedulerAcrossDST(t *testing.T) {
 	}
 }
 
+// TestSubMinuteCronIsRejectedBeforePreview rejects seconds-field cron and interval descriptors so
+// preview cannot admit schedules below the one-minute supported interval.
+// TestSubMinuteCronIsRejectedBeforePreview отклоняет cron с полем секунд и interval descriptors,
+// чтобы preview не допускал расписания меньше поддерживаемого интервала в одну минуту.
 func TestSubMinuteCronIsRejectedBeforePreview(t *testing.T) {
 	for _, expression := range []string{"*/30 * * * * *", "@every 30s", "@every 1s"} {
 		if _, err := Preview(Spec{Preset: "CUSTOM", CronExpression: expression, Timezone: "UTC"}, mustTime(t, "2026-09-08T10:00:00Z"), 5); err == nil {

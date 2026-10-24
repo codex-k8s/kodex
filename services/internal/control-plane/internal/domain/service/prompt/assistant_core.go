@@ -12,13 +12,30 @@ import (
 	"unicode/utf8"
 )
 
+// assistantCoreRefPattern checks only the eight-to-ninety-six-character ASCII reference shape used
+// in assistant-core continuation pins, not object ownership.
+// assistantCoreRefPattern проверяет только ASCII-форму ссылки длиной от восьми до девяноста шести
+// символов в pins продолжения базы помощника, а не владение объектом.
 var assistantCoreRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,96}$`)
 
+// AssistantCoreContinuationProjectionKey names the server-produced structured-runtime marker
+// selecting the exact assistant-core continuation binding.
+// AssistantCoreContinuationProjectionKey задаёт ключ маркера structured runtime сервера для выбора
+// точной привязки базы помощника при продолжении.
 const AssistantCoreContinuationProjectionKey = "continuation_assistant_core_projection"
+
+// AssistantCoreContinuationProjectionRevision pins the supported continuation-core reference
+// format; other projection revisions are rejected.
+// AssistantCoreContinuationProjectionRevision фиксирует поддерживаемый формат ссылки базы
+// продолжения; остальные ревизии проекции отклоняются.
 const AssistantCoreContinuationProjectionRevision = "continuation-assistant-core-reference-v1"
 
-// Только producer нового notice назначает marker после SourceEquality полного
-// текущего main prompt. Core и исторические snapshots сохраняются целиком.
+// AssistantCoreContinuationProjection binds a producer-assigned continuation marker to
+// core/instruction digests and exact runtime, actor resource and attempt pins; historical full
+// snapshots remain intact.
+// AssistantCoreContinuationProjection связывает назначаемый producer маркер продолжения с
+// дайджестами базы и инструкций и точными pins runtime, ресурсов actor и попытки; исторические
+// полные снимки сохраняются.
 type AssistantCoreContinuationProjection struct {
 	Revision                    string `json:"revision"`
 	CoreScope                   string `json:"core_scope"`
@@ -38,9 +55,12 @@ type AssistantCoreContinuationProjection struct {
 	Attempt                     int32  `json:"attempt"`
 }
 
-// База не является пользовательским шаблоном и не может назначать slots или
-// capabilities. Она материализуется ровно один раз из того же canonical data,
-// что и owner overlay; литеральный Go template в инструкции не выполняется снова.
+// renderAssistantCore validates and renders the pinned platform base once, forbidding slots;
+// SYSTEM avoids duplicate insertion, while PROJECT uses full text or a verified current-runtime
+// continuation reference.
+// renderAssistantCore проверяет и один раз строит закреплённую базу платформы с запретом slots;
+// SYSTEM исключает повторную вставку, PROJECT использует полный текст либо проверенную ссылку
+// продолжения текущего runtime.
 func renderAssistantCore(snapshot Snapshot, data map[string]any) (string, error) {
 	core := snapshot.AssistantCore
 	projection, err := assistantCoreContinuationProjection(snapshot)
@@ -93,6 +113,12 @@ func renderAssistantCore(snapshot Snapshot, data map[string]any) (string, error)
 		core.Scope, core.Ref, core.Revision, core.Digest, rendered), nil
 }
 
+// assistantCoreContinuationProjection strictly decodes a bounded optional projection and checks
+// its core, context, reference and runtime-diff pins; the marker is data and does not establish
+// authority.
+// assistantCoreContinuationProjection строго декодирует ограниченную необязательную проекцию и
+// проверяет pins базы, контекста, ссылок и runtime diff; маркер является данными и не
+// устанавливает полномочия.
 func assistantCoreContinuationProjection(snapshot Snapshot) (*AssistantCoreContinuationProjection, error) {
 	runtime, _ := snapshot.StructuredVariables["runtime"].(map[string]any)
 	value, present := runtime[AssistantCoreContinuationProjectionKey]

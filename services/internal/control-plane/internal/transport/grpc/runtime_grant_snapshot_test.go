@@ -8,6 +8,11 @@ import (
 	"testing"
 )
 
+// TestRuntimeGrantSnapshotCasterMatchesCompleteWireFixture compares the production
+// claimed-execution caster after binary protobuf roundtrip against the complete synthetic owner
+// JSON wire fixture.
+// TestRuntimeGrantSnapshotCasterMatchesCompleteWireFixture сравнивает production caster claimed
+// execution после binary protobuf roundtrip с полной синтетической JSON wire fixture владельца.
 func TestRuntimeGrantSnapshotCasterMatchesCompleteWireFixture(t *testing.T) {
 	claim := castClaim(fixture.Snapshot(t))
 	raw, err := proto.Marshal(claim)

@@ -9,6 +9,14 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// schedulePromptContext maps optional bounded schedule context, paired schedule/version selectors
+// and known draft/current-revision modes to protobuf, converting structured inputs explicitly.
+// Current revision requires an existing schedule; requested locators do not choose the execution
+// actor.
+// schedulePromptContext преобразует необязательный ограниченный schedule context, парные
+// schedule/version и известные draft/current-revision режимы в protobuf с явной конвертацией
+// структурных входов. Current revision требует существующее расписание; locators не выбирают
+// execution actor.
 func schedulePromptContext(value *generated.SchedulePromptPreviewContext) (*cp.SchedulePromptPreviewContext, bool) {
 	if value == nil {
 		return nil, true
@@ -48,6 +56,14 @@ func schedulePromptContext(value *generated.SchedulePromptPreviewContext) (*cp.S
 	return result, true
 }
 
+// schedulePromptPreviewView validates occurrence count and binds optional materialization to exact
+// mode/schedule/version/timezone/time and continuation session pins. Prompt provenance,
+// current/base revision and six automation variables must agree; full prompt visibility follows
+// the requested mode without scheduling an execution.
+// schedulePromptPreviewView проверяет число occurrences и связывает optional materialization с
+// точными mode/schedule/version/timezone/time и continuation session pins. Происхождение prompt,
+// current/base revision и шесть automation переменных обязаны совпасть; full prompt следует
+// запрошенному режиму без планирования исполнения.
 func schedulePromptPreviewView(w http.ResponseWriter, request *cp.PreviewScheduleRequest, response *cp.PreviewScheduleResponse) (map[string]any, bool) {
 	if response == nil || len(response.Occurrences) < 1 || len(response.Occurrences) > 100 {
 		return nil, false

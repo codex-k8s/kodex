@@ -12,6 +12,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// GetSystemSTTModelCatalog requires an attached STT client, reads its model catalog within the
+// bounded catalog timeout and returns only a valid public snapshot. RPC failures are mapped safely
+// without a provider fallback.
+// GetSystemSTTModelCatalog требует подключённый STT клиент, читает его каталог моделей в
+// ограниченный catalog timeout и выдаёт только корректный публичный снимок. Ошибки RPC безопасно
+// отображаются без fallback провайдера.
 func (server *Server) GetSystemSTTModelCatalog(w http.ResponseWriter, r *http.Request) {
 	if server.speech == nil {
 		writeLocalProblem(w, http.StatusServiceUnavailable, "UNAVAILABLE", true)
@@ -32,7 +38,13 @@ func (server *Server) GetSystemSTTModelCatalog(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, view)
 }
 
-// Совместимость моделей принадлежит adapter; HTTP проверяет только форму снимка.
+// sttCatalogView validates snapshot identity/time, safe recommendation limits, unique bounded
+// model metadata and finite ordered temperature ranges, then copies public arrays. The recommended
+// model must exist; actual compatibility decisions remain with the STT adapter.
+// sttCatalogView проверяет identity/time снимка, безопасные рекомендованные лимиты, уникальные
+// ограниченные metadata моделей и конечные упорядоченные температуры, затем копирует публичные
+// массивы. Рекомендованная модель обязана существовать; решения совместимости остаются у STT
+// adapter.
 func sttCatalogView(value *sttv1.TranscriptionModelCatalog) (generated.STTModelCatalog, bool) {
 	if value == nil || !sttCatalogText(value.GetVersion(), 160, false) || value.GetObservedAt() == nil || value.GetObservedAt().CheckValid() != nil ||
 		!sttCatalogText(value.GetRecommendedModel(), 160, false) || !sttCatalogText(value.GetResponseFormat(), 64, false) ||
@@ -65,6 +77,10 @@ func sttCatalogView(value *sttv1.TranscriptionModelCatalog) (generated.STTModelC
 	return result, seen[value.GetRecommendedModel()]
 }
 
+// sttCatalogStrings checks at most 32 unique catalog strings using bounded text rules. The
+// allowEmpty flag applies to individual values, while an empty list remains valid.
+// sttCatalogStrings проверяет не более 32 уникальных строк каталога по ограниченным текстовым
+// правилам. Флаг allowEmpty относится к отдельным значениям, а пустой список допустим.
 func sttCatalogStrings(values []string, allowEmpty bool) bool {
 	if len(values) > 32 {
 		return false
@@ -79,6 +95,10 @@ func sttCatalogStrings(values []string, allowEmpty bool) bool {
 	return true
 }
 
+// sttCatalogText checks optional emptiness, a byte bound, UTF-8, no surrounding whitespace and no
+// Unicode controls without altering catalog text.
+// sttCatalogText проверяет допустимость пустоты, байтовый лимит, UTF-8, отсутствие внешних
+// пробелов и Unicode управляющих символов без изменения текста каталога.
 func sttCatalogText(value string, maximum int, allowEmpty bool) bool {
 	return (allowEmpty || value != "") && len(value) <= maximum && utf8.ValidString(value) &&
 		strings.TrimSpace(value) == value && strings.IndexFunc(value, unicode.IsControl) < 0

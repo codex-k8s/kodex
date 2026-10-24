@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+// integrationCandidateInput copies nullable candidate context and page, defaults purpose to GRANT
+// and strips the recipient-kind prefix without enum validation.
+// integrationCandidateInput копирует nullable-контекст кандидатов и страницу, выбирает цель GRANT
+// и удаляет префикс вида получателя без проверки enum.
 func integrationCandidateInput(c *controlplanev1.IntegrationGrantCandidateContext, search string, pagination *controlplanev1.PageRequest) query.IntegrationCandidates {
 	kind := ""
 	if c.GetRecipientKind() != controlplanev1.IntegrationGrantRecipientKind_INTEGRATION_GRANT_RECIPIENT_KIND_UNSPECIFIED {
@@ -19,16 +23,31 @@ func integrationCandidateInput(c *controlplanev1.IntegrationGrantCandidateContex
 		CapabilityKey: c.GetCapabilityKey(), WorkflowRef: c.GetWorkflowRef(), StepKey: c.GetStepKey(),
 	}, Filter: query.Filter{Query: search, Page: page(pagination)}}
 }
+
+// castIntegrationCandidateContext projects owner-resolved candidate context locators and recipient
+// kind without treating payload locators as authority.
+// castIntegrationCandidateContext преобразует разрешённые владельцем ссылки контекста кандидатов и
+// вид получателя без назначения полномочий ссылками payload.
 func castIntegrationCandidateContext(c entity.IntegrationCandidateContext) *controlplanev1.IntegrationGrantCandidateContext {
 	return &controlplanev1.IntegrationGrantCandidateContext{ConnectionRef: c.ConnectionRef, ProjectRef: c.ProjectRef,
 		RecipientKind: controlplanev1.IntegrationGrantRecipientKind(controlplanev1.IntegrationGrantRecipientKind_value["INTEGRATION_GRANT_RECIPIENT_KIND_"+c.RecipientKind]),
 		RecipientRef:  c.RecipientRef, CapabilityKey: c.CapabilityKey, WorkflowRef: c.WorkflowRef, StepKey: c.StepKey}
 }
+
+// castIntegrationCandidatePins copies exact context, connection, definition, project, recipient
+// and workflow revision pins from the domain result.
+// castIntegrationCandidatePins копирует точные привязки контекста, подключения, определения,
+// проекта, получателя и ревизии процесса из доменного результата.
 func castIntegrationCandidatePins(p entity.IntegrationCandidatePins) *controlplanev1.IntegrationGrantCandidatePins {
 	return &controlplanev1.IntegrationGrantCandidatePins{ContextDigest: p.ContextDigest, ConnectionVersion: p.ConnectionVersion,
 		DefinitionVersion: p.DefinitionVersion, DefinitionDigest: p.DefinitionDigest, ProjectVersion: p.ProjectVersion,
 		RecipientVersion: p.RecipientVersion, WorkflowRevisionRef: p.WorkflowRevisionRef}
 }
+
+// integrationCandidateReason requires a known nonzero reason enum and returns unavailable when
+// owner output cannot be represented.
+// integrationCandidateReason требует известный ненулевой enum причины и возвращает unavailable,
+// если результат владельца нельзя представить.
 func integrationCandidateReason(reason string) (controlplanev1.IntegrationCandidateReason, error) {
 	v, ok := controlplanev1.IntegrationCandidateReason_value["INTEGRATION_CANDIDATE_REASON_"+reason]
 	if !ok || v == 0 {
@@ -37,6 +56,11 @@ func integrationCandidateReason(reason string) (controlplanev1.IntegrationCandid
 	return controlplanev1.IntegrationCandidateReason(v), nil
 }
 
+// ListIntegrationGrantConnectionCandidates passes explicit purpose and context to the authorized
+// connection-candidate read and requires representable reasons before returning pins and
+// pagination.
+// ListIntegrationGrantConnectionCandidates передаёт явную цель и контекст авторизованному чтению
+// кандидатов подключений и требует представимые причины до возврата привязок и пагинации.
 func (server *Server) ListIntegrationGrantConnectionCandidates(ctx context.Context, request *controlplanev1.ListIntegrationGrantConnectionCandidatesRequest) (*controlplanev1.ListIntegrationGrantConnectionCandidatesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantConnectionCandidates_FullMethodName)
 	if err != nil {
@@ -62,6 +86,10 @@ func (server *Server) ListIntegrationGrantConnectionCandidates(ctx context.Conte
 	return response, nil
 }
 
+// ListIntegrationGrantProjectCandidates reads project candidates with GRANT purpose and projects
+// checked reasons, per-item pins and owner context/pagination.
+// ListIntegrationGrantProjectCandidates читает кандидатов проектов с целью GRANT и преобразует
+// проверенные причины, привязки элементов и контекст с пагинацией владельца.
 func (server *Server) ListIntegrationGrantProjectCandidates(ctx context.Context, request *controlplanev1.ListIntegrationGrantProjectCandidatesRequest) (*controlplanev1.ListIntegrationGrantProjectCandidatesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantProjectCandidates_FullMethodName)
 	if err != nil {
@@ -87,6 +115,10 @@ func (server *Server) ListIntegrationGrantProjectCandidates(ctx context.Context,
 	return response, nil
 }
 
+// ListIntegrationGrantRecipientCandidates reads recipient candidates with GRANT purpose and
+// preserves typed recipient fields, checked reasons and exact result pins.
+// ListIntegrationGrantRecipientCandidates читает кандидатов получателей с целью GRANT и сохраняет
+// типизированные поля получателя, проверенные причины и точные привязки результата.
 func (server *Server) ListIntegrationGrantRecipientCandidates(ctx context.Context, request *controlplanev1.ListIntegrationGrantRecipientCandidatesRequest) (*controlplanev1.ListIntegrationGrantRecipientCandidatesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantRecipientCandidates_FullMethodName)
 	if err != nil {
@@ -112,6 +144,10 @@ func (server *Server) ListIntegrationGrantRecipientCandidates(ctx context.Contex
 	return response, nil
 }
 
+// ListIntegrationGrantCapabilityCandidates reads capability candidates with GRANT purpose and
+// returns checked reasons, grant version and typed capability projections.
+// ListIntegrationGrantCapabilityCandidates читает кандидатов возможностей с целью GRANT и
+// возвращает проверенные причины, версию grant и типизированные представления возможностей.
 func (server *Server) ListIntegrationGrantCapabilityCandidates(ctx context.Context, request *controlplanev1.ListIntegrationGrantCapabilityCandidatesRequest) (*controlplanev1.ListIntegrationGrantCapabilityCandidatesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantCapabilityCandidates_FullMethodName)
 	if err != nil {

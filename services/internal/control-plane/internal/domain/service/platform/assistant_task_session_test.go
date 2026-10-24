@@ -8,18 +8,36 @@ import (
 	"testing"
 )
 
+// taskSessionRepository counts synthetic assistant task-session reads without loading a real run
+// or session history.
+// taskSessionRepository подсчитывает синтетические чтения сессии задачи помощника без загрузки
+// настоящего выполнения либо истории сессии.
 type taskSessionRepository struct {
 	platformrepo.Repository
 	calls int
 }
 
+// ResolvePrincipal returns the local task-session fixture principal unchanged for exact workload
+// and read-permission assertions.
+// ResolvePrincipal возвращает локальный тестовый principal сессии задачи без изменений для
+// проверок точных workload и permission чтения.
 func (r *taskSessionRepository) ResolvePrincipal(_ context.Context, p value.Principal) (value.Principal, error) {
 	return p, nil
 }
+
+// ReadAssistantTaskSession counts the owner read and returns a synthetic failed task-session state
+// without performing a lifecycle transition.
+// ReadAssistantTaskSession подсчитывает чтение владельца и возвращает синтетическое ошибочное
+// состояние сессии задачи без перехода lifecycle.
 func (r *taskSessionRepository) ReadAssistantTaskSession(context.Context, value.Principal, string, string, int64, query.AssistantTaskSessionRead) (query.AssistantTaskSessionPage, error) {
 	r.calls++
 	return query.AssistantTaskSessionPage{State: "FAILED"}, nil
 }
+
+// TestReadAssistantTaskSessionUsesClosedReadPermission checks exact runtime read authority and
+// valid lease/fence/generation/run pins before any owner task-session read.
+// TestReadAssistantTaskSessionUsesClosedReadPermission проверяет точные runtime-полномочия чтения
+// и корректные pins lease, fence, поколения и выполнения до чтения сессии задачи владельцем.
 func TestReadAssistantTaskSessionUsesClosedReadPermission(t *testing.T) {
 	p := providerTestPrincipal()
 	p.CallerWorkload = "runtime-controller"

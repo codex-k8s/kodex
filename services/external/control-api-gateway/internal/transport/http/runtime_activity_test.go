@@ -6,6 +6,10 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestPublishedRunMessagePreservesLiteralText checks published commentary text remains literal
+// even when it resembles a state or localization key, preserving phase and revision.
+// TestPublishedRunMessagePreservesLiteralText проверяет буквальное сохранение опубликованного
+// commentary даже при сходстве со статусом либо ключом локализации с сохранением фазы и ревизии.
 func TestPublishedRunMessagePreservesLiteralText(t *testing.T) {
 	for _, text := range []string{"RUN_STATE_CANCELLED", "i18n:PRIVATE_TEST", "Проверяю текущие инструменты."} {
 		projection, err := ProtoMap(&cp.RunMessage{Ref: "msg_fixture01", Phase: cp.RunMessagePhase_RUN_MESSAGE_PHASE_COMMENTARY, Revision: 1, Text: text, Source: &cp.MessageSource{Origin: cp.MessageOrigin_MESSAGE_ORIGIN_ORDINARY}})
@@ -19,6 +23,12 @@ func TestPublishedRunMessagePreservesLiteralText(t *testing.T) {
 	}
 }
 
+// TestMessageSourceProjectionRejectsUnknownAndMissing checks known ordinary/callback sources
+// project explicitly while missing, unspecified and unknown sources reject run messages and
+// assistant turns.
+// TestMessageSourceProjectionRejectsUnknownAndMissing проверяет явную проекцию известных ordinary
+// и callback источников и отказ отсутствующим, неопределённым и неизвестным источникам сообщений
+// выполнения и turn помощника.
 func TestMessageSourceProjectionRejectsUnknownAndMissing(t *testing.T) {
 	for _, origin := range []cp.MessageOrigin{cp.MessageOrigin_MESSAGE_ORIGIN_ORDINARY, cp.MessageOrigin_MESSAGE_ORIGIN_CALLBACK_CONTINUATION} {
 		message := &cp.RunMessage{Ref: "trn_fixture01", Phase: cp.RunMessagePhase_RUN_MESSAGE_PHASE_USER, Text: "Safe public text", Revision: 1, Source: &cp.MessageSource{Origin: origin}}
@@ -37,6 +47,12 @@ func TestMessageSourceProjectionRejectsUnknownAndMissing(t *testing.T) {
 	}
 }
 
+// TestCallbackMessageSourceRequiresExactPublicBinding checks callback messages require an agent
+// actor, exact execution turn binding and USER phase and cannot masquerade as an owner assistant
+// turn.
+// TestCallbackMessageSourceRequiresExactPublicBinding проверяет обязательные actor агента, точную
+// связь turn выполнения и фазу USER у callback-сообщений и запрет выдавать их за turn владельца в
+// помощнике.
 func TestCallbackMessageSourceRequiresExactPublicBinding(t *testing.T) {
 	valid := func() *cp.RunEvent {
 		return &cp.RunEvent{

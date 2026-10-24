@@ -11,8 +11,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// managedImpactPath names the exact synthetic managed configuration and revision impact route for
+// local search and owner-readback tests.
+// managedImpactPath задаёт маршрут влияния точных синтетических конфигурации и ревизии для
+// локальных тестов поиска и чтения владельца.
 const managedImpactPath = "/api/v1/managed-configurations/mcfg_fixture01/revisions/mrev_fixture01/impact"
 
+// TestManagedImpactSearchPageAndReadback checks literal query and pagination pins, Unicode limits,
+// exact owner scope, safe totals/cursors and concrete owner errors without disclosure.
+// TestManagedImpactSearchPageAndReadback проверяет буквальный запрос и pins пагинации,
+// Unicode-лимиты, точную область владельца, безопасные счётчики и курсоры и конкретные ошибки
+// владельца без раскрытия.
 func TestManagedImpactSearchPageAndReadback(t *testing.T) {
 	fixture := func() *cp.GetManagedConfigurationImpactResponse {
 		return &cp.GetManagedConfigurationImpactResponse{Impact: &cp.ManagedConfigurationImpact{ConfigurationRef: "mcfg_fixture01", TargetRevisionRef: "mrev_fixture01", Digest: strings.Repeat("a", 64), Total: 12, Page: &cp.PageInfo{NextPageToken: "next-filter"}}}

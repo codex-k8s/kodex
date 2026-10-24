@@ -9,6 +9,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestPromptTemplateErrorCarriesOnlyTypedDiagnostics checks invalid templates retain the fixed
+// InvalidArgument message and one typed detail with exact diagnostic code, variable and source
+// position.
+// TestPromptTemplateErrorCarriesOnlyTypedDiagnostics проверяет фиксированные InvalidArgument
+// message и единственный typed detail неверного шаблона с точными кодом, переменной и позицией
+// диагностики.
 func TestPromptTemplateErrorCarriesOnlyTypedDiagnostics(t *testing.T) {
 	err := promptTemplateError([]promptservice.Diagnostic{{
 		Severity: "ERROR", Code: "PROMPT_TEMPLATE_VARIABLE_UNKNOWN",
@@ -29,6 +35,10 @@ func TestPromptTemplateErrorCarriesOnlyTypedDiagnostics(t *testing.T) {
 	}
 }
 
+// TestPromptDiagnosticsHaveError checks absent or warning-only diagnostics are not failures while
+// a collection containing an ERROR is recognized.
+// TestPromptDiagnosticsHaveError проверяет отсутствие отказа у отсутствующей либо только
+// warning-диагностики и распознавание набора с ERROR.
 func TestPromptDiagnosticsHaveError(t *testing.T) {
 	if promptDiagnosticsHaveError(nil) || promptDiagnosticsHaveError([]promptservice.Diagnostic{{Severity: "WARNING"}}) {
 		t.Fatal("non-error diagnostics were accepted as a prompt failure")

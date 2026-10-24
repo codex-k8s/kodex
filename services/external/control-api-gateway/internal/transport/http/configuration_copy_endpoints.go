@@ -12,10 +12,21 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// configurationDefinitionVersion recognizes a positive-major three-part numeric definition version
+// without prerelease/build suffixes. Other source identity and digest checks remain separate.
+// configurationDefinitionVersion распознаёт трёхчастную числовую версию определения с
+// положительным major без prerelease/build суффиксов. Остальные проверки identity и digest
+// источника выполняются отдельно.
 var configurationDefinitionVersion = regexp.MustCompile(`^[1-9][0-9]*\.[0-9]+\.[0-9]+$`)
 
-// Union generator не проверяет additionalProperties: boundary декодирует
-// закрытую форму повторно, включая запрет null/неоднозначных source selectors.
+// configurationCopyFields rechecks the generated union JSON for allowed outer keys, forbidden null
+// values and exactly one configuration versus recipe/shipped selector. Role-image and
+// integration-definition copies have different allowed fields; this closes additionalProperties
+// gaps in the generated union.
+// configurationCopyFields повторно проверяет JSON generated union на допустимые внешние ключи,
+// запрет null и ровно один selector configuration либо recipe/shipped. Копирование role image и
+// integration definition имеет разные поля; это закрывает пробел additionalProperties generated
+// union.
 func configurationCopyFields(value json.Marshaler, role bool) (map[string]json.RawMessage, bool) {
 	raw, err := value.MarshalJSON()
 	var fields map[string]json.RawMessage
@@ -48,6 +59,11 @@ func configurationCopyFields(value json.Marshaler, role bool) (map[string]json.R
 	return fields, configured != other
 }
 
+// configurationCopyString reads a selected raw JSON field only when it decodes as a string,
+// returning empty text for missing or nonstring fields so the caller can apply its field-specific
+// requirement.
+// configurationCopyString читает выбранное сырое JSON поле только при строковом декодировании,
+// возвращая пустой текст для отсутствующего или нестрокового поля для предметной проверки caller.
 func configurationCopyString(fields map[string]json.RawMessage, key string) string {
 	var value string
 	if json.Unmarshal(fields[key], &value) != nil {
@@ -56,6 +72,12 @@ func configurationCopyString(fields map[string]json.RawMessage, key string) stri
 	return value
 }
 
+// configurationCopyMutation requires a nonempty If-Match before delegating mutation-header
+// parsing. Missing version selection produces a local 400; owner lookup and source-version
+// enforcement remain in the command.
+// configurationCopyMutation требует непустой If-Match перед общим разбором mutation заголовков.
+// Отсутствие выбора версии даёт локальный 400; поиск владельца и проверка версии источника
+// остаются у команды.
 func configurationCopyMutation(w http.ResponseWriter, key, etag string) (*cp.MutationContext, bool) {
 	if etag == "" {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -64,6 +86,13 @@ func configurationCopyMutation(w http.ResponseWriter, key, etag string) (*cp.Mut
 	return requireMutation(w, key, etag)
 }
 
+// CopyRoleImageConfiguration validates a named project copy with exactly one recipe/configuration
+// source, attaches project routing and forwards the source oneof with mutation headers. Only a
+// nonnil owner result is projected as 201; requested source refs grant no access.
+// CopyRoleImageConfiguration проверяет именованную проектную копию с одним источником
+// recipe/configuration, добавляет проектную маршрутизацию и передаёт source oneof с mutation
+// заголовками. Только ненулевой ответ владельца проецируется как 201; refs источника доступа не
+// дают.
 func (server *Server) CopyRoleImageConfiguration(w http.ResponseWriter, r *http.Request, p generated.CopyRoleImageConfigurationParams) {
 	body, ok := decodeJSON[generated.RoleImageConfigurationCopyInput](w, r)
 	if !ok {
@@ -103,6 +132,13 @@ func (server *Server) CopyRoleImageConfiguration(w http.ResponseWriter, r *http.
 	writeManagedResult(w, http.StatusCreated, result)
 }
 
+// CopyIntegrationDefinitionConfiguration accepts either an existing configuration ref or a
+// strictly shaped shipped definition key/version/digest, plus a bounded name and mutation headers.
+// The specialized owner command creates the copy; this gateway never detaches Git ownership
+// itself.
+// CopyIntegrationDefinitionConfiguration принимает ref существующей конфигурации либо строгие
+// key/version/digest встроенного определения с ограниченным именем и mutation заголовками. Копию
+// создаёт специализированная команда владельца; gateway сам не снимает Git владение.
 func (server *Server) CopyIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request, p generated.CopyIntegrationDefinitionConfigurationParams) {
 	body, ok := decodeJSON[generated.IntegrationDefinitionConfigurationCopyInput](w, r)
 	if !ok {
@@ -148,6 +184,12 @@ func (server *Server) CopyIntegrationDefinitionConfiguration(w http.ResponseWrit
 	writeManagedResult(w, http.StatusCreated, result)
 }
 
+// ArchiveRoleImageConfiguration accepts an optional empty body and a valid configuration locator,
+// requires mutation/version selection and delegates role-image configuration archival to its
+// specialized owner command.
+// ArchiveRoleImageConfiguration принимает необязательное пустое тело и корректный locator
+// конфигурации, требует mutation и выбор версии и поручает архивирование конфигурации role image
+// специализированной команде владельца.
 func (server *Server) ArchiveRoleImageConfiguration(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, p generated.ArchiveRoleImageConfigurationParams) {
 	if _, ok := decodeOptionalJSON[struct{}](w, r); !ok {
 		return
@@ -168,6 +210,12 @@ func (server *Server) ArchiveRoleImageConfiguration(w http.ResponseWriter, r *ht
 	writeArchivedConfiguration(w, result.GetConfiguration())
 }
 
+// ArchiveIntegrationDefinitionConfiguration validates the optional empty body, configuration
+// locator and mutation headers before delegating integration-definition configuration archival; it
+// does not share a generic command with role-image lifecycle.
+// ArchiveIntegrationDefinitionConfiguration проверяет необязательное пустое тело, locator
+// конфигурации и mutation заголовки перед архивированием integration definition владельцем; общий
+// generic command с lifecycle role image не используется.
 func (server *Server) ArchiveIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, p generated.ArchiveIntegrationDefinitionConfigurationParams) {
 	if _, ok := decodeOptionalJSON[struct{}](w, r); !ok {
 		return
@@ -188,6 +236,11 @@ func (server *Server) ArchiveIntegrationDefinitionConfiguration(w http.ResponseW
 	writeArchivedConfiguration(w, result.GetConfiguration())
 }
 
+// writeArchivedConfiguration requires a valid owner configuration view with Archived true, then
+// emits the configuration envelope with its version ETag and no-store policy. An unexpected active
+// result becomes 502.
+// writeArchivedConfiguration требует корректную проекцию конфигурации владельца с Archived true,
+// затем выдаёт envelope с ETag версии и no-store. Неожиданно активный результат даёт 502.
 func writeArchivedConfiguration(w http.ResponseWriter, value *cp.ManagedConfigurationSet) {
 	configuration, err := managedConfigurationView(value)
 	if err != nil || !configuration.Archived {

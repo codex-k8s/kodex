@@ -4,11 +4,29 @@ title: Технический HTTP server
 type: component
 status: approved
 owner: backend
-version: 1.4.0
-updated: 2026-10-22
+version: 1.5.0
+updated: 2026-10-24
 ---
 
 # `httpserver`
+
+`ProbeMux(snapshot)` создаёт только общий mux прежних четырёх probes gateway и
+control-plane. `/healthz`, `/livez` и `/startupz` всегда возвращают204;
+`/readyz` читает текущий заранее вычисленный snapshot и возвращает204 либо
+прежний `http.Error(reason,503)`, включая текст причины, newline и headers.
+Patterns без метода сохраняют приём всех методов и прежнюю обработку query.
+Caller передаёт непустую функцию локального snapshot без I/O; фабрика не
+запускает её при создании и не вычисляет состояние зависимостей.
+
+Это отдельная API для сохранения существующего контракта двух приложений;
+`New` сохраняет свой строгий GET/headers contract. `ProbeMux` не добавляет
+metrics, root fallback, бизнесовые маршруты, auth, defaults либо limits.
+Приложение само добавляет маршруты и владеет http.Server, адресом, BaseContext,
+таймаутами, listener и shutdown. Фабрика не читает env, не выполняет I/O,
+не создаёт goroutines и не владеет runtime-состоянием. Probe не подтверждает
+полноту startup или исправность optional capability. Новых ошибок либо
+fallback для caller нет; проверка функций/параметров остаётся у composition.
+
 
 Общий технический HTTP server для `/healthz`, `/readyz` и `/metrics`.
 Библиотека также принимает ограниченный набор service-owned `ExactGETRoute`

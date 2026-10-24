@@ -16,12 +16,20 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// searchQueryStub captures platform search requests and supplies either a configured response or
+// synthetic owner-authorized agent results.
+// searchQueryStub сохраняет запросы поиска платформы и выдаёт заданный ответ либо синтетические
+// результаты агента, разрешённые тестовым владельцем.
 type searchQueryStub struct {
 	controlplanev1.PlatformQueryServiceClient
 	request  *controlplanev1.SearchPlatformRequest
 	response *controlplanev1.SearchPlatformResponse
 }
 
+// TestSearchRejectsMalformedInputBeforeRPC checks minimum query length, empty text, result-limit
+// bounds and cursor length before any platform search RPC.
+// TestSearchRejectsMalformedInputBeforeRPC проверяет минимальную длину запроса, пустой текст,
+// ограничения числа результатов и длины курсора до любого RPC поиска платформы.
 func TestSearchRejectsMalformedInputBeforeRPC(t *testing.T) {
 	for _, query := range []string{"query=x", "query=%20%20", "query=test&limit=0", "query=test&limit=51", "query=test&limit=4294967297", "query=test&pageToken=" + strings.Repeat("a", 513)} {
 		client := &catalogRPCRecorder{}
@@ -33,6 +41,12 @@ func TestSearchRejectsMalformedInputBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestSearchRejectsCorruptTypedResults checks unknown result kinds, foreign project, malformed
+// references, nil rows, invalid timestamps, unsafe totals and duplicate results return bad
+// gateway.
+// TestSearchRejectsCorruptTypedResults проверяет ответ bad gateway для неизвестных видов
+// результата, чужого проекта, неверных ссылок, nil-строк, времён, небезопасного счётчика и
+// повторов.
 func TestSearchRejectsCorruptTypedResults(t *testing.T) {
 	for name, change := range map[string]func(*controlplanev1.SearchPlatformResponse){
 		"unknown-kind":    func(r *controlplanev1.SearchPlatformResponse) { r.Results[0].Kind = 999 },
@@ -57,6 +71,10 @@ func TestSearchRejectsCorruptTypedResults(t *testing.T) {
 	}
 }
 
+// TestVFSMismatchedProjectIsNotReturned checks VFS list and search reject a foreign-project owner
+// result without exposing its project reference.
+// TestVFSMismatchedProjectIsNotReturned проверяет отказ списка и поиска VFS результату владельца
+// из чужого проекта без раскрытия его ссылки проекта.
 func TestVFSMismatchedProjectIsNotReturned(t *testing.T) {
 	for _, path := range []string{"/api/v1/vfs/nodes?projectRef=prj_project01", "/api/v1/vfs/search?projectRef=prj_project01&query=test"} {
 		node := &controlplanev1.VFSNode{Ref: "art_fixture01", Path: "/projects/prj_foreign01/result", ProjectRef: "prj_foreign01", Kind: controlplanev1.VFSNodeKind_VFS_NODE_KIND_RESULT}
@@ -72,6 +90,10 @@ func TestVFSMismatchedProjectIsNotReturned(t *testing.T) {
 	}
 }
 
+// SearchPlatform records the typed query and returns the configured response or a fixed-time
+// synthetic agent page with total and next cursor.
+// SearchPlatform записывает типизированный запрос и возвращает заданный ответ либо синтетическую
+// страницу агента с фиксированным временем, общим числом строк и следующим курсором.
 func (stub *searchQueryStub) SearchPlatform(_ context.Context, request *controlplanev1.SearchPlatformRequest, _ ...grpc.CallOption) (*controlplanev1.SearchPlatformResponse, error) {
 	stub.request = request
 	if stub.response != nil {
@@ -83,6 +105,12 @@ func (stub *searchQueryStub) SearchPlatform(_ context.Context, request *controlp
 	}, nil
 }
 
+// TestSearchPlatformForwardsFilterAndCursorAndPreservesPage checks project filter, limit and
+// cursor forwarding while preserving the owner total, next cursor and canonical public result
+// kind.
+// TestSearchPlatformForwardsFilterAndCursorAndPreservesPage проверяет передачу фильтра проекта,
+// лимита и курсора с сохранением числа результатов владельца, следующего курсора и канонического
+// публичного вида результата.
 func TestSearchPlatformForwardsFilterAndCursorAndPreservesPage(t *testing.T) {
 	query := &searchQueryStub{}
 	server := &Server{control: &controlplaneclient.Client{Query: query}}
@@ -111,6 +139,10 @@ func TestSearchPlatformForwardsFilterAndCursorAndPreservesPage(t *testing.T) {
 	}
 }
 
+// TestSearchPlatformReturnsAuthorizedArtifact checks projection of an artifact supplied by the
+// synthetic owner response, retaining its exact resource and project references.
+// TestSearchPlatformReturnsAuthorizedArtifact проверяет проекцию артефакта из синтетического
+// ответа владельца с сохранением точных ссылок ресурса и проекта.
 func TestSearchPlatformReturnsAuthorizedArtifact(t *testing.T) {
 	query := &searchQueryStub{}
 	response, _ := query.SearchPlatform(t.Context(), &controlplanev1.SearchPlatformRequest{})

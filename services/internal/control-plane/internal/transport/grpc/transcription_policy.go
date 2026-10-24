@@ -18,6 +18,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// ResolveTranscriptionPolicy checks the exact trusted or verified authority locator against the
+// resolved principal, requires eligible STT configuration and projects policy with the bound
+// expiry and cloned locator.
+// ResolveTranscriptionPolicy проверяет точный trusted либо verified authority locator относительно
+// разрешённого principal, требует допустимую STT-конфигурацию и преобразует policy с привязанным
+// сроком и копией locator.
 func (server *Server) ResolveTranscriptionPolicy(ctx context.Context, request *sttv1.ResolveTranscriptionPolicyRequest) (*sttv1.ResolveTranscriptionPolicyResponse, error) {
 	p, err := principal(ctx, sttv1.TranscriptionPolicyProjectionService_ResolveTranscriptionPolicy_FullMethodName)
 	if err != nil {
@@ -55,8 +61,12 @@ func (server *Server) ResolveTranscriptionPolicy(ctx context.Context, request *s
 	}, nil
 }
 
-// Locator связывается с повторно разрешённой CP сессией; его payload не
-// назначает actor/tenant. Digest проверяет целостность snapshot, не подпись.
+// trustedTranscriptionLocatorMatches binds the locator to a trusted CP principal with exact
+// workload, permission, identities and credential revision, requiring bounded expiry and
+// deterministic snapshot digest rather than a signature.
+// trustedTranscriptionLocatorMatches связывает locator с trusted principal CP по точным workload,
+// разрешению, identity и ревизии credential, требуя ограниченный срок и deterministic digest
+// снимка вместо подписи.
 func trustedTranscriptionLocatorMatches(locator *sttv1.DelegatedAuthorityLocator, p value.Principal) bool {
 	now := time.Now()
 	if locator == nil || p.CallerWorkload != "stt-tts-service" || p.Permission != "platform.stt.policy.resolve" || p.ProjectRef != "" ||
@@ -81,6 +91,11 @@ func trustedTranscriptionLocatorMatches(locator *sttv1.DelegatedAuthorityLocator
 	return locator.GetSourceDigestSha256() == hex.EncodeToString(digest[:])
 }
 
+// transcriptionLocatorMatches compares locator lifetime, actor/tenant/project, source pins and
+// provenance to the verified authorization context without accepting caller payload as authority.
+// transcriptionLocatorMatches сравнивает срок locator, actor, tenant, project, привязки источника
+// и происхождение с проверенным контекстом авторизации без назначения полномочий payload
+// вызывающего.
 func transcriptionLocatorMatches(locator *sttv1.DelegatedAuthorityLocator, verified *authorityv1.VerifiedAuthorizationContext) bool {
 	if locator == nil || verified == nil || uuid.Validate(locator.GetRequestId()) != nil || locator.GetCorrelationId() == "" || len(locator.GetCorrelationId()) > 128 ||
 		locator.GetExpiresAt() == nil || locator.GetExpiresAt().CheckValid() != nil || verified.GetExpiresAt() == nil ||
@@ -99,6 +114,10 @@ func transcriptionLocatorMatches(locator *sttv1.DelegatedAuthorityLocator, verif
 		((authority.GetProject() == nil && locator.GetProject() == nil) || transcriptionProvenanceMatches(locator.GetProject(), authority.GetProject().GetProvenance()))
 }
 
+// transcriptionProvenanceMatches requires both provenance records and exact source, reference,
+// revision and digest equality.
+// transcriptionProvenanceMatches требует обе записи происхождения и точное равенство source,
+// reference, revision и digest.
 func transcriptionProvenanceMatches(locator *sttv1.AuthorityIdentityProvenance, verified *authorityv1.AuthorityProvenance) bool {
 	return locator != nil && verified != nil && locator.GetSource() == int32(verified.GetSource()) &&
 		locator.GetReference() == verified.GetReference() && locator.GetRevision() == verified.GetRevision() && locator.GetDigestSha256() == verified.GetDigestSha256()

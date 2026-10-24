@@ -12,6 +12,10 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// TestCatalogFiltersReachOwner checks agent, workflow, provider, integration and audit filters
+// reach typed owner fields with literal search text.
+// TestCatalogFiltersReachOwner проверяет передачу фильтров агента, workflow, провайдера,
+// интеграции и аудита в типизированные поля владельца с буквальным текстом поиска.
 func TestCatalogFiltersReachOwner(t *testing.T) {
 	for _, tc := range []struct {
 		path, field, want string
@@ -50,6 +54,10 @@ func TestCatalogFiltersReachOwner(t *testing.T) {
 	}
 }
 
+// TestCatalogFiltersRejectInvalidBeforeOwner checks unknown or empty state/definition filters and
+// oversized audit action/outcome fail before any catalog owner request.
+// TestCatalogFiltersRejectInvalidBeforeOwner проверяет отказ неизвестным либо пустым фильтрам
+// состояния и определения и чрезмерным action и outcome аудита до запросов владельцу каталога.
 func TestCatalogFiltersRejectInvalidBeforeOwner(t *testing.T) {
 	for _, path := range []string{"/api/v1/agents?state=UNKNOWN", "/api/v1/projects/prj_fixture01/agents?state=UNSPECIFIED", "/api/v1/workflows?state=READY", "/api/v1/projects/prj_fixture01/workflows?state=", "/api/v1/provider-accounts?state=UNKNOWN", "/api/v1/integration-connections?definitionKey=", "/api/v1/audit-events?action=" + strings.Repeat("x", 161), "/api/v1/audit-events?outcome=" + strings.Repeat("x", 81)} {
 		client := &catalogRPCRecorder{}

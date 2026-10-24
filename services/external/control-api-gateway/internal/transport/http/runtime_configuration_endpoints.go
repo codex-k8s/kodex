@@ -297,7 +297,7 @@ func providerAccountCandidates(input []generated.ProviderAccountCandidateInput) 
 	result := make([]*controlplanev1.ProviderAccountCandidate, 0, len(input))
 	seen := map[string]bool{}
 	for _, item := range input {
-		if seen[item.AccountRef] || !opaqueHTTPReference.MatchString(item.AccountRef) || !strings.HasPrefix(item.AccountRef, "pacc_") || len(item.AccountRef) > 96 || item.Weight < 1 || item.Weight > 100 || !modelProviderKey.MatchString(item.ProviderDefinitionKey) || !modelCatalogDigest.MatchString(item.CatalogDigest) || item.CatalogRevision != "mcat_"+item.CatalogDigest {
+		if seen[item.AccountRef] || !opaqueHTTPReference.MatchString(item.AccountRef) || !strings.HasPrefix(item.AccountRef, "pacc_") || len(item.AccountRef) > 96 || item.Weight < 1 || item.Weight > 100 || !modelProviderKey.MatchString(item.ProviderDefinitionKey) || !validManagedDigest(item.CatalogDigest) || item.CatalogRevision != "mcat_"+item.CatalogDigest {
 			return nil, false
 		}
 		seen[item.AccountRef] = true

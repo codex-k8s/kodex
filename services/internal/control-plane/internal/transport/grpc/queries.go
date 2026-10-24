@@ -8,6 +8,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// GetBootstrapState reads bootstrap state using the principal verified for this RPC and maps
+// domain errors to transport status.
+// GetBootstrapState читает состояние начальной настройки с principal проверенного RPC и переводит
+// доменные ошибки в transport status.
 func (server *Server) GetBootstrapState(ctx context.Context, _ *controlplanev1.GetBootstrapStateRequest) (*controlplanev1.GetBootstrapStateResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetBootstrapState_FullMethodName)
 	if err != nil {
@@ -20,6 +24,10 @@ func (server *Server) GetBootstrapState(ctx context.Context, _ *controlplanev1.G
 	return &controlplanev1.GetBootstrapStateResponse{State: castBootstrap(result)}, nil
 }
 
+// GetPlatformEventCursor returns the organization and current platform event sequence from the
+// authorized domain read.
+// GetPlatformEventCursor возвращает организацию и текущую последовательность событий платформы из
+// авторизованного доменного чтения.
 func (server *Server) GetPlatformEventCursor(ctx context.Context, _ *controlplanev1.GetPlatformEventCursorRequest) (*controlplanev1.GetPlatformEventCursorResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetPlatformEventCursor_FullMethodName)
 	if err != nil {
@@ -32,6 +40,9 @@ func (server *Server) GetPlatformEventCursor(ctx context.Context, _ *controlplan
 	return &controlplanev1.GetPlatformEventCursorResponse{OrganizationRef: organizationRef, CurrentSequence: sequence}, nil
 }
 
+// GetOverview reads the overview for the requested project under the verified transport principal.
+// GetOverview читает обзор запрошенного проекта с проверенным transport principal; доступ
+// определяет доменный сервис.
 func (server *Server) GetOverview(ctx context.Context, request *controlplanev1.GetOverviewRequest) (*controlplanev1.GetOverviewResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetOverview_FullMethodName)
 	if err != nil {
@@ -44,6 +55,10 @@ func (server *Server) GetOverview(ctx context.Context, request *controlplanev1.G
 	return &controlplanev1.GetOverviewResponse{Overview: castOverview(result)}, nil
 }
 
+// ListPlatformCapabilities projects the domain capability list after resolving the principal for
+// this exact method.
+// ListPlatformCapabilities преобразует доменный список возможностей после получения principal для
+// точного метода RPC.
 func (server *Server) ListPlatformCapabilities(ctx context.Context, _ *controlplanev1.ListPlatformCapabilitiesRequest) (*controlplanev1.ListPlatformCapabilitiesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListPlatformCapabilities_FullMethodName)
 	if err != nil {
@@ -60,6 +75,10 @@ func (server *Server) ListPlatformCapabilities(ctx context.Context, _ *controlpl
 	return response, nil
 }
 
+// ListRuntimeSelections returns runtime selections from the authorized domain read without
+// performing runtime probes in transport.
+// ListRuntimeSelections возвращает варианты runtime из авторизованного доменного чтения без
+// проверок runtime в transport.
 func (server *Server) ListRuntimeSelections(ctx context.Context, _ *controlplanev1.ListRuntimeSelectionsRequest) (*controlplanev1.ListRuntimeSelectionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRuntimeSelections_FullMethodName)
 	if err != nil {
@@ -76,6 +95,10 @@ func (server *Server) ListRuntimeSelections(ctx context.Context, _ *controlplane
 	return response, nil
 }
 
+// SearchPlatform passes query, project and pagination to the authorized search and preserves total
+// and continuation token.
+// SearchPlatform передаёт запрос, проект и пагинацию авторизованному поиску, сохраняя общее число
+// и токен продолжения.
 func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev1.SearchPlatformRequest) (*controlplanev1.SearchPlatformResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_SearchPlatform_FullMethodName)
 	if err != nil {
@@ -92,6 +115,8 @@ func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev
 	return response, nil
 }
 
+// searchPage copies ordinary page fields and lets a positive legacy limit override page size.
+// searchPage копирует обычные поля страницы и заменяет её размер положительным прежним limit.
 func searchPage(request *controlplanev1.SearchPlatformRequest) query.Page {
 	result := page(request.GetPage())
 	if request.GetLimit() > 0 {
@@ -100,6 +125,10 @@ func searchPage(request *controlplanev1.SearchPlatformRequest) query.Page {
 	return result
 }
 
+// ListProjects returns the authorized project page together with domain next actions and its
+// continuation token.
+// ListProjects возвращает авторизованную страницу проектов с доменными следующими действиями и
+// токеном продолжения.
 func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.ListProjectsRequest) (*controlplanev1.ListProjectsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProjects_FullMethodName)
 	if err != nil {
@@ -116,6 +145,10 @@ func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.
 	return response, nil
 }
 
+// ListTrashedProjects reads the paginated trashed-project list using the method-specific verified
+// principal.
+// ListTrashedProjects читает страницу удалённых проектов с principal, проверенным для конкретного
+// метода.
 func (server *Server) ListTrashedProjects(ctx context.Context, request *controlplanev1.ListTrashedProjectsRequest) (*controlplanev1.ListTrashedProjectsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListTrashedProjects_FullMethodName)
 	if err != nil {
@@ -132,6 +165,10 @@ func (server *Server) ListTrashedProjects(ctx context.Context, request *controlp
 	return response, nil
 }
 
+// GetProject passes the project locator to the authorized domain read and casts its returned
+// entity.
+// GetProject передаёт ссылку проекта авторизованному доменному чтению и преобразует возвращённую
+// сущность.
 func (server *Server) GetProject(ctx context.Context, request *controlplanev1.GetProjectRequest) (*controlplanev1.GetProjectResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetProject_FullMethodName)
 	if err != nil {
@@ -144,6 +181,10 @@ func (server *Server) GetProject(ctx context.Context, request *controlplanev1.Ge
 	return &controlplanev1.GetProjectResponse{Project: castProject(item)}, nil
 }
 
+// ListPlatformMemberships returns a page of platform memberships and the explicit manage-members
+// action after domain authorization.
+// ListPlatformMemberships возвращает страницу участников платформы и явное действие управления
+// участниками после доменной авторизации.
 func (server *Server) ListPlatformMemberships(ctx context.Context, request *controlplanev1.ListPlatformMembershipsRequest) (*controlplanev1.ListPlatformMembershipsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListPlatformMemberships_FullMethodName)
 	if err != nil {
@@ -160,6 +201,10 @@ func (server *Server) ListPlatformMemberships(ctx context.Context, request *cont
 	return response, nil
 }
 
+// ListPlatformMembershipCandidates reads platform membership candidates using the supplied query
+// and page under the verified principal.
+// ListPlatformMembershipCandidates читает кандидатов в участники платформы по запросу и странице с
+// проверенным principal.
 func (server *Server) ListPlatformMembershipCandidates(ctx context.Context, request *controlplanev1.ListPlatformMembershipCandidatesRequest) (*controlplanev1.ListPlatformMembershipCandidatesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName)
 	if err != nil {
@@ -176,6 +221,10 @@ func (server *Server) ListPlatformMembershipCandidates(ctx context.Context, requ
 	return response, nil
 }
 
+// ListProjectMemberships reads project memberships with the project locator, query and page; the
+// domain owns access checks.
+// ListProjectMemberships читает участников проекта по ссылке, запросу и странице; проверки доступа
+// принадлежат домену.
 func (server *Server) ListProjectMemberships(ctx context.Context, request *controlplanev1.ListProjectMembershipsRequest) (*controlplanev1.ListProjectMembershipsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProjectMemberships_FullMethodName)
 	if err != nil {
@@ -192,6 +241,10 @@ func (server *Server) ListProjectMemberships(ctx context.Context, request *contr
 	return response, nil
 }
 
+// ListProjectMembershipCandidates projects a paginated candidate-user list from the authorized
+// project membership read.
+// ListProjectMembershipCandidates преобразует страницу пользователей-кандидатов из авторизованного
+// чтения участников проекта.
 func (server *Server) ListProjectMembershipCandidates(ctx context.Context, request *controlplanev1.ListProjectMembershipCandidatesRequest) (*controlplanev1.ListProjectMembershipCandidatesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProjectMembershipCandidates_FullMethodName)
 	if err != nil {
@@ -208,6 +261,10 @@ func (server *Server) ListProjectMembershipCandidates(ctx context.Context, reque
 	return response, nil
 }
 
+// ListAgents converts an optional agent state to the domain filter and returns the authorized
+// agent page.
+// ListAgents преобразует необязательное состояние агента в доменный фильтр и возвращает
+// авторизованную страницу агентов.
 func (server *Server) ListAgents(ctx context.Context, request *controlplanev1.ListAgentsRequest) (*controlplanev1.ListAgentsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListAgents_FullMethodName)
 	if err != nil {
@@ -228,6 +285,8 @@ func (server *Server) ListAgents(ctx context.Context, request *controlplanev1.Li
 	return response, nil
 }
 
+// GetAgent reads the requested agent through the domain using the principal bound to this RPC.
+// GetAgent читает запрошенного агента через домен с principal, связанным с данным RPC.
 func (server *Server) GetAgent(ctx context.Context, request *controlplanev1.GetAgentRequest) (*controlplanev1.GetAgentResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetAgent_FullMethodName)
 	if err != nil {
@@ -240,6 +299,10 @@ func (server *Server) GetAgent(ctx context.Context, request *controlplanev1.GetA
 	return &controlplanev1.GetAgentResponse{Agent: castAgent(item)}, nil
 }
 
+// ListAgentInstructionVersions casts the authorized instruction-version page while preserving its
+// domain continuation token.
+// ListAgentInstructionVersions преобразует авторизованную страницу версий инструкции, сохраняя
+// доменный токен продолжения.
 func (server *Server) ListAgentInstructionVersions(ctx context.Context, request *controlplanev1.ListAgentInstructionVersionsRequest) (*controlplanev1.ListAgentInstructionVersionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListAgentInstructionVersions_FullMethodName)
 	if err != nil {
@@ -256,6 +319,10 @@ func (server *Server) ListAgentInstructionVersions(ctx context.Context, request 
 	return response, nil
 }
 
+// ListWorkflows normalizes an optional workflow state and passes project, query and page to the
+// domain read.
+// ListWorkflows нормализует необязательное состояние процесса и передаёт проект, запрос и страницу
+// доменному чтению.
 func (server *Server) ListWorkflows(ctx context.Context, request *controlplanev1.ListWorkflowsRequest) (*controlplanev1.ListWorkflowsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListWorkflows_FullMethodName)
 	if err != nil {
@@ -276,6 +343,9 @@ func (server *Server) ListWorkflows(ctx context.Context, request *controlplanev1
 	return response, nil
 }
 
+// GetWorkflow returns the workflow selected by the domain after method-specific principal
+// resolution.
+// GetWorkflow возвращает процесс, выбранный доменом после получения principal конкретного метода.
 func (server *Server) GetWorkflow(ctx context.Context, request *controlplanev1.GetWorkflowRequest) (*controlplanev1.GetWorkflowResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetWorkflow_FullMethodName)
 	if err != nil {
@@ -288,6 +358,10 @@ func (server *Server) GetWorkflow(ctx context.Context, request *controlplanev1.G
 	return &controlplanev1.GetWorkflowResponse{Workflow: castWorkflow(item)}, nil
 }
 
+// ListRuns rejects unspecified requested states, forwards session and target filters, and
+// preserves total and pagination.
+// ListRuns отклоняет неопределённые запрошенные состояния, передаёт фильтры сессии и цели,
+// сохраняя общее число и пагинацию.
 func (server *Server) ListRuns(ctx context.Context, request *controlplanev1.ListRunsRequest) (*controlplanev1.ListRunsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRuns_FullMethodName)
 	if err != nil {
@@ -311,6 +385,8 @@ func (server *Server) ListRuns(ctx context.Context, request *controlplanev1.List
 	return response, nil
 }
 
+// GetRun resolves the verified principal before reading and projecting the requested run.
+// GetRun получает проверенный principal до чтения и преобразования запрошенного запуска.
 func (server *Server) GetRun(ctx context.Context, request *controlplanev1.GetRunRequest) (*controlplanev1.GetRunResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRun_FullMethodName)
 	if err != nil {
@@ -323,6 +399,10 @@ func (server *Server) GetRun(ctx context.Context, request *controlplanev1.GetRun
 	return &controlplanev1.GetRunResponse{Run: castRun(item)}, nil
 }
 
+// GetRunGraph selects the graph read with or without run snapshots and projects the root, graph
+// and returned runs.
+// GetRunGraph выбирает чтение графа со снимками запусков либо без них и преобразует корень, граф и
+// возвращённые запуски.
 func (server *Server) GetRunGraph(ctx context.Context, request *controlplanev1.GetRunGraphRequest) (*controlplanev1.GetRunGraphResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRunGraph_FullMethodName)
 	if err != nil {
@@ -343,6 +423,10 @@ func (server *Server) GetRunGraph(ctx context.Context, request *controlplanev1.G
 	return &controlplanev1.GetRunGraphResponse{Run: castRun(run), Graph: castGraph(graph), Runs: runs}, nil
 }
 
+// ListRunEvents reads events after the requested sequence and returns the current sequence and
+// completion flag unchanged.
+// ListRunEvents читает события после заданной последовательности и сохраняет текущую
+// последовательность и признак завершения.
 func (server *Server) ListRunEvents(ctx context.Context, request *controlplanev1.ListRunEventsRequest) (*controlplanev1.ListRunEventsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRunEvents_FullMethodName)
 	if err != nil {
@@ -359,6 +443,10 @@ func (server *Server) ListRunEvents(ctx context.Context, request *controlplanev1
 	return response, nil
 }
 
+// ListOwnerGates passes singular and plural state filters to the authorized gate read and returns
+// its total and page.
+// ListOwnerGates передаёт одиночный и множественный фильтры состояний авторизованному чтению
+// шлюзов и возвращает общее число и страницу.
 func (server *Server) ListOwnerGates(ctx context.Context, request *controlplanev1.ListOwnerGatesRequest) (*controlplanev1.ListOwnerGatesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListOwnerGates_FullMethodName)
 	if err != nil {
@@ -383,6 +471,8 @@ func (server *Server) ListOwnerGates(ctx context.Context, request *controlplanev
 	return response, nil
 }
 
+// GetOwnerGate reads the owner gate identified by the request using the verified method principal.
+// GetOwnerGate читает шлюз владельца по ссылке запроса с проверенным principal метода.
 func (server *Server) GetOwnerGate(ctx context.Context, request *controlplanev1.GetOwnerGateRequest) (*controlplanev1.GetOwnerGateResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetOwnerGate_FullMethodName)
 	if err != nil {
@@ -395,6 +485,10 @@ func (server *Server) GetOwnerGate(ctx context.Context, request *controlplanev1.
 	return &controlplanev1.GetOwnerGateResponse{Gate: castGate(item)}, nil
 }
 
+// ListArtifacts normalizes artifact filters, rejects more than five source kinds and returns the
+// authorized artifact page.
+// ListArtifacts нормализует фильтры артефактов, отклоняет более пяти видов источника и возвращает
+// авторизованную страницу артефактов.
 func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1.ListArtifactsRequest) (*controlplanev1.ListArtifactsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListArtifacts_FullMethodName)
 	if err != nil {
@@ -437,6 +531,10 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 	return response, nil
 }
 
+// GetArtifactImpact projects the domain impact decision, digest, counts, blockers and bounded
+// active-run list for the requested action.
+// GetArtifactImpact преобразует доменное решение о влиянии действия, digest, счётчики, препятствия
+// и ограниченный список активных запусков.
 func (server *Server) GetArtifactImpact(ctx context.Context, request *controlplanev1.GetArtifactImpactRequest) (*controlplanev1.GetArtifactImpactResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetArtifactImpact_FullMethodName)
 	if err != nil {
@@ -462,6 +560,10 @@ func (server *Server) GetArtifactImpact(ctx context.Context, request *controlpla
 	return &controlplanev1.GetArtifactImpactResponse{Impact: response}, nil
 }
 
+// GetArtifact returns the artifact from the authorized domain read without reading its content in
+// this handler.
+// GetArtifact возвращает артефакт из авторизованного доменного чтения без чтения его содержимого в
+// обработчике.
 func (server *Server) GetArtifact(ctx context.Context, request *controlplanev1.GetArtifactRequest) (*controlplanev1.GetArtifactResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetArtifact_FullMethodName)
 	if err != nil {
@@ -474,6 +576,10 @@ func (server *Server) GetArtifact(ctx context.Context, request *controlplanev1.G
 	return &controlplanev1.GetArtifactResponse{Artifact: castArtifact(item)}, nil
 }
 
+// ListArtifactRevisions returns revision entities, total and continuation token from the
+// authorized artifact revision read.
+// ListArtifactRevisions возвращает сущности ревизий, общее число и токен продолжения из
+// авторизованного чтения ревизий артефакта.
 func (server *Server) ListArtifactRevisions(ctx context.Context, request *controlplanev1.ListArtifactRevisionsRequest) (*controlplanev1.ListArtifactRevisionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListArtifactRevisions_FullMethodName)
 	if err != nil {
@@ -490,6 +596,10 @@ func (server *Server) ListArtifactRevisions(ctx context.Context, request *contro
 	return response, nil
 }
 
+// GetArtifactRevision passes artifact and revision locators to the authorized domain read before
+// projecting the result.
+// GetArtifactRevision передаёт ссылки артефакта и ревизии авторизованному доменному чтению до
+// преобразования результата.
 func (server *Server) GetArtifactRevision(ctx context.Context, request *controlplanev1.GetArtifactRevisionRequest) (*controlplanev1.GetArtifactRevisionResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetArtifactRevision_FullMethodName)
 	if err != nil {
@@ -502,6 +612,10 @@ func (server *Server) GetArtifactRevision(ctx context.Context, request *controlp
 	return &controlplanev1.GetArtifactRevisionResponse{Revision: castArtifactRevision(item)}, nil
 }
 
+// GetAttachmentSet returns the authorized attachment-set projection together with the domain
+// continuation token.
+// GetAttachmentSet возвращает авторизованное представление набора вложений с доменным токеном
+// продолжения.
 func (server *Server) GetAttachmentSet(ctx context.Context, request *controlplanev1.GetAttachmentSetRequest) (*controlplanev1.GetAttachmentSetResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetAttachmentSet_FullMethodName)
 	if err != nil {
@@ -515,6 +629,10 @@ func (server *Server) GetAttachmentSet(ctx context.Context, request *controlplan
 		Page: &controlplanev1.PageInfo{NextPageToken: next}}, nil
 }
 
+// ListSchedules reads schedules with project, text and page filters under the principal verified
+// for this RPC.
+// ListSchedules читает расписания с фильтрами проекта, текста и страницы с principal, проверенным
+// для данного RPC.
 func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1.ListSchedulesRequest) (*controlplanev1.ListSchedulesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListSchedules_FullMethodName)
 	if err != nil {
@@ -531,6 +649,10 @@ func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1
 	return response, nil
 }
 
+// GetSchedule reads and casts one schedule after resolving the method-specific transport
+// principal.
+// GetSchedule читает и преобразует одно расписание после получения transport principal конкретного
+// метода.
 func (server *Server) GetSchedule(ctx context.Context, request *controlplanev1.GetScheduleRequest) (*controlplanev1.GetScheduleResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetSchedule_FullMethodName)
 	if err != nil {
@@ -543,6 +665,10 @@ func (server *Server) GetSchedule(ctx context.Context, request *controlplanev1.G
 	return &controlplanev1.GetScheduleResponse{Schedule: castSchedule(item)}, nil
 }
 
+// ListIntegrationDefinitions returns definition projections, domain next actions and page
+// information with the core-ready transport flag.
+// ListIntegrationDefinitions возвращает представления определений, доменные следующие действия и
+// страницу с transport-признаком готовности ядра.
 func (server *Server) ListIntegrationDefinitions(ctx context.Context, request *controlplanev1.ListIntegrationDefinitionsRequest) (*controlplanev1.ListIntegrationDefinitionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationDefinitions_FullMethodName)
 	if err != nil {
@@ -564,6 +690,10 @@ func (server *Server) ListIntegrationDefinitions(ctx context.Context, request *c
 	return response, nil
 }
 
+// ListIntegrationConnections maps the definition key to the domain category filter and returns the
+// authorized connection page.
+// ListIntegrationConnections переносит ключ определения в доменный фильтр категории и возвращает
+// авторизованную страницу подключений.
 func (server *Server) ListIntegrationConnections(ctx context.Context, request *controlplanev1.ListIntegrationConnectionsRequest) (*controlplanev1.ListIntegrationConnectionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationConnections_FullMethodName)
 	if err != nil {
@@ -582,6 +712,10 @@ func (server *Server) ListIntegrationConnections(ctx context.Context, request *c
 	return response, nil
 }
 
+// GetIntegrationConnection reads the requested connection under the verified principal and maps
+// domain errors before casting.
+// GetIntegrationConnection читает запрошенное подключение с проверенным principal и переводит
+// доменные ошибки до преобразования.
 func (server *Server) GetIntegrationConnection(ctx context.Context, request *controlplanev1.GetIntegrationConnectionRequest) (*controlplanev1.GetIntegrationConnectionResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetIntegrationConnection_FullMethodName)
 	if err != nil {
@@ -594,6 +728,10 @@ func (server *Server) GetIntegrationConnection(ctx context.Context, request *con
 	return &controlplanev1.GetIntegrationConnectionResponse{Connection: castConnection(item)}, nil
 }
 
+// GetAdministration returns administration state obtained from the domain with the verified
+// principal for this exact method.
+// GetAdministration возвращает административное состояние, полученное из домена с principal,
+// проверенным для точного метода.
 func (server *Server) GetAdministration(ctx context.Context, _ *controlplanev1.GetAdministrationRequest) (*controlplanev1.GetAdministrationResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetAdministration_FullMethodName)
 	if err != nil {
@@ -606,6 +744,10 @@ func (server *Server) GetAdministration(ctx context.Context, _ *controlplanev1.G
 	return &controlplanev1.GetAdministrationResponse{State: castAdministration(item)}, nil
 }
 
+// ListAuditEvents forwards resource, action, outcome, text and technical-event filters and
+// preserves the audit page token.
+// ListAuditEvents передаёт фильтры ресурса, действия, исхода, текста и технических событий,
+// сохраняя токен страницы аудита.
 func (server *Server) ListAuditEvents(ctx context.Context, request *controlplanev1.ListAuditEventsRequest) (*controlplanev1.ListAuditEventsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListAuditEvents_FullMethodName)
 	if err != nil {

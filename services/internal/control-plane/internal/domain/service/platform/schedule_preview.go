@@ -13,6 +13,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// PreviewScheduleMaterialization requires exact gateway preview authority and owner
+// snapshot/context pins; full requests additionally need target/session full-view permission and
+// fresh interactive authentication before prompt rendering.
+// PreviewScheduleMaterialization требует точные полномочия preview gateway и pins снимка и
+// контекста владельца; полный запрос дополнительно требует full view цели либо сессии и свежую
+// interactive-аутентификацию до построения prompt.
 func (s *Service) PreviewScheduleMaterialization(ctx context.Context, p value.Principal, input command.ScheduleInput, ref string, expected int64, scheduledFor time.Time, expectedDigest string, full bool, mode string) (promptservice.Materialization, entity.SchedulePromptPreviewPin, []entity.TemplateVariable, error) {
 	var result promptservice.Materialization
 	var pin entity.SchedulePromptPreviewPin

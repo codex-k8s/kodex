@@ -7,6 +7,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// GetRuntimeRevisionDiff reads the authorized revision comparison and preserves optional previous
+// identity and component values in the protobuf diff.
+// GetRuntimeRevisionDiff читает авторизованное сравнение ревизий и сохраняет необязательные
+// прежнюю identity и значения компонентов в Protobuf diff.
 func (server *Server) GetRuntimeRevisionDiff(ctx context.Context, request *controlplanev1.GetRuntimeRevisionDiffRequest) (*controlplanev1.GetRuntimeRevisionDiffResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName)
 	if err != nil {
@@ -26,6 +30,10 @@ func (server *Server) GetRuntimeRevisionDiff(ctx context.Context, request *contr
 	return response, nil
 }
 
+// castPublicRuntimeRevisionIdentity preserves absent identity and projects
+// run/session/turn/attempt, revision digest and creation time from the public read model.
+// castPublicRuntimeRevisionIdentity сохраняет отсутствие identity и преобразует запуск, сессию,
+// ход, попытку, digest ревизии и время из публичной модели чтения.
 func castPublicRuntimeRevisionIdentity(item *entity.PublicRuntimeRevisionIdentity) *controlplanev1.PublicRuntimeRevisionIdentity {
 	if item == nil {
 		return nil
@@ -34,6 +42,10 @@ func castPublicRuntimeRevisionIdentity(item *entity.PublicRuntimeRevisionIdentit
 		TurnRef: item.TurnRef, Attempt: item.Attempt, RevisionDigest: item.RevisionDigest, CreatedAt: timestamp(item.CreatedAt)}
 }
 
+// castRuntimeRevisionDiffValue preserves an absent comparison value and otherwise copies its
+// reference, version, digest and revision.
+// castRuntimeRevisionDiffValue сохраняет отсутствие значения сравнения, иначе копирует ссылку,
+// версию, digest и ревизию.
 func castRuntimeRevisionDiffValue(item *entity.RuntimeRevisionDiffValue) *controlplanev1.RuntimeRevisionDiffValue {
 	if item == nil {
 		return nil

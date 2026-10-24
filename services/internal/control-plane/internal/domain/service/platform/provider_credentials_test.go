@@ -14,8 +14,16 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// errProviderOwnerCommit marks a synthetic ambiguous owner commit failure used to test
+// readback-driven compensation without an external provider.
+// errProviderOwnerCommit обозначает синтетическую неопределённую ошибку commit владельца для
+// проверки компенсации по readback без внешнего провайдера.
 var errProviderOwnerCommit = errors.New("synthetic provider owner commit failure")
 
+// providerFailureRepository records resolution, command and reference-read activity with
+// configurable reservation/replay and ambiguous commit outcomes for provider tests.
+// providerFailureRepository записывает разрешение principal, команды и чтение ссылок с задаваемыми
+// reservation, replay и неопределённым commit для тестов провайдера.
 type providerFailureRepository struct {
 	platformrepo.Repository
 	account            entity.ProviderAccount
@@ -28,6 +36,10 @@ type providerFailureRepository struct {
 	reservationApplied bool
 }
 
+// ReserveProviderAuthorization returns a synthetic stable attempt and advanced reserved version or
+// an injected denial, requiring an expected version and digest-shaped request.
+// ReserveProviderAuthorization возвращает синтетические устойчивую попытку и увеличенную reserved
+// version либо заданный отказ с требованием ожидаемой версии и формы дайджеста запроса.
 func (repository *providerFailureRepository) ReserveProviderAuthorization(_ context.Context, _ value.Principal, mutation value.Mutation, accountRef, method, digest string) (entity.ProviderAuthorizationReservation, error) {
 	if repository.reservationErr != nil {
 		return entity.ProviderAuthorizationReservation{}, repository.reservationErr
@@ -38,6 +50,12 @@ func (repository *providerFailureRepository) ReserveProviderAuthorization(_ cont
 	return entity.ProviderAuthorizationReservation{AttemptRef: providerAuthorizationRef(accountRef, mutation.IdempotencyKey, method), ReservedVersion: *mutation.ExpectedVersion + 1, Applied: repository.reservationApplied}, nil
 }
 
+// TestProviderMaterializationRequiresDurableReservationAndSkipsAppliedReplay checks a denied owner
+// reservation performs no API-key materialization and an applied replay reads the account without
+// repeating that effect.
+// TestProviderMaterializationRequiresDurableReservationAndSkipsAppliedReplay проверяет отсутствие
+// материализации API key при отказе reservation владельца и чтение аккаунта применённым replay без
+// повторного эффекта.
 func TestProviderMaterializationRequiresDurableReservationAndSkipsAppliedReplay(t *testing.T) {
 	t.Parallel()
 	version := int64(4)
@@ -58,20 +76,36 @@ func TestProviderMaterializationRequiresDurableReservationAndSkipsAppliedReplay(
 	}
 }
 
+// ResolvePrincipal counts synthetic principal resolution and returns the supplied principal
+// unchanged for owner-compensation assertions.
+// ResolvePrincipal подсчитывает синтетическое разрешение principal и возвращает его без изменений
+// для проверок компенсации владельца.
 func (repository *providerFailureRepository) ResolvePrincipal(_ context.Context, principal value.Principal) (value.Principal, error) {
 	repository.resolveCalls++
 	return principal, nil
 }
 
+// GetProviderAccount returns the configured synthetic account without querying provider or
+// database state.
+// GetProviderAccount возвращает настроенный синтетический аккаунт без запроса состояния провайдера
+// либо базы данных.
 func (repository *providerFailureRepository) GetProviderAccount(_ context.Context, _ value.Principal, _ string) (entity.ProviderAccount, error) {
 	return repository.account, nil
 }
 
+// Execute records the resolved provider command and always returns the synthetic owner commit
+// failure for compensation-path tests.
+// Execute записывает разрешённую команду провайдера и всегда возвращает синтетическую ошибку
+// commit владельца для тестов пути компенсации.
 func (repository *providerFailureRepository) Execute(_ context.Context, input command.Command) (command.Result, error) {
 	repository.executed = input
 	return command.Result{}, errProviderOwnerCommit
 }
 
+// ProviderMaterializationReferenced counts authoritative-reference fixture reads and returns
+// configured referenced/unknown outcomes without accessing real persisted state.
+// ProviderMaterializationReferenced подсчитывает тестовые чтения авторитетной ссылки и возвращает
+// заданные результаты referenced либо unknown без обращения к настоящему состоянию.
 func (repository *providerFailureRepository) ProviderMaterializationReferenced(
 	_ context.Context,
 	_ value.Principal,
@@ -82,6 +116,10 @@ func (repository *providerFailureRepository) ProviderMaterializationReferenced(
 	return repository.referenced, repository.referenceErr
 }
 
+// providerMaterializerRecorder supplies synthetic device/credential observations and records
+// API-key materialization and exact discard targets without calling a provider.
+// providerMaterializerRecorder выдаёт синтетические наблюдения устройства и реквизитов и
+// записывает материализацию API key и точные цели discard без вызова провайдера.
 type providerMaterializerRecorder struct {
 	device      ProviderDeviceAuthorizationMaterialization
 	observation ProviderAuthorizationObservation
@@ -90,26 +128,50 @@ type providerMaterializerRecorder struct {
 	apiCalls    int
 }
 
+// Check reports the local materializer fixture as ready without probing any external dependency.
+// Check сообщает готовность локальной оснастки materializer без проверки внешних зависимостей.
 func (materializer *providerMaterializerRecorder) Check(context.Context) error { return nil }
 
+// StartDeviceAuthorization returns the configured synthetic device authorization materialization
+// without starting an external device flow.
+// StartDeviceAuthorization возвращает заданную синтетическую материализацию авторизации устройства
+// без запуска внешнего device flow.
 func (materializer *providerMaterializerRecorder) StartDeviceAuthorization(context.Context, string, string) (ProviderDeviceAuthorizationMaterialization, error) {
 	return materializer.device, nil
 }
 
+// ObserveDeviceAuthorization returns the configured synthetic observation without polling a real
+// authorization provider.
+// ObserveDeviceAuthorization возвращает заданное синтетическое наблюдение без опроса настоящего
+// провайдера авторизации.
 func (materializer *providerMaterializerRecorder) ObserveDeviceAuthorization(context.Context, string) (ProviderAuthorizationObservation, error) {
 	return materializer.observation, nil
 }
 
+// MaterializeAPIKey counts materialization attempts and returns the fixture descriptor and fixed
+// masked label without storing supplied key bytes.
+// MaterializeAPIKey подсчитывает попытки материализации и возвращает тестовый дескриптор и
+// фиксированную скрытую метку без сохранения переданных байтов ключа.
 func (materializer *providerMaterializerRecorder) MaterializeAPIKey(context.Context, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error) {
 	materializer.apiCalls++
 	return materializer.apiKey, "API key account", nil
 }
 
+// Discard records the exact compensation target and succeeds without deleting actual secret or
+// attempt resources.
+// Discard записывает точную цель компенсации и завершается успешно без удаления настоящих ресурсов
+// секрета либо попытки.
 func (materializer *providerMaterializerRecorder) Discard(_ context.Context, target ProviderMaterializationDiscard) error {
 	materializer.discards = append(materializer.discards, target)
 	return nil
 }
 
+// TestProviderAPIKeyKeepsExactMaterializationAfterAmbiguousOwnerCommitFailure checks two exact
+// synthetic retries preserve owner-referenced materialization after commit errors, performing
+// fresh reference and principal checks without discard.
+// TestProviderAPIKeyKeepsExactMaterializationAfterAmbiguousOwnerCommitFailure проверяет сохранение
+// материала со ссылкой владельца после ошибок commit при двух точных синтетических повторах с
+// новым чтением ссылки и principal без discard.
 func TestProviderAPIKeyKeepsExactMaterializationAfterAmbiguousOwnerCommitFailure(t *testing.T) {
 	t.Parallel()
 	version := int64(4)
@@ -139,6 +201,12 @@ func TestProviderAPIKeyKeepsExactMaterializationAfterAmbiguousOwnerCommitFailure
 	}
 }
 
+// TestProviderAPIKeyCompensatesOnlyAfterAuthoritativeNonReference checks confirmed nonreference
+// discards the exact descriptor once and raw synthetic key material stays out of persisted command
+// fields and error text.
+// TestProviderAPIKeyCompensatesOnlyAfterAuthoritativeNonReference проверяет один discard точного
+// дескриптора после подтверждённого отсутствия ссылки и отсутствие исходного синтетического ключа
+// в сохраняемых полях команды и ошибке.
 func TestProviderAPIKeyCompensatesOnlyAfterAuthoritativeNonReference(t *testing.T) {
 	t.Parallel()
 	version := int64(4)
@@ -174,6 +242,12 @@ func TestProviderAPIKeyCompensatesOnlyAfterAuthoritativeNonReference(t *testing.
 	}
 }
 
+// TestProviderDeviceAuthorizationCompensatesExactAttemptAfterAuthoritativeNonReference checks
+// device-flow commit failure compensates only the exact attempt ref, UID and resource version
+// after owner nonreference.
+// TestProviderDeviceAuthorizationCompensatesExactAttemptAfterAuthoritativeNonReference проверяет
+// компенсацию только точных ref, UID и resource version попытки device flow после ошибки commit и
+// отсутствия ссылки владельца.
 func TestProviderDeviceAuthorizationCompensatesExactAttemptAfterAuthoritativeNonReference(t *testing.T) {
 	t.Parallel()
 	version := int64(2)
@@ -201,6 +275,12 @@ func TestProviderDeviceAuthorizationCompensatesExactAttemptAfterAuthoritativeNon
 	}
 }
 
+// TestProviderCompensationKeepsMaterializationWhenReferenceReadIsUnavailable checks failed
+// reference readback preserves material, joins owner/unavailable errors and does not repeat
+// principal resolution.
+// TestProviderCompensationKeepsMaterializationWhenReferenceReadIsUnavailable проверяет сохранение
+// материала при ошибке чтения ссылки, объединение ошибок владельца и unavailable и отсутствие
+// повторного разрешения principal.
 func TestProviderCompensationKeepsMaterializationWhenReferenceReadIsUnavailable(t *testing.T) {
 	t.Parallel()
 	version := int64(2)
@@ -227,6 +307,12 @@ func TestProviderCompensationKeepsMaterializationWhenReferenceReadIsUnavailable(
 	}
 }
 
+// TestProviderRefreshCompensatesObservedCredentialAfterAuthoritativeNonReference checks a refresh
+// observation survives in the owner command and exact credential compensation occurs once only
+// after authoritative nonreference.
+// TestProviderRefreshCompensatesObservedCredentialAfterAuthoritativeNonReference проверяет
+// сохранение наблюдения refresh в команде владельца и однократную компенсацию точных реквизитов
+// только после авторитетного отсутствия ссылки.
 func TestProviderRefreshCompensatesObservedCredentialAfterAuthoritativeNonReference(t *testing.T) {
 	t.Parallel()
 	version := int64(3)
@@ -267,6 +353,12 @@ func TestProviderRefreshCompensatesObservedCredentialAfterAuthoritativeNonRefere
 	}
 }
 
+// TestProviderRefreshKeepsObservedCredentialAfterCommittedOwnerReference checks ambiguous refresh
+// commit failure does not discard an observed credential already referenced by authoritative owner
+// state.
+// TestProviderRefreshKeepsObservedCredentialAfterCommittedOwnerReference проверяет отсутствие
+// discard наблюдаемых реквизитов со ссылкой авторитетного состояния владельца при неопределённой
+// ошибке commit refresh.
 func TestProviderRefreshKeepsObservedCredentialAfterCommittedOwnerReference(t *testing.T) {
 	t.Parallel()
 	version := int64(3)
@@ -287,6 +379,10 @@ func TestProviderRefreshKeepsObservedCredentialAfterCommittedOwnerReference(t *t
 	}
 }
 
+// providerTestPrincipal builds a synthetic provider-authorization principal with explicit actor,
+// tenant, workload, correlation and credential revision.
+// providerTestPrincipal создаёт синтетический principal авторизации провайдера с явными actor,
+// tenant, workload, correlation и ревизией реквизитов.
 func providerTestPrincipal() value.Principal {
 	return value.Principal{
 		ActorID: "owner-test", AuthorityTenant: "organization-test", Permission: "platform.provider-accounts.authorize",

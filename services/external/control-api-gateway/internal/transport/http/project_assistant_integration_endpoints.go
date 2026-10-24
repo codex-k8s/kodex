@@ -7,6 +7,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// GetProjectAssistantIntegrationGrantCandidates queries candidates for exact project/connection
+// selectors under the request context and requires a matching project profile plus the shared
+// valid candidate projection before output.
+// GetProjectAssistantIntegrationGrantCandidates запрашивает кандидатов точных project/connection в
+// контексте запроса и требует совпадения проектного профиля и общей корректной проекции кандидатов
+// до выдачи.
 func (s *Server) GetProjectAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request, projectRef string, p generated.GetProjectAssistantIntegrationGrantCandidatesParams) {
 	response, err := s.control.Query.GetProjectAssistantIntegrationGrantCandidates(r.Context(), &cp.GetProjectAssistantIntegrationGrantCandidatesRequest{
 		ProjectRef: projectRef, ConnectionRef: p.ConnectionRef, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken)})
@@ -22,6 +28,13 @@ func (s *Server) GetProjectAssistantIntegrationGrantCandidates(w http.ResponseWr
 	writeJSON(w, http.StatusOK, view)
 }
 
+// projectAssistantGrantCandidatePage rejects unknown outer protobuf fields and mismatched
+// project/profile pins, reuses the system candidate metadata converter and then adds
+// project/profile identity. Shared projection validation does not merge their owner authorization
+// paths.
+// projectAssistantGrantCandidatePage отклоняет неизвестные внешние protobuf поля и несовпадающие
+// project/profile pins, использует общий converter metadata системных кандидатов и добавляет
+// project/profile identity. Общая проверка проекции не объединяет пути авторизации владельца.
 func projectAssistantGrantCandidatePage(v *cp.GetProjectAssistantIntegrationGrantCandidatesResponse, projectRef, connectionRef string, limit int) (map[string]any, bool) {
 	if v == nil || len(v.ProtoReflect().GetUnknown()) != 0 || v.ProjectRef != projectRef || !fileTargetRef(v.ProjectRef) || !fileTargetRef(v.AssistantProfileRef) || v.ProfileVersion < 1 || v.ProfileVersion > maximumSafeJSONInteger {
 		return nil, false

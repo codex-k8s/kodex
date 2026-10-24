@@ -6,7 +6,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
-// Проверка wire-инвариантов не заменяет owner eligibility и не фильтрует страницу.
+// validResumableRunPage validates the CP page for unique succeeded runs/sessions with ADD_TURN,
+// exact project/agent/workflow selectors and a nonrepeating cursor. It rejects the whole malformed
+// page without filtering items or replacing owner eligibility.
+// validResumableRunPage проверяет страницу CP на уникальные успешные запуски/сессии с ADD_TURN,
+// точные project/agent/workflow selectors и неповторный cursor. Неверная страница целиком
+// отклоняется без фильтрации элементов и подмены допуска владельца.
 func validResumableRunPage(response *cp.ListRunsResponse, projectRef, targetType, targetRef, cursor string, size *int) bool {
 	items := response.GetRuns()
 	next := response.GetPage().GetNextPageToken()

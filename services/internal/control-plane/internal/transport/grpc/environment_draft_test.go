@@ -13,6 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestEnvironmentDraftPolicyRoundTrip checks the default runtime environment policy survives draft
+// response and domain-input conversion without field changes.
+// TestEnvironmentDraftPolicyRoundTrip проверяет сохранение default runtime environment policy при
+// преобразовании draft response обратно в доменный input без изменения полей.
 func TestEnvironmentDraftPolicyRoundTrip(t *testing.T) {
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
 	draft := castEnvironmentDraft(&entity.RuntimeEnvironmentDraft{
@@ -27,6 +31,10 @@ func TestEnvironmentDraftPolicyRoundTrip(t *testing.T) {
 	}
 }
 
+// TestPublishedEnvironmentDraftRejectsIncompleteOwnerResult checks incomplete or mismatched
+// environment/draft/impact results fail Internal while consistent publication pins are accepted.
+// TestPublishedEnvironmentDraftRejectsIncompleteOwnerResult проверяет Internal для неполных либо
+// несогласованных environment/draft/impact results и принятие согласованных привязок публикации.
 func TestPublishedEnvironmentDraftRejectsIncompleteOwnerResult(t *testing.T) {
 	for _, result := range []command.Result{
 		{},
@@ -52,6 +60,10 @@ func TestPublishedEnvironmentDraftRejectsIncompleteOwnerResult(t *testing.T) {
 	}
 }
 
+// TestEnvironmentDraftPreservesAbsentPolicy checks an absent draft policy stays absent in protobuf
+// and remains the zero domain policy after roundtrip.
+// TestEnvironmentDraftPreservesAbsentPolicy проверяет сохранение отсутствующей policy черновика в
+// Protobuf и нулевой доменной policy после roundtrip.
 func TestEnvironmentDraftPreservesAbsentPolicy(t *testing.T) {
 	draft := castEnvironmentDraft(&entity.RuntimeEnvironmentDraft{})
 	if draft.Specification.Policy != nil {
@@ -63,6 +75,10 @@ func TestEnvironmentDraftPreservesAbsentPolicy(t *testing.T) {
 	}
 }
 
+// TestEnvironmentDraftRejectsInvalidPolicyAsInvalidArgument checks create and save reject invalid
+// policy as InvalidArgument before using any configured domain service.
+// TestEnvironmentDraftRejectsInvalidPolicyAsInvalidArgument проверяет InvalidArgument при create и
+// save неверной policy до использования настроенного доменного сервиса.
 func TestEnvironmentDraftRejectsInvalidPolicyAsInvalidArgument(t *testing.T) {
 	server := &Server{}
 	request := &controlplanev1.CreateRuntimeEnvironmentDraftRequest{Specification: &controlplanev1.RuntimeEnvironmentDraftSpecification{

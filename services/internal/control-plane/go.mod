@@ -10,13 +10,14 @@ require (
 	github.com/codex-k8s/kodex/libs/go/emailbridgeapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationegresspolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
-	github.com/codex-k8s/kodex/libs/go/providerfinancewire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
+	github.com/codex-k8s/kodex/libs/go/providerfinancewire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimesecret v0.0.0
 	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
@@ -180,3 +181,5 @@ replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/se
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
 
 replace github.com/codex-k8s/kodex/libs/go/sttapi => ../../../libs/go/sttapi
+
+replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver

@@ -9,6 +9,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestIntegrationDefinitionBindingHTTPPresenceAndPins checks omitted, explicitly absent and
+// matched definition bindings retain distinct JSON shapes and exact configuration/revision/version
+// pins.
+// TestIntegrationDefinitionBindingHTTPPresenceAndPins проверяет разные JSON-формы отсутствующего
+// поля, явной отсутствующей и совпавшей привязки определения с точными pins конфигурации, ревизии
+// и версии.
 func TestIntegrationDefinitionBindingHTTPPresenceAndPins(t *testing.T) {
 	for _, test := range []struct {
 		name    string
@@ -36,6 +42,10 @@ func TestIntegrationDefinitionBindingHTTPPresenceAndPins(t *testing.T) {
 	}
 }
 
+// TestIntegrationDefinitionBindingHTTPRejectsInvalidUnion checks unspecified or unknown binding
+// states, metadata on ABSENT and incomplete or unsafe MATCH pins are rejected.
+// TestIntegrationDefinitionBindingHTTPRejectsInvalidUnion проверяет отказ неопределённым либо
+// неизвестным состояниям привязки, метаданным при ABSENT и неполным либо небезопасным pins MATCH.
 func TestIntegrationDefinitionBindingHTTPRejectsInvalidUnion(t *testing.T) {
 	for _, binding := range []*cp.IntegrationDefinitionConfigurationBinding{
 		{},

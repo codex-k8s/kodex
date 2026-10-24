@@ -14,10 +14,26 @@ import (
 )
 
 const (
-	speechAvailabilityTimeout      = 5 * time.Second
+	// speechAvailabilityTimeout bounds the standalone STT model-catalog RPC to five seconds,
+	// independently of the longer context used for protected availability lease checks.
+	// speechAvailabilityTimeout ограничивает самостоятельный STT model-catalog RPC пятью секундами
+	// отдельно от более длинного контекста проверки защищённого availability lease.
+	speechAvailabilityTimeout = 5 * time.Second
+	// speechAvailabilityLeaseTimeout bounds the protected availability context to thirty seconds so a
+	// reported short lease remains usable between realtime heartbeats. It does not extend owner or
+	// provider authority.
+	// speechAvailabilityLeaseTimeout ограничивает контекст защищённой availability тридцатью
+	// секундами, чтобы короткий reported lease сохранялся между realtime heartbeat. Полномочия
+	// владельца и провайдера не продлеваются.
 	speechAvailabilityLeaseTimeout = 30 * time.Second
 )
 
+// writeBootstrapState validates and publicly maps the owner bootstrap state, localizes safe errors
+// when available and augments it with the same protected speech-availability check used by
+// realtime.
+// writeBootstrapState проверяет и публично преобразует bootstrap state владельца, при наличии
+// переводит безопасные ошибки и добавляет ту же защищённую проверку speech availability, что
+// используется realtime.
 func (server *Server) writeBootstrapState(w http.ResponseWriter, r *http.Request, state *controlplanev1.BootstrapState) {
 	if state == nil {
 		writeLocalProblem(w, http.StatusBadGateway, "INTERNAL", false)
@@ -35,12 +51,22 @@ func (server *Server) writeBootstrapState(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, value)
 }
 
+// speechAvailability passes the attached STT client and owner eligibility snapshot to the shared
+// availability checker under the caller context, without a separate HTTP-only readiness policy.
+// speechAvailability передаёт подключённый STT клиент и снимок допуска владельца общему
+// availability checker в контексте caller без отдельной HTTP политики готовности.
 func (server *Server) speechAvailability(ctx context.Context, owner *controlplanev1.SpeechTranscriptionAvailability) generated.SpeechTranscriptionAvailability {
 	return SpeechAvailability(ctx, server.speech, owner)
 }
 
-// SpeechAvailability проверяет один защищённый STT path для HTTP bootstrap и
-// WebSocket heartbeat, чтобы оба транспорта выдавали одинаковый короткий lease.
+// SpeechAvailability first respects owner eligibility, then checks the protected STT path with a
+// bounded lease context and maps known failure stages. READY requires an exact ready stage and a
+// valid future lease no more than about thirty seconds ahead; HTTP bootstrap and WebSocket share
+// this result.
+// SpeechAvailability сначала учитывает допуск владельца, затем проверяет защищённый STT путь с
+// ограниченным lease контекстом и отображает известные этапы отказа. READY требует точного ready
+// этапа и корректного будущего lease не более примерно тридцати секунд; HTTP bootstrap и WebSocket
+// используют общий результат.
 func SpeechAvailability(ctx context.Context, speech sttv1.SpeechToTextServiceClient, owner *controlplanev1.SpeechTranscriptionAvailability) generated.SpeechTranscriptionAvailability {
 	result := generated.SpeechTranscriptionAvailability{Reason: "STT_SERVICE_UNAVAILABLE"}
 	if owner == nil || !owner.GetEligible() {
@@ -85,6 +111,11 @@ func SpeechAvailability(ctx context.Context, speech sttv1.SpeechToTextServiceCli
 	return result
 }
 
+// unavailableSpeechReason preserves only known owner-level STT configuration/permission/provider
+// blockers; unknown text collapses to STT_SERVICE_UNAVAILABLE instead of exposing arbitrary
+// diagnostic details.
+// unavailableSpeechReason сохраняет только известные STT блокеры configuration/permission/provider
+// владельца; неизвестный текст заменяется STT_SERVICE_UNAVAILABLE без произвольной диагностики.
 func unavailableSpeechReason(reason string) generated.SpeechTranscriptionAvailabilityReason {
 	switch reason {
 	case "STT_NOT_CONFIGURED", "STT_DISABLED", "STT_PERMISSION_DENIED", "STT_PERMISSION_INVALID", "STT_PROVIDER_ACCOUNT_INELIGIBLE", "STT_PROVIDER_CREDENTIAL_UNSUPPORTED", "STT_PROVIDER_DISABLED", "STT_MODEL_UNSUPPORTED", "STT_CONFIGURATION_UNAVAILABLE":

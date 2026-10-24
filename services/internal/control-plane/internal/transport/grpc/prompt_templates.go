@@ -15,6 +15,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ValidatePromptTemplate resolves the exact RPC principal and delegates pinned contextual
+// validation, returning owner context and safe diagnostics with valid=false on any error
+// diagnostic.
+// ValidatePromptTemplate разрешает principal точного RPC и передаёт контекстную валидацию с pins,
+// возвращая контекст владельца и безопасную диагностику с valid=false при любом сообщении ERROR.
 func (server *Server) ValidatePromptTemplate(ctx context.Context, request *controlplanev1.ValidatePromptTemplateRequest) (*controlplanev1.ValidatePromptTemplateResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ValidatePromptTemplate_FullMethodName)
 	if err != nil {
@@ -34,6 +39,12 @@ func (server *Server) ValidatePromptTemplate(ctx context.Context, request *contr
 	return response, nil
 }
 
+// PreviewPromptTemplate resolves exact RPC authority and owner preview context, rejects incomplete
+// materialization and maps diagnostics to typed errors before projecting permitted safe or full
+// output.
+// PreviewPromptTemplate разрешает полномочия точного RPC и контекст предпросмотра владельца,
+// отклоняет неполную материализацию и переводит диагностику в типизированные ошибки до выдачи
+// разрешённого безопасного либо полного вывода.
 func (server *Server) PreviewPromptTemplate(ctx context.Context, request *controlplanev1.PreviewPromptTemplateRequest) (*controlplanev1.PreviewPromptTemplateResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_PreviewPromptTemplate_FullMethodName)
 	if err != nil {
@@ -57,6 +68,10 @@ func (server *Server) PreviewPromptTemplate(ctx context.Context, request *contro
 	return castPromptMaterialization(result, request.GetIncludeFullMaterialization())
 }
 
+// promptDiagnosticsHaveError reports whether any materialization diagnostic has exact ERROR
+// severity without interpreting messages or changing diagnostic order.
+// promptDiagnosticsHaveError определяет наличие диагностики материализации с точной severity ERROR
+// без интерпретации сообщений и изменения их порядка.
 func promptDiagnosticsHaveError(diagnostics []promptservice.Diagnostic) bool {
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Severity == "ERROR" {
@@ -66,6 +81,10 @@ func promptDiagnosticsHaveError(diagnostics []promptservice.Diagnostic) bool {
 	return false
 }
 
+// promptTemplateError wraps safe prompt diagnostics in typed InvalidArgument details, falling back
+// to the generic status if detail attachment fails.
+// promptTemplateError оборачивает безопасную диагностику prompt в типизированные детали
+// InvalidArgument и возвращает общий статус при невозможности прикрепить детали.
 func promptTemplateError(diagnostics []promptservice.Diagnostic) error {
 	base := status.New(codes.InvalidArgument, "prompt template is invalid")
 	detail := &controlplanev1.PromptTemplateErrorDetail{}
@@ -79,6 +98,12 @@ func promptTemplateError(diagnostics []promptservice.Diagnostic) error {
 	return withDetails.Err()
 }
 
+// castPromptMaterialization projects safe preview, pins, provenance and diagnostics, selecting
+// full text/sections only when requested after owner permission checks and rejecting malformed
+// mapped slots or diffs.
+// castPromptMaterialization проецирует безопасный предпросмотр, pins, происхождение и диагностику,
+// выбирая полный текст и секции только по запросу после проверки прав владельцем и отклоняя
+// неверные слоты либо diff.
 func castPromptMaterialization(result promptservice.Materialization, full bool) (*controlplanev1.PreviewPromptTemplateResponse, error) {
 	var err error
 	response := &controlplanev1.PreviewPromptTemplateResponse{SafePreview: promptservice.SafePreview(result.SafePrompt),
@@ -122,6 +147,11 @@ func castPromptMaterialization(result promptservice.Materialization, full bool) 
 	return response, nil
 }
 
+// castPromptPreviewContext maps nil-safe protobuf preview fields and optional input data into
+// domain context without treating supplied locators or version expectations as authority.
+// castPromptPreviewContext переносит nil-безопасные protobuf-поля предпросмотра и необязательный
+// ввод в контекст домена без признания переданных ссылок либо ожидаемых версий источником
+// полномочий.
 func castPromptPreviewContext(input *controlplanev1.PromptPreviewContext) query.PromptPreviewContext {
 	result := query.PromptPreviewContext{AgentRef: input.GetAgentRef(), WorkflowRevisionRef: input.GetWorkflowRevisionRef(),
 		WorkflowStageKey: input.GetWorkflowStageKey(), ExpectedAgentVersion: input.GetExpectedAgentVersion(), ExpectedWorkflowVersion: input.GetExpectedWorkflowVersion(), AttachmentSetRef: input.GetAttachmentSetRef(), Task: input.GetTask()}
@@ -131,6 +161,10 @@ func castPromptPreviewContext(input *controlplanev1.PromptPreviewContext) query.
 	return result
 }
 
+// castPromptContextPin returns no protobuf pin for an absent digest and otherwise preserves the
+// owner agent/workflow/runtime/environment/attachment and previous-revision dependency pins.
+// castPromptContextPin не возвращает protobuf-pin при отсутствии дайджеста и иначе сохраняет pins
+// зависимостей агента, workflow, runtime, окружения, вложений и предыдущей ревизии владельца.
 func castPromptContextPin(pin entity.PromptContextPin) *controlplanev1.PromptContextPin {
 	if pin.Digest == "" {
 		return nil
@@ -142,6 +176,10 @@ func castPromptContextPin(pin entity.PromptContextPin) *controlplanev1.PromptCon
 		EnvironmentDigest: pin.EnvironmentDigest, AttachmentSetRef: pin.AttachmentSetRef, AttachmentManifestDigest: pin.AttachmentManifestDigest, PreviousRuntimeRevisionRef: pin.PreviousRuntimeRevisionRef}
 }
 
+// castPromptSlot maps a closed semantic slot name to protobuf, allowing unspecified only for an
+// explicitly permitted empty user-section slot.
+// castPromptSlot переводит закрытое имя семантического слота в protobuf, допуская unspecified
+// только для явно разрешённого пустого слота пользовательской секции.
 func castPromptSlot(value string, allowEmpty bool) (controlplanev1.PromptSemanticSlot, bool) {
 	if value == "" && allowEmpty {
 		return controlplanev1.PromptSemanticSlot_PROMPT_SEMANTIC_SLOT_UNSPECIFIED, true
@@ -150,11 +188,21 @@ func castPromptSlot(value string, allowEmpty bool) (controlplanev1.PromptSemanti
 	return controlplanev1.PromptSemanticSlot(number), ok && number > 0
 }
 
+// castPromptSource maps a known nonzero platform or user-template section source to its protobuf
+// enum, rejecting unknown and unspecified names.
+// castPromptSource переводит известный ненулевой источник секции платформы либо пользовательского
+// шаблона в protobuf enum с отказом неизвестным и неопределённым именам.
 func castPromptSource(value string) (controlplanev1.PromptSectionSource, bool) {
 	number, ok := controlplanev1.PromptSectionSource_value["PROMPT_SECTION_SOURCE_"+value]
 	return controlplanev1.PromptSectionSource(number), ok && number > 0
 }
 
+// castPromptSection enforces separate platform and user provenance shapes, assigning base lineage
+// server-side and requiring exact known extra-template kind, lowercase digest and bounded
+// reference.
+// castPromptSection разделяет формы происхождения платформы и пользователя, назначает базовое
+// происхождение сервером и требует известный вид дополнительного шаблона, lowercase-дайджест и
+// ограниченную ссылку.
 func castPromptSection(section promptservice.Section, baseRef, baseDigest string) (*controlplanev1.PromptPreviewSection, error) {
 	slot, slotOK := castPromptSlot(string(section.Slot), section.Source == "USER_TEMPLATE")
 	source, sourceOK := castPromptSource(section.Source)
@@ -188,11 +236,19 @@ func castPromptSection(section promptservice.Section, baseRef, baseDigest string
 	return result, nil
 }
 
+// castPromptDiagnostic copies safe diagnostic code, severity, message, variable and source
+// position into the protobuf response without exposing raw execution errors.
+// castPromptDiagnostic копирует безопасные код, severity, сообщение, переменную и позицию
+// диагностики в protobuf-ответ без раскрытия исходных ошибок исполнения.
 func castPromptDiagnostic(value promptservice.Diagnostic) *controlplanev1.PromptTemplateDiagnostic {
 	return &controlplanev1.PromptTemplateDiagnostic{Severity: value.Severity, Code: value.Code,
 		Message: value.Message, Line: value.Line, Column: value.Column, VariableName: value.VariableName}
 }
 
+// castPromptRuntimeDiff validates the domain diff before projecting closed components and fixed
+// use-current-context actions with exact previous/current descriptors.
+// castPromptRuntimeDiff проверяет доменный diff перед проекцией закрытых компонентов и
+// фиксированных действий use current context с точными предыдущими и текущими дескрипторами.
 func castPromptRuntimeDiff(value promptservice.RuntimeDiff) (*controlplanev1.PromptRuntimeDiff, error) {
 	if err := promptservice.ValidateRuntimeDiff(value); err != nil {
 		return nil, err

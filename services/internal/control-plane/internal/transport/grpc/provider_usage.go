@@ -1,14 +1,18 @@
 package grpc
 
 import (
-	"encoding/hex"
 	"strings"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// providerUsageContextInput preserves absent usage context and copies purpose and selection
+// locators without independently validating enum membership.
+// providerUsageContextInput сохраняет отсутствие контекста использования и копирует цель и ссылки
+// выбора без самостоятельной проверки enum.
 func providerUsageContextInput(value *cp.ProviderAccountUsageContext) *entity.ProviderAccountUsageContext {
 	if value == nil {
 		return nil
@@ -16,6 +20,12 @@ func providerUsageContextInput(value *cp.ProviderAccountUsageContext) *entity.Pr
 	return &entity.ProviderAccountUsageContext{Purpose: strings.TrimPrefix(value.Purpose.String(), "PROVIDER_ACCOUNT_USAGE_PURPOSE_"), AgentRef: value.AgentRef, ProviderDefinitionKey: value.ProviderDefinitionKey, Model: value.Model, ReasoningEffort: value.ReasoningEffort, RuntimeProfileRef: value.RuntimeProfileRef}
 }
 
+// castProviderAccountUsageRead requires a coherent versioned, time-bounded usage snapshot with
+// valid digests and closed dimensions, checking capacity, eligibility and catalog-health
+// consistency before projection.
+// castProviderAccountUsageRead требует согласованный версионированный снимок использования с
+// ограниченным сроком, верными digest и закрытыми измерениями, проверяя capacity, eligibility и
+// согласованность catalog health до преобразования.
 func castProviderAccountUsageRead(value entity.ProviderAccount) (*cp.ProviderAccount, error) {
 	result := castProviderAccount(value)
 	u := value.Usage
@@ -26,7 +36,7 @@ func castProviderAccountUsageRead(value entity.ProviderAccount) (*cp.ProviderAcc
 		return nil, errs.ErrUnavailable
 	}
 	for _, digest := range []string{u.ContextDigest, u.CatalogDigest} {
-		if raw, err := hex.DecodeString(digest); err != nil || len(raw) != 32 || strings.ToLower(digest) != digest {
+		if !runtimecontract.ValidSHA256Text(digest) {
 			return nil, errs.ErrUnavailable
 		}
 	}

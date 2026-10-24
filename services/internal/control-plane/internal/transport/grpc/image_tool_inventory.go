@@ -5,6 +5,11 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// castImageToolInventory returns UNAVAILABLE for absent inventory and projects supplied
+// owner-verified platform/tool observations as VERIFIED without hashing or probing them here.
+// castImageToolInventory возвращает UNAVAILABLE при отсутствии inventory и преобразует переданные
+// проверенные владельцем наблюдения платформ и инструментов как VERIFIED без хеширования либо
+// проверок в этом методе.
 func castImageToolInventory(value *runtimecontract.ImageToolInventory, digest string) *controlplanev1.ImageToolInventory {
 	result := &controlplanev1.ImageToolInventory{Status: "UNAVAILABLE"}
 	if value == nil {

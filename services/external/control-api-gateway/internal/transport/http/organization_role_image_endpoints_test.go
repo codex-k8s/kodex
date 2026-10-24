@@ -11,6 +11,10 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// organizationImageFixture adapts the synthetic role-image recipe to an explicit organization
+// owner scope without a project locator.
+// organizationImageFixture переводит синтетический рецепт образа роли в явную область владельца
+// организации без ссылки проекта.
 func organizationImageFixture() *controlplanev1.RoleImageRecipe {
 	image := roleImageRecipeFixture()
 	image.ScopeKind = controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION
@@ -19,6 +23,12 @@ func organizationImageFixture() *controlplanev1.RoleImageRecipe {
 	return image
 }
 
+// TestOrganizationRoleImageHTTPRoutesUseSpecializedOwnerRPC checks organization create, update and
+// command routes use their specialized owner RPC and that list results retain exact organization
+// scope.
+// TestOrganizationRoleImageHTTPRoutesUseSpecializedOwnerRPC проверяет отдельный RPC владельца у
+// маршрутов создания, обновления и команд организации и точную область организации в результатах
+// списка.
 func TestOrganizationRoleImageHTTPRoutesUseSpecializedOwnerRPC(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"create", "update", "command"} {
@@ -63,6 +73,12 @@ func TestOrganizationRoleImageHTTPRoutesUseSpecializedOwnerRPC(t *testing.T) {
 	}
 }
 
+// TestOrganizationRoleImageHTTPRejectsForeignScopeSnapshots checks rejection of project-scoped
+// recipes, mismatched recipe IDs and foreign-organization builds or artifacts without disclosing
+// foreign references.
+// TestOrganizationRoleImageHTTPRejectsForeignScopeSnapshots проверяет отказ рецептам области
+// проекта, несовпадающим ID рецепта и сборкам либо артефактам чужой организации без раскрытия
+// чужих ссылок.
 func TestOrganizationRoleImageHTTPRejectsForeignScopeSnapshots(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"project", "foreign-build", "foreign-artifact", "wrong-recipe"} {

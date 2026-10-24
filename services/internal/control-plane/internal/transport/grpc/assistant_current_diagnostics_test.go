@@ -13,6 +13,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestAssistantCurrentDiagnosticsPreserveStatusAndExportOnlyClosedStage checks only unavailable
+// current-configuration reads receive closed stage details without private cause or metadata,
+// preserving other statuses and catalog boundaries.
+// TestAssistantCurrentDiagnosticsPreserveStatusAndExportOnlyClosedStage проверяет выдачу закрытых
+// stage details только для unavailable-чтения текущей конфигурации без приватной причины и
+// metadata, сохраняя остальные status и границы каталогов.
 func TestAssistantCurrentDiagnosticsPreserveStatusAndExportOnlyClosedStage(t *testing.T) {
 	kind := controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION
 	for _, stage := range []string{errs.AssistantCurrentPromptContext, errs.AssistantCurrentConfigurationView, errs.AssistantCurrentOwnerCoreRead,

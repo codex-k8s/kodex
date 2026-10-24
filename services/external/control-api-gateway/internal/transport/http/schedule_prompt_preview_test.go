@@ -11,8 +11,16 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// schedulePromptBody provides synthetic hourly UTC schedule materialization with explicit DST,
+// overlap, session and notification policies and a literal task.
+// schedulePromptBody задаёт синтетическую материализацию часового расписания UTC с явными
+// политиками DST, пересечений, сессии и уведомлений и буквальной задачей.
 const schedulePromptBody = `{"preset":"HOURLY","timezone":"UTC","dstGapPolicy":"SHIFT_FORWARD","dstFoldPolicy":"RUN_ONCE_EARLIEST","misfirePolicy":"COALESCE","overlapPolicy":"FORBID","materialization":{"projectRef":"prj_fixture01","targetType":"AGENT","targetRef":"agent_fixture01","name":"Automation","task":"i18n:literal task","input":{},"promptInputs":{},"sessionPolicy":"NEW_EACH_RUN","notificationPolicy":"CONTROL_CENTER_ONLY"}}`
 
+// schedulePromptResponseFixture builds a fixed-time schedule prompt preview with draft or
+// saved-revision pins and availability reasons for six automation variables.
+// schedulePromptResponseFixture создаёт предпросмотр prompt расписания с фиксированным временем,
+// pins черновика либо сохранённой ревизии и причинами доступности шести переменных automation.
 func schedulePromptResponseFixture(current bool) *cp.PreviewScheduleResponse {
 	now := timestamppb.New(time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC))
 	response := &cp.PreviewScheduleResponse{NormalizedCronExpression: "0 * * * *", Occurrences: []*timestamppb.Timestamp{now}, DstGapPolicy: "SHIFT_FORWARD", DstFoldPolicy: "RUN_ONCE_EARLIEST", MisfirePolicy: "COALESCE", OverlapPolicy: "FORBID", MaterializedPrompt: promptPreviewFixture(),
@@ -48,6 +56,12 @@ func schedulePromptResponseFixture(current bool) *cp.PreviewScheduleResponse {
 	return response
 }
 
+// TestSchedulePromptPreviewPreservesDraftAndCurrentProvenance checks exact task/target mapping and
+// draft versus current-revision provenance without localizing literal previews or inventing draft
+// versions.
+// TestSchedulePromptPreviewPreservesDraftAndCurrentProvenance проверяет точное отображение задачи
+// и цели и происхождение черновика либо текущей ревизии без локализации буквального предпросмотра
+// и создания версии черновика.
 func TestSchedulePromptPreviewPreservesDraftAndCurrentProvenance(t *testing.T) {
 	for _, current := range []bool{false, true} {
 		body := schedulePromptBody
@@ -78,6 +92,12 @@ func TestSchedulePromptPreviewPreservesDraftAndCurrentProvenance(t *testing.T) {
 	}
 }
 
+// TestSchedulePromptPreviewRejectsForgedInputsAndCrossPins checks payload actor authority and
+// incomplete saved-revision selection before RPC and rejects inconsistent owner materialization,
+// context or variable pins.
+// TestSchedulePromptPreviewRejectsForgedInputsAndCrossPins проверяет отказ полномочиям actor из
+// payload и неполному выбору сохранённой ревизии до RPC и несогласованным pins материализации,
+// контекста либо переменных владельца.
 func TestSchedulePromptPreviewRejectsForgedInputsAndCrossPins(t *testing.T) {
 	for _, body := range []string{
 		strings.Replace(schedulePromptBody, `"task":`, `"executionActorRef":"actor_forged01","task":`, 1),
@@ -112,6 +132,12 @@ func TestSchedulePromptPreviewRejectsForgedInputsAndCrossPins(t *testing.T) {
 	}
 }
 
+// TestSchedulePromptPreviewWorkflowAndContinuationUseExactRuntimePins checks agent and coordinator
+// workflow continuation previews retain the exact previous runtime revision, session and workflow
+// stage pins.
+// TestSchedulePromptPreviewWorkflowAndContinuationUseExactRuntimePins проверяет сохранение точных
+// pins предыдущей runtime-ревизии, сессии и стадии workflow в предпросмотре продолжения агента и
+// координатора workflow.
 func TestSchedulePromptPreviewWorkflowAndContinuationUseExactRuntimePins(t *testing.T) {
 	for _, workflow := range []bool{false, true} {
 		body := strings.Replace(schedulePromptBody, `"sessionPolicy":"NEW_EACH_RUN"`, `"scheduleRef":"sch_fixture01","expectedScheduleVersion":4,"mode":"CURRENT_REVISION","sessionPolicy":"CONTINUE_ONE"`, 1)
@@ -153,6 +179,11 @@ func TestSchedulePromptPreviewWorkflowAndContinuationUseExactRuntimePins(t *test
 	}
 }
 
+// TestAutomationVariableDescriptionsLocalizeWithoutChangingExamples checks registered automation
+// variable descriptions localize while literal example strings remain unchanged.
+// TestAutomationVariableDescriptionsLocalizeWithoutChangingExamples проверяет локализацию
+// зарегистрированных описаний переменных automation с сохранением буквальных примеров без
+// изменений.
 func TestAutomationVariableDescriptionsLocalizeWithoutChangingExamples(t *testing.T) {
 	for _, name := range []string{"NAME", "TASK", "SCHEDULED_AT", "TIMEZONE", "REVISION"} {
 		v := &cp.TemplateVariable{Name: "automation." + strings.ToLower(name), ValueType: "string", Source: "AUTOMATION", Description: "i18n:AUTOMATION_VARIABLE_" + name, Example: "i18n:literal example", Available: true, Reason: cp.TemplateVariableAvailabilityReason_TEMPLATE_VARIABLE_AVAILABILITY_REASON_AVAILABLE}

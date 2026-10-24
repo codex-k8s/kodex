@@ -8,6 +8,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// GetRuntimeSecretImpact reads exact secret/revision metadata under secret-response headers,
+// checks owner version/page totals and unique consumers from one scope tuple, then emits the
+// secret-version ETag. No secret value is read or returned.
+// GetRuntimeSecretImpact читает metadata точных secret/revision с защитными заголовками, проверяет
+// версию владельца, total страницы и уникальных consumers одной области, затем выдаёт ETag версии
+// секрета. Значение секрета не читается и не возвращается.
 func (server *Server) GetRuntimeSecretImpact(w http.ResponseWriter, r *http.Request, ref generated.SecretRef, revision generated.RuntimeSecretRevision, p generated.GetRuntimeSecretImpactParams) {
 	setRuntimeSecretHeaders(w)
 	if !opaqueHTTPReference.MatchString(ref) || revision < 1 || revision > maximumSafeJSONInteger || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
@@ -47,6 +53,12 @@ func (server *Server) GetRuntimeSecretImpact(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, result)
 }
 
+// secretImpactConsumerView validates one environment revision with distinct positive secret
+// revisions excluding the target, plus an optional scope-matching agent binding. It copies
+// revision metadata without resolving or revealing credential content.
+// secretImpactConsumerView проверяет revision среды с уникальными положительными версиями секрета
+// кроме целевой и необязательной привязкой агента той же области. Копируются metadata версий без
+// разрешения и раскрытия credential содержимого.
 func secretImpactConsumerView(input *controlplanev1.RuntimeSecretImpactConsumer, target int64) (generated.RuntimeSecretImpactConsumer, bool) {
 	if input == nil || !opaqueHTTPReference.MatchString(input.GetEnvironmentRef()) || !opaqueHTTPReference.MatchString(input.GetEnvironmentVersionRef()) ||
 		input.GetEnvironmentVersion() < 1 || input.GetEnvironmentVersion() > maximumSafeJSONInteger || len(input.GetSecretRevisions()) < 1 || len(input.GetSecretRevisions()) > 128 ||
@@ -77,6 +89,12 @@ func secretImpactConsumerView(input *controlplanev1.RuntimeSecretImpactConsumer,
 	return result, validEnvironmentConsumer(item)
 }
 
+// RebindRuntimeSecret validates at most 32 unique environment selections sharing one scope and up
+// to 100 distinct agent consumers under versioned mutation context. The specialized owner performs
+// rebind; the response must match the exact selected environment/agent sets.
+// RebindRuntimeSecret проверяет не более 32 уникальных выборок сред одной области и до 100
+// различных consumers-агентов с versioned mutation context. Rebind выполняет отдельная команда
+// владельца; ответ совпадает с точными наборами выбранных сред и агентов.
 func (server *Server) RebindRuntimeSecret(w http.ResponseWriter, r *http.Request, ref generated.SecretRef, revision generated.RuntimeSecretRevision, p generated.RebindRuntimeSecretParams) {
 	setRuntimeSecretHeaders(w)
 	body, ok := decodeJSON[generated.RuntimeSecretRebindInput](w, r)
@@ -130,6 +148,13 @@ func (server *Server) RebindRuntimeSecret(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, result)
 }
 
+// secretRebindView requires exact result cardinality, advanced environment versions and new
+// revisions containing the requested secret descriptor. Returned agent bindings must retain
+// identity, advance versions and point to their selected new environment revisions; invalid
+// partial results are rejected.
+// secretRebindView требует точную cardinality результата, возросшие версии сред и новые revisions
+// с descriptor запрошенного секрета. Привязки агентов сохраняют identity, повышают версии и
+// указывают на выбранные новые revisions сред; неверные частичные результаты отклоняются.
 func secretRebindView(response *controlplanev1.RebindRuntimeSecretResponse, ref string, revision int64, selected map[string]generated.RuntimeSecretRebindSelection, agents map[string]string) (generated.RuntimeSecretRebindResult, bool) {
 	result := generated.RuntimeSecretRebindResult{Environments: []generated.RuntimeSecretReboundEnvironment{}, Bindings: []generated.AgentRuntimeEnvironmentBinding{}}
 	if response == nil || len(response.GetEnvironments()) != len(selected) || len(response.GetBindings()) != len(agents) {

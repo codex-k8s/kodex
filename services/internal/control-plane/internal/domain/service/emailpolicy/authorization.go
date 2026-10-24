@@ -10,6 +10,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// CommandRequiresGate maps bounded integration input to an exact mailbox command, rejecting
+// invalid mapping or missing/denied policy and reporting whether that operation requires a human
+// gate.
+// CommandRequiresGate отображает ограниченный ввод интеграции в точную mailbox-команду, отклоняет
+// неверное отображение и отсутствующую либо запрещающую policy и сообщает необходимость human gate
+// операции.
 func CommandRequiresGate(mailbox MailboxProjection, operation, effectKey string, boundedInput []byte) (bool, error) {
 	command, err := api.CommandForIntegration(operation, mailbox.Ref, mailbox.Sender, effectKey, boundedInput)
 	if err != nil {
@@ -26,6 +32,12 @@ func CommandRequiresGate(mailbox MailboxProjection, operation, effectKey string,
 	return false, errs.ErrForbidden
 }
 
+// ValidateExecutionBinding requires exactly one invocation/test origin, nonempty lease and fence,
+// positive generation and a present expiry; freshness is checked unless explicitly allowing
+// expiry.
+// ValidateExecutionBinding требует ровно один источник invocation либо test, непустые lease и
+// fence, положительное поколение и срок; актуальность срока проверяется, если явно не разрешено
+// истечение.
 func ValidateExecutionBinding(binding entity.EmailExecutionBinding, now time.Time, allowExpired bool) error {
 	if (binding.InvocationRef == "") == (binding.ConnectionTestRef == "") || binding.LeaseRef == "" ||
 		binding.Fence == "" || binding.Generation < 1 || binding.ExpiresAt.IsZero() ||
@@ -35,8 +47,12 @@ func ValidateExecutionBinding(binding entity.EmailExecutionBinding, now time.Tim
 	return nil
 }
 
-// AuthorizeCommand сверяет semantic digest через общий mapping, а scope сужает
-// до exact command после проверки mailbox policy. Caller не задаёт recipients.
+// AuthorizeCommand binds the mapped semantic digest, effect key, sender and revision to an enabled
+// mailbox, enforces folder/recipient policy and gate approval, and returns the exact
+// single-operation scope.
+// AuthorizeCommand связывает semantic digest отображённой команды, effect key, sender и ревизию с
+// включённым mailbox, проверяет policy папок и получателей и gate и возвращает scope ровно одной
+// операции.
 func AuthorizeCommand(mailbox MailboxProjection, operation, effectKey string, boundedInput []byte, input query.EmailAuthorization, gateApproved bool) (entity.EmailAuthorizationScope, string, error) {
 	command, err := api.CommandForIntegration(operation, mailbox.Ref, mailbox.Sender, effectKey, boundedInput)
 	if err != nil {

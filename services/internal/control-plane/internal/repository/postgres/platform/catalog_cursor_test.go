@@ -11,12 +11,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// TestListProjectsQueryDoesNotMixNamedAndPositionalArguments prevents positional
+// placeholders in the named-argument project list query without executing SQL.
+// TestListProjectsQueryDoesNotMixNamedAndPositionalArguments исключает позиционные
+// параметры в запросе списка проектов с именованными аргументами без исполнения SQL.
 func TestListProjectsQueryDoesNotMixNamedAndPositionalArguments(t *testing.T) {
 	if regexp.MustCompile(`\$[0-9]+`).MatchString(queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId) {
 		t.Fatal("project list query mixes named and positional arguments")
 	}
 }
 
+// TestArtifactCatalogCursorKeepsTimeAndAuthorityScope round-trips a compound
+// artifact position and proves that a changed project filter invalidates it.
+// TestArtifactCatalogCursorKeepsTimeAndAuthorityScope проверяет перенос составной
+// позиции артефакта и отказ при изменении проектного фильтра.
 func TestArtifactCatalogCursorKeepsTimeAndAuthorityScope(t *testing.T) {
 	current := scope{organizationID: "organization-a", actorID: "actor-a"}
 	filter := query.Filter{ProjectRef: "project-a", State: "ACTIVE"}
@@ -36,6 +44,12 @@ func TestArtifactCatalogCursorKeepsTimeAndAuthorityScope(t *testing.T) {
 	}
 }
 
+// TestCatalogCursorBindsTenantActorKindAndFilter checks rejection of changed
+// tenant, actor, kind and filters plus malformed/oversized tokens; page size alone
+// may change because it is deliberately excluded from the scope digest.
+// TestCatalogCursorBindsTenantActorKindAndFilter проверяет отказ при смене tenant,
+// actor, вида и фильтров, неверном или длинном токене; размер страницы может
+// меняться, поскольку он намеренно исключён из дайджеста области.
 func TestCatalogCursorBindsTenantActorKindAndFilter(t *testing.T) {
 	current := scope{organizationID: "organization-a", actorID: "actor-a"}
 	filter := query.Filter{ProjectRef: "project-a", Query: "needle", State: "READY", Page: query.Page{Size: 20}}

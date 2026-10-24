@@ -11,7 +11,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Fixture вызывает реальный JS helper; HTTP/provider не подменяют MaterializeMailbox.
+// TestOwnerEmailHelperMaterialization runs the real local JS mailbox fixture for IMAP/POP3,
+// checking malformed policies/TLS descriptors fail and valid materialization preserves input and
+// adds only a denied legacy mark policy.
+// TestOwnerEmailHelperMaterialization запускает настоящую локальную JS fixture ящика для
+// IMAP/POP3, проверяя отказ неверных policies и TLS descriptors, сохранение допустимого входа и
+// добавление только запрещённой legacy mark policy.
 func TestOwnerEmailHelperMaterialization(t *testing.T) {
 	for _, protocol := range []string{"IMAP", "POP3"} {
 		t.Run(protocol, func(t *testing.T) {

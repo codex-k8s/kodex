@@ -6,6 +6,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// castRuntimeExecutionDeadline preserves absent deadline, rejects shared contract decode failures
+// and projects its effective deadline and ordered workflow clock bindings.
+// castRuntimeExecutionDeadline сохраняет отсутствие срока, отклоняет ошибки общего декодера
+// контракта и преобразует effective deadline и упорядоченные привязки часов процесса.
 func castRuntimeExecutionDeadline(value any) (*cp.RuntimeExecutionDeadline, bool) {
 	if value == nil {
 		return nil, true

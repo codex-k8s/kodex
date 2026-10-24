@@ -17,19 +17,45 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// resolvedPrincipalKey privately keys the domain principal installed by this package after
+// admission and owner resolution.
+// resolvedPrincipalKey закрыто адресует доменный principal, установленный пакетом после admission
+// и разрешения владельцем.
 type resolvedPrincipalKey struct{}
+
+// resolvedPrincipal binds one resolved domain identity to its exact RPC method and admitted
+// transport profile without exposing a caller-set context key.
+// resolvedPrincipal связывает одну разрешённую доменную identity с точным RPC методом и допущенным
+// transport profile без выдачи caller-set context key.
 type resolvedPrincipal struct {
 	method    string
 	profile   string
 	principal value.Principal
 }
 
-// AdmissionAuthorizer выбирается только composition root выбранного профиля.
+// AdmissionAuthorizer is supplied by the composition root for one explicit transport profile;
+// admission and profile metadata do not replace domain owner resolution.
+// AdmissionAuthorizer поставляется composition root для одного явного transport profile; admission
+// и metadata профиля не заменяют разрешение доменного владельца.
 type AdmissionAuthorizer interface {
+	// Admit checks the configured peer/method admission and returns its server-owned operation/actor
+	// mode for subsequent domain resolution.
+	// Admit проверяет настроенный peer и method admission и возвращает server-owned operation и actor
+	// mode для последующего доменного разрешения.
 	Admit(context.Context, string) (serviceidentity.Admission, error)
+	// RPCProfile returns the composition-selected profile that incoming metadata must match exactly,
+	// rather than choosing a profile from the request.
+	// RPCProfile возвращает выбранный composition profile, которому incoming metadata должны точно
+	// соответствовать, вместо выбора профиля из запроса.
 	RPCProfile() string
 }
 
+// ServiceIdentityUnary admits the peer/method, hashes the deterministic protobuf request and
+// validates profile/project/credential metadata before owner resolution and installation of an
+// exact-method principal; errors use closed gRPC mappings.
+// ServiceIdentityUnary допускает peer и метод, хеширует deterministic protobuf request и проверяет
+// profile, project и credential metadata до разрешения владельцем и установки principal точного
+// метода; ошибки используют закрытые gRPC mappings.
 func ServiceIdentityUnary(authorizer AdmissionAuthorizer, resolver *rpcprincipal.Service) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if authorizer == nil || resolver == nil {

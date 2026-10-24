@@ -20,6 +20,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// secretDraftRecorder records the complete local prepare/readiness/broker call chain with cloned
+// requests, retained mutable value bytes and configurable terminal replay or failures.
+// secretDraftRecorder записывает полную локальную цепочку prepare/readiness/broker с копиями
+// запросов, ссылкой на изменяемые байты значения и задаваемыми terminal replay либо ошибками.
 type secretDraftRecorder struct {
 	grpc.ClientConnInterface
 	calls         []string
@@ -35,11 +39,19 @@ type secretDraftRecorder struct {
 	notReady      bool
 }
 
+// draftFixture builds a fixed-time project-scoped synthetic draft with explicit owner tuple,
+// secret version, generation and one-hour expiry.
+// draftFixture создаёт синтетический черновик области проекта с фиксированным временем, явным
+// кортежем владельца, версией секрета, поколением и сроком один час.
 func draftFixture() *cp.RuntimeSecretDraft {
 	now := time.Date(2026, 9, 5, 1, 0, 0, 0, time.UTC)
 	return &cp.RuntimeSecretDraft{ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", Ref: "sdft_fixture01", ProjectRef: "prj_fixture01", SecretRef: "sec_fixture01", SecretVersion: 4, Version: 3, Generation: 1, Name: "Fixture", Description: "", ValueType: cp.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_DRAFT, CreatedAt: timestamppb.New(now), UpdatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(time.Hour))}
 }
 
+// Invoke models typed owner preparation, authoritative draft reads, broker readiness and draft
+// effects, allowing scoped receipt corruption without performing real secret operations.
+// Invoke моделирует типизированные prepare владельца, авторитетное чтение черновика, readiness
+// broker и эффекты черновика с изменением квитанций для тестов без настоящих операций с секретами.
 func (c *secretDraftRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	c.calls = append(c.calls, method)
 	c.requests = append(c.requests, proto.Clone(request.(proto.Message)))
@@ -147,10 +159,20 @@ func (c *secretDraftRecorder) Invoke(_ context.Context, method string, request, 
 	return nil
 }
 
+// secretDraftHandler wires generated query, command and secret-broker clients to one local
+// recorder so tests can assert their exact call order.
+// secretDraftHandler связывает generated query, command и secret-broker клиентов с одной локальной
+// заглушкой записи для проверки точного порядка вызовов.
 func secretDraftHandler(c *secretDraftRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: cp.NewPlatformQueryServiceClient(c), Command: cp.NewPlatformCommandServiceClient(c)}, secretDrafts: sb.NewSecretBrokerServiceClient(c)})
 }
 
+// TestSecretDraftRoutesKeepOwnerPinsAndWriteOnlyValue checks create, save, validate, publish and
+// discard chains with distinct owner pins, write-only values, buffer clearing and terminal replay
+// without another effect.
+// TestSecretDraftRoutesKeepOwnerPinsAndWriteOnlyValue проверяет цепочки создания, сохранения,
+// валидации, публикации и отбрасывания с независимыми pins владельца, write-only значениями,
+// очисткой буфера и terminal replay без нового эффекта.
 func TestSecretDraftRoutesKeepOwnerPinsAndWriteOnlyValue(t *testing.T) {
 	for _, test := range []struct {
 		path, body, rpc, target string
@@ -208,6 +230,12 @@ func TestSecretDraftRoutesKeepOwnerPinsAndWriteOnlyValue(t *testing.T) {
 	}
 }
 
+// TestSecretDraftRejectsInvalidReceiptsAndBrokerReadback checks owner receipt rejection before
+// broker access and rejects broker results with mismatched references, owner, generation, version
+// or state.
+// TestSecretDraftRejectsInvalidReceiptsAndBrokerReadback проверяет отказ неверным квитанциям
+// владельца до broker и результатам broker с несовпадающими ссылками, владельцем, поколением,
+// версией либо состоянием.
 func TestSecretDraftRejectsInvalidReceiptsAndBrokerReadback(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.RuntimeSecretDraftOperationReceipt){
 		"missing draft":            func(o *cp.RuntimeSecretDraftOperationReceipt) { o.Draft = nil },
@@ -252,6 +280,12 @@ func TestSecretDraftRejectsInvalidReceiptsAndBrokerReadback(t *testing.T) {
 	}
 }
 
+// TestSecretDraftPropagatesAuthorityAndUnknownOutcomeWithoutSuccess checks concrete failures at
+// every call stage, readiness blocking before effects, malformed publication input and mandatory
+// mutation headers.
+// TestSecretDraftPropagatesAuthorityAndUnknownOutcomeWithoutSuccess проверяет конкретные ошибки
+// каждого этапа вызовов, блокирование эффектов при неготовности, неверный ввод публикации и
+// обязательные заголовки изменения.
 func TestSecretDraftPropagatesAuthorityAndUnknownOutcomeWithoutSuccess(t *testing.T) {
 	for code, expected := range map[codes.Code]int{codes.NotFound: 404, codes.PermissionDenied: 403, codes.Unauthenticated: 401, codes.Aborted: 412, codes.FailedPrecondition: 409, codes.Unavailable: 503, codes.DeadlineExceeded: 504} {
 		for _, method := range []string{"PrepareValidateRuntimeSecretDraft", "CheckSecretDraftReadiness", "ValidateSecretDraft"} {
@@ -294,6 +328,10 @@ func TestSecretDraftPropagatesAuthorityAndUnknownOutcomeWithoutSuccess(t *testin
 	}
 }
 
+// TestSecretDraftGetIsAuthoritativeAndPinned checks that draft reading performs one owner query
+// and rejects a response whose draft reference differs from the requested pin.
+// TestSecretDraftGetIsAuthoritativeAndPinned проверяет один query владельца при чтении черновика и
+// отказ ответу, ссылка которого отличается от запрошенного pin.
 func TestSecretDraftGetIsAuthoritativeAndPinned(t *testing.T) {
 	for _, mismatch := range []bool{false, true} {
 		c := &secretDraftRecorder{}

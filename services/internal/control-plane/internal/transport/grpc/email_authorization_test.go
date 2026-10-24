@@ -9,6 +9,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestEmailAuthorizationBindingAndOperationContract checks known email operation roundtrips,
+// unknown fallback and exact lease binding roundtrips for invocation/test sources, rejecting a
+// source-free lease.
+// TestEmailAuthorizationBindingAndOperationContract проверяет roundtrip известных email
+// operations, unknown fallback и точных lease bindings invocation/test sources, отклоняя lease без
+// source.
 func TestEmailAuthorizationBindingAndOperationContract(t *testing.T) {
 	for value := range cp.EmailOperation_name {
 		if value == 0 {

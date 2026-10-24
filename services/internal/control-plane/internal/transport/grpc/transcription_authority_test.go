@@ -19,12 +19,20 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// transcriptionAuthorityOwner is a synthetic credential/owner resolver recording ACL calls and
+// allowing deliberate actor, tenant or owner-denial mutations.
+// transcriptionAuthorityOwner является синтетическим credential/owner resolver с учётом
+// ACL-вызовов и управляемым изменением actor, tenant либо отказа владельца.
 type transcriptionAuthorityOwner struct {
 	actor, tenant string
 	deny          bool
 	calls         int
 }
 
+// ResolveProofAuthority records every lookup and accepts only the fixture's verified subject and
+// trusted-cluster profile unless owner denial is injected.
+// ResolveProofAuthority учитывает каждое разрешение и принимает только проверенный subject
+// оснастки и trusted-cluster profile, если не задан отказ владельца.
 func (owner *transcriptionAuthorityOwner) ResolveProofAuthority(_ context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
 	owner.calls++
 	if owner.deny || input.ExternalActorID != "verified-subject" || input.RPCProfile != transportprofile.TrustedCluster {
@@ -33,10 +41,18 @@ func (owner *transcriptionAuthorityOwner) ResolveProofAuthority(_ context.Contex
 	return platformrepo.ProofAuthority{ActorID: owner.actor, OrganizationID: owner.tenant}, nil
 }
 
+// ResolveServiceCredentialGeneration rejects service-credential resolution because this fixture
+// expects an authenticated user-session path.
+// ResolveServiceCredentialGeneration отклоняет разрешение service credential, поскольку оснастка
+// ожидает аутентифицированный путь пользовательской сессии.
 func (*transcriptionAuthorityOwner) ResolveServiceCredentialGeneration(context.Context, string) (uint64, error) {
 	return 0, errors.New("unexpected service credential")
 }
 
+// VerifyToken accepts only the synthetic session marker and returns its fixed subject and session
+// revision; other credentials are rejected.
+// VerifyToken принимает только синтетический маркер сессии и возвращает фиксированные subject и
+// ревизию; остальные credentials отклоняются.
 func (*transcriptionAuthorityOwner) VerifyToken(_ context.Context, token string) (oidcverifier.Principal, error) {
 	if token != "synthetic-session" {
 		return oidcverifier.Principal{}, errors.New("credential denied")
@@ -44,6 +60,12 @@ func (*transcriptionAuthorityOwner) VerifyToken(_ context.Context, token string)
 	return oidcverifier.Principal{Subject: "verified-subject", SessionRevision: 9}, nil
 }
 
+// TestTranscriptionAuthorityRequiresVerifiedOwnerAndExactMethod runs both authority RPCs through
+// the real unary authorization path with synthetic resolvers, checking exact method,
+// session/owner/caller/profile/project boundaries and bounded snapshot lifetime.
+// TestTranscriptionAuthorityRequiresVerifiedOwnerAndExactMethod проводит оба authority RPC через
+// настоящий unary authorization path с синтетическими resolvers, проверяя точный метод, границы
+// session, owner, caller, profile, project и ограниченный срок снимка.
 func TestTranscriptionAuthorityRequiresVerifiedOwnerAndExactMethod(t *testing.T) {
 	for _, catalog := range []bool{false, true} {
 		method := sttv1.TranscriptionAuthorityService_ResolveTranscriptionAuthority_FullMethodName
@@ -126,6 +148,11 @@ func TestTranscriptionAuthorityRequiresVerifiedOwnerAndExactMethod(t *testing.T)
 	}
 }
 
+// TestTranscriptionAuthorityRejectsCallerSuppliedIdentity checks actor/organization metadata
+// without a resolved trusted principal cannot create transcription or catalog authority.
+// TestTranscriptionAuthorityRejectsCallerSuppliedIdentity проверяет невозможность создать
+// transcription либо catalog authority только по actor/organization metadata без разрешённого
+// trusted principal.
 func TestTranscriptionAuthorityRejectsCallerSuppliedIdentity(t *testing.T) {
 	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(
 		serviceidentity.ProfileMetadataKey, transportprofile.TrustedCluster,

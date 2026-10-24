@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclaims"
+	"time"
+)
 
 // Contract and request-binding literals identify supported authority envelopes;
 // size limits are enforced separately and are not defined by this group.
@@ -48,53 +51,33 @@ const (
 // constructing this value alone does not authenticate a transport peer.
 // Workload связывает зарегистрированный workload ID с точной SPIFFE identity в signed authority данных;
 // само создание значения не аутентифицирует transport peer.
-type Workload struct {
-	WorkloadID string `json:"workload_id"`
-	SPIFFEID   string `json:"spiffe_id"`
-}
+type Workload authorityclaims.Workload
 
 // Provenance pins the owner's source kind/reference, monotonic revision and content digest for a
 // resolved identity; consumers must validate that source rather than trusting these fields as
 // self-asserted authority.
 // Provenance закрепляет source kind/reference владельца, monotonic revision и content digest разрешённой
 // identity; consumer проверяет источник, не доверяя полям как самозаявленным полномочиям.
-type Provenance struct {
-	Source       string `json:"source"`
-	Reference    string `json:"reference"`
-	Revision     uint64 `json:"revision"`
-	DigestSHA256 string `json:"digest_sha256"`
-}
+type Provenance authorityclaims.Provenance
 
 // Identity carries a resolved domain identifier together with its authority provenance, keeping identity
 // lookup separate from the identifier string in an untrusted request.
 // Identity несёт разрешённый domain идентификатор с authority происхождением, отделяя identity lookup от
 // строки идентификатора в недоверенном request.
-type Identity struct {
-	ID         string     `json:"id"`
-	Provenance Provenance `json:"provenance"`
-}
+type Identity authorityclaims.Identity[Provenance]
 
 // Authority records the actor kind, resolved actor/tenant and optional project boundary. Operation
 // permission belongs to the surrounding binding/claims, not an extra permission granted by this
 // structure.
 // Authority фиксирует actor kind, разрешённые actor/tenant и optional project границу. Operation
 // permission принадлежит окружающим binding/claims, не дополнительному разрешению этой структуры.
-type Authority struct {
-	ActorKind string    `json:"actor_kind"`
-	Actor     Identity  `json:"actor"`
-	Tenant    Identity  `json:"tenant"`
-	Project   *Identity `json:"project,omitempty"`
-}
+type Authority authorityclaims.Authority[Identity]
 
 // CredentialAuthentication preserves signed authentication time and optional ACR/AMR provenance; copying
 // the metadata does not reauthenticate a user or elevate policy eligibility.
 // CredentialAuthentication сохраняет signed время аутентификации и optional ACR/AMR происхождение;
 // копирование metadata не аутентифицирует пользователя заново и не повышает policy допустимость.
-type CredentialAuthentication struct {
-	AuthenticatedAt int64    `json:"auth_time"`
-	ACR             string   `json:"acr,omitempty"`
-	AMR             []string `json:"amr,omitempty"`
-}
+type CredentialAuthentication authorityclaims.CredentialAuthentication
 
 // AuthorityProof is the owner's short-lived signed input for a caller/operation, binding resolved
 // authority, credential/proof generations and exact request profile with JTI and time limits; parsing
@@ -102,26 +85,7 @@ type CredentialAuthentication struct {
 // AuthorityProof задаёт краткоживущий signed вход владельца для caller/operation, связывая разрешённые
 // полномочия, credential/proof поколения и exact request profile с JTI и сроками; разбор payload не
 // проверяет подпись и свежесть.
-type AuthorityProof struct {
-	Version                      int                       `json:"v"`
-	Issuer                       string                    `json:"iss"`
-	Audience                     string                    `json:"aud"`
-	Caller                       Workload                  `json:"caller"`
-	OperationID                  string                    `json:"operation_id"`
-	AuthorizationContextAudience string                    `json:"authorization_context_audience"`
-	Authority                    Authority                 `json:"authority"`
-	ProofRevision                uint64                    `json:"proof_revision"`
-	SignerGeneration             uint64                    `json:"signer_generation"`
-	CallerCredentialRevision     uint64                    `json:"caller_credential_revision"`
-	CredentialAuthentication     *CredentialAuthentication `json:"credential_authentication,omitempty"`
-	JTI                          string                    `json:"jti"`
-	IssuedAt                     int64                     `json:"iat"`
-	NotBefore                    int64                     `json:"nbf"`
-	ExpiresAt                    int64                     `json:"exp"`
-	RequestDigestSHA256          string                    `json:"request_digest_sha256,omitempty"`
-	RequestBindingMode           string                    `json:"request_binding_mode"`
-	AuthorityABIVersion          uint32                    `json:"authority_abi_version"`
-}
+type AuthorityProof authorityclaims.Proof[Workload, Authority, CredentialAuthentication]
 
 // AuthorizationClaims represents the signed internal RPC context with caller/target/method/permission,
 // provenance, source/key/policy pins and optional continuation lineage. It is a data model, not a

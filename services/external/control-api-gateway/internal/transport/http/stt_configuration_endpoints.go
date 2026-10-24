@@ -10,6 +10,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// validSTTSpecification requires a provider account locator, the fixed platform.stt.use permission
+// and shared audio/duration/timeout ranges, then delegates model/language/parameter compatibility
+// to modelprofile.Validate.
+// validSTTSpecification требует locator аккаунта провайдера, фиксированное platform.stt.use и
+// общие диапазоны audio/duration/timeout, затем поручает совместимость model/language/parameters
+// modelprofile.Validate.
 func validSTTSpecification(value generated.SystemSTTSpecification) bool {
 	return opaqueHTTPReference.MatchString(value.ProviderAccountRef) && value.PermissionKey == "platform.stt.use" &&
 		value.MaximumAudioBytes >= modelprofile.MinimumAudioBytes && value.MaximumAudioBytes <= modelprofile.MaximumAudioBytes &&
@@ -19,6 +25,14 @@ func validSTTSpecification(value generated.SystemSTTSpecification) bool {
 			Temperature: value.Parameters.Temperature, ChunkingStrategy: string(value.Parameters.ChunkingStrategy), Stream: bool(value.Parameters.Stream)}) == nil
 }
 
+// CreateTypedSystemSTTConfigurationDraft validates typed STT input and mutation/source selectors,
+// serializes the same closed JSON document used by managed revision editing and calls the
+// dedicated owner draft command. Creating a draft neither publishes configuration nor invokes
+// transcription.
+// CreateTypedSystemSTTConfigurationDraft проверяет typed STT вход и mutation/source selectors,
+// сериализует тот же закрытый JSON документ, что используется редактором managed revision, и
+// вызывает отдельную draft команду владельца. Создание черновика не публикует конфигурацию и не
+// запускает транскрипцию.
 func (server *Server) CreateTypedSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request, p generated.CreateTypedSystemSTTConfigurationDraftParams) {
 	body, ok := decodeJSON[generated.SystemSTTConfigurationDraftInput](w, r)
 	if !ok {
@@ -58,6 +72,12 @@ func (server *Server) CreateTypedSystemSTTConfigurationDraft(w http.ResponseWrit
 	writeManagedResult(w, http.StatusCreated, response)
 }
 
+// systemSTTSpecificationView requires parameters and bounded unsigned limits before converting to
+// the public signed-number DTO, copies language/keyword arrays and reuses the same complete
+// specification validator as input.
+// systemSTTSpecificationView требует параметры и ограниченные беззнаковые лимиты до преобразования
+// в публичный DTO со знаковыми числами, копирует language/keyword массивы и использует ту же
+// полную проверку specification, что и вход.
 func systemSTTSpecificationView(value *controlplanev1.SystemSTTConfiguration) (generated.SystemSTTSpecification, bool) {
 	p := value.GetParameters()
 	if p == nil || value.GetMaximumAudioBytes() > modelprofile.MaximumAudioBytes || value.GetMaximumAudioDurationMilliseconds() > uint64(modelprofile.MaximumAudioDuration.Milliseconds()) || value.GetProviderTimeoutMilliseconds() > uint64(modelprofile.MaximumProviderTimeout.Milliseconds()) {

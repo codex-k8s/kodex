@@ -14,6 +14,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// projectTrashHandler connects generated trash/recovery HTTP routes to local platform query and
+// command clients sharing the RPC recorder.
+// projectTrashHandler соединяет generated HTTP-маршруты корзины и восстановления с локальными
+// query- и command-клиентами платформы общей заглушки записи RPC.
 func projectTrashHandler(recorder *catalogRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{
 		Query:   cp.NewPlatformQueryServiceClient(recorder),
@@ -21,6 +25,10 @@ func projectTrashHandler(recorder *catalogRPCRecorder) http.Handler {
 	}})
 }
 
+// projectTrashFixture builds a synthetic trashed project with fixed deletion time, thirty-day
+// purge retention and an explicit restore action.
+// projectTrashFixture создаёт синтетический проект в корзине с фиксированным временем удаления,
+// сроком очистки тридцать дней и явным действием восстановления.
 func projectTrashFixture() *cp.Project {
 	deleted := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	return &cp.Project{
@@ -31,6 +39,11 @@ func projectTrashFixture() *cp.Project {
 	}
 }
 
+// TestProjectTrashTypedRoutes checks dedicated list, trash, restore and purge RPCs with retention
+// metadata, pagination, exact project identity and mandatory mutation fences.
+// TestProjectTrashTypedRoutes проверяет отдельные RPC списка, переноса в корзину, восстановления и
+// очистки с метаданными хранения, пагинацией, точной identity проекта и обязательными
+// ограничениями изменения.
 func TestProjectTrashTypedRoutes(t *testing.T) {
 	project := projectTrashFixture()
 	for _, tc := range []struct {
@@ -102,6 +115,10 @@ func TestProjectTrashTypedRoutes(t *testing.T) {
 	}
 }
 
+// TestProjectTrashRejectsInvalidOwnerProjection checks that missing or invalid purge time and
+// active projects are rejected from owner trash pages.
+// TestProjectTrashRejectsInvalidOwnerProjection проверяет отказ страниц корзины владельца
+// отсутствующему либо неверному времени очистки и активным проектам.
 func TestProjectTrashRejectsInvalidOwnerProjection(t *testing.T) {
 	for _, mutate := range []func(*cp.Project){
 		func(project *cp.Project) { project.PurgeAfter = nil },
@@ -123,6 +140,10 @@ func TestProjectTrashRejectsInvalidOwnerProjection(t *testing.T) {
 	}
 }
 
+// TestProjectTrashAcceptsPendingOwnerProjection checks that a purge-pending project with no next
+// actions remains a valid item in the owner trash list.
+// TestProjectTrashAcceptsPendingOwnerProjection проверяет корректность проекта в ожидании очистки
+// без следующих действий в списке корзины владельца.
 func TestProjectTrashAcceptsPendingOwnerProjection(t *testing.T) {
 	project := projectTrashFixture()
 	project.Lifecycle = cp.EntityLifecycle_ENTITY_LIFECYCLE_PURGE_PENDING

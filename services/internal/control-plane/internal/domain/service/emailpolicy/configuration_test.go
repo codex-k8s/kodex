@@ -9,6 +9,12 @@ import (
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 )
 
+// TestConfigurationProjectionPreservesPolicyWithoutCredentials checks credential-free policy
+// projections retain complete source digest commitments, distinct descriptor/binding generations
+// and rejection of unknown document fields.
+// TestConfigurationProjectionPreservesPolicyWithoutCredentials проверяет сохранение полного digest
+// источника проекциями policy без credentials, различие поколений дескриптора и binding и отказ
+// неизвестным полям документа.
 func TestConfigurationProjectionPreservesPolicyWithoutCredentials(t *testing.T) {
 	raw, err := os.ReadFile("../../../../../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
 	if err != nil {

@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestStandardCatalogTemplateUsesExactServerPins checks the derived FROM template retains exact
+// supply-chain pins, supports permitted instructions after the pinned base and rejects a foreign
+// base or unknown environment fallback.
+// TestStandardCatalogTemplateUsesExactServerPins проверяет сохранение точных supply-chain pins
+// производным FROM template, допуск разрешённых инструкций после pinned base и отказ чужой базе
+// либо fallback неизвестного окружения.
 func TestStandardCatalogTemplateUsesExactServerPins(t *testing.T) {
 	environment := validEnvironmentWithKey("standard", true, true)
 	catalog, err := NewCatalog([]Environment{environment})

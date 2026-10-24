@@ -19,6 +19,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// validEmailCredentialValue checks bounded PEM CA chains with CA certificates or bounded UTF-8
+// username/auth-secret bytes without CR/LF/NUL, preserving significant whitespace.
+// validEmailCredentialValue проверяет ограниченные PEM-цепочки CA с CA-сертификатами либо
+// ограниченные UTF-8 байты username и auth-secret без CR, LF и NUL с сохранением значимых
+// пробелов.
 func validEmailCredentialValue(kind string, raw []byte) bool {
 	if len(raw) == 0 || len(raw) > 64<<10 {
 		return false
@@ -55,6 +60,12 @@ func validEmailCredentialValue(kind string, raw []byte) bool {
 	}
 }
 
+// ConfigureEmailMailboxCredential resolves email owner/action pins and generation identity,
+// performs receipt-only replay for advanced connection versions and otherwise materializes exact
+// bytes before committing verified storage metadata.
+// ConfigureEmailMailboxCredential разрешает pins владельца и действия почты и identity поколения,
+// использует только receipt replay при большей версии подключения и иначе материализует точные
+// байты перед сохранением проверенных метаданных хранения.
 func (service *Service) ConfigureEmailMailboxCredential(ctx context.Context, principal value.Principal, mutation value.Mutation, connectionRef, kind string, raw []byte) (entity.EmailMailboxCredential, error) {
 	if mutation.ExpectedVersion == nil || *mutation.ExpectedVersion < 1 || *mutation.ExpectedVersion == math.MaxInt64 ||
 		len(mutation.IdempotencyKey) < 8 || len(mutation.IdempotencyKey) > 128 || connectionRef == "" || !validEmailCredentialValue(kind, raw) {
@@ -107,6 +118,11 @@ func (service *Service) ConfigureEmailMailboxCredential(ctx context.Context, pri
 	return service.commitEmailCredential(ctx, principal, mutation, payload)
 }
 
+// commitEmailCredential executes the owner credential command using resolved authority and rejects
+// absent or mismatched name, generation, kind, connection/version and digest readback.
+// commitEmailCredential выполняет команду реквизитов владельца с разрешёнными полномочиями и
+// отклоняет отсутствие либо несовпадение имени, поколения, вида, подключения, версии и дайджеста
+// ответа.
 func (service *Service) commitEmailCredential(ctx context.Context, principal value.Principal, mutation value.Mutation, payload command.EmailCredentialInput) (entity.EmailMailboxCredential, error) {
 	result, err := service.executeResolved(ctx, command.Command{Kind: command.ConfigureEmailCredential, Principal: principal, Mutation: mutation, Payload: payload})
 	if err != nil {

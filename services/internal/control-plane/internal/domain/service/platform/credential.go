@@ -15,18 +15,44 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// maximumIntegrationCredentialBytes limits the trimmed integration credential body to sixteen KiB
+// before materialization and owner command execution.
+// maximumIntegrationCredentialBytes ограничивает обрезанное по краям тело реквизитов интеграции
+// шестнадцатью KiB до материализации и команды владельца.
 const maximumIntegrationCredentialBytes = 16 << 10
 
+// ErrCredentialMaterializationConflict identifies materializer reuse of the same identity with
+// different content so callers can return the domain idempotency-reuse error.
+// ErrCredentialMaterializationConflict обозначает повтор identity materializer с другим содержимым
+// для возврата вызывающим доменной ошибки повторного ключа идемпотентности.
 var ErrCredentialMaterializationConflict = errors.New("credential materialization conflict")
 
+// MaterializedCredential holds immutable secret reference, UID, resource version and content
+// digest for an owner receipt, excluding plaintext credential material.
+// MaterializedCredential содержит immutable-ссылку секрета, UID, resource version и дайджест
+// содержимого для квитанции владельца без plaintext реквизитов.
 type MaterializedCredential struct {
 	SecretRef, SecretUID, SecretResourceVersion, ContentSHA256 string
 }
 
+// CredentialMaterializer defines materialization of mutable credential bytes under a stable
+// identity, returning exact storage metadata rather than persisting business state.
+// CredentialMaterializer задаёт материализацию изменяемых байтов реквизитов по устойчивой identity
+// с возвратом точных метаданных хранения без сохранения бизнес-состояния.
 type CredentialMaterializer interface {
+	// Materialize writes or reconciles the materialization identity using supplied bytes and returns
+	// the exact immutable secret descriptor or a conflict/error.
+	// Materialize записывает либо сверяет identity материализации по переданным байтам и возвращает
+	// точный immutable-дескриптор секрета либо conflict или ошибку.
 	Materialize(context.Context, string, []byte) (MaterializedCredential, error)
 }
 
+// ConfigureIntegrationCredential trims credential edges, resolves owner scope/version and
+// executable definition, materializes a copied buffer and commits only its descriptor through the
+// already resolved principal.
+// ConfigureIntegrationCredential обрезает края реквизитов, разрешает область и версию владельца и
+// исполняемое определение, материализует копию буфера и сохраняет только дескриптор с уже
+// разрешённым principal.
 func (service *Service) ConfigureIntegrationCredential(
 	ctx context.Context,
 	principal value.Principal,
@@ -104,6 +130,10 @@ func (service *Service) ConfigureIntegrationCredential(
 	return *result.Connection, nil
 }
 
+// containsString performs an exact case-sensitive membership check without trimming, normalization
+// or inferred action availability.
+// containsString проверяет точное регистрозависимое вхождение строки без обрезки, нормализации
+// либо вывода доступности действия.
 func containsString(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {

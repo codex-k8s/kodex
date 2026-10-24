@@ -18,6 +18,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// sttCatalogClient records the unary catalog context/request and returns configured synthetic
+// catalog data or error without relying on STT configuration, credentials or audio upload.
+// sttCatalogClient сохраняет контекст и request unary каталога и возвращает заданные синтетические
+// данные либо ошибку без STT конфигурации, credentials и загрузки аудио.
 type sttCatalogClient struct {
 	sttv1.SpeechToTextServiceClient
 	response *sttv1.TranscriptionModelCatalog
@@ -26,11 +30,21 @@ type sttCatalogClient struct {
 	request  *sttv1.GetModelCatalogRequest
 }
 
+// GetModelCatalog stores exact caller context/request and wraps the configured catalog in a typed
+// response while preserving the configured RPC error for handler tests.
+// GetModelCatalog сохраняет точные контекст и request caller и оборачивает заданный каталог в
+// typed response с сохранением заданной RPC ошибки для handler тестов.
 func (client *sttCatalogClient) GetModelCatalog(ctx context.Context, request *sttv1.GetModelCatalogRequest, _ ...grpc.CallOption) (*sttv1.GetModelCatalogResponse, error) {
 	client.ctx, client.request = ctx, request
 	return &sttv1.GetModelCatalogResponse{Catalog: client.response}, client.err
 }
 
+// sttCatalogFixture builds a synthetic adapter-owned model snapshot with distinct recommendation
+// limits and parameters, including an unknown-to-gateway model name to prove compatibility
+// ownership stays with the adapter.
+// sttCatalogFixture собирает синтетический снимок моделей adapter с отдельными recommendation
+// лимитами и параметрами, включая неизвестное gateway имя модели для доказательства владения
+// совместимостью на стороне adapter.
 func sttCatalogFixture() *sttv1.TranscriptionModelCatalog {
 	return &sttv1.TranscriptionModelCatalog{Version: "adapter-fixture-v2", ObservedAt: timestamppb.New(time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)),
 		RecommendedModel: "adapter-future-file-model", RecommendedMaximumAudioBytes: 12345, RecommendedMaximumAudioDurationMilliseconds: 23456, ResponseFormat: "json",
@@ -39,6 +53,12 @@ func sttCatalogFixture() *sttv1.TranscriptionModelCatalog {
 			MaximumPromptBytes: 896, MaximumKeywords: 64, MaximumKeywordBytes: 128, MinimumTemperature: 0, MaximumTemperature: 1}}}
 }
 
+// TestSTTCatalogUsesAdapterWithoutConfigurationOrAudio checks exact adapter metadata/limits
+// survive the generated catalog route, the unary context is bounded/cancelled and catalog output
+// does not claim runtime readiness or credential state.
+// TestSTTCatalogUsesAdapterWithoutConfigurationOrAudio проверяет сохранение точных adapter
+// metadata/лимитов через generated catalog маршрут, ограниченный и отменённый unary контекст и
+// отсутствие заявлений runtime readiness и состояния credentials.
 func TestSTTCatalogUsesAdapterWithoutConfigurationOrAudio(t *testing.T) {
 	client := &sttCatalogClient{response: sttCatalogFixture()}
 	response := httptest.NewRecorder()
@@ -64,6 +84,12 @@ func TestSTTCatalogUsesAdapterWithoutConfigurationOrAudio(t *testing.T) {
 	}
 }
 
+// TestSTTCatalogRejectsMalformedProducer mutates catalog identity/time/recommendations, model/list
+// uniqueness and bounds, finite temperatures and stream compatibility, requiring HTTP 502 for each
+// malformed adapter snapshot.
+// TestSTTCatalogRejectsMalformedProducer меняет catalog identity/time/recommendations,
+// уникальность и лимиты моделей и списков, конечность температуры и stream совместимость, требуя
+// HTTP 502 для каждого неверного снимка adapter.
 func TestSTTCatalogRejectsMalformedProducer(t *testing.T) {
 	cases := map[string]func(*sttv1.TranscriptionModelCatalog){
 		"version":                  func(v *sttv1.TranscriptionModelCatalog) { v.Version = "" },
@@ -99,6 +125,12 @@ func TestSTTCatalogRejectsMalformedProducer(t *testing.T) {
 	}
 }
 
+// TestSTTCatalogPreservesAuthorityAndAvailabilityErrors checks owner
+// authentication/permission/availability/input error mappings without private diagnostics and
+// reports 503 when no STT adapter is attached.
+// TestSTTCatalogPreservesAuthorityAndAvailabilityErrors проверяет отображение ошибок
+// authentication/permission/availability/input без приватной диагностики и 503 при отсутствии
+// подключённого STT adapter.
 func TestSTTCatalogPreservesAuthorityAndAvailabilityErrors(t *testing.T) {
 	for code, expected := range map[codes.Code]int{codes.PermissionDenied: 403, codes.Unauthenticated: 401, codes.Unavailable: 503, codes.InvalidArgument: 400} {
 		response := httptest.NewRecorder()

@@ -23,6 +23,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// syncOIDCGroups reconciles groups only for a nonzero verified external-session revision. It
+// checks existing observations before and after locking the tenant subject, then replaces
+// memberships in the caller transaction; it never commits independently.
+// syncOIDCGroups сверяет группы только для ненулевой проверенной ревизии внешней сессии.
+// Наблюдения проверяются до и после блокировки субъекта организации, затем членства заменяются в
+// транзакции вызывающего; самостоятельного commit нет.
 func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, organizationID, subjectID string, input platformrepo.ProofPrincipalInput) error {
 	if input.ExternalSessionRevision == 0 {
 		return nil
@@ -76,6 +82,12 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 	return nil
 }
 
+// normalizedOIDCGroups requires an issuer and at most 100 input groups, trims names, rejects
+// empty/control-containing or oversized names, and returns sorted unique group names without
+// performing identity verification.
+// normalizedOIDCGroups требует issuer и не более 100 входных групп, обрезает пробелы, отклоняет
+// пустые, длинные имена и управляющие символы и возвращает отсортированные уникальные имена без
+// проверки идентичности.
 func normalizedOIDCGroups(input platformrepo.ProofPrincipalInput) ([]string, error) {
 	if input.ExternalIssuer == "" || len(input.ExternalGroups) > 100 {
 		return nil, errs.ErrForbidden
@@ -97,6 +109,12 @@ func normalizedOIDCGroups(input platformrepo.ProofPrincipalInput) ([]string, err
 	return desiredGroups, nil
 }
 
+// oidcGroupsMatch compares stored ordered group names with the desired normalized list and
+// requires every observation to have the supplied session revision and be recent. Query/scan
+// failures close rows and return a safe availability error.
+// oidcGroupsMatch сравнивает сохранённые упорядоченные имена с нормализованным списком и требует у
+// каждого наблюдения заданную ревизию сессии и признак свежести. Ошибки запроса или Scan закрывают
+// rows и дают безопасную ошибку доступности.
 func (repository *Repository) oidcGroupsMatch(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -133,6 +151,10 @@ func (repository *Repository) oidcGroupsMatch(
 	return currentRevision == sessionRevision && slicesEqual(currentGroups, desiredGroups), nil
 }
 
+// slicesEqual compares ordered string lists element by element, treating nil and empty lists as
+// equal; it neither sorts nor normalizes its inputs.
+// slicesEqual поэлементно сравнивает упорядоченные списки строк, считая nil и пустой список
+// равными; входы не сортируются и не нормализуются.
 func slicesEqual(left, right []string) bool {
 	if len(left) != len(right) {
 		return false
@@ -145,18 +167,42 @@ func slicesEqual(left, right []string) bool {
 	return true
 }
 
-type accessScanner interface{ Scan(...any) error }
+// accessScanner allows the shared access projection readers to consume either
+// one row or a rows cursor without acquiring transaction ownership.
+// accessScanner позволяет общим readers проекций доступа принимать одну строку
+// либо курсор rows без перехода владения транзакцией.
+type accessScanner interface {
+	// Scan decodes the current projection into caller destinations and returns
+	// driver errors unchanged for the concrete scanner to classify.
+	// Scan декодирует текущую проекцию в приёмники caller и передаёт ошибки
+	// драйвера без изменений для классификации конкретным scanner.
+	Scan(...any) error
+}
 
+// resolvedAccessSubject pairs a tenant-resolved internal identity with the
+// public subject and trusted group snapshot used by the evaluator.
+// resolvedAccessSubject связывает разрешённую внутри организации внутреннюю
+// identity с публичным субъектом и доверенным снимком групп для evaluator.
 type resolvedAccessSubject struct {
 	id string
 	entity.AccessSubject
 }
 
+// resolvedAccessTarget carries owner-resolved resource/project IDs, owner ref
+// and related-resource scope; public request locators do not populate it directly.
+// resolvedAccessTarget хранит разрешённые владельцем ID ресурса и проекта,
+// ref владельца и область связанных ресурсов; публичные входы не заполняют её напрямую.
 type resolvedAccessTarget struct {
 	resourceID, projectID, ownerSubjectRef string
 	scope                                  entity.AccessScope
 }
 
+// ListPermissionRegistry resolves the caller, requires organization access.view in a read-only
+// transaction and returns permission metadata from PostgreSQL. Catalog entries describe
+// capabilities and do not confer permissions.
+// ListPermissionRegistry разрешает вызывающего, требует организационное access.view в read-only
+// транзакции и возвращает метаданные разрешений из PostgreSQL. Записи каталога описывают
+// возможности и не предоставляют полномочий.
 func (repository *Repository) ListPermissionRegistry(ctx context.Context, principal value.Principal) ([]entity.PermissionDefinition, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -189,6 +235,12 @@ func (repository *Repository) ListPermissionRegistry(ctx context.Context, princi
 	return result, tx.Commit(ctx)
 }
 
+// ListAccessSubjects uses the authorized access read transaction to page tenant subjects by
+// kind/query and raw ref cursor. One lookahead row determines continuation; commit errors are
+// returned to the caller with the assembled page.
+// ListAccessSubjects использует авторизованную транзакцию чтения для страниц субъектов организации
+// по виду, запросу и прямому ref-курсору. Лишняя строка определяет продолжение; ошибка commit
+// возвращается вместе с собранной страницей.
 func (repository *Repository) ListAccessSubjects(ctx context.Context, principal value.Principal, filter query.Filter, kind string) ([]entity.AccessSubject, string, error) {
 	current, tx, err := repository.accessReadTransaction(ctx, principal)
 	if err != nil {
@@ -219,6 +271,12 @@ func (repository *Repository) ListAccessSubjects(ctx context.Context, principal 
 	return result, next, tx.Commit(ctx)
 }
 
+// ListOIDCGroups pages tenant OIDC groups, their counts and observation timestamps after
+// access.view authorization. It uses a raw group-ref cursor and trims the lookahead row without
+// changing membership state.
+// ListOIDCGroups выдаёт страницы OIDC групп организации, их счётчики и время наблюдений после
+// проверки access.view. Используется прямой ref-курсор группы; лишняя строка удаляется без
+// изменения членства.
 func (repository *Repository) ListOIDCGroups(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.OIDCGroup, string, error) {
 	current, tx, err := repository.accessReadTransaction(ctx, principal)
 	if err != nil {
@@ -253,6 +311,12 @@ func (repository *Repository) ListOIDCGroups(ctx context.Context, principal valu
 	return result, next, tx.Commit(ctx)
 }
 
+// ListAccessRoles validates bounded UTF-8 search text and system-role aliases before
+// authorization, then reads tenant roles and optional archived entries. Each result includes its
+// current immutable version; continuation uses the last retained role ref.
+// ListAccessRoles проверяет ограниченный UTF-8 запрос и псевдонимы системных ролей до авторизации,
+// затем читает роли организации, при необходимости архивные. Результат включает текущую
+// неизменяемую версию; продолжение задаётся ref последней возвращённой роли.
 func (repository *Repository) ListAccessRoles(ctx context.Context, principal value.Principal, filter query.Filter, includeArchived bool) ([]entity.AccessRole, string, error) {
 	filter.Query = strings.TrimSpace(filter.Query)
 	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) || !validAccessRoleQueryAliases(filter.Aliases) {
@@ -292,6 +356,12 @@ func (repository *Repository) ListAccessRoles(ctx context.Context, principal val
 	return result, next, tx.Commit(ctx)
 }
 
+// validAccessRoleQueryAliases accepts at most ten entries from the explicit system-role
+// name/description localization keys. It allows an empty list and does not impose uniqueness or
+// expand arbitrary localization aliases.
+// validAccessRoleQueryAliases допускает не более десяти значений из явных ключей перевода имён и
+// описаний системных ролей. Пустой список разрешён; уникальность не проверяется и произвольные
+// псевдонимы не расширяются.
 func validAccessRoleQueryAliases(aliases []string) bool {
 	if len(aliases) > 10 {
 		return false
@@ -310,6 +380,12 @@ func validAccessRoleQueryAliases(aliases []string) bool {
 	return true
 }
 
+// ListAccessRoleVersions resolves one tenant role after access.view and pages its immutable
+// revisions using a positive numeric cursor. Role and versions are read in the same caller-owned
+// transaction and no current-version pointer changes.
+// ListAccessRoleVersions разрешает одну роль организации после access.view и выдаёт её
+// неизменяемые ревизии по положительному числовому курсору. Роль и версии читаются в одной
+// транзакции; указатель текущей версии не меняется.
 func (repository *Repository) ListAccessRoleVersions(ctx context.Context, principal value.Principal, roleRef string, page query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error) {
 	current, tx, err := repository.accessReadTransaction(ctx, principal)
 	if err != nil {
@@ -354,6 +430,12 @@ func (repository *Repository) ListAccessRoleVersions(ctx context.Context, princi
 	return role, versions, next, tx.Commit(ctx)
 }
 
+// ListAccessBindings validates role-oriented search text/aliases and returns tenant bindings
+// filtered by subject, role, project and revoked state. It authorizes access.view before querying
+// and uses the retained binding ref as continuation.
+// ListAccessBindings проверяет поиск и псевдонимы ролей и возвращает привязки организации по
+// субъекту, роли, проекту и признаку отзыва. access.view проверяется до запроса; продолжение
+// задаётся ref последней возвращённой привязки.
 func (repository *Repository) ListAccessBindings(ctx context.Context, principal value.Principal, filter query.AccessBindingFilter) ([]entity.AccessBinding, string, error) {
 	filter.Query = strings.TrimSpace(filter.Query)
 	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) || !validAccessRoleQueryAliases(filter.Aliases) {
@@ -394,6 +476,14 @@ func (repository *Repository) ListAccessBindings(ctx context.Context, principal 
 	return result, next, tx.Commit(ctx)
 }
 
+// QueryEffectiveAccess evaluates one active tenant subject against an owner-resolved visible
+// target in a repeatable-read snapshot. Inspecting another subject requires access.manage;
+// organization image permissions additionally require organization ownership/admin and management
+// access. Public target coordinates are preserved in the response.
+// QueryEffectiveAccess вычисляет доступ активного субъекта организации к видимой цели, разрешённой
+// владельцем, в repeatable-read снимке. Чужой субъект требует access.manage; организационные права
+// образов дополнительно требуют роли владельца/администратора и управления организацией. В ответе
+// сохраняются публичные координаты цели.
 func (repository *Repository) QueryEffectiveAccess(ctx context.Context, principal value.Principal, subjectRef string, target entity.AccessScope, permissionKeys []string, evaluatedAt time.Time) (entity.EffectiveAccess, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -460,6 +550,13 @@ func (repository *Repository) QueryEffectiveAccess(ctx context.Context, principa
 	return result, tx.Commit(ctx)
 }
 
+// SimulateAccess requires access.manage and target visibility, validates a hypothetical
+// role/binding for the resolved subject and compares current and augmented evaluator decisions in
+// a read-only snapshot. The simulation creates no role, binding, grant or persistent command
+// result.
+// SimulateAccess требует access.manage и видимость цели, проверяет гипотетические роль и привязку
+// разрешённого субъекта и сравнивает исходное решение с дополненным в read-only снимке. Симуляция
+// не создаёт роль, привязку, grant или устойчивый результат команды.
 func (repository *Repository) SimulateAccess(ctx context.Context, principal value.Principal, input command.AccessSimulationInput) (entity.AccessSimulation, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -515,6 +612,12 @@ func (repository *Repository) SimulateAccess(ctx context.Context, principal valu
 	return entity.AccessSimulation{Subject: subject.AccessSubject, Current: currentDecision, Simulated: simulated, EvaluatedAt: now}, nil
 }
 
+// accessReadTransaction resolves the principal and opens a read-only transaction with organization
+// access.view already checked. Failure rolls the transaction back here; successful callers own its
+// subsequent commit/rollback.
+// accessReadTransaction разрешает principal и открывает read-only транзакцию с уже проверенным
+// организационным access.view. При отказе rollback выполняется здесь; успешный caller отвечает за
+// последующий commit/rollback.
 func (repository *Repository) accessReadTransaction(ctx context.Context, principal value.Principal) (scope, pgx.Tx, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -531,6 +634,12 @@ func (repository *Repository) accessReadTransaction(ctx context.Context, princip
 	return current, tx, nil
 }
 
+// requireAccess resolves a target or accepts an internal resolved target, checks the
+// authority-project boundary, loads the active actor and bindings, and evaluates the exact
+// permission at current UTC time. Denial is hidden as NotFound; no binding is created.
+// requireAccess разрешает цель либо принимает внутреннюю разрешённую цель, проверяет границу
+// authority-project, загружает активного actor с привязками и вычисляет точное разрешение на
+// текущее UTC время. Отказ скрывается как NotFound; привязка не создаётся.
 func (repository *Repository) requireAccess(ctx context.Context, tx pgx.Tx, current scope, permission string, target any) error {
 	var resolved resolvedAccessTarget
 	switch value := target.(type) {
@@ -570,6 +679,12 @@ func (repository *Repository) requireAccess(ctx context.Context, tx pgx.Tx, curr
 	return nil
 }
 
+// resolveAccessSubject loads an active tenant subject and its groups, falling back to an OIDC
+// group only when the subject row is absent. Missing/inactive identities return NotFound;
+// caller-provided refs alone never establish identity.
+// resolveAccessSubject загружает активного субъекта организации и его группы, переходя к поиску
+// OIDC группы только при отсутствии строки субъекта. Отсутствующие или неактивные идентичности
+// дают NotFound; один переданный ref не доказывает identity.
 func (repository *Repository) resolveAccessSubject(ctx context.Context, tx pgx.Tx, organizationID, subjectRef string) (resolvedAccessSubject, error) {
 	var result resolvedAccessSubject
 	err := tx.QueryRow(ctx, queryAccessResolveSubject, pgx.NamedArgs{"organization_id": organizationID, "subject_ref": subjectRef}).Scan(
@@ -590,6 +705,12 @@ func (repository *Repository) resolveAccessSubject(ctx context.Context, tx pgx.T
 	return result, nil
 }
 
+// loadAccessBindings loads typed bindings for an already resolved tenant subject, selecting the
+// separate group-ID path for OIDC groups. It scans every row before returning and does not
+// independently evaluate target permissions.
+// loadAccessBindings загружает типизированные привязки уже разрешённого субъекта организации,
+// выбирая отдельный путь group-ID для OIDC группы. Все строки читаются до возврата; разрешения на
+// цель самостоятельно не вычисляются.
 func (repository *Repository) loadAccessBindings(ctx context.Context, tx pgx.Tx, organizationID string, subject resolvedAccessSubject) ([]entity.AccessBinding, error) {
 	subjectID, groupID := subject.id, ""
 	if subject.Kind == "OIDC_GROUP" {
@@ -614,8 +735,12 @@ func (repository *Repository) loadAccessBindings(ctx context.Context, tx pgx.Tx,
 	return result, nil
 }
 
-// Публичный scope сначала разрешается внутри authoritative tenant boundary.
-// Внутренние resource locators по-прежнему обрабатывает отдельный resolver ниже.
+// resolveAccessQueryTarget validates the public scope, binds organization scope to the current
+// tenant and converts project scope to an owner lookup. Resource-kind scope with a project
+// additionally requires project.view; concrete resources use the internal resolver.
+// resolveAccessQueryTarget проверяет публичную область, связывает организационную область с
+// текущим tenant и преобразует проектную в поиск владельца. Область вида ресурсов с проектом
+// дополнительно требует project.view; конкретные ресурсы проходят внутренний resolver.
 func (repository *Repository) resolveAccessQueryTarget(ctx context.Context, tx pgx.Tx, current scope, requested entity.AccessScope) (resolvedAccessTarget, error) {
 	if err := access.ValidateScope(requested); err != nil {
 		return resolvedAccessTarget{}, errs.ErrInvalid
@@ -645,6 +770,12 @@ func (repository *Repository) resolveAccessQueryTarget(ctx context.Context, tx p
 	return repository.resolveAccessTarget(ctx, tx, current.organizationID, requested)
 }
 
+// resolveAccessTarget resolves concrete resource identity, project, owner and related refs inside
+// the given tenant. It rejects missing resources and contradictory project locators; relationships
+// come from SQL rather than the requested payload.
+// resolveAccessTarget разрешает идентичность ресурса, проект, владельца и связанные refs внутри
+// заданной организации. Отсутствующий ресурс и противоречивый проектный адресат отклоняются; связи
+// приходят из SQL, а не входных данных.
 func (repository *Repository) resolveAccessTarget(ctx context.Context, tx pgx.Tx, organizationID string, requested entity.AccessScope) (resolvedAccessTarget, error) {
 	if requested.ResourceKind == "" || requested.ResourceKind != "ORGANIZATION" && strings.TrimSpace(requested.ResourceRef) == "" {
 		return resolvedAccessTarget{}, errs.ErrInvalid
@@ -672,10 +803,20 @@ func (repository *Repository) resolveAccessTarget(ctx context.Context, tx pgx.Tx
 	return result, nil
 }
 
+// organizationTarget constructs the organization-shaped access target from a trusted organization
+// ref. The constructor performs no lookup, validation or authorization itself.
+// organizationTarget собирает организационную цель доступа по доверенному ref организации. Сам
+// конструктор не выполняет поиск, валидацию или авторизацию.
 func organizationTarget(ref string) entity.AccessScope {
 	return entity.AccessScope{Kind: "ORGANIZATION", ResourceKind: "ORGANIZATION", ResourceRef: ref}
 }
 
+// visibilityPermission maps resource kinds to the read permission needed before exposing access
+// explanations; run visibility also covers owner gates. Unmapped kinds return an empty key and
+// rely on their caller-specific eligibility path.
+// visibilityPermission сопоставляет видам ресурсов разрешение чтения перед выдачей объяснения
+// доступа; видимость запуска также покрывает owner gate. Для отсутствующего вида возвращается
+// пустой ключ и действует проверка допуска вызывающего.
 func visibilityPermission(kind string) string {
 	switch kind {
 	case "RUNTIME_ENVIRONMENT":
@@ -707,6 +848,12 @@ func visibilityPermission(kind string) string {
 	}
 }
 
+// scanAccessRole scans one role with its current version, creator and binding count, then assigns
+// the parent role ref to the version. No row maps to NotFound; other scan failures return
+// Unavailable without partial entities.
+// scanAccessRole читает роль с текущей версией, создателем и числом привязок, затем назначает
+// версии ref родительской роли. Отсутствие строки даёт NotFound; прочие ошибки Scan дают
+// Unavailable без частичных сущностей.
 func scanAccessRole(scanner accessScanner) (entity.AccessRole, error) {
 	var item entity.AccessRole
 	var creator entity.User
@@ -727,6 +874,12 @@ func scanAccessRole(scanner accessScanner) (entity.AccessRole, error) {
 	return item, nil
 }
 
+// scanAccessRoleVersion scans an immutable role revision and creator, attaching the role ref
+// already resolved by the caller. All scan errors map to Unavailable; the helper does not resolve
+// tenant ownership.
+// scanAccessRoleVersion читает неизменяемую ревизию роли и создателя, назначая уже разрешённый
+// вызывающим ref роли. Любая ошибка Scan даёт Unavailable; владение в организации helper не
+// разрешает.
 func scanAccessRoleVersion(scanner accessScanner, roleRef string) (entity.AccessRoleVersion, error) {
 	var item entity.AccessRoleVersion
 	var creator entity.User
@@ -739,6 +892,12 @@ func scanAccessRoleVersion(scanner accessScanner, roleRef string) (entity.Access
 	return item, nil
 }
 
+// scanAccessBinding scans the complete binding projection with subject, immutable role version,
+// scope and conditions, discarding the internal database ID. It preserves presentation kind for
+// protected membership bindings and returns no partial binding on scan failure.
+// scanAccessBinding читает полную проекцию привязки с субъектом, неизменяемой версией роли,
+// областью и условиями, отбрасывая внутренний ID базы. Presentation kind сохраняется для защиты
+// привязок членства; при ошибке Scan частичный результат не возвращается.
 func scanAccessBinding(scanner accessScanner) (entity.AccessBinding, error) {
 	var internalID string
 	var creator entity.User
@@ -763,14 +922,29 @@ func scanAccessBinding(scanner accessScanner) (entity.AccessBinding, error) {
 	return item, nil
 }
 
+// getAccessRole reads a role by tenant and public role ref using the shared projection scanner. It
+// neither authorizes the caller nor changes the role; the enclosing operation supplies those
+// guarantees.
+// getAccessRole читает роль по организации и публичному ref через общий scanner проекции. Caller
+// не авторизуется и роль не меняется; эти гарантии предоставляет внешняя операция.
 func (repository *Repository) getAccessRole(ctx context.Context, tx pgx.Tx, organizationID, roleRef string) (entity.AccessRole, error) {
 	return scanAccessRole(tx.QueryRow(ctx, queryAccessGetRole, pgx.NamedArgs{"organization_id": organizationID, "role_ref": roleRef}))
 }
 
+// getAccessBinding reads a binding by tenant and public binding ref, including its immutable role
+// version and presentation protection marker. Authorization remains with the enclosing operation.
+// getAccessBinding читает привязку по организации и публичному ref, включая неизменяемую версию
+// роли и маркер защиты presentation. Авторизация остаётся у внешней операции.
 func (repository *Repository) getAccessBinding(ctx context.Context, tx pgx.Tx, organizationID, bindingRef string) (entity.AccessBinding, error) {
 	return scanAccessBinding(tx.QueryRow(ctx, queryAccessGetBinding, pgx.NamedArgs{"organization_id": organizationID, "binding_ref": bindingRef}))
 }
 
+// pageAccessSubjects trims a possible lookahead subject and returns the last retained ref as a raw
+// continuation token. Callers must supply a positive bounded limit; no visibility filtering occurs
+// here.
+// pageAccessSubjects удаляет возможного лишнего субъекта и возвращает ref последнего оставленного
+// как прямой токен продолжения. Caller передаёт положительный ограниченный limit; видимость здесь
+// не фильтруется.
 func pageAccessSubjects(items []entity.AccessSubject, limit int32) ([]entity.AccessSubject, string) {
 	if int32(len(items)) <= limit {
 		return items, ""
@@ -779,6 +953,12 @@ func pageAccessSubjects(items []entity.AccessSubject, limit int32) ([]entity.Acc
 	return items[:limit], next
 }
 
+// applyAccessCommand requires organization access.manage and dispatches only the explicit
+// role/version/archive and binding create/change/revoke commands. The caller owns the surrounding
+// idempotency, audit, event and transaction lifecycle.
+// applyAccessCommand требует организационное access.manage и направляет только явные команды роли,
+// версии, архива и create/change/revoke привязки. Внешний caller владеет жизненным циклом
+// idempotency, audit, событий и транзакции.
 func (repository *Repository) applyAccessCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	if err := repository.requireAccess(ctx, tx, current, "access.manage", organizationTarget(current.organizationRef)); err != nil {
 		return commandOutcome{}, err
@@ -797,6 +977,12 @@ func (repository *Repository) applyAccessCommand(ctx context.Context, tx pgx.Tx,
 	}
 }
 
+// createAccessRole validates a new custom role without a caller-assigned ref, generates its
+// identity, inserts revision one and reads the resulting role in the caller transaction. It
+// returns an outcome without committing.
+// createAccessRole проверяет новую пользовательскую роль без назначенного caller ref, создаёт
+// identity, вставляет первую ревизию и читает итоговую роль в транзакции вызывающего. Возвращается
+// outcome без commit.
 func (repository *Repository) createAccessRole(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AccessRoleInput)
 	if !ok || payload.RoleRef != "" || access.ValidateRole(payload) != nil {
@@ -825,6 +1011,12 @@ func (repository *Repository) createAccessRole(ctx context.Context, tx pgx.Tx, c
 	return accessRoleOutcome(role), nil
 }
 
+// createAccessRoleVersion resolves the tenant role before version checks, rejects system roles and
+// inactive/stale custom roles, and appends the next immutable revision before reading the updated
+// role. The caller transaction owns atomicity.
+// createAccessRoleVersion разрешает роль организации до проверки версии, отклоняет системные,
+// неактивные и устаревшие пользовательские роли и добавляет следующую неизменяемую ревизию перед
+// чтением обновлённой роли. Атомарностью владеет транзакция caller.
 func (repository *Repository) createAccessRoleVersion(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AccessRoleInput)
 	if !ok || payload.RoleRef == "" || input.Mutation.ExpectedVersion == nil || access.ValidateRole(payload) != nil {
@@ -853,6 +1045,12 @@ func (repository *Repository) createAccessRoleVersion(ctx context.Context, tx pg
 	return accessRoleOutcome(role), nil
 }
 
+// insertAccessRoleVersion inserts an immutable revision under a server-generated ref and activates
+// it with the expected parent-role version. A missing activation row becomes VersionMismatch;
+// insertion and activation remain in the same supplied transaction.
+// insertAccessRoleVersion вставляет неизменяемую ревизию с серверным ref и активирует её по
+// ожидаемой версии родительской роли. Отсутствие строки активации даёт VersionMismatch; вставка и
+// активация остаются в одной переданной транзакции.
 func (repository *Repository) insertAccessRoleVersion(ctx context.Context, tx pgx.Tx, current scope, roleID, roleRef string, revision, expectedRoleVersion int64, payload command.AccessRoleInput) (string, string, error) {
 	versionRef, err := newRef("arv")
 	if err != nil {
@@ -881,6 +1079,13 @@ func (repository *Repository) insertAccessRoleVersion(ctx context.Context, tx pg
 	return versionID, returnedRef, nil
 }
 
+// bootstrapAccess seeds the closed permission catalog, five system roles and their first
+// revisions, then an organization owner binding for the supplied system service subject. This is
+// bootstrap inside an existing transaction, without an independent commit or runtime self-grant
+// path.
+// bootstrapAccess заполняет закрытый каталог разрешений, пять системных ролей с первыми ревизиями
+// и организационную owner-привязку переданного системного сервиса. Это bootstrap внутри
+// существующей транзакции, без самостоятельного commit или runtime пути самовыдачи полномочий.
 func (repository *Repository) bootstrapAccess(ctx context.Context, tx pgx.Tx, organizationID, organizationRef, systemSubjectID string) error {
 	for _, definition := range access.Definitions() {
 		if _, err := tx.Exec(ctx, queryAccessBootstrapInsertPermission, pgx.NamedArgs{
@@ -953,6 +1158,12 @@ func (repository *Repository) bootstrapAccess(ctx context.Context, tx pgx.Tx, or
 	return nil
 }
 
+// archiveAccessRole archives one tenant role with OCC and distinguishes missing, protected system
+// and stale-role failures by authoritative readback. Successful mutation reads the final role and
+// returns its outcome without committing.
+// archiveAccessRole архивирует роль организации с OCC и различает отсутствие, защищённую системную
+// роль и устаревшую версию по авторитетному чтению. После успешного изменения читается итоговая
+// роль и возвращается outcome без commit.
 func (repository *Repository) archiveAccessRole(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AccessRoleInput)
 	if !ok || payload.RoleRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -986,6 +1197,14 @@ func (repository *Repository) archiveAccessRole(ctx context.Context, tx pgx.Tx, 
 	return accessRoleOutcome(role), nil
 }
 
+// changeAccessBinding handles explicit binding create/change/revoke in the caller transaction.
+// Existing bindings are tenant-resolved before OCC, presentation bindings are protected, and
+// change preserves the original subject. New scopes, subjects and role versions are resolved
+// before persistence.
+// changeAccessBinding обрабатывает явные create/change/revoke привязки в транзакции caller.
+// Существующая привязка разрешается внутри организации до OCC, presentation-привязки защищены, а
+// изменение сохраняет прежнего субъекта. Новые области, субъекты и версии ролей разрешаются до
+// записи.
 func (repository *Repository) changeAccessBinding(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AccessBindingInput)
 	if !ok {
@@ -1079,6 +1298,12 @@ func (repository *Repository) changeAccessBinding(ctx context.Context, tx pgx.Tx
 	return accessBindingOutcome(binding), nil
 }
 
+// resolveAccessRoleVersion loads an immutable tenant role revision and its creator by public
+// version ref, returning the internal version ID separately for persistence. Missing rows remain
+// distinct from driver failures.
+// resolveAccessRoleVersion загружает неизменяемую ревизию роли организации и создателя по
+// публичному ref версии, отдельно возвращая внутренний ID для записи. Отсутствие строки
+// различается с ошибкой драйвера.
 func (repository *Repository) resolveAccessRoleVersion(ctx context.Context, tx pgx.Tx, organizationID, ref string) (string, entity.AccessRoleVersion, error) {
 	var id string
 	var item entity.AccessRoleVersion
@@ -1095,6 +1320,12 @@ func (repository *Repository) resolveAccessRoleVersion(ctx context.Context, tx p
 	return id, item, nil
 }
 
+// resolveBindingSubject resolves an active subject of the requested kind inside the tenant and
+// returns either subject-ID or group-ID for binding storage. Inactive or missing results are
+// hidden as NotFound.
+// resolveBindingSubject разрешает активного субъекта заданного вида внутри организации и
+// возвращает либо subject-ID, либо group-ID для хранения привязки. Неактивный или отсутствующий
+// результат скрывается как NotFound.
 func (repository *Repository) resolveBindingSubject(ctx context.Context, tx pgx.Tx, organizationID, kind, ref string) (string, string, error) {
 	var returnedKind, id, returnedRef, displayName string
 	var active bool
@@ -1111,6 +1342,12 @@ func (repository *Repository) resolveBindingSubject(ctx context.Context, tx pgx.
 	return id, "", nil
 }
 
+// resolveBindingScope converts a previously validated binding scope to tenant-owned
+// project/resource IDs. Organization-wide and unprojected kind scopes use empty IDs; concrete
+// project/resource scopes go through authoritative lookup.
+// resolveBindingScope преобразует ранее проверенную область привязки во внутренние
+// project/resource ID организации. Для всей организации и внепроектного вида ID пусты; конкретные
+// проекты и ресурсы проходят авторитетный поиск.
 func (repository *Repository) resolveBindingScope(ctx context.Context, tx pgx.Tx, organizationID string, scope entity.AccessScope) (string, string, error) {
 	switch scope.Kind {
 	case "ORGANIZATION":
@@ -1135,6 +1372,12 @@ func (repository *Repository) resolveBindingScope(ctx context.Context, tx pgx.Tx
 	}
 }
 
+// mapAccessBindingMutationMiss reads the tenant binding after an unsuccessful guarded mutation to
+// preserve NotFound versus VersionMismatch. Driver/read errors propagate without a blind retry or
+// another mutation.
+// mapAccessBindingMutationMiss читает привязку организации после неудачного защищённого изменения,
+// различая NotFound и VersionMismatch. Ошибки чтения передаются без слепого повтора или новой
+// мутации.
 func (repository *Repository) mapAccessBindingMutationMiss(ctx context.Context, tx pgx.Tx, organizationID, ref string) error {
 	_, err := repository.getAccessBinding(ctx, tx, organizationID, ref)
 	if errors.Is(err, errs.ErrNotFound) {
@@ -1146,10 +1389,20 @@ func (repository *Repository) mapAccessBindingMutationMiss(ctx context.Context, 
 	return errs.ErrVersionMismatch
 }
 
+// accessRoleOutcome builds the role command result and audit/realtime metadata, identifying
+// ACCESS_ROLE and MEMBERSHIP_CHANGED. It does not persist the role or publish the event itself.
+// accessRoleOutcome собирает результат команды роли и метаданные audit/realtime с ACCESS_ROLE и
+// MEMBERSHIP_CHANGED. Сам helper не сохраняет роль и не публикует событие.
 func accessRoleOutcome(role entity.AccessRole) commandOutcome {
 	return commandOutcome{result: command.Result{AccessRole: &role}, resourceKind: "ACCESS_ROLE", resourceRef: role.Ref, summary: "i18n:ACCESS_ROLE_CHANGED", platformEvent: "MEMBERSHIP_CHANGED"}
 }
 
+// accessBindingOutcome builds the binding command result and project-scoped audit/realtime
+// metadata from the stored binding. The outer command transaction persists effects and publishes
+// via its existing outbox path.
+// accessBindingOutcome собирает результат команды привязки и проектные метаданные audit/realtime
+// из сохранённой привязки. Внешняя транзакция команды сохраняет эффекты и использует существующий
+// outbox путь публикации.
 func accessBindingOutcome(binding entity.AccessBinding) commandOutcome {
 	return commandOutcome{result: command.Result{AccessBinding: &binding}, projectRef: binding.Scope.ProjectRef, resourceKind: "ACCESS_BINDING", resourceRef: binding.Ref, summary: "i18n:ACCESS_BINDING_CHANGED", platformEvent: "MEMBERSHIP_CHANGED"}
 }

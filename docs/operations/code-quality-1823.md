@@ -4,11 +4,1236 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.349.0
-updated: 2026-10-23
+version: 1.373.0
+updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Передача текущего этапа перед независимым QA — 24.10.2026
+
+Владелец отдельно поручил сейчас завершить и слить текущие изменения PR#1828,
+проверив верхнеуровневую работоспособность без полного E2E. После слияния
+исполнитель обновляет основной локальный клон и продолжает оставшийся объём
+#1823 в новой ветке и отдельном worktree. Сквозная приёмка и отладка выделяются
+QA-агенту в его собственной копии. Это разрешение на слияние текущего этапа,
+а не подтверждение завершения всей задачи или сквозной приёмки.
+
+На Go-содержимом `a2455195f64d54551e06841da270339c2632f8d6` заново выполнены:
+
+| Проверка | Фактический результат |
+| --- | --- |
+| httpserver | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| internalrpcauth | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| control-api-gateway | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| control-plane | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| internal-rpc-authority | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| Linux-бинари | CGO_ENABLED=0 GOOS=linux build gateway, control-plane и control-plane-cli — PASS LOCAL |
+| Утилиты |17 analyzer tests,8 publication guard tests, Go documentation checker tests и5 exact-ignore guards — PASS LOCAL |
+| Форматирование |429 изменённых Go-файлов gofmt и полный diff --check — PASS LOCAL |
+| Безопасность публикации | Полные441 изменённых файла проверены на credential patterns. Три совпадения в двух test files подтверждены как прежние синтетические fixtures из main; значения не выводились. Credentials-пути в diff отсутствуют |
+| Внешние контуры | Credentials и13 external fixture/env inputs исключены. Реальные API/DSN/object storage и owner/warm/legacy harness — NOT RUN/SKIP |
+| Полный E2E/browser | NOT RUN по выбранному владельцем разделению работы с QA-агентом |
+| Image/deploy/live | NOT RUN; Linux build не является доказательством OCI image или запущенной среды |
+| GitHub CI | На a245519 check-runs пуст; это не PASS CI |
+
+После проверок меняется только эта запись журнала. Финальный SHA текущего PR
+фиксируется в описании с отдельным доказательством неизменности Go-кода.
+Итоговый inventory текущего этапа:18238/21405 Go declarations описаны,
+3167 остаются;1821 raw clone groups,893 адресных решения и928 неразобранных.
+Issue#1823 остаётся открытым. В новом PR продолжается исходный полный объём;
+пороги и исключения не ослабляются ради слияния. Точный merge SHA и новая
+рабочая ветка проверяются по GitHub и Git readback после слияния.
+
+
+## Подготовленное содержимое, повтор чтения и очистка проекта — 24.10.2026
+
+На основе `b646f5f5fbcb1bb9dc67a9f5a4214414533df3fb` описаны94 прежних
+объявления в artifact_content_read_retry.go23, prepared_content.go25,
+project_purge_worker.go24 и prompt_platform_instructions.go22. Описан также
+новый общий helper проверки владения versioned object. Полный Go inventory
+18238/21405, missing3167 — только PostgreSQL adapter control-plane.
+
+Два одинаковых участка archive и subject-artifact ownership объединены в
+`projectPurgeVersionedObjectIsOwned`. Public methods по-прежнему выбирают
+разные именованные SQL с прежними candidate/object arguments и error mapping.
+Archive допускает пустую version, subject artifact требует непустую точную
+version и полную SYSTEM promotion lineage; helper эти политики не смешивает.
+Тест ради прозрачного glue-выноса не добавлялся: expected AST доказывает
+ровно две замены вызовов и точный перенос общего тела. В трёх остальных файлах
+AST и directives совпали с исходной ревизией; все23 go:embed сохранены.
+Исторические prompt raw literals и их результирующие digest bytes не менялись.
+
+| Сценарий / lifecycle | Описанное фактическое поведение |
+| --- | --- |
+| Повтор чтения | Нужны наблюдаемый SQLSTATE40001, unavailable/conflict, успешная очистка тела и допустимый rollback. Independent rollback budget1s; ErrTxClosed допускается. Число попыток и время начала новых повторов ограничены, caller context возвращаемого Reader не сокращается |
+| Диагностика | Первая driver failure сохраняет stage/class; без неё используется domain class. Lazy Row.Scan и Rows.Scan/Err наблюдаются через wrapper, исходные ошибки не заменяются |
+| Prepared content | Проверенные размер/digest и ClamAV предшествуют unique intent; единственный Put допускается только после writer lock. Только exact receipt+Head позволяет STAGED. UNKNOWN или сбой его сохранения/commit никогда не разрешает второй Put |
+| Replay / binding | Совпавший request digest принимает только STAGED replay. Plan revision/operation/content digest/size и owner boundary проверяются отдельными queries; origin binding после TTL не выдаёт receipt или authority |
+| Link / adopt / abandon | Link сохраняет origin и exact revision binding; adopt требует совпадение target/receipt/clean evidence; abandon повышает generation и закрывает срок. Всё остаётся внутри прежних caller transactions |
+| Purge | Due promotion, pending receipt и событие остаются одной транзакцией. Finalize повторно сравнивает ordered inventory, блокирует active archive tasks, проверяет digest и атомарно вызывает прежний purge SQL с terminal snapshot. Внешние ресурсы этими методами не удаляются |
+| Prompt | Закрытый реестр v1–v5, en/ru и прежний8KiB budget сохраняются. Producer привязывает только новый unbound v3 snapshot; rejoin проверяет прежнюю revision. Текст инструкций не назначает authority |
+
+Полные локальные GOWORK=off control-plane build/unit — PASS; последующая
+правка только двух комментариев дополнительно проверена сравнением AST.
+Credentials и13 external inputs исключены. Реальные API, object storage,
+миграционные и owner/warm/legacy контуры — SKIP/NOT RUN. Смысл pgx
+transaction/row semantics проверен через Context7 на предыдущем этапе этого
+же изменения; dependencies и SQL не менялись.
+
+Scan6666 own sources,222 excluded,1821 raw,893 retained,928 unresolved.
+Прежний ownership clone устранён; одно точное109-token окно inbox Scan
+против source/intent binding Scan рассмотрено полностью и сохранено по
+path/hash/count1: разные nominal SQL tuples и обработка ошибок, без общего
+алгоритма кроме pgx.Row.Scan. Прежние решения не требовали перепривязки;
+добавлено только это решение. Detector/thresholds/ignore regions не менялись.
+17 analyzer unit и5 exact-ignore guards — PASS. В четырёх выбранных файлах
+0missing и0unresolved windows, общий backlog928 остаётся открытым.
+Выпуск и browser/manual acceptance ещё NOT RUN; владельцем они разрешены
+после полного завершения#1823.
+
+
+## Комментарии основного PostgreSQL adapter и общие операции — 24.10.2026
+
+На основе `4fa842ef9abba51a33968559e8e14ec30234a9fc` подробно описаны70
+прежних объявлений: repository.go33, role_images_helpers.go36 и один
+provider credential test. Описаны12 новых объявлений общих helpers,
+тестовой оснастки и проверок. Полный Go inventory18143/21404,
+missing3261 — только PostgreSQL adapter control-plane.
+
+Объединены четыре содержательных повтора:
+
+- `exactSHA256` использует существующий `runtimecontract.ValidSHA256Text`;
+  настройка provider credential использует тот же предикат вместо своего цикла.
+  Прежняя грамматика сохранена:64 строчных шестнадцатеричных байта, включая
+  нулевой digest. Проверки ConfigureRoleImages, проверявшие только длину,
+  не усиливались этим рефакторингом.
+- `copyRoleImageArtifactRecipe` копирует шесть полей provenance и независимые
+  срезы Platforms/DeclaredTools для обычного и locked artifact scanners.
+  Пустые срезы по-прежнему превращаются в nil; остальные поля не затрагиваются.
+- `finishProofIdentityResolution` объединяет два одинаковых заключительных
+  участка identity resolution. Начало обычной и Serializable транзакций,
+  синхронизация профиля/групп и rollback остаются у прежних callers.
+- Общая testdata/digests fixture содержит14 синтетических граничных случаев
+  с буквальными ожидаемыми результатами. PostgreSQL и gRPC tests используют
+  её независимо от production validator; каждый вызов получает новый срез.
+
+| Сценарий / lifecycle | Сохранённые границы |
+| --- | --- |
+| Identity вход | Claimed subject и initial claim сохраняют разные lookup/transaction paths; actor/organization выводятся из прежнего authoritative read, а не из payload |
+| Проект | Exact projectRef/organizationID/actorID query задаёт project ID/version; отсутствие строки приводит к commit до ErrForbidden |
+| Без проекта | Authoritative active binding read остаётся внутри той же транзакции; отсутствие доступа также фиксирует изменения профиля перед ErrForbidden |
+| Ошибки | Read failure возвращает ErrUnavailable без commit; commit failure перекрывает success/denial через ErrConflict. Любая ошибка возвращает нулевой authority |
+| Успех | Commit предшествует ActorVersion=1; organization version и RuntimeExecution сохраняются. Helper не добавляет grants или полномочий |
+| Артефакт | SQL column order, JSON decode errors, inventory hydration и locked promotion/claim fields остаются раздельными; общий только recipe provenance copy |
+| Повтор / отмена | Новых transitions/events/attempts нет. Прежние rollback caller context и retry при неоднозначном commit этим изменением не исправлены и не объявлены безопасными |
+
+Новые регрессионные проверки: три формы recipe slices, все поля результата
+и отсутствие aliasing;14 digest cases через role image, manifest и фактическую
+provider configuration с сохранением прежних metadata при отказе;10 outcomes
+identity resolution с точными SQL/owner args/context, числом commit и
+приоритетом ошибок. gRPC проверяет тот же corpus настоящими usage/publication
+casters. Existing optional bootstrap test сохраняет все16 presence masks.
+
+AST/directives provider credential test совпали с исходной ревизией;
+два production файла и gRPC test совпали с ожидаемыми точными выносами.
+Первый полный unit run выявил ошибку имени поля соседнего нового теста после
+переноса fixture; она исправлена, затем полный unit и четыре целевых теста
+прошли. Полные локальные GOWORK=off control-plane build/unit — PASS.
+Credentials и13 внешних fixture/env inputs исключены; реальные API,
+migration/owner/warm/legacy контуры — SKIP/NOT RUN. Это не live acceptance.
+Context7: pgx/v5 Tx.Commit, ErrTxCommitRollback и rollback после commit;
+локальная зависимость pgx v5.10.0. SQL/Proto/API/generated sources не менялись.
+
+Scan6666 own sources,222 excluded,1822 raw,892 retained,930 unresolved.
+Реальный повтор двух proof resolution tails и повтор тестовой таблицы
+устранены. Два оставшихся окна рассмотрены целиком и сохранены точными
+path/hash/count1 решениями: разные inbox/build rows и разные locked
+build/artifact column layouts. Общего алгоритма кроме pgx.Row.Scan в них нет.
+Ни detector, ни thresholds/ignore guards не менялись; прежние решения не
+перепривязывались.17 analyzer unit и5 exact-ignore guards — PASS.
+В выбранных шести Go-файлах нет missing comments и unresolved clone windows;
+остальные930 групп остаются открытыми. Merge/deploy/startup/browser/manual QA
+ещё NOT RUN; разрешение владельца на выпуск после полного завершения сохраняется.
+
+
+
+## Завершение комментариев тестов gRPC — 24.10.2026
+
+На основе `d4179fdd94ccdbfc6e295bfec907c218067c1830` описаны69
+сохранившихся объявлений в37 handwritten gRPC test files. Лишний
+`verifiedExpiryTimestamp`, без изменений вызывавший timestamppb.New,
+удалён; единственный caller использует библиотечный constructor напрямую.
+Новых tests ради этого простого изменения не добавлено.
+
+Полный Go inventory18061/21392, missing3331. Все пропуски находятся только
+в PostgreSQL adapter control-plane; во всём собственном gRPC production,
+private helpers и tests0missing. Fixture types с именем generatedArtifact
+остаются handwritten source и не исключены как generated output.
+
+| Группа проверок | Что фактически проверяется |
+| --- | --- |
+| Diagnostics/status | Code/text/details, sentinel identity, context cancellation, fresh authentication и bounded ErrorInfo metadata. Private joined cause и неизвестный SQLSTATE не выдаются наружу; это unit-boundary proof |
+| Upload/stream | Metadata/chunk/commit order, bounded spool/reader, size/digest/EOF, immutable chunks, close и confirm до Complete; negative partial/revoke/cancel/send/close/oversize paths |
+| Transcription | Настоящий unary authorization path с synthetic owner/token resolvers проверяет exact method, session/profile/caller/project и lifetime. Caller metadata не создаёт authority; digest fixture не объявлена signed proof |
+| Mailbox/effects | Known/unknown enum и exact lease oneof, public credential descriptor без private materialization, receipt outcomes и wire roundtrips. Настоящая локальная JS fixture проверяет IMAP/POP3 materialization и deny legacy policy |
+| Context/environment | Skill/memory pins, JSON roundtrip, project/digest mismatch; policy absence и publication result consistency. Grants/catalog hints не превращаются в authority |
+| Workflow/prompt/gates | Server-owned dependencies/keys, closed slot/source/reason enums, user provenance, scoped approval preview, optional invocation binding и workspace quota bounds |
+| External fixtures | Warm owner snapshot/file output, legacy stdin→gateway binary и owner loopback требуют отдельных opt-in inputs. Их отсутствие не доказывает integration acceptance |
+
+AST/directives36 comments-only файлов совпали с исходной ревизией;
+transcription policy test совпал с ожидаемой заменой единственного вызова
+и удалением прозрачной timestamp wrapper. Production-код, assertions,
+fixtures data, API/Proto/SQL/generated sources и lifecycle не менялись.
+Context7: protobuf-go timestamppb.New и CheckValid; constructor conversion
+не объявлено дополнительной timestamp validation.
+
+Полные локальные GOWORK=off control-plane build/unit — PASS. Child environment
+очищен от credentials и13 external fixture/env inputs: прежние orphan,
+migration, owner-composition и внешний CP DSN, дополнительно warm input/output
+paths и legacy claim/binary/kind. Отдельный -v запуск трёх opt-in gRPC entrypoints
+явно дал SKIP каждому; warm-wire, legacy-claim и owner-loopback — NOT RUN.
+Real-API orphan и3 migration fixtures также SKIP/NOT RUN. Локальный JS mailbox
+helper исполнялся на synthetic input, его source прочитан; внешних provider
+или HTTP вызовов эта fixture не выполняет.
+
+Scan6664 own sources,222 excluded,1823 raw,890 retained,933 unresolved.
+Clone-set fingerprint не изменился относительно исходного SHA:
+`5a8b4691a841c926bf8d1e2e76af3ab4eeb3653ef14a2d135cef255df71f93cb`.
+Новых/stale решений нет; registry и detector/guards не менялись. Внутри37
+выбранных файлов и с другими файлами0unresolved.17 analyzer unit и5 exact-ignore
+guards — PASS. Это завершение комментариев слоя, не всей задачи#1823.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN;
+разрешение владельца на последующий полный выпуск сохраняется.
+
+## Завершение комментариев production gRPC и общие projections — 24.10.2026
+
+На основе `fcb3cb7de8698623feefba5d5f4b113f0597f265` описаны112
+прежних объявлений во всех35 оставшихся production gRPC-файлах и3 прежних
+объявления provider usage/publication tests. Восемь новых объявлений тоже
+описаны:2 casters, skill execution helper, diagnostic constant, publication
+fixture и3 теста. Полный Go inventory17992/21393, missing3401 — PostgreSQL3331
+и только тестовые gRPC70. Во всём собственном production gRPC0missing.
+Всего выбрано40 Go-файлов, включая2 прежних skill files и новый test file.
+
+| Сценарий / lifecycle | Сохранённый контракт |
+| --- | --- |
+| Authority proof | Exact verified TLS chain/leaf SPIFFE URI и отдельное единственное application authorization → owner Resolve → fixed public errors. Readiness проверяет peer+service и не объявлен bearer-check. Проверка URI не подменяет operation eligibility |
+| Execution files | Lease/catalog/ref/revision/digest → owner read → shared descriptors/catalog projection. Search и manifest остаются разными typed queries; preview не разрешает чтение произвольного пути |
+| Stream artifact | Live bounded deadline → owner open → metadata/chunk copies → exact size/EOF/SHA-256 → close → fresh owner metadata → Complete. Частичные chunks не означают завершения |
+| Runtime context/deadline | Optional absence сохраняется. Context schema/digest и org/agent/project pins проверяются до projections; deadline/catalog используют прежние shared validators |
+| Email authorization | Exactly-one invocation/test source и valid expiry → owner authorization → closed nonzero policy/expiry/actor/grant. Descriptors не содержат secret values; configure передаёт value только своему owner call |
+| Context bind/unbind | Closed method/command pairs и expected binding version → owner → required Ref/positive Version → typed response. Validation результата не выдаёт binding authority |
+| Environment/secret impact | Scope/resource/version/digest pins остаются owner-validated; query impact не разрешает rebind. Прямой и draft secret impact используют одинаковый consumer read model |
+| Provider lifecycle/renewal | Closed blockers/cancel outcomes и exact task/account/claim/previous credential pins. Deterministic request digest не объявлен межъязыковой каноникой или подписью; unknown/size/time checks сохранены |
+| Skill lifecycle | Create/save/validate/review/publish/discard/archive/restore/purge сохраняют9 отдельных FullMethod/Kind/input pairs. Общая только execution+checked projection; review enum и owner admission/terminal effects остаются прежними |
+| Transcription | Trusted и verified profiles проверяются раздельно. Actor/tenant/credential revision и exact workload/permission связаны с owner principal; snapshot lifetime ограничен30s/caller deadline. Locator digest не подменяет подпись |
+| Workflow/VFS/assistant | Wire selector presence/unknown checks, task-session page sealing и publication pins сохраняются; catalogs/effective actions не становятся grants. VFS enum conversion не объявлен unknown validation |
+| Cancel/retry/events | Новых transitions, tasks, grants, events, SQL/Proto/API/generated changes нет; специализированные owner operations и их transaction boundary сохранены |
+
+Общие выносы:
+
+- `castContextBindingResult` объединяет прежние nil/Ref/Version checks и
+  projection четырёх bind/unbind handlers, сохраняя exact Internal code/text.
+- `castRuntimeSecretImpactConsumer` используется direct и draft impact reads;
+  outer/nested scope/version pins и nil/empty revision slices сохраняются.
+- Provider usage и publication impact используют существующий
+  `runtimecontract.ValidSHA256Text` вместо hex-decode/length/lowercase loops.
+  Грамматика прежняя:64 lowercase hexadecimal bytes, zero digest допустим.
+  Новых module dependencies/Docker inputs нет.
+- `executeSkillBundle` объединяет9 прежних execute+castSkillBundle путей,
+  сохраняя порядок domain и projection ошибок и idempotency fallback execute.
+- Два одинаковых SPIFFE rejection text используют именованную константу.
+
+Meaningful проверки:5 malformed context results и полный valid projection;
+6 consumer cases (2scope×3nil/empty/nonempty slices);14 digest boundary values
+через оба поля usage и оба поля двух publication kinds —84 actual-caster
+проверки. Publication fixture вынесена из прежнего теста для повторного
+использования;3 прежних тестовых объявления тоже описаны.
+
+AST/directives30 comments-only файлов совпали с исходной ревизией;8 production
+файлов совпали с ожидаемыми точными выносами. Полные локальные GOWORK=off
+control-plane build/unit прошли после окончательного skill выноса; targeted
+3 projection tests прошли. Credentials очищены из child environment;
+4 external fixture flags/DSN,3 composition env и внешний CP test DSN исключены.
+Real-API orphan,3 migration fixtures и owner loopback composition — SKIP/NOT RUN.
+Сборка/юниты не объявлены CI, image build либо acceptance развёрнутой среды.
+
+Context7: protobuf-go MarshalOptions.Deterministic и proto.Equal, включая
+same-binary guarantee и различие nil message/empty message; locally прочитаны
+existing ValidSHA256Text/alphabet tests. CONTRACT-DOC-002 authority/mutation/
+presence и GO-DOC-001/003/006, GUIDE-DOC-003/006, GOV-DOC-003 применены.
+
+Exact guard выявил изменившиеся окна:4 прежних решения перечитаны с обеих
+сторон и обновлены при прежнем pair/count1. После skill выноса удалены6 прежних
+решений на7 occurrence; вместо blind hash/count migration заново прочитаны
+полные skill files и новые окна.18 новых решений покрывают18 exact windows,
+включая5 оставшихся typed skill wrapper стыков после реального выноса.
+Всего6664 own sources,222 excluded,1823 raw,890 retained,933 unresolved.
+Промежуточный scan до skill выноса имел1825 raw; после выноса1823. Итоговый
+raw против исходных1820 также учитывает новые окна после комментариев, поэтому
+общий рост не объявлен отсутствием либо устранением всех реальных повторов.
+Внутри40 выбранных файлов0unresolved;37cross-file групп остаются открытыми.
+17 analyzer unit и5 exact-ignore guards — PASS; thresholds/guards сохранены.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN.
+Задача#1823 активна; разрешение владельца на последующий полный выпуск есть.
+
+## gRPC mailbox, provider и integration candidates — 24.10.2026
+
+На основе `753d99deb331527e548c11b812b091a33ddba038` описаны102
+сохранившихся объявления в9 Go-файлах: mailbox caster11, mailbox commands9,
+email receipts8, environment draft10, provider accounts10, integration
+candidates8, interaction7, secret owner composition20 и caster tests19.
+Прежний восьмой interaction helper удалён как точный дубль. Все9 файлов
+имеют0missing; полный Go inventory17869/21385, missing3516 — PostgreSQL3331
+и gRPC185. Generated code не менялся.
+
+`itemString` удалён,30 вызовов в interaction используют существующий
+`mapString` с тем же type assertion/string-or-empty контрактом. `itemStrings`
+и interactionPackageBytes оставлены: они создают отдельные копии slices;
+mapStrings принимает дополнительные типы и не обещает такой copy contract.
+Новая универсальная библиотека для scalar getter не создавалась.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Mailbox content → draft | Oneof YAML сохраняется, specification кодируется в JSON; enum membership, nil specification/policy и integer byte-limit conversion проверяются прежними casters. Credential descriptors содержат ссылки, не secret bytes |
+| Mailbox create/save/validate/publish/discard | Typed method/command pairs → mailboxCommand → verified principal и supplied mutation → owner Execute → required mailbox view. В отличие от execute helper здесь нет correlation-derived fallback idempotency key; объединение изменило бы контракт |
+| Mailbox bind/unbind/readback | Connection version/configuration revision pins передаются owner; unbind требует publication result и возвращает connection version. Worker readback подтверждается только после domain success, transport не проверяет внешний materializer |
+| Email effect/reconciliation | Binding → report с semantic/external receipt digests → owner receipt; reconcile проверяет expected digest у владельца; resolve использует отдельный worker RPC. Unknown outcome не подменяется confirmed effect |
+| Environment draft | PROJECT/ORGANIZATION scope назначается server; optional policy presence сохраняется. Published environment/draft/applied impact plan проверяются на exact refs/version/digests; preview hints не создают authority |
+| Provider account | Create/verify/revoke/delete/enable/concurrency остаются closed commands; start/reauthorize имеют разные RPC principals и общий domain start. Временная API-key copy очищается defer clear, входной request buffer не объявлен очищенным |
+| Integration candidates | Connection purpose может быть явным, остальные GRANT. Context/pins/reason casters общие; неизвестный/nonzero reason закрыто отклоняется, per-item и response pins сохраняются. Результат списка не выдаёт grant |
+| Interaction delivery | Required typed credential revision, definition/package pins и независимые package/capability slices сохраняются. Claim/complete/accept передают exact lease/gate/effect/external thread fields owner; CoreRunAffected=false остаётся прежним |
+| Secret owner test harness | Явная synthetic isolated DB, private rendezvous и150s lifetime; реальные owner transactions/production casters с fixture principals. Это не production bearer/mTLS acceptance и не live broker proof |
+| Cancel/retry/terminal/events | Transport transitions, tasks, grants, event schemas и owner transaction не менялись; сохраняются специализированные lifecycle methods, никакой generic transition не введён |
+
+AST/directives8 comments-only файлов совпали с исходным SHA. Interaction
+совпал с ожидаемым удалением точного getter и30 заменами имени вызова.
+Локальные GOWORK=off control-plane build и полный unit-набор — PASS.
+Child environment очищен от credentials;4 прежних внешних fixture flags/DSN,
+3 owner-composition env и внешний control-plane test DSN исключены.
+Отдельный запуск TestSecretOwnerLoopbackHarness явно дал SKIP: изолированные
+DB/rendezvous не подключались. Real-API orphan и3 migration fixtures также
+SKIP/NOT RUN. Никаких новых тестов ради тривиальной замены getter не добавлено.
+
+Context7: protobuf-go generated getter nil/default behavior, optional presence,
+oneof и protoreflect.Has. Локальный production getter и generated API сверены;
+документация не подменяет фактическую проверку field presence. Прочитаны
+CONTRACT-DOC-002 authority/mutation/presence и применимые части GO-DOC-001,
+GO-DOC-003/006, GUIDE-DOC-003/006; GOV-DOC-003 сохраняет границы доказательств.
+
+Exact guard обнаружил одно stale решение с2 occurrence после комментариев.
+GetEmailEffectReceipt и полные ClaimImageAdmission/ClaimImagePromotion перечитаны;
+обновлён только fragment hash при прежних pair/count2. Новые12 точных решений
+покрывают13 прочитанных внутренних окон; один hash имеет2 reviewed occurrence.
+Это typed wrappers/стыки разных RPC/commands/DTO, где общий parser/caster,
+principal/error/page и execute либо mailboxCommand уже существуют.
+
+Полный scan:6663 own sources,222 excluded,1820 raw,879 retained,
+941 unresolved. Рост raw1816→1820 — окна после комментариев, не обещание
+удаления detector groups выносом короткого scalar getter. Внутри9 выбранных
+файлов0unresolved;15cross-file групп остаются открытыми. 17 analyzer unit и
+5 exact-ignore guards — PASS. Detector thresholds/guards не ослаблены.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN.
+Chrome MCP разрешён и доступен; задача#1823 и разрешённый последующий выпуск
+остаются активными, частичный PR не сливается.
+
+## gRPC queries, runtime и system assistant — 24.10.2026
+
+На основе `2071aae7003b96bc1c72a204010d33d19b33fa6a` описаны ещё126
+прежних объявлений в5 Go-файлах: queries38, mvp_queries16, runtime42,
+runtime_test8 и system_assistant22. Все5 файлов имеют0missing; полный Go
+inventory17767/21386, missing3619: PostgreSQL3331 и gRPC288.
+
+Комментарии различают transport projection, проверенный principal и доменную
+eligibility. Request locators, context descriptors и allowed-operation hints
+не назначают полномочия. Enum table lookup и удаление префикса не объявлены
+валидацией неизвестного состояния. Наличие optional versions/context сохранено;
+AddAssistantTurn выбирает QUEUE, list conversations — ACTIVE по умолчанию.
+
+| Сценарий / переход | Сохранённый контракт |
+| --- | --- |
+| Query → owner → response | Exact RPC principal → специализированное domain read → typed caster и transportError. Total, page tokens, sequence/complete и optional graph snapshots остаются разными полями |
+| Provider/model catalog | Usage context, expected revision/digest и финансовая eligibility принадлежат owner read. Transport readiness projection не является live probe |
+| Schedule preview | Timing normalization и occurrences → необязательная materialization preview с mode, version/digest pins и first occurrence. Preview не создаёт schedule или execution |
+| Conversation lifecycle | Отдельные archive/restore/purge/move/turn/cancel/plan commands → execute → owner transaction. Missing-result checks и receipt/created-resource responses сохранены |
+| Execution claim/renew/complete/delegate | Exact workload/lease/fence/generation и mutation → closed command → owner graph. Новых grants, retries, terminal transitions или источников actor нет |
+| Runtime revision | Nil desired revision остаётся nil; context/file/deadline/prompt provenance casters могут отклонить snapshot. Projection существующих pins не заменяет их owner validation |
+| Artifact read | Verified principal и lease tuple → domain reader → bounded read → exact size check → Close. Download не превращён в обычное metadata чтение |
+| Connection test / invocation | Typed claims сохраняют definition, credential revision, grant, resource scope и effect pins. UnknownOutcome и optional effect receipt остаются у специализированного completion |
+| Warm runtime / errors | Reconcile/report используют exact RPC; failure warning сохраняет закрытый stage и mapped code. Current-configuration и plan error details сохраняют разные условия выдачи |
+
+Повторная сборка семи полей ProviderCredentialBinding в runtime snapshot
+заменена существующим `castProviderCredential`. Привязки account/revision,
+Secret name/UID/resourceVersion и content digest теперь имеют один источник.
+Values секретов не переносились; это преобразование метаданных результата.
+Существующий CAS-тест расширен: проверяет все поля input и binding, совпадение
+реального runtime пути с refresh projection, пустые и неверно типизированные
+метаданные. Наличие пустого binding и nil целой desired revision различаются.
+
+AST/directives3 comments-only файлов совпали с исходной ревизией; runtime
+совпал с ожидаемой единственной заменой struct literal общим вызовом.
+Полные локальные GOWORK=off control-plane build/unit и targeted CAS test — PASS.
+Четыре external fixture flags/DSN явно удалены: real-API orphan и3 dedicated
+migration contours SKIP/NOT RUN. Proto/generated/API/SQL не менялись.
+Context7 через подключённый connector: protobuf-go UnmarshalOptions,
+DiscardUnknown=false default и strict JSON decoding. Другой MCP endpoint
+отклонил свой API key; успешный ответ получен от подключённого Context7,
+секреты и настройки MCP не менялись. CONTRACT-DOC-002 authority/error rules
+прочитаны; свежий GOV-DOC-003 сохраняет границы локальных и live доказательств.
+
+Guard остановил assessment на8 stale hashes после комментариев. Обе стороны
+точных окон и полные методы role_images/session_archive/runtime_secrets
+перечитаны; прежние pair/count1 сохранены, обновлены только reviewed hashes.
+Внутри выбранных файлов разобрано31 окно:27 точных решений, четыре hash имеют
+по2 явно прочитанных occurrence. Это typed RPC wrappers/стыки разных команд,
+DTO и фильтров, где principal, transportError, page, execute и lease caster уже
+общие. Универсальный dispatcher ради их glue не добавлен.
+
+Полный scan:6663 own sources,222 excluded,1816 raw,866 retained,
+950 unresolved. Рост raw1810→1816 связан с окнами после комментариев;
+вынос credential literal не объявлен удалением detector group. Внутри5 файлов
+0unresolved,61cross-file группа с другими файлами остаётся в работе.
+17 analyzer unit и5 exact-ignore guards — PASS; thresholds и guards сохранены.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN.
+Chrome MCP доступен с подтверждённым владельцем разрешением; это не результат
+продуктовой приёмки. Задача#1823 активна, разрешение на последующий выпуск есть.
+
+## gRPC core, source/write-back и secret draft mappings — 24.10.2026
+
+На основе `5e418cf28efcf1380472d9989043059bc6e4b5a5` описаны125 прежних
+объявлений в6 Go-файлах: server16, commands_core35, configuration_source13,
+configuration_writeback16, runtime_secret_drafts21 и runtime_configuration24.
+Новый общий expiry helper и его тест тоже описаны. Inventory:17641/21386,
+missing3745 — PostgreSQL3331 и gRPC414. Все8 выбранных Go-файлов имеют0missing.
+
+Комментарии различают transport conversion и owner validation. Principal
+приходит из проверенного context точного метода; request resource locators
+не назначают actor/tenant/authority. Mutation сохраняет expected-version
+presence, а correlation-derived fallback idempotency key ограничен128 bytes.
+Read после CompleteOnboarding может отказать после успешной команды и не
+означает её rollback. Generated enum lookup в casts не объявлен проверкой
+unknown state; domain validators и transport policy остаются самостоятельными.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Command → owner | Closed method/command pair → execute → verified principal/mutation → domain Execute → typed response. Common error mapping уже единый, owner transaction не переносилась |
+| Source configure/refresh | SourceInput/sourceMutation уже общие; role-image и integration-definition сохраняют специализированные RPC/commands. Refresh не выполняет Git fetch в transport |
+| Source claim/renew/complete/fail | Owner назначает work/source generation/attempt/claim/fence; request tuple и reported commit/content/ancestry не доказывают полномочия. Struct conversion failure не выдаёт частичный response |
+| Write-back prepare/approve/reject/cancel | Proposal/content/source-version и approval pins передаются владельцу; payload/URL не доказывают внешний Git effect |
+| Write-back begin/complete/recovery | Owner begin получает commit/tree/blob/parent/content pins, возвращает already-started; complete получает exact effect/commit/content/PR locators. Lease renewal и failure остаются отдельными owner methods |
+| Secret draft prepare/consume/finish | SAVE/VALIDATE/PUBLISH/DISCARD и COMPLETE/FAIL/RECOVER/CLEANUP сохраняют отдельные намерения, claim generation и descriptors. Operation grant остаётся privileged value назначенного получателя, не обычным metadata |
+| Runtime environment/configuration | Public values, logical Secret revision bindings и tools копируются отдельно от secret values; canonical policy validator сохраняется. Create PROJECT scope и publication existing Ref не объединяются |
+| Cancel/retry/gate | Специализированные commands сохраняют owner graph closure, fresh attempt/lineage и gate decisions; generic transition dispatcher не добавлен |
+| Readiness / events | Новых workers, side effects, tasks, grants, idempotency scopes либо событий нет. Readiness ответ подтверждает owner operation, а не внешнюю live-проверку materializer |
+
+Одинаковое преобразование expiry source и write-back lease вынесено в локальный
+`leaseExpiryOrZero`. Только absent/CheckValid/AsTime правило общее: прежний
+invalid/absent timestamp становится time.Time{}, корректный сохраняет точный
+момент. WorkRef/SourceGeneration и ProposalRef, attempt, claimant, generation и
+fence остаются в отдельных typed casters. Не добавлены expiry admission,
+unknown-field validation, lease authentication или новый источник полномочий.
+Тест через оба настоящих caster проверяет7 случаев: absent, nanosecond instant,
+epoch, negative/overflow nanos и seconds ниже/выше допустимого диапазона;
+отдельно проверяется nil целой lease и сохранение всех различных pins.
+
+AST/directives4 comments-only файлов совпали с исходным SHA. Два lease файла
+совпали с ожидаемой точной заменой expiry block/call и удалением time import.
+Полные локальные GOWORK=off build/unit control-plane и targeted expiry test —
+PASS. Все4 внешние fixture flags/DSN явно удалены: real-API orphan и3 dedicated
+migration contours SKIP/NOT RUN. SQL, Proto sources, generated code и API не
+менялись. Context7: protobuf-go timestamppb CheckValid/AsTime; дополнительно
+прочитаны CONTRACT-DOC-002 authority/mutation/presence/error/server-path rules.
+
+Scanner guard обнаружил2 stale retained hashes после комментариев. Оба окна
+и полные затронутые методы GetWriteBack/ClaimImageBuild и secret recovery/archive
+renew перечитаны; обновлены только exact hashes с прежними pairs/count1 и
+уточнённой причиной. Новые18 адресных решений покрывают20 occurrence внутри
+выбранных файлов, включая3 прочитанных membership стыка одного hash. Это typed
+RPC adapters и стыки разных commands/DTO, где execute, sourceMutation,
+writeBackMutation, domainEnvironment/policy уже общие. Universal dispatcher,
+reflection либо семипольный getter interface ради этого glue не добавлены.
+
+Полный scan:6663 own sources,222 excluded,1810 raw,835 retained,
+975 unresolved. Рост raw после комментариев связан с новыми окнами физического
+min-lines и изменёнными стыками; реального увеличения бизнесового кода из-за
+этих комментариев нет. Общий expiry вынос не объявлен удалением всех detector
+окон typed leases. Внутри8 выбранных файлов0unresolved;54cross-file совпадения
+с другими файлами остаются в работе, не скрыты новыми решениями.
+17 analyzer unit и5 exact-ignore guards — PASS; detector/guards не ослаблены.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN.
+Задача#1823 остаётся активной, разрешение на последующий выпуск сохраняется.
+
+## Завершение комментариев CLI, authorization и проекций — 24.10.2026
+
+На основе `6da7ee376aca929f87da1193fb4e522215a125ab` завершены154 прежних
+объявления в16 Go-файлах: CLI37, authorization39, emailprojection43,
+integrationegress35. Все их private, tests, interface methods и embedded
+variables имеют EN→RU комментарии. Один прежний TLS peer helper заменён общим
+`serviceStreamPeer`; добавлен описанный `userServiceStreamFixture`.
+Inventory:17514/21384, missing3870. Остаток комментариев во всём собственном
+Go-коде теперь ограничен control-plane PostgreSQL adapter3331 и gRPC transport539;
+это подтверждено полным inventory, а не поиском только в выбранных файлах.
+
+Комментарии сохраняют фактические различия bootstrap, admission и публикации.
+CLI migration path не получает вымышленного собственного deadline; broker retry
+budget принадлежит каждому stream, повторяется только constructor ErrConnect,
+ensure/close не повторяются. Environment-owned bootstrap допускает только точный
+legacy64 KiB control-plane limit при forward update до256 KiB.
+
+| Сценарий / переход | Описанный прежний контракт |
+| --- | --- |
+| Unary RPC → principal | Composition root выбирает профиль; peer/method admission, deterministic request digest и credential/project metadata предшествуют owner resolution. Verified context и locator не назначаются обычным payload |
+| Stream → first request → chunks | Закрытые method/stream shape/actor bindings; principal разрешается только по первому request, peer admission повторяется вокруг receive и перед send. Полное тело upload проверяет handler; каждый chunk не объявлен новым owner resolution |
+| Stream revoke / errors / EOF | Отказ admission запрещает следующий send/receive; SendMsg не подтверждает получение клиентом. One-request stream отклоняет второе request message. Доменные lease/grant revocation остаются у владельца, новых events/transitions нет |
+| Mail Secret publish/readback | Только существующий seeded Secret, monotone revision/digest, неизменные credential bytes и digest map включённых endpoints; receipt содержит metadata, не значения |
+| Mailbox publication → readiness | Последовательные ConfigMap/network/gateway/Secret/email Deployment writes не являются общей transaction. PublishMailbox receipt не заменяет CheckMailbox с точными observed replica counters; живые SMTP/IMAP не проверяются |
+| Mail и integration fence | Отсутствующий mail fence сохраняет исходный допуск; integration fence требует generation1 либо точную пустую repo-owned bootstrap NetworkPolicy. Разные правила не объединены |
+| Integration publish/readback | Exact source, immutable policy data, supplemental network, отдельный private CONNECT Service selector, Deployment pins и все replicas; closed stage не раскрывает policy/API bodies. Достижимость listener остаётся отдельной проверкой |
+| Retry / lifecycle / events | Существующие conflict retries и порядок reads/writes не менялись; комментарии не добавляют commands, новые grants, idempotency scopes, events либо обход owner lifecycle |
+
+Общая test-оснастка сохраняет точные caller/target/method/operation/permission,
+actor mode, optional project locator и scenario-specific certificate bytes.
+Пять исходных peer paths используют один конструктор; четыре user fixture paths
+используют общую owner/resolver/metadata сборку. Проверки metadata, chunks,
+request digest, method isolation, preview/download, revocation и boundary
+negatives остаются в прежних tests. Generated wire проверяется через bufconn с
+synthetic peer, без утверждения о реальном TLS handshake или live storage.
+Две прежние authorization clone groups устранены; в authorization0unresolved.
+
+AST/directives14 comments-only файлов совпали с исходным SHA. Два test файла
+сверены с ожидаемыми replacements/import cleanup; их полный diff и неизменные
+bindings/assertions прочитаны. Существующие SQL, embedded fixtures, политики,
+сами production predicates, API и директивы не менялись.
+
+Полные локальные GOWORK=off build/unit control-plane — PASS; отдельный свежий
+полный authorization test — PASS. Первичный unit запуск выявил оставшийся
+unused import после переноса TLS fixture; импорт удалён и полный запуск
+повторён успешно. Этот первичный FAIL не выдаётся за PASS. Флаги real-API orphan
+и все три migration-test DSN явно удалены из окружения теста; эти четыре
+внешних контура SKIP/NOT RUN. Fake Kubernetes, synthetic peers и bufconn не
+обращаются к живому кластеру, базе либо credentials.
+
+Context7: grpc-go wrapped ServerStream context/RecvMsg/SendMsg/interceptors;
+goose SetBaseFS, embedded migrations и context-aware Up/UpTo/GetDBVersion.
+5 exact-ignore guards и diff check — PASS. Registry/detector не менялись.
+Полный scan:6661 own sources,222 excluded,1790 raw,815 retained,975 unresolved.
+Комментарии сделали видимым ещё одно прежнее совпадение Deployment readiness;
+оно остаётся unresolved вместе с admission/publication совпадениями email и
+integration, без нового ignore или формального закрытия.
+Merge/deploy/startup, image build, browser и ручной QA — NOT RUN; вся задача
+#1823 продолжается с сохранённым разрешением владельца на последующий выпуск.
+
+## Общие проекции integration candidates и оставшиеся локальные клиенты — 24.10.2026
+
+На основе `a9d02610a154ddc04cf82ef482beb0cb2c890160` описаны58 прежних
+объявлений: skillscanclient13, systemassistant18, две cmd entrypoints5,
+runtime-snapshot fixture3 и четыре PostgreSQL candidate/catalog файла19.
+Все собственные объявления этих файлов завершены, включая local types,
+private/tests и embedded SQL/JSON/prompt variables. Добавлены4 общих production
+helpers и10 тестовых объявлений, все с EN→RU комментариями. Inventory:
+17359/21383, missing4024. Prompt bytes, SQL и директивы embed не менялись.
+
+`skillscanclient` описывает32 MiB skill limit и512 MiB streamed artifact limit,
+точный EOF, bounded INSTREAM frames, общий timeout, закрытые protocol errors
+и VERSION до/после scan. Database revision должна быть положительной,
+дата не старше7дней и не более суток в будущем; обе VERSION replies совпадают.
+Это проверка переданных bytes, не полномочие публикации и не обещание полного
+обнаружения угроз. Тесты используют private temporary Unix socket с fake clamd.
+Комментарии core prompt и тестов не меняют instructions, owner text, runtime
+capabilities, исторические revisions либо safe projection.
+
+Четыре одинаковых блока двух assistant candidate методов вынесены в локальные
+helpers: `scanAssistantIntegrationGrants`, `assistantIntegrationCandidateAfter`,
+`integrationCapabilityProjection`, `assistantIntegrationCandidatePage`.
+Проекция capability применяется также в recipient catalog и обычном capability
+candidate query: всего4 потребителя одной формы. Это бизнесовый adapter одного
+сервиса, поэтому общая библиотека и новый module не добавлены.
+
+| Сценарий / граница | Сохранённое поведение |
+| --- | --- |
+| Principal → owner → package → grants | Каждый исходный метод сам разрешает trusted principal, organization/project/profile/recipient и точную package revision до общего чтения/проекции. SQL, request и transaction options не менялись |
+| Six-column grant rows | Точный порядок ref/version/capability/policy/paths/enabled; nonnil пустая map, прежний приоритет последней строки одного ключа; Close до Err и фиксированный unavailable без частичного результата |
+| Cursor | Прежние RawURL base64, один JSON document, known fields, context digest и capability-key guard. Повторные JSON keys сохраняют прежнее last-key-wins; cursor не является authority и не заменяет новый owner read |
+| Capability | Все advertised поля, schema bytes/digest, копии approval options и nil/empty semantics сохранены. Eligibility, resource scope и executable admission остаются у callers |
+| Paging | Прежняя сортировка по key, total до cursor, exclusive after, default50, exact next-token bytes, nonnil пустая страница. Commit остаётся после сборки результата |
+| Project / system различия | PROJECT сохраняет profile/project/public-scope commitment, public scopes и PACKAGE_UNAVAILABLE; SYSTEM сохраняет свою owner boundary и connection/recipient readiness. Их context digests не объединены |
+| Lifecycle / events | Новых writes, lifecycle transitions, retries, grants либо событий нет. Helpers не открывают transaction, не делают внешние вызовы; rows принадлежат уже выполненному caller query |
+
+Исходные четыре блока обоих методов побайтно совпали до выноса. Expected
+AST/directives четырёх consumer файлов и helper совпали после только описанных
+замен. Отдельное AST-сравнение исходных4 capability literals с общей формой
+подтвердило все поля после нормализации порядка полей и имени digest variable.
+AST/directives9 comments-only файлов совпали с исходным SHA.
+
+Четыре meaningful unit tests проверяют позиционные columns, close/error и
+отсутствие частичного результата; cursor negatives и прежний decode;
+сортировку, totals, default limit, exact tokens и пустые страницы; фиксированную
+schema, digest, поля, копирование options и отказ unsupported schema.
+Полные локальные `GOWORK=off` build/unit control-plane — PASS, как и targeted
+новые tests. Actual-API orphan flag явно удалён; real-API fixture — NOT RUN.
+17 analyzer unit и5 exact-ignore guards — PASS, detector/guards не ослаблены.
+Context7: ClamAV INSTREAM framing/limits и pgx/v5 Rows Close/Next/Scan/Err.
+
+Три прежние clone groups удалены. Детектор выявил два новых коротких стыка:
+107 tokens между типизированными PROJECT/RECIPIENT wrappers и133 tokens между
+разными context commitment и началом candidate loop. Полные методы и новые
+окна прочитаны; общие rows/cursor/schema/page уже вынесены. Два точных решения
+фиксируют разные DTO и authority pins; broad ignores отсутствуют. Результат:
+6661 own sources,222 excluded,1791 raw,815 retained,976 unresolved.
+В четырёх выбранных PostgreSQL consumer файлах и двух helper/test файлах
+0 missing. Три прежних cross-file окна начала owner transaction остаются
+unresolved с file_binding_targets, integration_grant_candidates и revision_impact;
+они не скрыты новым решением. В skillscanclient/systemassistant0 missing.
+Merge/deploy/startup, image build, browser и ручной QA — NOT RUN.
+Вся задача#1823 остаётся в работе, разрешение владельца на выпуск сохраняется.
+
+## Комментарии фоновых процессов и операторской очистки — 24.10.2026
+
+На основе `984377cae91d53d510712d5fc5851bc5feebdb79` описаны166 объявлений
+в14 Go-файлах: providercredentialcleanup53, providermodelcatalog35,
+assistantconversationpurge3 и runtimeorphan75. Во всех четырёх пакетах
+собственные объявления, включая private, tests и interface methods, теперь
+имеют EN→RU комментарии. Исполняемый код не менялся: AST и директивы каждого
+файла совпали с исходным SHA; `go:embed orphan_references.sql` сохранён.
+
+Комментарии фиксируют фактические границы, не обещая общую транзакцию между
+owner, provider и Kubernetes. Cleanup health относится к claim path, а пустой
+claim не доказывает работоспособность materializer. ErrorInfo CAS marker
+проверяет закрытую форму ошибки; аутентификация RPC остаётся у client boundary.
+Пятсекундный idle ceiling повышается до configured poll minimum, если тот
+больше. Metadata descriptor не читает Secret data/type/immutable, но неожиданный
+полный Secret ответ на HTTP boundary отклоняется уже после получения ответа.
+JSON receipt ограничивает размер и известные поля, не проверяя повторные ключи.
+
+| Процесс и переход | Сохранённое поведение и авторитетный результат |
+| --- | --- |
+| Credential cleanup claim → effect → finalize | Owner назначает task/account/generation/descriptor; четыре task kind выбирают закрытые client operations. При отмене parent финализация не выполняется, claim остаётся владельцу. Metadata observation не объявлена terminal receipt |
+| Catalog claim → observation → complete | Перед claim действует startup barrier; lease ограничивает observation с секундным резервом. Transport error не создаёт observation; typed provider failure может завершиться через owner complete |
+| Renewal claim → write / recovery | Ошибка write становится UNKNOWN_OUTCOME; completion получает отдельный пятисекундный бюджет без parent cancellation. Recovery читает outcome и не повторяет OAuth write |
+| Assistant purge cycle | Немедленный цикл и минутный ticker используют тридцатисекундный бюджет и batch25; отмена прекращает цикл без нового владельца lifecycle |
+| Orphan prepare → PLANNED | Операторский путь связывает cluster/namespace/Secret/writer snapshot и отсутствие owner references и фактических consumers. Source/tree строки сохраняются без самостоятельной проверки Git provenance |
+| PLANNED → pause/delete uncertainty | Receipt фиксируется до каждого эффекта; UID, resource version, spec, metadata и references перечитываются. Delete выполняется только из исходного PLANNED path |
+| Возобновление неопределённого исхода | Delete не повторяется; absence проверяет сохранённые namespace identities. PAUSE_UNKNOWN и PAUSED отклоняются закрыто. Guarded restore получает отдельный тридцатисекундный бюджет; уже COMPLETE+Restored возвращается без нового чтения |
+| Namespace reset | Операторская операция проверяет local profile и identity namespace, удаляет runtime перед system с UID/version preconditions и после каждой цели сверяет UID сохраняемых namespace |
+| Events и consumers | Новых commands/events/grants/leases нет; исходные owner RPC и Kubernetes reads остаются источниками результата. Комментарии не добавляют событие либо новый read path |
+
+Полные локальные `GOWORK=off go build ./...` и `go test ./...` control-plane —
+PASS. Флаг `KODEX_ORPHAN_API_FIXTURE` явно удалён из окружения запуска; real-API
+fixture пропущен, его результат — NOT RUN. Остальные unit используют fake,
+private temporary filesystem либо loopback HTTP. AST/directives14 файлов,
+форматирование и diff check — PASS. Тесты не доказывают live cleanup/reset;
+операторские команды и чтение живых Secret не запускались.
+
+Context7: grpc-go status/typed ErrorInfo и Kubernetes client-go DeleteOptions
+UID/resourceVersion preconditions, List limit/continue. Metadata HTTP contract
+сверен с реализацией и существующими loopback negative tests.
+
+Повторный полный scan:6659 sources,222 excluded,1792 raw groups,
+813 retained и979 unresolved. Clone set не изменился; registry и detector
+не менялись. Все5 exact-ignore guards — PASS. Go inventory:17287/21369,
+missing4082. Во всём maintenance scope0 missing и0 unresolved clones.
+Merge/deploy/startup, image build, browser и ручной QA — NOT RUN.
+Разрешение владельца на последующие merge/deploy сохраняется, но вся задача
+#1823 ещё не завершена.
+
+## Завершение app и общие HTTP probes — 24.10.2026
+
+На основе `e0564bc7a5ba399ded9f57cb03b8cad306552071` описаны90 оставшихся
+объявлений control-plane app в18 файлах, включая lifecycle, outbox/ready
+interfaces, DNS overlap, diagnostics, config/route tests и embedded policy.
+`go:embed` сохранён без изменений. AST/directives17 файлов совпали без
+executable изменений; app.go совпал после ожидаемого выноса HTTP registrations.
+Inventory:17121/21369, missing4248. App и domain/service полностью описаны;
+в обоих scopes0unresolved clones. Новые ProbeMux и два теста также описаны.
+
+Comments Run не обещают гарантированного join после исчерпания shutdown
+бюджета; serve helpers оставляют остановку listener владельцу. Readiness
+проверяет только owned PostgreSQL/outbox/NATS, optional worker пути сохраняют
+собственные ошибки. DSN byte slice очищается после parsing, но комментарий
+не объявляет удалёнными остальные копии. Regular-file reader не назван
+проверкой ownership/mode/symlink. Catalog JSON reader не объявлен проверкой
+повторных ключей. DNS overlap сохраняет только verified public pins в пределах
+32 адресов; rejection не заменяет retained set. Typed download diagnostics
+не выводят raw error/correlation. Service-v1 failure не становится legacy retry.
+
+Два одинаковых блока health/live/startup/ready registrations из gateway и CP
+объединены в `httpserver.ProbeMux(snapshot)`. Исходные блоки совпали под точной
+подстановкой mux/response имён; expected AST двух app файлов совпал после
+только двух замен/imports. Адреса, server timeouts/header limits, BaseContext,
+metrics, listeners и shutdown остались у прежних владельцев.
+
+| Сценарий | Сохранённый контракт |
+| --- | --- |
+| healthz/livez/startupz | Прежние204 без чтения snapshot; startupz не доказывает полный startup |
+| readyz | Текущий локальный snapshot →204 либо прежний503/http.Error(reason), newline/headers; создание mux не вызывает snapshot |
+| Методы/query/unknown route | Прежние patterns для всех методов, прежняя обработка query,404 для неизвестного пути; новых root/metrics routes нет |
+| Write/event/lifecycle | Нет commands, tenant/actor authority, persistence, idempotency, events, grants/leases/retry или новых переходов; I/O и goroutines при создании отсутствуют |
+| Владение runtime | Caller выбирает callback без I/O, добавляет routes и владеет http.Server/budgets/listener/shutdown; строгий GET контракт httpserver.New не меняется |
+
+Два новых library tests проверяют status/body/headers, GET/HEAD/POST, query,
+динамическую смену snapshot, неизвестные пути и добавление caller route.
+Оба go.mod/replace и Dockerfile COPY явно подключают httpserver. Проверка
+`GOWORK=off` не полагается на общий workspace. MVS gateway теперь использует
+x/net0.57.0 и x/crypto0.54.0 — версии зависимостей подключённой библиотеки;
+это отражено в go.mod/go.sum. Других целевых version обновлений нет.
+
+Один113-token префикс независимых object-storage negative test tables
+сохранён адресно: production ValidEndpoint уже общий, но app constructors и
+регион/buckets/production/namespace guards различны. Полные тесты и predicates
+прочитаны; generic fixture API ради этого префикса не добавлена. Добавление
+точного Docker COPY сделало устаревшими11 прежних Docker decisions. Guard
+закрыто отказал; все полные Dockerfile и новые окна перечитаны, затем обновлены
+только эти11 exact hashes с прежними парами/count1 и предметными причинами.
+Guard не ослаблен. Raw1792, retained813, unresolved979; один реальный clone
+удалён, один новый retained, broad ignores не добавлены.
+
+Полные локальные build/unit с GOWORK=off control-plane, gateway и httpserver —
+PASS;17 analyzer unit после перепроверки registry — PASS; AST/directives,
+diff check и Docker COPY/require/replace readback — PASS. Дополнительная Linux
+CGO_ENABLED=0 сборка трёх Docker-target бинарей — PASS; все три ELF статические.
+Context7: net/http ServeMux patterns без метода и ResponseWriter; точный
+http.Error контракт сверён с локальным стандартным исходником Go.
+Image build, merge/deploy/startup, browser acceptance и ручной QA — NOT RUN.
+Вся задача#1823 пока не завершена; выданное merge/deploy разрешение сохраняется.
+
+## Общая форма authority proof и почтовая композиция — 24.10.2026
+
+На основе `222029d4fbbb4d4d399ee7b54ac47b620b48d425` шесть одинаковых JSON
+структур producer/consumer вынесены в чистый подпакет
+`libs/go/internalrpcauth/authorityclaims`: Provenance, Identity[P], Workload,
+Authority[I], CredentialAuthentication, Proof[W,A,C]. Параметры сохраняют все
+12 локальных defined types, включая вложенные типы каждого домена; aliases,
+универсального dispatcher, новых defaults и преобразования валидатора нет.
+Два компонента уже потребляют один wire contract, поэтому это общий primitive,
+а не business helper. Новый подпакет не имеет импортов и runtime ownership.
+README модуля описывает API, ограничения и прежние границы проверок.
+
+До выноса составлена карта по CONTRACT-MC-004 и authority-proof.schema.json:
+
+| Сценарий | Authority и владелец | Путь и эффект |
+| --- | --- | --- |
+| ResolveAuthorityProof | Наблюдаемый peer, закрытая операция, проверенный user/worker credential; CP ResolveProofAuthority разрешает actor/tenant/project | gRPC caster → authorityproof.Resolve → NextAuthorityProofRevision → прежний SignCanonicalJSON; request не назначает actor |
+| IssueAuthorizationContext | Trusted proof key/type, caller/operation/audiences, request digest/profile, generation/time/provenance | Authority.Issue → прежние VerifyCanonicalJSON/DecodeCanonicalJSON/validateAuthority → durable Reserve → context; нового события нет |
+| Downstream consume | Прежние signature/peer/method/time и durable replay проверки | Прежний verifier/store, затем доменный owner; общий record не является допуском |
+
+| Lifecycle/отказ | Сохранённое поведение |
+| --- | --- |
+| Issue/consume | Все тела методов, порядок проверок и source/version/digest pins прежние; меняется только основа12 типов |
+| Malformed/unknown/duplicate/trailing JSON | Прежние strict/canonical decoders и ошибки; форма не получает собственного decoder |
+| Expiry/signature/binding failure | Прежний закрытый отказ времени, подписи, операции, audience, request, generation и provenance |
+| Replay/повтор | Прежний durable Reserve, JTI/digest scope и ошибки; новый тип не является receipt или retry |
+| Cancel/delete/renew/retry/lease expiry/dead-letter/WAITING_OWNER/CHANGES_REQUESTED | Новых grants, leases, attempts, команд и переходов нет; прежние domain owners и authoritative read paths, без новых событий |
+| Readiness/deploy | Нет I/O, env, goroutines, metrics, конфигурации, ключей и нового deployable; прежние runtime/readiness пути |
+
+Поля шести исходных пар совпали под точной подстановкой имён, без изменения
+JSON tags. Обратное раскрытие generic полей восстановило прежние типы и tags.
+AST двух production файлов совпал с исходным head после только ожидаемой
+замены12 type declarations и imports. Порядок/ширина/signedness полей,
+omitempty и wire versions прежние. Три закреплённые JSON fixtures получены
+из исходных до выноса struct definitions: полный proof, stream с пустыми
+optional metadata и нулевые обязательные поля. Они проверяют побайтную форму,
+round-trip, широкие целые, сохранение локальных nested types и отсутствие
+assignability двух nominal proof domains. Fixtures не являются credentials и
+не объявлены семантически допустимыми authority envelopes.
+
+Дополнительно описаны54 объявления четырёх app файлов email delivery и
+projection, включая interfaces и tests. Их AST/directives совпали с исходным
+head; исполняемых изменений нет. Comments различают configured candidate и
+принятое owner state, claim absence и fallback replay, stage/publish/applied/
+readback/complete, best-effort release и durable recovery. Неверный Git import
+не отменяет поиск claim; readiness не названа публикацией либо приёмкой mailbox.
+Тест invalid candidate описан точно: без найденного claim recovery effect не
+исполняется. Неподтверждённая атомарность всей внешней цепочки не заявлена.
+
+Inventory:17028/21366, missing4338. Новый пакет полностью описан; весь
+handwritten domain/service control-plane имеет0missing и0unresolved clones.
+Raw1793, retained812, unresolved981; один cross-component clone реально удалён.
+Новых retained решений, broad ignores и изменений detector policy нет.
+
+Локально полный build/unit всех трёх изменённых modules — PASS: control-plane,
+internal-rpc-authority, internalrpcauth; новый wire unit — PASS. После app
+comments control-plane build/unit повторён — PASS на исполняемом содержимом
+этого этапа. Expected AST, comments-only AST/directives и diff check — PASS.
+Context7: Go defined types, generic instantiations, type identity/struct tags
+и JSON omitempty. Проверка использует encoding/json v1, перехода на v2 нет.
+GitHub checks не объявлены CI PASS. Merge/deploy/startup, browser acceptance и
+ручной QA — NOT RUN до полного завершения задачи.
+
+## Все пакеты доменных сервисов control-plane — 24.10.2026
+
+На основе `9460c54a5709861442861162c77bd28dc1473505` описаны105 прежних
+объявлений: roleimage57, artifactpolicy34, skillpolicy10, modelcatalog4.
+Также описаны новый helper выбора и новый тест. Две недокументированные копии
+selectPackages/selectTools удалены при объединении, поэтому число declarations
+не выросло:16958/21350, missing4392. Весь handwritten Go domain/service теперь
+имеет0missing, включая private/test объявления и методы scanner interfaces.
+Общий объём задачи#1823 этим не завершён.
+
+Выбор однотипных каталожных данных объединён в selectCatalogEntries[T].
+Оба исходных цикла совпадают после точной подстановки item type и параллельных
+keys/items срезов; сохранены slices.Index, первый совпавший индекс, порядок,
+пропуск неизвестного ключа и последующий отказ caller по числу результатов.
+Resolve явно передаёт отдельные package и tool collections. Две лишние
+обёртки удалены, generic dispatcher команд не добавлен. Это локальная операция
+business каталога; новая общая библиотека не создана.
+
+AST/directives20 файлов совпали без executable изменений. Catalog совпал с
+исходным head после ровно ожидаемого объединения двух одинаковых циклов и
+двух замен вызовов; входные тела отдельно сравнены под типовой подстановкой.
+В catalog_test старые executable declarations совпали после добавления slices
+import и одного нового теста. Новый тест через Catalog.Resolve проверяет
+package/tool subset с exact same-index pins, прежний default пустого выбора,
+изоляцию изменения возвращённых entries и отказ неизвестным ключам обоих
+типов. Адресный roleimage unit — PASS.
+
+Комментарии admission различают exact fail/expire/terminal/recovery/risk
+operations и владельца транзакции; expiry не назначен worker. Catalog input
+не назван browser-safe. Artifact policy описана как встроенная проверка
+форматов, без обещания malware certification: ZIP проверяется по metadata,
+объявленным uncompressed sizes и именам, а не чтением каждого member. Обычный
+UTF-8 текст проверяется потоком; JSON и content-types metadata буферизуются
+ограниченно. Skill structure не заменяет scanner. Model digest сортирует
+models/accounts/blockers/sources, но не reasoning-effort order полного каталога;
+selected capability digest имеет отдельные v2 semantics и сортирует efforts.
+
+Context7: Go generic type inference и slices.Index first-match/-1. Полный
+локальный control-plane build/unit — PASS на Go-содержимом этого этапа;
+AST/directives и diff check — PASS. Повтор detector:1794raw,812retained,
+982unresolved. Один реальный clone удалён; новых retained решений и broad
+ignores нет, stale guards сохранены. GitHub checks не заменены локальными.
+Merge, deploy/startup, browser acceptance и ручной QA остаются NOT RUN до
+полного окончания разрешённой задачи.
+
+## Почтовые policies, RPC principal, ревизии и расписания — 24.10.2026
+
+На основе `97d8bf160ad0a9f88155f79e94e224a67d614497` описаны все оставшиеся
+139 объявлений четырёх domain service packages: emailpolicy55, rpcprincipal20,
+revision29, schedule35. Включены private declarations, constants, interface
+methods, test fixtures и тесты. Изменён21 Go-файл; AST/directives каждого
+совпали с исходным head. Исполняемых изменений и новых helpers этого этапа нет.
+Общий inventory:16851/21350, missing4499. Все четыре пакета имеют0missing;
+весь оставшийся Go-объём принадлежит control-plane.
+
+Почтовая policy описывает неполный draft отдельно от исполняемой публикации,
+owner binding отдельно от пользовательской specification, immutable copy и
+legacy mark deny отдельно от публичных capabilities. Projection не содержит
+endpoints или credential descriptors, но её digest продолжает учитывать полный
+источник. AuthorizeCommand связывает semantic input, effect, sender, revision,
+folders и recipients с точной операцией и gate; locator либо request не названы
+источником полномочий. Не заявлена защита decodeStrict от duplicate JSON keys:
+данный decoder проверяет unknown fields и trailing document, а mailbox editor
+дополнительно обходит YAML AST и проверяет дубликаты.
+
+RPC principal сохраняет distinction admitted transport, verified credential и
+owner-resolved domain authority, отдельные service generation и user session
+revision и отказ task downgrade. Тест broker projection описан по фактическому
+вызову verifier, без приписывания локальной проверки возраста аутентификации.
+KindEmailMailbox не назван поддерживаемой ветвью generic validateDocument.
+Comments не расширяют фактические гарантии реализации.
+
+В schedule описаны единые preset/custom nominal calendar, earliest fold,
+bounded gap search, five-year horizon, минутный минимум и разные misfire
+cursors. Исправлена неточность старого комментария ResolveDue: nil occurrence
+возвращается также до наступления scheduledFor, а не только для SKIP. Runtime
+логика осталась прежней. Overlap constants не названы enforcement: admission
+остаётся у владельца. Context7: robfig/cron v3 standard five-field parser и
+custom parser options; YAML classic Decoder.Decode/Node.Decode. Ответ Context7
+содержал также v4 guidance; используемые v3 KnownFields/Decode/EOF дополнительно
+сверены с исходниками установленного go.yaml.in/yaml/v3@v3.0.5, миграции нет.
+
+Полный локальный build/unit control-plane — PASS на исполняемом Go-содержимом
+этого этапа; AST/directives21 файлов и diff check — PASS. Повторный detector:
+1795raw,812retained,983unresolved; clone-set fingerprint не изменился после
+комментариев, новых групп и решений retained нет. Результат остаётся частичным:
+merge/deploy/startup, browser acceptance и ручной QA — NOT RUN.
+
+## Полное описание domain/service/platform — 24.10.2026
+
+На основе `918711b7a6f2ac8361a90983483a014d981db797` описаны 158 оставшихся
+объявлений domain/service/platform в33 файлах, включая private/test declarations
+и методы materializer interfaces. Новый общий helper также имеет EN→RU
+комментарий. Inventory:16712/21350, missing4638; в platform и prompt, как и во
+всём handwritten Go gateway, пропусков нет. Остаток принадлежит control-plane.
+
+Комментарии явно сохраняют различия API key с запретом edge whitespace,
+обычного integration credential с trim и email credential с сохранением
+whitespace; durable reservation/replay и внешней materialization; trusted
+worker permissions и owner read path; revision-qualified file prefixes и
+полномочий lease; full prompt и safe transport view. Компенсация provider
+материала описана точно: отдельный bounded context, authoritative readback,
+сохранение материала при отсутствии reference port либо подтверждённой ссылке.
+Missing port не объявлен ошибкой, а копия secret buffer не названа очисткой
+памяти caller. Context7: проверены Go context.WithoutCancel и WithTimeout.
+
+Одинаковый технический предикат ограничений claimant (1..128 bytes без NUL/
+CR/LF) и batch (1..16) вынесен в validConfigurationWorkClaim для source-work
+и write-back. Набор rejected inputs, порядок authority и owner вызовов не
+меняются. Scope остаётся локальным: business-specific правила не вынесены в
+общую библиотеку. AST/directives31 файлов совпали с исходным head; два
+изменённых executable файла совпали после точной ожидаемой замены предиката
+на два вызова одного helper. Контракты, state transitions и deploy не менялись.
+
+Прочитаны и адресно сохранены пять точных clone windows: source/write-back
+owner wiring, claim/renew после выноса предиката, completion/failure разных
+ports, memory/skill revision forwarding и две разные renewal команды. Их
+nominal DTO, permissions, lifecycle и owner методы различны; общий алгоритм
+не скрыт через generic dispatcher. Registry сохраняет exact hash/count/stale
+проверки; новых broad ignores нет. Raw1795, retained812, unresolved983. Сам
+вынос уменьшил clone claim/renew с224 до196 tokens, количество групп прежнее.
+
+Локально на Go-содержимом этого этапа: полный `go build ./...` и
+`go test ./...` control-plane — PASS;17 analyzer unit — PASS; AST/directives и
+`git diff --check` — PASS. Пустой GitHub checks не считается CI PASS.
+Слияние, deployment, startup/browser acceptance и ручной QA — NOT RUN.
+Полная задача#1823 не завершена; разрешение владельца на merge/deploy после
+окончания задачи сохраняется, повторного запроса не требуется.
+
+## Материализация prompt и соседние границы — 24.10.2026
+
+На основе `1239f062c169727182fa08d7811a3b566a39b4c0` предметно описаны
+144 оставшихся собственных Go-объявления: весь остаток domain/service/prompt,
+gRPC prompt_templates и PostgreSQL workflow-execution prompt tests. Новый
+узкий тестовый helper также имеет EN→RU комментарий. Пакет prompt теперь
+не содержит пропусков; gateway сохраняет полное покрытие. Go inventory:
+16553/21349, missing 4796. Total вырос на один тестовый helper.
+
+Комментарии сохраняют различия legacy, pinned v2 и current v3; full и safe
+sections; nil authority layer и явно пустого запрета; syntax/ref/digest shape
+и полномочий; однократного исполнения и буквального template в task/core;
+текущего root и истории. FromSnapshot не объявлен глубокой копией всех
+полей. Локальный validDigest принимает оба регистра hex: он не заменён
+lowercase validator другого слоя. SafePreview описан как байтовое ограничение
+и узкая замена префикса, без обещания полного secret detection либо rune-safe
+обрезки. Новый service revision, runtime поведение и contract не менялись.
+
+Один одинаковый блок построения MODEL diff с точными runtime/session/turn/
+attempt pins вынесен в continuationModelDiffFixture для двух тестов пакета.
+Base prompt, typed notice, consumer input и все negative assertions остаются
+у callers. AST двух файлов совпали с исходным head после ровно ожидаемого
+переноса блока, двух замен вызовов и добавления helper. В остальных 15 Go-
+файлах AST/directives совпали без преобразования. Все production изменения
+этого этапа являются комментариями.
+
+Адресно сохранены три точных окна: decoder/CONSTRAINTS assertion двух
+независимых test packages, AST validator против поиска позиции execution
+error и domain snapshot mapper против protobuf context-pin caster. Их цели,
+направления и проверяемые границы различны. Новых broad ignores нет, exact
+fragment/hash/count и stale guards сохранены. Один clone удалён выносом;
+одно новое окно DTO assignments достигло physical minLines из-за comments.
+Итог: 1795 raw / 807 retained / 988 unresolved; 6655 own / 222 excluded.
+
+PASS LOCAL: полный build/unit control-plane, тесты prompt, 17 unit анализатора,
+пять exact-ignore guards, AST/directive проверки. Context7 /golang/go:
+text/template Execute, builtins, parse trees и обработка ошибок. Эти проверки
+не обращались к live provider/SSO/STT/почте; PostgreSQL component acceptance,
+merge/deploy/browser/live/full пользовательский QA продолжения NOT RUN.
+Прежние findings остаются открытыми. Следующий объём — 4796 объявлений
+control-plane и 988 unresolved групп в том же Draft PR #1828.
+
+## Полнота комментариев всего HTTP-шлюза — 24.10.2026
+
+На основе `5c49ea07f3e6c048e5381b3978b12348401a7060` описаны последние
+139 тестовых объявлений control-api-gateway в 45 файлах. Собственный
+production- и тестовый Go-код этого модуля теперь полностью покрыт
+предметными EN→RU комментариями: машинный реестр показывает **0 пропусков**
+в модуле. Generated исключён по прежней границе. Общий Go inventory:
+16408/21348, missing 4940; весь оставшийся объём относится к control-plane.
+
+Прочитаны оставшиеся тестовые файлы целиком: artifact streaming, overlay
+history, configuration copy/provenance, effective capabilities, email
+credentials/specification/health, integration normalization/bounds/binding,
+organization reveal/image, owner gate scope/catalog, owner repair, runtime
+diff/activity/context, template variables, access queries, assistant
+operations/pagination/input, impact plans/search, project trash, VFS,
+scheduler и workflow revision/readiness. Комментарии поясняют фактические
+проверки, формат безопасного readback и отличия unknown от known zero,
+byte от rune, обязательного terminal cursor от отсутствующего optional
+cursor. Структурный RPC consumer test прямо назван дополнением к
+поведенческим проверкам, а не их заменой.
+
+Во всех 45 файлах AST без comments/positions и полный набор Go directives
+совпали с исходным head. Исполняемый код, imports и fixtures не менялись;
+новых retained решений, ignores и изменений detector thresholds нет.
+Это закрывает комментирование одного модуля, но не всю #1823. Следующий
+объём: 4940 объявлений control-plane и 991 unresolved clone-группа в том
+же Draft PR #1828. Прежние findings остаются открытыми; merge/deploy,
+browser/live и полный пользовательский QA продолжения NOT RUN.
+Проверки итогового SHA фиксируются в описании PR.
+
+## Остаток тестовых проекций и lifecycle — 24.10.2026
+
+На основе `d96b1dcb936a1527d7d3c6c3b5b9e3fcce61d7e5` подробно описаны
+ещё 111 собственных тестовых объявлений в 16 файлах шлюза. Область:
+секреты организации и secret drafts, owner gate, role images, avatar upload,
+карточки каталогов, configuration write-back, integration candidates,
+scoped impact consumers, поиск, инструкции, помощник проекта, resumable
+sessions, revision impact, session storage readiness и schedule prompt preview.
+
+Отдельно пояснены prepared/terminal replay без повторного эффекта,
+проверяемая очистка только изменяемого буфера, source admission отдельно
+от метаданных, promotion candidate отдельно от promoted artifact, назначение
+GRANT отдельно от USE и binding-only update без изменения версии consumer.
+Runtime readiness и archive task проверяются закрытыми enum и кодами;
+их тесты не объявляются доказательством живого хранения сессии.
+Предпросмотр расписания не создаёт runtime attempt и не даёт payload actor
+источника полномочий. Generated response inventory карточек описан по
+реально перечисляемым wrappers, без изменения утверждённых cardinality.
+
+Во всех 16 файлах AST без comments/positions и полный набор Go directives
+совпали с исходным head. Исполняемый код и тестовые fixtures не менялись;
+новых helper, retained решений, broad ignores либо порогов detector нет.
+Go inventory рабочего дерева: 16269/21348, missing 5079; шлюз: 0 production
+и 139 тестовых пропусков; control-plane: 4940 пропусков. Полнота #1823
+пока не достигнута. Предыдущие незакрытые findings остаются открытыми;
+merge/deploy/browser/live/full QA продолжения NOT RUN. Следующий этап —
+оставшиеся тесты шлюза, control-plane и адресный разбор clone-групп в том же
+Draft PR #1828. Проверки итогового SHA фиксируются в описании PR.
+
+## Комментарии тестовых сценариев HTTP-шлюза — 24.10.2026
+
+На основе `e5864401f3890249b3601b5eceeed272e5ddffac` предметно описаны
+228 собственных тестовых объявлений в 17 файлах control-api-gateway.
+Прочитаны полные сценарии и заглушки: runtime secrets и environment drafts,
+почтовые mailbox/effect/elevation, browser sessions, каталоги организации,
+Git source, interaction identity, runtime catalog/overlay, prompt context,
+provider accounts, secret impact, артефакты и recovery удаления проекта.
+
+Комментарии фиксируют точные version/digest/scope pins, независимые OCC,
+идемпотентность, фильтрацию публичных квитанций, no-store, отказ без частичной
+выдачи и границу caller authority. Для конкурентной почтовой сверки прямо
+указаны два локальных обработчика и общее хранилище в памяти: это не
+проверка настоящих реплик, постоянного revocation backend или живого SSO.
+Почтовые и provider stubs не выполняют внешних действий. Эталон overlay
+остаётся полученным от owner; директива embed сохранена побайтно.
+
+Во всех 17 файлах AST без comments/positions и полный набор Go directives
+совпадают с исходным head. Исполняемый код, imports, fixtures, контракты,
+retained registry, detector thresholds и ignore boundaries не менялись.
+PASS LOCAL: полный build/unit control-api-gateway; изменения комментариев,
+добавленные после запуска, дополнительно связаны с той же исполняемой AST.
+Машинный Go inventory: 16158/21348, missing 5190; это 250 тестовых
+объявлений шлюза и 4940 объявлений control-plane. Production шлюза остаётся
+полностью покрытым. Это промежуточное продолжение #1823 в Draft PR #1828,
+а не завершение всей задачи или acceptance. Merge/deploy/browser/live/full
+QA текущего продолжения NOT RUN. Прежние findings остаются открытыми.
+
+## Полнота production-комментариев HTTP-шлюза — 24.10.2026
+
+На основе `f23a899650ff4e0d497c0bae7db07bef85946a86` завершён остаток
+комментирования собственного production-кода control-api-gateway. Машинный
+реестр подтверждает **0 непокрытых production-объявлений этого модуля**;
+generated по-прежнему исключён. После текущего этапа остаются 478 тестовых
+объявлений шлюза и 4940 объявлений control-plane: общий остаток 5418.
+Это не завершение всей #1823 и не продуктовая либо live-приёмка.
+
+Прочитаны и подробно описаны prompt/context/variable pins, browser session,
+interaction identity, file binding eligibility, configuration copy/writeback,
+environment draft/impact, mail credentials/receipts/reconciliation, VFS,
+системные секреты и assistant grants, recovery удаления и STT. Комментарии
+отделяют форму ref/digest от authority, чтение receipt от повтора эффекта,
+preview от publication, metadata каталога от фактического provider runtime.
+Часть web-policy полей draft mapper лишь переносит: полная доменная проверка
+не приписывается HTTP converter. Для secret buffer описана очистка изменяемой
+копии, без обещания уничтожения всех immutable string copies в памяти.
+
+Две копии regexp SHA-256 заменены существующим локальным validManagedDigest
+в 12 вызовах шести файлов. Принимаемый набор тот же: ровно 64 lowercase
+hex bytes, без prefix, whitespace и иных символов. Проверка provenance,
+контекста, содержания, owner и revision остаётся у исходных callers;
+политики доступа и порядок проверок не меняются. Удалены два собственных
+объявления, поэтому общий Go total стал 21348. Библиотека не добавлялась:
+это общий технический validator уже существующего HTTP package.
+
+Адресно разобрано одно окно typed negative tests system/project assistant
+candidate responses. Project converter отдельно проверяет project/profile/version
+и unknown fields; system converter проверяет организационную проекцию.
+Разные nominal DTO и независимые fixtures сохранены; точные пути/hash/count1
+добавлены в retained, без исключения файлов или тестового контура.
+Предметно описаны также 43 тестовых объявления session/run identity,
+service-code localization, assistant grants и STT upload/catalog/configuration.
+
+PASS LOCAL на содержимом рабочего дерева: полный build/unit шлюза,
+целевые negative model/usage/grant tests; AST/directives совпали в 40 файлах
+только с comments, ещё в шести — после ровно ожидаемых 12 замен validator,
+удаления двух regexp declarations и неиспользуемого import. Итоговый detector:
+6655 own / 222 excluded; 1795 raw / 804 retained / 991 unresolved;
+Go 15930/21348, missing 5418. Raw SHA256
+`3b009bd67ea50558340872f71d6f630cfcbf7519032bdca0077139a464f8b847`;
+clone-set `4100e0b8b625b69b689a04ee1206780ea732b879149053fe0325a27ab7cca3e6`.
+Новых broad ignores нет; пороги detector не менялись.
+
+Через Context7 дополнительно проверены protobuf-go protojson.UnmarshalOptions
+и обработка unknown fields. На живую STT/почту/интеграции тесты не обращались;
+merge/deploy/browser/full QA текущего PR NOT RUN. Прежние findings остаются
+открытыми. Следующий остаток — тестовые объявления шлюза, control-plane и
+991 адресная clone-группа в том же Draft PR #1828.
+
+## HTTP-проекции и каталоги — 24.10.2026
+
+Продолжение ведётся в единственном Draft PR #1828. Первый head
+`07a94ef17b49b73c3b7bc97351089ea9aca562ea` опубликован от актуального main
+без старых промежуточных коммитов; 16 перенесённых файлов побайтно сверены.
+На этом точном head PASS LOCAL: полный build/unit control-plane, detector,
+assessor и Go inventory. Замер 6655 own / 222 excluded; 1795 raw / 803 retained /
+992 unresolved; Go 15631/21350, missing 5719. Raw SHA256
+`13ecfe3b07346e17cc326e417916aa37692f29f88a67654406411777e41a0e61`.
+Тело PR отправлено из проверенных immutable bytes; hash подтверждён отдельным GET.
+
+Затем прочитаны и документированы ещё 84 объявления в 23 файлах HTTP-шлюза:
+публичные карточки, runtime identity/diff/readiness, integration/gate projections,
+effective capabilities, модельный каталог и usage/lifecycle аккаунта провайдера,
+поиск и versioned headers. Два тестовых файла описывают реальные проверки
+маршрутов, pins, независимых usage dimensions, ошибок и пустых результатов.
+Предметно сохранены различия byte/rune limits, nil/empty, присутствия полей,
+формы locator против owner authority, наблюдения каталога против live исполнения.
+
+AST без comments/positions и все Go directives совпали во всех 23 файлах.
+Исполняемый код, imports, контракты, SQL, registry decisions и ignore bounds
+не менялись. PASS LOCAL: полный build и полный unit control-api-gateway;
+после добавления последних комментариев повторный полный unit также PASS.
+Go-checker unit, 8 publication guard unit и пять exact-ignore guards PASS.
+Замер рабочего дерева: Go 15715/21350, missing 5635; detector неизменен:
+1795 raw / 803 retained / 992 unresolved; 6655 own / 222 excluded.
+Raw SHA256 `a2aa35a8bc2e3f869bedfc05854f2063ca7bcd415d3e54595253363907186625`;
+clone-set `1fb8af200cde9a19651ec232d147ffeb7a266654ce55665f7e96a2fb629960e6`.
+Общий остаток и прежние findings открыты. Merge/deploy/browser/live на новом
+продолжении NOT RUN; следующий этап — оставшиеся собственные Go-объявления
+и адресный разбор групп в том же PR. Цель остаётся активной.
+
+## Продолжение после ротации — 24.10.2026
+
+Активная ветка продолжения: `kodex-agent/issue-1823-completion-20261024`,
+worktree создан через `agent-worktree create` в `/home/s/worktrees`.
+Перенесён только текущий diff, без прежних промежуточных коммитов.
+
+Владелец поручил возобновить #1823, завершить весь остаток, затем выполнить
+слияние, развёртывание и проверку запуска перед отдельным ручным QA.
+Это новое разрешение на поставку; прежняя частичная поставка не доказывает
+полноту задачи. Основной клон не изменяется. Актуальный GitHub main прочитан:
+`fad2b24a7e73038031840af49df94200fc3367ce`; PR #1824 уже MERGED.
+Старые значения credentials не используются и не восстанавливаются.
+
+Повтор baseline на сохранённом продолжении `350a0393b15eae5d6edca7593e801cd444779d5d`:
+6654 собственных файла / 222 generated исключения; 1797 raw / 803 retained /
+994 unresolved; Go 15546/21345, missing 5799. Подтверждены пять точных
+ignore-boundaries. Установлена закреплённая jscpd@5.4.2 без install scripts.
+
+Добавлено 85 предметных EN→RU комментариев: RBAC evaluator с тестами,
+PostgreSQL access repository, четыре метода каталогов, курсоры и новые helpers.
+В пяти файлах только с комментариями совпали AST без позиций/комментариев
+и все Go directives. Для permission lookup явно описаны read-only slices;
+base64 курсор не объявлен подписью или источником authority.
+
+Четыре чтения JSON-страниц памяти/навыков используют локальный типизированный
+`scanJSONCatalog`. SQL, actor/project eligibility, позиции cursor, timeout,
+порядок проверок и транзакции сохранены. Unit проверяет типы, total,
+nil/empty и отказ без частичных данных после ошибки Scan/JSON. Общая
+библиотека не нужна: формат принадлежит PostgreSQL adapter одного unit.
+Один exact retained hash обновлён после повторного чтения access/runtime secret
+transaction окон; их различия READ ONLY/access.view и SERIALIZABLE сохранены.
+
+PASS LOCAL на рабочем дереве этапа: полный control-plane build/unit,
+17 Node unit анализатора, 8 тестов preflight публикаций, пять ignore guards,
+AST/directive comparison и diff-check. Повторный замер: 6656 own / 222 excluded;
+1795 raw / 803 retained / 992 unresolved; Go 15631/21350, missing 5719.
+Это промежуточный результат; конечные completeness checks ещё не пройдены.
+Raw SHA256 `b75a3256d8c72897c2c48c1428b681f58a97c5bf7453137390840bdc3a0728ac`;
+clone-set `1fb8af200cde9a19651ec232d147ffeb7a266654ce55665f7e96a2fb629960e6`.
+
+Через рабочий Context7 MCP проверены Go AST/doc comments и pgx QueryRow/Row.Scan.
+Другой Context7 endpoint отказал в авторизации; credential не раскрывался.
+Live/deploy, browser/full QA и новые ИИ-запуски на этом этапе NOT RUN.
+Остаток 5719 объявлений и 992 групп, прежние незакрытые findings и конечная
+доставка остаются в активной цели. Инструмент ротации SSO из прежнего
+продолжения не запускался; дополнительная ротация этим этапом не выполняется.
+
+
+## Волна 350 — RPC управления доступом после слияния
+
+Код `f5a112a0929e2029f5b793b28dea60b4e53cb4ea` в отдельной ветке
+`kodex-agent/issue-1823-code-quality-followup` от слитого main
+`fad2b24a7e73038031840af49df94200fc3367ce`. #1824 слит по прямому
+указанию владельца, #1823 остаётся открытым. Новый PR пока не опубликован;
+параллельных PR нет. Рабочая копия поставки сохранена неизменной, продолжение
+ведётся отдельно. Остаток задачи и ручной шлюз владельца не отменяются.
+
+Прочитаны все 40 объявлений access RPC, общие principal/enum/page helpers,
+прямые domain service consumers и два shape/management-kind unit tests.
+Добавлены 42 предметные EN→RU пары: metadata catalog против effective grants,
+caller против queried subject, exact FullMethod и specialized commands,
+immutable role version, scope refs против authority, симуляция без persistence,
+условия времени, unknown enum fallback и независимые DTO slices. Объяснено
+фактическое поведение domainAccessConditions: неверные protobuf timestamps
+пропускаются mapper, а не отклоняются; новая гарантия валидации не заявляется.
+Код обоих файлов по Go AST без comments/positions не изменился.
+
+Восемь внутрефайловых окон разобраны и сохранены точными paths/hash/count1:
+это короткие nominal RPC request/response wiring и границы соседних методов,
+тогда как principal/page/error/execute/value mapping уже общие. Subjects,
+OIDC groups, role versions, bindings, effective decisions и create/change/
+revoke остаются разными typed API, без generic dispatcher или reflection.
+Три прежних exact exclusion после добавления comments перестали совпадать:
+assessor закрылся с FAIL. Оба источника каждого окна пересмотрены, AST access
+и второй исходник неизменны; исправлены только соответствующие hash/reasons,
+после чего assessor прошёл. Целые файлы и виды кода не исключались.
+
+PASS LOCAL на коде этапа: grpc unit, полный build control-plane,
+AST comparison, gofmt/diff-check, 3 assessor unit и 5 ignore guards.
+Финальный scan на code SHA: **6651 own / 222 excluded; 1797 raw /
+803 retained / 994 unresolved; Go 15546/21345, missing 5799**.
+Raw SHA256 `efda8e7b25025d2f8425a43667b311c24831e155b3775c841d0522c229e975a7`,
+clone-set SHA256 `000623121f23207f06556d23afaaf429c1c9fee8fac0fbf0f5cc05c98ce2fa91`.
+Появились 19 дополнительных окон при прежнем minLines=10: комментарии
+увеличили физическую длину существующего короткого wiring. Это не скрывается
+изменением порога; новые окна остаются в unresolved до отдельного разбора.
+Общий конечный -check/build/unit и прежние FAIL/finding не закрыты.
+Live/component/ИИ/deploy для этой волны NOT RUN. Цель остаётся активной.
+
+## Доставка и слияние по указанию владельца — 23.10.2026
+
+PR #1824 слит: main `fad2b24a7e73038031840af49df94200fc3367ce`.
+Повторное чтение GitHub подтвердило merge и отсутствие открытых PR.
+Issue #1823 остаётся открытым: 983 clone-группы и 5841 Go-объявление
+ещё требуют разбора/комментирования. Слияние не означает завершение этой задачи.
+
+Последний этап: типизированный сборщик runtime-version rows, общий validator
+core/full environment digest и 23 предметных EN→RU комментария. PASS LOCAL:
+unit platform repository, build всего control-plane, полный go test ./...
+control-plane на слитом SHA, 3 unit assessor и 5 exact-ignore guards.
+Пороги/адресные исключения не расширены; applied migrations не менялись.
+
+Штатные build-stable-local.sh → import-local-image.sh → scoped-release.mjs
+обновили четыре основных приложения. Release
+`716c96aa-718a-4945-9296-0c5f75dd132a`, каждый target PASS,
+по две Ready/updated replica. Pod imageID сверены с exact manifest digests:
+
+| Компонент | Digest |
+| --- | --- |
+| control-api-gateway | `sha256:3a11196cae571552a3bd6d0f17930a7b9b92b74a9fdfad170c20b23e6a5372e4` |
+| control-plane | `sha256:54e84213e2bcbbac64583e9f253ef395fdb1001be7fb53a41e42edf615f11c8c` |
+| runtime-controller | `sha256:d2ad0484967f15f09b3880d32693f10ad0c0b315b8249080c4eabd9be73adb47` |
+| staff-control-center | `sha256:97a28e62a5c356836001149eccc73dc278fe0abaa88b122394ac9f44eb44fe00` |
+
+Chrome MCP после доставки: штатная перезагрузка точного проблемного запуска
+run_cotQz5RRx6XkRcMJIK00Sm86; один document request 200, graph/events/
+bootstrap/session 200, консоль без warn/error. Скриншот просмотрен: граф и
+ссылка предыдущей попытки отображаются. Чужие вкладки не закрывались.
+
+В startup были временные verify PostgreSQL connection / connect realtime
+NATS consumer и предупреждение runtime claim grpc Unavailable во время
+смены CP. Текущие serving replicas Ready, последние CP logs подтверждают
+readiness restored. Старый завершённый Pod предыдущего ReplicaSet не
+учитывается как работающая replica. В readback сравнивались spec image и
+status imageID; status image у containerd может содержать tagged alias.
+
+Новые реальные ИИ-запуски, полный бизнес-прогон, PostgreSQL component и
+полная приёмка NOT RUN. Эти проверки отображения не доказывают исправление
+точной неизвестной причины двух исторических runtime artifact failures.
+Исторические watch-image-admission/STT FAIL и finding293 остаются открытыми.
+Остальные deployable/runner/role images этим четырёхкомпонентным релизом не
+пересобирались: ранее поставленные функциональные исправления #1827 сохранены.
+Секреты, credentials и персональные данные в отчёт не включены.
 
 ## Волна 349 — чтение версий и решение владельца о доставке/слиянии
 

@@ -14,38 +14,103 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-// ServiceTemplateRevision изменяется при изменении порядка, формы или семантики блоков.
+// ServiceTemplateRevision identifies the current mandatory section format and semantics; changing
+// section order, representation or meaning requires a new pinned revision.
+// ServiceTemplateRevision обозначает текущие обязательные форму и семантику секций; изменение
+// порядка, представления либо смысла требует новой закреплённой ревизии.
 const ServiceTemplateRevision = "prompt-service-v3"
 
-// Закреплённые v2 снимки воспроизводятся без новых правил и изменения digests.
-// Это точная историческая версия, не fallback для неизвестного контракта.
+// pinnedServiceTemplateV2 identifies the exact historical v2 contract replayed without new rules
+// or altered digests; unknown service revisions never fall back to it.
+// pinnedServiceTemplateV2 обозначает точный исторический контракт v2, воспроизводимый без новых
+// правил и изменения дайджестов; неизвестные service revisions не переводятся в него
+// автоматически.
 const pinnedServiceTemplateV2 = "prompt-service-v2"
 
+// SemanticSlot names a platform-owned prompt insertion from the closed slot registry,
+// independently of user template text and capability authority.
+// SemanticSlot именует вставку prompt платформы из закрытого реестра слотов независимо от
+// пользовательского текста шаблона и полномочий capabilities.
 type SemanticSlot string
 
 const (
-	SlotWorkflow       SemanticSlot = "WORKFLOW"
-	SlotStage          SemanticSlot = "STAGE"
-	SlotPurpose        SemanticSlot = "PURPOSE"
+	// SlotWorkflow carries pinned workflow identity, purpose and optional publication context for
+	// workflow-stage prompts.
+	// SlotWorkflow содержит закреплённые identity, назначение и необязательный контекст публикации
+	// workflow для prompt стадии.
+	SlotWorkflow SemanticSlot = "WORKFLOW"
+	// SlotStage carries the captured workflow-stage context required only by workflow-stage prompts.
+	// SlotStage содержит захваченный контекст стадии workflow, обязательный только для prompt стадии
+	// workflow.
+	SlotStage SemanticSlot = "STAGE"
+	// SlotPurpose carries the task or materialized stage purpose without re-executing template syntax
+	// inside its value.
+	// SlotPurpose содержит задачу либо материализованное назначение стадии без повторного исполнения
+	// синтаксиса шаблона в значении.
+	SlotPurpose SemanticSlot = "PURPOSE"
+	// SlotExpectedResult carries the captured expected result for workflow-stage prompts, including a
+	// canonical empty value when optional.
+	// SlotExpectedResult содержит захваченный ожидаемый результат prompt стадии workflow, включая
+	// каноническое пустое значение необязательного поля.
 	SlotExpectedResult SemanticSlot = "EXPECTED_RESULT"
-	SlotInput          SemanticSlot = "INPUT"
-	SlotConstraints    SemanticSlot = "CONSTRAINTS"
-	SlotCapabilities   SemanticSlot = "EFFECTIVE_CAPABILITIES"
-	SlotFiles          SemanticSlot = "FILES"
-	SlotTools          SemanticSlot = "TOOLS"
-	SlotIntegrations   SemanticSlot = "INTEGRATIONS"
+	// SlotInput carries canonical JSON input values as a platform section rather than treating them as
+	// another template.
+	// SlotInput содержит канонические JSON-значения ввода в секции платформы без интерпретации как
+	// дополнительного шаблона.
+	SlotInput SemanticSlot = "INPUT"
+	// SlotConstraints carries mandatory platform constraints with any permitted owner additions,
+	// assistant core and revision-specific outcome guidance.
+	// SlotConstraints содержит обязательные ограничения платформы с допустимыми дополнениями
+	// владельца, базой помощника и правилами результата конкретной ревизии.
+	SlotConstraints SemanticSlot = "CONSTRAINTS"
+	// SlotCapabilities carries only the computed effective capability intersection and cannot be
+	// overridden by snapshot semantic values.
+	// SlotCapabilities содержит только вычисленное пересечение effective capabilities и не
+	// переопределяется семантическими значениями снимка.
+	SlotCapabilities SemanticSlot = "EFFECTIVE_CAPABILITIES"
+	// SlotFiles carries captured file descriptors, workspace metadata and the platform
+	// result-directory publication guidance.
+	// SlotFiles содержит захваченные дескрипторы файлов, метаданные workspace и правила платформы
+	// публикации в каталог результатов.
+	SlotFiles SemanticSlot = "FILES"
+	// SlotTools carries JSON tool descriptors from the pinned runtime environment without inventing
+	// executable grants.
+	// SlotTools содержит JSON-дескрипторы инструментов закреплённого runtime-окружения без создания
+	// исполняемых grants.
+	SlotTools SemanticSlot = "TOOLS"
+	// SlotIntegrations carries canonical JSON integration context already supplied by the immutable
+	// owner snapshot.
+	// SlotIntegrations содержит канонический JSON-контекст интеграций, уже предоставленный
+	// immutable-снимком владельца.
+	SlotIntegrations SemanticSlot = "INTEGRATIONS"
+	// SlotRuntimeChanges carries the captured continuation context and is required only for
+	// session-continuation targets.
+	// SlotRuntimeChanges содержит захваченный контекст продолжения и обязателен только для целей
+	// продолжения сессии.
 	SlotRuntimeChanges SemanticSlot = "RUNTIME_CHANGES"
 )
 
+// semanticOrder fixes closed slot membership and append order for mandatory platform sections not
+// explicitly executed by a user template.
+// semanticOrder фиксирует закрытый набор слотов и порядок добавления обязательных секций
+// платформы, явно не выполненных пользовательским шаблоном.
 var semanticOrder = []SemanticSlot{SlotWorkflow, SlotStage, SlotPurpose, SlotExpectedResult, SlotInput,
 	SlotConstraints, SlotCapabilities, SlotFiles, SlotTools, SlotIntegrations, SlotRuntimeChanges}
 
+// SlotProvenance records each inserted slot, whether insertion came from the user template or
+// platform append and its one-based actual insertion order.
+// SlotProvenance записывает каждый вставленный слот, источник вставки из пользовательского шаблона
+// либо добавления платформы и фактический порядок от единицы.
 type SlotProvenance struct {
 	Slot     SemanticSlot `json:"slot"`
 	Source   string       `json:"source"`
 	Position int32        `json:"position"`
 }
 
+// Section stores one user or platform section with optional template lineage or slot identity;
+// safe projections replace content while preserving this provenance.
+// Section хранит одну секцию пользователя либо платформы с необязательными происхождением шаблона
+// или identity слота; безопасная проекция скрывает содержимое, сохраняя происхождение.
 type Section struct {
 	UserKind       string       `json:"userKind,omitempty"`
 	TemplateRef    string       `json:"templateRef,omitempty"`
@@ -55,12 +120,20 @@ type Section struct {
 	Content        string       `json:"content"`
 }
 
+// semanticEnvelope encodes service revision, locale and ordered sections as the bounded JSON
+// prompt instead of concatenating user-controlled closing tags.
+// semanticEnvelope кодирует service revision, локаль и упорядоченные секции в ограниченный
+// JSON-prompt вместо склеивания с закрывающими тегами пользователя.
 type semanticEnvelope struct {
 	Revision string    `json:"revision"`
 	Locale   string    `json:"locale"`
 	Sections []Section `json:"sections"`
 }
 
+// validateSlot accepts only a registered semantic slot name and returns no text during validation;
+// runtime insertion is installed separately.
+// validateSlot принимает только зарегистрированное имя семантического слота и не возвращает текст
+// при валидации; runtime-вставка назначается отдельно.
 func validateSlot(name string) (string, error) {
 	if !slices.Contains(semanticOrder, SemanticSlot(name)) {
 		return "", ErrInvalid
@@ -68,6 +141,10 @@ func validateSlot(name string) (string, error) {
 	return "", nil
 }
 
+// requiredSlots returns mandatory slots in canonical order, adding workflow context only for
+// workflow stages and runtime changes only for continuation.
+// requiredSlots возвращает обязательные слоты в каноническом порядке, добавляя workflow-контекст
+// только стадиям workflow и runtime-изменения только продолжению.
 func requiredSlots(kind string) []SemanticSlot {
 	result := make([]SemanticSlot, 0, len(semanticOrder))
 	for _, slot := range semanticOrder {
@@ -82,6 +159,12 @@ func requiredSlots(kind string) []SemanticSlot {
 	return result
 }
 
+// materializeSemantic validates pinned revisions and single-pass templates, computes authority
+// intersections and ordered safe/full sections and digests; unavailable referenced context
+// withholds full prompt and executable digest.
+// materializeSemantic проверяет закреплённые ревизии и однопроходные шаблоны, вычисляет
+// пересечения полномочий, упорядоченные скрытые и полные секции и дайджесты; недоступный
+// использованный контекст исключает полный prompt и исполняемый дайджест.
 func materializeSemantic(text string, snapshot Snapshot) (Materialization, error) {
 	invalid := func(code, message string) (Materialization, error) {
 		return Materialization{Diagnostics: []Diagnostic{{Severity: "ERROR", Code: code, Message: message, Line: 1, Column: 1}}}, ErrInvalid
@@ -345,6 +428,11 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 	return result, nil
 }
 
+// templateVariableReferences collects sorted distinct field references across template branches
+// and command arguments for unavailable-context diagnostics, without claiming those branches
+// executed.
+// templateVariableReferences собирает отсортированные уникальные ссылки полей по ветвям шаблона и
+// аргументам команд для диагностики недоступного контекста без утверждения об исполнении ветвей.
 func templateVariableReferences(root parse.Node) []string {
 	seen := make(map[string]bool)
 	var visit func(parse.Node)
@@ -394,8 +482,10 @@ func templateVariableReferences(root parse.Node) []string {
 	return result
 }
 
-// templateSlots разрешает только явную вставку. Вызов в condition, assignment
-// или pipeline не доказывает выдачу значения пользователю и закрыто отклоняется.
+// templateSlots allows slot calls only as standalone literal action insertions, rejecting
+// condition, assignment and pipeline uses that do not prove value insertion.
+// templateSlots разрешает slot только отдельной вставкой action с литералом, отклоняя условия,
+// присваивания и pipelines, не доказывающие вставку значения.
 func templateSlots(root parse.Node) ([]SemanticSlot, bool) {
 	var slots []SemanticSlot
 	var visit func(parse.Node) bool
@@ -453,6 +543,10 @@ func templateSlots(root parse.Node) ([]SemanticSlot, bool) {
 	return slots, valid
 }
 
+// semanticDigest returns lowercase SHA-256 of JSON-encoded materialization data, returning an
+// empty string if the data cannot be encoded.
+// semanticDigest возвращает lowercase SHA-256 JSON-кодированных данных материализации либо пустую
+// строку при невозможности кодирования.
 func semanticDigest(value any) string {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -462,6 +556,12 @@ func semanticDigest(value any) string {
 	return hex.EncodeToString(digest[:])
 }
 
+// semanticValues builds platform-owned slot values from canonical data and effective grants,
+// preserving historical v2 behavior while adding mandatory current constraints and result
+// guidance.
+// semanticValues собирает значения слотов платформы из канонических данных и effective grants с
+// сохранением поведения исторической v2 и добавлением обязательных текущих ограничений и правил
+// результатов.
 func semanticValues(snapshot Snapshot, data map[string]any, effective []string, core string) map[SemanticSlot]string {
 	encode := func(value any) string { encoded, _ := json.Marshal(value); return string(encoded) }
 	workflow, _ := data["workflow"].(map[string]any)

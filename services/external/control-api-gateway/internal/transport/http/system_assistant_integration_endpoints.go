@@ -2,15 +2,18 @@ package httptransport
 
 import (
 	"net/http"
-	"regexp"
 	"strings"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
-var systemGrantDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
-
+// GetSystemAssistantIntegrationGrantCandidates reads owner candidate metadata for the requested
+// connection and page, then validates the organization assistant/connection/version pins before
+// public output. Listing grantable capabilities does not itself issue grants.
+// GetSystemAssistantIntegrationGrantCandidates читает metadata кандидатов владельца для
+// запрошенных connection и страницы, затем проверяет organization assistant/connection/version
+// pins до выдачи. Перечисление grantable capabilities само grants не выдаёт.
 func (s *Server) GetSystemAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request, p generated.GetSystemAssistantIntegrationGrantCandidatesParams) {
 	response, err := s.control.Query.GetSystemAssistantIntegrationGrantCandidates(r.Context(), &cp.GetSystemAssistantIntegrationGrantCandidatesRequest{
 		ConnectionRef: p.ConnectionRef, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
@@ -27,11 +30,18 @@ func (s *Server) GetSystemAssistantIntegrationGrantCandidates(w http.ResponseWri
 	writeJSON(w, http.StatusOK, view)
 }
 
+// systemAssistantGrantCandidatePage validates organization-scoped assistant and connection pins,
+// definition provenance, page counts and distinct capability candidates. Existing grant
+// identity/version and approval metadata stay consistent; absent grants omit their optional
+// identity/policy fields.
+// systemAssistantGrantCandidatePage проверяет pins организационного помощника и connection,
+// provenance определения, counts страницы и уникальность capabilities. Identity/version прежнего
+// grant и approval metadata согласованы; отсутствие grant исключает optional identity/policy поля.
 func systemAssistantGrantCandidatePage(v *cp.GetSystemAssistantIntegrationGrantCandidatesResponse, connectionRef string, limit int) (map[string]any, bool) {
 	if v == nil || v.ScopeKind != cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION ||
 		!fileTargetRef(v.OrganizationRef) || !fileTargetRef(v.AssistantRef) || v.AssistantVersion < 1 || v.AssistantVersion > maximumSafeJSONInteger ||
 		v.ConnectionRef != connectionRef || !fileTargetRef(v.ConnectionRef) || v.ConnectionVersion < 1 || v.ConnectionVersion > maximumSafeJSONInteger ||
-		v.DefinitionVersion == "" || !systemGrantDigestPattern.MatchString(v.DefinitionDigest) || len(v.Items) > limit ||
+		v.DefinitionVersion == "" || !validManagedDigest(v.DefinitionDigest) || len(v.Items) > limit ||
 		v.Total < int64(len(v.Items)) || v.Total > maximumSafeJSONInteger || v.Page == nil {
 		return nil, false
 	}
@@ -77,6 +87,12 @@ func systemAssistantGrantCandidatePage(v *cp.GetSystemAssistantIntegrationGrantC
 	return result, true
 }
 
+// ChangeSystemAssistantIntegrationGrant maps the explicit capability enablement and approval
+// policy/scope paths under mutation headers to the specialized owner command. Payload
+// connection/capability selectors never confer caller authority or perform provider effects.
+// ChangeSystemAssistantIntegrationGrant передаёт явные enabled capability и approval policy/scope
+// paths с mutation заголовками отдельной команде владельца. Payload connection/capability
+// selectors не дают caller полномочий и не исполняют эффекты провайдера.
 func (s *Server) ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r *http.Request, p generated.ChangeSystemAssistantIntegrationGrantParams) {
 	body, ok := decodeJSON[generated.SystemAssistantIntegrationGrantInput](w, r)
 	if !ok {

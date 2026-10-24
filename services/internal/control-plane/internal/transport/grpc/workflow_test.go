@@ -7,6 +7,12 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestDomainWorkflowVersionBuildsAuthoritativeDependencies checks workflow metadata, generated
+// step keys, sequential/parallel dependencies, capability requirements and human-gate decisions
+// are materialized as expected.
+// TestDomainWorkflowVersionBuildsAuthoritativeDependencies проверяет ожидаемую материализацию
+// метаданных процесса, назначенных ключей шагов, последовательных и параллельных зависимостей,
+// capability requirements и human-gate решений.
 func TestDomainWorkflowVersionBuildsAuthoritativeDependencies(t *testing.T) {
 	t.Parallel()
 
@@ -40,6 +46,12 @@ func TestDomainWorkflowVersionBuildsAuthoritativeDependencies(t *testing.T) {
 	}
 }
 
+// TestDomainWorkflowVersionAssignsStableAvailableInputKeys checks explicit input keys are
+// preserved, missing keys use an available stable identifier and select options survive domain
+// conversion.
+// TestDomainWorkflowVersionAssignsStableAvailableInputKeys проверяет сохранение явных input keys,
+// назначение отсутствующим ключам свободного устойчивого идентификатора и сохранение select
+// options при доменном преобразовании.
 func TestDomainWorkflowVersionAssignsStableAvailableInputKeys(t *testing.T) {
 	t.Parallel()
 

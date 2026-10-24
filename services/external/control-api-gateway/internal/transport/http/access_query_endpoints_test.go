@@ -13,8 +13,16 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// accessRoleSearchRecorder adds a small synthetic Russian role-message catalog to the HTTP
+// response recorder for search-alias tests.
+// accessRoleSearchRecorder добавляет небольшой синтетический русский каталог сообщений ролей к
+// HTTP recorder для тестов поисковых псевдонимов.
 type accessRoleSearchRecorder struct{ *httptest.ResponseRecorder }
 
+// Localize returns fixture translations for the system member role name and description, leaving
+// other message IDs empty.
+// Localize возвращает тестовые переводы имени и описания системной роли участника, оставляя
+// остальные message ID пустыми.
 func (recorder *accessRoleSearchRecorder) Localize(messageID string) string {
 	return map[string]string{
 		"SYSTEM_ROLE_MEMBER":             "Участник",
@@ -22,6 +30,10 @@ func (recorder *accessRoleSearchRecorder) Localize(messageID string) string {
 	}[messageID]
 }
 
+// TestAccessRoleQueryAliasesUseLocalizedPresentation checks Russian name and description searches
+// resolve to their canonical localization keys without aliases for unrelated text.
+// TestAccessRoleQueryAliasesUseLocalizedPresentation проверяет разрешение поиска русского имени и
+// описания в канонические ключи локализации без псевдонимов для постороннего текста.
 func TestAccessRoleQueryAliasesUseLocalizedPresentation(t *testing.T) {
 	writer := &accessRoleSearchRecorder{ResponseRecorder: httptest.NewRecorder()}
 	if actual := accessRoleQueryAliases(writer, "участ"); !reflect.DeepEqual(actual, []string{"i18n:SYSTEM_ROLE_MEMBER"}) {
@@ -35,6 +47,10 @@ func TestAccessRoleQueryAliasesUseLocalizedPresentation(t *testing.T) {
 	}
 }
 
+// TestPublicAccessQueryScopesAcrossEndpoints checks four access scopes across query, explain and
+// simulate, preserving target and subject semantics while rejecting payload actor authority.
+// TestPublicAccessQueryScopesAcrossEndpoints проверяет четыре области доступа в query, explain и
+// simulate с сохранением смысла target и subject и отказом полномочиям actor из payload.
 func TestPublicAccessQueryScopesAcrossEndpoints(t *testing.T) {
 	for _, target := range []string{`{"kind":"ORGANIZATION"}`, `{"kind":"PROJECT","projectRef":"prj_fixture"}`, `{"kind":"RESOURCE_KIND","projectRef":"prj_fixture","resourceKind":"ROLE_IMAGE"}`, `{"kind":"RESOURCE_INSTANCE","projectRef":"prj_fixture","resourceKind":"PROJECT","resourceRef":"prj_fixture"}`} {
 		var decoded generated.AccessScope

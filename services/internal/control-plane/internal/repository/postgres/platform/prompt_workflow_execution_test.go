@@ -15,6 +15,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// workflowExecutionFixture builds a pinned workflow snapshot and current-root execution graph with
+// exact node/session/turn, retry lineage and two planned steps.
+// workflowExecutionFixture создаёт закреплённый снимок workflow и граф текущего корневого
+// выполнения с точными node, session, turn, происхождением retry и двумя планируемыми шагами.
 func workflowExecutionFixture() (entity.PromptMaterializationSnapshot, workflowExecutionPromptContext) {
 	snapshot := workflowPromptFixture()
 	version := validWorkflowFixture()
@@ -34,6 +38,11 @@ func workflowExecutionFixture() (entity.PromptMaterializationSnapshot, workflowE
 	}
 }
 
+// workflowExecutionProjectionFromLease extracts the typed prompt snapshot and exact advisory
+// workflow execution JSON from a synthetic lease after checking mandatory platform instructions.
+// workflowExecutionProjectionFromLease извлекает типизированный снимок prompt и точный
+// рекомендательный JSON выполнения workflow из синтетического lease после проверки обязательных
+// инструкций платформы.
 func workflowExecutionProjectionFromLease(t *testing.T, lease map[string]any) workflowExecutionPromptContext {
 	t.Helper()
 	snapshot, ok := lease["promptSnapshot"].(entity.PromptMaterializationSnapshot)
@@ -49,6 +58,11 @@ func workflowExecutionProjectionFromLease(t *testing.T, lease map[string]any) wo
 	return execution
 }
 
+// TestWorkflowExecutionPromptResultGateIsExactAndAdvisory checks registered result-gate
+// state/decision pairs remain exact advisory context and never become integration-send approval.
+// TestWorkflowExecutionPromptResultGateIsExactAndAdvisory проверяет точные зарегистрированные пары
+// состояния и решения result gate в рекомендательном контексте без превращения в согласование
+// отправки интеграции.
 func TestWorkflowExecutionPromptResultGateIsExactAndAdvisory(t *testing.T) {
 	for _, state := range []string{"OPEN", "APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "UNKNOWN"} {
 		snapshot, execution := workflowExecutionFixture()
@@ -72,6 +86,11 @@ func TestWorkflowExecutionPromptResultGateIsExactAndAdvisory(t *testing.T) {
 	}
 }
 
+// TestWorkflowExecutionPromptCanonicalDataIsLossless checks workflow context projection preserves
+// supplied JSON fields, null and an integer beyond safe float precision without rounding.
+// TestWorkflowExecutionPromptCanonicalDataIsLossless проверяет сохранение переданных JSON-полей,
+// null и целого числа сверх безопасной точности float при проекции контекста workflow без
+// округления.
 func TestWorkflowExecutionPromptCanonicalDataIsLossless(t *testing.T) {
 	snapshot, execution := workflowExecutionFixture()
 	snapshot.StructuredVariables["input"].(map[string]any)["values"] = map[string]any{"exact": json.Number("9007199254740993"), "owner": "preserved", "none": nil}
@@ -91,6 +110,12 @@ func TestWorkflowExecutionPromptCanonicalDataIsLossless(t *testing.T) {
 	}
 }
 
+// TestWorkflowExecutionPromptCurrentRootBoundary checks initial root, same-root continuation and
+// current-root stage guidance survive materialization as one mandatory platform constraint without
+// safe-preview disclosure.
+// TestWorkflowExecutionPromptCurrentRootBoundary проверяет материализацию правил начального корня,
+// продолжения того же корня и стадии текущего корня в одном обязательном ограничении платформы без
+// раскрытия в безопасном предпросмотре.
 func TestWorkflowExecutionPromptCurrentRootBoundary(t *testing.T) {
 	for _, mode := range []string{"INITIAL_ROOT", "SAME_ROOT_CONTINUATION", "CURRENT_ROOT_STAGE"} {
 		t.Run(mode, func(t *testing.T) {
@@ -139,6 +164,12 @@ func TestWorkflowExecutionPromptCurrentRootBoundary(t *testing.T) {
 	}
 }
 
+// TestWorkflowExecutionPromptRejectsInvalidOwnerPins checks foreign or malformed execution pins,
+// retry lineage, stages and step readiness fail with conflict and leave the original snapshot
+// unchanged.
+// TestWorkflowExecutionPromptRejectsInvalidOwnerPins проверяет отказ conflict чужим либо неверным
+// pins выполнения, происхождению retry, стадиям и готовности шагов с сохранением исходного снимка
+// без изменений.
 func TestWorkflowExecutionPromptRejectsInvalidOwnerPins(t *testing.T) {
 	for _, name := range []string{"root", "run", "node", "session", "turn", "agent", "workflow", "revision", "version", "digest", "stage", "self-retry", "fake-retry", "root-attempt", "node-attempt", "fake-continuation", "initial-continued", "initial-child", "steps", "duplicate", "missing-node", "state", "ready", "malformed-root", "malformed-step-node", "malformed-retry"} {
 		t.Run(name, func(t *testing.T) {
@@ -211,6 +242,12 @@ func TestWorkflowExecutionPromptRejectsInvalidOwnerPins(t *testing.T) {
 	}
 }
 
+// TestWorkflowExecutionPromptPinsDataWithoutChangingServiceRevision checks execution context
+// changes data commitments rather than compiled service revision/digest, preserves exact durable
+// rejoin and distinguishes another root.
+// TestWorkflowExecutionPromptPinsDataWithoutChangingServiceRevision проверяет изменение
+// обязательств данных контекстом выполнения без изменения compiled service revision и digest,
+// точный durable rejoin и различение другого корня.
 func TestWorkflowExecutionPromptPinsDataWithoutChangingServiceRevision(t *testing.T) {
 	snapshot, execution := workflowExecutionFixture()
 	historical, err := promptservice.Materialize("Owner", promptservice.FromSnapshot(snapshot))
@@ -247,6 +284,10 @@ func TestWorkflowExecutionPromptPinsDataWithoutChangingServiceRevision(t *testin
 	}
 }
 
+// workflowExecutionPromptTx records exact owner-scoped workflow-context SQL reads and injects row
+// failures through the local transaction fixture.
+// workflowExecutionPromptTx записывает точные SQL-чтения контекста workflow в области владельца и
+// задаёт ошибки строки через локальную оснастку транзакции.
 type workflowExecutionPromptTx struct {
 	pgx.Tx
 	t      *testing.T
@@ -254,6 +295,10 @@ type workflowExecutionPromptTx struct {
 	calls  int
 }
 
+// QueryRow requires the canonical context query and strict organization/node arguments, counts the
+// call and returns the configured synthetic scan error.
+// QueryRow требует канонический запрос контекста и строгие аргументы организации и узла,
+// подсчитывает вызов и возвращает заданную синтетическую ошибку Scan.
 func (tx *workflowExecutionPromptTx) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
 	tx.calls++
 	if sql != queryPromptWorkflowExecutionContext || len(args) != 1 || !reflect.DeepEqual(args[0], pgx.StrictNamedArgs{"organization_id": "owner-tenant", "node_ref": "nod_current"}) {
@@ -262,6 +307,12 @@ func (tx *workflowExecutionPromptTx) QueryRow(_ context.Context, sql string, arg
 	return delegationFrontierRow(func(dest ...any) error { return tx.rowErr })
 }
 
+// TestWorkflowExecutionPromptOwnerReadFailureIsClosed checks absent and unavailable owner rows map
+// to conflict/unavailable without snapshot mutation while non-workflow profiles perform no fake
+// context read.
+// TestWorkflowExecutionPromptOwnerReadFailureIsClosed проверяет отображение отсутствующей и
+// недоступной строки владельца в conflict и unavailable без изменения снимка и отсутствие ложного
+// чтения контекста у профилей без workflow.
 func TestWorkflowExecutionPromptOwnerReadFailureIsClosed(t *testing.T) {
 	for _, failure := range []error{pgx.ErrNoRows, errors.New("infrastructure unavailable")} {
 		snapshot, _ := workflowExecutionFixture()
@@ -287,6 +338,11 @@ func TestWorkflowExecutionPromptOwnerReadFailureIsClosed(t *testing.T) {
 	}
 }
 
+// TestWorkflowCoordinatorGeneratedTaskIsRootScoped checks generated coordinator task keeps the
+// original task and explicit current-root/delegation guidance, including steps assigned to the
+// coordinator.
+// TestWorkflowCoordinatorGeneratedTaskIsRootScoped проверяет сохранение исходной задачи и явных
+// правил текущего корня и делегирования в задаче координатора, включая шаги самого координатора.
 func TestWorkflowCoordinatorGeneratedTaskIsRootScoped(t *testing.T) {
 	version := validWorkflowFixture()
 	task := workflowCoordinatorTask("Exact original task", version.Ref, strings.Repeat("a", 64), version)

@@ -11,7 +11,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Reset проверяет обе identity до первого удаления; runtime исчезает первым.
+// Reset validates local system/runtime and identity namespaces before deletion, snapshots every
+// preserved namespace UID, then deletes runtime before system with UID/resource-version
+// preconditions and verifies preserved identities after each target.
+// Reset проверяет local system, runtime и identity namespaces до удаления, сохраняет UID каждого
+// сохраняемого namespace, затем удаляет runtime перед system с UID и resource version
+// preconditions и проверяет сохранённые identities после каждой цели.
 func (k *Kubernetes) Reset(ctx context.Context) error {
 	system, err := k.Client.CoreV1().Namespaces().Get(ctx, "kodex-system", metav1.GetOptions{})
 	if err != nil {

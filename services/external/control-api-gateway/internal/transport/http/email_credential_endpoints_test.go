@@ -13,6 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// emailCredentialRequest executes a local typed credential PUT with supplied version and
+// idempotency headers and a synthetic CSRF marker.
+// emailCredentialRequest выполняет локальный типизированный PUT учётных данных с указанными
+// версией и идемпотентностью и синтетическим маркером CSRF.
 func emailCredentialRequest(client *catalogRPCRecorder, body, etag, key string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest("PUT", "/api/v1/integration-connections/conn_fixture01/email-mailbox/credential", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
@@ -24,10 +28,19 @@ func emailCredentialRequest(client *catalogRPCRecorder, body, etag, key string) 
 	return w
 }
 
+// emailCredentialFixture builds synthetic auth-secret credential metadata with matching generation
+// and connection version, containing no credential value.
+// emailCredentialFixture создаёт синтетические метаданные auth-secret с совпадающими поколением и
+// версией подключения без значения учётных данных.
 func emailCredentialFixture() *cp.ConfigureEmailMailboxCredentialResponse {
 	return &cp.ConfigureEmailMailboxCredentialResponse{Credential: &cp.EmailMailboxCredential{Name: "email-fixture01", Generation: 3, ConnectionVersion: 3, ConnectionRef: "conn_fixture01", Kind: cp.EmailMailboxCredentialKind_EMAIL_MAILBOX_CREDENTIAL_KIND_AUTH_SECRET}}
 }
 
+// TestEmailCredentialTypedWriteOnly checks three registered credential kinds preserve significant
+// value whitespace and mutation pins while returning only safe metadata and no-store.
+// TestEmailCredentialTypedWriteOnly проверяет сохранение значимых пробелов значения и pins
+// изменения для трёх зарегистрированных видов учётных данных с выдачей только безопасных
+// метаданных и no-store.
 func TestEmailCredentialTypedWriteOnly(t *testing.T) {
 	for _, kind := range []string{"CA_CERTIFICATE", "USERNAME", "AUTH_SECRET"} {
 		r := emailCredentialFixture()
@@ -55,6 +68,10 @@ func TestEmailCredentialTypedWriteOnly(t *testing.T) {
 	}
 }
 
+// TestEmailCredentialRejectsInputBeforeRPC checks kind-specific value bounds, control characters,
+// caller authority and version/idempotency requirements before credential RPC.
+// TestEmailCredentialRejectsInputBeforeRPC проверяет ограничения значения по виду, управляющие
+// символы, полномочия клиента и требования версии и идемпотентности до RPC учётных данных.
 func TestEmailCredentialRejectsInputBeforeRPC(t *testing.T) {
 	for _, tc := range []struct{ kind, value string }{
 		{"UNKNOWN", "x"}, {"AUTH_SECRET", ""}, {"AUTH_SECRET", "a\nb"}, {"USERNAME", "a\x00b"},
@@ -81,6 +98,10 @@ func TestEmailCredentialRejectsInputBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestEmailCredentialRejectsReadback checks exact credential identity, connection, kind,
+// generation and version readback plus safe owner errors without leaked values or ETags.
+// TestEmailCredentialRejectsReadback проверяет точные identity учётных данных, подключение, вид,
+// поколение и версию ответа и безопасные ошибки владельца без выдачи значений либо ETag.
 func TestEmailCredentialRejectsReadback(t *testing.T) {
 	for _, mutate := range []func(*cp.ConfigureEmailMailboxCredentialResponse){
 		func(r *cp.ConfigureEmailMailboxCredentialResponse) { r.Credential = nil },

@@ -7,6 +7,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
 
+// CreateProviderAccount passes definition and display name through the dedicated create command
+// and projects its account result.
+// CreateProviderAccount передаёт определение и отображаемое имя отдельной команде создания и
+// преобразует аккаунт из результата.
 func (server *Server) CreateProviderAccount(
 	ctx context.Context,
 	request *controlplanev1.CreateProviderAccountRequest,
@@ -21,6 +25,10 @@ func (server *Server) CreateProviderAccount(
 	return &controlplanev1.CreateProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
 }
 
+// StartProviderAccountDeviceAuthorization uses the exact method principal and supplied mutation to
+// start device authorization through the owner service.
+// StartProviderAccountDeviceAuthorization использует principal точного метода и переданную
+// mutation для начала device authorization через сервис-владелец.
 func (server *Server) StartProviderAccountDeviceAuthorization(
 	ctx context.Context,
 	request *controlplanev1.StartProviderAccountDeviceAuthorizationRequest,
@@ -36,6 +44,10 @@ func (server *Server) StartProviderAccountDeviceAuthorization(
 	return &controlplanev1.StartProviderAccountDeviceAuthorizationResponse{Account: castProviderAccount(account)}, nil
 }
 
+// AuthorizeProviderAccountAPIKey copies the incoming key into a temporary byte slice for the
+// authorized owner call and clears that copy on return.
+// AuthorizeProviderAccountAPIKey копирует входной ключ во временный срез байтов для
+// авторизованного вызова владельца и очищает эту копию при возврате.
 func (server *Server) AuthorizeProviderAccountAPIKey(
 	ctx context.Context,
 	request *controlplanev1.AuthorizeProviderAccountAPIKeyRequest,
@@ -53,6 +65,10 @@ func (server *Server) AuthorizeProviderAccountAPIKey(
 	return &controlplanev1.AuthorizeProviderAccountAPIKeyResponse{Account: castProviderAccount(account)}, nil
 }
 
+// RefreshProviderAccountAuthorization passes the account locator and mutation to the authorized
+// refresh method without adding transport-owned retries.
+// RefreshProviderAccountAuthorization передаёт ссылку аккаунта и mutation авторизованному методу
+// обновления без повторов силами transport.
 func (server *Server) RefreshProviderAccountAuthorization(
 	ctx context.Context,
 	request *controlplanev1.RefreshProviderAccountAuthorizationRequest,
@@ -68,6 +84,10 @@ func (server *Server) RefreshProviderAccountAuthorization(
 	return &controlplanev1.RefreshProviderAccountAuthorizationResponse{Account: castProviderAccount(account)}, nil
 }
 
+// VerifyProviderAccountDeviceAuthorization executes the dedicated device-authorization
+// verification command for the supplied account locator.
+// VerifyProviderAccountDeviceAuthorization выполняет отдельную команду проверки device
+// authorization по переданной ссылке аккаунта.
 func (server *Server) VerifyProviderAccountDeviceAuthorization(
 	ctx context.Context,
 	request *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest,
@@ -80,6 +100,10 @@ func (server *Server) VerifyProviderAccountDeviceAuthorization(
 	return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
 }
 
+// ReauthorizeProviderAccountDeviceCode uses its distinct RPC principal to call the owner's
+// device-authorization start method with the supplied account and mutation.
+// ReauthorizeProviderAccountDeviceCode использует principal отдельного RPC для вызова начала
+// device authorization владельца с переданными аккаунтом и mutation.
 func (server *Server) ReauthorizeProviderAccountDeviceCode(
 	ctx context.Context,
 	request *controlplanev1.ReauthorizeProviderAccountDeviceCodeRequest,
@@ -95,6 +119,10 @@ func (server *Server) ReauthorizeProviderAccountDeviceCode(
 	return &controlplanev1.ReauthorizeProviderAccountDeviceCodeResponse{Account: castProviderAccount(account)}, nil
 }
 
+// RevokeProviderAccount passes the account locator through the dedicated revoke command and
+// projects the returned account state.
+// RevokeProviderAccount передаёт ссылку аккаунта отдельной команде отзыва и преобразует
+// возвращённое состояние аккаунта.
 func (server *Server) RevokeProviderAccount(
 	ctx context.Context,
 	request *controlplanev1.RevokeProviderAccountRequest,
@@ -107,6 +135,10 @@ func (server *Server) RevokeProviderAccount(
 	return &controlplanev1.RevokeProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
 }
 
+// DeleteProviderAccount passes the account locator through the dedicated delete command and
+// returns the owner's account projection.
+// DeleteProviderAccount передаёт ссылку аккаунта отдельной команде удаления и возвращает
+// представление аккаунта владельца.
 func (server *Server) DeleteProviderAccount(
 	ctx context.Context,
 	request *controlplanev1.DeleteProviderAccountRequest,
@@ -119,6 +151,10 @@ func (server *Server) DeleteProviderAccount(
 	return &controlplanev1.DeleteProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
 }
 
+// SetProviderAccountEnabled passes the requested enabled flag and account locator through the
+// dedicated command, leaving eligibility to the owner.
+// SetProviderAccountEnabled передаёт запрошенный enabled и ссылку аккаунта отдельной команде,
+// оставляя проверку доступности владельцу.
 func (server *Server) SetProviderAccountEnabled(
 	ctx context.Context,
 	request *controlplanev1.SetProviderAccountEnabledRequest,
@@ -133,6 +169,10 @@ func (server *Server) SetProviderAccountEnabled(
 	return &controlplanev1.SetProviderAccountEnabledResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
 }
 
+// SetProviderAccountConcurrency passes the proposed concurrency limit and account locator through
+// the dedicated command without validating domain limits here.
+// SetProviderAccountConcurrency передаёт предлагаемый лимит параллельности и ссылку аккаунта
+// отдельной команде без проверки доменных лимитов в этом методе.
 func (server *Server) SetProviderAccountConcurrency(
 	ctx context.Context,
 	request *controlplanev1.SetProviderAccountConcurrencyRequest,

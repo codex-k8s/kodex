@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+// TestTrustedAdmissionTechnicalCommandsAreExactAndLeastPrivilege checks fail, expire and terminal
+// RPCs admit only image-admission with exact service-actor permissions and no project requirement,
+// denying other workloads.
+// TestTrustedAdmissionTechnicalCommandsAreExactAndLeastPrivilege проверяет допуск fail, expire и
+// terminal RPC только image-admission с точными service actor permissions без требования проекта и
+// отказом другим нагрузкам.
 func TestTrustedAdmissionTechnicalCommandsAreExactAndLeastPrivilege(t *testing.T) {
 	authorizer, err := trustedClusterAuthorizer(transportprofile.TrustedCluster)
 	if err != nil {
@@ -28,6 +34,11 @@ func TestTrustedAdmissionTechnicalCommandsAreExactAndLeastPrivilege(t *testing.T
 	}
 }
 
+// TestTrustedAdmissionRecoveryTerminalIsControllerReadOnly checks only image-admission-controller
+// receives the distinct organization-scoped service-actor recovery-terminal read permission.
+// TestTrustedAdmissionRecoveryTerminalIsControllerReadOnly проверяет выдачу отдельного
+// organization-scoped service actor permission чтения recovery terminal только
+// image-admission-controller.
 func TestTrustedAdmissionRecoveryTerminalIsControllerReadOnly(t *testing.T) {
 	authorizer, err := trustedClusterAuthorizer(transportprofile.TrustedCluster)
 	if err != nil {

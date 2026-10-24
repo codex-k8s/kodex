@@ -11,12 +11,21 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// projectAssistantFixture builds a fixed-time synthetic active project-assistant profile with
+// separate profile, project and agent references.
+// projectAssistantFixture создаёт синтетический активный профиль помощника проекта с фиксированным
+// временем и отдельными ссылками профиля, проекта и агента.
 func projectAssistantFixture() *cp.ProjectAssistantProfile {
 	return &cp.ProjectAssistantProfile{Ref: "asstp_fixture01", ProjectRef: "prj_fixture01", AgentRef: "agt_fixture01",
 		Name: "Помощник проекта", State: "ACTIVE", Version: 1,
 		CreatedAt: timestamppb.New(time.Unix(1791056209, 0)), UpdatedAt: timestamppb.New(time.Unix(1791056209, 0))}
 }
 
+// TestProjectAssistantEndpointsPreserveExactScope checks dedicated project-assistant read/create
+// RPCs with exact project scope, literal name and instructions and creation idempotency.
+// TestProjectAssistantEndpointsPreserveExactScope проверяет отдельные RPC чтения и создания
+// помощника проекта с точной областью проекта, буквальными именем и инструкциями и
+// идемпотентностью создания.
 func TestProjectAssistantEndpointsPreserveExactScope(t *testing.T) {
 	get := &catalogRPCRecorder{response: &cp.GetProjectAssistantResponse{Profile: projectAssistantFixture()}}
 	w := httptest.NewRecorder()
@@ -41,6 +50,12 @@ func TestProjectAssistantEndpointsPreserveExactScope(t *testing.T) {
 	}
 }
 
+// TestProjectAssistantEndpointsRejectForeignAndMalformedProfiles checks rejection of foreign
+// project, wrong profile kind, missing agent, invalid binding states, absent timestamp and unsafe
+// version.
+// TestProjectAssistantEndpointsRejectForeignAndMalformedProfiles проверяет отказ чужому проекту,
+// неверному виду профиля, отсутствию агента, неверным состояниям привязки, отсутствию времени и
+// небезопасной версии.
 func TestProjectAssistantEndpointsRejectForeignAndMalformedProfiles(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.ProjectAssistantProfile){
 		"foreign-project": func(p *cp.ProjectAssistantProfile) { p.ProjectRef = "prj_foreign01" },
@@ -64,6 +79,10 @@ func TestProjectAssistantEndpointsRejectForeignAndMalformedProfiles(t *testing.T
 	}
 }
 
+// TestProjectAssistantProfileStatesAreBindingStates checks that ACTIVE, DISABLED and ARCHIVED are
+// accepted profile binding states rather than agent lifecycle states.
+// TestProjectAssistantProfileStatesAreBindingStates проверяет допустимость состояний привязки
+// профиля ACTIVE, DISABLED и ARCHIVED, отличающихся от жизненного цикла агента.
 func TestProjectAssistantProfileStatesAreBindingStates(t *testing.T) {
 	for _, state := range []string{"ACTIVE", "DISABLED", "ARCHIVED"} {
 		profile := projectAssistantFixture()
@@ -74,6 +93,10 @@ func TestProjectAssistantProfileStatesAreBindingStates(t *testing.T) {
 	}
 }
 
+// TestAssistantConversationRequiresExplicitScope checks rejection of missing, unknown or
+// incomplete conversation scope and exact forwarding of valid SYSTEM and PROJECT selections.
+// TestAssistantConversationRequiresExplicitScope проверяет отказ отсутствующей, неизвестной либо
+// неполной области диалога и точную передачу корректного выбора SYSTEM и PROJECT.
 func TestAssistantConversationRequiresExplicitScope(t *testing.T) {
 	for _, body := range []string{`{}`, `{"assistantScope":"NONE"}`, `{"assistantScope":"UNKNOWN"}`, `{"assistantScope":"PROJECT"}`} {
 		client := &catalogRPCRecorder{}
@@ -102,6 +125,10 @@ func TestAssistantConversationRequiresExplicitScope(t *testing.T) {
 	}
 }
 
+// TestAssistantHistoryFiltersPinnedProfile checks exact profile scope and assistant filters and
+// rejects owner history containing a different assistant reference without exposing it.
+// TestAssistantHistoryFiltersPinnedProfile проверяет точные фильтры области профиля и помощника и
+// отказ истории владельца с другой ссылкой помощника без её раскрытия.
 func TestAssistantHistoryFiltersPinnedProfile(t *testing.T) {
 	conversation := &cp.AssistantConversation{Ref: "conv_fixture01", AssistantScope: cp.AssistantScope_ASSISTANT_SCOPE_PROJECT,
 		AssistantRef: "agt_fixture01", ProjectRef: "prj_fixture01", State: cp.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE}

@@ -15,14 +15,32 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// errRuntimeCatalogView identifies invalid runtime catalog projections without carrying raw
+// upstream payloads or credential values.
+// errRuntimeCatalogView обозначает неверные проекции runtime каталога без сырых upstream payload и
+// значений credentials.
 var errRuntimeCatalogView = errors.New("runtime catalog response is invalid")
+
+// runtimeEffortPattern defines the bounded lowercase grammar shared by overlay enum values and
+// configured reasoning effort; known-shaped text still needs catalog-specific membership checks.
+// runtimeEffortPattern задаёт ограниченную грамматику нижнего регистра для overlay enum и
+// выбранного reasoning effort; правильная форма ещё требует проверки по конкретному каталогу.
 var runtimeEffortPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
+// invalidRuntimeCatalogView wraps the runtime catalog sentinel with a caller-supplied fixed reason
+// code. Callers must pass safe diagnostic categories rather than response data or upstream error
+// text.
+// invalidRuntimeCatalogView оборачивает sentinel runtime каталога фиксированным кодом причины от
+// caller. Передаваться должны безопасные категории диагностики, а не данные ответа или текст
+// upstream ошибки.
 func invalidRuntimeCatalogView(reason string) error {
 	return fmt.Errorf("%w: %s", errRuntimeCatalogView, reason)
 }
 
-// Порядок полей соответствует canonical JSON schema owner, включая пустые значения.
+// canonicalOverlayField preserves the owner canonical JSON field order and empty values for
+// overlay schema hashing. This transport-only shape is not an editable runtime configuration.
+// canonicalOverlayField сохраняет канонический порядок JSON полей владельца и пустые значения для
+// хэширования overlay schema. Эта transport форма не является редактируемой runtime конфигурацией.
 type canonicalOverlayField struct {
 	Key           string   `json:"key"`
 	ValueType     string   `json:"valueType"`
@@ -32,6 +50,12 @@ type canonicalOverlayField struct {
 	Completion    string   `json:"completion"`
 	Hover         string   `json:"hover"`
 }
+
+// canonicalOverlaySchema forms the exact digest preimage with empty revision/digest, ordered field
+// definitions and the maximum byte limit; serialization must remain compatible with the owner
+// schema producer.
+// canonicalOverlaySchema задаёт точный вход хэширования с пустыми revision/digest, упорядоченными
+// полями и байтовым лимитом; сериализация должна совпадать с producer схемы владельца.
 type canonicalOverlaySchema struct {
 	Revision     string                  `json:"revision"`
 	Digest       string                  `json:"digest"`
@@ -39,8 +63,15 @@ type canonicalOverlaySchema struct {
 	MaximumBytes int32                   `json:"maximumBytes"`
 }
 
+// validOverlaySchema checks five unique allowlisted fields, value/default bounds and the fixed
+// shell/web-search restrictions, then recomputes the owner canonical JSON digest and cos_ revision
+// binding. It validates advertised schema without changing executable overlay policy.
+// validOverlaySchema проверяет пять уникальных разрешённых полей, значения и defaults и
+// фиксированные ограничения shell/web-search, затем пересчитывает канонический JSON digest
+// владельца и связь cos_ revision. Проверяется заявленная схема без изменения исполняемой политики
+// overlay.
 func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
-	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 5 || !modelCatalogDigest.MatchString(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
+	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 5 || !validManagedDigest(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
 		return false
 	}
 	canonical := canonicalOverlaySchema{MaximumBytes: schema.MaximumBytes, Fields: []canonicalOverlayField{}}
@@ -79,10 +110,19 @@ func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
 	return hex.EncodeToString(digest[:]) == schema.Digest
 }
 
+// safeOverlayText allows empty UTF-8 overlay metadata within a byte bound while rejecting NUL and
+// line breaks; it performs no escaping or content normalization.
+// safeOverlayText допускает пустые UTF-8 метаданные overlay в байтовом лимите, отклоняя NUL и
+// переводы строк; escaping и нормализация содержимого не выполняются.
 func safeOverlayText(text string, maximum int) bool {
 	return len(text) <= maximum && utf8.ValidString(text) && !strings.ContainsAny(text, "\x00\r\n")
 }
 
+// validOverlayDiagnostic accepts bounded source coordinates, allowlisted protected/overlay keys
+// and exact known code/message pairs, keeping arbitrary TOML content out of public diagnostics.
+// validOverlayDiagnostic допускает ограниченные координаты исходника, разрешённые
+// protected/overlay keys и точные известные пары code/message, исключая произвольное TOML
+// содержимое из публичной диагностики.
 func validOverlayDiagnostic(diagnostic *cp.ConfigOverlayDiagnostic) bool {
 	if diagnostic == nil || diagnostic.Line < 0 || diagnostic.Line > 65537 || diagnostic.Column < 0 || diagnostic.Column > 65537 {
 		return false
@@ -104,6 +144,12 @@ func validOverlayDiagnostic(diagnostic *cp.ConfigOverlayDiagnostic) bool {
 	}
 }
 
+// validateRuntimeCatalogMessage checks registered runtime projection invariants before recursively
+// visiting nested protobuf messages to depth 64. Map fields are deliberately skipped; the first
+// failed validator rejects the message rather than filtering or repairing its contents.
+// validateRuntimeCatalogMessage проверяет зарегистрированные инварианты runtime проекций перед
+// рекурсивным обходом вложенных protobuf сообщений до глубины 64. Map поля намеренно пропускаются;
+// первая ошибка отклоняет сообщение без фильтрации и исправления содержимого.
 func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) error {
 	if depth > 64 {
 		return invalidRuntimeCatalogView("maximum_depth")
@@ -149,7 +195,7 @@ func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) erro
 		}
 	case *cp.ProviderAccountCandidate:
 		unpinned := item.CatalogRevision == "" && item.CatalogDigest == "" && item.ProviderDefinitionKey == ""
-		if !unpinned && (!modelCatalogDigest.MatchString(item.CatalogDigest) || item.CatalogRevision != "mcat_"+item.CatalogDigest || !modelProviderKey.MatchString(item.ProviderDefinitionKey)) || item.DefaultReasoningEffort != "" && (!runtimeEffortPattern.MatchString(item.DefaultReasoningEffort) || unpinned) {
+		if !unpinned && (!validManagedDigest(item.CatalogDigest) || item.CatalogRevision != "mcat_"+item.CatalogDigest || !modelProviderKey.MatchString(item.ProviderDefinitionKey)) || item.DefaultReasoningEffort != "" && (!runtimeEffortPattern.MatchString(item.DefaultReasoningEffort) || unpinned) {
 			return invalidRuntimeCatalogView("provider_account_candidate")
 		}
 	case *cp.ProviderAccountUsage:
@@ -165,7 +211,7 @@ func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) erro
 			return invalidRuntimeCatalogView("workflow")
 		}
 	case *cp.ConfigOverlayVersion:
-		if len(item.Diagnostics) > 16 || (item.SchemaRevision != "" || item.SchemaDigest != "") && (!modelCatalogDigest.MatchString(item.SchemaDigest) || item.SchemaRevision != "cos_"+item.SchemaDigest) {
+		if len(item.Diagnostics) > 16 || (item.SchemaRevision != "" || item.SchemaDigest != "") && (!validManagedDigest(item.SchemaDigest) || item.SchemaRevision != "cos_"+item.SchemaDigest) {
 			return invalidRuntimeCatalogView("config_overlay")
 		}
 		for _, diagnostic := range item.Diagnostics {

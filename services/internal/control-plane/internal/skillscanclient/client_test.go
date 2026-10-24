@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// TestScanProtocol checks clean/infected replies and closed rejection of scanner errors, missing
+// framing and wrong targets against a temporary Unix socket with exact uploaded bytes.
+// TestScanProtocol проверяет clean и infected ответы и закрытое отклонение scanner errors,
+// отсутствия framing и неверной цели через временный Unix socket с точными загруженными bytes.
 func TestScanProtocol(t *testing.T) {
 	for _, test := range []struct {
 		name, reply         string
@@ -96,6 +100,10 @@ func TestScanProtocol(t *testing.T) {
 	}
 }
 
+// TestScannerConfiguration rejects malformed socket paths and verifies an absent local scanner
+// cannot return a successful verdict.
+// TestScannerConfiguration отклоняет повреждённые socket paths и проверяет, что отсутствующий
+// локальный сканер не возвращает успешный verdict.
 func TestScannerConfiguration(t *testing.T) {
 	for _, socket := range []string{"", "relative.sock", "/tmp/../scanner.sock", "/tmp/scan\x00.sock"} {
 		if _, err := New(socket, time.Second); err == nil {

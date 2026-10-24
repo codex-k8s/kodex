@@ -12,6 +12,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// GetEmailEffectReceipt reads the exact invocation receipt and optional reconciliation decision,
+// requiring matching receipt version/digest, invocation and coherent decision time before
+// returning the receipt ETag. It does not retry an uncertain external mail effect.
+// GetEmailEffectReceipt читает receipt точного invocation и необязательное решение reconciliation,
+// требуя совпадения версии/digest receipt, invocation и согласованного времени решения до выдачи
+// ETag. Неопределённый внешний почтовый эффект не повторяется.
 func (server *Server) GetEmailEffectReceipt(w http.ResponseWriter, r *http.Request, ref generated.IntegrationInvocationRef) {
 	if !opaqueHTTPReference.MatchString(ref) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -41,6 +47,13 @@ func (server *Server) GetEmailEffectReceipt(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, result)
 }
 
+// ReconcileEmailEffect validates receipt/digest/outcome/note under versioned mutation headers,
+// consumes a fresh exact reconciliation authorization at the boundary and delegates the decision
+// to the owner. Returned receipt pins and outcome must match; this path records a decision rather
+// than resending mail.
+// ReconcileEmailEffect проверяет receipt/digest/outcome/note с versioned mutation заголовками,
+// потребляет свежее точное разрешение reconciliation в boundary и поручает решение владельцу. Pins
+// receipt и outcome ответа обязаны совпасть; путь записывает решение без повторной отправки почты.
 func (server *Server) ReconcileEmailEffect(w http.ResponseWriter, r *http.Request, ref generated.EmailEffectReceiptRef, p generated.ReconcileEmailEffectParams) {
 	body, ok := decodeJSON[generated.EmailReconciliationInput](w, r)
 	if !ok {
@@ -86,6 +99,10 @@ func (server *Server) ReconcileEmailEffect(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, decision)
 }
 
+// emailReconciliationOutcome maps only explicit EFFECT_CONFIRMED or NO_EFFECT_CONFIRMED owner
+// decisions from the public API; UNKNOWN_OUTCOME cannot be submitted as a reconciliation decision.
+// emailReconciliationOutcome преобразует из публичного API только явные решения EFFECT_CONFIRMED
+// либо NO_EFFECT_CONFIRMED; UNKNOWN_OUTCOME нельзя передать как решение reconciliation.
 func emailReconciliationOutcome(value generated.EmailReconciliationOutcome) (controlplanev1.EmailEffectOutcome, bool) {
 	switch value {
 	case generated.EFFECTCONFIRMED:
@@ -97,6 +114,11 @@ func emailReconciliationOutcome(value generated.EmailReconciliationOutcome) (con
 	}
 }
 
+// emailEffectOutcome projects known external receipt outcomes, preserving UNKNOWN_OUTCOME as
+// distinct from confirmed effect or confirmed absence. Unknown protobuf values are rejected.
+// emailEffectOutcome проецирует известные исходы внешнего receipt, сохраняя UNKNOWN_OUTCOME
+// отдельно от подтверждённого эффекта или его отсутствия. Неизвестные protobuf значения
+// отклоняются.
 func emailEffectOutcome(value controlplanev1.EmailEffectOutcome) (generated.EmailEffectOutcome, bool) {
 	switch value {
 	case controlplanev1.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_UNKNOWN_OUTCOME:
@@ -110,6 +132,12 @@ func emailEffectOutcome(value controlplanev1.EmailEffectOutcome) (generated.Emai
 	}
 }
 
+// emailEffectReceiptView checks receipt identity/version, invocation and semantic/external
+// digests, mailbox/configuration/connection/project coordinates and ordered timestamps. The public
+// DTO excludes execution keys and worker grants that are unnecessary for an owner decision.
+// emailEffectReceiptView проверяет identity/version receipt, invocation и semantic/external
+// digests, координаты mailbox/configuration/connection/project и порядок времени. Публичный DTO
+// исключает execution keys и worker grants, не нужные для решения владельца.
 func emailEffectReceiptView(value *controlplanev1.EmailEffectReceipt) (generated.EmailEffectReceipt, bool) {
 	created, createdOK := contextTimestamp(value.GetCreatedAt())
 	updated, updatedOK := contextTimestamp(value.GetUpdatedAt())
@@ -130,6 +158,12 @@ func emailEffectReceiptView(value *controlplanev1.EmailEffectReceipt) (generated
 	}, true
 }
 
+// emailReconciliationDecisionView projects a confirmed non-unknown decision only with valid
+// receipt/version/digest and actor/invocation refs plus a strictly later expiry. The result
+// describes the recorded owner decision without proving a new external effect.
+// emailReconciliationDecisionView проецирует подтверждённое решение без UNKNOWN только с
+// корректными receipt/version/digest и actor/invocation refs и строго более поздним expiry.
+// Описывается записанное решение владельца без доказательства нового внешнего эффекта.
 func emailReconciliationDecisionView(value *controlplanev1.EmailReconciliationDecision) (generated.EmailReconciliationDecision, bool) {
 	created, createdOK := contextTimestamp(value.GetCreatedAt())
 	expires, expiresOK := contextTimestamp(value.GetExpiresAt())

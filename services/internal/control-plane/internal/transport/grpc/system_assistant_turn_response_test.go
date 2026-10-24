@@ -9,6 +9,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestAssistantTurnResponsePreservesScopeAndOptionalSystemAssistant checks project/system
+// conversation scope and optional authoritative assistant survive response casting and protobuf
+// transmission without inventing a system assistant for project scope.
+// TestAssistantTurnResponsePreservesScopeAndOptionalSystemAssistant проверяет сохранение
+// project/system области беседы и необязательного ассистента владельца при response casting и
+// protobuf transmission без создания system assistant для project scope.
 func TestAssistantTurnResponsePreservesScopeAndOptionalSystemAssistant(t *testing.T) {
 	t.Parallel()
 

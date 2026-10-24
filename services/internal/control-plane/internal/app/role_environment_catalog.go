@@ -12,14 +12,26 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// maximumRoleEnvironmentCatalogBytes caps the nonempty serialized role-environment catalog at one
+// MiB before decoding and domain catalog validation.
+// maximumRoleEnvironmentCatalogBytes ограничивает непустой сериализованный каталог окружений ролей
+// одним MiB до декодирования и проверки доменного каталога.
 const maximumRoleEnvironmentCatalogBytes = 1 << 20
 
+// roleEnvironmentCatalogDocument defines the versioned configured catalog envelope with shared
+// source/context pins and ordered environment documents.
+// roleEnvironmentCatalogDocument определяет версионированный envelope заданного каталога с общими
+// source и context pins и упорядоченными environment documents.
 type roleEnvironmentCatalogDocument struct {
 	SchemaVersion uint64                         `json:"schemaVersion"`
 	Context       roleEnvironmentContextDocument `json:"context"`
 	Environments  []roleEnvironmentDocument      `json:"environments"`
 }
 
+// roleEnvironmentContextDocument carries configured source revision/digest and immutable OCI
+// context reference/digest used for all catalog environments.
+// roleEnvironmentContextDocument несёт заданные source revision и digest и immutable OCI context
+// reference и digest для всех окружений каталога.
 type roleEnvironmentContextDocument struct {
 	SourceRef      string `json:"sourceRef"`
 	SourceRevision string `json:"sourceRevision"`
@@ -28,6 +40,12 @@ type roleEnvironmentContextDocument struct {
 	ContextSHA256  string `json:"contextSha256"`
 }
 
+// roleEnvironmentDocument describes one environment and localized availability metadata with
+// pinned base, platforms, packages and tools; builder/toolchain pins still come from server
+// configuration.
+// roleEnvironmentDocument описывает одно окружение и локализованные availability метаданные с
+// pinned base, platforms, packages и tools; builder и toolchain pins поступают из конфигурации
+// сервера.
 type roleEnvironmentDocument struct {
 	Key                       string                            `json:"key"`
 	NameMessageKey            string                            `json:"nameMessageKey"`
@@ -44,12 +62,20 @@ type roleEnvironmentDocument struct {
 	Tools                     []roleEnvironmentToolDocument     `json:"tools"`
 }
 
+// roleEnvironmentPlatformDocument captures explicit OS, architecture and optional variant for
+// conversion into a validated role-image target platform.
+// roleEnvironmentPlatformDocument сохраняет явные OS, architecture и необязательный variant для
+// преобразования в проверенную целевую платформу образа роли.
 type roleEnvironmentPlatformDocument struct {
 	OS           string `json:"os"`
 	Architecture string `json:"architecture"`
 	Variant      string `json:"variant"`
 }
 
+// roleEnvironmentPackageDocument pairs a selectable catalog key with package manager/name/version
+// and exact source/digest pins rather than arbitrary installation commands.
+// roleEnvironmentPackageDocument связывает выбираемый catalog key с manager, именем, версией и
+// точными source и digest pins package вместо произвольных installation команд.
 type roleEnvironmentPackageDocument struct {
 	Key       string `json:"key"`
 	Manager   string `json:"manager"`
@@ -59,6 +85,10 @@ type roleEnvironmentPackageDocument struct {
 	SourceRef string `json:"sourceRef"`
 }
 
+// roleEnvironmentToolDocument pairs a selectable tool key with immutable name/version/source and
+// expected SHA-256 for later domain recipe validation.
+// roleEnvironmentToolDocument связывает выбираемый tool key с immutable именем, версией,
+// источником и ожидаемым SHA-256 для дальнейшей доменной проверки рецепта.
 type roleEnvironmentToolDocument struct {
 	Key       string `json:"key"`
 	Name      string `json:"name"`
@@ -67,6 +97,12 @@ type roleEnvironmentToolDocument struct {
 	SHA256    string `json:"sha256"`
 }
 
+// loadRoleEnvironmentCatalog decodes one known-field schema-v1 catalog under the exact configured
+// OCI repository prefix, injects server builder/frontend/toolchain pins and delegates full
+// recipe/recommendation validation to the domain catalog.
+// loadRoleEnvironmentCatalog декодирует один schema-v1 каталог с известными полями под точным
+// configured OCI repository prefix, добавляет server pins builder, frontend и toolchain и передаёт
+// полную проверку рецептов и рекомендации доменному каталогу.
 func loadRoleEnvironmentCatalog(config Config) (*roleimageservice.Catalog, error) {
 	value, err := readBoundedRoleEnvironmentCatalog(config.RoleEnvironmentCatalogFile)
 	if err != nil {
@@ -125,6 +161,11 @@ func loadRoleEnvironmentCatalog(config Config) (*roleimageservice.Catalog, error
 	return roleimageservice.NewCatalog(environments)
 }
 
+// readBoundedRoleEnvironmentCatalog reads a nonempty catalog with a streaming one-MiB-plus-one
+// bound and safe errors without asserting filesystem ownership or regular-file checks.
+// readBoundedRoleEnvironmentCatalog читает непустой каталог с потоковым пределом один MiB плюс
+// один байт и безопасными ошибками без утверждения проверки filesystem владения либо regular типа
+// файла.
 func readBoundedRoleEnvironmentCatalog(path string) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -138,6 +179,10 @@ func readBoundedRoleEnvironmentCatalog(path string) ([]byte, error) {
 	return value, nil
 }
 
+// decodeStrictJSON rejects unknown fields and any trailing JSON document while decoding into the
+// supplied target; it is not a duplicate-key validator.
+// decodeStrictJSON отклоняет неизвестные поля и любой следующий JSON документ при декодировании в
+// переданную цель; валидатором повторных ключей не является.
 func decodeStrictJSON(value []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(value))
 	decoder.DisallowUnknownFields()

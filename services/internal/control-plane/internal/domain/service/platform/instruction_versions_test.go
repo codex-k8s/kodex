@@ -13,6 +13,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// instructionVersionsRepository records the requested agent reference and injects a synthetic
+// authorized agent or boundary error for instruction history tests.
+// instructionVersionsRepository записывает запрошенную ссылку агента и задаёт синтетического
+// разрешённого агента либо ошибку границы для тестов истории инструкций.
 type instructionVersionsRepository struct {
 	platformrepo.Repository
 	agent  entity.Agent
@@ -20,15 +24,27 @@ type instructionVersionsRepository struct {
 	gotRef string
 }
 
+// ResolvePrincipal returns the supplied synthetic instruction-history principal unchanged without
+// performing an external identity lookup.
+// ResolvePrincipal возвращает переданный синтетический principal истории инструкций без изменений
+// и внешнего поиска identity.
 func (repository *instructionVersionsRepository) ResolvePrincipal(_ context.Context, principal value.Principal) (value.Principal, error) {
 	return principal, nil
 }
 
+// GetAgent records the exact agent reference and returns the configured fixture agent and error
+// without reading live state.
+// GetAgent записывает точную ссылку агента и возвращает заданные тестовые агента и ошибку без
+// чтения живого состояния.
 func (repository *instructionVersionsRepository) GetAgent(_ context.Context, _ value.Principal, ref string) (entity.Agent, error) {
 	repository.gotRef = ref
 	return repository.agent, repository.err
 }
 
+// testInstructionPrincipal builds a synthetic agent-read principal with explicit owner tenant,
+// workload, correlation and credential revision.
+// testInstructionPrincipal создаёт синтетический principal чтения агента с явными tenant
+// владельца, workload, correlation и ревизией реквизитов.
 func testInstructionPrincipal() value.Principal {
 	return value.Principal{
 		ActorID: "actor-id", AuthorityTenant: "organization-id", Permission: "agents.read",
@@ -36,6 +52,12 @@ func testInstructionPrincipal() value.Principal {
 	}
 }
 
+// TestListAgentInstructionVersionsUsesAuthorizedAgentReadAndPaginates checks history is read
+// through the exact authorized agent and that two-page slicing preserves order and terminal
+// cursor.
+// TestListAgentInstructionVersionsUsesAuthorizedAgentReadAndPaginates проверяет чтение истории
+// через точного разрешённого агента и сохранение порядка и terminal-курсора при разбиении на две
+// страницы.
 func TestListAgentInstructionVersionsUsesAuthorizedAgentReadAndPaginates(t *testing.T) {
 	t.Parallel()
 	repository := &instructionVersionsRepository{agent: entity.Agent{PublishedInstructionVersions: []entity.InstructionVersion{
@@ -61,6 +83,11 @@ func TestListAgentInstructionVersionsUsesAuthorizedAgentReadAndPaginates(t *test
 	}
 }
 
+// TestListAgentInstructionVersionsRejectsInvalidCursorAndPreservesBoundaryErrors checks malformed
+// history cursors fail as invalid and authoritative hidden/missing-agent errors remain not found.
+// TestListAgentInstructionVersionsRejectsInvalidCursorAndPreservesBoundaryErrors проверяет отказ
+// invalid неверному курсору истории и сохранение not found для авторитетной ошибки скрытого либо
+// отсутствующего агента.
 func TestListAgentInstructionVersionsRejectsInvalidCursorAndPreservesBoundaryErrors(t *testing.T) {
 	t.Parallel()
 	repository := &instructionVersionsRepository{agent: entity.Agent{PublishedInstructionVersions: []entity.InstructionVersion{{Ref: "ins_1", VersionNumber: 1}}}}

@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+// TestConfigureOptionalBootstrapProviderCredential checks all sixteen metadata-presence
+// combinations accept only wholly empty or complete bootstrap configuration, preserving stored
+// metadata on rejection and exact accepted values.
+// TestConfigureOptionalBootstrapProviderCredential проверяет принятие только полностью пустой либо
+// полной bootstrap configuration среди шестнадцати сочетаний наличия метаданных, сохранение
+// прежних метаданных при отказе и точных принятых значений.
 func TestConfigureOptionalBootstrapProviderCredential(t *testing.T) {
 	t.Parallel()
 	complete := ProviderCredentialConfig{

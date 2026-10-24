@@ -11,8 +11,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-// CapabilityDigest закрепляет возможности одной выбранной модели одного аккаунта.
-// Изменение других моделей в том же наблюдении не меняет этот pin.
+// CapabilityDigest hashes a version-two selected provider/account/model capability snapshot with
+// sorted efforts, binding default effort and model-default flag independently of other models.
+// CapabilityDigest хеширует version-two snapshot capabilities выбранных provider, аккаунта и
+// модели с сортированными efforts и привязкой default effort и флага default модели независимо от
+// других моделей.
 func CapabilityDigest(provider, accountRef, model string, efforts []string, defaultEffort string, isDefault bool) string {
 	canonicalEfforts := append([]string{}, efforts...)
 	slices.Sort(canonicalEfforts)
@@ -29,7 +32,12 @@ func CapabilityDigest(provider, accountRef, model string, efforts []string, defa
 	return hex.EncodeToString(sum[:])
 }
 
-// Digest связывает полный безопасный каталог, не его страницу или поисковый срез.
+// Digest hashes the complete supplied model catalog and source versions with sorted
+// models/accounts/blockers/sources and copied slices; reasoning-effort order is preserved and
+// eligibility is not expanded or recomputed.
+// Digest хеширует полный переданный каталог моделей и версии источников с сортировкой models,
+// accounts, blockers и sources и копиями срезов; порядок reasoning efforts сохранён, eligibility
+// не расширяется и не вычисляется заново.
 func Digest(models []entity.ModelCapability, sources ...string) (string, error) {
 	items := make([]entity.ModelCapability, len(models))
 	for i, item := range models {

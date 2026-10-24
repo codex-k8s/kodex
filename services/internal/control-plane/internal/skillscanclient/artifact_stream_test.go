@@ -17,6 +17,10 @@ import (
 	"time"
 )
 
+// streamScannerFixture serves synthetic VERSION/INSTREAM records on a temporary Unix socket,
+// counts streamed bytes and joins its listener goroutine during test cleanup.
+// streamScannerFixture обслуживает синтетические VERSION и INSTREAM записи через временный Unix
+// socket, учитывает streamed bytes и ожидает listener goroutine при очистке теста.
 func streamScannerFixture(t *testing.T, versions []string, reply string) (string, *atomic.Int64) {
 	t.Helper()
 	socket := filepath.Join(t.TempDir(), "stream.sock")
@@ -76,6 +80,10 @@ func streamScannerFixture(t *testing.T, versions []string, reply string) (string
 	return socket, &streamed
 }
 
+// TestArtifactStreamExactBytes checks a streamed artifact larger than32 MiB retains exact digest
+// and byte count while the skill byte-slice API still rejects that size.
+// TestArtifactStreamExactBytes проверяет точные digest и byte count streamed artifact больше32 MiB
+// при сохранении запрета такого размера в skill byte-slice API.
 func TestArtifactStreamExactBytes(t *testing.T) {
 	version := "ClamAV 1.4.3/12345/" + time.Now().UTC().Format("Mon Jan _2 15:04:05 2006")
 	body := bytes.Repeat([]byte("bounded stream "), 2300000) // Больше прежних 32 MiB.
@@ -94,6 +102,12 @@ func TestArtifactStreamExactBytes(t *testing.T) {
 	}
 }
 
+// TestArtifactStreamRejectsIncompleteOrUnverified rejects truncated/extra/invalid-sized streams,
+// stale or rotating database provenance, engine limits and cancellation without admitting a scan
+// result.
+// TestArtifactStreamRejectsIncompleteOrUnverified отклоняет усечённый, избыточный либо неверно
+// размеренный поток, устаревшую либо сменившуюся database provenance, engine limits и отмену без
+// допуска scan result.
 func TestArtifactStreamRejectsIncompleteOrUnverified(t *testing.T) {
 	date := time.Now().UTC().Format("Mon Jan _2 15:04:05 2006")
 	fresh := "ClamAV 1.4.3/12345/" + date

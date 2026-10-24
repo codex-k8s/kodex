@@ -20,13 +20,31 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// maximumExecutionArtifactBytes bounds execution artifact reads using the shared runtime
+// skill-file byte limit.
+// maximumExecutionArtifactBytes ограничивает чтение артефактов исполнения общим runtime-лимитом
+// размера файла навыка.
 const maximumExecutionArtifactBytes = runtimecontract.MaximumSkillFileBytes
+
+// warmRuntimeReconcileRejectedMessage names the fixed warning emitted when the domain rejects
+// warm-runtime reconciliation.
+// warmRuntimeReconcileRejectedMessage задаёт постоянный текст предупреждения при отказе домена в
+// согласовании тёплого runtime.
 const warmRuntimeReconcileRejectedMessage = "warm runtime reconciliation rejected"
 
+// mapString returns a string-typed map value or an empty string when the key is absent or has
+// another type.
+// mapString возвращает строковое значение карты либо пустую строку при отсутствии ключа или другом
+// типе.
 func mapString(values map[string]any, key string) string {
 	value, _ := values[key].(string)
 	return value
 }
+
+// mapInt64 converts supported numeric map values, rejects overflowing unsigned integers and
+// returns zero for unsupported types.
+// mapInt64 преобразует поддерживаемые числа карты, отклоняет переполнение беззнаковых целых и
+// возвращает ноль для прочих типов.
 func mapInt64(values map[string]any, key string) int64 {
 	switch value := values[key].(type) {
 	case int64:
@@ -53,10 +71,19 @@ func mapInt64(values map[string]any, key string) int64 {
 		return 0
 	}
 }
+
+// mapTime passes a time.Time map value, or its zero fallback, through the shared timestamp caster.
+// mapTime передаёт значение time.Time из карты либо его нулевую замену общему преобразователю
+// времени.
 func mapTime(values map[string]any, key string) *timestamppb.Timestamp {
 	value, _ := values[key].(time.Time)
 	return timestamp(value)
 }
+
+// mapStrings returns a string slice directly or filters string elements from an any slice, using
+// nil for other types.
+// mapStrings возвращает список строк напрямую либо выбирает строки из списка any, используя nil
+// для прочих типов.
 func mapStrings(values map[string]any, key string) []string {
 	if value, ok := values[key].([]string); ok {
 		return value
@@ -73,10 +100,18 @@ func mapStrings(values map[string]any, key string) []string {
 	return nil
 }
 
+// castLease projects lease reference, fence, generation and expiry from the supplied owner result
+// without authenticating the tuple.
+// castLease преобразует ссылку lease, fence, поколение и срок из результата владельца без
+// аутентификации этого набора.
 func castLease(values map[string]any) *controlplanev1.WorkLease {
 	return &controlplanev1.WorkLease{Ref: mapString(values, "leaseRef"), Fence: mapString(values, "fence"), Generation: mapInt64(values, "generation"), ExpiresAt: mapTime(values, "expiresAt")}
 }
 
+// castRuntimeRevision projects the supplied owner snapshot and version pins, rejecting invalid
+// context, file, deadline or prompt-contract projections.
+// castRuntimeRevision преобразует переданный снимок владельца и привязки версий, отклоняя неверные
+// проекции контекста, файлов, срока или контракта промпта.
 func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionSnapshot {
 	if values == nil {
 		return nil
@@ -133,15 +168,7 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	result.ImageManifestDigest = mapString(values, "imageManifestDigest")
 	result.RoleRuntimeContractRevision = uint64(mapInt64(values, "roleRuntimeContractRevision"))
 	result.RoleRuntimeContractSha256 = mapString(values, "roleRuntimeContractSHA256")
-	result.ProviderCredential = &controlplanev1.ProviderCredentialBinding{
-		AccountRef:            mapString(values, "providerAccountRef"),
-		CredentialRevisionRef: mapString(values, "providerCredentialRevisionRef"),
-		CredentialRevision:    mapInt64(values, "providerCredentialRevisionNumber"),
-		SecretName:            mapString(values, "providerSecretName"),
-		SecretUid:             mapString(values, "providerSecretUID"),
-		SecretResourceVersion: mapString(values, "providerSecretResourceVersion"),
-		ContentSha256:         mapString(values, "providerCredentialSHA256"),
-	}
+	result.ProviderCredential = castProviderCredential(values)
 	result.RuntimeConfigRef = mapString(values, "runtimeConfigRef")
 	result.RuntimeConfigVersion = mapInt64(values, "runtimeConfigVersion")
 	result.RuntimeConfigDigest = mapString(values, "runtimeConfigDigest")
@@ -311,12 +338,20 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	return result
 }
 
+// castClaim projects the owner claim as a running run and agent node together with its revision,
+// lease and task.
+// castClaim преобразует claim владельца в работающие запуск и узел агента вместе с ревизией, lease
+// и задачей.
 func castClaim(values map[string]any) *controlplanev1.ClaimedExecution {
 	run := &controlplanev1.Run{Ref: mapString(values, "runRef"), ProjectRef: mapString(values, "projectRef"), SessionRef: mapString(values, "sessionRef"), State: controlplanev1.RunState_RUN_STATE_RUNNING}
 	node := &controlplanev1.RunNode{Ref: mapString(values, "nodeRef"), RunRef: mapString(values, "runRef"), AgentRef: mapString(values, "agentRef"), TurnRef: mapString(values, "turnRef"), Type: controlplanev1.RunNodeType_RUN_NODE_TYPE_AGENT_EXECUTION, State: controlplanev1.RunNodeState_RUN_NODE_STATE_RUNNING}
 	return &controlplanev1.ClaimedExecution{Run: run, Node: node, Revision: castRuntimeRevision(values), Lease: castLease(values), Task: mapString(values, "task")}
 }
 
+// assistantRuntimeState maps the supported wire states to domain runtime states and returns an
+// empty string for every other enum value.
+// assistantRuntimeState переводит поддерживаемые состояния протокола в доменные состояния runtime
+// и возвращает пустую строку для прочих enum.
 func assistantRuntimeState(input controlplanev1.AssistantRuntimeState) string {
 	switch input {
 	case controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_PROVISIONING:
@@ -334,6 +369,10 @@ func assistantRuntimeState(input controlplanev1.AssistantRuntimeState) string {
 	}
 }
 
+// ClaimExecution passes workload and limit to the dedicated claim command and projects every
+// returned execution claim.
+// ClaimExecution передаёт workload и лимит отдельной команде получения работы и преобразует каждый
+// возвращённый claim исполнения.
 func (server *Server) ClaimExecution(ctx context.Context, request *controlplanev1.ClaimExecutionRequest) (*controlplanev1.ClaimExecutionResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName, command.ClaimExecution, nil, command.LeaseInput{WorkloadInstance: request.GetWorkloadInstance(), Limit: request.GetLimit()})
 	if err != nil {
@@ -346,6 +385,10 @@ func (server *Server) ClaimExecution(ctx context.Context, request *controlplanev
 	return response, nil
 }
 
+// ReadExecutionArtifact reads through the authorized lease path, closes the reader and rejects
+// read errors, oversized content or size mismatch.
+// ReadExecutionArtifact читает через авторизованный путь lease, закрывает reader и отклоняет
+// ошибки чтения, превышение лимита либо несовпадение размера.
 func (server *Server) ReadExecutionArtifact(ctx context.Context, request *controlplanev1.ReadExecutionArtifactRequest) (*controlplanev1.ReadExecutionArtifactResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ReadExecutionArtifact_FullMethodName)
 	if err != nil {
@@ -363,6 +406,10 @@ func (server *Server) ReadExecutionArtifact(ctx context.Context, request *contro
 	return &controlplanev1.ReadExecutionArtifactResponse{Artifact: castArtifact(download.Artifact), Content: content}, nil
 }
 
+// SearchAssistantResources selects task-session, configuration, integration-definition or ordinary
+// resource reads under the verified principal and lease tuple.
+// SearchAssistantResources выбирает чтение сессии задачи, конфигурации, определений интеграций
+// либо обычных ресурсов с проверенными principal и набором lease.
 func (server *Server) SearchAssistantResources(ctx context.Context, request *controlplanev1.SearchAssistantResourcesRequest) (*controlplanev1.SearchAssistantResourcesResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_SearchAssistantResources_FullMethodName)
 	if err != nil {
@@ -460,7 +507,10 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 	return response, nil
 }
 
-// Только own-read получает закрытый этап; остальные RPC и коды не меняются.
+// assistantCatalogTransportError adds a closed diagnostic stage only to unavailable
+// current-configuration reads, preserving other mapped errors.
+// assistantCatalogTransportError добавляет закрытый этап диагностики только к unavailable-чтению
+// текущей конфигурации, сохраняя остальные преобразованные ошибки.
 func assistantCatalogTransportError(kind controlplanev1.AssistantConfigurationCatalogKind, err error) error {
 	result := transportError(err)
 	if kind != controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION || status.Code(result) != codes.Unavailable {
@@ -469,6 +519,10 @@ func assistantCatalogTransportError(kind controlplanev1.AssistantConfigurationCa
 	return statusErrorWithReason(codes.Unavailable, status.Convert(result).Message(), errs.AssistantCurrentConfigurationStage(err))
 }
 
+// assistantPlanTransportError adds matching plan diagnostics and bounded metadata to mapped status
+// errors, falling back if detail encoding fails.
+// assistantPlanTransportError добавляет согласованную диагностику плана и ограниченные метаданные
+// к status-ошибкам, сохраняя исходную ошибку при сбое кодирования деталей.
 func assistantPlanTransportError(err error) error {
 	result := transportError(err)
 	stage, category, index, ok := errs.AssistantPlanDiagnostic(err)
@@ -489,6 +543,10 @@ func assistantPlanTransportError(err error) error {
 	return withDetails.Err()
 }
 
+// RenewExecution passes the exact lease reference, fence and generation through the dedicated
+// renew command and projects its lease.
+// RenewExecution передаёт точные ссылку lease, fence и поколение отдельной команде продления и
+// преобразует полученную lease.
 func (server *Server) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest) (*controlplanev1.RenewExecutionResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName, command.RenewExecution, nil, payload)
@@ -498,6 +556,10 @@ func (server *Server) RenewExecution(ctx context.Context, request *controlplanev
 	return &controlplanev1.RenewExecutionResponse{Lease: castLease(result.Runtime)}, nil
 }
 
+// ReportExecutionProgress converts optional financial and ordinary-message observations and
+// projects the command run, event and matching node.
+// ReportExecutionProgress преобразует необязательные финансовое наблюдение и обычное сообщение,
+// затем возвращает запуск, событие и соответствующий узел команды.
 func (server *Server) ReportExecutionProgress(ctx context.Context, request *controlplanev1.ReportExecutionProgressRequest) (*controlplanev1.ReportExecutionProgressResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Progress: request.GetProgress()}
 	if financial := request.GetFinancial(); financial != nil {
@@ -520,6 +582,10 @@ func (server *Server) ReportExecutionProgress(ctx context.Context, request *cont
 	return response, nil
 }
 
+// CommitProviderCredentialRefresh passes credential refresh CAS and lease bindings to the
+// dedicated mutation command and projects the returned binding.
+// CommitProviderCredentialRefresh передаёт CAS-привязки обновления credential и lease отдельной
+// команде изменения и преобразует возвращённую привязку.
 func (server *Server) CommitProviderCredentialRefresh(ctx context.Context, request *controlplanev1.CommitProviderCredentialRefreshRequest) (*controlplanev1.CommitProviderCredentialRefreshResponse, error) {
 	payload := providerCredentialRefreshInput(request)
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName,
@@ -530,6 +596,10 @@ func (server *Server) CommitProviderCredentialRefresh(ctx context.Context, reque
 	return &controlplanev1.CommitProviderCredentialRefreshResponse{ProviderCredential: castProviderCredential(result.Runtime)}, nil
 }
 
+// providerCredentialRefreshInput copies lease, previous revision and exact Secret identity,
+// version and digest fields without transporting secret values.
+// providerCredentialRefreshInput копирует lease, прежнюю ревизию и точные identity, версию и
+// digest Secret без передачи значений секретов.
 func providerCredentialRefreshInput(request *controlplanev1.CommitProviderCredentialRefreshRequest) command.ProviderCredentialRefreshInput {
 	return command.ProviderCredentialRefreshInput{
 		LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
@@ -540,6 +610,10 @@ func providerCredentialRefreshInput(request *controlplanev1.CommitProviderCreden
 	}
 }
 
+// castProviderCredential projects account, credential revision and exact Secret identity, resource
+// version and digest from owner result metadata.
+// castProviderCredential преобразует аккаунт, ревизию credential и точные identity, resource
+// version и digest Secret из метаданных результата владельца.
 func castProviderCredential(values map[string]any) *controlplanev1.ProviderCredentialBinding {
 	return &controlplanev1.ProviderCredentialBinding{
 		AccountRef:            mapString(values, "providerAccountRef"),
@@ -551,6 +625,10 @@ func castProviderCredential(values map[string]any) *controlplanev1.ProviderCrede
 	}
 }
 
+// CompleteExecution converts outcome, usage, archive metadata and artifact content before
+// executing the dedicated completion command.
+// CompleteExecution преобразует исход, использование, метаданные архива и содержимое артефактов до
+// отдельной команды завершения.
 func (server *Server) CompleteExecution(ctx context.Context, request *controlplanev1.CompleteExecutionRequest) (*controlplanev1.CompleteExecutionResponse, error) {
 	payload := command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode(), Usage: usageFromProto(request.GetUsage()), CodexSessionID: request.GetCodexSessionId(), ArchiveRelativePath: request.GetCodexArchiveRelativePath(), ArchiveSHA256: request.GetCodexArchiveSha256(), ArchiveSizeBytes: request.GetCodexArchiveSizeBytes()}
 	for _, item := range request.GetArtifacts() {
@@ -563,6 +641,10 @@ func (server *Server) CompleteExecution(ctx context.Context, request *controlpla
 	return &controlplanev1.CompleteExecutionResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}, nil
 }
 
+// DelegateExecution passes the parent lease and requested target to the dedicated delegation
+// command and returns the child, root graph and callback edge.
+// DelegateExecution передаёт родительскую lease и запрошенную цель отдельной команде делегирования
+// и возвращает потомка, корневой граф и ребро ответа.
 func (server *Server) DelegateExecution(ctx context.Context, request *controlplanev1.DelegateExecutionRequest) (*controlplanev1.DelegateExecutionResponse, error) {
 	payload := command.DelegateInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), TargetAgentRef: request.GetTargetAgentRef(), WorkflowStepKey: request.GetWorkflowStepKey(), Task: request.GetTask(), Input: asMap(request.GetInput())}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName, command.DelegateExecution, request.GetMutation(), payload)
@@ -572,6 +654,10 @@ func (server *Server) DelegateExecution(ctx context.Context, request *controlpla
 	return &controlplanev1.DelegateExecutionResponse{ChildRun: castRun(*result.Run), RootGraph: castGraph(*result.Graph), CallbackEdgeRef: mapString(result.Runtime, "callbackEdgeRef")}, nil
 }
 
+// ProposeAssistantPlan rejects nil or unspecified operations before passing the proposal and lease
+// bindings to the dedicated command.
+// ProposeAssistantPlan отклоняет nil либо неопределённые операции до передачи предложения и
+// привязок lease отдельной команде.
 func (server *Server) ProposeAssistantPlan(ctx context.Context, request *controlplanev1.ProposeAssistantPlanRequest) (*controlplanev1.ProposeAssistantPlanResponse, error) {
 	operations := make([]entity.AssistantPlanOperation, 0, len(request.GetOperations()))
 	for _, item := range request.GetOperations() {
@@ -588,6 +674,10 @@ func (server *Server) ProposeAssistantPlan(ctx context.Context, request *control
 	return &controlplanev1.ProposeAssistantPlanResponse{Plan: castPlan(result.Plan), Conversation: castConversation(*result.Conversation)}, nil
 }
 
+// ProposeAssistantMetadata passes a proposed conversation title with exact lease bindings through
+// the dedicated assistant metadata command.
+// ProposeAssistantMetadata передаёт предлагаемый заголовок беседы с точными привязками lease
+// отдельной команде метаданных ассистента.
 func (server *Server) ProposeAssistantMetadata(ctx context.Context, request *controlplanev1.ProposeAssistantMetadataRequest) (*controlplanev1.ProposeAssistantMetadataResponse, error) {
 	payload := command.ProposeAssistantMetadataInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Title: request.GetTitle()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeAssistantMetadata_FullMethodName, command.ProposeAssistantMetadata, request.GetMutation(), payload)
@@ -597,6 +687,10 @@ func (server *Server) ProposeAssistantMetadata(ctx context.Context, request *con
 	return &controlplanev1.ProposeAssistantMetadataResponse{Conversation: castConversation(*result.Conversation)}, nil
 }
 
+// ProposeRunMetadata passes a proposed run title with exact lease bindings through the dedicated
+// run metadata command.
+// ProposeRunMetadata передаёт предлагаемый заголовок запуска с точными привязками lease отдельной
+// команде метаданных запуска.
 func (server *Server) ProposeRunMetadata(ctx context.Context, request *controlplanev1.ProposeRunMetadataRequest) (*controlplanev1.ProposeRunMetadataResponse, error) {
 	payload := command.ProposeRunMetadataInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Title: request.GetTitle(), ActivitySummary: request.GetActivitySummary()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeRunMetadata_FullMethodName, command.ProposeRunMetadata, request.GetMutation(), payload)
@@ -606,6 +700,10 @@ func (server *Server) ProposeRunMetadata(ctx context.Context, request *controlpl
 	return &controlplanev1.ProposeRunMetadataResponse{Run: castRun(*result.Run), Event: castEvent(*result.Event)}, nil
 }
 
+// RecordRunToolCall converts tool-call locators, state, revision and safe result fields before
+// executing the dedicated recording command.
+// RecordRunToolCall преобразует ссылки вызова инструмента, состояние, ревизию и безопасные поля
+// результата до отдельной команды записи.
 func (server *Server) RecordRunToolCall(ctx context.Context, request *controlplanev1.RecordRunToolCallRequest) (*controlplanev1.RecordRunToolCallResponse, error) {
 	payload := command.RunToolCallInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
 		CallRef: request.GetCallRef(), Tool: request.GetTool(), SafeParameters: asMap(request.GetSafeParameters()),
@@ -618,6 +716,10 @@ func (server *Server) RecordRunToolCall(ctx context.Context, request *controlpla
 	return &controlplanev1.RecordRunToolCallResponse{Event: castEvent(*result.Event)}, nil
 }
 
+// assistantOperations preserves operation order while omitting nil entries and converting the
+// remaining operations individually.
+// assistantOperations сохраняет порядок операций, пропуская nil-элементы и преобразуя остальные
+// операции по отдельности.
 func assistantOperations(items []*controlplanev1.AssistantPlanOperation) []entity.AssistantPlanOperation {
 	result := make([]entity.AssistantPlanOperation, 0, len(items))
 	for _, item := range items {
@@ -628,6 +730,10 @@ func assistantOperations(items []*controlplanev1.AssistantPlanOperation) []entit
 	return result
 }
 
+// assistantOperation copies operation fields and optional versions, using bounded input only when
+// parameters are absent.
+// assistantOperation копирует поля операции и необязательные версии, используя bounded input
+// только при отсутствии parameters.
 func assistantOperation(item *controlplanev1.AssistantPlanOperation) entity.AssistantPlanOperation {
 	parameters := asMap(item.GetParameters())
 	if item.GetParameters() == nil {
@@ -641,6 +747,10 @@ func assistantOperation(item *controlplanev1.AssistantPlanOperation) entity.Assi
 	}
 }
 
+// ReconcileWarmRuntime reads the desired runtime through the verified workload path and logs only
+// the closed failure stage and mapped code on rejection.
+// ReconcileWarmRuntime читает желаемый runtime через проверенный путь workload и при отказе пишет
+// только закрытый этап и преобразованный код ошибки.
 func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *controlplanev1.ReconcileWarmRuntimeRequest) (*controlplanev1.ReconcileWarmRuntimeResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ReconcileWarmRuntime_FullMethodName)
 	if err != nil {
@@ -654,6 +764,10 @@ func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *control
 	return &controlplanev1.ReconcileWarmRuntimeResponse{Assistant: castAssistant(assistant), DesiredRevision: castRuntimeRevision(desired), MaterializationRequired: required}, nil
 }
 
+// ReportWarmRuntime maps the reported runtime state and passes workload, revision and safe error
+// code to the authorized domain report.
+// ReportWarmRuntime преобразует сообщённое состояние runtime и передаёт workload, ревизию и
+// безопасный код ошибки авторизованному доменному отчёту.
 func (server *Server) ReportWarmRuntime(ctx context.Context, request *controlplanev1.ReportWarmRuntimeRequest) (*controlplanev1.ReportWarmRuntimeResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ReportWarmRuntime_FullMethodName)
 	if err != nil {
@@ -667,6 +781,10 @@ func (server *Server) ReportWarmRuntime(ctx context.Context, request *controlpla
 	return &controlplanev1.ReportWarmRuntimeResponse{Assistant: castAssistant(assistant)}, nil
 }
 
+// ClaimDueSchedules projects authorized due-schedule claims with exact occurrence, lease,
+// revision, target and prompt input pins.
+// ClaimDueSchedules преобразует авторизованные claims наступивших расписаний с точными привязками
+// срабатывания, lease, ревизии, цели и входов промпта.
 func (server *Server) ClaimDueSchedules(ctx context.Context, request *controlplanev1.ClaimDueSchedulesRequest) (*controlplanev1.ClaimDueSchedulesResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ClaimDueSchedules_FullMethodName)
 	if err != nil {
@@ -691,6 +809,10 @@ func (server *Server) ClaimDueSchedules(ctx context.Context, request *controlpla
 	return response, nil
 }
 
+// MaterializeScheduleOccurrence passes occurrence and exact lease bindings through the dedicated
+// materialization command and projects run and schedule.
+// MaterializeScheduleOccurrence передаёт срабатывание и точные привязки lease отдельной команде
+// материализации и преобразует запуск и расписание.
 func (server *Server) MaterializeScheduleOccurrence(ctx context.Context, request *controlplanev1.MaterializeScheduleOccurrenceRequest) (*controlplanev1.MaterializeScheduleOccurrenceResponse, error) {
 	payload := command.OccurrenceInput{OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName, command.MaterializeOccurrence, request.GetMutation(), payload)
@@ -700,6 +822,10 @@ func (server *Server) MaterializeScheduleOccurrence(ctx context.Context, request
 	return &controlplanev1.MaterializeScheduleOccurrenceResponse{Run: castRun(*result.Run), Schedule: castSchedule(*result.Schedule)}, nil
 }
 
+// RenewScheduleOccurrence renews the occurrence lease through the verified domain method and
+// projects the returned lease metadata.
+// RenewScheduleOccurrence продлевает lease срабатывания через проверенный доменный метод и
+// преобразует возвращённые метаданные lease.
 func (server *Server) RenewScheduleOccurrence(ctx context.Context, request *controlplanev1.RenewScheduleOccurrenceRequest) (*controlplanev1.RenewScheduleOccurrenceResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_RenewScheduleOccurrence_FullMethodName)
 	if err != nil {
@@ -714,6 +840,10 @@ func (server *Server) RenewScheduleOccurrence(ctx context.Context, request *cont
 	return &controlplanev1.RenewScheduleOccurrenceResponse{Lease: castLease(result)}, nil
 }
 
+// FailScheduleOccurrence passes occurrence, lease, safe error and retryability to the failure
+// command and returns its state and attempt.
+// FailScheduleOccurrence передаёт срабатывание, lease, безопасную ошибку и возможность повтора
+// команде отказа и возвращает состояние и попытку.
 func (server *Server) FailScheduleOccurrence(ctx context.Context, request *controlplanev1.FailScheduleOccurrenceRequest) (*controlplanev1.FailScheduleOccurrenceResponse, error) {
 	payload := command.OccurrenceInput{
 		OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(),
@@ -727,6 +857,10 @@ func (server *Server) FailScheduleOccurrence(ctx context.Context, request *contr
 	return &controlplanev1.FailScheduleOccurrenceResponse{State: mapString(result.Runtime, "state"), Attempt: int32(mapInt64(result.Runtime, "attempt"))}, nil
 }
 
+// ClaimIntegrationConnectionTests reads authorized connection-test claims for the workload and
+// casts each with its typed test-claim projection.
+// ClaimIntegrationConnectionTests читает авторизованные claims проверок подключения для workload и
+// преобразует каждый типизированным преобразователем проверки.
 func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, request *controlplanev1.ClaimIntegrationConnectionTestsRequest) (*controlplanev1.ClaimIntegrationConnectionTestsResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName)
 	if err != nil {
@@ -743,6 +877,10 @@ func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, reque
 	return response, nil
 }
 
+// CompleteIntegrationConnectionTest passes test outcome and exact lease bindings to the dedicated
+// completion command and returns the resulting connection.
+// CompleteIntegrationConnectionTest передаёт исход проверки и точные привязки lease отдельной
+// команде завершения и возвращает полученное подключение.
 func (server *Server) CompleteIntegrationConnectionTest(ctx context.Context, request *controlplanev1.CompleteIntegrationConnectionTestRequest) (*controlplanev1.CompleteIntegrationConnectionTestResponse, error) {
 	payload := command.IntegrationConnectionTestInput{TestRef: request.GetTestRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName, command.CompleteConnectionTest, request.GetMutation(), payload)
@@ -752,6 +890,10 @@ func (server *Server) CompleteIntegrationConnectionTest(ctx context.Context, req
 	return &controlplanev1.CompleteIntegrationConnectionTestResponse{Connection: castConnection(*result.Connection)}, nil
 }
 
+// ResolveIntegrationInvocation passes invocation locators and bounded input to the authorized
+// owner method and projects the resulting grant and resource scope.
+// ResolveIntegrationInvocation передаёт ссылки вызова и ограниченный ввод авторизованному методу
+// владельца и преобразует полученные grant и область ресурсов.
 func (server *Server) ResolveIntegrationInvocation(ctx context.Context, request *controlplanev1.ResolveIntegrationInvocationRequest) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName)
 	if err != nil {
@@ -772,6 +914,10 @@ func (server *Server) ResolveIntegrationInvocation(ctx context.Context, request 
 	}, nil
 }
 
+// ClaimIntegrationInvocations reads authorized invocation claims for the workload and returns
+// their typed invocation projections.
+// ClaimIntegrationInvocations читает авторизованные claims вызовов для workload и возвращает их
+// типизированные представления вызова.
 func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *controlplanev1.ClaimIntegrationInvocationsRequest) (*controlplanev1.ClaimIntegrationInvocationsResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName)
 	if err != nil {
@@ -788,6 +934,10 @@ func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *
 	return response, nil
 }
 
+// GetIntegrationInvocation reads invocation state through the verified principal and returns safe
+// outcome and effect-receipt locators.
+// GetIntegrationInvocation читает состояние вызова с проверенным principal и возвращает безопасный
+// исход и ссылки квитанции эффекта.
 func (server *Server) GetIntegrationInvocation(ctx context.Context, request *controlplanev1.GetIntegrationInvocationRequest) (*controlplanev1.GetIntegrationInvocationResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_GetIntegrationInvocation_FullMethodName)
 	if err != nil {
@@ -804,6 +954,10 @@ func (server *Server) GetIntegrationInvocation(ctx context.Context, request *con
 	}, nil
 }
 
+// CompleteIntegrationInvocation preserves unknown outcome and optional effect-receipt fields
+// before executing completion with the exact lease tuple.
+// CompleteIntegrationInvocation сохраняет неизвестный исход и поля необязательной квитанции
+// эффекта до завершения с точным набором lease.
 func (server *Server) CompleteIntegrationInvocation(ctx context.Context, request *controlplanev1.CompleteIntegrationInvocationRequest) (*controlplanev1.CompleteIntegrationInvocationResponse, error) {
 	payload := command.IntegrationInvocationInput{InvocationRef: request.GetInvocationRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), UnknownOutcome: request.GetUnknownOutcome(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
 	if receipt := request.GetEffectReceipt(); receipt != nil {
@@ -820,7 +974,10 @@ func (server *Server) CompleteIntegrationInvocation(ctx context.Context, request
 	return &controlplanev1.CompleteIntegrationInvocationResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}, nil
 }
 
-// CastIntegrationConnectionTestClaim сохраняет точные owner pins и отсутствие generic credential.
+// CastIntegrationConnectionTestClaim projects exact definition and lease pins, package bytes and
+// an optional typed credential revision from the owner claim.
+// CastIntegrationConnectionTestClaim преобразует точные привязки определения и lease, байты пакета
+// и необязательную типизированную ревизию credential из claim владельца.
 func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.IntegrationConnectionTestClaim {
 	configuration, _ := item["configuration"].(map[string]any)
 	claim := &controlplanev1.IntegrationConnectionTestClaim{
@@ -835,7 +992,10 @@ func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.Int
 	return claim
 }
 
-// CastIntegrationInvocationClaim сохраняет точные owner pins и отсутствие generic credential.
+// CastIntegrationInvocationClaim projects exact definition, grant, resource-scope, effect and
+// lease pins with optional typed credential metadata.
+// CastIntegrationInvocationClaim преобразует точные привязки определения, grant, области ресурсов,
+// эффекта и lease с необязательными типизированными метаданными credential.
 func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.IntegrationInvocationClaim {
 	configuration, _ := item["configuration"].(map[string]any)
 	boundedInput, _ := item["boundedInput"].(map[string]any)

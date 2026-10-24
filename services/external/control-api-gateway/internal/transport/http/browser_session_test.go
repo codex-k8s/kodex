@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 )
 
+// TestSessionMetadataDistinguishesLegacyBearerAndBackendRefresh checks backend-refresh and legacy
+// reauthentication modes preserve authoritative timing/version metadata, then rejects invalid UUID
+// generation, unsafe version, expired/oversized lifetime and renewal after expiry.
+// TestSessionMetadataDistinguishesLegacyBearerAndBackendRefresh проверяет сохранение авторитетных
+// timing/version metadata для backend-refresh и legacy reauthentication, затем отказ для неверного
+// UUID поколения, небезопасной версии, истёкшего/превышенного lifetime и renew после expiry.
 func TestSessionMetadataDistinguishesLegacyBearerAndBackendRefresh(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()

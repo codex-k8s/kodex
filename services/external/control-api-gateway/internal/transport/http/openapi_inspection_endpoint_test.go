@@ -10,6 +10,10 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// openAPIInspectionSource provides synthetic OpenAPI with one supported health candidate and one
+// unsupported text-response operation for bounded local inspection tests.
+// openAPIInspectionSource задаёт синтетический OpenAPI с одним поддерживаемым health-кандидатом и
+// одной неподдерживаемой операцией текстового ответа для ограниченных локальных тестов анализа.
 const openAPIInspectionSource = `openapi: 3.1.0
 info: {title: Заявки, version: 1.0.0}
 servers: [{url: https://api.example.test}]
@@ -29,6 +33,12 @@ paths:
               schema: {type: string}
 `
 
+// TestOpenAPIInspectionIsBoundedLocalPreview checks local operation classification, digest/title
+// and no-store with insecure-origin noncandidates, rejecting oversized input and never returning
+// raw source.
+// TestOpenAPIInspectionIsBoundedLocalPreview проверяет локальную классификацию операций, дайджест,
+// название и no-store с недопуском кандидатов небезопасного origin, отказом чрезмерному вводу и
+// без выдачи исходного текста.
 func TestOpenAPIInspectionIsBoundedLocalPreview(t *testing.T) {
 	handler := generated.Handler(&Server{})
 	path := "/api/v1/integration-definition-configurations/openapi-inspections"

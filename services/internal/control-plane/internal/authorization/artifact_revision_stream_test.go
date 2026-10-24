@@ -3,12 +3,9 @@ package authorization
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"io"
 	"net"
-	"net/url"
 	"testing"
 	"time"
 
@@ -17,7 +14,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/rpcprincipal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -26,45 +22,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func revisionStreamPeer(t *testing.T, caller string) context.Context {
-	t.Helper()
-	uri, err := url.Parse(caller)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cert := &x509.Certificate{Raw: []byte("synthetic user certificate"), URIs: []*url.URL{uri}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Minute), ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}
-	return peer.NewContext(t.Context(), &peer.Peer{AuthInfo: credentials.TLSInfo{State: tls.ConnectionState{HandshakeComplete: true, PeerCertificates: []*x509.Certificate{cert}, VerifiedChains: [][]*x509.Certificate{{cert}}}}})
-}
-
+// revisionWireContext overrides only the stream context to install a synthetic peer in
+// generated-wire tests over an in-memory listener.
+// revisionWireContext заменяет только stream context для установки синтетического peer в
+// generated-wire tests через in-memory listener.
 type revisionWireContext struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
+// Context returns the synthetic verified-peer context while other stream operations remain
+// delegated to the generated transport.
+// Context возвращает синтетический verified-peer context, сохраняя остальные stream операции за
+// generated transport.
 func (stream *revisionWireContext) Context() context.Context { return stream.ctx }
 
-// Оснастка использует тот же проверенный синтетический TLS peer, что существующие
-// stream tests; реальные credentials, owner PostgreSQL и object storage не нужны.
+// revisionStreamFixture builds the exact revision-download binding, fake owner/resolver and
+// revocation state with synthetic credential metadata and no live storage.
+// revisionStreamFixture создаёт точную revision-download binding, fake owner и resolver и
+// revocation state с синтетическими credential metadata без живого storage.
 func revisionStreamFixture(t *testing.T, actor serviceidentity.ActorMode) (AdmissionAuthorizer, *rpcprincipal.Service, *streamOwnerFixture, *streamRevocations, context.Context) {
 	t.Helper()
-	const caller = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
-	const target = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
-	method := cp.PlatformCommandService_DownloadArtifactRevision_FullMethodName
-	revocations := &streamRevocations{}
-	auth, err := serviceidentity.New(target, []serviceidentity.Binding{{CallerSPIFFEID: caller, FullMethod: method, OperationID: "platform.command.artifact-revisions.download", Permission: "platform.command.artifact-revisions.download", ActorMode: actor}}, revocations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := &streamOwnerFixture{user: true}
-	resolver, err := rpcprincipal.New(owner, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := revisionStreamPeer(t, caller)
-	ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("x-kodex-rpc-profile", "service-v1", "authorization", "Bearer user-credential"))
-	return auth, resolver, owner, revocations, ctx
+	return userServiceStreamFixture(t, serviceidentity.Binding{CallerSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway", FullMethod: cp.PlatformCommandService_DownloadArtifactRevision_FullMethodName, OperationID: "platform.command.artifact-revisions.download", Permission: "platform.command.artifact-revisions.download", ActorMode: actor}, "")
 }
 
+// TestArtifactRevisionStreamBindsExactRequestAndRevokes checks DOWNLOAD/PREVIEW request digests
+// and method isolation, one initial request and refusal to send after revocation.
+// TestArtifactRevisionStreamBindsExactRequestAndRevokes проверяет digest запросов DOWNLOAD и
+// PREVIEW и изоляцию метода, один исходный запрос и запрет отправки после отзыва.
 func TestArtifactRevisionStreamBindsExactRequestAndRevokes(t *testing.T) {
 	method := cp.PlatformCommandService_DownloadArtifactRevision_FullMethodName
 	for _, purpose := range []cp.ArtifactDownloadPurpose{cp.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_DOWNLOAD, cp.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_PREVIEW} {
@@ -110,6 +95,11 @@ func TestArtifactRevisionStreamBindsExactRequestAndRevokes(t *testing.T) {
 	}
 }
 
+// TestArtifactRevisionStreamRejectsWrongBoundary rejects wrong stream
+// shapes/method/profile/peer/actor and missing user credentials before any owner request digest or
+// outbound content.
+// TestArtifactRevisionStreamRejectsWrongBoundary отклоняет неверные stream shape, method, profile,
+// peer, actor и отсутствие user credentials до request digest владельца либо outbound content.
 func TestArtifactRevisionStreamRejectsWrongBoundary(t *testing.T) {
 	method := cp.PlatformCommandService_DownloadArtifactRevision_FullMethodName
 	for _, name := range []string{"client-stream", "bidi-stream", "unary-shape", "unknown-method", "service-actor", "missing-credential", "foreign-peer", "wrong-profile"} {
@@ -147,10 +137,18 @@ func TestArtifactRevisionStreamRejectsWrongBoundary(t *testing.T) {
 	}
 }
 
+// revisionWireServer implements only the synthetic revision-download response path for generated
+// gRPC compatibility tests.
+// revisionWireServer реализует только синтетический revision-download response path для проверки
+// совместимости generated gRPC.
 type revisionWireServer struct {
 	cp.UnimplementedPlatformCommandServiceServer
 }
 
+// DownloadArtifactRevision checks the resolved synthetic actor and exact artifact/revision
+// locators before sending separate metadata and historical bytes.
+// DownloadArtifactRevision проверяет разрешённого синтетического actor и точные artifact и
+// revision locators до отправки отдельных metadata и исторических bytes.
 func (*revisionWireServer) DownloadArtifactRevision(request *cp.DownloadArtifactRevisionRequest, stream cp.PlatformCommandService_DownloadArtifactRevisionServer) error {
 	principal, err := Principal(stream.Context(), cp.PlatformCommandService_DownloadArtifactRevision_FullMethodName)
 	if err != nil || principal.ActorID != "resolved-actor" || request.ArtifactRef != "art_abcdefghijk" || request.RevisionRef != "arv_abcdefghijk" {
@@ -162,6 +160,12 @@ func (*revisionWireServer) DownloadArtifactRevision(request *cp.DownloadArtifact
 	return stream.Send(&cp.DownloadArtifactRevisionResponse{Data: []byte("old")})
 }
 
+// TestArtifactRevisionGeneratedWireThroughServiceStream checks generated revision RPC
+// metadata/data/EOF over bufconn with an injected synthetic verified peer; it is not a live TLS
+// acceptance test.
+// TestArtifactRevisionGeneratedWireThroughServiceStream проверяет metadata, data и EOF generated
+// revision RPC через bufconn с внедрённым синтетическим verified peer; это не live TLS acceptance
+// test.
 func TestArtifactRevisionGeneratedWireThroughServiceStream(t *testing.T) {
 	auth, resolver, _, _, peerCtx := revisionStreamFixture(t, serviceidentity.UserActor)
 	verifiedPeer, _ := peer.FromContext(peerCtx)
@@ -198,6 +202,12 @@ func TestArtifactRevisionGeneratedWireThroughServiceStream(t *testing.T) {
 	}
 }
 
+// TestArtifactRevisionTrustedClusterRequiresExactCallerAndCredential checks trusted-cluster still
+// requires the registered caller/method and verified user credential before owner resolution or
+// response data.
+// TestArtifactRevisionTrustedClusterRequiresExactCallerAndCredential проверяет требование
+// зарегистрированных caller и метода и проверенного user credential в trusted-cluster до
+// разрешения владельцем либо response data.
 func TestArtifactRevisionTrustedClusterRequiresExactCallerAndCredential(t *testing.T) {
 	const caller = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
 	const target = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"

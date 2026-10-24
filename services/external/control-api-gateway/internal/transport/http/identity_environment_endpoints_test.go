@@ -17,6 +17,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// identityEnvironmentRecorder records cloned interaction-identity and environment RPC requests
+// with configurable failures and corrupt response hooks.
+// identityEnvironmentRecorder записывает копии RPC identity взаимодействия и окружений с
+// задаваемыми ошибками и изменениями ответов для отрицательных сценариев.
 type identityEnvironmentRecorder struct {
 	grpc.ClientConnInterface
 	method  string
@@ -25,6 +29,10 @@ type identityEnvironmentRecorder struct {
 	corrupt func(proto.Message)
 }
 
+// Invoke supplies typed synthetic identity, impact and rebind responses after recording the
+// request, or returns the configured owner error.
+// Invoke выдаёт типизированные синтетические ответы identity, impact и rebind после записи запроса
+// либо возвращает заданную ошибку владельца.
 func (client *identityEnvironmentRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	client.method, client.request = method, proto.Clone(request.(proto.Message))
 	if client.failure != nil {
@@ -56,18 +64,45 @@ func (client *identityEnvironmentRecorder) Invoke(_ context.Context, method stri
 	return nil
 }
 
+// identityEnvironmentHandler connects the generated HTTP router to local query and command clients
+// sharing the identity/environment recorder.
+// identityEnvironmentHandler соединяет generated HTTP-маршрутизатор с локальными query- и
+// command-клиентами общей заглушки записи identity и окружений.
 func identityEnvironmentHandler(client *identityEnvironmentRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: controlplanev1.NewPlatformQueryServiceClient(client), Command: controlplanev1.NewPlatformCommandServiceClient(client)}})
 }
 
+// identityBindBody encodes synthetic external team, channel, user digest and target subject fields
+// for identity-binding HTTP tests.
+// identityBindBody кодирует синтетические поля внешней команды, канала, дайджеста пользователя и
+// целевого subject для HTTP-тестов привязки identity.
 func identityBindBody() string {
 	return `{"externalTeamRef":"team-fixture","externalChannelRef":"channel-fixture","externalUserDigest":"` + strings.Repeat("a", 64) + `","subjectRef":"sub_fixture01"}`
 }
 
+// environmentRebindBody provides one synthetic consumer selection with exact agent, binding,
+// version, project and organization scope pins.
+// environmentRebindBody задаёт выбор одного синтетического потребителя с точными pins агента,
+// привязки, версии, проекта и области организации.
 const environmentRebindBody = `{"consumers":[{"agentRef":"agt_fixture01","agentVersion":5,"bindingRef":"bind_fixture01","bindingVersion":2,"versionRef":"ever_fixture01","projectRef":"prj_fixture01","scopeKind":"PROJECT","organizationRef":"org_fixture01"}]}`
+
+// identityCollectionPath names the synthetic connection-scoped interaction-identity collection
+// route shared by local HTTP tests.
+// identityCollectionPath задаёт маршрут коллекции identity взаимодействия синтетического
+// подключения для локальных HTTP-тестов.
 const identityCollectionPath = "/api/v1/integration-connections/conn_fixture01/interaction-identities"
+
+// environmentVersionPath names the synthetic runtime environment version route used for impact and
+// consumer-rebinding tests.
+// environmentVersionPath задаёт маршрут версии синтетического runtime-окружения для тестов влияния
+// и перепривязки потребителей.
 const environmentVersionPath = "/api/v1/runtime-environments/env_fixture01/versions/ever_fixture02"
 
+// TestIdentityEnvironmentExactMapping checks five dedicated RPC routes, exact identifiers,
+// mutation fencing, pagination, impact ETag and selected consumer version pins.
+// TestIdentityEnvironmentExactMapping проверяет пять отдельных RPC-маршрутов, точные
+// идентификаторы, ограничения изменений, пагинацию, ETag влияния и pins версий выбранного
+// потребителя.
 func TestIdentityEnvironmentExactMapping(t *testing.T) {
 	for _, tc := range []struct {
 		method, path, body, rpc string
@@ -132,6 +167,12 @@ func TestIdentityEnvironmentExactMapping(t *testing.T) {
 	}
 }
 
+// TestIdentityEnvironmentRejectInvalidInputBeforeRPC checks forged authority, malformed digests
+// and control text, mutation headers and empty, duplicate or unsafe consumer selections before
+// RPC.
+// TestIdentityEnvironmentRejectInvalidInputBeforeRPC проверяет поддельные полномочия, неверные
+// дайджесты и управляющие символы, заголовки изменений и пустой, повторный либо небезопасный выбор
+// потребителей до RPC.
 func TestIdentityEnvironmentRejectInvalidInputBeforeRPC(t *testing.T) {
 	for _, tc := range []struct{ name, path, body, header, value string }{
 		{"actor", identityCollectionPath, strings.TrimSuffix(identityBindBody(), "}") + `,"actorRef":"forged"}`, "", ""},
@@ -165,6 +206,10 @@ func TestIdentityEnvironmentRejectInvalidInputBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestIdentityEnvironmentPageBoundsBeforeRPC checks page-size overflow and cursor length limits on
+// both interaction-identity lists and environment impact reads before RPC.
+// TestIdentityEnvironmentPageBoundsBeforeRPC проверяет переполнение размера страницы и длину
+// курсора до RPC в списках identity взаимодействия и чтении влияния окружения.
 func TestIdentityEnvironmentPageBoundsBeforeRPC(t *testing.T) {
 	for _, path := range []string{identityCollectionPath, environmentVersionPath + "/impact"} {
 		for _, query := range []string{"pageSize=0", "pageSize=101", "pageSize=4294967297", "pageToken=" + strings.Repeat("a", 513)} {
@@ -178,6 +223,10 @@ func TestIdentityEnvironmentPageBoundsBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestIdentityEnvironmentAuthorityErrorsRemainClosed checks concrete HTTP mapping for owner
+// identity-binding errors without returning private upstream details.
+// TestIdentityEnvironmentAuthorityErrorsRemainClosed проверяет конкретное HTTP-отображение ошибок
+// привязки identity владельца без возврата внутренних подробностей upstream.
 func TestIdentityEnvironmentAuthorityErrorsRemainClosed(t *testing.T) {
 	for _, code := range []codes.Code{codes.PermissionDenied, codes.NotFound, codes.Aborted, codes.Unauthenticated, codes.Unavailable} {
 		t.Run(code.String(), func(t *testing.T) {
@@ -192,6 +241,11 @@ func TestIdentityEnvironmentAuthorityErrorsRemainClosed(t *testing.T) {
 	}
 }
 
+// TestIdentityEnvironmentRejectCorruptUpstream checks rejection of foreign connection or target,
+// unknown state, nil consumers, unsafe versions and unselected or missing binding results.
+// TestIdentityEnvironmentRejectCorruptUpstream проверяет отказ чужим подключению либо цели,
+// неизвестному состоянию, nil-потребителям, небезопасным версиям и невыбранным либо отсутствующим
+// результатам привязки.
 func TestIdentityEnvironmentRejectCorruptUpstream(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, path, body string

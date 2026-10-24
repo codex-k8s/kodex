@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestValidatePaths checks supported documentation/assets and exact SKILL.md casing, rejecting
+// absent/duplicate manifest, traversal, hidden paths, case collisions and active/script
+// extensions.
+// TestValidatePaths проверяет допустимые документацию и assets и точный регистр SKILL.md с отказом
+// отсутствующему либо повторному manifest, traversal, hidden путям, коллизиям регистра и
+// active/script расширениям.
 func TestValidatePaths(t *testing.T) {
 	for _, paths := range [][]string{{"SKILL.md"}, {"SKILL.md", "references/design.md", "assets/icon.png"}} {
 		if err := ValidatePaths(paths); err != nil {
@@ -18,6 +24,10 @@ func TestValidatePaths(t *testing.T) {
 	}
 }
 
+// TestParseManifest checks LF/CRLF manifests parse identically while missing metadata/body,
+// duplicate/unknown fields, malformed YAML, NUL and oversized input fail.
+// TestParseManifest проверяет одинаковый parsing LF/CRLF manifest и отказ отсутствующим metadata
+// либо body, повторным и неизвестным полям, повреждённому YAML, NUL и превышению размера.
 func TestParseManifest(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
 		input := strings.ReplaceAll("---\nname: Example\ndescription: Safe documentation\n---\nRead these instructions.\n", "\n", newline)

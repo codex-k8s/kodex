@@ -8,11 +8,21 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// mailboxSpecFixture builds a fully populated synthetic mailbox specification with
+// generation-pinned credential references, TLS endpoints, limits, folders and operation policy.
+// mailboxSpecFixture создаёт полную синтетическую спецификацию ящика с generation pins ссылок
+// учётных данных, TLS endpoints, лимитами, папками и политикой операции.
 func mailboxSpecFixture() *cp.EmailMailboxSpecification {
 	endpoint := &cp.EmailMailboxEndpoint{Host: "mail.fixture.invalid", Port: 465, ServerName: "mail.fixture.invalid", TlsMode: cp.EmailMailboxTLSMode_EMAIL_MAILBOX_TLS_MODE_IMPLICIT, AuthMethod: cp.EmailMailboxAuthMethod_EMAIL_MAILBOX_AUTH_METHOD_PASSWORD, Ca: &cp.EmailMailboxCredentialReference{Name: "cred_ca_fixture", Generation: 2}, Username: &cp.EmailMailboxCredentialReference{Name: "cred_user_fixture", Generation: 3}, Secret: &cp.EmailMailboxCredentialReference{Name: "cred_auth_fixture", Generation: 4}}
 	return &cp.EmailMailboxSpecification{Enabled: true, ReceiveProtocol: cp.EmailMailboxReceiveProtocol_EMAIL_MAILBOX_RECEIVE_PROTOCOL_IMAP, AllowedFolders: []string{"INBOX", "Drafts"}, ArchiveFolder: "Archive", DraftsFolder: "Drafts", Folder: "INBOX", Sender: "sender@fixture.invalid", ReplyTo: "reply@fixture.invalid", Recipients: []string{"target@fixture.invalid"}, HelloName: "hello.fixture.invalid", Smtp: endpoint, Imap: proto.Clone(endpoint).(*cp.EmailMailboxEndpoint), Pop: proto.Clone(endpoint).(*cp.EmailMailboxEndpoint), Limits: &cp.EmailMailboxLimits{AttachmentBytes: 1024, MaxAttachments: 2, MaxRecipients: 3, MessageBytes: 4096, PageSize: 5, ScanMessages: 6, TimeoutSeconds: 7}, Policies: []*cp.EmailMailboxOperationPolicy{{Operation: cp.EmailOperation_EMAIL_OPERATION_SEND, Policy: cp.EmailApprovalPolicy_EMAIL_APPROVAL_POLICY_HUMAN_GATE, Folders: []string{"INBOX"}}}}
 }
 
+// TestMailboxSpecificationTypedRoundTripPreservesAllFieldsAndIncompleteDraft checks full and
+// incomplete draft specifications round-trip unchanged, retaining all known operation enums and
+// absence of unspecified selections.
+// TestMailboxSpecificationTypedRoundTripPreservesAllFieldsAndIncompleteDraft проверяет передачу
+// полных и неполных спецификаций черновика без изменений с сохранением всех известных enum
+// операций и отсутствия неопределённых выборов.
 func TestMailboxSpecificationTypedRoundTripPreservesAllFieldsAndIncompleteDraft(t *testing.T) {
 	for _, spec := range []*cp.EmailMailboxSpecification{mailboxSpecFixture(), {}, {Smtp: &cp.EmailMailboxEndpoint{}, Policies: []*cp.EmailMailboxOperationPolicy{{}}}} {
 		view, ok := mailboxSpecificationView(spec)
@@ -44,6 +54,12 @@ func TestMailboxSpecificationTypedRoundTripPreservesAllFieldsAndIncompleteDraft(
 	}
 }
 
+// TestMailboxSpecificationRejectsUnknownEnumAndOversizedSnapshot checks unknown owner/caller
+// enums, nil policies, oversized collections, unsafe limits and negative credential generations
+// are rejected.
+// TestMailboxSpecificationRejectsUnknownEnumAndOversizedSnapshot проверяет отказ неизвестным enum
+// владельца и клиента, nil-политикам, чрезмерным коллекциям, небезопасным лимитам и отрицательным
+// поколениям учётных данных.
 func TestMailboxSpecificationRejectsUnknownEnumAndOversizedSnapshot(t *testing.T) {
 	for _, mutate := range []func(*cp.EmailMailboxSpecification){
 		func(v *cp.EmailMailboxSpecification) { v.ReceiveProtocol = 99 },
@@ -71,6 +87,12 @@ func TestMailboxSpecificationRejectsUnknownEnumAndOversizedSnapshot(t *testing.T
 	}
 }
 
+// TestMailboxContentKeepsYAMLAsOwnerParsedInputAndRejectsTwoSources checks YAML is forwarded
+// unchanged for owner parsing and rejects both absent content and simultaneous YAML/specification
+// sources.
+// TestMailboxContentKeepsYAMLAsOwnerParsedInputAndRejectsTwoSources проверяет передачу YAML без
+// изменений для разбора владельцем и отказ отсутствующему содержимому и одновременным источникам
+// YAML и specification.
 func TestMailboxContentKeepsYAMLAsOwnerParsedInputAndRejectsTwoSources(t *testing.T) {
 	yaml := "enabled: true\nreceive_protocol: imap\n"
 	input, ok := mailboxContentInput(generated.EmailMailboxDraftContent{Yaml: &yaml})

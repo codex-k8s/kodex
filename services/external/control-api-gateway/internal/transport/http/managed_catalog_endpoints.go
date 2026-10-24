@@ -8,6 +8,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// ListManagedConfigurations validates project/search/page controls and an optional known kind,
+// calls the owner catalog and returns the shared validated summary page under no-store. It does
+// not expose full editable revision content.
+// ListManagedConfigurations проверяет project/search/page и необязательный известный kind,
+// вызывает каталог владельца и выдаёт общую проверенную страницу сводок под no-store. Полное
+// редактируемое содержимое revision не раскрывается.
 func (server *Server) ListManagedConfigurations(w http.ResponseWriter, r *http.Request, p generated.ListManagedConfigurationsParams) {
 	r, ok := catalogRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
 	if !ok {
@@ -42,8 +48,12 @@ func (server *Server) ListManagedConfigurations(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, output)
 }
 
-// ManagedConfigurationPageView строит тот же публичный каталог для HTTP и
-// типизированного realtime snapshot, не создавая два источника проекции.
+// ManagedConfigurationPageView builds the same bounded public summary page for HTTP and typed
+// realtime snapshots, validating each item through one shared converter. One invalid summary
+// rejects the page; eligibility is supplied by the owner catalog.
+// ManagedConfigurationPageView собирает одну ограниченную публичную страницу сводок для HTTP и
+// typed realtime snapshots, проверяя элементы общим converter. Одна неверная сводка отклоняет
+// страницу; допуск задаёт каталог владельца.
 func ManagedConfigurationPageView(value *controlplanev1.ListManagedConfigurationsResponse) (generated.ManagedConfigurationPage, error) {
 	if value == nil || value.GetTotal() < int64(len(value.GetConfigurations())) || value.GetTotal() > maximumSafeJSONInteger || len(value.GetConfigurations()) > 100 {
 		return generated.ManagedConfigurationPage{}, errManagedConfigurationShape
@@ -63,6 +73,13 @@ func ManagedConfigurationPageView(value *controlplanev1.ListManagedConfiguration
 	return result, nil
 }
 
+// managedConfigurationSummaryView projects validated configuration ownership/source/action
+// metadata and optional current revision identity/state/digest. It keeps absent revisions absent
+// and does not materialize their content or infer source edit permission.
+// managedConfigurationSummaryView проецирует проверенные ownership/source/action metadata
+// конфигурации и необязательные identity/state/digest текущей revision. Отсутствующая revision
+// сохраняется отсутствующей, содержимое не материализуется и право редактирования источника не
+// выводится.
 func managedConfigurationSummaryView(value *controlplanev1.ManagedConfigurationSet) (generated.ManagedConfigurationSummary, error) {
 	metadata, err := managedConfigurationMetadataView(value)
 	if err != nil {

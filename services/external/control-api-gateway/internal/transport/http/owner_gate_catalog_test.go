@@ -12,6 +12,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// gateCatalogFixture builds a synthetic approved project gate page with explicit scope, a larger
+// authoritative total and an opaque snapshot cursor.
+// gateCatalogFixture создаёт синтетическую страницу одобренного шлюза проекта с явной областью,
+// большим авторитетным общим числом строк и непрозрачным курсором snapshot.
 func gateCatalogFixture() *cp.ListOwnerGatesResponse {
 	return &cp.ListOwnerGatesResponse{
 		Gates: []*cp.OwnerGate{{Ref: "gate_fixture01", ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", Version: 3, State: cp.OwnerGateState_OWNER_GATE_STATE_APPROVED}},
@@ -20,6 +24,11 @@ func gateCatalogFixture() *cp.ListOwnerGatesResponse {
 	}
 }
 
+// TestOwnerGateCatalogPreservesQueryStatesTotalAndCursor checks literal Unicode search, ordered
+// state-set filters and owner pagination, preserving totals and terminal cursors on empty pages.
+// TestOwnerGateCatalogPreservesQueryStatesTotalAndCursor проверяет буквальный Unicode-поиск,
+// упорядоченный набор состояний и пагинацию владельца с сохранением счётчиков и terminal-курсоров
+// пустых страниц.
 func TestOwnerGateCatalogPreservesQueryStatesTotalAndCursor(t *testing.T) {
 	client := &catalogRPCRecorder{response: gateCatalogFixture()}
 	w := httptest.NewRecorder()
@@ -52,6 +61,10 @@ func TestOwnerGateCatalogPreservesQueryStatesTotalAndCursor(t *testing.T) {
 	}
 }
 
+// TestOwnerGateCatalogAcceptsEveryKnownStateInSet checks each of the six known owner-gate states
+// maps unchanged through the multi-state catalog filter.
+// TestOwnerGateCatalogAcceptsEveryKnownStateInSet проверяет передачу каждого из шести известных
+// состояний шлюза владельца без изменений через фильтр набора состояний каталога.
 func TestOwnerGateCatalogAcceptsEveryKnownStateInSet(t *testing.T) {
 	for value := int32(1); value <= 6; value++ {
 		state := cp.OwnerGateState(value)
@@ -66,6 +79,11 @@ func TestOwnerGateCatalogAcceptsEveryKnownStateInSet(t *testing.T) {
 	}
 }
 
+// TestOwnerGateCatalogRejectsInvalidFiltersBeforeRPC checks conflicting, empty, duplicate, unknown
+// or oversized state selections and malformed query text fail before catalog RPC.
+// TestOwnerGateCatalogRejectsInvalidFiltersBeforeRPC проверяет отказ конфликтующим, пустым,
+// повторным, неизвестным либо чрезмерным наборам состояний и некорректному тексту запроса до RPC
+// каталога.
 func TestOwnerGateCatalogRejectsInvalidFiltersBeforeRPC(t *testing.T) {
 	for _, query := range []string{
 		"state=OPEN&states=OPEN", "state=OPEN&states=APPROVED", "states=", "states=UNKNOWN", "states=UNSPECIFIED",
@@ -81,6 +99,11 @@ func TestOwnerGateCatalogRejectsInvalidFiltersBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestOwnerGateCatalogRejectsMalformedReadback checks safe totals, page size, unique scoped gates,
+// versions, filter-state consistency and cursor bounds before returning any catalog data.
+// TestOwnerGateCatalogRejectsMalformedReadback проверяет безопасные счётчики, размер страницы,
+// уникальные шлюзы нужной области, версии, соответствие фильтру состояний и границы курсора до
+// выдачи данных каталога.
 func TestOwnerGateCatalogRejectsMalformedReadback(t *testing.T) {
 	for name, change := range map[string]func(*cp.ListOwnerGatesResponse){
 		"negative total":     func(r *cp.ListOwnerGatesResponse) { r.Total = -1 },

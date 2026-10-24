@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+// TestCastGatePreservesIntentConsequencesAndSource checks attachment source, external-effect
+// consequences and integration intent survive gate projection while ordinary gates keep no intent.
+// TestCastGatePreservesIntentConsequencesAndSource проверяет сохранение источника вложений,
+// последствий внешнего эффекта и integration intent при projection шлюза и отсутствие intent у
+// обычного шлюза.
 func TestCastGatePreservesIntentConsequencesAndSource(t *testing.T) {
 	value := entity.OwnerGate{SourceAttachmentSetRef: "ats_source", DecisionConsequences: []entity.OwnerGateDecisionConsequence{{Decision: "APPROVE", SafeSummary: "Разрешить", ExecutesExternalEffect: true}}, IntegrationIntent: &entity.IntegrationIntent{ConnectionRef: "connection", ConnectionName: "Соединение", DefinitionKey: "synthetic", CapabilityKey: "synthetic.journal.write", Operation: "synthetic.journal.write", EffectKey: "effect", ResourceKind: "SYNTHETIC", ResourceScope: map[string]string{"journal": "main"}, ResourceScopeDigest: "digest", EffectPreview: map[string]any{"contentComplete": false}}}
 	got := castGate(value)
@@ -17,6 +22,10 @@ func TestCastGatePreservesIntentConsequencesAndSource(t *testing.T) {
 	}
 }
 
+// TestCastGatePreservesScopedApprovalPreview checks typed selected approval-scope parameters
+// remain representable in the protobuf Struct preview.
+// TestCastGatePreservesScopedApprovalPreview проверяет сохранение представимости выбранных
+// типизированных approval-scope parameters в preview Protobuf Struct.
 func TestCastGatePreservesScopedApprovalPreview(t *testing.T) {
 	value := entity.OwnerGate{IntegrationIntent: &entity.IntegrationIntent{
 		EffectPreview: map[string]any{"approvalScope": map[string]any{

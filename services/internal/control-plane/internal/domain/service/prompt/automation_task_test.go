@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestAutomationTaskPurposeUsesOnePassWithoutDuplicate checks literal template syntax inside task
+// values stays inert and repeated purpose preparation includes the task once even when the
+// original insertion was in a skipped branch.
+// TestAutomationTaskPurposeUsesOnePassWithoutDuplicate проверяет неисполнение буквального
+// синтаксиса шаблона в задаче и однократное включение задачи при повторной подготовке purpose даже
+// при исходной вставке в пропущенной ветви.
 func TestAutomationTaskPurposeUsesOnePassWithoutDuplicate(t *testing.T) {
 	task := "Literal {{.user.name}}"
 	snapshot := Snapshot{Variables: map[string]string{"task": task}}

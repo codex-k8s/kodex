@@ -8,6 +8,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
 
+// ChangeSystemAssistantIntegrationGrant passes connection, capability, enabled and approval fields
+// through the dedicated system-assistant grant command, leaving eligibility to the owner.
+// ChangeSystemAssistantIntegrationGrant передаёт подключение, возможность, enabled и поля
+// одобрения отдельной команде grant системного ассистента, оставляя eligibility владельцу.
 func (server *Server) ChangeSystemAssistantIntegrationGrant(ctx context.Context, request *controlplanev1.ChangeSystemAssistantIntegrationGrantRequest) (*controlplanev1.ChangeSystemAssistantIntegrationGrantResponse, error) {
 	payload := command.SystemAssistantIntegrationGrantInput{ConnectionRef: request.GetConnectionRef(), CapabilityKey: request.GetCapabilityKey(), Enabled: request.GetEnabled(), ApprovalPolicy: strings.TrimPrefix(request.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_"), ApprovalScopePaths: request.GetApprovalScopePaths()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ChangeSystemAssistantIntegrationGrant_FullMethodName, command.ChangeSystemAssistantIntegrationGrant, request.GetMutation(), payload)
@@ -17,6 +21,11 @@ func (server *Server) ChangeSystemAssistantIntegrationGrant(ctx context.Context,
 	return &controlplanev1.ChangeSystemAssistantIntegrationGrantResponse{Connection: castConnection(*result.Connection)}, nil
 }
 
+// GetSystemAssistantIntegrationGrantCandidates reads system-assistant candidates, requires closed
+// reason values and projects current grant metadata with owner/version pins and pagination.
+// GetSystemAssistantIntegrationGrantCandidates читает кандидатов системного ассистента, требует
+// закрытые значения причин и преобразует текущий grant с привязками владельца, версий и
+// пагинацией.
 func (server *Server) GetSystemAssistantIntegrationGrantCandidates(ctx context.Context, request *controlplanev1.GetSystemAssistantIntegrationGrantCandidatesRequest) (*controlplanev1.GetSystemAssistantIntegrationGrantCandidatesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetSystemAssistantIntegrationGrantCandidates_FullMethodName)
 	if err != nil {

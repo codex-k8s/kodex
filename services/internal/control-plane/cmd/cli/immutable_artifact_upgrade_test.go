@@ -12,12 +12,24 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+// immutableArtifactUpgradeSeed embeds the synthetic pre-upgrade artifact state for the dedicated disposable migration database.
+// immutableArtifactUpgradeSeed встраивает синтетическое pre-upgrade artifact состояние отдельной disposable migration database.
+//
 //go:embed testdata/immutable_artifact_upgrade_seed.sql
 var immutableArtifactUpgradeSeed string
 
+// immutableArtifactUpgradeAssert embeds post-upgrade artifact lineage and immutable revision assertions without reading live project data.
+// immutableArtifactUpgradeAssert встраивает post-upgrade проверки artifact lineage и immutable revision без чтения живых данных проекта.
+//
 //go:embed testdata/immutable_artifact_upgrade_assert.sql
 var immutableArtifactUpgradeAssert string
 
+// TestImmutableArtifactProtocolUpgrade requires an explicitly gated disposable loopback database,
+// upgrades a historical schema and checks artifact revision backfill plus repeated-up
+// preservation.
+// TestImmutableArtifactProtocolUpgrade требует явно разрешённую disposable loopback database,
+// обновляет историческую schema и проверяет artifact revision backfill и сохранение результата
+// повторным up.
 func TestImmutableArtifactProtocolUpgrade(t *testing.T) {
 	dsn := os.Getenv("KODEX_ARTIFACT_REVISION_UPGRADE_DSN")
 	if dsn == "" {

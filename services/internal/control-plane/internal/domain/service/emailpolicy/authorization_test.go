@@ -12,6 +12,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// TestEmailAllExecutableOperationsUseExactSemanticScopeAndMailboxGate covers all twenty-one
+// shipped email operations, twelve mutations, allow/deny/gate policies and rejection of altered
+// digest, sender, folder, effect or destination pins.
+// TestEmailAllExecutableOperationsUseExactSemanticScopeAndMailboxGate охватывает все двадцать одну
+// поставляемую почтовую операцию, двенадцать mutations, allow/deny/gate policy и отказ изменённым
+// pins digest, sender, папки, эффекта либо назначения.
 func TestEmailAllExecutableOperationsUseExactSemanticScopeAndMailboxGate(t *testing.T) {
 	raw, err := os.ReadFile("../../../../../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
 	if err != nil {

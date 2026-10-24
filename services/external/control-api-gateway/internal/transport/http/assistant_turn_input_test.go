@@ -11,6 +11,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestAssistantTurnInputBoundaryAndUTF8 checks the 32768-rune Cyrillic and astral input boundary,
+// exact valid content forwarding and rejection of overflow, NUL, blank or raw-invalid UTF-8 before
+// RPC.
+// TestAssistantTurnInputBoundaryAndUTF8 проверяет границу 32768 Unicode-символов для кириллицы и
+// astral, точную передачу корректного текста и отказ переполнению, NUL, пробельному либо
+// некорректному UTF-8 до RPC.
 func TestAssistantTurnInputBoundaryAndUTF8(t *testing.T) {
 	for _, test := range []struct {
 		name, content string

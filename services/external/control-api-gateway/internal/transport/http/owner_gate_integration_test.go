@@ -15,6 +15,12 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// TestOwnerGateConsequencesLocalizeWithoutChangingIntent checks Russian and English localization
+// of registered consequence summaries while preserving literal integration previews and terminal
+// flags.
+// TestOwnerGateConsequencesLocalizeWithoutChangingIntent проверяет русскую и английскую
+// локализацию зарегистрированных сводок последствий с сохранением буквальных предпросмотров
+// интеграции и terminal-флагов.
 func TestOwnerGateConsequencesLocalizeWithoutChangingIntent(t *testing.T) {
 	texts, err := usertext.New()
 	if err != nil {
@@ -38,6 +44,10 @@ func TestOwnerGateConsequencesLocalizeWithoutChangingIntent(t *testing.T) {
 	}
 }
 
+// integrationGateFixture builds a synthetic approved integration gate with explicit resource
+// scope, complete effect preview, decision consequences and attachment lineage.
+// integrationGateFixture создаёт синтетический одобренный шлюз интеграции с явной областью
+// ресурса, полным предпросмотром эффекта, последствиями решений и происхождением вложений.
 func integrationGateFixture() *cp.OwnerGate {
 	preview, _ := structpb.NewStruct(map[string]any{
 		"inputDigest": strings.Repeat("c", 64), "inputBytes": 64, "risk": "WRITE", "approvalPolicy": "HUMAN_EACH_EFFECT", "contentComplete": true,
@@ -55,6 +65,10 @@ func integrationGateFixture() *cp.OwnerGate {
 	}
 }
 
+// gateProjectionResponse executes one local list, get or resolve route using the fixture gate and
+// unwraps successful JSON into a common comparison shape.
+// gateProjectionResponse выполняет один локальный маршрут list, get либо resolve с тестовым шлюзом
+// и раскрывает успешный JSON в общую форму сравнения.
 func gateProjectionResponse(t *testing.T, kind string, gate *cp.OwnerGate) (int, map[string]any) {
 	t.Helper()
 	var response proto.Message
@@ -88,6 +102,10 @@ func gateProjectionResponse(t *testing.T, kind string, gate *cp.OwnerGate) (int,
 	return w.Code, result
 }
 
+// TestOwnerGateIntegrationProjectionParity checks identical integration projections across list,
+// get and resolve, preserving literal intent, consequence defaults and attachment references.
+// TestOwnerGateIntegrationProjectionParity проверяет одинаковые проекции интеграции в list, get и
+// resolve с сохранением буквального намерения, умолчаний последствий и ссылок вложений.
 func TestOwnerGateIntegrationProjectionParity(t *testing.T) {
 	var expected map[string]any
 	for _, kind := range []string{"get", "list", "resolve"} {
@@ -119,6 +137,10 @@ func TestOwnerGateIntegrationProjectionParity(t *testing.T) {
 	}
 }
 
+// TestOwnerGateHTTPSResourceProjection checks that an HTTPS resource scope retains its registered
+// public kind across list, get and resolve projections.
+// TestOwnerGateHTTPSResourceProjection проверяет сохранение зарегистрированного публичного вида
+// области HTTPS-ресурса в проекциях list, get и resolve.
 func TestOwnerGateHTTPSResourceProjection(t *testing.T) {
 	for _, kind := range []string{"get", "list", "resolve"} {
 		gate := integrationGateFixture()
@@ -136,6 +158,12 @@ func TestOwnerGateHTTPSResourceProjection(t *testing.T) {
 	}
 }
 
+// TestOwnerGateIntegrationRejectsMalformedProjectionOnEveryPath checks closed rejection of invalid
+// gate state, attachment pins, resource scope, effect identity, preview and decision consequences
+// on every route.
+// TestOwnerGateIntegrationRejectsMalformedProjectionOnEveryPath проверяет закрытый отказ неверным
+// состоянию шлюза, pins вложений, области ресурса, identity эффекта, предпросмотру и последствиям
+// решений на каждом маршруте.
 func TestOwnerGateIntegrationRejectsMalformedProjectionOnEveryPath(t *testing.T) {
 	for name, change := range map[string]func(*cp.OwnerGate){
 		"unknown state":       func(g *cp.OwnerGate) { g.State = cp.OwnerGateState(999) },
@@ -167,6 +195,10 @@ func TestOwnerGateIntegrationRejectsMalformedProjectionOnEveryPath(t *testing.T)
 	}
 }
 
+// TestOwnerGateReadPathsRejectNilGate checks that an absent owner gate returns bad gateway on
+// list, get and resolution response paths.
+// TestOwnerGateReadPathsRejectNilGate проверяет ответ bad gateway при отсутствии шлюза владельца в
+// путях ответа списка, чтения и решения.
 func TestOwnerGateReadPathsRejectNilGate(t *testing.T) {
 	for _, kind := range []string{"get", "list", "resolve"} {
 		code, _ := gateProjectionResponse(t, kind, nil)
@@ -176,6 +208,10 @@ func TestOwnerGateReadPathsRejectNilGate(t *testing.T) {
 	}
 }
 
+// TestOrdinaryOwnerGateDoesNotInventIntegrationIntent checks that a gate without integration
+// intent remains valid across all projection paths without synthesizing such intent.
+// TestOrdinaryOwnerGateDoesNotInventIntegrationIntent проверяет корректность шлюза без намерения
+// интеграции во всех путях проекции без искусственного создания такого намерения.
 func TestOrdinaryOwnerGateDoesNotInventIntegrationIntent(t *testing.T) {
 	for _, kind := range []string{"get", "list", "resolve"} {
 		gate := integrationGateFixture()

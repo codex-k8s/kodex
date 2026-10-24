@@ -18,18 +18,50 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// ErrInvalid marks rejected revision syntax, kind or semantics with a fixed runtime error that
+// does not contain the source document.
+// ErrInvalid обозначает отклонённые синтаксис, вид либо семантику ревизии фиксированной
+// runtime-ошибкой без исходного документа.
 var ErrInvalid = errors.New("invalid configuration revision")
 
 const (
-	KindPromptTemplate        = "PROMPT_TEMPLATE"
-	KindRoleImage             = "ROLE_IMAGE"
+	// KindPromptTemplate identifies prompt-template revisions routed to the dedicated text-template
+	// validation path when format is TEXT.
+	// KindPromptTemplate обозначает ревизии prompt template, передаваемые отдельной проверке
+	// текстового шаблона при формате TEXT.
+	KindPromptTemplate = "PROMPT_TEMPLATE"
+	// KindRoleImage identifies structured role-image revisions with typed environment or supported
+	// legacy image fields.
+	// KindRoleImage обозначает структурированные ревизии образа роли с типизированным окружением либо
+	// поддерживаемыми legacy полями образа.
+	KindRoleImage = "ROLE_IMAGE"
+	// KindIntegrationDefinition identifies integration package revisions validated against the shipped
+	// executable adapter registry.
+	// KindIntegrationDefinition обозначает ревизии integration package, проверяемые по реестру
+	// поставляемых исполняемых adapters.
 	KindIntegrationDefinition = "INTEGRATION_DEFINITION"
-	KindSystemSTT             = "SYSTEM_STT"
-	KindEmailMailbox          = "EMAIL_MAILBOX"
+	// KindSystemSTT identifies immutable system speech-to-text configuration revisions containing
+	// provider references rather than credential values.
+	// KindSystemSTT обозначает immutable ревизии системной speech-to-text конфигурации со ссылками
+	// provider вместо значений credentials.
+	KindSystemSTT = "SYSTEM_STT"
+	// KindEmailMailbox names the email-mailbox revision kind whose dedicated mailbox parser is
+	// separate from this generic document validator.
+	// KindEmailMailbox задаёт вид ревизии почтового mailbox, отдельный parser которого находится вне
+	// этого общего валидатора документов.
+	KindEmailMailbox = "EMAIL_MAILBOX"
 )
 
+// Diagnostic carries a stable revision validation code and runtime message without retaining the
+// untrusted source document.
+// Diagnostic несёт устойчивый код проверки ревизии и runtime-сообщение без сохранения
+// непроверенного исходного документа.
 type Diagnostic struct{ Code, Message string }
 
+// document defines known structured revision fields across JSON, YAML and TOML; kind-specific
+// validation selects the allowed semantic branch.
+// document определяет известные поля структурированной ревизии JSON, YAML и TOML; проверка
+// конкретного вида выбирает допустимую семантическую ветвь.
 type document struct {
 	Name        string                  `json:"name" yaml:"name" toml:"name"`
 	Description string                  `json:"description,omitempty" yaml:"description,omitempty" toml:"description,omitempty"`
@@ -41,12 +73,21 @@ type document struct {
 	RoleImage   *RoleImageConfiguration `json:"roleImage,omitempty" yaml:"roleImage,omitempty" toml:"roleImage,omitempty"`
 }
 
+// integrationDefinition models the legacy typed integration header and operation list checked by
+// the internal structured-document semantics validator.
+// integrationDefinition моделирует legacy типизированные заголовок интеграции и список операций
+// для внутренней семантической проверки структурированного документа.
 type integrationDefinition struct {
 	Key        string                 `json:"key" yaml:"key" toml:"key"`
 	Version    string                 `json:"version" yaml:"version" toml:"version"`
 	Adapter    string                 `json:"adapter" yaml:"adapter" toml:"adapter"`
 	Operations []integrationOperation `json:"operations" yaml:"operations" toml:"operations"`
 }
+
+// integrationOperation records a stable operation key, target operation, risk, approval mode and
+// resource kind for legacy integration semantics.
+// integrationOperation хранит устойчивый ключ операции, целевую операцию, риск, режим approval и
+// вид ресурса для legacy семантики интеграции.
 type integrationOperation struct {
 	Key          string `json:"key" yaml:"key" toml:"key"`
 	Operation    string `json:"operation" yaml:"operation" toml:"operation"`
@@ -54,6 +95,11 @@ type integrationOperation struct {
 	Approval     string `json:"approval" yaml:"approval" toml:"approval"`
 	ResourceKind string `json:"resourceKind" yaml:"resourceKind" toml:"resourceKind"`
 }
+
+// STTConfiguration stores immutable provider/model references, transcription parameters and
+// bounded audio/timeout limits without accepting a provider credential value.
+// STTConfiguration хранит immutable ссылки provider и модели, параметры транскрипции и
+// ограниченные audio/timeout лимиты без принятия значения provider credential.
 type STTConfiguration struct {
 	Enabled                          bool                      `json:"enabled" yaml:"enabled" toml:"enabled"`
 	ProviderAccountRef               string                    `json:"providerAccountRef" yaml:"providerAccountRef" toml:"providerAccountRef"`
@@ -66,6 +112,10 @@ type STTConfiguration struct {
 	ProviderTimeoutMilliseconds      uint64                    `json:"providerTimeoutMilliseconds,omitempty" yaml:"providerTimeoutMilliseconds,omitempty" toml:"providerTimeoutMilliseconds,omitempty"`
 }
 
+// ParseSystemSTT decodes and validates a JSON system-STT document and fills omitted audio size,
+// duration and provider timeout with model-profile defaults.
+// ParseSystemSTT декодирует и проверяет JSON документ system STT и заполняет отсутствующие размер
+// аудио, длительность и provider timeout значениями model profile.
 func ParseSystemSTT(content string) (STTConfiguration, error) {
 	var document document
 	if err := decodeStrict("JSON", content, &document); err != nil {
@@ -87,6 +137,12 @@ func ParseSystemSTT(content string) (STTConfiguration, error) {
 	return result, nil
 }
 
+// Validate normalizes kind/format and bounds trimmed content, uses specialized integration or
+// text-prompt validation, and otherwise returns a digest only after structured syntax and
+// semantics pass.
+// Validate нормализует вид и формат, ограничивает обрезанное содержимое, использует отдельную
+// проверку integration либо text prompt и иначе возвращает digest лишь после структурных
+// синтаксиса и семантики.
 func Validate(kind, format, content string) (string, []Diagnostic, error) {
 	kind, format, content = strings.ToUpper(strings.TrimSpace(kind)), strings.ToUpper(strings.TrimSpace(format)), strings.TrimSpace(content)
 	if content == "" || len(content) > 256<<10 {
@@ -118,8 +174,10 @@ func Validate(kind, format, content string) (string, []Diagnostic, error) {
 	return digest(content), nil, nil
 }
 
-// IntegrationDefinitionKey возвращает server-validated stable key typed
-// definition; caller не может подменить его отдельным полем rebind-команды.
+// IntegrationDefinitionKey returns the stable key of a server-validated executable integration
+// package so a caller cannot override it with a separate rebind payload field.
+// IntegrationDefinitionKey возвращает устойчивый ключ проверенного сервером исполняемого
+// integration package без возможности подмены отдельным полем rebind payload caller.
 func IntegrationDefinitionKey(format, content string) (string, error) {
 	definition, err := IntegrationPackage(format, content)
 	if err != nil {
@@ -128,7 +186,10 @@ func IntegrationDefinitionKey(format, content string) (string, error) {
 	return definition.Metadata.Key, nil
 }
 
-// Управляемый package может сужать исполняемый contract поставленного adapter.
+// IntegrationPackage accepts JSON/YAML packages only for registered gateway routes and validates
+// each revision against the exact shipped ready adapter profile.
+// IntegrationPackage принимает JSON/YAML packages только для зарегистрированных gateway routes и
+// проверяет каждую ревизию по точному поставляемому готовому adapter profile.
 func IntegrationPackage(format, content string) (integrationpackage.Package, error) {
 	if format != "JSON" && format != "YAML" {
 		return integrationpackage.Package{}, ErrInvalid
@@ -149,6 +210,11 @@ func IntegrationPackage(format, content string) (integrationpackage.Package, err
 	return definition, nil
 }
 
+// decodeStrict decodes JSON/YAML with unknown-field rejection and exactly one document, or TOML
+// with no undecoded fields; unsupported formats fail before semantic validation.
+// decodeStrict декодирует JSON/YAML с отказом неизвестным полям и требованием ровно одного
+// документа либо TOML без undecoded полей; неподдерживаемый формат отклоняется до семантической
+// проверки.
 func decodeStrict(format, content string, target any) error {
 	switch format {
 	case "JSON":
@@ -183,6 +249,10 @@ func decodeStrict(format, content string, target any) error {
 	}
 }
 
+// validateDocument requires a bounded nonblank name and applies role-image, legacy integration or
+// STT branch rules, rejecting unsupported kinds and out-of-profile STT parameters/limits.
+// validateDocument требует ограниченное непустое имя и применяет правила ветви образа роли, legacy
+// integration либо STT, отклоняя неподдерживаемые виды и параметры либо лимиты STT вне профиля.
 func validateDocument(kind string, value document) error {
 	if strings.TrimSpace(value.Name) == "" || len(value.Name) > 160 {
 		return errors.New("revision name is invalid")
@@ -222,6 +292,10 @@ func validateDocument(kind string, value document) error {
 	return nil
 }
 
+// validIntegration checks a nonempty bounded legacy operation list with unique keys, required
+// operation/resource fields and closed risk/approval sets.
+// validIntegration проверяет непустой ограниченный список legacy операций с уникальными ключами,
+// обязательными полями операции и ресурса и закрытыми наборами риска и approval.
 func validIntegration(value integrationDefinition) bool {
 	if value.Key == "" || value.Version == "" || value.Adapter == "" || len(value.Operations) == 0 || len(value.Operations) > 128 {
 		return false
@@ -241,6 +315,10 @@ func validIntegration(value integrationDefinition) bool {
 	return true
 }
 
+// member performs exact case-sensitive membership over the supplied closed string set without
+// normalization or fallback acceptance.
+// member выполняет точную регистрозависимую проверку в переданном закрытом наборе строк без
+// нормализации либо допуска запасного значения.
 func member(value string, allowed ...string) bool {
 	for _, candidate := range allowed {
 		if value == candidate {
@@ -250,6 +328,10 @@ func member(value string, allowed ...string) bool {
 	return false
 }
 
+// digest returns lowercase SHA-256 of whitespace-trimmed revision bytes without canonicalizing
+// structured fields or template semantics.
+// digest возвращает строчный SHA-256 байтов ревизии с обрезанными крайними пробелами без
+// канонизации структурированных полей либо семантики шаблона.
 func digest(value string) string {
 	sum := sha256.Sum256(bytes.TrimSpace([]byte(value)))
 	return hex.EncodeToString(sum[:])

@@ -11,19 +11,35 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/emailprojection"
 )
 
+// projectionStoreFixture supplies a configured synthetic accepted configuration and injected owner
+// failure for projection readiness and worker tests.
+// projectionStoreFixture предоставляет заданную синтетическую принятую конфигурацию и ошибку
+// владельца для тестов readiness и worker проекции.
 type projectionStoreFixture struct {
 	config api.Configuration
 	err    error
 }
 
+// EmailConfiguration returns the configured synthetic owner snapshot and failure without reading
+// configured files or external storage.
+// EmailConfiguration возвращает заданные синтетические owner snapshot и ошибку без чтения
+// configured файлов либо внешнего хранения.
 func (store projectionStoreFixture) EmailConfiguration(context.Context) (api.Configuration, error) {
 	return store.config, store.err
 }
 
+// EmailCredentialDigests returns an empty synthetic commitment map with the same owner failure,
+// keeping tests independent of real credentials.
+// EmailCredentialDigests возвращает пустую синтетическую карту commitments с той же owner ошибкой
+// без зависимости тестов от реальных credentials.
 func (store projectionStoreFixture) EmailCredentialDigests(context.Context, api.Configuration) (map[string]string, error) {
 	return map[string]string{}, store.err
 }
 
+// projectionPublisherFixture protects synthetic publish/readback counters with a mutex and can
+// report fixed dependency unavailability without cluster effects.
+// projectionPublisherFixture защищает синтетические счётчики publish и readback mutex и может
+// сообщить фиксированную недоступность зависимости без эффектов кластера.
 type projectionPublisherFixture struct {
 	mu        sync.Mutex
 	published int
@@ -31,6 +47,10 @@ type projectionPublisherFixture struct {
 	fail      bool
 }
 
+// Publish counts a synthetic publication under mutex and returns a configuration-bound receipt
+// unless injected publisher failure is enabled.
+// Publish считает синтетическую публикацию под mutex и возвращает связанную с конфигурацией
+// квитанцию, если не задан отказ publisher.
 func (publisher *projectionPublisherFixture) Publish(_ context.Context, config api.Configuration, _ map[string]string) (emailprojection.Receipt, error) {
 	publisher.mu.Lock()
 	defer publisher.mu.Unlock()
@@ -40,6 +60,11 @@ func (publisher *projectionPublisherFixture) Publish(_ context.Context, config a
 	}
 	return emailprojection.Receipt{Revision: config.Revision, Digest: api.Digest(config)}, nil
 }
+
+// Check counts synthetic readback under mutex and returns a configuration-bound receipt or
+// injected unavailability without incrementing publication.
+// Check считает синтетический readback под mutex и возвращает связанную с конфигурацией квитанцию
+// либо заданную недоступность без увеличения публикаций.
 func (publisher *projectionPublisherFixture) Check(_ context.Context, config api.Configuration, _ map[string]string) (emailprojection.Receipt, error) {
 	publisher.mu.Lock()
 	defer publisher.mu.Unlock()
@@ -50,6 +75,12 @@ func (publisher *projectionPublisherFixture) Check(_ context.Context, config api
 	return emailprojection.Receipt{Revision: config.Revision, Digest: api.Digest(config)}, nil
 }
 
+// TestEmailProjectionReadinessDoesNotPublishOrAcceptMissingOwner checks missing owner state blocks
+// both readback and publication, readiness only reads a valid projection and unavailable readback
+// remains a failure.
+// TestEmailProjectionReadinessDoesNotPublishOrAcceptMissingOwner проверяет запрет readback и
+// публикации при отсутствии owner state, только чтение правильной проекции при readiness и
+// сохранение отказа при недоступном readback.
 func TestEmailProjectionReadinessDoesNotPublishOrAcceptMissingOwner(t *testing.T) {
 	publisher := &projectionPublisherFixture{}
 	projection := &emailProjection{store: projectionStoreFixture{err: errors.New("owner unavailable")}, publisher: publisher}
@@ -75,6 +106,10 @@ func TestEmailProjectionReadinessDoesNotPublishOrAcceptMissingOwner(t *testing.T
 	}
 }
 
+// TestEmailProjectionWorkerCancellationAndJoin checks enabled and disabled projection workers both
+// return within a bounded wait after parent cancellation.
+// TestEmailProjectionWorkerCancellationAndJoin проверяет завершение включённого и отключённого
+// worker проекции за ограниченное ожидание после отмены родителя.
 func TestEmailProjectionWorkerCancellationAndJoin(t *testing.T) {
 	for _, disabled := range []bool{false, true} {
 		ctx, cancel := context.WithCancel(context.Background())

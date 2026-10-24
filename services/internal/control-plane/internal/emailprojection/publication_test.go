@@ -20,12 +20,24 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// publicationResolver supplies synthetic DNS snapshot data to the mailbox policy producer without
+// performing a DNS lookup.
+// publicationResolver предоставляет синтетические DNS snapshot data mailbox policy producer без
+// выполнения DNS lookup.
 type publicationResolver struct{}
 
+// Resolve returns one synthetic public IP and short expiry for policy fixture construction without
+// network I/O.
+// Resolve возвращает один синтетический public IP и короткий expiry для policy fixture без
+// сетевого I/O.
 func (publicationResolver) Resolve(context.Context, string) (mailpolicy.Snapshot, error) {
 	return mailpolicy.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("1.1.1.1")}, ExpiresAt: time.Now().Add(time.Minute)}, nil
 }
 
+// publicationFixture seeds fake served admission, network and Deployment objects, simulating
+// UID/version allocation and generation changes for publication tests.
+// publicationFixture подготавливает fake served admission, network и Deployment объекты, имитируя
+// назначение UID и version и смену generation для publication tests.
 func publicationFixture(t *testing.T) (*Kubernetes, *fake.Clientset, api.Configuration, mailpolicy.MailDocument) {
 	t.Helper()
 	publisher, client, configuration := projectionFixture(t)
@@ -88,6 +100,10 @@ func publicationFixture(t *testing.T) (*Kubernetes, *fake.Clientset, api.Configu
 	return publisher, client, configuration, document
 }
 
+// readyPublicationDeployments sets exact observed replica counters on both fake Deployments to
+// simulate rollout completion explicitly.
+// readyPublicationDeployments устанавливает точные observed replica counters обоих fake
+// Deployments для явной имитации завершения rollout.
 func readyPublicationDeployments(t *testing.T, client *fake.Clientset) {
 	t.Helper()
 	for _, name := range []string{"egress-gateway", "email-bridge"} {
@@ -103,6 +119,10 @@ func readyPublicationDeployments(t *testing.T, client *fake.Clientset) {
 	}
 }
 
+// TestMailboxPublicationRequiresFullApplyAndReplicaReadback requires observed rollout of every
+// replica and rejects widened network policy after otherwise successful fake publication.
+// TestMailboxPublicationRequiresFullApplyAndReplicaReadback требует observed rollout каждой
+// replica и отклоняет расширенную network policy после в остальном успешной fake publication.
 func TestMailboxPublicationRequiresFullApplyAndReplicaReadback(t *testing.T) {
 	publisher, client, configuration, document := publicationFixture(t)
 	digests := fixtureCredentialDigests(configuration)
@@ -135,6 +155,10 @@ func TestMailboxPublicationRequiresFullApplyAndReplicaReadback(t *testing.T) {
 	}
 }
 
+// TestMailboxPublicationAdmissionFailsBeforeCreate checks missing, warning-bearing, unobserved or
+// weakened admission state prevents every external mutation in the fake action log.
+// TestMailboxPublicationAdmissionFailsBeforeCreate проверяет, что missing, warning-bearing,
+// unobserved либо ослабленный admission state запрещает каждую внешнюю мутацию в fake action log.
 func TestMailboxPublicationAdmissionFailsBeforeCreate(t *testing.T) {
 	for _, mode := range []string{"missing", "warning", "generation", "binding"} {
 		t.Run(mode, func(t *testing.T) {
@@ -167,6 +191,11 @@ func TestMailboxPublicationAdmissionFailsBeforeCreate(t *testing.T) {
 	}
 }
 
+// TestMailboxPublicationCannotRollBackNetworkOrSecret publishes successive fake configuration
+// revisions and verifies the older publication cannot replace newer network or Secret state.
+// TestMailboxPublicationCannotRollBackNetworkOrSecret публикует последовательные fake
+// configuration revisions и проверяет запрет замены новых network либо Secret state старой
+// публикацией.
 func TestMailboxPublicationCannotRollBackNetworkOrSecret(t *testing.T) {
 	publisher, client, configuration, document := publicationFixture(t)
 	if _, err := publisher.PublishMailbox(t.Context(), configuration, fixtureCredentialDigests(configuration), document); err != nil {

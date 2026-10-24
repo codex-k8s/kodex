@@ -12,11 +12,19 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+// documentFixture creates a synthetic initial-generation empty destination document with a fixed
+// base gateway digest for pure projection tests.
+// documentFixture создаёт синтетический initial-generation документ без destinations с
+// фиксированным base gateway digest для чистых projection tests.
 func documentFixture() shared.Document {
 	return shared.Document{Schema: shared.Schema, Generation: 1, SourceDigest: shared.SourceDigest(nil),
 		GatewayPolicyDigest: strings.Repeat("a", 64), Destinations: []shared.Destination{}}
 }
 
+// deploymentFixture builds the exact synthetic gateway container, listener, source pins and
+// readonly volume layout expected by projection updates.
+// deploymentFixture создаёт точную синтетическую gateway container, listener, source pins и
+// readonly volume структуру для projection updates.
 func deploymentFixture(document shared.Document) *appsv1.Deployment {
 	return &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace,
 		Labels: map[string]string{"app.kubernetes.io/name": deploymentName, "app.kubernetes.io/component": "platform-egress"}},
@@ -33,6 +41,10 @@ func deploymentFixture(document shared.Document) *appsv1.Deployment {
 		}}}}
 }
 
+// TestDeploymentSwitchIsExactAndFenced checks exact immutable policy switching and replay while
+// rejecting forged source, stale generation, foreign labels and missing listener ports.
+// TestDeploymentSwitchIsExactAndFenced проверяет точное переключение immutable policy и replay с
+// отказом forged source, stale generation, foreign labels и missing listener ports.
 func TestDeploymentSwitchIsExactAndFenced(t *testing.T) {
 	document := documentFixture()
 	deployment := deploymentFixture(document)
@@ -70,6 +82,10 @@ func TestDeploymentSwitchIsExactAndFenced(t *testing.T) {
 	}
 }
 
+// openAPIServiceFixture creates the canonical private generation-one OpenAPI CONNECT Service with
+// a single named target port and exact selector.
+// openAPIServiceFixture создаёт canonical private generation-one OpenAPI CONNECT Service с
+// единственным named target port и точным selector.
 func openAPIServiceFixture() *corev1.Service {
 	return &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: openAPIServiceName, Namespace: namespace,
 		Labels: map[string]string{"app.kubernetes.io/name": deploymentName, "app.kubernetes.io/component": "platform-egress"}},
@@ -79,6 +95,10 @@ func openAPIServiceFixture() *corev1.Service {
 				TargetPort: intstr.FromString("openapi-connect")}}}}
 }
 
+// TestOpenAPIServiceSwitchIsExactAndFenced checks exact generation switching/replay and rejects
+// rollback, selector drift, foreign/broad selectors and external IP exposure.
+// TestOpenAPIServiceSwitchIsExactAndFenced проверяет точное generation переключение и replay и
+// отклоняет rollback, selector drift, foreign либо broad selectors и external IP exposure.
 func TestOpenAPIServiceSwitchIsExactAndFenced(t *testing.T) {
 	document := documentFixture()
 	document.Generation = 2
@@ -121,6 +141,10 @@ func TestOpenAPIServiceSwitchIsExactAndFenced(t *testing.T) {
 	}
 }
 
+// TestNetworkBootstrapRecoveryRequiresExactEmptyPolicy permits only the exact empty supplemental
+// bootstrap shape while rejecting open egress and rollback over a newer fence.
+// TestNetworkBootstrapRecoveryRequiresExactEmptyPolicy допускает только точную пустую supplemental
+// bootstrap форму, отклоняя open egress и rollback поверх более нового fence.
 func TestNetworkBootstrapRecoveryRequiresExactEmptyPolicy(t *testing.T) {
 	document := documentFixture()
 	document.Generation = 2
@@ -144,6 +168,10 @@ func TestNetworkBootstrapRecoveryRequiresExactEmptyPolicy(t *testing.T) {
 	}
 }
 
+// TestProjectionLabelsAcceptOnlyRepoOwnedLocalProvenance checks controller labels and the explicit
+// local provenance allowlist while rejecting an unregistered extra label.
+// TestProjectionLabelsAcceptOnlyRepoOwnedLocalProvenance проверяет controller labels и явный local
+// provenance allowlist с отклонением незарегистрированного дополнительного label.
 func TestProjectionLabelsAcceptOnlyRepoOwnedLocalProvenance(t *testing.T) {
 	expected := map[string]string{"app.kubernetes.io/name": deploymentName, "app.kubernetes.io/component": "platform-egress"}
 	if !validProjectionLabels(expected, expected) {

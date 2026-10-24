@@ -6,6 +6,11 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestSearchPageUsesRequestedLimitAndPreservesCursor checks positive legacy search limits override
+// page size without changing cursor and absent pagination uses the ordinary fifty-item default.
+// TestSearchPageUsesRequestedLimitAndPreservesCursor проверяет замену размера страницы
+// положительным legacy search limit без изменения курсора и обычный default из пятидесяти
+// элементов при отсутствии пагинации.
 func TestSearchPageUsesRequestedLimitAndPreservesCursor(t *testing.T) {
 	t.Parallel()
 

@@ -20,15 +20,32 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// runtimeOverlayGolden embeds the owner-produced overlay schema used to verify exact readback
+// without regenerating its digest from a gateway-specific schema.
+// runtimeOverlayGolden встраивает схему overlay от владельца для проверки точного чтения
+// без пересоздания её дайджеста по отдельной схеме gateway.
+//
 //go:embed testdata/runtime_overlay_schema.json
 var runtimeOverlayGolden []byte
 
-// Fixture получен из owner runtimecontract.OverlaySchema([low,high], high),
-// а не из прежнего набора полей gateway. Дайджест сохраняется без пересчёта.
+// runtimeOverlayProducerDigest pins the unchanged digest of the owner
+// runtimecontract.OverlaySchema([low, high], high) golden fixture rather than a gateway-defined
+// field set.
+// runtimeOverlayProducerDigest фиксирует неизменный дайджест эталона owner
+// runtimecontract.OverlaySchema([low, high], high), полученного из владельца, а не из прежнего
+// набора полей gateway.
 const runtimeOverlayProducerDigest = "e84f6b4c641531755549ee8c79f186e3f8778511afe2e63786269a776d90bceb"
 
+// runtimePublishFixture provides synthetic fixed-provider runtime publication input with exact
+// model catalog revision and digest pins.
+// runtimePublishFixture задаёт синтетический ввод публикации runtime с фиксированным провайдером и
+// точными pins ревизии и дайджеста каталога моделей.
 const runtimePublishFixture = `{"runtimeProfileRef":"rtp_fixture01","model":"fixture","providerPolicyMode":"FIXED","providerAccounts":[{"accountRef":"pacc_fixture01","weight":1,"catalogRevision":"mcat_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","catalogDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","providerDefinitionKey":"openai-codex"}]}`
 
+// runtimeOverlayFixture decodes the embedded owner-produced overlay schema and panics if the
+// checked-in fixture cannot be parsed.
+// runtimeOverlayFixture декодирует встроенную схему overlay от владельца и вызывает panic при
+// невозможности разобрать сохранённый в репозитории эталон.
 func runtimeOverlayFixture() *cp.ConfigOverlaySchema {
 	value := &cp.ConfigOverlaySchema{}
 	if err := protojson.Unmarshal(runtimeOverlayGolden, value); err != nil {
@@ -37,11 +54,20 @@ func runtimeOverlayFixture() *cp.ConfigOverlaySchema {
 	return value
 }
 
+// runtimeCatalogStatusFixture builds a fixed-time ready account catalog observation from
+// REMOTE_CODEX with a fifteen-minute expiry and no failure.
+// runtimeCatalogStatusFixture создаёт наблюдение готового каталога аккаунта от REMOTE_CODEX с
+// фиксированным временем, сроком пятнадцать минут и отсутствием ошибки.
 func runtimeCatalogStatusFixture() *cp.ProviderModelCatalogStatus {
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
 	return &cp.ProviderModelCatalogStatus{State: cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_READY, Source: cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX, Failure: cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE, ObservedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(15 * time.Minute))}
 }
 
+// TestRuntimeCatalogPublishExactPins checks unchanged model catalog authority pins and rejects
+// missing or mismatched pins, caller-assigned defaults and weight overflow before RPC.
+// TestRuntimeCatalogPublishExactPins проверяет неизменность pins полномочий каталога моделей и
+// отказ до RPC отсутствующим либо несовпадающим pins, назначенному клиентом умолчанию и
+// переполнению веса.
 func TestRuntimeCatalogPublishExactPins(t *testing.T) {
 	client := &contextRPCRecorder{corrupt: func(response proto.Message) {
 		field := response.ProtoReflect().Descriptor().Fields().ByName("runtime_configuration")
@@ -73,6 +99,11 @@ func TestRuntimeCatalogPublishExactPins(t *testing.T) {
 	}
 }
 
+// TestRuntimeOverlaySchemaAndDiagnostics checks schema and diagnostic-position projection while
+// rejecting missing or tampered schema, unknown fields or codes and unsafe diagnostic text.
+// TestRuntimeOverlaySchemaAndDiagnostics проверяет проекцию схемы и позиции диагностики с отказом
+// отсутствующей либо изменённой схеме, неизвестным полям и кодам и небезопасному тексту
+// диагностики.
 func TestRuntimeOverlaySchemaAndDiagnostics(t *testing.T) {
 	view := runtimeContextFixture()
 	view.DraftOverlay = &cp.ConfigOverlayVersion{Diagnostics: []*cp.ConfigOverlayDiagnostic{{Code: "CONFIG_OVERLAY_EFFORT_UNSUPPORTED", Key: "model_reasoning_effort", Line: 3, Column: 5, Message: "Reasoning effort is not supported by the selected model"}}, SchemaRevision: view.OverlaySchema.Revision, SchemaDigest: view.OverlaySchema.Digest}
@@ -103,6 +134,10 @@ func TestRuntimeOverlaySchemaAndDiagnostics(t *testing.T) {
 	}
 }
 
+// TestRuntimeOverlayNativeSearchReadPath checks the exact owner-produced five-field schema, native
+// search modes and default through HTTP and generated OpenAPI enums.
+// TestRuntimeOverlayNativeSearchReadPath проверяет точную схему из пяти полей от владельца, режимы
+// и умолчание native search через HTTP и generated OpenAPI enum.
 func TestRuntimeOverlayNativeSearchReadPath(t *testing.T) {
 	view := runtimeContextFixture()
 	if view.OverlaySchema.Digest != runtimeOverlayProducerDigest || view.OverlaySchema.Revision != "cos_"+runtimeOverlayProducerDigest || len(view.OverlaySchema.Fields) != 5 {
@@ -157,6 +192,11 @@ func TestRuntimeOverlayNativeSearchReadPath(t *testing.T) {
 	}
 }
 
+// TestRuntimeOverlayNativeSearchRemainsClosed checks rejection of unknown, missing or repeated
+// schema fields and altered search modes or defaults even after recomputing their digest.
+// TestRuntimeOverlayNativeSearchRemainsClosed проверяет отказ неизвестным, отсутствующим либо
+// повторным полям схемы и изменённым режимам либо умолчаниям поиска даже после пересчёта
+// дайджеста.
 func TestRuntimeOverlayNativeSearchRemainsClosed(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.AgentRuntimeConfigurationView){
 		"unknown field with matching digest": func(v *cp.AgentRuntimeConfigurationView) {
@@ -213,6 +253,10 @@ func TestRuntimeOverlayNativeSearchRemainsClosed(t *testing.T) {
 	}
 }
 
+// resignRuntimeOverlayFixture recomputes the canonical schema digest and revision for negative
+// fixtures so semantic schema checks are exercised independently of hash mismatch.
+// resignRuntimeOverlayFixture пересчитывает канонический дайджест и ревизию отрицательных эталонов
+// схемы для проверки семантики независимо от несовпадения хеша.
 func resignRuntimeOverlayFixture(t *testing.T, schema *cp.ConfigOverlaySchema) {
 	t.Helper()
 	canonical := canonicalOverlaySchema{MaximumBytes: schema.MaximumBytes, Fields: []canonicalOverlayField{}}
@@ -228,6 +272,11 @@ func resignRuntimeOverlayFixture(t *testing.T, schema *cp.ConfigOverlaySchema) {
 	schema.Revision = "cos_" + schema.Digest
 }
 
+// TestRuntimeCatalogFreshnessMapping checks known account catalog states, observation and expiry
+// validation, account/global status separation and an empty verified ready catalog.
+// TestRuntimeCatalogFreshnessMapping проверяет известные состояния каталога аккаунта, времена
+// наблюдения и истечения, разделение аккаунтного и глобального статуса и пустой проверенный
+// готовый каталог.
 func TestRuntimeCatalogFreshnessMapping(t *testing.T) {
 	for _, state := range []cp.ProviderModelCatalogState{cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_PENDING, cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_READY, cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_EXPIRED, cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_FAILED} {
 		status := runtimeCatalogStatusFixture()
@@ -269,6 +318,10 @@ func TestRuntimeCatalogFreshnessMapping(t *testing.T) {
 	}
 }
 
+// TestRuntimeCatalogNonReasoningPreservesEmptyDefault checks that non-reasoning capabilities
+// retain an empty default and effort list, including the public provider-candidate projection.
+// TestRuntimeCatalogNonReasoningPreservesEmptyDefault проверяет сохранение пустых умолчания и
+// списка effort для моделей без reasoning, включая публичную проекцию кандидата провайдера.
 func TestRuntimeCatalogNonReasoningPreservesEmptyDefault(t *testing.T) {
 	model := modelCapabilityFixture()
 	model.ReasoningEfforts, model.DefaultReasoningEffort = nil, ""

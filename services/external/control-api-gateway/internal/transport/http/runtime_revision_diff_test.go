@@ -15,6 +15,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// runtimeDiffFixture builds a fixed-time current runtime identity and eleven typed component
+// changes with component-specific safe reference, revision, version and digest shapes.
+// runtimeDiffFixture создаёт текущую runtime identity с фиксированным временем и одиннадцать
+// типизированных изменений с безопасными формами ссылок, ревизий, версий и дайджестов по
+// компонентам.
 func runtimeDiffFixture() *cp.GetRuntimeRevisionDiffResponse {
 	digest := strings.Repeat("a", 64)
 	result := &cp.GetRuntimeRevisionDiffResponse{Current: &cp.PublicRuntimeRevisionIdentity{Ref: "rrv_current01", Version: 2, RunRef: "run_fixture01", SessionRef: "ses_fixture01", TurnRef: "turn_fixture01", Attempt: 1, RevisionDigest: digest, CreatedAt: timestamppb.New(time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC))}}
@@ -45,6 +50,11 @@ func runtimeDiffFixture() *cp.GetRuntimeRevisionDiffResponse {
 	return result
 }
 
+// TestRuntimeRevisionDiffTypedProjection checks optional exact revision selection and eleven
+// public component values without exposing runtime snapshot, prompts, credentials or locators.
+// TestRuntimeRevisionDiffTypedProjection проверяет необязательный выбор точной ревизии и
+// одиннадцать публичных значений компонентов без раскрытия runtime snapshot, prompt, учётных
+// данных либо locators.
 func TestRuntimeRevisionDiffTypedProjection(t *testing.T) {
 	for _, pinned := range []bool{false, true} {
 		response := runtimeDiffFixture()
@@ -77,6 +87,10 @@ func TestRuntimeRevisionDiffTypedProjection(t *testing.T) {
 	}
 }
 
+// TestRuntimeRevisionDiffPreviousAndEmpty checks a same-session predecessor from another run
+// retains its identity and absent turn while an empty changes list remains valid.
+// TestRuntimeRevisionDiffPreviousAndEmpty проверяет сохранение identity предшественника той же
+// сессии из другого выполнения и отсутствующего turn при допустимом пустом списке изменений.
 func TestRuntimeRevisionDiffPreviousAndEmpty(t *testing.T) {
 	response := runtimeDiffFixture()
 	old := proto.Clone(response.Current).(*cp.PublicRuntimeRevisionIdentity)
@@ -98,6 +112,12 @@ func TestRuntimeRevisionDiffPreviousAndEmpty(t *testing.T) {
 	}
 }
 
+// TestRuntimeRevisionDiffRejectMalformed checks request pins before RPC and rejects corrupt
+// current/predecessor identity, component-specific fields, duplicate changes and private image
+// locators.
+// TestRuntimeRevisionDiffRejectMalformed проверяет pins запроса до RPC и отказ повреждённой
+// identity текущей и предыдущей ревизий, неверным полям компонентов, повторным изменениям и
+// внутренним locators образов.
 func TestRuntimeRevisionDiffRejectMalformed(t *testing.T) {
 	for _, path := range []string{"/api/v1/runs/bad!/runtime-revision-diff", "/api/v1/runs/run_fixture01/runtime-revision-diff?currentRevisionRef=", "/api/v1/runs/run_fixture01/runtime-revision-diff?currentRevisionRef=bad!"} {
 		client := &catalogRPCRecorder{}
@@ -147,6 +167,10 @@ func TestRuntimeRevisionDiffRejectMalformed(t *testing.T) {
 	}
 }
 
+// TestRuntimeRevisionDiffOwnerErrors checks concrete HTTP mapping of runtime revision diff owner
+// failures without returning private upstream details.
+// TestRuntimeRevisionDiffOwnerErrors проверяет конкретное HTTP-отображение ошибок владельца diff
+// runtime-ревизий без возврата внутренних подробностей upstream.
 func TestRuntimeRevisionDiffOwnerErrors(t *testing.T) {
 	for code, want := range map[codes.Code]int{codes.PermissionDenied: 403, codes.NotFound: 404, codes.InvalidArgument: 400, codes.Unavailable: 503} {
 		client := &catalogRPCRecorder{failure: status.Error(code, "private upstream detail")}

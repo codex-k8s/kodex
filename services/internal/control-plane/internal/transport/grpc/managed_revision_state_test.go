@@ -9,6 +9,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestManagedRevisionProtoStateRoundTrip checks all six managed revision states retain exact
+// numeric/name mappings and survive both binary protobuf and JSON roundtrips.
+// TestManagedRevisionProtoStateRoundTrip проверяет точные числовые и строковые значения шести
+// состояний managed revision и их сохранение в binary protobuf и JSON roundtrip.
 func TestManagedRevisionProtoStateRoundTrip(t *testing.T) {
 	for index, state := range []string{"DRAFT", "VALID", "INVALID", "PUBLISHED", "SUPERSEDED", "DISCARDED"} {
 		t.Run(state, func(t *testing.T) {

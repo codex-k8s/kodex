@@ -11,6 +11,12 @@ import (
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 )
 
+// TestCorePromptV53RecommendsScopedRepositoryCache pins historical v52/v53 bytes and current
+// revision, bounds optional cache advice and checks literal owner preservation, safe redaction and
+// unchanged materialization authority.
+// TestCorePromptV53RecommendsScopedRepositoryCache закрепляет исторические v52 и v53 bytes и
+// текущую ревизию, ограничивает необязательные cache рекомендации и проверяет сохранение
+// буквального owner text, безопасный redaction и неизменные полномочия материализации.
 func TestCorePromptV53RecommendsScopedRepositoryCache(t *testing.T) {
 	previous, err := os.ReadFile("prompts/system-assistant-core-v52.md")
 	version53, version53Err := os.ReadFile("prompts/system-assistant-core-v53.md")

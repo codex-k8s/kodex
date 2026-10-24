@@ -17,11 +17,23 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// rejectedSPIFFEIdentityMessage names the fixed public rejection for malformed certificate identity.
+// rejectedSPIFFEIdentityMessage задаёт фиксированный публичный отказ для неверной identity сертификата.
+const rejectedSPIFFEIdentityMessage = "mTLS SPIFFE identity is rejected"
+
+// AuthorityProofServer exposes proof resolution and readiness through the owner service, with peer
+// checks separate from application-credential validation.
+// AuthorityProofServer предоставляет разрешение proof и готовность через сервис-владелец, отделяя
+// проверку peer от проверки application credential.
 type AuthorityProofServer struct {
 	internalrpcauthorityv1.UnimplementedAuthorityProofResolverServiceServer
 	service *authorityproof.Service
 }
 
+// NewAuthorityProofServer requires a nonnil authority-proof service before constructing the
+// transport adapter without starting a listener.
+// NewAuthorityProofServer требует ненулевой сервис authority proof до создания transport adapter
+// без запуска listener.
 func NewAuthorityProofServer(service *authorityproof.Service) (*AuthorityProofServer, error) {
 	if service == nil {
 		return nil, errors.New("authority proof service is required")
@@ -29,6 +41,10 @@ func NewAuthorityProofServer(service *authorityproof.Service) (*AuthorityProofSe
 	return &AuthorityProofServer{service: service}, nil
 }
 
+// ResolveAuthorityProof requires a request, verified SPIFFE peer and exactly one authorization
+// value before forwarding trimmed bindings to owner resolution.
+// ResolveAuthorityProof требует запрос, проверенный SPIFFE peer и ровно одно значение
+// authorization до передачи нормализованных привязок разрешению владельца.
 func (server *AuthorityProofServer) ResolveAuthorityProof(ctx context.Context, request *internalrpcauthorityv1.ResolveAuthorityProofRequest) (*internalrpcauthorityv1.ResolveAuthorityProofResponse, error) {
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "authority proof request is required")
@@ -57,6 +73,10 @@ func (server *AuthorityProofServer) ResolveAuthorityProof(ctx context.Context, r
 	}, nil
 }
 
+// CheckReadiness checks the verified peer and owner readiness, returning served policy and signer
+// metadata; this method does not validate a bearer credential itself.
+// CheckReadiness проверяет peer и готовность владельца, возвращая обслуживаемые метаданные policy
+// и signer; сам метод не проверяет bearer credential.
 func (server *AuthorityProofServer) CheckReadiness(ctx context.Context, _ *internalrpcauthorityv1.AuthorityProofResolverServiceCheckReadinessRequest) (*internalrpcauthorityv1.AuthorityProofResolverServiceCheckReadinessResponse, error) {
 	if _, err := verifiedPeerSPIFFEID(ctx); err != nil {
 		return nil, err
@@ -72,6 +92,10 @@ func (server *AuthorityProofServer) CheckReadiness(ctx context.Context, _ *inter
 	}, nil
 }
 
+// verifiedPeerSPIFFEID requires TLSInfo with exactly one nonempty verified chain and extracts
+// identity from its verified leaf certificate.
+// verifiedPeerSPIFFEID требует TLSInfo с ровно одной непустой проверенной цепочкой и извлекает
+// identity из её проверенного leaf certificate.
 func verifiedPeerSPIFFEID(ctx context.Context) (string, error) {
 	value, ok := peer.FromContext(ctx)
 	if !ok {
@@ -84,17 +108,25 @@ func verifiedPeerSPIFFEID(ctx context.Context) (string, error) {
 	return exactSPIFFEURI(tlsInfo.State.VerifiedChains[0][0])
 }
 
+// exactSPIFFEURI requires one certificate URI with the configured SPIFFE scheme and host and no
+// query, fragment or userinfo, leaving operation eligibility to the service.
+// exactSPIFFEURI требует единственный URI сертификата с заданными SPIFFE scheme и host без query,
+// fragment либо userinfo, оставляя доступность операции сервису.
 func exactSPIFFEURI(certificate *x509.Certificate) (string, error) {
 	if certificate == nil || len(certificate.URIs) != 1 {
-		return "", status.Error(codes.PermissionDenied, "mTLS SPIFFE identity is rejected")
+		return "", status.Error(codes.PermissionDenied, rejectedSPIFFEIdentityMessage)
 	}
 	identity := certificate.URIs[0]
 	if identity.Scheme != "spiffe" || identity.Host != "kodex.local" || identity.RawQuery != "" || identity.Fragment != "" || identity.User != nil {
-		return "", status.Error(codes.PermissionDenied, "mTLS SPIFFE identity is rejected")
+		return "", status.Error(codes.PermissionDenied, rejectedSPIFFEIdentityMessage)
 	}
 	return identity.String(), nil
 }
 
+// proofStatus maps known owner failures to fixed public statuses and rejects every unclassified
+// failure as PermissionDenied without exposing its message.
+// proofStatus переводит известные отказы владельца в фиксированные публичные статусы и отклоняет
+// прочие как PermissionDenied без раскрытия их текста.
 func proofStatus(err error) error {
 	switch {
 	case errors.Is(err, errs.ErrUnauthorized):

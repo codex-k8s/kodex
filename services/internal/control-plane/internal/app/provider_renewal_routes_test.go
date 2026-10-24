@@ -9,6 +9,11 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// TestProviderRenewalOwnerRoutesRequireExactBroker checks renewal readiness, authorize and
+// validate routes admit only secret-broker as service actor with exact permission and no project
+// scope.
+// TestProviderRenewalOwnerRoutesRequireExactBroker проверяет допуск renewal readiness, authorize и
+// validate routes только secret-broker как service actor с точным permission без project scope.
 func TestProviderRenewalOwnerRoutesRequireExactBroker(t *testing.T) {
 	authorizer, err := trustedClusterAuthorizer(transportprofile.TrustedCluster)
 	if err != nil {

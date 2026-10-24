@@ -20,6 +20,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/eventing"
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
@@ -46,8 +47,18 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// maximumSecretFileBytes bounds protected key/DSN/CA reads to sixty-four KiB through the common
+// nonempty regular-file reader.
+// maximumSecretFileBytes ограничивает чтение защищённых key, DSN и CA шестьюдесятью четырьмя KiB
+// через общий reader непустого regular file.
 const maximumSecretFileBytes = 64 << 10
 
+// Run loads configuration and constructs owner/storage/identity dependencies, bootstraps and
+// checks broker/outbox before starting workers; shutdown marks unready, stops workers and attempts
+// independently bounded HTTP, gRPC and worker cleanup.
+// Run загружает конфигурацию и создаёт owner, storage и identity зависимости, выполняет bootstrap
+// и broker/outbox проверки до запуска workers; shutdown снимает readiness, останавливает workers и
+// выполняет отдельно ограниченные HTTP, gRPC и worker cleanup.
 func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	config, err := loadConfig()
 	if err != nil {
@@ -368,6 +379,10 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	return errors.Join(workerErr, shutdownErr)
 }
 
+// runAgentAvatarCleanup returns a worker that immediately cleans up to fifty expired uploads and
+// repeats each minute, reporting only a fixed failure class and returning on cancellation.
+// runAgentAvatarCleanup возвращает worker, сразу очищающий до пятидесяти истёкших uploads и
+// повторяющий цикл каждую минуту с фиксированным классом отказа и завершением при отмене.
 func runAgentAvatarCleanup(repository interface {
 	CleanupExpiredAgentAvatarUploads(context.Context, int32) error
 }, logger *slog.Logger) serviceruntime.Worker {
@@ -387,6 +402,10 @@ func runAgentAvatarCleanup(repository interface {
 	}
 }
 
+// routeResolverUnary routes only the exact proof-resolver resolve/readiness RPCs directly to their
+// own handler checks, keeping every other unary method behind the protected interceptor.
+// routeResolverUnary направляет только точные proof-resolver RPC resolve и readiness прямо к
+// собственным проверкам handler, сохраняя protected interceptor для остальных unary методов.
 func routeResolverUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		switch info.FullMethod {
@@ -399,6 +418,10 @@ func routeResolverUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerI
 	}
 }
 
+// monitorOIDCSigningKeys periodically refreshes signing keys under a bounded child context and
+// logs only transitions into or out of degraded refresh, returning the caller cancellation error.
+// monitorOIDCSigningKeys периодически обновляет signing keys под ограниченным дочерним context и
+// записывает лишь переходы в degraded refresh и обратно с возвратом ошибки отмены caller.
 func monitorOIDCSigningKeys(refresh func(context.Context) error, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.OIDCRefreshInterval)
@@ -424,10 +447,20 @@ func monitorOIDCSigningKeys(refresh func(context.Context) error, logger *slog.Lo
 	}
 }
 
+// readBoundedFile reads one nonempty regular protected file using the fixed secret-file byte limit
+// and safe errors without exposing its contents.
+// readBoundedFile читает один непустой regular protected file с фиксированным байтовым лимитом
+// секретного файла и безопасными ошибками без раскрытия содержимого.
 func readBoundedFile(path string) ([]byte, error) {
 	return readBoundedFileLimit(path, maximumSecretFileBytes)
 }
 
+// readBoundedFileLimit checks an opened file is regular and within the positive size bound, then
+// limits reading to maximum plus one; it does not enforce ownership/mode or reject symlink
+// traversal.
+// readBoundedFileLimit проверяет regular тип открытого файла и размер в положительном лимите,
+// затем ограничивает чтение maximum плюс одним байтом; владение, mode и запрет прохода symlink не
+// проверяются.
 func readBoundedFileLimit(path string, maximum int64) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -445,6 +478,10 @@ func readBoundedFileLimit(path string, maximum int64) ([]byte, error) {
 	return value, nil
 }
 
+// openPostgres loads the bounded DSN/CA, wipes the raw DSN byte slice after parsing, configures
+// exact TLS13 roots/SNI and pool size, and closes a pool whose initial ping fails.
+// openPostgres загружает ограниченные DSN и CA, очищает raw DSN срез после parsing, задаёт точные
+// TLS13 roots и SNI и размер pool и закрывает pool при отказе начального ping.
 func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	rawDSN, err := readBoundedFile(config.PostgresDSNFile)
 	if err != nil {
@@ -478,6 +515,10 @@ func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// loadServerTLS loads the configured server key pair and client CA into TLS13 mutual-client
+// verification without changing certificate paths or trust policy on failure.
+// loadServerTLS загружает заданные server key pair и client CA в TLS13 проверку client
+// certificates без изменения certificate путей либо trust policy при отказе.
 func loadServerTLS(config Config) (*tls.Config, error) {
 	certificate, err := tls.LoadX509KeyPair(config.ServerCertificateFile, config.ServerPrivateKeyFile)
 	if err != nil {
@@ -494,22 +535,19 @@ func loadServerTLS(config Config) (*tls.Config, error) {
 	return &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate}, ClientCAs: roots, ClientAuth: tls.RequireAndVerifyClientCert}, nil
 }
 
+// technicalServer builds the existing technical probe mux with snapshot readiness and the
+// control-plane header/read/write/idle budgets without opening a listener.
+// technicalServer создаёт прежний technical probe mux с snapshot readiness и control-plane
+// бюджетами header, read, write и idle без открытия listener.
 func technicalServer(address string, readiness *serviceruntime.Readiness) *http.Server {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("/startupz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
-		ready, reason := readiness.Ready()
-		if !ready {
-			http.Error(response, reason, http.StatusServiceUnavailable)
-			return
-		}
-		response.WriteHeader(http.StatusNoContent)
-	})
+	mux := httpserver.ProbeMux(readiness.Ready)
 	return &http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 3 * time.Second, WriteTimeout: 3 * time.Second, IdleTimeout: 30 * time.Second}
 }
 
+// serveGRPC returns a worker that waits for Serve or caller cancellation; server shutdown and
+// joining the serving goroutine remain the composition-root responsibility.
+// serveGRPC возвращает worker ожидания Serve либо отмены caller; shutdown сервера и ожидание
+// serving goroutine остаются ответственностью composition root.
 func serveGRPC(server *grpc.Server, listener net.Listener) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -522,6 +560,11 @@ func serveGRPC(server *grpc.Server, listener net.Listener) serviceruntime.Worker
 		}
 	}
 }
+
+// serveHTTP returns a worker that treats normal HTTP server closure as success or returns
+// Serve/cancellation errors, leaving actual shutdown to the owner.
+// serveHTTP возвращает worker, считающий штатное закрытие HTTP сервера успехом либо возвращающий
+// ошибки Serve и отмены; фактический shutdown остаётся владельцу.
 func serveHTTP(server *http.Server) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -538,23 +581,48 @@ func serveHTTP(server *http.Server) serviceruntime.Worker {
 	}
 }
 
+// readinessStore exposes only authoritative outbox infrastructure readiness for the root readiness
+// loop without adding optional projection dependencies.
+// readinessStore предоставляет только авторитетную readiness инфраструктуры outbox для root
+// readiness цикла без добавления optional projection зависимостей.
 type readinessStore interface {
+	// CheckOutbox checks the owned durable outbox path under the supplied readiness budget without
+	// claiming or publishing work.
+	// CheckOutbox проверяет собственный durable outbox путь под переданным readiness бюджетом без
+	// claim либо публикации работы.
 	CheckOutbox(context.Context) error
 }
 
+// readinessPublisher exposes the broker readiness check used with owned PostgreSQL/outbox health
+// by the root process readiness loop.
+// readinessPublisher предоставляет проверку broker readiness, используемую вместе с owned
+// PostgreSQL и outbox health root циклом готовности процесса.
 type readinessPublisher interface {
+	// Check checks broker durability/readiness through the configured publisher rather than inferring
+	// health from a prior successful publication.
+	// Check проверяет broker durability и readiness через заданный publisher вместо вывода здоровья из
+	// прежней успешной публикации.
 	Check(context.Context) error
 }
 
+// readinessOwner supplies owned-state service readiness independently of external optional
+// adapters, projections or cleanup workers.
+// readinessOwner предоставляет service readiness собственного состояния независимо от внешних
+// optional adapters, проекций либо cleanup workers.
 type readinessOwner interface {
+	// Ready checks the owner service readiness within the supplied context without declaring unrelated
+	// worker capabilities healthy.
+	// Ready проверяет readiness service владельца в переданном context без объявления исправными
+	// несвязанных worker capabilities.
 	Ready(context.Context) error
 }
 
-// Общий endpoint зависит только от owned PostgreSQL и NATS. Object storage
-// остаётся обязательным для файловых операций, но его временный отказ не
-// выключает независимые сценарии и не блокирует запуск после перезагрузки узла.
-// Вспомогательные projection, cleanup и catalog paths сохраняют собственную
-// диагностику и fail-closed ошибки.
+// monitorReadiness immediately and periodically evaluates owned service, outbox and broker checks
+// under one budget, updates the snapshot and logs only state transitions; optional paths retain
+// separate health.
+// monitorReadiness сразу и периодически проверяет owned service, outbox и broker под единым
+// бюджетом, обновляет snapshot и записывает лишь переходы состояния; optional пути сохраняют
+// отдельное здоровье.
 func monitorReadiness(service readinessOwner, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
@@ -581,16 +649,46 @@ func monitorReadiness(service readinessOwner, store readinessStore, publisher re
 	}
 }
 
+// outboxStore owns leased outbox claims and durable publication/failure finalization, keeping
+// business persistence outside the relay worker.
+// outboxStore владеет leased outbox claims и durable фиксацией публикации либо отказа с
+// сохранением business persistence вне relay worker.
 type outboxStore interface {
+	// ClaimOutbox claims a bounded batch for the exact instance and lease duration through the owner
+	// transaction.
+	// ClaimOutbox получает ограниченный пакет claim для точных instance и lease duration через
+	// транзакцию владельца.
 	ClaimOutbox(context.Context, string, int, time.Duration) ([]platformrepository.OutboxItem, error)
+	// MarkOutboxPublished records the exact leased outbox item and durable broker receipt after
+	// publication without recreating the business event.
+	// MarkOutboxPublished фиксирует точный leased outbox элемент и durable broker receipt после
+	// публикации без повторного создания business event.
 	MarkOutboxPublished(context.Context, platformrepository.OutboxItem, eventing.PublishReceipt) error
+	// MarkOutboxFailed records failure/backoff for the exact leased outbox item, leaving retry
+	// eligibility and ordering to the owner.
+	// MarkOutboxFailed фиксирует failure и backoff точного leased outbox элемента, сохраняя retry
+	// eligibility и ordering у владельца.
 	MarkOutboxFailed(context.Context, platformrepository.OutboxItem, time.Duration) error
 }
 
+// rawPublisher publishes an existing serialized event using its exact subject and event ID and
+// returns a durable broker receipt.
+// rawPublisher публикует существующее сериализованное событие с точными subject и event ID и
+// возвращает durable broker receipt.
 type rawPublisher interface {
+	// PublishRaw publishes the supplied event bytes and idempotent event identity under the caller
+	// context without constructing domain state.
+	// PublishRaw публикует переданные event bytes и идемпотентную identity события под caller context
+	// без построения доменного состояния.
 	PublishRaw(context.Context, string, string, []byte) (eventing.PublishReceipt, error)
 }
 
+// runOutboxRelay claims batches of up to sixty-four, bounds each publish and independently
+// finalizes receipt or capped exponential failure backoff using the supplied noncancelled base,
+// stopping on owner errors.
+// runOutboxRelay получает claim пакетами до шестидесяти четырёх, ограничивает publish и независимо
+// фиксирует receipt либо ограниченный exponential failure backoff через переданную неотменённую
+// base с остановкой при owner ошибках.
 func runOutboxRelay(store outboxStore, publisher rawPublisher, finalizeBase context.Context, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		timer := time.NewTimer(0)
@@ -625,6 +723,11 @@ func runOutboxRelay(store outboxStore, publisher rawPublisher, finalizeBase cont
 		}
 	}
 }
+
+// gracefulStop attempts gRPC graceful shutdown until the caller budget expires, then forces Stop
+// and returns the context error.
+// gracefulStop пытается выполнить graceful shutdown gRPC до истечения бюджета caller, затем
+// принудительно вызывает Stop и возвращает ошибку context.
 func gracefulStop(ctx context.Context, server *grpc.Server) error {
 	done := make(chan struct{})
 	go func() { server.GracefulStop(); close(done) }()

@@ -18,8 +18,20 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// draftSpecBody contains synthetic draft text deliberately resembling enum/localization markers,
+// empty collections and one plain environment value to verify exact content preservation rather
+// than accidental normalization.
+// draftSpecBody содержит синтетический draft текст, намеренно похожий на enum/localization
+// маркеры, пустые коллекции и одно обычное environment значение для проверки точного сохранения
+// без случайной нормализации.
 const draftSpecBody = `{"name":"TYPE_Черновик","description":"i18n:исходный текст","imageArtifactRef":"","tools":[],"values":[{"name":"TEST","value":"TYPE_не преобразовывать"}],"secretBindings":[]}`
 
+// environmentDraftRecorder captures cloned typed RPC requests and builds controlled
+// project/organization draft responses, with independent draft/environment mutation hooks for
+// negative publication tests. It persists no environment state.
+// environmentDraftRecorder сохраняет копии typed RPC requests и собирает контролируемые
+// project/organization draft ответы с отдельными draft/environment mutation hooks для
+// отрицательных publication тестов. Состояние среды не сохраняется.
 type environmentDraftRecorder struct {
 	grpc.ClientConnInterface
 	method            string
@@ -32,6 +44,12 @@ type environmentDraftRecorder struct {
 	mutateEnvironment func(*controlplanev1.RuntimeEnvironmentSet)
 }
 
+// Invoke records method/input, applies configured failure/empty behavior and fills the generated
+// response with synthetic draft plus publication plan/environment when needed. Mutation hooks
+// corrupt only the requested test projection.
+// Invoke сохраняет method/input, применяет заданные failure/empty и заполняет generated ответ
+// синтетическим draft и при необходимости publication plan/environment. Mutation hooks повреждают
+// только нужную тестовую проекцию.
 func (client *environmentDraftRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	client.method, client.request = method, proto.Clone(request.(proto.Message))
 	if client.failure != nil {
@@ -81,6 +99,12 @@ func (client *environmentDraftRecorder) Invoke(_ context.Context, method string,
 	return nil
 }
 
+// TestEnvironmentSecretRevisionSurvivesHTTPRoundTrip round-trips zero, explicit and maximum-safe
+// secret revision pins through draft reads and save/create routes, proving edits to unrelated
+// fields do not replace the pinned revision.
+// TestEnvironmentSecretRevisionSurvivesHTTPRoundTrip переносит нулевой, явный и максимально
+// безопасный secret revision pin через чтение draft и save/create маршруты, доказывая сохранение
+// pin при изменении других полей.
 func TestEnvironmentSecretRevisionSurvivesHTTPRoundTrip(t *testing.T) {
 	for _, revision := range []int64{0, 7, maximumSafeJSONInteger} {
 		client := &environmentDraftRecorder{bindings: []*controlplanev1.RuntimeSecretBinding{{Name: "API_TOKEN", SecretRef: "sec_fixture01", Revision: revision}}}
@@ -111,6 +135,12 @@ func TestEnvironmentSecretRevisionSurvivesHTTPRoundTrip(t *testing.T) {
 	}
 }
 
+// TestEnvironmentSecretRevisionRejectsInvalidNumbersBeforeRPC rejects negative, unsafe and
+// fractional input revisions on draft/environment create/save/version routes before RPC, and
+// requires 502 for corrupt owner revision metadata.
+// TestEnvironmentSecretRevisionRejectsInvalidNumbersBeforeRPC отклоняет отрицательные,
+// небезопасные и дробные revisions до RPC на draft/environment create/save/version маршрутах и
+// требует 502 для неверных metadata revision владельца.
 func TestEnvironmentSecretRevisionRejectsInvalidNumbersBeforeRPC(t *testing.T) {
 	for _, revision := range []string{"-1", "9007199254740992", "1.5"} {
 		spec := strings.Replace(draftSpecBody, `"secretBindings":[]`, `"secretBindings":[{"name":"API_TOKEN","secretRef":"sec_fixture01","revision":`+revision+`}]`, 1)
@@ -138,6 +168,12 @@ func TestEnvironmentSecretRevisionRejectsInvalidNumbersBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestEnvironmentPublishedSecretDescriptorPreservesPin checks positive safe published secret
+// revisions survive projection while zero/negative/unsafe pins fail, and verifies explicit false
+// readiness with private namespace metadata omitted.
+// TestEnvironmentPublishedSecretDescriptorPreservesPin проверяет сохранение положительных
+// безопасных published secret revisions, отказ для zero/negative/unsafe pins и явную false
+// готовность без приватных namespace metadata.
 func TestEnvironmentPublishedSecretDescriptorPreservesPin(t *testing.T) {
 	for _, revision := range []int64{0, -1, 7, maximumSafeJSONInteger, maximumSafeJSONInteger + 1} {
 		client := &catalogRPCRecorder{response: &controlplanev1.GetRuntimeEnvironmentSetResponse{Environment: &controlplanev1.RuntimeEnvironmentSet{
@@ -166,12 +202,23 @@ func TestEnvironmentPublishedSecretDescriptorPreservesPin(t *testing.T) {
 	}
 }
 
+// draftTestHandler wires the generated HTTP router to typed query/command clients backed by the
+// synthetic draft recorder, without an external RPC connection.
+// draftTestHandler связывает generated HTTP router с typed query/command клиентами синтетического
+// draft recorder без внешнего RPC соединения.
 func draftTestHandler(client *environmentDraftRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{
 		Query: controlplanev1.NewPlatformQueryServiceClient(client), Command: controlplanev1.NewPlatformCommandServiceClient(client),
 	}})
 }
 
+// TestEnvironmentDraftRoutesKeepSeparateTypedLifecycle checks
+// create/read/save/validate/publish/discard routes use their dedicated RPCs, retain
+// mutation/version/plan selectors and exact user text, and return typed arrays, draft ETag and
+// no-store consistently.
+// TestEnvironmentDraftRoutesKeepSeparateTypedLifecycle проверяет отдельные RPC
+// create/read/save/validate/publish/discard, сохранение mutation/version/plan selectors и точного
+// пользовательского текста и согласованные typed массивы, draft ETag и no-store.
 func TestEnvironmentDraftRoutesKeepSeparateTypedLifecycle(t *testing.T) {
 	for _, test := range []struct {
 		method, path, body, rpc string
@@ -235,6 +282,12 @@ func TestEnvironmentDraftRoutesKeepSeparateTypedLifecycle(t *testing.T) {
 	}
 }
 
+// TestEnvironmentDraftPinsExistingEnvironmentVersion requires existing environment ref and
+// expected version to travel together to create, and rejects missing or zero counterpart fields
+// before owner RPC.
+// TestEnvironmentDraftPinsExistingEnvironmentVersion требует совместной передачи existing
+// environment ref и expected version в create и отклоняет отсутствие либо нулевое парное поле до
+// RPC владельца.
 func TestEnvironmentDraftPinsExistingEnvironmentVersion(t *testing.T) {
 	client := &environmentDraftRecorder{}
 	response := httptest.NewRecorder()
@@ -254,6 +307,12 @@ func TestEnvironmentDraftPinsExistingEnvironmentVersion(t *testing.T) {
 	}
 }
 
+// TestEnvironmentDraftRejectsForeignReceipt rejects a foreign draft identity across all
+// existing-draft lifecycle routes and mismatched project/environment/version pins in create
+// responses, without exposing the foreign receipt.
+// TestEnvironmentDraftRejectsForeignReceipt отклоняет чужую draft identity на всех lifecycle
+// маршрутах существующего черновика и несовпадающие project/environment/version pins create ответа
+// без раскрытия чужого receipt.
 func TestEnvironmentDraftRejectsForeignReceipt(t *testing.T) {
 	for _, route := range []struct{ method, path, body string }{
 		{"GET", "/api/v1/runtime-environment-drafts/renvd_fixture01", ""},
@@ -283,6 +342,12 @@ func TestEnvironmentDraftRejectsForeignReceipt(t *testing.T) {
 	}
 }
 
+// TestEnvironmentDraftPreservesAuthorityFailures checks permission, not-found and stale-version
+// owner failures preserve their HTTP status and an empty successful RPC response becomes
+// invalid-upstream 502.
+// TestEnvironmentDraftPreservesAuthorityFailures проверяет сохранение HTTP статусов permission,
+// not-found и stale-version отказов владельца и преобразование пустого успешного RPC ответа в
+// invalid-upstream 502.
 func TestEnvironmentDraftPreservesAuthorityFailures(t *testing.T) {
 	for _, test := range []struct {
 		failure error
@@ -303,6 +368,14 @@ func TestEnvironmentDraftPreservesAuthorityFailures(t *testing.T) {
 	}
 }
 
+// TestEnvironmentDraftPolicyKeepsTypedResourceAndNetworkSettings round-trips exact
+// resource/ephemeral-volume/network policy through typed input/output, rejects unknown
+// destinations and keeps an owner-zero unset policy absent rather than inventing a published
+// policy.
+// TestEnvironmentDraftPolicyKeepsTypedResourceAndNetworkSettings переносит точные
+// resource/ephemeral-volume/network policy через typed input/output, отклоняет неизвестные
+// destinations и сохраняет нулевую unset policy владельца отсутствующей без выдуманной published
+// policy.
 func TestEnvironmentDraftPolicyKeepsTypedResourceAndNetworkSettings(t *testing.T) {
 	input := &controlplanev1.RuntimeEnvironmentPolicyInput{
 		Resources: &controlplanev1.RuntimeResourcePolicy{CpuRequestMilli: 1000, CpuLimitMilli: 2000, MemoryRequestMib: 1024, MemoryLimitMib: 4096,
@@ -333,6 +406,12 @@ func TestEnvironmentDraftPolicyKeepsTypedResourceAndNetworkSettings(t *testing.T
 	}
 }
 
+// TestEnvironmentDraftRejectsUnknownPolicyEnumBeforeRPC rejects protobuf-prefixed strings supplied
+// where public Kubernetes/network enum names are required, proving malformed policy input never
+// reaches the owner.
+// TestEnvironmentDraftRejectsUnknownPolicyEnumBeforeRPC отклоняет protobuf-prefixed строки вместо
+// публичных Kubernetes/network enum имён, доказывая отсутствие запроса владельцу при неверном
+// policy входе.
 func TestEnvironmentDraftRejectsUnknownPolicyEnumBeforeRPC(t *testing.T) {
 	for _, body := range []string{
 		`{"name":"draft","description":"","imageArtifactRef":"","tools":[],"values":[],"secretBindings":[],"policy":{"resources":{"cpuRequestMilli":1000,"cpuLimitMilli":2000,"memoryRequestMib":1024,"memoryLimitMib":4096,"ephemeralStorageRequestMib":1024,"ephemeralStorageLimitMib":2048},"volumes":[],"networkDestinations":["DNS","RUNTIME_CALLBACK","PROVIDER_PROXY"],"kubernetesAccess":"RUNTIME_KUBERNETES_ACCESS_KIND_NONE"}}`,
@@ -347,6 +426,12 @@ func TestEnvironmentDraftRejectsUnknownPolicyEnumBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentReadbackUsesOpenAPIEnums checks nested Kubernetes/volume/network/web
+// policy enum values normalize to public OpenAPI names and no protobuf enum prefixes leak into
+// JSON.
+// TestRuntimeEnvironmentReadbackUsesOpenAPIEnums проверяет нормализацию вложенных
+// Kubernetes/volume/network/web enum в публичные OpenAPI имена и отсутствие protobuf префиксов в
+// JSON.
 func TestRuntimeEnvironmentReadbackUsesOpenAPIEnums(t *testing.T) {
 	policy := &controlplanev1.RuntimeEnvironmentPolicy{
 		Resources: &controlplanev1.RuntimeResourcePolicy{},
@@ -384,6 +469,12 @@ func TestRuntimeEnvironmentReadbackUsesOpenAPIEnums(t *testing.T) {
 	}
 }
 
+// TestEnvironmentDraftMutationRequiresVersionBeforeRPC removes If-Match from draft save and
+// requires failure before the synthetic owner records any request, protecting the versioned
+// mutation boundary.
+// TestEnvironmentDraftMutationRequiresVersionBeforeRPC удаляет If-Match из draft save и требует
+// отказа до сохранения любого запроса синтетическим владельцем, защищая versioned mutation
+// boundary.
 func TestEnvironmentDraftMutationRequiresVersionBeforeRPC(t *testing.T) {
 	client := &environmentDraftRecorder{}
 	response := httptest.NewRecorder()
@@ -395,6 +486,12 @@ func TestEnvironmentDraftMutationRequiresVersionBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestOrganizationEnvironmentDraftUsesCanonicalOwnerAndSeparateVersionPins checks organization
+// create uses its dedicated RPC with create mutation version separate from optional environment
+// version, preserves text and proves authority fields are absent from the request contract.
+// TestOrganizationEnvironmentDraftUsesCanonicalOwnerAndSeparateVersionPins проверяет отдельный RPC
+// организационного create с версией create mutation отдельно от optional environment version,
+// сохранение текста и отсутствие authority полей в контракте запроса.
 func TestOrganizationEnvironmentDraftUsesCanonicalOwnerAndSeparateVersionPins(t *testing.T) {
 	for _, existing := range []bool{false, true} {
 		client := &environmentDraftRecorder{organization: true}
@@ -426,6 +523,12 @@ func TestOrganizationEnvironmentDraftUsesCanonicalOwnerAndSeparateVersionPins(t 
 	}
 }
 
+// TestEnvironmentDraftReadbackRejectsUnspecifiedAndMalformedScope requires draft reads to reject
+// missing/unknown scope, absent organization, project without locator and organization carrying a
+// project, without leaking the draft identifier.
+// TestEnvironmentDraftReadbackRejectsUnspecifiedAndMalformedScope требует отказа draft чтения для
+// missing/unknown scope, отсутствующей организации, проекта без locator и организации с проектом
+// без утечки draft identifier.
 func TestEnvironmentDraftReadbackRejectsUnspecifiedAndMalformedScope(t *testing.T) {
 	for name, mutate := range map[string]func(*controlplanev1.RuntimeEnvironmentDraft){
 		"missing scope":           func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ScopeKind = 0 },
@@ -447,6 +550,12 @@ func TestEnvironmentDraftReadbackRejectsUnspecifiedAndMalformedScope(t *testing.
 	}
 }
 
+// TestOrganizationEnvironmentDraftRejectsProjectAndMalformedOwnerResponse rejects malformed or
+// project-scoped organization-create receipts and caller-injected project/organization/scope
+// fields before RPC, keeping authority assignment with the owner.
+// TestOrganizationEnvironmentDraftRejectsProjectAndMalformedOwnerResponse отклоняет неверные и
+// проектные receipts организационного create и подставленные caller project/organization/scope до
+// RPC, оставляя назначение полномочий владельцу.
 func TestOrganizationEnvironmentDraftRejectsProjectAndMalformedOwnerResponse(t *testing.T) {
 	for name, mutate := range map[string]func(*controlplanev1.RuntimeEnvironmentDraft){
 		"missing scope":        func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ScopeKind = 0 },
@@ -477,6 +586,12 @@ func TestOrganizationEnvironmentDraftRejectsProjectAndMalformedOwnerResponse(t *
 	}
 }
 
+// TestEnvironmentPublicationRejectsCrossOrganizationAndMissingScope checks valid project and
+// organization publication remains usable while missing/unknown or foreign organization scope in
+// the returned environment rejects the complete publication envelope.
+// TestEnvironmentPublicationRejectsCrossOrganizationAndMissingScope проверяет штатную публикацию
+// проекта и организации и отказ всему publication envelope при missing/unknown либо чужой
+// organization области возвращённой среды.
 func TestEnvironmentPublicationRejectsCrossOrganizationAndMissingScope(t *testing.T) {
 	for _, organization := range []bool{false, true} {
 		control := &environmentDraftRecorder{organization: organization}

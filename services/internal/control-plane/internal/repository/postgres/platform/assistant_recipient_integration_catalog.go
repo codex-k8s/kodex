@@ -14,12 +14,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantRecipientIntegrationCatalogContext embeds the owner lease/run/revision and visible recipient-context catalog query.
+// queryAssistantRecipientIntegrationCatalogContext встраивает owner query lease, run, revision и видимого recipient context каталога.
+//
 //go:embed sql/assistant_recipient_integration_catalog__context.sql
 var queryAssistantRecipientIntegrationCatalogContext string
 
+// queryAssistantRecipientIntegrationCatalogEntries embeds the scoped bounded catalog entry query with current shipped revision pins.
+// queryAssistantRecipientIntegrationCatalogEntries встраивает ограниченный scope запрос записей каталога с текущими shipped revision pins.
+//
 //go:embed sql/assistant_recipient_integration_catalog__entries.sql
 var queryAssistantRecipientIntegrationCatalogEntries string
 
+// assistantRecipientIntegrationCatalogTx binds the catalog to the owner lease/context projection,
+// handles exact workflow-to-agent selection, and reads bounded grant metadata under current
+// package/read eligibility without granting mutation authority.
+// assistantRecipientIntegrationCatalogTx связывает каталог с owner lease и context projection,
+// обрабатывает точный workflow-to-agent выбор и читает ограниченные grant metadata под текущей
+// package и read eligibility без выдачи mutation authority.
 func (repository *Repository) assistantRecipientIntegrationCatalogTx(ctx context.Context, tx pgx.Tx, current scope, leaseRef string, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
 	result := entity.AssistantConfigurationCatalogResponse{Kind: input.Kind, AssistantRef: input.AssistantRef, ScopeKind: "PROJECT", OrganizationRef: current.organizationRef}
 	catalog := &entity.AssistantRecipientIntegrationGrantCatalog{Entries: []entity.AssistantRecipientIntegrationGrantCatalogEntry{}}
@@ -58,6 +70,10 @@ func (repository *Repository) assistantRecipientIntegrationCatalogTx(ctx context
 	if err != nil {
 		return result, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
+	// key holds only connection/capability locators from the scoped catalog query for subsequent exact
+	// owner snapshot reads.
+	// key хранит только connection и capability locators из ограниченного scope catalog query для
+	// последующих точных owner snapshot reads.
 	type key struct{ connection, capability string }
 	keys := []key{}
 	for rows.Next() {
@@ -88,17 +104,11 @@ func (repository *Repository) assistantRecipientIntegrationCatalogTx(ctx context
 		if !found || !capability.CallableByAgent() || snapshot.recipientVersion != catalog.RecipientVersion {
 			return result, errs.ErrUnavailable
 		}
-		schema, err := capability.InputSchema()
+		projection, err := integrationCapabilityProjection(capability)
 		if err != nil {
-			return result, errs.ErrUnavailable
+			return result, err
 		}
-		digest, err := capability.InputSchemaDigest()
-		if err != nil {
-			return result, errs.ErrUnavailable
-		}
-		candidate := entity.SystemAssistantIntegrationGrantCandidate{Capability: entity.IntegrationCapability{Key: capability.Key, Name: capability.Name, Description: capability.Description, Operation: capability.Operation,
-			Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy, AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...), ResourceKind: capability.ResourceScope.Kind,
-			InputFields: integrationConfigurationFields(capability.InputFields), InputSchema: string(schema), InputSchemaSHA256: digest}, Grantable: snapshot.reason == "READY", Reason: snapshot.reason,
+		candidate := entity.SystemAssistantIntegrationGrantCandidate{Capability: projection, Grantable: snapshot.reason == "READY", Reason: snapshot.reason,
 			CurrentGrantRef: snapshot.grantRef, CurrentGrantVersion: snapshot.grantVersion, CurrentGrantEnabled: snapshot.enabled, CurrentApprovalPolicy: snapshot.approvalPolicy, CurrentApprovalScopePaths: append([]string{}, snapshot.approvalScopePaths...)}
 		if !executable {
 			candidate.Grantable, candidate.Reason = false, "PACKAGE_UNAVAILABLE"
@@ -120,9 +130,12 @@ func (repository *Repository) assistantRecipientIntegrationCatalogTx(ctx context
 	return result, nil
 }
 
-// Только безопасный metadata read: точная published ревизия, несовместимая с
-// текущим adapter, видна как PACKAGE_UNAVAILABLE и не получает GRANT authority.
-// Исполняемый resolver и mutation admission остаются без compatibility fallback.
+// assistantRecipientCatalogPackage uses the executable resolver for current shipped pins and an
+// exact published bound metadata decoder for other revisions; incompatibility remains read-only
+// PACKAGE_UNAVAILABLE and never relaxes mutation admission.
+// assistantRecipientCatalogPackage использует executable resolver для текущих shipped pins и
+// точный published bound metadata decoder для остальных ревизий; несовместимость остаётся
+// read-only PACKAGE_UNAVAILABLE и не ослабляет mutation admission.
 func (repository *Repository) assistantRecipientCatalogPackage(ctx context.Context, runner queryRunner, organizationID, connectionRef, key, version, digest string) (integrationpackage.Package, bool, error) {
 	shipped, known := repository.integrationDefinitions[key]
 	if !known {
@@ -150,13 +163,20 @@ func (repository *Repository) assistantRecipientCatalogPackage(ctx context.Conte
 	return definition, integrationpackage.ValidateExecutableRevision(definition, shipped) == nil, nil
 }
 
-// Реестр текущего producer, а не устаревшая DB-проекция, определяет exact
-// shipped pins. Непригодные unbound ревизии исключаются до пагинации; найденные
-// published bindings остаются для полного closed decoder и проверки corruption.
+// assistantRecipientCatalogShippedRevisions serializes exact current producer revision/digest pins
+// for catalog filtering, rejecting an empty registry; found published bindings still require the
+// full closed decoder.
+// assistantRecipientCatalogShippedRevisions сериализует точные текущие producer revision и digest
+// pins для фильтрации каталога, отклоняя пустой реестр; найденные published bindings по-прежнему
+// требуют полного закрытого decoder.
 func (repository *Repository) assistantRecipientCatalogShippedRevisions() (string, error) {
 	if len(repository.integrationDefinitions) == 0 {
 		return "", errs.ErrUnavailable
 	}
+	// revision encodes the current producer version and digest used by the catalog query without
+	// replacing bound published revision verification.
+	// revision кодирует текущие producer version и digest для catalog query без замены проверки bound
+	// published revision.
 	type revision struct {
 		Version string `json:"version"`
 		Digest  string `json:"digest"`
@@ -172,7 +192,10 @@ func (repository *Repository) assistantRecipientCatalogShippedRevisions() (strin
 	return string(encoded), nil
 }
 
-// Назначение в exact draft не является grant: отдельный owner admission остаётся обязательным.
+// assistantWorkflowContainsAgent checks coordinator or step assignment in the exact workflow
+// snapshot; assignment alone is not a grant and owner admission remains required.
+// assistantWorkflowContainsAgent проверяет coordinator либо step assignment в точном workflow
+// snapshot; одно назначение не является grant и owner admission остаётся обязательным.
 func assistantWorkflowContainsAgent(before map[string]any, agentRef string) bool {
 	if assistantString(before, "coordinatorAgentRef") == agentRef {
 		return true

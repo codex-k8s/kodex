@@ -5,9 +5,12 @@ import (
 	"strings"
 )
 
-// AutomationTaskPurpose сохраняет пользовательский шаблон и добавляет task
-// только когда его точного значения нет в результате одного прохода. Значение
-// task остаётся данными, в том числе при наличии внутри него {{...}}.
+// AutomationTaskPurpose validates and renders the owner template once to detect the exact captured
+// task, appending one task insertion only if absent and keeping template syntax inside task values
+// inert.
+// AutomationTaskPurpose проверяет и один раз строит шаблон владельца для поиска точной захваченной
+// задачи, добавляя одну вставку task только при её отсутствии и не исполняя синтаксис шаблона
+// внутри значения задачи.
 func AutomationTaskPurpose(text string, snapshot Snapshot) (string, error) {
 	task := snapshot.Variables["task"]
 	if strings.TrimSpace(task) == "" || len(task) > 65536 || len(Validate(text, Catalog())) != 0 {

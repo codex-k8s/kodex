@@ -11,12 +11,20 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 )
 
+// rotatingIntegrationDNS supplies a finite sequence of synthetic DNS snapshots or one injected
+// refresh error without using real network resolution.
+// rotatingIntegrationDNS предоставляет конечную последовательность синтетических DNS snapshots
+// либо заданную ошибку refresh без реального сетевого разрешения.
 type rotatingIntegrationDNS struct {
 	snapshots []dnsresolver.Snapshot
 	index     int
 	err       error
 }
 
+// Refresh returns the next synthetic snapshot and advances the fixture cursor, rejecting
+// exhaustion or the configured dependency error.
+// Refresh возвращает следующий синтетический snapshot и продвигает cursor оснастки с отказом при
+// исчерпании либо заданной ошибке зависимости.
 func (source *rotatingIntegrationDNS) Refresh(_ context.Context, _ string) (dnsresolver.Snapshot, error) {
 	if source.err != nil {
 		return dnsresolver.Snapshot{}, source.err
@@ -29,6 +37,10 @@ func (source *rotatingIntegrationDNS) Refresh(_ context.Context, _ string) (dnsr
 	return snapshot, nil
 }
 
+// TestIntegrationDNSProjectionUnionsBoundedRotatingAnswers checks four rotating IPv4/IPv6
+// snapshots produce a sorted deduplicated union with the earliest current expiry.
+// TestIntegrationDNSProjectionUnionsBoundedRotatingAnswers проверяет получение отсортированного
+// объединения без повторов с ранним текущим сроком по четырём чередующимся IPv4/IPv6 snapshots.
 func TestIntegrationDNSProjectionUnionsBoundedRotatingAnswers(t *testing.T) {
 	first := netip.MustParseAddr("93.184.215.14")
 	second := netip.MustParseAddr("93.184.215.15")
@@ -47,6 +59,10 @@ func TestIntegrationDNSProjectionUnionsBoundedRotatingAnswers(t *testing.T) {
 	}
 }
 
+// TestIntegrationDNSProjectionRejectsIncompleteSample checks exhaustion before the required four
+// DNS observations rejects the projection rather than publishing partial evidence.
+// TestIntegrationDNSProjectionRejectsIncompleteSample проверяет отказ проекции при исчерпании DNS
+// наблюдений до обязательных четырёх вместо публикации частичного свидетельства.
 func TestIntegrationDNSProjectionRejectsIncompleteSample(t *testing.T) {
 	source := &rotatingIntegrationDNS{snapshots: []dnsresolver.Snapshot{{Addresses: []netip.Addr{netip.MustParseAddr("93.184.215.14")}, ExpiresAt: time.Now().Add(time.Minute)}}}
 	if _, err := (&integrationDNSResolver{source: source}).Resolve(t.Context(), "api.example.test"); err == nil {
@@ -54,6 +70,12 @@ func TestIntegrationDNSProjectionRejectsIncompleteSample(t *testing.T) {
 	}
 }
 
+// TestIntegrationDNSProjectionRetainsOnlyRecentVerifiedPublicPins checks old verified public pins
+// overlap the next observation briefly and disappear after the retention window without losing
+// current pins.
+// TestIntegrationDNSProjectionRetainsOnlyRecentVerifiedPublicPins проверяет краткое перекрытие
+// старых проверенных публичных pins со следующим наблюдением и их исчезновение после окна хранения
+// без потери текущих pins.
 func TestIntegrationDNSProjectionRetainsOnlyRecentVerifiedPublicPins(t *testing.T) {
 	first := netip.MustParseAddr("8.8.8.8")
 	second := netip.MustParseAddr("9.9.9.9")
@@ -84,6 +106,12 @@ func TestIntegrationDNSProjectionRetainsOnlyRecentVerifiedPublicPins(t *testing.
 	}
 }
 
+// TestIntegrationDNSProjectionBoundsRetainedPinsWithoutPublishingPartialChange checks a
+// thirty-third overlapping pin fails without replacing the previous retained set and succeeds once
+// old pins expire.
+// TestIntegrationDNSProjectionBoundsRetainedPinsWithoutPublishingPartialChange проверяет отказ
+// тридцать третьему overlapping pin без замены прежнего retained set и успех после истечения
+// старых pins.
 func TestIntegrationDNSProjectionBoundsRetainedPinsWithoutPublishingPartialChange(t *testing.T) {
 	start := time.Now()
 	source := &rotatingIntegrationDNS{}
@@ -119,6 +147,10 @@ func TestIntegrationDNSProjectionBoundsRetainedPinsWithoutPublishingPartialChang
 	}
 }
 
+// TestIntegrationDNSProjectionRejectsMixedPublicPrivateSnapshot checks one mixed public/private
+// DNS answer fails before any unsafe address can enter retained overlap state.
+// TestIntegrationDNSProjectionRejectsMixedPublicPrivateSnapshot проверяет отказ одному смешанному
+// public/private DNS ответу до попадания небезопасного адреса в retained overlap state.
 func TestIntegrationDNSProjectionRejectsMixedPublicPrivateSnapshot(t *testing.T) {
 	source := &rotatingIntegrationDNS{snapshots: []dnsresolver.Snapshot{{
 		Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("10.0.0.1")},

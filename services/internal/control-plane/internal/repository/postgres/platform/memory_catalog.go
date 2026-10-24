@@ -2,7 +2,6 @@ package platform
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -13,6 +12,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ListMemoryRecords reads one bounded memory page with its eligible total using
+// the resolved actor/project scope and a filter-bound cursor. SQL owns eligibility;
+// the lookahead row is trimmed before encoding the next record ref.
+// ListMemoryRecords читает ограниченную страницу памяти и число допустимых записей
+// по разрешённым actor/project и связанному с фильтром курсору. Допуск задаёт SQL;
+// лишняя строка удаляется перед кодированием ref следующей страницы.
 func (repository *Repository) ListMemoryRecords(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.KodexMemoryRecord, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -25,20 +30,14 @@ func (repository *Repository) ListMemoryRecords(ctx context.Context, principal v
 		return nil, 0, "", err
 	}
 	limit := boundedPage(filter.Page)
-	var raw []byte
-	var total int64
-	err = repository.pool.QueryRow(ctx, queryMemoryRecordList, pgx.StrictNamedArgs{
+	items, total, err := scanJSONCatalog[entity.KodexMemoryRecord](repository.pool.QueryRow(ctx, queryMemoryRecordList, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": current.actorID,
 		"authority_project": current.authorityProjectID, "project_ref": filter.ProjectRef,
 		"agent_ref": filter.ResourceRef, "state": filter.State, "query": filter.Query,
 		"cursor_ref": cursor, "page_size": limit + 1, "evaluated_at": time.Now().UTC(),
-	}).Scan(&raw, &total)
+	}))
 	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
-	}
-	var items []entity.KodexMemoryRecord
-	if json.Unmarshal(raw, &items) != nil {
-		return nil, 0, "", errs.ErrUnavailable
+		return nil, 0, "", err
 	}
 	next := ""
 	if len(items) > int(limit) {
@@ -48,6 +47,12 @@ func (repository *Repository) ListMemoryRecords(ctx context.Context, principal v
 	return items, total, next, nil
 }
 
+// ListMemoryRecordRevisions resolves and authorizes the current memory record
+// before reading descending revisions in one read-only repeatable-read snapshot.
+// The cursor binds the actor and record; its position must be a positive revision.
+// ListMemoryRecordRevisions разрешает текущую запись памяти и проверяет доступ
+// до чтения убывающих версий в одном read-only repeatable-read снимке. Курсор
+// связан с actor и записью; его позиция должна быть положительным номером версии.
 func (repository *Repository) ListMemoryRecordRevisions(ctx context.Context, principal value.Principal, ref string, page query.Page) ([]entity.MemoryRecordRevision, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -80,18 +85,12 @@ func (repository *Repository) ListMemoryRecordRevisions(ctx context.Context, pri
 		return nil, 0, "", err
 	}
 	limit := boundedPage(page)
-	var raw []byte
-	var total int64
-	err = tx.QueryRow(ctx, queryMemoryRevisionList, pgx.StrictNamedArgs{
+	items, total, err := scanJSONCatalog[entity.MemoryRecordRevision](tx.QueryRow(ctx, queryMemoryRevisionList, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": current.actorID, "record_ref": ref,
 		"before_revision": before, "page_size": limit + 1, "evaluated_at": time.Now().UTC(),
-	}).Scan(&raw, &total)
+	}))
 	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
-	}
-	var items []entity.MemoryRecordRevision
-	if json.Unmarshal(raw, &items) != nil {
-		return nil, 0, "", errs.ErrUnavailable
+		return nil, 0, "", err
 	}
 	next := ""
 	if len(items) > int(limit) {

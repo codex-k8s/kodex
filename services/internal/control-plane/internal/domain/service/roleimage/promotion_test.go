@@ -11,6 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// promotionRepositoryStub captures specialized promotion input and supplies resolved authority, a
+// configured receipt and counted supply-work reads without external registry actions.
+// promotionRepositoryStub сохраняет specialized promotion input и предоставляет разрешённые
+// полномочия, заданную квитанцию и считаемые supply-work чтения без внешних registry действий.
 type promotionRepositoryStub struct {
 	repository.Repository
 	resolved value.Principal
@@ -19,21 +23,38 @@ type promotionRepositoryStub struct {
 	calls    int
 }
 
+// GetSupplyWorkAvailability counts one owner availability query and returns synthetic admission
+// availability without claiming or executing supply work.
+// GetSupplyWorkAvailability считает один запрос доступности владельца и возвращает синтетическую
+// admission availability без claim либо исполнения supply work.
 func (stub *promotionRepositoryStub) GetSupplyWorkAvailability(context.Context, value.Principal) (repository.SupplyWorkAvailability, error) {
 	stub.calls++
 	return repository.SupplyWorkAvailability{AdmissionAvailable: true}, nil
 }
 
+// ResolvePrincipal returns the configured authoritative promotion principal rather than reusing
+// caller identity from the request payload.
+// ResolvePrincipal возвращает заданный авторитетный promotion principal вместо повторного
+// использования caller identity из request payload.
 func (stub *promotionRepositoryStub) ResolvePrincipal(context.Context, value.Principal) (value.Principal, error) {
 	return stub.resolved, nil
 }
 
+// RequestPromotion captures exact specialized promotion mutation, counts the owner call and
+// returns the preconfigured synthetic receipt.
+// RequestPromotion сохраняет точную specialized promotion mutation, считает вызов владельца и
+// возвращает заданную синтетическую квитанцию.
 func (stub *promotionRepositoryStub) RequestPromotion(_ context.Context, input repository.PromotionRequestInput) (entity.RoleImagePromotionReceipt, error) {
 	stub.input = input
 	stub.calls++
 	return stub.receipt, nil
 }
 
+// TestPromoteRoleImageBuildsSpecializedMutation checks exact promotion operation, intent digest
+// and OCC version reach the owner and changing OCC changes the idempotency intent commitment.
+// TestPromoteRoleImageBuildsSpecializedMutation проверяет передачу владельцу точных promotion
+// operation, intent digest и OCC версии и изменение idempotency intent commitment при изменении
+// OCC.
 func TestPromoteRoleImageBuildsSpecializedMutation(t *testing.T) {
 	catalog, err := NewCatalog([]Environment{validEnvironment(true, true)})
 	if err != nil {
@@ -79,6 +100,11 @@ func TestPromoteRoleImageBuildsSpecializedMutation(t *testing.T) {
 	}
 }
 
+// TestGetSupplyWorkAvailabilityRequiresExactControllerAuthority checks only the resolved
+// image-admission-controller with the exact supply-work permission can read availability through
+// the owner port.
+// TestGetSupplyWorkAvailabilityRequiresExactControllerAuthority проверяет чтение доступности через
+// порт владельца только разрешённым image-admission-controller с точным supply-work permission.
 func TestGetSupplyWorkAvailabilityRequiresExactControllerAuthority(t *testing.T) {
 	catalog, err := NewCatalog([]Environment{validEnvironment(true, true)})
 	if err != nil {
@@ -114,6 +140,11 @@ func TestGetSupplyWorkAvailabilityRequiresExactControllerAuthority(t *testing.T)
 	}
 }
 
+// TestPromoteRoleImageRejectsInvalidBoundary checks wrong transport permission, missing OCC and
+// malformed provenance digest fail with their exact domain error before promotion owner calls.
+// TestPromoteRoleImageRejectsInvalidBoundary проверяет отказ неверному transport permission,
+// отсутствующему OCC и повреждённому provenance digest с точной доменной ошибкой до promotion
+// вызовов владельца.
 func TestPromoteRoleImageRejectsInvalidBoundary(t *testing.T) {
 	catalog, err := NewCatalog([]Environment{validEnvironment(true, true)})
 	if err != nil {
@@ -159,4 +190,8 @@ func TestPromoteRoleImageRejectsInvalidBoundary(t *testing.T) {
 	}
 }
 
+// pointer returns the address of a copied typed fixture value for optional OCC version fields
+// without shared mutable global state.
+// pointer возвращает адрес копии типизированного значения оснастки для необязательных OCC полей
+// версии без общего изменяемого глобального состояния.
 func pointer[T any](value T) *T { return &value }

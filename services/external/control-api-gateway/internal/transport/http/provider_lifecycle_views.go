@@ -4,6 +4,12 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// validProviderAccountLifecycle checks deletion/verification projections and their relationship to
+// the account lifecycle/version. It does not issue cleanup work, revoke credentials or prove
+// provider reachability.
+// validProviderAccountLifecycle проверяет проекции удаления и проверки и их связь с lifecycle и
+// версией аккаунта. Задачи очистки не выдаются, credentials не отзываются и достижимость
+// провайдера не доказывается.
 func validProviderAccountLifecycle(a *cp.ProviderAccount) bool {
 	if a == nil || !validProviderDeletion(a.Deletion) || !validProviderVerification(a.Verification) {
 		return false
@@ -19,6 +25,12 @@ func validProviderAccountLifecycle(a *cp.ProviderAccount) bool {
 	return a.Verification == nil || a.Verification.AccountVersion <= a.Version
 }
 
+// validProviderDeletion allows no deletion intent or validates one exact state/reason pair with
+// six unique blocker kinds, bounded counts and coherent completion time. A deleted intent requires
+// zero remaining cleanup and blockers.
+// validProviderDeletion допускает отсутствие намерения удаления либо проверяет точную пару
+// state/reason, шесть уникальных видов блокеров, ограниченные счётчики и согласованное время
+// завершения. Завершённое удаление требует нулевых остатков cleanup и блокеров.
 func validProviderDeletion(d *cp.ProviderAccountDeletion) bool {
 	if d == nil {
 		return true
@@ -54,6 +66,12 @@ func validProviderDeletion(d *cp.ProviderAccountDeletion) bool {
 	return true
 }
 
+// validProviderVerification allows an absent verification or checks credentialed-catalog scope,
+// version pins, state/reason and requested/completed times. The receipt describes an observation;
+// this validator never contacts the provider.
+// validProviderVerification допускает отсутствие проверки либо сверяет область credentialed
+// catalog, pins версий, state/reason и время запроса/завершения. Receipt описывает наблюдение;
+// валидатор не обращается к провайдеру.
 func validProviderVerification(v *cp.ProviderAccountVerification) bool {
 	if v == nil {
 		return true

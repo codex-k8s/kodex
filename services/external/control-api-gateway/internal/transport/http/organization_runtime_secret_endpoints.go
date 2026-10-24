@@ -8,6 +8,12 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// ListSystemRuntimeSecrets reads organization secret metadata and rejects nil, project-scoped or
+// malformed scope entries before using the common secret-page writer. Protective response headers
+// apply, and secret values are never listed.
+// ListSystemRuntimeSecrets читает metadata организационных секретов и отклоняет nil, проектные и
+// неверные области до общего secret-page writer. Действуют защитные заголовки; значения секретов
+// не перечисляются.
 func (s *Server) ListSystemRuntimeSecrets(w http.ResponseWriter, r *http.Request, p generated.ListSystemRuntimeSecretsParams) {
 	setRuntimeSecretHeaders(w)
 	response, err := s.control.Query.ListOrganizationRuntimeSecrets(r.Context(), &cp.ListOrganizationRuntimeSecretsRequest{Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken)})
@@ -28,6 +34,14 @@ func (s *Server) ListSystemRuntimeSecrets(w http.ResponseWriter, r *http.Request
 	writeRuntimeSecretPage(w, &cp.ListRuntimeSecretsResponse{Secrets: response.GetSecrets(), Page: response.GetPage()})
 }
 
+// CreateSystemRuntimeSecretDraft decodes a typed secret value into a transient buffer, prepares an
+// organization-scoped owner operation pinned to its exact SHA-256 and saves through the existing
+// prepared-operation path. The buffer is erased on return; creation is not publication or runtime
+// secret activation.
+// CreateSystemRuntimeSecretDraft декодирует typed значение секрета во временный буфер, готовит
+// организационную операцию владельца с точным SHA-256 и сохраняет существующим prepared-operation
+// путём. Буфер очищается при возврате; создание не является публикацией и runtime активацией
+// секрета.
 func (s *Server) CreateSystemRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, p generated.CreateSystemRuntimeSecretDraftParams) {
 	setRuntimeSecretHeaders(w)
 	body, ok := decodeJSON[generated.RuntimeSecretCreateInput](w, r)

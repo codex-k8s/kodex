@@ -11,6 +11,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// instructionImpactFixture adapts the shared revision impact fixture to agent instructions with
+// exact source version, previous revision and draft pins.
+// instructionImpactFixture адаптирует общий эталон влияния ревизии к инструкциям агента с точной
+// версией источника и pins предыдущей ревизии и черновика.
 func instructionImpactFixture() *cp.RevisionImpactPlan {
 	p := revisionImpactFixture()
 	p.Kind, p.SourceRef, p.SourceVersion = cp.RevisionImpactKind_REVISION_IMPACT_KIND_AGENT_INSTRUCTIONS, "agt_fixture01", 3
@@ -18,6 +22,11 @@ func instructionImpactFixture() *cp.RevisionImpactPlan {
 	return p
 }
 
+// TestInstructionsImpactPreparePublishExactReceipt checks typed prepare and publish calls, plan
+// selection and agent ETag, rejecting a publication receipt with a mismatched source OCC version.
+// TestInstructionsImpactPreparePublishExactReceipt проверяет типизированные вызовы prepare и
+// publish, выбор плана и ETag агента с отказом квитанции публикации при несовпадении OCC версии
+// источника.
 func TestInstructionsImpactPreparePublishExactReceipt(t *testing.T) {
 	p := instructionImpactFixture()
 	client := &catalogRPCRecorder{response: &cp.PrepareInstructionsImpactResponse{Plan: p}}
@@ -44,6 +53,10 @@ func TestInstructionsImpactPreparePublishExactReceipt(t *testing.T) {
 	}
 }
 
+// TestInstructionsImpactRejectsLegacyBeforeRPC checks that missing publication plan or selection,
+// repeated selected items and impact fields on VALIDATE fail before owner RPC.
+// TestInstructionsImpactRejectsLegacyBeforeRPC проверяет отказ до RPC владельца при отсутствии
+// плана либо выбора публикации, повторе выбранных элементов и полях влияния в VALIDATE.
 func TestInstructionsImpactRejectsLegacyBeforeRPC(t *testing.T) {
 	for _, body := range []string{`{"action":"PUBLISH"}`, `{"action":"PUBLISH","planRef":"rip_fixture01"}`, `{"action":"PUBLISH","planRef":"rip_fixture01","selectedItemRefs":["item_fixture01","item_fixture01"]}`, `{"action":"VALIDATE","planRef":"rip_fixture01","selectedItemRefs":[]}`} {
 		client := &catalogRPCRecorder{}
@@ -56,6 +69,10 @@ func TestInstructionsImpactRejectsLegacyBeforeRPC(t *testing.T) {
 	}
 }
 
+// TestPromptImpactPreparePinsExactRevision checks exact managed configuration, draft revision and
+// mutation version in prompt impact preparation, rejecting a foreign prepared revision.
+// TestPromptImpactPreparePinsExactRevision проверяет точные конфигурацию, ревизию черновика и
+// версию изменения при подготовке влияния prompt с отказом чужой подготовленной ревизии.
 func TestPromptImpactPreparePinsExactRevision(t *testing.T) {
 	p := instructionImpactFixture()
 	p.Kind, p.SourceRef, p.SourceRevisionRef, p.DraftRef = cp.RevisionImpactKind_REVISION_IMPACT_KIND_PROMPT_TEMPLATE, "mcfg_fixture01", "", "mrev_fixture01"
@@ -75,6 +92,12 @@ func TestPromptImpactPreparePinsExactRevision(t *testing.T) {
 	}
 }
 
+// TestPromptImpactSupportsUnchangedEntityAndGlobalAgent checks first publication and
+// organization-scoped continuation binding updates may preserve consumer version while requiring
+// an advanced binding version and known consumer kind.
+// TestPromptImpactSupportsUnchangedEntityAndGlobalAgent проверяет первую публикацию и изменения
+// привязки продолжения области организации с неизменной версией потребителя, требуя роста версии
+// привязки и известного вида потребителя.
 func TestPromptImpactSupportsUnchangedEntityAndGlobalAgent(t *testing.T) {
 	p := instructionImpactFixture()
 	p.Kind, p.SourceRef, p.SourceRevisionRef = cp.RevisionImpactKind_REVISION_IMPACT_KIND_PROMPT_TEMPLATE, "mcfg_fixture01", ""
@@ -100,6 +123,10 @@ func TestPromptImpactSupportsUnchangedEntityAndGlobalAgent(t *testing.T) {
 	}
 }
 
+// TestAgentInstructionsBindingPreservesFalseAndRejectsBrokenPin checks that false effective status
+// survives projection and a binding without its pinned revision is rejected.
+// TestAgentInstructionsBindingPreservesFalseAndRejectsBrokenPin проверяет сохранение
+// effective=false при проекции и отказ привязке без закреплённой ревизии.
 func TestAgentInstructionsBindingPreservesFalseAndRejectsBrokenPin(t *testing.T) {
 	binding := &cp.AgentInstructionsBinding{Ref: "binding_fixture01", Version: 2, RevisionRef: "ins_fixture01", Effective: false}
 	value, err := messageMap(binding)

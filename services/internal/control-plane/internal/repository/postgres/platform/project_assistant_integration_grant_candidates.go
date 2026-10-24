@@ -1,16 +1,12 @@
 package platform
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -22,6 +18,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// GetProjectAssistantIntegrationGrantCandidates validates filters, resolves the trusted principal
+// and project assistant under the owner transaction, then returns candidates only after the
+// existing transaction commit.
+// GetProjectAssistantIntegrationGrantCandidates проверяет filters, разрешает trusted principal и
+// проектного помощника внутри owner transaction, затем возвращает кандидатов после прежнего
+// transaction commit.
 func (repository *Repository) GetProjectAssistantIntegrationGrantCandidates(ctx context.Context, principal value.Principal, projectRef, connectionRef, search string, page query.Page) (entity.ProjectAssistantIntegrationGrantCandidates, error) {
 	result := entity.ProjectAssistantIntegrationGrantCandidates{}
 	if projectRef == "" || connectionRef == "" || len(connectionRef) > 96 || strings.ContainsAny(connectionRef, "\x00\r\n/ ") || !utf8.ValidString(search) || len([]rune(search)) > 200 || strings.ContainsRune(search, '\x00') || page.Size < 0 || page.Size > 100 || len(page.Token) > 512 {
@@ -51,6 +53,13 @@ func (repository *Repository) GetProjectAssistantIntegrationGrantCandidates(ctx 
 	}
 	return result, nil
 }
+
+// projectAssistantIntegrationGrantCandidatesTx resolves exact project/profile/connection ownership
+// before reading grants, derives public scopes and project-bound cursor pins, and retains
+// package/recipient readiness distinctions before shared projection/paging.
+// projectAssistantIntegrationGrantCandidatesTx разрешает точное project, profile и connection
+// ownership до чтения grants, выводит public scopes и project-bound cursor pins и сохраняет
+// различия package и recipient readiness до общих projection и paging.
 func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx context.Context, tx pgx.Tx, current scope, assistantRef, connectionRef, search string, page query.Page) (entity.ProjectAssistantIntegrationGrantCandidates, error) {
 	result := entity.ProjectAssistantIntegrationGrantCandidates{SystemAssistantIntegrationGrantCandidates: entity.SystemAssistantIntegrationGrantCandidates{Items: []entity.SystemAssistantIntegrationGrantCandidate{}}}
 	target, err := repository.projectAssistantIntegrationGrantOwner(ctx, tx, current, assistantRef, connectionRef)
@@ -95,23 +104,13 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 		}
 		scopeCommitment = digest
 	}
-	grants := map[string]entity.SystemAssistantIntegrationGrantCandidate{}
 	rows, err := tx.Query(ctx, querySystemAssistantIntegrationGrantsCurrent, current.organizationID, connectionRef, target.ref)
 	if err != nil {
 		return result, errs.ErrUnavailable
 	}
-	for rows.Next() {
-		var key string
-		var grant entity.SystemAssistantIntegrationGrantCandidate
-		if rows.Scan(&grant.CurrentGrantRef, &grant.CurrentGrantVersion, &key, &grant.CurrentApprovalPolicy, &grant.CurrentApprovalScopePaths, &grant.CurrentGrantEnabled) != nil {
-			rows.Close()
-			return result, errs.ErrUnavailable
-		}
-		grants[key] = grant
-	}
-	rows.Close()
-	if rows.Err() != nil {
-		return result, errs.ErrUnavailable
+	grants, err := scanAssistantIntegrationGrants(rows)
+	if err != nil {
+		return result, err
 	}
 	encoded, _ := json.Marshal(struct {
 		Tenant, Actor, Connection, Assistant, Definition, Search, Project, Profile, PublicScope string
@@ -119,16 +118,9 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 	}{current.organizationID, current.actorID, connectionRef, target.ref, result.DefinitionDigest, search, target.projectRef, target.profileRef, scopeCommitment, result.ConnectionVersion, target.version, target.profileVersion})
 	digest := sha256.Sum256(encoded)
 	contextDigest := hex.EncodeToString(digest[:])
-	after := ""
-	if page.Token != "" {
-		raw, err := base64.RawURLEncoding.DecodeString(page.Token)
-		var cursor integrationCandidateCursor
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.DisallowUnknownFields()
-		if err != nil || decoder.Decode(&cursor) != nil || decoder.Decode(new(any)) != io.EOF || cursor.Scope != contextDigest || !validCapabilityKey(cursor.After) {
-			return result, errs.ErrInvalid
-		}
-		after = cursor.After
+	after, err := assistantIntegrationCandidateAfter(page.Token, contextDigest)
+	if err != nil {
+		return result, err
 	}
 	items := []entity.SystemAssistantIntegrationGrantCandidate{}
 	for _, capability := range definition.Spec.Capabilities {
@@ -148,33 +140,12 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 		if !executable {
 			item.Reason = "PACKAGE_UNAVAILABLE"
 		}
-		schema, err := capability.InputSchema()
+		item.Capability, err = integrationCapabilityProjection(capability)
 		if err != nil {
-			return result, errs.ErrUnavailable
+			return result, err
 		}
-		schemaDigest, err := capability.InputSchemaDigest()
-		if err != nil {
-			return result, errs.ErrUnavailable
-		}
-		item.Capability = entity.IntegrationCapability{Key: capability.Key, Name: capability.Name, Description: capability.Description, Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy, AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...), ResourceKind: capability.ResourceScope.Kind, InputFields: integrationConfigurationFields(capability.InputFields), InputSchema: string(schema), InputSchemaSHA256: schemaDigest}
 		items = append(items, item)
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Capability.Key < items[j].Capability.Key })
-	result.Total = int64(len(items))
-	limit := page.Size
-	if limit == 0 {
-		limit = 50
-	}
-	for _, item := range items {
-		if item.Capability.Key <= after {
-			continue
-		}
-		if len(result.Items) == int(limit) {
-			cursor, _ := json.Marshal(integrationCandidateCursor{Scope: contextDigest, After: result.Items[len(result.Items)-1].Capability.Key})
-			result.NextPageToken = base64.RawURLEncoding.EncodeToString(cursor)
-			break
-		}
-		result.Items = append(result.Items, item)
-	}
+	result.Items, result.Total, result.NextPageToken = assistantIntegrationCandidatePage(items, page.Size, contextDigest, after)
 	return result, nil
 }

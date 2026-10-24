@@ -11,6 +11,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestProjectAssistantGrantCandidatePublicScope checks the exact GitHub repository scope and
+// digest reach typed output and rejects wrong kind, digest, absent/extra keys, private-key
+// substitution or unrelated capability namespace.
+// TestProjectAssistantGrantCandidatePublicScope проверяет передачу точных GitHub repository scope
+// и digest в типизированный output и отказ для неверных kind, digest, отсутствующих либо лишних
+// ключей, подмены ключа и чужого namespace capability.
 func TestProjectAssistantGrantCandidatePublicScope(t *testing.T) {
 	values := map[string]string{"owner": "fixture-owner", "repository": "repository"}
 	encoded, _ := json.Marshal(values)

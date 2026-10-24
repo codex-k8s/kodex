@@ -6,6 +6,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestRuntimeRevisionDiff checks stable typed model/environment changes, omission of unchanged
+// components and eleven current additions with no predecessor or previous values.
+// TestRuntimeRevisionDiff проверяет устойчивые типизированные изменения модели и окружения,
+// отсутствие неизменённых компонентов и одиннадцать текущих добавлений без предшественника и
+// предыдущих значений.
 func TestRuntimeRevisionDiff(t *testing.T) {
 	previous := entity.RuntimeRevisionPublicProjection{Identity: entity.PublicRuntimeRevisionIdentity{Ref: "rrev_previous", SessionRef: "sess_same"},
 		Model: entity.RuntimeRevisionDiffValue{Ref: "old-model"}, Environment: entity.RuntimeRevisionDiffValue{Ref: "env_same", Version: 1, Digest: "old"}}

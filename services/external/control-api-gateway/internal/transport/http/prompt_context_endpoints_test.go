@@ -12,10 +12,19 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// promptPinFixture builds a synthetic agent context pin with an exact digest and agent version for
+// local prompt readback tests.
+// promptPinFixture создаёт синтетический pin контекста агента с точным дайджестом и версией агента
+// для локальных тестов чтения prompt.
 func promptPinFixture() *cp.PromptContextPin {
 	return &cp.PromptContextPin{Digest: strings.Repeat("c", 64), AgentRef: "agent_fixture01", AgentVersion: 3}
 }
 
+// promptPreviewFixture builds a complete synthetic safe preview with context and template digests,
+// executed slots and ordered user/platform provenance sections.
+// promptPreviewFixture создаёт полный синтетический безопасный предпросмотр с дайджестами
+// контекста и шаблона, выполненными слотами и упорядоченными секциями происхождения пользователя и
+// платформы.
 func promptPreviewFixture() *cp.PreviewPromptTemplateResponse {
 	digest := strings.Repeat("a", 64)
 	return &cp.PreviewPromptTemplateResponse{SafePreview: "TYPE_текст", Complete: true, TemplateRef: "preview_fixture01", TemplateDigest: digest, MaterializationDigest: digest, ServiceTemplateRevision: "prompt.v1", ServiceTemplateDigest: digest, VariableSnapshotDigest: digest, Locale: "en", ContextPin: promptPinFixture(),
@@ -28,6 +37,11 @@ func promptPreviewFixture() *cp.PreviewPromptTemplateResponse {
 		}}
 }
 
+// TestPromptPreviewPreservesExecutedSlotsAndExactContext checks exact task, input and context
+// digest forwarding together with ordered preview sections, executed slots and the owner context
+// pin.
+// TestPromptPreviewPreservesExecutedSlotsAndExactContext проверяет точную передачу задачи, ввода и
+// дайджеста контекста, порядок секций предпросмотра, выполненные слоты и pin контекста владельца.
 func TestPromptPreviewPreservesExecutedSlotsAndExactContext(t *testing.T) {
 	client := &catalogRPCRecorder{response: promptPreviewFixture()}
 	w := httptest.NewRecorder()
@@ -43,6 +57,11 @@ func TestPromptPreviewPreservesExecutedSlotsAndExactContext(t *testing.T) {
 	}
 }
 
+// TestPromptCatalogPostCarriesValuesOutsideURL checks context-bearing catalog POST mapping for
+// query, workflow source, page size and task, retaining the owner context pin.
+// TestPromptCatalogPostCarriesValuesOutsideURL проверяет отображение POST каталога с контекстом,
+// запросом, источником workflow, размером страницы и задачей с сохранением pin контекста
+// владельца.
 func TestPromptCatalogPostCarriesValuesOutsideURL(t *testing.T) {
 	client := &catalogRPCRecorder{response: &cp.ListTemplateVariablesResponse{ContextPin: promptPinFixture()}}
 	w := httptest.NewRecorder()
@@ -53,6 +72,10 @@ func TestPromptCatalogPostCarriesValuesOutsideURL(t *testing.T) {
 	}
 }
 
+// TestPromptCatalogRejectsUnknownVariableSource checks that an unknown variable source returns bad
+// request without invoking the owner catalog RPC.
+// TestPromptCatalogRejectsUnknownVariableSource проверяет ответ bad request для неизвестного
+// источника переменных без вызова RPC каталога владельца.
 func TestPromptCatalogRejectsUnknownVariableSource(t *testing.T) {
 	client := &catalogRPCRecorder{response: &cp.ListTemplateVariablesResponse{ContextPin: promptPinFixture()}}
 	w := httptest.NewRecorder()
@@ -62,6 +85,10 @@ func TestPromptCatalogRejectsUnknownVariableSource(t *testing.T) {
 	}
 }
 
+// TestPromptCatalogPreservesOwnerDenialReasons checks that unavailable variables retain the owner
+// permission- or capability-required reason instead of being marked available.
+// TestPromptCatalogPreservesOwnerDenialReasons проверяет сохранение причины недоступности
+// переменной из-за требуемых permission либо capability владельца без подмены на доступность.
 func TestPromptCatalogPreservesOwnerDenialReasons(t *testing.T) {
 	for _, reason := range []cp.TemplateVariableAvailabilityReason{cp.TemplateVariableAvailabilityReason_TEMPLATE_VARIABLE_AVAILABILITY_REASON_PERMISSION_REQUIRED, cp.TemplateVariableAvailabilityReason_TEMPLATE_VARIABLE_AVAILABILITY_REASON_CAPABILITY_REQUIRED} {
 		variable := variableFixture()
@@ -75,6 +102,10 @@ func TestPromptCatalogPreservesOwnerDenialReasons(t *testing.T) {
 	}
 }
 
+// TestPromptWorkflowAndContinuationUseOwnerPins checks workflow stage and session continuation
+// targets with owner lineage pins and prospective diffs that create no runtime attempt.
+// TestPromptWorkflowAndContinuationUseOwnerPins проверяет цели стадии workflow и продолжения
+// сессии с pins происхождения владельца и предварительными diff без создания runtime attempt.
 func TestPromptWorkflowAndContinuationUseOwnerPins(t *testing.T) {
 	for _, kind := range []string{"WORKFLOW_STAGE", "SESSION_CONTINUATION"} {
 		t.Run(kind, func(t *testing.T) {
@@ -102,6 +133,11 @@ func TestPromptWorkflowAndContinuationUseOwnerPins(t *testing.T) {
 	}
 }
 
+// TestPromptPreviewRejectsInvalidProvenanceWithoutEcho checks rejection of invalid slot ordering,
+// section provenance, private full bodies and unsafe context versions before preview projection.
+// TestPromptPreviewRejectsInvalidProvenanceWithoutEcho проверяет отказ неверному порядку слотов,
+// происхождению секций, внутреннему полному телу и небезопасным версиям контекста до проекции
+// предпросмотра.
 func TestPromptPreviewRejectsInvalidProvenanceWithoutEcho(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.PreviewPromptTemplateResponse){
 		"unknown slot":   func(v *cp.PreviewPromptTemplateResponse) { v.Slots[0].Slot = 999 },
@@ -125,6 +161,11 @@ func TestPromptPreviewRejectsInvalidProvenanceWithoutEcho(t *testing.T) {
 	}
 }
 
+// TestPromptSelectionRejectsPayloadAuthorityAndMalformedContext checks rejection of payload actor
+// authority, absent workflow-stage context and caller-supplied agent identity before owner RPC.
+// TestPromptSelectionRejectsPayloadAuthorityAndMalformedContext проверяет отказ полномочиям actor
+// из payload, отсутствию контекста стадии workflow и переданной клиентом identity агента до RPC
+// владельца.
 func TestPromptSelectionRejectsPayloadAuthorityAndMalformedContext(t *testing.T) {
 	for _, body := range []string{
 		`{"template":"text","targetKind":"AGENT","targetRef":"agent_fixture01","context":{"actorRef":"actor_forged01"}}`,
@@ -140,6 +181,10 @@ func TestPromptSelectionRejectsPayloadAuthorityAndMalformedContext(t *testing.T)
 	}
 }
 
+// TestPromptScopeIsPassedOnlyToPromptLifecycle checks prompt draft scope forwarding and response
+// projection while rejecting that same scope on the role-image lifecycle route.
+// TestPromptScopeIsPassedOnlyToPromptLifecycle проверяет передачу области черновика prompt и её
+// проекцию в ответе с отказом той же области на маршруте жизненного цикла образа роли.
 func TestPromptScopeIsPassedOnlyToPromptLifecycle(t *testing.T) {
 	configuration, revision := managedFixture()
 	configuration.Kind = cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE
@@ -162,6 +207,11 @@ func TestPromptScopeIsPassedOnlyToPromptLifecycle(t *testing.T) {
 	}
 }
 
+// TestPromptProspectiveDiffDoesNotInventAttempt checks that a prospective diff has no attempt and
+// rejects foreign agent context or a previous runtime revision inconsistent with the context pin.
+// TestPromptProspectiveDiffDoesNotInventAttempt проверяет отсутствие attempt у предварительного
+// diff и отказ чужому контексту агента либо предыдущей runtime-ревизии, не совпадающей с pin
+// контекста.
 func TestPromptProspectiveDiffDoesNotInventAttempt(t *testing.T) {
 	v := &cp.PromptRuntimeDiff{PreviousRevisionRef: "runtime_previous01", SessionRef: "session_fixture01", Digest: strings.Repeat("a", 64)}
 	if _, ok := promptRuntimeDiffView(v); !ok {
