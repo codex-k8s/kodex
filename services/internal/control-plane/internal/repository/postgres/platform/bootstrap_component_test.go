@@ -619,6 +619,26 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 }
 
+// testManagedConfigurationLifecycle builds its own catalog/project/agent fixtures and exercises
+// prompt draft replay, OCC, validation, immutable publication and selective consumer rebind. It
+// also checks search/VFS/catalog/history pagination and delegates metadata redaction, Git
+// ownership, impact and CFG scenarios. The STT branch pins published configuration and credential
+// generation across broker/trusted-cluster reads, rejects changed or ineligible accounts, and
+// restores its revoked account fixture. Role-image branches check project/version/snapshot
+// boundaries, replacement-build fencing and rejection of unpromoted effective images; integration
+// reads require the pinned kind and authority. Git copy/detach preserves lineage and published
+// rows reject UPDATE/DELETE. Direct SQL only arranges/observes component state; no STT, image
+// build or integration is executed.
+// testManagedConfigurationLifecycle создаёт собственные catalog/project/agent fixtures и проверяет
+// повтор draft, OCC, валидацию, неизменяемую публикацию prompt и выборочную перепривязку consumer.
+// Проверяет pagination поиска/VFS/catalog/history и делегирует сценарии metadata redaction, Git
+// ownership, impact и CFG. Ветка STT связывает опубликованную конфигурацию с credential generation
+// в broker/trusted-cluster reads, отклоняет изменённые или недопустимые accounts и восстанавливает
+// отозванный тестовый account. Ветки role image проверяют project/version/snapshot boundaries,
+// отмену заменённой сборки и запрет effective image без promotion; integration reads требуют
+// закреплённый kind и полномочия. Git copy/detach сохраняет lineage, опубликованные строки
+// запрещают UPDATE/DELETE. Прямой SQL только подготавливает и наблюдает компонентное состояние;
+// STT, image build и integration не исполняются.
 func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	// Адресный запуск сам завершает owner catalog tasks, не зависит от соседних сценариев.
 	seedObservedCatalogFixture(t, ctx, repository)
@@ -1273,6 +1293,17 @@ WHERE account.ref = $1
 	testCFGLifecycle(t, ctx, repository, service, owner, integrationReader, projectResult.Project.Ref, connection.Connection.Ref, integrationDefinition)
 }
 
+// testManagedPromptHistoryRedaction proves that an initially unbound subject is forbidden, then
+// grants only project.view in one project and reads its managed prompt metadata. Paginated catalog
+// reads must stay in that project, suppress content, avoid duplicate rows and reject a cursor
+// under a changed filter. History retains the published pointer while redacting current and
+// historical content without prompt.full.view; the fixture creates a role/binding but grants no
+// content-read permission.
+// testManagedPromptHistoryRedaction проверяет запрет для изначально непривязанного subject, затем
+// выдаёт только project.view в одном проекте и читает метаданные managed prompt. Страницы каталога
+// должны оставаться в этом проекте, скрывать content, не повторять строки и отклонять cursor с
+// изменённым filter. История сохраняет published pointer, скрывая текущее и историческое
+// содержимое без prompt.full.view; оснастка создаёт role/binding без права чтения content.
 func testManagedPromptHistoryRedaction(
 	t *testing.T,
 	ctx context.Context,
@@ -1358,6 +1389,16 @@ func testManagedPromptHistoryRedaction(
 	}
 }
 
+// testIntegrationDefinitionRebindAuthority creates an organization-scoped manager with
+// organization.manage/project.manage but no exact integration.manage permission, after checking
+// that the unbound subject is forbidden. Even with an owner-computed impact digest and current
+// configuration version, its connection rebind must return NotFound. The component assertion keeps
+// broad management authority separate from the specialized integration command.
+// testIntegrationDefinitionRebindAuthority создаёт manager с organization scope и
+// organization.manage/project.manage, но без точного integration.manage, предварительно проверив
+// запрет для непривязанного subject. Даже с impact digest от владельца и текущей version
+// конфигурации перепривязка connection должна вернуть NotFound. Компонентная проверка отделяет
+// общие управленческие полномочия от специализированной integration command.
 func testIntegrationDefinitionRebindAuthority(
 	t *testing.T,
 	ctx context.Context,
@@ -1415,6 +1456,20 @@ func testIntegrationDefinitionRebindAuthority(
 	}
 }
 
+// publishAndRebindManagedConfiguration runs caller-selected create/validate/publish commands with
+// derived idempotency keys and each returned configuration version, requiring DRAFT, VALID and
+// PUBLISHED. For role images it instead asserts legacy rebind rejection and unpromoted-plan
+// Conflict and returns the published result. Other kinds use a fresh impact digest and a consumer
+// copy initially marked absent; an existing integration binding supplies its exact
+// revision/version. The helper returns the rebind result or fails the test, without bypassing
+// service authority or promoting an image.
+// publishAndRebindManagedConfiguration выполняет выбранные вызывающим create/validate/publish
+// commands с производными idempotency keys и каждой полученной version конфигурации, требуя DRAFT,
+// VALID и PUBLISHED. Для role images вместо перепривязки проверяет запрет legacy rebind и Conflict
+// плана без promotion и возвращает published result. Прочие kinds используют свежий impact digest
+// и копию consumer с начальным признаком отсутствия; существующая integration binding задаёт
+// точные revision/version. Helper возвращает rebind result либо завершает тест, не обходя
+// сервисные полномочия и не выполняя promotion image.
 func publishAndRebindManagedConfiguration(
 	t *testing.T,
 	ctx context.Context,
@@ -1484,6 +1539,16 @@ func publishAndRebindManagedConfiguration(
 	return rebound
 }
 
+// testStaleRoleRuntimeContractRejectsLaunch creates a project/agent, launches and cancels a
+// baseline run, then snapshots durable session/run counts. It temporarily advances the configured
+// runtime-contract revision and digest and requires another launch to fail with Conflict without
+// increasing either count. A deferred restore reinstates the original role-image configuration;
+// successful command creation is not evidence of running a workload.
+// testStaleRoleRuntimeContractRejectsLaunch создаёт project/agent, запускает и отменяет baseline
+// run, затем сохраняет счётчики sessions/runs. Временно повышает настроенные revision и digest
+// runtime contract и требует Conflict при новом launch без увеличения обоих счётчиков. Отложенное
+// восстановление возвращает исходную role-image configuration; успешное создание команды не
+// доказывает исполнение workload.
 func testStaleRoleRuntimeContractRejectsLaunch(
 	t *testing.T,
 	ctx context.Context,
@@ -2015,6 +2080,18 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	}
 }
 
+// testSystemAssistantRuntimeEnvironmentReconciliation leaves a new default system image configured
+// and reconciles it twice in explicitly committed transactions with deferred rollback cleanup. It
+// resolves the exact persisted image, recomputes environment digests with the default policy and
+// requires version two with a parent, exactly two versions, RECOVERING, the digest-derived desired
+// revision and cleared warm-instance/heartbeat fields after both calls. These assertions prove
+// persisted idempotent reconciliation, not image execution or readiness.
+// testSystemAssistantRuntimeEnvironmentReconciliation оставляет настроенным новый default system
+// image и дважды выполняет reconciliation в явно фиксируемых транзакциях с отложенным rollback
+// cleanup. Разрешает точный сохранённый image, пересчитывает environment digests с default policy
+// и после обоих вызовов требует version two с parent, ровно две версии, RECOVERING, desired
+// revision из digest и очищенные warm-instance/heartbeat fields. Проверяет сохранённую
+// идемпотентную reconciliation без доказательства исполнения image или готовности.
 func testSystemAssistantRuntimeEnvironmentReconciliation(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	config := repository.roleImages
@@ -2079,6 +2156,18 @@ func testSystemAssistantRuntimeEnvironmentReconciliation(t *testing.T, ctx conte
 	assertReadback(2)
 }
 
+// testProviderAccountApplicationAccess checks owner collection/create/revoke action visibility,
+// creates a pending-authorization account and resolves allowed account-view access. An initially
+// unbound second subject is forbidden; after a resource-kind provider.account.view binding it sees
+// the same collection and OPEN-only actions in list/detail, with no collection creation action.
+// This fixture checks read/action projections and owner creation, not an attempted unauthorized
+// mutation or provider authentication.
+// testProviderAccountApplicationAccess проверяет видимость owner collection/create/revoke actions,
+// создаёт account в ожидании авторизации и разрешает account-view access. Второй изначально
+// непривязанный subject получает запрет; после binding provider.account.view по resource kind
+// видит ту же коллекцию и только OPEN в list/detail без действия создания в коллекции. Оснастка
+// проверяет чтение, проекции действий и создание владельцем, но не попытку запрещённой записи или
+// аутентификацию provider.
 func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
@@ -2163,6 +2252,21 @@ func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, rep
 	}
 }
 
+// testRuntimeConfigurationPublish seeds a secondary provider/catalog and checks that a new agent
+// uses the active promoted SHIPPED base with exact readonly provenance and rejects recipe mutation
+// actions. It validates the two-account policy, rejects missing/forged/provider-mismatched catalog
+// inputs and stale pins with their distinct errors, then publishes valid candidates with
+// configuration/agent version increments. An unsupported reasoning-effort overlay must produce one
+// versioned safe location diagnostic, remain INVALID and fail publication with Conflict. All
+// effects are component metadata; no provider, build or runtime is contacted.
+// testRuntimeConfigurationPublish подготавливает secondary provider/catalog и проверяет у нового
+// агента активную promoted SHIPPED base с точным readonly provenance и запретом recipe mutation
+// actions. Проверяет policy двух accounts, отклоняет отсутствующие, самоназначенные, чужие
+// provider catalog inputs и устаревшие pins с разными ошибками, затем публикует допустимые
+// candidates с увеличением configuration/agent versions. Overlay с неподдерживаемым reasoning
+// effort должен дать одну безопасную versioned diagnostic с позицией, остаться INVALID и получить
+// Conflict при публикации. Эффекты ограничены компонентными метаданными; обращений к provider,
+// build или runtime нет.
 func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	if _, err := repository.pool.Exec(ctx, bootstrapComponentInsertSecondaryProviderQuery); err != nil {

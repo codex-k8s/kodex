@@ -4,11 +4,59 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.402.0
+version: 1.403.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Bootstrap: managed configuration и runtime policy — 25.10.2026
+
+На основе `08851224210b510a5faf72d65fb205b5b192bf6d` полностью прочитаны
+восемь функций bootstrap_component_test.go: testManagedConfigurationLifecycle,
+testManagedPromptHistoryRedaction, testIntegrationDefinitionRebindAuthority,
+publishAndRebindManagedConfiguration, testStaleRoleRuntimeContractRejectsLaunch,
+testSystemAssistantRuntimeEnvironmentReconciliation,
+testProviderAccountApplicationAccess и testRuntimeConfigurationPublish.
+Это1223 строки тел/signatures и разделителей до добавления комментариев;
+вызванные внешние helpers не объявляются повторно полностью проверенными.
+Все восемь получили предметные EN→RU описания. Полное AST/directive сравнение
+bootstrap с исходным HEAD — PASS: только комментарии, assertions/SQL/literals,
+fixtures, cleanup и порядок subtests неизменны.
+
+| Проверяемый путь | Описанные границы |
+| --- | --- |
+| Prompt lifecycle | Replay/OCC, INVALID→corrected draft, publication отдельно от selective rebind, immutable published UPDATE/DELETE rejection |
+| Search/history | Cursor filter binding и устойчивость к display timestamp, VFS project boundary, catalog pagination, metadata-only redaction с сохранённым published pointer |
+| Integration rebind | organization.manage/project.manage не заменяют exact integration.manage; owner impact/current version не дают полномочий другому actor |
+| Shared publish fixture | Каждая returned version и derived idempotency key; role-image branch специально запрещает legacy rebind/unpromoted plan, а integration consumer pin получает текущую revision/version |
+| STT metadata | Published config/credential generation, broker и trusted-cluster pins, negative config/account eligibility и восстановление account; распознавание речи не выполняется |
+| Role image | Project/OCC/snapshot и replacement-build cancellation; unpromoted binding не становится effective. Queue/build record не означает исполненную сборку |
+| Stale runtime contract | Baseline launch/cancel, временное повышение contract revision/digest, Conflict без новых session/run, deferred config restore |
+| Environment reconcile | Два committed reconciliation, exact persisted image/digests, version2/parent/ровно2 версии, RECOVERING и cleared warm/heartbeat. Новый default image остаётся настроенным; запуска workload нет |
+| Provider/RBAC и overlay | Owner creation и OPEN-only viewer projections без negative write assertion; shipped provenance/mutation rejection, catalog pins и versioned INVALID overlay diagnostic с запретом публикации |
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks403-final`),15 внешних fixture/admin/template inputs исключены.
+Перечисленные PostgreSQL component scenarios — NOT RUN/SKIP, а не выполненная
+приёмка. gofmt/diff check,17 analyzer unit и5 exact-ignore guards — PASS.
+Browser/full E2E/deploy/live — NOT RUN. Новые library API и dependencies
+не затронуты, новые документы библиотек для comments-only изменения не нужны.
+
+Inventory6682 own sources/222 exclusions:19936/21477 Go declarations описаны,
+missing1541 — PostgreSQL adapter control-plane. Текущий PR152 Go-файла:
+1805/1840 описаны,35 оставшихся — только bootstrap_component_test.go;
+прочие151 Go-файл diff полностью описаны. Detector1800 raw/904 retained/
+896 unresolved, registry778 неизменен; fragment/format/kind/path-pair keyset
+совпадает с0885122. Новые/удалённые clone keys отсутствуют, thresholds и
+exclusions не расширены. Остальные части большого bootstrap ещё требуют работы.
+
+Production behavior, SQL bytes и все27 embeds, contracts/generated, migrations,
+dependencies и deploy inputs сохранены. Прикладные секреты не читались и не
+переносились; необходимые bot-role credentials/identity передаются только нужным
+GitHub children без вывода значений. Whole-blob проверка допускает лишь4 прежних
+inert title-test markers по exact main bytes/count, неизвестных совпадений нет.
+Issue#1823 открыт, PR Draft; main и QA baseline f2e64eb не менялись.
 
 ## Bootstrap: SQL-оснастка и отказ readiness — 25.10.2026
 
