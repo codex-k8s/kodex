@@ -20,6 +20,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestProviderAccountActionsUseCanonicalNextActions checks literal ordered action lists for eight
+// provider lifecycle/authorization states under full management flags. These are presentation
+// hints, not proof of command permission or provider reachability.
+// TestProviderAccountActionsUseCanonicalNextActions проверяет буквальные упорядоченные actions
+// восьми lifecycle и authorization состояний provider при полных management flags. Это подсказки
+// интерфейса, не доказательство прав команды и доступности provider.
 func TestProviderAccountActionsUseCanonicalNextActions(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -49,6 +55,12 @@ func TestProviderAccountActionsUseCanonicalNextActions(t *testing.T) {
 	}
 }
 
+// TestProviderAccountLifecycleStateMatrix checks ten explicit state/enabled combinations,
+// including the existing reauthorization allowance and invalid authorized/disabled/revoked forms.
+// It validates the local state predicate without changing account rows.
+// TestProviderAccountLifecycleStateMatrix проверяет десять явных сочетаний state и enabled,
+// включая прежний допуск reauthorization и неверные authorized, disabled и revoked формы.
+// Проверяет локальный предикат без изменения account rows.
 func TestProviderAccountLifecycleStateMatrix(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -74,6 +86,12 @@ func TestProviderAccountLifecycleStateMatrix(t *testing.T) {
 	}
 }
 
+// TestProviderAccountStatusReasonIsSafeAndDeterministic requires literal safe reason codes for
+// eight status/authorization cases and a fallback when a raw provider failure string is supplied.
+// It does not perform provider calls or classify arbitrary remote payloads.
+// TestProviderAccountStatusReasonIsSafeAndDeterministic требует буквальные safe reason codes
+// восьми status и authorization случаев и fallback при сыром provider failure. Не вызывает
+// provider и не классифицирует произвольные внешние данные.
 func TestProviderAccountStatusReasonIsSafeAndDeterministic(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -100,6 +118,12 @@ func TestProviderAccountStatusReasonIsSafeAndDeterministic(t *testing.T) {
 	}
 }
 
+// TestProviderAccountEnabledTransitionMatrix checks seven enable/disable outcomes, retaining
+// credential requirements, terminal-state rejection and conflict on redundant requests. It
+// exercises only the pure transition predicate, not transaction locking or actor authority.
+// TestProviderAccountEnabledTransitionMatrix проверяет семь enable и disable исходов, требование
+// credential, отказ terminal состоянию и конфликт повторного запроса. Проверяет чистый переход, не
+// блокировки транзакции и authority субъекта.
 func TestProviderAccountEnabledTransitionMatrix(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -128,6 +152,12 @@ func TestProviderAccountEnabledTransitionMatrix(t *testing.T) {
 	}
 }
 
+// TestValidStableKey checks eight literal provider-key grammar boundaries covering lowercase,
+// digits, separator, minimum length and rejected whitespace/case/punctuation. It is lexical
+// validation without registry lookup.
+// TestValidStableKey проверяет восемь буквальных границ provider-key: нижний регистр, цифры,
+// разделитель, минимум длины и отказ пробелам, регистру и пунктуации. Это лексика без registry
+// lookup.
 func TestValidStableKey(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -153,6 +183,14 @@ func TestValidStableKey(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentReadinessRequiresCurrentRoleRuntimeContract projects readiness from six
+// synthetic current/stale contract and image cases, requiring exact blocker codes and preservation
+// of the platform-bootstrap image rule. This static projection does not prove a running image,
+// Kubernetes deployment or capacity admission.
+// TestRuntimeEnvironmentReadinessRequiresCurrentRoleRuntimeContract выводит readiness из шести
+// синтетических current и stale contract/image случаев с точными blocker codes и правилом
+// platform-bootstrap image. Статическая проекция не доказывает работающий image, Kubernetes
+// deployment и capacity admission.
 func TestRuntimeEnvironmentReadinessRequiresCurrentRoleRuntimeContract(t *testing.T) {
 	t.Parallel()
 	const currentContractRevision = 7
@@ -219,6 +257,13 @@ func TestRuntimeEnvironmentReadinessRequiresCurrentRoleRuntimeContract(t *testin
 	}
 }
 
+// TestProviderCompensationQueryWaitsForOwnerTransactionAndMatchesExactDescriptor asserts literal
+// row-lock and authorization/materializer/credential descriptor predicates in compensation SQL. It
+// guards query shape only, not actual lock waiting, owner eligibility or external deletion.
+// TestProviderCompensationQueryWaitsForOwnerTransactionAndMatchesExactDescriptor проверяет
+// буквальные row-lock и authorization, materializer, credential descriptor условия compensation
+// SQL. Подтверждает только форму query, не ожидание блокировки, owner eligibility и внешнее
+// удаление.
 func TestProviderCompensationQueryWaitsForOwnerTransactionAndMatchesExactDescriptor(t *testing.T) {
 	t.Parallel()
 	if !strings.Contains(queryProviderAccountsMaterializationGuard, "FOR UPDATE") {
@@ -238,6 +283,16 @@ func TestProviderCompensationQueryWaitsForOwnerTransactionAndMatchesExactDescrip
 	}
 }
 
+// TestBootstrapComponentProviderAccountLifecycle runs only with the configured component DSN,
+// initializes synthetic provider/image metadata, bootstraps and resolves the exact default account
+// before materialization-reference and disable/enable/revoke assertions. Descriptor mismatch must
+// not remain referenced and revoked re-enable conflicts. Without DSN it skips; no real
+// credentials, provider authorization or Kubernetes materialization are exercised.
+// TestBootstrapComponentProviderAccountLifecycle работает только при component DSN: задаёт
+// синтетические provider и image metadata, делает bootstrap и разрешает точный default account до
+// reference, disable, enable и revoke assertions. Descriptor mismatch не должен оставаться
+// referenced, включение revoked даёт конфликт. Без DSN пропускается; реальные credentials,
+// provider authorization и Kubernetes materialization не проверяются.
 func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
 	if dsn == "" {
@@ -254,25 +309,7 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct repository: %v", err)
 	}
-	credentialConfig := ProviderCredentialConfig{
-		SecretName:            "runtime-provider-openai-default-r1",
-		SecretUID:             "10000000-0000-4000-8000-000000000001",
-		SecretResourceVersion: "1",
-		ContentSHA256:         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-	}
-	if err := repository.ConfigureProviderCredential(credentialConfig); err != nil {
-		t.Fatalf("configure provider credential: %v", err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1,
-		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64),
-		LeaseSigningKey:       []byte(strings.Repeat("d", 32)),
-	}); err != nil {
-		t.Fatalf("configure role images: %v", err)
-	}
+	credentialConfig := configureComponentProviderAndRoleImages(t, repository)
 	if err := repository.Bootstrap(ctx); err != nil {
 		t.Fatalf("bootstrap provider account: %v", err)
 	}
@@ -357,6 +394,13 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	}
 }
 
+// executeProviderEnabledTransition issues the specialized enabled-state command with the supplied
+// principal, exact current account version and idempotency key, requiring a provider-account
+// result. It leaves state/action assertions to its component caller and does not bypass service
+// authority.
+// executeProviderEnabledTransition вызывает специализированную команду enabled с principal, точной
+// текущей версией account и ключом идемпотентности, требуя account result. State и actions
+// проверяет component caller; service authority не обходится.
 func executeProviderEnabledTransition(
 	t *testing.T,
 	ctx context.Context,
@@ -379,6 +423,12 @@ func executeProviderEnabledTransition(
 	return *result.ProviderAccount
 }
 
+// TestSynchronousPurgeKeepsTombstoneNameUnique requires the finalization SQL to clear the current
+// revision, retain a PURGED tombstone and reject retained revisions without mutating file_name. It
+// is a string-level invariant, not a storage purge or database uniqueness proof.
+// TestSynchronousPurgeKeepsTombstoneNameUnique требует очистки current revision, сохранения PURGED
+// tombstone и отказа retained revisions без изменения file_name в SQL. Это строковый инвариант, не
+// storage purge и не проверка уникальности БД.
 func TestSynchronousPurgeKeepsTombstoneNameUnique(t *testing.T) {
 	if !strings.Contains(queryArtifactsPurgeFinalize, "current_revision_id = NULL") ||
 		!strings.Contains(queryArtifactsPurgeFinalize, "lifecycle_state = 'PURGED'") ||
@@ -388,6 +438,15 @@ func TestSynchronousPurgeKeepsTombstoneNameUnique(t *testing.T) {
 	}
 }
 
+// TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary checks literal materialization locks,
+// pinned revision/digest/size, soft-deleted snapshot reads, skill/file provenance and purge
+// retention predicates across existing SQL. It rejects mutable artifact-version dependencies while
+// preserving ordinary-download lifecycle filtering; no live authorization, locking or content read
+// occurs.
+// TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary проверяет буквальные materialization
+// locks, revision, digest, size, soft-deleted snapshot reads, skill и file provenance и purge
+// retention в прежних SQL. Отклоняет зависимости от mutable artifact version, сохраняя
+// ordinary-download filtering; живой authorization, locking и content read отсутствуют.
 func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
 	for _, fragment := range []string{
 		"artifact.lifecycle_state = 'ACTIVE'",
@@ -456,6 +515,11 @@ func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
 	}
 }
 
+// TestProviderAccountActionsForViewOnlyMember requires only OPEN when all provider-management
+// presentation flags are false. It checks output hints, not the enforcement of command
+// permissions.
+// TestProviderAccountActionsForViewOnlyMember требует только OPEN при отключённых
+// provider-management flags, проверяя подсказки результата, не исполнение прав команд.
 func TestProviderAccountActionsForViewOnlyMember(t *testing.T) {
 	t.Parallel()
 	item := entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}
@@ -464,6 +528,14 @@ func TestProviderAccountActionsForViewOnlyMember(t *testing.T) {
 	}
 }
 
+// TestIssue1019RemediationQueriesKeepExactAuthorityAndProvenance checks literal exact-run prompt
+// preview, Human Gate workflow-step layering, VFS run/turn/artifact provenance and nonlegacy
+// search ordering/authority clauses. It is a SQL-shape regression and cannot substitute for
+// executed cross-boundary scenarios.
+// TestIssue1019RemediationQueriesKeepExactAuthorityAndProvenance проверяет буквальные exact-run
+// prompt preview, Human Gate workflow-step layering, VFS run, turn и artifact provenance и search
+// ordering/authority без legacy membership. Это SQL-shape regression, не замена сквозным
+// исполненным сценариям.
 func TestIssue1019RemediationQueriesKeepExactAuthorityAndProvenance(t *testing.T) {
 	t.Parallel()
 	if !strings.Contains(queryPromptPreviewSnapshot, "run.ref = @target_ref") ||
@@ -494,4 +566,39 @@ func TestIssue1019RemediationQueriesKeepExactAuthorityAndProvenance(t *testing.T
 		!strings.Contains(queryQueriesSearchSelectEligibleResources, "created_at AS order_time") {
 		t.Fatal("global search still trusts legacy membership or mutable ordering")
 	}
+}
+
+// configureComponentProviderAndRoleImages configures the three component fixtures with the same
+// existing synthetic provider descriptor followed by role-image policy, deadlines, registry refs
+// and a freshly allocated synthetic signing key. It returns a value copy of the provider metadata
+// for lifecycle assertions, fails through testing.T with the original messages and reads no
+// environment or real credentials. Preview fixtures with different values are intentionally
+// separate.
+// configureComponentProviderAndRoleImages настраивает три component fixtures прежним синтетическим
+// provider descriptor, затем role-image policy, deadlines, registry refs и новым срезом
+// синтетического signing key. Возвращает копию provider metadata для lifecycle assertions,
+// завершает тест прежними сообщениями и не читает env или реальные credentials. Preview fixtures с
+// иными значениями остаются отдельными.
+func configureComponentProviderAndRoleImages(t *testing.T, repository *Repository) ProviderCredentialConfig {
+	t.Helper()
+	credentialConfig := ProviderCredentialConfig{
+		SecretName:            "runtime-provider-openai-default-r1",
+		SecretUID:             "10000000-0000-4000-8000-000000000001",
+		SecretResourceVersion: "1",
+		ContentSHA256:         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+	}
+	if err := repository.ConfigureProviderCredential(credentialConfig); err != nil {
+		t.Fatalf("configure provider credential: %v", err)
+	}
+	if err := repository.ConfigureRoleImages(RoleImageConfig{
+		PolicyRevision: 1, RoleRuntimeContractRevision: 1,
+		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
+		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
+		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
+		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64),
+		LeaseSigningKey:       []byte(strings.Repeat("d", 32)),
+	}); err != nil {
+		t.Fatalf("configure role images: %v", err)
+	}
+	return credentialConfig
 }

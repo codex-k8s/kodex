@@ -101,6 +101,14 @@ var (
 	bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery string
 )
 
+// finalizedAttachmentSetRef creates and finalizes a fixture attachment-set draft through
+// specialized commands with exact project/purpose/artifact refs and returned expected version. It
+// requires FINALIZED and returns the server ref; the caller supplies its disposable service and
+// principal, so this helper creates no grant by itself.
+// finalizedAttachmentSetRef создаёт и финализирует fixture attachment-set draft
+// специализированными командами с точными project, purpose, artifact refs и полученной expected
+// version. Требует FINALIZED и возвращает server ref; disposable service и principal задаёт
+// caller, helper сам не выдаёт grant.
 func finalizedAttachmentSetRef(t *testing.T, ctx context.Context, service *platformservice.Service,
 	principal value.Principal, projectRef, purpose, key string, artifactRefs ...string,
 ) string {
@@ -123,6 +131,19 @@ func finalizedAttachmentSetRef(t *testing.T, ctx context.Context, service *platf
 	return finalized.AttachmentSet.Ref
 }
 
+// TestBootstrapComponent runs the existing sequential owner regression matrix only when the
+// component DSN is configured, with a five-minute context, synthetic object/provider/image
+// fixtures and two idempotent bootstraps. It checks readiness independence and
+// protected-state/cursor invariants before delegating
+// catalog/authority/runtime/secret/graph/configuration scenarios to their existing helpers.
+// Scenario order and the final account-disable case are preserved; missing DSN skips, and no live
+// provider, broker, Kubernetes or browser acceptance is established.
+// TestBootstrapComponent выполняет прежнюю последовательную owner regression matrix только при
+// component DSN, с context пять минут, синтетическими object, provider и image fixtures и двумя
+// idempotent bootstrap. Проверяет readiness independence, protected-state и cursor invariants,
+// затем вызывает прежние catalog, authority, runtime, secret, graph и configuration helpers.
+// Порядок и последний account-disable случай сохраняются; без DSN skip, живые provider, broker,
+// Kubernetes и browser не принимаются.
 func TestBootstrapComponent(t *testing.T) {
 	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
 	if dsn == "" {
@@ -141,23 +162,7 @@ func TestBootstrapComponent(t *testing.T) {
 		t.Fatalf("construct repository: %v", err)
 	}
 	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
-		SecretName:            "runtime-provider-openai-default-r1",
-		SecretUID:             "10000000-0000-4000-8000-000000000001",
-		SecretResourceVersion: "1",
-		ContentSHA256:         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-	}); err != nil {
-		t.Fatalf("configure provider credential: %v", err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1,
-		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-	}); err != nil {
-		t.Fatalf("configure role images: %v", err)
-	}
+	configureComponentProviderAndRoleImages(t, repository)
 	for attempt := 0; attempt < 2; attempt++ {
 		if err := repository.Bootstrap(ctx); err != nil {
 			t.Fatalf("bootstrap attempt %d: %v", attempt+1, err)

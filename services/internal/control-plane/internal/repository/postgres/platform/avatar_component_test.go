@@ -74,23 +74,7 @@ func TestAvatarLifecycleComponent(t *testing.T) {
 		t.Fatalf("construct repository: %v", err)
 	}
 	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
-		SecretName:            "runtime-provider-openai-default-r1",
-		SecretUID:             "10000000-0000-4000-8000-000000000001",
-		SecretResourceVersion: "1",
-		ContentSHA256:         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-	}); err != nil {
-		t.Fatalf("configure provider credential: %v", err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1,
-		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-	}); err != nil {
-		t.Fatalf("configure role images: %v", err)
-	}
+	configureComponentProviderAndRoleImages(t, repository)
 	var bootstrapped bool
 	if err := pool.QueryRow(ctx, `SELECT bootstrapped_at IS NOT NULL FROM control_plane.installation WHERE singleton`).Scan(&bootstrapped); err != nil {
 		t.Fatalf("read bootstrap state: %v", err)

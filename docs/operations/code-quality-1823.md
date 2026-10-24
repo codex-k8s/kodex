@@ -4,11 +4,84 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.400.0
+version: 1.401.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая component preparation, preview parallel и secret recovery fixtures — 25.10.2026
+
+На основе `bbe69d36860ec5f66637d1c35f8c0cb3fbf869fe` полностью прочитаны
+artifact_preview_parallel_component_test.go(320 строк), mvp_queries_test.go(497)
+и runtime_secrets_component_test.go(501):42 прежних неописанных объявления.
+Все42 получили предметные EN→RU описания, включая local attempt type.
+Дополнительно полностью прочитаны finalizedAttachmentSetRef и главная
+TestBootstrapComponent(104–413) и описаны оба объявления. У avatar component
+повторно прочитана затронутая setup часть; весь файл был прочитан на прошлом
+этапе. Остальные bootstrap declarations не объявляются прочитанными/описанными.
+
+`configureComponentProviderAndRoleImages` заменяет три одинаковые подготовки
+provider descriptor и role-image configuration в avatar, MVP provider lifecycle
+и bootstrap. Сохранены точные синтетические поля, порядок ConfigureProviderCredential
+→ ConfigureRoleImages, исходные failure messages и отдельный новый signing-key
+slice на вызов. Возвращаемая provider config — value copy для прежних MVP
+assertions. Helper не читает env, не открывает БД и не загружает реальные
+credentials; preview fixture с другими digest/registry refs оставлен отдельным.
+Это test-only код, production implementation не менялась.
+
+Три полных HEAD-derived expected-AST сравнения avatar/MVP/bootstrap подтверждают
+только замену блоков общим helper и его добавление. Независимая проверка AST
+каждого ProviderCredentialConfig и RoleImageConfig literal исходных трёх
+callers против нового helper подтвердила точное совпадение полей/выражений и
+порядка. Два полных comments-only AST/directive сравнения preview parallel и
+runtime secret component сохранили все assertions/fixtures. Единственный preview
+embed и весь bootstrap embed set неизменны; effect-count SQL прочитан полностью,
+прочие production SQL не редактировались и не объявляются заново полностью
+проверенными. Изменённый helper вызывается только в component контурах;
+компиляция/AST не выдаются за его выполненный PostgreSQL сценарий.
+
+| Оснастка / граница | Что зафиксировано |
+| --- | --- |
+| Общий setup | Точные прежние provider receipt и image policy/deadline/registry значения, новый synthetic key slice, прежний порядок и ошибки; никаких external calls или env reads внутри helper |
+| Bootstrap driver | Только configured component DSN, общий5-minute context, два Bootstrap, protected-state/readiness/cursor assertions и прежний последовательный roster. Последний account-disable сценарий остаётся последним |
+| Attachment draft | Специализированные create/finalize с exact project/purpose/artifacts и server version; FINALIZED ref не создаёт самостоятельный grant |
+| Preview trace | Closed query identity и SQLSTATE subset, без SQL/args/raw error. Mutex/barrier синхронизация grant select, context cancellation учитывается вне mutex |
+| Preview read |8 exact artifacts,4 rounds по4/8 readers с5-second batch budget; bytes/digest, consumed-grant/audit cardinality, balanced Get/Close и negative revision/purpose/tenant assertions. Без provider execution |
+| Pure MVP rules | Literal action lists, lifecycle/enabled/status/stable-key matrices и static runtime-contract readiness; hints/static Ready не доказывают authority или running image |
+| SQL-shape tests | Exact descriptor/FOR UPDATE, purge tombstone, immutable revision/digest/size, Human Gate/VFS/search clauses. String assertions не заменяют DB locks, RLS, race или content read |
+| Secret owner lifecycle | Synthetic create/reissue/consume/claim expiry/recovery KEEP/DELETE/rotate/reveal/revoke, terminal receipts и audit cardinality; отсутствие повторного completed reveal grant. Broker plaintext/encryption/apply отсутствуют |
+| Abandoned/concurrent | Same-intent expired PREPARED reissue и terminal replacement, cleared claims/one audit; rotate/revoke one-winner barrier, проигравший Conflict/Unavailable. Winner явно consume/fail для cleanup |
+
+Новых тестовых файлов и зеркальных tests для простого fixture glue нет.
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks401-final`);13 external fixture keys и2 admin/template inputs исключены.
+Выполнены pure MVP predicate/readiness/SQL-shape, scan-mapping и digest unit;
+PostgreSQL bootstrap/provider/preview/secret-recovery component — NOT RUN/SKIP.
+Нельзя объявлять shared setup или concurrent/claim/receipt matrix исполненными
+по одному compiler/unit result. Full expected-AST/directives, literal AST proof,
+gofmt/diff check,17 analyzer unit и5 exact-ignore guards — PASS. Context7
+/jackc/pgx QueryTracer start/end context, SQL/Args/Err data и ParseConfig/
+NewWithConfig/Tracer/MaxConns проверены. Browser/full E2E/deploy/live — NOT RUN.
+
+Inventory6682 own sources/222 exclusions:19899/21477 Go declarations описаны,
+missing1578 — PostgreSQL adapter control-plane. В текущем PR152 Go-файла:
+1768/1840 описаны,72 оставшихся — остальные объявления bootstrap_component_test.go.
+Большой файл включён для завершения общей дедубликации трёх callers; его остаток
+будет разобран далее, это не статус полной готовности PR. За пределами этого
+файла в текущем Go diff missing0.
+
+Detector1800 raw/904 retained/896 unresolved, registry778 неизменен.
+Старые181-token avatar/bootstrap и132-token avatar/MVP setup окна исчезли,
+новых fragment keys нет. Thresholds/ignore regions/whole-file exclusions не
+расширены, все тесты и большой bootstrap по-прежнему входят в inventory.
+SQL/API/generated/dependencies/migrations/deploy inputs и production behavior
+не менялись. Issue#1823 открыт, PR Draft, QA baseline f2e64eb сохранён.
+
+Прикладные секреты не читались и не переносились; необходимые bot-role ключи
+и author identity используются только для GitHub children без вывода значений.
+Изменённые blobs проверяются с четырьмя прежними inert title-test markers по
+exact main bytes/count; новые credential-looking fixtures не добавлялись.
 
 ## Avatar compensation, artifact delete/readback и catalog proof — 25.10.2026
 

@@ -18,11 +18,35 @@ import (
 )
 
 const (
+	// runtimeSecretHashA provides the fixed synthetic digest for the initial materialized revision in
+	// crash/recovery scenarios. It is test metadata, not a hash obtained from any real secret.
+	// runtimeSecretHashA задаёт фиксированный синтетический digest начальной revision для crash и
+	// recovery. Это metadata теста, не хеш реального секрета.
 	runtimeSecretHashA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	// runtimeSecretHashB provides a second distinct synthetic digest for rotation intents and
+	// successful replacement assertions. It contains no credential value or environment-derived data.
+	// runtimeSecretHashB задаёт второй синтетический digest для rotation intents и успешной замены,
+	// без credential value и данных env.
 	runtimeSecretHashB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	// runtimeSecretHashC provides a third synthetic digest used as an intentionally mismatched
+	// materialization descriptor. Its distinction from the requested digest drives a closed rejection,
+	// not a live secret comparison.
+	// runtimeSecretHashC задаёт третий синтетический digest для намеренно несовпадающего
+	// materialization descriptor. Отличие вызывает отказ без сравнения живых секретов.
 	runtimeSecretHashC = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 )
 
+// testRuntimeSecretCrashConsistency runs the owner-side
+// create/reissue/consume/expiry/recovery/rotate/reveal/revoke matrix in its caller disposable
+// contour using synthetic descriptors only. It checks invalidated grants, exact
+// claimant/generation, terminal receipts, audit cardinality, recovery KEEP/DELETE and absence of
+// reissued completed reveal grants. PostgreSQL deadlines are changed explicitly; no broker
+// encryption, Kubernetes apply or plaintext read is performed.
+// testRuntimeSecretCrashConsistency выполняет owner-side create, reissue, consume, expiry,
+// recovery, rotate, reveal и revoke в disposable контуре вызывающего только на синтетических
+// дескрипторах. Проверяет отзыв grants, точные claimant и generation, terminal receipts, audit
+// cardinality, KEEP и DELETE и отсутствие повторной выдачи completed reveal. Deadlines БД меняются
+// явно; broker encryption, Kubernetes apply и plaintext read отсутствуют.
 func testRuntimeSecretCrashConsistency(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	service, err := platformservice.New(repository)
@@ -264,6 +288,15 @@ func testRuntimeSecretCrashConsistency(t *testing.T, ctx context.Context, reposi
 	testConcurrentRuntimeSecretRotateRevoke(t, ctx, repository, service, owner, consumePrincipal, failPrincipal)
 }
 
+// testAbandonedPreparedRuntimeSecretMutation expires a PREPARED grant, verifies same-intent
+// reissue, then replaces an expired prepared operation and requires one terminal GRANT_EXPIRED
+// receipt/audit with cleared claim state. A live prepared replacement blocks competitors and is
+// explicitly consumed/failed for cleanup. This simulates owner recovery in disposable PostgreSQL,
+// not wall-clock expiry or a live broker.
+// testAbandonedPreparedRuntimeSecretMutation истекает PREPARED grant, проверяет same-intent
+// reissue, затем заменяет истёкшую operation и требует одну terminal GRANT_EXPIRED receipt и audit
+// с очищенным claim. Живая replacement блокирует конкурента и явно consume/fail для cleanup.
+// Моделирует owner recovery disposable PostgreSQL, не реальное ожидание и не живой broker.
 func testAbandonedPreparedRuntimeSecretMutation(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, rotate, consume, fail value.Principal, secret entity.RuntimeSecret) {
 	t.Helper()
 	expectedVersion := secret.Version
@@ -332,6 +365,14 @@ func testAbandonedPreparedRuntimeSecretMutation(t *testing.T, ctx context.Contex
 	}
 }
 
+// completeRuntimeSecretRotate prepares and consumes an exact-version rotation, derives its
+// versioned object name and completes it with a fixed synthetic descriptor at the returned
+// generation. It requires success and returns the owner secret metadata; no external
+// materialization or secret bytes are created.
+// completeRuntimeSecretRotate подготавливает и потребляет exact-version rotation, выводит
+// versioned object name и завершает фиксированным синтетическим дескриптором с полученным
+// generation. Требует успеха и возвращает owner metadata без внешней materialization и значений
+// секрета.
 func completeRuntimeSecretRotate(t *testing.T, ctx context.Context, service *platformservice.Service, rotate, consume, complete value.Principal, secret entity.RuntimeSecret, hash, key string) entity.RuntimeSecret {
 	t.Helper()
 	expectedVersion := secret.Version
@@ -362,6 +403,15 @@ func completeRuntimeSecretRotate(t *testing.T, ctx context.Context, service *pla
 	return result
 }
 
+// testConcurrentRuntimeSecretRotateRevoke creates a synthetic secret, releases rotate and revoke
+// prepares together and requires exactly one winner with one Conflict/Unavailable loser. It
+// consumes and fails the winner and checks one failure audit. The caller owns the disposable
+// database/context; accepting the loser domain outcomes does not prove a live retry or provider
+// effect.
+// testConcurrentRuntimeSecretRotateRevoke создаёт синтетический секрет, одновременно выпускает
+// rotate и revoke prepares и требует одного победителя и одного Conflict либо Unavailable.
+// Потребляет и завершает победителя ошибкой и проверяет один audit. Disposable БД и context
+// принадлежат вызывающему; исход проигравшего не доказывает живой повтор и provider effect.
 func testConcurrentRuntimeSecretRotateRevoke(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner, consume, fail value.Principal) {
 	t.Helper()
 	create := runtimeSecretOwnerPrincipal(owner, "secret.create")
@@ -387,6 +437,12 @@ func testConcurrentRuntimeSecretRotateRevoke(t *testing.T, ctx context.Context, 
 		t.Fatalf("complete concurrent fixture: %v", err)
 	}
 
+	// attempt holds each goroutine own kind/principal/input plus its resulting prepare receipt/error.
+	// Completion is read only after the wait group joins; the record neither grants authority nor
+	// shares a mutable result between attempts.
+	// attempt содержит собственные kind, principal и input каждой goroutine и её prepare receipt и
+	// error. Результат читается после wait group join; запись не выдаёт authority и не делит mutable
+	// result между попытками.
 	type attempt struct {
 		kind      string
 		principal value.Principal
@@ -451,6 +507,12 @@ func testConcurrentRuntimeSecretRotateRevoke(t *testing.T, ctx context.Context, 
 	assertRuntimeSecretAudit(t, ctx, repository, winner.result.OperationRef, "FAILED", 1)
 }
 
+// runtimeSecretOwnerPrincipal copies the fixture principal and selects the operation permission
+// and correlation label for a test service call. It does not resolve fresh identity or mint a
+// credential; real authorization remains with the component service/repository path.
+// runtimeSecretOwnerPrincipal копирует fixture principal и выбирает operation permission и
+// correlation label для тестового service call. Не разрешает fresh identity и не выпускает
+// credential; реальная проверка остаётся service и repository контура.
 func runtimeSecretOwnerPrincipal(base value.Principal, permission string) value.Principal {
 	result := base
 	result.Permission = permission
@@ -458,6 +520,12 @@ func runtimeSecretOwnerPrincipal(base value.Principal, permission string) value.
 	return result
 }
 
+// runtimeSecretSystemPrincipal resolves the closed synthetic installation/system subject through
+// the existing proof fixture for the exact secret-broker operation. It returns only a test
+// principal and does not load broker secrets or confer arbitrary worker permissions.
+// runtimeSecretSystemPrincipal разрешает закрытого синтетического system subject через прежний
+// proof fixture точной secret-broker операции. Возвращает тестовый principal без загрузки broker
+// secrets и выдачи произвольных worker permissions.
 func runtimeSecretSystemPrincipal(t *testing.T, ctx context.Context, repository *Repository, permission string) value.Principal {
 	t.Helper()
 	return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -466,6 +534,12 @@ func runtimeSecretSystemPrincipal(t *testing.T, ctx context.Context, repository 
 	}, "secret-broker")
 }
 
+// runtimeSecretProjectRef reads the caller fixture project by its fixed test name and fails if
+// lookup cannot complete. The query is test-only and does not establish tenant/resource authority
+// for production operations.
+// runtimeSecretProjectRef читает проект оснастки по фиксированному тестовому имени и завершает
+// тест при ошибке. Query предназначен только для теста и не устанавливает production
+// tenant/resource authority.
 func runtimeSecretProjectRef(t *testing.T, ctx context.Context, repository *Repository) string {
 	t.Helper()
 	var ref string
@@ -475,6 +549,12 @@ func runtimeSecretProjectRef(t *testing.T, ctx context.Context, repository *Repo
 	return ref
 }
 
+// assertRuntimeSecretAudit counts audit receipts joined to the exact operation ref and expected
+// outcome and requires the supplied cardinality. It observes committed caller-contour rows only
+// and does not create an audit or validate external materialization.
+// assertRuntimeSecretAudit считает audit receipts точной operation ref и outcome, требуя заданную
+// cardinality. Наблюдает строки контура вызывающего, не создавая audit и не проверяя внешнюю
+// materialization.
 func assertRuntimeSecretAudit(t *testing.T, ctx context.Context, repository *Repository, operationRef, outcome string, expected int) {
 	t.Helper()
 	var count int
@@ -491,6 +571,12 @@ func assertRuntimeSecretAudit(t *testing.T, ctx context.Context, repository *Rep
 	}
 }
 
+// TestRuntimeSecretDigestComparison checks equality, inequality and malformed-input rejection with
+// the three fixed synthetic digests. It performs only local digest comparison, with no plaintext,
+// credential loading or runtime owner operation.
+// TestRuntimeSecretDigestComparison проверяет равенство, различие и отказ неверной форме на
+// фиксированных синтетических digests. Выполняет локальное сравнение без plaintext, загрузки
+// credentials и runtime owner operation.
 func TestRuntimeSecretDigestComparison(t *testing.T) {
 	if !runtimeSecretDigestsEqual(runtimeSecretHashA, strings.Repeat("a", 64)) {
 		t.Fatal("equal SHA-256 digests did not match")

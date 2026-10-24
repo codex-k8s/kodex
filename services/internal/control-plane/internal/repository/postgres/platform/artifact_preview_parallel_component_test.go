@@ -26,14 +26,32 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryPreviewEffectCounts counts consumed PREVIEW grants and artifact.preview audits for the
+// fixture artifact refs, enabling a before/after cardinality assertion. It does not itself
+// authorize a read or prove reader cleanup; this is embedded disposable-test SQL.
+// queryPreviewEffectCounts считает consumed PREVIEW grants и artifact.preview audits заданных
+// fixture refs для проверки cardinality до и после. Сам не авторизует чтение и не доказывает
+// cleanup; это встроенный SQL disposable-теста.
+//
 //go:embed testdata/sql/artifact_preview_effect_counts.sql
 var queryPreviewEffectCounts string
 
+// previewTrackedStore wraps a synthetic object store with atomic successful-Get and body-Close
+// counters for concurrent reader-leak assertions. It preserves the underlying store and does not
+// simulate PostgreSQL ownership or a live provider.
+// previewTrackedStore оборачивает синтетический object store атомарными счётчиками успешных Get и
+// body Close для конкурентной проверки утечек. Сохраняет исходный store, не моделируя PostgreSQL
+// ownership или живого provider.
 type previewTrackedStore struct {
 	objectstorage.Store
 	gets, closes atomic.Int64
 }
 
+// Get delegates exact context/key/version to the store and, only on success, counts the Get and
+// wraps the returned body for close accounting. Receipt/error and failure behavior remain
+// unchanged.
+// Get передаёт store точные context, key и version, только при успехе учитывает Get и оборачивает
+// body для Close accounting. Квитанция, ошибка и поведение отказа сохраняются.
 func (store *previewTrackedStore) Get(ctx context.Context, key, version string) (objectstorage.Object, error) {
 	object, err := store.Store.Get(ctx, key, version)
 	if err == nil {
@@ -43,18 +61,44 @@ func (store *previewTrackedStore) Get(ctx context.Context, key, version string) 
 	return object, err
 }
 
+// previewTrackedBody retains the original reader/closer and owning fixture store so every close
+// invocation can be counted without buffering or altering bytes. It is not an idempotent-close
+// wrapper.
+// previewTrackedBody хранит исходный reader/closer и fixture store для учёта каждого Close без
+// буферизации и изменения байтов. Не делает Close идемпотентным.
 type previewTrackedBody struct {
 	io.ReadCloser
 	store *previewTrackedStore
 }
 
+// Close increments the atomic close counter before forwarding to the original body and returns its
+// error unchanged. Repeated closes remain observable rather than silently suppressed.
+// Close увеличивает атомарный счётчик до вызова исходного Close, возвращая его ошибку. Повторные
+// закрытия учитываются, а не скрываются.
 func (body *previewTrackedBody) Close() error {
 	body.store.closes.Add(1)
 	return body.ReadCloser.Close()
 }
 
+// previewTraceContextKey provides a private typed context key for the closed SQL identity passed
+// between pgx tracer callbacks. No SQL text, arguments or credential data are stored in the
+// context.
+// previewTraceContextKey задаёт закрытый тип ключа context для SQL identity между pgx tracer
+// callbacks. SQL, аргументы и credentials в context не сохраняются.
 type previewTraceContextKey struct{}
+
+// previewTraceEvent stores only a closed query identity and normalized SQLSTATE category for
+// synthetic concurrency diagnostics. It carries no raw PostgreSQL error or query payload.
+// previewTraceEvent сохраняет только закрытые query identity и SQLSTATE category для диагностики
+// синтетической конкуренции, без сырой ошибки PostgreSQL и query payload.
 type previewTraceEvent struct{ identity, state string }
+
+// previewParallelTrace protects its event list and optional grant-selection barrier with a mutex,
+// tracking how many concurrent reads reached the selected boundary. The barrier controls fixture
+// timing only and does not grant database authority.
+// previewParallelTrace защищает mutex список событий и необязательный barrier выбора grant,
+// учитывая число достигших границы чтений. Barrier управляет временем оснастки, не полномочиями
+// БД.
 type previewParallelTrace struct {
 	mu       sync.Mutex
 	events   []previewTraceEvent
@@ -63,7 +107,12 @@ type previewParallelTrace struct {
 	expected int
 }
 
-// SQL и аргументы не сохраняются: tracer распознаёт только закрытые identities.
+// previewQueryIdentity maps the fixed download/grant/content/audit SQL name prefixes and commit to
+// closed identities, falling back to OTHER. It deliberately does not retain or log the original
+// SQL or any arguments.
+// previewQueryIdentity сопоставляет фиксированные SQL name prefixes download, grant, content,
+// audit и commit закрытым identity, иначе OTHER. Исходные SQL и аргументы намеренно не сохраняются
+// и не логируются.
 func previewQueryIdentity(sql string) string {
 	for _, identity := range []string{
 		"artifacts_downloadartifact_select_artifact_for_grant",
@@ -84,10 +133,22 @@ func previewQueryIdentity(sql string) string {
 	return "OTHER"
 }
 
+// TraceQueryStart adds only the normalized statement identity to the supplied context for
+// TraceQueryEnd. It neither records arguments nor changes the query or caller deadline.
+// TraceQueryStart добавляет в переданный context только нормализованную identity для
+// TraceQueryEnd, не сохраняя аргументы и не меняя query и deadline.
 func (trace *previewParallelTrace) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	return context.WithValue(ctx, previewTraceContextKey{}, previewQueryIdentity(data.SQL))
 }
 
+// TraceQueryEnd records a closed identity/state pair under the mutex and synchronizes successful
+// grant-selection queries at the configured arrival count. Only four listed SQLSTATEs escape as
+// codes; other errors become OTHER. Barrier wait observes caller cancellation after releasing the
+// mutex.
+// TraceQueryEnd записывает закрытые identity и state под mutex и синхронизирует успешные
+// grant-selection queries по заданному числу участников. Только четыре перечисленных SQLSTATE
+// сохраняются кодами, прочие ошибки дают OTHER. Ожидание barrier учитывает отмену после
+// освобождения mutex.
 func (trace *previewParallelTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
 	identity, _ := ctx.Value(previewTraceContextKey{}).(string)
 	state := "NONE"
@@ -118,6 +179,12 @@ func (trace *previewParallelTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Con
 	}
 }
 
+// reset clears recorded events and arrivals and replaces the barrier under lock; positive
+// parallelism enables synchronization while zero disables it. Callers reset between completed
+// fixture batches, not as a runtime retry or cancellation mechanism.
+// reset под mutex очищает события и arrivals, заменяет barrier; положительный parallelism включает
+// синхронизацию, ноль отключает. Вызывающий сбрасывает между завершёнными batches, не для runtime
+// retry или cancellation.
 func (trace *previewParallelTrace) reset(parallel int) {
 	trace.mu.Lock()
 	defer trace.mu.Unlock()
@@ -127,10 +194,24 @@ func (trace *previewParallelTrace) reset(parallel int) {
 	}
 }
 
+// previewFailedRow carries an injected scan error without row values for the pure scan-mapping
+// regression. It does not connect to a database or contain real driver payloads.
+// previewFailedRow содержит заданную ошибку Scan без значений строки для чистой регрессии
+// отображения. Не подключается к БД и не содержит реальных driver payloads.
 type previewFailedRow struct{ cause error }
 
+// Scan returns the synthetic failure without assigning destinations, allowing both artifact
+// scanners to demonstrate safe domain mapping.
+// Scan возвращает синтетическую ошибку без присваивания destinations, позволяя обоим artifact
+// scanners проверить безопасное доменное отображение.
 func (row previewFailedRow) Scan(...any) error { return row.cause }
 
+// TestArtifactPreviewScanDropsSerializationCause injects a synthetic 40001 cause into artifact and
+// revision scanners and requires Unavailable without exposed PgError or private marker. This tests
+// only scanner mapping; it does not prove transaction retry or PostgreSQL behavior.
+// TestArtifactPreviewScanDropsSerializationCause вводит синтетический 40001 в artifact и revision
+// scanners, требуя Unavailable без PgError и private marker. Проверяет только отображение Scan, не
+// повтор транзакции и не PostgreSQL.
 func TestArtifactPreviewScanDropsSerializationCause(t *testing.T) {
 	for _, scan := range []func(rowScanner) error{
 		func(row rowScanner) error { _, err := scanArtifact(row); return err },
@@ -145,8 +226,18 @@ func TestArtifactPreviewScanDropsSerializationCause(t *testing.T) {
 	}
 }
 
-// Это regression настоящего owner PREVIEW, а не live запрос и не grant обход.
-// Четыре и восемь файлов относятся к одному Run; provider не запускается.
+// TestArtifactPreviewParallelComponent uses isolated PostgreSQL, eight connections, synthetic
+// storage and closed tracing to read eight exact artifacts sequentially and in four rounds each of
+// four/eight concurrent PREVIEWs. It verifies bytes/digest, one consumed grant/audit per
+// successful read, balanced readers and negative revision/purpose/tenant cases. The 60-second
+// contour and five-second batches do not run a provider or live environment; absent fixtures cause
+// a skip rather than acceptance.
+// TestArtifactPreviewParallelComponent использует isolated PostgreSQL, восемь connections,
+// синтетический storage и закрытый tracing для чтения восьми точных artifacts последовательно и
+// четырьмя rounds по четыре и восемь PREVIEW одновременно. Проверяет bytes, digest, один consumed
+// grant и audit на чтение, баланс readers и отрицательные revision, purpose и tenant случаи.
+// Контур 60 секунд и batches пять секунд не запускают provider и живую среду; отсутствие fixtures
+// означает skip, не приёмку.
 func TestArtifactPreviewParallelComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
