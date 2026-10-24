@@ -4,12 +4,75 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.360.0
+version: 1.361.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Общая форма authority proof и почтовая композиция — 24.10.2026
+
+На основе `222029d4fbbb4d4d399ee7b54ac47b620b48d425` шесть одинаковых JSON
+структур producer/consumer вынесены в чистый подпакет
+`libs/go/internalrpcauth/authorityclaims`: Provenance, Identity[P], Workload,
+Authority[I], CredentialAuthentication, Proof[W,A,C]. Параметры сохраняют все
+12 локальных defined types, включая вложенные типы каждого домена; aliases,
+универсального dispatcher, новых defaults и преобразования валидатора нет.
+Два компонента уже потребляют один wire contract, поэтому это общий primitive,
+а не business helper. Новый подпакет не имеет импортов и runtime ownership.
+README модуля описывает API, ограничения и прежние границы проверок.
+
+До выноса составлена карта по CONTRACT-MC-004 и authority-proof.schema.json:
+
+| Сценарий | Authority и владелец | Путь и эффект |
+| --- | --- | --- |
+| ResolveAuthorityProof | Наблюдаемый peer, закрытая операция, проверенный user/worker credential; CP ResolveProofAuthority разрешает actor/tenant/project | gRPC caster → authorityproof.Resolve → NextAuthorityProofRevision → прежний SignCanonicalJSON; request не назначает actor |
+| IssueAuthorizationContext | Trusted proof key/type, caller/operation/audiences, request digest/profile, generation/time/provenance | Authority.Issue → прежние VerifyCanonicalJSON/DecodeCanonicalJSON/validateAuthority → durable Reserve → context; нового события нет |
+| Downstream consume | Прежние signature/peer/method/time и durable replay проверки | Прежний verifier/store, затем доменный owner; общий record не является допуском |
+
+| Lifecycle/отказ | Сохранённое поведение |
+| --- | --- |
+| Issue/consume | Все тела методов, порядок проверок и source/version/digest pins прежние; меняется только основа12 типов |
+| Malformed/unknown/duplicate/trailing JSON | Прежние strict/canonical decoders и ошибки; форма не получает собственного decoder |
+| Expiry/signature/binding failure | Прежний закрытый отказ времени, подписи, операции, audience, request, generation и provenance |
+| Replay/повтор | Прежний durable Reserve, JTI/digest scope и ошибки; новый тип не является receipt или retry |
+| Cancel/delete/renew/retry/lease expiry/dead-letter/WAITING_OWNER/CHANGES_REQUESTED | Новых grants, leases, attempts, команд и переходов нет; прежние domain owners и authoritative read paths, без новых событий |
+| Readiness/deploy | Нет I/O, env, goroutines, metrics, конфигурации, ключей и нового deployable; прежние runtime/readiness пути |
+
+Поля шести исходных пар совпали под точной подстановкой имён, без изменения
+JSON tags. Обратное раскрытие generic полей восстановило прежние типы и tags.
+AST двух production файлов совпал с исходным head после только ожидаемой
+замены12 type declarations и imports. Порядок/ширина/signedness полей,
+omitempty и wire versions прежние. Три закреплённые JSON fixtures получены
+из исходных до выноса struct definitions: полный proof, stream с пустыми
+optional metadata и нулевые обязательные поля. Они проверяют побайтную форму,
+round-trip, широкие целые, сохранение локальных nested types и отсутствие
+assignability двух nominal proof domains. Fixtures не являются credentials и
+не объявлены семантически допустимыми authority envelopes.
+
+Дополнительно описаны54 объявления четырёх app файлов email delivery и
+projection, включая interfaces и tests. Их AST/directives совпали с исходным
+head; исполняемых изменений нет. Comments различают configured candidate и
+принятое owner state, claim absence и fallback replay, stage/publish/applied/
+readback/complete, best-effort release и durable recovery. Неверный Git import
+не отменяет поиск claim; readiness не названа публикацией либо приёмкой mailbox.
+Тест invalid candidate описан точно: без найденного claim recovery effect не
+исполняется. Неподтверждённая атомарность всей внешней цепочки не заявлена.
+
+Inventory:17028/21366, missing4338. Новый пакет полностью описан; весь
+handwritten domain/service control-plane имеет0missing и0unresolved clones.
+Raw1793, retained812, unresolved981; один cross-component clone реально удалён.
+Новых retained решений, broad ignores и изменений detector policy нет.
+
+Локально полный build/unit всех трёх изменённых modules — PASS: control-plane,
+internal-rpc-authority, internalrpcauth; новый wire unit — PASS. После app
+comments control-plane build/unit повторён — PASS на исполняемом содержимом
+этого этапа. Expected AST, comments-only AST/directives и diff check — PASS.
+Context7: Go defined types, generic instantiations, type identity/struct tags
+и JSON omitempty. Проверка использует encoding/json v1, перехода на v2 нет.
+GitHub checks не объявлены CI PASS. Merge/deploy/startup, browser acceptance и
+ручной QA — NOT RUN до полного завершения задачи.
 
 ## Все пакеты доменных сервисов control-plane — 24.10.2026
 

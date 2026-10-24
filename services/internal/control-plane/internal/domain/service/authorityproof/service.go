@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclaims"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/policydeclaration"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -225,52 +226,32 @@ type localPeer policydeclaration.LocalPeer
 // fields does not establish source eligibility.
 // provenance фиксирует источник, ссылку, версию и хеш разрешённой владельцем личности; заполнение полей
 // не устанавливает допустимость источника.
-type provenance struct {
-	Source       string `json:"source"`
-	Reference    string `json:"reference"`
-	Revision     uint64 `json:"revision"`
-	DigestSHA256 string `json:"digest_sha256"`
-}
+type provenance authorityclaims.Provenance
 
 // identity pairs an owner-resolved identifier with provenance in outgoing proof claims; it is not an
 // identifier copied as authority from the request body.
 // identity связывает разрешённый владельцем идентификатор с происхождением в исходящем доказательстве;
 // это не идентификатор из тела запроса, самовольно ставший полномочием.
-type identity struct {
-	ID         string     `json:"id"`
-	Provenance provenance `json:"provenance"`
-}
+type identity authorityclaims.Identity[provenance]
 
 // workload carries the configured caller workload and exact SPIFFE ID in signed proof claims;
 // observed-peer verification happens before this value is emitted.
 // workload содержит настроенную нагрузку вызывающего и точный SPIFFE ID в подписанном доказательстве;
 // наблюдаемая сторона проверяется до выдачи значения.
-type workload struct {
-	WorkloadID string `json:"workload_id"`
-	SPIFFEID   string `json:"spiffe_id"`
-}
+type workload authorityclaims.Workload
 
 // authority groups actor kind, owner-resolved actor/tenant and optional project for an outgoing proof;
 // operation permission remains in policy rather than an extra field here.
 // authority объединяет вид исполнителя, разрешённых владельцем исполнителя и организацию и
 // необязательный проект исходящего доказательства; право операции остаётся в политике, не дополнительном
 // поле этой структуры.
-type authority struct {
-	ActorKind string    `json:"actor_kind"`
-	Actor     identity  `json:"actor"`
-	Tenant    identity  `json:"tenant"`
-	Project   *identity `json:"project,omitempty"`
-}
+type authority authorityclaims.Authority[identity]
 
 // credentialAuthentication preserves verified human authentication time and optional ACR/AMR in the
 // proof; the metadata does not reauthenticate or elevate the principal.
 // credentialAuthentication сохраняет проверенное время аутентификации человека и необязательные ACR и
 // AMR в доказательстве; метаданные не аутентифицируют повторно и не повышают права.
-type credentialAuthentication struct {
-	AuthenticatedAt int64    `json:"auth_time"`
-	ACR             string   `json:"acr,omitempty"`
-	AMR             []string `json:"amr,omitempty"`
-}
+type credentialAuthentication authorityclaims.CredentialAuthentication
 
 // proofClaims is the outgoing owner-signed authority-proof payload binding caller, operation, resolved
 // authority, independent revisions, request profile and one-time identity/time fields; encoding alone
@@ -278,26 +259,7 @@ type credentialAuthentication struct {
 // proofClaims — исходящее подписываемое владельцем доказательство с привязками вызывающего, операции,
 // разрешённых полномочий, независимых ревизий, профиля запроса и одноразовых ID и сроков; одно
 // кодирование подпись не даёт.
-type proofClaims struct {
-	Version                      int                       `json:"v"`
-	Issuer                       string                    `json:"iss"`
-	Audience                     string                    `json:"aud"`
-	Caller                       workload                  `json:"caller"`
-	OperationID                  string                    `json:"operation_id"`
-	AuthorizationContextAudience string                    `json:"authorization_context_audience"`
-	Authority                    authority                 `json:"authority"`
-	ProofRevision                uint64                    `json:"proof_revision"`
-	SignerGeneration             uint64                    `json:"signer_generation"`
-	CallerCredentialRevision     uint64                    `json:"caller_credential_revision"`
-	CredentialAuthentication     *credentialAuthentication `json:"credential_authentication,omitempty"`
-	JTI                          string                    `json:"jti"`
-	IssuedAt                     int64                     `json:"iat"`
-	NotBefore                    int64                     `json:"nbf"`
-	ExpiresAt                    int64                     `json:"exp"`
-	RequestDigestSHA256          string                    `json:"request_digest_sha256,omitempty"`
-	RequestBindingMode           string                    `json:"request_binding_mode"`
-	AuthorityABIVersion          uint32                    `json:"authority_abi_version"`
-}
+type proofClaims authorityclaims.Proof[workload, authority, credentialAuthentication]
 
 // workerGrantClaims is the unverified decoded workload credential envelope until signature, lifetime,
 // instance, generation and exact producer binding checks succeed; its actor/tenant-looking fields are

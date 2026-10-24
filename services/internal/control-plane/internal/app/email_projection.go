@@ -12,16 +12,42 @@ import (
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 )
 
+// emailProjectionStore reads the authoritative accepted email configuration and its exact
+// credential commitments for legacy projection reconciliation.
+// emailProjectionStore читает авторитетную принятую email конфигурацию и её точные commitments
+// credentials для legacy согласования проекции.
 type emailProjectionStore interface {
+	// EmailConfiguration returns the owner-accepted email configuration rather than selecting a
+	// configured candidate as active projection state.
+	// EmailConfiguration возвращает принятую владельцем email конфигурацию вместо выбора configured
+	// candidate как активного состояния проекции.
 	EmailConfiguration(context.Context) (api.Configuration, error)
+	// EmailCredentialDigests reads credential commitments for the supplied exact accepted
+	// configuration without exposing materialized credentials.
+	// EmailCredentialDigests читает commitments credentials переданной точной принятой конфигурации
+	// без раскрытия материализованных credentials.
 	EmailCredentialDigests(context.Context, api.Configuration) (map[string]string, error)
 }
 
+// emailProjectionPublisher separates publishing from authoritative projection readback so
+// readiness need not perform a mutation.
+// emailProjectionPublisher разделяет публикацию и авторитетный readback проекции, чтобы readiness
+// не требовал mutation.
 type emailProjectionPublisher interface {
+	// Publish publishes the accepted email configuration and bound credential digests, returning the
+	// projection receipt or a dependency failure.
+	// Publish публикует принятую email конфигурацию и связанные digests credentials с возвратом
+	// квитанции проекции либо отказа зависимости.
 	Publish(context.Context, api.Configuration, map[string]string) (emailprojection.Receipt, error)
+	// Check reads back exact configuration and credential commitments without publishing a change.
+	// Check читает точные configuration и commitments credentials без публикации изменения.
 	Check(context.Context, api.Configuration, map[string]string) (emailprojection.Receipt, error)
 }
 
+// emailProjection owns periodic bounded email reconciliation and readiness, optionally delegating
+// exact mailbox publication work to the owner-claim delivery path.
+// emailProjection владеет периодическим ограниченным email согласованием и readiness с
+// необязательной передачей точной работы публикации mailbox пути доставки по claim владельца.
 type emailProjection struct {
 	store             emailProjectionStore
 	publisher         emailProjectionPublisher
@@ -29,10 +55,20 @@ type emailProjection struct {
 	delivery          *mailboxDelivery
 }
 
+// constructEmailCredentialMaterializer constructs the in-cluster credential materializer for the
+// configured namespace, fixed email projection Secret and Kubernetes API budget.
+// constructEmailCredentialMaterializer создаёт in-cluster materializer credentials для заданного
+// namespace, фиксированного Secret email проекции и бюджета Kubernetes API.
 func constructEmailCredentialMaterializer(config Config) (*credentialmaterializer.Kubernetes, error) {
 	return credentialmaterializer.InCluster(config.IntegrationCredentialNamespace, emailprojection.SecretName, config.KubernetesAPITimeout)
 }
 
+// initializeEmailProjection returns nil when disabled, imports bounded configured bytes into the
+// owner and constructs publisher/delivery dependencies, checking admission/readiness without
+// running a reconciliation publish.
+// initializeEmailProjection возвращает nil при отключении, импортирует ограниченные configured
+// bytes владельцу и создаёт publisher и delivery зависимости с проверкой admission и readiness без
+// publish согласования.
 func initializeEmailProjection(ctx context.Context, repository *platformrepository.Repository, config Config) (*emailProjection, error) {
 	if config.EmailConfigurationFile == "" {
 		return nil, nil
@@ -63,6 +99,10 @@ func initializeEmailProjection(ctx context.Context, repository *platformreposito
 	return projection, nil
 }
 
+// reconcile prefers the mailbox delivery path, suppressing legacy replay whenever handled or
+// failed; otherwise reads accepted owner state, publishes it and performs readback.
+// reconcile предпочитает путь доставки mailbox с запретом legacy replay при handled либо ошибке;
+// иначе читает принятое owner state, публикует его и выполняет readback.
 func (projection *emailProjection) reconcile(ctx context.Context) error {
 	if projection.delivery != nil {
 		found, err := projection.delivery.reconcile(ctx)
@@ -84,6 +124,10 @@ func (projection *emailProjection) reconcile(ctx context.Context) error {
 	return projection.Check(ctx)
 }
 
+// Check treats nil as disabled, checks admission only for owner publication delivery and otherwise
+// reads accepted configuration/commitments before publisher readback without publishing.
+// Check считает nil отключением, проверяет только admission для owner publication delivery и иначе
+// читает принятые configuration и commitments до publisher readback без публикации.
 func (projection *emailProjection) Check(ctx context.Context) error {
 	if projection == nil {
 		return nil
@@ -104,6 +148,10 @@ func (projection *emailProjection) Check(ctx context.Context) error {
 	return err
 }
 
+// Run waits for cancellation when disabled and otherwise reconciles on a ticker with a child
+// timeout, logging only a fixed failure classification before joining on caller cancellation.
+// Run ожидает отмену при отключении и иначе согласует по ticker с дочерним timeout, записывая лишь
+// фиксированную классификацию отказа и завершаясь при отмене caller.
 func (projection *emailProjection) Run(ctx context.Context) error {
 	if projection == nil {
 		<-ctx.Done()

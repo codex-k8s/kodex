@@ -13,6 +13,25 @@ contract: сам префикс не нормализуется и не вали
 Два прежних локальных validator остаются thin wrappers, все caller-side
 context/permission/owner checks и зависимости модулей неизменны.
 
+`authorityclaims` задаёт общую JSON-форму `Provenance`, `Identity[P]`,
+`Workload`, `Authority[I]`, `CredentialAuthentication` и `Proof[W,A,C]` для
+control-plane producer и authority consumer. Параметры сохраняют все локальные
+номинальные типы, включая вложенные provenance, identity, workload и auth
+metadata; два домена не становятся aliases. Порядок, ширина, signedness и
+JSON tags полей, включая прежние `omitempty`, сохранены. Копирование по
+значению не делает deep copy AMR или project pointer.
+
+Это чистый подпакет без импортов, env, I/O, конфигурации, goroutines, metrics,
+retry либо состояния. Он не задаёт version defaults, не строит credentials,
+не подписывает и не проверяет JWS. Проверенные actor/tenant/project, срок,
+request binding, signer generation, strict/canonical decode и durable replay
+остаются у прежних доменных владельцев и transport. В частности, общий record
+может содержать неверные либо нулевые значения: форма не является допуском.
+Ошибки принадлежат прежним decoders/verifiers, нового fallback нет. Wire
+совместимость проверяют закреплённые JSON fixtures исходной модели для всех
+optional branches и нулевых обязательных полей; отдельная проверка сохраняет
+номинальные nested types. Подпакет не требует новой deploy/readiness политики.
+
 `PlatformWorkerGrantClaims` хранит общую JSON-форму worker credential для
 выпуска и доменного resolver. Оба потребителя сохраняют отдельные nominal
 типы; подписи, instance/version binding, сроки, поля производителя и durable
