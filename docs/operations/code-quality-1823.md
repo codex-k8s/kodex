@@ -4,11 +4,47 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.372.0
+version: 1.373.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Передача текущего этапа перед независимым QA — 24.10.2026
+
+Владелец отдельно поручил сейчас завершить и слить текущие изменения PR#1828,
+проверив верхнеуровневую работоспособность без полного E2E. После слияния
+исполнитель обновляет основной локальный клон и продолжает оставшийся объём
+#1823 в новой ветке и отдельном worktree. Сквозная приёмка и отладка выделяются
+QA-агенту в его собственной копии. Это разрешение на слияние текущего этапа,
+а не подтверждение завершения всей задачи или сквозной приёмки.
+
+На Go-содержимом `a2455195f64d54551e06841da270339c2632f8d6` заново выполнены:
+
+| Проверка | Фактический результат |
+| --- | --- |
+| httpserver | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| internalrpcauth | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| control-api-gateway | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| control-plane | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| internal-rpc-authority | GOWORK=off build и полный unit с -count=1 — PASS LOCAL |
+| Linux-бинари | CGO_ENABLED=0 GOOS=linux build gateway, control-plane и control-plane-cli — PASS LOCAL |
+| Утилиты |17 analyzer tests,8 publication guard tests, Go documentation checker tests и5 exact-ignore guards — PASS LOCAL |
+| Форматирование |429 изменённых Go-файлов gofmt и полный diff --check — PASS LOCAL |
+| Безопасность публикации | Полные441 изменённых файла проверены на credential patterns. Три совпадения в двух test files подтверждены как прежние синтетические fixtures из main; значения не выводились. Credentials-пути в diff отсутствуют |
+| Внешние контуры | Credentials и13 external fixture/env inputs исключены. Реальные API/DSN/object storage и owner/warm/legacy harness — NOT RUN/SKIP |
+| Полный E2E/browser | NOT RUN по выбранному владельцем разделению работы с QA-агентом |
+| Image/deploy/live | NOT RUN; Linux build не является доказательством OCI image или запущенной среды |
+| GitHub CI | На a245519 check-runs пуст; это не PASS CI |
+
+После проверок меняется только эта запись журнала. Финальный SHA текущего PR
+фиксируется в описании с отдельным доказательством неизменности Go-кода.
+Итоговый inventory текущего этапа:18238/21405 Go declarations описаны,
+3167 остаются;1821 raw clone groups,893 адресных решения и928 неразобранных.
+Issue#1823 остаётся открытым. В новом PR продолжается исходный полный объём;
+пороги и исключения не ослабляются ради слияния. Точный merge SHA и новая
+рабочая ветка проверяются по GitHub и Git readback после слияния.
+
 
 ## Подготовленное содержимое, повтор чтения и очистка проекта — 24.10.2026
 
