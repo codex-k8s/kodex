@@ -4,11 +4,88 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.397.0
+version: 1.398.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Lease чтения помощника, порядок поиска и catalog pins — 25.10.2026
+
+На основе `134864d4a30d3319227cbb8dc24aa3589ce7a59c` полностью прочитаны
+assistant_task_session.go, assistant_search.go, runtime_catalog_pins.go и
+assistant_configuration_catalog.go; у queries.go полностью прочитан Search и
+затронутые ranking/cursor части. Из40 прежних неописанных объявлений38 получили
+предметные EN→RU описания, два удалены при дедубликации. Описаны также пять
+новых объявлений: lease helper, общий ranked type, sort helper и два теста.
+Полное expected-AST сравнение четырёх production файлов подтверждает только
+указанные выносы; runtime_catalog_pins.go — только комментарии. Новые тесты
+полностью описаны. Все16 go:embed сохранены; прочитаны12 SQL:10 task/search/
+catalog-pin queries, single-run read и ordinary search. Остальные6 catalog
+embeds неизменны, их повторный полный SQL-аудит не заявляется.
+
+`resolveAssistantReadLease` объединяет четыре одинаковых fence/generation
+resolve-and-scan/error блока в definition list, assistant resource search,
+assistant configuration catalog и task-session read. Сохранены caller context,
+точные SQL/organization/lease/generation и SHA-256 fence, четыре destinations,
+NoRows/wrapped → NotFound, serialization40001 → прежний retry marker плюс
+Unavailable, остальные ошибки → Unavailable без driver detail. Helper меняет
+только три прежних actor/project поля scope и возвращает assistant project;
+частичный Scan при ошибке по-прежнему отбрасывается callers. Definition list
+использует отдельную копию scope, сохраняя прежний current для остальных
+операций. Subject/membership/permissions и source/target boundaries остаются
+в специализированных readers. Helper не начинает, не фиксирует и не
+откатывает транзакцию, не выдаёт grant и не запускает работу.
+
+Прежний assistantTaskSessionHash удалён: две binding/source проекции вызывают
+существующий jsonValueDigest с теми же JSON inputs. Сохранены точные байты
+encoding/json, lowercase SHA-256 и исторический ignored-marshal-error nil-byte
+fallback; ни JCS, ни подпись, ни authority proof не добавлены. Cursor decoder
+по-прежнему проверяет canonical JSON/base64 и EOF, но не имеет отдельного
+запрета повторных JSON keys; actor/source не назначаются курсором.
+
+Два локальных rankedResult заменены одним rankedSearchResult, одинаковые
+sort.Slice comparator перенесены в sortSearchResults. Сортировка на месте:
+relevance ascending, time descending через Equal/After, kind/NUL/ref ascending.
+Прежняя нестабильность и эквивалентность равных ключей сохранены. Ordinary Search
+фильтрует access до sort/count/cursor; assistant search сортирует candidates до
+закрытого kind/access фильтра и ограниченного ответа. Эти разные порядки,
+лимиты/SQL, subject/bindings, Total/truncated/cursor и commit errors не объединены.
+
+| Путь / жизненный цикл | Сохранённая граница |
+| --- | --- |
+| Lease snapshot | RepeatableRead без SQL ReadOnly ради FOR SHARE; exact live lease/ref/fence/generation и persisted actor/assistant scope. Fresh access subject и membership остаются у readers |
+| Retry / cleanup | Общий5-second budget, максимум3 попытки только для40001; rollback с WithoutCancel и отдельной1-second границей до новой попытки. Ошибка cleanup заменяет исход; helper не расширяет retry на deadlock/unknown commit |
+| Definition list | Только enabled global schema/capability metadata и имя credential key;10+1 pagination, bounds100 fields/capabilities; каталог не разрешает integration invocation |
+| Search | До500 combined candidates, closed resource kinds, единый current visibility rule;10 результатов, trimmed text и subtitle≤160runes. Обычный Search сохраняет свой max50, cursor и Total после eligibility |
+| Task session | Single-run run.view, до128 source pins и согласованные session/storage versions. Canonical published message/execution/USER source, safe callback text, UTF-8, максимум10 целых messages и256KiB encoded text; oversized first message fail-closed |
+| Cursor / source | Actor/org/project/run/session commitment и source snapshot digest; unsigned canonical cursor offset≤10000. Изменившийся source даёт VersionMismatch, курсор не назначает actor/project |
+| Catalog pins | Exact enabled authorized account/current credential и provider definition, optional share locks. Input exact catalog snapshot против persisted per-model digest/default; overlay validation и intersection reasoning efforts не резервируют capacity |
+| Bootstrap | Preferred DEVICE_CODE account pool≤32, nil против empty candidates, capture≤128 и только server-owned path. Common READY default model не заменяет опубликованный выбор владельца |
+
+Новый lease test проверяет10 исходов с буквальным fence hash, точными context/
+SQL/args/destinations, сохранением прочих scope fields, partial Scan, no commit,
+NoRows/wrapped,40001/wrapped retry, deadlock/other/commit-rollback non-retry и
+отсутствием driver diagnostics. Использована существующая test row/TX оснастка.
+Новый ranking test проверяет4 случая: nil, allocated empty, literal mixed
+priority/time/nanosecond/timezone/kind/ref golden и equal-key payload retention
+без обещания стабильности. Они не доказывают live lease, RLS либо runtime path.
+
+После расширения на ordinary Search выполнены финальные GOWORK=off полный
+control-plane build и unit `-count=1` — PASS LOCAL (`checks398-ranking-final`);
+13 external fixture keys и2 admin/template inputs исключены. Прежний промежуточный
+PASS не подменяет эту финальную проверку. Полные expected-AST/directives, gofmt,
+diff check,17 analyzer unit и5 exact-ignore guards — PASS. Context7 /jackc/pgx:
+Row/Scan/ErrNoRows/errors.Is и BeginTx/TxOptions/explicit rollback проверены.
+Real PostgreSQL/FOR SHARE/renew races/RLS, runtime/provider/catalog refresh,
+body storage/message delivery, browser/full E2E и deploy/live — NOT RUN/SKIP.
+
+Inventory6681 own sources/222 exclusions:19759/21471 Go declarations описаны,
+missing1712 — PostgreSQL adapter control-plane. Все139 Go-файлов PR содержат
+1628/1628 описаний. Detector1803 raw/903 retained/900 unresolved; registry777
+entries не менялся. Старое123-token sorting окно d969629b удалено реальным
+выносом, новых fragment keys нет. Thresholds/ignore regions/whole-file
+exclusions не расширены. Issue#1823 открыт, PR Draft, QA baseline f2e64eb сохранён.
 
 ## Черновики секретов, impact-планы и required workflow SQL — 25.10.2026
 

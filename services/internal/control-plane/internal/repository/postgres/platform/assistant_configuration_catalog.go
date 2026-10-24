@@ -100,14 +100,10 @@ func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.
 		return entity.AssistantConfigurationCatalogResponse{}, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	defer rollbackAssistantLockedRead(ctx, tx, &resultError)
-	fenceDigest := sha256.Sum256([]byte(fence))
-	var sourceProjectRef, sourceScope, sourceRef string
-	err = tx.QueryRow(ctx, queryAssistantSearchResolveLease, pgx.StrictNamedArgs{"organization_id": current.organizationID, "lease_ref": leaseRef, "fence_digest": hex.EncodeToString(fenceDigest[:]), "generation": generation}).Scan(&current.actorRef, &current.actorID, &current.authorityProjectID, &sourceProjectRef)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrNotFound
-	}
+	var sourceScope, sourceRef string
+	sourceProjectRef, err := repository.resolveAssistantReadLease(ctx, tx, &current, leaseRef, fence, generation)
 	if err != nil {
-		return entity.AssistantConfigurationCatalogResponse{}, assistantLockedReadError(err, errs.ErrUnavailable)
+		return entity.AssistantConfigurationCatalogResponse{}, err
 	}
 	if _, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef); err != nil {
 		return entity.AssistantConfigurationCatalogResponse{}, err

@@ -213,18 +213,9 @@ func (repository *Repository) Search(ctx context.Context, principal value.Princi
 		return nil, 0, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	// rankedResult keeps a search candidate with its relevance bucket and ordering timestamp inside
-	// Search; only the embedded public result is returned after visibility filtering.
-	// rankedResult хранит кандидата поиска с категорией релевантности и временем сортировки внутри
-	// Search; после проверки видимости наружу возвращается лишь встроенный публичный результат.
-	type rankedResult struct {
-		entity.SearchResult
-		relevance int
-		orderTime time.Time
-	}
-	candidates := make([]rankedResult, 0)
+	candidates := make([]rankedSearchResult, 0)
 	for rows.Next() {
-		var item rankedResult
+		var item rankedSearchResult
 		if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle,
 			&item.State, &item.UpdatedAt, &item.relevance, &item.orderTime); err != nil {
 			return nil, 0, "", errs.ErrUnavailable
@@ -244,7 +235,7 @@ func (repository *Repository) Search(ctx context.Context, principal value.Princi
 		return nil, 0, "", err
 	}
 	evaluatedAt := time.Now().UTC()
-	ranked := make([]rankedResult, 0, len(candidates))
+	ranked := make([]rankedSearchResult, 0, len(candidates))
 	for _, item := range candidates {
 		visible, visibilityErr := repository.resourceVisible(ctx, tx, current, subject.AccessSubject, bindings,
 			item.Kind, item.Ref, item.ProjectRef, evaluatedAt)
@@ -255,15 +246,7 @@ func (repository *Repository) Search(ctx context.Context, principal value.Princi
 			ranked = append(ranked, item)
 		}
 	}
-	sort.Slice(ranked, func(i, j int) bool {
-		if ranked[i].relevance != ranked[j].relevance {
-			return ranked[i].relevance < ranked[j].relevance
-		}
-		if !ranked[i].orderTime.Equal(ranked[j].orderTime) {
-			return ranked[i].orderTime.After(ranked[j].orderTime)
-		}
-		return ranked[i].Kind+"\x00"+ranked[i].Ref < ranked[j].Kind+"\x00"+ranked[j].Ref
-	})
+	sortSearchResults(ranked)
 	total := int64(len(ranked))
 	if cursor.Time != nil {
 		remaining := ranked[:0]
@@ -303,6 +286,38 @@ func searchResultAfterCursor(relevance int, createdAt time.Time, kind, ref strin
 	return relevance > cursor.Relevance ||
 		relevance == cursor.Relevance && createdAt.Before(*cursor.Time) ||
 		relevance == cursor.Relevance && createdAt.Equal(*cursor.Time) && kind+"\x00"+ref > cursor.Kind+"\x00"+cursor.Ref
+}
+
+// rankedSearchResult pairs a public candidate with the relevance bucket and timestamp used by both
+// ordinary and assistant search. These private ordering fields never establish visibility or
+// authority; each reader applies its own permission, count and pagination rules.
+// rankedSearchResult связывает публичного кандидата с релевантностью и временем для обычного поиска
+// и поиска помощника. Закрытые поля сортировки не задают видимость и полномочия; права, подсчёт и
+// пагинацию каждый reader проверяет отдельно.
+type rankedSearchResult struct {
+	entity.SearchResult
+	relevance int
+	orderTime time.Time
+}
+
+// sortSearchResults sorts the supplied slice in place by ascending relevance, descending timestamp
+// and ascending kind/NUL/ref, using the same unstable sort as both original readers. Equal keys
+// remain equivalent without an added tie-breaker; nil and empty slices are accepted. It performs
+// no filtering, truncation or mutation of candidate fields.
+// sortSearchResults сортирует переданный срез на месте по возрастанию релевантности, убыванию времени
+// и возрастанию kind/NUL/ref тем же нестабильным алгоритмом, что оба исходных reader. Равные ключи
+// остаются равными без нового условия порядка; nil и пустой срез допустимы. Фильтрация, усечение и
+// изменение полей кандидатов не выполняются.
+func sortSearchResults(results []rankedSearchResult) {
+	sort.Slice(results, func(left, right int) bool {
+		if results[left].relevance != results[right].relevance {
+			return results[left].relevance < results[right].relevance
+		}
+		if !results[left].orderTime.Equal(results[right].orderTime) {
+			return results[left].orderTime.After(results[right].orderTime)
+		}
+		return results[left].Kind+"\x00"+results[left].Ref < results[right].Kind+"\x00"+results[right].Ref
+	})
 }
 
 // resourceVisible maps a known kind to its view permission and resolves an exact
