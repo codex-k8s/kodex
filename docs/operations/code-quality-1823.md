@@ -4,11 +4,73 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.384.0
+version: 1.385.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Исполнение, RuntimeRevision и продолжения сессий — 24.10.2026
+
+На основе `9757fb1de905abb0c145f7148da8de073d524a2e` описаны46 прежних
+объявлений runtime.go, включая локальный terminalGraphTransition. Два новых
+production helpers и четыре test declarations также описаны.52/52 объявления
+двух файлов имеют EN→RU описание; inventory18937/21438, missing2501 —
+PostgreSQL adapter control-plane. Новый собственный test входит в inventory.
+
+`lockRuntimeContinuationSession` объединяет два exact owner/parent run →
+locked session/next-turn reads с проверкой ожидаемой session identity.
+Row errors и mismatch по-прежнему дают Unavailable; zero turn number не
+получает новой проверки. `insertRuntimeContinuationTurn` объединяет два
+queued AGENT turn INSERT → session counter UPDATE шага. Caller context,
+resolved tenant/run/session/agent, content bytes и порядок SQL сохранены;
+affected-row count и историческое игнорирование newRef error не менялись.
+
+Caller-specific callback/gate/source eligibility, task preparation и SQL
+resolver остаются до helpers в прежнем порядке. Required published step
+по-прежнему переиспользует canonical node/key, а обычный callback создаёт
+continuation node/edge. Integration continuation отдельно возобновляет
+child/root и читает root state. Helpers не создают graph edges, не разрешают
+полномочия и не владеют commit/rollback.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Artifact read | Exact lease/fence/generation и revision/catalog pins, bounded DB snapshot, object metadata/size binding, свежий lease-bound audit до возврата body. Object Get использует исходный context, body закрывается при позднем отказе, rollback имеет независимый budget |
+| Claim / maintenance | Expiry/storage/deadline maintenance до выбора candidates, sorted provider-account capacity locks и fresh credential eligibility. Каждый candidate имеет savepoint и собственную origin/catalog/authority/prompt/MCP/session validation; pinned environment input проверяется до revision/lease/materialization |
+| Immutable revision | Typed snapshot/prompt/environment/context/file catalog/credential descriptor pins; fresh RuntimeRevision и fenced lease назначает сервер. Digest не заменяет authority, случайный payload ref не создаёт delegation |
+| Claim failure / readiness | Managed-MCP pending/recovery откладывает work; classified eligibility failure закрывает root graph и исключает его предыдущие возвращаемые claims. Infrastructure error не объявляется terminal eligibility failure; maintenance/readiness effects возможны при пустом batch |
+| Lease / renew | Exact tenant/ref, fence hash, generation, CLAIMED и application-clock expiry; generic lease сам не проверяет fresh root/deadline/workload ownership. Renew добавляет30 секунд без нового revision либо явного deadline cap в этом методе |
+| Metadata / tool / progress | Locked lease, bounded metadata, closed tool/capability/purpose forms и actual grant lookup; sensitive-key filter обходит только map[string]any/[]any, не является общим secret detector. Exact message replay не создаёт второй event; financial/message/progress input взаимоисключающий |
+| Credential refresh | Previous pinned ref/hash и provider-account lock, current matching Secret UID/resource-version replay либо forward CAS новой revision и cleanup прежней. Secret values не читаются, активные immutable revisions не переписываются |
+| Complete / terminal | Locked nonterminal root, lease/node/turn closure, bounded authorized artifact receipts, archive binding и per-turn usage; callback/required workflow/owner gate либо terminal graph closure с событиями, schedule/storage/delivery readback в caller TX |
+| Delegate / callback | Server graph capability/relationship/frontier и same-project target, inherited origin/input, catalog-bound child session и owned delegation/callback edges. Existing child/edge receipt возвращает replay без второго turn/event |
+| Continuations | Exact completed callback/closed owner-gate invocation resolver, original session lock/match, queued turn/counter и CONTINUES lineage. Payload JSON является недоверенными данными; завершённый integration call не отправляется повторно |
+
+Новый unit test проверяет десять исходов: exact/zero/foreign/missing session,
+no-row/driver failure, insert success/zero affected rows/insert failure/
+counter failure. Проверены exact SQL/owner/run/session/content/context pins,
+insert-before-update, error short circuit, zero outputs и отсутствие hidden
+commit/rollback либо raw driver detail. Это synthetic test, не concurrency proof.
+Адресный test и полный GOWORK=off control-plane build/unit `-count=1` — PASS
+LOCAL.15 external fixture/admin/template inputs исключены. Real PostgreSQL,
+lease races/terminal graphs, provider refresh, image admission/runtime launch,
+body/storage, полный E2E/browser и deploy/live — NOT RUN/SKIP.
+
+Полный expected-AST compare runtime.go — PASS: два session-lock и два
+turn-insert/counter блока заменены на два helpers; остальные исполняемые
+ветви неизменны. Runtime file не содержит go:embed. SQL/API/generated,
+dependencies, applied migrations и deploy inputs не менялись. Прочитаны
+lease/artifact/audit, callback/gate continuation resolver/receipt/session SQL;
+прежние Context7 pgx/v5.10.0 Row/Scan/transaction правила сохраняются.
+
+Scan6672 own sources,222 excluded,1809 raw,898 retained occurrences и911
+unresolved: три109/120/115-token continuation окна устранены, новых окон и
+исключений на этапе выноса нет. Все772 прежних registry entries действительны,
+thresholds/ignore regions не менялись.5 exact-ignore guards, gofmt/diff check
+— PASS; analyzer unit17 PASS относятся к неизменённому инструментарию.
+Исторические permissive numeric casts/ignored optional JSON/ParseInt errors,
+raw claim driver diagnostics и lease error/expiry semantics не исправлялись.
+QA baseline f2e64eb и основной клон сохранены; Issue#1823 открыт.
 
 ## Общая конфигурация и component helpers помощников — 24.10.2026
 
