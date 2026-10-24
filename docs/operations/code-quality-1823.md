@@ -4,11 +4,53 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.401.0
+version: 1.402.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Bootstrap: SQL-оснастка и отказ readiness — 25.10.2026
+
+На основе `bbac694abfc502a25e0889935b079fa4ef86416a` полностью прочитаны
+unavailableReadinessObjectStore, его Check и все27 встроенных SQL-файлов
+bootstrap_component_test.go. Добавлено29 предметных EN→RU описаний. SQL-файлы,
+директивы go:embed, значения, signatures, assertions и исполняемые тела не менялись:
+полное AST/directive сравнение файла с исходным HEAD — PASS. Это дополнение
+комментариев, новых runtime helpers или тестов нет. Остальные43 объявления
+bootstrap не объявляются в этом этапе полностью прочитанными/описанными.
+
+| Граница оснастки | Фактическое поведение |
+| --- | --- |
+| Отказ readiness | Check увеличивает несинхронизированный последовательный счётчик и возвращает ErrUnavailable; остальные Store methods делегируются, контекст не используется |
+| Защищённый bootstrap | Прямые disable/delete/core-content/session-account UPDATE/DELETE намеренно обходят команды для проверки запрета БД; эти строки не являются production authority path |
+| Due/claim/archive | Fixture меняет available_at/next_run_at/input/version/lease expiry. Readback отдельно наблюдает target state, cleared claim и точные archive audit/outbox effects; чтение не выполняет переход |
+| Provider fixtures | Secondary setup имеет широкий заключительный UPDATE по всем matching account/credential pairs; warm-failover ограничен своим ref. Это различие явно описано, запросы не объединяются |
+| Credential rotation | Тестовый CTE блокирует account, создаёт следующую descriptor revision и CAS current pointer с account version/authorized state; внешний secret не ротируется |
+| Readback | Counts, prompt/runtime/environment revisions, digests, UUID refs, effect receipts, tool-call JSON и sequences читаются как сохранённые результаты. Metadata не заменяет credential payload, execution, delivery или readiness proof |
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks402-final`),13 external fixture keys и2 admin/template inputs исключены.
+Компонентные bootstrap/provider/claim/rotation assertions — NOT RUN/SKIP,
+выполненные unit и AST не выдаются за их исполнение. gofmt/diff check,
+17 analyzer unit и5 exact-ignore guards — PASS. Новые зависимости, API или
+внешние library interfaces не затронуты; новые документы библиотек для
+comments-only изменения не запрашивались. Browser/full E2E/deploy/live — NOT RUN.
+
+Inventory6682 own sources/222 exclusions:19928/21477 Go declarations описаны,
+missing1549 — PostgreSQL adapter control-plane. Текущий PR152 Go-файла:
+1797/1840 описаны,43 оставшихся — только bootstrap_component_test.go.
+Все прочие151 Go-файл diff полностью описаны; большой bootstrap и все тесты
+по-прежнему входят в inventory. Detector1800 raw/904 retained/896 unresolved,
+registry778 неизменен; множество fragment/format/kind/path-pair keys прежнее,
+новых или удалённых clone keys нет. Thresholds и exclusions не расширены.
+
+Production behavior/SQL, contracts/generated, dependencies, migrations и deploy
+inputs не менялись. Прикладные секреты не читались и не переносились; необходимые
+bot-role credentials/identity используются только для GitHub children без вывода
+значений. Whole-blob проверка сохраняет лишь4 прежних inert title-test markers
+с exact main bytes/count; новых credential-looking fixtures нет. Issue#1823
+открыт, PR Draft; основной клон и QA baseline f2e64eb не менялись.
 
 ## Общая component preparation, preview parallel и secret recovery fixtures — 25.10.2026
 

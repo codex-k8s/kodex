@@ -34,69 +34,272 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// unavailableReadinessObjectStore embeds the configured object store while replacing only
+// readiness Check with an unavailable response and a call counter. Other Store operations remain
+// delegated; the fixture does not simulate object contents or successful readiness.
+// unavailableReadinessObjectStore встраивает настроенное объектное хранилище, заменяя только
+// readiness Check ответом о недоступности и счётчиком вызовов. Остальные операции Store
+// делегируются; оснастка не имитирует содержимое объектов или успешную готовность.
 type unavailableReadinessObjectStore struct {
 	objectstorage.Store
 	checkCalls int
 }
 
+// Check increments the fixture call counter and always returns objectstorage.ErrUnavailable
+// without using the supplied context or calling the embedded store. The counter is unsynchronized
+// and belongs to the sequential readiness assertions.
+// Check увеличивает счётчик оснастки и всегда возвращает objectstorage.ErrUnavailable без
+// использования переданного контекста и вызова встроенного хранилища. Счётчик не синхронизирован и
+// предназначен для последовательных readiness assertions.
 func (store *unavailableReadinessObjectStore) Check(context.Context) error {
 	store.checkCalls++
 	return objectstorage.ErrUnavailable
 }
 
 var (
+	// bootstrapComponentReadbackQuery embeds a read-only aggregate of bootstrap rows: organizations,
+	// pending owner contracts, ready system assistant, published core prompts, starting runtime,
+	// capabilities, optional integrations, enabled provider definition, authorized default account,
+	// first credential revisions and completed installation. Its counts are installation-wide fixture
+	// observations, not caller authorization checks.
+	// bootstrapComponentReadbackQuery содержит встроенный запрос сводных счётчиков bootstrap:
+	// организаций, ожидающих owner contracts, готового системного ассистента, опубликованных core
+	// prompts, запускаемого runtime, capabilities, optional integrations, включённого provider
+	// definition, авторизованного default account, первых credential revisions и завершённой
+	// установки. Это наблюдения по всей тестовой установке, а не проверка полномочий вызывающего.
 	//go:embed testdata/sql/bootstrap_component_readback.sql
 	bootstrapComponentReadbackQuery string
+	// bootstrapComponentDisableSystemAssistantQuery embeds a direct fixture UPDATE that disables every
+	// system-assistant agent, sets DISABLED and refreshes updated_at. The component test expects
+	// database protection to reject this bypass; the variable itself performs no mutation.
+	// bootstrapComponentDisableSystemAssistantQuery содержит прямой тестовый UPDATE: выключает всех
+	// агентов system-assistant, задаёт DISABLED и обновляет updated_at. Компонентный тест ожидает
+	// запрета такого обхода защитой БД; само объявление ничего не изменяет.
 	//go:embed testdata/sql/bootstrap_component_disable_system_assistant.sql
 	bootstrapComponentDisableSystemAssistantQuery string
+	// bootstrapComponentDeleteSystemAssistantQuery embeds a direct DELETE selected by the
+	// system-assistant key for the protected-row rejection test. It has no tenant parameter or service
+	// authorization and is used only against the disposable component database.
+	// bootstrapComponentDeleteSystemAssistantQuery содержит прямой DELETE по ключу system-assistant
+	// для проверки запрета удаления защищённой строки. Tenant parameter и сервисная авторизация
+	// отсутствуют; запрос предназначен только для одноразовой компонентной БД.
 	//go:embed testdata/sql/bootstrap_component_delete_system_assistant.sql
 	bootstrapComponentDeleteSystemAssistantQuery string
+	// bootstrapComponentReplaceCorePromptQuery embeds an attempted replacement of every core
+	// instruction content with a fixed fixture string. It deliberately bypasses publication commands
+	// so the component test can assert database immutability protection.
+	// bootstrapComponentReplaceCorePromptQuery содержит попытку заменить содержимое всех core
+	// instructions фиксированной тестовой строкой. Намеренно обходит команды публикации, чтобы
+	// компонентный тест проверял защиту неизменяемости в БД.
 	//go:embed testdata/sql/bootstrap_component_replace_core_prompt.sql
 	bootstrapComponentReplaceCorePromptQuery string
+	// bootstrapComponentReplaceSessionProviderAccountQuery embeds a CTE that inserts a disabled
+	// pending-authorization account for system-issued subjects and attempts to assign it to
+	// SYSTEM_ASSISTANT sessions. The protected-affinity test expects rejection; it does not establish
+	// a usable provider connection or authority.
+	// bootstrapComponentReplaceSessionProviderAccountQuery содержит CTE, который создаёт выключенный
+	// account в ожидании авторизации для системных subjects и пытается назначить его SYSTEM_ASSISTANT
+	// sessions. Тест защищённой привязки ожидает запрета; запрос не создаёт пригодного provider
+	// connection или полномочий.
 	//go:embed testdata/sql/bootstrap_component_replace_session_provider_account.sql
 	bootstrapComponentReplaceSessionProviderAccountQuery string
+	// bootstrapComponentConnectIntegrationQuery embeds a fixture UPDATE by connection ref that sets
+	// connected/configured states and a successful test summary, timestamps the test, increments
+	// version and returns that version. It simulates persisted readiness without testing credentials
+	// or contacting an integration.
+	// bootstrapComponentConnectIntegrationQuery содержит тестовый UPDATE по connection ref: задаёт
+	// connected/configured и успешное резюме проверки, сохраняет время теста, увеличивает и возвращает
+	// version. Имитирует сохранённую готовность без проверки credentials или обращения к интеграции.
 	//go:embed testdata/sql/bootstrap_component_connect_integration.sql
 	bootstrapComponentConnectIntegrationQuery string
+	// bootstrapComponentMakeInteractionDeliveryDueQuery embeds a fixture UPDATE that makes only the
+	// referenced FAILED delivery immediately available using the database clock. It neither changes
+	// the delivery state nor performs delivery, claim or retry processing.
+	// bootstrapComponentMakeInteractionDeliveryDueQuery содержит тестовый UPDATE, делающий указанную
+	// FAILED delivery доступной сейчас по часам БД. Не меняет состояние доставки и не выполняет
+	// отправку, claim или обработку retry.
 	//go:embed testdata/sql/bootstrap_component_make_interaction_delivery_due.sql
 	bootstrapComponentMakeInteractionDeliveryDueQuery string
+	// bootstrapComponentMakeScheduleDueQuery embeds a fixture UPDATE that subtracts seven days from
+	// the referenced schedule next_run_at and refreshes updated_at. It preserves version and lifecycle
+	// fields and only arranges the due-work precondition.
+	// bootstrapComponentMakeScheduleDueQuery содержит тестовый UPDATE, вычитающий семь дней из
+	// next_run_at указанного расписания и обновляющий updated_at. Сохраняет version и lifecycle
+	// fields, подготавливая только условие наступившего срока.
 	//go:embed testdata/sql/bootstrap_component_make_schedule_due.sql
 	bootstrapComponentMakeScheduleDueQuery string
+	// bootstrapComponentScheduleOccurrenceReadbackQuery embeds a read by occurrence ref joined to its
+	// run, returning occurrence state, a combined null check for all four claim fields and run source.
+	// It observes persisted claim cleanup without renewing, completing or authorizing the occurrence.
+	// bootstrapComponentScheduleOccurrenceReadbackQuery содержит чтение occurrence по ref с
+	// присоединённым run: возвращает состояние, общую проверку NULL для четырёх полей claim и источник
+	// run. Наблюдает сохранённую очистку claim без продления, завершения или авторизации occurrence.
 	//go:embed testdata/sql/bootstrap_component_schedule_occurrence_readback.sql
 	bootstrapComponentScheduleOccurrenceReadbackQuery string
+	// bootstrapComponentChangeScheduleAfterClaimQuery embeds a fixture UPDATE by schedule ref that
+	// replaces input with a fixed task, increments version and refreshes updated_at. It creates a
+	// post-claim configuration mismatch without changing the already captured occurrence snapshot.
+	// bootstrapComponentChangeScheduleAfterClaimQuery содержит тестовый UPDATE по schedule ref:
+	// заменяет input фиксированной задачей, увеличивает version и обновляет updated_at. Создаёт
+	// несовпадение конфигурации после claim, не изменяя уже зафиксированный snapshot occurrence.
 	//go:embed testdata/sql/bootstrap_component_change_schedule_after_claim.sql
 	bootstrapComponentChangeScheduleAfterClaimQuery string
+	// bootstrapComponentExpireScheduleClaimQuery embeds a fixture UPDATE that moves the referenced
+	// occurrence lease expiry one second before the database clock. It leaves claim identity and state
+	// intact so the real expiry path must perform cleanup.
+	// bootstrapComponentExpireScheduleClaimQuery содержит тестовый UPDATE, сдвигающий истечение lease
+	// указанного occurrence на секунду в прошлое по часам БД. Сохраняет identity claim и состояние,
+	// оставляя очистку настоящему пути обработки истечения.
 	//go:embed testdata/sql/bootstrap_component_expire_schedule_claim.sql
 	bootstrapComponentExpireScheduleClaimQuery string
+	// bootstrapComponentScheduleTargetStateReadbackQuery embeds a join constrained by both schedule
+	// and occurrence refs, returning schedule enabled, occurrence state and whether all claim fields
+	// are null. The read proves only persisted target/claim state and does not execute a lifecycle
+	// transition.
+	// bootstrapComponentScheduleTargetStateReadbackQuery содержит join с ограничением одновременно по
+	// schedule и occurrence refs: возвращает enabled расписания, состояние occurrence и отсутствие
+	// всех полей claim. Чтение подтверждает только сохранённое состояние цели и claim, не выполняя
+	// переход жизненного цикла.
 	//go:embed testdata/sql/bootstrap_component_schedule_target_state_readback.sql
 	bootstrapComponentScheduleTargetStateReadbackQuery string
+	// bootstrapComponentScheduleArchiveReadbackQuery embeds a read for the exact schedule/occurrence
+	// pair, observing archived lifecycle, enabled/next-run and claim cleanup plus archive audit count
+	// and matching SCHEDULE_CHANGED outbox count. Event matching includes aggregate ref/version and
+	// archived state/summary; the query does not publish or acknowledge events.
+	// bootstrapComponentScheduleArchiveReadbackQuery содержит чтение точной пары schedule/occurrence:
+	// наблюдает архивный lifecycle, enabled/next-run, очистку claim, число archive audit и подходящих
+	// SCHEDULE_CHANGED outbox records. Сопоставление события включает aggregate ref/version и архивные
+	// state/summary; запрос не публикует и не подтверждает события.
 	//go:embed testdata/sql/bootstrap_component_schedule_archive_readback.sql
 	bootstrapComponentScheduleArchiveReadbackQuery string
+	// bootstrapComponentCorePromptUpgradeReadbackQuery embeds the system-assistant
+	// runtime/current-core-instruction join, returning prompt/runtime revisions, state,
+	// content/version and counts of published core prompts and organization upgrade audits. This is a
+	// database readback of upgrade effects, not runtime execution evidence.
+	// bootstrapComponentCorePromptUpgradeReadbackQuery содержит join runtime системного ассистента с
+	// текущей core instruction: возвращает prompt/runtime revisions, состояние, содержимое/version и
+	// счётчики опубликованных core prompts и upgrade audits организации. Это чтение эффектов
+	// обновления в БД, а не доказательство исполнения runtime.
 	//go:embed testdata/sql/bootstrap_component_core_prompt_upgrade_readback.sql
 	bootstrapComponentCorePromptUpgradeReadbackQuery string
+	// bootstrapComponentWarmHeartbeatCountsQuery embeds two installation-wide counts: warm-runtime
+	// report audits and control-plane platform outbox rows. Callers compare snapshots around heartbeat
+	// operations; the query does not attribute rows to a particular runtime or consume events.
+	// bootstrapComponentWarmHeartbeatCountsQuery содержит два счётчика всей установки: audits отчётов
+	// warm runtime и строки platform outbox control-plane. Вызывающий сравнивает снимки вокруг
+	// heartbeat; запрос не относит строки к отдельному runtime и не потребляет события.
 	//go:embed testdata/sql/bootstrap_component_warm_heartbeat_counts.sql
 	bootstrapComponentWarmHeartbeatCountsQuery string
+	// bootstrapComponentProviderCredentialReadbackQuery embeds a join from the default provider
+	// account to its current credential revision, reading revision number, secret identity/resource
+	// version, content digest, account version and total account credential revisions. It reads
+	// descriptor metadata only, never credential payload bytes.
+	// bootstrapComponentProviderCredentialReadbackQuery содержит join default provider account с
+	// текущей credential revision: читает номер ревизии, identity/resource version секрета, digest
+	// содержимого, version account и число его credential revisions. Читает только метаданные
+	// descriptor, без байтов credential payload.
 	//go:embed testdata/sql/bootstrap_component_provider_credential_readback.sql
 	bootstrapComponentProviderCredentialReadbackQuery string
+	// bootstrapComponentInstructionDraftReadbackQuery embeds an aggregate for the agent resolved by
+	// ref over DRAFT, VALID and INVALID instruction rows. It returns count plus minimum state/content
+	// for test assertions; published versions are excluded and no validation or publication occurs.
+	// bootstrapComponentInstructionDraftReadbackQuery содержит агрегат по DRAFT, VALID и INVALID
+	// instructions агента, найденного по ref. Возвращает число строк и минимальные state/content для
+	// тестовых assertions; опубликованные версии исключены, валидация и публикация не выполняются.
 	//go:embed testdata/sql/bootstrap_component_instruction_draft_readback.sql
 	bootstrapComponentInstructionDraftReadbackQuery string
+	// bootstrapComponentEffectReceiptCountQuery embeds a count of integration effect receipts selected
+	// by exact effect key. The fixture uses this observation for idempotency assertions; the query
+	// creates no receipt and does not prove external effect delivery.
+	// bootstrapComponentEffectReceiptCountQuery содержит подсчёт integration effect receipts по
+	// точному effect key. Оснастка использует наблюдение для проверки идемпотентности; запрос не
+	// создаёт receipt и не доказывает доставку внешнего эффекта.
 	//go:embed testdata/sql/bootstrap_component_effect_receipt_count.sql
 	bootstrapComponentEffectReceiptCountQuery string
+	// bootstrapComponentSequenceReadbackQuery embeds a read of platform_sequence and
+	// authority_proof_sequence from the singleton installation row. It snapshots durable counters for
+	// before/after assertions without advancing either sequence or deriving caller authority.
+	// bootstrapComponentSequenceReadbackQuery содержит чтение platform_sequence и
+	// authority_proof_sequence единственной строки установки. Получает устойчивые счётчики для
+	// сравнения до/после, не увеличивая их и не выводя полномочия вызывающего.
 	//go:embed testdata/sql/bootstrap_component_sequence_readback.sql
 	bootstrapComponentSequenceReadbackQuery string
+	// bootstrapComponentToolCallOutboxReadbackQuery embeds a run-event-ref lookup joined to outbox by
+	// event_id and extracts the nested tool-call tool value from UTF-8 JSON payload. It reads stored
+	// event materialization only and does not execute the tool or deliver the outbox record.
+	// bootstrapComponentToolCallOutboxReadbackQuery содержит поиск run event по ref с join outbox по
+	// event_id и извлечением вложенного tool-call tool из UTF-8 JSON payload. Читает только
+	// сохранённую материализацию события, не исполняет tool и не доставляет outbox record.
 	//go:embed testdata/sql/bootstrap_component_tool_call_outbox_readback.sql
 	bootstrapComponentToolCallOutboxReadbackQuery string
+	// bootstrapComponentInsertSecondaryProviderQuery embeds multi-statement fixture setup for an
+	// authorized secondary account and first credential descriptor owned by the system subject. Its
+	// final UPDATE links every matching account/credential pair, without limiting that UPDATE to the
+	// inserted account; callers rely on isolated fixture state. No real provider or secret payload is
+	// created.
+	// bootstrapComponentInsertSecondaryProviderQuery содержит несколько операторов подготовки
+	// авторизованного secondary account и первого credential descriptor от системного subject.
+	// Последний UPDATE связывает все подходящие пары account/credential без ограничения только
+	// добавленным account; вызывающий полагается на изоляцию оснастки. Реальный provider или secret
+	// payload не создаётся.
 	//go:embed testdata/sql/bootstrap_component_insert_secondary_provider.sql
 	bootstrapComponentInsertSecondaryProviderQuery string
+	// bootstrapComponentInsertWarmFailoverProviderQuery embeds multi-statement setup for an authorized
+	// warm-failover account and synthetic first credential descriptor. Both descriptor selection and
+	// final current-revision UPDATE are restricted to the fixture account ref; it prepares database
+	// metadata without provisioning credentials or contacting the provider.
+	// bootstrapComponentInsertWarmFailoverProviderQuery содержит несколько операторов подготовки
+	// авторизованного warm-failover account и синтетического первого credential descriptor. Выбор
+	// account для descriptor и последний UPDATE текущей ревизии ограничены ref тестового account;
+	// подготавливаются метаданные БД без выдачи credentials и обращения к provider.
 	//go:embed testdata/sql/bootstrap_component_insert_warm_failover_provider.sql
 	bootstrapComponentInsertWarmFailoverProviderQuery string
+	// bootstrapComponentIntegrationInvocationEffectKeyQuery embeds a read of the effect key for an
+	// integration invocation selected by exact ref. It resolves persisted idempotency identity for
+	// assertions without claiming the invocation or applying an effect.
+	// bootstrapComponentIntegrationInvocationEffectKeyQuery содержит чтение effect key integration
+	// invocation по точному ref. Разрешает сохранённую identity идемпотентности для assertions без
+	// claim invocation или применения эффекта.
 	//go:embed testdata/sql/bootstrap_component_integration_invocation_effect_key.sql
 	bootstrapComponentIntegrationInvocationEffectKeyQuery string
+	// bootstrapComponentRuntimeProviderReadbackQuery embeds a read by runtime-revision ref returning
+	// provider account and credential-revision UUIDs as text. It observes the immutable revision
+	// provider binding without resolving an active account, retrieving secret bytes or granting
+	// runtime authority.
+	// bootstrapComponentRuntimeProviderReadbackQuery содержит чтение runtime revision по ref с
+	// возвратом UUID provider account и credential revision как текста. Наблюдает привязку provider в
+	// immutable revision без разрешения активного account, чтения секрета или выдачи runtime
+	// authority.
 	//go:embed testdata/sql/bootstrap_component_runtime_provider_readback.sql
 	bootstrapComponentRuntimeProviderReadbackQuery string
+	// bootstrapComponentProviderAccountReadbackQuery embeds a provider-account lookup by UUID,
+	// returning state, current credential-revision UUID as text and account version. It observes
+	// stored lifecycle/OCC metadata without authorizing, enabling or rotating the account.
+	// bootstrapComponentProviderAccountReadbackQuery содержит поиск provider account по UUID с
+	// возвратом state, UUID текущей credential revision как текста и version account. Наблюдает
+	// сохранённые lifecycle/OCC metadata без авторизации, включения или ротации account.
 	//go:embed testdata/sql/bootstrap_component_provider_account_readback.sql
 	bootstrapComponentProviderAccountReadbackQuery string
+	// bootstrapComponentRotateProviderCredentialQuery embeds a fixture CTE that locks the selected
+	// account, inserts the next credential descriptor using supplied identity/version/digest and
+	// atomically advances the matching current pointer, authorized state and account version. It
+	// returns the inserted UUID and preserves the previous descriptor; it does not rotate an external
+	// secret or invoke production credential commands.
+	// bootstrapComponentRotateProviderCredentialQuery содержит тестовый CTE: блокирует выбранный
+	// account, добавляет следующий credential descriptor с переданными identity/version/digest и
+	// атомарно обновляет совпавший current pointer, authorized state и version account. Возвращает
+	// UUID новой записи и сохраняет предыдущий descriptor; не ротирует внешний секрет и не вызывает
+	// production credential commands.
 	//go:embed testdata/sql/bootstrap_component_rotate_provider_credential.sql
 	bootstrapComponentRotateProviderCredentialQuery string
+	// bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery embeds the system-assistant
+	// runtime/binding/environment/current-version join, reading version and digests, parent presence,
+	// version count, runtime state/desired revision and cleared warm-instance/heartbeat flags. It
+	// observes persisted reconciliation results without launching or proving readiness of a runtime.
+	// bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery содержит join runtime системного
+	// ассистента, binding, environment и текущей version: читает номер/digests, наличие parent, число
+	// версий, runtime state/desired revision и признаки очистки warm instance/heartbeat. Наблюдает
+	// сохранённый результат reconciliation без запуска runtime или доказательства его готовности.
 	//go:embed testdata/sql/bootstrap_component_runtime_environment_reconcile_readback.sql
 	bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery string
 )
