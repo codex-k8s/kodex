@@ -2,11 +2,11 @@ package grpc
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	digestfixture "github.com/codex-k8s/kodex/services/internal/control-plane/testdata/digests"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -60,35 +60,21 @@ func TestSecretImpactConsumerPreservesOwnerPinsAndSlicePresence(t *testing.T) {
 // TestDigestCastersPreserveExactTextGrammar проверяет оба digest-поля настоящими usage и
 // publication casters с независимо заданным допуском строчного шестнадцатеричного текста.
 func TestDigestCastersPreserveExactTextGrammar(t *testing.T) {
-	for _, test := range []struct {
-		name, text string
-		valid      bool
-	}{
-		{"zero", strings.Repeat("0", 64), true},
-		{"lowercase", strings.Repeat("f", 64), true},
-		{"alphabet", strings.Repeat("0123456789abcdef", 4), true},
-		{"empty", "", false},
-		{"short", strings.Repeat("a", 63), false},
-		{"long", strings.Repeat("a", 65), false},
-		{"uppercase", strings.Repeat("A", 64), false},
-		{"nonhex", strings.Repeat("g", 64), false},
-		{"prefixed", "sha256:" + strings.Repeat("a", 64), false},
-		{"space", strings.Repeat("a", 63) + " ", false},
-		{"newline", strings.Repeat("a", 63) + "\n", false},
-		{"nul", strings.Repeat("a", 63) + "\x00", false},
-		{"utf8", strings.Repeat("a", 62) + "é", false},
-		{"invalid utf8", strings.Repeat("a", 63) + string([]byte{0xff}), false},
-	} {
-		t.Run(test.name, func(t *testing.T) {
+	cases := digestfixture.SHA256TextCases()
+	if len(cases) != 14 {
+		t.Fatal("synthetic digest corpus is incomplete")
+	}
+	for _, test := range cases {
+		t.Run(test.Name, func(t *testing.T) {
 			for _, field := range []string{"context", "catalog"} {
 				account := providerUsageReadFixture()
 				if field == "context" {
-					account.Usage.ContextDigest = test.text
+					account.Usage.ContextDigest = test.Text
 				} else {
-					account.Usage.CatalogDigest = test.text
-					account.Usage.CatalogRevision = "mcat_" + test.text
+					account.Usage.CatalogDigest = test.Text
+					account.Usage.CatalogRevision = "mcat_" + test.Text
 				}
-				if _, err := castProviderAccountUsageRead(account); (err == nil) != test.valid {
+				if _, err := castProviderAccountUsageRead(account); (err == nil) != test.Valid {
 					t.Fatalf("usage %s digest acceptance changed", field)
 				}
 			}
@@ -96,13 +82,13 @@ func TestDigestCastersPreserveExactTextGrammar(t *testing.T) {
 				for _, field := range []string{"plan", "target"} {
 					result := publicationImpactResultFixture(kind)
 					if field == "plan" {
-						result.RevisionImpactPlan.Digest = test.text
+						result.RevisionImpactPlan.Digest = test.Text
 					} else {
-						result.RevisionImpactPlan.TargetDigest = test.text
-						result.ManagedRevision.Digest = test.text
+						result.RevisionImpactPlan.TargetDigest = test.Text
+						result.ManagedRevision.Digest = test.Text
 					}
 					err := validatePublishedImpactResult(result, kind, "rvip_fixture", "source_fixture")
-					if (err == nil) != test.valid {
+					if (err == nil) != test.Valid {
 						t.Fatalf("%s %s digest acceptance changed", kind, field)
 					}
 				}

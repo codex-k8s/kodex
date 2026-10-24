@@ -1,4 +1,5 @@
-// Package platform реализует PostgreSQL-порт универсального control-plane.
+// Package platform implements PostgreSQL adapters for control-plane owner state and transactions.
+// Package platform реализует PostgreSQL adapters для owner state и транзакций control-plane.
 package platform
 
 import (
@@ -34,10 +35,22 @@ import (
 )
 
 const (
-	defaultRuntimeKey    = "builtin-safe-runtime"
+	// defaultRuntimeKey identifies the built-in runtime profile seeded and selected for the initial
+	// system assistant.
+	// defaultRuntimeKey обозначает встроенный runtime profile, создаваемый и выбираемый для начального
+	// системного ассистента.
+	defaultRuntimeKey = "builtin-safe-runtime"
+	// maximumArtifactBytes aliases the domain repository artifact-byte bound so adapter paths use the
+	// same storage limit.
+	// maximumArtifactBytes ссылается на доменный предел байтов артефакта, чтобы пути adapter
+	// использовали один лимит хранения.
 	maximumArtifactBytes = platformrepo.MaximumArtifactBytes
 )
 
+// Repository implements owner persistence using the supplied pool and object store with configured
+// scanners, catalogs and credential descriptors; it does not own pool shutdown.
+// Repository реализует хранение владельца через переданные pool и object store с настроенными
+// scanners, каталогами и credential descriptors; закрытие pool ему не принадлежит.
 type Repository struct {
 	pool                            *pgxpool.Pool
 	trustedCluster                  bool
@@ -58,14 +71,18 @@ type Repository struct {
 	runtimeSecretStagingNamespace   string
 }
 
-// ProviderCredentialConfig содержит только безопасную identity неизменяемой
-// Kubernetes Secret revision. Значение credential в control-plane не попадает.
+// ProviderCredentialConfig contains only immutable Kubernetes Secret identity, resource version
+// and content digest metadata, never the credential value.
+// ProviderCredentialConfig содержит только метаданные неизменяемых identity Kubernetes Secret,
+// resource version и content digest без значения credential.
 type ProviderCredentialConfig struct {
 	SecretName, SecretUID, SecretResourceVersion, ContentSHA256 string
 }
 
-// RoleImageConfig связывает supply-chain lifecycle с точной policy, runtime ABI
-// и secret, которым control-plane детерминированно подписывает fenced claims.
+// RoleImageConfig binds role-image policy, runtime contract, claim lifetimes, repositories and
+// default image to the signing key used for fenced supply-chain tokens.
+// RoleImageConfig связывает role-image policy, runtime contract, сроки claims, repositories и
+// default image с ключом подписания fenced supply-chain tokens.
 type RoleImageConfig struct {
 	PolicyRevision, RoleRuntimeContractRevision uint64
 	PolicySHA256, RoleRuntimeContractSHA256     string
@@ -77,6 +94,10 @@ type RoleImageConfig struct {
 	LeaseSigningKey                             []byte
 }
 
+// New requires pool, object store, the supported provider and a model, loads shipped definitions
+// and sets default namespaces without connecting, bootstrapping or starting workers.
+// New требует pool, object store, поддерживаемого провайдера и модель, загружает shipped
+// definitions и назначает default namespaces без подключения, bootstrap либо запуска workers.
 func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string, objects objectstorage.Store) (*Repository, error) {
 	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" || objects == nil {
 		return nil, errors.New("control-plane repository dependencies are required")
@@ -91,6 +112,10 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string,
 	}, nil
 }
 
+// ConfigureRuntimeSecrets requires the shared DNS-label grammar before storing the runtime Secret
+// namespace for subsequent owner operations.
+// ConfigureRuntimeSecrets требует общую грамматику DNS-label до сохранения namespace runtime
+// Secret для последующих операций владельца.
 func (repository *Repository) ConfigureRuntimeSecrets(namespace string) error {
 	if !validDNSLabel(namespace) {
 		return errors.New("runtime secret namespace is invalid")
@@ -99,6 +124,10 @@ func (repository *Repository) ConfigureRuntimeSecrets(namespace string) error {
 	return nil
 }
 
+// ConfigureRuntimeSecretStaging requires a valid DNS label distinct from the current runtime
+// Secret namespace before storing draft staging namespace.
+// ConfigureRuntimeSecretStaging требует допустимую DNS-label, отличную от текущего runtime Secret
+// namespace, до сохранения staging namespace черновиков.
 func (repository *Repository) ConfigureRuntimeSecretStaging(namespace string) error {
 	if !validDNSLabel(namespace) || namespace == repository.runtimeSecretNamespace {
 		return errors.New("runtime secret staging namespace is invalid")
@@ -107,6 +136,10 @@ func (repository *Repository) ConfigureRuntimeSecretStaging(namespace string) er
 	return nil
 }
 
+// ConfigureRoleImages checks configured lengths, lifetimes, attempt bounds and default image
+// reference shape, derives its digest and copies the signing key before storing configuration.
+// ConfigureRoleImages проверяет заданные длины, сроки, предел попыток и форму default image
+// reference, выделяет её digest и копирует signing key до сохранения конфигурации.
 func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {
 	if config.PolicyRevision == 0 || config.RoleRuntimeContractRevision == 0 ||
 		len(config.PolicySHA256) != 64 || len(config.RoleRuntimeContractSHA256) != 64 ||
@@ -127,6 +160,12 @@ func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error 
 	return nil
 }
 
+// ConfigureProviderCredential allows an entirely empty optional configuration, otherwise validates
+// Secret name, UUID, bounded resource version and lowercase SHA-256 before replacing stored
+// metadata.
+// ConfigureProviderCredential допускает полностью пустую необязательную конфигурацию, иначе
+// проверяет имя Secret, UUID, ограниченный resource version и строчный SHA-256 до замены
+// метаданных.
 func (repository *Repository) ConfigureProviderCredential(config ProviderCredentialConfig) error {
 	if config == (ProviderCredentialConfig{}) {
 		repository.providerCredential = config
@@ -134,13 +173,8 @@ func (repository *Repository) ConfigureProviderCredential(config ProviderCredent
 	}
 	if !validDNSLabel(config.SecretName) || uuid.Validate(config.SecretUID) != nil ||
 		config.SecretResourceVersion == "" || len(config.SecretResourceVersion) > 128 ||
-		len(config.ContentSHA256) != sha256.Size*2 {
+		!exactSHA256(config.ContentSHA256) {
 		return errors.New("provider credential metadata is invalid")
-	}
-	for _, character := range config.ContentSHA256 {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return errors.New("provider credential metadata is invalid")
-		}
 	}
 	repository.providerCredential = config
 	return nil
@@ -154,6 +188,10 @@ func validDNSLabel(value string) bool {
 	return runtimecontract.ValidDNSLabel(value)
 }
 
+// Ready checks installation schema version and secret-draft/purge-recovery schema predicates
+// through the supplied pool, returning fixed diagnostics without probing downstream workers.
+// Ready проверяет версию схемы установки и schema predicates secret-draft и purge-recovery через
+// переданный pool, возвращая фиксированную диагностику без проверки downstream workers.
 func (repository *Repository) Ready(ctx context.Context) error {
 	var schemaVersion int
 	if err := repository.pool.QueryRow(ctx, queryRepositoryReadySelectInstallationSingleton).Scan(&schemaVersion); err != nil {
@@ -173,6 +211,12 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	return nil
 }
 
+// Bootstrap uses one serializable transaction to initialize owner state or reconcile configured
+// credential, core prompt, environment and shipped definitions; commit and deferred rollback
+// remain caller-context operations.
+// Bootstrap использует одну serializable-транзакцию для начального owner state либо сверки
+// credential, core prompt, среды и shipped definitions; commit и deferred rollback остаются
+// операциями с caller context.
 func (repository *Repository) Bootstrap(ctx context.Context) error {
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
@@ -337,6 +381,12 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	return tx.Commit(ctx)
 }
 
+// reconcileIntegrationDefinitions reconciles sorted shipped packages with forward version/digest
+// checks, projects capability schemas and configuration fields and disables absent packages within
+// the supplied transaction.
+// reconcileIntegrationDefinitions сверяет отсортированные shipped packages с forward
+// version/digest checks, преобразует capability schemas и configuration fields и отключает
+// отсутствующие packages в переданной транзакции.
 func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Context, tx pgx.Tx) error {
 	keys := make([]string, 0, len(repository.integrationDefinitions))
 	for _, definition := range integrationpackage.Sorted(repository.integrationDefinitions) {
@@ -397,6 +447,12 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 	return nil
 }
 
+// integrationConfigurationFields copies field constraints with URL formatting or the TEXT default,
+// adding integer minimum and nonzero maximum pointers while preserving an independent
+// allowed-value slice.
+// integrationConfigurationFields копирует ограничения полей с URL formatting либо default TEXT,
+// добавляя integer minimum и ненулевой maximum pointers и сохраняя независимый срез allowed
+// values.
 func integrationConfigurationFields(fields []integrationpackage.Field) []entity.IntegrationConfigurationField {
 	result := make([]entity.IntegrationConfigurationField, 0, len(fields))
 	for _, field := range fields {
@@ -420,6 +476,12 @@ func integrationConfigurationFields(fields []integrationpackage.Field) []entity.
 	return result
 }
 
+// compareIntegrationDefinitionVersions parses exactly three decimal uint32 components with
+// positive major and compares them numerically, rejecting malformed input without full
+// semantic-version parsing.
+// compareIntegrationDefinitionVersions разбирает ровно три десятичных uint32-компонента с
+// положительным major и сравнивает их численно, отклоняя неверный ввод без полного
+// semantic-version parsing.
 func compareIntegrationDefinitionVersions(left, right string) (int, error) {
 	parse := func(raw string) ([3]uint64, error) {
 		var result [3]uint64
@@ -455,6 +517,12 @@ func compareIntegrationDefinitionVersions(left, right string) (int, error) {
 	return 0, nil
 }
 
+// reconcileProviderCredential accepts current or exact historical bootstrap pins without rollback,
+// otherwise permits same-name/content metadata renewal as a new revision and schedules
+// old-credential cleanup atomically.
+// reconcileProviderCredential принимает текущие либо точные historical bootstrap pins без отката,
+// иначе допускает обновление метаданных того же name/content новой ревизией и атомарно планирует
+// очистку прежней credential.
 func (repository *Repository) reconcileProviderCredential(ctx context.Context, tx pgx.Tx) error {
 	var organizationID, accountID, currentCredentialID, secretName, secretUID, secretResourceVersion, contentSHA256 string
 	var revisionNumber int64
@@ -525,6 +593,12 @@ func (repository *Repository) reconcileProviderCredential(ctx context.Context, t
 	return nil
 }
 
+// reconcileSystemAssistantCorePrompt rejects revision rollback and same-version integrity
+// mismatch, otherwise inserts and binds the new core prompt, conditionally activates it and
+// requires one audit row in the supplied transaction.
+// reconcileSystemAssistantCorePrompt отклоняет rollback ревизии и нарушение целостности той же
+// версии, иначе вставляет и привязывает новый core prompt, условно активирует его и требует одну
+// audit row в переданной транзакции.
 func (repository *Repository) reconcileSystemAssistantCorePrompt(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -599,6 +673,12 @@ func (repository *Repository) reconcileSystemAssistantCorePrompt(
 	return nil
 }
 
+// reconcileSystemAssistantRuntimeEnvironment preserves user-published images, validates stored
+// bootstrap environment/policy and creates an audited version only when the expected
+// image/configuration digests differ.
+// reconcileSystemAssistantRuntimeEnvironment сохраняет пользовательские опубликованные образы,
+// проверяет сохранённые bootstrap environment и policy и создаёт аудируемую версию только при
+// несовпадении ожидаемых image/configuration digests.
 func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx context.Context, tx pgx.Tx) error {
 	var organizationID, agentID, environmentID, currentVersionID, createdBy, imageArtifactID, currentCoreDigest, currentDigest string
 	var platformBootstrapImage bool
@@ -676,6 +756,10 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 	return nil
 }
 
+// systemAssistantCoreRevisionNumber accepts the system-assistant-core-v prefix followed by a
+// positive uint32 decimal revision and returns a validity flag.
+// systemAssistantCoreRevisionNumber принимает префикс system-assistant-core-v с положительной
+// десятичной uint32-ревизией и возвращает признак допустимости.
 func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
 	const prefix = "system-assistant-core-v"
 	if !strings.HasPrefix(revision, prefix) {
@@ -685,6 +769,10 @@ func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
 	return number, err == nil && number > 0
 }
 
+// scope holds owner-resolved internal identity and authority references plus correlation and
+// credential-authentication time for a repository operation.
+// scope хранит разрешённые владельцем внутренние identity и authority references, correlation и
+// время аутентификации credential для операции repository.
 type scope struct {
 	interactionIdentityID                                                               string
 	authorityProjectID                                                                  string
@@ -692,6 +780,10 @@ type scope struct {
 	credentialAuthenticatedAt                                                           time.Time
 }
 
+// ResolvePrincipal requires UUID actor/tenant identities and resolves active public references
+// through the verified-principal SQL path, preserving the remaining principal fields.
+// ResolvePrincipal требует UUID actor и tenant и разрешает активные публичные ссылки через
+// verified-principal SQL path, сохраняя остальные поля principal.
 func (repository *Repository) ResolvePrincipal(ctx context.Context, principal value.Principal) (value.Principal, error) {
 	if uuid.Validate(principal.ActorID) != nil || uuid.Validate(principal.AuthorityTenant) != nil {
 		return value.Principal{}, errs.ErrForbidden
@@ -707,6 +799,12 @@ func (repository *Repository) ResolvePrincipal(ctx context.Context, principal va
 	return principal, nil
 }
 
+// resolveProofIdentity resolves system workload or user/STT identity, synchronizes profile/groups
+// and checks project or active access; only the public gateway may enter initial owner claim, and
+// denial may follow a committed profile update.
+// resolveProofIdentity разрешает system workload либо user/STT identity, синхронизирует
+// profile/groups и проверяет project либо active access; только публичный gateway может впервые
+// claim owner, а отказ может следовать после commit обновления профиля.
 func (repository *Repository) resolveProofIdentity(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
 	if input.CallerWorkload == "" || input.Operation == "" {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
@@ -763,29 +861,7 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 		if err := repository.syncOIDCGroups(ctx, tx, authority.OrganizationID, authority.ActorID, input); err != nil {
 			return platformrepo.ProofAuthority{}, err
 		}
-		if input.ProjectRef != "" {
-			if err := tx.QueryRow(ctx, queryAuthorizeProjectMembership,
-				input.ProjectRef, authority.OrganizationID, authority.ActorID).Scan(&authority.ProjectID, &authority.ProjectVersion); errors.Is(err, pgx.ErrNoRows) {
-				if commitErr := tx.Commit(ctx); commitErr != nil {
-					return platformrepo.ProofAuthority{}, errs.ErrConflict
-				}
-				return platformrepo.ProofAuthority{}, errs.ErrForbidden
-			} else if err != nil {
-				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-			}
-		} else if allowed, accessErr := repository.subjectHasProofAccess(ctx, tx, authority.OrganizationID, authority.ActorID); accessErr != nil {
-			return platformrepo.ProofAuthority{}, accessErr
-		} else if !allowed {
-			if commitErr := tx.Commit(ctx); commitErr != nil {
-				return platformrepo.ProofAuthority{}, errs.ErrConflict
-			}
-			return platformrepo.ProofAuthority{}, errs.ErrForbidden
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return platformrepo.ProofAuthority{}, errs.ErrConflict
-		}
-		authority.ActorVersion = 1
-		return authority, nil
+		return repository.finishProofIdentityResolution(ctx, tx, input.ProjectRef, authority)
 	}
 	// Впервые назначить владельца установки может только публичный gateway.
 	if trustedSTT {
@@ -844,31 +920,13 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 	if err := repository.syncOIDCGroups(ctx, tx, authority.OrganizationID, authority.ActorID, input); err != nil {
 		return platformrepo.ProofAuthority{}, err
 	}
-	if input.ProjectRef != "" {
-		if err := tx.QueryRow(ctx, queryAuthorizeProjectMembership,
-			input.ProjectRef, authority.OrganizationID, authority.ActorID).Scan(&authority.ProjectID, &authority.ProjectVersion); errors.Is(err, pgx.ErrNoRows) {
-			if commitErr := tx.Commit(ctx); commitErr != nil {
-				return platformrepo.ProofAuthority{}, errs.ErrConflict
-			}
-			return platformrepo.ProofAuthority{}, errs.ErrForbidden
-		} else if err != nil {
-			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-		}
-	} else if allowed, accessErr := repository.subjectHasProofAccess(ctx, tx, authority.OrganizationID, authority.ActorID); accessErr != nil {
-		return platformrepo.ProofAuthority{}, accessErr
-	} else if !allowed {
-		if commitErr := tx.Commit(ctx); commitErr != nil {
-			return platformrepo.ProofAuthority{}, errs.ErrConflict
-		}
-		return platformrepo.ProofAuthority{}, errs.ErrForbidden
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return platformrepo.ProofAuthority{}, errs.ErrConflict
-	}
-	authority.ActorVersion = 1
-	return authority, nil
+	return repository.finishProofIdentityResolution(ctx, tx, input.ProjectRef, authority)
 }
 
+// subjectHasProofAccess reads the active-binding eligibility predicate for one resolved
+// organization and subject inside the caller transaction.
+// subjectHasProofAccess читает predicate доступности активной привязки для разрешённых организации
+// и subject внутри транзакции caller.
 func (repository *Repository) subjectHasProofAccess(ctx context.Context, tx pgx.Tx, organizationID, subjectID string) (bool, error) {
 	var allowed bool
 	if err := tx.QueryRow(ctx, queryProofSubjectHasActiveBinding, organizationID, subjectID).Scan(&allowed); err != nil {
@@ -877,6 +935,12 @@ func (repository *Repository) subjectHasProofAccess(ctx context.Context, tx pgx.
 	return allowed, nil
 }
 
+// resolveClaimedProofAuthority reads a claimed organization/subject pair in a read-only
+// repeatable-read transaction, distinguishing missing identity from backend failure and requiring
+// commit before success.
+// resolveClaimedProofAuthority читает claimed organization/subject pair в read-only
+// repeatable-read транзакции, отличая отсутствие identity от отказа backend и требуя commit до
+// успеха.
 func (repository *Repository) resolveClaimedProofAuthority(
 	ctx context.Context,
 	input platformrepo.ProofPrincipalInput,
@@ -913,6 +977,10 @@ func (repository *Repository) resolveClaimedProofAuthority(
 	return authority, true, nil
 }
 
+// NextAuthorityProofRevision obtains a revision from the database and rejects zero or values above
+// the exact JavaScript-safe integer range.
+// NextAuthorityProofRevision получает ревизию из БД и отклоняет ноль либо значения выше точного
+// диапазона JavaScript-safe integer.
 func (repository *Repository) NextAuthorityProofRevision(ctx context.Context) (uint64, error) {
 	var revision uint64
 	if err := repository.pool.QueryRow(ctx, queryNextAuthorityProofRevision).Scan(&revision); err != nil {
@@ -924,6 +992,10 @@ func (repository *Repository) NextAuthorityProofRevision(ctx context.Context) (u
 	return revision, nil
 }
 
+// AcceptWorkerGrant validates workload, generation, revision and lifetime bounds before
+// instance-specific or durable high-watermark admission, requiring the accepted revision to match.
+// AcceptWorkerGrant проверяет workload, generation, revision и lifetime bounds до
+// instance-specific либо durable high-watermark admission, требуя совпадение принятой ревизии.
 func (repository *Repository) AcceptWorkerGrant(ctx context.Context, input platformrepo.WorkerGrantInput) error {
 	if input.WorkloadID == "" || input.CredentialGeneration == 0 || input.CredentialGeneration > 9007199254740991 || input.Revision == 0 || input.Revision > 9007199254740991 ||
 		input.IssuedAt.IsZero() || !input.ExpiresAt.After(input.IssuedAt) {
@@ -945,12 +1017,20 @@ func (repository *Repository) AcceptWorkerGrant(ctx context.Context, input platf
 	return nil
 }
 
+// resolveScope uses the same resolved-scope SQL and mapping as the observed path while supplying
+// no error observer.
+// resolveScope использует те же resolved-scope SQL и преобразование, что наблюдаемый путь, без
+// передачи error observer.
 func (repository *Repository) resolveScope(ctx context.Context, principal value.Principal) (scope, error) {
 	return repository.resolveScopeObserved(ctx, principal, nil)
 }
 
-// Наблюдатель owner DOWNLOAD видит driver class до прежнего domain mapping.
-// Все callers используют тот же единственный SQL path и authority checks.
+// resolveScopeObserved resolves actor/tenant scope, lets an optional in-process observer inspect
+// query failure before domain mapping and copies principal correlation, project boundary and
+// authentication time.
+// resolveScopeObserved разрешает actor/tenant scope, передаёт query failure необязательному
+// observer внутри процесса до domain mapping и копирует correlation, project boundary и
+// authentication time principal.
 func (repository *Repository) resolveScopeObserved(ctx context.Context, principal value.Principal, observe func(error)) (scope, error) {
 	var result scope
 	err := repository.pool.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, principal.ActorID, principal.AuthorityTenant).Scan(
@@ -970,10 +1050,18 @@ func (repository *Repository) resolveScopeObserved(ctx context.Context, principa
 	return result, nil
 }
 
+// allPermissions returns a fresh slice of the fixed project permission names without assigning
+// those permissions to any principal.
+// allPermissions возвращает новый срез фиксированных имён project permissions без назначения этих
+// разрешений principal.
 func allPermissions() []string {
 	return []string{"VIEW", "MANAGE", "MANAGE_MEMBERS", "MANAGE_AGENTS", "MANAGE_WORKFLOWS", "LAUNCH_RUNS", "CANCEL_RUNS", "RESOLVE_GATES", "MANAGE_ARTIFACTS", "MANAGE_SCHEDULES", "MANAGE_INTEGRATIONS", "VIEW_AUDIT"}
 }
 
+// newRef reads eighteen cryptographically random bytes and returns a prefix plus unpadded URL-safe
+// base64 reference, exposing only a fixed error on entropy failure.
+// newRef читает восемнадцать криптографически случайных байтов и возвращает prefix с unpadded
+// URL-safe base64 reference, выдавая фиксированную ошибку при отказе entropy.
 func newRef(prefix string) (string, error) {
 	raw := make([]byte, 18)
 	if _, err := rand.Read(raw); err != nil {
@@ -982,6 +1070,10 @@ func newRef(prefix string) (string, error) {
 	return prefix + "_" + base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
+// boundedPage uses fifty for nonpositive page size, caps positive sizes at two hundred and leaves
+// the page token untouched.
+// boundedPage выбирает пятьдесят для неположительного page size, ограничивает положительный
+// двумястами и не изменяет page token.
 func boundedPage(page query.Page) int32 {
 	if page.Size < 1 {
 		return 50
@@ -992,8 +1084,16 @@ func boundedPage(page query.Page) int32 {
 	return page.Size
 }
 
+// asJSON returns encoding/json output while deliberately discarding its error, preserving the
+// existing nil-byte fallback for unsupported values.
+// asJSON возвращает результат encoding/json, намеренно отбрасывая ошибку и сохраняя прежнюю
+// nil-byte замену для неподдерживаемых значений.
 func asJSON(value any) []byte { encoded, _ := json.Marshal(value); return encoded }
 
+// scanTime returns nil for absent or zero time and otherwise returns the original pointer without
+// copying the timestamp.
+// scanTime возвращает nil для отсутствующего либо нулевого времени, иначе исходный pointer без
+// копирования timestamp.
 func scanTime(value *time.Time) *time.Time {
 	if value == nil || value.IsZero() {
 		return nil
@@ -1002,3 +1102,35 @@ func scanTime(value *time.Time) *time.Time {
 }
 
 var _ platformrepo.Repository = (*Repository)(nil)
+
+// finishProofIdentityResolution performs the existing project/active-binding check after profile
+// synchronization, committing before success or access denial and preserving conflict precedence.
+// finishProofIdentityResolution выполняет прежнюю project/active-binding проверку после profile
+// synchronization, делая commit перед успехом либо отказом в доступе и сохраняя приоритет conflict.
+// The caller owns rollback on query failure; this helper does not resolve actor or tenant identity.
+// Caller владеет rollback при query failure; helper не разрешает actor либо tenant identity.
+func (repository *Repository) finishProofIdentityResolution(ctx context.Context, tx pgx.Tx, projectRef string, authority platformrepo.ProofAuthority) (platformrepo.ProofAuthority, error) {
+	if projectRef != "" {
+		if err := tx.QueryRow(ctx, queryAuthorizeProjectMembership,
+			projectRef, authority.OrganizationID, authority.ActorID).Scan(&authority.ProjectID, &authority.ProjectVersion); errors.Is(err, pgx.ErrNoRows) {
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				return platformrepo.ProofAuthority{}, errs.ErrConflict
+			}
+			return platformrepo.ProofAuthority{}, errs.ErrForbidden
+		} else if err != nil {
+			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+		}
+	} else if allowed, accessErr := repository.subjectHasProofAccess(ctx, tx, authority.OrganizationID, authority.ActorID); accessErr != nil {
+		return platformrepo.ProofAuthority{}, accessErr
+	} else if !allowed {
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return platformrepo.ProofAuthority{}, errs.ErrConflict
+		}
+		return platformrepo.ProofAuthority{}, errs.ErrForbidden
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return platformrepo.ProofAuthority{}, errs.ErrConflict
+	}
+	authority.ActorVersion = 1
+	return authority, nil
+}

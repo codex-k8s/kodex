@@ -6112,6 +6112,22 @@
       "fragmentSHA256": "5b46f3ed4a39e56017150119db2a10097946c26dd0038771ac4307052b5778b2",
       "count": 1,
       "reason": "ListVFSNodes и SearchVFS имеют одинаковые typed filter поля и castVFSNode, но разные exact RPC principals и domain list/search operations. query.Filter, page, enum conversion и casting уже общие; generic list/search callback скрыл бы routing ради nominal response boilerplate. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_helpers.go",
+      "fragmentSHA256": "de28274b1db68961089a4b2cf258f5de31387f259ccef155273a8e1babcf98f7",
+      "count": 1,
+      "reason": "Окно112 tokens сопоставляет начало scanInboxRow и часть scanBuild. Полные функции прочитаны: inbox восстанавливает21 поле durable event/ordering/lease/terminal row и возвращает исходную ошибку Scan; image build читает27 иных колонок, затем декодирует recipe JSON и устанавливает Dockerfile/SourceAvailable. Общего алгоритма кроме вызова уже общего pgx.Row.Scan нет; различаются SQL column order, типы результата и обработка ошибки. Универсальный variadic callback scanner скрыл бы связь destinations с nominal SQL-проекцией. Сохранена только эта точная пара путей/hash/count1; ни inbox lifecycle, ни artifact validation не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_helpers.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_helpers.go",
+      "fragmentSHA256": "4dd96d920c699191e2b45b8bc4bddaea0351ccacb422a8ce5d53c426475e48fb",
+      "count": 1,
+      "reason": "Окно174 tokens совпадает после нормализации имён в середине списков destinations scanLockedBuild и scanLockedArtifact. Полные функции прочитаны: build содержит recipe/project IDs, policy/contract pins; artifact содержит отдельные admission/promotion/authorization claims, generations и expiry. Их column order и структуры различны, общий исполняемый алгоритм копирования recipe provenance уже вынесен в copyRoleImageArtifactRecipe. Обобщение positional Scan через reflection или generic dispatcher скрыло бы связь с разными SQL tuples без удаления общего бизнесового алгоритма. Сохранено только точное внутрефайловое окно/hash/count1; Scan и claim validation не подавляются целиком."
     }
   ]
 }

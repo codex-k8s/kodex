@@ -4,11 +4,75 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.370.0
+version: 1.371.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Комментарии основного PostgreSQL adapter и общие операции — 24.10.2026
+
+На основе `4fa842ef9abba51a33968559e8e14ec30234a9fc` подробно описаны70
+прежних объявлений: repository.go33, role_images_helpers.go36 и один
+provider credential test. Описаны12 новых объявлений общих helpers,
+тестовой оснастки и проверок. Полный Go inventory18143/21404,
+missing3261 — только PostgreSQL adapter control-plane.
+
+Объединены четыре содержательных повтора:
+
+- `exactSHA256` использует существующий `runtimecontract.ValidSHA256Text`;
+  настройка provider credential использует тот же предикат вместо своего цикла.
+  Прежняя грамматика сохранена:64 строчных шестнадцатеричных байта, включая
+  нулевой digest. Проверки ConfigureRoleImages, проверявшие только длину,
+  не усиливались этим рефакторингом.
+- `copyRoleImageArtifactRecipe` копирует шесть полей provenance и независимые
+  срезы Platforms/DeclaredTools для обычного и locked artifact scanners.
+  Пустые срезы по-прежнему превращаются в nil; остальные поля не затрагиваются.
+- `finishProofIdentityResolution` объединяет два одинаковых заключительных
+  участка identity resolution. Начало обычной и Serializable транзакций,
+  синхронизация профиля/групп и rollback остаются у прежних callers.
+- Общая testdata/digests fixture содержит14 синтетических граничных случаев
+  с буквальными ожидаемыми результатами. PostgreSQL и gRPC tests используют
+  её независимо от production validator; каждый вызов получает новый срез.
+
+| Сценарий / lifecycle | Сохранённые границы |
+| --- | --- |
+| Identity вход | Claimed subject и initial claim сохраняют разные lookup/transaction paths; actor/organization выводятся из прежнего authoritative read, а не из payload |
+| Проект | Exact projectRef/organizationID/actorID query задаёт project ID/version; отсутствие строки приводит к commit до ErrForbidden |
+| Без проекта | Authoritative active binding read остаётся внутри той же транзакции; отсутствие доступа также фиксирует изменения профиля перед ErrForbidden |
+| Ошибки | Read failure возвращает ErrUnavailable без commit; commit failure перекрывает success/denial через ErrConflict. Любая ошибка возвращает нулевой authority |
+| Успех | Commit предшествует ActorVersion=1; organization version и RuntimeExecution сохраняются. Helper не добавляет grants или полномочий |
+| Артефакт | SQL column order, JSON decode errors, inventory hydration и locked promotion/claim fields остаются раздельными; общий только recipe provenance copy |
+| Повтор / отмена | Новых transitions/events/attempts нет. Прежние rollback caller context и retry при неоднозначном commit этим изменением не исправлены и не объявлены безопасными |
+
+Новые регрессионные проверки: три формы recipe slices, все поля результата
+и отсутствие aliasing;14 digest cases через role image, manifest и фактическую
+provider configuration с сохранением прежних metadata при отказе;10 outcomes
+identity resolution с точными SQL/owner args/context, числом commit и
+приоритетом ошибок. gRPC проверяет тот же corpus настоящими usage/publication
+casters. Existing optional bootstrap test сохраняет все16 presence masks.
+
+AST/directives provider credential test совпали с исходной ревизией;
+два production файла и gRPC test совпали с ожидаемыми точными выносами.
+Первый полный unit run выявил ошибку имени поля соседнего нового теста после
+переноса fixture; она исправлена, затем полный unit и четыре целевых теста
+прошли. Полные локальные GOWORK=off control-plane build/unit — PASS.
+Credentials и13 внешних fixture/env inputs исключены; реальные API,
+migration/owner/warm/legacy контуры — SKIP/NOT RUN. Это не live acceptance.
+Context7: pgx/v5 Tx.Commit, ErrTxCommitRollback и rollback после commit;
+локальная зависимость pgx v5.10.0. SQL/Proto/API/generated sources не менялись.
+
+Scan6666 own sources,222 excluded,1822 raw,892 retained,930 unresolved.
+Реальный повтор двух proof resolution tails и повтор тестовой таблицы
+устранены. Два оставшихся окна рассмотрены целиком и сохранены точными
+path/hash/count1 решениями: разные inbox/build rows и разные locked
+build/artifact column layouts. Общего алгоритма кроме pgx.Row.Scan в них нет.
+Ни detector, ни thresholds/ignore guards не менялись; прежние решения не
+перепривязывались.17 analyzer unit и5 exact-ignore guards — PASS.
+В выбранных шести Go-файлах нет missing comments и unresolved clone windows;
+остальные930 групп остаются открытыми. Merge/deploy/startup/browser/manual QA
+ещё NOT RUN; разрешение владельца на выпуск после полного завершения сохраняется.
+
 
 
 ## Завершение комментариев тестов gRPC — 24.10.2026
