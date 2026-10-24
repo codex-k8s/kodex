@@ -16,20 +16,56 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryProviderUsageAccounts Embeds the organization-scoped 4097-row account usage projection with
+// current credential identity, active execution count, latest observation state and latest
+// successful model content. Empty refs mean all accounts; stale credential/version observations
+// become pending, and models are optional. No remote probe is performed.
+// queryProviderUsageAccounts Встраивает выборку до 4097 аккаунтов организации с текущей
+// идентичностью credential, числом активных выполнений, состоянием последнего наблюдения и
+// последним успешным содержимым моделей. Пустые ссылки означают все аккаунты; устаревшая версия
+// или credential дают PENDING, модели включаются отдельно. Внешняя проверка не выполняется.
+//
 //go:embed sql/provider_usage__accounts.sql
 var queryProviderUsageAccounts string
 
+// queryProviderUsageAgents Embeds exact organization/agent-ref usage inputs: current runtime
+// config/policy/overlay and the policy-selected account, with a 4097-row bound. It projects
+// dependencies without reserving account capacity or authorizing launch.
+// queryProviderUsageAgents Встраивает данные использования точных агентов организации: текущие
+// конфигурацию, policy, overlay и выбранный policy аккаунт с пределом 4097 строк. Проецирует
+// зависимости без резервирования ёмкости аккаунта и авторизации запуска.
+//
 //go:embed sql/provider_usage__agents.sql
 var queryProviderUsageAgents string
 
+// queryProviderUsageProfile Reads the global runtime profile by stable key, including
+// provider/model/runtime revision and enabled flag. No organization predicate is needed for this
+// global catalog; callers decide whether the profile is usable.
+// queryProviderUsageProfile Читает глобальный runtime-профиль по стабильному ключу с провайдером,
+// моделью, ревизией runtime и признаком включения. Глобальный каталог не ограничен организацией;
+// пригодность профиля проверяют вызывающие.
+//
 //go:embed sql/provider_usage__profile.sql
 var queryProviderUsageProfile string
 
+// providerUsageProfile Carries the selected global runtime profile identity/provider/model/runtime
+// revision and enabled state for CONFIGURE compatibility checks. A populated profile alone is not
+// a launch grant.
+// providerUsageProfile Хранит идентичность, провайдера, модель, ревизию runtime и включённость
+// глобального профиля для проверки CONFIGURE. Заполненный профиль сам не разрешает запуск.
 type providerUsageProfile struct {
 	Ref, Provider, Model, RuntimeRevision string
 	Enabled                               bool
 }
 
+// providerUsageAccount Carries account lifecycle/capacity, current credential and observation
+// identifiers, bounded catalog models/status/provenance and transaction observation time.
+// Credential values are absent; this dependency snapshot does not reserve capacity or prove
+// provider SLA.
+// providerUsageAccount Хранит жизненный цикл и ёмкость аккаунта, идентификаторы текущих credential
+// и наблюдения, ограниченный каталог моделей с состоянием и происхождением, время наблюдения
+// транзакции. Значений credential нет; снимок не резервирует ёмкость и не доказывает SLA
+// провайдера.
 type providerUsageAccount struct {
 	Ref, Provider, State, CredentialID, ObservationID, ContentDigest, CatalogSource string
 	Version, Maximum, Active                                                        int64
@@ -40,6 +76,12 @@ type providerUsageAccount struct {
 	ObservedAt                                                                      time.Time
 }
 
+// providerUsageAgent Carries the current agent identity/lifecycle/version/project, runtime
+// configuration and digest, provider/model/overlay, pinned candidates and selected account. These
+// read-side dependencies require separate actor launch/configure authority.
+// providerUsageAgent Хранит текущие идентичность, состояние, версию и проект агента, конфигурацию
+// runtime с хешем, провайдера, модель, overlay, закреплённых кандидатов и выбранный аккаунт.
+// Зависимости чтения требуют отдельного права субъекта на запуск или настройку.
 type providerUsageAgent struct {
 	Ref, State, ProjectRef, ConfigRef, ConfigDigest, Provider, Model, Overlay, SelectedAccount string
 	Version                                                                                    int64
@@ -47,6 +89,12 @@ type providerUsageAgent struct {
 	Candidates                                                                                 []entity.ProviderAccountCandidate
 }
 
+// providerUsageContext Combines optional caller usage intent with the resolved agent/profile,
+// separately evaluated actor eligibility and subject/binding digest. ActorAllowed is an internal
+// projection; it must not be accepted as caller-provided authority.
+// providerUsageContext Объединяет необязательное намерение использования с разрешёнными агентом и
+// профилем, отдельно вычисленной пригодностью субъекта и хешем субъекта с привязками. ActorAllowed
+// является внутренней проекцией и не принимается как полномочие из данных клиента.
 type providerUsageContext struct {
 	Input           *entity.ProviderAccountUsageContext
 	Agent           providerUsageAgent
@@ -55,6 +103,14 @@ type providerUsageContext struct {
 	Profile         providerUsageProfile
 }
 
+// readProviderUsageAccounts Reads exact organization/ref accounts, normalizing nil refs to an
+// empty SQL array, then enforces 4096 accounts, 128KiB model JSON, lifecycle/capacity and catalog
+// invariants. Scan/iteration/decode failures discard partial results as unavailable; too many
+// accounts has its own error. Closes rows without committing.
+// readProviderUsageAccounts Читает аккаунты точных организации и ссылок, заменяя nil пустым
+// SQL-массивом. Проверяет предел 4096 аккаунтов, 128KiB JSON моделей, жизненный цикл, ёмкость и
+// каталог. Сбой чтения или декодирования отбрасывает частичный результат с Unavailable;
+// переполнение имеет отдельную ошибку. Закрывает rows без commit.
 func readProviderUsageAccounts(ctx context.Context, tx pgx.Tx, organization string, refs []string, models bool) ([]providerUsageAccount, error) {
 	if refs == nil {
 		refs = []string{}
@@ -90,6 +146,14 @@ func readProviderUsageAccounts(ctx context.Context, tx pgx.Tx, organization stri
 	return result, nil
 }
 
+// readProviderUsageAgents Requires 1..4096 requested refs and reads current organization agents
+// into a ref-keyed map, enforcing bounded strict candidate JSON and rejecting scan/iteration
+// failures as unavailable. Missing refs remain absent; caller authorization and transaction
+// completion are separate.
+// readProviderUsageAgents Требует от 1 до 4096 запрошенных ссылок, читает текущих агентов
+// организации в карту по ссылке, ограничивает и строго декодирует JSON кандидатов. Ошибки чтения
+// дают Unavailable; отсутствующие ссылки в карту не добавляются. Авторизация и завершение
+// транзакции выполняются отдельно.
 func readProviderUsageAgents(ctx context.Context, tx pgx.Tx, organization string, refs []string) (map[string]providerUsageAgent, error) {
 	if len(refs) == 0 || len(refs) > 4096 {
 		return nil, errs.ErrInvalid
@@ -114,6 +178,15 @@ func readProviderUsageAgents(ctx context.Context, tx pgx.Tx, organization string
 	return result, nil
 }
 
+// resolveProviderUsageContext Resolves current access subject/bindings and hashes them even
+// without usage intent. With input, validates CONFIGURE/LAUNCH fields, exact target/project/view
+// authority, separately projects manage/launch permission, reads the agent and optional global
+// profile. Missing profile remains a blocked compatibility input; no capacity is claimed.
+// resolveProviderUsageContext Разрешает текущего субъекта доступа с привязками и хеширует их даже
+// без намерения использования. При наличии входа проверяет поля CONFIGURE/LAUNCH, точную цель,
+// проект и просмотр, отдельно проецирует право настройки или запуска, читает агента и
+// необязательный глобальный профиль. Отсутствующий профиль блокирует совместимость; ёмкость не
+// захватывается.
 func (repository *Repository) resolveProviderUsageContext(ctx context.Context, tx pgx.Tx, current scope, input *entity.ProviderAccountUsageContext) (providerUsageContext, error) {
 	result := providerUsageContext{Input: input}
 	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
@@ -177,10 +250,25 @@ func (repository *Repository) resolveProviderUsageContext(ctx context.Context, t
 	return result, nil
 }
 
+// providerDimension Builds a usage dimension from caller-selected bounded state/reason/remediation
+// values. It does not perform checks, normalize unknown values or change runtime admission.
+// providerDimension Строит измерение использования из выбранных вызывающим ограниченных состояния,
+// причины и исправления. Не выполняет проверки, не нормализует неизвестные значения и не меняет
+// допуск runtime.
 func providerDimension(state, reason, remediation string) entity.ProviderUsageDimension {
 	return entity.ProviderUsageDimension{State: state, Reason: reason, Remediation: remediation}
 }
 
+// providerAccountUsage Projects lifecycle, credential presence, observed catalog reachability,
+// compatibility, actor permission and capacity into usage with a 10-second/catalog-expiry bound
+// and deterministic context digest. Selection eligibility excludes capacity/health while
+// operational state includes them; READY health is credentialed catalog reachability, not provider
+// SLA or execution proof.
+// providerAccountUsage Проецирует жизненный цикл, наличие credential, наблюдавшуюся доступность
+// каталога, совместимость, право субъекта и ёмкость с пределом 10 секунд либо сроком каталога и
+// детерминированным хешем контекста. Пригодность выбора не включает ёмкость и здоровье, рабочее
+// состояние учитывает их. READY означает доступность каталога с credential, а не SLA или
+// выполненный запуск.
 func providerAccountUsage(item providerUsageAccount, context providerUsageContext) (*entity.ProviderAccountUsage, error) {
 	ready := providerDimension("READY", "AVAILABLE", "NONE")
 	notEvaluated := providerDimension("NOT_EVALUATED", "CONTEXT_REQUIRED", "SELECT_CONTEXT")
@@ -247,6 +335,14 @@ func providerAccountUsage(item providerUsageAccount, context providerUsageContex
 	return u, nil
 }
 
+// providerModelCompatibility Checks CONFIGURE profile/provider or LAUNCH agent/configuration and
+// unique selected candidate, then current catalog provenance/pins, model support,
+// capability/default-effort digests and overlay effort compatibility. Returns bounded guidance
+// without reserving capacity or executing a provider; requires a non-nil context input.
+// providerModelCompatibility Проверяет профиль и провайдера CONFIGURE либо агента, конфигурацию и
+// единственного выбранного кандидата LAUNCH, затем текущий каталог, привязки, поддержку модели,
+// хеш возможностей и усилие overlay. Возвращает ограниченные подсказки без резервирования ёмкости
+// или вызова провайдера; требует непустой вход контекста.
 func providerModelCompatibility(item providerUsageAccount, context providerUsageContext, revision, digest string) entity.ProviderUsageDimension {
 	blocked := func(reason, remediation string) entity.ProviderUsageDimension {
 		return providerDimension("BLOCKED", reason, remediation)
@@ -326,12 +422,26 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 	return blocked("MODEL_UNSUPPORTED", "SELECT_MODEL")
 }
 
+// providerUsageAccountDigest Hashes a value copy of account usage metadata after removing model
+// payload and zeroing transaction observation time. Other catalog/credential/capacity changes
+// remain represented; the caller value is not mutated and this is not a signature.
+// providerUsageAccountDigest Хеширует копию метаданных использования аккаунта после удаления
+// моделей и обнуления времени наблюдения транзакции. Остальные изменения каталога, credential и
+// ёмкости учитываются; исходное значение не меняется, подпись не создаётся.
 func providerUsageAccountDigest(item providerUsageAccount) string {
 	item.Models = nil
 	item.ObservedAt = time.Time{}
 	return digestBytes(asJSON(item))
 }
 
+// validProviderUsageCatalog Checks closed catalog state/failure/source vocabularies, READY
+// timestamps, at most 128 unique valid model IDs and up to 16 unique supported reasoning efforts
+// with a consistent default. It validates stored shape/expiry only, not remote availability or
+// authorization.
+// validProviderUsageCatalog Проверяет закрытые наборы состояний, ошибок и источников каталога,
+// сроки READY, до 128 уникальных допустимых моделей и до 16 уникальных поддерживаемых усилий с
+// согласованным значением по умолчанию. Проверяет сохранённую форму и срок, а не внешнюю
+// доступность или полномочия.
 func validProviderUsageCatalog(item providerUsageAccount) bool {
 	if !slices.Contains([]string{"READY", "PENDING", "FAILED", "EXPIRED"}, item.Catalog.State) || len(item.Models) > 128 {
 		return false
@@ -362,6 +472,14 @@ func validProviderUsageCatalog(item providerUsageAccount) bool {
 	return true
 }
 
+// providerUsageRead Resolves scope, starts read-only RepeatableRead and requires
+// provider.account.view on the caller-derived target. Access failures roll back with the request
+// context and are hidden as not-found; successful callers own commit/rollback, and rollback errors
+// here remain ignored.
+// providerUsageRead Разрешает область, открывает read-only RepeatableRead и требует
+// provider.account.view для цели, вычисленной вызывающим. Ошибка доступа вызывает rollback с
+// контекстом запроса и скрывается как NotFound; при успехе транзакцией управляет вызывающий.
+// Ошибка rollback здесь игнорируется.
 func (repository *Repository) providerUsageRead(ctx context.Context, p value.Principal, target func(scope) entity.AccessScope) (scope, pgx.Tx, error) {
 	current, err := repository.resolveScope(ctx, p)
 	if err != nil {
@@ -378,14 +496,26 @@ func (repository *Repository) providerUsageRead(ctx context.Context, p value.Pri
 	return current, tx, nil
 }
 
-// providerAdmissionForAgents возвращает выбранный фактической policy account;
-// чтение не резервирует capacity и не заменяет launch authority владельца.
+// providerAdmissionSnapshot Carries submit eligibility, operational state/context digest and
+// optional full usage for the policy-selected account of an agent. It is a read dependency
+// snapshot, not reserved capacity or proof of actor launch authority.
+// providerAdmissionSnapshot Хранит пригодность подачи, рабочее состояние, хеш контекста и
+// необязательную полную проекцию использования выбранного policy аккаунта агента. Это снимок
+// зависимости чтения, а не резерв ёмкости или подтверждение права субъекта на запуск.
 type providerAdmissionSnapshot struct {
 	AllowedToSubmit                 bool
 	OperationalState, ContextDigest string
 	Usage                           *entity.ProviderAccountUsage
 }
 
+// providerAdmissionForAgents Reads current agents and distinct policy-selected accounts, then
+// projects LAUNCH compatibility per requested ref. Missing accounts produce blocked snapshots;
+// actor eligibility is assumed already checked by the workflow/agent caller. Reads neither reserve
+// capacity nor select replacement accounts.
+// providerAdmissionForAgents Читает текущих агентов и различные выбранные policy аккаунты, затем
+// проецирует совместимость LAUNCH по каждой запрошенной ссылке. Отсутствующий аккаунт даёт
+// BLOCKED; право субъекта предполагается уже проверенным вызывающим workflow или agent. Чтение не
+// резервирует ёмкость и не подбирает замену аккаунту.
 func (repository *Repository) providerAdmissionForAgents(ctx context.Context, tx pgx.Tx, current scope, refs []string) (map[string]providerAdmissionSnapshot, error) {
 	agents, err := readProviderUsageAgents(ctx, tx, current.organizationID, refs)
 	if err != nil {

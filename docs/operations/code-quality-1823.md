@@ -4,11 +4,92 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.391.0
+version: 1.392.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Квитанции взаимодействия и использование провайдеров — 25.10.2026
+
+На основе `36b4b023c2ec68586b2dd79ee0dd36def502db4c` полностью прочитаны
+queries_interaction.go, interaction.go и provider_usage.go, описаны19+16+18
+прежних объявлений, включая локальный inboundRoute. Новая функция и три
+объявления тестовой оснастки также описаны:19/19,17/17,18/18 и3/3, всего57/57.
+Общий inventory19424/21456, missing2032 — PostgreSQL adapter control-plane.
+Все108 Go-файлов текущего PR имеют1228/1228 EN→RU описаний.
+
+`staleInteractionGateOutcome` объединяет два одинаковых пути записи STALE
+квитанции и формирования ответа найденного шлюза: уже закрытый gate и
+Conflict/VersionMismatch канонического resolver. Проверки точных внешних
+координат, явных gate/run/version, gate.resolve и блокировка остаются до
+обоих путей. Только успешная вставка даёт прежний ответ, ошибка сохраняет
+matched=true с пустым результатом и прежним преобразованием ошибки.
+Никакой отправки или повторного разрешения шлюза общая функция не выполняет.
+
+Общие connection/grant/gate/run/project/event/user связи четырёх квитанций
+заданы одним значением. IGNORED по-прежнему не сохраняет решение; валидное
+решение назначается до двух STALE путей и GATE_RESOLVED. Функция меняет исход
+только в копии квитанции. Сохранены тип ресурса INTERACTION_MESSAGE для STALE,
+messageKey, acceptedResourceRef, project metadata и успешный путь
+INTERACTION_DECISION. SQL, очередность авторизации и управление транзакцией
+не менялись.
+
+Новый тест проверяет4 исхода: явное корневое сообщение и fallback на исходное
+при успешной записи и сбое. Проверены точные context, receipt CTE, все
+именованные owner/subject/identity/digest/decision/external-coordinate args,
+форма новой irc-ссылки, однократная запись, неизменность исходной квитанции,
+прежний результат только после успеха и отсутствие деталей драйвера. Nil
+встроенная транзакция запрещает неожиданные Query/Commit/другие действия.
+Это синтетическая проверка записи, не доказательство PostgreSQL RLS,
+конкурентного разрешения шлюза или внешнего подтверждения.
+
+| Путь / жизненный цикл | Сохранённая граница |
+| --- | --- |
+| Источники | RepeatableRead, текущие package/grant pins и метаданные credential, rows закрываются до чтения пакета, фильтрация возможностей до commit. Значений credential нет |
+| Claim доставки | Serializable; истёкшая аренда становится UNKNOWN_OUTCOME, DUE/FAILED кандидаты блокируются SKIP LOCKED; approval/identity pins, попытка/поколение и45-секундная аренда. UNKNOWN_OUTCOME не выбирается для повтора |
+| Complete | Точные org/ref/lease/fence/generation и срок БД; успешное назначение сверяется с ожидаемым. SUCCEEDED, FAILED только при confirmed-no-effect, иначе UNKNOWN_OUTCOME; аренда закрывается. Необязательный инцидент не меняет основной run |
+| Inbound / duplicate | Текущая возможность пакета и разрешённая человеческая личность предшествуют поиску квитанции по subject/identity. Явный несовпавший gate не превращается в launch; неоднозначный маршрут игнорируется, уникальный требует launch authority |
+| Gate / receipt | gate.resolve до обработки, валидное решение и версия до resolver; IGNORED/STALE/GATE_RESOLVED фиксируются в caller TX. Receipt CTE может поставить acknowledgement в очередь, но не отправляет его |
+| Terminal / invalidate | Terminal notification требует отдельный HUMAN_GATE/WAITING_APPROVAL и версии пакета/соединения. Отзыв делает захваченный эффект UNKNOWN_OUTCOME, прочие ожидающие CANCELLED; связанные открытые gates возвращаются для атомарного закрытия |
+| Provider usage | Снимок текущих credential/version, наблюдения каталога и активных выполнений; до4096 аккаунтов, ограниченный JSON/модели/efforts. READY здоровья означает credentialed catalog reachability, не SLA или выполненный запрос |
+| CONFIGURE / LAUNCH | Проверки view и отдельная пригодность manage/launch, текущая конфигурация, выбранный policy аккаунт, каталог и model/effort pins. Подсказка пригодности не резервирует capacity; dependency admission предполагает проверку actor внешним caller |
+| Usage expiry / digest | До10 секунд с ограничением сроком READY каталога; digest аккаунта исключает model payload и время транзакции, сохраняя прочие версии/наблюдения. Context digest не является подписью или допуском |
+
+Все19 interaction SQL и3 provider_usage SQL прочитаны полностью;22 go:embed
+сохранены. Полное AST/directive сравнение queries_interaction.go и
+provider_usage.go подтверждает только комментарии. interaction.go сравнен
+с преобразованием полного исходного файла: общая квитанция и два STALE пути,
+остальные ветви неизменны. Через Context7 /jackc/pgx проверены Row/Scan,
+ErrNoRows/errors.Is, Rows Next/Err/Close и отсутствие автоматического rollback
+при отмене BEGIN context.
+
+Исторические ограничения описаны без заявления об исправлении: rollback
+использует контекст запроса и игнорирует ошибку; Claim forwards limit/workload
+и преобразует commit error в Conflict; complete SQL не сопоставляет
+workload_instance самостоятельно. Adapter count остаётся приблизительным,
+run-incidents SQL использует явные owner/admin/membership VIEW условия.
+Обычный json.Unmarshal шаблона не объявлен строгим decoder. Provider usage
+не резервирует ёмкость, профиль глобальный, отсутствие профиля остаётся
+данными блокирующей совместимости, actor eligibility внутреннего admission
+не вычисляется повторно здесь.
+
+GOWORK=off control-plane build и unit `-count=1` — PASS LOCAL;13 внешних
+fixture keys и2 admin/template inputs исключены.17 analyzer unit и5
+exact-ignore guards — PASS. После исправления одного слова комментария
+полное AST/directive сравнение подтвердило неизменность исполняемой части;
+повторный unit для прозы не требовался. gofmt и diff check — PASS.
+Real PostgreSQL/RLS/lease/OCC/approval races, внешние сообщения/credential
+материализация/provider health/catalog refresh/capacity admission,
+browser/full E2E и deploy/live — NOT RUN/SKIP. QA baseline f2e64eb сохранён.
+
+Scan6676 own sources,222 excluded:1804 raw,900 retained occurrences и904
+unresolved. Устранён ручной семантический повтор ниже detector windows.
+114-token префикс разных RepeatableRead/Serializable методов остаётся
+открытым;105-token окно перехода между методами изменило hash из-за новых
+комментариев и также открыто. Новый тест не добавил raw clone groups.
+774 registry entries, thresholds, ignore regions и whole-file exclusions
+не менялись. Issue#1823 открыт, PR остаётся Draft до завершения объёма.
 
 ## Черновики секретов, ассистенты и продолжение сессий — 25.10.2026
 

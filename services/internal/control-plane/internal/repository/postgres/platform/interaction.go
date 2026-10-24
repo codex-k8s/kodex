@@ -16,6 +16,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// projectInteractionIncident Projects optional delivery state into bounded incident
+// category/severity/state/i18n guidance while preserving identity/timestamps and marking the core
+// run unaffected. Unknown outcome takes priority over exhausted attempts, and success resolves a
+// previous failure.
+// projectInteractionIncident Проецирует состояние необязательной доставки в фиксированные
+// категорию, тяжесть, состояние и i18n-подсказки, сохраняя идентификаторы и время, помечая
+// основной запуск незатронутым. Неопределённый исход имеет приоритет над исчерпанием попыток;
+// успех разрешает прежний сбой.
 func projectInteractionIncident(incident entity.Incident, deliveryState string, attempt, maximumAttempts int) entity.Incident {
 	incident.Category = "OPTIONAL_INTERACTION_DELIVERY"
 	incident.CoreAffected = false
@@ -44,6 +52,14 @@ func projectInteractionIncident(incident entity.Incident, deliveryState string, 
 	return incident
 }
 
+// ListInteractionSources Resolves scope in RepeatableRead, scans credential metadata and
+// capabilities, closes rows before package reads, filters source capabilities and projects only
+// eligible sources. Commits before returning an allocated empty/list result; read/commit failures
+// are unavailable and deferred request-context rollback errors remain ignored.
+// ListInteractionSources Разрешает область в RepeatableRead, читает метаданные credential и
+// возможности, закрывает rows до чтения пакетов, фильтрует входящие возможности и проецирует
+// пригодные источники. Возвращает созданный список после commit; сбои чтения или commit дают
+// Unavailable, ошибка отложенного rollback с контекстом запроса игнорируется.
 func (repository *Repository) ListInteractionSources(ctx context.Context, principal value.Principal) ([]map[string]any, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -113,6 +129,14 @@ func (repository *Repository) ListInteractionSources(ctx context.Context, princi
 	return eligible, nil
 }
 
+// ClaimInteractionDeliveries Claims deliveries in a caller-scope Serializable transaction, decodes
+// template JSON and validates current package source or approved WRITE/HUMAN_EACH_EFFECT
+// capability after closing rows. Commit failure maps to conflict; no messages are sent here.
+// Limit/workload are forwarded unchanged and SQL owns expiry/fence creation.
+// ClaimInteractionDeliveries Захватывает доставки в Serializable транзакции разрешённой области,
+// декодирует JSON шаблона и после закрытия rows проверяет текущую входящую возможность либо
+// одобренную WRITE/HUMAN_EACH_EFFECT возможность пакета. Ошибка commit даёт Conflict; сообщения
+// здесь не отправляются. Limit/workload передаются без изменения, сроки и fence назначает SQL.
 func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, principal value.Principal, workloadInstance string, limit int32) ([]map[string]any, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -198,6 +222,15 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 	return result, nil
 }
 
+// completeInteractionDelivery Validates mutually consistent success/unknown/no-effect reports and
+// bounded external refs/safe codes, locks the exact live lease/fence/generation, verifies
+// successful target coordinates and updates delivery state. Emits an optional non-core incident
+// for failure or recovered retry; caller command owns audit/idempotency/commit.
+// completeInteractionDelivery Проверяет согласованность success/unknown/no-effect, пределы внешних
+// ссылок и безопасные коды, блокирует точные действующие lease/fence/generation, сверяет
+// назначение успешной отправки и обновляет состояние. При сбое или успехе после повтора создаёт
+// необязательный инцидент без влияния на основной запуск; аудит, идемпотентность и commit
+// принадлежат внешней команде.
 func (repository *Repository) completeInteractionDelivery(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.InteractionDeliveryInput)
 	if !ok || payload.DeliveryRef == "" || payload.LeaseRef == "" || payload.Fence == "" || payload.Generation < 1 {
@@ -281,6 +314,14 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 	}, nil
 }
 
+// acceptInteractionMessage Validates bounded event/coordinate/message fields and lowercase user
+// digest, resolves current package capability and linked human identity before actor-scoped
+// receipt replay. Routes matched gate replies first; explicit unmatched gate data cannot fall back
+// to launch. New inbound work uses the resolved human scope in the same caller transaction.
+// acceptInteractionMessage Проверяет пределы события, координат и сообщения, нижний регистр хеша
+// пользователя, разрешает текущую возможность пакета и связанную человеческую личность до поиска
+// её квитанции. Сначала обрабатывает ответ шлюзу; явные несовпавшие данные шлюза не переходят в
+// запуск. Новая входящая работа использует область человека в той же транзакции.
 func (repository *Repository) acceptInteractionMessage(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.InteractionMessageInput)
 	if !ok || payload.ConnectionRef == "" || payload.ExternalEventRef == "" || payload.ExternalPostRef == "" ||
@@ -342,6 +383,16 @@ func (repository *Repository) acceptInteractionMessage(ctx context.Context, tx p
 	return repository.acceptInteractionInbound(ctx, tx, scope, input, connectionID, eventDigest)
 }
 
+// acceptInteractionGateDecision Locks the gate matched by current source/external coordinates,
+// checks explicit gate/run/version and gate.resolve, then records ignored/stale replies or
+// delegates a valid OPEN decision to the canonical gate resolver. Conflict/version mismatch
+// becomes a stale receipt; receipt/acknowledgement queue and gate changes share the caller
+// transaction without external sending.
+// acceptInteractionGateDecision Блокирует шлюз текущего источника и внешних координат, проверяет
+// явные ссылки шлюза и запуска, версию и gate.resolve, затем фиксирует проигнорированный или
+// устаревший ответ либо передаёт допустимое OPEN решение каноническому resolver.
+// Conflict/VersionMismatch превращается в устаревшую квитанцию; она, очередь подтверждений и
+// изменение шлюза принадлежат одной транзакции без внешней отправки.
 func (repository *Repository) acceptInteractionGateDecision(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, connectionID, eventDigest string) (commandOutcome, bool, error) {
 	payload := input.Payload.(command.InteractionMessageInput)
 	var deliveryID, grantID, gateID, gateRef, gateState, projectID, projectRef, rootRunID, runRef string
@@ -367,26 +418,21 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 	if err := repository.requireAccess(ctx, tx, scope, "gate.resolve", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "OWNER_GATE", ResourceRef: gateRef}); err != nil {
 		return commandOutcome{}, true, err
 	}
+	receipt := interactionReceipt{
+		connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
+		projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
+	}
 	decision := payload.Decision
 	if decision == "" || !contains([]string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}, decision) || !contains(allowed, decision) {
-		if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
-			connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
-			projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
-			outcome: "IGNORED",
-		}); err != nil {
+		receipt.outcome = "IGNORED"
+		if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, receipt); err != nil {
 			return commandOutcome{}, true, err
 		}
 		return interactionMessageOutcome(gateRef, "IGNORED", "i18n:MATTERMOST_GATE_COMMAND_HELP", gateRef, projectID, projectRef), true, nil
 	}
+	receipt.decision = decision
 	if gateState != "OPEN" {
-		if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
-			connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
-			projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
-			outcome: "STALE", decision: decision,
-		}); err != nil {
-			return commandOutcome{}, true, err
-		}
-		return interactionMessageOutcome(gateRef, "STALE", "i18n:MATTERMOST_GATE_STALE", gateRef, projectID, projectRef), true, nil
+		return repository.staleInteractionGateOutcome(ctx, tx, scope, payload, receipt, gateRef, projectRef)
 	}
 	nested := input
 	nested.Kind = command.ResolveOwnerGate
@@ -394,23 +440,13 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 	nested.Payload = command.GateResolutionInput{GateRef: gateRef, Decision: decision, Comment: truncate(strings.TrimSpace(payload.Message), 2000)}
 	outcome, err := repository.resolveGate(ctx, tx, scope, nested)
 	if errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrVersionMismatch) {
-		if receiptErr := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
-			connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
-			projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
-			outcome: "STALE", decision: decision,
-		}); receiptErr != nil {
-			return commandOutcome{}, true, receiptErr
-		}
-		return interactionMessageOutcome(gateRef, "STALE", "i18n:MATTERMOST_GATE_STALE", gateRef, projectID, projectRef), true, nil
+		return repository.staleInteractionGateOutcome(ctx, tx, scope, payload, receipt, gateRef, projectRef)
 	}
 	if err != nil {
 		return commandOutcome{}, true, err
 	}
-	if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
-		connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
-		projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
-		outcome: "GATE_RESOLVED", decision: decision,
-	}); err != nil {
+	receipt.outcome = "GATE_RESOLVED"
+	if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, receipt); err != nil {
 		return commandOutcome{}, true, err
 	}
 	outcome.result.Runtime = map[string]any{"outcome": "GATE_RESOLVED", "messageKey": "i18n:MATTERMOST_GATE_RESOLVED", "acceptedResourceRef": gateRef}
@@ -419,6 +455,14 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 	return outcome, true, nil
 }
 
+// acceptInteractionInbound Reads and closes at most two current inbound routes; ambiguity or blank
+// text records an ignored receipt. A unique route requires exact agent/workflow launch access and
+// delegates to canonical launch with the resolved human scope, then records the run receipt
+// atomically. It does not accept caller-supplied target authority.
+// acceptInteractionInbound Читает и закрывает до двух текущих входящих маршрутов; неоднозначность
+// или пустой текст дают квитанцию IGNORED. Единственный маршрут требует точного права запуска
+// агента или workflow и передаётся каноническому запуску с областью человека, после чего атомарно
+// пишется квитанция. Цель из произвольных данных клиента не назначает полномочия.
 func (repository *Repository) acceptInteractionInbound(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, connectionID, eventDigest string) (commandOutcome, error) {
 	payload := input.Payload.(command.InteractionMessageInput)
 	rows, err := tx.Query(ctx, queryInteractionListInboundGrants, pgx.StrictNamedArgs{
@@ -428,6 +472,12 @@ func (repository *Repository) acceptInteractionInbound(ctx context.Context, tx p
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	// inboundRoute Keeps the resolved grant and target/project identifiers from one locked inbound SQL
+	// row. Two rows deliberately signal ambiguous routing; these internal IDs are not selected from
+	// the external message.
+	// inboundRoute Хранит разрешённые идентификаторы разрешения, цели и проекта из заблокированной
+	// строки входящей выборки. Две строки намеренно выявляют неоднозначность; внутренние ID не
+	// выбираются из внешнего сообщения.
 	type inboundRoute struct{ grantID, grantRef, targetKind, targetRef, projectID, projectRef string }
 	routes := []inboundRoute{}
 	for rows.Next() {
@@ -488,11 +538,27 @@ func (repository *Repository) acceptInteractionInbound(ctx context.Context, tx p
 	return outcome, nil
 }
 
+// interactionReceipt Carries resolved connection/grant/gate/run/project links, event/user digests
+// and the fixed processing outcome/decision for transactional receipt insertion. External
+// plaintext message and credential values are excluded; identity/subject come separately from the
+// trusted scope.
+// interactionReceipt Хранит разрешённые связи соединения, разрешения, шлюза, запуска и проекта,
+// хеши события и пользователя, исход и решение для транзакционной вставки квитанции. Текст
+// сообщения и значения credential не включены; личность и субъект берутся отдельно из доверенной
+// области.
 type interactionReceipt struct {
 	connectionID, grantID, gateID, rootRunRef, projectID string
 	eventDigest, userDigest, outcome, decision           string
 }
 
+// insertInteractionReceipt Generates a receipt ref, chooses the explicit root post or original
+// post fallback and executes the owner-scoped receipt/acknowledgement CTE with resolved
+// subject/identity and metadata. Reference generation errors propagate, SQL errors become
+// unavailable; no commit or external send occurs.
+// insertInteractionReceipt Создаёт ссылку квитанции, выбирает явное корневое либо исходное
+// сообщение и исполняет CTE квитанции с очередью подтверждений, разрешёнными субъектом, личностью
+// и метаданными. Ошибка генерации ссылки возвращается, SQL-сбой даёт Unavailable; commit и внешней
+// отправки нет.
 func (repository *Repository) insertInteractionReceipt(ctx context.Context, tx pgx.Tx, scope scope, message command.InteractionMessageInput, receipt interactionReceipt) error {
 	ref, err := newRef("irc")
 	if err != nil {
@@ -525,6 +591,12 @@ func (repository *Repository) insertInteractionReceipt(ctx context.Context, tx p
 	return nil
 }
 
+// interactionMessageOutcome Builds the stable interaction-message command result with outcome/i18n
+// key/accepted resource and caller-resolved project metadata. It performs no write, authorization
+// or event emission.
+// interactionMessageOutcome Строит стабильный результат команды взаимодействия с исходом,
+// i18n-ключом, принятой ссылкой и разрешёнными вызывающим данными проекта. Не пишет состояние, не
+// авторизует и не публикует событие.
 func interactionMessageOutcome(resourceRef, outcome, messageKey, acceptedRef, projectID, projectRef string) commandOutcome {
 	return commandOutcome{
 		result: command.Result{Runtime: map[string]any{
@@ -535,6 +607,12 @@ func interactionMessageOutcome(resourceRef, outcome, messageKey, acceptedRef, pr
 	}
 }
 
+// enqueueGateInteractionDeliveries Executes gate-delivery enqueue SQL in the supplied transaction
+// with already resolved organization/project/root/gate IDs, translating SQL failure to
+// unavailable. Enqueue is local durable intent, not an external effect or approval.
+// enqueueGateInteractionDeliveries Ставит доставки шлюза в очередь переданной транзакции по уже
+// разрешённым ID организации, проекта, корневого запуска и шлюза. SQL-сбой даёт Unavailable;
+// очередь фиксирует локальное намерение, а не внешний эффект или одобрение.
 func (repository *Repository) enqueueGateInteractionDeliveries(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, gateID string) error {
 	if _, err := tx.Exec(ctx, queryInteractionEnqueueGateDeliveries, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
@@ -547,6 +625,12 @@ func (repository *Repository) enqueueGateInteractionDeliveries(ctx context.Conte
 	return nil
 }
 
+// enqueueTerminalInteractionDeliveries Skips projectless runs and otherwise delegates terminal
+// notifications to the approval-backed interaction path in the same transaction. It neither
+// directly sends a result nor bypasses per-effect human approval.
+// enqueueTerminalInteractionDeliveries Пропускает запуски без проекта, остальные передаёт пути
+// завершённых уведомлений с одобрением в той же транзакции. Результат напрямую не отправляет и
+// одобрение каждого эффекта человеком не обходит.
 func (repository *Repository) enqueueTerminalInteractionDeliveries(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID string) error {
 	if projectID == "" {
 		return nil
@@ -554,11 +638,22 @@ func (repository *Repository) enqueueTerminalInteractionDeliveries(ctx context.C
 	return repository.enqueueApprovedTerminalInteraction(ctx, tx, scope, projectID, rootRunID)
 }
 
+// interactionDigest Returns lowercase SHA-256 hex over connection ref, one NUL separator and
+// external event ref for deterministic per-connection event deduplication. It is an unkeyed
+// locator digest, not authentication or a signature.
+// interactionDigest Возвращает SHA-256 в нижнем hex-регистре от ссылки соединения, разделителя NUL
+// и ссылки внешнего события для детерминированной дедупликации. Это хеш поиска без ключа, а не
+// аутентификация или подпись.
 func interactionDigest(connectionRef, externalEventRef string) string {
 	digest := sha256.Sum256([]byte(connectionRef + "\x00" + externalEventRef))
 	return hex.EncodeToString(digest[:])
 }
 
+// lowerHexDigest Accepts exactly 64 ASCII lowercase hexadecimal characters for a SHA-256
+// representation; rejects uppercase, prefixes, whitespace and other lengths without decoding or
+// checking provenance.
+// lowerHexDigest Допускает ровно 64 ASCII-символа нижнего hex-регистра для представления SHA-256.
+// Отклоняет верхний регистр, префиксы, пробелы и иную длину; происхождение хеша не проверяет.
 func lowerHexDigest(value string) bool {
 	if len(value) != sha256.Size*2 {
 		return false
@@ -573,6 +668,12 @@ func lowerHexDigest(value string) bool {
 	return true
 }
 
+// validInteractionErrorCode Accepts only the closed interaction delivery failure-code set,
+// rejecting arbitrary adapter text before persistence. This shape check does not determine whether
+// an external effect occurred.
+// validInteractionErrorCode Допускает только закрытый набор кодов ошибок доставки взаимодействия,
+// отклоняя произвольный текст адаптера перед сохранением. Проверка формы не определяет, произошёл
+// ли внешний эффект.
 func validInteractionErrorCode(value string) bool {
 	switch value {
 	case "INTERACTION_CONFIGURATION_INVALID", "INTERACTION_CREDENTIAL_UNAVAILABLE", "INTERACTION_FORBIDDEN",
@@ -582,4 +683,22 @@ func validInteractionErrorCode(value string) bool {
 	default:
 		return false
 	}
+}
+
+// staleInteractionGateOutcome stores a STALE receipt from caller-resolved owner/identity links
+// and builds the existing matched-gate response only after insertion succeeds. The receipt is
+// copied before its outcome is set; decision and external-root fallback remain unchanged. Caller
+// paths retain gate.resolve/version checks, gate locking and transaction commit; the SQL may
+// enqueue an acknowledgement but this helper never sends externally or resolves the gate.
+// staleInteractionGateOutcome сохраняет квитанцию STALE по разрешённым вызывающим связям владельца
+// и личности, формирует прежний ответ найденного шлюза только после успешной вставки. Исход
+// задаётся в копии квитанции; решение и выбор корневого сообщения сохраняются. Проверки
+// gate.resolve и версии, блокировка шлюза и commit остаются у вызывающих. SQL может поставить
+// подтверждение в очередь, но функция не отправляет его и не разрешает шлюз.
+func (repository *Repository) staleInteractionGateOutcome(ctx context.Context, tx pgx.Tx, current scope, message command.InteractionMessageInput, receipt interactionReceipt, gateRef, projectRef string) (commandOutcome, bool, error) {
+	receipt.outcome = "STALE"
+	if err := repository.insertInteractionReceipt(ctx, tx, current, message, receipt); err != nil {
+		return commandOutcome{}, true, err
+	}
+	return interactionMessageOutcome(gateRef, "STALE", "i18n:MATTERMOST_GATE_STALE", gateRef, receipt.projectID, projectRef), true, nil
 }
