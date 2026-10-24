@@ -4,8 +4,8 @@ title: Backup controller
 type: service
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-08-28
+version: 1.0.1
+updated: 2026-10-24
 ---
 
 # Backup controller
@@ -70,3 +70,14 @@ entrypoint `scripts/tests/local-session-archive-backup-restore-e2e.sh`. Он
 manifest и payload, изменяет source fixture, выполняет изолированный restore и
 сравнивает восстановленные bytes с исходными. Все версии fixture и disposable
 restore targets удаляются с readback в рамках сценария.
+
+## Проверка контекста сборки
+
+`make test-local-backup-controller-build-contract` за 60 секунд проверяет, что
+Docker-контекст содержит все локальные `replace` из `go.mod`, а изменение
+`libs/go/objectstorage` меняет входной hash и не переиспользует старый OCI
+archive. Неизменённый источник сохраняет прежний cache. Docker и import в этой
+регрессии заменены локальными fixtures: проверка не собирает настоящий image,
+не обращается к кластеру, не читает credentials и не заменяет restore drill.
+Связанные задачи: [#1003](https://github.com/codex-k8s/kodex/issues/1003),
+[#1830](https://github.com/codex-k8s/kodex/issues/1830).

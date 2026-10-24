@@ -40,7 +40,7 @@ install -d -m 0700 "$state_directory/cache"
 input_digest=$(
   tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
     -C "$source_root" -cf - services/jobs/backup-controller \
-    libs/go/grpcserver libs/go/httpserver libs/go/observability libs/go/securefile \
+    libs/go/grpcserver libs/go/httpserver libs/go/objectstorage libs/go/observability libs/go/securefile \
     libs/go/serviceruntime |
     sha256sum | awk '{print $1}'
 )

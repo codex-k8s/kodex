@@ -10,6 +10,7 @@ WORKDIR /workspace
 
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/httpserver/ libs/go/httpserver/
+COPY libs/go/objectstorage/ libs/go/objectstorage/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/securefile/ libs/go/securefile/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/

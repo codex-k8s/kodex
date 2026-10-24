@@ -154,6 +154,10 @@ test-provider-bootstrap-postgres:
 test-local-backup-controller-credentials-contract:
 	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
 
+.PHONY: test-local-backup-controller-build-contract
+test-local-backup-controller-build-contract:
+	@timeout 60s python3 -B tools/dev/test_build_local_backup_controller.py
+
 test-local-image-cache-import-contract:
 	@./scripts/tests/local-image-cache-import-contract-test.sh
 

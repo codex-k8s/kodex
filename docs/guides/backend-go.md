@@ -4,8 +4,8 @@ title: Серверная разработка на Go
 type: guide
 status: approved
 owner: developer
-version: 1.4.8
-updated: 2026-10-21
+version: 1.4.9
+updated: 2026-10-24
 ---
 
 # Серверная разработка на Go
@@ -772,6 +772,9 @@ Multi-stage Dockerfile учитывает полный local-module closure ос
 3. Docker context и ignore rules явно разрешают ту же closure.
 4. Runtime и migration targets собираются из одного проверенного source tree,
    но имеют минимально разные entrypoint и содержимое.
+5. Входной hash локального OCI cache покрывает тот же набор модулей: изменение
+   любого dependency не переиспользует прежний archive. Даже test-only local
+   `require`/`replace` должен присутствовать до `go mod download`.
 
 Builder, runtime service, migration/job и agent-runtime images имеют отдельные
 immutable digests. Один digest нельзя неявно переиспользовать для разных
