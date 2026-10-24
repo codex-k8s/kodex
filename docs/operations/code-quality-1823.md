@@ -4,11 +4,81 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.388.0
-updated: 2026-10-24
+version: 1.389.0
+updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Worker leases, integration claims и assistant-plan tests — 25.10.2026
+
+На основе `18c2a306a41239fb5f5728fc9d5b002c64f6152c` полностью прочитаны
+workers.go и assistant_tools_test.go, описаны30+34 прежних объявления.
+Два новых production helpers и один test helper также описаны:32/32 и35/35,
+всего67/67, включая разные локальные candidate в двух claim methods.
+Общий inventory19252/21446;2194 оставшихся — PostgreSQL adapter control-plane.
+Все97 Go-файлов текущего PR имеют1056/1056 EN→RU описаний.
+
+`beginIntegrationClaimTransaction` объединяет два одинаковых workload route →
+resolveScope → Serializable begin префикса. Route проверяется до scope/БД,
+исходный context и error mappings сохраняются; caller владеет rollback/commit,
+expiry/selection/health/lease/approval policies. Test и invocation не получают
+общую SQL dispatcher policy. `attachIntegrationClaimCredential` объединяет
+conditional metadata projection: pinned definition requirement, nonempty ref
+и nonnil creation time; меняется тот же caller descriptor timestamp, в claim
+копируется descriptor, не значения секретов. При пропуске map entry не меняется.
+
+`prepareAssistantCreateForTest` объединяет hydrate → normalize → bind для
+двух pure create оснасток с nil TX и t.Helper; возвращает hydrated и bound,
+оставляя разные target-forgery, payload, capability и environment assertions
+в исходных tests. Все проверки и входные fixture values сохранены.
+Существующий TestIntegrationExecutionRoute покрывает обе допустимые роли и
+четыре запрещённых workload. Зеркальные tests простой обвязки не добавлялись.
+
+| Путь / lifecycle | Сохранённая граница |
+| --- | --- |
+| Warm reconcile | Serializable provider policy/catalog → locked session; replacement либо unavailable при отсутствии eligible account. Exact overlay/environment/image/runtime/prompt/workspace/context/spec pins и digest, commit до desired snapshot. Scope/stage error сохраняются |
+| Warm policy / report | Bootstrap empty LEAST_USED exception и default-model fallback, exact candidate pins и current config version, новая policy/config/audit без helper commit. Report требует exact runtime-controller permission/instance/revision и closed state; audit/invalidation лишь при changed |
+| Schedule claim | Время БД, dead-letter до reclaim, новая attempt/fence/generation, immutable revision/input/automation/prompt/target pins. ResolveDue учитывает DST/misfire/overlap; skipped occurrence не выдаёт lease, next-run OCC и change event остаются атомарными |
+| Renew / materialize / fail | Exact credential generation/lease/fence/database-time expiry. Fail закрывает attempt и меняет retry/dead-letter state; materialize повторно проверяет ACTIVE schedule/target pins, авторизует launch от persisted initiator, связывает run и закрывает attempt в caller TX |
+| Integration health test | Workload route и отдельный OWNER_TEST expiry/requeue, managed-MCP refresh лишь integration-gateway. Pinned health capability требует READ/NONE; новый claim fenced. Bounded projection/network retry не объявляет credential invalid; terminal test/connection/mailbox readback сохраняются |
+| Invocation resolve / gate | Exact run/node/connection/grant/package/input/resource scope и originating actor management. Durable intent/effect keys, mailbox и HUMAN_SCOPED pins/reservation; idempotency reuse отклоняется. Invocation/gate node/edge/run event и commit до ответа; provider effect здесь не отправляется |
+| Invocation claim / complete | Expired READ возвращается READY, прочий effect — UNKNOWN_OUTCOME. Fresh package/approval checks и execution deadline cap; UNKNOWN_OUTCOME выдаёт RECOVER_READ_ONLY. Exact success receipt replay до fresh lease checks; новый success сверяет effect/input pins, terminal success/failure планирует continuation, unknown — нет |
+| Test evidence | Pure tests покрывают closed registries, context/project/version/immutable envelope, input bounds/Unicode, file redaction, explicit capabilities, image/spec/approval pins, graph/schedule edits и typed command mapping. Они не доказывают live authorization, provider/storage/image execution, owner approval либо full E2E |
+
+Полные expected-AST comparisons обоих файлов — PASS: только два claim
+init префикса, два credential projection блока и два test preparation блока
+заменены общими helpers; остальные executable branches/assertions сохранены.
+SQL/API/generated/dependencies/applied migrations/deploy inputs не менялись.
+Прочитаны exact test/invocation expiry и claim SQL, schedule renew SQL:
+отдельные state policies, tenant/claimed-workload и credential generation
+сохраняются. Через Context7 /jackc/pgx проверены explicit BeginTx/rollback
+ownership и автоматическое закрытие CollectRows.
+
+После окончательного descriptor выноса полный GOWORK=off control-plane build
+и unit `-count=1` — PASS LOCAL;15 external fixture/admin/template inputs
+исключены.17 analyzer unit,5 exact-ignore guards, gofmt/diff check — PASS.
+Real PostgreSQL locks/concurrent claim/OCC/receipt/approval races, warm/provider/
+image/storage execution, broker delivery, browser/full E2E и deploy/live —
+NOT RUN/SKIP. QA baseline f2e64eb не менялся.
+
+Исторические ignored optional JSON/reference-generation errors и rollback,
+read-error conflation, application-time expiry equality в integration paths,
+SQLSTATE/constraint diagnostics invocation insert, узкий organization-only
+GetIntegrationInvocation readback и retry/commit limitations описаны без
+заявления об исправлении. Static heartbeat/Ready не объявляется live proof;
+recovery не разрешает повторный provider effect.
+
+Scan6673 own sources,222 excluded:1804 raw,900 retained occurrences и904
+unresolved. Прежние106-token test preparation,171-token claim init и114-token
+credential/tail окна исчезли. Новое116-token окно пересекает конец разных
+helpers, комментарии и начало двух claim methods: общий begin уже вынесен,
+остаток содержит caller error/defer и разные expiry SQL с разными lifecycle
+policies. После полного чтения методов, fragments и SQL сохранён только
+exact pair/hash/count1, без исключения policy/lease/approval implementation.
+Все774 registry entries действительны; thresholds/ignore regions и whole-file
+exclusions не расширялись. Issue#1823 открыт, PR остаётся Draft до завершения
+полного согласованного объёма.
 
 ## Подготовка assistant plans и provider/model каталоги — 24.10.2026
 

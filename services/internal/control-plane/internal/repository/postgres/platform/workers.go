@@ -27,8 +27,26 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// credentialProjectionPendingCode identifies a credential projection delay for the bounded owner
+// READ-test retry path; expiry of that retry budget maps to integration unavailability rather than
+// proving credential invalidity.
+// credentialProjectionPendingCode обозначает задержку credential projection для ограниченного
+// повтора owner READ-test; исчерпание бюджета отображается в недоступность integration без
+// доказательства невалидности credential.
 const credentialProjectionPendingCode = "INTEGRATION_CREDENTIAL_PROJECTION_PENDING"
 
+// ReconcileWarmRuntime reconciles provider policy and the locked warm session in a Serializable
+// transaction, replacing an ineligible account binding or committing unavailable state when no
+// replacement exists. It verifies catalog/config/environment/image/prompt/workspace pins, builds a
+// server-owned desired snapshot, binds its specification/digest and commits before returning
+// materializationRequired. Failures carry the current safe stage; ignored optional limits JSON and
+// request-context rollback remain historical behavior.
+// ReconcileWarmRuntime согласует provider policy и заблокированную warm session в Serializable
+// транзакции, заменяет недопустимый account binding либо фиксирует unavailable без доступной
+// замены. Проверяет catalog/config/environment/image/prompt/workspace pins, строит серверный
+// desired snapshot, связывает specification/digest и выполняет commit до возврата
+// materializationRequired. Ошибка содержит текущий безопасный stage; ignored optional limits JSON
+// и request-context rollback сохраняют историческое поведение.
 func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principal value.Principal, instance string) (result entity.SystemAssistant, desired map[string]any, materializationRequired bool, returnedError error) {
 	stage := errs.WarmReconcileScope
 	defer func() { returnedError = errs.WithWarmRuntimeStage(returnedError, stage) }()
@@ -304,12 +322,29 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	return assistant, snapshot, required, nil
 }
 
+// systemAssistantProviderPolicySnapshot holds the locked system assistant/runtime configuration
+// identity, version/model/policy mode and current/desired account candidates for one
+// reconciliation. It contains metadata, not provider credential values or a standalone grant.
+// systemAssistantProviderPolicySnapshot хранит заблокированные identity системного
+// помощника/runtime configuration, version/model/policy mode и текущих/ожидаемых account
+// candidates одного согласования. Содержит метаданные, не значения credentials и не
+// самостоятельный grant.
 type systemAssistantProviderPolicySnapshot struct {
 	agentID, agentRef, configID, runtimeProfileRef, provider, model, mode string
 	configVersion                                                         int64
 	currentCandidates, desiredCandidates                                  []entity.ProviderAccountCandidate
 }
 
+// reconcileSystemAssistantProviderPolicy reads and validates current/desired policy candidates,
+// preserving the initial empty LEAST_USED bootstrap exception and fallback default-model
+// selection. It captures catalog pins, sorts candidates and skips an unchanged policy; otherwise
+// publishes new policy/config/audit references and desired runtime revision in the caller
+// transaction. It does not commit and attaches precise reconcile stages to failures.
+// reconcileSystemAssistantProviderPolicy читает и проверяет текущих/ожидаемых policy candidates,
+// сохраняет начальное исключение empty LEAST_USED и fallback выбора default model. Фиксирует
+// catalog pins, сортирует candidates, пропускает неизменённую policy; иначе публикует новые
+// policy/config/audit refs и desired runtime revision в транзакции вызывающего. Не выполняет
+// commit, добавляет точный reconcile stage к ошибкам.
 func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -423,6 +458,10 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	return true, nil
 }
 
+// providerCandidatesEqual compares candidate slices positionally using exact struct equality; nil
+// and empty compare equal and callers must sort first when order is semantically irrelevant.
+// providerCandidatesEqual сравнивает срезы candidates позиционно точным равенством структур; nil и
+// пустой равны, вызывающий сначала сортирует, если порядок семантически незначим.
 func providerCandidatesEqual(left, right []entity.ProviderAccountCandidate) bool {
 	if len(left) != len(right) {
 		return false
@@ -435,6 +474,12 @@ func providerCandidatesEqual(left, right []entity.ProviderAccountCandidate) bool
 	return true
 }
 
+// warmSessionBinding carries the canonical warm assistant/session/creator identity and observed
+// provider-account eligibility. An empty session denotes initial binding work, not a fabricated
+// provider or a reusable authorization token.
+// warmSessionBinding несёт канонические identity warm assistant/session/creator и наблюдаемую
+// eligibility provider account. Пустая session означает начальную привязку, не фиктивного
+// провайдера и не повторно используемый токен полномочий.
 type warmSessionBinding struct {
 	assistantRef            string
 	sessionID               string
@@ -443,6 +488,14 @@ type warmSessionBinding struct {
 	providerAccountEligible bool
 }
 
+// lockWarmSessionBinding first locks the runtime owner for an initial missing session; only NoRows
+// falls through to the existing-session binding query. Missing existing binding becomes Conflict
+// and other reads Unavailable. The caller owns the transaction and decides whether replacement or
+// unavailable state follows.
+// lockWarmSessionBinding сначала блокирует runtime owner для начального отсутствия session; лишь
+// NoRows направляет к запросу существующего session binding. Отсутствие существующей связи даёт
+// Conflict, другие ошибки — Unavailable. Транзакцией и выбором replacement/unavailable владеет
+// вызывающий.
 func (repository *Repository) lockWarmSessionBinding(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -478,6 +531,14 @@ func (repository *Repository) lockWarmSessionBinding(
 	return binding, nil
 }
 
+// replaceWarmSession requires a selected provider account, closes any previous warm session,
+// creates the replacement under the persisted creator and binds its model catalog before switching
+// the runtime session with the expected old reference. It validates returned IDs/version and
+// leaves all effects/commit to the caller transaction.
+// replaceWarmSession требует выбранный provider account, закрывает прежнюю warm session при
+// наличии, создаёт замену от сохранённого creator и связывает model catalog до переключения
+// runtime session с ожидаемой старой ссылкой. Проверяет возвращённые IDs/version; все эффекты и
+// commit остаются в транзакции вызывающего.
 func (repository *Repository) replaceWarmSession(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -525,6 +586,12 @@ func (repository *Repository) replaceWarmSession(
 	return nil
 }
 
+// markWarmRuntimeUnavailable closes an existing warm session and marks the exact runtime/session
+// binding unavailable in the caller transaction. NoRows becomes Conflict, malformed returned
+// version/other failures Unavailable; it neither creates a substitute session nor commits.
+// markWarmRuntimeUnavailable закрывает существующую warm session и помечает точный runtime/session
+// binding unavailable в транзакции вызывающего. NoRows даёт Conflict, неверная возвращённая
+// version/прочие ошибки — Unavailable; не создаёт подменную session и не выполняет commit.
 func (repository *Repository) markWarmRuntimeUnavailable(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -551,6 +618,16 @@ func (repository *Repository) markWarmRuntimeUnavailable(
 	return nil
 }
 
+// ReportWarmRuntime requires the exact runtime-controller report permission, nonempty
+// instance/revision and a closed runtime state. It updates the matching runtime in ReadCommitted,
+// derives Ready from the reported state and emits audit/invalidation only for a changed report
+// before commit. Optional limits JSON remains permissive and this report is not an independent
+// provider probe.
+// ReportWarmRuntime требует точные workload runtime-controller и report permission, непустые
+// instance/revision и состояние закрытого набора. Обновляет совпавший runtime в ReadCommitted,
+// выводит Ready из сообщённого состояния, создаёт audit/invalidation лишь при изменённом report до
+// commit. Optional limits JSON остаётся permissive; report не является независимой проверкой
+// провайдера.
 func (repository *Repository) ReportWarmRuntime(ctx context.Context, principal value.Principal, payload command.WarmRuntimeInput) (entity.SystemAssistant, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -612,6 +689,18 @@ func (repository *Repository) ReportWarmRuntime(ctx context.Context, principal v
 	return assistant, nil
 }
 
+// ClaimDueSchedules uses database time in ReadCommitted to dead-letter expired work, reclaim
+// expired attempts first and then resolve due schedules with pinned revision/input/prompt/target
+// snapshots. It advances next-run time with OCC, records skipped occurrences without a claim and
+// persists fresh lease/fence/generation/attempt plus change events before commit. Caller supplies
+// a valid bounded limit; historical ignored reference-generation errors and error mappings are
+// preserved.
+// ClaimDueSchedules использует время БД в ReadCommitted для dead-letter, сначала перезахватывает
+// истёкшие attempts, затем разрешает due schedules с pinned revision/input/prompt/target
+// snapshots. Продвигает next-run через OCC, записывает skipped occurrences без claim, сохраняет
+// свежие lease/fence/generation/attempt и change events до commit. Корректный ограниченный limit
+// передаёт вызывающий; прежние ignored reference-generation errors и отображения ошибок
+// сохраняются.
 func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -644,6 +733,12 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	// expiredOccurrence captures the locked expired schedule occurrence identity, immutable
+	// input/revision/target digests and prior attempt/generation for reclaim. The new lease uses these
+	// persisted pins rather than mutable schedule parameters.
+	// expiredOccurrence фиксирует identity заблокированного истёкшего occurrence, immutable
+	// input/revision/target digests и прежние attempt/generation для перезахвата. Новая lease
+	// использует эти сохранённые pins вместо изменяемых параметров расписания.
 	type expiredOccurrence struct {
 		id, ref, scheduleRef, inputDigest, scheduleRevisionRef, scheduleRevisionDigest string
 		targetRef, targetDigest, automationTextDigest, promptInputsDigest              string
@@ -710,6 +805,11 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	// dueSchedule holds one due schedule and its exact current revision, timezone/DST/misfire/overlap
+	// policy, target, input/prompt and initiating actor snapshot while query rows are closed before
+	// writes.
+	// dueSchedule хранит due schedule и точную current revision, timezone/DST/misfire/overlap policy,
+	// target, input/prompt и снимок исходного субъекта; строки запроса закрываются до записей.
 	type dueSchedule struct {
 		id, ref, preset, cron, timezone, name, targetType, targetRef string
 		currentRevisionID, currentRevisionRef, currentRevisionDigest string
@@ -800,6 +900,14 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	return result, nil
 }
 
+// RenewScheduleOccurrence validates nonempty occurrence/lease/fence and positive generation, then
+// renews the exact organization and credential-revision-bound lease in Serializable. It returns
+// the persisted lease/generation/expiry with the same fence only after commit; a rejected renewal
+// is Forbidden and commit failure Conflict.
+// RenewScheduleOccurrence проверяет непустые occurrence/lease/fence и положительное generation,
+// затем продлевает точную lease организации и credential revision в Serializable. Возвращает
+// сохранённые lease/generation/expiry с прежним fence лишь после commit; отказ продления даёт
+// Forbidden, отказ commit — Conflict.
 func (repository *Repository) RenewScheduleOccurrence(ctx context.Context, principal value.Principal, input command.OccurrenceInput) (map[string]any, error) {
 	if input.OccurrenceRef == "" || input.LeaseRef == "" || input.Fence == "" || input.Generation < 1 {
 		return nil, errs.ErrInvalid
@@ -829,6 +937,18 @@ func (repository *Repository) RenewScheduleOccurrence(ctx context.Context, princ
 	return map[string]any{"leaseRef": leaseRef, "fence": input.Fence, "generation": generation, "expiresAt": expiresAt}, nil
 }
 
+// changeOccurrence locks a credential-bound occurrence, verifies fence/generation/database-time
+// expiry and immutable input/automation/prompt pins, then handles failure or materialization
+// separately. Failure closes the attempt, transitions retry/dead-letter state and emits
+// invalidation. Materialization rechecks active schedule/target pins, authorizes launch as the
+// persisted initiator, creates the run and atomically marks the attempt materialized. It uses the
+// caller transaction and preserves existing read-error conflation and readback.
+// changeOccurrence блокирует occurrence с credential binding, проверяет fence/generation/expiry по
+// времени БД и immutable input/automation/prompt pins, отдельно обрабатывает отказ и
+// materialization. Отказ закрывает attempt, меняет retry/dead-letter state и создаёт invalidation.
+// Materialization повторно проверяет active schedule/target pins, авторизует запуск от
+// сохранённого инициатора, создаёт run и атомарно отмечает attempt materialized. Использует
+// транзакцию вызывающего, сохраняет прежнее объединение ошибок чтения и readback.
 func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.OccurrenceInput)
 	if !ok {
@@ -948,6 +1068,12 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 	return outcome, nil
 }
 
+// emitScheduleOccurrenceChange reads the exact organization occurrence event scope/version and
+// emits a versioned SCHEDULE_CHANGED platform snapshot in the same transaction. A failed scope
+// read becomes Unavailable; this helper does not commit or mutate the occurrence.
+// emitScheduleOccurrenceChange читает точные event scope/version occurrence организации и создаёт
+// версионный SCHEDULE_CHANGED platform snapshot в той же транзакции. Отказ чтения scope даёт
+// Unavailable; helper не выполняет commit и не меняет occurrence.
 func (repository *Repository) emitScheduleOccurrenceChange(ctx context.Context, tx pgx.Tx, scope scope, occurrenceID string) error {
 	var scheduleRef, projectRef string
 	var version int64
@@ -957,6 +1083,11 @@ func (repository *Repository) emitScheduleOccurrenceChange(ctx context.Context, 
 	return repository.emitPlatformEventSnapshot(ctx, tx, scope, "SCHEDULE_CHANGED", projectRef, scheduleRef, "i18n:SCHEDULE_UPDATED", version, "")
 }
 
+// validScheduleErrorCode accepts a nonempty code of at most64 bytes containing only uppercase
+// ASCII letters, digits and underscore; it validates safe syntax rather than a semantic
+// provider-code allowlist.
+// validScheduleErrorCode принимает непустой код до64 байт лишь с uppercase ASCII буквами, цифрами
+// и underscore; проверяет безопасный синтаксис, не семантический список provider codes.
 func validScheduleErrorCode(value string) bool {
 	if value == "" || len(value) > 64 {
 		return false
@@ -969,18 +1100,46 @@ func validScheduleErrorCode(value string) bool {
 	return true
 }
 
-func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
+// beginIntegrationClaimTransaction validates the closed workload route before scope resolution,
+// then opens a Serializable transaction with the same caller context. Route/scope errors are
+// preserved and begin failures map to Unavailable with no usable transaction. Test/invocation
+// callers retain separate expiry/selection/lease policies and own rollback/commit; this shared
+// preparation neither issues a claim nor grants resource authority.
+// beginIntegrationClaimTransaction проверяет закрытый workload route до разрешения области, затем
+// открывает Serializable транзакцию с прежним контекстом вызывающего. Route/scope errors
+// сохраняет, отказ begin отображает в Unavailable без пригодной транзакции. Test/invocation
+// callers сохраняют разные expiry/selection/lease policies и владение rollback/commit; общая
+// подготовка не захватывает work и не предоставляет resource authority.
+func (repository *Repository) beginIntegrationClaimTransaction(ctx context.Context, principal value.Principal) (scope, pgx.Tx, string, error) {
 	route, err := integrationExecutionRoute(principal.CallerWorkload)
 	if err != nil {
-		return nil, err
+		return scope{}, nil, "", err
 	}
-	scope, err := repository.resolveScope(ctx, principal)
+	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, err
+		return scope{}, nil, "", err
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
-		return nil, errs.ErrUnavailable
+		return scope{}, nil, "", errs.ErrUnavailable
+	}
+	return current, tx, route, nil
+}
+
+// ClaimIntegrationConnectionTests opens a workload-route-scoped Serializable claim, expires stale
+// tests and enqueues managed-MCP refresh only for integration-gateway. It loads candidates,
+// requires a pinned READ/no-approval health capability and assigns fresh30-second fenced leases,
+// returning public configuration plus credential descriptors when applicable after commit.
+// Test/provider effects are not executed here; optional configuration JSON errors remain ignored.
+// ClaimIntegrationConnectionTests открывает workload-route-scoped Serializable claim, обрабатывает
+// истёкшие tests и добавляет managed-MCP refresh лишь для integration-gateway. Читает candidates,
+// требует pinned READ/no-approval health capability, назначает свежие30-секундные fenced leases,
+// возвращает public configuration и допустимые credential descriptors после commit. Test/provider
+// effects здесь не исполняются; ошибки optional configuration JSON по-прежнему игнорируются.
+func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	scope, tx, route, err := repository.beginIntegrationClaimTransaction(ctx, principal)
+	if err != nil {
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationtestsExpireStaleTestLeases, scope.organizationID, principal.CallerWorkload); err != nil {
@@ -995,6 +1154,12 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	// candidate stores one selected connection-test row with internal/test identity, prior generation,
+	// exact definition/configuration and optional credential metadata until rows are closed before
+	// claiming. It is local to the health-test path and contains no invocation effect policy.
+	// candidate хранит выбранную строку connection-test с internal/test identity, прежним generation,
+	// точными definition/configuration и необязательными credential metadata до закрытия строк и
+	// захвата. Локален health-test пути, не содержит invocation effect policy.
 	type candidate struct {
 		id, ref, connectionRef, definitionKey, definitionVersion, definitionDigest string
 		generation                                                                 int64
@@ -1049,10 +1214,7 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 			"configuration": configuration, "leaseRef": leaseRef, "fence": fence,
 			"generation": generation, "expiresAt": expiresAt,
 		}
-		if definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
-			item.credential.CreatedAt = *item.credentialCreatedAt
-			claim["credential"] = item.credential
-		}
+		attachIntegrationClaimCredential(claim, definition.RequiresConnectionCredential(), &item.credential, item.credentialCreatedAt)
 		result = append(result, claim)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1061,6 +1223,19 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 	return result, nil
 }
 
+// completeIntegrationConnectionTest validates success/error shape and optional email health
+// summary, locks the exact workload test and checks its fence/generation/lease/expiry. Only a
+// bounded exact owner READ-test projection/network delay is requeued; exhausted projection delay
+// does not invalidate credentials. Otherwise it stores test outcome, preserves successful
+// managed-refresh connection state or updates connection/credential/mailbox observation and
+// current readback. Caller owns commit/audit/events.
+// completeIntegrationConnectionTest проверяет success/error форму и необязательный email health
+// summary, блокирует точный workload test, проверяет fence/generation/lease/expiry. Лишь
+// ограниченная задержка projection/network точного owner READ-test возвращается в очередь;
+// исчерпанная задержка projection не делает credentials невалидными. Иначе сохраняет test outcome,
+// оставляет connection state при успешном managed-refresh либо обновляет
+// connection/credential/mailbox observation и текущий readback. Commit/audit/events принадлежат
+// вызывающему.
 func (repository *Repository) completeIntegrationConnectionTest(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.IntegrationConnectionTestInput)
 	if !ok || payload.Success && payload.SafeErrorCode != "" || !payload.Success &&
@@ -1163,12 +1338,33 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: connectionRef, summary: "i18n:INTEGRATION_CONNECTION_TEST_COMPLETED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 }
 
+// ResolveIntegrationInvocation runs the complete specialized invocation-resolution transaction
+// through the existing bounded Serializable retry helper. Fresh attempts repeat
+// owner/package/approval checks; it does not call the external provider or itself decide which
+// error is safely retryable.
+// ResolveIntegrationInvocation проводит полную специализированную транзакцию разрешения invocation
+// через существующий ограниченный Serializable retry helper. Новая попытка повторяет
+// owner/package/approval проверки; метод не вызывает провайдера и сам не решает, какую ошибку
+// безопасно повторять.
 func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, principal value.Principal, input map[string]string, boundedInput map[string]any) (map[string]any, error) {
 	return retrySerializableTransaction(ctx, func() (map[string]any, error) {
 		return repository.resolveIntegrationInvocation(ctx, principal, input, boundedInput)
 	})
 }
 
+// resolveIntegrationInvocation resolves exact run/node/connection/grant state in Serializable,
+// rechecks originating-actor management, pinned package/capability/resource scope and canonical
+// bounded input. It derives durable intent/effect keys, handles mailbox and HUMAN_SCOPED approval
+// pins/reservation, reuses or creates an invocation and owner-gate graph/event before commit.
+// Idempotency reuse is rejected; selected serialization errors retain retry classification and
+// historical SQLSTATE/constraint diagnostics remain unchanged. No provider effect is sent here.
+// resolveIntegrationInvocation разрешает точные run/node/connection/grant в Serializable, повторно
+// проверяет управление исходного субъекта, pinned package/capability/resource scope и канонический
+// ограниченный input. Вычисляет устойчивые intent/effect keys, обрабатывает mailbox и HUMAN_SCOPED
+// approval pins/reservation, переиспользует либо создаёт invocation и owner-gate graph/event до
+// commit. Idempotency reuse отклоняется; отдельные serialization errors сохраняют retry
+// classification, исторические SQLSTATE/constraint diagnostics не меняются. Provider effect здесь
+// не отправляется.
 func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, principal value.Principal, input map[string]string, boundedInput map[string]any) (map[string]any, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1365,6 +1561,29 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	}, nil
 }
 
+// attachIntegrationClaimCredential attaches a credential descriptor only when the pinned
+// definition requires it and both revision reference and creation time are present, updating the
+// same caller-owned descriptor timestamp. Callers supply a valid descriptor pointer and a writable
+// claim map for an attached credential; omission preserves any existing map entry. It neither
+// reads secret values nor grants access, renews a lease or commits a transaction.
+// attachIntegrationClaimCredential добавляет credential descriptor лишь при требовании pinned
+// definition и наличии revision reference и времени создания, обновляя timestamp того же
+// descriptor вызывающего. Caller передаёт допустимый указатель descriptor и доступную для записи
+// claim map при добавлении; пропуск сохраняет возможную прежнюю запись карты. Helper не читает
+// значения секретов, не даёт доступа, не продлевает lease и не выполняет commit.
+func attachIntegrationClaimCredential(claim map[string]any, required bool, credential *entity.IntegrationCredentialRevision, createdAt *time.Time) {
+	if required && credential.Ref != "" && createdAt != nil {
+		credential.CreatedAt = *createdAt
+		claim["credential"] = *credential
+	}
+}
+
+// integrationExecutionRoute maps only integration-gateway to MANAGED_MCP and interaction-gateway
+// to INTERACTION; every other workload is Forbidden. Route selection does not replace exact
+// permission, tenant or invocation authorization.
+// integrationExecutionRoute сопоставляет только integration-gateway с MANAGED_MCP и
+// interaction-gateway с INTERACTION; остальные workload получают Forbidden. Выбор маршрута не
+// заменяет точные permission, tenant и invocation authorization.
 func integrationExecutionRoute(workload string) (string, error) {
 	switch workload {
 	case "integration-gateway":
@@ -1376,18 +1595,22 @@ func integrationExecutionRoute(workload string) (string, error) {
 	}
 }
 
+// ClaimIntegrationInvocations expires stale leases in the exact workload route, loads candidates
+// and rechecks originating-actor access, current managed health and pinned capability/approval
+// scope. It skips expired execution deadlines, caps lease expiry to a remaining deadline, assigns
+// a new fence/generation and returns EXECUTE or RECOVER_READ_ONLY for UNKNOWN_OUTCOME after
+// commit. Optional JSON decode and reference-generation behavior stay unchanged; recovery mode
+// does not authorize resending an effect.
+// ClaimIntegrationInvocations обрабатывает истёкшие leases точного workload route, читает
+// candidates, повторно проверяет доступ исходного субъекта, current managed health и pinned
+// capability/approval scope. Пропускает истёкшие execution deadlines, ограничивает expiry
+// оставшимся deadline, назначает новые fence/generation, возвращает EXECUTE либо RECOVER_READ_ONLY
+// для UNKNOWN_OUTCOME после commit. Optional JSON decode и generation refs сохраняют прежнее
+// поведение; recovery mode не разрешает повторно отправить effect.
 func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
-	route, err := integrationExecutionRoute(principal.CallerWorkload)
+	scope, tx, route, err := repository.beginIntegrationClaimTransaction(ctx, principal)
 	if err != nil {
 		return nil, err
-	}
-	scope, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID, principal.CallerWorkload); err != nil {
@@ -1397,6 +1620,12 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	// candidate pins one invocation candidate to run/node/initiator, grant/version, exact
+	// package/capability/risk/approval/resource scope, input/effect digests and credential metadata.
+	// It is distinct from health-test candidates and is revalidated before any lease claim.
+	// candidate связывает кандидата invocation с run/node/initiator, grant/version, точными
+	// package/capability/risk/approval/resource scope, input/effect digests и credential metadata.
+	// Отличается от health-test candidate, повторно проверяется до захвата lease.
 	type candidate struct {
 		id, ref, state, connectionRef, definitionKey, capabilityKey, nodeID, runID string
 		initiatorRef                                                               string
@@ -1504,10 +1733,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			"workMode": workMode,
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
 		}
-		if definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
-			item.credential.CreatedAt = *item.credentialCreatedAt
-			claim["credential"] = item.credential
-		}
+		attachIntegrationClaimCredential(claim, definition.RequiresConnectionCredential(), &item.credential, item.credentialCreatedAt)
 		result = append(result, claim)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1516,6 +1742,14 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 	return result, nil
 }
 
+// GetIntegrationInvocation resolves the organization scope and reads only invocation
+// state/result/error plus gate/effect-receipt references. NoRows becomes NotFound and other read
+// failures Unavailable; it preserves this narrow pool-query path without adding per-resource
+// authorization or a provider read.
+// GetIntegrationInvocation разрешает область организации и читает лишь invocation
+// state/result/error и gate/effect-receipt refs. NoRows даёт NotFound, прочие ошибки чтения —
+// Unavailable; сохраняет узкий pool-query путь без добавления per-resource authorization и чтения
+// провайдера.
 func (repository *Repository) GetIntegrationInvocation(ctx context.Context, principal value.Principal, ref string) (map[string]any, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1531,6 +1765,18 @@ func (repository *Repository) GetIntegrationInvocation(ctx context.Context, prin
 	return map[string]any{"state": state, "resultSummary": resultSummary, "safeErrorCode": safeErrorCode, "gateRef": gateRef, "effectReceiptRef": receiptRef}, nil
 }
 
+// completeIntegrationInvocation validates workload and outcome/receipt shape, including exact
+// response digest, then locks the invocation. An exact successful stored receipt replays before
+// fresh lease checks; a new outcome requires matching running lease/fence/generation/expiry ;
+// success additionally matches effect/input pins. Success persists a receipt, terminal
+// success/failure schedules continuation, UNKNOWN_OUTCOME does not; all paths return graph
+// readback in the caller transaction without provider resend.
+// completeIntegrationInvocation проверяет workload и outcome/receipt форму, включая точный
+// response digest, затем блокирует invocation. Точная сохранённая successful receipt повторяется
+// до свежих lease checks; новый исход требует совпавшие running lease/fence/generation/expiry ;
+// success дополнительно сверяет effect/input pins. Success сохраняет receipt, terminal
+// success/failure планирует продолжение, UNKNOWN_OUTCOME — нет; пути возвращают graph readback в
+// транзакции вызывающего без повторной отправки провайдеру.
 func (repository *Repository) completeIntegrationInvocation(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	if _, err := integrationExecutionRoute(input.Principal.CallerWorkload); err != nil {
 		return commandOutcome{}, err
@@ -1633,6 +1879,12 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event}, projectID: projectID, projectRef: projectRef, resourceKind: "INTEGRATION_INVOCATION", resourceRef: payload.InvocationRef, summary: "i18n:INTEGRATION_INVOCATION_COMPLETED"}, nil
 }
 
+// integrationActionOutcomeMessage maps successful and failed integration states to their
+// localization keys, using the unknown-outcome key for every other state. It formats presentation
+// metadata without changing execution state.
+// integrationActionOutcomeMessage сопоставляет успешное и неуспешное integration state ключам
+// локализации, используя unknown-outcome для остальных. Формирует метаданные представления без
+// изменения execution state.
 func integrationActionOutcomeMessage(state string) string {
 	switch state {
 	case "SUCCEEDED":
@@ -1644,6 +1896,12 @@ func integrationActionOutcomeMessage(state string) string {
 	}
 }
 
+// integrationGateContextSummary joins trimmed connection name and capability name, falling back to
+// operation when capability name is blank, then truncates the presentation summary to1000. The
+// summary is descriptive and never a source of scope or approval authority.
+// integrationGateContextSummary объединяет очищенные имя connection и capability, подставляет
+// operation при пустом capability name, ограничивает summary1000. Текст служит описанию, не
+// источником scope и approval authority.
 func integrationGateContextSummary(connectionName, capabilityName, operation string) string {
 	name := strings.TrimSpace(capabilityName)
 	if name == "" {
@@ -1652,6 +1910,12 @@ func integrationGateContextSummary(connectionName, capabilityName, operation str
 	return truncate(strings.TrimSpace(connectionName)+" · "+name, 1000)
 }
 
+// safeIntegrationErrorCode allows only the closed integration failure-code set plus the email
+// health-not-ready code. Credential projection pending is intentionally handled by its separate
+// bounded test path rather than becoming a general invocation error.
+// safeIntegrationErrorCode допускает лишь закрытый набор integration failure codes и email
+// health-not-ready. Credential projection pending намеренно обрабатывается отдельным ограниченным
+// test path, не становится общей ошибкой invocation.
 func safeIntegrationErrorCode(code string) bool {
 	switch code {
 	case emailbridgeapi.HealthNotReadyCode, "INTEGRATION_AUTH_REJECTED", "INTEGRATION_CREDENTIAL_UNAVAILABLE", "INTEGRATION_UNAVAILABLE", "INTEGRATION_RATE_LIMITED", "INTEGRATION_CONFIGURATION_INVALID", "INTEGRATION_CAPABILITY_UNSUPPORTED", "INTEGRATION_ROUTE_NOT_OWNED", "INTEGRATION_REQUEST_REJECTED", "INTEGRATION_RESPONSE_INVALID", "INTEGRATION_OUTCOME_UNKNOWN":

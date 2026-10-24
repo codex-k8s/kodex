@@ -6184,6 +6184,14 @@
       "fragmentSHA256": "0412082a31dba074844d257a0deb991759b0b32ca0f46ae1b53cfd41ecc63014",
       "count": 1,
       "reason": "Окно124 tokens пересекает полные короткие launchRun/addAssistantTurnCommand wrappers и начало следующих специализированных signatures/validation. Оба прочитаны: они передают false существующим launchRunWithAttachmentPolicy/addAssistantTurnWithAttachmentPolicy, где общий для normal/retry алгоритм каждого вида уже вынесен. Run launch разрешает project/AGENT/WORKFLOW/session/catalog/attachment policy; assistant turn дополнительно связан с conversation identity, собственным context и interrupt lifecycle. Общего самостоятельного алгоритма у wrapper нет; generic callback dispatcher поверх одной строки скрыл бы разные payload/authority transitions. Сохранена лишь точная pair/hash/count1, без исключения реализаций validation, attachment policy либо файлов целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/workers.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/workers.go",
+      "fragmentSHA256": "36587310dbd0cfc902e3a3281a178f06bc765d6e67c36d4bef1e3242edee030f",
+      "count": 1,
+      "reason": "Окно пересекает закрывающую скобку разных helpers, комментарии и начало двух специализированных claim methods. Общие workload route/scope/Serializable begin уже вынесены в beginIntegrationClaimTransaction. Остались callsite error/defer и разные expiry SQL: OWNER_TEST возвращается в DUE, invocation READ — в READY, прочие effects — в UNKNOWN_OUTCOME. Dynamic SQL dispatcher спрятал бы разные lifecycle policies ради обвязки. Решение относится только к этому pair/hash/count1; expiry implementation, lease/approval checks и остальные method bodies не исключаются."
     }
   ]
 }

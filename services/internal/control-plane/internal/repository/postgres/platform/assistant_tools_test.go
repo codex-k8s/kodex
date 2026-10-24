@@ -13,6 +13,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantOperationCommandUsesClosedSpecializedRegistry checks a valid project create
+// mapping, rejection of a forged ownerID field and rejection of an unsupported delete kind using
+// pure command adapters. It does not create a project or prove live authorization.
+// TestAssistantOperationCommandUsesClosedSpecializedRegistry проверяет корректное сопоставление
+// project create, отказ при подставленном ownerID и неподдерживаемом delete через чистые command
+// adapters. Не создаёт проект и не доказывает живую authorization.
 func TestAssistantOperationCommandUsesClosedSpecializedRegistry(t *testing.T) {
 	t.Parallel()
 	project := entity.AssistantPlanOperation{Type: "CREATE_PROJECT", Summary: "Create project", Input: map[string]any{"name": "Sales", "purpose": "Qualify leads", "language": "en"}}
@@ -30,6 +36,12 @@ func TestAssistantOperationCommandUsesClosedSpecializedRegistry(t *testing.T) {
 	}
 }
 
+// TestAssistantProjectFileOperation checks text-file command metadata/hash shape and rejects path
+// traversal, unsupported media and an extra secret field using independent forged input copies. No
+// object storage or malware scanner is invoked.
+// TestAssistantProjectFileOperation проверяет метаданные/форму hash текстового файла, отклоняет
+// path traversal, неподдерживаемый media type и лишнее secret поле на отдельных копиях input. Не
+// вызывает object storage и malware scanner.
 func TestAssistantProjectFileOperation(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{
@@ -64,6 +76,14 @@ func TestAssistantProjectFileOperation(t *testing.T) {
 	}
 }
 
+// TestAssistantBinaryProjectFileOperation checks exact base64-decoded bytes/size and rejects
+// invalid encoding/media combinations and decoded content over1MiB. An empty binary draft remains
+// accepted for editing but is not content-ready; synthetic PNG-like bytes do not prove real image
+// decoding or storage.
+// TestAssistantBinaryProjectFileOperation проверяет точные base64 decoded bytes/size, отклоняет
+// неверные encoding/media сочетания и декодированное содержимое свыше1MiB. Пустой binary draft
+// допускается к редактированию, но не content-ready; синтетические PNG-подобные байты не
+// доказывают реальное декодирование изображения и storage.
 func TestAssistantBinaryProjectFileOperation(t *testing.T) {
 	t.Parallel()
 	png := []byte("\x89PNG\r\n\x1a\ncontent")
@@ -110,6 +130,12 @@ func TestAssistantBinaryProjectFileOperation(t *testing.T) {
 	}
 }
 
+// TestNormalizeAssistantProjectFileStoresBinaryContentOnce verifies normalization keeps inline
+// binary content only in Parameters and removes it from the public After snapshot, also accepting
+// an already redacted After. It does not persist or upload that content.
+// TestNormalizeAssistantProjectFileStoresBinaryContentOnce проверяет сохранение inline binary
+// content лишь в Parameters с удалением из публичного After при нормализации, допускает уже
+// очищенный After. Не сохраняет и не загружает содержимое.
 func TestNormalizeAssistantProjectFileStoresBinaryContentOnce(t *testing.T) {
 	t.Parallel()
 	parameters := map[string]any{
@@ -136,6 +162,13 @@ func TestNormalizeAssistantProjectFileStoresBinaryContentOnce(t *testing.T) {
 	}
 }
 
+// TestAssistantOperationTextLimitsCountUnicodeCharacters uses multibyte Russian text to
+// check200-character titles and1000-character summaries survive normalization/command mapping,
+// while a201-character title is rejected. It covers these text limits rather than all OpenAPI
+// fields.
+// TestAssistantOperationTextLimitsCountUnicodeCharacters использует многобайтный русский текст для
+// проверки title200 и summary1000 символов через normalization/command mapping, отклоняя title201.
+// Покрывает эти текстовые пределы, не все OpenAPI поля.
 func TestAssistantOperationTextLimitsCountUnicodeCharacters(t *testing.T) {
 	t.Parallel()
 
@@ -165,6 +198,14 @@ func TestAssistantOperationTextLimitsCountUnicodeCharacters(t *testing.T) {
 	}
 }
 
+// TestAssistantIntegrationDefinitionPublicationRequiresPinnedMetadata checks organization-context
+// publication with exact configuration/revision/digest/version, rejects unapproved input fields
+// and malformed digest, and forbids changing the pinned revision through a draft edit. It
+// exercises preview/typed-command helpers without publishing a definition.
+// TestAssistantIntegrationDefinitionPublicationRequiresPinnedMetadata проверяет publication в
+// organization context с точными configuration/revision/digest/version, отклоняет неразрешённые
+// поля и неверный digest, запрещает смену pinned revision через draft edit. Проверяет
+// preview/typed-command helpers без публикации definition.
 func TestAssistantIntegrationDefinitionPublicationRequiresPinnedMetadata(t *testing.T) {
 	t.Parallel()
 	version := int64(4)
@@ -215,6 +256,12 @@ func TestAssistantIntegrationDefinitionPublicationRequiresPinnedMetadata(t *test
 	}
 }
 
+// TestAssistantOperationCommandBuildsHydratedProjectUpdate checks that a fully hydrated
+// project-update input maps to the specialized UpdateProject payload with exact reference, fields
+// and OCC version, without executing persistence.
+// TestAssistantOperationCommandBuildsHydratedProjectUpdate проверяет преобразование полного
+// hydrated project-update в специализированный UpdateProject payload с точными reference, полями и
+// OCC version без сохранения.
 func TestAssistantOperationCommandBuildsHydratedProjectUpdate(t *testing.T) {
 	t.Parallel()
 	version := int64(7)
@@ -236,6 +283,14 @@ func TestAssistantOperationCommandBuildsHydratedProjectUpdate(t *testing.T) {
 	}
 }
 
+// TestAssistantAgentUpdateRequiresExactContextAndOwnerSnapshot checks exact agent-context matching
+// and the hydrate→normalize→bind→command chain, preserving unchanged owner fields/avatar/version
+// while applying the requested purpose. No-op, noneditable-only and blank changes must fail; no
+// database or access evaluator is used.
+// TestAssistantAgentUpdateRequiresExactContextAndOwnerSnapshot проверяет точное соответствие agent
+// context и цепочку hydrate→normalize→bind→command с сохранением неизменённых owner
+// fields/avatar/version при новом purpose. No-op, лишь не редактируемое поле и пустое изменение
+// должны отказать; БД и access evaluator не используются.
 func TestAssistantAgentUpdateRequiresExactContextAndOwnerSnapshot(t *testing.T) {
 	t.Parallel()
 	proposed := entity.AssistantPlanOperation{Type: "UPDATE_AGENT", Key: "update-coordinator", Title: "Update coordinator", Summary: "Update coordinator",
@@ -279,6 +334,14 @@ func TestAssistantAgentUpdateRequiresExactContextAndOwnerSnapshot(t *testing.T) 
 	}
 }
 
+// TestAssistantInstructionDraftRequiresExactAgentAndSeparatePublication checks draft-only
+// instruction mapping and exact agent context, then verifies rehydration restores owner
+// target/version/before metadata despite forged preview fields. Foreign agents, short instructions
+// and a publish field are rejected without publishing instructions.
+// TestAssistantInstructionDraftRequiresExactAgentAndSeparatePublication проверяет draft-only
+// сопоставление инструкций и точный agent context, затем восстановление owner
+// target/version/before при подставленных preview fields. Чужой агент, короткие инструкции и поле
+// publish отклоняются без публикации инструкций.
 func TestAssistantInstructionDraftRequiresExactAgentAndSeparatePublication(t *testing.T) {
 	t.Parallel()
 	proposed := entity.AssistantPlanOperation{Type: "CREATE_INSTRUCTION_DRAFT", Key: "draft-agent-instructions",
@@ -323,6 +386,14 @@ func TestAssistantInstructionDraftRequiresExactAgentAndSeparatePublication(t *te
 	}
 }
 
+// TestAssistantSystemInstructionPlanPreservesOwnerBoundary checks system-instruction planning
+// across screen contexts, exact original/new instructions and owner version, then verifies edited
+// previews restore the system assistant target and version. This is pure envelope validation, not
+// owner approval or runtime application.
+// TestAssistantSystemInstructionPlanPreservesOwnerBoundary проверяет план системных инструкций
+// между screen contexts, точные old/new instructions и owner version, затем восстановление
+// target/version системного помощника при редактировании preview. Это чистая проверка envelope, не
+// owner approval и не применение runtime.
 func TestAssistantSystemInstructionPlanPreservesOwnerBoundary(t *testing.T) {
 	t.Parallel()
 	proposed := entity.AssistantPlanOperation{
@@ -368,6 +439,14 @@ func TestAssistantSystemInstructionPlanPreservesOwnerBoundary(t *testing.T) {
 	}
 }
 
+// TestAssistantSelfConfigurationOperationRequiresPinnedAssistant checks supported system/project
+// self-configuration exceptions only for the pinned assistant and appropriate scope, rejecting
+// foreign targets and an ordinary operation with an injected system reference. It does not
+// independently authorize a command.
+// TestAssistantSelfConfigurationOperationRequiresPinnedAssistant проверяет поддерживаемые
+// system/project self-configuration исключения лишь для закреплённого помощника и нужной области,
+// отклоняет чужие цели и обычную операцию с подставленным system ref. Самостоятельно команду не
+// авторизует.
 func TestAssistantSelfConfigurationOperationRequiresPinnedAssistant(t *testing.T) {
 	t.Parallel()
 	for _, operationType := range []string{
@@ -399,6 +478,12 @@ func TestAssistantSelfConfigurationOperationRequiresPinnedAssistant(t *testing.T
 	}
 }
 
+// TestProjectAssistantSelfCapabilityGuard checks a supported project assistant self-capability
+// proposal is classified only for its exact PROJECT assistant, rejecting other scopes and a
+// foreign assistant. The classifier result does not execute the capability grant.
+// TestProjectAssistantSelfCapabilityGuard проверяет классификацию поддерживаемого self-capability
+// предложения лишь для точного PROJECT помощника, отклоняя другие области и чужого помощника.
+// Классификация не исполняет grant capability.
 func TestProjectAssistantSelfCapabilityGuard(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{Type: "CHANGE_CAPABILITY", Parameters: map[string]any{"agentRef": "agt_project123", "capabilityKey": "platform.artifact.manage", "enabled": true}}
@@ -415,6 +500,12 @@ func TestProjectAssistantSelfCapabilityGuard(t *testing.T) {
 	}
 }
 
+// TestProjectAssistantOperationScopeIsClosed checks representative organization-only/unknown
+// operations are absent from the project assistant allowlist while supported project operations
+// remain recognized. This allowlist test is separate from actor and resource authorization.
+// TestProjectAssistantOperationScopeIsClosed проверяет отсутствие примеров
+// organization-only/unknown операций в списке проектного помощника и распознавание поддерживаемых
+// проектных операций. Проверка списка отделена от actor/resource authorization.
 func TestProjectAssistantOperationScopeIsClosed(t *testing.T) {
 	t.Parallel()
 	for _, operationType := range []string{"CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UNKNOWN"} {
@@ -429,6 +520,12 @@ func TestProjectAssistantOperationScopeIsClosed(t *testing.T) {
 	}
 }
 
+// TestAssistantOperationCreatesProjectProfileThroughSpecializedCommand checks a normalized
+// profile-create preview with an explicit project reaches CreateProjectAssistant from organization
+// context and rejects binding the same proposal to another project. No profile is persisted.
+// TestAssistantOperationCreatesProjectProfileThroughSpecializedCommand проверяет прохождение
+// нормализованного profile-create с явным проектом в CreateProjectAssistant из organization
+// context и отказ при привязке к иному проекту. Профиль не сохраняется.
 func TestAssistantOperationCreatesProjectProfileThroughSpecializedCommand(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{Key: "create-project-assistant", Type: "CREATE_PROJECT_ASSISTANT",
@@ -453,6 +550,12 @@ func TestAssistantOperationCreatesProjectProfileThroughSpecializedCommand(t *tes
 	}
 }
 
+// TestHydrateAssistantAgentCapabilityFields checks capability-toggle preview action/target/version
+// and before/after enabled values from a fixed owner snapshot, rejecting an unchanged toggle. It
+// does not grant the capability.
+// TestHydrateAssistantAgentCapabilityFields проверяет action/target/version preview переключения
+// capability и before/after enabled из фиксированного owner snapshot, отклоняя неизменённое
+// переключение. Capability не предоставляет.
 func TestHydrateAssistantAgentCapabilityFields(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{
@@ -477,6 +580,12 @@ func TestHydrateAssistantAgentCapabilityFields(t *testing.T) {
 	}
 }
 
+// TestAssistantEditedAgentUpdateRehydratesAuthorityEnvelope forges editable preview metadata and
+// verifies rehydration restores the original agent target/version/name/avatar while retaining the
+// allowed purpose edit; changing immutable avatar or agent reference is Forbidden.
+// TestAssistantEditedAgentUpdateRehydratesAuthorityEnvelope подставляет preview metadata и
+// проверяет восстановление исходных agent target/version/name/avatar с сохранением допустимого
+// purpose edit; изменение immutable avatar либо agent ref даёт Forbidden.
 func TestAssistantEditedAgentUpdateRehydratesAuthorityEnvelope(t *testing.T) {
 	t.Parallel()
 	original, err := hydrateAssistantAgentFields("agt_current", "Coordinator", "Coordinate work", "Manage agents", "avatar-ref", 7,
@@ -512,6 +621,12 @@ func TestAssistantEditedAgentUpdateRehydratesAuthorityEnvelope(t *testing.T) {
 	}
 }
 
+// TestAssistantCreateTargetUsesClosedKinds checks supported agent/environment create kinds receive
+// their expected preview target/name and an unsupported delete kind receives no target. Target
+// construction is not resource creation or authority.
+// TestAssistantCreateTargetUsesClosedKinds проверяет ожидаемые preview target/name для
+// agent/environment create и отсутствие target у неподдерживаемого delete. Построение target не
+// создаёт ресурс и не даёт полномочий.
 func TestAssistantCreateTargetUsesClosedKinds(t *testing.T) {
 	t.Parallel()
 	parameters := map[string]any{"name": "Analyst"}
@@ -526,24 +641,23 @@ func TestAssistantCreateTargetUsesClosedKinds(t *testing.T) {
 	}
 }
 
+// TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand exercises create
+// hydration/normalization/project binding into the environment-draft command, preserving public
+// values, secret descriptors, tools and policy. It rejects forged target, secret values,
+// duplicate/overlapping names, unsafe tools, invalid policy/image locator and missing project
+// using synthetic inputs only.
+// TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand проводит create
+// hydration/normalization/project binding в environment-draft command с сохранением public values,
+// secret descriptors, tools и policy. Отклоняет подставленную цель, значения секретов,
+// duplicate/overlap names, unsafe tools, неверные policy/image locator и пустой проект лишь на
+// синтетических inputs.
 func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{
 		Type: "CREATE_RUNTIME_ENVIRONMENT_DRAFT", Key: "environment-draft", Title: "Prepare environment", Summary: "Prepare environment draft",
 		Input: map[string]any{"projectRef": "current", "name": "Developer environment", "description": "Build and test project code"},
 	}
-	hydrated, err := (&Repository{}).hydrateAssistantOperation(t.Context(), nil, scope{}, "prj_example", operation)
-	if err != nil {
-		t.Fatal(err)
-	}
-	normalized, err := normalizeAssistantOperation(hydrated)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bound, err := bindAssistantOperationProject(normalized, "prj_example")
-	if err != nil {
-		t.Fatal(err)
-	}
+	hydrated, bound := prepareAssistantCreateForTest(t, operation, "prj_example")
 	mapped, err := assistantOperationCommand(bound)
 	if err != nil || mapped.Kind != command.CreateRuntimeEnvironmentDraft {
 		t.Fatalf("map environment draft: kind=%q err=%v", mapped.Kind, err)
@@ -598,6 +712,14 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 	}
 }
 
+// TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields checks role-image create mapping
+// retains the exact agent/version/environment/Dockerfile, allows a name edit through trusted
+// rehydration and forbids project/agent/version changes or secret fields. It does not build or
+// admit an image.
+// TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields проверяет сохранение точных
+// agent/version/environment/Dockerfile при role-image create, допускает name edit через доверенное
+// rehydration, запрещает смену project/agent/version и secret fields. Не собирает и не допускает
+// image.
 func TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields(t *testing.T) {
 	t.Parallel()
 	parameters := map[string]any{"projectRef": "prj_example", "agentRef": "agt_example", "agentVersion": int64(3),
@@ -644,6 +766,14 @@ func TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields(t *testing.T) 
 	}
 }
 
+// TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields checks image-update payload/OCC and
+// exact specification hash shape, allows a supported environment edit and rejects changes to
+// project/recipe/spec pins or secret fields. Synthetic recipe text is not build or admission
+// evidence.
+// TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields проверяет image-update payload/OCC и
+// точную форму specification hash, допускает разрешённый environment edit, отклоняет смену
+// project/recipe/spec pins и secret fields. Синтетический recipe text не доказывает
+// build/admission.
 func TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields(t *testing.T) {
 	t.Parallel()
 	version := int64(4)
@@ -696,6 +826,14 @@ func TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields(t *testing.T) {
 	}
 }
 
+// TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities checks explicit initial
+// capability preservation and rejects duplicates/unsupported kinds, then verifies template
+// context/integration enrichment leaves the input unchanged. Internal
+// localization/index/unknown-variable template fragments must be rejected without running a model.
+// TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities проверяет сохранение явных
+// initial capabilities и отказ при duplicates/unsupported kinds, затем template
+// context/integration enrichment без изменения input. Internal localization/index/unknown-variable
+// fragments должны отклоняться без запуска модели.
 func TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities(t *testing.T) {
 	t.Parallel()
 	input := map[string]any{
@@ -746,6 +884,14 @@ func TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities(t *testing.
 	}
 }
 
+// TestAssistantCreateAgentHydrationReachesApprovedCommand checks pure create hydration through
+// normalization/project binding into CreateAgent, retaining explicit capabilities and injected
+// organization/project/agent/integration template context. The fixture reaches a typed command,
+// not a real approval or persisted agent.
+// TestAssistantCreateAgentHydrationReachesApprovedCommand проверяет чистую create hydration через
+// normalization/project binding в CreateAgent с сохранением явных capabilities и добавленного
+// organization/project/agent/integration template context. Оснастка достигает typed command, не
+// реального approval и не сохранённого агента.
 func TestAssistantCreateAgentHydrationReachesApprovedCommand(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{
@@ -756,18 +902,7 @@ func TestAssistantCreateAgentHydrationReachesApprovedCommand(t *testing.T) {
 			"capabilities": []any{"platform.artifact.manage", "platform.run.launch", "platform.run.delegate"},
 		},
 	}
-	hydrated, err := (&Repository{}).hydrateAssistantOperation(t.Context(), nil, scope{}, "prj_example", operation)
-	if err != nil {
-		t.Fatal(err)
-	}
-	normalized, err := normalizeAssistantOperation(hydrated)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bound, err := bindAssistantOperationProject(normalized, "prj_example")
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, bound := prepareAssistantCreateForTest(t, operation, "prj_example")
 	mapped, err := assistantOperationCommand(bound)
 	if err != nil {
 		t.Fatal(err)
@@ -782,6 +917,13 @@ func TestAssistantCreateAgentHydrationReachesApprovedCommand(t *testing.T) {
 	}
 }
 
+// TestHydrateAssistantProjectOperationBuildsCompleteAuthoritativeSnapshot checks project-update
+// preview target/version/selection and complete before/after snapshots with unchanged
+// purpose/language, rejecting a no-op rename. It uses a supplied owner snapshot without querying
+// or updating a project.
+// TestHydrateAssistantProjectOperationBuildsCompleteAuthoritativeSnapshot проверяет
+// target/version/selection preview проекта и полные before/after с неизменёнными purpose/language,
+// отклоняя no-op rename. Использует переданный owner snapshot без чтения и изменения проекта.
 func TestHydrateAssistantProjectOperationBuildsCompleteAuthoritativeSnapshot(t *testing.T) {
 	t.Parallel()
 	operation, err := hydrateAssistantProjectOperation("prj_12345678", "Sales", "Qualify leads", "en", 7,
@@ -803,6 +945,12 @@ func TestHydrateAssistantProjectOperationBuildsCompleteAuthoritativeSnapshot(t *
 	}
 }
 
+// TestAssistantOperationProjectBindingUsesConversationAuthority checks current-project alias binds
+// only to the supplied conversation project in a copied input map and rejects explicit different
+// or absent authoritative projects. It preserves the original tool payload.
+// TestAssistantOperationProjectBindingUsesConversationAuthority проверяет привязку current-project
+// alias лишь к переданному проекту беседы в копии input, отклоняет явно иной либо отсутствующий
+// авторитетный проект. Сохраняет исходный tool payload.
 func TestAssistantOperationProjectBindingUsesConversationAuthority(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{Type: "CREATE_AGENT", Summary: "Create analyst", Input: map[string]any{
@@ -826,6 +974,12 @@ func TestAssistantOperationProjectBindingUsesConversationAuthority(t *testing.T)
 	}
 }
 
+// TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun checks a synthetic workflow
+// draft gets stable step/input keys and a launch payload receives the server-owned
+// SYSTEM_ASSISTANT source. It validates adapters without publishing or executing the workflow/run.
+// TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun проверяет стабильные step/input
+// keys синтетического workflow draft и назначенный сервером source SYSTEM_ASSISTANT launch
+// payload. Проверяет adapters без публикации и исполнения workflow/run.
 func TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun(t *testing.T) {
 	t.Parallel()
 	workflow := entity.AssistantPlanOperation{Type: "CREATE_WORKFLOW", Summary: "Create workflow", Input: map[string]any{
@@ -855,6 +1009,12 @@ func TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun(t *testing
 	}
 }
 
+// TestAssistantOperationConflictClassifiesLaunchReadiness checks launch-readiness conflict
+// presentation has the expected runtime field, READY/UNAVAILABLE values and exact target
+// reference. No live readiness probe is involved.
+// TestAssistantOperationConflictClassifiesLaunchReadiness проверяет ожидаемые runtime field,
+// READY/UNAVAILABLE и точную target ref в представлении launch-readiness conflict. Реальной
+// проверки готовности нет.
 func TestAssistantOperationConflictClassifiesLaunchReadiness(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{Key: "launch", Type: "LAUNCH_RUN",
@@ -866,6 +1026,12 @@ func TestAssistantOperationConflictClassifiesLaunchReadiness(t *testing.T) {
 	}
 }
 
+// TestAssistantOperationCommandNormalizesNamedParallelGroups checks two steps sharing a named
+// parallel group receive the same numeric group and no artificial dependency between them in the
+// typed draft. It does not schedule concurrent work.
+// TestAssistantOperationCommandNormalizesNamedParallelGroups проверяет одинаковую числовую группу
+// и отсутствие искусственной зависимости у двух шагов с общей именованной parallel group в typed
+// draft. Не планирует параллельное исполнение.
 func TestAssistantOperationCommandNormalizesNamedParallelGroups(t *testing.T) {
 	t.Parallel()
 	workflow := entity.AssistantPlanOperation{Type: "CREATE_WORKFLOW", Summary: "Create workflow", Input: map[string]any{
@@ -890,6 +1056,14 @@ func TestAssistantOperationCommandNormalizesNamedParallelGroups(t *testing.T) {
 	}
 }
 
+// TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC checks specialized connection
+// create/test and grant-change mapping with expected versions and owner-selected approval paths.
+// It rejects malformed paths, retained scope on revoke, missing version and competing recipients,
+// while allowing revocation with cleared paths; no provider call is made.
+// TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC проверяет специализированное
+// сопоставление connection create/test и grant-change с expected versions и выбранными approval
+// paths. Отклоняет неверные paths, scope при revoke, отсутствие версии и конкурирующих
+// получателей, допускает revoke с очищенными paths; провайдера не вызывает.
 func TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC(t *testing.T) {
 	t.Parallel()
 	create := entity.AssistantPlanOperation{Type: "CREATE_INTEGRATION_CONNECTION", Summary: "Create CRM connection", Input: map[string]any{
@@ -952,6 +1126,14 @@ func TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC(t *testing.
 	}
 }
 
+// TestHydrateAssistantIntegrationGrantFieldsUsesAuthoritySnapshot checks grant hydration retains
+// connection/recipient version and name in the preview, enforces exact recipient context and maps
+// through normalization to the typed connection-OCC grant command with approval paths. The
+// snapshot is synthetic, not a live authorization grant.
+// TestHydrateAssistantIntegrationGrantFieldsUsesAuthoritySnapshot проверяет сохранение
+// connection/recipient version/name в grant preview, точный recipient context и прохождение
+// normalization в typed connection-OCC grant command с approval paths. Снимок синтетический, не
+// живой authorization grant.
 func TestHydrateAssistantIntegrationGrantFieldsUsesAuthoritySnapshot(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{
@@ -998,6 +1180,13 @@ func TestHydrateAssistantIntegrationGrantFieldsUsesAuthoritySnapshot(t *testing.
 	}
 }
 
+// TestAssistantJSONEqualPreservesStoredPlanSemantics round-trips a synthetic plan map through
+// ordinary JSON to change numeric/collection Go types, verifies semantic equality and rejects a
+// changed owner version. It covers these stored-plan representations rather than universal JSON
+// canonicalization.
+// TestAssistantJSONEqualPreservesStoredPlanSemantics проводит синтетическую plan map через обычный
+// JSON для изменения Go типов чисел/коллекций, проверяет семантическое равенство и отказ при иной
+// owner version. Покрывает эти stored-plan representations, не универсальную канонизацию JSON.
 func TestAssistantJSONEqualPreservesStoredPlanSemantics(t *testing.T) {
 	t.Parallel()
 	original := map[string]any{
@@ -1024,6 +1213,15 @@ func TestAssistantJSONEqualPreservesStoredPlanSemantics(t *testing.T) {
 	}
 }
 
+// TestAssistantConnectionUpdateRequiresExactContextAndPreservesAuthority checks connection context
+// and full hydration/command mapping preserve public fields/version without credential or
+// definition mutation. Edited metadata is restored from the original envelope;
+// malformed/no-op/secret changes and a definition switch are rejected without contacting the
+// provider.
+// TestAssistantConnectionUpdateRequiresExactContextAndPreservesAuthority проверяет connection
+// context и полное hydration/command mapping с сохранением публичных полей/версии без изменения
+// credential/definition. Edited metadata восстанавливается из исходного envelope;
+// malformed/no-op/secret changes и смена definition отклоняются без провайдера.
 func TestAssistantConnectionUpdateRequiresExactContextAndPreservesAuthority(t *testing.T) {
 	t.Parallel()
 	connection := entity.IntegrationConnection{Ref: "con_current", DefinitionKey: "github", Name: "Source", Version: 5,
@@ -1081,6 +1279,12 @@ func TestAssistantConnectionUpdateRequiresExactContextAndPreservesAuthority(t *t
 	}
 }
 
+// TestAssistantOperationCommandBuildsOwnerFriendlySchedule checks a DAILY schedule retains
+// explicit time/task without synthesizing hidden cron, rejects missing automation text and
+// preserves an explicitly supplied CUSTOM cron. It does not compute real occurrences.
+// TestAssistantOperationCommandBuildsOwnerFriendlySchedule проверяет сохранение явных
+// времени/задачи DAILY расписания без скрытой генерации cron, отказ без automation text и
+// сохранение явно переданного CUSTOM cron. Не вычисляет реальные occurrences.
 func TestAssistantOperationCommandBuildsOwnerFriendlySchedule(t *testing.T) {
 	t.Parallel()
 	schedule := entity.AssistantPlanOperation{Type: "CREATE_SCHEDULE", Summary: "Schedule lead review", Input: map[string]any{
@@ -1110,6 +1314,14 @@ func TestAssistantOperationCommandBuildsOwnerFriendlySchedule(t *testing.T) {
 	}
 }
 
+// TestAssistantScheduleUpdatePinsSnapshotAndRejectsForgedDraft checks exact schedule context and
+// hydration/typed-command OCC retain target/project/DST policy. Draft edits restore authoritative
+// target/version and allow a name change while rejecting immutable schedule/project/policy/prompt
+// fields; no schedule is persisted.
+// TestAssistantScheduleUpdatePinsSnapshotAndRejectsForgedDraft проверяет точный schedule context и
+// сохранение target/project/DST policy в hydration/typed-command OCC. Draft edits восстанавливают
+// target/version и допускают name change, отклоняя immutable schedule/project/policy/prompt
+// fields; расписание не сохраняется.
 func TestAssistantScheduleUpdatePinsSnapshotAndRejectsForgedDraft(t *testing.T) {
 	t.Parallel()
 	before := map[string]any{
@@ -1169,6 +1381,16 @@ func TestAssistantScheduleUpdatePinsSnapshotAndRejectsForgedDraft(t *testing.T) 
 	}
 }
 
+// TestAssistantWorkflowUpdatePreservesGraphAndRejectsForgedDraft checks exact workflow context,
+// graph/default preservation and OCC through hydration/command mapping. An edited graph retains
+// existing step identity and gets a server-assigned new key/dependency; foreign/duplicate keys and
+// immutable project/workflow/draft/version edits fail. It exercises pure snapshot helpers without
+// publishing or executing a workflow.
+// TestAssistantWorkflowUpdatePreservesGraphAndRejectsForgedDraft проверяет точный workflow
+// context, сохранение graph/default и OCC через hydration/command mapping. Изменённый граф
+// сохраняет identity прежнего шага и получает серверный новый key/dependency; чужие/duplicate keys
+// и immutable project/workflow/draft/version edits отклоняются. Проверяет чистые snapshot helpers
+// без публикации и исполнения workflow.
 func TestAssistantWorkflowUpdatePreservesGraphAndRejectsForgedDraft(t *testing.T) {
 	t.Parallel()
 	draft := entity.WorkflowVersion{Name: "Weekly report", Purpose: "Summarize work", CoordinatorAgentRef: "agt_12345678",
@@ -1265,4 +1487,30 @@ func TestAssistantWorkflowUpdatePreservesGraphAndRejectsForgedDraft(t *testing.T
 			t.Fatalf("workflow field %s was mutable: %v", key, err)
 		}
 	}
+}
+
+// prepareAssistantCreateForTest runs the shared pure-create fixture preparation with a nil
+// database transaction: hydrate, normalize, then bind to the supplied project, failing at the
+// original stage. It returns both the hydrated and bound operations so each caller retains its own
+// target-forgery and typed-payload assertions. It is limited to create branches that require no
+// database and does not supply real authorization.
+// prepareAssistantCreateForTest выполняет общую подготовку pure-create оснастки с nil транзакцией
+// БД: hydrate, normalize, затем bind к переданному проекту с отказом на исходном stage. Возвращает
+// hydrated и bound operations для отдельных target-forgery и typed-payload assertions каждого
+// caller. Ограничен create ветками без БД, реальную authorization не предоставляет.
+func prepareAssistantCreateForTest(t *testing.T, operation entity.AssistantPlanOperation, projectRef string) (entity.AssistantPlanOperation, entity.AssistantPlanOperation) {
+	t.Helper()
+	hydrated, err := (&Repository{}).hydrateAssistantOperation(t.Context(), nil, scope{}, projectRef, operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := bindAssistantOperationProject(normalized, projectRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hydrated, bound
 }
