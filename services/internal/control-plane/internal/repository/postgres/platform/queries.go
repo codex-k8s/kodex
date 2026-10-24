@@ -21,6 +21,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// GetBootstrapState resolves the actor and system assistant, reads bootstrap/onboarding timestamps
+// and organization project count, then derives onboarding actions. STT configuration errors become
+// safe availability reasons rather than failing bootstrap; Ready is configuration readback, not a
+// live transcription probe. Reads are separate rather than one snapshot.
+// GetBootstrapState разрешает субъекта и системного помощника, читает отметки bootstrap/onboarding
+// и число проектов организации, затем вычисляет действия onboarding. Ошибки конфигурации STT
+// превращаются в безопасные причины недоступности без отказа всего bootstrap; Ready отражает
+// конфигурацию, а не реальную транскрипцию. Чтения выполняются отдельно, не в одном снимке.
 func (repository *Repository) GetBootstrapState(ctx context.Context, principal value.Principal) (platformrepo.BootstrapState, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -59,6 +67,12 @@ func (repository *Repository) GetBootstrapState(ctx context.Context, principal v
 	return state, nil
 }
 
+// GetPlatformEventCursor returns the resolved organization reference together with the
+// installation-wide event sequence; query failures map to Unavailable and the cursor itself grants
+// no subscription authority.
+// GetPlatformEventCursor возвращает ссылку разрешённой организации и общую последовательность
+// событий установки; ошибки запроса отображаются в Unavailable, сам курсор не предоставляет право
+// подписки.
 func (repository *Repository) GetPlatformEventCursor(ctx context.Context, principal value.Principal) (string, int64, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -71,6 +85,13 @@ func (repository *Repository) GetPlatformEventCursor(ctx context.Context, princi
 	return scope.organizationRef, sequence, nil
 }
 
+// GetOverview combines three independently authorized first pages of runs, open gates and
+// artifacts with organization-wide counters. ActiveRuns filters only the fetched twenty-run page;
+// counters are not scoped to the optional project filter and this is not an atomic snapshot.
+// GetOverview объединяет три независимо авторизованные первые страницы запусков, открытых шлюзов и
+// артефактов со счётчиками всей организации. ActiveRuns фильтрует лишь полученную страницу из
+// двадцати запусков; счётчики не ограничены необязательным фильтром проекта, общего атомарного
+// снимка нет.
 func (repository *Repository) GetOverview(ctx context.Context, principal value.Principal, projectRef string) (platformrepo.Overview, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -105,6 +126,12 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 	return result, nil
 }
 
+// ListCapabilities requires a resolved actor scope and lists enabled capability descriptions and
+// risk. Query/scan errors map to Unavailable; a final iteration error is returned unchanged with
+// any accumulated rows.
+// ListCapabilities требует разрешённую область субъекта и перечисляет включённые возможности с
+// описанием и риском. Ошибки запроса/сканирования отображаются в Unavailable; конечная ошибка
+// итерации возвращается без преобразования вместе с накопленными строками.
 func (repository *Repository) ListCapabilities(ctx context.Context, principal value.Principal) ([]entity.IntegrationCapability, error) {
 	if _, err := repository.resolveScope(ctx, principal); err != nil {
 		return nil, err
@@ -125,6 +152,12 @@ func (repository *Repository) ListCapabilities(ctx context.Context, principal va
 	return result, rows.Err()
 }
 
+// ListRuntimes lists enabled runtime profiles after scope resolution and marks each returned
+// selection Ready without probing a provider. Query/scan failures discard results as Unavailable;
+// final iteration errors retain the accumulated result and raw error.
+// ListRuntimes перечисляет включённые профили после разрешения области и помечает каждый Ready без
+// проверки провайдера. Ошибки запроса/сканирования отбрасывают результат с Unavailable; конечная
+// ошибка итерации сохраняет накопленный результат и исходную ошибку.
 func (repository *Repository) ListRuntimes(ctx context.Context, principal value.Principal) ([]entity.RuntimeSelection, error) {
 	if _, err := repository.resolveScope(ctx, principal); err != nil {
 		return nil, err
@@ -146,6 +179,14 @@ func (repository *Repository) ListRuntimes(ctx context.Context, principal value.
 	return result, rows.Err()
 }
 
+// Search collects text candidates in a read-only RepeatableRead transaction, evaluates current
+// resource visibility before ranking/counting/pagination, and caps pages at fifty. Its versioned
+// cursor binds normalized query/project, not identity; access is evaluated afresh. No partial
+// results escape errors, and commit failure maps to Conflict.
+// Search собирает текстовых кандидатов в read-only RepeatableRead транзакции, проверяет текущую
+// видимость до ранжирования, подсчёта и пагинации, ограничивает страницу пятьюдесятью строками.
+// Версионный курсор связан с нормализованными запросом/проектом, не с личностью; доступ
+// проверяется заново. Ошибки исключают частичный результат, отказ commit отображается в Conflict.
 func (repository *Repository) Search(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.SearchResult, int64, string, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -172,6 +213,10 @@ func (repository *Repository) Search(ctx context.Context, principal value.Princi
 		return nil, 0, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
+	// rankedResult keeps a search candidate with its relevance bucket and ordering timestamp inside
+	// Search; only the embedded public result is returned after visibility filtering.
+	// rankedResult хранит кандидата поиска с категорией релевантности и временем сортировки внутри
+	// Search; после проверки видимости наружу возвращается лишь встроенный публичный результат.
 	type rankedResult struct {
 		entity.SearchResult
 		relevance int
@@ -248,12 +293,26 @@ func (repository *Repository) Search(ctx context.Context, principal value.Princi
 	return result, total, next, nil
 }
 
+// searchResultAfterCursor compares ascending relevance, descending time and ascending kind/NUL/ref
+// to select rows strictly after a decoded search position; the caller must supply a nonnil cursor
+// time.
+// searchResultAfterCursor сравнивает релевантность по возрастанию, время по убыванию и
+// kind/NUL/ref по возрастанию для выбора строк строго после позиции; вызывающий обязан передать
+// ненулевое время курсора.
 func searchResultAfterCursor(relevance int, createdAt time.Time, kind, ref string, cursor searchCursor) bool {
 	return relevance > cursor.Relevance ||
 		relevance == cursor.Relevance && createdAt.Before(*cursor.Time) ||
 		relevance == cursor.Relevance && createdAt.Equal(*cursor.Time) && kind+"\x00"+ref > cursor.Kind+"\x00"+cursor.Ref
 }
 
+// resourceVisible maps a known kind to its view permission and resolves an exact
+// organization/resource target, hiding absent targets. Environments additionally resolve their own
+// project; project-membership presentation bindings are excluded for other resource kinds. The
+// shared evaluator decides using the supplied subject, bindings and evaluation time.
+// resourceVisible сопоставляет известный вид с правом просмотра и разрешает точный ресурс
+// организации, скрывая отсутствующие цели. Окружение дополнительно разрешает собственный проект;
+// presentation bindings проектного membership исключаются для остальных видов ресурсов. Общий
+// evaluator принимает решение по переданным субъекту, bindings и времени.
 func (repository *Repository) resourceVisible(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -302,6 +361,12 @@ func (repository *Repository) resourceVisible(
 	return accessservice.Evaluate(subject, permission, target.scope, target.ownerSubjectRef, resourceBindings, evaluatedAt).Allowed, nil
 }
 
+// searchCursor stores version/filter digest and the relevance/time/kind/ref keyset position in
+// unsigned search tokens; decoding validates shape and filter binding without treating this
+// payload as authority.
+// searchCursor хранит версию, дайджест фильтра и позицию relevance/time/kind/ref в неподписанном
+// токене поиска; декодирование проверяет форму и связь с фильтром, не признавая payload источником
+// полномочий.
 type searchCursor struct {
 	Version   int        `json:"v"`
 	Filter    string     `json:"f"`
@@ -311,17 +376,34 @@ type searchCursor struct {
 	Ref       string     `json:"i"`
 }
 
+// searchFilterDigest hashes trimmed query and project separated by NUL and returns the first
+// twelve SHA-256 bytes as raw URL base64; this compact filter binding is not a MAC.
+// searchFilterDigest хеширует очищенные от крайних пробелов запрос и проект, разделённые NUL,
+// возвращая первые двенадцать байт SHA-256 в raw URL base64; эта компактная связь с фильтром не
+// является MAC.
 func searchFilterDigest(queryValue, projectRef string) string {
 	digest := sha256.Sum256([]byte(strings.TrimSpace(queryValue) + "\x00" + strings.TrimSpace(projectRef)))
 	return base64.RawURLEncoding.EncodeToString(digest[:12])
 }
 
+// encodeSearchCursor copies the position, stamps version two and the filter digest, then
+// JSON/raw-URL-base64 encodes it; it preserves the existing ignored marshal error for this fixed
+// serializable shape.
+// encodeSearchCursor копирует позицию, назначает версию два и дайджест фильтра, затем кодирует
+// JSON/raw-URL-base64; сохраняет прежнее игнорирование ошибки marshal для этой фиксированной
+// сериализуемой структуры.
 func encodeSearchCursor(cursor searchCursor, queryValue, projectRef string) string {
 	cursor.Version, cursor.Filter = 2, searchFilterDigest(queryValue, projectRef)
 	raw, _ := json.Marshal(cursor)
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
+// decodeSearchCursor accepts a blank token as the first page; otherwise enforces raw URL base64, a
+// 512-byte decoded limit, version/filter match, a timestamp, relevance zero through two and
+// nonempty kind/ref. Malformed positions return Invalid; the token is not authenticated.
+// decodeSearchCursor принимает пустой токен как первую страницу; иначе требует raw URL base64, не
+// более512 декодированных байт, совпадение версии/фильтра, время, релевантность от нуля до двух и
+// непустые kind/ref. Некорректная позиция даёт Invalid; подлинность токена не проверяется.
 func decodeSearchCursor(token, queryValue, projectRef string) (searchCursor, error) {
 	if strings.TrimSpace(token) == "" {
 		return searchCursor{}, nil
@@ -338,6 +420,14 @@ func decodeSearchCursor(token, queryValue, projectRef string) (searchCursor, err
 	return cursor, nil
 }
 
+// ListProjects validates the filter-bound updated-at/project-ref cursor, reads eligible projects
+// and presentation permissions in one read-only RepeatableRead snapshot, trims a lookahead row and
+// projects current cards before commit. Owner/admin presentation actions do not replace SQL
+// eligibility; failures discard the page.
+// ListProjects проверяет связанный с фильтром курсор updated-at/project-ref, читает доступные
+// проекты и presentation permissions в одном read-only RepeatableRead снимке, удаляет
+// дополнительную строку и проецирует текущие карточки до commit. Действия owner/admin не заменяют
+// SQL eligibility; ошибки отбрасывают страницу.
 func (repository *Repository) ListProjects(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Project, string, []string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -415,6 +505,12 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 	return result, next, actions, nil
 }
 
+// GetProject reads one eligible organization project in a read-only RepeatableRead transaction,
+// loads membership presentation permissions for nonprivileged actors and projects the current
+// card. Missing rows become NotFound; query/commit failures become Unavailable.
+// GetProject читает доступный проект организации в read-only RepeatableRead транзакции, загружает
+// presentation permissions membership для обычного субъекта и проецирует текущую карточку.
+// Отсутствие строки даёт NotFound; ошибки запроса/commit дают Unavailable.
 func (repository *Repository) GetProject(ctx context.Context, principal value.Principal, ref string) (entity.Project, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -454,6 +550,12 @@ func (repository *Repository) GetProject(ctx context.Context, principal value.Pr
 	return item, nil
 }
 
+// projectActions starts with OPEN and maps the supplied presentation permissions to
+// edit/create/manage/upload hints in stable order; it neither checks resource eligibility nor adds
+// the privileged DELETE hint owned by callers.
+// projectActions начинает с OPEN и в стабильном порядке преобразует переданные presentation
+// permissions в подсказки edit/create/manage/upload; не проверяет доступ к ресурсу и не добавляет
+// привилегированную DELETE, принадлежащую вызывающим.
 func projectActions(permissions []string) []string {
 	actions := []string{"OPEN"}
 	mappings := []struct{ permission, action string }{
@@ -474,6 +576,13 @@ func projectActions(permissions []string) []string {
 	return actions
 }
 
+// ListPlatformMemberships restricts the platform membership page to owner/admin, preserving
+// distinct subject/binding active flags and deriving edit/revoke hints. It returns an empty
+// continuation token even when the SQL page limit truncates rows; scan/iteration failures discard
+// results.
+// ListPlatformMemberships ограничивает страницу участников платформы owner/admin, сохраняет разные
+// признаки активности субъекта и membership, вычисляет edit/revoke. Возвращает пустой токен
+// продолжения даже при обрезке SQL лимитом; ошибки сканирования/итерации отбрасывают результат.
 func (repository *Repository) ListPlatformMemberships(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Membership, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -509,6 +618,13 @@ func (repository *Repository) ListPlatformMemberships(ctx context.Context, princ
 	return result, "", nil
 }
 
+// ListPlatformMembershipCandidates requires owner/admin and queries active verified-OIDC
+// organization subjects without any platform membership, matching a trimmed query. It delegates
+// only four-column row decoding and returns no continuation token; candidate status grants no
+// membership authority.
+// ListPlatformMembershipCandidates требует owner/admin и выбирает активных verified-OIDC субъектов
+// организации без платформенного membership по очищенному запросу. Делегирует лишь чтение четырёх
+// колонок и не возвращает токен продолжения; статус кандидата не предоставляет право участия.
 func (repository *Repository) ListPlatformMembershipCandidates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.User, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -526,20 +642,17 @@ func (repository *Repository) ListPlatformMembershipCandidates(ctx context.Conte
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	var result []entity.User
-	for rows.Next() {
-		var item entity.User
-		if err := rows.Scan(&item.Ref, &item.DisplayName, &item.EmailMasked, &item.Active); err != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		result = append(result, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	return result, "", nil
+	result, err := readMembershipCandidates(rows)
+	return result, "", err
 }
 
+// ListMemberships uses the authorized MEMBERSHIP catalog with exact actor/authority-project SQL
+// arguments, scanned subject/binding state and per-item edit/revoke hints. Catalog authorization
+// and pagination remain separate from those presentation hints; row iteration errors are passed to
+// the catalog.
+// ListMemberships использует авторизованный каталог MEMBERSHIP с точными SQL аргументами
+// субъекта/authority-project, состояниями субъекта/membership и подсказками edit/revoke.
+// Авторизация и пагинация каталога отделены от подсказок; ошибки итерации передаются каталогу.
 func (repository *Repository) ListMemberships(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Membership, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -573,6 +686,14 @@ func (repository *Repository) ListMemberships(ctx context.Context, principal val
 		})
 }
 
+// ListMembershipCandidates queries active platform members lacking any membership in the requested
+// active project, preserving SQL owner/admin-or-MANAGE_MEMBERS selection and actor/project
+// arguments. It shares row decoding with platform candidates and intentionally returns no
+// continuation token.
+// ListMembershipCandidates выбирает активных участников платформы без membership в запрошенном
+// активном проекте, сохраняя SQL отбор owner/admin либо MANAGE_MEMBERS и аргументы
+// субъекта/проекта. Разделяет чтение строк с платформенными кандидатами и намеренно не возвращает
+// токен продолжения.
 func (repository *Repository) ListMembershipCandidates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.User, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -590,20 +711,39 @@ func (repository *Repository) ListMembershipCandidates(ctx context.Context, prin
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
+	result, err := readMembershipCandidates(rows)
+	return result, "", err
+}
+
+// readMembershipCandidates collects the common four-column user projection from already authorized
+// candidate rows without issuing SQL or closing caller-owned rows. Empty success preserves a nil
+// slice; scan or final iteration failure discards all collected users and maps to Unavailable
+// without exposing driver diagnostics.
+// readMembershipCandidates собирает общую четырёхколоночную проекцию пользователя из уже
+// авторизованных строк кандидатов без SQL и закрытия строк вызывающего. Пустой успешный результат
+// сохраняет nil срез; ошибка scan либо конечной итерации отбрасывает всех собранных пользователей
+// и даёт Unavailable без раскрытия диагностики драйвера.
+func readMembershipCandidates(rows pgx.Rows) ([]entity.User, error) {
 	var result []entity.User
 	for rows.Next() {
 		var item entity.User
 		if err := rows.Scan(&item.Ref, &item.DisplayName, &item.EmailMasked, &item.Active); err != nil {
-			return nil, "", errs.ErrUnavailable
+			return nil, errs.ErrUnavailable
 		}
 		result = append(result, item)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, "", errs.ErrUnavailable
+		return nil, errs.ErrUnavailable
 	}
-	return result, "", nil
+	return result, nil
 }
 
+// platformMembershipActions returns no hints for nonprivileged actors, self changes or an
+// administrator acting on an owner. Otherwise it permits EDIT and adds REVOKE only for an active
+// binding; last-owner checks remain command-time policy.
+// platformMembershipActions не возвращает подсказок обычному субъекту, при изменении себя и для
+// administrator над owner. Иначе предлагает EDIT и добавляет REVOKE лишь для активного membership;
+// проверка последнего owner остаётся политикой команды.
 func platformMembershipActions(scope scope, item entity.Membership) []string {
 	if scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
 		return []string{}
@@ -621,6 +761,10 @@ func platformMembershipActions(scope scope, item entity.Membership) []string {
 	return actions
 }
 
+// projectMembershipActions suppresses self-edit hints and otherwise returns EDIT plus REVOKE for
+// active bindings; callers must already have established project management eligibility.
+// projectMembershipActions подавляет подсказки изменения себя, иначе возвращает EDIT и REVOKE для
+// активного membership; вызывающий уже должен проверить право управления проектом.
 func projectMembershipActions(scope scope, item entity.Membership) []string {
 	if item.User.Ref == scope.actorRef {
 		return []string{}
@@ -632,6 +776,14 @@ func projectMembershipActions(scope scope, item entity.Membership) []string {
 	return actions
 }
 
+// ListAgents loads candidate agents through the authorized catalog, applies avatar/card readback
+// before per-item authorization projection, then attaches instructions/grants and recomputes
+// actions from exact manage/launch permissions. It keeps the transaction and cursor ownership in
+// the catalog rather than exposing raw SQL flags as authority.
+// ListAgents загружает кандидатов агентов через авторизованный каталог, проецирует avatar/карточки
+// до поэлементной авторизации, затем добавляет инструкции/grants и пересчитывает действия по
+// точным manage/launch permissions. Транзакцией и курсором владеет каталог; исходные SQL flags не
+// выдаются за полномочия.
 func (repository *Repository) ListAgents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Agent, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -684,6 +836,14 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 	return result, next, nil
 }
 
+// GetAgent reads an actor-scoped agent in a read-only snapshot and additionally resolves
+// ordinary-agent assistant context. It projects avatar/system state, instructions, integration
+// grants and cards before commit; missing rows are NotFound and failed attachments/commit are
+// Unavailable.
+// GetAgent читает агента с областью субъекта в read-only снимке и дополнительно разрешает
+// assistant context обычного агента. До commit проецирует avatar/system state, инструкции,
+// integration grants и карточки; отсутствие строки даёт NotFound, отказ добавления данных/commit
+// даёт Unavailable.
 func (repository *Repository) GetAgent(ctx context.Context, principal value.Principal, ref string) (entity.Agent, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -728,6 +888,14 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 	return item, nil
 }
 
+// agentActions derives ordered UI hints from supplied manage/launch flags, system/archive/enabled
+// state and instruction versions. System agents expose only OPEN and optional RECOVER; ordinary
+// agents may validate/publish/rollback instructions, and assistant-backed agents omit ARCHIVE.
+// These hints do not execute or authorize mutations.
+// agentActions вычисляет упорядоченные подсказки по manage/launch flags, system/archive/enabled и
+// версиям инструкций. Системный агент предлагает только OPEN и возможный RECOVER; обычный может
+// validate/publish/rollback инструкции, assistant-backed агент не предлагает ARCHIVE. Подсказки не
+// исполняют и не авторизуют изменения.
 func agentActions(agent entity.Agent, canManage, canLaunch bool) []string {
 	if agent.System {
 		actions := []string{"OPEN"}
@@ -769,18 +937,39 @@ func agentActions(agent entity.Agent, canManage, canLaunch bool) []string {
 	return actions
 }
 
+// canManageAgent recognizes only the EDIT hint in an existing action list; it is a presentation
+// helper rather than an independent permission evaluation.
+// canManageAgent распознаёт только подсказку EDIT в готовом списке действий; служит представлению,
+// не независимой проверке полномочий.
 func canManageAgent(actions []string) bool {
 	return slices.Contains(actions, "EDIT")
 }
 
+// canLaunchAgent recognizes only the LAUNCH hint in an existing action list without checking
+// actor, target readiness or authorization itself.
+// canLaunchAgent распознаёт лишь LAUNCH в готовом списке действий без самостоятельной проверки
+// субъекта, готовности цели и полномочий.
 func canLaunchAgent(actions []string) bool {
 	return slices.Contains(actions, "LAUNCH")
 }
 
+// attachInstructions delegates instruction attachment to the pool-backed reader; callers needing
+// one consistent snapshot must use attachInstructionsFrom with their transaction.
+// attachInstructions делегирует добавление инструкций чтению через pool; для единого
+// согласованного снимка вызывающий должен использовать attachInstructionsFrom со своей
+// транзакцией.
 func (repository *Repository) attachInstructions(ctx context.Context, scope scope, agent *entity.Agent) error {
 	return repository.attachInstructionsFrom(ctx, repository.pool, scope, agent)
 }
 
+// attachInstructionsFrom appends ordered published instruction versions, selects the first
+// published and first nonpublished version and updates the binding on the supplied agent.
+// Validation-problem JSON decode errors are historically ignored; a successful empty binding read
+// fails Unavailable. Partial in-memory changes can precede an error.
+// attachInstructionsFrom добавляет упорядоченные опубликованные версии инструкций, выбирает первую
+// published и первую непубликуемую версию, обновляет binding переданного агента. Ошибки JSON
+// проблем валидации исторически игнорируются; успешное чтение без binding даёт Unavailable. До
+// ошибки возможны частичные изменения памяти.
 func (repository *Repository) attachInstructionsFrom(ctx context.Context, runner queryRunner, scope scope, agent *entity.Agent) error {
 	rows, err := runner.Query(ctx, queryQueriesAttachinstructionsSelectInstructionVersionsOrganizationIdAgentIdRef, scope.organizationID, agent.Ref)
 	if err != nil {
@@ -813,10 +1002,20 @@ func (repository *Repository) attachInstructionsFrom(ctx context.Context, runner
 	return rows.Err()
 }
 
+// attachAgentGrants uses the pool-backed grant reader to append integration grant references; it
+// does not open a snapshot or independently authorize the agent.
+// attachAgentGrants использует чтение grants через pool для добавления ссылок integration grants;
+// не открывает снимок и не авторизует агента самостоятельно.
 func (repository *Repository) attachAgentGrants(ctx context.Context, scope scope, agent *entity.Agent) error {
 	return repository.attachAgentGrantsFrom(ctx, repository.pool, scope, agent)
 }
 
+// attachAgentGrantsFrom appends grant references selected by organization and agent using the
+// supplied runner, closes rows and returns query/scan/iteration errors unchanged. Existing
+// references are not cleared and partial appends may remain on failure.
+// attachAgentGrantsFrom добавляет ссылки grants выбранные по организации и агенту через переданный
+// runner, закрывает строки и возвращает исходные ошибки запроса/сканирования/итерации. Прежние
+// ссылки не очищает; при отказе могут остаться частичные добавления.
 func (repository *Repository) attachAgentGrantsFrom(ctx context.Context, runner queryRunner, scope scope, agent *entity.Agent) error {
 	rows, err := runner.Query(ctx, queryQueriesAttachagentgrantsSelectIntegrationGrantsOrganizationIdTargetKindTargetRef, scope.organizationID, agent.Ref)
 	if err != nil {
@@ -833,6 +1032,14 @@ func (repository *Repository) attachAgentGrantsFrom(ctx context.Context, runner 
 	return rows.Err()
 }
 
+// ListWorkflows reads actor/project-filtered workflow candidates through the authorized catalog,
+// validates version JSON and projects launch readiness/cards in the same transaction. Exact
+// per-item manage/launch evaluation then determines action hints; catalog ownership governs
+// pagination and commit.
+// ListWorkflows читает отфильтрованных по субъекту/проекту кандидатов workflow через
+// авторизованный каталог, проверяет JSON версий и проецирует launch readiness/карточки в той же
+// транзакции. Точная поэлементная manage/launch проверка затем задаёт подсказки; каталог управляет
+// пагинацией и commit.
 func (repository *Repository) ListWorkflows(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Workflow, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -876,13 +1083,44 @@ func (repository *Repository) ListWorkflows(ctx context.Context, principal value
 		})
 }
 
-type rowScanner interface{ Scan(...any) error }
+// rowScanner is the minimal positional scan contract shared by single rows and iterated rows;
+// readers choose their own projection and error mapping.
+// rowScanner задаёт минимальный контракт позиционного сканирования одиночной и итерируемой строки;
+// читатели сами выбирают проекцию и отображение ошибок.
+type rowScanner interface {
+	// Scan fills caller-owned destinations in query column order and reports a row/decode failure;
+	// implementations own driver behavior and must be called at a valid row position.
+	// Scan заполняет принадлежащие вызывающему destinations в порядке колонок и сообщает ошибку
+	// строки/декодирования; поведение драйвера принадлежит реализации, вызов требует допустимой
+	// текущей строки.
+	Scan(...any) error
+}
 
+// queryRunner allows pool or transaction reads without transferring transaction ownership; callers
+// remain responsible for authorization, result-set closure and snapshot consistency.
+// queryRunner позволяет чтение через pool либо транзакцию без передачи владения транзакцией;
+// вызывающий отвечает за авторизацию, закрытие строк и согласованность снимка.
 type queryRunner interface {
+	// Query opens a multirow result for the given context, SQL and arguments; the caller closes and
+	// checks iteration errors before reusing the connection.
+	// Query открывает многострочный результат по контексту, SQL и аргументам; вызывающий закрывает
+	// строки и проверяет ошибки итерации до повторного использования соединения.
 	Query(context.Context, string, ...any) (pgx.Rows, error)
+	// QueryRow returns one deferred-scan row for the supplied context/query/arguments; absence and
+	// query failures surface through Scan.
+	// QueryRow возвращает одну строку с отложенным сканированием по контексту/запросу/аргументам;
+	// отсутствие и ошибки запроса обнаруживаются через Scan.
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+// scanWorkflow decodes the fixed workflow projection plus optional actor action flags, validates
+// draft/published structure and publication reference, and normalizes draft identity. Internal
+// reads default both flags true; that convenience does not grant authority. NoRows becomes
+// NotFound and corrupt/other failures become Unavailable.
+// scanWorkflow декодирует фиксированную проекцию workflow и необязательные flags действий
+// субъекта, проверяет структуру draft/published и publication reference, нормализует draft
+// identity. Внутреннее чтение по умолчанию ставит оба flags true; это не предоставляет полномочий.
+// NoRows даёт NotFound, повреждение/остальные ошибки дают Unavailable.
 func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 	var item entity.Workflow
 	var draft, published []byte
@@ -918,6 +1156,14 @@ func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 	return item, nil
 }
 
+// workflowActions maps manageable DRAFT/VALID/PUBLISHED states to edit/validate/publish/archive
+// hints and offers LAUNCH for published launchable workflows when readiness is absent or permits
+// submission. The absent-readiness compatibility behavior is retained; this function performs no
+// live readiness check.
+// workflowActions преобразует управляемые DRAFT/VALID/PUBLISHED в edit/validate/publish/archive и
+// предлагает LAUNCH опубликованному workflow при праве запуска и отсутствии readiness либо
+// разрешении подачи. Сохраняет совместимость при отсутствии readiness; реальную готовность не
+// проверяет.
 func workflowActions(item entity.Workflow, canManage, canLaunch bool) []string {
 	actions := []string{"OPEN"}
 	if canManage {
@@ -936,6 +1182,12 @@ func workflowActions(item entity.Workflow, canManage, canLaunch bool) []string {
 	return actions
 }
 
+// GetWorkflow resolves actor and exact workflow assistant context in a read-only RepeatableRead
+// snapshot, decodes actor-scoped versions, projects launch readiness/cards and commits. Failed
+// reads or projections return no workflow; failed commit maps to Unavailable.
+// GetWorkflow разрешает субъекта и точный assistant context workflow в read-only RepeatableRead
+// снимке, декодирует версии с областью субъекта, проецирует launch readiness/карточки и фиксирует
+// транзакцию. Отказ чтения/проекции исключает workflow в ответе; отказ commit даёт Unavailable.
 func (repository *Repository) GetWorkflow(ctx context.Context, principal value.Principal, ref string) (entity.Workflow, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -965,6 +1217,14 @@ func (repository *Repository) GetWorkflow(ctx context.Context, principal value.P
 	return item, nil
 }
 
+// ListRuns normalizes query/project and a copied unique closed set of states, routes
+// resumable-session requests separately and rejects ordinary target filters. The authorized
+// catalog reads/scans candidates, attaches assistant/continuation/artifact projections and a total
+// count using timestamp/ref pagination within its transaction.
+// ListRuns нормализует запрос/проект и копию уникальных состояний закрытого набора, отдельно
+// направляет resumable-session запросы и отклоняет фильтры цели обычного списка. Авторизованный
+// каталог читает кандидатов, добавляет assistant/continuation/artifact проекции и полный счётчик с
+// пагинацией по времени/ref в своей транзакции.
 func (repository *Repository) ListRuns(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Run, int64, string, error) {
 	filter.Query = strings.TrimSpace(filter.Query)
 	filter.ProjectRef = strings.TrimSpace(filter.ProjectRef)
@@ -1037,10 +1297,20 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 		}, runCatalogPosition)
 }
 
+// runCatalogPosition formats a run creation time in UTC RFC3339Nano followed by a vertical bar and
+// reference; outer catalog encoding binds this position to scope and filters.
+// runCatalogPosition форматирует время создания запуска в UTC RFC3339Nano, затем вертикальную
+// черту и ссылку; внешнее кодирование каталога связывает позицию с областью и фильтрами.
 func runCatalogPosition(item entity.Run) string {
 	return item.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + item.Ref
 }
 
+// parseRunCatalogPosition accepts an empty first-page position or splits timestamp/ref, rejecting
+// invalid timestamps and empty or separator-bearing references as Invalid. It parses position
+// shape, not resource eligibility or a run-reference prefix.
+// parseRunCatalogPosition принимает пустую позицию первой страницы либо разделяет время/ref,
+// отклоняя неверное время и пустые либо содержащие разделитель ссылки с Invalid. Проверяет форму
+// позиции, не доступ к ресурсу и не префикс ссылки запуска.
 func parseRunCatalogPosition(cursor string) (*time.Time, string, error) {
 	if cursor == "" {
 		return nil, "", nil
@@ -1053,10 +1323,22 @@ func parseRunCatalogPosition(cursor string) (*time.Time, string, error) {
 	return &at, ref, nil
 }
 
+// scanRun delegates the ordinary run projection to scanRunWithPrefix without leading destinations;
+// actorScoped selects whether the SQL row supplies two presentation action flags.
+// scanRun делегирует обычную проекцию запуска scanRunWithPrefix без начальных destinations;
+// actorScoped определяет наличие двух presentation flags действий в SQL строке.
 func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
 	return scanRunWithPrefix(row, actorScoped)
 }
 
+// scanRunWithPrefix prepends caller destinations to the complete run projection, optionally reads
+// actor cancel/launch flags, decodes input/usage and derives initial actions. Internal mode
+// defaults flags true without authorizing a command; scan/JSON failures discard the run, though
+// caller prefix destinations may already be written.
+// scanRunWithPrefix добавляет destinations вызывающего перед полной проекцией запуска, при
+// необходимости читает cancel/launch flags, декодирует input/usage и вычисляет исходные действия.
+// Внутренний режим ставит flags true без авторизации команды; ошибки scan/JSON отбрасывают запуск,
+// но начальные destinations уже могут быть заполнены.
 func scanRunWithPrefix(row rowScanner, actorScoped bool, prefix ...any) (entity.Run, error) {
 	var item entity.Run
 	var input, usage []byte
@@ -1084,6 +1366,13 @@ func scanRunWithPrefix(row rowScanner, actorScoped bool, prefix ...any) (entity.
 	item.NextActions = runActions(item.State, canCancel, canLaunch)
 	return item, nil
 }
+
+// runActions returns OPEN with CANCEL for cancellable live states, RETRY for failed/cancelled
+// states using the same supplied cancel flag, or ADD_TURN for successful launchable runs. All
+// other cases retain OPEN; this is an action hint, not continuation eligibility.
+// runActions возвращает OPEN с CANCEL для отменяемых живых состояний, RETRY для failed/cancelled
+// по тому же cancel flag либо ADD_TURN для successful при launch flag. Остальные случаи сохраняют
+// OPEN; это подсказка, не проверка допустимости продолжения.
 func runActions(state string, canCancel, canLaunch bool) []string {
 	switch state {
 	case "QUEUED", "RUNNING", "WAITING_HUMAN":
@@ -1101,6 +1390,11 @@ func runActions(state string, canCancel, canLaunch bool) []string {
 	}
 	return []string{"OPEN"}
 }
+
+// contains performs exact case-sensitive membership testing over string values without
+// normalization, mutation or permission interpretation.
+// contains проверяет точное регистрозависимое вхождение строки без нормализации, изменения данных
+// и интерпретации полномочий.
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
@@ -1110,6 +1404,12 @@ func contains(values []string, want string) bool {
 	return false
 }
 
+// actorActionPermissions groups project membership-derived presentation flags for
+// agent/workflow/run/gate/artifact/schedule actions; exact resource eligibility must be
+// established by the query or command path.
+// actorActionPermissions объединяет presentation flags проектного membership для действий агентов,
+// workflow, запусков, шлюзов, артефактов и расписаний; точный доступ к ресурсу обязан установить
+// путь запроса либо команды.
 type actorActionPermissions struct {
 	canManageAgents    bool
 	canManageWorkflows bool
@@ -1120,6 +1420,13 @@ type actorActionPermissions struct {
 	canManageSchedules bool
 }
 
+// projectActionPermissions returns all presentation flags for owner/admin, none for an empty
+// project or missing membership, and otherwise maps the stored permission strings. It maps other
+// query errors to Unavailable and does not independently authorize an exact resource.
+// projectActionPermissions возвращает все presentation flags для owner/admin, ни одного для
+// пустого проекта либо отсутствующего membership, иначе сопоставляет сохранённые строки
+// permissions. Остальные ошибки запроса отображает в Unavailable, точный ресурс самостоятельно не
+// авторизует.
 func (repository *Repository) projectActionPermissions(
 	ctx context.Context,
 	runner queryRunner,
@@ -1164,6 +1471,17 @@ func (repository *Repository) projectActionPermissions(
 	}, nil
 }
 
+// applyResultActionPermissions refreshes command/receipt presentation in the caller transaction:
+// current cards, queued-work access, conversation context, provider account, configuration and
+// artifact eligibility. It re-reads workflow publication and assistant-run pins, projects gate
+// intent and continuation actions, then filters graph/event hints. It can partially mutate the
+// supplied result before failure and never commits; historical receipt outcome does not supply
+// current authority.
+// applyResultActionPermissions обновляет представление command/receipt в транзакции вызывающего:
+// текущие карточки, доступ к queued work, контекст беседы, provider account, конфигурацию и
+// artifact eligibility. Перечитывает публикацию workflow и pins assistant-run, проецирует gate
+// intent/continuation, фильтрует graph/event actions. Может частично изменить результат до ошибки,
+// не выполняет commit; исторический outcome receipt не даёт текущих полномочий.
 func (repository *Repository) applyResultActionPermissions(
 	ctx context.Context,
 	runner pgx.Tx,
@@ -1334,6 +1652,10 @@ func (repository *Repository) applyResultActionPermissions(
 	return nil
 }
 
+// filterNodeActions copies only OPEN and permission-allowed CANCEL/RETRY/RESOLVE_GATE hints in
+// original order, dropping all unrecognized actions without mutating the source slice.
+// filterNodeActions копирует только OPEN и разрешённые CANCEL/RETRY/RESOLVE_GATE в исходном
+// порядке, отбрасывая неизвестные действия без изменения исходного среза.
 func filterNodeActions(actions []string, permissions actorActionPermissions) []string {
 	result := make([]string, 0, len(actions))
 	for _, action := range actions {
@@ -1353,6 +1675,12 @@ func filterNodeActions(actions []string, permissions actorActionPermissions) []s
 	return result
 }
 
+// applyEventActionPermissions recomputes action hints on nonnil run/node/gate deltas using
+// supplied project presentation flags; the event itself must be nonnil and callers separately
+// project current gate/continuation eligibility.
+// applyEventActionPermissions пересчитывает подсказки непустых run/node/gate delta по переданным
+// проектным presentation flags; само событие должно быть непустым, вызывающий отдельно проецирует
+// текущую gate/continuation eligibility.
 func applyEventActionPermissions(event *entity.RunEvent, permissions actorActionPermissions) {
 	if event.Delta.Run != nil {
 		event.Delta.Run.NextActions = runActions(
@@ -1369,6 +1697,12 @@ func applyEventActionPermissions(event *entity.RunEvent, permissions actorAction
 	}
 }
 
+// GetRun resolves exact assistant-context eligibility for the requested run in a read-only
+// RepeatableRead transaction, reads incidents/continuation/artifact projections, attaches session
+// readiness and commits. Any failure discards the run; commit failure maps to Unavailable.
+// GetRun разрешает точную assistant-context eligibility запуска в read-only RepeatableRead
+// транзакции, читает incidents/continuation/artifact проекции, добавляет session readiness и
+// фиксирует транзакцию. Любая ошибка отбрасывает запуск; отказ commit даёт Unavailable.
 func (repository *Repository) GetRun(ctx context.Context, principal value.Principal, ref string) (entity.Run, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1395,6 +1729,14 @@ func (repository *Repository) GetRun(ctx context.Context, principal value.Princi
 	return item, nil
 }
 
+// readRunWithIncidents reads an actor/authority-project-scoped run through the supplied runner,
+// attaches assistant pins and eligible artifacts, projects interaction delivery incidents and
+// current continuation actions. It does not open or commit a transaction; callers own the
+// authoritative access path and snapshot.
+// readRunWithIncidents читает запуск с областью субъекта/authority-project через переданный
+// runner, добавляет assistant pins и доступные артефакты, проецирует interaction delivery
+// incidents и текущие continuation actions. Не открывает и не фиксирует транзакцию; авторитетным
+// доступом и снимком владеет вызывающий.
 func (repository *Repository) readRunWithIncidents(ctx context.Context, runner queryRunner, scope scope, ref string) (entity.Run, error) {
 	item, err := scanRun(runner.QueryRow(ctx, queryQueriesGetrunSelectRunsOrganizationIdRefProjectId, scope.organizationID, ref, scope.actorID, scope.authorityProjectID), true)
 	if err != nil {
@@ -1435,14 +1777,31 @@ func (repository *Repository) readRunWithIncidents(ctx context.Context, runner q
 	return item, nil
 }
 
+// GetRunGraph reads the selected run and its root graph through getRunGraph without embedding the
+// root run family; access and snapshot/error handling remain in that shared implementation.
+// GetRunGraph читает выбранный запуск и его корневой граф через getRunGraph без вложенного
+// семейства запусков; доступом, снимком и ошибками управляет общий метод.
 func (repository *Repository) GetRunGraph(ctx context.Context, principal value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
 	return repository.getRunGraph(ctx, principal, ref, false)
 }
 
+// GetRunGraphSnapshot requests the root graph with embedded run-family snapshots; getRunGraph
+// rejects a nonroot selected run in this mode instead of attaching a mismatched family.
+// GetRunGraphSnapshot запрашивает корневой граф со снимками семейства запусков; getRunGraph в этом
+// режиме отклоняет выбранный некорневой запуск вместо добавления несовпадающего семейства.
 func (repository *Repository) GetRunGraphSnapshot(ctx context.Context, principal value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
 	return repository.getRunGraph(ctx, principal, ref, true)
 }
 
+// getRunGraph reads a run, root cursor, nodes and edges in one read-only RepeatableRead
+// transaction, filters node hints, masks callback continuation summaries and projects
+// retry/artifact views. Snapshot mode requires the selected root and attaches its run family; all
+// rows are closed before dependent reads and commit. Failures return neither partial run nor
+// graph.
+// getRunGraph читает запуск, корневой курсор, узлы и рёбра в одной read-only RepeatableRead
+// транзакции, фильтрует подсказки узлов, скрывает callback continuation summaries и проецирует
+// retry/артефакты. Режим snapshot требует выбранный root и добавляет его семейство; строки
+// закрываются до зависимых чтений и commit. Ошибки исключают частичный запуск и граф.
 func (repository *Repository) getRunGraph(ctx context.Context, principal value.Principal, ref string, includeRuns bool) (entity.Run, entity.RunGraph, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1548,6 +1907,12 @@ func (repository *Repository) getRunGraph(ctx context.Context, principal value.P
 	return run, graph, nil
 }
 
+// scanRunNode scans the complete node projection including stored action hints, materialization
+// state and artifact/child-run references. NoRows maps to NotFound and any other scan error to
+// Unavailable; caller policy must filter the hints.
+// scanRunNode сканирует полную проекцию узла, включая сохранённые подсказки, materialization state
+// и ссылки артефактов/дочерних запусков. NoRows даёт NotFound, прочие ошибки scan дают
+// Unavailable; вызывающий обязан отфильтровать подсказки политикой.
 func scanRunNode(row rowScanner) (entity.RunNode, error) {
 	var node entity.RunNode
 	if err := row.Scan(&node.Ref, &node.RunRef, &node.ParentNodeRef, &node.Type, &node.State, &node.DisplayName, &node.Role, &node.AgentRef, &node.TurnRef, &node.Attempt, &node.InputSummary, &node.ProgressSummary, &node.IntegrationNames, &node.CallbackSummary, &node.SafeErrorCode, &node.SafeErrorMessage, &node.NextActions, &node.MaterializationState, &node.CreatedAt, &node.StartedAt, &node.FinishedAt, &node.ArtifactRefs, &node.ChildRunRefs); err != nil {
@@ -1559,6 +1924,16 @@ func scanRunNode(row rowScanner) (entity.RunNode, error) {
 	return node, nil
 }
 
+// ListRunEvents reads a bounded 200-default/500-maximum root-event page and root high-watermark in
+// one read-only snapshot after reading the selected run. It validates run deltas, integration
+// bindings and tool JSON, projects current artifacts/gates/actions and masks callback provenance
+// text. Completion compares the page to the graph sequence; any failure discards the page and
+// commit maps to Unavailable.
+// ListRunEvents читает страницу корневых событий с лимитом200 по умолчанию и максимумом500 вместе
+// с root high-watermark в одном read-only снимке после чтения выбранного запуска. Проверяет run
+// delta, integration bindings и tool JSON, проецирует текущие артефакты/шлюзы/действия, скрывает
+// callback provenance text. Полноту определяет относительно graph sequence; ошибки отбрасывают
+// страницу, отказ commit даёт Unavailable.
 func (repository *Repository) ListRunEvents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RunEvent, int64, bool, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1665,6 +2040,12 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	return result, graph.Sequence, complete, nil
 }
 
+// scanGate reads the fixed gate projection and optional actor resolve flag, deriving actions from
+// state and that flag. Internal mode defaults resolve true without granting authority; NoRows is
+// NotFound and any other scan failure is Unavailable.
+// scanGate читает фиксированную проекцию шлюза и необязательный resolve flag субъекта, вычисляет
+// действия по состоянию/flag. Внутренний режим ставит resolve true без предоставления полномочий;
+// NoRows даёт NotFound, остальные ошибки scan дают Unavailable.
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
 	canResolve := true
@@ -1683,12 +2064,23 @@ func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	return item, nil
 }
 
+// gateActions offers RESOLVE_GATE only for an OPEN gate with the supplied resolve flag; all other
+// cases return an empty nonnil action slice.
+// gateActions предлагает RESOLVE_GATE только открытому шлюзу при переданном resolve flag; во всех
+// других случаях возвращает пустой ненулевой срез действий.
 func gateActions(state string, canResolve bool) []string {
 	if state == "OPEN" && canResolve {
 		return []string{"RESOLVE_GATE"}
 	}
 	return []string{}
 }
+
+// GetOwnerGate reads an actor-scoped gate in a read-only RepeatableRead transaction, additionally
+// checks organization role-image access for organization gates and projects current intent before
+// commit. It does not resolve or mutate the gate.
+// GetOwnerGate читает шлюз с областью субъекта в read-only RepeatableRead транзакции,
+// дополнительно проверяет organization role-image access для шлюза организации и проецирует
+// текущий intent до commit. Не принимает решение и не изменяет шлюз.
 func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.Principal, ref string) (entity.OwnerGate, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1717,6 +2109,15 @@ func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.
 	return gate, nil
 }
 
+// ListArtifacts normalizes and validates closed lifecycle/type/scan/source filters, including a
+// copied sorted unique source-kind set. The authorized catalog owns snapshot/cursor/total
+// handling; the loader scans eligible candidates and per-item projection applies current action
+// permissions and visible bindings. Invalid filters or failed reads yield no page.
+// ListArtifacts нормализует и проверяет закрытые lifecycle/type/scan/source фильтры, включая
+// скопированный отсортированный уникальный набор source kinds. Авторизованный каталог владеет
+// снимком, курсором и total; загрузчик читает доступных кандидатов, поэлементная проекция
+// применяет текущие действия и видимые bindings. Неверные фильтры и ошибки чтения исключают
+// страницу.
 func (repository *Repository) ListArtifacts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Artifact, int64, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1818,13 +2219,27 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 		})
 }
 
+// artifactCursorVersion pins the positional artifact cursor wire prefix to v1; outer catalog
+// wrapping owns scope/filter binding and resource authorization.
+// artifactCursorVersion фиксирует wire prefix позиционного курсора артефактов как v1; внешняя
+// обёртка каталога владеет связью с областью/фильтром и авторизацией ресурсов.
 const artifactCursorVersion = "v1"
 
+// encodeArtifactCursor encodes UTC creation time and artifact reference separated by newline under
+// a v1 raw-URL-base64 prefix; it does not authenticate the reference.
+// encodeArtifactCursor кодирует время создания UTC и ссылку артефакта, разделённые переводом
+// строки, с префиксом v1/raw-URL-base64; не удостоверяет подлинность ссылки.
 func encodeArtifactCursor(createdAt time.Time, ref string) string {
 	payload := createdAt.UTC().Format(time.RFC3339Nano) + "\n" + ref
 	return artifactCursorVersion + "." + base64.RawURLEncoding.EncodeToString([]byte(payload))
 }
 
+// decodeArtifactCursor accepts an empty first-page position; otherwise requires v1, at most256
+// encoded payload characters, a valid timestamp and an art_ reference up to96 bytes without
+// newlines. It normalizes time to UTC and returns Invalid for malformed positions.
+// decodeArtifactCursor принимает пустую позицию первой страницы; иначе требует v1, не более256
+// символов кодированного payload, корректное время и ссылку art_ до96 байт без переводов строки.
+// Нормализует время в UTC, некорректная позиция даёт Invalid.
 func decodeArtifactCursor(token string) (*time.Time, string, error) {
 	if token == "" {
 		return nil, "", nil
@@ -1846,6 +2261,12 @@ func decodeArtifactCursor(token string) (*time.Time, string, error) {
 	return &createdAt, ref, nil
 }
 
+// scanArtifact scans artifact revision/lifecycle/binding metadata and one presentation manage
+// flag, then derives initial actions. It maps NoRows to NotFound and other scan errors to
+// Unavailable; current binding eligibility remains a separate caller projection.
+// scanArtifact читает метаданные revision/lifecycle/binding артефакта и один presentation manage
+// flag, затем вычисляет исходные действия. NoRows отображает в NotFound, прочие ошибки scan в
+// Unavailable; текущая доступность bindings остаётся отдельной проекцией вызывающего.
 func scanArtifact(row rowScanner) (entity.Artifact, error) {
 	var item entity.Artifact
 	var canManage bool
@@ -1859,6 +2280,14 @@ func scanArtifact(row rowScanner) (entity.Artifact, error) {
 	return item, nil
 }
 
+// artifactActions treats empty lifecycle as ACTIVE, offers restore/purge only for managed deleted
+// items and no actions after purge begins. Nonclean items expose only managed DELETE; clean items
+// expose DOWNLOAD plus managed BIND/DELETE. It consumes supplied state/flags without checking
+// current access.
+// artifactActions считает пустой lifecycle равным ACTIVE, предлагает restore/purge лишь
+// управляемым удалённым объектам и не предлагает действий после начала purge. Нечистый объект
+// предлагает лишь DELETE при управлении; чистый — DOWNLOAD и возможные BIND/DELETE. Использует
+// переданные состояния/flags без проверки текущего доступа.
 func artifactActions(scanState, lifecycleState string, canManage bool) []string {
 	if lifecycleState == "" {
 		lifecycleState = "ACTIVE"
@@ -1884,6 +2313,13 @@ func artifactActions(scanState, lifecycleState string, canManage bool) []string 
 	}
 	return actions
 }
+
+// GetArtifact bounds the request to five seconds, resolves exact file assistant context in a
+// read-only RepeatableRead snapshot, scans the artifact and projects current eligibility before
+// commit. Any read/projection/commit failure discards the artifact.
+// GetArtifact ограничивает запрос пятью секундами, разрешает точный assistant context файла в
+// read-only RepeatableRead снимке, читает артефакт и проецирует текущую eligibility до commit.
+// Любой отказ чтения, проекции или commit отбрасывает артефакт.
 func (repository *Repository) GetArtifact(ctx context.Context, principal value.Principal, ref string) (entity.Artifact, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -1912,6 +2348,12 @@ func (repository *Repository) GetArtifact(ctx context.Context, principal value.P
 	return item, nil
 }
 
+// ListSchedules loads actor/authority-project-scoped schedule candidates through the authorized
+// catalog and strict schedule scanner. The catalog applies exact per-item view/manage evaluation
+// and cursor handling; the callback only derives management action hints.
+// ListSchedules загружает кандидатов расписаний с областью субъекта/authority-project через
+// авторизованный каталог и строгий scanner. Каталог применяет точную поэлементную view/manage
+// проверку и курсор; callback лишь вычисляет подсказки управления.
 func (repository *Repository) ListSchedules(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Schedule, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1945,6 +2387,12 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 		})
 }
 
+// GetSchedule resolves actor scope and directly scans the actor-scoped schedule query through the
+// pool. It preserves this single-query read path rather than opening the catalog snapshot or
+// adding a separate context resolver.
+// GetSchedule разрешает область субъекта и непосредственно читает расписание через pool запросом с
+// областью субъекта. Сохраняет путь одиночного запроса, не открывая снимок каталога и не добавляя
+// отдельный context resolver.
 func (repository *Repository) GetSchedule(ctx context.Context, principal value.Principal, ref string) (entity.Schedule, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1958,6 +2406,14 @@ func (repository *Repository) GetSchedule(ctx context.Context, principal value.P
 	}))
 }
 
+// scanSchedule decodes mutable schedule fields and the complete immutable current revision,
+// validates display/input/prompt JSON and projects revision policies into the public item.
+// Continue-session expectation and nullable reference must agree; any mismatch/corruption fails
+// Unavailable, while NoRows is NotFound.
+// scanSchedule декодирует изменяемые поля расписания и полную immutable current revision,
+// проверяет display/input/prompt JSON, переносит политики ревизии в публичный объект. Ожидание
+// продолжения сессии и nullable reference обязаны совпасть; несовпадение/повреждение даёт
+// Unavailable, NoRows — NotFound.
 func scanSchedule(row rowScanner) (entity.Schedule, error) {
 	var item entity.Schedule
 	var input, currentRevisionInput, currentRevisionPromptInputs []byte
@@ -2007,6 +2463,12 @@ func scanSchedule(row rowScanner) (entity.Schedule, error) {
 	return item, nil
 }
 
+// scheduleActions always offers OPEN, adds only DELETE for a managed archived schedule, and
+// otherwise adds EDIT/ARCHIVE plus DISABLE or ENABLE according to the current enabled flag. It
+// performs no lifecycle transition.
+// scheduleActions всегда предлагает OPEN, добавляет лишь DELETE для управляемого архивного
+// расписания, иначе EDIT/ARCHIVE и DISABLE либо ENABLE по текущему enabled. Не выполняет переходов
+// жизненного цикла.
 func scheduleActions(item entity.Schedule, canManage bool) []string {
 	actions := []string{"OPEN"}
 	if !canManage {
@@ -2022,6 +2484,14 @@ func scheduleActions(item entity.Schedule, canManage bool) []string {
 	return append(actions, "ENABLE")
 }
 
+// ListIntegrationDefinitions validates a stable-key cursor, reads definitions with a lookahead row
+// in a read-only snapshot and strictly decodes capabilities/schema. Current organization.manage
+// allows COPY only for enabled shipped definitions; collection create hints still use platform
+// role. Commit failure discards the page.
+// ListIntegrationDefinitions проверяет курсор stable-key, читает определения с дополнительной
+// строкой в read-only снимке, строго декодирует capabilities/schema. Текущее organization.manage
+// даёт COPY лишь включённым shipped definitions; подсказка создания коллекции использует
+// платформенную роль. Отказ commit отбрасывает страницу.
 func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.IntegrationDefinition, string, []string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -2085,6 +2555,10 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 	return result, next, actions, nil
 }
 
+// collectionCreateActions returns the supplied single collection action only for exact OWNER or
+// ADMINISTRATOR roles; other roles receive an empty slice without an independent access check.
+// collectionCreateActions возвращает единственное переданное действие коллекции лишь для точных
+// ролей OWNER либо ADMINISTRATOR; остальные получают пустой срез без независимой проверки доступа.
 func collectionCreateActions(role, action string) []string {
 	if role == "OWNER" || role == "ADMINISTRATOR" {
 		return []string{action}
@@ -2092,6 +2566,12 @@ func collectionCreateActions(role, action string) []string {
 	return []string{}
 }
 
+// assistantActions offers OPEN and ready-dependent conversation/turn hints, adding EDIT for
+// owner/admin and RECOVER when such an actor sees an unready assistant. Readiness is supplied by
+// the caller rather than probed here.
+// assistantActions предлагает OPEN и зависящие от ready подсказки беседы/turn, добавляет EDIT для
+// owner/admin и RECOVER при неготовом помощнике для этих ролей. Готовность передаёт вызывающий,
+// здесь она не проверяется.
 func assistantActions(role string, ready bool) []string {
 	actions := []string{"OPEN"}
 	if ready {
@@ -2106,6 +2586,14 @@ func assistantActions(role string, ready bool) []string {
 	return actions
 }
 
+// ListIntegrationConnections normalizes the definition-key alias into the category filter,
+// rejecting disagreement, then uses the authorized integration catalog. Rows are decoded and
+// package/grant readback attached within its transaction; exact integration.manage controls both
+// connection and grant hints.
+// ListIntegrationConnections переносит alias definition-key в фильтр category, отклоняя
+// несовпадение, затем использует авторизованный каталог integrations. Строки декодируются,
+// package/grant readback добавляется в его транзакции; точное integration.manage управляет
+// подсказками connection и grant.
 func (repository *Repository) ListIntegrationConnections(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.IntegrationConnection, string, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -2148,6 +2636,13 @@ func (repository *Repository) ListIntegrationConnections(ctx context.Context, pr
 		})
 }
 
+// scanConnection decodes public configuration/capability JSON and credential-revision metadata,
+// attaching the revision only when both its reference and creation time exist. It exposes OPEN
+// initially; NoRows becomes NotFound and scan/JSON corruption becomes Unavailable without reading
+// secret values.
+// scanConnection декодирует public configuration/capability JSON и метаданные credential revision,
+// добавляя ревизию лишь при наличии ссылки и времени создания. Изначально предлагает OPEN; NoRows
+// даёт NotFound, ошибки scan/JSON дают Unavailable, значения секретов не читает.
 func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 	var item entity.IntegrationConnection
 	var configuration, capabilities []byte
@@ -2178,11 +2673,31 @@ func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 	return item, nil
 }
 
+// connectionQuerier accepts pool or transactional reads needed by connection package/grant
+// projections without owning authorization, transaction boundaries or returned row closure.
+// connectionQuerier принимает чтения через pool либо транзакцию для package/grant проекций
+// connection без владения авторизацией, границами транзакции и закрытием возвращённых строк.
 type connectionQuerier interface {
+	// Query returns an iterated connection-related result set whose closure and final error checks
+	// belong to the caller.
+	// Query возвращает итерируемый набор строк connection, закрытие и проверка конечной ошибки
+	// принадлежат вызывающему.
 	Query(context.Context, string, ...any) (pgx.Rows, error)
+	// QueryRow returns a deferred-scan connection-related row; caller scanning interprets absence and
+	// query failures.
+	// QueryRow возвращает строку connection с отложенным сканированием; вызывающий интерпретирует
+	// отсутствие и ошибки запроса при scan.
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+// connectionActions builds ordered connection/grant hints from supplied management flags,
+// enabled/testing/credential state and approval requirements. Disabled connections stop at
+// edit/enable/delete; grant management requires CONNECTED, while test/configure hints preserve
+// their existing guards. No provider call or access evaluation occurs.
+// connectionActions строит упорядоченные подсказки connection/grant по management flags,
+// enabled/testing/credential и требованиям одобрения. Отключённый connection ограничен
+// edit/enable/delete; управление grants требует CONNECTED, test/configure сохраняют прежние
+// условия. Не вызывает провайдера и не проверяет доступ.
 func connectionActions(item entity.IntegrationConnection, manageConnection, manageGrants bool) []string {
 	actions := []string{"OPEN"}
 	if !manageConnection && !manageGrants {
@@ -2212,6 +2727,12 @@ func connectionActions(item entity.IntegrationConnection, manageConnection, mana
 	return actions
 }
 
+// connectionAuthority queries the organization/actor/connection management predicate and returns
+// that same boolean for connection and grant management. Any query/scan error returns two false
+// flags and Unavailable; the caller owns surrounding resource eligibility.
+// connectionAuthority запрашивает management predicate организации/субъекта/connection и
+// возвращает одно значение для управления connection и grants. Любая ошибка запроса/scan даёт два
+// false и Unavailable; окружающей eligibility ресурса владеет вызывающий.
 func connectionAuthority(ctx context.Context, querier connectionQuerier, scope scope, ref string) (bool, bool, error) {
 	var manage bool
 	if err := querier.QueryRow(ctx, queryIntegrationConnectionAuthority, scope.organizationID, scope.actorID, ref).Scan(&manage); err != nil {
@@ -2220,6 +2741,14 @@ func connectionAuthority(ctx context.Context, querier connectionQuerier, scope s
 	return manage, manage, nil
 }
 
+// attachConnection projects connection package metadata, then appends
+// actor/authority-project-filtered grants with decoded resource scopes and the connection current
+// version. Query/scan/iteration errors remain raw; malformed scope JSON returns a fixed error, and
+// partial item mutations can precede failure.
+// attachConnection проецирует package metadata connection, затем добавляет отфильтрованные по
+// субъекту/authority-project grants с декодированными resource scopes и текущей версией
+// connection. Ошибки query/scan/итерации остаются исходными; некорректный scope JSON даёт
+// фиксированную ошибку, до отказа возможны частичные изменения объекта.
 func attachConnection(ctx context.Context, querier connectionQuerier, scope scope, item *entity.IntegrationConnection) error {
 	if err := projectConnectionPackage(ctx, querier, scope, item); err != nil {
 		return err
@@ -2248,6 +2777,12 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 	return rows.Err()
 }
 
+// readConnection reads one organization connection through the supplied runner, attaches
+// package/grants and derives actions from the management predicate. Attachment failures map to
+// Unavailable; the caller must establish exact access and transaction consistency.
+// readConnection читает connection организации через переданный runner, добавляет package/grants и
+// вычисляет действия по management predicate. Отказ добавления данных даёт Unavailable; точный
+// доступ и согласованность транзакции устанавливает вызывающий.
 func readConnection(ctx context.Context, querier connectionQuerier, scope scope, ref string) (entity.IntegrationConnection, error) {
 	item, err := scanConnection(querier.QueryRow(ctx, queryQueriesGetintegrationconnectionSelectIntegrationConnectionsOrganizationIdRef, scope.organizationID, ref))
 	if err != nil {
@@ -2264,6 +2799,14 @@ func readConnection(ctx context.Context, querier connectionQuerier, scope scope,
 	return item, nil
 }
 
+// GetIntegrationConnection resolves exact integration-connection assistant context in a read-only
+// RepeatableRead transaction, reads the connection/grants and attaches its definition binding
+// before commit. Every failure returns an empty connection; it neither tests the provider nor
+// reads secret content.
+// GetIntegrationConnection разрешает точный assistant context connection в read-only
+// RepeatableRead транзакции, читает connection/grants и добавляет definition binding до commit.
+// Любая ошибка возвращает пустой connection; провайдера не тестирует, содержимое секретов не
+// читает.
 func (repository *Repository) GetIntegrationConnection(ctx context.Context, principal value.Principal, ref string) (entity.IntegrationConnection, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -2290,6 +2833,14 @@ func (repository *Repository) GetIntegrationConnection(ctx context.Context, prin
 	return item, nil
 }
 
+// getAssistant reads the organization system assistant, historically ignores resource-limit JSON
+// errors and derives Ready from READY/BUSY state plus a heartbeat younger than45 seconds. It sets
+// system/nondeletable flags and role-based actions; this readback does not prove provider
+// execution readiness.
+// getAssistant читает системного помощника организации, исторически игнорирует ошибки JSON
+// resource limits и вычисляет Ready по READY/BUSY и heartbeat моложе45 секунд. Назначает
+// system/nondeletable и действия роли; это чтение не доказывает готовность исполнения у
+// провайдера.
 func (repository *Repository) getAssistant(ctx context.Context, scope scope) (entity.SystemAssistant, error) {
 	var item entity.SystemAssistant
 	var limits []byte
@@ -2304,6 +2855,12 @@ func (repository *Repository) getAssistant(ctx context.Context, scope scope) (en
 	item.NextActions = assistantActions(scope.role, item.Ready)
 	return item, nil
 }
+
+// GetSystemAssistant resolves the actor organization and delegates system-assistant
+// readback/action projection to getAssistant without opening a transaction or running a
+// recovery/readiness probe.
+// GetSystemAssistant разрешает организацию субъекта и делегирует getAssistant чтение/проекцию
+// действий системного помощника без открытия транзакции и recovery/readiness проверки.
 func (repository *Repository) GetSystemAssistant(ctx context.Context, principal value.Principal) (entity.SystemAssistant, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -2312,6 +2869,14 @@ func (repository *Repository) GetSystemAssistant(ctx context.Context, principal 
 	return repository.getAssistant(ctx, scope)
 }
 
+// ListAssistantConversations bounds the request to five seconds, validates normalized conversation
+// filters and a scope/filter-bound timestamp/ref cursor, then reads a lookahead page in a
+// read-only snapshot. It attaches turns/plans only for the selected page before commit; failures
+// discard all conversations.
+// ListAssistantConversations ограничивает запрос пятью секундами, проверяет нормализованные
+// фильтры бесед и связанный с областью/фильтром курсор время/ref, читает страницу с дополнительной
+// строкой в read-only снимке. Добавляет turns/plans только выбранной странице до commit; ошибки
+// отбрасывают все беседы.
 func (repository *Repository) ListAssistantConversations(ctx context.Context, principal value.Principal, filter query.AssistantConversationFilter) ([]entity.AssistantConversation, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -2394,6 +2959,17 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	}
 	return result, next, nil
 }
+
+// attachConversation appends ordered turns and plans in the supplied transaction, projecting
+// runtime message provenance and masking callback text. It decodes/redacts plan operations and
+// attaches receipts only for matching terminal revision/state/outcome with a creation time;
+// invalid matching receipts fail closed. LatestPlan copies the final accumulated plan; partial
+// additions can precede errors.
+// attachConversation добавляет упорядоченные turns/plans в переданной транзакции, проецирует
+// runtime message provenance и скрывает callback text. Декодирует и редактирует plan operations,
+// добавляет receipts лишь при совпадении terminal revision/state/outcome и наличии времени
+// создания; некорректная совпадающая receipt закрыто отклоняется. LatestPlan копирует последний
+// накопленный план; до ошибки возможны частичные добавления.
 func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx, scope scope, item *entity.AssistantConversation) error {
 	rows, err := tx.Query(ctx, queryQueriesAttachconversationSelectSessionTurnsOrganizationIdSessionIdRef, scope.organizationID, item.Ref)
 	if err != nil {
@@ -2476,10 +3052,18 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 	return nil
 }
 
+// assistantPlanStateHasReceipt recognizes only APPLIED, REJECTED and STALE plan states as
+// receipt-bearing; unknown or nonterminal states return false.
+// assistantPlanStateHasReceipt считает имеющими receipt только состояния плана APPLIED, REJECTED и
+// STALE; неизвестное либо нетерминальное состояние даёт false.
 func assistantPlanStateHasReceipt(state string) bool {
 	return state == "APPLIED" || state == "REJECTED" || state == "STALE"
 }
 
+// assistantPlanReceiptMatchesState matches APPLIED to APPLIED, REJECTED to REJECTED and STALE to
+// CONFLICT, rejecting all other pairs without inferring success from receipt existence.
+// assistantPlanReceiptMatchesState сопоставляет APPLIED с APPLIED, REJECTED с REJECTED и STALE с
+// CONFLICT, отклоняя прочие пары без вывода об успехе из наличия receipt.
 func assistantPlanReceiptMatchesState(state, outcome string) bool {
 	switch state {
 	case "APPLIED":
@@ -2493,6 +3077,13 @@ func assistantPlanReceiptMatchesState(state, outcome string) bool {
 	}
 }
 
+// GetAdministration combines separate assistant/definition reads with adapter counts and failed
+// interaction incidents. It reports the existing fixed CoreReady/summary and selects the web
+// profile from active adapters rather than performing a live health probe or a single consistent
+// snapshot.
+// GetAdministration объединяет отдельные чтения помощника/определений со счётчиком adapters и
+// неудачными interaction incidents. Возвращает прежние фиксированные CoreReady/summary, выбирает
+// web profile по активным adapters без реальной health проверки и единого согласованного снимка.
 func (repository *Repository) GetAdministration(ctx context.Context, principal value.Principal) (platformrepo.Administration, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -2539,6 +3130,13 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	}
 	return result, nil
 }
+
+// ListAuditEvents resolves actor scope, validates an audit position and queries
+// actor/project/resource-filtered events with one lookahead row. It preserves SQL order, returns a
+// timestamp/ref continuation when trimmed and discards results on query/scan/iteration errors.
+// ListAuditEvents разрешает область субъекта, проверяет audit position и читает события с фильтром
+// субъекта/проекта/ресурса и дополнительной строкой. Сохраняет SQL порядок, возвращает продолжение
+// время/ref при обрезке, отбрасывает результат при ошибках запроса/scan/итерации.
 func (repository *Repository) ListAuditEvents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.AuditEvent, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -2577,10 +3175,19 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 	return result, next, nil
 }
 
+// encodeAuditCursor delegates timestamp/ref encoding to the shared MVP cursor under the audit
+// namespace without signing or authorizing the referenced event.
+// encodeAuditCursor делегирует кодирование время/ref общему MVP курсору в пространстве audit без
+// подписи и авторизации события по ссылке.
 func encodeAuditCursor(occurredAt time.Time, ref string) string {
 	return encodeMVPCursor("audit", occurredAt, ref)
 }
 
+// decodeAuditCursor uses the shared audit cursor decoder and additionally requires nonempty
+// references to have aud_ prefix and no line breaks; empty first-page positions remain valid.
+// decodeAuditCursor использует общий decoder audit cursor и дополнительно требует префикс aud_ и
+// отсутствие переводов строки у непустой ссылки; пустая позиция первой страницы остаётся
+// допустимой.
 func decodeAuditCursor(token string) (*time.Time, string, error) {
 	occurredAt, ref, err := decodeMVPCursor("audit", token)
 	if err != nil {

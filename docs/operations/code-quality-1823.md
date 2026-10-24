@@ -4,11 +4,68 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.386.0
+version: 1.387.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Чтение каталогов, карточек и membership candidates — 24.10.2026
+
+На основе `1434282b1dbc46b57dd76673f020fd570c538380` прочитан полный
+queries.go и описаны96 прежних объявлений, включая локальный rankedResult,
+интерфейсы и их методы. Новый helper также описан:97/97 в файле.
+Общий inventory19110/21442;2332 оставшихся объявления — PostgreSQL adapter
+control-plane. Все93 Go-файла текущего PR имеют914/914 EN→RU описаний.
+
+`readMembershipCandidates` объединяет два одинаковых цикла чтения четырёх
+полей пользователя: Ref, DisplayName, EmailMasked, Active. Сохранены nil
+для пустого успеха, порядок строк, отбрасывание частичных результатов и
+Unavailable для Scan/final Err. Helper не выполняет SQL, не закрывает строки,
+не назначает права и не владеет транзакцией. Разные SQL/arguments/role guards,
+контекст и deferred Close остались у platform/project callers; оба по-прежнему
+возвращают пустой continuation token. Прочитаны оба полных candidate SQL:
+platform требует отсутствие любого platform membership; project — ACTIVE
+project, active platform membership и owner/admin либо MANAGE_MEMBERS отбор.
+Отбор кандидата сам не предоставляет право добавить участника.
+
+| Путь чтения | Сохранённая граница и ограничение |
+| --- | --- |
+| Bootstrap / overview / administration | Actor scope до чтения; отдельные запросы без общего snapshot. Overview counters относятся к организации, ActiveRuns фильтрует лишь первую страницу. CoreReady и runtime profile Ready не являются live health proof |
+| Search | RepeatableRead read-only; candidates → exact resourceVisible → ranking/count/cursor. Environment сначала разрешает exact resource, затем свой project. Presentation membership не расширяет остальные kind; unsigned cursor не выдаёт authority |
+| Projects / agents / workflows | Actor/authority-project SQL eligibility, текущие card/readiness projections и caller-specific action hints. Detail имеет отдельный context path; internal scanner mode с true flags не авторизует команды |
+| Runs / graph / events | Exact run readback, assistant pin и continuation/session readiness; root graph cursor, actor-filtered hints, artifact eligibility. Callback source перечитывается и публичный текст маскируется. Snapshot mode требует selected root; event delta/tool JSON проверяются до выдачи |
+| Artifacts / schedules | Closed filters/cursors и текущие binding/action projections. Artifact detail имеет five-second context/snapshot. Schedule scanner проверяет current revision JSON и nullable continuation consistency; detail сохраняет одиночный pool-query path |
+| Integrations | Catalog authorization до package/grant projection; public configuration и metadata credential revision без значений секретов. Definition COPY требует current organization.manage; management hints не заменяют command authority |
+| Conversations / audit | Five-second conversation budget, scope/filter-bound cursor, selected-page turns/plans и matching terminal receipt checks. Audit сохраняет SQL order/filters и lookahead pagination; cursor не удостоверяет полномочия |
+
+Полный expected-AST compare queries.go — PASS: только два одинаковых цикла
+заменены вызовом общего reader и добавлен сам reader; формат interface
+rowScanner развёрнут для комментария метода. Остальные исполняемые ветви,
+SQL/API/generated/dependencies/applied migrations/deploy inputs не менялись.
+Для небольшого row-collection glue отдельный зеркальный test не добавлялся.
+Полный GOWORK=off control-plane build и unit `-count=1` — PASS LOCAL;
+15 external fixture/admin/template inputs исключены.17 analyzer unit,
+5 exact-ignore guards, gofmt и diff check — PASS. Real PostgreSQL/locks,
+права на живых данных, provider/runtime/image/bootstrap, browser/full E2E и
+deploy/live — NOT RUN/SKIP. QA baseline f2e64eb не менялся.
+
+Через Context7 MCP проверены /jackc/pgx Rows Next/Scan/Err/Close и владение
+результатом: Next=false закрывает строки, после итерации требуется Err,
+Close допускает повторный вызов. Рабочий connector использован после отказа
+другого маршрута Context7 с ошибкой ключа; значения и настройки не менялись.
+Исторические ignored optional JSON, raw final iteration errors некоторых
+списков, membership-derived presentation hints и fixed readiness ограничены
+описанием фактического поведения, без заявления об исправлении.
+
+Scan6673 own sources,222 excluded:1807 raw,899 retained occurrences,
+908 unresolved. Два прежних candidate/cross-boundary окна101/151 tokens
+исчезли после общего reader. Шесть окон получили новые hashes из-за
+комментариев внутри границ detector при сохранённом исполняемом коде;
+они остаются открытыми, не объявляются шестью исправленными алгоритмами.
+Все773 registry entries действительны, новых исключений нет; thresholds,
+ignore regions и whole-file exclusions не расширялись. Issue#1823 открыт,
+PR остаётся Draft до завершения полного согласованного объёма.
 
 ## Общие команды, receipts и membership lock — 24.10.2026
 
