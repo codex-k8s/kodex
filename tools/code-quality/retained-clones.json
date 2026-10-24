@@ -4149,9 +4149,9 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "8dd430c38dd396b2a5e1cae59c363c165efa0c2b181f72fda39b40b8b4f38d91",
+      "fragmentSHA256": "ed5209550cdb36087a7aaba61d06e729175e79dbbaf6b827b182d689ec34706c",
       "count": 1,
-      "reason": "138-token окно сравнивает ListPermissionRegistry с ListRoleEnvironments: разные exact FullMethod, domain methods, entities и typed response/caster. Разрешение principal и transportError уже общие; оставшийся ordered append — стандартная сборка разных protobuf lists, не копия доменного алгоритма. Generic list dispatcher потребовал бы callbacks/type parameters ради сохранения явно проверяемых прав и схем. Сохранено только точное окно двух путей с count1."
+      "reason": "138-token окно сравнивает ListPermissionRegistry с ListRoleEnvironments: разные exact FullMethod, domain methods, entities и typed response/caster. Разрешение principal и transportError уже общие; оставшийся ordered append — стандартная сборка разных protobuf lists, не копия доменного алгоритма. Generic list dispatcher потребовал бы callbacks/type parameters ради сохранения явно проверяемых прав и схем. Сохранено только точное окно двух путей с count1. После добавления предметных EN→RU комментариев окно пересмотрено по обоим исходникам: Go AST access.go не изменился, второй файл неизменен; обновлён только content hash точного того же scaffold."
     },
     {
       "format": "go",
@@ -5245,7 +5245,7 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/access.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
-      "fragmentSHA256": "8567ab7587b7d8e342c9ce485d37bb8c9437836cab202747700e5da9fb0458e3",
+      "fragmentSHA256": "2504851033c0139074f0dbaa54e6b6ebfc20f33a755d6677846cf3e2158e5fdb",
       "count": 1,
       "reason": "После выноса пяти одинаковых secret operation startup остаётся короткое окно с accessReadTransaction. Последний открывает READ ONLY и сам проверяет access.view/organization с rollback при отказе; secret helper открывает SERIALIZABLE, предметные permissions/locks остаются у команды. Общая transaction factory ради resolveScope/BeginTx скроет разные isolation и владельца authority без выноса общего доменного алгоритма. Исключены только точные пути/hash/count1, не transaction/authorization paths."
     },
@@ -5285,17 +5285,17 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
-      "fragmentSHA256": "8c7c17b85d0a4c99c36f00e580cdfc096271c3b8bd2552a385aea44c3d3e006c",
+      "fragmentSHA256": "169ae75590b22e6340e3facc01e99dc5ee4e6d2c0803efeb54c51cd3d318f750",
       "count": 1,
-      "reason": "Окно106 tokens сравнивает хвост разных page DTO loops и начало ListAccessRoles/ListRuntimeSecrets. Общие principal/page/error primitives уже выделены, различны точный full method, service method, nominal request/response и collection caster. Совпадающие return/guards не образуют отдельный общий предметный алгоритм; generic query dispatcher скроет связь RPC с owner method ради нескольких строк. Сохранены только точные пути/fragment/count1, не catalog handlers."
+      "reason": "Окно106 tokens сравнивает хвост разных page DTO loops и начало ListAccessRoles/ListRuntimeSecrets. Общие principal/page/error primitives уже выделены, различны точный full method, service method, nominal request/response и collection caster. Совпадающие return/guards не образуют отдельный общий предметный алгоритм; generic query dispatcher скроет связь RPC с owner method ради нескольких строк. Сохранены только точные пути/fragment/count1, не catalog handlers. После добавления предметных EN→RU комментариев окно пересмотрено по обоим исходникам: Go AST access.go не изменился, второй файл неизменен; обновлён только content hash точного того же scaffold."
     },
     {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
-      "fragmentSHA256": "2d5ca0f3fc9685caaf6a7cef8623531022c5b9f5abfa71a52b955f52cbe83092",
+      "fragmentSHA256": "892a59227af45314155db038516d8d0a20a09f42d68577ec9d2197adf8fe04c1",
       "count": 1,
-      "reason": "Окно100 tokens пересекает конец typed collection mapping и начало ExplainAccess/CompleteRuntimeSecretOperation. Первое объясняет решение по subject/permission, второе завершает broker claim с generation/materialization; общими остаются append/return и principal guard. DTO, authority и доменные эффекты различны; общий dispatcher или caster с reflection ради этого scaffold ухудшит проверку границы без общего алгоритма. Исключена только точная пара/hash/count1."
+      "reason": "Окно100 tokens пересекает конец typed collection mapping и начало ExplainAccess/CompleteRuntimeSecretOperation. Первое объясняет решение по subject/permission, второе завершает broker claim с generation/materialization; общими остаются append/return и principal guard. DTO, authority и доменные эффекты различны; общий dispatcher или caster с reflection ради этого scaffold ухудшит проверку границы без общего алгоритма. Исключена только точная пара/hash/count1. После добавления предметных EN→RU комментариев окно пересмотрено по обоим исходникам: Go AST access.go не изменился, второй файл неизменен; обновлён только content hash точного того же scaffold."
     },
     {
       "format": "go",
@@ -5400,6 +5400,70 @@
       "fragmentSHA256": "35d85acb9c45ed358ed16710572faadf581ca98eaa51ee35d2209616c2d5ba49",
       "count": 1,
       "reason": "Совпадает часть immutable environment-version columns и joins lifecycle snapshot и paginated project environment catalog. Snapshot относится к уже авторизованной заблокированной mutation цели; каталог самостоятельно фильтрует actor project.view/authority-project/query/cursor до LIMIT. Common row scanner уже отделён, универсальный SQL getter скроет разные authority и cardinality без общего бизнесового алгоритма. Новый DB view лишь ради columns/grants нецелесообразен; исключена только данная точная пара/hash/count1, не SQL файлы или predicates."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "62bd70d790c2bca8c5bca842106b4f9e2b4d375a4b4668d1460e79b4d51098f7",
+      "count": 1,
+      "reason": "146-token окно захватывает разные typed list loops и границы ListAccessSubjects/ListOIDCGroups/ListAccessRoles. Subjects использует kind, роли — query aliases/includeArchived; точные RPC principal и domain methods различны. principal/page/transportError уже общие, остаются nominal protobuf collections/casters. Универсальный dispatcher добавит callbacks вместо ясной связи метода и owner API без общего предметного алгоритма. Сохранена лишь эта точная внутрефайловая пара/hash/count1, не списки или весь transport."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "c02503496671260b6ebcd73c8d17254adba38e24f6103c2303c069f1ab94769e",
+      "count": 1,
+      "reason": "117-token окно сравнивает хвост чтения субъектов и чтение ролей с началом следующих RPC. Вид субъекта, role includeArchived/aliases, exact FullMethod, domain return type и response collection различаются. Общие auth/page/error primitives уже выделены; совпадающий append/return не образует независимого алгоритма. Generic list helper потребовал бы callbacks и дополнительной DTO-абстракции ради короткого glue. Исключены только exact paths/hash/count1 этого окна."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "472470ae9946fe03fda0052b3c498fccf294d7bb5e00294dbe11337c76e121cc",
+      "count": 1,
+      "reason": "115-token окно совпадает у сборки страницы субъектов и страницы версий роли с началом следующего метода. Role versions дополнительно возвращает current role и принимает exact roleRef, тогда как subject list принимает kind/query; оба используют разные nominal casters/collections. Paging, verified principal и mapping errors уже общие. Универсальный callback dispatcher скрыл бы схему результата ради append/return; сохранено только exact внутрефайловое окно/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "faaee59325ed6fa099d1ae681a1ea5451aab2878bda90554409e06a528f1353d",
+      "count": 1,
+      "reason": "118-token окно пересекает границы RPC чтения OIDC-групп/ролей и страницы привязок/оценки доступа. Binding filter содержит subject/role/project/revoked selectors, group list — query/page, response types и exact method authority различны. Совпадают стандартные return/error guards и ordered DTO append, а общий principal/transportError уже используется. Полный generic dispatcher не извлечёт предметного алгоритма и усложнит authority readback. Исключена только указанная пара/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "a34dd8b1a2ef7b3aba47edbb5a41a1b290ba0f41f334bc69f06d9bb36e0aae94",
+      "count": 1,
+      "reason": "105-token окно сравнивает хвост binding page и хвост effective-access decisions с началом следующего RPC. Bindings несут PageInfo, effective access — subject/evaluatedAt и объяснения, exact owner methods различны; данные запроса не становятся principal. Общие error/principal helpers уже выделены, совпадает лишь ordered append/return на границе методов. Reflection либо callback response factory усложнит typed schema ради короткого glue. Сохранены только exact paths/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "c6503b3bc82cd91a7082e35f7609fd98da2c3b2a90516263212367fe75c47fe6",
+      "count": 1,
+      "reason": "117-token окно пересекает CreateAccessRole и CreateAccessRoleVersion: создание передаёт пустой roleRef, новая версия — существующий; specialized command и exact RPC FullMethod различны. Построение содержимого уже accessRoleInput, auth/mutation/error execution уже execute. Остаётся nominal typed role response и граница методов; ещё один callback wrapper скрывает выбор команды без общего оставшегося алгоритма. Исключено только точное внутрефайловое окно/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "cb2ee9e403936e96430e521ac34479e8b80103ec2c121bcdf6662cc48e474ff0",
+      "count": 1,
+      "reason": "130-token окно сравнивает хвост версии роли/архивирование с хвостом изменения привязки/отзывом. Specialized commands, exact FullMethod, role/binding input и response types различны; общий execute уже владеет auth/mutation/error path. Совпадающие return guards и соседние method declarations не являются новым доменным алгоритмом. Generic result factory заменит явные команды callbacks ради короткого glue. Сохранена только exact внутрефайловая пара/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "0d04478501c792921a11aa132354ada2bdb940feab01d773aca785bb5f98d507",
+      "count": 1,
+      "reason": "129-token окно сравнивает CreateAccessBinding и ChangeAccessBinding: create включает subject kind/ref, change сохраняет subject и принимает bindingRef; команды, full method и owner lifecycle различны. execute уже общий для principal, mutation и ошибок, а domainAccessScope/domainAccessConditions общие для значений. Остался specialized command wiring с nominal response, не независимый алгоритм. Универсальный dispatcher спрятал бы различие authority/input. Исключена только exact пара/hash/count1."
     }
   ]
 }

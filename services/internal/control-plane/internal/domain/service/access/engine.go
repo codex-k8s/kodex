@@ -12,8 +12,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// maximumBindingWindow caps the interval only when both binding timestamps exist;
+// it does not impose a lifetime on an open-ended binding.
+// maximumBindingWindow ограничивает интервал только при наличии обеих временных
+// границ привязки; бессрочной привязке срок жизни не назначается.
 const maximumBindingWindow = 366 * 24 * time.Hour
 
+// definitions is the closed application permission catalog, including compatible
+// scopes, resource kinds and explicit support for ownership conditions. Entries
+// describe available permissions; they do not grant any caller access.
+// definitions задаёт закрытый каталог прикладных разрешений с допустимыми
+// областями, видами ресурсов и поддержкой проверки владельца. Записи описывают
+// разрешения, но сами по себе не предоставляют доступ вызывающему.
 var definitions = []entity.PermissionDefinition{
 	permission("organization.view", "READ", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("platform.stt.use", "WRITE", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
@@ -67,6 +77,10 @@ var definitions = []entity.PermissionDefinition{
 	permission("audit.view", "READ", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT"}, false),
 }
 
+// permission builds catalog metadata and stable localization keys from a known
+// permission key. Callers supply the allowed scopes and resource kinds explicitly.
+// permission собирает метаданные каталога и устойчивые ключи перевода из известного
+// ключа разрешения. Допустимые области и виды ресурсов явно передаёт вызывающий.
 func permission(key, risk string, scopes, resources []string, ownerCondition bool) entity.PermissionDefinition {
 	upper := strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
 	return entity.PermissionDefinition{
@@ -76,6 +90,10 @@ func permission(key, risk string, scopes, resources []string, ownerCondition boo
 	}
 }
 
+// Definitions returns the catalog in declaration order with independent outer,
+// scope and resource slices, so metadata consumers cannot mutate the registry.
+// Definitions возвращает каталог в порядке объявления с независимыми внешним
+// срезом и срезами областей и ресурсов, защищая реестр от изменений потребителем.
 func Definitions() []entity.PermissionDefinition {
 	result := make([]entity.PermissionDefinition, len(definitions))
 	for index, definition := range definitions {
@@ -86,6 +104,12 @@ func Definitions() []entity.PermissionDefinition {
 	return result
 }
 
+// Permission looks up an exact registered key without aliases or normalization.
+// Its slice fields reference registry data and must be treated as read-only;
+// unknown keys return a zero definition and false.
+// Permission ищет точный зарегистрированный ключ без псевдонимов и нормализации.
+// Срезы результата ссылаются на реестр и предназначены только для чтения;
+// неизвестный ключ возвращает нулевое определение и false.
 func Permission(key string) (entity.PermissionDefinition, bool) {
 	for _, definition := range definitions {
 		if definition.Key == key {
@@ -95,6 +119,12 @@ func Permission(key string) (entity.PermissionDefinition, bool) {
 	return entity.PermissionDefinition{}, false
 }
 
+// ValidateRole checks role text bounds, nonempty unique known permission/scope
+// lists and compatibility of every permission with every requested scope. It
+// validates a role definition, without loading its owner or assigning authority.
+// ValidateRole проверяет ограничения текстов роли, непустые уникальные списки
+// известных разрешений и областей и совместимость каждой пары. Функция проверяет
+// определение роли, не загружая её владельца и не назначая полномочий.
 func ValidateRole(input command.AccessRoleInput) error {
 	if strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.Name) != input.Name || len([]rune(input.Name)) > 160 ||
 		len(input.Description) > 2000 || len(input.ChangeComment) > 500 ||
@@ -117,6 +147,12 @@ func ValidateRole(input command.AccessRoleInput) error {
 	return nil
 }
 
+// ValidateBinding checks a binding against the supplied role version, structural
+// scope rules and time conditions. RequireOwner needs at least one supporting
+// permission; subject existence, role ownership and authorization remain external.
+// ValidateBinding проверяет привязку по переданной версии роли, структуре области
+// и временным условиям. RequireOwner требует хотя бы одного поддерживающего
+// разрешения; существование субъекта, владение ролью и авторизация проверяются снаружи.
 func ValidateBinding(input command.AccessBindingInput, role entity.AccessRoleVersion, now time.Time) error {
 	if !knownSubjectKind(input.SubjectKind) || strings.TrimSpace(input.SubjectRef) == "" || strings.TrimSpace(input.RoleVersionRef) == "" ||
 		!contains(role.AllowedScopes, input.Scope.Kind) || ValidateScope(input.Scope) != nil || ValidateConditions(input.Conditions, now) != nil {
@@ -135,6 +171,12 @@ func ValidateBinding(input command.AccessBindingInput, role entity.AccessRoleVer
 	return nil
 }
 
+// ValidateScope accepts only known scope kinds and compatible locator shapes,
+// including the distinction between project and organization resource instances.
+// It does not resolve resource ownership or verify that a locator exists.
+// ValidateScope допускает только известные виды областей и совместимые формы
+// адресации, различая проектные и организационные экземпляры ресурсов.
+// Функция не разрешает владение ресурсом и не проверяет существование адресата.
 func ValidateScope(scope entity.AccessScope) error {
 	if !knownScope(scope.Kind) {
 		return errors.New("access scope kind is invalid")
@@ -165,6 +207,12 @@ func ValidateScope(scope entity.AccessScope) error {
 	return nil
 }
 
+// ValidateConditions rejects zero timestamps, reversed or oversized bounded
+// windows and an end more than one minute behind now. Single-sided bounds remain
+// valid; actual applicability at the evaluation instant is checked separately.
+// ValidateConditions отклоняет нулевые даты, обратные или слишком длинные замкнутые
+// интервалы и окончание более чем на минуту раньше now. Односторонние границы
+// допустимы; применимость в момент вычисления проверяется отдельно.
 func ValidateConditions(conditions entity.AccessConditions, now time.Time) error {
 	if conditions.ValidFrom != nil && conditions.ValidFrom.IsZero() || conditions.ValidUntil != nil && conditions.ValidUntil.IsZero() {
 		return errors.New("access condition timestamp is invalid")
@@ -180,6 +228,15 @@ func ValidateConditions(conditions entity.AccessConditions, now time.Time) error
 	return nil
 }
 
+// Evaluate computes an allow-only decision from the supplied authoritative subject,
+// target and bindings. Active matching bindings contribute ordered explanation
+// steps; unknown permissions, invalid targets and no matches deny without exposing
+// binding details. Callers own subject eligibility, tenant isolation and related refs.
+// Evaluate вычисляет решение только по разрешающим привязкам из переданных
+// авторитетных субъекта, цели и привязок. Активные совпадения добавляют упорядоченные
+// шаги объяснения; неизвестное разрешение, неверная цель и отсутствие совпадений
+// дают отказ без сведений о привязках. Допуск субъекта, tenant и связанные refs
+// устанавливает вызывающий.
 func Evaluate(subject entity.AccessSubject, permissionKey string, target entity.AccessScope, ownerSubjectRef string, bindings []entity.AccessBinding, at time.Time) entity.EffectiveAccessDecision {
 	decision := entity.EffectiveAccessDecision{PermissionKey: permissionKey, Target: target}
 	definition, known := Permission(permissionKey)
@@ -216,6 +273,12 @@ func Evaluate(subject entity.AccessSubject, permissionKey string, target entity.
 	return decision
 }
 
+// bindingTargetsSubject matches an exact typed subject or an OIDC group present
+// in the supplied subject snapshot. Group membership must already be trusted;
+// the helper does not fetch identity state or authenticate a caller.
+// bindingTargetsSubject сопоставляет точного типизированного субъекта либо OIDC
+// группу из его снимка. Членство должно быть доверенным до вызова; helper не
+// загружает состояние идентичности и не аутентифицирует вызывающего.
 func bindingTargetsSubject(binding, subject entity.AccessSubject) bool {
 	if binding.Kind == "OIDC_GROUP" {
 		return binding.Ref == subject.Ref || contains(subject.OIDCGroupRefs, binding.Ref)
@@ -223,6 +286,12 @@ func bindingTargetsSubject(binding, subject entity.AccessSubject) bool {
 	return binding.Kind == subject.Kind && binding.Ref == subject.Ref
 }
 
+// scopeMatches applies scope breadth to an already resolved target. Instance
+// bindings require the same project and either exact identity or a related ref
+// supplied by the owner; the helper never discovers relationships from payloads.
+// scopeMatches применяет ширину области к уже разрешённой цели. Привязки экземпляра
+// требуют того же проекта и точного ресурса либо связанного ref от владельца;
+// helper самостоятельно не выводит связи из пользовательских данных.
 func scopeMatches(binding, target entity.AccessScope) bool {
 	switch binding.Kind {
 	case "ORGANIZATION":
@@ -244,6 +313,12 @@ func scopeMatches(binding, target entity.AccessScope) bool {
 	}
 }
 
+// conditionsMatch uses an inclusive start and exclusive end, then enforces exact
+// nonempty ownership when requested or for run.cancel.own. It evaluates conditions
+// without revalidating their stored shape or changing timestamps.
+// conditionsMatch включает начало интервала и исключает окончание, затем требует
+// точного непустого владельца по условию или для run.cancel.own. Условия вычисляются
+// без повторной проверки сохранённой структуры и без изменения временных границ.
 func conditionsMatch(conditions entity.AccessConditions, permissionKey, subjectRef, ownerSubjectRef string, at time.Time) bool {
 	if conditions.ValidFrom != nil && at.Before(*conditions.ValidFrom) || conditions.ValidUntil != nil && !at.Before(*conditions.ValidUntil) {
 		return false
@@ -252,6 +327,10 @@ func conditionsMatch(conditions entity.AccessConditions, permissionKey, subjectR
 	return !requireOwner || ownerSubjectRef != "" && ownerSubjectRef == subjectRef
 }
 
+// uniqueKnown rejects unknown and repeated values using the supplied closed-set
+// predicate. Empty input succeeds here; callers enforce required list cardinality.
+// uniqueKnown отклоняет неизвестные и повторные значения по переданному предикату
+// закрытого набора. Пустой список допустим здесь; обязательность задают callers.
 func uniqueKnown(values []string, known func(string) bool) bool {
 	seen := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -266,18 +345,37 @@ func uniqueKnown(values []string, known func(string) bool) bool {
 	return true
 }
 
+// knownSubjectKind recognizes only user, OIDC group and service binding subjects;
+// accepting a kind does not establish the existence or eligibility of a subject.
+// knownSubjectKind распознаёт только пользователя, OIDC группу и сервис как виды
+// субъектов привязки; известный вид не доказывает существование или допуск субъекта.
 func knownSubjectKind(value string) bool {
 	return value == "USER" || value == "OIDC_GROUP" || value == "SERVICE"
 }
+
+// knownScope recognizes the four supported scope discriminators without aliases;
+// locator fields and resource ownership require their separate checks.
+// knownScope распознаёт четыре поддерживаемых вида области без псевдонимов;
+// поля адресации и владение ресурсом проверяются отдельно.
 func knownScope(value string) bool {
 	return value == "ORGANIZATION" || value == "PROJECT" || value == "RESOURCE_KIND" || value == "RESOURCE_INSTANCE"
 }
+
+// knownResourceKind recognizes the closed set of resources addressable by RBAC.
+// Permission compatibility and concrete resource eligibility are checked elsewhere.
+// knownResourceKind распознаёт закрытый набор ресурсов, адресуемых через RBAC.
+// Совместимость разрешения и допуск конкретного ресурса проверяются отдельно.
 func knownResourceKind(value string) bool {
 	return value == "ORGANIZATION" || value == "PROJECT" || value == "AGENT" || value == "WORKFLOW" || value == "RUN" ||
 		value == "OWNER_GATE" || value == "ARTIFACT" || value == "SCHEDULE" || value == "INTEGRATION" ||
 		value == "RUNTIME_ENVIRONMENT" || value == "ROLE_IMAGE" || value == "SESSION" || value == "SECRET" ||
 		value == "PROVIDER_ACCOUNT"
 }
+
+// contains tests exact string membership without case folding or normalization;
+// a nil or empty list never matches, preserving closed-set comparisons.
+// contains проверяет точное строковое вхождение без изменения регистра и нормализации;
+// nil и пустой список не совпадают, сохраняя сравнение по закрытому набору.
 func contains(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {

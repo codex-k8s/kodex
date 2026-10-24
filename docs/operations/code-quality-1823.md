@@ -4,11 +4,146 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.349.0
-updated: 2026-10-23
+version: 1.351.0
+updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+
+## Продолжение после ротации — 24.10.2026
+
+Активная ветка продолжения: `kodex-agent/issue-1823-completion-20261024`,
+worktree создан через `agent-worktree create` в `/home/s/worktrees`.
+Перенесён только текущий diff, без прежних промежуточных коммитов.
+
+Владелец поручил возобновить #1823, завершить весь остаток, затем выполнить
+слияние, развёртывание и проверку запуска перед отдельным ручным QA.
+Это новое разрешение на поставку; прежняя частичная поставка не доказывает
+полноту задачи. Основной клон не изменяется. Актуальный GitHub main прочитан:
+`fad2b24a7e73038031840af49df94200fc3367ce`; PR #1824 уже MERGED.
+Старые значения credentials не используются и не восстанавливаются.
+
+Повтор baseline на сохранённом продолжении `350a0393b15eae5d6edca7593e801cd444779d5d`:
+6654 собственных файла / 222 generated исключения; 1797 raw / 803 retained /
+994 unresolved; Go 15546/21345, missing 5799. Подтверждены пять точных
+ignore-boundaries. Установлена закреплённая jscpd@5.4.2 без install scripts.
+
+Добавлено 85 предметных EN→RU комментариев: RBAC evaluator с тестами,
+PostgreSQL access repository, четыре метода каталогов, курсоры и новые helpers.
+В пяти файлах только с комментариями совпали AST без позиций/комментариев
+и все Go directives. Для permission lookup явно описаны read-only slices;
+base64 курсор не объявлен подписью или источником authority.
+
+Четыре чтения JSON-страниц памяти/навыков используют локальный типизированный
+`scanJSONCatalog`. SQL, actor/project eligibility, позиции cursor, timeout,
+порядок проверок и транзакции сохранены. Unit проверяет типы, total,
+nil/empty и отказ без частичных данных после ошибки Scan/JSON. Общая
+библиотека не нужна: формат принадлежит PostgreSQL adapter одного unit.
+Один exact retained hash обновлён после повторного чтения access/runtime secret
+transaction окон; их различия READ ONLY/access.view и SERIALIZABLE сохранены.
+
+PASS LOCAL на рабочем дереве этапа: полный control-plane build/unit,
+17 Node unit анализатора, 8 тестов preflight публикаций, пять ignore guards,
+AST/directive comparison и diff-check. Повторный замер: 6656 own / 222 excluded;
+1795 raw / 803 retained / 992 unresolved; Go 15631/21350, missing 5719.
+Это промежуточный результат; конечные completeness checks ещё не пройдены.
+Raw SHA256 `b75a3256d8c72897c2c48c1428b681f58a97c5bf7453137390840bdc3a0728ac`;
+clone-set `1fb8af200cde9a19651ec232d147ffeb7a266654ce55665f7e96a2fb629960e6`.
+
+Через рабочий Context7 MCP проверены Go AST/doc comments и pgx QueryRow/Row.Scan.
+Другой Context7 endpoint отказал в авторизации; credential не раскрывался.
+Live/deploy, browser/full QA и новые ИИ-запуски на этом этапе NOT RUN.
+Остаток 5719 объявлений и 992 групп, прежние незакрытые findings и конечная
+доставка остаются в активной цели. Инструмент ротации SSO из прежнего
+продолжения не запускался; дополнительная ротация этим этапом не выполняется.
+
+
+## Волна 350 — RPC управления доступом после слияния
+
+Код `f5a112a0929e2029f5b793b28dea60b4e53cb4ea` в отдельной ветке
+`kodex-agent/issue-1823-code-quality-followup` от слитого main
+`fad2b24a7e73038031840af49df94200fc3367ce`. #1824 слит по прямому
+указанию владельца, #1823 остаётся открытым. Новый PR пока не опубликован;
+параллельных PR нет. Рабочая копия поставки сохранена неизменной, продолжение
+ведётся отдельно. Остаток задачи и ручной шлюз владельца не отменяются.
+
+Прочитаны все 40 объявлений access RPC, общие principal/enum/page helpers,
+прямые domain service consumers и два shape/management-kind unit tests.
+Добавлены 42 предметные EN→RU пары: metadata catalog против effective grants,
+caller против queried subject, exact FullMethod и specialized commands,
+immutable role version, scope refs против authority, симуляция без persistence,
+условия времени, unknown enum fallback и независимые DTO slices. Объяснено
+фактическое поведение domainAccessConditions: неверные protobuf timestamps
+пропускаются mapper, а не отклоняются; новая гарантия валидации не заявляется.
+Код обоих файлов по Go AST без comments/positions не изменился.
+
+Восемь внутрефайловых окон разобраны и сохранены точными paths/hash/count1:
+это короткие nominal RPC request/response wiring и границы соседних методов,
+тогда как principal/page/error/execute/value mapping уже общие. Subjects,
+OIDC groups, role versions, bindings, effective decisions и create/change/
+revoke остаются разными typed API, без generic dispatcher или reflection.
+Три прежних exact exclusion после добавления comments перестали совпадать:
+assessor закрылся с FAIL. Оба источника каждого окна пересмотрены, AST access
+и второй исходник неизменны; исправлены только соответствующие hash/reasons,
+после чего assessor прошёл. Целые файлы и виды кода не исключались.
+
+PASS LOCAL на коде этапа: grpc unit, полный build control-plane,
+AST comparison, gofmt/diff-check, 3 assessor unit и 5 ignore guards.
+Финальный scan на code SHA: **6651 own / 222 excluded; 1797 raw /
+803 retained / 994 unresolved; Go 15546/21345, missing 5799**.
+Raw SHA256 `efda8e7b25025d2f8425a43667b311c24831e155b3775c841d0522c229e975a7`,
+clone-set SHA256 `000623121f23207f06556d23afaaf429c1c9fee8fac0fbf0f5cc05c98ce2fa91`.
+Появились 19 дополнительных окон при прежнем minLines=10: комментарии
+увеличили физическую длину существующего короткого wiring. Это не скрывается
+изменением порога; новые окна остаются в unresolved до отдельного разбора.
+Общий конечный -check/build/unit и прежние FAIL/finding не закрыты.
+Live/component/ИИ/deploy для этой волны NOT RUN. Цель остаётся активной.
+
+## Доставка и слияние по указанию владельца — 23.10.2026
+
+PR #1824 слит: main `fad2b24a7e73038031840af49df94200fc3367ce`.
+Повторное чтение GitHub подтвердило merge и отсутствие открытых PR.
+Issue #1823 остаётся открытым: 983 clone-группы и 5841 Go-объявление
+ещё требуют разбора/комментирования. Слияние не означает завершение этой задачи.
+
+Последний этап: типизированный сборщик runtime-version rows, общий validator
+core/full environment digest и 23 предметных EN→RU комментария. PASS LOCAL:
+unit platform repository, build всего control-plane, полный go test ./...
+control-plane на слитом SHA, 3 unit assessor и 5 exact-ignore guards.
+Пороги/адресные исключения не расширены; applied migrations не менялись.
+
+Штатные build-stable-local.sh → import-local-image.sh → scoped-release.mjs
+обновили четыре основных приложения. Release
+`716c96aa-718a-4945-9296-0c5f75dd132a`, каждый target PASS,
+по две Ready/updated replica. Pod imageID сверены с exact manifest digests:
+
+| Компонент | Digest |
+| --- | --- |
+| control-api-gateway | `sha256:3a11196cae571552a3bd6d0f17930a7b9b92b74a9fdfad170c20b23e6a5372e4` |
+| control-plane | `sha256:54e84213e2bcbbac64583e9f253ef395fdb1001be7fb53a41e42edf615f11c8c` |
+| runtime-controller | `sha256:d2ad0484967f15f09b3880d32693f10ad0c0b315b8249080c4eabd9be73adb47` |
+| staff-control-center | `sha256:97a28e62a5c356836001149eccc73dc278fe0abaa88b122394ac9f44eb44fe00` |
+
+Chrome MCP после доставки: штатная перезагрузка точного проблемного запуска
+run_cotQz5RRx6XkRcMJIK00Sm86; один document request 200, graph/events/
+bootstrap/session 200, консоль без warn/error. Скриншот просмотрен: граф и
+ссылка предыдущей попытки отображаются. Чужие вкладки не закрывались.
+
+В startup были временные verify PostgreSQL connection / connect realtime
+NATS consumer и предупреждение runtime claim grpc Unavailable во время
+смены CP. Текущие serving replicas Ready, последние CP logs подтверждают
+readiness restored. Старый завершённый Pod предыдущего ReplicaSet не
+учитывается как работающая replica. В readback сравнивались spec image и
+status imageID; status image у containerd может содержать tagged alias.
+
+Новые реальные ИИ-запуски, полный бизнес-прогон, PostgreSQL component и
+полная приёмка NOT RUN. Эти проверки отображения не доказывают исправление
+точной неизвестной причины двух исторических runtime artifact failures.
+Исторические watch-image-admission/STT FAIL и finding293 остаются открытыми.
+Остальные deployable/runner/role images этим четырёхкомпонентным релизом не
+пересобирались: ранее поставленные функциональные исправления #1827 сохранены.
+Секреты, credentials и персональные данные в отчёт не включены.
 
 ## Волна 349 — чтение версий и решение владельца о доставке/слиянии
 

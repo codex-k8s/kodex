@@ -2,7 +2,6 @@ package platform
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -13,6 +12,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ListSkillBundles reads one bounded skill bundle page and eligible total under
+// the resolved actor/project scope. SQL filters eligibility before counting;
+// a lookahead bundle determines the next filter-bound cursor without being returned.
+// ListSkillBundles читает ограниченную страницу наборов навыков и допустимый count
+// по разрешённым actor/project. SQL проверяет допуск до подсчёта; лишний набор
+// определяет продолжение связанного с фильтром курсора и не включается в ответ.
 func (repository *Repository) ListSkillBundles(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.SkillBundle, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -25,20 +30,14 @@ func (repository *Repository) ListSkillBundles(ctx context.Context, principal va
 		return nil, 0, "", err
 	}
 	limit := boundedPage(filter.Page)
-	var raw []byte
-	var total int64
-	err = repository.pool.QueryRow(ctx, querySkillBundleList, pgx.StrictNamedArgs{
+	items, total, err := scanJSONCatalog[entity.SkillBundle](repository.pool.QueryRow(ctx, querySkillBundleList, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": current.actorID,
 		"authority_project": current.authorityProjectID, "project_ref": filter.ProjectRef,
 		"agent_ref": filter.ResourceRef, "state": filter.State, "query": filter.Query,
 		"cursor_ref": cursor, "page_size": limit + 1, "evaluated_at": time.Now().UTC(),
-	}).Scan(&raw, &total)
+	}))
 	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
-	}
-	var items []entity.SkillBundle
-	if json.Unmarshal(raw, &items) != nil {
-		return nil, 0, "", errs.ErrUnavailable
+		return nil, 0, "", err
 	}
 	next := ""
 	if len(items) > int(limit) {
@@ -48,6 +47,12 @@ func (repository *Repository) ListSkillBundles(ctx context.Context, principal va
 	return items, total, next, nil
 }
 
+// ListSkillBundleRevisions authorizes the current bundle before reading revision
+// history in the same read-only repeatable-read snapshot. A positive revision
+// position and actor/bundle-bound cursor preserve descending history pagination.
+// ListSkillBundleRevisions проверяет доступ к текущему набору до чтения истории
+// версий в том же read-only repeatable-read снимке. Положительная позиция версии
+// и курсор, связанный с actor/набором, сохраняют убывающую пагинацию истории.
 func (repository *Repository) ListSkillBundleRevisions(ctx context.Context, principal value.Principal, ref string, page query.Page) ([]entity.SkillBundleRevision, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -80,18 +85,12 @@ func (repository *Repository) ListSkillBundleRevisions(ctx context.Context, prin
 		return nil, 0, "", err
 	}
 	limit := boundedPage(page)
-	var raw []byte
-	var total int64
-	err = tx.QueryRow(ctx, querySkillRevisionList, pgx.StrictNamedArgs{
+	items, total, err := scanJSONCatalog[entity.SkillBundleRevision](tx.QueryRow(ctx, querySkillRevisionList, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": current.actorID, "bundle_ref": ref,
 		"before_revision": before, "page_size": limit + 1, "evaluated_at": time.Now().UTC(),
-	}).Scan(&raw, &total)
+	}))
 	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
-	}
-	var items []entity.SkillBundleRevision
-	if json.Unmarshal(raw, &items) != nil {
-		return nil, 0, "", errs.ErrUnavailable
+		return nil, 0, "", err
 	}
 	next := ""
 	if len(items) > int(limit) {

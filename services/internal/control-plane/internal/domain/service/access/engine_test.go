@@ -7,6 +7,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestEvaluateRestrictsAgentAndProjectInstance checks exact agent access while denying another
+// agent and the same locator in a different project; denial must not reveal a binding ref.
+// TestEvaluateRestrictsAgentAndProjectInstance проверяет доступ к точному агенту и отказ для
+// другого агента и того же адресата в другом проекте; отказ не раскрывает ref привязки.
 func TestEvaluateRestrictsAgentAndProjectInstance(t *testing.T) {
 	subject := entity.AccessSubject{Ref: "usr_alice", Kind: "USER", Active: true}
 	binding := entity.AccessBinding{
@@ -37,6 +41,10 @@ func TestEvaluateRestrictsAgentAndProjectInstance(t *testing.T) {
 	}
 }
 
+// TestEvaluateRestrictsOrganizationIntegrationInstance accepts an organization integration
+// instance and proves that its binding cannot authorize a different integration.
+// TestEvaluateRestrictsOrganizationIntegrationInstance допускает организационный экземпляр
+// интеграции и доказывает, что его привязка не разрешает доступ к другой интеграции.
 func TestEvaluateRestrictsOrganizationIntegrationInstance(t *testing.T) {
 	subject := entity.AccessSubject{Ref: "usr_alice", Kind: "USER", Active: true}
 	binding := entity.AccessBinding{
@@ -58,6 +66,12 @@ func TestEvaluateRestrictsOrganizationIntegrationInstance(t *testing.T) {
 	}
 }
 
+// TestEnvironmentPrivilegedManageIsScopedToProjectAndEnvironment checks privileged environment
+// permission metadata and an exact project environment binding, including denial for its
+// neighbor.
+// TestEnvironmentPrivilegedManageIsScopedToProjectAndEnvironment проверяет метаданные
+// привилегированного управления средой и привязку точной проектной среды, включая отказ для
+// соседней.
 func TestEnvironmentPrivilegedManageIsScopedToProjectAndEnvironment(t *testing.T) {
 	t.Parallel()
 	definition, present := Permission("environment.privileged.manage")
@@ -88,6 +102,10 @@ func TestEnvironmentPrivilegedManageIsScopedToProjectAndEnvironment(t *testing.T
 	}
 }
 
+// TestSensitivePermissionsAreSeparatedByExactResource verifies explicit sensitive
+// permission/resource pairs and rejects obsolete broad run and artifact permission keys.
+// TestSensitivePermissionsAreSeparatedByExactResource проверяет явные пары чувствительных
+// разрешений и ресурсов и отсутствие устаревших широких ключей запусков и артефактов.
 func TestSensitivePermissionsAreSeparatedByExactResource(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -119,6 +137,10 @@ func TestSensitivePermissionsAreSeparatedByExactResource(t *testing.T) {
 	}
 }
 
+// TestProjectViewCoversExactRoleImage proves that project.view includes a role image when its
+// resolved instance belongs to the allowed project.
+// TestProjectViewCoversExactRoleImage доказывает, что project.view охватывает ролевой образ, чей
+// разрешённый экземпляр принадлежит допустимому проекту.
 func TestProjectViewCoversExactRoleImage(t *testing.T) {
 	t.Parallel()
 	definition, present := Permission("project.view")
@@ -140,6 +162,10 @@ func TestProjectViewCoversExactRoleImage(t *testing.T) {
 	}
 }
 
+// TestValidateScopeRequiresProjectForProjectOwnedResourceInstance rejects an agent without a
+// project and an organization integration incorrectly narrowed by a project locator.
+// TestValidateScopeRequiresProjectForProjectOwnedResourceInstance отклоняет агента без проекта и
+// организационную интеграцию с ошибочно указанным проектным адресатом.
 func TestValidateScopeRequiresProjectForProjectOwnedResourceInstance(t *testing.T) {
 	if err := ValidateScope(entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: "agt_a"}); err == nil {
 		t.Fatal("project-owned agent scope without project was accepted")
@@ -149,6 +175,10 @@ func TestValidateScopeRequiresProjectForProjectOwnedResourceInstance(t *testing.
 	}
 }
 
+// TestEvaluateAppliesBoundedWindowAndOIDCGroup checks inherited and direct OIDC group bindings
+// inside their time window and denial at the exclusive end instant.
+// TestEvaluateAppliesBoundedWindowAndOIDCGroup проверяет унаследованную и прямую привязки OIDC
+// группы внутри временного окна и отказ в исключённый момент его окончания.
 func TestEvaluateAppliesBoundedWindowAndOIDCGroup(t *testing.T) {
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	from, until := now.Add(-time.Minute), now.Add(time.Minute)
