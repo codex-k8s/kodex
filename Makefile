@@ -1,6 +1,7 @@
 GOVULNCHECK_VERSION := v1.6.0
 GO_MIN_VERSION := 1.26.6
 GO_TOOLCHAIN := go1.26.6
+
 BUF_VERSION := 1.71.0
 PROTOBUF_GO_PLUGIN_REMOTE := buf.build/protocolbuffers/go:v1.36.11
 PROTOBUF_GO_PLUGIN_REVISION := 1
@@ -402,3 +403,8 @@ test-runner-binary-provenance:
 .PHONY: test-role-image-forward-upgrade
 test-role-image-forward-upgrade:
 	TMPDIR=/tmp node --test tools/dev/role-image-forward-upgrade.test.mjs tools/dev/role-image-acceptance.test.mjs tools/dev/role-image-acceptance-cli.test.mjs tools/dev/role-image-runtime-proof.test.mjs tools/dev/email-agent-acceptance.test.mjs
+
+.PHONY: test-scoped-backup-drill
+test-scoped-backup-drill:
+	@timeout 60s python3 -m unittest tools/dev/test_scoped_backup_drill.py tools/release/test_backup_release_pin.py
+	@bash -n tools/release/pin-backup-controller-release.sh tools/release/render-web-only.sh

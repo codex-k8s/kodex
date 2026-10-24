@@ -185,6 +185,8 @@ while IFS=$'\t' read -r component pull_ref; do
   ' "$rendered"
 done < <(jq -r '.images[] | [.component,.pull_ref] | @tsv' "$lock_file")
 
+"$script_directory/pin-backup-controller-release.sh" "$lock_file" "$rendered"
+
 registry_push=$(jq -er '.registry.push' "$lock_file")
 node_pull=$(jq -er '.registry.node_pull' "$lock_file")
 repository_prefix=$(jq -er '.registry.repository_prefix' "$lock_file")

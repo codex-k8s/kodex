@@ -293,7 +293,7 @@ func TestOperationLockExpiredReplacementLosesRaceSafely(t *testing.T) {
 // RU: TestCatalogExposesOnlyVerifiedBackupsAndValidDrills скрывает непроверенные манифесты до появления точных квитанций.
 func TestCatalogExposesOnlyVerifiedBackupsAndValidDrills(t *testing.T) {
 	t.Parallel()
-	repository, _ := testRepository(t)
+	repository, fake := testRepository(t)
 	ctx := context.Background()
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	backupID := "20260828T120000Z-0123456789abcdef"
@@ -325,6 +325,18 @@ func TestCatalogExposesOnlyVerifiedBackupsAndValidDrills(t *testing.T) {
 		BackupID: backup.BackupID, Manifest: manifestReceipt, VerifiedAt: now.Add(2 * time.Minute), ObjectCount: 3}
 	if err := repository.EnsureVerification(ctx, backup, manifestReceipt, verification); err != nil {
 		t.Fatal(err)
+	}
+	versionBefore := fake.objects[repository.key("backups/"+backupID+"/verification.json")].version
+	nextBefore := fake.nextVersion
+	verification.VerifiedAt = now.Add(3 * time.Minute)
+	if err := repository.EnsureVerification(ctx, backup, manifestReceipt, verification); err != nil {
+		t.Fatal("repeat verify rejected exact immutable receipt", err)
+	}
+	if fake.nextVersion != nextBefore || fake.objects[repository.key("backups/"+backupID+"/verification.json")].version != versionBefore {
+		t.Fatal("repeat verify overwrote immutable verification version")
+	}
+	if inspected, err := repository.ListVerified(ctx); err != nil || len(inspected) != 1 {
+		t.Fatal("bounded inspection rejected legal verification replay", err)
 	}
 	values, drilled, err := repository.Catalog(ctx)
 	if err != nil || len(values) != 1 || !drilled[backup.BackupID].IsZero() {

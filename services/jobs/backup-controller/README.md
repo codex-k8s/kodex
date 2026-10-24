@@ -90,3 +90,23 @@ source/context/archive/manifest digests и не выполняет import, admis
 publication или node pull. Тот же закрытый component registry должен
 допускаться проверкой OCI и publication receipt; незарегистрированные
 компоненты и выдуманные результаты проверок остаются запрещены.
+
+
+## Одноразовый scoped data drill
+
+`tools/dev/scoped_backup_drill.py` предоставляет create-only custody, readback
+неизвестного create, отдельный backup Job и render изолированного PG/TLS с
+UID cleanup. Полный порядок и lifecycle matrix находятся в
+[runbook](../../../docs/runbooks/backup-controller.md#одноразовый-data-drill-10031830).
+Новые безопасные CLI: `list-verified`, `inspect-backup`, `inspect-restore-drill`,
+`preflight-restore`, `inspect-restore-targets`. Только явный
+`cleanup-restore-drill` удаляет receipt-owned target versions;
+`inspect-restore-cleanup` читает его частичный/пустой исход без подтверждения
+полноты восстановленных данных. Никакие metadata команды не запускают serve.
+
+`make test-scoped-backup-drill` — bounded hermetic custody/render регрессии;
+`go test -p 1 ./...` в этом модуле — Go unit. Они не заменяют настоящий drill.
+Shared S3 fixture identity не доказывает credential-level prefix isolation;
+инструмент не меняет глобальные identities и не передаёт credentials моделям.
+Нулевой release revision отвергается runtime; full environment renderer
+связывает его с тем же exact backup image из release lock.

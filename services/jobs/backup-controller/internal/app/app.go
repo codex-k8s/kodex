@@ -92,6 +92,67 @@ func buildRunner(ctx context.Context, config Config, command, buildVersion strin
 // runOnce executes one bounded backup, verify, retention or owner-approved restore-drill command.
 // RU: runOnce выполняет одну ограниченную команду копирования, проверки, хранения либо подтверждённого восстановления.
 func runOnce(ctx context.Context, controller *runner.Runner, config Config, command string) error {
+	if command == "list-verified" || command == "inspect-backup" || command == "inspect-restore-drill" || command == "preflight-restore" || command == "inspect-restore-targets" || command == "inspect-restore-cleanup" || command == "cleanup-restore-drill" {
+		read, cancel := context.WithTimeout(ctx, config.StartupTimeout)
+		defer cancel()
+		var result any
+		var err error
+		switch command {
+		case "list-verified":
+			var ids []string
+			ids, err = controller.ListVerifiedMetadata(read)
+			result = struct {
+				Complete  bool     `json:"complete"`
+				BackupIDs []string `json:"backupIds"`
+			}{Complete: true, BackupIDs: ids}
+		case "inspect-backup":
+			result, err = controller.InspectBackup(read, config.BackupID)
+		case "inspect-restore-drill":
+			result, err = controller.InspectRestore(read, config.BackupID, config.RestoreID, config.ExpectedApprovalID, config.ExpectedTargetSHA256)
+		case "preflight-restore":
+			targets, loadErr := configspec.LoadRestoreTargets(config.RestoreTargetsFile, config.Environment)
+			if loadErr != nil {
+				return loadErr
+			}
+			err = controller.PreflightRestore(read, targets)
+			result = struct {
+				State string `json:"state"`
+			}{State: "EMPTY_TARGETS_READY"}
+		case "inspect-restore-targets", "inspect-restore-cleanup", "cleanup-restore-drill":
+			approval, loadErr := configspec.LoadRestoreApproval(config.RestoreApprovalFile, time.Now().UTC())
+			if loadErr != nil {
+				return loadErr
+			}
+			targets, loadErr := configspec.LoadRestoreTargets(config.RestoreTargetsFile, config.Environment)
+			if loadErr != nil {
+				return loadErr
+			}
+			mode := s3backup.TargetComplete
+			if command == "cleanup-restore-drill" {
+				mode = s3backup.TargetCleanup
+			} else if command == "inspect-restore-cleanup" {
+				mode = s3backup.TargetCleanupReadback
+			}
+			var count int
+			count, err = controller.InspectRestoreTarget(read, approval, targets, mode)
+			state := "RESTORED_CONTENT_PRESENT"
+			if mode != s3backup.TargetComplete {
+				state = "REMAINING"
+				if count == 0 {
+					state = "EMPTY"
+				}
+			}
+			result = struct {
+				Operation        string `json:"operation"`
+				State            string `json:"state"`
+				RemainingObjects int    `json:"remainingObjects"`
+			}{Operation: command, State: state, RemainingObjects: count}
+		}
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
 	operation, cancel := context.WithTimeout(ctx, config.BackupTimeout)
 	defer cancel()
 	switch command {
