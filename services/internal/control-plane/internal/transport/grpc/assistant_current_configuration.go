@@ -5,6 +5,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// castAssistantCurrentConfiguration projects the owner's configuration, environment/image/policy
+// and instruction pins plus public values and secret references, rejecting invalid template
+// availability reasons.
+// castAssistantCurrentConfiguration преобразует конфигурацию владельца, привязки среды, образа,
+// policy и инструкций, публичные значения и ссылки секретов, отклоняя неверные причины доступности
+// шаблона.
 func castAssistantCurrentConfiguration(value entity.AssistantCurrentConfiguration) (*controlplanev1.AssistantCurrentConfiguration, error) {
 	environment := value.Environment
 	result := &controlplanev1.AssistantCurrentConfiguration{AgentVersion: value.AgentVersion,

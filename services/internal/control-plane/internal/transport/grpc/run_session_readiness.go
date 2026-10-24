@@ -5,6 +5,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// castRunSessionReadiness preserves absent readiness and optional latest archive task while
+// projecting public storage state, reason and bounded task-attempt metadata.
+// castRunSessionReadiness сохраняет отсутствие readiness и необязательную последнюю archive task,
+// преобразуя публичные storage state, причину и метаданные ограниченных попыток задачи.
 func castRunSessionReadiness(value *entity.RunSessionReadiness) *cp.RunSessionReadiness {
 	if value == nil {
 		return nil

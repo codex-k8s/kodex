@@ -7,6 +7,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// ListArtifactBindingTargets projects the authorized target page with artifact/version/evaluation
+// pins and distinct bind/unbind availability reasons.
+// ListArtifactBindingTargets преобразует авторизованную страницу целей с привязками артефакта,
+// версии и оценки и отдельными причинами доступности привязки и отвязки.
 func (server *Server) ListArtifactBindingTargets(ctx context.Context, request *controlplanev1.ListArtifactBindingTargetsRequest) (*controlplanev1.ListArtifactBindingTargetsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListArtifactBindingTargets_FullMethodName)
 	if err != nil {
@@ -32,6 +36,10 @@ func (server *Server) ListArtifactBindingTargets(ctx context.Context, request *c
 	return response, nil
 }
 
+// GetRunAttachmentEligibility passes project, typed target and run locators to the owner and
+// projects eligibility with exact versions, digest and evaluation time.
+// GetRunAttachmentEligibility передаёт проект, типизированную цель и запуск владельцу и
+// преобразует доступность с точными версиями, digest и временем оценки.
 func (server *Server) GetRunAttachmentEligibility(ctx context.Context, request *controlplanev1.GetRunAttachmentEligibilityRequest) (*controlplanev1.GetRunAttachmentEligibilityResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRunAttachmentEligibility_FullMethodName)
 	if err != nil {

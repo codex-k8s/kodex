@@ -8,6 +8,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// castRuntimeContext accepts absent context and otherwise validates schema, computed digest and
+// organization/agent/project bindings before appending skill and memory snapshots.
+// castRuntimeContext принимает отсутствие контекста, иначе проверяет schema, вычисленный digest и
+// привязки организации, агента и проекта до добавления снимков навыков и памяти.
 func castRuntimeContext(result *cp.RuntimeRevisionSnapshot, value any, projectRef string) bool {
 	if value == nil {
 		return true
@@ -45,6 +49,10 @@ func castRuntimeContext(result *cp.RuntimeRevisionSnapshot, value any, projectRe
 	return true
 }
 
+// castRuntimeContextProvenance copies actor, source reference and revision, digest and creation
+// time from the validated context snapshot provenance.
+// castRuntimeContextProvenance копирует actor, ссылку и ревизию источника, digest и время создания
+// из происхождения проверенного снимка контекста.
 func castRuntimeContextProvenance(p runtimecontract.RuntimeContextProvenance) *cp.ContextProvenance {
 	return &cp.ContextProvenance{ActorRef: p.ActorRef, SourceKind: p.SourceKind, SourceRef: p.SourceRef,
 		SourceRevision: p.SourceRevision, Digest: p.Digest, CreatedAt: timestamppb.New(p.CreatedAt)}

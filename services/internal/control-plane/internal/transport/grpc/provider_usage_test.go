@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// providerUsageReadFixture supplies a coherent synthetic account usage snapshot with aligned
+// catalog-health timestamps, capacity, eligibility and digest pins.
+// providerUsageReadFixture создаёт согласованный синтетический снимок использования аккаунта с
+// совпадающими catalog-health times, capacity, eligibility и digest-привязками.
 func providerUsageReadFixture() entity.ProviderAccount {
 	now := time.Now().UTC()
 	expires := now.Add(time.Minute)
@@ -19,6 +23,12 @@ func providerUsageReadFixture() entity.ProviderAccount {
 		AllowedToSubmit: true, EligibleForSelection: true, OperationalState: "READY", MaximumConcurrentExecutions: 2, CatalogStatus: &entity.ModelCatalogStatus{State: "READY", Source: "REMOTE_API", Failure: "NONE", ObservedAt: &now, ExpiresAt: &expires}, CatalogDigest: strings.Repeat("a", 64), CatalogRevision: "mcat_" + strings.Repeat("a", 64), ContextDigest: strings.Repeat("b", 64), ObservedAt: now, ExpiresAt: now.Add(10 * time.Second)}}
 }
 
+// TestProviderUsageReadCasterClosesMalformedOwnerProjection checks the valid owner snapshot and
+// rejection of unknown dimensions, missing catalog/context, stale versions and inconsistent
+// capacity, admission or health.
+// TestProviderUsageReadCasterClosesMalformedOwnerProjection проверяет допустимый снимок владельца
+// и отказ для неизвестных измерений, отсутствия каталога или контекста, старых версий и
+// несогласованных capacity, admission либо health.
 func TestProviderUsageReadCasterClosesMalformedOwnerProjection(t *testing.T) {
 	value, err := castProviderAccountUsageRead(providerUsageReadFixture())
 	if err != nil || !value.Usage.AllowedToSubmit || value.Usage.ProviderHealth.State != cp.ProviderUsageState_PROVIDER_USAGE_STATE_READY {

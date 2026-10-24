@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// GetAgentEffectiveCapabilities projects the authorized effective-capability page with exact
+// runtime/environment/workflow pins and distinct requested, required, effective and grantable
+// flags.
+// GetAgentEffectiveCapabilities преобразует авторизованную страницу эффективных возможностей с
+// точными привязками runtime, среды и процесса и отдельными requested, required, effective и
+// grantable.
 func (server *Server) GetAgentEffectiveCapabilities(ctx context.Context, request *controlplanev1.GetAgentEffectiveCapabilitiesRequest) (*controlplanev1.GetAgentEffectiveCapabilitiesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName)
 	if err != nil {

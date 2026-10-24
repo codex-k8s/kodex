@@ -8,6 +8,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// GetEmailMailboxConfiguration reads configuration under the verified principal with exact
+// connection/configuration/revision locators and casts its mailbox view.
+// GetEmailMailboxConfiguration читает конфигурацию с проверенным principal и точными ссылками
+// подключения, конфигурации и ревизии, преобразуя представление ящика.
 func (server *Server) GetEmailMailboxConfiguration(ctx context.Context, request *cp.GetEmailMailboxConfigurationRequest) (*cp.GetEmailMailboxConfigurationResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName)
 	if err != nil {
@@ -19,6 +23,11 @@ func (server *Server) GetEmailMailboxConfiguration(ctx context.Context, request 
 	}
 	return &cp.GetEmailMailboxConfigurationResponse{Configuration: castMailboxView(result)}, nil
 }
+
+// ListEmailMailboxConfigurations returns authorized mailbox views with the owner total,
+// continuation token and action availability.
+// ListEmailMailboxConfigurations возвращает авторизованные представления ящиков с общим числом,
+// токеном продолжения и доступностью действий владельца.
 func (server *Server) ListEmailMailboxConfigurations(ctx context.Context, request *cp.ListEmailMailboxConfigurationsRequest) (*cp.ListEmailMailboxConfigurationsResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName)
 	if err != nil {
@@ -34,6 +43,11 @@ func (server *Server) ListEmailMailboxConfigurations(ctx context.Context, reques
 	}
 	return response, nil
 }
+
+// ListEmailMailboxCredentials rejects unknown credential-kind enums, treats zero as no kind filter
+// and returns only the authorized credential metadata page.
+// ListEmailMailboxCredentials отклоняет неизвестные enum вида credential, трактует ноль как
+// отсутствие фильтра и возвращает только авторизованную страницу метаданных credential.
 func (server *Server) ListEmailMailboxCredentials(ctx context.Context, request *cp.ListEmailMailboxCredentialsRequest) (*cp.ListEmailMailboxCredentialsResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_ListEmailMailboxCredentials_FullMethodName)
 	if err != nil {
@@ -57,6 +71,11 @@ func (server *Server) ListEmailMailboxCredentials(ctx context.Context, request *
 	}
 	return response, nil
 }
+
+// GetEmailMailboxCredentialReceipt reads the credential receipt by connection and idempotency key
+// under the verified principal and returns its metadata projection.
+// GetEmailMailboxCredentialReceipt читает квитанцию credential по подключению и ключу
+// идемпотентности с проверенным principal и возвращает её метаданные.
 func (server *Server) GetEmailMailboxCredentialReceipt(ctx context.Context, request *cp.GetEmailMailboxCredentialReceiptRequest) (*cp.GetEmailMailboxCredentialReceiptResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName)
 	if err != nil {
@@ -68,6 +87,11 @@ func (server *Server) GetEmailMailboxCredentialReceipt(ctx context.Context, requ
 	}
 	return &cp.GetEmailMailboxCredentialReceiptResponse{Credential: castEmailMailboxCredential(result)}, nil
 }
+
+// PreviewEmailMailboxConfiguration converts content before owner preview and returns canonical
+// YAML, diagnostics and optional specification without publishing configuration.
+// PreviewEmailMailboxConfiguration преобразует содержимое до просмотра владельцем и возвращает
+// canonical YAML, диагностику и необязательную спецификацию без публикации конфигурации.
 func (server *Server) PreviewEmailMailboxConfiguration(ctx context.Context, request *cp.PreviewEmailMailboxConfigurationRequest) (*cp.PreviewEmailMailboxConfigurationResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName)
 	if err != nil {

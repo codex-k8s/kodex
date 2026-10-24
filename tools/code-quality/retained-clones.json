@@ -4293,17 +4293,17 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/config_overlay_history.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
-      "fragmentSHA256": "309c17fc3fca40eb4e87dbcd1a56e669191b6a9e6acd934ae780a84753718173",
+      "fragmentSHA256": "20a080902aa34197f3669541ff1ec974f5c98d6af485e346966544cc1aa803a8",
       "count": 1,
-      "reason": "Окно123 tokens пересекает хвост ListConfigOverlayRevisions и начало GetConfigOverlayRevision против хвоста ListManagedConfigurations и начала ListManagedConfigurationHistory. Совпадают typed page/error/cast plumbing, а owner queries, filter selectors, nominal replies и exact FullMethod различны. page/principal/transportError и casters уже общие; связного повторного алгоритма на всём окне нет. Generic list/read dispatcher с фабрикой ответов скрыл бы маршрутизацию и добавил callbacks ради одного append loop. Сохранена только эта точная пара/fragment/count1, не list/query файлы."
+      "reason": "Окно123 tokens пересекает хвост ListConfigOverlayRevisions и начало GetConfigOverlayRevision против хвоста ListManagedConfigurations и начала ListManagedConfigurationHistory. Совпадают typed page/error/cast plumbing, а owner queries, filter selectors, nominal replies и exact FullMethod различны. page/principal/transportError и casters уже общие; связного повторного алгоритма на всём окне нет. Generic list/read dispatcher с фабрикой ответов скрыл бы маршрутизацию и добавил callbacks ради одного append loop. Сохранена только эта точная пара/fragment/count1, не list/query файлы. После комментариев exact window и полные методы обеих сторон перечитаны; pair/count1 сохранены."
     },
     {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
-      "fragmentSHA256": "f1843b1f39458237cac3807ef0c3d9ebf092429f4ececa0bc778261b3c22077c",
+      "fragmentSHA256": "1702bfd4dda3fe38297880a042514a35807295d151411e1b84c74350df7e02a0",
       "count": 1,
-      "reason": "Окно104 tokens сравнивает хвост GetEmailMailboxConfiguration/начало ListEmailMailboxConfigurations с хвостом runtime ROLE_IMAGE binding/началом integration-definition binding. Различаются публичный query principal и RuntimeWork exact methods, mailbox view и managed binding, connection/revision selectors и фиксированные owner kinds. Общие principal/error/cast примитивы уже выделены; общий read-any helper смешал бы разные eligibility boundaries ради коротких return/guard. Исключены только точные пути/hash/count1, не mail/runtime reads в целом."
+      "reason": "Окно104 tokens сравнивает хвост GetEmailMailboxConfiguration/начало ListEmailMailboxConfigurations с хвостом runtime ROLE_IMAGE binding/началом integration-definition binding. Различаются публичный query principal и RuntimeWork exact methods, mailbox view и managed binding, connection/revision selectors и фиксированные owner kinds. Общие principal/error/cast примитивы уже выделены; общий read-any helper смешал бы разные eligibility boundaries ради коротких return/guard. Исключены только точные пути/hash/count1, не mail/runtime reads в целом. После комментариев exact window и полные методы обеих сторон перечитаны; pair/count1 сохранены."
     },
     {
       "format": "go",
@@ -5099,54 +5099,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
-      "fragmentSHA256": "fe753318ce851f8d0d919b50ce20cdff300edfedbdd3ee4e547fea9429659570",
-      "count": 1,
-      "reason": "Окно ValidateSkillBundleDraft и ReviewSkillBundleDraft захватывает хвост двух разных typed commands с уже общими execute и castSkillBundle. Validation проверяет admission, Review принимает enum decision и comment; одинаковая форма error-first response не создаёт единого бизнес-перехода. Вынос полного handler в универсальный command adapter скрыл бы method/kind и решение reviewer. Исключена только точная пара путей/fragment/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
-      "fragmentSHA256": "6626fd23087534ea7515ce4ac0e9a18dfa5a8afadc1302ee93c0886cca45163f",
-      "count": 1,
-      "reason": "Окно CreateSkillBundleDraft и SaveSkillBundleDraft содержит уже общий domainSkillSpecification, execute и castSkillBundle, но разные typed request/response и pins: создание по проекту/пакету против сохранения конкретной ревизии. Остаток — явный transport glue; generic dispatch либо reflection ради короткого хвоста скрыл бы обязательную RevisionRef на Save. Сохранён только точный внутрефайловый fragment/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
-      "fragmentSHA256": "5c076cd6cfbdde5a0cc92c87b69158d3a444f8dad37bde296d81cf49ee18533e",
-      "count": 1,
-      "reason": "Окно SaveSkillBundleDraft и PublishSkillBundleDraft перекрывает хвост typed Save и начало Publish. Save передаёт replacement specification, Publish точные RevisionRef/ExpectedDigest и является отдельным admission transition. Общие execute и castSkillBundle уже существуют; объединение boundary handlers скрыло бы различие owner commands. Исключён только данный fragment двух путей и count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
-      "fragmentSHA256": "cf7e1093e22035d5a2e13571e63b3e9cb475854c4042431090eb4fa55d6b5413",
-      "count": 2,
-      "reason": "Два перекрывающихся окна Review/Publish/Discard SkillBundleDraft повторяют только явные typed wrappers после общего execute и castSkillBundle; Review имеет decision/comment, Publish и Discard закрепляют revision/digest с разными terminal effects. Единый generic lifecycle dispatcher заменил бы номинальные RPC методы и затруднил бы review authority. Сохранён только этот внутрефайловый fragment с count2, не lifecycle операции."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
-      "fragmentSHA256": "d5de41b5539c46adb2f9beed55443e26dc78c9112c165f93cc311055fdd65781",
-      "count": 1,
-      "reason": "Окно Publish и Discard SkillBundleDraft отличается owner command kind и ожидаемым эффектом, хотя короткий transport tail использует одни общие execute/castSkillBundle. Универсальная функция ради вызова этих уже общих helpers скроет противоположные решения по жизненному циклу; локальные typed ответы остаются явными. Адресное исключение только данного внутрефайлового fragment/count1, остальные команды не исключены."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
-      "fragmentSHA256": "ae8b7362857643041c627bdf4f8e8be08758dbbde754652089d5ab39e7604514",
-      "count": 1,
-      "reason": "Перекрывающееся окно Archive/Restore/Purge SkillBundle повторяет форму трёх коротких transport wrappers вокруг общего execute и castSkillBundle. У переходов разные command kinds и lifecycle semantics, включая необратимый Purge; общий dispatcher не устранил бы бизнес-копию, но скрыл бы точные owner methods. Исключены только этот hash и два exact пути с count1; остальные группы остаются видимыми."
-    },
-    {
-      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/attachment_set_endpoints.go",
       "fragmentSHA256": "b477298c556952965db3e41e4037f5212376fc1c8ac8f67753ce7913499e89d3",
@@ -5165,9 +5117,9 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_revision_diff.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
-      "fragmentSHA256": "2b867c26fff16f9865464fe8559e532d8e6d2d7f3305564f67958f72a8bb4ee1",
+      "fragmentSHA256": "442af4c357cb3572665a7ad089e1b098814d8fa720daeede58d7e4556a05fe76",
       "count": 1,
-      "reason": "Окно совпадения включает imports и начало разных RPC GetRuntimeRevisionDiff и ClaimSessionArchiveTasks: principal и обработка ошибки общие, затем расходятся read-only diff и state-changing claim задач. Нового самостоятельного алгоритма тут нет; универсальный dispatcher связал бы разные полномочия и lifecycle без полезного сокращения. Исключается точное окно, не проверки или целые handlers."
+      "reason": "Окно совпадения включает imports и начало разных RPC GetRuntimeRevisionDiff и ClaimSessionArchiveTasks: principal и обработка ошибки общие, затем расходятся read-only diff и state-changing claim задач. Нового самостоятельного алгоритма тут нет; универсальный dispatcher связал бы разные полномочия и lifecycle без полезного сокращения. Исключается точное окно, не проверки или целые handlers. После комментариев exact window и полные методы обеих сторон перечитаны; pair/count1 сохранены."
     },
     {
       "format": "go",
@@ -5309,9 +5261,9 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
-      "fragmentSHA256": "2079ed89f3a8babbcd3c755ae897d4b37d2aef7eb6c1695cf4f5a7ce85c62c1a",
+      "fragmentSHA256": "b50e13a51a818e50cf271c5d10d044fd9034cd8e310171906037ad41cac0f3b2",
       "count": 1,
-      "reason": "Окно148 tokens сравнивает границы readiness и следующих рабочих RPC provider renewal против credential projection. Общие principal и transportError уже выделены; различны exact full methods, service readiness probe, authorize/resolve payload и proof requirements. Generic work handler скроет эти самостоятельные security contracts без удаления нового предметного алгоритма. Оставлено только данное окно двух путей/hash/count1; readiness и дальнейшие команды не исключены целиком."
+      "reason": "Окно148 tokens сравнивает границы readiness и следующих рабочих RPC provider renewal против credential projection. Общие principal и transportError уже выделены; различны exact full methods, service readiness probe, authorize/resolve payload и proof requirements. Generic work handler скроет эти самостоятельные security contracts без удаления нового предметного алгоритма. Оставлено только данное окно двух путей/hash/count1; readiness и дальнейшие команды не исключены целиком. После комментариев exact window и полные методы обеих сторон перечитаны; pair/count1 сохранены."
     },
     {
       "format": "go",
@@ -6016,6 +5968,150 @@
       "fragmentSHA256": "3d8df24d820687e2a728a0f7aac72a35a811bd4c99998c428de7cd4fb0b39ef3",
       "count": 1,
       "reason": "Delete/SetEnabled и SetEnabled/SetConcurrency различают account delete, boolean flag и numeric concurrency input. Общая command execution и castProviderAccount уже единые; искусственный generic update input размывает специализированные command.Kind/FullMethod bindings. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/config_overlay_history.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "fragmentSHA256": "29b50df5dd759b1e3acade3d2adf8a082562d15f0412d5f5d713d1c0114abc81",
+      "count": 1,
+      "reason": "Стык overlay history list/get сравнивается с credential list/receipt read. Agent/revision и connection/idempotency locators имеют разные owner eligibility; общие page/principal/transportError и nominal casters уже используются. Новый generic getter не выделяет самостоятельного алгоритма. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
+      "fragmentSHA256": "b677df0f89637dd9bd50cc86d8ed9682afd4cf3738e4f61cbf0dba4ae481ac0d",
+      "count": 1,
+      "reason": "Skill bind/unbind и переход к memory bind после выноса result validation повторяют только typed command wrappers. castContextBindingResult и execute уже общие; BundleRef и RecordRef, exact RPC и command.Kind остаются явными. Полный generic binding dispatcher не добавлен. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
+      "fragmentSHA256": "4e1549186883247bfa502b9a397db4f668c5bb5d1541e8f64e7866836746b31b",
+      "count": 1,
+      "reason": "Skill unbind/memory bind и memory bind/unbind используют общий проверяемый result caster и execute. Оставлены nominal request/response wrappers и различные owner commands, обеспечивающие отдельную bind/unbind семантику при одинаковом version payload. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
+      "fragmentSHA256": "6f2786dae960e2a5cb776bae593cceb28ebb223592e1affc6cb3c4536e628ca2",
+      "count": 1,
+      "reason": "Стык memory bind/unbind и начало общего result caster совпадает лишь execute/return каркасом. Validation identity/version уже единая; конкретные commands и expected-binding version inputs сохраняются, новые callbacks не нужны. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secret_draft_impact.go",
+      "fragmentSHA256": "76117a2b5c9c88c4ab9b2ff5aa4102f2a85c54d21ad84802603804717f8b2249",
+      "count": 1,
+      "reason": "Mailbox configuration get/list сравнивается с secret draft impact prepare/get. Public query, preparation mutation и impact-plan reads не одна операция; response nominal types, selectors и lifetime pins различны. Principal/error/page/casters уже общие. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "fragmentSHA256": "6f4f967ddfcdbe45e5d334d472f17bfcb3bf5bcede1d565a7cf9ee98f2a958bd",
+      "count": 1,
+      "reason": "Mailbox configuration get/list и environment impact prepare/plan get совпадают короткими handler boundaries. Configuration/connection/revision и DraftRef/PlanRef имеют разные domains и authority scopes; execute/principal/cast helpers уже единые. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_impact.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/secret_impact.go",
+      "fragmentSHA256": "df0ba0c9754d59861460bcc8630322ccd94bf07048bfcc38d74594c5b60bb5e2",
+      "count": 1,
+      "reason": "GetRuntimeEnvironmentImpact и GetRuntimeSecretImpact имеют одинаковый principal/domain/page каркас, но environment version/digest и secret revision semantics различны. Общие environment/secret consumer casters уже вынесены; generic owner impact read затруднил бы явные method bindings. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "fragmentSHA256": "22a60e18a76cbacef31adef24a2588d1a153dce65bc945acd6e6c5557de865ad",
+      "count": 1,
+      "reason": "Interaction identity bind/revoke/list и prompt/instruction/environment impact prepare различают authority-bearing identity и publication planning. Exact method/command/input pairs остаются типизированными; execute уже обрабатывает общие principal/mutation/errors. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "fragmentSHA256": "6f953ffcf3e612b5d1e24fefe549dc66b5fb3f5088c9ea13bec178cbd957b900",
+      "count": 1,
+      "reason": "Стык identity revoke/list и instruction/environment impact/plan query имеет разные command и query намерения и protobuf replies. Общее execute/principal/error plumbing уже выделено, универсальный transition или read dispatcher не нужен. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
+      "fragmentSHA256": "22eb5d95363f4568f6422a328ae9fb6d6b96f76f91b82124ccf67811ba911374",
+      "count": 1,
+      "reason": "Provider renewal authorize и validate observation используют общий renewalTask с unknown/size/time/deterministic digest checks. Owner authorization и observation eligibility разные service methods и nominal replies; short request/error wrapper оставлен явным без общего callback. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant_integration_grants.go",
+      "fragmentSHA256": "5980a5ddd8c0f729e1187d06bee5e7554b945a0107bb634fbd8843c0a581403f",
+      "count": 1,
+      "reason": "Environment draft impact/plan query и system-assistant grant change/candidate query совпадают return/principal стыком. PlanRef и connection/capability approvals различают authority scopes; execute и transport errors уже общие, commands не сливаются. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_files.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_files.go",
+      "fragmentSHA256": "d6938833b018b70e314882963f0a48b6ee4e3695ffee1008bf8ca1a8ab792856",
+      "count": 1,
+      "reason": "SearchExecutionFiles и GetExecutionFileManifest используют общий execution context, descriptor и catalog casters. Search передаёт query, manifest читает каталог без него; nominal service/RPC и output schema сохраняются, generic callback ради append loop не добавлен. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "8d71bd567203bf39b1d352c9ba95db4dacf71f85f112b266f73a8e339e8d79b4",
+      "count": 1,
+      "reason": "После выноса9команд общий executeSkillBundle уже объединяет command execution и checked projection. Окно Validate/Review/Publish/Discard пересекает разные commands и caster boundary; retained только typed response/command стык без прежнего повторного result handling. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "fragmentSHA256": "8d09171f9044f25bd40b230291eed8d53312f1a2ca9800ee8b2e6d6f2773a273",
+      "count": 1,
+      "reason": "Create/SaveSkillBundleDraft и начало общего executeSkillBundle теперь различают create project/spec и replacement revision/spec inputs. Exact closed command pair и nominal reply остаются в wrappers; повторное execution+projection уже удалено. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "8a3f81b532e7b1b72a22e8bcfb1d2eb82a22b3d6314bc392edbfbaddeb34dd7f",
+      "count": 1,
+      "reason": "Create/Save и Review/Publish skill wrappers используют один executeSkillBundle. Review decision validation и create/save payload различны; результат и error handling теперь централизованы, оставшийся typed RPC стык не требует generic transition. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "653ca5e0a5725188bb078e3fc9c02e93854dd1b54230c5b1adad146c70829899",
+      "count": 1,
+      "reason": "Review/Publish и Publish/Discard skill wrappers сохраняют разные closed commands и expected revision/digest pins. Общие executeSkillBundle и castSkillBundle уже единые; противоположные lifecycle decisions не заменяются общим action payload. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill_lifecycle.go",
+      "fragmentSHA256": "f837c79e82f15f313c9c249e1c1e204bd799859144d2ea3545c398e553ec6ee3",
+      "count": 1,
+      "reason": "Discard/Archive/Restore и Archive/Restore/Purge повторяют только короткие typed wrappers общего executeSkillBundle. Revision/digest draft inputs и bundle-only lifecycle inputs, exact methods и owner eligibility различны; новые dispatch registry/callback не вводятся. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/vfs.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/vfs.go",
+      "fragmentSHA256": "5b46f3ed4a39e56017150119db2a10097946c26dd0038771ac4307052b5778b2",
+      "count": 1,
+      "reason": "ListVFSNodes и SearchVFS имеют одинаковые typed filter поля и castVFSNode, но разные exact RPC principals и domain list/search operations. query.Filter, page, enum conversion и casting уже общие; generic list/search callback скрыл бы routing ради nominal response boilerplate. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
     }
   ]
 }

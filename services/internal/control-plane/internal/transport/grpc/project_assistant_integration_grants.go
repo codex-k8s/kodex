@@ -13,8 +13,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// assistantGrantScopeIdentifier bounds GitHub owner/repository scope identifiers to the configured
+// ASCII character set and length; dot-only exclusions are checked separately.
+// assistantGrantScopeIdentifier ограничивает owner/repository scope identifiers GitHub заданным
+// ASCII-набором и длиной; запрет одиночной и двойной точки проверяется отдельно.
 var assistantGrantScopeIdentifier = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
+// castAssistantIntegrationGrantCandidate checks the closed reason and optional exact GitHub
+// repository scope shape, identifier grammar and JSON digest before projecting candidate and
+// current-grant metadata.
+// castAssistantIntegrationGrantCandidate проверяет закрытую причину и необязательные точные форму
+// GitHub repository scope, грамматику идентификаторов и JSON digest до преобразования кандидата и
+// текущего grant.
 func castAssistantIntegrationGrantCandidate(item entity.SystemAssistantIntegrationGrantCandidate) (*cp.SystemAssistantIntegrationGrantCandidate, error) {
 	reason, err := integrationCandidateReason(item.Reason)
 	if err != nil {
@@ -48,6 +58,12 @@ func castAssistantIntegrationGrantCandidate(item entity.SystemAssistantIntegrati
 	return result, nil
 }
 
+// GetProjectAssistantIntegrationGrantCandidates reads the authorized project-assistant candidate
+// page with exact profile, assistant, connection and definition pins and rejects unrepresentable
+// candidates.
+// GetProjectAssistantIntegrationGrantCandidates читает авторизованную страницу кандидатов
+// проектного ассистента с точными привязками профиля, ассистента, подключения и определения,
+// отклоняя непредставимых кандидатов.
 func (server *Server) GetProjectAssistantIntegrationGrantCandidates(ctx context.Context, request *cp.GetProjectAssistantIntegrationGrantCandidatesRequest) (*cp.GetProjectAssistantIntegrationGrantCandidatesResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_GetProjectAssistantIntegrationGrantCandidates_FullMethodName)
 	if err != nil {

@@ -9,12 +9,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// castProjectPurgeRecovery projects project presence, snapshot digest, recovery counts, resolution
+// availability and owner version pins without performing cleanup.
+// castProjectPurgeRecovery преобразует наличие проекта, digest снимка, счётчики восстановления,
+// доступность решения и версии владельца без выполнения очистки.
 func castProjectPurgeRecovery(item entity.ProjectPurgeRecovery) *cp.ProjectPurgeRecovery {
 	return &cp.ProjectPurgeRecovery{ProjectRef: item.ProjectRef, Version: item.Version, SnapshotDigest: item.SnapshotDigest,
 		State: item.State, UnknownContentCount: item.UnknownContentCount, CleanupPendingCount: item.CleanupPendingCount,
 		ProjectPresent: item.ProjectPresent, CanResolve: item.CanResolve, ResolutionRef: item.ResolutionRef, ProjectVersion: item.ProjectVersion}
 }
 
+// GetProjectPurgeRecovery reads purge recovery under the verified query principal and projects the
+// owner snapshot.
+// GetProjectPurgeRecovery читает восстановление окончательного удаления с проверенным query
+// principal и преобразует снимок владельца.
 func (server *Server) GetProjectPurgeRecovery(ctx context.Context, request *cp.GetProjectPurgeRecoveryRequest) (*cp.GetProjectPurgeRecoveryResponse, error) {
 	p, err := principal(ctx, cp.PlatformQueryService_GetProjectPurgeRecovery_FullMethodName)
 	if err != nil {
@@ -27,6 +35,10 @@ func (server *Server) GetProjectPurgeRecovery(ctx context.Context, request *cp.G
 	return &cp.GetProjectPurgeRecoveryResponse{Recovery: castProjectPurgeRecovery(item)}, nil
 }
 
+// ResolveProjectPurgeRecovery passes snapshot digest and explicit unknown-outcome acknowledgment
+// through the dedicated resolution command, requiring a recovery result.
+// ResolveProjectPurgeRecovery передаёт digest снимка и явное признание неизвестного исхода
+// отдельной команде решения, требуя результат восстановления.
 func (server *Server) ResolveProjectPurgeRecovery(ctx context.Context, request *cp.ResolveProjectPurgeRecoveryRequest) (*cp.ResolveProjectPurgeRecoveryResponse, error) {
 	result, err := execute(ctx, server.service, cp.PlatformCommandService_ResolveProjectPurgeRecovery_FullMethodName,
 		command.ResolveProjectPurgeRecovery, request.GetMutation(), command.ProjectPurgeRecoveryInput{

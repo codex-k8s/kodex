@@ -10,6 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// readAssistantTaskSession rejects unknown fields and mixed search selectors before the
+// lease-bound session read, then seals the projected published-message page or fails unavailable.
+// readAssistantTaskSession отклоняет unknown fields и смешанные search selectors до чтения сессии
+// по lease, затем запечатывает страницу опубликованных сообщений либо отказывает как unavailable.
 func (server *Server) readAssistantTaskSession(ctx context.Context, p value.Principal, request *controlplanev1.SearchAssistantResourcesRequest) (*controlplanev1.SearchAssistantResourcesResponse, error) {
 	selector := request.GetAssistantTaskSessionRead()
 	if selector == nil || len(request.ProtoReflect().GetUnknown()) != 0 || len(selector.ProtoReflect().GetUnknown()) != 0 || request.Query != "" || request.IntegrationDefinitionCatalog || request.DefinitionQuery != "" || request.DefinitionOffset != 0 || request.AssistantConfigurationCatalog != nil {

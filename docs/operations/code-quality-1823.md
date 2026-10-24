@@ -4,12 +4,84 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.368.0
+version: 1.369.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Завершение комментариев production gRPC и общие projections — 24.10.2026
+
+На основе `fcb3cb7de8698623feefba5d5f4b113f0597f265` описаны112
+прежних объявлений во всех35 оставшихся production gRPC-файлах и3 прежних
+объявления provider usage/publication tests. Восемь новых объявлений тоже
+описаны:2 casters, skill execution helper, diagnostic constant, publication
+fixture и3 теста. Полный Go inventory17992/21393, missing3401 — PostgreSQL3331
+и только тестовые gRPC70. Во всём собственном production gRPC0missing.
+Всего выбрано40 Go-файлов, включая2 прежних skill files и новый test file.
+
+| Сценарий / lifecycle | Сохранённый контракт |
+| --- | --- |
+| Authority proof | Exact verified TLS chain/leaf SPIFFE URI и отдельное единственное application authorization → owner Resolve → fixed public errors. Readiness проверяет peer+service и не объявлен bearer-check. Проверка URI не подменяет operation eligibility |
+| Execution files | Lease/catalog/ref/revision/digest → owner read → shared descriptors/catalog projection. Search и manifest остаются разными typed queries; preview не разрешает чтение произвольного пути |
+| Stream artifact | Live bounded deadline → owner open → metadata/chunk copies → exact size/EOF/SHA-256 → close → fresh owner metadata → Complete. Частичные chunks не означают завершения |
+| Runtime context/deadline | Optional absence сохраняется. Context schema/digest и org/agent/project pins проверяются до projections; deadline/catalog используют прежние shared validators |
+| Email authorization | Exactly-one invocation/test source и valid expiry → owner authorization → closed nonzero policy/expiry/actor/grant. Descriptors не содержат secret values; configure передаёт value только своему owner call |
+| Context bind/unbind | Closed method/command pairs и expected binding version → owner → required Ref/positive Version → typed response. Validation результата не выдаёт binding authority |
+| Environment/secret impact | Scope/resource/version/digest pins остаются owner-validated; query impact не разрешает rebind. Прямой и draft secret impact используют одинаковый consumer read model |
+| Provider lifecycle/renewal | Closed blockers/cancel outcomes и exact task/account/claim/previous credential pins. Deterministic request digest не объявлен межъязыковой каноникой или подписью; unknown/size/time checks сохранены |
+| Skill lifecycle | Create/save/validate/review/publish/discard/archive/restore/purge сохраняют9 отдельных FullMethod/Kind/input pairs. Общая только execution+checked projection; review enum и owner admission/terminal effects остаются прежними |
+| Transcription | Trusted и verified profiles проверяются раздельно. Actor/tenant/credential revision и exact workload/permission связаны с owner principal; snapshot lifetime ограничен30s/caller deadline. Locator digest не подменяет подпись |
+| Workflow/VFS/assistant | Wire selector presence/unknown checks, task-session page sealing и publication pins сохраняются; catalogs/effective actions не становятся grants. VFS enum conversion не объявлен unknown validation |
+| Cancel/retry/events | Новых transitions, tasks, grants, events, SQL/Proto/API/generated changes нет; специализированные owner operations и их transaction boundary сохранены |
+
+Общие выносы:
+
+- `castContextBindingResult` объединяет прежние nil/Ref/Version checks и
+  projection четырёх bind/unbind handlers, сохраняя exact Internal code/text.
+- `castRuntimeSecretImpactConsumer` используется direct и draft impact reads;
+  outer/nested scope/version pins и nil/empty revision slices сохраняются.
+- Provider usage и publication impact используют существующий
+  `runtimecontract.ValidSHA256Text` вместо hex-decode/length/lowercase loops.
+  Грамматика прежняя:64 lowercase hexadecimal bytes, zero digest допустим.
+  Новых module dependencies/Docker inputs нет.
+- `executeSkillBundle` объединяет9 прежних execute+castSkillBundle путей,
+  сохраняя порядок domain и projection ошибок и idempotency fallback execute.
+- Два одинаковых SPIFFE rejection text используют именованную константу.
+
+Meaningful проверки:5 malformed context results и полный valid projection;
+6 consumer cases (2scope×3nil/empty/nonempty slices);14 digest boundary values
+через оба поля usage и оба поля двух publication kinds —84 actual-caster
+проверки. Publication fixture вынесена из прежнего теста для повторного
+использования;3 прежних тестовых объявления тоже описаны.
+
+AST/directives30 comments-only файлов совпали с исходной ревизией;8 production
+файлов совпали с ожидаемыми точными выносами. Полные локальные GOWORK=off
+control-plane build/unit прошли после окончательного skill выноса; targeted
+3 projection tests прошли. Credentials очищены из child environment;
+4 external fixture flags/DSN,3 composition env и внешний CP test DSN исключены.
+Real-API orphan,3 migration fixtures и owner loopback composition — SKIP/NOT RUN.
+Сборка/юниты не объявлены CI, image build либо acceptance развёрнутой среды.
+
+Context7: protobuf-go MarshalOptions.Deterministic и proto.Equal, включая
+same-binary guarantee и различие nil message/empty message; locally прочитаны
+existing ValidSHA256Text/alphabet tests. CONTRACT-DOC-002 authority/mutation/
+presence и GO-DOC-001/003/006, GUIDE-DOC-003/006, GOV-DOC-003 применены.
+
+Exact guard выявил изменившиеся окна:4 прежних решения перечитаны с обеих
+сторон и обновлены при прежнем pair/count1. После skill выноса удалены6 прежних
+решений на7 occurrence; вместо blind hash/count migration заново прочитаны
+полные skill files и новые окна.18 новых решений покрывают18 exact windows,
+включая5 оставшихся typed skill wrapper стыков после реального выноса.
+Всего6664 own sources,222 excluded,1823 raw,890 retained,933 unresolved.
+Промежуточный scan до skill выноса имел1825 raw; после выноса1823. Итоговый
+raw против исходных1820 также учитывает новые окна после комментариев, поэтому
+общий рост не объявлен отсутствием либо устранением всех реальных повторов.
+Внутри40 выбранных файлов0unresolved;37cross-file групп остаются открытыми.
+17 analyzer unit и5 exact-ignore guards — PASS; thresholds/guards сохранены.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN.
+Задача#1823 активна; разрешение владельца на последующий полный выпуск есть.
 
 ## gRPC mailbox, provider и integration candidates — 24.10.2026
 
