@@ -4,11 +4,76 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.375.0
+version: 1.376.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Role-image source, команды, worker lifecycle и promotion — 24.10.2026
+
+На основе `15268f8a7ad050daf6bedefd82f52b5bd039a828` описано81 прежнее
+объявление в восьми файлах: source11, admission failure8, manage22,
+workers19, promotions8, promotion tests7 и build intent4+2tests.
+Новый finish helper и новый regression test тоже описаны. Полный
+Go inventory18490/21414, missing2924 — PostgreSQL adapter control-plane.
+Все выбранные восемь Go-файлов имеют0missing, включая два interface methods
+и локальные receipt/expiry types.
+
+Общие выносы без изменения публичных команд:
+
+- `admittedArtifactCanBePromoted` использует существующий
+  `exactPromotionSnapshot` и сохраняет дополнительные request-specific gates:
+  пустой request, PENDING, отсутствие promoted reference и exact provenance.
+- ClaimBuild использует прежний `roleImageRecipePolicyCurrent` вместо второго
+  сравнения четырёх policy/runtime revision/digest pins.
+- Общий CancelOpenBuilds prefix выполняется один раз для UPDATE, REQUEST_BUILD,
+  ARCHIVE и RESTORE после прежних scope/OCC/state checks. CREATE и отдельный
+  CANCEL_BUILD к нему не переходят; conditional promotion cancellation не объединена.
+- `finishBuildMutation` объединяет только уже применённый progress/failure
+  result → receipt → event → commit. Разные SQL transitions и receipt kinds
+  остаются явными у callers, их deferred rollback сохраняется.
+
+| Сценарий / lifecycle | Сохранённый контракт |
+| --- | --- |
+| Source view/manage | Scope выводится из authoritative recipe/configuration mapping, не пустого ProjectRef. Forbidden/not-found дают закрытые hints, прочие ошибки передаются. Redaction пользовательского source не изменяет worker exact grant/input |
+| List/detail/manage | List/detail читают count/rows/permissions/lineage в прежнем RR; source permissions отделены от build/promote. Serializable Manage проверяет authority до receipt replay и перепроецирует source перед выдачей |
+| UPDATE/REQUEST/ARCHIVE/RESTORE | Recipe scope, shipped guard и OCC/state предшествуют cancellation. Build cancellation arguments/error mapping и порядок последующих policy/recipe/promotion действий одинаковы прежнему |
+| Claim / expiry | Claim сериализует actor/key и сохраняет явный claim либо expiry-only receipt. SQL expiry ограничен32, закрывает token/generation, увеличивает build fence и пишет outcomes с audit/event даже без нового claim |
+| Renew / progress / complete / failure | Replay сохраняет исходный outcome, live transition отдельно проверяет version/attempt/fence/workload/token/expiry. Completion хранит build/artifact pair; renew не добавляет event в этом методе. Новый finish helper не выполняет authority либо SQL mutation |
+| Admission failure / expiry | Normal failure требует live claim/current policy; expiry использует истёкший срок и отдельный путь подтверждённого prior-expiry readback. Последний добавляет receipt без повторной state mutation/audit/event. Batch expiry сохраняет собственные audit/event |
+| Promotion | Snapshot/evidence predicate общий, request state/provenance gates отдельны. Worker reclaim допускает только прежние QUEUED/PROMOTING и соответствующие expiry states. Shape checks не объявлены signature verification |
+| Intent | Только CorrelationRef копии principal исключён из build intent. Все прочие authority/lease/OCC и terminal payload fields сохранены; проверяемый principal не подменяется копией для digest |
+
+Новый тест задаёт19 буквальных promotion outcomes: общие recipe/admission/
+policy/runtime/evidence отказы, отдельные request/state/provenance blockers и
+допустимое изменение mutable artifact version. Проверяется и общий snapshot,
+и более узкий request predicate. Девять адресных regression tests — PASS,
+включая прежние evidence/receipt/token, SQL-clause и intent checks. Статические
+SQL-clause tests не являются доказательством конкурентного DB исполнения.
+
+Полные локальные GOWORK=off control-plane build/unit после окончательного
+finish helper — PASS. Четыре comments-only файла совпали с baseline AST и
+directives; три production файла и изменённый test file — с точными expected
+выносами/добавлением теста. Рецептурные predicates чистые; cancellation prefix
+перенесён только перед существующими action branches. SQL/API/generated,
+dependencies и deploy inputs не менялись. Через Context7 проверены
+pgx/v5.10.0 transaction/rollback и Rows/Err; прочитаны12 применимых source,
+claim, expiry и cancellation SQL. Credentials и13 external inputs исключены.
+Real SQL locks/races, registry build/push, owner/warm/legacy и full E2E/browser
+— NOT RUN/SKIP, отдельно от unit. Прежняя классификация ambiguous commit как
+retry и ignored rollback errors не объявлена исправленной данным выносом.
+
+Scan6669 own sources,222 excluded,1819 raw,896 retained,923 unresolved.
+Реальный общий receipt/event/commit tail вынесен. Один238-token self-overlap
+единственного typed promotion commitment initializer сохранён точным
+path/hash/count1 решением после чтения всей функции: разных обязательных
+полей нельзя удалять ради нормализации идентификаторов. Прежние решения не
+перепривязывались. Четыре cross-file окна с managed_configuration.go и
+role_images_admission.go остаются открытыми.17 analyzer tests и5 exact-ignore
+guards — PASS. Issue#1823 и весь остаток остаются открытыми; QA baseline
+f2e64eb и основной локальный клон этим продолжением не меняются.
+
 
 ## Role-image risk, managed lineage, impact и attachment sets — 24.10.2026
 

@@ -11,6 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// admissionFailure copies exact artifact/recipe/build/scope lineage into a FAILED projection with
+// the supplied safe error code, without changing stored state.
+// admissionFailure копирует точную artifact/recipe/build/scope lineage в FAILED projection с
+// заданным безопасным error code без изменения сохранённого состояния.
 func admissionFailure(artifact entity.ImageArtifact, code string) entity.RoleImageAdmissionFailure {
 	return entity.RoleImageAdmissionFailure{ImageArtifactRef: artifact.Ref, Version: artifact.Version,
 		RecipeRef: artifact.RecipeRef, RecipeGeneration: artifact.RecipeGeneration,
@@ -18,22 +22,40 @@ func admissionFailure(artifact entity.ImageArtifact, code string) entity.RoleIma
 		OrganizationRef: artifact.OrganizationRef, ProjectRef: artifact.ProjectRef, State: "FAILED", ErrorCode: code}
 }
 
+// FailAdmission runs the complete explicit failure through the existing bounded role-image retry
+// policy while retaining the normal live-claim path.
+// FailAdmission выполняет полный явный failure через прежнюю ограниченную role-image retry policy,
+// сохраняя обычный live-claim path.
 func (repository *Repository) FailAdmission(ctx context.Context, input roleimagerepo.AdmissionFailureInput) (entity.RoleImageAdmissionFailure, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.RoleImageAdmissionFailure, error) {
 		return repository.failAdmission(ctx, input)
 	})
 }
 
+// failAdmission selects the normal terminal-admission path with expiry disabled; the common
+// implementation still owns all claim and authority checks.
+// failAdmission выбирает обычный terminal-admission path с выключенным expiry; все claim и
+// authority checks остаются в общей реализации.
 func (repository *Repository) failAdmission(ctx context.Context, input roleimagerepo.AdmissionFailureInput) (entity.RoleImageAdmissionFailure, error) {
 	return repository.terminalAdmission(ctx, input, false)
 }
 
+// ExpireAdmission maps exact expiry pins to the common terminal input and fixed
+// ADMISSION_LEASE_EXPIRED code, selecting expiry semantics within the existing retry policy.
+// ExpireAdmission переносит точные expiry pins в общий terminal input с фиксированным
+// ADMISSION_LEASE_EXPIRED и выбирает expiry semantics в прежней retry policy.
 func (repository *Repository) ExpireAdmission(ctx context.Context, input roleimagerepo.AdmissionExpiryInput) (entity.RoleImageAdmissionFailure, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.RoleImageAdmissionFailure, error) {
 		return repository.terminalAdmission(ctx, roleimagerepo.AdmissionFailureInput{ExpectedAdmissionAttemptRef: input.ExpectedAdmissionAttemptRef, ExpectedAdmissionAttempt: input.ExpectedAdmissionAttempt, Principal: input.Principal, IdempotencyKey: input.IdempotencyKey, ArtifactRef: input.ArtifactRef, ExpectedVersion: input.ExpectedVersion, ExpectedFence: input.ExpectedFence, ExpectedAuthorityGeneration: input.ExpectedAuthorityGeneration, ManifestDigest: input.ManifestDigest, ImmutableBuildSHA256: input.ImmutableBuildSHA256, ProvenanceSHA256: input.ProvenanceSHA256, PolicyRevision: input.PolicyRevision, PolicySHA256: input.PolicySHA256, BuildRef: input.BuildRef, ExpectedBuildAttempt: input.ExpectedBuildAttempt, RecipeGeneration: input.RecipeGeneration, SpecSHA256: input.SpecSHA256, ErrorCode: "ADMISSION_LEASE_EXPIRED"}, true)
 	})
 }
 
+// terminalAdmission locks actor/key and artifact/attempt in a serializable transaction, separating
+// live-token failure from expiry and confirmed prior-expiry readback; fresh transitions store
+// state/audit/receipt/event, while prior expiry adds only its receipt.
+// terminalAdmission блокирует actor/key и artifact/attempt в serializable транзакции, разделяя
+// live-token failure, expiry и подтверждённый prior-expiry readback; свежий переход сохраняет
+// state/audit/receipt/event, прежний expiry добавляет только receipt.
 func (repository *Repository) terminalAdmission(ctx context.Context, input roleimagerepo.AdmissionFailureInput, expiry bool) (entity.RoleImageAdmissionFailure, error) {
 	if input.ExpectedAdmissionAttemptRef == "" || input.ExpectedAdmissionAttempt == 0 {
 		return entity.RoleImageAdmissionFailure{}, errs.ErrForbidden
@@ -146,15 +168,31 @@ func (repository *Repository) terminalAdmission(ctx context.Context, input rolei
 	return result, nil
 }
 
+// matchesAdmissionFailureTuple compares immutable manifest/build/provenance/policy/specification
+// and recipe-generation pins only; version, fence, authority and token are checked separately by
+// the caller.
+// matchesAdmissionFailureTuple сравнивает только неизменяемые
+// manifest/build/provenance/policy/specification и recipe-generation pins; version, fence,
+// authority и token проверяет caller отдельно.
 func matchesAdmissionFailureTuple(a entity.ImageArtifact, input roleimagerepo.AdmissionFailureInput) bool {
 	return a.ManifestDigest == input.ManifestDigest && a.ImmutableBuildSHA256 == input.ImmutableBuildSHA256 && a.ProvenanceSHA256 == input.ProvenanceSHA256 && a.PolicyRevision == input.PolicyRevision && a.PolicySHA256 == input.PolicySHA256 && a.SpecSHA256 == input.SpecSHA256 && a.BuildRef == input.BuildRef && a.BuildAttempt == input.ExpectedBuildAttempt && a.RecipeGeneration == input.RecipeGeneration
 }
 
+// expireRoleImageAdmissions collects the bounded SQL expiry results before emitting one
+// audit/event per changed artifact in the caller transaction; it returns the changed projections
+// without owning commit.
+// expireRoleImageAdmissions собирает ограниченные результаты SQL expiry до записи одного
+// audit/event на изменённый artifact в транзакции caller; возвращает изменённые projections без
+// собственного commit.
 func (repository *Repository) expireRoleImageAdmissions(ctx context.Context, tx pgx.Tx, current scope) ([]entity.RoleImageAdmissionFailure, error) {
 	rows, err := tx.Query(ctx, queryRoleImagesExpireAdmissions, pgx.StrictNamedArgs{"organization_id": current.organizationID})
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	// expiredAdmission retains the failure projection plus internal project and recipe-version pins
+	// needed to emit exact expiry audit and event after closing rows.
+	// expiredAdmission хранит failure projection и внутренние project и recipe-version pins для точных
+	// expiry audit и event после закрытия rows.
 	type expiredAdmission struct {
 		failure       entity.RoleImageAdmissionFailure
 		projectID     string

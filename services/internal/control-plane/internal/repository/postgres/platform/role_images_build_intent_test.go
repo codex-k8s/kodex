@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// TestRoleImageBuildIntentCorrelation checks all four intent forms ignore fresh correlation
+// without mutating input, while reflection verifies every other principal and lease field remains
+// committed.
+// TestRoleImageBuildIntentCorrelation проверяет независимость четырёх intent forms от свежего
+// correlation без изменения input; reflection подтверждает включение каждого другого principal и
+// lease field в commitment.
 func TestRoleImageBuildIntentCorrelation(t *testing.T) {
 	lease := roleimagerepo.BuildLeaseInput{
 		Principal: value.Principal{ActorID: "actor", AuthorityTenant: "organization", ProjectRef: "project",
@@ -75,6 +81,10 @@ func TestRoleImageBuildIntentCorrelation(t *testing.T) {
 	}
 }
 
+// TestRoleImageBuildIntentPayload checks stage/progress and every terminal string payload field
+// alter the digest, and lease normalization changes no field except correlation.
+// TestRoleImageBuildIntentPayload проверяет изменение digest при смене stage/progress и каждого
+// terminal string payload field и отсутствие иных изменений lease normalization кроме correlation.
 func TestRoleImageBuildIntentPayload(t *testing.T) {
 	progress := roleimagerepo.BuildProgressInput{Stage: "MATERIALIZATION", ProgressPercent: 5}
 	changedProgress := progress

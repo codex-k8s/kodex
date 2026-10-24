@@ -17,17 +17,31 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// roleImageListCursor pins the list filter commitment, last recipe reference and update time for
+// stable keyset pagination; the cursor itself does not grant access.
+// roleImageListCursor закрепляет list filter commitment, последнюю recipe reference и update time
+// для устойчивой keyset pagination; сам cursor не выдаёт доступ.
 type roleImageListCursor struct {
 	Filter    string
 	Ref       string
 	UpdatedAt time.Time
 }
 
+// List forces PROJECT scope before invoking the shared role-image list so this entrypoint cannot
+// infer organization scope from an empty project.
+// List принудительно задаёт PROJECT scope перед общим role-image list, исключая вывод organization
+// scope по пустому проекту в этом entrypoint.
 func (repository *Repository) List(ctx context.Context, principal value.Principal, filter roleimagerepo.Filter) ([]entity.RoleImageRecipe, string, int64, error) {
 	filter.ScopeKind = "PROJECT"
 	return repository.listRoleImages(ctx, principal, filter)
 }
 
+// listRoleImages validates query/state/cursor and uses one read-only repeatable-read snapshot for
+// count, scoped rows, access hints and source/managed-lineage projection; commits before returning
+// the bounded page.
+// listRoleImages проверяет query/state/cursor и использует один read-only repeatable-read snapshot
+// для count, scoped rows, access hints и source/managed-lineage projection; выполняет commit до
+// выдачи ограниченной страницы.
 func (repository *Repository) listRoleImages(ctx context.Context, principal value.Principal, filter roleimagerepo.Filter) ([]entity.RoleImageRecipe, string, int64, error) {
 	if len(filter.Query) > 128 || !utf8.ValidString(filter.Query) || strings.ContainsRune(filter.Query, 0) || (filter.State != "" && filter.State != "ACTIVE" && filter.State != "ARCHIVED") {
 		return nil, "", 0, errs.ErrInvalid
@@ -115,10 +129,19 @@ func (repository *Repository) listRoleImages(ctx context.Context, principal valu
 	return result, next, total, nil
 }
 
+// Get selects the PROJECT detail path with fresh owner access and source-redaction checks
+// performed by the scoped reader.
+// Get выбирает PROJECT detail path со свежими owner access и source-redaction checks внутри scoped
+// reader.
 func (repository *Repository) Get(ctx context.Context, principal value.Principal, ref string) (roleimagerepo.Detail, error) {
 	return repository.getScopedRoleImage(ctx, principal, ref, "PROJECT")
 }
 
+// getScopedRoleImage resolves exact scope and current permissions in a read-only repeatable-read
+// transaction, reads the recipe detail and redacts source independently of build/promote hints
+// before commit.
+// getScopedRoleImage разрешает точную область и текущие permissions в read-only repeatable-read
+// транзакции, читает recipe detail и скрывает source независимо от build/promote hints до commit.
 func (repository *Repository) getScopedRoleImage(ctx context.Context, principal value.Principal, ref, scopeKind string) (roleimagerepo.Detail, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -158,11 +181,29 @@ func (repository *Repository) getScopedRoleImage(ctx context.Context, principal 
 	return detail, nil
 }
 
+// roleImageQuerier abstracts only row and rows queries so recipe projections can share a pool or
+// caller-owned transaction without owning its lifetime.
+// roleImageQuerier обобщает только row и rows queries для общих recipe projections через pool либо
+// транзакцию caller без владения её жизненным циклом.
 type roleImageQuerier interface {
+	// QueryRow runs the exact SQL and arguments as a lazy pgx.Row; the projection caller handles Scan
+	// failure and ownership validation.
+	// QueryRow выполняет точные SQL и аргументы как отложенный pgx.Row; projection caller обрабатывает
+	// Scan failure и проверку владения.
 	QueryRow(context.Context, string, ...any) pgx.Row
+	// Query returns iterable rows for the exact SQL and arguments; the consuming projection closes
+	// rows and checks scan/iteration errors.
+	// Query возвращает iterable rows точных SQL и аргументов; projection consumer закрывает rows и
+	// проверяет scan/iteration errors.
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }
 
+// getRoleImageRecipe builds exact recipe/build/artifact/risk/managed-lineage detail with existing
+// action hints, treating absent optional candidate/failure as normal and other projection errors
+// as failures.
+// getRoleImageRecipe собирает точные recipe/build/artifact/risk/managed-lineage detail с прежними
+// action hints, считая отсутствие необязательных candidate/failure нормальным, а прочие ошибки
+// projection — отказом.
 func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier roleImageQuerier, current scope, ref string, canBuild, canPromote bool) (roleimagerepo.Detail, error) {
 	row := querier.QueryRow(ctx, queryRoleImagesGetRecipe, current.organizationID, ref)
 	var internalID string
@@ -259,11 +300,21 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 	}, nil
 }
 
+// Manage forces PROJECT scope and delegates the complete owner-managed recipe command, preserving
+// its authorization and transaction path.
+// Manage принудительно задаёт PROJECT scope и передаёт полную owner-managed recipe command с
+// сохранением authorization и transaction path.
 func (repository *Repository) Manage(ctx context.Context, input roleimagerepo.ManageInput) (roleimagerepo.ManageResult, error) {
 	input.ScopeKind = "PROJECT"
 	return repository.manageScopedRoleImage(ctx, input)
 }
 
+// manageScopedRoleImage authorizes the scoped command before receipt replay, otherwise applies the
+// recipe transition, audit, managed source lineage, event and receipt in one serializable
+// transaction; source visibility is reprojected before return.
+// manageScopedRoleImage авторизует scoped command до receipt replay, иначе применяет recipe
+// transition, audit, managed source lineage, event и receipt в одной serializable транзакции;
+// source visibility вычисляется повторно перед выдачей.
 func (repository *Repository) manageScopedRoleImage(ctx context.Context, input roleimagerepo.ManageInput) (roleimagerepo.ManageResult, error) {
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -336,6 +387,13 @@ func (repository *Repository) manageScopedRoleImage(ctx context.Context, input r
 	return result, nil
 }
 
+// applyRoleImageManage applies the closed create/update/archive/restore/request-build/cancel-build
+// actions with exact scope and recipe OCC; cancellation invalidates open work, policy refresh
+// preserves server pins and matching promoted artifacts can satisfy request-build without a new
+// build.
+// applyRoleImageManage применяет закрытые create/update/archive/restore/request-build/cancel-build
+// actions с точными scope и recipe OCC; отмена закрывает open work, policy refresh сохраняет
+// server pins, а совпадающий promoted artifact может исполнить request-build без новой сборки.
 func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.Tx, current scope, input roleimagerepo.ManageInput) (roleimagerepo.ManageResult, string, string, error) {
 	specification := asJSON(input.Recipe)
 	specSHA256 := roleImageDigest(input.Recipe)
@@ -406,10 +464,10 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 			}
 			return roleImageManageResult(detail.Recipe, &build, detail.ActiveArtifact, false), locked.ProjectID, locked.Recipe.ProjectRef, nil
 		}
+		if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {
+			return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
+		}
 		if input.Action == "UPDATE" {
-			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {
-				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
-			}
 			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenPromotions, current.organizationID, locked.ID); err != nil {
 				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
 			}
@@ -424,9 +482,6 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 			// обновила policy или runtime contract, одновременно выпускаем новую
 			// серверную ревизию рецепта: worker не должен бесконечно забирать
 			// заведомо устаревшую задачу и блокировать всю очередь.
-			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {
-				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
-			}
 			if !repository.roleImageRecipePolicyCurrent(locked.Recipe) {
 				if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenPromotions, current.organizationID, locked.ID); err != nil {
 					return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
@@ -440,9 +495,6 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 				}
 			}
 		} else if input.Action == "ARCHIVE" || input.Action == "RESTORE" {
-			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {
-				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
-			}
 			if input.Action == "ARCHIVE" {
 				if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenPromotions, current.organizationID, locked.ID); err != nil {
 					return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
@@ -474,6 +526,10 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 	}
 }
 
+// roleImageRecipePolicyCurrent compares all four recipe admission-policy and role-runtime-contract
+// revision/digest pins against the currently configured server policy.
+// roleImageRecipePolicyCurrent сравнивает все четыре recipe admission-policy и
+// role-runtime-contract revision/digest pins с текущей настроенной policy сервера.
 func (repository *Repository) roleImageRecipePolicyCurrent(recipe entity.RoleImageRecipe) bool {
 	return recipe.PolicyRevision == repository.roleImages.PolicyRevision &&
 		recipe.PolicySHA256 == repository.roleImages.PolicySHA256 &&
@@ -481,6 +537,12 @@ func (repository *Repository) roleImageRecipePolicyCurrent(recipe entity.RoleIma
 		recipe.RoleRuntimeContractSHA256 == repository.roleImages.RoleRuntimeContractSHA256
 }
 
+// authorizeRoleImageManage resolves a create target or existing exact recipe target, requires
+// image.build and additionally source view/manage for create/update; denial maps to not found to
+// preserve resource privacy.
+// authorizeRoleImageManage разрешает create target либо существующую точную recipe target, требует
+// image.build и дополнительно source view/manage для create/update; отказ даёт not found для
+// сохранения закрытости ресурса.
 func (repository *Repository) authorizeRoleImageManage(ctx context.Context, tx pgx.Tx, current scope, input roleimagerepo.ManageInput) error {
 	var target resolvedAccessTarget
 	var err error
@@ -512,10 +574,20 @@ func (repository *Repository) authorizeRoleImageManage(ctx context.Context, tx p
 	return nil
 }
 
+// resolveRoleImageAccessTarget selects the PROJECT target resolver, retaining the optional
+// expected-project check rather than treating caller locators as authority.
+// resolveRoleImageAccessTarget выбирает PROJECT target resolver с сохранением необязательной
+// проверки expected project вместо доверия caller locators как полномочиям.
 func (repository *Repository) resolveRoleImageAccessTarget(ctx context.Context, querier roleImageQuerier, current scope, ref, expectedProjectRef string) (resolvedAccessTarget, error) {
 	return repository.resolveScopedRoleImageAccessTarget(ctx, querier, current, ref, expectedProjectRef, "PROJECT")
 }
 
+// resolveScopedRoleImageAccessTarget reads exact tenant/reference/scope owner and project IDs,
+// rejects a conflicting expected project and constructs the role-image access scope from
+// authoritative row values.
+// resolveScopedRoleImageAccessTarget читает точные tenant/reference/scope owner и project IDs,
+// отклоняет конфликтующий expected project и строит role-image access scope по авторитетной
+// строке.
 func (repository *Repository) resolveScopedRoleImageAccessTarget(ctx context.Context, querier roleImageQuerier, current scope, ref, expectedProjectRef, scopeKind string) (resolvedAccessTarget, error) {
 	var target resolvedAccessTarget
 	if err := querier.QueryRow(ctx, queryRoleImagesResolveAccessTarget, current.organizationID, ref, scopeKind).Scan(
@@ -532,6 +604,10 @@ func (repository *Repository) resolveScopedRoleImageAccessTarget(ctx context.Con
 	return target, nil
 }
 
+// roleImageAccessContext holds the resolved subject, current bindings, one evaluation time and
+// optional authority project for repeated permission checks within a reader or command.
+// roleImageAccessContext хранит разрешённый subject, текущие bindings, единое evaluation time и
+// необязательный authority project для повторных permission checks внутри reader либо command.
 type roleImageAccessContext struct {
 	subject            resolvedAccessSubject
 	bindings           []entity.AccessBinding
@@ -539,6 +615,10 @@ type roleImageAccessContext struct {
 	authorityProjectID string
 }
 
+// loadRoleImageAccessContext loads the current subject and access bindings under the caller
+// transaction and captures UTC evaluation time plus the trusted project authority bound.
+// loadRoleImageAccessContext загружает текущие subject и access bindings в транзакции caller и
+// фиксирует UTC evaluation time и доверенную границу project authority.
 func (repository *Repository) loadRoleImageAccessContext(ctx context.Context, tx pgx.Tx, current scope) (roleImageAccessContext, error) {
 	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
 	if err != nil {
@@ -551,6 +631,10 @@ func (repository *Repository) loadRoleImageAccessContext(ctx context.Context, tx
 	return roleImageAccessContext{subject: subject, bindings: bindings, evaluatedAt: time.Now().UTC(), authorityProjectID: current.authorityProjectID}, nil
 }
 
+// allowed rejects a conflicting nonempty target project before delegating
+// subject/owner/scope/bindings to the shared access evaluator at the captured time.
+// allowed отклоняет конфликтующий непустой target project до передачи subject/owner/scope/bindings
+// общему access evaluator на зафиксированное время.
 func (authorization roleImageAccessContext) allowed(permission string, target resolvedAccessTarget) bool {
 	if authorization.authorityProjectID != "" && target.projectID != "" && authorization.authorityProjectID != target.projectID {
 		return false
@@ -559,6 +643,11 @@ func (authorization roleImageAccessContext) allowed(permission string, target re
 		target.ownerSubjectRef, authorization.bindings, authorization.evaluatedAt).Allowed
 }
 
+// roleImageAccessTarget constructs a ROLE_IMAGE resource-instance scope with an optional related
+// PROJECT locator and owner subject hint, without resolving database identity or granting
+// permission.
+// roleImageAccessTarget строит ROLE_IMAGE resource-instance scope с необязательным связанным
+// PROJECT locator и owner subject hint без разрешения database identity либо выдачи permission.
 func roleImageAccessTarget(ref, projectRef, ownerSubjectRef string) resolvedAccessTarget {
 	var related map[string]string
 	if projectRef != "" {
@@ -570,6 +659,12 @@ func roleImageAccessTarget(ref, projectRef, ownerSubjectRef string) resolvedAcce
 	}}
 }
 
+// insertRoleImageBuild commits recipe/owner/policy/runtime input into an immutable build digest,
+// inserts the build and reads its exact projection from the caller transaction; absent readback
+// yields unavailable.
+// insertRoleImageBuild закрепляет recipe/owner/policy/runtime input в immutable build digest,
+// добавляет build и читает его точную projection в транзакции caller; отсутствие readback даёт
+// unavailable.
 func (repository *Repository) insertRoleImageBuild(ctx context.Context, tx pgx.Tx, current scope, recipeID string, recipe entity.RoleImageRecipe) (*entity.ImageBuild, error) {
 	immutable := roleImageDigest(struct {
 		ScopeKind, OrganizationRef, ProjectRef string
@@ -603,6 +698,10 @@ func (repository *Repository) insertRoleImageBuild(ctx context.Context, tx pgx.T
 	return nil, errs.ErrUnavailable
 }
 
+// decodeJSON delegates to encoding/json.Unmarshal without additional unknown-field rejection,
+// canonicalization or owner validation.
+// decodeJSON передаёт декодирование encoding/json.Unmarshal без дополнительного запрета unknown
+// fields, канонизации либо проверки владельца.
 func decodeJSON(raw []byte, target any) error {
 	return json.Unmarshal(raw, target)
 }

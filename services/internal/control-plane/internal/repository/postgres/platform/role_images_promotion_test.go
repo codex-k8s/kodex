@@ -13,6 +13,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// TestPromotionEvidenceGateRejectsIncompleteAdmission checks complete synthetic evidence passes
+// and each missing or malformed required admission field closes the exact-evidence gate.
+// TestPromotionEvidenceGateRejectsIncompleteAdmission проверяет успех полного synthetic evidence и
+// закрытие exact-evidence gate при каждом отсутствующем либо неверном обязательном admission
+// field.
 func TestPromotionEvidenceGateRejectsIncompleteAdmission(t *testing.T) {
 	_, artifact, _ := promotionTestSnapshot()
 	if !exactPromotionEvidence(artifact.Artifact) {
@@ -41,6 +46,12 @@ func TestPromotionEvidenceGateRejectsIncompleteAdmission(t *testing.T) {
 	}
 }
 
+// TestPromotionReceiptDigestBindsImmutableEvidence checks immutable evidence changes alter the
+// request digest while a mutable artifact lifecycle version does not, and validates the linked
+// request receipt.
+// TestPromotionReceiptDigestBindsImmutableEvidence проверяет изменение request digest при смене
+// immutable evidence и его устойчивость к mutable artifact lifecycle version, а также связанную
+// request receipt.
 func TestPromotionReceiptDigestBindsImmutableEvidence(t *testing.T) {
 	_, artifact, request := promotionTestSnapshot()
 	baseline := promotionRequestDigest(request.Ref, request.RequestedBy, artifact)
@@ -72,6 +83,12 @@ func TestPromotionReceiptDigestBindsImmutableEvidence(t *testing.T) {
 	}
 }
 
+// TestPromotionTokensBindClaimAndAuthorizationSnapshot checks deterministic promotion tokens bind
+// exact artifact version, evidence, request receipt, fence, credential generation and separate
+// claim/authorization purposes using only a synthetic key.
+// TestPromotionTokensBindClaimAndAuthorizationSnapshot проверяет привязку детерминированных
+// promotion tokens к точным artifact version, evidence, request receipt, fence, credential
+// generation и разным claim/authorization purposes только на синтетическом ключе.
 func TestPromotionTokensBindClaimAndAuthorizationSnapshot(t *testing.T) {
 	repository := &Repository{roleImages: RoleImageConfig{
 		LeaseSigningKey:    []byte("0123456789abcdef0123456789abcdef"),
@@ -107,6 +124,12 @@ func TestPromotionTokensBindClaimAndAuthorizationSnapshot(t *testing.T) {
 	}
 }
 
+// TestRoleImageTransactionRetryAndCommitClassification checks the existing bounded retry and
+// SQLSTATE/commit mapping, including the current retry classification of ambiguous connection
+// failure; it does not prove such a failure was rolled back.
+// TestRoleImageTransactionRetryAndCommitClassification проверяет прежние bounded retry и
+// SQLSTATE/commit mapping, включая текущую retry classification неопределённого connection
+// failure; не доказывает rollback такого отказа.
 func TestRoleImageTransactionRetryAndCommitClassification(t *testing.T) {
 	calls := 0
 	result, err := retryRoleImageTransaction(context.Background(), func() (string, error) {
@@ -145,6 +168,12 @@ func TestRoleImageTransactionRetryAndCommitClassification(t *testing.T) {
 	}
 }
 
+// TestRoleImagePromotionCancellationIsTerminal checks required terminal request/artifact
+// claim-clearing clauses exist in the cancellation SQL; this static test does not execute a
+// database transition.
+// TestRoleImagePromotionCancellationIsTerminal проверяет наличие обязательных terminal
+// request/artifact claim-clearing clauses в cancellation SQL; этот статический тест не исполняет
+// переход в БД.
 func TestRoleImagePromotionCancellationIsTerminal(t *testing.T) {
 	lower := strings.ToLower(queryRoleImagesCancelOpenPromotions)
 	for _, required := range []string{
@@ -157,6 +186,12 @@ func TestRoleImagePromotionCancellationIsTerminal(t *testing.T) {
 	}
 }
 
+// TestRoleImagePromotionQueriesKeepOneWinnerAndExactCompletion checks required locking, OCC,
+// request/evidence and activation predicates in the named promotion queries; string checks do not
+// establish concurrent runtime behavior.
+// TestRoleImagePromotionQueriesKeepOneWinnerAndExactCompletion проверяет обязательные locking,
+// OCC, request/evidence и activation predicates в именованных promotion queries; проверка строк не
+// доказывает конкурентное runtime поведение.
 func TestRoleImagePromotionQueriesKeepOneWinnerAndExactCompletion(t *testing.T) {
 	tests := map[string]struct {
 		query    string
@@ -198,6 +233,10 @@ func TestRoleImagePromotionQueriesKeepOneWinnerAndExactCompletion(t *testing.T) 
 	}
 }
 
+// promotionTestSnapshot builds one complete synthetic recipe/artifact/request snapshot with fixed
+// immutable pins and a matching request digest, without querying registry or database.
+// promotionTestSnapshot создаёт один полный synthetic recipe/artifact/request snapshot с
+// фиксированными immutable pins и совпадающим request digest без обращения к registry либо БД.
 func promotionTestSnapshot() (lockedRecipe, lockedArtifact, lockedPromotionRequest) {
 	digest := strings.Repeat("a", 64)
 	manifest := "sha256:" + strings.Repeat("b", 64)
@@ -233,4 +272,52 @@ func promotionTestSnapshot() (lockedRecipe, lockedArtifact, lockedPromotionReque
 	}
 	request.ReceiptSHA256 = promotionRequestDigest(request.Ref, request.RequestedBy, artifact)
 	return recipe, artifact, request
+}
+
+// TestPromotionRequestAddsOnlyRequestSpecificGates checks literal outcomes for shared snapshot
+// failures and the additional pending/request/provenance gates, keeping mutable lifecycle version
+// outside the immutable snapshot predicate.
+// TestPromotionRequestAddsOnlyRequestSpecificGates проверяет буквальные исходы общих snapshot
+// failures и дополнительных pending/request/provenance gates, сохраняя mutable lifecycle version
+// вне предиката неизменяемого snapshot.
+func TestPromotionRequestAddsOnlyRequestSpecificGates(t *testing.T) {
+	for _, test := range []struct {
+		name              string
+		mutate            func(*lockedRecipe, *lockedArtifact)
+		snapshot, request bool
+	}{
+		{name: "ready", snapshot: true, request: true},
+		{name: "mutable lifecycle version", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.Version++ }, snapshot: true, request: true},
+		{name: "existing request", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.PromotionRequestID = "existing" }, snapshot: true},
+		{name: "already claimed", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.PromotionState = "CLAIMED" }, snapshot: true},
+		{name: "already promoted", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.PromotedReference = "registry.invalid/promoted" }, snapshot: true},
+		{name: "different provenance", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.ProvenanceSHA256 = strings.Repeat("c", 64) }, snapshot: true},
+		{name: "inactive recipe", mutate: func(r *lockedRecipe, _ *lockedArtifact) { r.Recipe.State = "ARCHIVED" }},
+		{name: "different recipe ID", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.RecipeID = "other" }},
+		{name: "different recipe ref", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.RecipeRef = "other" }},
+		{name: "admission state", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.AdmissionState = "REJECTED" }},
+		{name: "admission verdict", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.AdmissionVerdict = "REJECTED" }},
+		{name: "recipe version", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.RecipeVersion++ }},
+		{name: "recipe generation", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.RecipeGeneration++ }},
+		{name: "specification", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.SpecSHA256 = strings.Repeat("c", 64) }},
+		{name: "policy version", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.PolicyRevision++ }},
+		{name: "policy digest", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.PolicySHA256 = strings.Repeat("c", 64) }},
+		{name: "contract version", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.RoleRuntimeContractRevision++ }},
+		{name: "contract digest", mutate: func(_ *lockedRecipe, a *lockedArtifact) {
+			a.Artifact.RoleRuntimeContractSHA256 = strings.Repeat("c", 64)
+		}},
+		{name: "incomplete evidence", mutate: func(_ *lockedRecipe, a *lockedArtifact) { a.Artifact.ManifestDigest = "latest" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recipe, artifact, _ := promotionTestSnapshot()
+			artifact.PromotionRequestID = ""
+			expectedProvenance := artifact.Artifact.ProvenanceSHA256
+			if test.mutate != nil {
+				test.mutate(&recipe, &artifact)
+			}
+			if exactPromotionSnapshot(recipe, artifact) != test.snapshot || admittedArtifactCanBePromoted(recipe, artifact, expectedProvenance) != test.request {
+				t.Fatal("snapshot or promotion-request eligibility changed")
+			}
+		})
+	}
 }

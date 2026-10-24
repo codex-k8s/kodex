@@ -14,6 +14,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// buildClaimReceipt stores the exact build/input snapshot, fence, credential generation and expiry
+// needed to reconstruct the original deterministic lease token on replay; it is not fresh liveness
+// proof.
+// buildClaimReceipt сохраняет точные build/input snapshot, fence, credential generation и expiry
+// для восстановления исходного детерминированного lease token при replay; не является свежим
+// liveness proof.
 type buildClaimReceipt struct {
 	Build               entity.ImageBuild
 	Input               entity.RoleImageBuildInput
@@ -22,16 +28,28 @@ type buildClaimReceipt struct {
 	LeaseExpiresAt      time.Time
 }
 
+// buildExpiryOutcome records one build reference, updated version and EXPIRED/DEAD_LETTER stage
+// after an owner expiry transition.
+// buildExpiryOutcome фиксирует одну build reference, обновлённую version и стадию
+// EXPIRED/DEAD_LETTER после owner expiry transition.
 type buildExpiryOutcome struct {
 	BuildRef string
 	Version  uint64
 	Stage    string
 }
 
+// buildExpiryReceipt stores an explicit nonempty batch of expiry-only changes so replay cannot
+// confuse no new claim with an empty build snapshot.
+// buildExpiryReceipt сохраняет явную непустую пачку expiry-only изменений, исключая смешение
+// отсутствия нового claim с пустым build snapshot.
 type buildExpiryReceipt struct {
 	Changes []buildExpiryOutcome
 }
 
+// admissionClaimReceipt pins the attempt, accepted-risk/source evidence, expiry/rejection side
+// effects and artifact claim coordinates required by admission replay.
+// admissionClaimReceipt закрепляет attempt, accepted-risk/source evidence, побочные
+// expiry/rejection изменения и artifact claim coordinates для admission replay.
 type admissionClaimReceipt struct {
 	AdmissionAttemptRef                                        string
 	AdmissionAttempt                                           uint32
@@ -46,6 +64,10 @@ type admissionClaimReceipt struct {
 	ClaimExpiresAt                                             time.Time
 }
 
+// promotionClaimReceipt stores the exact artifact/request receipt commitment, fence, authority
+// generation and claim deadline used for promotion replay.
+// promotionClaimReceipt сохраняет точные artifact/request receipt commitment, fence, authority
+// generation и claim deadline для promotion replay.
 type promotionClaimReceipt struct {
 	Artifact                      entity.ImageArtifact
 	PromotionRequestReceiptSHA256 string
@@ -54,6 +76,10 @@ type promotionClaimReceipt struct {
 	ClaimExpiresAt                time.Time
 }
 
+// promotionAuthorizationReceipt stores the exact promotion artifact/request receipt and fenced
+// authority lifetime used to reconstruct authorization replay.
+// promotionAuthorizationReceipt сохраняет точные promotion artifact/request receipt и ограниченный
+// срок fenced authority для восстановления authorization replay.
 type promotionAuthorizationReceipt struct {
 	Artifact                      entity.ImageArtifact
 	PromotionRequestReceiptSHA256 string
@@ -62,12 +88,22 @@ type promotionAuthorizationReceipt struct {
 	AuthorizationExpiresAt        time.Time
 }
 
+// ClaimBuild runs the complete build claim through the existing bounded role-image transaction
+// retry policy rather than retrying an individual SQL statement.
+// ClaimBuild выполняет полный build claim через прежнюю ограниченную role-image transaction retry
+// policy вместо повтора отдельного SQL statement.
 func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Principal, key string) (entity.ImageBuildClaim, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.ImageBuildClaim, error) {
 		return repository.claimBuild(ctx, principal, key)
 	})
 }
 
+// claimBuild locks actor/key idempotency, replays an explicit claim or expiry-only outcome,
+// otherwise expires old leases and claims one bounded-attempt candidate with fresh token/fence
+// before storing receipt and event in the same commit.
+// claimBuild блокирует actor/key idempotency, повторяет явный claim либо expiry-only outcome,
+// иначе завершает прежние leases и забирает одного кандидата с ограничением attempts и свежими
+// token/fence, сохраняя receipt и event одним commit.
 func (repository *Repository) claimBuild(ctx context.Context, principal value.Principal, key string) (entity.ImageBuildClaim, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -147,10 +183,7 @@ func (repository *Repository) claimBuild(ctx context.Context, principal value.Pr
 	if err != nil || decodeJSON(specification, &recipe.Input) != nil {
 		return entity.ImageBuildClaim{}, errs.ErrConflict
 	}
-	if recipe.PolicyRevision != repository.roleImages.PolicyRevision ||
-		recipe.PolicySHA256 != repository.roleImages.PolicySHA256 ||
-		recipe.RoleRuntimeContractRevision != repository.roleImages.RoleRuntimeContractRevision ||
-		recipe.RoleRuntimeContractSHA256 != repository.roleImages.RoleRuntimeContractSHA256 {
+	if !repository.roleImageRecipePolicyCurrent(recipe) {
 		return entity.ImageBuildClaim{}, errs.ErrConflict
 	}
 	receipt := buildClaimReceipt{Build: build, Input: newRoleImageBuildInput(recipe, immutable),
@@ -171,9 +204,12 @@ func (repository *Repository) claimBuild(ctx context.Context, principal value.Pr
 	return repository.buildClaimFromReceipt(receipt), nil
 }
 
-// Lease expiry закрывает прежний token/generation и увеличивает fence в той же
-// owner-транзакции, что durable event и новая attempt. При исчерпании бюджета
-// terminal DEAD_LETTER фиксируется даже когда нового claim уже нет.
+// expireRoleImageBuilds expires up to32 eligible leases, clears old claim authority and increments
+// fences in SQL, then emits audit/events and returns exact changed outcomes in the caller
+// transaction, including DEAD_LETTER without a new claim.
+// expireRoleImageBuilds завершает до32 допустимых leases, очищает прежнюю claim authority и
+// увеличивает fences в SQL, затем пишет audit/events и возвращает точные outcomes в транзакции
+// caller, включая DEAD_LETTER без нового claim.
 func (repository *Repository) expireRoleImageBuilds(ctx context.Context, tx pgx.Tx, current scope) ([]buildExpiryOutcome, error) {
 	rows, err := tx.Query(ctx, queryRoleImagesExpireBuilds, current.organizationID)
 	if err != nil {
@@ -208,8 +244,12 @@ func (repository *Repository) expireRoleImageBuilds(ctx context.Context, tx pgx.
 	return outcomes, nil
 }
 
-// Вид сохранённого результата закрепляет отсутствие нового claim; пустой Build
-// не используется как неявный переключатель протокола или источник полномочий.
+// loadBuildClaimOutcome checks exact stored intent and explicit response kind, validating either
+// required claim identity/lifetime or one-to32 expiry outcomes; unknown or malformed receipts fail
+// as conflict.
+// loadBuildClaimOutcome проверяет точные сохранённые intent и response kind, проверяя обязательные
+// claim identity/lifetime либо от одного до32 expiry outcomes; неизвестные и неверные receipts
+// дают conflict.
 func (repository *Repository) loadBuildClaimOutcome(ctx context.Context, tx pgx.Tx, current scope,
 	operation, key, intent string,
 ) (buildClaimReceipt, bool, bool, error) {
@@ -250,6 +290,10 @@ func (repository *Repository) loadBuildClaimOutcome(ctx context.Context, tx pgx.
 	}
 }
 
+// buildClaimFromReceipt reconstructs the deterministic token and public claim from saved receipt
+// coordinates without issuing a new attempt, extending expiry or checking current lease liveness.
+// buildClaimFromReceipt восстанавливает детерминированные token и публичный claim по сохранённым
+// receipt coordinates без новой attempt, продления expiry либо проверки текущей liveness lease.
 func (repository *Repository) buildClaimFromReceipt(receipt buildClaimReceipt) entity.ImageBuildClaim {
 	token := repository.roleImageToken("image-build", receipt.Build.Ref, receipt.Build.Attempt,
 		receipt.Fence, receipt.AuthorityGeneration, receipt.LeaseExpiresAt)
@@ -258,6 +302,12 @@ func (repository *Repository) buildClaimFromReceipt(receipt buildClaimReceipt) e
 		LeaseExpiresAt: receipt.LeaseExpiresAt}
 }
 
+// RenewBuild locks the build and honors an exact renewal replay before live-claim validation;
+// otherwise rotates token/credential generation and expiry, stores the renewed immutable input and
+// commits without emitting a build event here.
+// RenewBuild блокирует build и принимает точный renewal replay до live-claim validation; иначе
+// меняет token/credential generation и expiry, сохраняет renewed immutable input и фиксирует без
+// build event в этом методе.
 func (repository *Repository) RenewBuild(ctx context.Context, input roleimagerepo.BuildLeaseInput) (entity.ImageBuildClaim, error) {
 	current, tx, locked, operation, intent, err := repository.beginBuildMutation(ctx, input, "platform.role-images.builds.renew")
 	if err != nil {
@@ -307,6 +357,11 @@ func (repository *Repository) RenewBuild(ctx context.Context, input roleimagerep
 	return repository.buildClaimFromReceipt(receipt), nil
 }
 
+// ReportBuildProgress honors exact progress replay, validates the live fenced claim and stores
+// updated stage/percent, receipt and build-changed event in the caller-owned serializable
+// transaction.
+// ReportBuildProgress принимает точный progress replay, проверяет живой fenced claim и сохраняет
+// обновлённые stage/percent, receipt и build-changed event в serializable транзакции владельца.
 func (repository *Repository) ReportBuildProgress(ctx context.Context, input roleimagerepo.BuildProgressInput) (entity.ImageBuild, error) {
 	current, tx, locked, operation, intent, err := repository.beginBuildMutation(ctx, input.BuildLeaseInput, "platform.role-images.builds.progress")
 	if err != nil {
@@ -332,19 +387,15 @@ func (repository *Repository) ReportBuildProgress(ctx context.Context, input rol
 		&locked.Build.Stage, &locked.Build.ProgressPercent, &locked.Build.UpdatedAt); err != nil {
 		return entity.ImageBuild{}, mapRoleImageWriteError(err)
 	}
-	if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, input.IdempotencyKey,
-		intent, "IMAGE_BUILD_PROGRESS", locked.Build); err != nil {
-		return entity.ImageBuild{}, err
-	}
-	if err := repository.emitRoleImageBuildChanged(ctx, tx, current, locked); err != nil {
-		return entity.ImageBuild{}, err
-	}
-	if err := committed(tx, ctx); err != nil {
-		return entity.ImageBuild{}, err
-	}
-	return locked.Build, nil
+	return repository.finishBuildMutation(ctx, tx, current, locked, operation, input.IdempotencyKey, intent, "IMAGE_BUILD_PROGRESS")
 }
 
+// CompleteBuild replays the saved build/artifact pair or verifies live claim plus exact staging
+// and immutable input, then completes the build, clears its lease, inserts the bound artifact and
+// commits audit/receipt/event atomically.
+// CompleteBuild повторяет сохранённую пару build/artifact либо проверяет live claim, точные
+// staging и immutable input, затем завершает build, очищает lease, добавляет связанный artifact и
+// атомарно фиксирует audit/receipt/event.
 func (repository *Repository) CompleteBuild(ctx context.Context, input roleimagerepo.BuildCompletionInput) (entity.ImageBuild, entity.ImageArtifact, error) {
 	current, tx, locked, operation, _, err := repository.beginBuildMutation(ctx, input.BuildLeaseInput, "platform.role-images.builds.complete")
 	if err != nil {
@@ -352,6 +403,10 @@ func (repository *Repository) CompleteBuild(ctx context.Context, input roleimage
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	intent := roleImageBuildCompletionDigest(input)
+	// completionReceipt stores both completed build and artifact as one replay result so retry cannot
+	// create a second artifact or return an incomplete completion pair.
+	// completionReceipt сохраняет завершённые build и artifact единым replay result, исключая второй
+	// artifact при повторе либо неполную completion pair.
 	type completionReceipt struct {
 		Build    entity.ImageBuild
 		Artifact entity.ImageArtifact
@@ -417,6 +472,10 @@ func (repository *Repository) CompleteBuild(ctx context.Context, input roleimage
 	return locked.Build, artifact, nil
 }
 
+// FailBuild replays a saved failure or validates the live claim, applies SQL failure state, clears
+// the local lease coordinates and commits the exact updated build with receipt/event.
+// FailBuild повторяет сохранённый failure либо проверяет live claim, применяет SQL failure state,
+// очищает локальные lease coordinates и фиксирует точный обновлённый build с receipt/event.
 func (repository *Repository) FailBuild(ctx context.Context, input roleimagerepo.BuildFailureInput) (entity.ImageBuild, error) {
 	current, tx, locked, operation, _, err := repository.beginBuildMutation(ctx, input.BuildLeaseInput, "platform.role-images.builds.fail")
 	if err != nil {
@@ -446,19 +505,15 @@ func (repository *Repository) FailBuild(ctx context.Context, input roleimagerepo
 	}
 	locked.Build.LeaseExpiresAt, locked.Build.LeaseTokenSHA256, locked.Build.ClaimantWorkload = nil, "", ""
 	locked.Build.AuthorityGeneration = 0
-	if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, input.IdempotencyKey,
-		intent, "IMAGE_BUILD_FAILURE", locked.Build); err != nil {
-		return entity.ImageBuild{}, err
-	}
-	if err := repository.emitRoleImageBuildChanged(ctx, tx, current, locked); err != nil {
-		return entity.ImageBuild{}, err
-	}
-	if err := committed(tx, ctx); err != nil {
-		return entity.ImageBuild{}, err
-	}
-	return locked.Build, nil
+	return repository.finishBuildMutation(ctx, tx, current, locked, operation, input.IdempotencyKey, intent, "IMAGE_BUILD_FAILURE")
 }
 
+// beginBuildMutation resolves trusted scope, opens a serializable transaction and locks the exact
+// tenant/build, rolling back on missing/read failure; successful callers own rollback/commit and
+// use the correlation-normalized lease digest.
+// beginBuildMutation разрешает доверенную область, открывает serializable транзакцию и блокирует
+// точные tenant/build с rollback при отсутствии либо ошибке чтения; успешные callers владеют
+// rollback/commit и используют lease digest без correlation.
 func (repository *Repository) beginBuildMutation(ctx context.Context, input roleimagerepo.BuildLeaseInput, operation string) (scope, pgx.Tx, lockedBuild, string, string, error) {
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -481,6 +536,10 @@ func (repository *Repository) beginBuildMutation(ctx context.Context, input role
 	return current, tx, locked, operation, roleImageBuildLeaseDigest(input), nil
 }
 
+// emitRoleImageBuildChanged resolves the project locator and requires valid scope plus
+// recipe/version pins before emitting the build-stage snapshot through the caller transaction.
+// emitRoleImageBuildChanged разрешает project locator и требует допустимые scope и recipe/version
+// pins до записи build-stage snapshot через транзакцию caller.
 func (repository *Repository) emitRoleImageBuildChanged(ctx context.Context, tx pgx.Tx, current scope, locked lockedBuild) error {
 	projectRef := projectRefByID(ctx, tx, locked.ProjectID)
 	if (locked.Build.ScopeKind != "PROJECT" && locked.Build.ScopeKind != "ORGANIZATION") ||
@@ -492,6 +551,12 @@ func (repository *Repository) emitRoleImageBuildChanged(ctx context.Context, tx 
 		int64(locked.Build.Version), locked.Build.Stage)
 }
 
+// validateBuildClaim distinguishes version/attempt/fence mismatch from forbidden workload,
+// credential generation, missing/expired lease, token or stage; it uses the existing
+// pipe-delimited stage matching expression.
+// validateBuildClaim различает version/attempt/fence mismatch и forbidden workload, credential
+// generation, отсутствующий/истёкший lease, token либо stage; использует прежнее pipe-delimited
+// выражение проверки стадии.
 func validateBuildClaim(input roleimagerepo.BuildLeaseInput, locked lockedBuild, now time.Time) error {
 	if locked.Build.Version != input.ExpectedVersion || locked.Build.Attempt != input.ExpectedAttempt ||
 		locked.Build.Fence != input.ExpectedFence {
@@ -505,4 +570,23 @@ func validateBuildClaim(input roleimagerepo.BuildLeaseInput, locked lockedBuild,
 		return errs.ErrForbidden
 	}
 	return nil
+}
+
+// finishBuildMutation stores the already-applied build result, emits its snapshot and commits
+// in the original order; any failure returns a zero build. Specialized callers retain claim
+// validation, SQL transition, receipt kind and their existing deferred rollback.
+// finishBuildMutation сохраняет уже применённый build result, записывает snapshot и выполняет
+// commit в прежнем порядке; любой отказ возвращает нулевой build. Специализированные callers
+// сохраняют claim validation, SQL transition, receipt kind и прежний deferred rollback.
+func (repository *Repository) finishBuildMutation(ctx context.Context, tx pgx.Tx, current scope, locked lockedBuild, operation, key, intent, responseType string) (entity.ImageBuild, error) {
+	if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, key, intent, responseType, locked.Build); err != nil {
+		return entity.ImageBuild{}, err
+	}
+	if err := repository.emitRoleImageBuildChanged(ctx, tx, current, locked); err != nil {
+		return entity.ImageBuild{}, err
+	}
+	if err := committed(tx, ctx); err != nil {
+		return entity.ImageBuild{}, err
+	}
+	return locked.Build, nil
 }

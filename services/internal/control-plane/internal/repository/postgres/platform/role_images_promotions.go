@@ -11,6 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// RequestPromotion forces PROJECT scope and delegates the full promotion request to the existing
+// transaction retry policy.
+// RequestPromotion принудительно задаёт PROJECT scope и передаёт полный promotion request прежней
+// transaction retry policy.
 func (repository *Repository) RequestPromotion(ctx context.Context, input roleimagerepo.PromotionRequestInput) (entity.RoleImagePromotionReceipt, error) {
 	input.ScopeKind = "PROJECT"
 	return retryRoleImageTransaction(ctx, func() (entity.RoleImagePromotionReceipt, error) {
@@ -18,6 +22,12 @@ func (repository *Repository) RequestPromotion(ctx context.Context, input roleim
 	})
 }
 
+// requestPromotion requires current scoped image.promote before idempotent replay, locks exact
+// artifact/recipe and OCC, verifies admitted immutable evidence and records request linkage,
+// audit, event and receipt in one serializable transaction.
+// requestPromotion требует текущий scoped image.promote до idempotent replay, блокирует точные
+// artifact/recipe и OCC, проверяет admitted immutable evidence и сохраняет request linkage, audit,
+// event и receipt одной serializable транзакцией.
 func (repository *Repository) requestPromotion(ctx context.Context, input roleimagerepo.PromotionRequestInput) (entity.RoleImagePromotionReceipt, error) {
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -155,21 +165,24 @@ func (repository *Repository) requestPromotion(ctx context.Context, input roleim
 	return receipt, nil
 }
 
+// admittedArtifactCanBePromoted requires an active matching admitted recipe snapshot and exact
+// evidence, no existing promotion request/reference, PENDING promotion state and the caller-pinned
+// provenance digest.
+// admittedArtifactCanBePromoted требует активный совпадающий admitted recipe snapshot и точное
+// evidence, отсутствие существующих promotion request/reference, PENDING promotion state и
+// закреплённый caller provenance digest.
 func admittedArtifactCanBePromoted(recipe lockedRecipe, artifact lockedArtifact, expectedProvenance string) bool {
-	return recipe.Recipe.State == "ACTIVE" && artifact.RecipeID == recipe.ID &&
-		artifact.Artifact.RecipeRef == recipe.Recipe.Ref && artifact.PromotionRequestID == "" &&
-		artifact.AdmissionState == "ACCEPTED" && artifact.Artifact.AdmissionVerdict == "ACCEPTED" &&
+	return exactPromotionSnapshot(recipe, artifact) && artifact.PromotionRequestID == "" &&
 		artifact.PromotionState == "PENDING" && artifact.Artifact.PromotedReference == "" &&
-		artifact.Artifact.RecipeVersion == recipe.Recipe.Version &&
-		artifact.Artifact.RecipeGeneration == recipe.Recipe.Generation &&
-		artifact.Artifact.SpecSHA256 == recipe.Recipe.SpecSHA256 &&
-		artifact.Artifact.PolicyRevision == recipe.Recipe.PolicyRevision &&
-		artifact.Artifact.PolicySHA256 == recipe.Recipe.PolicySHA256 &&
-		artifact.Artifact.RoleRuntimeContractRevision == recipe.Recipe.RoleRuntimeContractRevision &&
-		artifact.Artifact.RoleRuntimeContractSHA256 == recipe.Recipe.RoleRuntimeContractSHA256 &&
-		artifact.Artifact.ProvenanceSHA256 == expectedProvenance && exactPromotionEvidence(artifact.Artifact)
+		artifact.Artifact.ProvenanceSHA256 == expectedProvenance
 }
 
+// exactPromotionEvidence validates required manifest, hash and signature-identity shapes plus
+// positive admission/policy/runtime/build versions; shape validation is not signature verification
+// or promotion authority.
+// exactPromotionEvidence проверяет обязательные формы manifest, hash и signature identity и
+// положительные admission/policy/runtime/build versions; проверка формы не является проверкой
+// подписи либо promotion authority.
 func exactPromotionEvidence(artifact entity.ImageArtifact) bool {
 	return exactManifestDigest(artifact.ManifestDigest) && exactSHA256(artifact.ImmutableBuildSHA256) &&
 		exactSHA256(artifact.ProvenanceSHA256) && exactSHA256(artifact.SBOMSHA256) &&
@@ -182,6 +195,12 @@ func exactPromotionEvidence(artifact entity.ImageArtifact) bool {
 		artifact.BuildAttempt > 0 && artifact.BuildVersion > 0
 }
 
+// exactPromotionSnapshot compares active recipe identity, version/generation/specification,
+// admission result and policy/runtime pins with the artifact and requires exact evidence,
+// independently of promotion-request state.
+// exactPromotionSnapshot сравнивает active recipe identity, version/generation/specification,
+// admission result и policy/runtime pins с artifact и требует точное evidence независимо от
+// promotion-request state.
 func exactPromotionSnapshot(recipe lockedRecipe, artifact lockedArtifact) bool {
 	return recipe.Recipe.State == "ACTIVE" && artifact.RecipeID == recipe.ID &&
 		artifact.Artifact.RecipeRef == recipe.Recipe.Ref &&
@@ -196,6 +215,11 @@ func exactPromotionSnapshot(recipe lockedRecipe, artifact lockedArtifact) bool {
 		exactPromotionEvidence(artifact.Artifact)
 }
 
+// promotionRequestMatches requires the exact linked request ID, nonempty requester and matching
+// immutable manifest/provenance/receipt commitment; it does not infer permission from request
+// fields.
+// promotionRequestMatches требует точный linked request ID, непустого requester и совпадение
+// immutable manifest/provenance/receipt commitment; не выводит permission из полей запроса.
 func promotionRequestMatches(request lockedPromotionRequest, artifact lockedArtifact) bool {
 	return request.ID != "" && request.ID == artifact.PromotionRequestID && request.RequestedBy != "" &&
 		request.ExpectedProvenanceSHA256 == artifact.Artifact.ProvenanceSHA256 &&
@@ -203,6 +227,10 @@ func promotionRequestMatches(request lockedPromotionRequest, artifact lockedArti
 		request.ReceiptSHA256 == promotionRequestDigest(request.Ref, request.RequestedBy, artifact)
 }
 
+// promotionCanBeClaimed allows an unpromoted PENDING artifact for QUEUED request or an expired
+// CLAIMED/AUTHORIZED lifetime for PROMOTING request, rejecting other states.
+// promotionCanBeClaimed допускает unpromoted PENDING artifact для QUEUED request либо истёкший
+// срок CLAIMED/AUTHORIZED для PROMOTING request, отклоняя другие состояния.
 func promotionCanBeClaimed(now time.Time, request lockedPromotionRequest, artifact lockedArtifact) bool {
 	if request.State == "QUEUED" {
 		return artifact.PromotionState == "PENDING" && artifact.Artifact.PromotedReference == ""
@@ -219,6 +247,11 @@ func promotionCanBeClaimed(now time.Time, request lockedPromotionRequest, artifa
 	return false
 }
 
+// promotionRequestDigest hashes the fixed request/requester and immutable
+// recipe/build/evidence/runtime/platform/tool tuple, excluding the mutable artifact lifecycle
+// version.
+// promotionRequestDigest хеширует фиксированные request/requester и неизменяемый
+// recipe/build/evidence/runtime/platform/tool tuple без mutable artifact lifecycle version.
 func promotionRequestDigest(ref, requestedBy string, artifact lockedArtifact) string {
 	return roleImageDigest(struct {
 		Ref, RequestedBy, RecipeRef, ArtifactRef, BuildRef, StagingReference   string

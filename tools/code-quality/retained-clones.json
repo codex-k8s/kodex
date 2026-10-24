@@ -6152,6 +6152,14 @@
       "fragmentSHA256": "a8a092029622fde34e5bf5f1035630b96f8f36023b93b890c918abd22204c51a",
       "count": 1,
       "reason": "Окно118 tokens сравнивает общий вход resolveScope/BeginTx/rollback двух разных read-only RR методов. Полные функции прочитаны: artifact binding проверяет artifact.bind и видимость каждого project agent; system assistant candidates требует отдельного organization owner, exact connection/package pins и readiness. Сами алгоритмы authority, построения страницы и cursor раздельны, общий JSON hash теперь использует jsonValueDigest. Generic callback runner смешал бы typed results и скрывал собственные owner/eligibility steps, не удаляя общего бизнесового алгоритма. Оставлена только эта точная пара путей/hash/count1; scopes, SQL, rollback и grant policies не подавляются целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_promotions.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_promotions.go",
+      "fragmentSHA256": "1122f331eb98125b3a86fc3b097beb20af781ee7e649736ab043ed9b35bb8f85",
+      "count": 1,
+      "reason": "238-token окно является самоперекрытием одного promotionRequestDigest initializer со сдвигом на одну строку. Полная функция прочитана: каждый named field фиксированной commitment structure связывается с отдельным immutable artifact field, включая provenance, evidence, policy/runtime, platform/tool pins; второго алгоритма или второго producer здесь нет. Normalization identifiers делает разные обязательные присваивания похожими. Reflection mapper либо удаление полей изменили бы ясную wire/commitment форму; общий JSON hash уже roleImageDigest/jsonValueDigest. Сохранено только точное внутрефайловое overlap окно/hash/count1, не digest validation или функция целиком."
     }
   ]
 }
