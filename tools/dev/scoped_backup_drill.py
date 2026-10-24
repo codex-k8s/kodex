@@ -66,13 +66,19 @@ def write_private(path, value):
 
 
 def read_private(path):
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, "DUPLICATE_JSON_KEY")
+            value[key] = item
+        return value
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and
                 info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600 and
                 info.st_size <= 1 << 20, "PRIVATE_INPUT_REQUIRED")
-        return json.loads(stream.read())
+        return json.loads(stream.read(), object_pairs_hook=unique)
 
 
 class Kubernetes:
@@ -143,9 +149,12 @@ def labels(run):
             "kodex.dev/e2e-run": run}
 
 
-def custody_plan(kube, storage_secret, run, role="backup"):
-    source_namespace(kube)
-    require(re.fullmatch(r"kodex-external-s3-local-[a-f0-9]{16}", storage_secret), "EXACT_STORAGE_SOURCE_REQUIRED")
+def custody_plan(kube, storage_secret, run, role="backup", static_receipt=None, receipt_max_age=300):
+    if static_receipt is not None:
+        validate_static_storage(kube, static_receipt, storage_secret, run, receipt_max_age)
+    else:
+        source_namespace(kube)
+        require(re.fullmatch(r"kodex-external-s3-local-[a-f0-9]{16}", storage_secret), "EXACT_STORAGE_SOURCE_REQUIRED")
     require(role in ("backup", "repository"), "CUSTODY_ROLE_INVALID")
     value = {"schema": "kodex.backup-custody/v1", "context": CONTEXT, "namespaceUID": SOURCE_UID, "role": role,
             "run": run, "labels": labels(run), "storageSecret": storage_secret,
@@ -153,6 +162,8 @@ def custody_plan(kube, storage_secret, run, role="backup"):
             "targetSecret": "backup-controller-credentials" if role == "backup" else "backup-controller-repository"}
     if role == "backup":
         value["postgresIdentity"] = kube.identity(SOURCE_NAMESPACE, "secret", "kodex-postgresql-runtime-credentials")
+    if static_receipt is not None:
+        value["staticIdentityReceipt"] = static_receipt
     return value
 
 
@@ -161,18 +172,37 @@ def validate_plan(kube, plan, expected):
             plan.get("context") == CONTEXT and plan.get("namespaceUID") == SOURCE_UID and
             plan.get("targetSecret") in ("backup-controller-credentials", "backup-controller-repository") and
             plan.get("labels") == labels(plan.get("run", "")), "CUSTODY_PLAN_INVALID")
-    fresh = custody_plan(kube, plan["storageSecret"], plan["run"], plan.get("role"))
+    # Уже одобренный immutable plan повторно проверяет live UID/template, не старый wall-clock возраст.
+    fresh = custody_plan(kube, plan["storageSecret"], plan["run"], plan.get("role"), plan.get("staticIdentityReceipt"), receipt_max_age=None)
     require(fresh == plan, "CUSTODY_SOURCE_CHANGED")
 
 
 def source_storage(kube, plan):
+    receipt = plan.get("staticIdentityReceipt")
+    if receipt is not None:
+        validate_static_storage(kube, receipt, plan["storageSecret"], plan["run"], max_age=None)
     values = {key: kube.key(SOURCE_NAMESPACE, plan["storageSecret"], key)
               for key in ("endpoint", "region", "bucket", "access-key", "secret-key")}
     require(values["endpoint"] == S3_ENDPOINT and values["region"] == "us-east-1" and
             values["bucket"] == "kodex-artifacts", "LOCAL_STORAGE_CONTRACT_INVALID")
+    if receipt is not None:
+        require(digest(values) == receipt["scopedPayloadSHA256"], "STATIC_SCOPED_PAYLOAD_CHANGED")
+        validate_static_storage(kube, receipt, plan["storageSecret"], plan["run"], max_age=None)
     return {"name": "backup-repository", "endpoint": S3_ENDPOINT, "region": values["region"],
             "bucket": "kodex-backups", "accessKeyId": values["access-key"],
             "secretAccessKey": values["secret-key"], "usePathStyle": True, "allowInsecureLocal": True}
+
+
+def validate_static_storage(kube, receipt, storage_secret, run, max_age):
+    """Static mode не читает auth/shared Admin values и никогда не делает fallback."""
+    import static_backup_identity_operator as static_operator
+    from static_backup_identity_transport import MetadataView
+    view = kube if hasattr(kube, "secret_metadata") and hasattr(kube, "get") else MetadataView(kube)
+    try:
+        return static_operator.validate_static_receipt(view, receipt, storage_secret, run, max_age=max_age)
+    except static_operator.custody.Rejected:
+        # CLI __main__ и импортированный module имеют разные классы exception.
+        raise Rejected("STATIC_STORAGE_AUTHORITY_REJECTED") from None
 
 
 def credentials(kube, plan):
@@ -183,7 +213,7 @@ def credentials(kube, plan):
                   "tlsServerName": POSTGRES_HOST, "caFile": "/var/run/secrets/kodex/backup-controller/tls/ca.pem",
                   "schemaKind": "goose"} for name, database in
                  (("control-plane", "control_plane"), ("internal-rpc-authority", "internal_rpc_authority"))]
-    stores = [dict(storage, name=name, bucket=bucket, prefix=prefix) for name, bucket, prefix in
+    stores = [dict(storage, name=name, bucket=bucket, prefix=prefix + ("/" if "staticIdentityReceipt" in plan else "")) for name, bucket, prefix in
               (("artifacts", "kodex-artifacts", "organizations"),
                ("session-archives", "kodex-session-archives", "session-archive/v1"))]
     return {"schemaVersion": 1, "destination": storage, "databases": databases, "objectStores": stores}
@@ -610,6 +640,7 @@ def main():
     plan.add_argument("--object-storage-secret", required=True)
     plan.add_argument("--run", required=True)
     plan.add_argument("--role", choices=("backup", "repository"), default="backup")
+    plan.add_argument("--static-identity-receipt")
     plan.add_argument("--output", required=True)
     apply = sub.add_parser("custody-apply")
     apply.add_argument("--plan", required=True)
@@ -651,7 +682,8 @@ def main():
     args = parser.parse_args()
     kube = Kubernetes()
     if args.command == "custody-plan":
-        value = custody_plan(kube, args.object_storage_secret, args.run, args.role)
+        value = custody_plan(kube, args.object_storage_secret, args.run, args.role,
+                             read_private(args.static_identity_receipt) if args.static_identity_receipt else None)
         write_private(args.output, value)
         print(json.dumps({"planSHA256": digest(value)}))
     elif args.command == "custody-apply":

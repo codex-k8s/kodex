@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.31
-updated: 2026-10-24
+version: 1.7.32
+updated: 2026-10-25
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -1215,6 +1215,20 @@ snapshot получает новый origin. Legacy lookup ограничен н
 устойчивого origin без удаления receipt или повторного угадывания результата.
 
 ## Ротация, пропуск обновлений и однонаправленное восстановление
+
+Клиентский digest, ETag или owner attr не доказывает content CAS, если штатный
+конкурирующий writer может изменить bytes, сохранив эти атрибуты. Компенсация
+credential требует сравнения точного server-owned содержимого/версии атомарно
+с изменением; timestamp, read-before/write-after и повторный readback не заменяют
+эту границу. Неподдерживаемый провайдером CAS закрывает mutation, а не расширяет
+права на metadata либо bucket.
+
+JSONPatch UID/resourceVersion/full-spec CAS одного Kubernetes workload не является
+транзакцией с Secrets/PVC: ссылка по имени не pin-ит UID. Временная immutable auth
+revision требует отдельного контроля writers, exact resource receipts и
+readback обслуживаемого Pod/route. Возврат ссылки, Ready, store ACK и общий 403
+не доказывают отзыв credential: нужен точный отрицательный authentication probe.
+Неизвестный эффект сохраняет origin/inputs и не разрешает новый ключ или retry.
 
 При переносе legacy metadata snapshot digest, registry digest и hash входа
 публикации не взаимозаменяемы. Недостающую историческую связь разрешается

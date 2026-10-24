@@ -4,7 +4,7 @@ title: Offline-план отдельной static S3 identity для backup dril
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-25
 ---
 
@@ -13,8 +13,9 @@ updated: 2026-10-25
 Этот документ утверждает порядок подготовки плана. Он не разрешает читать или
 копировать ключи, создавать Secrets, менять auth, выполнять Pod exec, probes или
 rollout. Точка входа `static_backup_identity_plan.py` работает только с локальными
-несекретными metadata snapshots и не имеет Kubernetes-клиента. Полноценный live
-оператор здесь не реализован. Dynamic IAM unit `adf197b71` не является зависимостью
+несекретными metadata snapshots и не имеет Kubernetes-клиента. Исполняемый
+`static_backup_identity_operator.py` подготовлен для отдельного owner gate;
+сейчас разрешены только его offline fixtures. Dynamic IAM unit `adf197b71` не является зависимостью
 этого плана и не переносится: его Filer content CAS недоказуем на pinned версии.
 
 ## Поддержанный путь и цена изменения
@@ -141,21 +142,109 @@ Stale RV/spec требует нового metadata observation и review акт�
 После patch нужны новый Pod UID, точный STS owner UID, прежний PVC UID, exact image,
 новый config ref/revision и converged Ready/EndpointSlice. Ready проверяет
 доступность процесса, но не policy. До запуска drill root выполняет signed
-positive/negative probes нового credential: source GET/list-version allow,
-source PUT/delete deny, sibling/unprefixed list deny, QA write/read/exact-version
+positive/negative probes нового credential: source HEAD/list/list-version allow,
+sibling/unprefixed list deny, QA write/read/exact-version
 delete allow только для собственных синтетических objects, bucket Admin deny.
 Не делать negative source PUT: ошибочный Allow сам изменит source; этот инвариант
 проверять authorizer без effect либо harmless endpoint, пока такой путь не доказан
 он остаётся NOT RUN. Не использовать shared Admin как fallback.
 
-Transport будущего verifier — authenticated Kubernetes API с exact Pod UID,
-container/image и trusted verifier, секреты только stdin и loopback S3 внутри Pod;
-или уже утверждённый exact TLS S3 endpoint. Не добавлять внешний plaintext путь,
-egress, API exposure или ослабление TLS/NetworkPolicy. Код verifier из rejected
-dynamic unit автоматически не принимается. Его перенос/проверка — отдельный шаг.
-Actual custody consumer пока не принимает этот static receipt: до адресной
-адаптации с exact identity/policy/content/Secret UID pins и независимого review
-backup **BLOCKED**, подстановка shared source запрещена.
+`static_backup_identity_transport.py` использует authenticated Kubernetes API,
+проверяет HTTPS/CA/no-skip в exact context и устанавливает exec в exact
+`seaweedfs-0`/container/image. Constant shell выводит HELLO; до credential stdin
+повторяется Pod UID/ref/Ready pin. Затем существующая exec session выполняет
+штатный [curl `--aws-sigv4`/`--config -`](https://curl.se/docs/manpage.html#--aws-sigv4)
+к `127.0.0.1:8333`. Keys находятся только в памяти и stdin, не в argv/env/файлах.
+`-q`, no proxy, no redirects, HTTP1.1 и bounded response исключают внешние
+curl config/proxy routes. Runtime наличие SigV4 в curl pinned image проверяется
+рабочей probe; до live проверки оно NOT RUN. Новый Go binary/service не нужен.
+Filer используется только HEAD четырёх exact IAM путей: legacy config/policies
+должны отсутствовать, exact name collisions отклоняются. Его values не читаются,
+его Create/Update/Delete не вызываются. Ни HTTP за пределами Pod, ни изменение
+egress/API exposure/TLS/NetworkPolicy не добавляются. Старый dynamic unit не перенесён.
+
+Custody consumer `scoped_backup_drill.py custody-plan --static-identity-receipt`
+принимает новый dedicated Secret только с owner receipt. Проверяются exact
+identity/policy/plan/payload digests, Secret UID/RV/immutable/purpose labels, current
+STS template и Pod UID/Ready/EndpointSlice. Auth Secret проверяется metadata-only;
+его shared Admin data consumer не читает. Dedicated keys проверяются payload hash
+до/после чтения; отказ не разрешает shared fallback. Source prefixes получают
+обязательный trailing slash; canonical restore target prefix сохраняется, его
+actual listing нормализован отдельным исправлением `19282e66`.
+
+Новый custody plan требует receipt не старше 300s. После одобрения его immutable
+SHA последующие `validate_plan`/restore/custody reads не повторяют wall-clock TTL:
+они авторитетно перечитывают все exact live pins. Это позволяет закончить backup
+дольше пяти минут, но return, Pod replacement, metadata rotation и чужой template
+немедленно закрывают путь. Исторический receipt сам по себе не оживляет доступ.
+
+## Исполняемые операции после owner gate
+
+`tools/dev/fixtures/static-backup-approval.template.json` заведомо не разрешает
+ничего: flags false, expiry0, SHA placeholders. Только после явного ответа
+владельца root подготавливает owned regular0600 approval в private0700 каталоге,
+с exact canonical plan SHA, чистым reviewed operator Git SHA, expiresAt и
+подтверждением quiescent window. Это запись внешнего ручного решения, не
+самовыдаваемый bearer token. Файл не заменяет owner instruction в рабочей сессии.
+
+Оператор имеет четыре закрытые команды и общий hard budget900s. API request20s/
+child30s; exec handshake8s/response12s/curl8s; rollout wait240s с poll2s. Одна
+state directory защищена flock и exact origin plan/revision. Каждый внешний
+effect предваряется append-only durable INTENT; затем сохраняются ACK pins и
+authoritative readback DONE. Файлы содержат только metadata/hashes/receipts.
+Один API/curl effect отправляется один раз; pending INTENT требует readback.
+SIGINT/SIGTERM и исчерпание budget прекращают работу с сохранением origin;
+неизвестный in-flight effect требует отдельного readback. CLI выводит только
+закрытый именованный diagnostic code, provider stdout/stderr не выводятся.
+
+Примеры ниже описывают будущие команды, сейчас запускать их запрещено:
+
+```sh
+python3 -B tools/dev/static_backup_identity_operator.py apply \
+  --plan /private/plan.json --approval /private/owner-approval.json \
+  --state /private/static-state --output /private/static-receipt.json
+
+python3 -B tools/dev/scoped_backup_drill.py custody-plan \
+  --static-identity-receipt /private/static-receipt.json \
+  --object-storage-secret qa-backup-key-static1003-8f87b5e6b10b49e2 \
+  --run static1003 --role backup --output /private/custody-plan.json
+
+python3 -B tools/dev/static_backup_identity_operator.py return \
+  --plan /private/plan.json --approval /private/owner-approval.json \
+  --state /private/static-state --output /private/static-return.json
+```
+
+Dedicated pair сначала сохраняется в own immutable scoped Secret; auth Secret
+собирается с той же парой. После lost ACK readback принимает только matching
+owner/payload/immutable pins; известный UID/RV не заменяется. Если create не
+состоялся, а исходная пара утрачена, outcome остаётся UNKNOWN: новую пару и новый
+nonce оператор не генерирует. Metadata recovery не создаёт Secrets и не повторяет
+patch. С истёкшим approval доступна только команда `readback`; новый внешний
+effect требует нового явного разрешения. CLI ошибки и output redacted.
+
+QA write probes используют только два exact own `_static-auth-probe/<owner>` key.
+PUT имеет If-None-Match:* и metadata owner; GET сверяет bounded synthetic body,
+HEAD — owner/ETag/VersionId; DELETE всегда содержит exact non-null VersionId.
+Lost ACK PUT восстанавливается bounded own body/metadata read, DELETE — exact
+version absence; повтор mutation запрещён. Source PUT/DELETE запрещены также
+самим transport, даже при ошибочном Allow. Только декларативная policy closure
+проверяет source write denial; runtime source-write probe остаётся NOT RUN.
+Versioning всех четырёх buckets должен быть Enabled; helper его не включает.
+
+| Исход | Следующее действие |
+| --- | --- |
+| Неизвестный create/apply/return | Только `readback` того же state/plan/revision, без нового эффекта |
+| Чужой UID/RV/spec/owner/payload | Закрытый отказ, чужой ресурс не изменяется и не удаляется |
+| Обычный возврат | Consumers stopped, old template CAS, новый Pod/EndpointSlice, baseline read, InvalidAccessKeyId, own Secrets delete CAS |
+| Bad OrderedReady Pod | После observed return template отдельная `recover-pod`, только при owner flag и exact UID/RV |
+| Истёкшее approval | Чтение origin для recovery; apply/return/recover/QA mutation запрещены |
+| Не закрытый QA effect при возврате | Restore baseline/revocation могут завершиться, но own Secrets удерживаются и результат остаётся UNKNOWN до owner recovery |
+| Lost ACK Secret delete | Readback absence; чужая replacement запрещает cleanup PASS |
+
+Известный собственный QA object закрывается exact-version cleanup до возврата,
+когда desired Pod доступен. Если S3 effect остаётся unknown либо Pod недоступен,
+доступность baseline имеет приоритет перед cleanup: после возврата helper не
+выдаёт final PASS, не удаляет recovery inputs и не делает Admin fallback.
 
 ## Возврат и неизвестные исходы
 
@@ -204,10 +293,15 @@ DeleteOptions UID/RV preconditions и проверить absence; старый S
 credentials, PG, Go или containers. Fixtures проверяют JSONPatch test/replace,
 stale RV/UID, concurrent spec edits, чужую replacement, точный возврат, prefix
 boundary, отсутствие source write actions и recovery DeleteOptions. Это модель
-RFC6902, не Kubernetes server-side dry-run. Новый plan на metadata живого STS —
-только наблюдение, не auth/apply/restore acceptance. Полный render, actual static
-loader/policy probes, custody adapter, quiescent proof, rollout, revocation и
-backup/restore остаются NOT RUN/BLOCKED до отдельного решения владельца.
+RFC6902, не Kubernetes server-side dry-run.
+`make test-static-backup-identity-operator` запускает offline planner/operator/
+transport/custody regressions с двумя timeout60s, без живых клиентов. Включены
+lost ACK на create/patch/QA write/delete/cleanup, old generation/UID replacement,
+expired readback, source mutation guard, no credential output, cold return и
+OrderedReady recovery. Новый plan на metadata живого STS — только наблюдение.
+Actual static loader/policy/curl probes, quiescent proof, server-side dry-run,
+rollout, revocation, DB reader grants и полный backup/restore остаются NOT RUN.
+Готовность к review кода не является разрешением auth/deploy или full DR.
 
 Context7 при подготовке вернул `Invalid API key`; использованы официальные
-Kubernetes docs и перечисленные exact upstream исходники SeaweedFS 4.41.
+Kubernetes/curl docs и перечисленные exact upstream исходники SeaweedFS 4.41.
