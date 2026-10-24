@@ -2,6 +2,10 @@ package app
 
 import "testing"
 
+// TestProviderCredentialBoundarySeparatesResolverAndTarget checks exact provider target/SNI and
+// local resolver target/SNI/CA remain separate and rejects each boundary substitution.
+// TestProviderCredentialBoundarySeparatesResolverAndTarget проверяет разделение точных provider
+// target и SNI и локальных resolver target, SNI и CA с отказом каждой подмене границы.
 func TestProviderCredentialBoundarySeparatesResolverAndTarget(t *testing.T) {
 	t.Parallel()
 	if providerAuthorityResolverTarget != "dns:///127.0.0.1:8443" {

@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+// TestBootstrapProviderCredentialPresence checks all sixteen presence combinations accept only no
+// bootstrap credential descriptors or the complete name/UID/resource-version/digest tuple.
+// TestBootstrapProviderCredentialPresence проверяет все шестнадцать сочетаний наличия с допуском
+// лишь отсутствия bootstrap credential descriptors либо полного кортежа name, UID, resource
+// version и digest.
 func TestBootstrapProviderCredentialPresence(t *testing.T) {
 	t.Parallel()
 	for mask := range 16 {

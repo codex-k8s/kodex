@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+// TestValidProviderCredentialCleanupConfig accepts the bounded cleanup fixture and rejects
+// zero/oversized batches and poll/timeout values outside their supported ranges.
+// TestValidProviderCredentialCleanupConfig допускает ограниченную cleanup оснастку и отклоняет
+// нулевые либо слишком большие пакеты и poll и timeout за поддерживаемыми диапазонами.
 func TestValidProviderCredentialCleanupConfig(t *testing.T) {
 	t.Parallel()
 	valid := Config{

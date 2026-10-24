@@ -19,24 +19,56 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// artifactDiagnosticTestStream embeds unsupported stream operations and supplies only a caller
+// context for error-boundary observer tests.
+// artifactDiagnosticTestStream встраивает неподдерживаемые stream операции и предоставляет только
+// caller context для тестов error boundary observer.
 type artifactDiagnosticTestStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
+// Context returns the configured synthetic stream context without transport metadata or external
+// stream activity.
+// Context возвращает заданный синтетический stream context без transport metadata либо внешней
+// stream активности.
 func (stream artifactDiagnosticTestStream) Context() context.Context { return stream.ctx }
 
+// artifactDiagnosticTestStatus keeps a synthetic gRPC code and unwrap cause separate so tests
+// prove observation cannot leak nested private diagnostic text.
+// artifactDiagnosticTestStatus разделяет синтетические gRPC code и unwrap cause для доказательства
+// отсутствия утечки вложенного private diagnostic текста в наблюдение.
 type artifactDiagnosticTestStatus struct {
 	cause error
 	code  codes.Code
 }
 
+// Error returns only the fixed safe gRPC status error string while leaving the nested synthetic
+// cause available through Unwrap.
+// Error возвращает только фиксированную безопасную строку gRPC status error с сохранением
+// вложенной синтетической причины через Unwrap.
 func (err artifactDiagnosticTestStatus) Error() string { return err.GRPCStatus().Err().Error() }
+
+// Unwrap exposes the synthetic nested cause to typed diagnostic lookup without incorporating it
+// into the safe status text.
+// Unwrap предоставляет синтетическую вложенную причину типизированному diagnostic поиску без
+// включения в безопасный status текст.
 func (err artifactDiagnosticTestStatus) Unwrap() error { return err.cause }
+
+// GRPCStatus returns the configured gRPC code with one fixed safe unavailable message instead of
+// the nested fixture error.
+// GRPCStatus возвращает заданный gRPC code с одним фиксированным безопасным сообщением
+// недоступности вместо вложенной ошибки оснастки.
 func (err artifactDiagnosticTestStatus) GRPCStatus() *status.Status {
 	return status.New(err.code, "operation is temporarily unavailable")
 }
 
+// TestArtifactDownloadDiagnosticStreamObserverLogsOnlyClosedProjection checks exactly one
+// unchanged Unavailable observation includes only known fields, normalizes unknown SQLSTATE and
+// excludes nested private cause or synthetic identity text.
+// TestArtifactDownloadDiagnosticStreamObserverLogsOnlyClosedProjection проверяет ровно одно
+// неизменённое Unavailable наблюдение лишь с известными полями, нормализацию неизвестного SQLSTATE
+// и отсутствие вложенной private причины либо синтетического identity текста.
 func TestArtifactDownloadDiagnosticStreamObserverLogsOnlyClosedProjection(t *testing.T) {
 	var output bytes.Buffer
 	previous := slog.Default()
@@ -81,6 +113,12 @@ func TestArtifactDownloadDiagnosticStreamObserverLogsOnlyClosedProjection(t *tes
 	}
 }
 
+// TestArtifactDownloadDiagnosticObserverDoesNotTrustTextOrOtherMethod checks raw text cannot forge
+// typed fields, another RPC gets no owner-download diagnostic and expected Aborted produces no
+// server-error observation.
+// TestArtifactDownloadDiagnosticObserverDoesNotTrustTextOrOtherMethod проверяет невозможность
+// подделки typed полей raw текстом, отсутствие owner download диагностики у другого RPC и
+// отсутствие server-error наблюдения для ожидаемого Aborted.
 func TestArtifactDownloadDiagnosticObserverDoesNotTrustTextOrOtherMethod(t *testing.T) {
 	var output bytes.Buffer
 	previous := slog.Default()

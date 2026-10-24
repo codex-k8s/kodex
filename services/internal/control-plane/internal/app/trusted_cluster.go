@@ -15,8 +15,11 @@ import (
 	"google.golang.org/grpc"
 )
 
-// trustedClusterReader не создаёт proof service, verifier socket или TLS.
-// Browser credential проверяется тем же OIDC verifier; principal разрешает CP.
+// trustedClusterReader constructs trusted-cluster admission plus the OIDC verifier and owner
+// principal resolver, closing the verifier on partial failure without creating proof service,
+// verifier socket or TLS.
+// trustedClusterReader создаёт trusted-cluster admission, OIDC verifier и owner principal resolver
+// с закрытием verifier при частичном отказе без создания proof service, verifier socket либо TLS.
 func trustedClusterReader(ctx context.Context, config Config, owner rpcprincipal.Owner) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor, *oidcverifier.Verifier, error) {
 	authorizer, err := trustedClusterAuthorizer(config.RPCProfile)
 	if err != nil {
@@ -38,6 +41,12 @@ func trustedClusterReader(ctx context.Context, config Config, owner rpcprincipal
 	return authorization.ServiceIdentityUnary(authorizer, resolver), authorization.ServiceIdentityStream(authorizer, resolver), verifier, nil
 }
 
+// trustedClusterAuthorizer validates the embedded target/version, rewrites only the exact broker
+// STT credential route to user actor, appends three closed STT user routes and constructs explicit
+// trusted-cluster admission.
+// trustedClusterAuthorizer проверяет embedded target и version, меняет на user actor только точный
+// broker STT credential route, добавляет три закрытых STT user routes и создаёт явный
+// trusted-cluster admission.
 func trustedClusterAuthorizer(profile string) (*serviceidentity.TrustedClusterAuthorizer, error) {
 	const target = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	var policy serviceidentity.Policy

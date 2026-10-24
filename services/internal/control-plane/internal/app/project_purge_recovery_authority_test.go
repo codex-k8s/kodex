@@ -8,6 +8,12 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// TestProjectPurgeRecoveryTrustedRoutesRequireGatewayUser checks purge recovery query/resolve
+// routes admit only the gateway user with exact operation/permission and no required signed
+// project, denying agent/runtime/retention workloads.
+// TestProjectPurgeRecoveryTrustedRoutesRequireGatewayUser проверяет допуск purge recovery query и
+// resolve routes только gateway user с точными operation и permission без обязательного signed
+// project и отказом agent, runtime и retention нагрузкам.
 func TestProjectPurgeRecoveryTrustedRoutesRequireGatewayUser(t *testing.T) {
 	authorizer, err := trustedClusterAuthorizer("trusted-cluster")
 	if err != nil {

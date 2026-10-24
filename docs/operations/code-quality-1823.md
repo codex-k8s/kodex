@@ -4,12 +4,72 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.361.0
+version: 1.362.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Завершение app и общие HTTP probes — 24.10.2026
+
+На основе `e0564bc7a5ba399ded9f57cb03b8cad306552071` описаны90 оставшихся
+объявлений control-plane app в18 файлах, включая lifecycle, outbox/ready
+interfaces, DNS overlap, diagnostics, config/route tests и embedded policy.
+`go:embed` сохранён без изменений. AST/directives17 файлов совпали без
+executable изменений; app.go совпал после ожидаемого выноса HTTP registrations.
+Inventory:17121/21369, missing4248. App и domain/service полностью описаны;
+в обоих scopes0unresolved clones. Новые ProbeMux и два теста также описаны.
+
+Comments Run не обещают гарантированного join после исчерпания shutdown
+бюджета; serve helpers оставляют остановку listener владельцу. Readiness
+проверяет только owned PostgreSQL/outbox/NATS, optional worker пути сохраняют
+собственные ошибки. DSN byte slice очищается после parsing, но комментарий
+не объявляет удалёнными остальные копии. Regular-file reader не назван
+проверкой ownership/mode/symlink. Catalog JSON reader не объявлен проверкой
+повторных ключей. DNS overlap сохраняет только verified public pins в пределах
+32 адресов; rejection не заменяет retained set. Typed download diagnostics
+не выводят raw error/correlation. Service-v1 failure не становится legacy retry.
+
+Два одинаковых блока health/live/startup/ready registrations из gateway и CP
+объединены в `httpserver.ProbeMux(snapshot)`. Исходные блоки совпали под точной
+подстановкой mux/response имён; expected AST двух app файлов совпал после
+только двух замен/imports. Адреса, server timeouts/header limits, BaseContext,
+metrics, listeners и shutdown остались у прежних владельцев.
+
+| Сценарий | Сохранённый контракт |
+| --- | --- |
+| healthz/livez/startupz | Прежние204 без чтения snapshot; startupz не доказывает полный startup |
+| readyz | Текущий локальный snapshot →204 либо прежний503/http.Error(reason), newline/headers; создание mux не вызывает snapshot |
+| Методы/query/unknown route | Прежние patterns для всех методов, прежняя обработка query,404 для неизвестного пути; новых root/metrics routes нет |
+| Write/event/lifecycle | Нет commands, tenant/actor authority, persistence, idempotency, events, grants/leases/retry или новых переходов; I/O и goroutines при создании отсутствуют |
+| Владение runtime | Caller выбирает callback без I/O, добавляет routes и владеет http.Server/budgets/listener/shutdown; строгий GET контракт httpserver.New не меняется |
+
+Два новых library tests проверяют status/body/headers, GET/HEAD/POST, query,
+динамическую смену snapshot, неизвестные пути и добавление caller route.
+Оба go.mod/replace и Dockerfile COPY явно подключают httpserver. Проверка
+`GOWORK=off` не полагается на общий workspace. MVS gateway теперь использует
+x/net0.57.0 и x/crypto0.54.0 — версии зависимостей подключённой библиотеки;
+это отражено в go.mod/go.sum. Других целевых version обновлений нет.
+
+Один113-token префикс независимых object-storage negative test tables
+сохранён адресно: production ValidEndpoint уже общий, но app constructors и
+регион/buckets/production/namespace guards различны. Полные тесты и predicates
+прочитаны; generic fixture API ради этого префикса не добавлена. Добавление
+точного Docker COPY сделало устаревшими11 прежних Docker decisions. Guard
+закрыто отказал; все полные Dockerfile и новые окна перечитаны, затем обновлены
+только эти11 exact hashes с прежними парами/count1 и предметными причинами.
+Guard не ослаблен. Raw1792, retained813, unresolved979; один реальный clone
+удалён, один новый retained, broad ignores не добавлены.
+
+Полные локальные build/unit с GOWORK=off control-plane, gateway и httpserver —
+PASS;17 analyzer unit после перепроверки registry — PASS; AST/directives,
+diff check и Docker COPY/require/replace readback — PASS. Дополнительная Linux
+CGO_ENABLED=0 сборка трёх Docker-target бинарей — PASS; все три ELF статические.
+Context7: net/http ServeMux patterns без метода и ResponseWriter; точный
+http.Error контракт сверён с локальным стандартным исходником Go.
+Image build, merge/deploy/startup, browser acceptance и ручной QA — NOT RUN.
+Вся задача#1823 пока не завершена; выданное merge/deploy разрешение сохраняется.
 
 ## Общая форма authority proof и почтовая композиция — 24.10.2026
 

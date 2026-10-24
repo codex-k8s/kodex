@@ -17,6 +17,7 @@ COPY libs/go/mailpolicy/ libs/go/mailpolicy/
 COPY libs/go/integrationegresspolicy/ libs/go/integrationegresspolicy/
 COPY libs/go/dnsresolver/ libs/go/dnsresolver/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
+COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/i18n/ libs/go/i18n/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/integrationpackage/ libs/go/integrationpackage/

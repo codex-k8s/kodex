@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/eventing/browserstate"
 	"github.com/codex-k8s/kodex/libs/go/eventing/sessionrevocation"
+	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	oidcauth "github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
@@ -162,18 +163,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	requests, cancelRequests := servingContext(lifecycle)
 	defer cancelRequests()
 	public := &http.Server{Addr: config.HTTPListen, Handler: secureHeaders(telemetry.HTTPMiddleware(internalobservability.Route, businessMetrics.ObserveHTTP, api.Handler())), TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}, BaseContext: func(net.Listener) context.Context { return requests }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestTimeout, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
-	technicalMux := http.NewServeMux()
-	technicalMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	technicalMux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	technicalMux.HandleFunc("/startupz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	technicalMux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
-		ready, reason := readiness.Ready()
-		if !ready {
-			http.Error(w, reason, http.StatusServiceUnavailable)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
+	technicalMux := httpserver.ProbeMux(readiness.Ready)
 	technicalMux.Handle("/metrics", metrics.PrometheusHandler())
 	technical := &http.Server{Addr: config.TechnicalListen, Handler: technicalMux, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	readiness.Set(false, "dependencies_starting")
