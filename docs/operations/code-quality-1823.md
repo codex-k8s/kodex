@@ -4,11 +4,100 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.393.0
+version: 1.394.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Восстановление очистки, credential projection и runtime activity — 25.10.2026
+
+На основе `df644b79a65104f93e69de09df526fb9b0171a1b` полностью прочитаны
+project_purge_recovery.go, credential_projections.go, provider_renewal_tasks.go
+и runtime_activity.go:17+16+16+16 прежних объявлений. Два новых scanner и
+два теста также описаны:18/18,17/17,16/16,16/16 и2/2, всего69/69.
+Общий inventory19548/21464, missing1916 — PostgreSQL adapter control-plane.
+Все120 Go-файлов текущего PR имеют1417/1417 EN→RU описаний.
+
+`scanProjectPurgeRecoveryConfirmation` объединяет два чтения положительного
+boolean после pin/finish. True означает принятую функцию владельца; false
+по-прежнему Conflict, любая ошибка Scan, включая NoRows/wrapped NoRows, —
+Unavailable раньше проверки флага. Разные receipt/outcome проверки,
+SQL, owner/generation/storage arguments остаются явными. Отдельный
+exists-check авторизации с false → NotFound не объединялся. Никакого
+внешнего удаления scanner не выполняет и его результат не доказывает такое
+удаление.
+
+`scanProviderCredentialProjection` объединяет семь полей provider binding
+и прежнее преобразование Scan ошибок для runtime и STT. У runtime остаются
+raw secret descriptors/expiry, у STT — model/language/capabilities; порядок
+всех9/10 destinations сохранён. NoRows/wrapped NoRows дают NotFound, прочие
+ошибки Unavailable. Частичные внутренние destinations могут заполниться,
+но оба callers как прежде возвращают нулевой полный результат при ошибке.
+Два разных SQL и все authority/tenant/execution/configuration pins остаются
+у вызывающих, как и expiry cap, owner-secret resolution и commit.
+
+Новый тестовый файл проверяет20 исходов:6 boolean confirmations (true,
+false, scan failure, true-before-failure, missing/wrapped missing) и два
+режима credential scanner ×7 исходов (success, missing/wrapped missing,
+scan failure, partial failure, full-output failure, partial missing).
+Проверены однократный Scan, точные семь полей и разные типизированные tails,
+приоритет ошибки, частичные внутренние значения и отсутствие деталей
+драйвера. Все дескрипторы синтетические; тесты не открывают БД, не читают
+секреты и не доказывают SQL/RLS либо конкуренцию.
+
+| Путь / жизненный цикл | Сохранённая граница |
+| --- | --- |
+| Purge snapshot / resolve | OWNER/ADMINISTRATOR через control-api-gateway без project authority, точная identity хранилища. AcknowledgeUnknownOutcome/expected version/snapshot digest, owner SQLSTATE mapping; сохранённый проект дополнительно lock/version-check перед PROJECT_CHANGED |
+| Claim / pin / finish | Owner/limit1..4/storage identity, точные ledger/object metadata/generation/deadline. Pin сверяет key/digest/size и требует version/ETag; finish допускает только ABSENT/DELETED/FAILED. Функции владельца принимают наблюдение, не выполняют object-store I/O |
+| Runtime resolve / validate | Точный secret-broker permission и отдельные fence modes. Legacy проверяет verified proof/workload/method/TTL; trusted authority восстанавливается из owner state. SQL связывает actor/tenant/lease/workload/generation/revision/attempt/input/session/turn и текущую credential |
+| Runtime secret scope / expiry | PROJECT либо ORGANIZATION только для exact system-assistant RPC без project ID, ACTIVE scoped secret и точные Kubernetes pins. До64 дескрипторов, срок min(lease,authority), значений нет |
+| STT | Точные authority/config revision/digest/account/credential generation, текущая личность, отдельная platform.stt.use в trusted mode. Модель/язык проверяются; capabilities JSON лишь разбирается. Срок min(1 minute,authority), trusted authority до30 секунд |
+| Renewal claim | Installation system identity,5 секунд, expire до16 старых tasks, один locked DEVICE_CODE account с AUTHORIZATION_REJECTED, свежая input eligibility после account lock. Ref/fence/encoder request digests,90-second deadline, durable CLAIMED до внешнего эффекта |
+| Renewal authorize / observation | Exact broker permission, locked task/account/current input и binding. Authorize требует неистёкший CLAIMED/AUTHORIZED и повторно проверяет отсутствие runtime lease; observation допускает лишь AUTHORIZED/UNKNOWN_OUTCOME и не продлевает effect. Истёкший authorized становится UNKNOWN_OUTCOME без resend |
+| Runtime source / receipt | Источник выводится из сохранённого turn/canonical callback lineage, callback content заменяется публичным i18n-маркером. Root lock → exact node/turn/attempt receipt → историческое событие с совпавшим Execution, без восстановления текущего графа |
+| Tool terminal | Последняя RUNNING проекция текущего terminal node становится CANCELLED revision2, event/outbox дополняются одной owner TX. Это закрытие наблюдения, а не утверждение об исходе внешнего эффекта |
+
+Прочитаны20 встроенных SQL четырёх файлов и5 соседних SQL credential/
+event/outbox, всего25. Все20 go:embed сохранены. Owner recovery SQL wrappers
+вызывают существующие функции; их PL/pgSQL не менялся и не объявляется заново
+доказанным этим локальным этапом. Два полных expected-AST сравнения purge и
+credential files подтверждают только указанные scanner выносы. Renewal и
+runtime activity прошли полное AST/directive сравнение с исходным SHA:
+только комментарии. SQL/API/generated/dependencies/migrations/deploy inputs
+не менялись. Через Context7 /jackc/pgx проверены Row/Scan/ErrNoRows/errors.Is
+и явное владение транзакцией.
+
+Исторические ограничения описаны без заявления об исправлении: scope/
+authority predicates не проверяют подпись самостоятельно; runtime/STT
+rollback с request context игнорирует ошибку. sameProviderRenewalBinding
+не сравнивает organization/owner-request digest/state, их owner/state границы
+остаются отдельно. Descriptor sort key не включает revision, полное значение
+сравнивается после сортировки без самостоятельного запрета duplicate keys.
+Published-message predicate отдельно не отвергает NUL, terminal-tool predicate
+не ограничивает result/duration; event/outbox enrichment не сверяет число
+изменённых строк. Пустой renewal claim всё ещё может сохранить expiration
+changes и не считается доказательством отсутствия эффекта.
+
+GOWORK=off control-plane build и unit `-count=1`, включая20 новых исходов,
+— PASS LOCAL;13 external fixture keys и2 admin/template inputs исключены.
+17 analyzer unit и5 exact-ignore guards — PASS, после двух registry решений
+assessment/guards повторены успешно. gofmt и diff check — PASS.
+Real PostgreSQL/RLS/claim/OCC/owner-resolution races, object-store pin/delete/
+readback, broker materialization/secret values, remote renewal/STT/provider,
+callback/tool execution, browser/full E2E и deploy/live — NOT RUN/SKIP.
+QA baseline f2e64eb сохранён.
+
+Scan6678 own sources,222 excluded:1806 raw,902 retained occurrences и904
+unresolved. Комментарии обнаружили два дополнительных116/117-token окна
+разных типизированных сравнений: renewal task против secret draft и transfer
+artifact. Полностью прочитаны обе стороны, включая весь runtime artifact
+transfer и его свежий owner readback до Complete. Разные поля/версии/authority
+не превращены в generic comparator; добавлены два точных path/hash/count1
+решения с обоснованиями. Registry теперь776 entries, все прежние774 валидны.
+Новый тест не добавил clone groups; scanner выносы устраняют ручные повторы
+ниже detector windows. Thresholds, ignore regions и whole-file exclusions
+не менялись. Issue#1823 открыт, PR остаётся Draft.
 
 ## Поля окружения, ревизии файлов и действующие возможности — 25.10.2026
 

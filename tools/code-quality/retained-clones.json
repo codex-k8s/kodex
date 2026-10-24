@@ -6192,6 +6192,22 @@
       "fragmentSHA256": "36587310dbd0cfc902e3a3281a178f06bc765d6e67c36d4bef1e3242edee030f",
       "count": 1,
       "reason": "Окно пересекает закрывающую скобку разных helpers, комментарии и начало двух специализированных claim methods. Общие workload route/scope/Serializable begin уже вынесены в beginIntegrationClaimTransaction. Остались callsite error/defer и разные expiry SQL: OWNER_TEST возвращается в DUE, invocation READ — в READY, прочие effects — в UNKNOWN_OUTCOME. Dynamic SQL dispatcher спрятал бы разные lifecycle policies ради обвязки. Решение относится только к этому pair/hash/count1; expiry implementation, lease/approval checks и остальные method bodies не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/provider_renewal_tasks.go",
+      "secondPath": "services/internal/secret-broker/internal/integration/draftowner/caster.go",
+      "fragmentSHA256": "50ca483f68e252559a14dc62ca1edf60bb04052d8320dea64f6a202812c84487",
+      "count": 1,
+      "reason": "Окно116 tokens пересекает окончание locked renewal scanner, комментарии и типизированное сравнение sameProviderRenewalBinding; парное окно — конец castDraft и sameDraft. Полностью прочитаны оба сравнения и их окружающие ветви. Renewal требует точного account/credential/claimant/generation/fence/request digest и срока, а secret draft сравнивает scope/organization/secret/draft generation, описательные поля и допускает неубывающую Version с отдельной проверкой state/publication. Общим является синтаксис conjunction полей, не контракт равенства. Универсальный reflective comparator или набор callbacks скрыл бы разные owner pins и ослабил проверяемость. Сохранена только эта точная пара путей/hash/count1; сканирование credential и owner authority этим решением не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/provider_renewal_tasks.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_artifact_transfer.go",
+      "fragmentSHA256": "e05bacfcd205c7525bafe64309a465565e087deb21d7fc080f5d27b4ee8e5625",
+      "count": 1,
+      "reason": "Окно117 tokens сопоставляет границу комментария и sameProviderRenewalBinding с sameTransferArtifact. Полностью прочитан runtime_artifact_transfer.go, включая свежее owner readback до Complete, и renewal binding с последующими owner/state проверками. Renewal сравнивает credential revision/previous descriptor, claimant/generation/fence/request digest/expiry; transfer — artifact/project/run/session refs, filename/media/digest/size/revision/version/source. Номинальные типы, поля и источник authority различаются; общий алгоритм помимо прямого conjunction отсутствует. Generic comparator ради формы && потерял бы явный перечень защищённых полей. Сохранены только эта пара путей, fragment hash и count1; stream content/SHA256/EOF/owner checks и renewal lifecycle остаются явными."
     }
   ]
 }

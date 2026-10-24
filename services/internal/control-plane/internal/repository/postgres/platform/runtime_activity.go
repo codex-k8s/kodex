@@ -16,16 +16,44 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryRuntimeActivityExecution Reads exact organization/root/node execution, session/turn
+// counters and persisted actor/input, using run task for the first USER turn and stored turn
+// content otherwise. The caller validates positive counters and derives callback source
+// separately.
+// queryRuntimeActivityExecution Читает выполнение точных организации, корня и узла, сессию,
+// счётчики turn, сохранённых автора и вход. Для первого USER turn берёт task запуска, иначе
+// содержимое turn. Вызывающий проверяет положительные счётчики и отдельно выводит
+// callback-источник.
+//
 //go:embed sql/runtime_activity__execution.sql
 var queryRuntimeActivityExecution string
 
+// queryRuntimeMessageSource Derives ORDINARY/CALLBACK_CONTINUATION from exact persisted
+// organization/run/turn/node actor and canonical CONTINUES or completed required-workflow callback
+// lineage, including pinned TURN_QUEUED evidence. Message text, locale and caller-supplied actor
+// do not classify the source.
+// queryRuntimeMessageSource Выводит ORDINARY/CALLBACK_CONTINUATION из точных сохранённых
+// организации, запуска, turn, узла и автора, канонической CONTINUES либо завершённой
+// callback-цепочки обязательного workflow с привязанным TURN_QUEUED. Текст, локаль и автор из
+// запроса источник не назначают.
+//
 //go:embed sql/runtime_message__source.sql
 var queryRuntimeMessageSource string
 
+// callbackContinuationPublicText Names the fixed public i18n marker replacing internal
+// callback-continuation input in runtime activity projection. It reveals no callback payload or
+// new authority.
+// callbackContinuationPublicText Задаёт фиксированный публичный i18n-маркер вместо внутреннего
+// входа callback-продолжения в проекции активности. Callback payload и новые полномочия не
+// раскрывает.
 const callbackContinuationPublicText = "i18n:CALLBACK_CONTINUATION_PUBLIC"
 
-// Источник выводится из сохранённого turn и canonical callback lineage.
-// Текст сообщения, actor из запроса и локаль не участвуют в классификации.
+// readRuntimeMessageSource Reads the persisted canonical source and accepts only
+// ORDINARY/CALLBACK_CONTINUATION. Any scan failure or unknown origin returns unavailable with zero
+// output; it does not infer source from message text.
+// readRuntimeMessageSource Читает сохранённый канонический источник и допускает только
+// ORDINARY/CALLBACK_CONTINUATION. Любая ошибка чтения или иной origin даёт Unavailable с нулевым
+// результатом; текст сообщения источник не определяет.
 func readRuntimeMessageSource(ctx context.Context, tx pgx.Tx, organizationID, runRef, turnRef, nodeRef string) (entity.MessageSource, error) {
 	var source entity.MessageSource
 	if err := tx.QueryRow(ctx, queryRuntimeMessageSource, pgx.StrictNamedArgs{
@@ -36,23 +64,61 @@ func readRuntimeMessageSource(ctx context.Context, tx pgx.Tx, organizationID, ru
 	return source, nil
 }
 
+// queryRuntimeActivityLockRoot Locks the exact tenant/root run and returns its public ref,
+// serializing activity receipt lookup with later event append across nodes of the same root. The
+// caller supplies owner-resolved root identity.
+// queryRuntimeActivityLockRoot Блокирует точный корневой запуск организации и возвращает публичную
+// ссылку, сериализуя поиск квитанции активности с последующим добавлением события между узлами
+// корня. Идентичность корня разрешает вызывающий.
+//
 //go:embed sql/runtime_activity__lock_root.sql
 var queryRuntimeActivityLockRoot string
 
+// queryRuntimeActivityLatest Finds the latest exact organization/root/node/turn/attempt activity
+// event by message or tool ref and returns sequence/safe delta/tool JSON. Missing rows mean no
+// receipt; the caller reloads authoritative event layout and verifies execution identity.
+// queryRuntimeActivityLatest Находит последнее событие точных организации, корня, узла, turn и
+// attempt по ссылке сообщения или инструмента, возвращая sequence, safe delta и JSON вызова.
+// Отсутствие строки означает отсутствие квитанции; вызывающий перечитывает событие и сверяет
+// выполнение.
+//
 //go:embed sql/runtime_activity__latest.sql
 var queryRuntimeActivityLatest string
 
+// queryRuntimeActivityTerminalTools Selects the latest RUNNING tool projection per
+// node/turn/attempt/ref only when that current node is terminal and execution pins match. It
+// identifies observations to close, not proof that an external tool effect was cancelled.
+// queryRuntimeActivityTerminalTools Выбирает последнюю RUNNING проекцию инструмента по узлу, turn,
+// attempt и ref только для текущего terminal-узла с совпавшими привязками выполнения. Выбирает
+// наблюдения для закрытия, а не доказывает отмену внешнего эффекта.
+//
 //go:embed sql/runtime_activity__terminal_tools.sql
 var queryRuntimeActivityTerminalTools string
 
+// runtimeActivityRefPattern Accepts 8..96 ASCII letters/digits/underscore/hyphen as published
+// activity refs, with no normalization or ownership verification.
+// runtimeActivityRefPattern Допускает 8..96 ASCII-букв, цифр, подчёркиваний и дефисов в ссылке
+// опубликованной активности без нормализации или проверки владения.
 var runtimeActivityRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,96}$`)
 
+// validPublishedMessage Requires a nonnil message with valid ref, first revision, COMMENTARY/FINAL
+// phase and nonblank valid UTF-8 text within the runtime byte limit. It performs no
+// redaction/source authorization and adds no independent NUL-content predicate.
+// validPublishedMessage Требует непустое сообщение с допустимой ссылкой, первой ревизией, фазой
+// COMMENTARY/FINAL и непустым UTF-8 текстом в пределах runtime-лимита. Не скрывает содержимое, не
+// авторизует источник и не добавляет отдельной проверки NUL.
 func validPublishedMessage(message *entity.RunMessage) bool {
 	return message != nil && runtimeActivityRefPattern.MatchString(message.Ref) && message.Revision == 1 &&
 		(message.Phase == "COMMENTARY" || message.Phase == "FINAL") &&
 		strings.TrimSpace(message.Text) != "" && utf8.ValidString(message.Text) && len(message.Text) <= runtimecontract.MaximumRuntimeMessageBytes
 }
 
+// validToolActivityLifecycle Requires RUNNING at revision 1 with empty result/zero duration, or
+// SUCCEEDED/FAILED/CANCELLED at revision 2. Terminal result and duration are not checked by this
+// narrow predicate; other caller validations remain required.
+// validToolActivityLifecycle Требует RUNNING в ревизии 1 с пустым результатом и нулевой
+// длительностью либо SUCCEEDED/FAILED/CANCELLED в ревизии 2. Итоговый результат и длительность
+// этой узкой проверкой не ограничены; прочие проверки вызывающего сохраняются.
 func validToolActivityLifecycle(state string, revision int64, result string, duration int64) bool {
 	if state == "RUNNING" {
 		return revision == 1 && result == "" && duration == 0
@@ -60,8 +126,14 @@ func validToolActivityLifecycle(state string, revision int64, result string, dur
 	return (state == "SUCCEEDED" || state == "FAILED" || state == "CANCELLED") && revision == 2
 }
 
-// Terminal node закрывает незавершённые проекции в той же owner transaction.
-// CANCELLED означает закрытие наблюдения, а не утверждение об исходе внешнего effect.
+// closeTerminalToolActivity Reads and closes pending tool projections before writes, then records
+// CANCELLED revision 2 observations and enriches both event/outbox in the same owner transaction.
+// Retains the original actor and execution lineage; CANCELLED closes observation without asserting
+// the external effect outcome.
+// closeTerminalToolActivity Читает и закрывает rows незавершённых проекций до записей, затем
+// фиксирует наблюдения CANCELLED ревизии 2 и дополняет событие с outbox в одной транзакции
+// владельца. Сохраняет автора и цепочку выполнения; CANCELLED закрывает наблюдение без утверждения
+// об исходе внешнего эффекта.
 func (repository *Repository) closeTerminalToolActivity(ctx context.Context, tx pgx.Tx, current scope, projectID, rootRunID string) error {
 	rows, err := tx.Query(ctx, queryRuntimeActivityTerminalTools, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "root_run_id": rootRunID,
@@ -69,6 +141,11 @@ func (repository *Repository) closeTerminalToolActivity(ctx context.Context, tx 
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	// pending Buffers exact node ref, decoded running tool call and persisted actor after the query
+	// closes, so event/outbox writes do not compete with open rows on the transaction connection.
+	// pending Буферизует точную ссылку узла, декодированный RUNNING вызов и сохранённого автора после
+	// закрытия запроса, чтобы записи event/outbox не конфликтовали с открытыми rows соединения
+	// транзакции.
 	type pending struct {
 		nodeRef string
 		call    entity.RunToolCall
@@ -102,6 +179,13 @@ func (repository *Repository) closeTerminalToolActivity(ctx context.Context, tx 
 	return nil
 }
 
+// attachToolCallActivity Updates exact organization/event actor/tool-call projection and its
+// linked durable outbox before mutating the returned event in memory. Any SQL failure is
+// unavailable; it owns no commit, external publication or authorization and does not check
+// affected-row counts.
+// attachToolCallActivity Обновляет автора и проекцию вызова точного события организации, затем
+// связанный outbox до изменения возвращаемого события в памяти. SQL-сбой даёт Unavailable; commit,
+// внешняя публикация и авторизация сюда не входят, число строк не проверяется.
 func attachToolCallActivity(ctx context.Context, tx pgx.Tx, current scope, event *entity.RunEvent, actor entity.RunEventActor, call *entity.RunToolCall) error {
 	if _, err := tx.Exec(ctx, queryRuntimeRecordtoolcallUpdateEvent, current.organizationID, actor.Kind, actor.Ref,
 		actor.Name, asJSON(call), event.Ref); err != nil {
@@ -114,12 +198,26 @@ func attachToolCallActivity(ctx context.Context, tx pgx.Tx, current scope, event
 	return nil
 }
 
+// runtimeActivityTurnInput Carries persisted turn content, actor and canonical message source for
+// safe event projection. Callback input is replaced by a fixed public marker before return; these
+// fields do not establish caller authority.
+// runtimeActivityTurnInput Хранит сохранённые содержимое turn, автора и канонический источник для
+// безопасной проекции события. Callback-вход заменяется фиксированным публичным маркером до
+// возврата; поля не назначают полномочия вызывающего.
 type runtimeActivityTurnInput struct {
 	Content string
 	Actor   entity.RunEventActor
 	Source  entity.MessageSource
 }
 
+// readRuntimeActivityExecution Scans exact execution/turn input and requires positive
+// turn/attempt, resolves canonical source and replaces callback continuation text with the public
+// marker. Any read/counter failure returns zero execution/input as unavailable; no execution state
+// is changed.
+// readRuntimeActivityExecution Читает точные выполнение и вход turn, требует положительные
+// turn/attempt, разрешает канонический источник и заменяет callback-текст публичным маркером.
+// Ошибка чтения или счётчиков даёт нулевой результат с Unavailable; состояние выполнения не
+// меняется.
 func readRuntimeActivityExecution(ctx context.Context, tx pgx.Tx, organizationID, rootRunID, nodeRef string) (*entity.RunEventExecution, runtimeActivityTurnInput, error) {
 	var execution entity.RunEventExecution
 	var input runtimeActivityTurnInput
@@ -140,8 +238,16 @@ func readRuntimeActivityExecution(ctx context.Context, tx pgx.Tx, organizationID
 	return &execution, input, nil
 }
 
-// Блокировка root сериализует проверку receipt с append события, включая разные
-// узлы одной сессии. Авторитетное происхождение берётся только из текущего lease.
+// latestRuntimeActivity Locks the owner root, derives current execution from trusted lease
+// metadata, finds its latest exact activity receipt and reloads the historical authoritative
+// event. Requires sequence, delta run and full execution equality, then returns stored graph
+// revision; no receipt returns nil,nil. It never reconstructs/rewrites a historical graph or
+// grants new authority.
+// latestRuntimeActivity Блокирует корень владельца, выводит текущее выполнение из доверенных
+// данных аренды, находит точную квитанцию активности и перечитывает историческое событие. Требует
+// совпадения sequence, наличия run в delta и полного выполнения, возвращает сохранённую graph
+// revision. Отсутствие квитанции даёт nil,nil; граф не восстанавливает и не переписывает,
+// полномочия не выдаёт.
 func latestRuntimeActivity(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, kind, ref string) (*entity.RunEvent, error) {
 	var locked string
 	if err := tx.QueryRow(ctx, queryRuntimeActivityLockRoot, pgx.StrictNamedArgs{
