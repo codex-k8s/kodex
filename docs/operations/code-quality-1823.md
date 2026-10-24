@@ -4,11 +4,79 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.390.0
+version: 1.391.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Черновики секретов, ассистенты и продолжение сессий — 25.10.2026
+
+На основе `cf220b3fa52bdfac83f10b5a3a34e31e18fb4bde` полностью прочитаны
+queries_secret_drafts.go, project_assistant.go и resumable_sessions.go,
+описаны22+21+21 прежних объявления. Две новые функции и адресный тест
+также описаны:22/22,23/23,21/21 и1/1, всего67/67. Общий inventory
+19367/21452, missing2085 — PostgreSQL adapter control-plane. Все104
+Go-файла текущего PR имеют1171/1171 EN→RU описаний.
+
+`scanConversationAssistant` объединяет два одинаковых пятиколоночных
+сканирования идентичности. Создание беседы сохраняет предварительный отказ
+неизвестной области и PROJECT без проекта, отдельную SQL-выборку включённого
+неархивного кандидата. Существующая беседа сохраняет другую выборку точного
+субъекта и организации без добавления фильтра кандидата. Обе явно передают
+прежние context, SQL и StrictNamedArgs. При NoRows и wrapped NoRows остаётся
+NotFound, при другом сбое — Unavailable; частично заполненная структура
+сохраняется как прежде. Функция не управляет транзакцией или авторизацией.
+
+`appendAssistantContextOperations` объединяет два цикла добавления подсказок
+разрешений и соединений. Порядок, прежние элементы и отсутствие новых дублей
+сохранены, пустой вход не меняет срез. Обе специализированные SQL и их
+параметры остаются явными. Отдельные условия CREATE_PROJECT_ASSISTANT и
+единственной файловой операции не расширены. Подсказки не дают полномочия
+исполнения; ошибка последующего запроса по-прежнему может оставить частичные
+изменения дескриптора в памяти.
+
+Тест проверяет оба исходных метода:2 режима ×6 исходов — success, missing,
+wrapped missing, scan failure, partial failure и partial missing. Проверены
+точные context/SQL/именованные аргументы, порядок пяти Scan destinations,
+сохранение частичного результата и отсутствие commit/других DB calls или
+раскрытия деталей драйвера. Три неверных запроса создания вызывают Invalid
+до доступа к nil transaction. Это проверка границы чтения на синтетических
+данных, не доказательство PostgreSQL RLS или конкурентного поведения.
+
+| Путь / жизненный цикл | Зафиксированная граница |
+| --- | --- |
+| Черновик секрета | PREPARING и версии, encrypted descriptor и staged namespace; Get/Lock не фильтруют срок и состояние. Actor/tenant/disclosure и допустимость перехода проверяет вызывающий |
+| Подготовленная операция | Lookup по ref/token digest не равен actor authorization. Consume только PREPARED и неистёкший grant, claim generation и lease min(30s, grant expiry); Finish не имеет собственной version/claim/state проверки |
+| Отзыв / восстановление / очистка | Expire отзывает все активные операции черновика, не только истёкшие. Recovery выбирает кандидатов сверки, не разрешает повтор эффекта. Cleanup intent сохраняет незавершённые дескрипторы; флаг завершения не удаляет данные |
+| Ассистент / план | Канонический SYSTEM либо точная PROJECT lineage, actor-owned conversation/plan, специализированные цели разрешений и закрытый набор project operations. Выбор цели и подсказки не являются допуском исполнения |
+| Список продолжений | ACTIVE session, последний подходящий SUCCEEDED run, отсутствие активных turn, run.view/launch и runtime/catalog eligibility. RepeatableRead, лимит10000 с отказом переполнения, rows закрываются до зависимых запросов |
+| Курсор / кэш | Неподписанный cursor проверяется по scope и отпечатку eligible run ref/version/time. Кэш ограничен одной транзакцией/областью; снимок не охватывает все зависимости и не заменяет свежий командный допуск |
+| ADD_TURN | Старая подсказка удаляется до проверки; ineligible подавляется, инфраструктурная ошибка возвращается. Состояние не захватывается, новый turn не создаётся; event получает actions только после успеха |
+
+Прочитаны все22 SQL черновиков, десять встроенных SQL ассистентов и оба
+SQL продолжений. Все34 go:embed сохранены. queries_secret_drafts.go и
+resumable_sessions.go прошли полное AST/directive сравнение с исходным SHA:
+только комментарии. project_assistant.go сравнен с преобразованием полного
+исходного файла: только общий scanner и два вынесенных цикла; SQL/API,
+generated/dependencies/migrations/deploy inputs не менялись. Через Context7
+/jackc/pgx проверены Row/Scan/ErrNoRows и errors.Is.
+
+GOWORK=off control-plane build и unit `-count=1` — PASS LOCAL;13 внешних
+fixture keys и2 admin/template inputs исключены.17 analyzer unit и5
+exact-ignore guards — PASS. После уточнения только русской прозы повторное
+полное AST/directive сравнение подтвердило неизменность исполняемой части;
+повторять unit для комментариев не потребовалось. gofmt и diff check — PASS.
+Real PostgreSQL/RLS/OCC/claim races, шифрование/издатель/материализация и
+очистка секретов, provider/runtime/catalog refresh, browser/full E2E и
+deploy/live — NOT RUN/SKIP. QA baseline f2e64eb не менялся.
+
+Scan6675 own sources,222 excluded:1804 raw,900 retained occurrences и904
+unresolved. Прежнее138-token окно в expandAssistantContext заменилось
+109-token окном разных специализированных SQL-вызовов; оно остаётся открытым.
+Новый тест не добавил clone groups.774 registry entries не менялись;
+thresholds, ignore regions и whole-file exclusions не расширены.
+Issue#1823 открыт, PR остаётся Draft до завершения согласованного объёма.
 
 ## Artifact receipts, purge/download и contextual plans — 25.10.2026
 
