@@ -19,27 +19,63 @@ import (
 )
 
 const (
-	SecretName             = "email-bridge-mailbox-projection"
-	DocumentKey            = "mailboxes.json"
+	// SecretName pins the existing mailbox projection Secret updated by this publisher rather than
+	// accepting a caller-selected Secret target.
+	// SecretName закрепляет существующий mailbox projection Secret этого publisher вместо приёма
+	// выбранной caller цели Secret.
+	SecretName = "email-bridge-mailbox-projection"
+	// DocumentKey names the serialized mailbox configuration entry while other Secret entries retain
+	// separately materialized credential values.
+	// DocumentKey обозначает запись сериализованной mailbox configuration при сохранении отдельно
+	// материализованных credential values в остальных Secret entries.
+	DocumentKey = "mailboxes.json"
+	// maximumProjectionBytes caps both the encoded configuration and aggregate
+	// document-plus-existing-credential payload at900 KiB before update.
+	// maximumProjectionBytes ограничивает кодированную configuration и совокупные document и existing
+	// credential payload900 KiB до update.
 	maximumProjectionBytes = 900 << 10
 )
 
 var (
-	ErrInvalid     = errors.New("email projection is invalid")
-	ErrConflict    = errors.New("email projection revision conflict")
+	// ErrInvalid reports rejected configuration/render input without exposing credential values or
+	// document contents.
+	// ErrInvalid обозначает отклонённые configuration либо render input без раскрытия credential
+	// values либо содержимого документа.
+	ErrInvalid = errors.New("email projection is invalid")
+	// ErrConflict reports rollback, same-revision equivocation or exact readback/credential digest
+	// mismatch as a fixed error.
+	// ErrConflict обозначает rollback, same-revision equivocation либо mismatch точного readback или
+	// credential digest фиксированной ошибкой.
+	ErrConflict = errors.New("email projection revision conflict")
+	// ErrUnavailable reports unavailable Kubernetes state or required credential material using a
+	// fixed error.
+	// ErrUnavailable обозначает недоступное Kubernetes состояние либо обязательный credential material
+	// фиксированной ошибкой.
 	ErrUnavailable = errors.New("email projection is unavailable")
 )
 
+// Receipt returns observed configuration revision/digest and Secret UID/resource version without
+// including any Secret values.
+// Receipt возвращает наблюдаемые configuration revision и digest и Secret UID и resource version
+// без Secret values.
 type Receipt struct {
 	Revision                           int64
 	Digest, SecretUID, ResourceVersion string
 }
 
+// Kubernetes holds the injected Kubernetes client and validated projection namespace; it owns no
+// background reconciliation loop.
+// Kubernetes хранит внедрённый Kubernetes client и проверенный projection namespace; фоновым
+// reconciliation loop не владеет.
 type Kubernetes struct {
 	client    kubernetes.Interface
 	namespace string
 }
 
+// InCluster constructs an in-cluster client with the supplied request timeout and maps setup
+// failures to unavailable before namespace validation.
+// InCluster создаёт in-cluster client с переданным request timeout и отображает setup failures в
+// unavailable до проверки namespace.
 func InCluster(namespace string, timeout time.Duration) (*Kubernetes, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -53,6 +89,10 @@ func InCluster(namespace string, timeout time.Duration) (*Kubernetes, error) {
 	return New(client, namespace)
 }
 
+// New requires a nonnil client and descriptor-valid namespace without reading cluster resources or
+// credential material.
+// New требует ненулевой client и descriptor-valid namespace без чтения cluster resources либо
+// credential material.
 func New(client kubernetes.Interface, namespace string) (*Kubernetes, error) {
 	if client == nil || !api.DescriptorValid(api.Descriptor{Name: namespace, Generation: 1}) {
 		return nil, ErrInvalid
@@ -60,7 +100,10 @@ func New(client kubernetes.Interface, namespace string) (*Kubernetes, error) {
 	return &Kubernetes{client: client, namespace: namespace}, nil
 }
 
-// CredentialKey не допускает alias между разными immutable descriptors.
+// CredentialKey validates the immutable credential descriptor before composing name.generation,
+// preventing path syntax and aliases across generations.
+// CredentialKey проверяет immutable credential descriptor до составления name.generation, запрещая
+// path syntax и aliases разных generations.
 func CredentialKey(descriptor api.Descriptor) (string, error) {
 	if !api.DescriptorValid(descriptor) {
 		return "", ErrInvalid
@@ -68,8 +111,12 @@ func CredentialKey(descriptor api.Descriptor) (string, error) {
 	return descriptor.Name + "." + strconv.FormatInt(descriptor.Generation, 10), nil
 }
 
-// Publish вызывается только после принятия revision в PostgreSQL владельца.
-// Credential values уже материализованы отдельно; публикация не меняет их.
+// Publish updates only the document in an existing valid seeded Secret after owner acceptance,
+// preserving credential bytes and monotone revision/digest under conflict retries, then performs
+// exact Secret readback.
+// Publish обновляет только document существующего корректного seeded Secret после owner
+// acceptance, сохраняя credential bytes и монотонные revision и digest при conflict retries, затем
+// выполняет точный Secret readback.
 func (publisher *Kubernetes) Publish(ctx context.Context, configuration api.Configuration, credentialDigests map[string]string) (Receipt, error) {
 	if api.ValidateConfiguration(configuration) != nil {
 		return Receipt{}, ErrInvalid
@@ -118,6 +165,10 @@ func (publisher *Kubernetes) Publish(ctx context.Context, configuration api.Conf
 	return publisher.Check(ctx, configuration, credentialDigests)
 }
 
+// Check checks the served configuration revision/digest, Secret identity/version and enabled
+// mailbox credential digests before returning a metadata-only receipt.
+// Check проверяет обслуживаемые configuration revision и digest, Secret identity и version и
+// credential digests включённых mailboxes до metadata-only receipt.
 func (publisher *Kubernetes) Check(ctx context.Context, configuration api.Configuration, credentialDigests map[string]string) (Receipt, error) {
 	if api.ValidateConfiguration(configuration) != nil {
 		return Receipt{}, ErrInvalid
@@ -138,6 +189,10 @@ func (publisher *Kubernetes) Check(ctx context.Context, configuration api.Config
 	return Receipt{Revision: served.Revision, Digest: api.Digest(served), SecretUID: string(secret.UID), ResourceVersion: secret.ResourceVersion}, nil
 }
 
+// validateCredentials requires nonempty material at each enabled endpoint CA/username/secret
+// descriptor and matches its SHA-256 to the supplied digest map without changing values.
+// validateCredentials требует непустой material каждого CA, username и secret descriptor
+// включённого endpoint и сверяет SHA-256 с переданной digest map без изменения значений.
 func validateCredentials(configuration api.Configuration, data map[string][]byte, credentialDigests map[string]string) error {
 	for _, mailbox := range configuration.Mailboxes {
 		if !mailbox.Enabled {

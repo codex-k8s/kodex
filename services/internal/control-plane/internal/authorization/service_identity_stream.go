@@ -11,9 +11,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ServiceIdentityStream поддерживает закрытый набор streaming RPC. Для upload
-// principal связывается с первой metadata-частью, а размер и digest всего тела
-// проверяет handler до устойчивой записи.
+// ServiceIdentityStream admits only registered client/server stream shapes and actor modes,
+// resolving identity from the initial request while upload handlers retain whole-body size/digest
+// validation.
+// ServiceIdentityStream допускает только зарегистрированные формы client либо server stream и
+// actor modes, разрешая identity по первому запросу; проверка размера и digest всего upload тела
+// остаётся у handlers.
 func ServiceIdentityStream(authorizer AdmissionAuthorizer, resolver *rpcprincipal.Service) grpc.StreamServerInterceptor {
 	return func(server any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if authorizer == nil || resolver == nil {
@@ -41,6 +44,10 @@ func ServiceIdentityStream(authorizer AdmissionAuthorizer, resolver *rpcprincipa
 	}
 }
 
+// servicePrincipalStream wraps the stream with first-request principal context and per-message
+// admission; it does not re-resolve the domain principal for every body chunk.
+// servicePrincipalStream оборачивает stream контекстом principal первого запроса и admission
+// каждого сообщения; доменный principal каждого body chunk повторно не разрешает.
 type servicePrincipalStream struct {
 	grpc.ServerStream
 	ctx           context.Context
@@ -51,7 +58,16 @@ type servicePrincipalStream struct {
 	singleRequest bool
 }
 
+// Context returns the wrapped context, including the principal only after the first message has
+// passed unary resolution.
+// Context возвращает контекст оболочки с principal только после unary разрешения первого
+// сообщения.
 func (stream *servicePrincipalStream) Context() context.Context { return stream.ctx }
+
+// RecvMsg rejects a second single-request message, checks admission before and after successful
+// receive and resolves only the first message into the stream context.
+// RecvMsg отклоняет второе сообщение single-request stream, проверяет admission до и после
+// успешного receive и разрешает только первое сообщение в stream context.
 func (stream *servicePrincipalStream) RecvMsg(message any) error {
 	if stream.received && stream.singleRequest {
 		return status.Error(codes.InvalidArgument, "service stream accepts one request")
@@ -72,6 +88,11 @@ func (stream *servicePrincipalStream) RecvMsg(message any) error {
 	_, err := stream.resolve(stream.ctx, message, &grpc.UnaryServerInfo{FullMethod: stream.method}, func(ctx context.Context, _ any) (any, error) { stream.ctx = ctx; return nil, nil })
 	return err
 }
+
+// SendMsg requires an initial resolved exact-method principal and fresh peer/method admission
+// before forwarding a response; it does not claim client receipt.
+// SendMsg требует исходный разрешённый principal точного метода и свежий peer и method admission
+// до отправки ответа; получение клиентом не подтверждает.
 func (stream *servicePrincipalStream) SendMsg(message any) error {
 	if !stream.received {
 		return status.Error(codes.PermissionDenied, "service stream request required")

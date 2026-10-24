@@ -19,9 +19,16 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+// migrations embeds the canonical SQL migration registry used by CLI up/status and gated upgrade fixtures.
+// migrations встраивает канонический SQL migration registry для CLI up, status и явно разрешённых upgrade fixtures.
+//
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+// main creates the CLI root context, dispatches arguments through run and exits nonzero after
+// reporting a returned error.
+// main создаёт корневой CLI context, передаёт аргументы в run и завершает процесс с ненулевым
+// кодом после сообщения возвращённой ошибки.
 func main() {
 	ctx := context.Background()
 	if err := run(ctx, os.Args[1:]); err != nil {
@@ -30,6 +37,10 @@ func main() {
 	}
 }
 
+// run dispatches broker bootstrap or embedded PostgreSQL up/status, reading the explicitly named
+// admin DSN file and using the caller context without adding its own migration deadline.
+// run выбирает broker bootstrap либо embedded PostgreSQL up и status, читая явно названный admin
+// DSN file и используя caller context без собственного migration deadline.
 func run(ctx context.Context, args []string) error {
 	if len(args) == 2 && args[0] == "broker" && args[1] == "bootstrap" {
 		return bootstrapBroker(ctx)
@@ -68,6 +79,12 @@ func run(ctx context.Context, args []string) error {
 	return goose.UpContext(ctx, database, "migrations")
 }
 
+// bootstrapBroker ensures control-plane, session-revocation and browser-state streams in sequence
+// with a separate retry budget per stream, limiting the legacy message-size upgrade to the
+// control-plane bootstrap adapter.
+// bootstrapBroker последовательно обеспечивает control-plane, session-revocation и browser-state
+// streams с отдельным retry budget каждого stream, ограничивая legacy message-size upgrade
+// control-plane bootstrap adapter.
 func bootstrapBroker(ctx context.Context) error {
 	config, timeout, err := loadBrokerBootstrapConfig()
 	if err != nil {
@@ -94,29 +111,66 @@ func bootstrapBroker(ctx context.Context) error {
 	return nil
 }
 
-// Только environment-owned bootstrap принимает точный прежний message-limit.
+// controlPlaneBootstrapPublisher wraps the environment-owned bootstrap publisher so only this path
+// accepts the exact previous control-plane message limit during forward upgrade.
+// controlPlaneBootstrapPublisher оборачивает environment-owned bootstrap publisher, чтобы только
+// этот путь принимал точный прежний control-plane message limit при forward upgrade.
 type controlPlaneBootstrapPublisher struct{ *natsjetstream.Publisher }
 
+// EnsureStream delegates bootstrap reconciliation with the exact64 KiB legacy limit rather than
+// weakening the regular publisher stream checks.
+// EnsureStream передаёт bootstrap reconciliation с точным legacy пределом64 KiB без ослабления
+// обычных publisher stream checks.
 func (publisher *controlPlaneBootstrapPublisher) EnsureStream(ctx context.Context) error {
 	return publisher.EnsureStreamWithMessageLimitUpgrade(ctx, 64<<10)
 }
 
+// brokerPublisher defines the ensure/close lifecycle needed by one bootstrap attempt without
+// exposing broker publish operations.
+// brokerPublisher задаёт lifecycle ensure и close одной bootstrap attempt без предоставления
+// broker publish operations.
 type brokerPublisher interface {
+	// EnsureStream checks or provisions the configured stream using the bounded bootstrap context.
+	// EnsureStream проверяет либо подготавливает настроенный stream под ограниченным bootstrap
+	// context.
 	EnsureStream(context.Context) error
+	// Close releases the constructed publisher after its single ensure attempt, including an ensure
+	// failure.
+	// Close освобождает созданный publisher после единственной ensure attempt, включая отказ ensure.
 	Close() error
 }
 
+// brokerPublisherFactory constructs one attempt-specific publisher from a copied config whose
+// connect timeout is capped by the remaining stream budget.
+// brokerPublisherFactory создаёт publisher одной attempt по копии config с connect timeout,
+// ограниченным остатком stream budget.
 type brokerPublisherFactory func(natsjetstream.Config) (brokerPublisher, error)
 
+// brokerRetryPolicy stores the positive initial delay and maximum exponential-backoff delay for
+// transient connection retries.
+// brokerRetryPolicy хранит положительную начальную задержку и предел exponential-backoff задержки
+// повторов transient connection.
 type brokerRetryPolicy struct {
 	initial time.Duration
 	maximum time.Duration
 }
 
+// minimumBrokerConnectTimeout prevents starting a new connect attempt with less than one hundred
+// milliseconds left in its stream retry budget.
+// minimumBrokerConnectTimeout запрещает начинать новую connect attempt при остатке stream retry
+// budget меньше ста миллисекунд.
 const minimumBrokerConnectTimeout = 100 * time.Millisecond
 
+// brokerBootstrapCompleted holds the fixed success diagnostic for the pinned control-plane stream
+// message size without interpolating credentials.
+// brokerBootstrapCompleted хранит фиксированную диагностику успешного bootstrap закреплённого
+// control-plane stream message size без подстановки credentials.
 const brokerBootstrapCompleted = "control-plane broker bootstrap completed: stream=CONTROL_PLANE maximum_message_bytes=262144"
 
+// loadBrokerBootstrapConfig parses the required replica/storage/retry settings and assembles the
+// pinned stream configuration plus TLS/credential file locators without reading their contents.
+// loadBrokerBootstrapConfig разбирает обязательные replica, storage и retry настройки и собирает
+// закреплённую stream configuration и TLS и credential file locators без чтения их содержимого.
 func loadBrokerBootstrapConfig() (natsjetstream.Config, time.Duration, error) {
 	replicas, err := strconv.Atoi(strings.TrimSpace(os.Getenv("CONTROL_PLANE_NATS_REPLICAS")))
 	if err != nil {
@@ -140,6 +194,12 @@ func loadBrokerBootstrapConfig() (natsjetstream.Config, time.Duration, error) {
 	}, timeout, nil
 }
 
+// bootstrapBrokerWithRetry retries only constructor ErrConnect within one stream deadline, capping
+// connect time/backoff; ensure and close failures return immediately after the publisher is
+// closed.
+// bootstrapBrokerWithRetry повторяет только constructor ErrConnect в одном stream deadline,
+// ограничивая connect time и backoff; ошибки ensure и close возвращаются сразу после закрытия
+// publisher.
 func bootstrapBrokerWithRetry(
 	ctx context.Context,
 	config natsjetstream.Config,

@@ -18,11 +18,27 @@ import (
 )
 
 const (
+	// publicationRevisionAnnotation names the mailbox revision fence stored on published network
+	// policy and Deployment templates.
+	// publicationRevisionAnnotation обозначает mailbox revision fence, сохраняемый в публикуемых
+	// network policy и Deployment templates.
 	publicationRevisionAnnotation = "kodex.dev/mail-configuration-revision"
-	publicationDigestAnnotation   = "kodex.dev/mail-configuration-digest"
-	mailPolicyNetworkName         = "egress-gateway-mail-destinations"
+	// publicationDigestAnnotation names the exact configuration digest paired with each mailbox
+	// revision fence.
+	// publicationDigestAnnotation обозначает точный configuration digest, связанный с каждым mailbox
+	// revision fence.
+	publicationDigestAnnotation = "kodex.dev/mail-configuration-digest"
+	// mailPolicyNetworkName pins the existing supplemental egress policy updated for mailbox
+	// publication.
+	// mailPolicyNetworkName закрепляет существующую дополнительную egress policy, обновляемую при
+	// mailbox publication.
+	mailPolicyNetworkName = "egress-gateway-mail-destinations"
 )
 
+// samePublicationJSON compares serialized JSON bytes and returns false on either marshal failure,
+// preserving the existing nil/empty encoding distinction.
+// samePublicationJSON сравнивает сериализованные JSON bytes и возвращает false при ошибке любого
+// marshal, сохраняя прежнее различие кодирования nil и empty.
 func samePublicationJSON(left, right any) bool {
 	a, err := json.Marshal(left)
 	if err != nil {
@@ -32,7 +48,10 @@ func samePublicationJSON(left, right any) bool {
 	return err == nil && bytes.Equal(a, b)
 }
 
-// CheckPublicationAdmission проверяет фактически обслуживаемую защиту CREATE.
+// CheckPublicationAdmission requires the fixed namespace and observed warning-free admission
+// policy plus exact expected binding/spec before any mailbox publication effect.
+// CheckPublicationAdmission требует фиксированный namespace и наблюдаемую admission policy без
+// warnings с точными ожидаемыми binding и spec до любого mailbox publication effect.
 func (publisher *Kubernetes) CheckPublicationAdmission(ctx context.Context) error {
 	if publisher.namespace != "kodex-system" {
 		return ErrInvalid
@@ -60,6 +79,10 @@ func (publisher *Kubernetes) CheckPublicationAdmission(ctx context.Context) erro
 	return nil
 }
 
+// publicationObjects renders the validated mail document into typed ConfigMap/network resources
+// and attaches exact configuration revision/digest annotations.
+// publicationObjects преобразует проверенный mail document в типизированные ConfigMap и network
+// resources и добавляет точные configuration revision и digest annotations.
 func publicationObjects(document mailpolicy.MailDocument) (corev1.ConfigMap, networkingv1.NetworkPolicy, error) {
 	var configMap corev1.ConfigMap
 	var policy networkingv1.NetworkPolicy
@@ -71,6 +94,10 @@ func publicationObjects(document mailpolicy.MailDocument) (corev1.ConfigMap, net
 	return configMap, policy, nil
 }
 
+// checkPublicationFence rejects unparsable, newer or equivocal existing revision fences while
+// retaining the original acceptance of a missing fence.
+// checkPublicationFence отклоняет неразбираемый, более новый либо неоднозначный existing revision
+// fence, сохраняя исходный допуск отсутствующего fence.
 func checkPublicationFence(annotations map[string]string, document mailpolicy.MailDocument) error {
 	if raw := annotations[publicationRevisionAnnotation]; raw != "" {
 		revision, err := strconv.ParseInt(raw, 10, 64)
@@ -81,6 +108,12 @@ func checkPublicationFence(annotations map[string]string, document mailpolicy.Ma
 	return nil
 }
 
+// PublishMailbox checks document/configuration pins and admission before ordered ConfigMap,
+// network, gateway, Secret and email Deployment writes; the Secret receipt does not replace later
+// CheckMailbox replica readback or make the writes atomic.
+// PublishMailbox проверяет document и configuration pins и admission до последовательных
+// ConfigMap, network, gateway, Secret и email Deployment writes; Secret receipt не заменяет
+// последующий CheckMailbox replica readback и не делает writes атомарными.
 func (publisher *Kubernetes) PublishMailbox(ctx context.Context, configuration api.Configuration, credentials map[string]string, document mailpolicy.MailDocument) (Receipt, error) {
 	if document.Validate() != nil || document.ConfigurationRevision != configuration.Revision || document.ConfigurationDigest != api.Digest(configuration) {
 		return Receipt{}, ErrInvalid
@@ -141,6 +174,10 @@ func (publisher *Kubernetes) PublishMailbox(ctx context.Context, configuration a
 	return receipt, nil
 }
 
+// publicationEnvironment returns the gateway mail digest pin or the bridge
+// managed-mode/revision/digest pins used by the selected Deployment update.
+// publicationEnvironment возвращает gateway mail digest pin либо bridge managed-mode, revision и
+// digest pins для выбранного Deployment update.
 func publicationEnvironment(name string, document mailpolicy.MailDocument) map[string]string {
 	if name == "egress-gateway" {
 		return map[string]string{"EGRESS_GATEWAY_MAIL_POLICY_DIGEST": document.Digest()}
@@ -149,6 +186,12 @@ func publicationEnvironment(name string, document mailpolicy.MailDocument) map[s
 		"EMAIL_BRIDGE_EXPECTED_CONFIGURATION_DIGEST": document.ConfigurationDigest, "EMAIL_BRIDGE_EGRESS_POLICY_DIGEST": document.Digest()}
 }
 
+// setMailDeployment guards the existing revision/source then updates the single named container
+// pins in stable order and the gateway mail ConfigMap volume, rejecting duplicate or missing
+// targets.
+// setMailDeployment проверяет existing revision и source, затем обновляет pins единственного
+// именованного container в стабильном порядке и gateway mail ConfigMap volume, отклоняя duplicate
+// либо missing targets.
 func setMailDeployment(deployment *appsv1.Deployment, name string, document mailpolicy.MailDocument, configMapName string) error {
 	if name == "egress-gateway" {
 		if err := checkMailGatewaySource(deployment, document); err != nil {
@@ -210,6 +253,10 @@ func setMailDeployment(deployment *appsv1.Deployment, name string, document mail
 	return nil
 }
 
+// checkMailGatewaySource requires one gateway container with exact base digest, policy file and
+// readonly mount without subpaths before changing its mail-policy source.
+// checkMailGatewaySource требует один gateway container с точными base digest, policy file и
+// readonly mount без subpaths до изменения mail-policy source.
 func checkMailGatewaySource(deployment *appsv1.Deployment, document mailpolicy.MailDocument) error {
 	containers, pins, files, mounts := 0, 0, 0, 0
 	for _, container := range deployment.Spec.Template.Spec.Containers {
@@ -246,6 +293,12 @@ func checkMailGatewaySource(deployment *appsv1.Deployment, document mailpolicy.M
 	return nil
 }
 
+// applyMailDeployment re-reads and transforms the selected Deployment on conflict retries,
+// skipping an identical spec and mapping failure to a fixed conflict without asserting rollout
+// completion.
+// applyMailDeployment повторно читает и преобразует выбранный Deployment при conflict retries,
+// пропускает идентичный spec и отображает отказ в фиксированный conflict без утверждения
+// завершения rollout.
 func (publisher *Kubernetes) applyMailDeployment(ctx context.Context, name string, document mailpolicy.MailDocument, configMapName string) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, err := publisher.client.AppsV1().Deployments(publisher.namespace).Get(ctx, name, metav1.GetOptions{})
@@ -268,6 +321,10 @@ func (publisher *Kubernetes) applyMailDeployment(ctx context.Context, name strin
 	return nil
 }
 
+// checkMailConfigMap requires observed UID/version, immutable text data without binary entries and
+// every expected label while retaining the original allowance for additional labels.
+// checkMailConfigMap требует наблюдаемые UID и version, immutable text data без binary entries и
+// каждый expected label, сохраняя исходный допуск дополнительных labels.
 func (publisher *Kubernetes) checkMailConfigMap(ctx context.Context, expected corev1.ConfigMap) error {
 	current, err := publisher.client.CoreV1().ConfigMaps(publisher.namespace).Get(ctx, expected.Name, metav1.GetOptions{})
 	if err != nil {
@@ -284,6 +341,10 @@ func (publisher *Kubernetes) checkMailConfigMap(ctx context.Context, expected co
 	return nil
 }
 
+// CheckMailbox reads admission, immutable policy data, exact network fences, both desired/observed
+// Deployment states and the Secret receipt; it does not test a live SMTP/IMAP connection.
+// CheckMailbox читает admission, immutable policy data, точные network fences, desired и observed
+// состояния обоих Deployment и Secret receipt; живое SMTP либо IMAP соединение не проверяет.
 func (publisher *Kubernetes) CheckMailbox(ctx context.Context, configuration api.Configuration, credentials map[string]string, document mailpolicy.MailDocument) (Receipt, error) {
 	if document.Validate() != nil || document.ConfigurationRevision != configuration.Revision || document.ConfigurationDigest != api.Digest(configuration) {
 		return Receipt{}, ErrInvalid
@@ -318,6 +379,10 @@ func (publisher *Kubernetes) CheckMailbox(ctx context.Context, configuration api
 	return publisher.Check(ctx, configuration, credentials)
 }
 
+// mailDeploymentReady requires nonempty Deployment identity/version, positive desired replicas and
+// exact observed-generation/replica counters with zero unavailable replicas.
+// mailDeploymentReady требует непустые Deployment identity и version, положительные desired
+// replicas и точные observed-generation и replica counters с нулевыми unavailable replicas.
 func mailDeploymentReady(deployment *appsv1.Deployment) bool {
 	if deployment.UID == "" || deployment.ResourceVersion == "" || deployment.Generation < 1 || deployment.Spec.Replicas == nil || *deployment.Spec.Replicas < 1 {
 		return false

@@ -16,17 +16,30 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+// impactOwnerSnapshotUpgradeSeed embeds historical synthetic impact snapshots to exercise a real forward schema migration.
+// impactOwnerSnapshotUpgradeSeed встраивает исторические синтетические impact snapshots для проверки настоящей forward schema migration.
+//
 //go:embed testdata/impact_owner_snapshot_upgrade_seed.sql
 var impactOwnerSnapshotUpgradeSeed string
 
+// impactOwnerSnapshotUpgradeAssert embeds the expected owner snapshot invariants checked after initial and repeated migration up.
+// impactOwnerSnapshotUpgradeAssert встраивает ожидаемые owner snapshot invariants после начального и повторного migration up.
+//
 //go:embed testdata/impact_owner_snapshot_upgrade_assert.sql
 var impactOwnerSnapshotUpgradeAssert string
 
+// impactOwnerSnapshotUpgradeProbe embeds current-protocol controls used to prove real owner SQL distinguishes current and historical snapshots.
+// impactOwnerSnapshotUpgradeProbe встраивает current-protocol controls для проверки различения текущих и исторических snapshots настоящим owner SQL.
+//
 //go:embed testdata/impact_owner_snapshot_upgrade_probe.sql
 var impactOwnerSnapshotUpgradeProbe string
 
-// TestImpactOwnerSnapshotProtocolUpgrade проверяет реальную старую схему, а не
-// изменение protocol revision существующей новой строки в тесте.
+// TestImpactOwnerSnapshotProtocolUpgrade upgrades an actual gated historical disposable schema,
+// verifies forward/repeated-up invariants through real owner queries and checks the latest
+// embedded migration version.
+// TestImpactOwnerSnapshotProtocolUpgrade обновляет настоящую явно разрешённую историческую
+// disposable schema, проверяет forward и repeated-up invariants реальными owner queries и сверяет
+// последнюю embedded migration version.
 func TestImpactOwnerSnapshotProtocolUpgrade(t *testing.T) {
 	dsn := os.Getenv("KODEX_IMPACT_OWNER_SNAPSHOT_UPGRADE_DSN")
 	if dsn == "" {
@@ -74,6 +87,10 @@ func TestImpactOwnerSnapshotProtocolUpgrade(t *testing.T) {
 	}
 }
 
+// latestEmbeddedImpactUpgradeMigration validates embedded migration filenames and returns the
+// greatest positive version, requiring the impact protocol upgrade to be present.
+// latestEmbeddedImpactUpgradeMigration проверяет имена embedded migration files и возвращает
+// наибольшую положительную version, требуя наличие impact protocol upgrade.
 func latestEmbeddedImpactUpgradeMigration(t *testing.T) int64 {
 	t.Helper()
 	entries, err := migrations.ReadDir("migrations")
@@ -97,8 +114,12 @@ func latestEmbeddedImpactUpgradeMigration(t *testing.T) int64 {
 	return latest
 }
 
-// Это доказательство SQL-входа владельца, не RPC или выдачи полномочий.
-// Читаем реальные queries adapter, не копируем предикат версии в тест.
+// testHistoricalImpactOwnerQueries runs actual adapter SQL under the disposable owner role to
+// distinguish current and hidden historical snapshots, with independent bounded rollback/close;
+// this is not RPC authorization proof.
+// testHistoricalImpactOwnerQueries исполняет настоящий adapter SQL под disposable owner role для
+// различения текущих и скрытых исторических snapshots с независимыми ограниченными rollback и
+// close; это не доказательство RPC authorization.
 func testHistoricalImpactOwnerQueries(t *testing.T, ctx context.Context, config *pgx.ConnConfig) {
 	t.Helper()
 	connection, err := pgx.ConnectConfig(ctx, config)
@@ -177,11 +198,19 @@ func testHistoricalImpactOwnerQueries(t *testing.T, ctx context.Context, config 
 	}
 }
 
+// assertHistoricalImpactQueryHidden requires the actual owner query to return zero rows for one
+// historical protocol fixture.
+// assertHistoricalImpactQueryHidden требует нулевую выборку настоящего owner query для одной
+// исторической protocol fixture.
 func assertHistoricalImpactQueryHidden(t *testing.T, ctx context.Context, tx pgx.Tx, sql string, arguments pgx.StrictNamedArgs) {
 	t.Helper()
 	assertImpactOwnerQueryCardinality(t, ctx, tx, sql, arguments, 0)
 }
 
+// assertImpactOwnerQueryCardinality executes the supplied actual query with strict named
+// arguments, counts rows and checks iteration failure before comparing exact cardinality.
+// assertImpactOwnerQueryCardinality исполняет переданный настоящий query со strict named
+// arguments, учитывает строки и проверяет iteration failure до сравнения точной cardinality.
 func assertImpactOwnerQueryCardinality(t *testing.T, ctx context.Context, tx pgx.Tx, sql string, arguments pgx.StrictNamedArgs, expected int) {
 	t.Helper()
 	rows, err := tx.Query(ctx, sql, arguments)

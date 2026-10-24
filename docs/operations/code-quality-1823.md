@@ -4,12 +4,72 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.364.0
+version: 1.365.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Завершение комментариев CLI, authorization и проекций — 24.10.2026
+
+На основе `6da7ee376aca929f87da1193fb4e522215a125ab` завершены154 прежних
+объявления в16 Go-файлах: CLI37, authorization39, emailprojection43,
+integrationegress35. Все их private, tests, interface methods и embedded
+variables имеют EN→RU комментарии. Один прежний TLS peer helper заменён общим
+`serviceStreamPeer`; добавлен описанный `userServiceStreamFixture`.
+Inventory:17514/21384, missing3870. Остаток комментариев во всём собственном
+Go-коде теперь ограничен control-plane PostgreSQL adapter3331 и gRPC transport539;
+это подтверждено полным inventory, а не поиском только в выбранных файлах.
+
+Комментарии сохраняют фактические различия bootstrap, admission и публикации.
+CLI migration path не получает вымышленного собственного deadline; broker retry
+budget принадлежит каждому stream, повторяется только constructor ErrConnect,
+ensure/close не повторяются. Environment-owned bootstrap допускает только точный
+legacy64 KiB control-plane limit при forward update до256 KiB.
+
+| Сценарий / переход | Описанный прежний контракт |
+| --- | --- |
+| Unary RPC → principal | Composition root выбирает профиль; peer/method admission, deterministic request digest и credential/project metadata предшествуют owner resolution. Verified context и locator не назначаются обычным payload |
+| Stream → first request → chunks | Закрытые method/stream shape/actor bindings; principal разрешается только по первому request, peer admission повторяется вокруг receive и перед send. Полное тело upload проверяет handler; каждый chunk не объявлен новым owner resolution |
+| Stream revoke / errors / EOF | Отказ admission запрещает следующий send/receive; SendMsg не подтверждает получение клиентом. One-request stream отклоняет второе request message. Доменные lease/grant revocation остаются у владельца, новых events/transitions нет |
+| Mail Secret publish/readback | Только существующий seeded Secret, monotone revision/digest, неизменные credential bytes и digest map включённых endpoints; receipt содержит metadata, не значения |
+| Mailbox publication → readiness | Последовательные ConfigMap/network/gateway/Secret/email Deployment writes не являются общей transaction. PublishMailbox receipt не заменяет CheckMailbox с точными observed replica counters; живые SMTP/IMAP не проверяются |
+| Mail и integration fence | Отсутствующий mail fence сохраняет исходный допуск; integration fence требует generation1 либо точную пустую repo-owned bootstrap NetworkPolicy. Разные правила не объединены |
+| Integration publish/readback | Exact source, immutable policy data, supplemental network, отдельный private CONNECT Service selector, Deployment pins и все replicas; closed stage не раскрывает policy/API bodies. Достижимость listener остаётся отдельной проверкой |
+| Retry / lifecycle / events | Существующие conflict retries и порядок reads/writes не менялись; комментарии не добавляют commands, новые grants, idempotency scopes, events либо обход owner lifecycle |
+
+Общая test-оснастка сохраняет точные caller/target/method/operation/permission,
+actor mode, optional project locator и scenario-specific certificate bytes.
+Пять исходных peer paths используют один конструктор; четыре user fixture paths
+используют общую owner/resolver/metadata сборку. Проверки metadata, chunks,
+request digest, method isolation, preview/download, revocation и boundary
+negatives остаются в прежних tests. Generated wire проверяется через bufconn с
+synthetic peer, без утверждения о реальном TLS handshake или live storage.
+Две прежние authorization clone groups устранены; в authorization0unresolved.
+
+AST/directives14 comments-only файлов совпали с исходным SHA. Два test файла
+сверены с ожидаемыми replacements/import cleanup; их полный diff и неизменные
+bindings/assertions прочитаны. Существующие SQL, embedded fixtures, политики,
+сами production predicates, API и директивы не менялись.
+
+Полные локальные GOWORK=off build/unit control-plane — PASS; отдельный свежий
+полный authorization test — PASS. Первичный unit запуск выявил оставшийся
+unused import после переноса TLS fixture; импорт удалён и полный запуск
+повторён успешно. Этот первичный FAIL не выдаётся за PASS. Флаги real-API orphan
+и все три migration-test DSN явно удалены из окружения теста; эти четыре
+внешних контура SKIP/NOT RUN. Fake Kubernetes, synthetic peers и bufconn не
+обращаются к живому кластеру, базе либо credentials.
+
+Context7: grpc-go wrapped ServerStream context/RecvMsg/SendMsg/interceptors;
+goose SetBaseFS, embedded migrations и context-aware Up/UpTo/GetDBVersion.
+5 exact-ignore guards и diff check — PASS. Registry/detector не менялись.
+Полный scan:6661 own sources,222 excluded,1790 raw,815 retained,975 unresolved.
+Комментарии сделали видимым ещё одно прежнее совпадение Deployment readiness;
+оно остаётся unresolved вместе с admission/publication совпадениями email и
+integration, без нового ignore или формального закрытия.
+Merge/deploy/startup, image build, browser и ручной QA — NOT RUN; вся задача
+#1823 продолжается с сохранённым разрешением владельца на последующий выпуск.
 
 ## Общие проекции integration candidates и оставшиеся локальные клиенты — 24.10.2026
 

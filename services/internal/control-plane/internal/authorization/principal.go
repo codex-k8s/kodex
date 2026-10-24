@@ -12,11 +12,22 @@ import (
 )
 
 const (
-	expectedAudience   = "urn:kodex:internal-rpc:control-plane"
+	// expectedAudience pins the control-plane audience required when converting a verified legacy
+	// authorization context into a domain principal.
+	// expectedAudience закрепляет audience control-plane при преобразовании проверенного legacy
+	// authorization context в доменный principal.
+	expectedAudience = "urn:kodex:internal-rpc:control-plane"
+	// expectedWorkloadID pins the target workload accepted by the verified-context fallback; caller
+	// payload cannot override this target.
+	// expectedWorkloadID закрепляет target workload для fallback проверенного context; caller payload
+	// не может заменить эту цель.
 	expectedWorkloadID = "control-plane"
 )
 
-// TrustedPrincipal не разрешает включить доверенный профиль входным payload.
+// TrustedPrincipal requires an already resolved trusted-cluster profile before the method-bound
+// principal lookup, so payload or unverified metadata cannot enable that profile.
+// TrustedPrincipal требует уже разрешённый профиль trusted-cluster до method-bound поиска
+// principal, поэтому payload либо непроверенные metadata не включают этот профиль.
 func TrustedPrincipal(ctx context.Context, fullMethod string) (value.Principal, error) {
 	resolved, ok := ctx.Value(resolvedPrincipalKey{}).(resolvedPrincipal)
 	if !ok || resolved.profile != transportprofile.TrustedCluster {
@@ -25,6 +36,12 @@ func TrustedPrincipal(ctx context.Context, fullMethod string) (value.Principal, 
 	return Principal(ctx, fullMethod)
 }
 
+// Principal returns a validated exact-method resolved identity or converts the verified authority
+// context with fixed target/audience checks, copying AMR and treating project as a locator rather
+// than self-assigned authority.
+// Principal возвращает проверенную разрешённую identity точного метода либо преобразует verified
+// authority context с фиксированными target и audience, копируя AMR и считая project locator, а не
+// самостоятельно выданным полномочием.
 func Principal(ctx context.Context, fullMethod string) (value.Principal, error) {
 	if resolved, ok := ctx.Value(resolvedPrincipalKey{}).(resolvedPrincipal); ok {
 		if resolved.method != fullMethod || resolved.principal.Validate() != nil {

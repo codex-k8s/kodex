@@ -17,6 +17,10 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// projectionFixture loads the contract example and seeds a fake client with a prior configuration
+// plus synthetic credential bytes, without accessing a real Secret.
+// projectionFixture загружает contract example и подготавливает fake client прежней configuration
+// и синтетическими credential bytes без доступа к реальному Secret.
 func projectionFixture(t *testing.T) (*Kubernetes, *fake.Clientset, api.Configuration) {
 	t.Helper()
 	raw, err := os.ReadFile("../../../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
@@ -55,6 +59,12 @@ func projectionFixture(t *testing.T) (*Kubernetes, *fake.Clientset, api.Configur
 	return publisher, client, configuration
 }
 
+// TestPublishExactSnapshotAndNoCredentialMutation checks exact publication/readback, unchanged
+// credential bytes, read-only identical replay and rejection of rollback or same-revision
+// equivocation on a fake client.
+// TestPublishExactSnapshotAndNoCredentialMutation проверяет точные publication и readback,
+// неизменные credential bytes, read-only идентичный replay и отказ rollback либо same-revision
+// equivocation через fake client.
 func TestPublishExactSnapshotAndNoCredentialMutation(t *testing.T) {
 	publisher, client, configuration := projectionFixture(t)
 	ctx := context.Background()
@@ -88,6 +98,12 @@ func TestPublishExactSnapshotAndNoCredentialMutation(t *testing.T) {
 	}
 }
 
+// TestPublishRequiresExactCredentialsAndExistingSeed rejects absent/corrupt seeded state and
+// missing, empty, changed or wrong-generation credential material before any mutation in each fake
+// scenario.
+// TestPublishRequiresExactCredentialsAndExistingSeed отклоняет отсутствующее либо повреждённое
+// seeded состояние и missing, empty, changed либо wrong-generation credential material до мутации
+// каждого fake сценария.
 func TestPublishRequiresExactCredentialsAndExistingSeed(t *testing.T) {
 	for _, mode := range []string{"missing", "generation", "empty", "changed-value", "absent-secret", "corrupt-document"} {
 		t.Run(mode, func(t *testing.T) {
@@ -127,6 +143,10 @@ func TestPublishRequiresExactCredentialsAndExistingSeed(t *testing.T) {
 	}
 }
 
+// TestPublishReadbackRejectsLostUpdate simulates a successful update acknowledgement without
+// serving the update and requires exact readback to reject it.
+// TestPublishReadbackRejectsLostUpdate имитирует успешное подтверждение update без обслуживания
+// изменения и требует его отклонения точным readback.
 func TestPublishReadbackRejectsLostUpdate(t *testing.T) {
 	publisher, client, configuration := projectionFixture(t)
 	client.PrependReactor("update", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -137,6 +157,10 @@ func TestPublishReadbackRejectsLostUpdate(t *testing.T) {
 	}
 }
 
+// TestEmptyProjectionNeedsNoFakeCredential checks a configuration with no mailboxes publishes
+// using only the document entry without manufacturing unused credential material.
+// TestEmptyProjectionNeedsNoFakeCredential проверяет публикацию configuration без mailboxes только
+// с document entry без создания неиспользуемого credential material.
 func TestEmptyProjectionNeedsNoFakeCredential(t *testing.T) {
 	publisher, client, configuration := projectionFixture(t)
 	configuration.Mailboxes = []api.Mailbox{}
@@ -151,6 +175,10 @@ func TestEmptyProjectionNeedsNoFakeCredential(t *testing.T) {
 	}
 }
 
+// TestCredentialKeyRejectsPathsAndSeparatesGenerations checks malformed credential locators/zero
+// generation are rejected and a valid descriptor yields the exact generation-qualified key.
+// TestCredentialKeyRejectsPathsAndSeparatesGenerations проверяет отказ неверным credential
+// locators и нулевому generation и точный generation-qualified key корректного descriptor.
 func TestCredentialKeyRejectsPathsAndSeparatesGenerations(t *testing.T) {
 	for _, name := range []string{"", "../secret", "ca.1", "ca/1"} {
 		if _, err := CredentialKey(api.Descriptor{Name: name, Generation: 1}); err == nil {
@@ -166,6 +194,10 @@ func TestCredentialKeyRejectsPathsAndSeparatesGenerations(t *testing.T) {
 	}
 }
 
+// fixtureCredentialDigests hashes only the constant synthetic fixture bytes and associates that
+// digest with each declared endpoint descriptor.
+// fixtureCredentialDigests хеширует только постоянные синтетические fixture bytes и связывает
+// digest с каждым объявленным endpoint descriptor.
 func fixtureCredentialDigests(configuration api.Configuration) map[string]string {
 	digest := sha256.Sum256([]byte("synthetic-fixture-material"))
 	result := map[string]string{}
