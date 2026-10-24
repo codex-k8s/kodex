@@ -15,15 +15,44 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantConfigurationComponentConversationScope embeds conversation project and latest
+// exact assistant-plan event project readback to prove targeted project effects do not rebind a
+// global source conversation.
+// queryAssistantConfigurationComponentConversationScope встраивает readback conversation project и
+// project последнего точного assistant-plan event для проверки, что целевые project effects не
+// перепривязывают global source conversation.
+//
 //go:embed testdata/sql/assistant_configuration_component_conversation_scope.sql
 var queryAssistantConfigurationComponentConversationScope string
 
+// queryAssistantConfigurationComponentMembership embeds revocation of active synthetic actor
+// bindings and returns their references for exact restoration; it runs only in the disposable
+// component fixture.
+// queryAssistantConfigurationComponentMembership встраивает отзыв active synthetic actor bindings
+// и возвращает ссылки для точного восстановления; выполняется только в одноразовой component
+// fixture.
+//
 //go:embed testdata/sql/assistant_configuration_component_membership.sql
 var queryAssistantConfigurationComponentMembership string
 
+// queryAssistantConfigurationComponentMembershipRestore embeds restoration of only the previously
+// revoked tenant/subject/reference binding set, preserving unrelated membership state.
+// queryAssistantConfigurationComponentMembershipRestore встраивает восстановление лишь ранее
+// отозванного tenant/subject/reference набора bindings, сохраняя несвязанные membership state.
+//
 //go:embed testdata/sql/assistant_configuration_component_membership_restore.sql
 var queryAssistantConfigurationComponentMembershipRestore string
 
+// testAssistantProjectConfiguration selects an eligible project assistant, checks owner-pinned
+// environment/instruction/binding/model proposals in multiple compound orders, and verifies
+// canonical published environment binding/readback and instruction events. It checks global source
+// conversation/event scope, revoked owner before replay/OCC and mixed/system locator denials; all
+// effects require the external disposable repository suite, with no real provider or image build.
+// testAssistantProjectConfiguration выбирает допустимого project assistant, проверяет owner-pinned
+// environment/instruction/binding/model proposals в разных compound orders и канонические
+// published environment binding/readback и instruction events. Проверяет global source
+// conversation/event scope, revoked owner до replay/OCC и отказы mixed/system locators; все
+// эффекты требуют внешнего одноразового repository suite без реального provider либо image build.
 func testAssistantProjectConfiguration(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner, worker, reader value.Principal, lease map[string]any, sourceScope string, sourceProjectRefs ...string) {
 	t.Helper()
 	prefix := "helper-project-configuration-" + sourceScope

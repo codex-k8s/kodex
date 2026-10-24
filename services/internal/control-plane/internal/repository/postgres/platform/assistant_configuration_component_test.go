@@ -20,29 +20,78 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantConfigurationComponentRevision embeds the exact lease runtime-revision safe
+// snapshot read used to prove configuration changes leave an active immutable revision untouched.
+// queryAssistantConfigurationComponentRevision встраивает чтение safe snapshot точной lease
+// runtime-revision для проверки, что изменение конфигурации не переписывает активную immutable
+// revision.
+//
 //go:embed testdata/sql/assistant_configuration_component_revision.sql
 var queryAssistantConfigurationComponentRevision string
 
+// queryAssistantConfigurationComponentEffects embeds synthetic audit/receipt/recipe/build/outbox
+// counters; the first four are tenant-scoped while the outbox counter is global to the disposable
+// database.
+// queryAssistantConfigurationComponentEffects встраивает синтетические
+// audit/receipt/recipe/build/outbox счётчики; первые четыре ограничены tenant, outbox глобален в
+// одноразовой БД.
+//
 //go:embed testdata/sql/assistant_configuration_component_effects.sql
 var queryAssistantConfigurationComponentEffects string
 
+// queryAssistantConfigurationComponentProfileBump embeds a forward profile
+// version/runtime-revision bump for stale-plan component fixtures, not a production operator
+// command.
+// queryAssistantConfigurationComponentProfileBump встраивает продвижение profile
+// version/runtime-revision для stale-plan component fixtures, а не production operator command.
+//
 //go:embed testdata/sql/assistant_configuration_component_profile_bump.sql
 var queryAssistantConfigurationComponentProfileBump string
 
+// queryAssistantConfigurationComponentProfileClone embeds creation of an alternative enabled
+// synthetic runtime profile preserving source provider/model/resource settings for selection-drift
+// tests.
+// queryAssistantConfigurationComponentProfileClone встраивает создание альтернативного включённого
+// синтетического runtime profile с сохранением source provider/model/resource settings для
+// selection-drift tests.
+//
 //go:embed testdata/sql/assistant_configuration_component_profile_clone.sql
 var queryAssistantConfigurationComponentProfileClone string
 
+// queryAssistantConfigurationComponentAccountBindingConstraint embeds read-only inspection of the
+// validated access-binding constraint, checking the account migration did not widen unrelated
+// resource kinds.
+// queryAssistantConfigurationComponentAccountBindingConstraint встраивает read-only проверку
+// валидированного access-binding constraint, подтверждающую, что account migration не расширила
+// несвязанные resource kinds.
+//
 //go:embed testdata/sql/assistant_configuration_component_account_binding_constraint.sql
 var queryAssistantConfigurationComponentAccountBindingConstraint string
 
+// queryAssistantCurrentConfigurationExpire embeds a disposable claimed-lease expiry mutation
+// returning its original expiry for later restoration; no production lease is targeted.
+// queryAssistantCurrentConfigurationExpire встраивает изменение expiry одноразового claimed-lease
+// с возвратом прежнего expiry для восстановления; production lease не затрагивается.
+//
 //go:embed testdata/sql/assistant_current_configuration_expire.sql
 var queryAssistantCurrentConfigurationExpire string
 
+// queryAssistantCurrentConfigurationRestoreExpiry embeds restoration of the exact claimed fixture
+// lease expiry after negative read checks; callers verify affected rows where required.
+// queryAssistantCurrentConfigurationRestoreExpiry встраивает восстановление expiry точного claimed
+// fixture lease после негативных read checks; callers проверяют affected rows там, где требуется.
+//
 //go:embed testdata/sql/assistant_current_configuration_restore_expiry.sql
 var queryAssistantCurrentConfigurationRestoreExpiry string
 
-// Сценарий вызывается публичной обязательной profile suite; callbacks только
-// синтетические, provider и пользовательский браузер не используются.
+// testAssistantRecipeCatalogEnvironmentKey checks one exact scoped recipe discovery entry retains
+// persisted environment/owner/version/generation and excludes artifact-only
+// reference/digest/inventory metadata. It uses the supplied component lease and no browser or
+// provider calls.
+// testAssistantRecipeCatalogEnvironmentKey проверяет, что точная scoped recipe discovery entry
+// сохраняет persisted environment/owner/version/generation и исключает artifact-only
+// reference/digest/inventory metadata. Использует переданный component lease без browser либо
+// provider calls.
 func testAssistantRecipeCatalogEnvironmentKey(t *testing.T, ctx context.Context, service *platformservice.Service, reader value.Principal, lease map[string]any, recipe entity.RoleImageRecipe) {
 	t.Helper()
 	result, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64),
@@ -58,6 +107,18 @@ func testAssistantRecipeCatalogEnvironmentKey(t *testing.T, ctx context.Context,
 	}
 }
 
+// testAssistantConfigurationPipeline exercises SYSTEM/PROJECT lease-bound catalogs, safe own
+// metadata, account eligibility, exact runtime/profile/catalog pins, no-change filtering, owner
+// edits, stale refresh and lost-ACK replay. Compound plan rollback and image catalog repair verify
+// immutable revisions/lineage and revoked-owner denial using synthetic callbacks/fixtures. It
+// requires the external disposable PostgreSQL profile suite and does not itself build images,
+// contact providers or perform browser acceptance.
+// testAssistantConfigurationPipeline проверяет SYSTEM/PROJECT lease-bound catalogs, safe own
+// metadata, account eligibility, точные runtime/profile/catalog pins, no-change filtering, owner
+// edits, stale refresh и lost-ACK replay. Compound plan rollback и image catalog repair сверяют
+// immutable revisions/lineage и отказ revoked-owner через synthetic callbacks/fixtures. Требует
+// внешний одноразовый PostgreSQL profile suite, сам не собирает images, не обращается к providers
+// и не выполняет browser acceptance.
 func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner, worker, reader value.Principal, lease map[string]any, sourceScope string) {
 	t.Helper()
 	prefix := "helper-configuration-" + sourceScope

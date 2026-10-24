@@ -21,6 +21,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// changeSchedule handles typed schedule create/update/enable/archive/delete inside the caller
+// transaction. It normalizes timing/content, pins eligible project targets and immutable
+// revisions, checks locked OCC/state and cancels claimed occurrences on
+// update/archive/delete/disable. Delete requires ARCHIVED; the returned outcome carries
+// SCHEDULE_CHANGED metadata without committing or launching a run.
+// changeSchedule обрабатывает типизированные schedule create/update/enable/archive/delete в
+// транзакции caller. Нормализует время/содержимое, закрепляет допустимые project targets и
+// immutable revisions, проверяет locked OCC/state и отменяет claimed occurrences при
+// update/archive/delete/disable. Delete требует ARCHIVED; возвращаемый outcome несёт
+// SCHEDULE_CHANGED metadata без commit или запуска run.
 func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ScheduleInput)
 	if !ok {
@@ -131,28 +141,14 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		if storedState != "ARCHIVED" {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		var deletedInput []byte
-		if err := tx.QueryRow(ctx, queryConfigurationChangescheduleDeleteSchedule, pgx.StrictNamedArgs{
+		changedProjectID, changedProjectRef, changeErr := finishScheduleLifecycleMutation(ctx, tx, scheduleID, tx.QueryRow(ctx, queryConfigurationChangescheduleDeleteSchedule, pgx.StrictNamedArgs{
 			"organization_id": scope.organizationID, "schedule_ref": payload.Ref,
 			"expected_version": *input.Mutation.ExpectedVersion,
-		}).Scan(
-			&projectID, &projectRef, &item.Ref, &item.Name, &item.Target.Type, &item.Target.Ref,
-			&item.Preset, &item.CronExpression, &item.Timezone, &deletedInput,
-			&item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled,
-			&item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt,
-		); errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrVersionMismatch
-		} else if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+		}), &item)
+		if changeErr != nil {
+			return commandOutcome{}, changeErr
 		}
-		if _, err := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences,
-			pgx.StrictNamedArgs{"schedule_id": scheduleID}); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		item.ProjectRef = projectRef
-		if json.Unmarshal(deletedInput, &item.Input) != nil || attachScheduleDisplay(&item) != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
+		projectID, projectRef = changedProjectID, changedProjectRef
 		return scheduleCommandOutcome(item, projectID, projectRef, "i18n:SCHEDULE_DELETED"), nil
 	}
 	if storedState == "ARCHIVED" {
@@ -160,25 +156,11 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	}
 	summary := "i18n:SCHEDULE_UPDATED"
 	if input.Kind == command.ArchiveSchedule {
-		var archivedInput []byte
-		if err := tx.QueryRow(ctx, queryConfigurationChangescheduleArchiveSchedule, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(
-			&projectID, &projectRef, &item.Ref, &item.Name, &item.Target.Type, &item.Target.Ref,
-			&item.Preset, &item.CronExpression, &item.Timezone, &archivedInput,
-			&item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled,
-			&item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt,
-		); errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrVersionMismatch
-		} else if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+		changedProjectID, changedProjectRef, changeErr := finishScheduleLifecycleMutation(ctx, tx, scheduleID, tx.QueryRow(ctx, queryConfigurationChangescheduleArchiveSchedule, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion), &item)
+		if changeErr != nil {
+			return commandOutcome{}, changeErr
 		}
-		if _, err := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences,
-			pgx.StrictNamedArgs{"schedule_id": scheduleID}); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		item.ProjectRef = projectRef
-		if json.Unmarshal(archivedInput, &item.Input) != nil || attachScheduleDisplay(&item) != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
+		projectID, projectRef = changedProjectID, changedProjectRef
 		item.NextActions = []string{"OPEN"}
 		summary = "i18n:SCHEDULE_ARCHIVED"
 	} else if input.Kind == command.UpdateSchedule {
@@ -269,6 +251,12 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	return scheduleCommandOutcome(item, projectID, projectRef, summary), nil
 }
 
+// scheduleRevisionDigest hashes the fixed typed schedule revision envelope as lowercase SHA-256,
+// including target version/digest, policies and both input maps. It returns JSON marshal errors
+// rather than silently hashing fallback bytes; identity and authority are checked separately.
+// scheduleRevisionDigest хеширует фиксированный типизированный schedule revision envelope строчным
+// SHA-256, включая target version/digest, policies и обе input maps. Возвращает ошибки JSON
+// marshal вместо хеширования fallback bytes; identity и authority проверяются отдельно.
 func scheduleRevisionDigest(payload command.ScheduleInput) (string, error) {
 	encoded, err := json.Marshal(struct {
 		Name, TargetType, TargetRef, Preset, CronExpression, Timezone             string
@@ -291,6 +279,12 @@ func scheduleRevisionDigest(payload command.ScheduleInput) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// scheduleCommandOutcome projects current revision policies/content pins onto a copied schedule
+// and builds audit/event routing. Empty/ACTIVE lifecycle state becomes ACTIVE or PAUSED according
+// to Enabled; terminal lifecycle labels are preserved. It does not emit the event.
+// scheduleCommandOutcome проецирует current revision policies/content pins в копию schedule и
+// строит audit/event routing. Пустое/ACTIVE lifecycle state становится ACTIVE либо PAUSED по
+// Enabled; terminal lifecycle labels сохраняются. Само событие не создаётся.
 func scheduleCommandOutcome(item entity.Schedule, projectID, projectRef, summary string) commandOutcome {
 	item.DSTGapPolicy, item.DSTFoldPolicy = item.CurrentRevision.DSTGapPolicy, item.CurrentRevision.DSTFoldPolicy
 	item.MisfirePolicy, item.OverlapPolicy = item.CurrentRevision.MisfirePolicy, item.CurrentRevision.OverlapPolicy
@@ -316,18 +310,17 @@ func scheduleCommandOutcome(item entity.Schedule, projectID, projectRef, summary
 	}
 }
 
+// normalizeScheduleInput validates a local copy of schedule name, automation text, prompt inputs,
+// target and session/notification policies, then normalizes timing after the supplied instant.
+// Empty automation falls back to legacy input.task then name; only timing normalization is
+// returned, so the caller separately applies content defaults.
+// normalizeScheduleInput проверяет локальную копию schedule name, automation text, prompt inputs,
+// target и session/notification policies, затем нормализует время после переданного момента.
+// Пустой automation использует legacy input.task, затем name; возвращается только timing
+// normalization, поэтому caller отдельно применяет content defaults.
 func normalizeScheduleInput(payload command.ScheduleInput, after time.Time) (scheduleservice.Normalized, error) {
 	payload.Name = strings.TrimSpace(payload.Name)
-	payload.AutomationText = strings.TrimSpace(payload.AutomationText)
-	if payload.AutomationText == "" {
-		payload.AutomationText, _ = payload.Input["task"].(string)
-		if strings.TrimSpace(payload.AutomationText) == "" {
-			payload.AutomationText = payload.Name
-		}
-	}
-	if payload.PromptInputs == nil {
-		payload.PromptInputs = map[string]any{}
-	}
+	applyScheduleContentDefaults(&payload)
 	if payload.Name == "" || len(payload.Name) > 160 || payload.AutomationText == "" || len(payload.AutomationText) > 32768 ||
 		!validBoundedRunInput(payload.PromptInputs) || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || !contains([]string{"NEW_EACH_RUN", "CONTINUE_ONE"}, payload.SessionPolicy) || !contains([]string{"CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"}, payload.NotificationPolicy) {
 		return scheduleservice.Normalized{}, errs.ErrInvalid
@@ -344,6 +337,12 @@ func normalizeScheduleInput(payload command.ScheduleInput, after time.Time) (sch
 	return normalized, nil
 }
 
+// applyNormalizedSchedulePolicies copies normalized preset/timezone/DST/misfire/overlap policies
+// into the payload and applies the same automation/prompt defaults used for validation.
+// Cron/display fields are assigned by callers; no target eligibility or persistence occurs.
+// applyNormalizedSchedulePolicies копирует нормализованные preset/timezone/DST/misfire/overlap
+// policies в payload и применяет те же automation/prompt defaults, что при validation.
+// Cron/display fields назначают callers; target eligibility или сохранение не выполняются.
 func applyNormalizedSchedulePolicies(payload *command.ScheduleInput, normalized scheduleservice.Normalized) {
 	payload.Preset = normalized.Preset
 	payload.Timezone = normalized.Timezone
@@ -351,18 +350,16 @@ func applyNormalizedSchedulePolicies(payload *command.ScheduleInput, normalized 
 	payload.DSTFoldPolicy = normalized.DSTFoldPolicy
 	payload.MisfirePolicy = normalized.MisfirePolicy
 	payload.OverlapPolicy = normalized.OverlapPolicy
-	payload.AutomationText = strings.TrimSpace(payload.AutomationText)
-	if payload.AutomationText == "" {
-		payload.AutomationText, _ = payload.Input["task"].(string)
-		if strings.TrimSpace(payload.AutomationText) == "" {
-			payload.AutomationText = payload.Name
-		}
-	}
-	if payload.PromptInputs == nil {
-		payload.PromptInputs = map[string]any{}
-	}
+	applyScheduleContentDefaults(payload)
 }
 
+// validateScheduleTarget reads only a ready enabled nonsystem project agent or a published project
+// workflow revision, returning the server version/digest. Unsupported kinds are Invalid, absent
+// targets NotFound and read failure Unavailable; this does not launch or grant target authority.
+// validateScheduleTarget читает только ready enabled nonsystem project agent либо published
+// project workflow revision, возвращая серверные version/digest. Неподдерживаемый kind даёт
+// Invalid, отсутствие target NotFound, ошибка чтения Unavailable; не запускает target и не выдаёт
+// authority.
 func (repository *Repository) validateScheduleTarget(ctx context.Context, tx pgx.Tx, organizationID, projectID string, target entity.RunTarget) (int64, string, error) {
 	query := queryConfigurationChangescheduleSelectAgentTarget
 	if target.Type == "WORKFLOW" {
@@ -381,6 +378,10 @@ func (repository *Repository) validateScheduleTarget(ctx context.Context, tx pgx
 	return version, digest, nil
 }
 
+// attachScheduleDisplay derives display time/day from persisted preset/cron and mutates those
+// fields only after successful parsing, returning the original display error.
+// attachScheduleDisplay выводит отображаемые time/day из сохранённых preset/cron и меняет эти поля
+// лишь после успешного разбора, возвращая исходную display error.
 func attachScheduleDisplay(item *entity.Schedule) error {
 	timeOfDay, dayOfWeek, err := scheduleservice.Display(item.Preset, item.CronExpression)
 	if err != nil {
@@ -391,6 +392,16 @@ func attachScheduleDisplay(item *entity.Schedule) error {
 	return nil
 }
 
+// changeConnection routes specialized grant commands and otherwise handles typed connection
+// creation, update/delete, credential projection, asynchronous test admission or enablement.
+// Existing-connection paths first cancel/revoke write-back claims; disable also cancels
+// interaction intents, grants and tests. Package pins/OCC/credential descriptors are validated
+// without reading secret values or performing a provider health call here.
+// changeConnection направляет специализированные grant commands и иначе обрабатывает
+// типизированные connection creation, update/delete, credential projection, допуск асинхронного
+// test либо enablement. Пути существующего connection сначала отменяют/отзывают write-back claims;
+// disable также отменяет interaction intents, grants и tests. Package pins/OCC/credential
+// descriptors проверяются без чтения secret values или health-вызова провайдера здесь.
 func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	if input.Kind == command.ChangeIntegrationGrant || input.Kind == command.ChangeSystemAssistantIntegrationGrant || input.Kind == command.ChangeProjectAssistantIntegrationGrant {
 		return repository.changeIntegrationGrant(ctx, tx, scope, input)
@@ -564,12 +575,24 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CONNECTION_UPDATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 }
 
+// lockedIntegrationConnection holds the locked connection identity, lifecycle/runtime state,
+// enablement, OCC version and exact definition pins needed for update/delete/credential/test
+// decisions; no credential value is stored.
+// lockedIntegrationConnection хранит заблокированные connection identity, lifecycle/runtime state,
+// enablement, OCC version и точные definition pins для update/delete/credential/test решений;
+// credential value не хранится.
 type lockedIntegrationConnection struct {
 	id, definitionKey, lifecycleState, state, definitionVersion, definitionDigest string
 	enabled                                                                       bool
 	version                                                                       int64
 }
 
+// lockIntegrationConnection locks the exact active tenant/ref connection and reads eight
+// lifecycle/definition fields. Missing rows return zero/NotFound and scan failures
+// zero/Unavailable; the caller retains transaction ownership.
+// lockIntegrationConnection блокирует точный active tenant/ref connection и читает восемь
+// lifecycle/definition fields. Отсутствие строки возвращает zero/NotFound, scan failure
+// zero/Unavailable; транзакцией владеет caller.
 func (repository *Repository) lockIntegrationConnection(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -589,6 +612,12 @@ func (repository *Repository) lockIntegrationConnection(
 	return item, nil
 }
 
+// integrationConnectionDependencies counts active tests/invocations/deliveries and enabled grants
+// for an already resolved connection ID. Query failure returns zero counts with Unavailable; zero
+// counts are not themselves authorization.
+// integrationConnectionDependencies считает активные tests/invocations/deliveries и enabled grants
+// уже разрешённого connection ID. Ошибка запроса возвращает нулевые счётчики с Unavailable;
+// нулевые счётчики сами не являются authorization.
 func (repository *Repository) integrationConnectionDependencies(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -602,6 +631,14 @@ func (repository *Repository) integrationConnectionDependencies(
 	return effects, grants, nil
 }
 
+// updateIntegrationConnection locks tenant connection/OCC, validates the pinned actual package and
+// string configuration and rejects TESTING or active effects. It updates metadata, revokes
+// grants/tests and rereads the canonical connection in the same transaction; package/configuration
+// errors retain the existing Invalid mapping.
+// updateIntegrationConnection блокирует tenant connection/OCC, проверяет закреплённый фактический
+// package и string configuration, отклоняет TESTING либо active effects. Обновляет metadata,
+// отзывает grants/tests и перечитывает канонический connection в той же транзакции;
+// package/configuration errors сохраняют прежнее отображение в Invalid.
 func (repository *Repository) updateIntegrationConnection(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -661,6 +698,14 @@ func (repository *Repository) updateIntegrationConnection(
 	}, nil
 }
 
+// deleteIntegrationConnection requires exact locked OCC, disabled DISABLED state and no active
+// effects or enabled grants before the logical delete. It preserves the readable prior connection
+// metadata, replaces lifecycle/version/time, clears next actions and returns a DELETED event
+// outcome without committing.
+// deleteIntegrationConnection требует точные locked OCC, disabled DISABLED state и отсутствие
+// active effects либо enabled grants перед логическим delete. Сохраняет прежние доступные
+// connection metadata, заменяет lifecycle/version/time, очищает next actions и возвращает DELETED
+// event outcome без commit.
 func (repository *Repository) deleteIntegrationConnection(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -706,6 +751,16 @@ func (repository *Repository) deleteIntegrationConnection(
 	}, nil
 }
 
+// changeIntegrationGrant resolves ordinary or specialized assistant grant input, rechecks
+// authority after connection locking and before OCC, and validates exact
+// capability/approval/resource-scope pins and idle policy changes. It enables/revokes the grant,
+// cancels interaction/write-back work, increments connection version and advances mailbox
+// observation atomically in the caller transaction.
+// changeIntegrationGrant разрешает обычный либо специализированный assistant grant input, повторно
+// проверяет authority после connection lock до OCC и сверяет точные
+// capability/approval/resource-scope pins и idle policy changes. Включает/отзывает grant, отменяет
+// interaction/write-back work, увеличивает connection version и продвигает mailbox observation
+// атомарно в транзакции caller.
 func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.IntegrationGrantInput)
 	var systemTarget systemAssistantIntegrationGrantTarget
@@ -851,6 +906,13 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	}
 	return commandOutcome{result: command.Result{Connection: &connection}, projectID: projectID, projectRef: projectRef, resourceKind: "INTEGRATION_GRANT", resourceRef: grantRef, summary: "i18n:INTEGRATION_GRANT_UPDATED", platformEvent: "INTEGRATION_GRANT_CHANGED"}, nil
 }
+
+// integrationStringConfiguration copies public configuration into a new string map, trimming
+// values and rejecting nonstrings or empty results; keys are unchanged and nil input yields an
+// empty nonnil map.
+// integrationStringConfiguration копирует public configuration в новую string map, обрезая пробелы
+// значений и отклоняя нестроковые либо пустые результаты; ключи неизменны, nil input даёт пустую
+// ненулевую map.
 func integrationStringConfiguration(input map[string]any) (map[string]string, bool) {
 	result := make(map[string]string, len(input))
 	for key, raw := range input {
@@ -864,6 +926,15 @@ func integrationStringConfiguration(input map[string]any) (map[string]string, bo
 	return result, true
 }
 
+// validIntegrationCredentialInput checks a new required credential descriptor has no assigned
+// revision identity, a UUID SecretUID, bounded resource version, lowercase SHA-256 and an exact
+// allowed SecretRef prefix/key shape. Optional credentials must be nil; this validates metadata
+// syntax without reading a Kubernetes Secret or proving materialization.
+// validIntegrationCredentialInput проверяет, что новый обязательный credential descriptor не имеет
+// назначенной revision identity и содержит UUID SecretUID, ограниченную resource version, строчный
+// SHA-256 и точные разрешённые SecretRef prefix/key shape. Необязательные credentials должны быть
+// nil; проверяет синтаксис metadata без чтения Kubernetes Secret или доказательства
+// materialization.
 func validIntegrationCredentialInput(required bool, credential *entity.IntegrationCredentialRevision) bool {
 	if !required {
 		return credential == nil
@@ -886,6 +957,15 @@ func validIntegrationCredentialInput(required bool, credential *entity.Integrati
 	return true
 }
 
+// validateIntegrationConfiguration normalizes at most fifty declared fields with a closed key set:
+// bounded trimmed TEXT, HTTPS authority-only URL and deduplicated ordered STRING_LIST. Missing
+// required fields, unsupported types or malformed values fail with nil/false; optional absent
+// fields remain absent and no network request occurs.
+// validateIntegrationConfiguration нормализует до пятидесяти объявленных fields с закрытым набором
+// ключей: ограниченный обрезанный TEXT, HTTPS URL только с authority и STRING_LIST с удалением
+// повторов при сохранении порядка. Отсутствие обязательного field, неподдерживаемый type либо
+// ошибочное значение дают nil/false; отсутствующие optional fields остаются отсутствующими,
+// сетевых запросов нет.
 func validateIntegrationConfiguration(fields []entity.IntegrationConfigurationField, input map[string]any) (map[string]any, bool) {
 	if len(fields) > 50 || len(input) > len(fields) {
 		return nil, false
@@ -957,6 +1037,12 @@ func validateIntegrationConfiguration(fields []entity.IntegrationConfigurationFi
 	return normalized, true
 }
 
+// changeAssistant dispatches only the closed set of conversation, turn, plan, owner-instruction
+// and recovery commands to their specialized handlers in the caller transaction; unknown kinds
+// return Invalid.
+// changeAssistant направляет только закрытый набор conversation, turn, plan, owner-instruction и
+// recovery commands специализированным handlers в транзакции caller; неизвестные kinds возвращают
+// Invalid.
 func (repository *Repository) changeAssistant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	switch input.Kind {
 	case command.CreateAssistantConversation:
@@ -988,6 +1074,14 @@ func (repository *Repository) changeAssistant(ctx context.Context, tx pgx.Tx, sc
 	}
 }
 
+// createAssistantConversation resolves project and canonical assistant identity, selects its
+// provider account, creates a model-catalog-bound session and authoritatively expands context
+// before inserting the conversation. Scope/profile are projected from server identity; no turn or
+// provider execution is started.
+// createAssistantConversation разрешает project и каноническую assistant identity, выбирает
+// provider account, создаёт связанную с model catalog session и авторитетно расширяет context до
+// вставки conversation. Scope/profile проецируются из серверной identity; turn или provider
+// execution не запускаются.
 func (repository *Repository) createAssistantConversation(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantConversationInput)
 	if !ok {
@@ -1043,6 +1137,14 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 	return commandOutcome{result: command.Result{Conversation: &item}, projectID: stringValue(projectID), projectRef: payload.ProjectRef, resourceKind: "ASSISTANT_CONVERSATION", resourceRef: ref, summary: "i18n:ASSISTANT_CONVERSATION_CREATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
+// resolveAssistantContext validates bounded paired context selectors, requires project.view when a
+// project is supplied and resolves name/version/allowed operations through the
+// tenant/actor/authority-project SQL projection. A conflicting resolved project is hidden as
+// NotFound; payload route/ref do not establish authority.
+// resolveAssistantContext проверяет ограниченные парные context selectors, требует project.view
+// при переданном project и разрешает name/version/allowed operations через
+// tenant/actor/authority-project SQL projection. Несовпавший resolved project скрывается как
+// NotFound; payload route/ref не устанавливают authority.
 func (repository *Repository) resolveAssistantContext(ctx context.Context, tx pgx.Tx, current scope, descriptor entity.AssistantContextDescriptor, projectRef string) (entity.AssistantContextDescriptor, error) {
 	if len(descriptor.Route) > 500 || len(descriptor.EntityKind) > 80 || len(descriptor.EntityRef) > 96 ||
 		(descriptor.EntityKind == "") != (descriptor.EntityRef == "") ||
@@ -1072,10 +1174,26 @@ func (repository *Repository) resolveAssistantContext(ctx context.Context, tx pg
 	return descriptor, nil
 }
 
+// addAssistantTurnCommand delegates ordinary turn creation with attachment snapshot reuse
+// disabled; canonical identity, readiness, context and lifecycle checks remain in the shared
+// specialized implementation.
+// addAssistantTurnCommand передаёт обычное создание turn с отключённым attachment snapshot reuse;
+// проверки канонических identity, readiness, context и lifecycle остаются в общей
+// специализированной реализации.
 func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	return repository.addAssistantTurnWithAttachmentPolicy(ctx, tx, scope, input, false)
 }
 
+// addAssistantTurnWithAttachmentPolicy validates content/delivery and rechecks conversation
+// assistant identity, environment readiness, optional OCC and session catalogs. INTERRUPT_ACTIVE
+// cancels the previous run before resolving fresh context and finalized attachment snapshots. It
+// creates linked run/turn/node state, advances session/conversation and emits TURN_QUEUED
+// atomically; the reuse flag only controls attachment snapshot policy, not authority.
+// addAssistantTurnWithAttachmentPolicy проверяет content/delivery и повторно сверяет conversation
+// assistant identity, environment readiness, optional OCC и session catalogs. INTERRUPT_ACTIVE
+// отменяет прежний run до разрешения свежего context и finalized attachment snapshots. Атомарно
+// создаёт связанные run/turn/node state, продвигает session/conversation и создаёт TURN_QUEUED;
+// reuse flag управляет лишь attachment snapshot policy, не authority.
 func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantTurnInput)
 	if !ok || payload.ConversationRef == "" || !runtimecontract.ValidAssistantTurnContent(payload.Content) ||
@@ -1224,6 +1342,12 @@ func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.C
 	return commandOutcome{result: result, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
+// cancelAssistantTurnCommand locks the conversation and requires exact OCC before cancelling its
+// active run through the canonical run command. It returns the run/cancelled readback and emits
+// assistant-change metadata only if a run was actually cancelled.
+// cancelAssistantTurnCommand блокирует conversation и требует точный OCC до отмены активного run
+// через каноническую run command. Возвращает run/cancelled readback и добавляет assistant-change
+// metadata только при фактической отмене run.
 func (repository *Repository) cancelAssistantTurnCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantTurnCancellationInput)
 	if !ok || payload.ConversationRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -1253,6 +1377,12 @@ func (repository *Repository) cancelAssistantTurnCommand(ctx context.Context, tx
 	return outcome, nil
 }
 
+// cancelActiveAssistantRun resolves the current active run/version and delegates CancelRun with
+// that OCC and reason. No active run is a successful empty/false result; lookup and lifecycle
+// failures propagate without inventing a cancellation.
+// cancelActiveAssistantRun разрешает текущий active run/version и передаёт CancelRun с этими OCC и
+// reason. Отсутствие active run успешно возвращает пустое значение/false; lookup и lifecycle
+// failures передаются без вымышленной отмены.
 func (repository *Repository) cancelActiveAssistantRun(ctx context.Context, tx pgx.Tx, scope scope, conversationRef, reason string) (string, bool, error) {
 	var runRef string
 	var runVersion int64
@@ -1272,6 +1402,22 @@ func (repository *Repository) cancelActiveAssistantRun(ctx context.Context, tx p
 	return runRef, true, nil
 }
 
+// applyAssistantPlanCommand requires a locked VALID plan with exact version/current validated
+// revision, constrains the verified owner scope and applies selected specialized commands inside
+// nested savepoints. It carries only server-observed connection/agent/binding versions, rechecks
+// immutable snapshots and rolls back all operation effects on conflict before writing
+// STALE/conflict receipt in the outer savepoint. Success records per-operation audits/events and
+// one APPLIED receipt; single-project creation may promote conversation lineage. Savepoint commits
+// do not commit the caller transaction, and historical ignored rollback failures outside the
+// explicit conflict branch remain unchanged.
+// applyAssistantPlanCommand требует заблокированный VALID plan с точными version/current validated
+// revision, ограничивает проверенный owner scope и применяет выбранные specialized commands во
+// вложенных savepoints. Переносит лишь наблюдённые сервером connection/agent/binding versions,
+// перепроверяет immutable snapshots и откатывает все operation effects при конфликте до записи
+// STALE/conflict receipt во внешнем savepoint. Успех сохраняет per-operation audits/events и одну
+// APPLIED receipt; создание единственного project может повысить conversation lineage. Savepoint
+// commits не фиксируют транзакцию caller, а прежние игнорируемые rollback failures вне явной
+// conflict branch сохранены.
 func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	// Исходный verified browser scope хранится отдельно. Только новая specialty
 	// использует его после owner gate; проектная граница остальных effects не меняется.
@@ -1582,6 +1728,12 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt, CreatedRefs: created}, projectID: mustProjectID(ctx, tx, scope.organizationID, responseConversationProjectRef), projectRef: responseConversationProjectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_APPLIED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
+// assistantPlanCreatesSingleProject returns true only when exactly one selected operation creates
+// a project; unselected operations are ignored and any other selected kind prevents conversation
+// promotion.
+// assistantPlanCreatesSingleProject возвращает true лишь когда ровно одна выбранная операция
+// создаёт project; невыбранные операции игнорируются, любой другой выбранный kind запрещает
+// conversation promotion.
 func assistantPlanCreatesSingleProject(operations []entity.AssistantPlanOperation) bool {
 	selected := 0
 	for _, operation := range operations {
@@ -1596,6 +1748,13 @@ func assistantPlanCreatesSingleProject(operations []entity.AssistantPlanOperatio
 	return selected == 1
 }
 
+// promoteAssistantConversationProject promotes the owned session, durable storage lineage and
+// conversation to the newly created project in order, checking returned identity/lineage proof
+// before emitting session-storage run changes. Caller transaction rollback retains atomicity
+// across all steps.
+// promoteAssistantConversationProject последовательно переводит собственные session, durable
+// storage lineage и conversation в новый project, проверяя возвращённые identity/lineage proof до
+// события session-storage run changes. Откат транзакции caller сохраняет атомарность всех шагов.
 func (repository *Repository) promoteAssistantConversationProject(ctx context.Context, tx pgx.Tx, scope scope,
 	conversationRef, projectID, projectRef string,
 ) error {
@@ -1623,6 +1782,10 @@ func (repository *Repository) promoteAssistantConversationProject(ctx context.Co
 	return repository.emitSessionStorageRunChanged(ctx, tx, scope, sessionID)
 }
 
+// valueOrNil projects an optional int64 pointer to its value or a nil interface for conflict
+// metadata without allocating authority or modifying the source.
+// valueOrNil проецирует необязательный int64 pointer в его значение либо nil interface для
+// conflict metadata без назначения authority или изменения исходника.
 func valueOrNil(value *int64) any {
 	if value == nil {
 		return nil
@@ -1630,6 +1793,12 @@ func valueOrNil(value *int64) any {
 	return *value
 }
 
+// assistantOperationConflict projects LAUNCH_RUN conflicts as runtime READY/UNAVAILABLE and other
+// kinds as expected-version/CHANGED, preserving operation/target locators and a fixed safe problem
+// code. It does not inspect a provider or prove the underlying cause.
+// assistantOperationConflict проецирует LAUNCH_RUN conflicts как runtime READY/UNAVAILABLE,
+// остальные kinds как expected-version/CHANGED, сохраняя operation/target locators и фиксированный
+// безопасный problem code. Не проверяет провайдера и не доказывает исходную причину.
 func assistantOperationConflict(operation entity.AssistantPlanOperation) (entity.AssistantPlanConflict, string) {
 	if operation.Type == "LAUNCH_RUN" {
 		return entity.AssistantPlanConflict{OperationRef: operation.Key, TargetRef: operation.Target.Ref,
@@ -1639,6 +1808,12 @@ func assistantOperationConflict(operation entity.AssistantPlanOperation) (entity
 		Field: "version", Expected: valueOrNil(operation.ExpectedVersion), Actual: "CHANGED"}, "operation-version-conflict"
 }
 
+// auditAssistantOperation allocates an audit reference and inserts one assistant-plan operation
+// record using resolved actor/project/resource metadata and conversation lineage. Entropy failure
+// propagates; SQL failure or a non-single affected row maps to Unavailable, without committing.
+// auditAssistantOperation назначает audit reference и вставляет одну assistant-plan operation
+// запись с разрешёнными actor/project/resource metadata и conversation lineage. Ошибка entropy
+// передаётся; SQL failure либо не одна затронутая строка дают Unavailable без commit.
 func (repository *Repository) auditAssistantOperation(ctx context.Context, tx pgx.Tx, scope scope, conversationRef string, outcome commandOutcome, action string) (string, error) {
 	ref, err := newRef("aud")
 	if err != nil {
@@ -1650,13 +1825,28 @@ func (repository *Repository) auditAssistantOperation(ctx context.Context, tx pg
 	}
 	return ref, nil
 }
+
+// nullUUID returns nil for an empty internal UUID string and otherwise preserves the string
+// unchanged for nullable SQL arguments; it does not validate UUID syntax.
+// nullUUID возвращает nil для пустой внутренней UUID string, иначе сохраняет строку для nullable
+// SQL arguments; синтаксис UUID не проверяет.
 func nullUUID(value string) any {
 	if value == "" {
 		return nil
 	}
 	return value
 }
+
+// timePointer returns a pointer to an independent copy of the supplied timestamp, preserving its
+// instant and location without reading the clock.
+// timePointer возвращает указатель на независимую копию переданного timestamp, сохраняя момент и
+// location без чтения часов.
 func timePointer(value time.Time) *time.Time { return &value }
+
+// stringValue returns a string dynamic value unchanged and maps nil or other types to empty; it
+// performs no formatting or validation.
+// stringValue возвращает строковое dynamic value без изменений, nil либо другие types отображает в
+// пустую строку; не форматирует и не проверяет значение.
 func stringValue(value any) string {
 	if value == nil {
 		return ""
@@ -1665,6 +1855,14 @@ func stringValue(value any) string {
 	return text
 }
 
+// updateAssistantInstructions checks typed owner instructions, expected version and the pre-trim
+// byte limit, updates organization runtime instructions with OCC and returns assistant-change
+// metadata. Resource-limit JSON decode errors remain ignored; system/nondeletable flags are set
+// without starting a runtime.
+// updateAssistantInstructions проверяет typed owner instructions, expected version и byte limit до
+// trim, обновляет organization runtime instructions с OCC и возвращает assistant-change metadata.
+// Ошибки resource-limit JSON decode по-прежнему игнорируются; system/nondeletable flags
+// назначаются без запуска runtime.
 func (repository *Repository) updateAssistantInstructions(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantInstructionsInput)
 	if !ok || input.Mutation.ExpectedVersion == nil || len(payload.Instructions) > 20000 {
@@ -1684,6 +1882,13 @@ func (repository *Repository) updateAssistantInstructions(ctx context.Context, t
 	assistant.Deletable = false
 	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "i18n:ASSISTANT_INSTRUCTIONS_UPDATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
+
+// recoverAssistant requires expected version, executes the canonical recovery-state reset and
+// rereads assistant metadata. Any reset SQL error or affected-row mismatch retains the existing
+// VersionMismatch result; this requests recovery rather than proving a restarted runtime.
+// recoverAssistant требует expected version, выполняет канонический recovery-state reset и
+// перечитывает assistant metadata. Любая reset SQL error либо affected-row mismatch сохраняет
+// прежний VersionMismatch; запрашивает восстановление, не доказывая перезапуск runtime.
 func (repository *Repository) recoverAssistant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	if input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
@@ -1698,6 +1903,14 @@ func (repository *Repository) recoverAssistant(ctx context.Context, tx pgx.Tx, s
 	}
 	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "i18n:ASSISTANT_RECOVERY_REQUESTED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
+
+// getAssistantTx reads organization system-assistant metadata and derives Ready only from
+// READY/BUSY plus a heartbeat less than45 seconds old. Resource-limit JSON errors remain ignored;
+// system/nondeletable flags and role-based action hints do not prove provider or environment
+// readiness.
+// getAssistantTx читает organization system-assistant metadata и выводит Ready лишь из READY/BUSY
+// и heartbeat моложе45 секунд. Ошибки resource-limit JSON игнорируются; system/nondeletable flags
+// и role-based action hints не доказывают provider либо environment readiness.
 func (repository *Repository) getAssistantTx(ctx context.Context, tx pgx.Tx, scope scope) (entity.SystemAssistant, error) {
 	var item entity.SystemAssistant
 	var limits []byte
@@ -1711,4 +1924,56 @@ func (repository *Repository) getAssistantTx(ctx context.Context, tx pgx.Tx, sco
 	item.Deletable = false
 	item.NextActions = assistantActions(scope.role, item.Ready)
 	return item, nil
+}
+
+// applyScheduleContentDefaults trims explicit automation text, falls back to the unchanged legacy
+// task string or name, and allocates prompt inputs only when nil. It intentionally retains legacy
+// task whitespace and caller map identity; validation and timing policies remain separate.
+// applyScheduleContentDefaults обрезает пробелы явного automation text, использует неизменённую
+// legacy task string либо name и создаёт prompt inputs только при nil. Намеренно сохраняет
+// пробелы legacy task и identity map caller; validation и timing policies остаются отдельными.
+func applyScheduleContentDefaults(payload *command.ScheduleInput) {
+	payload.AutomationText = strings.TrimSpace(payload.AutomationText)
+	if payload.AutomationText == "" {
+		payload.AutomationText, _ = payload.Input["task"].(string)
+		if strings.TrimSpace(payload.AutomationText) == "" {
+			payload.AutomationText = payload.Name
+		}
+	}
+	if payload.PromptInputs == nil {
+		payload.PromptInputs = map[string]any{}
+	}
+}
+
+// finishScheduleLifecycleMutation reads the shared nineteen-column archive/delete projection,
+// maps missing rows to VersionMismatch and other scan failures to Unavailable, then cancels
+// claimed occurrences and decodes input/display in the original order. Callers keep distinct
+// SQL/state/OCC/response policies; this helper neither checks authority nor commits. Errors return
+// zero project locators, and callers discard any partially populated internal schedule.
+// finishScheduleLifecycleMutation читает общую проекцию девятнадцати колонок archive/delete,
+// отображает отсутствие строки в VersionMismatch, прочие scan failures в Unavailable, затем
+// отменяет claimed occurrences и декодирует input/display в прежнем порядке. Callers сохраняют
+// разные SQL/state/OCC/response policies; helper не проверяет authority и не делает commit.
+// Ошибки возвращают пустые project locators; callers отбрасывают частично заполненный schedule.
+func finishScheduleLifecycleMutation(ctx context.Context, tx pgx.Tx, scheduleID string, row pgx.Row, item *entity.Schedule) (string, string, error) {
+	var projectID, projectRef string
+	var raw []byte
+	err := row.Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Target.Type, &item.Target.Ref,
+		&item.Preset, &item.CronExpression, &item.Timezone, &raw,
+		&item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled,
+		&item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", errs.ErrVersionMismatch
+	}
+	if err != nil {
+		return "", "", errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences, pgx.StrictNamedArgs{"schedule_id": scheduleID}); err != nil {
+		return "", "", errs.ErrUnavailable
+	}
+	item.ProjectRef = projectRef
+	if json.Unmarshal(raw, &item.Input) != nil || attachScheduleDisplay(item) != nil {
+		return "", "", errs.ErrUnavailable
+	}
+	return projectID, projectRef, nil
 }

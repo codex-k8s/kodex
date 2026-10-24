@@ -4,11 +4,70 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.383.0
+version: 1.384.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая конфигурация и component helpers помощников — 24.10.2026
+
+На основе `efd756f1f2486ad0c82ce4503c278117cf59644d` описано51 прежнее
+объявление четырёх Go-файлов: configuration36, runtime authority2 и два
+configuration component-файла9+4. Два новых helper также описаны;53/53
+объявления выбранных файлов имеют EN→RU комментарии. Общий inventory
+18885/21432, missing2547 — PostgreSQL adapter control-plane. Весь собственный
+assistant*configuration Go-набор теперь описан, включая component helpers;
+это не доказательство исполнения PostgreSQL-сценариев.
+
+`applyScheduleContentDefaults` объединяет прежние defaults validation и
+policy application: trim явного automation, fallback к неизменённому legacy
+input.task либо name, новая prompt map только при nil. Legacy task whitespace,
+map identity и разница локальной копии validation/указателя application
+сохранены. Timing/target eligibility и schedule digest не менялись.
+
+`finishScheduleLifecycleMutation` объединяет полный общий archive/delete
+хвост:19 Scan destinations → no-row VersionMismatch/прочие Unavailable →
+отмена claimed occurrences → input JSON/display. Разные SQL и их arguments,
+OCC/state checks, delete-only ARCHIVED prerequisite, response summary/actions
+и final outcome остаются у callers. Helper не выполняет authority check и
+не делает commit. При ошибке частичный внутренний schedule отбрасывается
+caller, как раньше; project locators возвращаются только при успехе.
+
+| Сценарий / lifecycle | Сохранённая граница |
+| --- | --- |
+| Schedule | Project target READY enabled nonsystem agent либо published workflow revision, immutable target version/digest и schedule revision; archive/delete/update/disable отменяют claimed occurrences. Digest сохраняет typed JSON и передаёт marshal error |
+| Connection | Публичная configuration и exact actual package pins, OCC, active effect dependencies; credential descriptor проверяется без secret values. TestConnection допускает асинхронный READ health test, не выполняет сетевую проверку здесь |
+| Grant / withdrawal | Specialized assistant input и повтор authority после connection lock до OCC; exact capability/approval/resource-scope pins. Grant mutation отзывает interaction/write-back work, продвигает connection version и mailbox observation в одной TX |
+| Conversation / turn | Canonical assistant identity и model-catalog-bound session, fresh context/allowed operations, runtime readiness и finalized attachments. Interrupt отменяет прежний run до нового; run/turn/node/attachment links и TURN_QUEUED фиксируются в caller TX |
+| Plan apply | VALID plan/version/revision, server-owned scope, specialized snapshot checks и nested savepoints. Переносятся лишь фактически применённые connection/agent/binding versions; conflict откатывает operation effects и сохраняет STALE/receipt. Savepoint commit не является outer transaction commit |
+| Single-project promotion | Ровно один выбранный CREATE_PROJECT разрешает перевод session/storage lineage/conversation; identity/lineage proof и session-storage event сохраняются |
+| Runtime authority / recovery | SYSTEM использует organization.manage вместо project permission. Recovery request не доказывает перезапуск. Ready в getAssistantTx — лишь READY/BUSY и heartbeat threshold; ignored resource-limit JSON decode и некоторые rollback errors не исправлялись |
+| Component fixtures | SYSTEM/PROJECT catalogs, own metadata, account eligibility, profile/catalog/OCC drift, no-change, lost-ACK replay, compound operation order/rollback, image repair и revoked-owner-before-receipt. Синтетические fixture writes/readbacks требуют disposable PostgreSQL; browser/provider/image build ими не доказываются |
+
+Три comments-only AST/directives comparisons и полный expected-AST compare
+configuration.go — PASS после окончательного завершённого helper: два
+content-defaults вызова и два lifecycle tail вызова при сохранении остальных
+исполняемых ветвей.11 embedded SQL/fixture directives неизменны. SQL/API,
+generated, dependencies, applied migrations и deploy inputs не менялись.
+Прочитаны связанные schedule target/lock, connection lock/dependency,
+VALID plan lock, assistant runtime и component fixture SQL. Прежние
+Context7 pgx/v5.10.0 Row/Scan/transaction правила сохраняются.
+
+Первый промежуточный build дал FAIL из-за лишнего уровня указателя в одном
+вызове defaults helper; ошибка исправлена до commit. Последующие полные
+локальные GOWORK=off build/unit `-count=1` прошли, затем после расширения
+lifecycle helper оба полных запуска повторены — PASS.15 external fixture/
+admin/template inputs исключены. Disposable PostgreSQL, lease/concurrency,
+реальные provider tests/image builds, E2E/browser и deploy/live — NOT RUN/SKIP.
+
+Scan6671 own sources,222 excluded,1812 raw,898 retained occurrences и914
+unresolved:213-token archive/delete повтор устранён без нового исключения.
+Другие cross-file windows с runtime/queries остаются открытыми. Все772
+прежних registry entries действительны; registry, thresholds и ignore regions
+не менялись.5 exact-ignore guards, gofmt/diff check — PASS; инструментарий
+анализатора неизменён, его предыдущие17 unit PASS сохраняются. QA baseline
+f2e64eb и основной клон не менялись, Issue#1823 остаётся открытым.
 
 ## Конфигурация помощников: каталоги, runtime и неизменяемые планы — 24.10.2026
 
