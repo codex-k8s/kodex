@@ -16,11 +16,26 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// secretDraftRow holds public draft metadata plus internal owner/secret/project IDs, expected
+// content hash, namespaces and an optional encrypted descriptor. It contains no plaintext value;
+// the private descriptor and IDs must stay within authorized broker/owner paths.
+// secretDraftRow хранит публичные метаданные черновика, внутренние ID владельца, секрета и
+// проекта, ожидаемый хеш, namespace и зашифрованный дескриптор. Открытого значения нет; закрытые
+// дескриптор и ID используются только авторизованными путями владельца и брокера.
 type secretDraftRow struct {
 	id, ownerID, contentDigest, secretID, projectID, namespace, stagingNamespace, secretState string
 	public                                                                                    entity.RuntimeSecretDraft
 	encrypted                                                                                 *entity.RuntimeSecretDraftEncryptedDescriptor
 }
+
+// secretDraftOperationRow carries a locked operation identity, expected owner versions/revisions,
+// intent, actor, grant deadline and claimant/generation/lease alongside terminal and cleanup
+// snapshots. Cleanup descriptors are decoded separately for recovery; stored fields are evidence
+// requiring lifecycle checks, not fresh grants.
+// secretDraftOperationRow содержит заблокированную операцию, ожидаемые версии и ревизии владельца,
+// намерение, субъекта, срок разрешения, заявителя, поколение и аренду, итоговые и очистные снимки.
+// Дескрипторы декодируются для восстановления; сохранённые сведения требуют проверок жизненного
+// цикла и не выдают новое разрешение.
 type secretDraftOperationRow struct {
 	recoveryEncrypted                                                             *entity.RuntimeSecretDraftEncryptedDescriptor
 	recoveryMaterialization                                                       *entity.RuntimeSecretMaterialization
@@ -32,6 +47,14 @@ type secretDraftOperationRow struct {
 	cleanupCompleted                                                              bool
 }
 
+// scanSecretDraft scans the fixed draft/secret/owner projection and decodes a nonempty encrypted
+// descriptor. NoRows maps to NotFound and other scan/JSON errors to Unavailable; partially
+// populated data remains in the error result and must not be used as success. It does not
+// authorize or validate a state transition.
+// scanSecretDraft сканирует фиксированную проекцию черновика, секрета и владельца, декодируя
+// непустой зашифрованный дескриптор. NoRows даёт NotFound, другие ошибки чтения и JSON —
+// Unavailable; частичные поля при ошибке не являются успешным результатом. Полномочия и переход
+// состояния не проверяет.
 func scanSecretDraft(row pgx.Row) (secretDraftRow, error) {
 	var d secretDraftRow
 	var raw []byte
@@ -48,9 +71,25 @@ func scanSecretDraft(row pgx.Row) (secretDraftRow, error) {
 	}
 	return d, nil
 }
+
+// lockSecretDraft locks the exact organization/ref secret and draft rows using the caller
+// transaction and delegates projection decoding/error mapping to scanSecretDraft. The lock does
+// not replace subsequent actor, permission, version or expiry checks.
+// lockSecretDraft блокирует строки секрета и черновика точных организации и ссылки в переданной
+// транзакции, передавая декодирование и ошибки scanSecretDraft. Блокировка не заменяет проверки
+// субъекта, прав, версии и срока.
 func (r *Repository) lockSecretDraft(ctx context.Context, tx pgx.Tx, org, ref string) (secretDraftRow, error) {
 	return scanSecretDraft(tx.QueryRow(ctx, querySecretDraftLock, pgx.StrictNamedArgs{"organization_id": org, "draft_ref": ref}))
 }
+
+// lockSecretDraftOperation locks and scans the exact organization/operation row, then decodes any
+// pending encrypted/materialization cleanup descriptors. NoRows is NotFound and scan/decode
+// failures Unavailable with a possibly partial private row; the caller owns fence, actor and state
+// checks.
+// lockSecretDraftOperation блокирует и читает точную операцию организации, затем декодирует
+// имеющиеся дескрипторы очистки зашифрованных и материализованных данных. NoRows — NotFound,
+// ошибки чтения и декодирования — Unavailable с возможной частичной строкой; субъект, поколение и
+// состояние проверяются вызывающим.
 func (r *Repository) lockSecretDraftOperation(ctx context.Context, tx pgx.Tx, org, ref string) (secretDraftOperationRow, error) {
 	var o secretDraftOperationRow
 	err := tx.QueryRow(ctx, querySecretDraftOperationLock, pgx.StrictNamedArgs{"organization_id": org, "operation_ref": ref}).Scan(&o.id, &o.ref, &o.kind, &o.state, &o.actorID, &o.draftVersion, &o.secretVersion, &o.currentRevision, &o.targetRevision, &o.intentDigest, &o.claimantID, &o.claimGeneration, &o.expires, &o.lease, &o.failure, &o.snapshot, &o.encryptedCleanup, &o.materializationCleanup, &o.cleanupCompleted, &o.correlation)
@@ -66,6 +105,15 @@ func (r *Repository) lockSecretDraftOperation(ctx context.Context, tx pgx.Tx, or
 	}
 	return o, nil
 }
+
+// lookupSecretDraftOperation resolves operation/draft refs within an organization by explicit
+// operation ref, token digest or actor/kind/idempotency key. An empty actor becomes the zero UUID
+// for typed SQL arguments; only the key branch checks actor/kind. NoRows is NotFound and other
+// errors Unavailable; lookup success does not authorize consumption.
+// lookupSecretDraftOperation разрешает ссылки операции и черновика в организации по ссылке
+// операции, хешу токена либо субъекту, виду и ключу идемпотентности. Пустой субъект заменяется
+// нулевым UUID для SQL; только ветвь ключа ограничена субъектом и видом. NoRows — NotFound, прочие
+// ошибки — Unavailable; найденная операция ещё не разрешает исполнение.
 func (r *Repository) lookupSecretDraftOperation(ctx context.Context, tx pgx.Tx, org, actor, kind, key, ref, token string) (string, string, error) {
 	var operationRef, draftRef string
 	if actor == "" {
@@ -80,6 +128,17 @@ func (r *Repository) lookupSecretDraftOperation(ctx context.Context, tx pgx.Tx, 
 	}
 	return operationRef, draftRef, nil
 }
+
+// secretDraftAccess requires the exact draft owner and any authority-project pin, then validates
+// organization/project scope consistency. Organization resources use the dedicated runtime
+// permission; project creation targets the project and other permissions target the secret. Access
+// denial is hidden as NotFound, while target-resolution errors propagate. It does not check
+// version, freshness or draft expiry.
+// secretDraftAccess требует точного владельца черновика и совпадения ограничивающего проекта,
+// проверяет согласованность области организации и проекта. Для организации используется отдельное
+// runtime право; создание в проекте адресует проект, остальные права — секрет. Отказ доступа
+// скрывается как NotFound, ошибки разрешения цели передаются. Версия, свежесть и срок черновика
+// проверяются отдельно.
 func (r *Repository) secretDraftAccess(ctx context.Context, tx pgx.Tx, s scope, d secretDraftRow, permission string) error {
 	if s.actorID != d.ownerID || s.authorityProjectID != "" && s.authorityProjectID != d.projectID {
 		return errs.ErrNotFound
@@ -106,6 +165,14 @@ func (r *Repository) secretDraftAccess(ctx context.Context, tx pgx.Tx, s scope, 
 	}
 	return nil
 }
+
+// secretDraftOwnerScope re-resolves an active persisted operation actor within the same
+// organization and reconstructs its current membership role. Any query/scan failure becomes
+// Forbidden and an empty scope; the returned scope still needs resource-specific authorization and
+// does not inherit broker permissions.
+// secretDraftOwnerScope повторно разрешает активного сохранённого субъекта операции внутри той же
+// организации и его актуальную роль. Любая ошибка запроса или Scan даёт Forbidden и пустую
+// область; права конкретного ресурса проверяются отдельно, права брокера не наследуются.
 func (r *Repository) secretDraftOwnerScope(ctx context.Context, tx pgx.Tx, s scope, actorID string) (scope, error) {
 	var ref, org string
 	if tx.QueryRow(ctx, querySecretDraftOwnerScope, pgx.StrictNamedArgs{"organization_id": s.organizationID, "actor_id": actorID}).Scan(&ref, &org) != nil {
@@ -117,6 +184,15 @@ func (r *Repository) secretDraftOwnerScope(ctx context.Context, tx pgx.Tx, s sco
 	}
 	return owner, nil
 }
+
+// GetRuntimeSecretDraft reads the exact organization/ref draft in a read-only repeatable-read
+// transaction and requires its owner plus secret.view, or secret.create for a provisioning secret.
+// Only public metadata is returned after commit; read/authorization failures return an empty draft
+// and commit failure is Unavailable. Deferred request-context rollback errors are ignored.
+// GetRuntimeSecretDraft читает точный черновик организации в read-only repeatable-read транзакции,
+// проверяя владельца и secret.view либо secret.create для PROVISIONING секрета. После commit
+// возвращаются только публичные метаданные; при ошибках результат пуст, ошибка commit —
+// Unavailable. Ошибка отложенного rollback с request context игнорируется.
 func (r *Repository) GetRuntimeSecretDraft(ctx context.Context, p value.Principal, ref string) (entity.RuntimeSecretDraft, error) {
 	s, err := r.resolveScope(ctx, p)
 	if err != nil {
@@ -143,6 +219,18 @@ func (r *Repository) GetRuntimeSecretDraft(ctx context.Context, p value.Principa
 	}
 	return d.public, nil
 }
+
+// updateSecretDraft updates a locked draft at its exact current version and synchronizes returned
+// version/time, state and published revision in the private row. A nil encrypted descriptor
+// preserves the stored descriptor; encoding failure is Invalid and any update Scan failure
+// Conflict. DISCARDED/EXPIRED cancels prepared impact plans; cancellation failure requires caller
+// rollback, since the local row may already have changed. No commit or external cleanup is
+// performed.
+// updateSecretDraft обновляет заблокированный черновик при точной версии, синхронизируя в закрытой
+// строке версию, время, состояние и опубликованную ревизию. Nil дескриптор сохраняет прежний;
+// ошибка кодирования — Invalid, любой сбой Scan обновления — Conflict. DISCARDED/EXPIRED отменяет
+// PREPARED планы; при ошибке отмены вызывающий откатывает транзакцию, локальная строка уже могла
+// измениться. Commit и внешняя очистка не выполняются.
 func (r *Repository) updateSecretDraft(ctx context.Context, tx pgx.Tx, d *secretDraftRow, state string, encrypted *entity.RuntimeSecretDraftEncryptedDescriptor, published int64) error {
 	var raw any
 	if encrypted != nil {
@@ -168,6 +256,13 @@ func (r *Repository) updateSecretDraft(ctx context.Context, tx pgx.Tx, d *secret
 	}
 	return nil
 }
+
+// auditSecretDraft inserts metadata-only audit with a generated ref, operation actor/correlation
+// and a lowercased runtime-secret-draft action inside the caller transaction. Reference or insert
+// failure is Unavailable; the caller must pair audit atomically with the owner change.
+// auditSecretDraft вставляет аудит метаданных с новой ссылкой, субъектом и корреляцией операции,
+// действием runtime-secret-draft с видом в нижнем регистре, в транзакции вызывающего. Ошибки
+// ссылки и вставки — Unavailable; атомарную связь с изменением обеспечивает вызывающий.
 func (r *Repository) auditSecretDraft(ctx context.Context, tx pgx.Tx, s scope, d secretDraftRow, o secretDraftOperationRow, outcome string) error {
 	ref, err := newRef("aud")
 	if err != nil {
@@ -179,6 +274,13 @@ func (r *Repository) auditSecretDraft(ctx context.Context, tx pgx.Tx, s scope, d
 	}
 	return nil
 }
+
+// secretDraftGrantExpiry returns the earlier of the runtime operation TTL after now and five
+// minutes after the principal authentication time. It may return a past deadline; validation of
+// authentication freshness and eligibility belongs to the caller.
+// secretDraftGrantExpiry возвращает более ранний срок: TTL runtime операции от now либо пять минут
+// после аутентификации субъекта. Срок может быть в прошлом; свежесть аутентификации и допустимость
+// операции проверяет вызывающий.
 func secretDraftGrantExpiry(p value.Principal, now time.Time) time.Time {
 	expires := now.Add(runtimeSecretOperationTTL)
 	freshUntil := p.CredentialAuthenticatedAt.Add(5 * time.Minute)
@@ -187,6 +289,24 @@ func secretDraftGrantExpiry(p value.Principal, now time.Time) time.Time {
 	}
 	return expires
 }
+
+// PrepareRuntimeSecretDraft prepares SAVE, VALIDATE, PUBLISH or DISCARD in a serializable owner
+// transaction with database time, exact target locks and actor-bound idempotency intent. Completed
+// replay validates its saved scope; eligible PREPARED replay rotates the grant hash without
+// changing owner pins. Fresh paths check versions, expiry and concurrent work; PUBLISH reserves a
+// monotonic target and binds impact, DISCARD changes terminal metadata. Grant hash, operation,
+// audit and state commit together; the raw grant is returned only in the authorized receipt, never
+// persisted. Non-SAVE callers must supply a non-nil ExpectedVersion and a validated kind; upstream
+// freshness/input validation is not repeated here. Commit failure is Conflict.
+// PrepareRuntimeSecretDraft подготавливает SAVE, VALIDATE, PUBLISH или DISCARD в serializable
+// транзакции владельца со временем БД, точными блокировками и намерением идемпотентности субъекта.
+// Завершённый повтор проверяет сохранённую область; допустимый PREPARED повтор меняет хеш
+// разрешения, сохраняя привязки. Новые пути проверяют версии, срок и конкурирующую работу; PUBLISH
+// закрепляет монотонный номер и impact, DISCARD меняет итоговые метаданные. Хеш разрешения,
+// операция, аудит и состояние фиксируются вместе; исходное разрешение возвращается только
+// авторизованной квитанцией, не сохраняется. Для non-SAVE требуются ненулевой ExpectedVersion и
+// проверенный вид; внешние проверки свежести и входа здесь не повторяются. Ошибка commit —
+// Conflict.
 func (r *Repository) PrepareRuntimeSecretDraft(ctx context.Context, p value.Principal, input repoport.RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error) {
 	var empty entity.RuntimeSecretDraftOperationReceipt
 	s, err := r.resolveScope(ctx, p)
@@ -389,6 +509,18 @@ func (r *Repository) PrepareRuntimeSecretDraft(ctx context.Context, p value.Prin
 	return entity.RuntimeSecretDraftOperationReceipt{OperationRef: opRef, OperationGrant: grant, State: "PREPARED", ExpiresAt: expires, Draft: d.public}, nil
 }
 
+// ConsumeRuntimeSecretDraft requires the exact worker operation, a valid claimant and bounded
+// grant, then resolves its SHA-256 lookup in a serializable transaction. It locks
+// draft/operation/secret, re-resolves the persisted owner and current create/rotate authority, and
+// checks database-time draft eligibility plus PUBLISH revision pins. Atomic PREPARED-to-CLAIMED
+// consumption advances generation and assigns a grant-capped lease; work is returned only after
+// commit. It performs no encryption, Kubernetes apply or publication.
+// ConsumeRuntimeSecretDraft требует точной worker операции, допустимого заявителя и ограниченного
+// разрешения, затем разрешает его SHA-256 в serializable транзакции. Блокирует черновик, операцию
+// и секрет, повторно разрешает сохранённого владельца и create/rotate право, проверяет срок
+// черновика по БД и PUBLISH ревизии. Атомарное потребление PREPARED в CLAIMED увеличивает
+// поколение и назначает аренду не дольше разрешения; работа возвращается после commit. Шифрование,
+// Kubernetes apply и публикация здесь не выполняются.
 func (r *Repository) ConsumeRuntimeSecretDraft(ctx context.Context, p value.Principal, input repoport.RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftWork, error) {
 	var empty entity.RuntimeSecretDraftWork
 	if !validRuntimeSecretWorkPrincipal(p, "platform.runtime-secret-drafts.operations.consume") || !validRuntimeSecretClaimant(input.ClaimantID) || len(input.OperationGrant) < 32 || len(input.OperationGrant) > 256 {
@@ -452,6 +584,15 @@ func (r *Repository) ConsumeRuntimeSecretDraft(ctx context.Context, p value.Prin
 	}
 	return secretDraftWork(d, o), nil
 }
+
+// secretDraftWork builds the broker work projection from validated private rows, deriving a stable
+// staged object name from the first 16 SHA-256 bytes of the draft ref and the fixed ciphertext
+// key. It includes lease when present and unfinished recovery descriptors only; it does not read
+// secret bytes or independently authorize external effects.
+// secretDraftWork формирует работу брокера из проверенных закрытых строк, выводя стабильное имя
+// подготовленного объекта из первых 16 байт SHA-256 ссылки черновика и фиксированный ключ
+// ciphertext. Добавляет имеющуюся аренду и только незавершённые дескрипторы восстановления;
+// значения секретов не читает и внешние эффекты самостоятельно не разрешает.
 func secretDraftWork(d secretDraftRow, o secretDraftOperationRow) entity.RuntimeSecretDraftWork {
 	digest := sha256.Sum256([]byte(d.public.Ref))
 	work := entity.RuntimeSecretDraftWork{OperationRef: o.ref, Kind: o.kind, Draft: d.public, ExpectedContentSHA256: d.contentDigest, Namespace: d.namespace, StagedNamespace: d.stagingNamespace, StagedSecretName: "runtime-secret-draft-" + hex.EncodeToString(digest[:16]), StagedSecretKey: "ciphertext", TargetRevision: o.targetRevision, Encrypted: d.encrypted, ClaimantID: o.claimantID, ClaimGeneration: o.claimGeneration, ExpiresAt: o.expires}

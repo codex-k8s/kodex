@@ -4,11 +4,69 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.396.0
+version: 1.397.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Черновики секретов, impact-планы и required workflow SQL — 25.10.2026
+
+На основе `7798b98d87622978169e983b7638cd56b5d93e1a` полностью прочитаны
+runtime_secret_draft_impact.go, runtime_secret_drafts.go и
+workflow_launch_queries.go. Все45 прежних объявлений — по15 в каждом — получили
+предметные EN→RU описания. Новых declarations и исполняемых изменений нет:
+полное AST/directive сравнение трёх файлов подтвердило прежний код и все24
+embed. Прочитаны42 SQL:24 встроенных,17 draft/membership queries и общий
+secret_impact_consumers. Соседний bindSecretDraftImpact прочитан для проверки
+назначения plan selection, но apply/completion не объявляются заново
+проверенными целиком.
+
+Общий inventory19717/21469, missing1752 — PostgreSQL adapter control-plane.
+Все134 Go-файла текущего PR имеют1586/1586 EN→RU описаний. Описаны1414
+прежних и65 новых объявлений PR, один прежний wrapper удалён. Generated output,
+SQL/API/runtime errors/dependencies/migrations/deploy inputs не менялись.
+
+| Путь / жизненный цикл | Фактическая граница |
+| --- | --- |
+| Draft metadata read | Exact organization/ref, ReadOnly RepeatableRead, владелец и secret.view либо secret.create при PROVISIONING. Публичная проекция без encrypted descriptor; commit failure Unavailable |
+| Scope / scanner | Exact draft owner и authority-project pin, согласованная PROJECT/ORGANIZATION область. Broker повторно разрешает сохранённого владельца; частичный scanner result при ошибке не является успехом |
+| SAVE / replay | Serializable, PostgreSQL time, exact target/creator и content hash. Actor/kind/key + intent replay: завершённый snapshot со scope check либо новый hash PREPARED grant без изменения owner pins |
+| VALIDATE / PUBLISH / DISCARD | У вызывающего проверены kind и non-nil ExpectedVersion. Версия/срок/active operation; PUBLISH требует VALID, secret OCC и отсутствие конкурирующей мутации, закрепляет target revision и impact; DISCARD переводит metadata и отменяет PREPARED plans |
+| Grant / consume | Срок — минимум operation TTL и authentication+5min, сам helper может вернуть прошедший срок. Exact worker permission/claimant/token bound; current persisted-owner authority, draft eligibility и PUBLISH pins до PREPARED→CLAIMED/generation/lease; работа только после commit |
+| Work / external effect | Стабильное staging name из draft-ref SHA-256, server namespaces/ciphertext key, незавершённые recovery descriptors. Work metadata не выполняет encryption/apply/publication и не заменяет fence |
+| Impact prepare | Serializable, exact draft owner/create-or-rotate, VALID/OCC/expiry и locked secret. Replay точного draft/intent до fresh version/state guards. До1000 текущих eligible snapshots, actor/credential digest, immutable pins, audit и commit |
+| Impact read | Actor-bound plan, ReadOnly RepeatableRead и повторные owner/agent/environment eligibility checks. Forbidden/NotFound скрываются; Total — текущие совпадения до курсора, cursor связан с digest/state/query; прочая ошибка может сопровождаться накопленной страницей |
+| Plan lifecycle SQL | PREPARED expiry отображается как EXPIRED без записи. Bind требует неистёкший неиспользованный plan и exact org/actor/draft/versions; выбор, PENDING outcome и terminal/cancel требуют surrounding owner transaction |
+| Required launch origin | Exact live lease/fence/generation/deadline и согласованные root/run/node/session/turn/revision/project/agent/actor; capability в агенте и revision, assistantScope NONE. Locks и snapshot projection не заменяют requested workflow eligibility |
+| Required launch lineage | Ancestor checks depth≤8, состояние OPEN и текущие actor/project/workflow/agent pins; пустая цепочка проходит NOT EXISTS. Ancestor authority projection сама не отклоняет invalid ancestry |
+| Required launch graph | Упорядоченные advisory project locks; структурные пределы direct<16/depth<8/descendants<128. Child parent/proxy/callback/immutable origin pins и OPEN terminal update остаются отдельными SQL; caller закрывает полный граф и события |
+
+Исторические ограничения описаны без исправлений: request-context rollback
+ошибки игнорируются; owner lookup скрывает query failure как Forbidden;
+update Scan errors становятся Conflict; часть callbacks возвращает частичные
+снимки только вместе с ошибкой. Non-SAVE Prepare разыменовывает обязательный
+ExpectedVersion и опирается на внешнюю kind/freshness/input validation.
+Raw grant возвращается защищённой квитанцией, хранится только его хеш;
+актуальные значения секретов не читались и не переносились.
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks397-final`);13 external fixture keys и2 admin/template inputs исключены.
+Новые зеркальные тесты для комментариев не добавлены. Полные AST/directive,
+gofmt, diff check,17 analyzer unit и5 exact-ignore guards — PASS.
+Context7 /jackc/pgx: BeginTx/TxOptions/Row/Scan/ErrNoRows и отсутствие
+auto-rollback при отмене BEGIN context проверены. Real PostgreSQL/RLS/OCC/
+locks/claim races, broker encryption/materialization/cleanup, workflow runtime,
+browser/full E2E и deploy/live — NOT RUN/SKIP. QA baseline f2e64eb сохранён.
+
+Detector6679 sources/222 exclusions:1804 raw,903 retained occurrences,
+901 unresolved; registry777 exact entries. Исполняемые clones не удалялись:
+одно115-token окно environment/secret draft Get после полного чтения сохранено
+с точным path pair/hash/count1. Оно пересекает разные предыдущие функции и
+короткий scope/ReadOnly Begin glue, при разных дальнейших owner/scanner/commit
+contracts. AST unchanged и набор fragment keys прежний; комментарии меняют
+номера строк. Thresholds/ignore regions/whole-file exclusions не расширены.
+Issue#1823 открыт; PR Draft и полный объём не объявлен завершённым.
 
 ## Чтение mailbox, Git-владение и очистка credential — 25.10.2026
 
