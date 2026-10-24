@@ -4,7 +4,7 @@ title: Backup, retention и restore drill
 type: runbook
 status: approved
 owner: sre
-version: 1.5.1
+version: 1.5.2
 updated: 2026-10-25
 ---
 
@@ -240,9 +240,26 @@ CLI="$QA_SOURCE/tools/dev/scoped_backup_drill.py"
    При mismatch остановиться и штатно исправить только этот Bundle/CA path.
 2. Publication — только stable build/verify/JS plan/apply/readback и реальный
    `publish-stable-image-worker.sh`. После registry-only PASS проверить **node
-   pull** новым Job без Secret mounts, `imagePullPolicy: Always`, command
-   `/bin/sh -ec 'test "$(id -u)" = 10001; test -x /usr/local/bin/backup-controller'`.
+   pull** новым Job через `render-pull`. Он использует default SA без token,
+   не имеет volumes/env/envFrom, запускает только проверку UID10001 и наличия
+   исполняемого backup-controller. Pull всегда выполняется для exact digest;
+   timeout120s/backoff0, root filesystem read-only, capabilities сняты.
+
+```sh
+python3 "$CLI" render-pull --run "$DRILL_ID" --image "$BACKUP_IMAGE" \
+  --output "$QA_STATE/pull-job.json"
+PULL_UID=$(kubectl --context k3d-kodex create -f "$QA_STATE/pull-job.json" -o 'jsonpath={.metadata.uid}')
+python3 "$CLI" capture --manifest "$QA_STATE/pull-job.json" --run "$DRILL_ID" \
+  --expected-uid "$PULL_UID" --output "$QA_STATE/pull-job-receipt.json"
+kubectl --context k3d-kodex -n kodex-system wait --for=condition=complete \
+  "job/qa-pull-$DRILL_ID" --timeout=150s
+```
+
    Сохранить Job/Pod UID и exact imageID; этот успех ещё не backup PASS.
+   После terminal Job удалить его через `cleanup-resource --receipt
+   "$QA_STATE/pull-job-receipt.json"`, подтвердить `readback-absence` с тем же
+   receipt. При UNKNOWN create сначала только metadata readback/capture UID,
+   без повторного create. Новые SA, NetworkPolicy и глобальные ресурсы не нужны.
 3. Подготовить обе custody роли. Пример для `backup`; повторить с
    `--role repository` и отдельными файлами plan/result. SHA берётся только из
    результата plan, не пересчитывается после редактирования.

@@ -219,8 +219,35 @@ def source_document(relative):
     return json.loads(result.stdout)
 
 
+def require_pinned_image(image):
+    """Принимает только exact repository и immutable SHA256, без tag/дополнительных разделителей."""
+    require(re.fullmatch(r"registry\.local\.kodex/kodex/backup-controller@sha256:[a-f0-9]{64}", image),
+            "PINNED_IMAGE_REQUIRED")
+
+
+def pull_job(run, image):
+    """Строит автономный node-pull Job без конфигурации, credentials и обращения к кластеру."""
+    require_pinned_image(image)
+    owner_labels = labels(run)
+    return {"apiVersion": "batch/v1", "kind": "Job",
+            "metadata": {"name": "qa-pull-" + run, "namespace": SOURCE_NAMESPACE, "labels": owner_labels},
+            "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 120, "ttlSecondsAfterFinished": 86400,
+                     "template": {"metadata": {"labels": owner_labels.copy()}, "spec": {
+                         "serviceAccountName": "default", "automountServiceAccountToken": False,
+                         "restartPolicy": "Never",
+                         "securityContext": {"runAsNonRoot": True, "runAsUser": 10001, "runAsGroup": 10001,
+                                             "seccompProfile": {"type": "RuntimeDefault"}},
+                         "containers": [{"name": "pull", "image": image, "imagePullPolicy": "Always",
+                                         "command": ["/bin/sh", "-ec", 'test "$(id -u)" = 10001; test -x /usr/local/bin/backup-controller'],
+                                         "securityContext": {"readOnlyRootFilesystem": True,
+                                                             "allowPrivilegeEscalation": False,
+                                                             "capabilities": {"drop": ["ALL"]}},
+                                         "resources": {"requests": {"memory": "32Mi", "cpu": "25m"},
+                                                       "limits": {"memory": "64Mi", "cpu": "100m"}}}]}}}}
+
+
 def job(template, name, namespace, run, image, command, prefix):
-    require(DIGEST.fullmatch(image.rsplit("@", 1)[-1]) and image.startswith("registry.local.kodex/kodex/backup-controller@"), "PINNED_IMAGE_REQUIRED")
+    require_pinned_image(image)
     require(NAME.fullmatch(prefix) and prefix.startswith("qa-1830-"), "FRESH_REPOSITORY_PREFIX_REQUIRED")
     pod = copy.deepcopy(template)
     pod["metadata"] = {"labels": dict(labels(run), **{"app.kubernetes.io/component": "restore-drill" if command != "backup" else "backup-once"})}
@@ -591,6 +618,9 @@ def main():
     render = sub.add_parser("render-backup")
     for key in ("run", "image", "prefix", "output"):
         render.add_argument("--" + key, required=True)
+    pull = sub.add_parser("render-pull")
+    for key in ("run", "image", "output"):
+        pull.add_argument("--" + key, required=True)
     read = sub.add_parser("render-readback")
     for key in ("run", "image", "prefix", "output", "operation"):
         read.add_argument("--" + key, required=True)
@@ -627,6 +657,9 @@ def main():
     elif args.command == "custody-apply":
         receipt = apply_custody(kube, read_private(args.plan), args.approved_plan_sha, args.output)
         print(json.dumps({"state": "CREATED_AND_VERIFIED", "uid": receipt["identity"]["uid"]}))
+    elif args.command == "render-pull":
+        write_private(args.output, pull_job(args.run, args.image))
+        print(json.dumps({"state": "RENDERED_NOT_APPLIED"}))
     elif args.command == "render-backup":
         write_private(args.output, backup_job(args.run, args.image, args.prefix))
         print(json.dumps({"state": "RENDERED_NOT_APPLIED"}))

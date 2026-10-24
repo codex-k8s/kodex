@@ -179,6 +179,52 @@ class ScopedBackupDrill(unittest.TestCase):
         with self.assertRaisesRegex(drill.Rejected, "FRESH_REPOSITORY"):
             drill.backup_job("fixture", IMAGE, "kodex")
 
+    def test_pull_job_is_secretless_bounded_and_owned(self):
+        with patch.object(drill, "source_document", side_effect=AssertionError("template read forbidden")):
+            value = drill.pull_job("fixture", IMAGE)
+        self.assertEqual(value["metadata"], {"name": "qa-pull-fixture", "namespace": drill.SOURCE_NAMESPACE,
+                                           "labels": drill.labels("fixture")})
+        self.assertEqual(value["spec"]["template"]["metadata"]["labels"], drill.labels("fixture"))
+        self.assertEqual(value["spec"]["backoffLimit"], 0)
+        self.assertEqual(value["spec"]["activeDeadlineSeconds"], 120)
+        pod = value["spec"]["template"]["spec"]
+        self.assertEqual(pod["serviceAccountName"], "default")
+        self.assertFalse(pod["automountServiceAccountToken"])
+        self.assertEqual(pod["restartPolicy"], "Never")
+        self.assertEqual(pod["securityContext"], {"runAsNonRoot": True, "runAsUser": 10001, "runAsGroup": 10001,
+                                                 "seccompProfile": {"type": "RuntimeDefault"}})
+        self.assertEqual(len(pod["containers"]), 1)
+        container = pod["containers"][0]
+        self.assertEqual(container["image"], IMAGE)
+        self.assertEqual(container["imagePullPolicy"], "Always")
+        self.assertEqual(container["command"], ["/bin/sh", "-ec", 'test "$(id -u)" = 10001; test -x /usr/local/bin/backup-controller'])
+        self.assertEqual(container["securityContext"], {"readOnlyRootFilesystem": True, "allowPrivilegeEscalation": False,
+                                                       "capabilities": {"drop": ["ALL"]}})
+        self.assertEqual(container["resources"], {"requests": {"memory": "32Mi", "cpu": "25m"},
+                                                  "limits": {"memory": "64Mi", "cpu": "100m"}})
+        encoded = json.dumps(value)
+        for forbidden in ('"volumes"', '"volumeMounts"', '"env"', '"envFrom"', '"imagePullSecrets"',
+                          '"hostPath"', '"secret"', '"projected"', '"initContainers"', '"ephemeralContainers"'):
+            self.assertNotIn(forbidden, encoded)
+
+    def test_pull_job_rejects_unpinned_or_foreign_images_and_invalid_run(self):
+        for image in (IMAGE.split("@")[0], IMAGE.split("@")[0] + ":latest", IMAGE[:-1], IMAGE + "0",
+                      IMAGE.replace("sha256:", "sha512:"), IMAGE.replace("backup-controller@", "control-plane@"),
+                      IMAGE.replace("registry.local.kodex", "foreign.invalid"), IMAGE.replace("@", "@latest@")):
+            with self.subTest(image=image), self.assertRaisesRegex(drill.Rejected, "PINNED_IMAGE_REQUIRED"):
+                drill.pull_job("fixture", image)
+        with self.assertRaisesRegex(drill.Rejected, "DRILL_ID_INVALID"):
+            drill.pull_job("../foreign", IMAGE)
+
+    def test_render_pull_cli_is_offline_and_writes_private_manifest(self):
+        output = self.directory / "pull.json"
+        with patch("sys.argv", ["scoped_backup_drill.py", "render-pull", "--run", "fixture", "--image", IMAGE,
+                                "--output", str(output)]), \
+                patch.object(drill.Kubernetes, "run", side_effect=AssertionError("live access forbidden")), \
+                patch("builtins.print"):
+            drill.main()
+        self.assertEqual(drill.read_private(output), drill.pull_job("fixture", IMAGE))
+
     def test_isolated_render_does_not_mount_source_passwords_or_installation_key(self):
         rendered = drill.restore_resources("fixture", IMAGE, "qa-1830-fixture")
         encoded = json.dumps(rendered)
