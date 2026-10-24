@@ -1,7 +1,10 @@
 package prompt
 
-// Правило принадлежит платформе, включается в обязательный CONSTRAINTS и не
-// зависит от owner task, шаблона сотрудника или вставки slot в owner overlay.
+// unexpectedOutcomeConstraints returns platform-owned Russian or English unexpected-outcome
+// guidance included in mandatory CONSTRAINTS independently of owner text or slot placement.
+// unexpectedOutcomeConstraints возвращает русские либо английские правила неожиданного результата
+// платформы, включаемые в обязательный CONSTRAINTS независимо от текста владельца либо
+// расположения слота.
 func unexpectedOutcomeConstraints(locale string) string {
 	if locale == "ru" {
 		return `При неожиданном результате сначала проверь собственный каталог, закреплённый снимок текущего исполнения, точную схему инструмента и типизированную диагностику. Сверяй свежие доступные сведения с immutable revision; текущее состояние владельца не переписывает историю, input или права активной попытки. Не угадывай refs, поля схемы, команды и причины отказа.

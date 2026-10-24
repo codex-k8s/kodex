@@ -13,11 +13,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 )
 
+// assistantCoreFixture builds a synthetic project assistant core with canonical revision and exact
+// content SHA-256 for renderer boundary tests.
+// assistantCoreFixture создаёт синтетическую базу помощника проекта с канонической ревизией и
+// точным SHA-256 содержимого для тестов границы renderer.
 func assistantCoreFixture(content string) *entity.PromptAssistantCore {
 	digest := sha256.Sum256([]byte(content))
 	return &entity.PromptAssistantCore{Scope: "PROJECT", Ref: "ins_core_fixture", Revision: "system-assistant-core-v47", Digest: hex.EncodeToString(digest[:]), Content: content}
 }
 
+// TestAssistantCoreOnePassAndBoundedRendering checks core values expand once, literal template
+// syntax stays literal and output expansion beyond the bounded buffer fails.
+// TestAssistantCoreOnePassAndBoundedRendering проверяет однократное раскрытие значений базы,
+// буквальное сохранение синтаксиса шаблона и отказ при расширении вывода сверх ограниченного
+// буфера.
 func TestAssistantCoreOnePassAndBoundedRendering(t *testing.T) {
 	snapshot := semanticFixture()
 	snapshot.ServiceTemplateRevision, snapshot.ProjectRef = "prompt-service-v3", "prj_core_fixture"
@@ -35,6 +44,10 @@ func TestAssistantCoreOnePassAndBoundedRendering(t *testing.T) {
 	}
 }
 
+// TestAssistantCoreInvalidPinsFailClosed checks renderer revision, reference, digest, scope,
+// project, slot, variable and encoding violations reject the assistant core.
+// TestAssistantCoreInvalidPinsFailClosed проверяет отказ базе помощника при нарушениях ревизии
+// renderer, ссылки, дайджеста, области, проекта, слота, переменной либо кодировки.
 func TestAssistantCoreInvalidPinsFailClosed(t *testing.T) {
 	for _, mutate := range []struct {
 		name   string
@@ -64,6 +77,12 @@ func TestAssistantCoreInvalidPinsFailClosed(t *testing.T) {
 	}
 }
 
+// TestProjectAssistantCorePlatformMaterializationAndRejoin checks compiled core and owner overlay
+// coexist in one platform constraints section, preserve authority and safe redaction and reproduce
+// exact digests after durable rejoin.
+// TestProjectAssistantCorePlatformMaterializationAndRejoin проверяет совместное размещение
+// compiled-базы и дополнения владельца в одной секции ограничений платформы, сохранение полномочий
+// и скрытия и точные дайджесты после durable rejoin.
 func TestProjectAssistantCorePlatformMaterializationAndRejoin(t *testing.T) {
 	snapshot := semanticFixture()
 	snapshot.ProjectRef = "prj_core_fixture"
@@ -111,6 +130,12 @@ func TestProjectAssistantCorePlatformMaterializationAndRejoin(t *testing.T) {
 	}
 }
 
+// TestSystemAssistantCorePinDoesNotDuplicateBase checks system base appears once with or without
+// project context, preserving template/core pins and exact durable rejoin while dependency changes
+// alter digests.
+// TestSystemAssistantCorePinDoesNotDuplicateBase проверяет однократное присутствие системной базы
+// с контекстом проекта и без него, pins шаблона и базы и точный durable rejoin с изменением
+// дайджестов при смене зависимости.
 func TestSystemAssistantCorePinDoesNotDuplicateBase(t *testing.T) {
 	for _, projectRef := range []string{"", "prj_system_context"} {
 		t.Run("context-"+projectRef, func(t *testing.T) {
@@ -148,6 +173,10 @@ func TestSystemAssistantCorePinDoesNotDuplicateBase(t *testing.T) {
 	}
 }
 
+// continuationCoreProjectionFixture builds a synthetic project continuation with exact runtime
+// diff and compact core binding, canonicalizing its structured marker through JSON.
+// continuationCoreProjectionFixture создаёт синтетическое продолжение проекта с точным runtime
+// diff и компактной привязкой базы, канонизируя structured-маркер через JSON.
 func continuationCoreProjectionFixture(t *testing.T) Snapshot {
 	t.Helper()
 	snapshot := semanticFixture()
@@ -179,6 +208,12 @@ func continuationCoreProjectionFixture(t *testing.T) Snapshot {
 	return snapshot
 }
 
+// TestContinuationCoreProjectionPreservesInitialAndHistoricalRendering checks compact continuation
+// avoids duplicate core text without losing durable full pins, while initial and historical
+// no-marker prompts keep full rendering.
+// TestContinuationCoreProjectionPreservesInitialAndHistoricalRendering проверяет отсутствие
+// дублирования текста базы в компактном продолжении при сохранении полных durable pins и полного
+// построения начальных и исторических prompt без маркера.
 func TestContinuationCoreProjectionPreservesInitialAndHistoricalRendering(t *testing.T) {
 	snapshot := continuationCoreProjectionFixture(t)
 	projected, err := Materialize("Continue", snapshot)
@@ -214,6 +249,11 @@ func TestContinuationCoreProjectionPreservesInitialAndHistoricalRendering(t *tes
 	}
 }
 
+// TestContinuationCoreProjectionRejectsInvalidPins checks mutated core, projection, content or
+// exact runtime identity/attempt pins fail closed without returning a complete executable prompt.
+// TestContinuationCoreProjectionRejectsInvalidPins проверяет закрытый отказ при изменении базы,
+// проекции, содержимого либо точных pins runtime identity и попытки без возврата полного
+// исполняемого prompt.
 func TestContinuationCoreProjectionRejectsInvalidPins(t *testing.T) {
 	for _, mutation := range []string{"scope", "content", "digest", "ref", "revision", "target", "project", "marker-version", "unknown-field", "core-pin", "instructions-digest", "instructions-bytes", "materialization-digest", "runtime-revision", "agent", "run", "node", "session", "turn", "attempt"} {
 		t.Run(mutation, func(t *testing.T) {

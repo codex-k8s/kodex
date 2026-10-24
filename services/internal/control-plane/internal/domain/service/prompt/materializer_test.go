@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+// TestMaterializeUsesOnePinnedSnapshotAndMandatoryBlocks checks repeatable legacy rendering and
+// digest from one snapshot, mandatory service blocks, effective authority intersection and
+// redacted contextual values.
+// TestMaterializeUsesOnePinnedSnapshotAndMandatoryBlocks проверяет повторяемые историческое
+// построение и дайджест одного снимка, обязательные service-блоки, пересечение фактических
+// полномочий и скрытие контекстных значений.
 func TestMaterializeUsesOnePinnedSnapshotAndMandatoryBlocks(t *testing.T) {
 	snapshot := Snapshot{
 		TargetKind: TargetSessionContinuation, TargetRef: "agt_example", ProjectRef: "prj_example",
@@ -40,6 +46,10 @@ func TestMaterializeUsesOnePinnedSnapshotAndMandatoryBlocks(t *testing.T) {
 	}
 }
 
+// TestExplicitEmptyAuthorityLayerFailsClosed checks an explicit empty layer denies every
+// capability and trusted grant union remains sorted and duplicate-free.
+// TestExplicitEmptyAuthorityLayerFailsClosed проверяет запрет всех capabilities явно пустым слоем
+// и отсортированное объединение доверенных grants без повторов.
 func TestExplicitEmptyAuthorityLayerFailsClosed(t *testing.T) {
 	if got := Intersection([]string{}, []string{"read"}); len(got) != 0 {
 		t.Fatalf("empty authority layer expanded permissions: %#v", got)
@@ -49,6 +59,11 @@ func TestExplicitEmptyAuthorityLayerFailsClosed(t *testing.T) {
 	}
 }
 
+// TestApplicableEmptyHumanGateRemovesIntegrationGrant checks an applicable empty Human Gate
+// removes an otherwise granted integration capability from both effective grants and legacy prompt
+// output.
+// TestApplicableEmptyHumanGateRemovesIntegrationGrant проверяет удаление ранее разрешённой
+// capability интеграции применимым пустым Human Gate из effective grants и исторического prompt.
 func TestApplicableEmptyHumanGateRemovesIntegrationGrant(t *testing.T) {
 	result, err := Materialize("Agent {{ .target.ref }}", Snapshot{
 		TargetKind: TargetAgent, TargetRef: "agt_example", TemplateRef: "ins_example",
@@ -64,6 +79,10 @@ func TestApplicableEmptyHumanGateRemovesIntegrationGrant(t *testing.T) {
 	}
 }
 
+// TestMaterializeRejectsUnknownAndUnclosedVariables checks unknown fields, unclosed syntax,
+// forbidden index and unrestricted dot output return ErrInvalid with diagnostics.
+// TestMaterializeRejectsUnknownAndUnclosedVariables проверяет возврат ErrInvalid с диагностикой
+// для неизвестных полей, незакрытого синтаксиса, запрещённого index и неограниченного вывода dot.
 func TestMaterializeRejectsUnknownAndUnclosedVariables(t *testing.T) {
 	snapshot := Snapshot{TargetKind: TargetAgent, TargetRef: "agt_example", TemplateRef: "ins_example", TemplateDigest: strings.Repeat("b", 64)}
 	for _, template := range []string{
@@ -76,6 +95,12 @@ func TestMaterializeRejectsUnknownAndUnclosedVariables(t *testing.T) {
 	}
 }
 
+// TestValidateLocatesUnknownVariableWithoutEchoingTemplate checks an unknown variable is
+// identified on the second Unicode source line without echoing template text or the field into its
+// safe message.
+// TestValidateLocatesUnknownVariableWithoutEchoingTemplate проверяет определение неизвестной
+// переменной на второй Unicode-строке без возврата текста шаблона либо поля в безопасном
+// сообщении.
 func TestValidateLocatesUnknownVariableWithoutEchoingTemplate(t *testing.T) {
 	diagnostics := Validate("первая строка\n{{ .unknown.value }}", Catalog())
 	if len(diagnostics) != 1 {
@@ -90,6 +115,10 @@ func TestValidateLocatesUnknownVariableWithoutEchoingTemplate(t *testing.T) {
 	}
 }
 
+// TestValidateLocatesVariableWithWrongExecutionType checks an invalid range over an agent-name
+// string reports that field and its source line through safe execution diagnostics.
+// TestValidateLocatesVariableWithWrongExecutionType проверяет указание поля имени агента и строки
+// исходника в безопасной диагностике неверной итерации range по строковому значению.
 func TestValidateLocatesVariableWithWrongExecutionType(t *testing.T) {
 	diagnostics := Validate("{{.project.name}}\n{{range .agent.name}}value{{end}}", Catalog())
 	if len(diagnostics) != 1 {
@@ -101,6 +130,10 @@ func TestValidateLocatesVariableWithWrongExecutionType(t *testing.T) {
 	}
 }
 
+// TestIntersectionCannotEscalateAuthority checks the five-layer intersection returns only the
+// capability shared by every authority layer.
+// TestIntersectionCannotEscalateAuthority проверяет возврат только общей capability при
+// пересечении пяти слоёв полномочий.
 func TestIntersectionCannotEscalateAuthority(t *testing.T) {
 	got := Intersection([]string{"read", "write", "admin"}, []string{"read", "write"}, []string{"read"}, []string{"read", "external"}, []string{"read"})
 	if len(got) != 1 || got[0] != "read" {
@@ -108,6 +141,11 @@ func TestIntersectionCannotEscalateAuthority(t *testing.T) {
 	}
 }
 
+// TestMaterializationDigestPinsEveryAuthorityLayer checks adding an explicitly empty Human Gate
+// changes the historical materialization digest even when the other pinned inputs are unchanged.
+// TestMaterializationDigestPinsEveryAuthorityLayer проверяет изменение исторического дайджеста
+// материализации при добавлении явно пустого Human Gate без изменения остальных закреплённых
+// входов.
 func TestMaterializationDigestPinsEveryAuthorityLayer(t *testing.T) {
 	base := Snapshot{TargetKind: TargetAgent, TargetRef: "agt_example", TemplateRef: "ins_example",
 		TemplateDigest: strings.Repeat("c", 64), UserCapabilities: []string{"read"}, AgentCapabilities: []string{"read"}}
@@ -125,6 +163,12 @@ func TestMaterializationDigestPinsEveryAuthorityLayer(t *testing.T) {
 	}
 }
 
+// TestMaterializeTypedFileAndToolCollections checks typed file/tool rendering and exact descriptor
+// values while safe legacy output hides values and retains only one placeholder item per
+// collection.
+// TestMaterializeTypedFileAndToolCollections проверяет типизированное построение файлов и
+// инструментов и точные значения дескрипторов со скрытием значений и одним placeholder-элементом
+// коллекции в безопасном историческом выводе.
 func TestMaterializeTypedFileAndToolCollections(t *testing.T) {
 	snapshot := Snapshot{
 		TargetKind: TargetAgent, TargetRef: "agt_example", TemplateRef: "ins_example",

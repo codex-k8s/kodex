@@ -8,8 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// Настоящий domain producer создаёт отдельно базовые инструкции и notice.
-// Provider resume не переименовывает Agent/Workflow/Automation в другой kind.
+// TestCanonicalContinuationConsumerPreservesBasePromptKind checks actual producer/consumer
+// continuation retains agent/stage/automation base kinds and rejects missing, replayed, malformed,
+// tampered or user-origin runtime notices.
+// TestCanonicalContinuationConsumerPreservesBasePromptKind проверяет сохранение базовых видов
+// агента, стадии и автоматизации настоящими producer и consumer продолжения с отказом
+// отсутствующим, повторным, неверным, изменённым либо пользовательским runtime-уведомлениям.
 func TestCanonicalContinuationConsumerPreservesBasePromptKind(t *testing.T) {
 	for _, kind := range []string{TargetAgent, TargetWorkflowStage, TargetAutomation} {
 		t.Run(kind, func(t *testing.T) {
@@ -19,20 +23,7 @@ func TestCanonicalContinuationConsumerPreservesBasePromptKind(t *testing.T) {
 			if err != nil || !base.Complete {
 				t.Fatal("base producer failed")
 			}
-			previous, current := map[string][]RuntimeDescriptor{}, map[string][]RuntimeDescriptor{}
-			for _, component := range runtimeComponentOrder {
-				previous[component], current[component] = []RuntimeDescriptor{}, []RuntimeDescriptor{}
-			}
-			previous["MODEL"] = []RuntimeDescriptor{{Value: "old-model"}}
-			current["MODEL"] = []RuntimeDescriptor{{Value: "current-model"}}
-			diff, err := CompareRuntimeContexts(previous, current, RuntimeDiff{PreviousRevisionRef: "rrev_previous", CurrentRevisionRef: "rrev_current", SessionRef: "ses_current", TurnRef: "turn_current", Attempt: 2})
-			if err != nil {
-				t.Fatal(err)
-			}
-			rawDiff, err := json.Marshal(diff)
-			if err != nil {
-				t.Fatal(err)
-			}
+			diff, rawDiff := continuationModelDiffFixture(t)
 			snapshot.TargetKind, snapshot.SessionContinuation = TargetSessionContinuation, string(rawDiff)
 			notice, err := Materialize(`Custom continuation {{slot "RUNTIME_CHANGES"}}`, snapshot)
 			if err != nil || !notice.Complete {

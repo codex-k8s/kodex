@@ -18,22 +18,48 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// ErrInvalid marks invalid templates, incomplete pinned snapshots or rejected materialization
+// without exposing raw template execution diagnostics.
+// ErrInvalid обозначает неверные шаблоны, неполные закреплённые снимки либо отклонённую
+// материализацию без раскрытия исходной диагностики исполнения шаблона.
 var ErrInvalid = errors.New("invalid prompt template")
 
 const (
-	TargetAgent               = "AGENT"
-	TargetWorkflowStage       = "WORKFLOW_STAGE"
-	TargetAutomation          = "AUTOMATION"
+	// TargetAgent identifies direct agent prompt materialization in the closed target-kind registry.
+	// TargetAgent обозначает прямую материализацию prompt агента в закрытом реестре видов цели.
+	TargetAgent = "AGENT"
+	// TargetWorkflowStage identifies workflow-stage prompts with workflow, stage and expected-result
+	// semantic slots.
+	// TargetWorkflowStage обозначает prompt стадии workflow с семантическими слотами workflow, стадии
+	// и ожидаемого результата.
+	TargetWorkflowStage = "WORKFLOW_STAGE"
+	// TargetAutomation identifies automation prompt materialization without granting the template
+	// scheduler or execution authority.
+	// TargetAutomation обозначает материализацию prompt автоматизации без предоставления шаблону
+	// полномочий планировщика либо выполнения.
+	TargetAutomation = "AUTOMATION"
+	// TargetSessionContinuation identifies continuation prompts that may include the pinned
+	// runtime-change slot and validated runtime diff.
+	// TargetSessionContinuation обозначает prompt продолжения с возможными закреплённым слотом
+	// runtime-изменений и проверенным runtime diff.
 	TargetSessionContinuation = "SESSION_CONTINUATION"
 )
 
+// Diagnostic carries a safe code/message and optional variable plus one-based source position; it
+// does not contain the raw execution error or template body.
+// Diagnostic содержит безопасные код и сообщение, необязательную переменную и позицию от единицы
+// без исходной ошибки исполнения либо тела шаблона.
 type Diagnostic struct {
 	VariableName            string
 	Severity, Code, Message string
 	Line, Column            int32
 }
 
-// Snapshot содержит только проверенные server-owned значения одной immutable revision.
+// Snapshot contains one immutable owner revision with verified context, templates, values and
+// applicable capability layers; callers must preserve its referenced maps and slices.
+// Snapshot содержит одну immutable-ревизию владельца с проверенными контекстом, шаблонами,
+// значениями и применимыми слоями capabilities; вызывающий сохраняет неизменность вложенных maps и
+// slices.
 type Snapshot struct {
 	AssistantCore                                         *entity.PromptAssistantCore `json:",omitempty"`
 	ExtraTemplates                                        []entity.PromptUserTemplate `json:",omitempty"`
@@ -52,6 +78,11 @@ type Snapshot struct {
 	WorkflowStage, Automation, SessionContinuation        string
 }
 
+// Materialization holds full and redacted prompt output, provenance, pinned digests, effective
+// capabilities and diagnostics; incomplete semantic results withhold executable text and digest.
+// Materialization хранит полный и скрытый вывод prompt, происхождение, закреплённые дайджесты,
+// effective capabilities и диагностику; неполные семантические результаты не выдают исполняемый
+// текст и дайджест.
 type Materialization struct {
 	Complete                                                                       bool
 	ContextPin                                                                     entity.PromptContextPin
@@ -66,7 +97,10 @@ type Materialization struct {
 	Diagnostics                                                                    []Diagnostic
 }
 
-// FromSnapshot одинаково переносит immutable owner snapshot в preview и runtime.
+// FromSnapshot maps the immutable domain snapshot into the renderer shape without changing its
+// provenance or deep-copying shared templates, maps and capability layers.
+// FromSnapshot переносит immutable-снимок домена в форму renderer без изменения происхождения и
+// глубокого копирования общих шаблонов, maps и слоёв capabilities.
 func FromSnapshot(snapshot entity.PromptMaterializationSnapshot) Snapshot {
 	values := make(map[SemanticSlot]string, len(snapshot.SemanticValues))
 	for name, value := range snapshot.SemanticValues {
@@ -86,6 +120,12 @@ func FromSnapshot(snapshot entity.PromptMaterializationSnapshot) Snapshot {
 		WorkflowStage: snapshot.WorkflowStage, Automation: snapshot.Automation, SessionContinuation: snapshot.SessionContinuation}
 }
 
+// Validate checks the nonempty 100000-byte template, syntax, closed variable/function and slot
+// rules and bounded execution against canonical fixture data, returning safe positional
+// diagnostics.
+// Validate проверяет непустой шаблон до 100000 байт, синтаксис, закрытые правила переменных,
+// функций и слотов и ограниченное исполнение на канонических данных с безопасной позиционной
+// диагностикой.
 func Validate(templateText string, allowedVariables map[string]string) []Diagnostic {
 	if strings.TrimSpace(templateText) == "" || len(templateText) > 100_000 {
 		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_INVALID", Message: "Prompt template is empty or exceeds the size limit", Line: 1, Column: 1}}
@@ -109,6 +149,10 @@ func Validate(templateText string, allowedVariables map[string]string) []Diagnos
 	return nil
 }
 
+// Materialize selects semantic rendering only from the snapshot service revision, using legacy
+// rendering solely when that revision is absent.
+// Materialize выбирает семантическое построение только по service revision снимка и использует
+// историческое построение исключительно при отсутствии этой ревизии.
 func Materialize(templateText string, snapshot Snapshot) (Materialization, error) {
 	if snapshot.ServiceTemplateRevision != "" {
 		return materializeSemantic(templateText, snapshot)
@@ -116,7 +160,12 @@ func Materialize(templateText string, snapshot Snapshot) (Materialization, error
 	return materializeLegacy(templateText, snapshot)
 }
 
-// materializeLegacy сохраняет интерпретацию уже записанных immutable snapshots.
+// materializeLegacy replays historical snapshots with canonical values, separately redacted
+// rendering and mandatory service/capability blocks, pinning output and every authority layer in
+// the digest.
+// materializeLegacy воспроизводит исторические снимки с каноническими значениями, отдельным
+// скрытым построением и обязательными service и capability блоками, закрепляя вывод и каждый слой
+// полномочий в дайджесте.
 func materializeLegacy(templateText string, snapshot Snapshot) (Materialization, error) {
 	variables := copyVariables(snapshot.Variables)
 	variables["project.ref"] = snapshot.ProjectRef
@@ -183,8 +232,10 @@ func materializeLegacy(templateText string, snapshot Snapshot) (Materialization,
 		TemplateDigest: snapshot.TemplateDigest, EffectiveCapabilities: effective, Diagnostics: diagnostics}, nil
 }
 
-// Intersection закрыто пересекает authority layers. nil означает неприменимый
-// слой, а непустой или явно пустой slice является authority-ограничением.
+// Intersection returns sorted distinct capabilities present in every applicable layer; nil skips a
+// layer, whereas an explicit empty layer denies all capabilities.
+// Intersection возвращает отсортированные уникальные capabilities всех применимых слоёв; nil
+// пропускает слой, а явно пустой слой запрещает все capabilities.
 func Intersection(layers ...[]string) []string {
 	var effective map[string]struct{}
 	for _, layer := range layers {
@@ -216,7 +267,10 @@ func Intersection(layers ...[]string) []string {
 	return result
 }
 
-// Union объединяет только server-owned grants разных capability namespaces.
+// Union normalizes and sorts distinct capability names from server-owned grant layers; it combines
+// already trusted namespaces rather than deciding eligibility.
+// Union нормализует и сортирует уникальные имена capabilities слоёв grants сервера; объединяет уже
+// доверенные пространства, не принимая решение о доступности.
 func Union(layers ...[]string) []string {
 	values := make(map[string]struct{})
 	for _, layer := range layers {
@@ -235,6 +289,10 @@ func Union(layers ...[]string) []string {
 	return result
 }
 
+// SafePreview replaces the literal secret-tag prefix and truncates to 4096 bytes plus a marker; it
+// neither performs complete secret detection nor preserves rune boundaries.
+// SafePreview заменяет буквальный префикс тега секрета и ограничивает вывод 4096 байтами с
+// маркером; не выполняет полное обнаружение секретов и не сохраняет границу Unicode-символа.
 func SafePreview(value string) string {
 	const limit = 4_096
 	value = strings.ReplaceAll(value, "<secret", "<redacted-secret")
@@ -244,6 +302,10 @@ func SafePreview(value string) string {
 	return value[:limit] + "\n[truncated]"
 }
 
+// serviceBlock emits a trimmed legacy service block or an explicit unused marker when its supplied
+// value is blank.
+// serviceBlock выдаёт исторический service-блок с обрезанными краевыми пробелами либо явный маркер
+// unused при пустом значении.
 func serviceBlock(name, value string) string {
 	if strings.TrimSpace(value) == "" {
 		return fmt.Sprintf("<%s used=\"false\">unused</%s>", name, name)
@@ -251,6 +313,10 @@ func serviceBlock(name, value string) string {
 	return fmt.Sprintf("<%s used=\"true\">\n%s\n</%s>", name, strings.TrimSpace(value), name)
 }
 
+// safeServiceBlock preserves only whether the legacy service block is configured, replacing any
+// nonblank value with a fixed marker.
+// safeServiceBlock сохраняет только признак настройки исторического service-блока, заменяя
+// непустое значение фиксированным маркером.
 func safeServiceBlock(name, value string) string {
 	if strings.TrimSpace(value) == "" {
 		return serviceBlock(name, "")
@@ -258,6 +324,10 @@ func safeServiceBlock(name, value string) string {
 	return serviceBlock(name, "configured")
 }
 
+// listBlock emits a comma-joined legacy list block or an explicit unused marker without validating
+// its already prepared values.
+// listBlock выдаёт исторический блок списка с соединением через запятую либо явный unused без
+// проверки уже подготовленных значений.
 func listBlock(name string, values []string) string {
 	if len(values) == 0 {
 		return fmt.Sprintf("<%s used=\"false\">unused</%s>", name, name)
@@ -265,6 +335,10 @@ func listBlock(name string, values []string) string {
 	return fmt.Sprintf("<%s used=\"true\">%s</%s>", name, strings.Join(values, ","), name)
 }
 
+// capabilityLayer encodes nil as not applicable and other layers as a normalized sorted list,
+// preserving that distinction in historical materialization digests.
+// capabilityLayer кодирует nil как неприменимый слой, а остальные слои как нормализованный
+// отсортированный список, сохраняя различие в исторических дайджестах материализации.
 func capabilityLayer(values []string) string {
 	if values == nil {
 		return "<not-applicable>"
@@ -272,6 +346,10 @@ func capabilityLayer(values []string) string {
 	return strings.Join(Union(values), ",")
 }
 
+// copyVariables copies the flat string variable map so renderer-added reserved references do not
+// mutate the caller map.
+// copyVariables копирует плоскую map строковых переменных, чтобы добавление зарезервированных
+// ссылок renderer не меняло map вызывающего.
 func copyVariables(input map[string]string) map[string]string {
 	result := make(map[string]string, len(input)+4)
 	for name, value := range input {
@@ -280,6 +358,10 @@ func copyVariables(input map[string]string) map[string]string {
 	return result
 }
 
+// Catalog returns a fresh closed map of canonical dotted prompt variables; empty values describe
+// names, not availability or authority.
+// Catalog возвращает новую закрытую map канонических переменных prompt с точками; пустые значения
+// описывают имена, а не доступность либо полномочия.
 func Catalog() map[string]string {
 	return map[string]string{
 		"user.ref": "", "user.name": "", "organization.ref": "", "organization.name": "",
@@ -301,10 +383,18 @@ func Catalog() map[string]string {
 	}
 }
 
+// parseTemplate parses a named Go template with missing-key errors and the validating slot
+// function; separate AST checks enforce the allowed language subset.
+// parseTemplate разбирает именованный Go-шаблон с ошибками отсутствующих ключей и валидирующей
+// функцией slot; допустимое подмножество языка ограничивают отдельные проверки AST.
 func parseTemplate(templateText string) (*template.Template, error) {
 	return template.New("prompt").Option("missingkey=error").Funcs(template.FuncMap{"slot": validateSlot}).Parse(templateText)
 }
 
+// firstUnknownTemplateField walks template branches in source order and returns the first
+// disallowed variable, item field, function or nested-template use with its parser position.
+// firstUnknownTemplateField обходит ветви шаблона в исходном порядке и возвращает первую
+// запрещённую переменную, поле элемента, функцию либо вложенный template с позицией parser.
 func firstUnknownTemplateField(node parse.Node, allowed map[string]string) (string, parse.Pos) {
 	if node == nil || (reflect.ValueOf(node).Kind() == reflect.Pointer && reflect.ValueOf(node).IsNil()) {
 		return "", 0
@@ -382,6 +472,10 @@ func firstUnknownTemplateField(node parse.Node, allowed map[string]string) (stri
 	return "", 0
 }
 
+// templateLineColumn converts a one-based parser byte position into one-based line and Unicode
+// column, falling back to the first position for invalid offsets.
+// templateLineColumn преобразует байтовую позицию parser от единицы в строку и Unicode-столбец от
+// единицы с возвратом первой позиции при неверном смещении.
 func templateLineColumn(templateText string, position parse.Pos) (int32, int32) {
 	if position < 1 || int(position) > len(templateText)+1 {
 		return 1, 1
@@ -393,6 +487,10 @@ func templateLineColumn(templateText string, position parse.Pos) (int32, int32) 
 	return int32(line), int32(column)
 }
 
+// executionDiagnosticField finds the first field AST node whose expression appears in the
+// execution error, returning only its name and position rather than exposing error text.
+// executionDiagnosticField находит первый узел поля AST с выражением из ошибки исполнения и
+// возвращает только имя и позицию без раскрытия текста ошибки.
 func executionDiagnosticField(node parse.Node, executionErr error) (string, parse.Pos) {
 	if node == nil || executionErr == nil || (reflect.ValueOf(node).Kind() == reflect.Pointer && reflect.ValueOf(node).IsNil()) {
 		return "", 0
@@ -435,6 +533,10 @@ func executionDiagnosticField(node parse.Node, executionErr error) (string, pars
 	return "", 0
 }
 
+// executionDiagnosticBranchField searches a branch condition, main body and else body in order for
+// a field associated with the execution error.
+// executionDiagnosticBranchField по порядку ищет связанное с ошибкой исполнения поле в условии
+// ветви, основном теле и теле else.
 func executionDiagnosticBranchField(branch *parse.BranchNode, executionErr error) (string, parse.Pos) {
 	for _, node := range []parse.Node{branch.Pipe, branch.List, branch.ElseList} {
 		if name, position := executionDiagnosticField(node, executionErr); name != "" {
@@ -444,6 +546,10 @@ func executionDiagnosticBranchField(branch *parse.BranchNode, executionErr error
 	return "", 0
 }
 
+// allowedTemplateFunction accepts only the closed logic, comparison, length, print/printf and slot
+// function subset used by the prompt language.
+// allowedTemplateFunction принимает только закрытое подмножество логики, сравнений, длины,
+// print/printf и slot языка prompt.
 func allowedTemplateFunction(name string) bool {
 	switch name {
 	case "and", "or", "not", "eq", "ne", "lt", "le", "gt", "ge", "len", "print", "printf", "slot":
@@ -453,6 +559,10 @@ func allowedTemplateFunction(name string) bool {
 	}
 }
 
+// firstUnknownBranchField checks the condition, main body and else body in order for the first
+// disallowed template field or operation.
+// firstUnknownBranchField по порядку проверяет условие, основное тело и else на первое запрещённое
+// поле либо операцию шаблона.
 func firstUnknownBranchField(branch *parse.BranchNode, allowed map[string]string) (string, parse.Pos) {
 	for _, node := range []parse.Node{branch.Pipe, branch.List, branch.ElseList} {
 		if unknown, position := firstUnknownTemplateField(node, allowed); unknown != "" {
@@ -462,6 +572,10 @@ func firstUnknownBranchField(branch *parse.BranchNode, allowed map[string]string
 	return "", 0
 }
 
+// allowedTemplateField accepts catalog names, their namespace prefixes or closed descriptor item
+// fields; it does not prove that a value is available in the current snapshot.
+// allowedTemplateField принимает имена каталога, префиксы их пространств либо закрытые поля
+// элементов дескриптора без подтверждения доступности значения в текущем снимке.
 func allowedTemplateField(name string, allowed map[string]string) bool {
 	if _, ok := allowed[name]; ok {
 		return true
@@ -474,6 +588,10 @@ func allowedTemplateField(name string, allowed map[string]string) bool {
 	return allowedTemplateItemField(name)
 }
 
+// allowedTemplateItemField accepts only the fixed file/tool descriptor field names usable in
+// template iteration.
+// allowedTemplateItemField принимает только фиксированные имена полей дескрипторов файлов и
+// инструментов, доступные в итерации шаблона.
 func allowedTemplateItemField(name string) bool {
 	switch name {
 	case "artifact_ref", "revision_ref", "name", "media_type", "size", "sha256", "path", "source", "version", "purpose", "description", "ref", "capability":
@@ -483,6 +601,10 @@ func allowedTemplateItemField(name string) bool {
 	}
 }
 
+// canonicalTemplateData builds fresh nested namespace defaults and file-context paths, then
+// recursively overlays owner values without authorizing their contents.
+// canonicalTemplateData создаёт новые вложенные умолчания пространств и пути файлового контекста,
+// затем рекурсивно накладывает значения владельца без авторизации содержимого.
 func canonicalTemplateData(overrides map[string]any) map[string]any {
 	fileScope := func(files []any, directory string) map[string]any {
 		return map[string]any{
@@ -524,6 +646,10 @@ func canonicalTemplateData(overrides map[string]any) map[string]any {
 	return data
 }
 
+// validationTemplateData adds representative file and tool descriptors to canonical defaults so
+// validation exercises collection item fields and execution types.
+// validationTemplateData добавляет характерные дескрипторы файла и инструмента к каноническим
+// умолчаниям для проверки полей элементов коллекций и типов исполнения.
 func validationTemplateData() map[string]any {
 	file := map[string]any{
 		"artifact_ref": "art_example", "revision_ref": "arv_example", "name": "example.txt",
@@ -542,6 +668,10 @@ func validationTemplateData() map[string]any {
 	return data
 }
 
+// mergeTemplateMap recursively merges map values into mutable target maps and directly assigns
+// non-map values, including slices, without deep-copying every leaf.
+// mergeTemplateMap рекурсивно объединяет map-значения в изменяемые целевые maps и прямо
+// присваивает остальные значения, включая slices, без глубокого копирования каждого листа.
 func mergeTemplateMap(target map[string]any, source map[string]any) {
 	for key, value := range source {
 		if nested, ok := value.(map[string]any); ok {
@@ -557,6 +687,10 @@ func mergeTemplateMap(target map[string]any, source map[string]any) {
 	}
 }
 
+// setNestedTemplateValue sets a dotted string variable, creating or replacing intermediate maps in
+// the renderer-owned data tree.
+// setNestedTemplateValue назначает строковую переменную с точками, создавая либо заменяя
+// промежуточные maps в дереве данных renderer.
 func setNestedTemplateValue(data map[string]any, name, value string) {
 	parts := strings.Split(name, ".")
 	current := data
@@ -571,6 +705,12 @@ func setNestedTemplateValue(data map[string]any, name, value string) {
 	current[parts[len(parts)-1]] = value
 }
 
+// redactTemplateData rebuilds supported maps/collections with path placeholders and
+// numeric/boolean zero values, keeping at most one representative collection item for legacy safe
+// rendering.
+// redactTemplateData пересоздаёт поддерживаемые maps и коллекции с placeholders пути и нулевыми
+// числами и bool, оставляя не более одного характерного элемента для исторического скрытого
+// построения.
 func redactTemplateData(value any, path string) any {
 	switch current := value.(type) {
 	case map[string]any:
@@ -626,6 +766,10 @@ func redactTemplateData(value any, path string) any {
 	}
 }
 
+// executeTemplate executes the parsed template into the bounded prompt buffer, discarding partial
+// output when template execution or a write fails.
+// executeTemplate исполняет разобранный шаблон в ограниченный буфер prompt, отбрасывая частичный
+// вывод при ошибке исполнения либо записи.
 func executeTemplate(parsed *template.Template, data map[string]any) (string, error) {
 	var output boundedPromptBuffer
 	if err := parsed.Execute(&output, data); err != nil {
@@ -634,10 +778,18 @@ func executeTemplate(parsed *template.Template, data map[string]any) (string, er
 	return output.String(), nil
 }
 
+// boundedPromptBuffer wraps a bytes buffer with the renderer output bound enforced before each
+// template write.
+// boundedPromptBuffer оборачивает байтовый буфер ограничением вывода renderer, проверяемым до
+// каждой записи шаблона.
 type boundedPromptBuffer struct {
 	bytes.Buffer
 }
 
+// Write rejects the whole write when it would exceed 256 KiB, leaving the previously buffered
+// bytes unchanged on overflow.
+// Write отклоняет всю запись при превышении 256 KiB, сохраняя ранее записанные байты без изменений
+// при переполнении.
 func (buffer *boundedPromptBuffer) Write(value []byte) (int, error) {
 	if buffer.Len()+len(value) > 256<<10 {
 		return 0, errors.New("materialized prompt exceeds the size limit")
@@ -645,6 +797,10 @@ func (buffer *boundedPromptBuffer) Write(value []byte) (int, error) {
 	return buffer.Buffer.Write(value)
 }
 
+// validTargetKind accepts only agent, workflow-stage, automation and session-continuation target
+// kinds from the local closed registry.
+// validTargetKind принимает только виды цели агента, стадии workflow, автоматизации и продолжения
+// сессии из локального закрытого реестра.
 func validTargetKind(value string) bool {
 	switch value {
 	case TargetAgent, TargetWorkflowStage, TargetAutomation, TargetSessionContinuation:
@@ -654,6 +810,10 @@ func validTargetKind(value string) bool {
 	}
 }
 
+// validDigest checks exactly 64 decodable hexadecimal characters, accepting either letter case; it
+// does not verify content, provenance or owner authority.
+// validDigest проверяет ровно 64 декодируемых hex-символа в любом регистре, не подтверждая
+// содержимое, происхождение либо полномочия владельца.
 func validDigest(value string) bool {
 	if len(value) != 64 {
 		return false

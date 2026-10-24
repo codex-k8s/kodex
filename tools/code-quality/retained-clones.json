@@ -5472,6 +5472,30 @@
       "fragmentSHA256": "5269ebbe6616dba4825944174de363584aca9334fdc072884f93f5e77105cd1c",
       "count": 1,
       "reason": "Точное окно таблиц отрицательных сценариев проверяет одинаковые повреждения общих owner/connection/grant полей в разных nominal protobuf responses: project и system assistant candidates. Project-тест дополнительно проверяет собственные project/profile/version pins и отдельный wrapper, system-тест — организационную проекцию. Оба полных теста прочитаны; generic mutator потребует reflection/переупаковки разных DTO либо общего production converter и ослабит независимость fixtures от проверяемой проекции. Сохранены отдельные типизированные mutations и asserts, а не исключены файлы или все тесты."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/prompt/assistant_core_test.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/prompt_workflow_execution_test.go",
+      "fragmentSHA256": "30330dfe1cc350cf720844c2411854cf8e9d3e9ee26f71970a58514d5cd535b5",
+      "count": 1,
+      "reason": "Точное окно103 tokens совпадает только в вызове runtime decoder и начале проверки PLATFORM CONSTRAINTS. Domain test доказывает compiled assistant core, однопроходность и durable rejoin; PostgreSQL adapter test доказывает текущий workflow root, owner projection и отсутствие подмены result gate правом отправки. Разные package, fixtures и содержательные assertions прочитаны полностью. Общего production алгоритма нет; межпакетный test helper потребовал бы отдельного экспортируемого API только ради короткого декодирования и спрятал бы разные проверяемые границы. Сохранены лишь эти пути/hash/count1, не тестовые файлы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/prompt/materializer.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/prompt/materializer.go",
+      "fragmentSHA256": "58ed31fec720dba3c255b1af7b9171ca9f719d5fe5cf63eaaa6fc73165ecaaaf",
+      "count": 1,
+      "reason": "Окно160 tokens охватывает общий каркас source-ordered AST обхода, но разные политики: firstUnknownTemplateField закрыто проверяет переменные, функции, slots и nested templates; executionDiagnosticField только находит безопасные имя и позицию по уже полученной execution error и не является валидатором. Их branch helpers и функции остаются раздельными по ответственности. Универсальный visitor ради этого каркаса потребовал бы callbacks с различными stop/validation правилами и усложнил бы проверку закрытого отказа; самостоятельный общий renderer или authority алгоритм здесь не дублируется. Сохранено только данное внутрефайловое окно/hash/count1, не AST walkers или весь materializer."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/domain/service/prompt/materializer.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/prompt_templates.go",
+      "fragmentSHA256": "7c142db62bcb4445eb12bcaeceed93fd2a98b2165fdf05e8abec659de6194793",
+      "count": 1,
+      "reason": "После предметных комментариев physical minLines достигнут у105-token окна явных nominal DTO assignments и границ соседних функций. FromSnapshot переносит immutable owner snapshot в доменный renderer, тогда как castPromptContextPin переводит domain dependency pin в protobuf-ответ. В первом окне начало Validate, во втором начало castPromptSlot: самостоятельного общего алгоритма всего окна нет. Наборы полей и направления различны; общий converter в libs заставил бы домен зависеть от transport/generated либо стёр бы типы через reflection. Оставлено только это точное окно двух путей/hash/count1, не authority checks, casters или файлы целиком."
     }
   ]
 }

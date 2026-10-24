@@ -4,12 +4,54 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.356.0
+version: 1.357.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Материализация prompt и соседние границы — 24.10.2026
+
+На основе `1239f062c169727182fa08d7811a3b566a39b4c0` предметно описаны
+144 оставшихся собственных Go-объявления: весь остаток domain/service/prompt,
+gRPC prompt_templates и PostgreSQL workflow-execution prompt tests. Новый
+узкий тестовый helper также имеет EN→RU комментарий. Пакет prompt теперь
+не содержит пропусков; gateway сохраняет полное покрытие. Go inventory:
+16553/21349, missing 4796. Total вырос на один тестовый helper.
+
+Комментарии сохраняют различия legacy, pinned v2 и current v3; full и safe
+sections; nil authority layer и явно пустого запрета; syntax/ref/digest shape
+и полномочий; однократного исполнения и буквального template в task/core;
+текущего root и истории. FromSnapshot не объявлен глубокой копией всех
+полей. Локальный validDigest принимает оба регистра hex: он не заменён
+lowercase validator другого слоя. SafePreview описан как байтовое ограничение
+и узкая замена префикса, без обещания полного secret detection либо rune-safe
+обрезки. Новый service revision, runtime поведение и contract не менялись.
+
+Один одинаковый блок построения MODEL diff с точными runtime/session/turn/
+attempt pins вынесен в continuationModelDiffFixture для двух тестов пакета.
+Base prompt, typed notice, consumer input и все negative assertions остаются
+у callers. AST двух файлов совпали с исходным head после ровно ожидаемого
+переноса блока, двух замен вызовов и добавления helper. В остальных 15 Go-
+файлах AST/directives совпали без преобразования. Все production изменения
+этого этапа являются комментариями.
+
+Адресно сохранены три точных окна: decoder/CONSTRAINTS assertion двух
+независимых test packages, AST validator против поиска позиции execution
+error и domain snapshot mapper против protobuf context-pin caster. Их цели,
+направления и проверяемые границы различны. Новых broad ignores нет, exact
+fragment/hash/count и stale guards сохранены. Один clone удалён выносом;
+одно новое окно DTO assignments достигло physical minLines из-за comments.
+Итог: 1795 raw / 807 retained / 988 unresolved; 6655 own / 222 excluded.
+
+PASS LOCAL: полный build/unit control-plane, тесты prompt, 17 unit анализатора,
+пять exact-ignore guards, AST/directive проверки. Context7 /golang/go:
+text/template Execute, builtins, parse trees и обработка ошибок. Эти проверки
+не обращались к live provider/SSO/STT/почте; PostgreSQL component acceptance,
+merge/deploy/browser/live/full пользовательский QA продолжения NOT RUN.
+Прежние findings остаются открытыми. Следующий объём — 4796 объявлений
+control-plane и 988 unresolved групп в том же Draft PR #1828.
 
 ## Полнота комментариев всего HTTP-шлюза — 24.10.2026
 
