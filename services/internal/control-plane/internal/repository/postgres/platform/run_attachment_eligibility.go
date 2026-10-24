@@ -86,7 +86,7 @@ func (repository *Repository) GetRunAttachmentEligibility(ctx context.Context, p
 			if err := tx.QueryRow(ctx, queryResumableSessionGet, pgx.StrictNamedArgs{
 				"organization_id": current.organizationID, "actor_id": current.actorID,
 				"authority_project_id": current.authorityProjectID, "run_ref": runRef,
-			}).Scan(&candidate.RunRef, &candidate.Version, &candidate.SessionID, &candidate.SessionRef, &candidate.ProjectID, &candidate.ProjectRef, &candidate.TargetType, &candidate.TargetRef, &candidate.AccountRef); err != nil {
+			}).Scan(&candidate.RunRef, &candidate.Version, &candidate.SessionID, &candidate.SessionRef, &candidate.ProjectID, &candidate.ProjectRef, &candidate.TargetType, &candidate.TargetRef, &candidate.AccountRef, &candidate.InputJSON); err != nil {
 				return result, errs.ErrUnavailable
 			}
 			binding, err := readSessionModelCatalog(ctx, tx, current.organizationID, candidate.SessionID, candidate.AccountRef)
