@@ -1399,7 +1399,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				err = errs.ErrConflict
 			}
 		}
-		if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+		if preparedRuntimeConfigurationOperation(operation.Type) {
 			matching, matchErr := repository.assistantRuntimeConfigurationSnapshotMatches(ctx, operationEffectsTx, scope, operation)
 			if matchErr != nil || !matching {
 				err = errs.ErrConflict

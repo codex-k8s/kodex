@@ -60,7 +60,7 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		}
 		_, err := repository.authorizeSystemAssistantImage(ctx, tx, current, payload, input.Kind == command.UpdateSystemAssistantRoleImageRecipe)
 		return err
-	case command.PublishAssistantRuntimeConfig:
+	case command.PublishAssistantRuntimeConfig, command.PublishPreparedAgentRuntimeConfig:
 		payload, ok := input.Payload.(command.AssistantRuntimeConfigurationInput)
 		if !ok {
 			return errs.ErrInvalid

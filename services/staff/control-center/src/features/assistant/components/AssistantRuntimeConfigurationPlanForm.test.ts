@@ -38,7 +38,7 @@ const disposers: Array<() => void> = [];
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
 });
-function operation(mode?: unknown): EditablePlanOperation {
+function operation(mode?: unknown, ordinary = false): EditablePlanOperation {
   const owner = {
     agentRef: "agt_assistant",
     assistantScope: "SYSTEM",
@@ -81,12 +81,22 @@ function operation(mode?: unknown): EditablePlanOperation {
     },
     after: { ...owner, runtimeProfilePin, webSearchMode: mode ?? "cached" },
   };
+  if (ordinary) {
+    input.type = "PREPARE_AGENT_RUNTIME_CONFIGURATION";
+    for (const fields of [input.parameters, input.before, input.after]) {
+      delete fields.assistantScope;
+      delete fields.assistantProfileRef;
+      fields.scopeKind = "PROJECT";
+      fields.projectRef = "prj_synthetic";
+      fields.targetKind = "AGENT";
+    }
+  }
   const [editable] = editableOperations([input]);
   if (!editable) throw new Error("Synthetic operation is missing");
   return editable;
 }
-function mount(mode?: unknown, disabled = false) {
-  const props = reactive({ operation: operation(mode), disabled });
+function mount(mode?: unknown, disabled = false, ordinary = false) {
+  const props = reactive({ operation: operation(mode, ordinary), disabled });
   const events: Array<[string, unknown[]]> = [];
   let setup!: {
     changeWebSearch: (event: Event) => void;
@@ -231,4 +241,20 @@ it("readonly или неподдерживаемый выбор не измен�
   editable.setup.changeWebSearch(event("future-mode"));
   editable.setup.changeWebSearch(event(""));
   expect(editable.events.filter(([name]) => name === "parameter")).toEqual([]);
+});
+
+it("редактирует специализированный ordinary-план и сохраняет закрытую project policy", () => {
+  const { props, events, setup } = mount("live", false, true);
+  const original = operationInputs([props.operation])[0];
+  setup.changeWebSearch(event("cached"));
+  const saved = operationInputs([props.operation])[0];
+  expect(events.some(([name]) => name === "parameter")).toBe(true);
+  expect(saved?.type).toBe("PREPARE_AGENT_RUNTIME_CONFIGURATION");
+  expect(saved?.parameters.webSearchMode).toBe("cached");
+  expect(saved?.before).toEqual(original?.before);
+  expect(saved?.target).toEqual(original?.target);
+  expect(saved?.parameters.targetKind).toBe("AGENT");
+  expect(saved?.parameters.projectRef).toBe("prj_synthetic");
+  expect(saved?.parameters.assistantScope).toBeUndefined();
+  expect(saved?.parameters.assistantProfileRef).toBeUndefined();
 });

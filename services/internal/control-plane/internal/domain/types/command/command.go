@@ -354,6 +354,9 @@ const (
 	// PublishAssistantRuntimeConfig выбирает публикацию runtime помощника через границу версионного
 	// owner-плана, не обычный endpoint сотрудника.
 	PublishAssistantRuntimeConfig Kind = "PUBLISH_ASSISTANT_RUNTIME_CONFIGURATION"
+	// PublishPreparedAgentRuntimeConfig atomically publishes reviewed model and overlay settings for an ordinary project employee.
+	// PublishPreparedAgentRuntimeConfig атомарно публикует согласованные настройки модели и overlay обычного сотрудника проекта.
+	PublishPreparedAgentRuntimeConfig Kind = "PUBLISH_PREPARED_AGENT_RUNTIME_CONFIGURATION"
 	// CreateSystemAssistantRoleImageRecipe selects creation of the organization assistant's role-image
 	// recipe inside its explicit system/organization scope.
 	// CreateSystemAssistantRoleImageRecipe выбирает создание рецепта образа общесистемного помощника
@@ -1190,13 +1193,14 @@ type AgentRuntimeConfigurationInput struct {
 	ProviderAccounts                                       []entity.ProviderAccountCandidate
 }
 
-// AssistantRuntimeConfigurationInput is assigned by an owner-versioned assistant plan and adds exact
-// runtime-profile provenance, reasoning/web-search settings and assistant scope lineage; it is not the
-// staff publication endpoint's general payload.
-// AssistantRuntimeConfigurationInput назначается версионным owner-планом помощника и добавляет точное
-// происхождение runtime profile, reasoning, web search и scope lineage; общим payload публикации
-// сотрудника не является.
+// AssistantRuntimeConfigurationInput is assigned by an owner-versioned plan with exact profile,
+// account catalog and overlay pins. Empty TargetKind retains the protected assistant policy;
+// AGENT selects the separate ordinary employee policy and forbids assistant profile lineage.
+// AssistantRuntimeConfigurationInput назначается версионным планом владельца с точными привязками
+// профиля, каталога аккаунтов и overlay. Пустой TargetKind сохраняет защищённую политику помощника;
+// AGENT выбирает отдельную политику обычного сотрудника без профиля помощника.
 type AssistantRuntimeConfigurationInput struct {
+	TargetKind                                                  string
 	RuntimeProfilePin                                           entity.AssistantRuntimeProfilePin
 	Configuration                                               AgentRuntimeConfigurationInput
 	ReasoningEffort                                             string

@@ -15,6 +15,7 @@ var queryAssistantConfigurationResolveTarget string
 type assistantConfigurationTarget struct {
 	scopeKind, projectRef, profileRef, name string
 	version                                 int64
+	ordinary                                bool
 }
 
 // Обычный Agent не превращается в помощника из-за пустого projectRef запроса.

@@ -609,6 +609,11 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	}
 	selfInstructionsOperation := input.IsSystemAssistant() && input.AgentRef != ""
 	selfConfigurationOperation := input.IsAssistant() && input.AgentRef != ""
+	if input.AssistantScope == runtimecontract.AssistantScopeProject && input.ProjectRef != "" {
+		employee := assistantRuntimeConfigurationSchema(opaqueRefSchema())
+		employee["description"] = "Prepare a reviewed runtime configuration for an ordinary employee in this exact project, after CREATE_AGENT has returned its real ref. Never target any assistant or another project. Read AGENT_RUNTIME_CONFIGURATION plus fresh profile/account/model catalogs. Supply model, reasoningEffort and the complete desired provider policy; the server assigns ownership, versions and pins. Owner confirmation atomically publishes model and overlay. This never launches a run or changes grants, instructions, image or environment."
+		result = append(result, assistantOperationSchema("PREPARE_AGENT_RUNTIME_CONFIGURATION", employee))
+	}
 	if selfConfigurationOperation {
 		configurationAgentRef := opaqueRefSchema()
 		if input.AssistantScope == runtimecontract.AssistantScopeProject {
@@ -713,6 +718,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
 			selfInstructionsOperation && (kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE") ||
 			selfConfigurationOperation && kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" ||
+			input.AssistantScope == runtimecontract.AssistantScopeProject && input.ProjectRef != "" && kind == "PREPARE_AGENT_RUNTIME_CONFIGURATION" ||
 			projectSelfOperation && (kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY") ||
 			projectSelfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 			filtered = append(filtered, operation)

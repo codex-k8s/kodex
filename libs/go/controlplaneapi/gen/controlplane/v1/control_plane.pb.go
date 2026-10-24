@@ -8222,6 +8222,8 @@ const (
 	AssistantPlanOperation_TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT AssistantPlanOperation_Type = 32
 	// Создать новую immutable ревизию существующего Artifact после owner Apply.
 	AssistantPlanOperation_TYPE_CREATE_PROJECT_FILE_REVISION AssistantPlanOperation_Type = 33
+	// Подготовить атомарную модель и overlay обычного сотрудника точного проекта.
+	AssistantPlanOperation_TYPE_PREPARE_AGENT_RUNTIME_CONFIGURATION AssistantPlanOperation_Type = 34
 )
 
 // Enum value maps for AssistantPlanOperation_Type.
@@ -8261,6 +8263,7 @@ var (
 		31: "TYPE_PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION",
 		32: "TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT",
 		33: "TYPE_CREATE_PROJECT_FILE_REVISION",
+		34: "TYPE_PREPARE_AGENT_RUNTIME_CONFIGURATION",
 	}
 	AssistantPlanOperation_Type_value = map[string]int32{
 		"TYPE_UNSPECIFIED":                                      0,
@@ -8297,6 +8300,7 @@ var (
 		"TYPE_PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION": 31,
 		"TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT":       32,
 		"TYPE_CREATE_PROJECT_FILE_REVISION":                     33,
+		"TYPE_PREPARE_AGENT_RUNTIME_CONFIGURATION":              34,
 	}
 )
 
@@ -83869,7 +83873,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05State\x12\x15\n" +
 	"\x11STATE_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fSTATE_ABSENT\x10\x01\x12\x0f\n" +
-	"\vSTATE_MATCH\x10\x02\"\xfc\x10\n" +
+	"\vSTATE_MATCH\x10\x02\"\xaa\x11\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
 	"\x04type\x18\x02 \x01(\x0e2,.controlplane.v1.AssistantPlanOperation.TypeR\x04type\x12\x14\n" +
@@ -83894,7 +83898,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05after\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x05after\x12\x1a\n" +
 	"\bselected\x18\x10 \x01(\bR\bselected\x12/\n" +
 	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\x12*\n" +
-	"\x0etarget_version\x18\x12 \x01(\x03H\x01R\rtargetVersion\x88\x01\x01\"\xcb\t\n" +
+	"\x0etarget_version\x18\x12 \x01(\x03H\x01R\rtargetVersion\x88\x01\x01\"\xf9\t\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -83930,7 +83934,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	".TYPE_CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT\x10\x1e\x129\n" +
 	"5TYPE_PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION\x10\x1f\x123\n" +
 	"/TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT\x10 \x12%\n" +
-	"!TYPE_CREATE_PROJECT_FILE_REVISION\x10!\"n\n" +
+	"!TYPE_CREATE_PROJECT_FILE_REVISION\x10!\x12,\n" +
+	"(TYPE_PREPARE_AGENT_RUNTIME_CONFIGURATION\x10\"\"n\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rACTION_CREATE\x10\x01\x12\x11\n" +

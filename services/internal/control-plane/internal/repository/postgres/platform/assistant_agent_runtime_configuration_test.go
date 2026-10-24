@@ -72,8 +72,8 @@ func TestAssistantAgentRuntimeConfigurationProjectionExcludesPrivateData(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	view := entity.AgentRuntimeConfigurationView{AgentVersion: agent.Version,
-		Configuration:       entity.AgentRuntimeConfiguration{Ref: "arcfg_fixture123", AgentRef: agent.Ref, Version: 5, Digest: digest, Provider: "openai-codex", Model: "gpt-6.1-sol"},
+	view := entity.AgentRuntimeConfigurationView{AgentVersion: agent.Version, PublishedOverlay: entity.ConfigOverlayVersion{Ref: "ovl_fixture123", Version: 2, Digest: digest, Content: "model_reasoning_effort = \"high\"\n"},
+		Configuration:       entity.AgentRuntimeConfiguration{Ref: "arcfg_fixture123", AgentRef: agent.Ref, Version: 5, Digest: digest, Provider: "openai-codex", Model: "gpt-6.1-sol", RuntimeProfileRef: "builtin-safe-runtime", ProviderPolicy: entity.ProviderAccountPolicyVersion{Mode: "FIXED", AccountCandidates: []entity.ProviderAccountCandidate{{AccountRef: "pacc_fixture123", Weight: 1}}}},
 		EnvironmentBinding:  entity.AgentRuntimeEnvironmentBinding{Ref: "aenv_fixture123", AgentRef: agent.Ref, EnvironmentRef: "renv_fixture123", VersionRef: "renvv_fixture123", Version: 3, Digest: digest},
 		SafeEffectiveConfig: "PRIVATE_SENTINEL",
 		Environment: entity.RuntimeEnvironmentSet{Ref: "renv_fixture123", ProjectRef: agent.ProjectRef, Name: "Developer", Version: 8,
@@ -120,8 +120,8 @@ func TestAssistantAgentRuntimeConfigurationCanonicalAdmissionInventory(t *testin
 		t.Fatal("fixture must reproduce distinct sorted admission order", err)
 	}
 	agent := entity.Agent{Ref: "agt_recipient123", ProjectRef: "prj_context123", Version: 9}
-	view := entity.AgentRuntimeConfigurationView{AgentVersion: agent.Version,
-		Configuration:      entity.AgentRuntimeConfiguration{Ref: "arcfg_fixture123", AgentRef: agent.Ref, Version: 5, Digest: digest, Provider: "openai-codex", Model: "gpt-6.1-sol"},
+	view := entity.AgentRuntimeConfigurationView{AgentVersion: agent.Version, PublishedOverlay: entity.ConfigOverlayVersion{Ref: "ovl_fixture123", Version: 2, Digest: digest, Content: "model_reasoning_effort = \"high\"\n"},
+		Configuration:      entity.AgentRuntimeConfiguration{Ref: "arcfg_fixture123", AgentRef: agent.Ref, Version: 5, Digest: digest, Provider: "openai-codex", Model: "gpt-6.1-sol", RuntimeProfileRef: "builtin-safe-runtime", ProviderPolicy: entity.ProviderAccountPolicyVersion{Mode: "FIXED", AccountCandidates: []entity.ProviderAccountCandidate{{AccountRef: "pacc_fixture123", Weight: 1}}}},
 		EnvironmentBinding: entity.AgentRuntimeEnvironmentBinding{Ref: "aenv_binding123", AgentRef: agent.Ref, EnvironmentRef: "renv_fixture123", VersionRef: "renvv_fixture123", Version: 7, Digest: digest},
 		Environment: entity.RuntimeEnvironmentSet{Ref: "renv_fixture123", ProjectRef: agent.ProjectRef, Name: "Окружение Developer", Version: 12,
 			CurrentVersion: entity.RuntimeEnvironmentVersion{Ref: "renvv_fixture123", Revision: 4, Digest: digest, Policy: runtimecontract.DefaultRuntimeEnvironmentPolicy(),

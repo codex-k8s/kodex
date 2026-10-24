@@ -123,7 +123,7 @@ func (repository *Repository) prepareAssistantPlanDraftTx(ctx context.Context, t
 			continue
 		}
 		switch operation.Type {
-		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, prepareProjectAssistantConnection:
+		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration, "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, prepareProjectAssistantConnection:
 			updated, err := repository.rehydrateEditedAssistantConfiguration(ctx, tx, scope, original, operation, state == "STALE")
 			if err != nil {
 				return assistantPlanDraftPrepared{}, err
@@ -303,7 +303,7 @@ func assistantPlanAgentVersionKey(operation entity.AssistantPlanOperation) strin
 	if assistantProjectConfigurationOperation(operation) {
 		return assistantString(operation.Parameters, "projectAssistantRef")
 	}
-	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+	if preparedRuntimeConfigurationOperation(operation.Type) {
 		return assistantString(operation.Parameters, "agentRef")
 	}
 	switch operation.Type {
@@ -549,7 +549,7 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 				continue
 			}
 		}
-		if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+		if preparedRuntimeConfigurationOperation(operation.Type) {
 			matching, snapshotErr := repository.assistantRuntimeConfigurationSnapshotMatches(ctx, tx, scope, operation)
 			if snapshotErr != nil || !matching {
 				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
@@ -668,8 +668,8 @@ func (repository *Repository) validateAssistantLaunchReadiness(
 }
 
 func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx.Tx, scope scope, operation entity.AssistantPlanOperation) (int64, bool, error) {
-	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
-		target, err := repository.assistantConfigurationTarget(ctx, tx, scope, operation.Target.Ref)
+	if preparedRuntimeConfigurationOperation(operation.Type) {
+		target, err := repository.preparedRuntimeTarget(ctx, tx, scope, operation.Target.Ref, assistantString(operation.Parameters, "projectRef"), operation.Type == prepareAgentRuntimeConfiguration)
 		return target.version, true, err
 	}
 	if operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {

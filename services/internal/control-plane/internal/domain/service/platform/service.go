@@ -1762,7 +1762,7 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
 		command.CreateAssistantRoleImageRecipe, command.UpdateAssistantRoleImageRecipe,
 		command.CreateSystemAssistantRoleImageRecipe, command.UpdateSystemAssistantRoleImageRecipe,
-		command.PublishAssistantRuntimeConfig,
+		command.PublishAssistantRuntimeConfig, command.PublishPreparedAgentRuntimeConfig,
 		command.SetAgentAvatar, command.RemoveAgentAvatar,
 		command.PrepareInstructionsImpact, command.PreparePromptTemplateImpact,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,

@@ -196,6 +196,11 @@ func (repository *Repository) constrainAssistantPlanScope(ctx context.Context, t
 			return errs.ErrNotFound
 		}
 	}
+	for _, operation := range operations {
+		if operation.Type == prepareAgentRuntimeConfiguration && (assistant.Scope != "PROJECT" || assistant.ProjectRef == "" || assistantString(operation.Parameters, "projectRef") != assistant.ProjectRef) {
+			return errs.ErrForbidden
+		}
+	}
 	if assistant.Scope != "PROJECT" {
 		return nil
 	}

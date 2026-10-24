@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.36
-updated: 2026-10-20
+version: 1.1.37
+updated: 2026-10-24
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -811,3 +811,55 @@ UPDATE. Проверка только перехода UPDATE не закрыв�
 терминального либо подтверждённого объекта. Начальный INSERT допускает лишь
 каноническое исходное состояние; полномочия и решения возникают исключительно
 через специализированную команду владельца состояния.
+
+## Настройка модели обычного сотрудника через проектного помощника ([#1841](https://github.com/codex-k8s/kodex/issues/1841))
+
+`PREPARE_AGENT_RUNTIME_CONFIGURATION` — специализированная операция плана.
+Она не меняет профиль сотрудника через `UPDATE_AGENT` и не расширяет
+`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`: у двух команд общий внутренний
+примитив публикации, но разные закрытые resolver цели.
+
+Карта контракта: запрос пользователя в PROJECT-диалоге → текущий runtime tool
+`propose_assistant_plan` → `RuntimeWorkService.ProposeAssistantPlan` с exact
+lease/fence/generation → CP выводит actor/tenant/project из owner-состояния →
+ordinary-agent resolver + `agent.manage` → owner-план DRAFT с before/after,
+версией агента, runtime-profile revision и account catalog/model pins → UI
+редактирует только желаемые model/profile/effort/search/account policy → owner
+`validateAssistantPlan` и `applyAssistantPlan` с `If-Match`/idempotency → одна
+транзакция CP сохраняет runtime policy/configuration, опубликованный overlay,
+receipt и audit. На каждую применённую операцию возникает ровно одно
+`AGENT_CHANGED` сотрудника, на переход плана — одно
+`SYSTEM_ASSISTANT_CHANGED`, с проверенным owner actor и в той же транзакции.
+UI читает план, receipt и актуальную конфигурацию. Следующий turn получает новую immutable
+RuntimeRevision штатным materialization путём; активный turn остаётся прежним.
+Runtime-controller не получает права самостоятельно применять план.
+
+| Переход | Проверка и результат | Событие / авторитетное чтение |
+| --- | --- | --- |
+| Подготовка | Действующая PROJECT lease, active exact project, обычная цель без assistant profile, `agent.manage`; новые сотрудники адресуются только реальным ref после CREATE_AGENT | DRAFT плана; штатное событие плана, чтение плана |
+| Безопасный READ | Fresh lease + `agent.view`, exact project; только allowlist metadata и pins, без TOML/ENV/credentials | События нет; `AGENT_RUNTIME_CONFIGURATION` |
+| Редактирование DRAFT | Owner/target/version/pins неизменяемы; желаемые поля заново валидируются; drift не усыновляется | Новая revision DRAFT; штатное событие плана |
+| Validate | Owner access, eligibility, profile/account/model/overlay pins и отсутствие чужого draft проверяются заново | VALID либо проблемы; чтение плана |
+| Apply | Повторная авторизация до OCC/receipt, точный snapshot; runtime и overlay атомарны | APPLIED + exact receipt и `AGENT_CHANGED`, либо STALE/CONFLICT; штатное событие плана |
+| Потерянный ACK / replay | Прежний idempotency key, текущая owner boundary; прежний receipt без повторных эффектов | События повторно нет; чтение receipt |
+| STALE refresh | Явное owner-редактирование создаёт новую revision с новым before/pins; смешанная owner identity отклоняется | DRAFT новой revision; чтение плана |
+| Отзыв доступа / archive / чужой проект | Закрытый отказ до изменения runtime; assistant targets всегда исключены | События конфигурации нет; авторитетный read по текущим правам |
+| Чужой overlay draft / частичная ошибка | Не перезаписывать draft; rollback всех runtime/overlay эффектов общей транзакции | Публикации нет; чтение плана и текущей конфигурации |
+| Отказ от предложения / удаление проекта | До Apply публикаций нет; существующий lifecycle проекта, без отдельной cancel-task/lease/grant этой операции | События конфигурации нет; штатное событие удаления проекта и чтение владельца |
+| Retry / следующий turn | Новый runtime snapshot штатного turn; конфигурация не запускает run и не создаёт grant | Штатные события turn; version-pinned RuntimeRevision |
+
+Proto enum, OpenAPI enum, runtime schema, CP command registry и UI editor
+изменяются вместе. Порядок обновления: **runtime-controller → CP → API gateway
+→ PWA**. Новый RC принимает ровно две закрытые формы безопасного чтения:
+legacy `model_configuration` из 5 полей и v2 из 14 полей. У каждой формы
+проверяется весь известный состав; смешанные, неполные v2 и неизвестные поля
+отклоняются. Legacy READ возвращается без синтеза отсутствующих policy/overlay
+pins и не считается полной конфигурацией для планирования. Новая prepare-команда
+всегда получает свежие pins от CP, независимо от прежнего read snapshot.
+
+До обновления CP новый RC сохраняет прежний READ. После обновления CP доступны
+v2 READ и новая операция; прежний CP закрыто отклоняет неизвестную операцию.
+При rollback сначала возвращается прежний CP, затем RC; API/PWA откатываются
+согласованно, чтобы новая операция не предлагалась старому CP. Схема PostgreSQL
+не меняется. Опубликованные настройки восстанавливаются штатным owner-планом,
+а не ручным SQL. Локальные component/unit проверки не являются live-приёмкой.

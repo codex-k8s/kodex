@@ -90,9 +90,16 @@ func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context
 			return assistantPlanProposal{}, errs.ErrInvalid
 		}
 		seen[operation.Key] = struct{}{}
-		selfConfiguration := assistantSelfConfigurationOperation(assistant.Ref, assistant.Scope, operation)
+		scopedConfiguration := assistantSelfConfigurationOperation(assistant.Ref, assistant.Scope, operation)
+		if operation.Type == prepareAgentRuntimeConfiguration {
+			if assistant.Scope != "PROJECT" || projectRef == "" {
+				return assistantPlanProposal{}, errs.ErrForbidden
+			}
+			scopedConfiguration = true // Exact target access is rechecked by the specialized project resolver.
+			// Точный доступ к цели повторно проверяет специализированный resolver проекта.
+		}
 		if assistantProjectConfigurationOperation(operation) {
-			selfConfiguration = assistant.Scope == "SYSTEM" || assistant.Scope == "PROJECT" && assistantString(operation.Parameters, "projectAssistantRef") == assistant.Ref
+			scopedConfiguration = assistant.Scope == "SYSTEM" || assistant.Scope == "PROJECT" && assistantString(operation.Parameters, "projectAssistantRef") == assistant.Ref
 		}
 		if assistant.Scope == "PROJECT" && !assistantProjectConfigurationOperation(operation) && operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" &&
 			assistantString(operation.Parameters, "systemAssistantRef") == "" {
@@ -100,17 +107,17 @@ func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context
 			if readErr != nil {
 				return assistantPlanProposal{}, readErr
 			}
-			selfConfiguration = configuration.Environment.ProjectRef == projectRef &&
+			scopedConfiguration = configuration.Environment.ProjectRef == projectRef &&
 				configuration.Environment.Ref == assistantString(operation.Parameters, "environmentRef")
 		}
-		if !contains(allowedOperations, operation.Type) && !selfConfiguration {
+		if !contains(allowedOperations, operation.Type) && !scopedConfiguration {
 			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if operation.Type == createProjectFileRevision && (projectRef == "" || assistant.Scope == "SYSTEM" && contextKind != "PROJECT" && contextKind != "FILE") {
 			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		projectGlobalRevision := operation.Type == createProjectFileRevision && assistant.Scope == "PROJECT"
-		if !selfConfiguration && !projectGlobalRevision && !assistantOperationMatchesContext(contextKind, contextRef, operation) {
+		if !scopedConfiguration && !projectGlobalRevision && !assistantOperationMatchesContext(contextKind, contextRef, operation) {
 			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if operation.Type == createProjectFileRevision && assistantString(operation.Parameters, "contentRef") != "" {
@@ -122,7 +129,7 @@ func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context
 		} else {
 			operation, err = repository.hydrateAssistantOperation(ctx, tx, actorScope, projectRef, operation)
 		}
-		noRuntimeChange := operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" && errors.Is(err, errAssistantRuntimeConfigurationNoChange)
+		noRuntimeChange := preparedRuntimeConfigurationOperation(operation.Type) && errors.Is(err, errAssistantRuntimeConfigurationNoChange)
 		if err != nil && !noRuntimeChange {
 			if (operation.Type == "CHANGE_CAPABILITY" || operation.Type == "CHANGE_INTEGRATION_GRANT") && errors.Is(err, errs.ErrConflict) {
 				continue
@@ -240,7 +247,7 @@ func projectAssistantOperation(operationType string) bool {
 	case "CREATE_PROJECT_FILE", createProjectFileRevision, "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT",
 		"CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE",
 		"UPDATE_SCHEDULE", "LAUNCH_RUN", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW", "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
-		"PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+		"PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration:
 		return true
 	default:
 		return false
@@ -281,7 +288,7 @@ func assistantOperationType(value string) bool {
 	case "CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_PROJECT_FILE", createProjectFileRevision, "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
-		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration:
 		return true
 	default:
 		return false
@@ -294,7 +301,7 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 		return contextRef != "" && (contextKind == "PROJECT" || contextKind == "FILE")
 	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
 		return true
-	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
+	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration, "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
 		return true
 	case "PUBLISH_INTEGRATION_DEFINITION":
 		return contextKind == "" && contextRef == ""
@@ -357,6 +364,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 		return repository.hydrateSystemAssistantImage(ctx, tx, actorScope, operation)
+	}
+	if operation.Type == prepareAgentRuntimeConfiguration {
+		return repository.hydratePreparedRuntimeConfiguration(ctx, tx, actorScope, projectRef, operation)
 	}
 	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
 		return repository.hydrateAssistantRuntimeConfiguration(ctx, tx, actorScope, operation)
@@ -1015,7 +1025,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	switch operation.Type {
 	case createProjectFileRevision:
 		expectedAction = "UPDATE"
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration:
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -1079,7 +1089,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
-	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration:
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
 	case "UPDATE_WORKFLOW":
@@ -1193,7 +1203,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 	if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 		return systemAssistantImageCommand(operation)
 	}
-	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+	if preparedRuntimeConfigurationOperation(operation.Type) {
 		return assistantRuntimeConfigurationCommand(operation)
 	}
 	if strings.TrimSpace(operation.Summary) == "" || utf8.RuneCountInString(operation.Summary) > 1000 || operation.Input == nil {

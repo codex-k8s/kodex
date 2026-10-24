@@ -683,6 +683,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCREATESYSTEMASSISTANTROLEIMAGERECIPE         AssistantContextDescriptorAllowedOperations = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                               AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
 	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                                    AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
+	AssistantContextDescriptorAllowedOperationsPREPAREAGENTRUNTIMECONFIGURATION             AssistantContextDescriptorAllowedOperations = "PREPARE_AGENT_RUNTIME_CONFIGURATION"
 	AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION         AssistantContextDescriptorAllowedOperations = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
 	AssistantContextDescriptorAllowedOperationsPREPAREPROJECTASSISTANTINTEGRATIONCONNECTION AssistantContextDescriptorAllowedOperations = "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION            AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
@@ -740,6 +741,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW:
 		return true
 	case AssistantContextDescriptorAllowedOperationsLAUNCHRUN:
+		return true
+	case AssistantContextDescriptorAllowedOperationsPREPAREAGENTRUNTIMECONFIGURATION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION:
 		return true
@@ -890,6 +893,7 @@ const (
 	AssistantPlanOperationTypeCREATESYSTEMASSISTANTROLEIMAGERECIPE         AssistantPlanOperationType = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 	AssistantPlanOperationTypeCREATEWORKFLOW                               AssistantPlanOperationType = "CREATE_WORKFLOW"
 	AssistantPlanOperationTypeLAUNCHRUN                                    AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypePREPAREAGENTRUNTIMECONFIGURATION             AssistantPlanOperationType = "PREPARE_AGENT_RUNTIME_CONFIGURATION"
 	AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION         AssistantPlanOperationType = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
 	AssistantPlanOperationTypePREPAREPROJECTASSISTANTINTEGRATIONCONNECTION AssistantPlanOperationType = "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION            AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
@@ -947,6 +951,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCREATEWORKFLOW:
 		return true
 	case AssistantPlanOperationTypeLAUNCHRUN:
+		return true
+	case AssistantPlanOperationTypePREPAREAGENTRUNTIMECONFIGURATION:
 		return true
 	case AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION:
 		return true

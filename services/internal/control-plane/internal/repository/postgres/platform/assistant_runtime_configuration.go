@@ -19,7 +19,7 @@ import (
 )
 
 var assistantRuntimeEditable = []string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts"}
-var assistantRuntimeOwnerFields = []string{"agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef"}
+var assistantRuntimeOwnerFields = []string{"agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "targetKind"}
 
 // Маркер относится только к полностью проверенной подготовке; обычный conflict
 // и ошибки готовности не означают отсутствие изменений.
@@ -118,7 +118,12 @@ func minimalAssistantRuntimeAccounts(candidates []entity.ProviderAccountCandidat
 	return result
 }
 
+// assistantRuntimeOwner emits one server-owned target lineage: assistant scope/profile or ordinary AGENT/project, never a mixed policy.
+// assistantRuntimeOwner возвращает одну назначенную сервером цепочку цели: scope/profile помощника либо AGENT/project обычного сотрудника, без смешения политик.
 func assistantRuntimeOwner(target assistantConfigurationTarget, current scope, agentRef string) map[string]any {
+	if target.ordinary {
+		return map[string]any{"agentRef": agentRef, "targetKind": "AGENT", "scopeKind": "PROJECT", "organizationRef": current.organizationRef, "projectRef": target.projectRef}
+	}
 	assistantScope := "PROJECT"
 	if target.scopeKind == "ORGANIZATION" {
 		assistantScope = "SYSTEM"
@@ -190,12 +195,20 @@ func (repository *Repository) prepareAssistantRuntimeCandidates(ctx context.Cont
 	return normalized, err
 }
 
+// hydrateAssistantRuntimeConfiguration preserves the assistant-only entry point while sharing preparation with the ordinary-agent operation.
+// hydrateAssistantRuntimeConfiguration сохраняет вход только для помощников и общий механизм подготовки с отдельной операцией сотрудника.
 func (repository *Repository) hydrateAssistantRuntimeConfiguration(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	return repository.hydratePreparedRuntimeConfiguration(ctx, tx, current, "", operation)
+}
+
+// hydratePreparedRuntimeConfiguration captures exact configuration, overlay and provider pins after resolving the command-specific target policy.
+// hydratePreparedRuntimeConfiguration фиксирует точные configuration, overlay и provider pins после проверки отдельной политики цели команды.
+func (repository *Repository) hydratePreparedRuntimeConfiguration(ctx context.Context, tx pgx.Tx, current scope, projectRef string, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if !onlyAssistantFields(operation.Parameters, assistantRuntimeEditable...) {
 		return operation, errs.ErrInvalid
 	}
 	agentRef := assistantString(operation.Parameters, "agentRef")
-	target, err := repository.assistantConfigurationTarget(ctx, tx, current, agentRef)
+	target, err := repository.preparedRuntimeTarget(ctx, tx, current, agentRef, projectRef, operation.Type == prepareAgentRuntimeConfiguration)
 	if err != nil {
 		return operation, err
 	}
@@ -257,8 +270,10 @@ func (repository *Repository) hydrateAssistantRuntimeConfiguration(ctx context.C
 	return operation, nil
 }
 
+// assistantRuntimeConfigurationCommand accepts only hydrated owner pins and routes each closed operation to its distinct internal command; payload locators grant no authority.
+// assistantRuntimeConfigurationCommand принимает лишь подготовленные сервером owner pins и направляет каждую закрытую операцию в отдельную внутреннюю команду; ссылки payload не дают полномочий.
 func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
-	if !onlyAssistantFields(operation.Input, "agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts", "providerCatalogPins", "runtimeProfilePin", "expectedVersion") {
+	if !onlyAssistantFields(operation.Input, "agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts", "providerCatalogPins", "runtimeProfilePin", "targetKind", "expectedVersion") {
 		return command.Command{}, errs.ErrInvalid
 	}
 	minimal, err := assistantRuntimeAccounts(operation.Input)
@@ -296,6 +311,7 @@ func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperatio
 	}
 	payload := command.AssistantRuntimeConfigurationInput{Configuration: command.AgentRuntimeConfigurationInput{AgentRef: assistantString(operation.Input, "agentRef"), RuntimeProfileRef: assistantString(operation.Input, "runtimeProfileRef"), Model: assistantString(operation.Input, "model"), ProviderPolicyMode: assistantString(operation.Input, "providerPolicyMode"), ProviderAccounts: pins}, ReasoningEffort: effort,
 		WebSearchMode: mode,
+		TargetKind:    assistantString(operation.Input, "targetKind"),
 		ScopeKind:     assistantString(operation.Input, "scopeKind"), OrganizationRef: assistantString(operation.Input, "organizationRef"), ProjectRef: assistantString(operation.Input, "projectRef"), AssistantProfileRef: assistantString(operation.Input, "assistantProfileRef")}
 	profileRaw, err := json.Marshal(operation.Input["runtimeProfilePin"])
 	if err != nil || decodeStrict(profileRaw, &payload.RuntimeProfilePin) != nil || payload.RuntimeProfilePin.Ref != payload.Configuration.RuntimeProfileRef || payload.RuntimeProfilePin.Version < 1 || payload.RuntimeProfilePin.RuntimeRevision == "" {
@@ -304,7 +320,16 @@ func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperatio
 	if !validModel(payload.Configuration.Model) || !validProviderPolicy(payload.Configuration.ProviderPolicyMode, minimal) {
 		return command.Command{}, errs.ErrInvalid
 	}
-	return command.Command{Kind: command.PublishAssistantRuntimeConfig, Payload: payload, Mutation: operationMutation(expected)}, nil
+	kind := command.PublishAssistantRuntimeConfig
+	if operation.Type == prepareAgentRuntimeConfiguration {
+		if payload.TargetKind != "AGENT" || payload.ScopeKind != "PROJECT" || payload.ProjectRef == "" || payload.AssistantProfileRef != "" || operation.Input["assistantScope"] != nil {
+			return command.Command{}, errs.ErrInvalid
+		}
+		kind = command.PublishPreparedAgentRuntimeConfig
+	} else if payload.TargetKind != "" {
+		return command.Command{}, errs.ErrInvalid
+	}
+	return command.Command{Kind: kind, Payload: payload, Mutation: operationMutation(expected)}, nil
 }
 
 func operationMutation(version int64) (mutation value.Mutation) {
@@ -312,8 +337,10 @@ func operationMutation(version int64) (mutation value.Mutation) {
 	return
 }
 
+// authorizeAssistantRuntimeConfiguration reruns the selected target resolver and exact owner lineage check before version/idempotency handling.
+// authorizeAssistantRuntimeConfiguration повторяет выбранный resolver цели и проверку точной owner lineage до обработки версии и идемпотентности.
 func (repository *Repository) authorizeAssistantRuntimeConfiguration(ctx context.Context, tx pgx.Tx, current scope, payload command.AssistantRuntimeConfigurationInput) (assistantConfigurationTarget, error) {
-	target, err := repository.assistantConfigurationTarget(ctx, tx, current, payload.Configuration.AgentRef)
+	target, err := repository.preparedRuntimeTarget(ctx, tx, current, payload.Configuration.AgentRef, payload.ProjectRef, payload.TargetKind == "AGENT")
 	if err != nil {
 		return target, err
 	}
@@ -323,6 +350,8 @@ func (repository *Repository) authorizeAssistantRuntimeConfiguration(ctx context
 	return target, nil
 }
 
+// assistantRuntimeConfigurationSnapshotMatches rejects current target, profile, catalog or overlay drift without repairing the immutable proposal.
+// assistantRuntimeConfigurationSnapshotMatches отвергает дрейф цели, профиля, каталога или overlay, не исправляя неизменяемое предложение.
 func (repository *Repository) assistantRuntimeConfigurationSnapshotMatches(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (bool, error) {
 	planned, err := assistantRuntimeConfigurationCommand(operation)
 	if err != nil {
@@ -359,9 +388,11 @@ func (repository *Repository) assistantRuntimeConfigurationSnapshotMatches(ctx c
 	return assistantJSONEqual(fresh, operation.Parameters["providerCatalogPins"]), nil
 }
 
+// publishAssistantRuntimeConfiguration reauthorizes either closed target policy, then writes runtime and overlay under the caller-owned transaction; any later failure must roll both back.
+// publishAssistantRuntimeConfiguration повторяет авторизацию одной из закрытых политик цели и записывает runtime с overlay в транзакции вызывающего; последующий сбой откатывает оба изменения.
 func (repository *Repository) publishAssistantRuntimeConfiguration(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantRuntimeConfigurationInput)
-	if !ok {
+	if !ok || (input.Kind == command.PublishPreparedAgentRuntimeConfig) != (payload.TargetKind == "AGENT") {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	if _, err := repository.authorizeAssistantRuntimeConfiguration(ctx, tx, current, payload); err != nil {

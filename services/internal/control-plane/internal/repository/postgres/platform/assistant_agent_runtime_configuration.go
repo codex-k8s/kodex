@@ -85,6 +85,11 @@ func assistantAgentRuntimeConfigurationJSON(agent entity.Agent, view entity.Agen
 		strings.TrimSpace(view.Configuration.Provider) == "" || strings.TrimSpace(view.Configuration.Model) == "" {
 		return nil, errs.ErrUnavailable
 	}
+	overlay, err := runtimecontract.ParseConfigOverlay(view.PublishedOverlay.Content)
+	if err != nil || view.Configuration.RuntimeProfileRef == "" || !validProviderPolicy(view.Configuration.ProviderPolicy.Mode, view.Configuration.ProviderPolicy.AccountCandidates) ||
+		view.PublishedOverlay.Ref == "" || view.PublishedOverlay.Version < 1 || !exactSHA256(view.PublishedOverlay.Digest) {
+		return nil, errs.ErrUnavailable
+	}
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicyWithoutDigests()
 	policy.Resources = environment.CurrentVersion.Policy.Resources
 	if _, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy); err != nil {
@@ -101,7 +106,12 @@ func assistantAgentRuntimeConfigurationJSON(agent entity.Agent, view entity.Agen
 		"published_version_ref": environment.CurrentVersion.Ref, "published_revision": environment.CurrentVersion.Revision, "published_digest": environment.CurrentVersion.Digest,
 		"image": image, "configured_tools": tools, "verified_tool_inventory": inventory,
 		"model_configuration": map[string]any{"ref": view.Configuration.Ref, "version": view.Configuration.Version,
-			"digest": view.Configuration.Digest, "provider": view.Configuration.Provider, "model": view.Configuration.Model},
+			"digest": view.Configuration.Digest, "provider": view.Configuration.Provider, "model": view.Configuration.Model,
+			"runtime_profile_ref": view.Configuration.RuntimeProfileRef, "provider_policy_mode": view.Configuration.ProviderPolicy.Mode,
+			"provider_accounts": minimalAssistantRuntimeAccounts(view.Configuration.ProviderPolicy.AccountCandidates),
+			"reasoning_effort":  overlay.ModelReasoningEffort, "web_search_mode": overlay.WebSearchMode,
+			"published_overlay_ref": view.PublishedOverlay.Ref, "published_overlay_version": view.PublishedOverlay.Version,
+			"published_overlay_digest": view.PublishedOverlay.Digest, "has_draft_overlay": view.DraftOverlay != nil},
 		"resources": runtimecontract.RuntimeResourcePolicy{
 			CPURequestMilli:            environment.CurrentVersion.Policy.Resources.CPURequestMilli,
 			CPULimitMilli:              environment.CurrentVersion.Policy.Resources.CPULimitMilli,

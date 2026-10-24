@@ -326,6 +326,9 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	if err != nil || len(results) != 0 {
 		t.Fatalf("project assistant search escaped project scope: results=%#v err=%v", results, err)
 	}
+	t.Run("ordinary employee runtime configuration uses exact project", func(t *testing.T) {
+		testPreparedAgentRuntimeConfigurationPipeline(t, ctx, repository, service, owner, worker, searchReader, lease, secondProject.Ref)
+	})
 	t.Run("project helper model configuration and safe discovery", func(t *testing.T) {
 		testAssistantConfigurationPipeline(t, ctx, repository, service, owner, worker, searchReader, lease, "PROJECT")
 	})

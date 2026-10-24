@@ -18,13 +18,13 @@ func TestConfigurationCatalogGuidanceMatchesContext(t *testing.T) {
 		operations               []string
 		reads                    []string
 	}{
-		{name: "absent context", reads: []string{"AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "983d6e7e41d4c31b8360567807b1704e1d6d1e2cc5bc39495a42a469ea514fdb"},
-		{name: "RUN", kind: "RUN", reads: []string{"AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "481c398a0a31778bea1cfc32a7f37a0401e37bab9a0bc3e3ea04c80d1460bc64"},
-		{name: "WORKFLOW", kind: "WORKFLOW", operations: []string{"UPDATE_WORKFLOW"}, reads: []string{"WORKFLOW_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "99b4759c2eeb1479fef4303e1226f63995eef2259e840c68747ab8fdf6d4c920"},
-		{name: "AGENT update", kind: "AGENT", operations: []string{"UPDATE_AGENT"}, reads: []string{"AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "080496a8661ef244e674a1fb99eabf665cc3598e3ee4c8284fe2fe3e6de67b69"},
-		{name: "AGENT instruction", kind: "AGENT", operations: []string{"CREATE_INSTRUCTION_DRAFT"}, reads: []string{"AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "080496a8661ef244e674a1fb99eabf665cc3598e3ee4c8284fe2fe3e6de67b69"},
-		{name: "WORKFLOW revoked", kind: "WORKFLOW", reads: []string{"AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "481c398a0a31778bea1cfc32a7f37a0401e37bab9a0bc3e3ea04c80d1460bc64"},
-		{name: "AGENT revoked", kind: "AGENT", reads: []string{"AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "481c398a0a31778bea1cfc32a7f37a0401e37bab9a0bc3e3ea04c80d1460bc64"},
+		{name: "absent context", reads: []string{"AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "cacfbadb416a5c0f1f48e5e843a5fd112c07efb379132a9f804165105b77ba3f"},
+		{name: "RUN", kind: "RUN", reads: []string{"AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "1ce808f5f244347cdc83ce58608b896343a003109ad40193cb1445a43955b1c0"},
+		{name: "WORKFLOW", kind: "WORKFLOW", operations: []string{"UPDATE_WORKFLOW"}, reads: []string{"WORKFLOW_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "5fc0f142d70cb09726a4914e3ea6dbd93b1382ee13c4f6cdb3341c170bb29ae7"},
+		{name: "AGENT update", kind: "AGENT", operations: []string{"UPDATE_AGENT"}, reads: []string{"AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "801df59e797492ec83d1a774a585c40785237858b9ffbad3e548439fa81e8abb"},
+		{name: "AGENT instruction", kind: "AGENT", operations: []string{"CREATE_INSTRUCTION_DRAFT"}, reads: []string{"AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "801df59e797492ec83d1a774a585c40785237858b9ffbad3e548439fa81e8abb"},
+		{name: "WORKFLOW revoked", kind: "WORKFLOW", reads: []string{"AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "1ce808f5f244347cdc83ce58608b896343a003109ad40193cb1445a43955b1c0"},
+		{name: "AGENT revoked", kind: "AGENT", reads: []string{"AGENT_RUNTIME_CONFIGURATION", "WORKFLOW_METADATA"}, schemaDigest: "1ce808f5f244347cdc83ce58608b896343a003109ad40193cb1445a43955b1c0"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeProject, AgentRef: "agt_helper123", ProjectRef: "prj_project123"}
@@ -43,6 +43,9 @@ func TestConfigurationCatalogGuidanceMatchesContext(t *testing.T) {
 			encoded, err := json.Marshal(tool)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if !strings.Contains(string(encoded), "PREPARE_AGENT_RUNTIME_CONFIGURATION") {
+				t.Fatal("project catalog lost the ordinary employee operation")
 			}
 			digest := sha256.Sum256(encoded)
 			actual := hex.EncodeToString(digest[:])

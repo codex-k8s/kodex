@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.30
-updated: 2026-10-16
+version: 1.7.31
+updated: 2026-10-24
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -2059,6 +2059,19 @@ values, Secret, команд инструментов, инструкций ил
 не выходит из своего проекта; SYSTEM не обходит eligibility root USER.
 Полные instructions и подтверждаемые изменения сохраняют отдельный current
 server-owned context/OCC gate; metadata read не расширяет их authority.
+
+Подготовка модели обычного сотрудника через помощника использует отдельную
+`PREPARE_AGENT_RUNTIME_CONFIGURATION` (#1841). Источник — действующая PROJECT
+lease; точный проект назначает сервер, `agent.manage` проверяется при подготовке,
+редактировании, validate и apply. Ordinary resolver исключает system agents и
+все `project_assistant_profiles`; существующая самонастройка помощника не
+расширяется. Ни locator, ни прочитанная политика аккаунтов не выдают доступ.
+Безопасный runtime READ возвращает только ссылки профиля/аккаунтов, веса,
+модель, степень рассуждений, режим поиска и pins опубликованного overlay с
+признаком наличия черновика; полные TOML, credentials и ENV отсутствуют.
+Желаемые значения и before/pins фиксируются сервером. Runtime configuration и
+совместимый overlay публикуются одной owner-транзакцией после человеческого
+подтверждения; drift, отзыв доступа и чужой черновик закрывают применение.
 
 Тот же принцип применяется к published Workflow metadata: owner повторяет
 публичный eligibility resolver и `workflow.view`, а PROJECT остаётся в exact

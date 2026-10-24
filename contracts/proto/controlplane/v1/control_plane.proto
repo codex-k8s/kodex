@@ -1699,6 +1699,8 @@ message AssistantPlanOperation {
     TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT = 32;
     // Создать новую immutable ревизию существующего Artifact после owner Apply.
     TYPE_CREATE_PROJECT_FILE_REVISION = 33;
+    // Подготовить атомарную модель и overlay обычного сотрудника точного проекта.
+    TYPE_PREPARE_AGENT_RUNTIME_CONFIGURATION = 34;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

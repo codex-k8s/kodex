@@ -3962,6 +3962,7 @@ const ru = {
       UPDATE_ROLE_IMAGE_RECIPE: "Изменить рецепт образа",
       CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Создать рецепт образа Kodex",
       UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Изменить рецепт образа Kodex",
+      PREPARE_AGENT_RUNTIME_CONFIGURATION: "Настроить модель сотрудника",
       PREPARE_ASSISTANT_RUNTIME_CONFIGURATION:
         "Подготовить настройки модели помощника",
       CREATE_WORKFLOW: "Создать Workflow",
@@ -4487,9 +4488,9 @@ const ru = {
       systemImageNextSteps:
         "Подтверждение сохранит рецепт образа. Затем откройте его и проверьте состояние сборки. После успешного допуска отдельно опубликуйте образ и выберите его в окружении помощника. Текущие ходы сохранят прежний образ.",
       runtimeConfigurationBoundary:
-        "Настройки модели применятся только к закреплённому помощнику и следующим ходам. После сохранения и проверки плана отдельно подтвердите применение; текущие ходы сохранят прежнюю конфигурацию.",
+        "Настройки модели применятся только к закреплённому сотруднику или помощнику и следующим ходам. После сохранения и проверки плана отдельно подтвердите применение; текущие ходы сохранят прежнюю конфигурацию.",
       runtimeConfigurationUnavailable:
-        "Не удалось подтвердить привязку помощника или каталог. Обновите план; изменения пока недоступны.",
+        "Не удалось подтвердить привязку сотрудника или помощника либо каталог. Обновите план; изменения пока недоступны.",
       webSearchMode: "Поиск в интернете",
       webSearchUnchanged: "Не менять",
       webSearchDefault: "Настройка по умолчанию",
@@ -8661,6 +8662,7 @@ const en = {
       UPDATE_ROLE_IMAGE_RECIPE: "Update image recipe",
       CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Create Kodex image recipe",
       UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Update Kodex image recipe",
+      PREPARE_AGENT_RUNTIME_CONFIGURATION: "Configure employee model",
       PREPARE_ASSISTANT_RUNTIME_CONFIGURATION:
         "Prepare assistant model settings",
       CREATE_WORKFLOW: "Create Workflow",
@@ -9181,9 +9183,9 @@ const en = {
       systemImageNextSteps:
         "Confirmation saves the image recipe. Then open it and check the build status. After successful admission, publish the image separately and select it in the assistant environment. Current turns keep their existing image.",
       runtimeConfigurationBoundary:
-        "Model settings apply only to the pinned assistant and future turns. Save and validate the plan, then separately confirm application; current turns keep their existing configuration.",
+        "Model settings apply only to the pinned employee or assistant and future turns. Save and validate the plan, then separately confirm application; current turns keep their existing configuration.",
       runtimeConfigurationUnavailable:
-        "The assistant binding or catalog could not be verified. Refresh the plan; changes are unavailable for now.",
+        "The employee or assistant binding or catalog could not be verified. Refresh the plan; changes are unavailable for now.",
       webSearchMode: "Web search",
       webSearchUnchanged: "Keep current setting",
       webSearchDefault: "Default setting",
