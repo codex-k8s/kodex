@@ -4,11 +4,81 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.408.0
+version: 1.409.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Assistant edit: общая реконструкция workflow/schedule/environment — 25.10.2026
+
+На основе `e670bfebf2b145acd3d0c5add96612b826030e6e` полностью прочитаны
+assistant_workflow.go(470 строк), assistant_schedule.go(208) и
+assistant_environment.go(397):31 прежнее неописанное объявление. Все31 и новый
+rehydrateAssistantEditableFields получили предметные EN→RU описания.
+Полностью прочитаны два SQL snapshot/readback и два pure schedule/workflow
+regression tests; у contextual_plans.go прочитаны затронутые dispatch/STALE/
+normalize/authorization branches, без заявления нового полного аудита файла.
+Повторно сверены применимые разделы GO-DOC-001/002/003/006, GUIDE-DOC-006 и
+GOV-DOC-003; документация не менялась ради нового API или архитектуры.
+
+Новый private helper объединяет только совпадающие pure части трёх edited-plan
+сценариев: present-only copy editable keys, вызов конкретного hydrator с
+original Before/version, прежние ошибки/Before mismatch и восстановление Selected.
+Fresh nonnil seed map принадлежит caller: workflow/schedule явно задают свои
+refs, environment сохраняет отдельное добавление исходного SYSTEM assistant ref.
+Отсутствующий key не превращается в nil; явно переданный nil и nested aliases
+сохраняются. Существующий assistantHydrationRequest намеренно не используется:
+у него иное missing-key поведение. Helper не становится универсальной command,
+не выбирается из payload, не имеет DB/context/permission или внешних effects.
+
+Три полных HEAD-derived expected-AST/directive proof подтверждают только
+вынос/комментарии. Независимая проверка специализирует общий helper каждым
+из трёх закрытых ref/list/hydrator bindings и получает прежние AST tails;
+все исходные guards и environment seed/SYSTEM block совпадают — PASS.
+Оба SQL bytes неизменны, query/row-scan order и транзакционные границы сохранены.
+
+| Путь / стадия | Authority, version и результат |
+| --- | --- |
+| Workflow snapshot | Caller tx/scope→exact WORKFLOW context и UPDATE_WORKFLOW→tenant/ref SQL; project/ARCHIVED/draft/EDIT eligibility. JSON failures Unavailable, отказ существующего read path не маскируется helper |
+| Schedule snapshot | Exact SCHEDULE context/UPDATE_SCHEDULE→tenant/project/ACTIVE project/current revision. No rows NotFound, ARCHIVED Conflict; input/prompt maps и display timing без новой authority |
+| Environment snapshot | PROJECT ENVIRONMENT context или current SYSTEM assistant с точным org-scoped environment. SYSTEM ref канонизируется, effective project пуст; только revisioned secret descriptors, не payload |
+| Edit guards | Существующие type/key/kind/ref/positive version и closed shapes остаются до helper. Workflow project обязателен, schedule protected pins проверяются при наличии, environment project/SYSTEM refs совпадают с исходными |
+| Pure reconstruction | Caller-owned seed+только supplied editable values; original Before/version, error priority и Selected. Это подготовка нового plan draft, не write/claim/grant |
+| Workflow hydration | Numeric/text/graph bounds, server keys/defaults/dependencies, Input очищается, canonical After строится из проверенного typed draft. Partial proposed-step mutation при dependency error явно описана |
+| Schedule hydration | Shallow merged map и strict Parameters/After equality, DST/misfire/overlap/prompt pins. Прежний Input сохраняется; normalize используется для валидации, returned payload не заменяется его результатом |
+| Environment hydration | Public-value replace против patch/removal, binding compatibility, tools/policy и byte bounds; Input очищается. Identity predicate сравнивает ref/version/digest tuple, не deep specification/policyInput |
+| Fresh recheck | Workflow заново строит canonical After и сравнивает JSON, schedule использует DeepEqual, environment свой identity predicate. Разные policies не объединены |
+| DRAFT / STALE | Сохранённый оригинал берётся по key/type из текущего плана; STALE повторно hydrate в прежней owner tx, DRAFT не получает скрытый rebase. Дальше неизменённые normalize/typed command/authorization |
+| Apply / persistence | Специализированные workflow/schedule/environment commands, idempotency/OCC/receipt/audit/events принадлежат прежнему owner path вне helper; новых wire operations, grants или retry нет |
+| Cancel/delete/terminal/lease | Новых переходов и фоновой работы нет; helper не запускается как worker и не продлевает lifecycle/authority. Существующие owner transitions не изменены |
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks409-final`),15 external fixture/admin/template inputs исключены.
+Существующие pure schedule/workflow forged-draft/context/pin tests, workflow
+DAG/default/key/diagnostics regressions и environment form tests входят в unit.
+Новых зеркальных tests для извлечения не добавлено. PostgreSQL owner transactions,
+RLS/OCC races, реальные environment/image/secret effects — NOT RUN/SKIP.
+gofmt/diff check,17 analyzer unit и5 exact-ignore guards — PASS.
+Новые library API/dependencies отсутствуют; раньше проверенные Context7 pgx
+QueryRow/Scan документы не требовали нового API lookup. Full E2E/browser/deploy/live — NOT RUN.
+
+Inventory6683 own sources/222 exclusions:20010/21483 Go declarations описаны,
+missing1473 — оставшиеся control-plane PostgreSQL files. Текущий PR156 Go-файлов,
+1879/1879 объявлений описаны, missing0; bootstrap78/78 сохраняется.
+Detector1792 raw/904 retained/888 unresolved, registry778 неизменен.
+Исчезли четыре прежних fragment keys: два workflow/schedule5aa0a4ead1c0,
+49d3cdee500f, environment/schedule facfcc685e4c и перекрывающееся
+115-token environment/instructions6080ddcc5cba. assistant_instructions.go
+не редактировался и не объявляется полностью прочитанным на этом этапе.
+Новых keys нет; thresholds/ignore regions/exclusions не расширены.
+
+Production SQL, API/contracts/generated, dependencies, migrations и deploy
+inputs не менялись. Прикладные секреты не читались и не переносились; необходимые
+bot-role credentials/identity передаются только нужным GitHub children без вывода
+значений. Whole-blob проверка допускает только4 прежних inert title-test markers
+по exact main bytes/count, неизвестных совпадений нет. Issue#1823 открыт,
+PR Draft; основной клон и QA baseline f2e64eb не менялись. Общий объём не завершён.
 
 ## Bootstrap: завершение описаний membership, schedule и lifecycle — 25.10.2026
 

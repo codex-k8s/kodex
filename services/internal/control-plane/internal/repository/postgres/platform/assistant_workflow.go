@@ -12,11 +12,29 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// assistantWorkflowEditableFields lists the workflow form fields accepted by hydration and
+// edited-plan reconstruction, in stable copy order. Workflow/project refs and the retained typed
+// draft are handled separately; membership in this list grants no permission and does not validate
+// a supplied value.
+// assistantWorkflowEditableFields перечисляет поля формы workflow для hydration и восстановления
+// edited plan в устойчивом порядке копирования. Workflow/project refs и сохранённый typed draft
+// обрабатываются отдельно; наличие в списке не выдаёт полномочий и не проверяет переданное
+// значение.
 var assistantWorkflowEditableFields = []string{
 	"name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria",
 	"maxConcurrency", "timeoutSeconds", "inputFields", "steps",
 }
 
+// assistantWorkflowGraphFields projects typed workflow inputs/steps into fresh JSON-shaped maps
+// and nonnil slices, including options, gate decisions and required capabilities. Numeric
+// parallel-group/timeouts become float64. This editor projection omits defaults and dependency
+// edges; those remain in the retained draft and are preserved separately during graph
+// reconstruction.
+// assistantWorkflowGraphFields проецирует типизированные workflow inputs/steps в новые
+// JSON-подобные maps и ненулевые slices, включая options, gate decisions и required capabilities.
+// Числовые parallel-group/timeouts становятся float64. Проекция редактора не включает defaults и
+// dependency edges: они остаются в сохранённом draft и отдельно сохраняются при восстановлении
+// графа.
 func assistantWorkflowGraphFields(draft entity.WorkflowVersion) ([]any, []any) {
 	fields := make([]any, 0, len(draft.Inputs))
 	for _, field := range draft.Inputs {
@@ -46,6 +64,17 @@ func assistantWorkflowGraphFields(draft entity.WorkflowVersion) ([]any, []any) {
 	return fields, steps
 }
 
+// readAssistantWorkflowSnapshot resolves the exact workflow assistant context in the caller
+// transaction and requires UPDATE_WORKFLOW before reading the tenant/ref projection. It rejects a
+// different project, archived workflow, missing draft or absent EDIT action as NotFound. The
+// returned snapshot includes JSON-round-tripped draft and editable graph fields with the
+// authoritative workflow version; encoding/decoding failure is Unavailable. It creates no
+// transaction, grant or write.
+// readAssistantWorkflowSnapshot разрешает точный assistant context workflow в транзакции
+// вызывающего и требует UPDATE_WORKFLOW до чтения tenant/ref projection. Чужой проект, архивный
+// workflow, отсутствие draft или EDIT action отклоняет как NotFound. Snapshot содержит draft после
+// JSON round-trip и редактируемые graph fields с авторитетной workflow version; отказ
+// кодирования/декодирования даёт Unavailable. Транзакцию, grant или запись не создаёт.
 func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef, workflowRef string,
 ) (map[string]any, int64, error) {
@@ -86,6 +115,14 @@ func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context,
 	}, workflow.Version, nil
 }
 
+// hydrateAssistantWorkflowOperation accepts only workflowRef plus the closed editable fields under
+// a nonempty server-supplied project, using field-specific shape/ref errors. It reads the
+// authoritative owner-scoped snapshot/version in the supplied transaction and delegates pure
+// hydration. Parameter refs locate a resource and never replace context authorization.
+// hydrateAssistantWorkflowOperation принимает только workflowRef и закрытые editable fields при
+// непустом server-supplied project с адресными shape/ref errors. Читает авторитетные owner-scoped
+// snapshot/version в переданной транзакции и делегирует чистую hydration. Parameter refs служат
+// locator ресурса и не заменяют авторизацию контекста.
 func (repository *Repository) hydrateAssistantWorkflowOperation(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -103,6 +140,17 @@ func (repository *Repository) hydrateAssistantWorkflowOperation(ctx context.Cont
 	return hydrateAssistantWorkflowFields(before, version, operation)
 }
 
+// hydrateAssistantWorkflowFields builds a fresh editable map from the snapshot, trims supplied
+// text, bounds concurrency/timeouts and requires JSON-shaped graph arrays. Unchanged values are
+// Conflict. It restores Before/target/version, selects the operation, clears Input and validates
+// the typed workflow command before deriving canonical After with graph/draft. Map copies remain
+// shallow; this pure transformation performs no authorization, persistence or publication.
+// hydrateAssistantWorkflowFields строит новую editable map из snapshot, обрезает пробелы
+// переданного текста, ограничивает concurrency/timeouts и требует JSON-подобные graph arrays.
+// Неизменённые значения дают Conflict. Восстанавливает Before/target/version, выбирает operation,
+// очищает Input и проверяет typed workflow command перед построением canonical After с
+// graph/draft. Копии maps остаются поверхностными; чистое преобразование не выполняет авторизацию,
+// сохранение или публикацию.
 func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -169,6 +217,14 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 	return operation, nil
 }
 
+// assistantWorkflowAfterSnapshot JSON-round-trips the typed draft, shallow-copies parameters and
+// replaces inputFields/steps with the typed editor projection plus the normalized draft. It maps
+// marshal/unmarshal failure to Invalid and retains unrelated parameter values/aliases. The result
+// is a display/comparison snapshot, not caller authority.
+// assistantWorkflowAfterSnapshot выполняет JSON round-trip typed draft, поверхностно копирует
+// parameters и заменяет inputFields/steps типизированной editor projection с normalized draft.
+// Отказ marshal/unmarshal отображает в Invalid, остальные parameter values/aliases сохраняет.
+// Результат является snapshot для отображения/сравнения, а не полномочиями вызывающего.
 func assistantWorkflowAfterSnapshot(parameters map[string]any, draft entity.WorkflowVersion) (map[string]any, error) {
 	raw, err := json.Marshal(draft)
 	if err != nil {
@@ -184,6 +240,18 @@ func assistantWorkflowAfterSnapshot(parameters map[string]any, draft entity.Work
 	return after, nil
 }
 
+// assistantUpdateWorkflow parses Input when present or parameters with the expected-version
+// fallback, requiring the exact workflow field set, positive version and refs matching Before. It
+// rebuilds the retained valid draft, applies typed text/numeric edits and reconstructs a changed
+// graph while preserving protected defaults/dependencies, then validates the final workflow. It
+// returns a specialized WorkflowInput/version with field diagnostics; it does not itself resolve
+// current ownership or commit a command.
+// assistantUpdateWorkflow разбирает Input при наличии либо parameters с fallback expected version,
+// требуя точный workflow field set, положительную version и refs, совпадающие с Before.
+// Восстанавливает сохранённый допустимый draft, применяет typed text/numeric edits и перестраивает
+// изменённый граф с сохранением защищённых defaults/dependencies, затем валидирует итоговый
+// workflow. Возвращает специализированные WorkflowInput/version с field diagnostics; сам не
+// разрешает текущее владение и не фиксирует команду.
 func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.WorkflowInput, int64, error) {
 	input := operation.Input
 	if input == nil {
@@ -253,6 +321,17 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 		Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: draft.CoordinatorAgentRef, Draft: &draft}, version, nil
 }
 
+// assistantUpdateWorkflowGraph parses bounded input/step arrays with closed shapes, rejects
+// unknown explicit or duplicate keys and assigns unused server keys to new entries. It
+// reconstructs the typed graph, restores matching input defaults, remaps new dependency keys and
+// retains original dependency edges before replacing draft inputs/steps. Errors carry the existing
+// field diagnostics and leave that final replacement unapplied; no stored workflow is written.
+// assistantUpdateWorkflowGraph разбирает ограниченные input/step arrays с закрытыми shapes,
+// запрещает неизвестные явные или повторные keys и назначает свободные server keys новым
+// элементам. Восстанавливает typed graph, возвращает соответствующие input defaults, переназначает
+// новые dependency keys и сохраняет исходные dependency edges до замены draft inputs/steps. Ошибки
+// несут прежние field diagnostics и не выполняют эту итоговую замену; сохранённый workflow не
+// записывается.
 func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVersion) error {
 	fields, fieldsOK := input["inputFields"].([]any)
 	steps, stepsOK := input["steps"].([]any)
@@ -367,6 +446,17 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 	return nil
 }
 
+// retainAssistantWorkflowDependencies mutates proposed steps to retain old edges for existing
+// keys, adding reconstructed edges only when key order/parallel structure changed. Every
+// dependency must refer to a unique earlier proposed step, and step keys must be unique; otherwise
+// it returns Invalid. Original dependency slices are copied, but a failure may leave earlier
+// proposed steps modified, so callers discard the failed proposal.
+// retainAssistantWorkflowDependencies изменяет proposed steps с сохранением прежних edges для
+// существующих keys и добавляет восстановленные edges только при изменении порядка keys/parallel
+// structure. Каждая dependency должна ссылаться на уникальный более ранний proposed step, keys
+// шагов также уникальны; иначе возвращает Invalid. Исходные dependency slices копируются, но при
+// отказе ранние proposed steps могут остаться изменёнными, поэтому вызывающий отбрасывает
+// неуспешный proposal.
 func retainAssistantWorkflowDependencies(original, proposed []entity.WorkflowStep) error {
 	previous := make(map[string]entity.WorkflowStep, len(original))
 	unchanged := len(original) == len(proposed)
@@ -406,6 +496,12 @@ func retainAssistantWorkflowDependencies(original, proposed []entity.WorkflowSte
 	return nil
 }
 
+// valueOrZero returns zero for a nil int64 pointer and otherwise the pointed value without
+// changing it. The fallback preserves absence for later validation; zero does not become a valid
+// optimistic-lock version or an authority decision.
+// valueOrZero возвращает ноль для nil int64 pointer, иначе его значение без изменения. Fallback
+// сохраняет отсутствие для последующей валидации; ноль не становится допустимой optimistic-lock
+// version или решением о полномочиях.
 func valueOrZero(value *int64) int64 {
 	if value == nil {
 		return 0
@@ -413,6 +509,17 @@ func valueOrZero(value *int64) int64 {
 	return *value
 }
 
+// rehydrateEditedAssistantWorkflow requires the original UPDATE_WORKFLOW key/kind/ref and positive
+// version, a closed edited field set and unchanged workflow/project refs before invoking the
+// shared pure reconstruction. Only supplied editable values are forwarded; the original
+// Before/version remain authoritative and the caller selection is restored after workflow-specific
+// canonical hydration. Forged snapshot/target/version fields cannot replace the original envelope
+// through this path.
+// rehydrateEditedAssistantWorkflow требует исходные UPDATE_WORKFLOW key/kind/ref и положительную
+// version, закрытый edited field set и неизменённые workflow/project refs до общей чистой
+// реконструкции. Передаются только заданные editable values; исходные Before/version остаются
+// авторитетными, выбор вызывающего восстанавливается после специализированной canonical hydration
+// workflow. Подделанные snapshot/target/version fields не заменяют исходную оболочку этим путём.
 func rehydrateEditedAssistantWorkflow(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if original.Type != "UPDATE_WORKFLOW" || original.Key != edited.Key || original.Target.Kind != "WORKFLOW" ||
 		original.Target.Ref == "" || original.ExpectedVersion == nil || *original.ExpectedVersion < 1 ||
@@ -422,25 +529,19 @@ func rehydrateEditedAssistantWorkflow(original, edited entity.AssistantPlanOpera
 		assistantString(edited.Parameters, "projectRef") != assistantString(original.Before, "projectRef") {
 		return entity.AssistantPlanOperation{}, errs.ErrForbidden
 	}
-	parameters := map[string]any{"workflowRef": original.Target.Ref}
-	for _, field := range assistantWorkflowEditableFields {
-		if value, supplied := edited.Parameters[field]; supplied {
-			parameters[field] = value
-		}
-	}
-	edited.Parameters = parameters
-	selected := edited.Selected
-	hydrated, err := hydrateAssistantWorkflowFields(original.Before, *original.ExpectedVersion, edited)
-	if err != nil {
-		return entity.AssistantPlanOperation{}, err
-	}
-	if !reflect.DeepEqual(hydrated.Before, original.Before) {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
-	}
-	hydrated.Selected = selected
-	return hydrated, nil
+	return rehydrateAssistantEditableFields(original, edited, map[string]any{"workflowRef": original.Target.Ref}, assistantWorkflowEditableFields, hydrateAssistantWorkflowFields)
 }
 
+// assistantWorkflowUpdateSnapshotMatches re-reads the current owner-scoped workflow snapshot and
+// compares both version pins, target name, complete Before and workflow/project refs. It then
+// clears canonical Input, rebuilds the typed command and normalized After and compares JSON
+// representations. Read/validation errors propagate; false means mismatch, not authorization or a
+// write. Its canonical-After policy deliberately differs from schedule map equality.
+// assistantWorkflowUpdateSnapshotMatches повторно читает текущий owner-scoped workflow snapshot и
+// сравнивает обе version pins, target name, полный Before и workflow/project refs. Затем очищает
+// canonical Input, восстанавливает typed command и normalized After и сравнивает JSON
+// representations. Ошибки чтения/валидации передаются выше; false означает несовпадение, а не
+// авторизацию или запись. Политика canonical After намеренно отличается от schedule map equality.
 func (repository *Repository) assistantWorkflowUpdateSnapshotMatches(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (bool, error) {
