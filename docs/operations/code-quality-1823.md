@@ -4,11 +4,103 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.394.0
+version: 1.395.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Свежие assistant grant requests, mailbox publication и continuation — 25.10.2026
+
+На основе `45299d3e6c4bca978f5d82cd4eacbe55207cb2f8` полностью прочитаны
+email_mailbox_publication_work.go, assistant_project_connection.go,
+assistant_project_integration_grant.go, assistant_system_integration_grant.go,
+prompt_continuation.go и прежний connection test:16+15+6+9+15+1 объявлений.
+Все62 получили предметные описания; два новых helper и два теста также описаны.
+Семь Go-файлов этапа имеют66/66 EN→RU описаний. Общий inventory19614/21468,
+missing1854 — PostgreSQL adapter control-plane. Все127 Go-файлов текущего PR
+имеют1483/1483 EN→RU описаний.
+
+`assistantHydrationRequest` объединяет шесть подготовок запроса свежего чтения:
+snapshot-check и edit/refresh для project connection, project grant и system
+grant. Сохраняются копия всей оболочки операции, новая непустая карта Parameters
+по соответствующему закрытому списку, присутствие отсутствующего ключа с nil,
+поверхностные вложенные значения и все остальные поля, включая Input/Before/
+After/Target/ExpectedVersion/Selected. Функция не проверяет authority и не
+назначает owner pins; списки выбираются доверенными callers. Разные SYSTEM/
+PROJECT scope, immutable pins, approval rules, snapshot equality и поведение
+stale refresh остаются у прежних специализированных методов.
+
+Проверка системных аналогов нашла два таких же блока у SYSTEM grant; они
+также перенесены после полного чтения файла. Поиск прежнего exact request
+copy pattern больше не находит совпадений в PostgreSQL adapter. Совпавшие
+проекции before/after не превращены в общий policy comparator: grant отдельно
+сравнивает ExpectedVersion, а connection сохраняет свой прежний набор.
+
+`emailMailboxPublicationWriteResult` объединяет результаты трёх точных
+stage/applied/callback Exec. Любая ошибка исполнения даёт Unavailable до
+проверки count; ровно одна строка успешна, ноль или несколько — Conflict.
+Все SQL, claim/revision/digest аргументы и предварительные policy/principal
+проверки сохранены. Release по-прежнему допускает zero rows, Complete
+сохраняет отдельное error/count → Conflict и прямой tx.Commit; они не
+перенесены в общий helper.
+
+Существующий closed-pin test полностью описан без изменения проверок.
+Новый hydration test использует5 буквальных наборов: connection, project
+grant, system grant, nil parameters и пустой список. Проверены закрытые
+Parameters без protected/unknown pins, сохранение оболочки и pointer identity,
+независимость внешней карты и прежние общие вложенные значения. Второй тест
+проверяет6 mailbox write исходов: one/zero/multiple rows, error, error при
+one-row tag и ErrNoRows. Ошибка имеет прежний приоритет, детали драйвера
+не раскрываются. Это чистые синтетические проверки, без DB или внешних effects.
+
+| Путь / жизненный цикл | Сохранённая граница |
+| --- | --- |
+| Assistant connection prepare | Текущий ACTIVE project/profile/non-system agent, project.manage visibility и organization OWNER/ADMINISTRATOR, дополнительный organization.manage. Закрытый bootstrap config и current executable package pins до server-owned CREATE envelope |
+| Connection effect | Project-limited authority отклоняется, current owner/agent/profile/package версии сверяются повторно; canonical changeConnection и purpose insert в caller TX. Prepared envelope не выдаёт права на организационный эффект |
+| Grant edit / refresh | Точные owner/assistant/connection/capability pins и approval paths, запрет no-op. Обычный edit требует свежесть original, stale refresh не меняет стабильную lineage; SYS/PROJECT authorization не смешивается |
+| Mailbox claim / stage | Только последняя PENDING/READY publication,45-секундный claim с generation. Configuration/policy digest и revision, повтор той же policy разрешён, SQL lease fence до записи |
+| Applied / callback | Applied marker требует staged policy; callback — exact projectless email-bridge permission, latest revision/digest и applied state. Маркеры не доказывают Kubernetes readback самостоятельно |
+| Complete / replay | Global advisory lock и live applied claim/connection lock, callback/expiry/OCC/document checks, BIND/UNBIND/GIT_SYNC/RECOVERY-specific bindings, accepted document watermark/readback, READY/audit/event одной TX. READY replay лишь release+commit |
+| Continuation prepare | Предыдущая runtime revision той же сессии, безопасный component diff, pinned/default template и digest/bytes, canonical instruction/workflow/task/core binding. Complete materialization и общий consumer budget до добавления контекста |
+| PROJECT core notice | Exact main prompt/materialization/instruction digest и snapshot/core/run/node/session/turn/attempt, compact marker лишь в дополнительном notice. Main prompt и immutable история не переписываются, полные instructions передаются отдельно |
+| Persist / descriptor | Same-tenant/session previous/current revision pins и one-row insert. Integration descriptor исключает credential/transport fields; MCP digest связывает безопасные capabilities/integrations, не предоставляет authority |
+
+Все23 SQL прочитаны:18 встроенных directives и5 соседних mailbox/definition
+SQL. Все18 go:embed сохранены. Пять полных expected-AST сравнений трёх
+assistant файлов, mailbox work и расширенного connection test подтверждают
+только шесть request copies, три Exec result блока и новый тест. Prompt
+continuation прошёл полное AST/directive сравнение с исходным SHA: только
+комментарии. Проверочный test fixture первоначально отличался порядком imports;
+после его gofmt сравнение прошло без правок прежнего тестового поведения.
+Через Context7 /jackc/pgx проверены Row/Scan/ErrNoRows/errors.Is, Rows Close/Err
+и отсутствие автоматического rollback при отмене BEGIN context.
+
+Исторические ограничения описаны без заявления об исправлении: mailbox
+complete возвращает прямой commit error и игнорирует rollback с request
+context, canonical JSON marshal в readback имеет прежнюю обработку ошибок.
+Continuation accessors допускают совместимые пустые/пропущенные значения,
+continuationNumber сохраняет разные signed integer/string и nonnegative
+JSON-safe float пути. Safe diff не содержит credentials; notice, snapshot
+или version pins не заменяют свежую execution/owner authority.
+
+После SYSTEM extension финальные GOWORK=off control-plane build и unit
+`-count=1`, включая5+6 новых случаев и прежние closed-pin assertions, —
+PASS LOCAL;13 external fixture keys и2 admin/template inputs исключены.
+17 analyzer unit и5 exact-ignore guards — PASS. Финальный gofmt добавил
+только разделители комментариев directives; полное AST/directive сравнение
+снова подтвердило прежнюю исполняемую часть. Diff check — PASS.
+Real PostgreSQL/RLS/OCC/grant races, Kubernetes apply/readback/email-bridge
+callback, accepted mailbox watermark/remote delivery, prompt provider/thread
+resume, browser/full E2E и deploy/live — NOT RUN/SKIP. QA baseline f2e64eb сохранён.
+
+Scan6679 own sources,222 excluded:1806 raw,902 retained occurrences и904
+unresolved. Прежние134/131-token окна устранены как исходные фрагменты;
+анализатор теперь видит меньшие102/105-token specialized read/edit окна.
+Четыре project/system grant окна также изменили boundaries/hash, остаются
+открытыми; общий raw count не снизился. Новых registry решений нет:776 entries
+валидны, thresholds/ignore regions/whole-file exclusions не менялись.
+Issue#1823 открыт, PR остаётся Draft до завершения полного объёма.
 
 ## Восстановление очистки, credential projection и runtime activity — 25.10.2026
 

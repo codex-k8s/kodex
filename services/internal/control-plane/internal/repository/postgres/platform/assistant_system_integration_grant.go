@@ -13,12 +13,35 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// querySystemAssistantIntegrationGrantSnapshot Reads existing exact
+// organization/connection/agent/capability grant state or empty/default fields through a left
+// join. It supplies a candidate snapshot, not owner authorization or a new grant.
+// querySystemAssistantIntegrationGrantSnapshot Читает состояние точного grant организации,
+// соединения, агента и возможности либо пустые поля через LEFT JOIN. Даёт снимок кандидата, а не
+// авторизацию владельца или новый grant.
+//
 //go:embed sql/system_assistant_integration_grants__snapshot.sql
 var querySystemAssistantIntegrationGrantSnapshot string
 
+// querySystemAssistantIntegrationGrantPlanAuthority Reads the actor-owned plan operations used to
+// recheck project and system grant authority before execution. The caller strictly bounds the
+// decoded operation count and resolves each current owner; stored pins alone do not authorize
+// effects.
+// querySystemAssistantIntegrationGrantPlanAuthority Читает операции принадлежащего субъекту плана
+// для повторной проверки проектных и системных grant перед исполнением. Вызывающий ограничивает
+// число операций и разрешает каждого текущего владельца; сохранённые привязки сами не разрешают
+// эффект.
+//
 //go:embed sql/system_assistant_integration_grants__plan_authority.sql
 var querySystemAssistantIntegrationGrantPlanAuthority string
 
+// authorizeSystemAssistantIntegrationGrantPlan For plan inputs reads exact actor-owned operations,
+// validates the bound and project-grant authority, then requires each system operation to match
+// organization scope and current assistant owner. Other payload kinds are skipped; no grants are
+// changed.
+// authorizeSystemAssistantIntegrationGrantPlan Для входа плана читает точные операции субъекта,
+// проверяет предел и полномочия проектных grant, затем требует организационную область и текущего
+// владельца каждой системной операции. Иные payload пропускаются; grant не меняются.
 func (repository *Repository) authorizeSystemAssistantIntegrationGrantPlan(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	var ref string
 	switch payload := input.Payload.(type) {
@@ -62,9 +85,29 @@ func (repository *Repository) authorizeSystemAssistantIntegrationGrantPlan(ctx c
 	return nil
 }
 
+// assistantSystemGrantEditable Defines five trusted connection/capability/enable/approval fields
+// selected for fresh SYSTEM grant hydration. Project-assistant identifiers and protected owner
+// pins are not copied from editable parameters.
+// assistantSystemGrantEditable Задаёт пять доверенных полей соединения, возможности, включения и
+// одобрения для свежего SYSTEM grant. Идентификаторы проектного ассистента и защищённые привязки
+// владельца из редактируемых параметров не копируются.
 var assistantSystemGrantEditable = []string{"connectionRef", "capabilityKey", "enabled", "approvalPolicy", "approvalScopePaths"}
+
+// assistantSystemGrantOwner Defines protected organization/system-assistant/package/grant/approval
+// metadata preserved by owner edits and freshly revalidated through the canonical owner path.
+// assistantSystemGrantOwner Задаёт защищённые метаданные организации, системного ассистента,
+// пакета, grant и одобрения, сохраняемые правками и заново проверяемые каноническим путём
+// владельца.
 var assistantSystemGrantOwner = []string{"scopeKind", "organizationRef", "systemAssistantRef", "definitionVersion", "definitionDigest", "grantRef", "grantVersion", "defaultApprovalPolicy", "allowedApprovalPolicies"}
 
+// hydrateSystemAssistantIntegrationGrant Validates the closed editable grant input and approval
+// paths, resolves canonical system-assistant owner/current connection/package capability, reads
+// existing grant and rejects no-op changes. Builds immutable owner/before/after/target/version
+// metadata without executing an effect.
+// hydrateSystemAssistantIntegrationGrant Проверяет закрытый редактируемый вход grant и approval
+// paths, разрешает канонического системного ассистента, текущее соединение и возможность пакета,
+// читает прежний grant и отклоняет отсутствие изменения. Строит неизменяемые owner, before, after,
+// target и version без исполнения эффекта.
 func (repository *Repository) hydrateSystemAssistantIntegrationGrant(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if !onlyAssistantFields(operation.Parameters, assistantSystemGrantEditable...) {
 		return operation, errs.ErrInvalid
@@ -130,6 +173,13 @@ func (repository *Repository) hydrateSystemAssistantIntegrationGrant(ctx context
 	return operation, nil
 }
 
+// systemAssistantIntegrationGrantCommand Maps a closed organization/system-assistant plan input
+// with positive expected version and valid enable/approval fields to the specialized grant
+// command. Current owner and package authority are checked separately during execution.
+// systemAssistantIntegrationGrantCommand Преобразует закрытый организационный вход системного
+// ассистента с положительной ожидаемой версией и допустимыми enable/approval полями в
+// специализированную команду grant. Текущие полномочия владельца и пакета проверяются отдельно при
+// исполнении.
 func systemAssistantIntegrationGrantCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	allowed := append(append([]string{}, assistantSystemGrantEditable...), assistantSystemGrantOwner...)
 	allowed = append(allowed, "expectedVersion")
@@ -145,12 +195,14 @@ func systemAssistantIntegrationGrantCommand(operation entity.AssistantPlanOperat
 	return command.Command{Kind: command.ChangeSystemAssistantIntegrationGrant, Mutation: value.Mutation{ExpectedVersion: &version}, Payload: command.SystemAssistantIntegrationGrantInput{ConnectionRef: assistantString(operation.Input, "connectionRef"), CapabilityKey: assistantString(operation.Input, "capabilityKey"), ApprovalPolicy: assistantString(operation.Input, "approvalPolicy"), Enabled: enabled, ApprovalScopePaths: paths}}, nil
 }
 
+// systemAssistantIntegrationGrantSnapshotMatches Rehydrates only trusted editable fields against
+// current system owner/grant state and compares before/after/expected-version/target JSON. Errors
+// propagate; matching is a freshness check, not execution authority.
+// systemAssistantIntegrationGrantSnapshotMatches Свежо разрешает только доверенные редактируемые
+// поля по текущим системному владельцу и grant, сравнивает JSON before, after, expected-version и
+// target. Ошибка возвращается; совпадение проверяет свежесть, а не выдаёт полномочия.
 func (repository *Repository) systemAssistantIntegrationGrantSnapshotMatches(ctx context.Context, tx pgx.Tx, current scope, original entity.AssistantPlanOperation) (bool, error) {
-	request := original
-	request.Parameters = map[string]any{}
-	for _, field := range assistantSystemGrantEditable {
-		request.Parameters[field] = original.Parameters[field]
-	}
+	request := assistantHydrationRequest(original, assistantSystemGrantEditable)
 	fresh, err := repository.hydrateSystemAssistantIntegrationGrant(ctx, tx, current, request)
 	if err != nil {
 		return false, err
@@ -158,6 +210,14 @@ func (repository *Repository) systemAssistantIntegrationGrantSnapshotMatches(ctx
 	return assistantJSONEqual(fresh.Before, original.Before) && assistantJSONEqual(fresh.After, original.After) && assistantJSONEqual(fresh.ExpectedVersion, original.ExpectedVersion) && assistantJSONEqual(fresh.Target, original.Target), nil
 }
 
+// rehydrateEditedSystemAssistantGrant Preserves owner pins and exact connection/capability
+// identity, checks original freshness outside stale refresh and rehydrates editable fields before
+// rechecking stable organization/system-assistant scope and selection. PROJECT rules remain in
+// their distinct path.
+// rehydrateEditedSystemAssistantGrant Сохраняет привязки владельца и точные соединение с
+// возможностью, проверяет свежесть вне обновления устаревшего плана, разрешает редактируемые поля
+// и заново сверяет организацию, системного ассистента и выбор. PROJECT правила остаются в
+// отдельном пути.
 func (repository *Repository) rehydrateEditedSystemAssistantGrant(ctx context.Context, tx pgx.Tx, current scope, original, edited entity.AssistantPlanOperation, stale bool) (entity.AssistantPlanOperation, error) {
 	if !onlyAssistantFields(edited.Parameters, append(append([]string{}, assistantSystemGrantEditable...), assistantSystemGrantOwner...)...) {
 		return edited, errs.ErrInvalid
@@ -178,11 +238,7 @@ func (repository *Repository) rehydrateEditedSystemAssistantGrant(ctx context.Co
 			return edited, errs.ErrConflict
 		}
 	}
-	request := edited
-	request.Parameters = map[string]any{}
-	for _, field := range assistantSystemGrantEditable {
-		request.Parameters[field] = edited.Parameters[field]
-	}
+	request := assistantHydrationRequest(edited, assistantSystemGrantEditable)
 	fresh, err := repository.hydrateSystemAssistantIntegrationGrant(ctx, tx, current, request)
 	if err != nil {
 		return edited, err

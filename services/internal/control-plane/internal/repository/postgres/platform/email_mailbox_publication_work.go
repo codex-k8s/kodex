@@ -15,38 +15,121 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// queryEmailMailboxPublicationClaim Claims only the latest PENDING/READY publication with an
+// absent/expired lease under SKIP LOCKED, incrementing generation and assigning a 45-second lease.
+// Returns configuration/policy/readback metadata; claiming does not apply Kubernetes resources or
+// confirm bridge acceptance.
+// queryEmailMailboxPublicationClaim Захватывает только последнюю PENDING/READY публикацию без
+// действующей аренды через SKIP LOCKED, увеличивает поколение и назначает 45-секундную аренду.
+// Возвращает конфигурацию, policy и метаданные сверки; ресурсы Kubernetes не применяет и принятие
+// bridge не подтверждает.
+//
 //go:embed sql/email_mailbox_publication_claim.sql
 var queryEmailMailboxPublicationClaim string
 
+// queryEmailMailboxPublicationStagePolicy Stores a policy document/digest only for exact live
+// ref/claimant/generation and matching configuration revision/digest, allowing repeated identical
+// policy. It does not publish the policy externally.
+// queryEmailMailboxPublicationStagePolicy Сохраняет документ и хеш policy только для точных
+// действующих ref, claimant, generation и совпавших ревизии с хешем конфигурации, допуская повтор
+// той же policy. Внешнюю публикацию не выполняет.
+//
 //go:embed sql/email_mailbox_publication_stage_policy.sql
 var queryEmailMailboxPublicationStagePolicy string
 
+// queryEmailMailboxPublicationApplied Records application time once for an exact live publication
+// claim with a staged policy. The timestamp records caller-confirmed application rather than
+// independently checking Kubernetes.
+// queryEmailMailboxPublicationApplied Однократно фиксирует время применения точного действующего
+// захвата публикации с подготовленной policy. Время отражает подтверждение вызывающего, а не
+// самостоятельную проверку Kubernetes.
+//
 //go:embed sql/email_mailbox_publication_applied.sql
 var queryEmailMailboxPublicationApplied string
 
+// queryEmailMailboxPublicationCallback Records bridge readback only for the latest matching
+// revision/digest after application, in PENDING/READY state. Exact bridge workload/permission
+// validation belongs to the caller; no lease token is inferred from this callback.
+// queryEmailMailboxPublicationCallback Фиксирует сверку bridge только для последней совпавшей
+// ревизии и хеша после применения в PENDING/READY. Точные workload и разрешение проверяет
+// вызывающий; токен аренды из callback не выводится.
+//
 //go:embed sql/email_mailbox_publication_callback.sql
 var queryEmailMailboxPublicationCallback string
 
+// queryEmailMailboxPublicationRelease Clears claimant/lease for exact ref/claimant/generation in
+// PENDING/READY without requiring an unexpired lease. Callers intentionally do not require a
+// nonzero affected-row count on release.
+// queryEmailMailboxPublicationRelease Очищает claimant и аренду точных ref, claimant, generation в
+// PENDING/READY без требования неистёкшей аренды. При освобождении вызывающие намеренно не требуют
+// ненулевое число изменённых строк.
+//
 //go:embed sql/email_mailbox_publication_release.sql
 var queryEmailMailboxPublicationRelease string
 
+// queryEmailMailboxPublicationFinishLock Locks exact live applied publication and connection,
+// projecting expected connection version from observation receipts or the original version plus
+// owner/configuration/callback metadata. Callers still validate callback, expiry, OCC and document
+// identity before marking readiness.
+// queryEmailMailboxPublicationFinishLock Блокирует точные действующую применённую публикацию и
+// соединение. Выводит ожидаемую версию соединения из квитанций наблюдения либо исходной версии,
+// сведения владельца, конфигурации и callback. Вызывающий дополнительно проверяет callback, срок,
+// OCC и документ до готовности.
+//
 //go:embed sql/email_mailbox_publication_finish_lock.sql
 var queryEmailMailboxPublicationFinishLock string
 
+// queryEmailMailboxPublicationReady Marks a live applied/callback-confirmed publication READY,
+// preserves the first ready timestamp and clears its exact claim. Callers require one affected row
+// after authoritative binding/document readback in the same transaction.
+// queryEmailMailboxPublicationReady Переводит действующую применённую публикацию с callback в
+// READY, сохраняет первое время готовности и очищает точный захват. Вызывающий требует одну строку
+// после авторитетной сверки привязок и документа в той же транзакции.
+//
 //go:embed sql/email_mailbox_publication_ready.sql
 var queryEmailMailboxPublicationReady string
 
+// queryEmailMailboxBindingApply Upserts the resolved connection-to-configuration revision binding,
+// incrementing version on conflict. Tenant/connection ownership and publication eligibility must
+// already be established by the locked caller path.
+// queryEmailMailboxBindingApply Вставляет или обновляет разрешённую привязку соединения к ревизии
+// конфигурации, увеличивая версию при конфликте. Организация, владение соединением и пригодность
+// публикации заранее проверяются заблокированным путём вызывающего.
+//
 //go:embed sql/email_mailbox_binding_apply.sql
 var queryEmailMailboxBindingApply string
 
+// queryEmailMailboxBindingRemove Deletes only the exact organization/connection mailbox binding.
+// It neither deletes the connection nor changes a remote mailbox; caller locks/authority establish
+// eligibility.
+// queryEmailMailboxBindingRemove Удаляет только точную привязку почтового ящика организации и
+// соединения. Соединение и внешний ящик не удаляет; пригодность устанавливают блокировки и
+// полномочия вызывающего.
+//
 //go:embed sql/email_mailbox_binding_remove.sql
 var queryEmailMailboxBindingRemove string
 
+// queryEmailMailboxConnectionApply Updates mailbox ID/from-address public configuration under
+// exact organization/internal connection/version, without incrementing connection version itself.
+// Callers require one affected row and atomically reconcile bindings/readiness.
+// queryEmailMailboxConnectionApply Меняет публичные mailbox ID и from-address по точным
+// организации, внутреннему ID соединения и версии без самостоятельного увеличения версии
+// соединения. Вызывающий требует одну строку и атомарно сверяет привязки с готовностью.
+//
 //go:embed sql/email_mailbox_connection_apply.sql
 var queryEmailMailboxConnectionApply string
 
+// ClaimEmailMailboxPublication Validates a bounded nonempty claimant, reads one claim, validates
+// decoded configuration and its exact digest, then assigns claimant locally. Missing rows return
+// no work; scan/validation failure is unavailable and may retain partial internal work with the
+// error. No external application occurs.
+// ClaimEmailMailboxPublication Проверяет ограниченного непустого claimant, читает захват,
+// валидирует декодированную конфигурацию и точный хеш, затем назначает claimant локально.
+// Отсутствие строки означает отсутствие работы; сбой чтения или проверки даёт Unavailable с
+// возможным частичным внутренним work. Внешнего применения нет.
 func (repository *Repository) ClaimEmailMailboxPublication(ctx context.Context, claimant string) (entity.EmailMailboxPublicationWork, bool, error) {
 	var work entity.EmailMailboxPublicationWork
 	if claimant == "" || len(claimant) > 96 {
@@ -68,6 +151,12 @@ func (repository *Repository) ClaimEmailMailboxPublication(ctx context.Context, 
 	return work, true, nil
 }
 
+// StageEmailMailboxPolicy Validates the policy and exact work configuration revision/digest,
+// bounds marshaled bytes, then requires one staged-policy update under the exact claim. Invalid
+// policy is invalid, SQL failure unavailable and a missed update conflict.
+// StageEmailMailboxPolicy Проверяет policy и точные ревизию с хешем конфигурации work,
+// ограничивает JSON и требует одну запись policy точного захвата. Неверная policy даёт Invalid,
+// SQL-сбой — Unavailable, отсутствие изменения — Conflict.
 func (repository *Repository) StageEmailMailboxPolicy(ctx context.Context, work entity.EmailMailboxPublicationWork, document mailpolicy.MailDocument) error {
 	if document.Validate() != nil || document.ConfigurationRevision != work.Configuration.Revision || document.ConfigurationDigest != api.Digest(work.Configuration) {
 		return errs.ErrInvalid
@@ -76,25 +165,25 @@ func (repository *Repository) StageEmailMailboxPolicy(ctx context.Context, work 
 	if err != nil || len(raw) > mailpolicy.MaximumFileBytes {
 		return errs.ErrInvalid
 	}
-	tag, err := repository.pool.Exec(ctx, queryEmailMailboxPublicationStagePolicy, work.Ref, work.Claimant, work.ClaimGeneration, raw, document.Digest(), document.ConfigurationDigest, document.ConfigurationRevision)
-	if err != nil {
-		return errs.ErrUnavailable
-	}
-	if tag.RowsAffected() != 1 {
-		return errs.ErrConflict
-	}
-	return nil
+	return emailMailboxPublicationWriteResult(repository.pool.Exec(ctx, queryEmailMailboxPublicationStagePolicy, work.Ref, work.Claimant, work.ClaimGeneration, raw, document.Digest(), document.ConfigurationDigest, document.ConfigurationRevision))
 }
+
+// MarkEmailMailboxApplied Requires one application-marker update for the exact
+// ref/claimant/generation and staged policy. It maps SQL failure to unavailable and count mismatch
+// to conflict; callers own the actual Kubernetes apply/readback.
+// MarkEmailMailboxApplied Требует одну запись маркера применения по точным ref, claimant,
+// generation и подготовленной policy. SQL-сбой даёт Unavailable, иное число строк — Conflict; само
+// применение и сверку Kubernetes выполняет вызывающий.
 func (repository *Repository) MarkEmailMailboxApplied(ctx context.Context, work entity.EmailMailboxPublicationWork) error {
-	tag, err := repository.pool.Exec(ctx, queryEmailMailboxPublicationApplied, work.Ref, work.Claimant, work.ClaimGeneration)
-	if err != nil {
-		return errs.ErrUnavailable
-	}
-	if tag.RowsAffected() != 1 {
-		return errs.ErrConflict
-	}
-	return nil
+	return emailMailboxPublicationWriteResult(repository.pool.Exec(ctx, queryEmailMailboxPublicationApplied, work.Ref, work.Claimant, work.ClaimGeneration))
 }
+
+// ReleaseEmailMailboxPublication Releases the exact publication claim, mapping SQL failure to
+// unavailable while accepting zero affected rows as before. It does not roll back already applied
+// resources or accepted configuration.
+// ReleaseEmailMailboxPublication Освобождает точный захват публикации, возвращая Unavailable при
+// SQL-сбое и по-прежнему допуская ноль изменённых строк. Уже применённые ресурсы и принятую
+// конфигурацию не откатывает.
 func (repository *Repository) ReleaseEmailMailboxPublication(ctx context.Context, work entity.EmailMailboxPublicationWork) error {
 	_, err := repository.pool.Exec(ctx, queryEmailMailboxPublicationRelease, work.Ref, work.Claimant, work.ClaimGeneration)
 	if err != nil {
@@ -103,6 +192,14 @@ func (repository *Repository) ReleaseEmailMailboxPublication(ctx context.Context
 	return nil
 }
 
+// ReportEmailConfigurationReadback Requires exact projectless email-bridge report permission and
+// resolved scope, then validates positive revision/digest and requires one latest
+// applied-publication callback update. The report records bridge readback without granting
+// publication authority to arbitrary payload identities.
+// ReportEmailConfigurationReadback Требует точное report-разрешение email-bridge без проекта и
+// разрешённую область, проверяет положительную ревизию с хешем и одну callback-запись последней
+// применённой публикации. Фиксирует сверку bridge без выдачи полномочий произвольной личности из
+// payload.
 func (repository *Repository) ReportEmailConfigurationReadback(ctx context.Context, principal value.Principal, revision int64, digest string) error {
 	if principal.CallerWorkload != "email-bridge" || principal.ProjectRef != "" || principal.Permission != "platform.email.configuration.report" {
 		return errs.ErrForbidden
@@ -113,17 +210,19 @@ func (repository *Repository) ReportEmailConfigurationReadback(ctx context.Conte
 	if revision < 1 || !emailpolicy.ValidDigest(digest) {
 		return errs.ErrInvalid
 	}
-	tag, err := repository.pool.Exec(ctx, queryEmailMailboxPublicationCallback, revision, digest)
-	if err != nil {
-		return errs.ErrUnavailable
-	}
-	if tag.RowsAffected() != 1 {
-		return errs.ErrConflict
-	}
-	return nil
+	return emailMailboxPublicationWriteResult(repository.pool.Exec(ctx, queryEmailMailboxPublicationCallback, revision, digest))
 }
 
-// Complete вызывается локальным reconciler только после полного Kubernetes readback.
+// CompleteEmailMailboxPublication After caller Kubernetes readback, locks the global publication
+// boundary and exact live applied claim/connection, verifies callback/expiry/OCC/document
+// identity, reconciles kind-specific bindings and accepted document readback, then marks ready
+// with audit/event in one transaction. READY replay only releases/commits; existing direct commit
+// errors and ignored request-context rollback remain unchanged.
+// CompleteEmailMailboxPublication После сверки Kubernetes вызывающим блокирует общую границу
+// публикации и точный действующий применённый захват с соединением, проверяет callback, срок, OCC
+// и документ. Сверяет привязки по виду и принятый документ, затем пишет READY с аудитом и событием
+// одной транзакцией. READY replay лишь освобождает и подтверждает; прямые ошибки commit и
+// игнорируемый rollback с контекстом запроса сохраняются.
 func (repository *Repository) CompleteEmailMailboxPublication(ctx context.Context, work entity.EmailMailboxPublicationWork) error {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
@@ -230,4 +329,22 @@ func (repository *Repository) CompleteEmailMailboxPublication(ctx context.Contex
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// emailMailboxPublicationWriteResult requires one row for stage/applied/callback writes, mapping
+// every execution error to unavailable before count validation and zero/multiple rows to conflict.
+// Callers retain exact SQL, claim/revision/digest arguments and preceding validation/authority.
+// Release and completion use different existing contracts and intentionally do not call this helper.
+// emailMailboxPublicationWriteResult требует одну строку записи stage/applied/callback, переводит
+// любую ошибку исполнения в Unavailable до проверки числа строк, ноль или несколько — в Conflict.
+// Точные SQL, аргументы claim/revision/digest, проверки входа и полномочия остаются у вызывающих.
+// Release и complete имеют другие прежние контракты и намеренно не используют эту функцию.
+func emailMailboxPublicationWriteResult(tag pgconn.CommandTag, err error) error {
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrConflict
+	}
+	return nil
 }

@@ -21,18 +21,57 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryPromptContinuationPrevious Reads the latest stored runtime revision of the exact
+// organization/session, ordered by creation/ref, for continuation comparison. It does not itself
+// prove session authority or authorize a retry.
+// queryPromptContinuationPrevious Читает последнюю сохранённую runtime-ревизию точных организации
+// и сессии по времени и ссылке для сравнения продолжения. Самостоятельно не подтверждает
+// полномочия сессии и не разрешает retry.
+//
 //go:embed sql/prompt_continuation_previous.sql
 var queryPromptContinuationPrevious string
 
+// queryPromptContinuationTemplate Reads the exact agent continuation-template binding and pinned
+// published/superseded revision within matching organization/project/set. Absence preserves the
+// built-in template; caller verifies bytes and digest before materialization.
+// queryPromptContinuationTemplate Читает точную привязку continuation-шаблона агента и
+// закреплённую опубликованную либо замещённую ревизию совпавших организации, проекта и набора.
+// Отсутствие сохраняет встроенный шаблон; вызывающий проверяет байты и хеш до материализации.
+//
 //go:embed sql/prompt_continuation_template.sql
 var queryPromptContinuationTemplate string
 
+// queryPromptContinuationInsert Persists immutable continuation content/snapshot and
+// template/service/variable/diff/materialization pins only between same-organization/session
+// previous/current runtime revisions. Callers require one row in the owning execution transaction.
+// queryPromptContinuationInsert Сохраняет неизменяемые содержимое, снимок и привязки шаблона,
+// сервиса, переменных, diff и материализации только между прежней и текущей runtime-ревизиями
+// одной организации и сессии. Вызывающий требует одну строку в транзакции выполнения владельца.
+//
 //go:embed sql/prompt_continuation_insert.sql
 var queryPromptContinuationInsert string
 
+// defaultContinuationTemplateRef Identifies the built-in continuation template when no
+// owner-pinned agent template exists; changing this constant would alter provenance and is outside
+// this annotation/refactoring.
+// defaultContinuationTemplateRef Идентифицирует встроенный шаблон продолжения при отсутствии
+// закреплённого шаблона владельца. Изменение константы затронуло бы происхождение и в текущий
+// рефакторинг не входит.
 const defaultContinuationTemplateRef = "prompt_continuation_default_v1"
+
+// defaultContinuationTemplate Provides the exact existing runtime notice text with RUNTIME_CHANGES
+// and INPUT slots; its bytes are hashed and retained unchanged rather than rewriting historical
+// notices.
+// defaultContinuationTemplate Содержит точный прежний текст runtime-уведомления со слотами
+// RUNTIME_CHANGES и INPUT. Байты хешируются и сохраняются без изменения исторических уведомлений.
 const defaultContinuationTemplate = "Continue the Session with the current approved runtime context.\n{{slot \"RUNTIME_CHANGES\"}}\n{{slot \"INPUT\"}}"
 
+// preparedContinuationNotice Carries the prior internal runtime revision ID, safe component diff,
+// exact prompt snapshot and complete materialization pending insertion in the caller transaction.
+// Preparation does not grant execution authority or persist on its own.
+// preparedContinuationNotice Хранит внутренний ID прежней runtime-ревизии, безопасный diff
+// компонентов, точный снимок prompt и полную материализацию до вставки транзакцией вызывающего.
+// Подготовка сама не выдаёт полномочия и ничего не сохраняет.
 type preparedContinuationNotice struct {
 	PreviousID      string
 	Diff            promptservice.RuntimeDiff
@@ -40,6 +79,16 @@ type preparedContinuationNotice struct {
 	Materialization promptservice.Materialization
 }
 
+// prepareRuntimeContinuationNotice Reads previous/current dependency descriptors, builds the
+// runtime diff and a copied owner/default-template snapshot, verifies template bytes/digest, binds
+// canonical instructions/workflow/task/core projections and requires complete bounded
+// materialization plus consumer-valid session context before adding notice metadata to the current
+// snapshot. No previous revision returns nil,nil; failures retain stage-specific diagnostics.
+// prepareRuntimeContinuationNotice Читает прежние и текущие дескрипторы, строит diff и копию
+// снимка закреплённого либо встроенного шаблона, проверяет байты и хеш. Связывает канонические
+// instructions, workflow, task и core, требует полную ограниченную материализацию и пригодный
+// consumer-контекст до добавления метаданных в текущий снимок. Нет прежней ревизии — nil,nil;
+// ошибки сохраняют диагностику этапа.
 func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Context, tx pgx.Tx, current scope,
 	snapshot map[string]any, promptSnapshot entity.PromptMaterializationSnapshot,
 ) (*preparedContinuationNotice, error) {
@@ -132,9 +181,15 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	return &preparedContinuationNotice{PreviousID: previousID, Diff: diff, Snapshot: noticeSnapshot, Materialization: materialized}, nil
 }
 
-// Только дополнительный PROJECT notice получает compact marker. Main prompt,
-// core pins/content и прежняя immutable история не изменяются. Runner передаёт
-// полные current Instructions отдельно при thread/start и thread/resume.
+// bindRuntimeContinuationCoreProjection Only for a PROJECT assistant core, verifies the exact
+// current main prompt/snapshot/core/run/session/node/turn/attempt pins, then adds a compact
+// canonical JSON core projection to the supplementary notice. Rejects an existing marker; main
+// instructions and immutable history stay unchanged and full instructions are delivered
+// separately.
+// bindRuntimeContinuationCoreProjection Только для PROJECT core сверяет точные текущие main
+// prompt, снимок, core, run, session, node, turn и attempt, затем добавляет компактную
+// каноническую JSON-проекцию core в дополнительное уведомление. Отклоняет прежний маркер; основные
+// инструкции и история не меняются, полные инструкции передаются отдельно.
 func bindRuntimeContinuationCoreProjection(notice *entity.PromptMaterializationSnapshot, source entity.PromptMaterializationSnapshot, current map[string]any) error {
 	if source.AssistantCore == nil || source.AssistantCore.Scope != "PROJECT" {
 		return nil
@@ -195,8 +250,14 @@ func bindRuntimeContinuationCoreProjection(notice *entity.PromptMaterializationS
 	return nil
 }
 
-// Полный server notice проверяется тем же consumer predicate до seal. История
-// и исходный USER ввод не усекаются и не переписываются для прохождения бюджета.
+// appendRuntimeContinuationContext Copies the session-context slice and appends one full server
+// notice as USER only below 128 messages, then applies the same runtime consumer predicate before
+// replacing the snapshot field. It neither truncates historical/user content nor treats ordinary
+// text as a semantic notice.
+// appendRuntimeContinuationContext Копирует срез контекста и добавляет одно полное серверное
+// уведомление USER только при менее 128 сообщениях, затем применяет тот же runtime
+// consumer-предикат до замены поля снимка. Историю и пользовательский текст не усекает, обычный
+// текст семантическим уведомлением не объявляет.
 func appendRuntimeContinuationContext(snapshot map[string]any, materialized promptservice.Materialization) error {
 	messages, ok := snapshot["sessionContext"].([]map[string]string)
 	if !ok && snapshot["sessionContext"] != nil {
@@ -220,6 +281,13 @@ func appendRuntimeContinuationContext(snapshot map[string]any, materialized prom
 	return nil
 }
 
+// persistRuntimeContinuationNotice Skips nil notices, marshals the exact prepared snapshot and
+// inserts content plus all provenance pins between prior/current owner revisions, requiring one
+// affected row. Any marshal/write/count failure is conflict; commit belongs to the caller.
+// persistRuntimeContinuationNotice Пропускает nil-уведомление, кодирует точный подготовленный
+// снимок и вставляет содержимое со всеми привязками происхождения между ревизиями владельца,
+// требуя одну строку. Ошибка кодирования, записи или числа строк даёт Conflict; commit принадлежит
+// вызывающему.
 func (repository *Repository) persistRuntimeContinuationNotice(ctx context.Context, tx pgx.Tx, current scope, currentID string, notice *preparedContinuationNotice) error {
 	if notice == nil {
 		return nil
@@ -239,6 +307,16 @@ func (repository *Repository) persistRuntimeContinuationNotice(ctx context.Conte
 	return nil
 }
 
+// continuationComponents Normalizes a snapshot through JSON and builds sorted closed runtime
+// component descriptors, binding platform
+// instructions/core/templates/model/policy/files/context/tools and safe integration fields.
+// Credential/transport values are excluded from integration descriptors; MCP digest binds the safe
+// capability/integration projection. This is change explanation, not a new grant.
+// continuationComponents Нормализует снимок через JSON и строит отсортированные дескрипторы
+// закрытого набора runtime-компонентов: инструкции, core, шаблоны, модель, policy, файлы,
+// контекст, инструменты и безопасные поля интеграций. Credential и transport значения в
+// интеграционные дескрипторы не входят; MCP-хеш связывает безопасные возможности и интеграции. Это
+// объяснение изменений, а не новый grant.
 func continuationComponents(snapshot map[string]any) (map[string][]promptservice.RuntimeDescriptor, error) {
 	encoded, err := json.Marshal(snapshot)
 	if err != nil {
@@ -334,6 +412,12 @@ func continuationComponents(snapshot map[string]any) (map[string][]promptservice
 	return result, nil
 }
 
+// continuationObjects Extracts object elements only from a []any input into an allocated ordered
+// slice, silently skipping nonobjects and treating other container types as empty. This
+// compatibility accessor performs no schema/authority validation.
+// continuationObjects Извлекает только объекты из []any в созданный упорядоченный срез, пропуская
+// прочие элементы и считая иной тип контейнера пустым. Доступ совместимости не проверяет схему или
+// полномочия.
 func continuationObjects(value any) []map[string]any {
 	items, _ := value.([]any)
 	result := make([]map[string]any, 0, len(items))
@@ -344,10 +428,22 @@ func continuationObjects(value any) []map[string]any {
 	}
 	return result
 }
+
+// continuationString Returns a string-valued map entry or empty string for missing/wrong-type
+// input without coercion. Required-field checks belong to descriptor builders.
+// continuationString Возвращает строковое поле карты либо пустую строку при отсутствии или ином
+// типе без приведения. Обязательные поля проверяются построителями дескрипторов.
 func continuationString(value map[string]any, key string) string {
 	result, _ := value[key].(string)
 	return result
 }
+
+// continuationNumber Accepts nil as zero, signed integer types directly, nonnegative finite
+// integral JSON-safe float64, or canonical signed decimal int64 strings; unsupported/malformed
+// values return -1. The integer/string paths deliberately retain their historical signed behavior.
+// continuationNumber Принимает nil как ноль, знаковые целые напрямую, неотрицательный конечный
+// целый float64 в безопасном JSON-диапазоне либо каноническую знаковую десятичную строку int64.
+// Иной или неверный вход даёт -1; целые и строки сохраняют прежнее знаковое поведение.
 func continuationNumber(value any) int64 {
 	switch number := value.(type) {
 	case nil:
@@ -372,6 +468,13 @@ func continuationNumber(value any) int64 {
 	}
 	return -1
 }
+
+// continuationDigest Returns lowercase SHA-256 of the existing JSON encoding or empty string on
+// marshal failure. It is a safe descriptor commitment, not canonical JCS, authentication or
+// permission to execute.
+// continuationDigest Возвращает SHA-256 в нижнем hex-регистре от прежнего JSON-кодирования либо
+// пустую строку при ошибке marshal. Это фиксация дескриптора, а не JCS, аутентификация или
+// разрешение выполнения.
 func continuationDigest(value any) string {
 	raw, err := json.Marshal(value)
 	if err != nil {
