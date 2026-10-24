@@ -333,6 +333,11 @@ func (resolver *Resolver) resolveType(ctx context.Context, hostname string, quer
 				if len(cname) != 0 || len(addresses) != 0 {
 					return nil, 0, &Error{Reason: ReasonMalformed}
 				}
+				if ttl, found, err := negativeAnswerTTL(response, current); err != nil {
+					return nil, 0, err
+				} else if found {
+					return nil, minTTL(minimumTTL, ttl), nil
+				}
 				return nil, -1, nil
 			}
 			minimumTTL = minTTL(minimumTTL, ttlByOwner[current])
@@ -349,10 +354,48 @@ func (resolver *Resolver) resolveType(ctx context.Context, hostname string, quer
 				if !onlyUsedOwners(cname, addresses, used) {
 					return nil, 0, &Error{Reason: ReasonMalformed}
 				}
+				if ttl, found, err := negativeAnswerTTL(response, current); err != nil {
+					return nil, 0, err
+				} else if found {
+					return nil, minTTL(minimumTTL, ttl), nil
+				}
 				break
 			}
 		}
 	}
+}
+
+// negativeAnswerTTL recognizes a completed NODATA answer only when one valid
+// Internet-class SOA covers the terminal name. The caller has already validated
+// NOERROR, the entire CNAME chain and absence of requested addresses. Its TTL
+// bounds the shared snapshot; an absent SOA never skips a CNAME follow-up.
+// RU: negativeAnswerTTL распознаёт завершённый NODATA только по единственной
+// корректной SOA класса Internet, покрывающей конечное имя. Вызывающий код уже
+// проверил NOERROR, всю цепочку CNAME и отсутствие запрошенных адресов. TTL
+// ограничивает общий снимок; отсутствие SOA не отменяет следующий запрос CNAME.
+func negativeAnswerTTL(response *dns.Msg, terminal string) (time.Duration, bool, error) {
+	found := false
+	var ttl time.Duration
+	for _, record := range response.Ns {
+		soa, ok := record.(*dns.SOA)
+		if !ok {
+			continue
+		}
+		zone, err := normalizeDNSName(soa.Hdr.Name)
+		if found || err != nil || soa.Hdr.Class != dns.ClassINET || soa.Hdr.Rrtype != dns.TypeSOA ||
+			!dns.IsSubDomain(dns.Fqdn(zone), dns.Fqdn(terminal)) {
+			return 0, false, &Error{Reason: ReasonMalformed}
+		}
+		if _, err := normalizeDNSName(soa.Ns); err != nil {
+			return 0, false, err
+		}
+		if _, err := normalizeDNSName(soa.Mbox); err != nil {
+			return 0, false, err
+		}
+		found = true
+		ttl = time.Duration(min(soa.Hdr.Ttl, soa.Minttl)) * time.Second
+	}
+	return ttl, found, nil
 }
 
 // query tries configured servers in order, retries truncated UDP answers over
