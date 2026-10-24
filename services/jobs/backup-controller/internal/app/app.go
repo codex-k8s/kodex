@@ -119,7 +119,7 @@ func runOnce(ctx context.Context, controller *runner.Runner, config Config, comm
 				State string `json:"state"`
 			}{State: "EMPTY_TARGETS_READY"}
 		case "inspect-restore-targets", "inspect-restore-cleanup", "cleanup-restore-drill":
-			approval, loadErr := configspec.LoadRestoreApproval(config.RestoreApprovalFile, time.Now().UTC())
+			approval, loadErr := loadRestoreTargetApproval(command, config.RestoreApprovalFile, time.Now().UTC())
 			if loadErr != nil {
 				return loadErr
 			}

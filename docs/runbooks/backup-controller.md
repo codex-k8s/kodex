@@ -4,7 +4,7 @@ title: Backup, retention и restore drill
 type: runbook
 status: approved
 owner: sre
-version: 1.5.0
+version: 1.5.1
 updated: 2026-10-25
 ---
 
@@ -196,6 +196,7 @@ namespace/PG/Certificate/NetworkPolicy, read metadata/Pod status и UID delete.
 | Plan | Root transport, exact namespace UID, source Secret UID/RV | Только метаданные, SHA плана; без credential read |
 | Custody apply | Approved plan SHA, source drift, target absence | Один immutable Secret и exact receipt; нет доменного события |
 | Lost ACK / crash | Durable INTENT, прежний target name | Только readback exact UID; новый пароль/create не повторяются |
+| Expired approval после cleanup ACK loss | Действующие storage read credentials и полные immutable backup/drill/approval/target/request pins | Исторический read-only inspection разрешён; cleanup/restore требуют fresh approval |
 | Backup | Один Job, новый QA repository prefix, backoff0 | Manifest complete + verification либо FAIL; завершение Pod недостаточно |
 | Verify | Exact backup ID, versioned repository | Полный payload readback; repeated verification не создаёт новую S3 version |
 | Target create | Новый namespace UID/emptyDir/credentials/TLS | Собственный PG, без source admin или installation private key |
@@ -355,6 +356,13 @@ DB и S3 objects не переключаются/не изменяются.
     `.cleanupReadbackJob` (inspect-restore-cleanup). EMPTY здесь означает
     отсутствие после cleanup, **не** восстановление данных; REMAINING требует
     решения root по уже прочитанному состоянию, не blind retry.
+    Истечение approval не блокирует `inspect-restore-targets` и
+    `inspect-restore-cleanup`: это чтение только при совпадении полных
+    исторических immutable pins и текущем доступе к storage. Неверные
+    approval/backup/restore/target/request pins по-прежнему отклоняются.
+    Исторический decoder не разрешает повтор delete, restore или deployment;
+    изменение требует действующего approval и повторной проверки freshness
+    на границе runner до lock или внешнего эффекта.
 12. После terminal Jobs удалить/capture-owned PG Deployment с server UID
     precondition, дождаться исчезновения PG Pod, затем input Secrets, target
     namespace, source additive ingress и source one-shot/readback Jobs/Secrets

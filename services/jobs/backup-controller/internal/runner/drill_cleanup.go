@@ -12,6 +12,11 @@ import (
 // InspectRestoreTarget requires the same immutable approval and target fingerprint as the completed drill, then inspects exact receipt-owned target versions. Explicit cleanup uses the existing operation lock and never changes source databases, backup payloads or restore algorithms.
 // InspectRestoreTarget требует неизменяемые подтверждение и fingerprint завершённого drill, затем проверяет только принадлежащие квитанции версии цели. Явный cleanup использует штатный lock и не меняет исходные БД, backup payload либо алгоритмы восстановления.
 func (runner *Runner) InspectRestoreTarget(ctx context.Context, approval configspec.RestoreApproval, targets configspec.RestoreTargets, mode s3backup.TargetInspectionMode) (remaining int, resultErr error) {
+	if mode == s3backup.TargetCleanup {
+		if err := configspec.RequireFreshRestoreApproval(approval, runner.now()); err != nil {
+			return 0, err
+		}
+	}
 	targetSHA, err := configspec.FingerprintTargets(targets)
 	if err != nil || targetSHA != approval.TargetSetSHA256 {
 		return 0, errors.New("cleanup target fingerprint mismatches approval")

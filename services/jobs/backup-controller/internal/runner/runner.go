@@ -293,6 +293,9 @@ func (runner *Runner) Retain(ctx context.Context, policy Policy) (resultErr erro
 // RestoreDrill binds targets to owner approval, refuses prior terminal failures and verifies isolated restored data.
 // RU: RestoreDrill связывает цели с подтверждением владельца, отклоняет прежние terminal-отказы и проверяет восстановленные данные.
 func (runner *Runner) RestoreDrill(ctx context.Context, approval configspec.RestoreApproval, targets configspec.RestoreTargets) (resultErr error) {
+	if err := configspec.RequireFreshRestoreApproval(approval, runner.now()); err != nil {
+		return err
+	}
 	defer func() {
 		if resultErr == nil {
 			runner.observer.RestoreFinished("success")

@@ -24,6 +24,10 @@ import (
 // RU: maximumSpecBytes ограничивает размер каждой защищённой JSON-спецификации до декодирования.
 const maximumSpecBytes = 256 << 10
 
+// restoreApprovalInvalid names the closed diagnostic shared by malformed identities and expired mutation authority.
+// restoreApprovalInvalid задаёт закрытую диагностику неверной идентичности и истёкшего разрешения на изменение.
+const restoreApprovalInvalid = "restore approval is invalid or expired"
+
 // namePattern permits short DNS-style logical names in backup and restore specifications.
 // RU: namePattern допускает короткие логические имена в стиле DNS для спецификаций резервирования и восстановления.
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
@@ -195,17 +199,43 @@ func LoadRepositoryCredentials(path, environment string) (RepositoryCredentials,
 // LoadRestoreApproval accepts only a current, well-formed approval expiring within 24 hours of now.
 // RU: LoadRestoreApproval принимает лишь корректное действующее подтверждение со сроком не дальше 24 часов от now.
 func LoadRestoreApproval(path string, now time.Time) (RestoreApproval, error) {
+	value, err := LoadRestoreApprovalForInspection(path)
+	if err != nil {
+		return RestoreApproval{}, err
+	}
+	if err := RequireFreshRestoreApproval(value, now); err != nil {
+		return RestoreApproval{}, err
+	}
+	return value, nil
+}
+
+// LoadRestoreApprovalForInspection reads a well-formed historical identity without granting mutation authority. Its caller must still match the complete immutable backup/drill/target/request pins before returning inspection results.
+// LoadRestoreApprovalForInspection читает корректную историческую идентичность без разрешения на изменение. Вызывающий по-прежнему обязан сопоставить полные неизменяемые backup/drill/target/request pins до выдачи результата.
+func LoadRestoreApprovalForInspection(path string) (RestoreApproval, error) {
 	var value RestoreApproval
 	if err := read(path, &value); err != nil {
 		return RestoreApproval{}, err
 	}
-	if value.SchemaVersion != 1 || !namePattern.MatchString(value.ApprovalID) ||
-		!namePattern.MatchString(value.RestoreID) || !validBackupID(value.BackupID) ||
-		!validDigest(value.TargetSetSHA256) || value.ExpiresAt.IsZero() || !now.Before(value.ExpiresAt) ||
-		value.ExpiresAt.Sub(now) > 24*time.Hour {
-		return RestoreApproval{}, errors.New("restore approval is invalid or expired")
+	if !validRestoreApprovalIdentity(value) {
+		return RestoreApproval{}, errors.New(restoreApprovalInvalid)
 	}
 	return value, nil
+}
+
+// RequireFreshRestoreApproval rejects malformed, expired or excessively future authority at each mutation boundary, including internal callers that already hold a typed historical approval.
+// RequireFreshRestoreApproval отклоняет неверное, истёкшее либо слишком далёкое разрешение на каждой границе изменения, включая внутренний вызов с типизированной исторической записью.
+func RequireFreshRestoreApproval(value RestoreApproval, now time.Time) error {
+	if !validRestoreApprovalIdentity(value) || !now.Before(value.ExpiresAt) || value.ExpiresAt.Sub(now) > 24*time.Hour {
+		return errors.New(restoreApprovalInvalid)
+	}
+	return nil
+}
+
+// validRestoreApprovalIdentity checks the closed schema and exact immutable locators without evaluating temporal authority.
+// validRestoreApprovalIdentity проверяет закрытую схему и точные неизменяемые идентификаторы без оценки срока полномочий.
+func validRestoreApprovalIdentity(value RestoreApproval) bool {
+	return value.SchemaVersion == 1 && namePattern.MatchString(value.ApprovalID) && namePattern.MatchString(value.RestoreID) &&
+		validBackupID(value.BackupID) && validDigest(value.TargetSetSHA256) && !value.ExpiresAt.IsZero()
 }
 
 // FingerprintTargets hashes canonical target identities and transport choices, excluding credentials and database order.
