@@ -6128,6 +6128,14 @@
       "fragmentSHA256": "4dd96d920c699191e2b45b8bc4bddaea0351ccacb422a8ce5d53c426475e48fb",
       "count": 1,
       "reason": "Окно174 tokens совпадает после нормализации имён в середине списков destinations scanLockedBuild и scanLockedArtifact. Полные функции прочитаны: build содержит recipe/project IDs, policy/contract pins; artifact содержит отдельные admission/promotion/authorization claims, generations и expiry. Их column order и структуры различны, общий исполняемый алгоритм копирования recipe provenance уже вынесен в copyRoleImageArtifactRecipe. Обобщение positional Scan через reflection или generic dispatcher скрыло бы связь с разными SQL tuples без удаления общего бизнесового алгоритма. Сохранено только точное внутрефайловое окно/hash/count1; Scan и claim validation не подавляются целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/prepared_content.go",
+      "fragmentSHA256": "7c53e21980d1b7211edd3cb262e1da7350440d306b66799e9278aceb3e2027e0",
+      "count": 1,
+      "reason": "Окно109 tokens сравнивает21 позиционный Scan destination durable inbox с21 полем source/intent binding подготовленного содержимого. Полные scanInboxRow и readPreparedContentBindingTx прочитаны: первое возвращает inbox row и исходную driver error, второе читает exact plan/revision/operation owner query под shared lock, возвращает отдельную binding structure и преобразует отсутствие строки в conflict, прочие ошибки в unavailable. Общего исполняемого алгоритма кроме pgx.Row.Scan нет. Generic reflection scanner скрыл бы разные nominal SQL column contracts, а helper с callbacks добавил бы обёртку без удаления алгоритма. Сохранена только точная пара путей/hash/count1; eligibility, TTL и lifecycle не подавлены."
     }
   ]
 }

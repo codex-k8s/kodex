@@ -4,11 +4,58 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.371.0
+version: 1.372.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Подготовленное содержимое, повтор чтения и очистка проекта — 24.10.2026
+
+На основе `b646f5f5fbcb1bb9dc67a9f5a4214414533df3fb` описаны94 прежних
+объявления в artifact_content_read_retry.go23, prepared_content.go25,
+project_purge_worker.go24 и prompt_platform_instructions.go22. Описан также
+новый общий helper проверки владения versioned object. Полный Go inventory
+18238/21405, missing3167 — только PostgreSQL adapter control-plane.
+
+Два одинаковых участка archive и subject-artifact ownership объединены в
+`projectPurgeVersionedObjectIsOwned`. Public methods по-прежнему выбирают
+разные именованные SQL с прежними candidate/object arguments и error mapping.
+Archive допускает пустую version, subject artifact требует непустую точную
+version и полную SYSTEM promotion lineage; helper эти политики не смешивает.
+Тест ради прозрачного glue-выноса не добавлялся: expected AST доказывает
+ровно две замены вызовов и точный перенос общего тела. В трёх остальных файлах
+AST и directives совпали с исходной ревизией; все23 go:embed сохранены.
+Исторические prompt raw literals и их результирующие digest bytes не менялись.
+
+| Сценарий / lifecycle | Описанное фактическое поведение |
+| --- | --- |
+| Повтор чтения | Нужны наблюдаемый SQLSTATE40001, unavailable/conflict, успешная очистка тела и допустимый rollback. Independent rollback budget1s; ErrTxClosed допускается. Число попыток и время начала новых повторов ограничены, caller context возвращаемого Reader не сокращается |
+| Диагностика | Первая driver failure сохраняет stage/class; без неё используется domain class. Lazy Row.Scan и Rows.Scan/Err наблюдаются через wrapper, исходные ошибки не заменяются |
+| Prepared content | Проверенные размер/digest и ClamAV предшествуют unique intent; единственный Put допускается только после writer lock. Только exact receipt+Head позволяет STAGED. UNKNOWN или сбой его сохранения/commit никогда не разрешает второй Put |
+| Replay / binding | Совпавший request digest принимает только STAGED replay. Plan revision/operation/content digest/size и owner boundary проверяются отдельными queries; origin binding после TTL не выдаёт receipt или authority |
+| Link / adopt / abandon | Link сохраняет origin и exact revision binding; adopt требует совпадение target/receipt/clean evidence; abandon повышает generation и закрывает срок. Всё остаётся внутри прежних caller transactions |
+| Purge | Due promotion, pending receipt и событие остаются одной транзакцией. Finalize повторно сравнивает ordered inventory, блокирует active archive tasks, проверяет digest и атомарно вызывает прежний purge SQL с terminal snapshot. Внешние ресурсы этими методами не удаляются |
+| Prompt | Закрытый реестр v1–v5, en/ru и прежний8KiB budget сохраняются. Producer привязывает только новый unbound v3 snapshot; rejoin проверяет прежнюю revision. Текст инструкций не назначает authority |
+
+Полные локальные GOWORK=off control-plane build/unit — PASS; последующая
+правка только двух комментариев дополнительно проверена сравнением AST.
+Credentials и13 external inputs исключены. Реальные API, object storage,
+миграционные и owner/warm/legacy контуры — SKIP/NOT RUN. Смысл pgx
+transaction/row semantics проверен через Context7 на предыдущем этапе этого
+же изменения; dependencies и SQL не менялись.
+
+Scan6666 own sources,222 excluded,1821 raw,893 retained,928 unresolved.
+Прежний ownership clone устранён; одно точное109-token окно inbox Scan
+против source/intent binding Scan рассмотрено полностью и сохранено по
+path/hash/count1: разные nominal SQL tuples и обработка ошибок, без общего
+алгоритма кроме pgx.Row.Scan. Прежние решения не требовали перепривязки;
+добавлено только это решение. Detector/thresholds/ignore regions не менялись.
+17 analyzer unit и5 exact-ignore guards — PASS. В четырёх выбранных файлах
+0missing и0unresolved windows, общий backlog928 остаётся открытым.
+Выпуск и browser/manual acceptance ещё NOT RUN; владельцем они разрешены
+после полного завершения#1823.
+
 
 ## Комментарии основного PostgreSQL adapter и общие операции — 24.10.2026
 
