@@ -8,7 +8,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-// Expiry назначает только owner по времени PostgreSQL, не вызывающий worker.
+// validAdmissionWorkerFailure allows only the three closed worker failure codes; lease expiry is
+// assigned separately by the owner using PostgreSQL time.
+// validAdmissionWorkerFailure разрешает только три закрытых кода отказа worker; истечение lease
+// назначается отдельно владельцем по времени PostgreSQL.
 func validAdmissionWorkerFailure(code string) bool {
 	switch code {
 	case "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND", "ADMISSION_EVIDENCE_EXCEEDS_BOUND", "ADMISSION_WORKER_FAILED":
@@ -18,6 +21,11 @@ func validAdmissionWorkerFailure(code string) bool {
 	}
 }
 
+// FailAdmission resolves current principal, requires exact image-admission failure authority and
+// validates attempt/fence/claim/evidence pins before delegating the failure transition to the
+// owner.
+// FailAdmission разрешает текущий principal, требует точные полномочия отказа image-admission и
+// проверяет attempt, fence, claim и evidence pins до передачи перехода отказа владельцу.
 func (service *Service) FailAdmission(ctx context.Context, input roleimage.AdmissionFailureInput) (entity.RoleImageAdmissionFailure, error) {
 	principal, err := service.resolvePrincipal(ctx, input.Principal)
 	if err != nil {
@@ -39,6 +47,10 @@ func (service *Service) FailAdmission(ctx context.Context, input roleimage.Admis
 	return service.repository.FailAdmission(ctx, input)
 }
 
+// ExpireAdmission requires the distinct owner-expiry operation and complete attempt/build/policy
+// pins, leaving expiry determination and atomic failure state to the repository owner.
+// ExpireAdmission требует отдельную операцию owner expiry и полные pins attempt, build и policy с
+// сохранением определения истечения и атомарного отказа у repository владельца.
 func (service *Service) ExpireAdmission(ctx context.Context, input roleimage.AdmissionExpiryInput) (entity.RoleImageAdmissionFailure, error) {
 	principal, err := service.resolvePrincipal(ctx, input.Principal)
 	if err != nil {

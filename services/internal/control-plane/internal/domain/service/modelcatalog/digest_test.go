@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestCatalogDigestCanonicalAndVersionBound checks account-order stability and commitment to
+// availability, effort defaults/list, eligible accounts and source revision, including a nonempty
+// commitment for an empty catalog.
+// TestCatalogDigestCanonicalAndVersionBound проверяет устойчивость к порядку аккаунтов и привязку
+// к доступности, efforts и их default, допустимым аккаунтам и source revision, включая непустой
+// commitment пустого каталога.
 func TestCatalogDigestCanonicalAndVersionBound(t *testing.T) {
 	models := []entity.ModelCapability{{ID: "model", ProviderDefinitionKey: "provider", Available: true, ReasoningEfforts: []string{"low", "high"}, EligibleProviderAccountRefs: []string{"b", "a"}}}
 	first, err := Digest(models, "version-1")
@@ -35,6 +41,12 @@ func TestCatalogDigestCanonicalAndVersionBound(t *testing.T) {
 	}
 }
 
+// TestCapabilityDigestIgnoresOtherModelsButBindsSelectedCapabilities checks selected-model effort
+// sorting is stable and changes to account/model, supported efforts, default effort or
+// default-model flag invalidate the capability pin.
+// TestCapabilityDigestIgnoresOtherModelsButBindsSelectedCapabilities проверяет устойчивость
+// сортировки efforts выбранной модели и изменение capability pin при смене аккаунта, модели,
+// допустимых efforts, default effort либо флага default модели.
 func TestCapabilityDigestIgnoresOtherModelsButBindsSelectedCapabilities(t *testing.T) {
 	base := CapabilityDigest("provider", "pacc_one", "selected", []string{"medium", "low"}, "medium", true)
 	if len(base) != 64 || CapabilityDigest("provider", "pacc_one", "selected", []string{"low", "medium"}, "medium", true) != base {

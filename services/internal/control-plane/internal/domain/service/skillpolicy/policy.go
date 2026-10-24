@@ -12,15 +12,33 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// MaximumManifestBytes bounds the complete SKILL.md body to two hundred fifty-six KiB before
+// frontmatter and instruction parsing.
+// MaximumManifestBytes ограничивает полный body SKILL.md двумястами пятьюдесятью шестью KiB до
+// parsing frontmatter и инструкций.
 const MaximumManifestBytes = 256 << 10
 
+// ErrInvalid marks rejected skill paths or manifest structure with one fixed runtime error
+// independent of untrusted content.
+// ErrInvalid обозначает отклонённые пути skill либо структуру manifest одной фиксированной
+// runtime-ошибкой, независимой от непроверенного содержимого.
 var ErrInvalid = errors.New("invalid skill bundle structure")
 
+// Manifest contains only the known YAML name and description fields extracted from bounded
+// SKILL.md frontmatter rather than execution permissions.
+// Manifest содержит только известные YAML поля имени и описания из ограниченного frontmatter
+// SKILL.md вместо полномочий исполнения.
 type Manifest struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 }
 
+// ValidatePaths requires exactly named root SKILL.md among up to one hundred twenty-eight
+// canonical relative paths, rejecting case-folded duplicates, hidden/traversal segments and
+// unsupported asset extensions.
+// ValidatePaths требует точно названный корневой SKILL.md среди не более ста двадцати восьми
+// канонических относительных путей, отклоняя дубликаты без учёта регистра, hidden/traversal
+// сегменты и неподдерживаемые расширения.
 func ValidatePaths(paths []string) error {
 	if len(paths) == 0 || len(paths) > 128 {
 		return ErrInvalid
@@ -60,6 +78,12 @@ func ValidatePaths(paths []string) error {
 	return nil
 }
 
+// ParseManifest bounds UTF-8 content without NUL, normalizes CRLF and requires one known-field
+// YAML frontmatter plus nonblank instructions, returning bounded name/description without
+// executing the body.
+// ParseManifest ограничивает UTF-8 содержимое без NUL, нормализует CRLF и требует один YAML
+// frontmatter с известными полями и непустые инструкции, возвращая ограниченные имя и описание без
+// исполнения body.
 func ParseManifest(body []byte) (Manifest, error) {
 	if len(body) > MaximumManifestBytes || !utf8.Valid(body) || bytes.IndexByte(body, 0) >= 0 {
 		return Manifest{}, ErrInvalid

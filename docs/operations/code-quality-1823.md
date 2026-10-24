@@ -4,12 +4,57 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.359.0
+version: 1.360.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## Все пакеты доменных сервисов control-plane — 24.10.2026
+
+На основе `9460c54a5709861442861162c77bd28dc1473505` описаны105 прежних
+объявлений: roleimage57, artifactpolicy34, skillpolicy10, modelcatalog4.
+Также описаны новый helper выбора и новый тест. Две недокументированные копии
+selectPackages/selectTools удалены при объединении, поэтому число declarations
+не выросло:16958/21350, missing4392. Весь handwritten Go domain/service теперь
+имеет0missing, включая private/test объявления и методы scanner interfaces.
+Общий объём задачи#1823 этим не завершён.
+
+Выбор однотипных каталожных данных объединён в selectCatalogEntries[T].
+Оба исходных цикла совпадают после точной подстановки item type и параллельных
+keys/items срезов; сохранены slices.Index, первый совпавший индекс, порядок,
+пропуск неизвестного ключа и последующий отказ caller по числу результатов.
+Resolve явно передаёт отдельные package и tool collections. Две лишние
+обёртки удалены, generic dispatcher команд не добавлен. Это локальная операция
+business каталога; новая общая библиотека не создана.
+
+AST/directives20 файлов совпали без executable изменений. Catalog совпал с
+исходным head после ровно ожидаемого объединения двух одинаковых циклов и
+двух замен вызовов; входные тела отдельно сравнены под типовой подстановкой.
+В catalog_test старые executable declarations совпали после добавления slices
+import и одного нового теста. Новый тест через Catalog.Resolve проверяет
+package/tool subset с exact same-index pins, прежний default пустого выбора,
+изоляцию изменения возвращённых entries и отказ неизвестным ключам обоих
+типов. Адресный roleimage unit — PASS.
+
+Комментарии admission различают exact fail/expire/terminal/recovery/risk
+operations и владельца транзакции; expiry не назначен worker. Catalog input
+не назван browser-safe. Artifact policy описана как встроенная проверка
+форматов, без обещания malware certification: ZIP проверяется по metadata,
+объявленным uncompressed sizes и именам, а не чтением каждого member. Обычный
+UTF-8 текст проверяется потоком; JSON и content-types metadata буферизуются
+ограниченно. Skill structure не заменяет scanner. Model digest сортирует
+models/accounts/blockers/sources, но не reasoning-effort order полного каталога;
+selected capability digest имеет отдельные v2 semantics и сортирует efforts.
+
+Context7: Go generic type inference и slices.Index first-match/-1. Полный
+локальный control-plane build/unit — PASS на Go-содержимом этого этапа;
+AST/directives и diff check — PASS. Повтор detector:1794raw,812retained,
+982unresolved. Один реальный clone удалён; новых retained решений и broad
+ignores нет, stale guards сохранены. GitHub checks не заменены локальными.
+Merge, deploy/startup, browser acceptance и ручной QA остаются NOT RUN до
+полного окончания разрешённой задачи.
 
 ## Почтовые policies, RPC principal, ревизии и расписания — 24.10.2026
 

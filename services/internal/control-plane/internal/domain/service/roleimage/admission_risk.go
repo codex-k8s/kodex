@@ -12,6 +12,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// GetVulnerabilityReport selects exact project/organization report authority, forbids a signed
+// project scope and validates resource/query/page pins, requiring a report digest for cursor
+// continuation.
+// GetVulnerabilityReport выбирает точные project либо organization полномочия отчёта, запрещает
+// signed project scope и проверяет pins ресурса, запроса и страницы с требованием report digest
+// для продолжения cursor.
 func (service *Service) GetVulnerabilityReport(ctx context.Context, p value.Principal, filter repo.VulnerabilityReportFilter) (entity.ImageVulnerabilityReport, error) {
 	p, err := service.resolvePrincipal(ctx, p)
 	if err != nil {
@@ -37,6 +43,12 @@ func (service *Service) GetVulnerabilityReport(ctx context.Context, p value.Prin
 	return service.repository.GetVulnerabilityReport(ctx, p, filter)
 }
 
+// DecideAdmissionRisk resolves exact gateway risk-decision authority, derives the mutation intent
+// and validates owner scope, safe integer versions, evidence digests, OCC and bounded decision
+// reason before owner execution.
+// DecideAdmissionRisk разрешает точные gateway полномочия решения о риске, выводит mutation intent
+// и проверяет owner scope, безопасные целые версии, evidence digests, OCC и ограниченную причину
+// до исполнения владельцем.
 func (service *Service) DecideAdmissionRisk(ctx context.Context, input repo.AdmissionRiskInput) (entity.ImageAdmissionRiskResult, error) {
 	p, err := service.resolvePrincipal(ctx, input.Principal)
 	if err != nil {
@@ -76,9 +88,18 @@ func (service *Service) DecideAdmissionRisk(ctx context.Context, input repo.Admi
 	return service.repository.DecideAdmissionRisk(ctx, input)
 }
 
+// validRiskScope permits organization scope without a project locator or project scope with a
+// valid project reference, rejecting mixed or unknown scopes.
+// validRiskScope допускает organization scope без project locator либо project scope с правильной
+// ссылкой проекта, отклоняя смешанные и неизвестные scopes.
 func validRiskScope(scope, project string) bool {
 	return scope == "ORGANIZATION" && project == "" || scope == "PROJECT" && validRef(project, "prj")
 }
+
+// validRiskSeverity accepts only the six closed vulnerability severity values, including the
+// explicit UNKNOWN classification.
+// validRiskSeverity принимает только шесть закрытых значений severity уязвимостей, включая явную
+// классификацию UNKNOWN.
 func validRiskSeverity(value string) bool {
 	switch value {
 	case "CRITICAL", "HIGH", "MEDIUM", "LOW", "NEGLIGIBLE", "UNKNOWN":
@@ -86,9 +107,19 @@ func validRiskSeverity(value string) bool {
 	}
 	return false
 }
+
+// validRiskQuery bounds vulnerability search text to one hundred twenty-eight bytes, requires
+// UTF-8 and rejects all Unicode control characters.
+// validRiskQuery ограничивает текст поиска уязвимостей ста двадцатью восемью байтами, требует
+// UTF-8 и отклоняет все управляющие символы Unicode.
 func validRiskQuery(value string) bool {
 	return len(value) <= 128 && utf8.ValidString(value) && !strings.ContainsFunc(value, unicode.IsControl)
 }
+
+// validRiskReason requires a nonempty UTF-8 reason through two thousand forty-eight bytes, with no
+// edge whitespace or Unicode control characters.
+// validRiskReason требует непустую UTF-8 причину до двух тысяч сорока восьми байт без крайних
+// пробелов либо управляющих символов Unicode.
 func validRiskReason(value string) bool {
 	return len(value) > 0 && len(value) <= 2048 && strings.TrimSpace(value) == value && utf8.ValidString(value) && !strings.ContainsFunc(value, unicode.IsControl)
 }

@@ -10,24 +10,48 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// riskRepositoryStub supplies authoritative synthetic risk identity and counts report/decision
+// calls without implementing unrelated image repository operations.
+// riskRepositoryStub предоставляет авторитетную синтетическую risk identity и считает чтения
+// отчёта и решения без реализации остальных операций image repository.
 type riskRepositoryStub struct {
 	repo.Repository
 	principal value.Principal
 	calls     int
 }
 
+// ResolvePrincipal returns the configured synthetic risk principal independently of the
+// caller-provided request identity.
+// ResolvePrincipal возвращает заданный синтетический risk principal независимо от request identity
+// вызывающего.
 func (s *riskRepositoryStub) ResolvePrincipal(context.Context, value.Principal) (value.Principal, error) {
 	return s.principal, nil
 }
+
+// DecideAdmissionRisk counts an accepted owner risk-decision call and returns an empty synthetic
+// result without materializing an admission decision.
+// DecideAdmissionRisk считает принятый вызов решения о риске владельца и возвращает пустой
+// синтетический результат без материализации admission решения.
 func (s *riskRepositoryStub) DecideAdmissionRisk(context.Context, repo.AdmissionRiskInput) (entity.ImageAdmissionRiskResult, error) {
 	s.calls++
 	return entity.ImageAdmissionRiskResult{}, nil
 }
+
+// GetVulnerabilityReport counts a report read through the owner port and returns an empty
+// synthetic vulnerability report.
+// GetVulnerabilityReport считает чтение отчёта через порт владельца и возвращает пустой
+// синтетический vulnerability report.
 func (s *riskRepositoryStub) GetVulnerabilityReport(context.Context, value.Principal, repo.VulnerabilityReportFilter) (entity.ImageVulnerabilityReport, error) {
 	s.calls++
 	return entity.ImageVulnerabilityReport{}, nil
 }
 
+// TestImageRiskSpecialtyRejectsInvalidAuthorityAndPins checks signed-project and wrong
+// caller/permission rejection, exact scope, bounded reason, matching OCC, report digest and closed
+// risk actions before owner execution.
+// TestImageRiskSpecialtyRejectsInvalidAuthorityAndPins проверяет отказ signed project и неверным
+// caller и permission, точный scope, ограниченную причину, совпадающий OCC, digest отчёта и
+// закрытые risk действия до исполнения владельцем.
 func TestImageRiskSpecialtyRejectsInvalidAuthorityAndPins(t *testing.T) {
 	catalog, err := NewCatalog([]Environment{validEnvironment(true, true)})
 	if err != nil {

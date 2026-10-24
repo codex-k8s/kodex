@@ -7,6 +7,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestRoleImageManageIntentDigestBindsOwnerScope checks every recipe management intent commits
+// owner scope and cancellation commits the exact build reference rather than a generic cancel
+// action.
+// TestRoleImageManageIntentDigestBindsOwnerScope проверяет включение owner scope в каждый intent
+// управления рецептом и точной ссылки build в отмену вместо общего cancel действия.
 func TestRoleImageManageIntentDigestBindsOwnerScope(t *testing.T) {
 	for _, action := range []string{"CREATE", "UPDATE", "ARCHIVE", "RESTORE", "REQUEST_BUILD"} {
 		input := roleimagerepo.ManageInput{ScopeKind: "PROJECT", Action: action, RecipeRef: "imgrec_example", ProjectRef: "prj_example",
