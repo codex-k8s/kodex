@@ -21,6 +21,18 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// UploadArtifact resolves scope and validates/seeks the upload, checks an authorized receipt
+// before external work, scans and stores the object, then repeats receipt resolution under an
+// idempotency lock in ReadCommitted. Fresh uploads retain filename/owner/run checks, persist
+// artifact/content/audit/event/receipt and keep the prepared object only after commit; replay or
+// failures clean that unused object. Existing scan-state inputs, ignored reference/marshal errors
+// and commit mappings remain unchanged.
+// UploadArtifact разрешает область, проверяет и перематывает upload, проверяет авторизованную
+// receipt до внешней работы, сканирует и сохраняет объект, затем повторяет receipt resolution под
+// idempotency lock в ReadCommitted. Новая загрузка сохраняет filename/owner/run checks, атомарно
+// пишет artifact/content/audit/event/receipt, удерживает подготовленный объект лишь после commit;
+// replay и отказы очищают неиспользованный объект. Прежние scan-state inputs, ignored
+// reference/marshal errors и commit mappings не меняются.
 func (repository *Repository) UploadArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, input platformrepo.ArtifactUpload) (entity.Artifact, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -79,30 +91,21 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		mutation.Operation, mutation.IdempotencyKey); err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
-	var storedDigest string
-	var stored []byte
 	if err := repository.requireArtifactUploadAccess(ctx, tx, scope, input.ProjectRef); err != nil {
 		return entity.Artifact{}, err
 	}
-	err = tx.QueryRow(ctx, queryArtifactsUploadartifactSelectIdempotencyReceiptsOrganizationIdActorIdOperation, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
-	if err == nil {
-		if storedDigest != mutation.IntentDigest {
-			return entity.Artifact{}, errs.ErrIdempotencyReuse
-		}
-		var item entity.Artifact
-		if json.Unmarshal(stored, &item) != nil {
-			return entity.Artifact{}, errs.ErrConflict
-		}
-		if err := repository.authorizeArtifactUploadReceipt(ctx, tx, scope, input, &item); err != nil {
+	replayed, err := readArtifactUploadReceipt(ctx, tx, scope, mutation)
+	if err != nil {
+		return entity.Artifact{}, err
+	}
+	if replayed != nil {
+		if err := repository.authorizeArtifactUploadReceipt(ctx, tx, scope, input, replayed); err != nil {
 			return entity.Artifact{}, err
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return entity.Artifact{}, errs.ErrConflict
 		}
-		return item, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return entity.Artifact{}, errs.ErrUnavailable
+		return *replayed, nil
 	}
 	projectID := ""
 	if input.ProjectRef != "" {
@@ -178,6 +181,16 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	return item, nil
 }
 
+// createProjectFile accepts only a project-bound prepared file with no inline content and bounded
+// size, validates its antivirus/object metadata and prepared-content ledger, then takes the
+// filename lock and inserts artifact/content rows in the caller transaction. It adopts the ledger
+// into the exact new revision and returns event metadata; outer execution owns
+// audit/idempotency/commit and prepared-object retention.
+// createProjectFile принимает лишь проектный подготовленный файл без inline content с ограниченным
+// размером, проверяет antivirus/object metadata и prepared-content ledger, берёт filename lock и
+// вставляет artifact/content в транзакции вызывающего. Принимает ledger в точную новую revision и
+// возвращает event metadata; внешний execution владеет audit/idempotency/commit и удержанием
+// подготовленного объекта.
 func (repository *Repository) createProjectFile(ctx context.Context, tx pgx.Tx, current scope, raw any) (commandOutcome, error) {
 	input, ok := raw.(command.ProjectFileInput)
 	if !ok || input.ProjectRef == "" || input.FileName == "" || safeFileName(input.FileName) != input.FileName ||
@@ -244,6 +257,12 @@ func (repository *Repository) createProjectFile(ctx context.Context, tx pgx.Tx, 
 	}, nil
 }
 
+// putArtifactObject rewinds the seekable upload, streams it to object storage and verifies the
+// source reader again against declared size/digest after Put. Failed verification cleans the new
+// object receipt; storage errors use the domain mapper and no database transaction is created.
+// putArtifactObject перематывает seekable upload, передаёт поток object storage и после Put
+// повторно сверяет исходный reader с заявленными size/digest. Отказ проверки очищает новый object
+// receipt; storage errors проходят доменное отображение, транзакция БД не создаётся.
 func (repository *Repository) putArtifactObject(
 	ctx context.Context,
 	objectKey string,
@@ -266,6 +285,14 @@ func (repository *Repository) putArtifactObject(
 	return receipt, nil
 }
 
+// verifyArtifactReader rewinds, hashes at most maximumArtifactBytes plus one and attempts to
+// rewind again before checking the read result. Seek/read failures are Unavailable, exact size or
+// sha256-prefixed digest mismatch Conflict; this verifies the seekable source rather than reading
+// the stored object.
+// verifyArtifactReader перематывает reader, хеширует не более maximumArtifactBytes плюс один и
+// повторно перематывает до проверки результата чтения. Seek/read failures дают Unavailable,
+// несовпадение точных size либо sha256-prefixed digest — Conflict; проверяет seekable source, не
+// чтение сохранённого объекта.
 func verifyArtifactReader(reader platformrepo.ArtifactReader, sizeBytes int64, digest string) error {
 	if _, err := reader.Seek(0, io.SeekStart); err != nil {
 		return errs.ErrUnavailable
@@ -284,6 +311,48 @@ func verifyArtifactReader(reader platformrepo.ArtifactReader, sizeBytes int64, d
 	return nil
 }
 
+// readArtifactUploadReceipt locks and reads the unexpired receipt for the exact
+// organization/actor/operation/idempotency key in the caller transaction. Missing or wrapped
+// NoRows is a nil miss, other scan failures are Unavailable, a changed intent is IdempotencyReuse
+// before JSON decoding and malformed JSON is Conflict. A decoded artifact is only a replay
+// candidate, including historical null/unknown-field JSON compatibility; callers still require
+// fresh upload/file/revision eligibility and own commit.
+// readArtifactUploadReceipt блокирует и читает неистёкшую receipt точных
+// organization/actor/operation/idempotency key в транзакции вызывающего. Missing либо wrapped
+// NoRows даёт nil miss, прочие scan failures — Unavailable, иной intent — IdempotencyReuse до
+// декодирования JSON, неверный JSON — Conflict. Декодированный artifact — лишь replay candidate с
+// прежней совместимостью null/unknown-field JSON; вызывающие всё ещё требуют свежие
+// upload/file/revision eligibility и владеют commit.
+func readArtifactUploadReceipt(ctx context.Context, tx pgx.Tx, current scope, mutation value.Mutation) (*entity.Artifact, error) {
+	var storedDigest string
+	var stored []byte
+	err := tx.QueryRow(ctx, queryArtifactsUploadartifactSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
+		current.organizationID, current.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	if storedDigest != mutation.IntentDigest {
+		return nil, errs.ErrIdempotencyReuse
+	}
+	var item entity.Artifact
+	if json.Unmarshal(stored, &item) != nil {
+		return nil, errs.ErrConflict
+	}
+	return &item, nil
+}
+
+// preflightArtifactUpload checks current upload access and a recorded receipt in ReadCommitted
+// before scanning or object Put. A matching receipt still undergoes current file/revision
+// eligibility and commit; a miss validates project/run scope and commits an empty preflight. It
+// supplies no idempotency guarantee for the later write, which repeats these checks under its
+// lock.
+// preflightArtifactUpload проверяет текущий upload access и сохранённую receipt в ReadCommitted до
+// сканирования и object Put. Совпавшая receipt проходит текущую file/revision eligibility и
+// commit; отсутствие проверяет project/run scope и фиксирует пустой preflight. Не гарантирует
+// идемпотентность поздней записи: она повторяет проверки под своим lock.
 func (repository *Repository) preflightArtifactUpload(
 	ctx context.Context,
 	scope scope,
@@ -295,31 +364,21 @@ func (repository *Repository) preflightArtifactUpload(
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var storedDigest string
-	var stored []byte
 	if err := repository.requireArtifactUploadAccess(ctx, tx, scope, input.ProjectRef); err != nil {
 		return nil, err
 	}
-	err = tx.QueryRow(ctx, queryArtifactsUploadartifactSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
-		scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
-	if err == nil {
-		if storedDigest != mutation.IntentDigest {
-			return nil, errs.ErrIdempotencyReuse
-		}
-		var item entity.Artifact
-		if json.Unmarshal(stored, &item) != nil {
-			return nil, errs.ErrConflict
-		}
-		if err := repository.authorizeArtifactUploadReceipt(ctx, tx, scope, input, &item); err != nil {
+	replayed, err := readArtifactUploadReceipt(ctx, tx, scope, mutation)
+	if err != nil {
+		return nil, err
+	}
+	if replayed != nil {
+		if err := repository.authorizeArtifactUploadReceipt(ctx, tx, scope, input, replayed); err != nil {
 			return nil, err
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return nil, errs.ErrConflict
 		}
-		return &item, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return nil, errs.ErrUnavailable
+		return replayed, nil
 	}
 	projectID := ""
 	if input.ProjectRef != "" {
@@ -346,6 +405,13 @@ func (repository *Repository) preflightArtifactUpload(
 	return nil, nil
 }
 
+// requireArtifactUploadAccess hides organization-level upload from a project-constrained
+// principal, resolves an exact project target when present and requires artifact.upload on that
+// target or the organization. Access-check errors are hidden as NotFound; the helper does not
+// create an artifact or grant.
+// requireArtifactUploadAccess скрывает upload уровня организации от project-constrained principal,
+// при наличии проекта разрешает точную цель и требует artifact.upload на ней либо организации.
+// Access-check errors скрываются как NotFound; helper не создаёт artifact и grant.
 func (repository *Repository) requireArtifactUploadAccess(ctx context.Context, tx pgx.Tx, current scope, projectRef string) error {
 	if current.authorityProjectID != "" && projectRef == "" {
 		return errs.ErrNotFound
@@ -366,6 +432,14 @@ func (repository *Repository) requireArtifactUploadAccess(ctx context.Context, t
 	return nil
 }
 
+// authorizeArtifactUploadReceipt requires recorded artifact/project/run identity to match the
+// upload, resolves current file context, reads the recorded revision and refreshes
+// scan/eligibility projection. Historical receipt contents do not supply authority; the caller
+// commits and discards partial item mutations on failure.
+// authorizeArtifactUploadReceipt требует совпадения записанных artifact/project/run identity с
+// upload, разрешает текущий file context, читает записанную revision, обновляет scan/eligibility
+// projection. Историческое содержимое receipt не даёт полномочий; вызывающий выполняет commit и
+// отбрасывает частичные изменения объекта при ошибке.
 func (repository *Repository) authorizeArtifactUploadReceipt(ctx context.Context, tx pgx.Tx, current scope, input platformrepo.ArtifactUpload, item *entity.Artifact) error {
 	if item.Ref == "" || item.ProjectRef != input.ProjectRef || item.RunRef != input.RunRef {
 		return errs.ErrConflict
@@ -383,6 +457,12 @@ func (repository *Repository) authorizeArtifactUploadReceipt(ctx context.Context
 	return projectArtifactEligibility(ctx, tx, current, item)
 }
 
+// artifactObjectKey builds an organization/project artifact path or falls back to the actor
+// subject path for unassigned uploads, removing the sha256 prefix from the digest suffix. It
+// formats already resolved identifiers without escaping or independently validating them.
+// artifactObjectKey строит путь artifact организации/проекта либо использует actor subject path
+// для upload без проекта, убирая sha256 prefix из digest suffix. Форматирует уже разрешённые
+// identifiers без экранирования и самостоятельной проверки.
 func artifactObjectKey(organizationRef, actorRef, projectRef, artifactRef, digest string) string {
 	scopeKind, scopeRef := "projects", projectRef
 	if projectRef == "" {
@@ -392,6 +472,12 @@ func artifactObjectKey(organizationRef, actorRef, projectRef, artifactRef, diges
 		strings.TrimPrefix(digest, "sha256:")}, "/")
 }
 
+// mapObjectStorageError maps known invalid/not-found/conflict storage sentinels through errors.Is
+// to domain errors and maps every other error, including nil if misused, to Unavailable. Callers
+// invoke it only for failed storage operations.
+// mapObjectStorageError отображает известные invalid/not-found/conflict storage sentinels через
+// errors.Is в доменные ошибки, остальные ошибки, включая nil при неверном вызове, в Unavailable.
+// Вызывающие применяют его лишь при отказах storage.
 func mapObjectStorageError(err error) error {
 	switch {
 	case errors.Is(err, objectstorage.ErrInvalid):
@@ -405,6 +491,12 @@ func mapObjectStorageError(err error) error {
 	}
 }
 
+// artifactPurgeReceipt records exact artifact/project identity and ordered revision/object-version
+// inventory for a two-phase purge; the terminal persisted receipt is reduced to artifact reference
+// and PURGED state. It is replay metadata rather than current purge authority.
+// artifactPurgeReceipt фиксирует точные artifact/project identity и упорядоченный
+// revision/object-version inventory двухфазного purge; terminal persisted receipt сокращается до
+// artifact ref и PURGED state. Это replay metadata, не текущие полномочия purge.
 type artifactPurgeReceipt struct {
 	ArtifactRef    string                `json:"artifactRef"`
 	ArtifactID     string                `json:"artifactId"`
@@ -414,12 +506,24 @@ type artifactPurgeReceipt struct {
 	LifecycleState string                `json:"lifecycleState"`
 }
 
+// artifactPurgeObject pins one revision content object key/version in the prepared purge inventory
+// so external deletion and final owner inventory comparison refer to the same stored objects.
+// artifactPurgeObject связывает ключ/версию content object одной revision с подготовленным purge
+// inventory для удаления и итоговой owner inventory сверки одних и тех же объектов.
 type artifactPurgeObject struct {
 	RevisionID    string `json:"revisionId"`
 	ObjectKey     string `json:"objectKey"`
 	ObjectVersion string `json:"objectVersion"`
 }
 
+// PurgeArtifact prepares an authorized impact-pinned purge receipt, returns immediately for a
+// terminal replay, otherwise deletes each exact object version and requires Head to confirm
+// absence before finalizing owner state. Partial external deletion leaves PURGE_PENDING for retry;
+// storage errors do not falsely mark the artifact PURGED.
+// PurgeArtifact готовит авторизованную impact-pinned purge receipt, сразу возвращает terminal
+// replay, иначе удаляет точную версию каждого объекта и требует подтверждения отсутствия через
+// Head до завершения owner state. Частичное внешнее удаление оставляет PURGE_PENDING для повтора;
+// storage errors не объявляют artifact PURGED.
 func (repository *Repository) PurgeArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, artifactRef, impactDigest string) (string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -446,6 +550,15 @@ func (repository *Repository) PurgeArtifact(ctx context.Context, principal value
 	return repository.finalizeArtifactPurge(ctx, scope, mutation, receipt)
 }
 
+// prepareArtifactPurge locks actor idempotency and resolves fresh artifact.purge authority in
+// ReadCommitted before receipt replay. A fresh purge locks exact content inventory, validates
+// expected version, DELETED state and matching permitted impact, then atomically marks
+// PURGE_PENDING and stores the replay inventory. Commit failures are Conflict and no external
+// objects are deleted here.
+// prepareArtifactPurge блокирует actor idempotency и разрешает свежее artifact.purge authority в
+// ReadCommitted до receipt replay. Новый purge блокирует точный content inventory, проверяет
+// expected version, DELETED и совпавший permitted impact, атомарно назначает PURGE_PENDING и
+// сохраняет replay inventory. Отказ commit даёт Conflict; внешние объекты здесь не удаляются.
 func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope scope, mutation value.Mutation, artifactRef, impactDigest string) (artifactPurgeReceipt, error) {
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
@@ -531,6 +644,16 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 	return receipt, nil
 }
 
+// finalizeArtifactPurge rechecks current purge access, exact artifact/project identity,
+// PURGE_PENDING state and byte-equal ordered inventory after external deletion. It deletes
+// content/revisions, finalizes lifecycle, replaces the idempotency receipt with a safe terminal
+// payload and writes audit/invalidation in one transaction. It preserves historical read-error
+// conflation and commit/error mappings; object absence is verified by the outer method.
+// finalizeArtifactPurge повторно проверяет текущий purge access, точные artifact/project identity,
+// PURGE_PENDING и побайтно равный упорядоченный inventory после внешнего удаления. Удаляет
+// content/revisions, завершает lifecycle, заменяет idempotency receipt безопасным terminal
+// payload, пишет audit/invalidation в одной транзакции. Сохраняет прежнее объединение ошибок
+// чтения и commit/error mappings; отсутствие объектов проверяет внешний метод.
 func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope scope, mutation value.Mutation, receipt artifactPurgeReceipt) (string, error) {
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
@@ -621,6 +744,13 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 	}
 	return receipt.LifecycleState, nil
 }
+
+// safeFileName trims surrounding whitespace, replaces both slash forms with underscores,
+// substitutes artifact for an empty result and truncates to255 runes. It is a display/storage
+// filename normalizer, not a full path or control-character validator.
+// safeFileName убирает крайние пробелы, заменяет оба вида slash на underscores, подставляет
+// artifact для пустого результата и обрезает до255 runes. Нормализует display/storage filename, не
+// является полной проверкой пути и control characters.
 func safeFileName(name string) string {
 	name = strings.TrimSpace(name)
 	name = strings.ReplaceAll(name, "\\", "_")
@@ -635,10 +765,20 @@ func safeFileName(name string) string {
 	return name
 }
 
+// DownloadArtifact delegates a current-revision download/preview to the shared purpose-checked
+// retry path using an empty revision selector; no reader is returned before the owner read
+// commits.
+// DownloadArtifact делегирует download/preview текущей revision общему purpose-checked retry пути
+// с пустым revision selector; reader не возвращается до commit owner read.
 func (repository *Repository) DownloadArtifact(ctx context.Context, principal value.Principal, ref, purpose string) (platformrepo.ArtifactDownload, error) {
 	return repository.downloadArtifactRevision(ctx, principal, ref, "", purpose)
 }
 
+// DownloadArtifactRevision requires a nonempty exact revision selector and delegates to the shared
+// authorized content-read path; purpose validation and transaction/reader ownership remain there.
+// DownloadArtifactRevision требует непустой exact revision selector и делегирует общему
+// авторизованному content-read пути; purpose validation и владение транзакцией/reader остаются
+// там.
 func (repository *Repository) DownloadArtifactRevision(ctx context.Context, principal value.Principal, ref, revisionRef, purpose string) (platformrepo.ArtifactDownload, error) {
 	if revisionRef == "" {
 		return platformrepo.ArtifactDownload{}, errs.ErrInvalid
@@ -646,6 +786,13 @@ func (repository *Repository) DownloadArtifactRevision(ctx context.Context, prin
 	return repository.downloadArtifactRevision(ctx, principal, ref, revisionRef, purpose)
 }
 
+// downloadArtifactRevision accepts only DOWNLOAD or PREVIEW and retries the complete specialized
+// content-read attempt through the existing bounded artifact retry helper. It preserves the
+// original caller context for a successfully returned stream rather than retrying an already
+// exposed reader.
+// downloadArtifactRevision допускает лишь DOWNLOAD либо PREVIEW и повторяет полную
+// специализированную content-read attempt через существующий ограниченный retry helper. Сохраняет
+// исходный caller context успешного потока, не повторяет уже выданный reader.
 func (repository *Repository) downloadArtifactRevision(ctx context.Context, principal value.Principal, ref, revisionRef, purpose string) (platformrepo.ArtifactDownload, error) {
 	if purpose != "DOWNLOAD" && purpose != "PREVIEW" {
 		return platformrepo.ArtifactDownload{}, errs.ErrInvalid
@@ -655,6 +802,18 @@ func (repository *Repository) downloadArtifactRevision(ctx context.Context, prin
 	})
 }
 
+// downloadArtifactRevisionOnce uses an observed Serializable owner read to lock an eligible clean
+// exact revision, project current access and create/consume a purpose/version/subject-bound
+// download grant. It verifies stored content pins and object metadata, writes audit and commits
+// before transferring the reader. Failed attempts close the body and finish bounded transaction
+// cleanup with safe stage diagnostics; it checks object descriptor metadata without rehashing the
+// streamed bytes.
+// downloadArtifactRevisionOnce использует наблюдаемый Serializable owner read для блокировки
+// доступной clean exact revision, проекции текущего доступа и создания/потребления
+// purpose/version/subject-bound download grant. Проверяет stored content pins и object metadata,
+// пишет audit, выполняет commit до передачи reader. Отказ закрывает body и завершает bounded
+// transaction cleanup с безопасными stage diagnostics; проверяет object descriptor metadata без
+// повторного хеширования байтов потока.
 func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, principal value.Principal, ref, revisionRef, purpose string) (_ platformrepo.ArtifactDownload, resultError error) {
 	scopeDiagnostic := artifactread.NewDiagnostic(artifactread.StageScope, artifactread.ClassDomain, "")
 	scope, err := repository.resolveScopeObserved(ctx, principal, func(cause error) {
@@ -820,6 +979,16 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 	return platformrepo.ArtifactDownload{Artifact: item, Reader: object.Body, GrantRef: grantRef}, nil
 }
 
+// changeArtifactBinding requires a typed artifact/agent payload and expected version, reads the
+// exact artifact and eligible same-project agent, and requires artifact capability only when
+// enabling. It inserts/deletes the binding, advances artifact/agent versions only when changed and
+// returns current artifact readback/event metadata in the caller transaction. Authorization and
+// commit stay in outer execution.
+// changeArtifactBinding требует typed artifact/agent payload и expected version, читает точный
+// artifact и допустимого агента того же проекта, требует artifact capability лишь при включении.
+// Вставляет/удаляет binding, увеличивает artifact/agent versions лишь при изменении, возвращает
+// текущий artifact readback/event metadata в транзакции вызывающего. Authorization и commit
+// остаются во внешнем execution.
 func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ArtifactBindingInput)
 	if !ok || payload.ArtifactRef == "" || payload.AgentRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -873,6 +1042,14 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 	return commandOutcome{result: command.Result{Artifact: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "ARTIFACT", resourceRef: payload.ArtifactRef, summary: "i18n:ARTIFACT_BINDING_UPDATED", platformEvent: "ARTIFACT_CHANGED"}, nil
 }
 
+// changeArtifactLifecycle locks the exact artifact, checks expected version and ACTIVE→DELETED or
+// DELETED→ACTIVE state, requiring fresh matching permitted impact only for deletion. It performs a
+// one-row versioned transition and returns artifact/event metadata without deleting storage or
+// committing the caller transaction.
+// changeArtifactLifecycle блокирует точный artifact, проверяет expected version и ACTIVE→DELETED
+// либо DELETED→ACTIVE, требует свежий совпавший permitted impact лишь при удалении. Выполняет
+// версионный переход одной строки, возвращает artifact/event metadata без удаления storage и
+// commit транзакции вызывающего.
 func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ArtifactLifecycleInput)
 	if !ok || strings.TrimSpace(payload.ArtifactRef) == "" || input.Mutation.ExpectedVersion == nil {
@@ -937,6 +1114,14 @@ func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pg
 	}, nil
 }
 
+// GetArtifactImpact accepts DELETE/PURGE, resolves the corresponding exact command target and
+// access in ReadCommitted, then computes impact and commits before returning. Access denials are
+// hidden as NotFound; the response is a proposal pin rather than permission to execute later
+// without rechecking.
+// GetArtifactImpact принимает DELETE/PURGE, разрешает соответствующую точную command target и
+// доступ в ReadCommitted, вычисляет impact и выполняет commit до ответа. Отказ доступа скрывает
+// как NotFound; ответ служит proposal pin, не разрешением позднего исполнения без повторной
+// проверки.
 func (repository *Repository) GetArtifactImpact(ctx context.Context, principal value.Principal, artifactRef, action string) (entity.ArtifactImpact, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -971,6 +1156,16 @@ func (repository *Repository) GetArtifactImpact(ctx context.Context, principal v
 	return impact, nil
 }
 
+// artifactImpactTx reads version/lifecycle and binding/attachment/runtime/skill counts, validates
+// a21-row runtime lookahead and returns at most20 active run summaries with truncation metadata.
+// Skill usage always blocks; DELETE requires ACTIVE while PURGE requires DELETED with no active
+// bindings/runtime. The digest pins the serialized impact view; callers own action validation,
+// authorization and transaction consistency.
+// artifactImpactTx читает version/lifecycle и binding/attachment/runtime/skill counts, проверяет
+// runtime lookahead из21 строки и возвращает не более20 active run summaries с truncation
+// metadata. Skill usage всегда блокирует; DELETE требует ACTIVE, PURGE — DELETED без active
+// bindings/runtime. Digest фиксирует сериализованный impact view; action validation, authorization
+// и согласованность транзакции принадлежат вызывающим.
 func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, current scope, artifactRef, action string) (entity.ArtifactImpact, string, error) {
 	var artifactID, lifecycleState string
 	var activeRunsJSON []byte

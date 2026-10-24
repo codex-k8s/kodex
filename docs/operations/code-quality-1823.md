@@ -4,11 +4,84 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.389.0
+version: 1.390.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Artifact receipts, purge/download и contextual plans — 25.10.2026
+
+На основе `7e5f5cf8f74ea8cb4339436bbd49d06d80681028` полностью прочитаны
+artifacts.go и contextual_plans.go, описаны23+22 прежних объявления. Новый
+receipt reader, формат-константа и test также описаны:24/24,23/23 и1/1,
+всего48/48. Общий inventory19300/21449, missing2149 — PostgreSQL adapter
+control-plane. Все100 Go-файлов текущего PR имеют1104/1104 EN→RU описаний.
+
+`readArtifactUploadReceipt` объединяет два locked receipt QueryRow/Scan,
+intent comparison и JSON decode. Сохранены exact organization/actor/operation/
+key и context/SQL identity, nil miss для NoRows/wrapped NoRows, Unavailable
+для прочих read failures, IdempotencyReuse до JSON decode, Conflict для
+malformed JSON. Декодирование null/unknown fields сохраняет прежнюю
+совместимость, не выдаёт полномочия. Оба callers явно сохраняют upload
+access до чтения, current file/revision eligibility после найденной receipt,
+commit/error mapping и дальнейший miss path. Main caller по-прежнему
+повторяет проверку под idempotency lock и очищает ненужный prepared object
+на replay; helper не владеет storage, authorization или транзакцией.
+
+Новый test проверяет десять исходов: success, missing/wrapped missing,
+scan/partial failure, intent reuse, mismatch-before-malformed-JSON,
+malformed JSON, null и unknown-field candidates. Проверены exact context,
+SQL/four owner-key arguments, две Scan destinations, no commit/других DB
+calls и отсутствие raw driver detail. Это synthetic reader proof, не live
+receipt authorization/concurrency test. Fixed JSON oracle задан независимо
+от writer, decoded artifact всё ещё требует caller eligibility.
+
+`assistantPlanSnapshotConflictFormat` заменяет17 одинаковых safe problem
+format literals в минимальной общей области. Wire text и one-based index
+сохранены. Разные typed snapshot readers, авторизация, порядок validation и
+формирование INVALID/VALID остаются явными; generic policy dispatcher не
+добавлялся.
+
+| Путь / lifecycle | Сохранённая граница |
+| --- | --- |
+| Upload / replay | Scope/reader validation → authorized preflight → AV/source verification/object Put → ReadCommitted idempotency lock → fresh authorized receipt либо filename/project/run checks → artifact/content/audit/event/receipt → commit. Prepared object удерживается лишь после nil commit |
+| Prepared project file | Typed bounded prepared descriptor/AV и ledger, exact project upload access и filename lock, новая revision и adoption ledger в caller TX; outer execution сохраняет audit/idempotency/commit/object retention |
+| Soft delete / restore / binding | Exact artifact lock/OCC и state transition; delete требует свежий matching permitted impact. Binding требует same-project agent/capability при enable, versions растут лишь при изменении; storage не удаляется |
+| Purge prepare / external / finalize | Fresh purge authority до receipt replay, exact locked ordered inventory/version/DELETED/impact. PURGE_PENDING receipt до внешнего Delete+Head absence. Finalize повторяет authority и inventory identity/state equality, удаляет content/revisions, пишет terminal receipt/audit/event одной TX |
+| Download / preview | Serializable exact eligible clean revision, current bindings и purpose/subject/version grant create+consume. Object metadata pins → audit → commit до выдачи reader. Failure закрывает body, independent bounded rollback и typed serialization retry; байты потока здесь повторно не хешируются |
+| Draft / stale refresh | Exact plan version/revision и conversation scope, operation count/key/type. Specialized editors восстанавливают owner envelope; лишь STALE обновляет допустимые snapshots, обычный DRAFT не скрывает rebase. Normalize/bind/authorize каждой операции и file pins до новой immutable USER revision/ledger links |
+| Validate / reject | Лишь selected operations проходят content/duplicate grant/command/authorization/specialized snapshot/readiness/version checks; safe problems дают INVALID/VALID, не effects. Launch runtime contract проверяется для всех target agents, provider/catalog — для первого/coordinator. Reject пишет exact revision REJECTED receipt без применения operations |
+| Receipt / edit metadata | Agent-version rebase копирует карты без DB authority; edited agent/connection/grant/image поля ограничены original identity/version/pins. Receipt нормализует nil lists, сохраняет outcome/audit/created refs, но не предоставляет будущих полномочий |
+
+Полный expected-AST compare artifacts.go — PASS: два receipt read/decode
+блока заменены общим reader, остальные caller authority/commit/cleanup и
+ветви неизменны. Полный expected-AST compare contextual_plans.go — PASS:
+только17 одинаковых literals заменены точной общей константой. SQL/API,
+generated/dependencies/applied migrations/deploy inputs не менялись.
+Прочитаны полные actor-scoped/unexpired/FOR UPDATE receipt SQL, purge
+inventory/mark-pending, exact clean/view/download revision grant и draft-plan
+lock SQL. Через Context7 /jackc/pgx проверены Row/Scan/ErrNoRows и errors.Is;
+существующий artifact read finish использует independent one-second rollback.
+
+Новый адресный test — PASS; финальные GOWORK=off control-plane build и unit
+`-count=1` после format-константы — PASS LOCAL.15 external fixture/admin/
+template inputs исключены.17 analyzer unit,5 exact-ignore guards и gofmt/
+diff check — PASS. Real PostgreSQL receipt locks/OCC/concurrent replay,
+AV/object store/partial purge/ambiguous commit/stream delivery, provider/runtime/
+image/broker, browser/full E2E и deploy/live — NOT RUN/SKIP. QA baseline
+f2e64eb не менялся. Прежние ignored optional marshal/reference/project lookup
+errors, read-error conflation и commit/cleanup contracts описаны без
+заявления об исправлении; validation problems не объявляются live acceptance.
+
+Scan6674 own sources,222 excluded:1804 raw,900 retained occurrences и904
+unresolved. Новый test входит в inventory и не добавляет clone groups.
+Receipt reader устраняет ручной semantic duplicate ниже/между detector
+windows; raw count не уменьшился.109-token specialized validation окно
+изменило hash при замене format literals и остаётся открытым. Все774
+registry entries действительны и не менялись; thresholds/ignore regions и
+whole-file exclusions не расширялись. Issue#1823 открыт, PR остаётся Draft
+до завершения полного согласованного объёма.
 
 ## Worker leases, integration claims и assistant-plan tests — 25.10.2026
 
