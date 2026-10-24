@@ -201,6 +201,16 @@ def installed_helper():
         raise ValueError("INSTALLED_HELPER_REQUIRED")
 
 
+def stop_rollback_timer():
+    """Сверяет terminal state, если transient unit исчезла во время stop."""
+    try:
+        run(["systemctl", "stop", TIMER + ".timer", TIMER + ".service"])
+    except RuntimeError:
+        for unit in [TIMER + ".timer", TIMER + ".service"]:
+            if run(["systemctl", "show", unit, "--property=ActiveState", "--value"]).strip() != "inactive":
+                raise RuntimeError("ROLLBACK_TIMER_STOP_NOT_CONFIRMED")
+
+
 def execute(mode, supplied, expected_digest):
     """Выполняет ограниченный переход plan/apply/confirm/rollback под lock."""
     if mode in {"rollback", "expire", "boot", "inspect"}:
@@ -293,7 +303,7 @@ def execute(mode, supplied, expected_digest):
         run(["systemctl", "enable", UNIT + ".service"])
         private_write(ROOT / "confirmed.json", json.dumps({"planDigest": plan_digest, "connection": connection,
                                                           "servingSHA256": digest(table_state())}))
-        run(["systemctl", "stop", TIMER + ".timer", TIMER + ".service"])
+        stop_rollback_timer()
         return {"status": "CONFIRMED", "planDigest": plan_digest}
     raise ValueError("UNSUPPORTED_MODE")
 

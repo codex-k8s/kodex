@@ -120,7 +120,7 @@ class FirewallLifecycleTests(unittest.TestCase):
                 raise RuntimeError("HOST_OPERATION_FAILED")
             return "active"
         with patch.object(FIREWALL, "table_state", return_value=[]), patch.object(FIREWALL, "run", side_effect=transport):
-            with self.assertRaisesRegex(RuntimeError, "HOST_OPERATION_FAILED"):
+            with self.assertRaisesRegex(RuntimeError, "ROLLBACK_TIMER_STOP_NOT_CONFIRMED"):
                 FIREWALL.execute("confirm", self.plan, self.plan_digest)
         self.assertTrue(FIREWALL.confirmed(FIREWALL.read_state()))
         with patch.object(FIREWALL, "run") as transport:
@@ -157,6 +157,23 @@ class FirewallLifecycleTests(unittest.TestCase):
             FIREWALL.private_write(path, "second")
         self.assertEqual(path.read_text(), "first")
         self.assertEqual(list(self.root.glob(".receipt-*")), [])
+
+    def test_disappeared_transient_units_are_confirmed_by_readback(self):
+        self.state()
+        FIREWALL.private_write(self.root / "serving.sha256", FIREWALL.digest([]))
+        calls = []
+        def transport(args, data=None):
+            calls.append(args)
+            if args[:2] == ["systemctl", "stop"]:
+                raise RuntimeError("HOST_OPERATION_FAILED")
+            if args[:2] == ["systemctl", "show"]:
+                return "inactive\n"
+            return "active"
+        with patch.object(FIREWALL, "table_state", return_value=[]), patch.object(FIREWALL, "run", side_effect=transport):
+            result = FIREWALL.execute("confirm", self.plan, self.plan_digest)
+        self.assertEqual(result["status"], "CONFIRMED")
+        self.assertEqual(sum(argv[:2] == ["systemctl", "stop"] for argv in calls), 1)
+        self.assertEqual(sum(argv[:2] == ["systemctl", "show"] for argv in calls), 2)
 
 
 if __name__ == "__main__":
