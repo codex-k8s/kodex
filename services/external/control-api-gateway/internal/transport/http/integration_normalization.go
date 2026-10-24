@@ -10,8 +10,18 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// errPublicIntegrationShape is the fixed error for invalid integration response shapes, keeping
+// arbitrary provider and credential data out of the error text.
+// errPublicIntegrationShape задаёт фиксированную ошибку неверной формы ответа интеграции без
+// произвольных данных провайдера и credentials в тексте ошибки.
 var errPublicIntegrationShape = errors.New("public integration response is invalid")
 
+// normalizeIntegrationEnum maps only owned integration/gate enums to public suffixes after
+// descriptor lookup rejects zero/unknown values. Other enum descriptors pass through unchanged for
+// their own normalizer.
+// normalizeIntegrationEnum преобразует только принадлежащие этому пути integration/gate enum в
+// публичные суффиксы после отклонения нулевых и неизвестных значений по descriptor. Прочие enum
+// передаются без изменений собственному normalizer.
 func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor) (any, error) {
 	prefix := ""
 	switch descriptor.FullName() {
@@ -43,6 +53,14 @@ func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor)
 	return strings.TrimPrefix(name, prefix), nil
 }
 
+// normalizeIntegrationShape normalizes selected integration projections in place: removes private
+// revision pins, validates configuration binding shape and schema digest, reconciles typed risk
+// and preserves optional numeric-bound presence. OwnerGate validation is delegated; this
+// projection path never grants capabilities.
+// normalizeIntegrationShape нормализует выбранные проекции интеграций на месте: убирает приватные
+// pins ревизий, проверяет форму configuration binding и дайджест схемы, согласует typed risk и
+// сохраняет наличие числовых границ. Проверка OwnerGate делегируется; этот путь проекции не выдаёт
+// capabilities.
 func normalizeIntegrationShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
 	switch descriptor.FullName() {
 	case "controlplane.v1.OwnerGate":

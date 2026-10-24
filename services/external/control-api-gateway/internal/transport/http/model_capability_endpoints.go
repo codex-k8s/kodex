@@ -11,10 +11,30 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// modelProviderKey defines the closed-shaped lowercase provider-definition key accepted by model
+// catalog requests and responses, independently of account authorization.
+// modelProviderKey задаёт грамматику provider-definition key нижнего регистра для запросов и
+// ответов каталога моделей независимо от авторизации аккаунта.
 var modelProviderKey = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,79}$`)
+
+// modelBlocker bounds model readiness blocker codes to uppercase ASCII tokens, preventing
+// arbitrary diagnostic text from entering this public code field.
+// modelBlocker ограничивает коды блокеров готовности модели ASCII токенами верхнего регистра,
+// исключая произвольную диагностику из этого публичного поля.
 var modelBlocker = regexp.MustCompile(`^[A-Z0-9_]{1,80}$`)
+
+// modelCatalogDigest recognizes exactly 64 lowercase hexadecimal characters used for catalog and
+// related content digests; callers separately verify the digest relationship.
+// modelCatalogDigest распознаёт ровно 64 шестнадцатеричных символа нижнего регистра для дайджестов
+// каталога и связанного содержимого; связь дайджеста отдельно проверяют callers.
 var modelCatalogDigest = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+// ListModelCapabilities validates optional provider/account and expected catalog pins, queries CP
+// and rejects malformed pages, duplicate model identities or scope mismatches before output.
+// Eligibility comes from the owner response rather than the requested account ref.
+// ListModelCapabilities проверяет необязательные provider/account и ожидаемые pins каталога,
+// запрашивает CP и отклоняет неверные страницы, дубликаты моделей и несовпадение области до
+// выдачи. Допуск приходит из ответа владельца, а не запрошенного ref аккаунта.
 func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Request, p generated.ListModelCapabilitiesParams) {
 	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, p.PageToken)
 	if !ok {
@@ -66,6 +86,12 @@ func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, result)
 }
 
+// modelCatalogStatusView requires status only for account-scoped queries and maps known
+// state/source/failure values with coherent observation times. READY/EXPIRED need a remote source
+// and NONE failure; FAILED forbids a source and requires a failure.
+// modelCatalogStatusView требует status только для запросов аккаунта и преобразует известные
+// state/source/failure с согласованным временем наблюдения. READY/EXPIRED требуют remote source и
+// NONE; FAILED запрещает source и требует ошибку.
 func modelCatalogStatusView(status *cp.ProviderModelCatalogStatus, accountScoped bool) (*generated.ProviderModelCatalogStatus, bool) {
 	if !accountScoped {
 		return nil, status == nil
@@ -136,6 +162,12 @@ func modelCatalogStatusView(status *cp.ProviderModelCatalogStatus, accountScoped
 	return result, true
 }
 
+// modelCapabilityView validates one model, distinct effort/account/blocker lists, default effort
+// membership and availability/blocker consistency, then copies the public slices. It does not
+// infer actual provider execution success from catalog availability.
+// modelCapabilityView проверяет модель, уникальные списки effort/account/blocker, наличие default
+// effort и согласованность available/blocker, затем копирует публичные срезы. Доступность каталога
+// не объявляется успешным исполнением провайдера.
 func modelCapabilityView(model *cp.ModelCapability) (generated.ModelCapability, bool) {
 	if model == nil || !boundedModelText(model.Id, 160) || !modelProviderKey.MatchString(model.ProviderDefinitionKey) || len(model.ReasoningEfforts) > 16 || len(model.ReadinessBlockers) > 16 {
 		return generated.ModelCapability{}, false
@@ -176,6 +208,10 @@ func modelCapabilityView(model *cp.ModelCapability) (generated.ModelCapability, 
 		ReadinessBlockers: append([]string{}, model.ReadinessBlockers...)}, true
 }
 
+// boundedModelText requires nonempty valid UTF-8 text within a byte bound and forbids NUL, CR and
+// LF. It preserves text exactly without trimming or normalization.
+// boundedModelText требует непустой корректный UTF-8 текст в байтовом лимите без NUL, CR и LF.
+// Текст сохраняется точно, без обрезки пробелов и нормализации.
 func boundedModelText(value string, limit int) bool {
 	return value != "" && len(value) <= limit && utf8.ValidString(value) && !strings.ContainsAny(value, "\x00\r\n")
 }

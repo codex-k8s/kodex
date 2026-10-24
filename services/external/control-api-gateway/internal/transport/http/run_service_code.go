@@ -1,7 +1,11 @@
 package httptransport
 
-// Код назначается только служебному RunEvent до локализации summary.
-// Содержимое сообщений, результатов инструментов и внешних эффектов не скрывается.
+// projectRunEventServiceCode adds a closed serviceCode only to canonical cancellation/completion
+// service events before localization. Events carrying messages, tool output, artifacts, progress
+// or integration invocations remain untouched.
+// projectRunEventServiceCode добавляет закрытый serviceCode только каноническим служебным событиям
+// отмены/завершения до локализации. События с сообщениями, выводом инструментов, артефактами,
+// progress или integration invocation не меняются.
 func projectRunEventServiceCode(value map[string]any) {
 	for _, field := range []string{"message", "toolCall", "artifact", "artifactRef", "progress", "integrationInvocationRef"} {
 		if _, present := value[field]; present {
@@ -39,7 +43,12 @@ func projectRunEventServiceCode(value map[string]any) {
 	}
 }
 
-// Только каноническое служебное завершение, не любая ошибка корневого узла.
+// projectRootCompletionServiceCode marks only a matching terminal root-process state event with
+// the canonical completion summary; gate/incident/edge payloads and mismatched nested node
+// coordinates suppress the marker.
+// projectRootCompletionServiceCode помечает только согласованное событие terminal состояния
+// корневого процесса с канонической сводкой завершения; gate/incident/edge и несовпадающие
+// координаты вложенного узла исключают маркер.
 func projectRootCompletionServiceCode(value map[string]any) {
 	for _, field := range []string{"gate", "gateRef", "incident", "edge", "edgeRef"} {
 		if _, present := value[field]; present {

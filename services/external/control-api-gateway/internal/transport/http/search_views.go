@@ -10,17 +10,36 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// searchUpstreamProblemCode is the stable public problem code for malformed owner search pages,
+// shared across all search projection rejection paths.
+// searchUpstreamProblemCode задаёт устойчивый публичный код ошибки неверной страницы поиска
+// владельца для всех путей отказа проекции поиска.
 const searchUpstreamProblemCode = "INVALID_UPSTREAM_RESPONSE"
 
+// rejectSearchPage logs the supplied fixed search-validation reason and emits a nonretryable HTTP
+// 502 problem. Callers provide safe categories without item contents or upstream errors.
+// rejectSearchPage записывает переданную фиксированную причину проверки поиска и выдаёт
+// неповторяемую ошибку HTTP 502. Caller передаёт безопасную категорию без содержимого элементов и
+// upstream ошибок.
 func rejectSearchPage(w http.ResponseWriter, reason string) {
 	slog.Error("Invalid search response", "reason", reason)
 	writeLocalProblem(w, http.StatusBadGateway, searchUpstreamProblemCode, false)
 }
 
+// validSearchQuery requires valid UTF-8 with at least two nonpadding runes, at most 200 original
+// runes and no NUL. Validation does not trim or alter the query forwarded to the owner.
+// validSearchQuery требует корректный UTF-8, не менее двух рун без внешних пробелов, не более 200
+// исходных рун и отсутствие NUL. Проверка не обрезает и не меняет запрос владельцу.
 func validSearchQuery(value string) bool {
 	return utf8.ValidString(value) && utf8.RuneCountInString(strings.TrimSpace(value)) >= 2 && utf8.RuneCountInString(value) <= 200 && !strings.ContainsRune(value, '\x00')
 }
 
+// writeSearchPage validates page size/count/cursor and every result identity, requested project,
+// text, time and supported kind before writing any JSON. Duplicate identities or one invalid item
+// reject the complete page, preserving owner eligibility and total.
+// writeSearchPage проверяет размер/count/cursor страницы и identity, запрошенный проект, текст,
+// время и поддерживаемый вид каждого результата до выдачи JSON. Дубликат или один неверный элемент
+// отклоняет всю страницу, сохраняя допуск владельца и total.
 func writeSearchPage(w http.ResponseWriter, response *cp.SearchPlatformResponse, project string, limit int) {
 	if response == nil {
 		rejectSearchPage(w, "missing page")
@@ -91,6 +110,11 @@ func writeSearchPage(w http.ResponseWriter, response *cp.SearchPlatformResponse,
 	writeJSON(w, http.StatusOK, result)
 }
 
+// validSearchText checks inclusive rune-count bounds, UTF-8 validity and absence of NUL, allowing
+// empty text only when the minimum is zero. Other controls are not removed or normalized here.
+// validSearchText проверяет включённые границы числа рун, UTF-8 и отсутствие NUL, разрешая пустой
+// текст только при нулевом минимуме. Другие управляющие символы здесь не удаляются и не
+// нормализуются.
 func validSearchText(value string, minimum, maximum int) bool {
 	length := utf8.RuneCountInString(value)
 	return utf8.ValidString(value) && length >= minimum && length <= maximum && !strings.ContainsRune(value, '\x00')

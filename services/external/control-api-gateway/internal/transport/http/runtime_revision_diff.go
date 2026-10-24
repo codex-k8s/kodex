@@ -9,6 +9,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// GetRuntimeRevisionDiff validates the run and optional current-revision locators, requests an
+// owner diff and verifies its public projection before returning HTTP 200. Locator syntax never
+// substitutes run visibility or version-pinned owner reads.
+// GetRuntimeRevisionDiff проверяет адреса запуска и необязательной текущей ревизии, запрашивает
+// diff владельца и проверяет публичную проекцию до HTTP 200. Синтаксис адреса не заменяет
+// видимость запуска и version-pinned чтение владельца.
 func (server *Server) GetRuntimeRevisionDiff(w http.ResponseWriter, r *http.Request, ref generated.RunRef, p generated.GetRuntimeRevisionDiffParams) {
 	pin := stringValue(p.CurrentRevisionRef)
 	if !opaqueHTTPReference.MatchString(ref) || len(ref) > 96 || p.CurrentRevisionRef != nil && (!opaqueHTTPReference.MatchString(pin) || len(pin) > 96) {
@@ -28,6 +34,12 @@ func (server *Server) GetRuntimeRevisionDiff(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, result)
 }
 
+// runtimeRevisionDiffView binds the current revision to the requested run/pin, constrains the
+// predecessor to the same session with strict time/ref ordering, and validates unique component
+// changes with coherent optional previous values. Invalid partial results must not be returned.
+// runtimeRevisionDiffView связывает текущую ревизию с запрошенными run/pin, ограничивает
+// предшественника той же сессией и строгим порядком времени/ref и проверяет уникальные изменения
+// компонентов с согласованными previous. Неверный частичный результат выдавать нельзя.
 func runtimeRevisionDiffView(response *cp.GetRuntimeRevisionDiffResponse, ref, pin string) (generated.RuntimeRevisionDiff, bool) {
 	result := generated.RuntimeRevisionDiff{Changes: []generated.RuntimeRevisionDiffChange{}}
 	current, ok := publicRuntimeRevisionIdentity(response.GetCurrent())
@@ -69,6 +81,12 @@ func runtimeRevisionDiffView(response *cp.GetRuntimeRevisionDiffResponse, ref, p
 	return result, true
 }
 
+// publicRuntimeRevisionIdentity projects bounded immutable revision/run/session/optional-turn
+// identifiers, positive attempt/version, digest and valid creation time. It validates readback
+// identity without granting continuation authority.
+// publicRuntimeRevisionIdentity проецирует ограниченные immutable ref ревизии, запуска, сессии и
+// необязательного turn, положительные attempt/version, digest и корректное время создания.
+// Проверка identity чтения не предоставляет полномочий продолжения.
 func publicRuntimeRevisionIdentity(v *cp.PublicRuntimeRevisionIdentity) (generated.PublicRuntimeRevisionIdentity, bool) {
 	if v == nil || !validManagedVersion(v.GetVersion()) || v.GetAttempt() < 1 || !validManagedDigest(v.GetRevisionDigest()) || v.GetCreatedAt() == nil || v.GetCreatedAt().CheckValid() != nil {
 		return generated.PublicRuntimeRevisionIdentity{}, false
@@ -84,6 +102,12 @@ func publicRuntimeRevisionIdentity(v *cp.PublicRuntimeRevisionIdentity) (generat
 	return generated.PublicRuntimeRevisionIdentity{Ref: v.GetRef(), Version: v.GetVersion(), RunRef: v.GetRunRef(), SessionRef: v.GetSessionRef(), TurnRef: optionalManagedString(v.GetTurnRef()), Attempt: int(v.GetAttempt()), RevisionDigest: v.GetRevisionDigest(), CreatedAt: v.GetCreatedAt().AsTime()}, true
 }
 
+// runtimeRevisionDiffValue enforces component-specific ref/revision/digest/version combinations,
+// preserving optional absence and distinct provider/model/image representations. Unknown
+// components or inconsistent field combinations fail closed.
+// runtimeRevisionDiffValue проверяет сочетания ref/revision/digest/version по виду компонента,
+// сохраняя необязательное отсутствие и разные представления provider/model/image. Неизвестный
+// компонент и несовместимые поля закрыто отклоняются.
 func runtimeRevisionDiffValue(component generated.RuntimeRevisionDiffChangeComponent, v *cp.RuntimeRevisionDiffValue) (generated.RuntimeRevisionDiffValue, bool) {
 	result := generated.RuntimeRevisionDiffValue{}
 	if v == nil {

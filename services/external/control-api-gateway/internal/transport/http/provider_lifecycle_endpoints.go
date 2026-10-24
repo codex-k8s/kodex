@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// ListProviderAccountBlockers validates account/search/kind/page selectors, queries the owner and
+// checks blocker counts, identities and cursor before projecting the page with the account-version
+// ETag. Hidden blockers remain counts rather than exposed resources.
+// ListProviderAccountBlockers проверяет account/search/kind/page selectors, запрашивает владельца
+// и сверяет счётчики, identity и cursor блокеров до проекции страницы с ETag версии аккаунта.
+// Скрытые блокеры остаются счётчиком, а не раскрываемыми ресурсами.
 func (server *Server) ListProviderAccountBlockers(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.ListProviderAccountBlockersParams) {
 	query := stringValue(p.Query)
 	kind := cp.ProviderAccountBlockerKind_PROVIDER_ACCOUNT_BLOCKER_KIND_UNSPECIFIED
@@ -43,10 +49,20 @@ func (server *Server) ListProviderAccountBlockers(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, value)
 }
 
+// validProviderBlockerKind recognizes the contiguous registered blocker kinds from AGENT through
+// WARM_RUNTIME, rejecting zero and unknown values without authorizing those resources.
+// validProviderBlockerKind распознаёт непрерывный набор видов блокеров от AGENT до WARM_RUNTIME,
+// отклоняя нулевые и неизвестные значения без авторизации этих ресурсов.
 func validProviderBlockerKind(kind cp.ProviderAccountBlockerKind) bool {
 	return kind >= cp.ProviderAccountBlockerKind_PROVIDER_ACCOUNT_BLOCKER_KIND_AGENT && kind <= cp.ProviderAccountBlockerKind_PROVIDER_ACCOUNT_BLOCKER_KIND_WARM_RUNTIME
 }
 
+// validProviderBlockerPage checks account/deletion pins, safe counts/digest, unique filtered
+// blocker identities and cancellation flags limited to queued turns. Continuation must be bounded,
+// nonempty-page backed and different from the supplied cursor.
+// validProviderBlockerPage проверяет pins аккаунта и удаления, безопасные счётчики/digest,
+// уникальные отфильтрованные identity блокеров и флаг отмены только у queued turn. Продолжение
+// должно быть ограниченным, опираться на непустую страницу и отличаться от входного cursor.
 func validProviderBlockerPage(p *cp.ListProviderAccountBlockersResponse, kind cp.ProviderAccountBlockerKind, size *int, cursor string) bool {
 	if p == nil || !validManagedVersion(p.AccountVersion) || p.DeletionIntentVersion < 0 || p.DeletionIntentVersion > maximumSafeJSONInteger ||
 		p.Total < int64(len(p.Items)) || p.Total > maximumSafeJSONInteger || p.HiddenCount < 0 || p.HiddenCount > maximumSafeJSONInteger ||
@@ -70,6 +86,12 @@ func validProviderBlockerPage(p *cp.ListProviderAccountBlockersResponse, kind cp
 	return len(token) <= 2048 && (token == "" || token != cursor && len(p.Items) != 0)
 }
 
+// CancelProviderAccountQueuedWork validates a bounded unique selection and blockers digest under
+// mutation/version headers, then delegates cancellation to the owner. The response must match
+// account and ordered selected runs with known outcomes before public output.
+// CancelProviderAccountQueuedWork проверяет ограниченную уникальную выборку и digest блокеров с
+// заголовками mutation/version, затем поручает отмену владельцу. Ответ должен совпасть по аккаунту
+// и порядку выбранных запусков с известными исходами до публичной выдачи.
 func (server *Server) CancelProviderAccountQueuedWork(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.CancelProviderAccountQueuedWorkParams) {
 	body, ok := decodeJSON[generated.ProviderAccountQueuedWorkCancellationInput](w, r)
 	if !ok {

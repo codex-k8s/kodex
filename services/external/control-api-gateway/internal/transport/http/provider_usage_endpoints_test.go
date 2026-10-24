@@ -12,6 +12,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// providerUsageAccountFixture builds a synthetic CONFIGURE account snapshot with independent
+// readiness dimensions, pinned catalog digests and fresh matching health/catalog timestamps. It
+// performs no live provider call.
+// providerUsageAccountFixture собирает синтетический CONFIGURE снимок аккаунта с независимыми
+// измерениями готовности, pins дайджестов каталога и свежими совпадающими временами
+// health/catalog. Живой провайдер не вызывается.
 func providerUsageAccountFixture() *cp.ProviderAccount {
 	now := time.Now().UTC()
 	dimension := func(state cp.ProviderUsageState, reason cp.ProviderUsageReason) *cp.ProviderUsageDimension {
@@ -30,8 +36,18 @@ func providerUsageAccountFixture() *cp.ProviderAccount {
 	}}
 }
 
+// providerConfigureQuery supplies the fixed synthetic agent/profile/provider CONFIGURE selectors
+// used to test exact usage-context forwarding in list and single-account routes.
+// providerConfigureQuery задаёт фиксированные синтетические agent/profile/provider selectors
+// CONFIGURE для проверки точной передачи usage context в списке и чтении одного аккаунта.
 const providerConfigureQuery = "?usagePurpose=CONFIGURE&usageAgentRef=agt_usage00001&usageRuntimeProfileRef=codex-default&usageProviderDefinitionKey=openai-codex"
 
+// TestProviderUsageListAndSingleKeepContextAndIndependentDimensions checks both account routes
+// preserve the owner usage context, explicit zero counters and independent
+// eligible/submit/model-health dimensions in public JSON.
+// TestProviderUsageListAndSingleKeepContextAndIndependentDimensions проверяет сохранение контекста
+// владельца, явных нулевых счётчиков и независимых eligible/submit/model-health измерений в
+// публичном JSON обоих маршрутов аккаунта.
 func TestProviderUsageListAndSingleKeepContextAndIndependentDimensions(t *testing.T) {
 	for _, list := range []bool{false, true} {
 		account := providerUsageAccountFixture()
@@ -71,6 +87,12 @@ func TestProviderUsageListAndSingleKeepContextAndIndependentDimensions(t *testin
 	}
 }
 
+// TestProviderUsageRejectsContextOverridesAndMalformedSnapshots proves invalid usage selectors
+// stop before CP and corrupted or mismatched owner snapshots fail with 502 for both list and
+// single-account reads.
+// TestProviderUsageRejectsContextOverridesAndMalformedSnapshots доказывает отказ неверных usage
+// selectors до CP и HTTP 502 для повреждённых либо несовпадающих снимков владельца в списке и
+// чтении аккаунта.
 func TestProviderUsageRejectsContextOverridesAndMalformedSnapshots(t *testing.T) {
 	for _, query := range []string{"?usagePurpose=LAUNCH&usageAgentRef=agt_usage00001&usageModel=model-one", "?usagePurpose=CONFIGURE&usageAgentRef=agt_usage00001", "?usageAgentRef=agt_usage00001", providerConfigureQuery + "&usageReasoningEffort=high"} {
 		client := &catalogRPCRecorder{}
@@ -109,6 +131,12 @@ func TestProviderUsageRejectsContextOverridesAndMalformedSnapshots(t *testing.T)
 	}
 }
 
+// TestProviderUsageLaunchPreservesQueuedAdmissionWithExhaustedCapacity verifies that exhausted
+// execution capacity remains a separate blocked dimension while the owner still allows queued
+// submission for a valid LAUNCH context.
+// TestProviderUsageLaunchPreservesQueuedAdmissionWithExhaustedCapacity проверяет, что исчерпанная
+// ёмкость остаётся отдельным блокирующим измерением, пока владелец разрешает постановку в очередь
+// с корректным LAUNCH context.
 func TestProviderUsageLaunchPreservesQueuedAdmissionWithExhaustedCapacity(t *testing.T) {
 	account := providerUsageAccountFixture()
 	u := account.Usage

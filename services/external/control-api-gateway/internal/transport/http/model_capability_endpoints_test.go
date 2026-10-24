@@ -13,15 +13,31 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// modelCapabilityFixture builds one synthetic available model with two supported reasoning
+// efforts, an allowed default and one eligible account, without consulting a live catalog.
+// modelCapabilityFixture собирает синтетическую доступную модель с двумя reasoning effort,
+// допустимым default и одним подходящим аккаунтом без чтения живого каталога.
 func modelCapabilityFixture() *cp.ModelCapability {
 	return &cp.ModelCapability{Id: "fixture-model", ProviderDefinitionKey: "openai-codex", ReasoningEfforts: []string{"low", "medium"}, DefaultReasoningEffort: "medium", Available: true, EligibleProviderAccountRefs: []string{"pacc_fixture01"}}
 }
 
+// modelCatalogFixture wraps the synthetic model in a catalog page with a matching lowercase
+// digest/mcat_ revision pair and total one; account status is added explicitly by tests that
+// require it.
+// modelCatalogFixture оборачивает синтетическую модель в страницу каталога с согласованными
+// digest/mcat_ revision нижнего регистра и total один; status аккаунта явно добавляют требующие
+// его тесты.
 func modelCatalogFixture() *cp.ListModelCapabilitiesResponse {
 	digest := strings.Repeat("a", 64)
 	return &cp.ListModelCapabilitiesResponse{Models: []*cp.ModelCapability{modelCapabilityFixture()}, Total: 1, CatalogDigest: digest, CatalogRevision: "mcat_" + digest}
 }
 
+// TestModelCapabilitiesExactTypedRoute checks the exact RPC method, provider/account/search/page
+// filters and expected catalog pins, then verifies public effort ordering, provenance and no-store
+// response headers.
+// TestModelCapabilitiesExactTypedRoute проверяет точный RPC метод, provider/account/search/page
+// фильтры и ожидаемые pins каталога, затем публичный порядок effort, provenance и заголовок
+// no-store.
 func TestModelCapabilitiesExactTypedRoute(t *testing.T) {
 	response := modelCatalogFixture()
 	response.CatalogStatus = runtimeCatalogStatusFixture()
@@ -48,6 +64,10 @@ func TestModelCapabilitiesExactTypedRoute(t *testing.T) {
 	}
 }
 
+// TestModelCapabilitiesRejectMalformedInput proves missing/mismatched catalog pins and invalid
+// provider/account/search/page selectors produce HTTP 400 before any owner request.
+// TestModelCapabilitiesRejectMalformedInput доказывает HTTP 400 до запроса владельцу при неполных
+// либо несовпадающих pins каталога и неверных provider/account/search/page selectors.
 func TestModelCapabilitiesRejectMalformedInput(t *testing.T) {
 	for _, query := range []string{"expectedCatalogRevision=", "expectedCatalogDigest=", "expectedCatalogRevision=mcat_" + strings.Repeat("a", 64), "expectedCatalogDigest=" + strings.Repeat("a", 64), "expectedCatalogRevision=mcat_" + strings.Repeat("a", 64) + "&expectedCatalogDigest=" + strings.Repeat("b", 64), "pageSize=0", "pageSize=101", "providerDefinitionKey=BAD", "providerAccountRef=prj_foreign01", "providerAccountRef=", "query=" + strings.Repeat("a", 201), "pageToken=" + strings.Repeat("x", 513)} {
 		t.Run(query[:min(len(query), 32)], func(t *testing.T) {
@@ -61,6 +81,12 @@ func TestModelCapabilitiesRejectMalformedInput(t *testing.T) {
 	}
 }
 
+// TestModelCapabilitiesRejectCorruptOwnerResponse mutates model provenance, default effort,
+// account/provider identity, counts, cursor, duplicates and readiness fields and requires
+// whole-response rejection with HTTP 502.
+// TestModelCapabilitiesRejectCorruptOwnerResponse меняет provenance модели, default effort,
+// account/provider identity, счётчики, cursor, дубликаты и readiness поля и требует отклонения
+// всего ответа с HTTP 502.
 func TestModelCapabilitiesRejectCorruptOwnerResponse(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.ListModelCapabilitiesResponse){
 		"digest missing":    func(r *cp.ListModelCapabilitiesResponse) { r.CatalogDigest = "" },
@@ -93,6 +119,11 @@ func TestModelCapabilitiesRejectCorruptOwnerResponse(t *testing.T) {
 	}
 }
 
+// TestModelCapabilitiesDeniedAndEmpty checks safe HTTP mappings for owner RPC errors without
+// private error details and preserves explicit empty items/zero total for an authorized empty
+// catalog.
+// TestModelCapabilitiesDeniedAndEmpty проверяет безопасное HTTP отображение ошибок RPC владельца
+// без приватной диагностики и явные пустые items/нулевой total для разрешённого пустого каталога.
 func TestModelCapabilitiesDeniedAndEmpty(t *testing.T) {
 	for code, want := range map[codes.Code]int{codes.InvalidArgument: 400, codes.Aborted: 412, codes.Unauthenticated: 401, codes.PermissionDenied: 403, codes.NotFound: 404, codes.Unavailable: 503} {
 		client := &catalogRPCRecorder{failure: status.Error(code, "private upstream detail")}
@@ -112,6 +143,11 @@ func TestModelCapabilitiesDeniedAndEmpty(t *testing.T) {
 	}
 }
 
+// TestModelCapabilitiesRejectChangedExpectedSnapshot requires HTTP 502 when a well-formed owner
+// catalog differs from the exact revision/digest requested by the client, proving the pin is
+// checked after the RPC.
+// TestModelCapabilitiesRejectChangedExpectedSnapshot требует HTTP 502 при корректном каталоге
+// владельца, отличающемся от точных revision/digest клиента, подтверждая проверку pin после RPC.
 func TestModelCapabilitiesRejectChangedExpectedSnapshot(t *testing.T) {
 	client := &catalogRPCRecorder{response: modelCatalogFixture()}
 	w := httptest.NewRecorder()
@@ -122,6 +158,10 @@ func TestModelCapabilitiesRejectChangedExpectedSnapshot(t *testing.T) {
 	}
 }
 
+// TestProviderDefinitionsModelZeroValues keeps unavailable model readiness explicit in
+// provider-definition JSON, including false availability and an empty eligible-account array.
+// TestProviderDefinitionsModelZeroValues сохраняет явную готовность недоступной модели в JSON
+// provider definition, включая false доступности и пустой массив подходящих аккаунтов.
 func TestProviderDefinitionsModelZeroValues(t *testing.T) {
 	model := modelCapabilityFixture()
 	model.Available, model.EligibleProviderAccountRefs = false, nil

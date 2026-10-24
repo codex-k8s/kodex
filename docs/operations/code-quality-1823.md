@@ -4,12 +4,44 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.351.0
+version: 1.352.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## HTTP-проекции и каталоги — 24.10.2026
+
+Продолжение ведётся в единственном Draft PR #1828. Первый head
+`07a94ef17b49b73c3b7bc97351089ea9aca562ea` опубликован от актуального main
+без старых промежуточных коммитов; 16 перенесённых файлов побайтно сверены.
+На этом точном head PASS LOCAL: полный build/unit control-plane, detector,
+assessor и Go inventory. Замер 6655 own / 222 excluded; 1795 raw / 803 retained /
+992 unresolved; Go 15631/21350, missing 5719. Raw SHA256
+`13ecfe3b07346e17cc326e417916aa37692f29f88a67654406411777e41a0e61`.
+Тело PR отправлено из проверенных immutable bytes; hash подтверждён отдельным GET.
+
+Затем прочитаны и документированы ещё 84 объявления в 23 файлах HTTP-шлюза:
+публичные карточки, runtime identity/diff/readiness, integration/gate projections,
+effective capabilities, модельный каталог и usage/lifecycle аккаунта провайдера,
+поиск и versioned headers. Два тестовых файла описывают реальные проверки
+маршрутов, pins, независимых usage dimensions, ошибок и пустых результатов.
+Предметно сохранены различия byte/rune limits, nil/empty, присутствия полей,
+формы locator против owner authority, наблюдения каталога против live исполнения.
+
+AST без comments/positions и все Go directives совпали во всех 23 файлах.
+Исполняемый код, imports, контракты, SQL, registry decisions и ignore bounds
+не менялись. PASS LOCAL: полный build и полный unit control-api-gateway;
+после добавления последних комментариев повторный полный unit также PASS.
+Go-checker unit, 8 publication guard unit и пять exact-ignore guards PASS.
+Замер рабочего дерева: Go 15715/21350, missing 5635; detector неизменен:
+1795 raw / 803 retained / 992 unresolved; 6655 own / 222 excluded.
+Raw SHA256 `a2aa35a8bc2e3f869bedfc05854f2063ca7bcd415d3e54595253363907186625`;
+clone-set `1fb8af200cde9a19651ec232d147ffeb7a266654ce55665f7e96a2fb629960e6`.
+Общий остаток и прежние findings открыты. Merge/deploy/browser/live на новом
+продолжении NOT RUN; следующий этап — оставшиеся собственные Go-объявления
+и адресный разбор групп в том же PR. Цель остаётся активной.
 
 ## Продолжение после ротации — 24.10.2026
 

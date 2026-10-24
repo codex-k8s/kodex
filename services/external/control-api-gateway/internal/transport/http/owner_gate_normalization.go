@@ -6,10 +6,26 @@ import (
 	"unicode/utf8"
 )
 
+// errOwnerGateShape is the fixed public-projection rejection error, avoiding inclusion of gate
+// payloads or integration details in diagnostics.
+// errOwnerGateShape задаёт фиксированную ошибку отклонения публичной проекции без включения gate
+// payload и деталей интеграции в диагностику.
 var errOwnerGateShape = errors.New("owner gate integration projection is invalid")
 
+// integrationEffectKeyPattern accepts only the canonical eff_ prefix and 32 lowercase hexadecimal
+// characters for an integration intent effect key; matching is shape validation, not proof of a
+// receipt.
+// integrationEffectKeyPattern допускает только канонический eff_ и 32 шестнадцатеричных символа
+// нижнего регистра для ключа эффекта integration intent; совпадение проверяет форму, а не наличие
+// receipt.
 var integrationEffectKeyPattern = regexp.MustCompile(`^eff_[a-f0-9]{32}$`)
 
+// validateOwnerGateProjection checks the already normalized gate projection, scope/version,
+// decision/consequence correspondence and optional integration intent metadata. It bounds
+// preview/scope containers without executing an effect or creating an owner decision.
+// validateOwnerGateProjection проверяет уже нормализованную проекцию шлюза, область/версию,
+// соответствие решений и последствий и необязательные метаданные integration intent. Размеры
+// preview/scope ограничиваются без исполнения эффекта и создания решения владельца.
 func validateOwnerGateProjection(gate map[string]any) error {
 	ref, _ := gate["ref"].(string)
 	project, _ := gate["projectRef"].(string)
@@ -109,6 +125,10 @@ func validateOwnerGateProjection(gate map[string]any) error {
 	return nil
 }
 
+// gateText requires a UTF-8 string within inclusive rune-count bounds. It does not trim, localize
+// or sanitize text and rejects nonstring values.
+// gateText требует UTF-8 строку в включённых границах числа рун. Текст не обрезается, не
+// переводится и не очищается; нестроковые значения отклоняются.
 func gateText(value any, minimum, maximum int) bool {
 	text, ok := value.(string)
 	return ok && utf8.ValidString(text) && utf8.RuneCountInString(text) >= minimum && utf8.RuneCountInString(text) <= maximum

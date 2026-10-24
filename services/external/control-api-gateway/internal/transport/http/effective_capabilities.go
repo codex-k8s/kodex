@@ -10,8 +10,18 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
+// effectiveCapabilityKey defines the lowercase capability-key grammar for public catalog items,
+// with the separate length bound enforced by the page validator.
+// effectiveCapabilityKey задаёт грамматику ключа capability нижнего регистра для публичных
+// элементов каталога; длину отдельно ограничивает валидатор страницы.
 var effectiveCapabilityKey = regexp.MustCompile(`^[a-z][a-z0-9_.-]+$`)
 
+// GetAgentEffectiveCapabilities validates the agent and paired workflow/step selectors, calls CP
+// under the request context and rejects mismatched, oversized or repeating-cursor results before
+// writing the public page. Requested selectors identify a query and do not establish access.
+// GetAgentEffectiveCapabilities проверяет агента и парные workflow/step selectors, вызывает CP в
+// контексте запроса и отклоняет несовпадающий, длинный результат либо повторный cursor до выдачи
+// публичной страницы. Selectors задают запрос и не устанавливают доступ.
 func (server *Server) GetAgentEffectiveCapabilities(w http.ResponseWriter, r *http.Request, agentRef generated.AgentRef, p generated.GetAgentEffectiveCapabilitiesParams) {
 	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, nil)
 	if !ok {
@@ -37,10 +47,22 @@ func (server *Server) GetAgentEffectiveCapabilities(w http.ResponseWriter, r *ht
 	writeJSON(w, http.StatusOK, result)
 }
 
+// effectiveCapabilityRef requires the common opaque reference grammar and a maximum of 96 bytes,
+// without interpreting prefixes or establishing resource ownership.
+// effectiveCapabilityRef требует общей грамматики opaque ref и не более 96 байт без интерпретации
+// префиксов и установления владения ресурсом.
 func effectiveCapabilityRef(ref string) bool {
 	return len(ref) <= 96 && opaqueHTTPReference.MatchString(ref)
 }
 
+// effectiveCapabilityPage projects only a page matching the requested agent/workflow/step and
+// valid immutable pins, counts and timestamps. It enforces strict item ordering, effective/reason
+// consistency and integration-only connection/grant pins; false makes any accumulated partial page
+// unusable.
+// effectiveCapabilityPage проецирует только страницу с запрошенными agent/workflow/step и
+// корректными immutable pins, счётчиками и временем. Проверяются строгий порядок элементов,
+// согласованность effective/reason и connection/grant pins только у интеграций; при false
+// накопленная частичная страница непригодна.
 func effectiveCapabilityPage(response *cp.GetAgentEffectiveCapabilitiesResponse, agentRef, workflowRef, stepKey string) (generated.AgentEffectiveCapabilityPage, bool) {
 	result := generated.AgentEffectiveCapabilityPage{Items: []generated.AgentEffectiveCapability{}}
 	if response == nil || response.GetAgentRef() != agentRef || !validManagedVersion(response.GetAgentVersion()) ||
