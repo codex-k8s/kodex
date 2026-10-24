@@ -39,6 +39,7 @@ export interface UploadQueueItem {
     totalBytes: number;
   };
   state: UploadQueueState;
+  scanState?: Artifact["scanState"];
 }
 
 export const uploadQueueConcurrency = 3;

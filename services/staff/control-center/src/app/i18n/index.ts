@@ -2477,8 +2477,9 @@ const ru = {
       AGENT_ARCHIVED: "Сотрудник архивирован; новое подключение недоступно.",
       ARTIFACT_UNAVAILABLE: "Состояние файла не допускает это действие.",
     },
+    uploaded: "Загружен",
     bindingHint:
-      "Выберите сотрудников, которым этот проверенный файл будет доступен как источник знаний.",
+      "Выберите сотрудников для доступа к источнику знаний. Подключение доступно только после успешной проверки файла.",
     agentFilesCapabilityRequired:
       "Сначала выдайте сотруднику возможность «Файлы» в его карточке.",
     noAgents: "Сначала создайте ИИ-сотрудника в этом Проекте.",
@@ -7187,8 +7188,9 @@ const en = {
       AGENT_ARCHIVED: "The employee is archived; new bindings are unavailable.",
       ARTIFACT_UNAVAILABLE: "The file state does not allow this action.",
     },
+    uploaded: "Uploaded",
     bindingHint:
-      "Choose the employees who can use this validated file as a knowledge source.",
+      "Choose employees for knowledge access. Binding is available only after the file passes validation.",
     agentFilesCapabilityRequired:
       "Grant the Files capability in the employee card first.",
     noAgents: "Create an AI employee in this Project first.",

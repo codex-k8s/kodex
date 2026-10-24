@@ -666,7 +666,9 @@ function replaceArtifact(artifact: Artifact): void {
 
 function updateUploadQueueItem(
   id: string,
-  update: Partial<Pick<UploadQueueItem, "problem" | "progress" | "state">>,
+  update: Partial<
+    Pick<UploadQueueItem, "problem" | "progress" | "state" | "scanState">
+  >,
 ): void {
   uploadQueue.value = uploadQueue.value.map((item) =>
     item.id === id ? { ...item, ...update } : item,
@@ -725,6 +727,7 @@ async function uploadQueueItem(item: UploadQueueItem): Promise<void> {
     updateUploadQueueItem(item.id, {
       progress: { loadedBytes: item.file.size, totalBytes: item.file.size },
       state: "SUCCEEDED",
+      scanState: artifact.scanState,
     });
   } catch (error) {
     if (
@@ -1313,7 +1316,9 @@ onBeforeUnmount(() => {
                     ? custom.queued
                     : item.state === "FAILED"
                       ? item.problem || custom.failed
-                      : $t("states.CLEAN")
+                      : item.scanState
+                        ? $t(`states.${item.scanState}`)
+                        : $t("files.uploaded")
               }}
             </small>
             <progress

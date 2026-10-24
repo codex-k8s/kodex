@@ -11,9 +11,13 @@ import { createI18n } from "vue-i18n";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FilesWorkspace from "./FilesWorkspace.vue";
 import { AppProblem } from "@/shared/api/problem";
+import type { UploadQueueItem } from "./model";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 
-const api = vi.hoisted(() => ({ loadArtifactPage: vi.fn() }));
+const api = vi.hoisted(() => ({
+  loadArtifactPage: vi.fn(),
+  uploadArtifactItem: vi.fn(),
+}));
 const platform = vi.hoisted(() => ({
   artifacts: {} as Record<string, Artifact>,
   projects: {},
@@ -27,7 +31,6 @@ vi.mock("./api", () => ({
   mutateArtifactsSequentially: vi.fn(),
   purgeArtifactItem: vi.fn(),
   restoreArtifactItem: vi.fn(),
-  uploadArtifactItem: vi.fn(),
 }));
 vi.mock("@/features/platform/store", () => ({
   usePlatformStore: () => platform,
@@ -63,6 +66,8 @@ const unavailable = new AppProblem({
 });
 
 type State = {
+  uploadQueue: Ref<UploadQueueItem[]>;
+  uploadQueueItem: (item: UploadQueueItem) => Promise<void>;
   items: Ref<{ artifact: Artifact }[]>;
   listProblem: Ref<AppProblem | undefined>;
   initialLoading: Ref<boolean>;
@@ -130,6 +135,31 @@ afterEach(() => {
 });
 
 describe("FilesWorkspace initial loading and retry", () => {
+  it.each(["CLEAN", "QUARANTINED", "PENDING", "SCANNING", "FAILED"] as const)(
+    "сохраняет серверный результат %s при успешной передаче файла",
+    async (scanState) => {
+      platform.realtimeSnapshot.mockReturnValue({ scopeKey: "prj_fixture" });
+      const state = mount();
+      const item: UploadQueueItem = {
+        id: "upload_fixture",
+        file: new File(["abc"], "document.md", { type: "text/markdown" }),
+        state: "QUEUED",
+      };
+      state.uploadQueue.value = [item];
+      api.uploadArtifactItem.mockResolvedValue({ ...artifact, scanState });
+      await state.uploadQueueItem(item);
+      expect(api.uploadArtifactItem).toHaveBeenCalledOnce();
+      expect(state.uploadQueue.value[0]).toMatchObject({
+        state: "SUCCEEDED",
+        scanState,
+      });
+      expect(
+        source.split('class="upload-queue"')[1]?.split("</section>")[0],
+      ).not.toContain('$t("states.CLEAN")');
+      expect(source).toContain("$t(`states.${item.scanState}`)");
+    },
+  );
+
   it("сохраняет ссылку до загрузки списка и читает файл отдельно от первой страницы", async () => {
     vi.useFakeTimers();
     platform.realtimeSnapshot.mockReturnValue({ scopeKey: "prj_fixture" });
