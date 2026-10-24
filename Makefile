@@ -408,3 +408,7 @@ test-role-image-forward-upgrade:
 test-scoped-backup-drill:
 	@timeout 60s python3 -m unittest tools/dev/test_scoped_backup_drill.py tools/release/test_backup_release_pin.py
 	@bash -n tools/release/pin-backup-controller-release.sh tools/release/render-web-only.sh
+
+.PHONY: test-static-backup-identity-plan
+test-static-backup-identity-plan:
+	@timeout 30s python3 -B tools/dev/test_static_backup_identity_plan.py

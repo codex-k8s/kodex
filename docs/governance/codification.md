@@ -180,6 +180,7 @@ updated: 2026-07-28
 | `RUN-MC-022`       | `docs/runbooks/interaction-gateway.md`                      |
 | `RUN-MC-023`       | `docs/runbooks/identity-and-management-surfaces.md`         |
 | `RUN-MC-024`       | `docs/runbooks/backup-controller.md`                        |
+| `RUN-QA-S3-1003`   | `docs/runbooks/backup-static-identity-plan.md`                |
 | `OPS-DOC-1313` | `docs/operations/authority-freshness-1313.md` |
 | `OPS-DOC-1381` | `docs/operations/image-admission-proof-hold-1381.md` |
 | `OPS-DOC-1390` | `docs/operations/authority-rotation-1390.md` |
