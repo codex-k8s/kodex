@@ -14,6 +14,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// ListProviderDefinitions returns the authorized provider-definition page after resolving the
+// principal for this method.
+// ListProviderDefinitions возвращает авторизованную страницу определений провайдеров после
+// получения principal данного метода.
 func (server *Server) ListProviderDefinitions(ctx context.Context, request *controlplanev1.ListProviderDefinitionsRequest) (*controlplanev1.ListProviderDefinitionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProviderDefinitions_FullMethodName)
 	if err != nil {
@@ -84,6 +88,10 @@ func (server *Server) ListProviderAccounts(ctx context.Context, request *control
 	return response, nil
 }
 
+// GetProviderAccount reads the account together with usage context and rejects errors from the
+// typed usage projection.
+// GetProviderAccount читает аккаунт вместе с контекстом использования и отклоняет ошибки
+// типизированного преобразования использования.
 func (server *Server) GetProviderAccount(ctx context.Context, request *controlplanev1.GetProviderAccountRequest) (*controlplanev1.GetProviderAccountResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetProviderAccount_FullMethodName)
 	if err != nil {
@@ -117,6 +125,10 @@ func castProviderDefinition(value entity.ProviderDefinition) *controlplanev1.Pro
 	return result
 }
 
+// ListModelCapabilities passes provider, account, expected revision and digest to the domain
+// model-catalog read.
+// ListModelCapabilities передаёт провайдера, аккаунт, ожидаемую ревизию и digest доменному чтению
+// каталога моделей.
 func (server *Server) ListModelCapabilities(ctx context.Context, request *controlplanev1.ListModelCapabilitiesRequest) (*controlplanev1.ListModelCapabilitiesResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListModelCapabilities_FullMethodName)
 	if err != nil {
@@ -132,6 +144,10 @@ func (server *Server) ListModelCapabilities(ctx context.Context, request *contro
 	return castModelCatalog(catalog), nil
 }
 
+// castModelCatalog projects models, pagination and catalog revision pins while preserving optional
+// status presence.
+// castModelCatalog преобразует модели, пагинацию и привязки ревизии каталога, сохраняя наличие
+// необязательного статуса.
 func castModelCatalog(catalog entity.ModelCatalog) *controlplanev1.ListModelCapabilitiesResponse {
 	response := &controlplanev1.ListModelCapabilitiesResponse{Total: catalog.Total, Page: &controlplanev1.PageInfo{NextPageToken: catalog.NextPageToken}, CatalogRevision: catalog.Revision, CatalogDigest: catalog.Digest}
 	if catalog.Status != nil {
@@ -149,6 +165,10 @@ func castModelCatalog(catalog entity.ModelCatalog) *controlplanev1.ListModelCapa
 	return response
 }
 
+// castModelCapability copies model reasoning options, availability, eligible account references
+// and readiness blockers.
+// castModelCapability копирует варианты рассуждения модели, доступность, ссылки подходящих
+// аккаунтов и препятствия готовности.
 func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapability {
 	return &controlplanev1.ModelCapability{Id: value.ID, ProviderDefinitionKey: value.ProviderDefinitionKey,
 		ReasoningEfforts: value.ReasoningEfforts, DefaultReasoningEffort: value.DefaultReasoningEffort,
@@ -184,18 +204,34 @@ func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderA
 	return result
 }
 
+// providerAuthorizationMethod looks up the prefixed authorization method enum; unknown strings
+// retain the generated zero-value fallback.
+// providerAuthorizationMethod ищет enum способа авторизации по префиксу; неизвестные строки
+// сохраняют нулевое значение generated lookup.
 func providerAuthorizationMethod(value string) controlplanev1.ProviderAuthorizationMethod {
 	return controlplanev1.ProviderAuthorizationMethod(controlplanev1.ProviderAuthorizationMethod_value["PROVIDER_AUTHORIZATION_METHOD_"+value])
 }
 
+// providerAuthorizationState looks up the prefixed authorization state enum without independently
+// validating domain state.
+// providerAuthorizationState ищет enum состояния авторизации по префиксу без самостоятельной
+// проверки доменного состояния.
 func providerAuthorizationState(value string) controlplanev1.ProviderAuthorizationState {
 	return controlplanev1.ProviderAuthorizationState(controlplanev1.ProviderAuthorizationState_value["PROVIDER_AUTHORIZATION_STATE_"+value])
 }
 
+// providerAccountState maps the prefixed domain account state through the generated enum table,
+// including its zero fallback.
+// providerAccountState переводит доменное состояние аккаунта через generated-таблицу enum с
+// префиксом, включая нулевой fallback.
 func providerAccountState(value string) controlplanev1.ProviderAccountState {
 	return controlplanev1.ProviderAccountState(controlplanev1.ProviderAccountState_value["PROVIDER_ACCOUNT_STATE_"+value])
 }
 
+// GetRuntimeEnvironmentReadiness projects the domain environment readiness observation and
+// published-version pins without probing the environment here.
+// GetRuntimeEnvironmentReadiness преобразует доменное наблюдение готовности среды и привязки
+// опубликованной версии без проверки среды в этом методе.
 func (server *Server) GetRuntimeEnvironmentReadiness(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentReadinessRequest) (*controlplanev1.GetRuntimeEnvironmentReadinessResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentReadiness_FullMethodName)
 	if err != nil {
@@ -212,6 +248,10 @@ func (server *Server) GetRuntimeEnvironmentReadiness(ctx context.Context, reques
 	}}, nil
 }
 
+// ListRuntimeEnvironmentAgents reads the authorized environment-agent page using environment
+// reference, query and page filters.
+// ListRuntimeEnvironmentAgents читает авторизованную страницу агентов среды по ссылке среды,
+// запросу и фильтрам страницы.
 func (server *Server) ListRuntimeEnvironmentAgents(ctx context.Context, request *controlplanev1.ListRuntimeEnvironmentAgentsRequest) (*controlplanev1.ListRuntimeEnvironmentAgentsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRuntimeEnvironmentAgents_FullMethodName)
 	if err != nil {
@@ -230,6 +270,10 @@ func (server *Server) ListRuntimeEnvironmentAgents(ctx context.Context, request 
 	return response, nil
 }
 
+// ListScheduleRevisions returns schedule revisions and the continuation token from the authorized
+// domain read.
+// ListScheduleRevisions возвращает ревизии расписания и токен продолжения из авторизованного
+// доменного чтения.
 func (server *Server) ListScheduleRevisions(ctx context.Context, request *controlplanev1.ListScheduleRevisionsRequest) (*controlplanev1.ListScheduleRevisionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListScheduleRevisions_FullMethodName)
 	if err != nil {
@@ -246,6 +290,10 @@ func (server *Server) ListScheduleRevisions(ctx context.Context, request *contro
 	return response, nil
 }
 
+// castScheduleRevision projects immutable schedule fields, target version and digest, prompt
+// inputs and occurrence policies.
+// castScheduleRevision преобразует неизменяемые поля расписания, версию и digest цели, входы
+// промпта и политики срабатывания.
 func castScheduleRevision(value entity.ScheduleRevision) *controlplanev1.ScheduleRevision {
 	target := castRunTarget(value.Target)
 	target.TargetVersion = value.TargetVersion
@@ -261,6 +309,10 @@ func castScheduleRevision(value entity.ScheduleRevision) *controlplanev1.Schedul
 	}
 }
 
+// PreviewSchedule normalizes timing and previews occurrences, optionally projecting pinned prompt
+// materialization with a validated preview mode.
+// PreviewSchedule нормализует время и показывает срабатывания, при необходимости преобразуя
+// материализацию промпта с привязками и проверенным режимом.
 func (server *Server) PreviewSchedule(ctx context.Context, request *controlplanev1.PreviewScheduleRequest) (*controlplanev1.PreviewScheduleResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_PreviewSchedule_FullMethodName)
 	if err != nil {
@@ -326,6 +378,10 @@ func (server *Server) PreviewSchedule(ctx context.Context, request *controlplane
 	return response, nil
 }
 
+// ListScheduleRuns returns authorized schedule occurrences with their schedule revision and run
+// projections.
+// ListScheduleRuns возвращает авторизованные срабатывания расписания с ревизией расписания и
+// представлением запуска.
 func (server *Server) ListScheduleRuns(ctx context.Context, request *controlplanev1.ListScheduleRunsRequest) (*controlplanev1.ListScheduleRunsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListScheduleRuns_FullMethodName)
 	if err != nil {
@@ -345,6 +401,10 @@ func (server *Server) ListScheduleRuns(ctx context.Context, request *controlplan
 	return response, nil
 }
 
+// ListRoleImageRecipeRevisions projects the authorized recipe-revision page including build,
+// provenance, image and promotion pins.
+// ListRoleImageRecipeRevisions преобразует авторизованную страницу ревизий рецепта с привязками
+// сборки, происхождения, образа и продвижения.
 func (server *Server) ListRoleImageRecipeRevisions(ctx context.Context, request *controlplanev1.ListRoleImageRecipeRevisionsRequest) (*controlplanev1.ListRoleImageRecipeRevisionsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName)
 	if err != nil {
@@ -368,6 +428,10 @@ func (server *Server) ListRoleImageRecipeRevisions(ctx context.Context, request 
 	return response, nil
 }
 
+// normalizedProviderState removes the provider-account-state prefix from the enum string without
+// additional state validation.
+// normalizedProviderState удаляет префикс состояния аккаунта провайдера из строки enum без
+// дополнительной проверки состояния.
 func normalizedProviderState(value controlplanev1.ProviderAccountState) string {
 	return strings.TrimPrefix(value.String(), "PROVIDER_ACCOUNT_STATE_")
 }

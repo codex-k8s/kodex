@@ -4,12 +4,73 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.366.0
+version: 1.367.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
 
+
+## gRPC queries, runtime и system assistant — 24.10.2026
+
+На основе `2071aae7003b96bc1c72a204010d33d19b33fa6a` описаны ещё126
+прежних объявлений в5 Go-файлах: queries38, mvp_queries16, runtime42,
+runtime_test8 и system_assistant22. Все5 файлов имеют0missing; полный Go
+inventory17767/21386, missing3619: PostgreSQL3331 и gRPC288.
+
+Комментарии различают transport projection, проверенный principal и доменную
+eligibility. Request locators, context descriptors и allowed-operation hints
+не назначают полномочия. Enum table lookup и удаление префикса не объявлены
+валидацией неизвестного состояния. Наличие optional versions/context сохранено;
+AddAssistantTurn выбирает QUEUE, list conversations — ACTIVE по умолчанию.
+
+| Сценарий / переход | Сохранённый контракт |
+| --- | --- |
+| Query → owner → response | Exact RPC principal → специализированное domain read → typed caster и transportError. Total, page tokens, sequence/complete и optional graph snapshots остаются разными полями |
+| Provider/model catalog | Usage context, expected revision/digest и финансовая eligibility принадлежат owner read. Transport readiness projection не является live probe |
+| Schedule preview | Timing normalization и occurrences → необязательная materialization preview с mode, version/digest pins и first occurrence. Preview не создаёт schedule или execution |
+| Conversation lifecycle | Отдельные archive/restore/purge/move/turn/cancel/plan commands → execute → owner transaction. Missing-result checks и receipt/created-resource responses сохранены |
+| Execution claim/renew/complete/delegate | Exact workload/lease/fence/generation и mutation → closed command → owner graph. Новых grants, retries, terminal transitions или источников actor нет |
+| Runtime revision | Nil desired revision остаётся nil; context/file/deadline/prompt provenance casters могут отклонить snapshot. Projection существующих pins не заменяет их owner validation |
+| Artifact read | Verified principal и lease tuple → domain reader → bounded read → exact size check → Close. Download не превращён в обычное metadata чтение |
+| Connection test / invocation | Typed claims сохраняют definition, credential revision, grant, resource scope и effect pins. UnknownOutcome и optional effect receipt остаются у специализированного completion |
+| Warm runtime / errors | Reconcile/report используют exact RPC; failure warning сохраняет закрытый stage и mapped code. Current-configuration и plan error details сохраняют разные условия выдачи |
+
+Повторная сборка семи полей ProviderCredentialBinding в runtime snapshot
+заменена существующим `castProviderCredential`. Привязки account/revision,
+Secret name/UID/resourceVersion и content digest теперь имеют один источник.
+Values секретов не переносились; это преобразование метаданных результата.
+Существующий CAS-тест расширен: проверяет все поля input и binding, совпадение
+реального runtime пути с refresh projection, пустые и неверно типизированные
+метаданные. Наличие пустого binding и nil целой desired revision различаются.
+
+AST/directives3 comments-only файлов совпали с исходной ревизией; runtime
+совпал с ожидаемой единственной заменой struct literal общим вызовом.
+Полные локальные GOWORK=off control-plane build/unit и targeted CAS test — PASS.
+Четыре external fixture flags/DSN явно удалены: real-API orphan и3 dedicated
+migration contours SKIP/NOT RUN. Proto/generated/API/SQL не менялись.
+Context7 через подключённый connector: protobuf-go UnmarshalOptions,
+DiscardUnknown=false default и strict JSON decoding. Другой MCP endpoint
+отклонил свой API key; успешный ответ получен от подключённого Context7,
+секреты и настройки MCP не менялись. CONTRACT-DOC-002 authority/error rules
+прочитаны; свежий GOV-DOC-003 сохраняет границы локальных и live доказательств.
+
+Guard остановил assessment на8 stale hashes после комментариев. Обе стороны
+точных окон и полные методы role_images/session_archive/runtime_secrets
+перечитаны; прежние pair/count1 сохранены, обновлены только reviewed hashes.
+Внутри выбранных файлов разобрано31 окно:27 точных решений, четыре hash имеют
+по2 явно прочитанных occurrence. Это typed RPC wrappers/стыки разных команд,
+DTO и фильтров, где principal, transportError, page, execute и lease caster уже
+общие. Универсальный dispatcher ради их glue не добавлен.
+
+Полный scan:6663 own sources,222 excluded,1816 raw,866 retained,
+950 unresolved. Рост raw1810→1816 связан с окнами после комментариев;
+вынос credential literal не объявлен удалением detector group. Внутри5 файлов
+0unresolved,61cross-file группа с другими файлами остаётся в работе.
+17 analyzer unit и5 exact-ignore guards — PASS; thresholds и guards сохранены.
+Merge/deploy/startup, image build, browser acceptance и ручной QA — NOT RUN.
+Chrome MCP доступен с подтверждённым владельцем разрешением; это не результат
+продуктовой приёмки. Задача#1823 активна, разрешение на последующий выпуск есть.
 
 ## gRPC core, source/write-back и secret draft mappings — 24.10.2026
 
