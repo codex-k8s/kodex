@@ -23,6 +23,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ListProviderDefinitions opens an authorized organization read, pages definitions by stable key
+// and derives authorization methods from capability JSON. It attaches current model catalogs,
+// selects an unambiguous eligible default and computes readiness blockers before commit. Ready
+// describes catalog eligibility, not a provider probe; the shared read helper leaves isolation at
+// the server default.
+// ListProviderDefinitions открывает авторизованное чтение организации, получает страницу
+// definitions по stable key и выводит методы authorization из capability JSON. Добавляет текущие
+// model catalogs, выбирает однозначную доступную default model, вычисляет blockers до commit.
+// Ready отражает catalog eligibility, не проверку провайдера; общий read helper оставляет изоляцию
+// по умолчанию сервера.
 func (repository *Repository) ListProviderDefinitions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.ProviderDefinition, string, error) {
 	current, tx, err := repository.authorizedRead(ctx, principal, "organization.view", func(current scope) entity.AccessScope {
 		return organizationTarget(current.organizationRef)
@@ -109,6 +119,12 @@ func (repository *Repository) ListProviderDefinitions(ctx context.Context, princ
 	return items, next, nil
 }
 
+// modelCapabilityCursor stores the version/filter digest, catalog revision/digest and
+// provider/model position for model pages. This unsigned cursor binds a read position and content
+// pins without granting access to an account or model.
+// modelCapabilityCursor хранит версию/дайджест фильтра, catalog revision/digest и provider/model
+// position страницы. Этот неподписанный курсор связывает позицию чтения и content pins без
+// предоставления доступа к аккаунту или модели.
 type modelCapabilityCursor struct {
 	CatalogRevision       string `json:"r"`
 	CatalogDigest         string `json:"d"`
@@ -118,6 +134,16 @@ type modelCapabilityCursor struct {
 	Model                 string `json:"m"`
 }
 
+// ListModelCapabilities requires organization view, validates definition/account/query and an
+// actor-bound cursor, then reads the catalog and enforces optional expected content pins. It
+// filters names, counts all matches and pages after an exact existing model position;
+// stale/missing positions are Invalid and commit failure is Conflict. It does not execute provider
+// discovery.
+// ListModelCapabilities требует organization view, проверяет definition/account/query и связанный
+// с субъектом курсор, читает каталог и проверяет необязательные ожидаемые content pins. Фильтрует
+// имена, считает все совпадения, строит страницу после существующей точной модели;
+// устаревшая/отсутствующая позиция даёт Invalid, отказ commit — Conflict. Provider discovery не
+// выполняет.
 func (repository *Repository) ListModelCapabilities(ctx context.Context, principal value.Principal, definitionKey, accountRef string, filter query.Filter) (entity.ModelCatalog, error) {
 	current, tx, err := repository.authorizedRead(ctx, principal, "organization.view", func(current scope) entity.AccessScope {
 		return organizationTarget(current.organizationRef)
@@ -181,6 +207,17 @@ func (repository *Repository) ListModelCapabilities(ctx context.Context, princip
 	return entity.ModelCatalog{Models: items, Total: total, NextPageToken: next, Revision: revision, Digest: digest, Status: catalog.Status}, nil
 }
 
+// readModelCatalogTx reads bounded strict catalog records in the caller transaction and merges
+// models by provider/model key. Conflicting reasoning capabilities remove all eligible accounts
+// for that model; otherwise any eligible account clears blockers. It sorts models/blockers and
+// computes content-only revision/digest from source parts, excluding observed eligibility/time.
+// Missing requested-account status is NotFound and corrupt/read failures are Unavailable.
+// readModelCatalogTx читает ограниченные строгие записи каталога в транзакции вызывающего и
+// объединяет модели по provider/model key. Противоречивые reasoning capabilities убирают все
+// eligible accounts модели; иначе любой доступный аккаунт очищает blockers. Сортирует
+// модели/blockers, вычисляет content-only revision/digest из source parts без observed
+// eligibility/time. Отсутствие статуса запрошенного аккаунта даёт NotFound, повреждение/отказ
+// чтения — Unavailable.
 func readModelCatalogTx(ctx context.Context, tx pgx.Tx, current scope, definitionKey, accountRef string) (entity.ModelCatalog, error) {
 	rows, err := tx.Query(ctx, queryMVPListModelCapabilities, pgx.StrictNamedArgs{"organization_id": current.organizationID, "provider_definition_key": definitionKey, "provider_account_ref": accountRef})
 	if err != nil {
@@ -264,17 +301,37 @@ func readModelCatalogTx(ctx context.Context, tx pgx.Tx, current scope, definitio
 	return result, nil
 }
 
+// modelCapabilityFilterDigest hashes definition/account/query separated by NUL and returns twelve
+// SHA-256 bytes as raw URL base64. The query component can already contain actor scope; the digest
+// binds filters without being a signature or permission.
+// modelCapabilityFilterDigest хеширует definition/account/query, разделённые NUL, возвращает
+// двенадцать байт SHA-256 в raw URL base64. Компонент query уже может содержать область субъекта;
+// дайджест связывает фильтры без подписи и полномочий.
 func modelCapabilityFilterDigest(definitionKey, accountRef, queryValue string) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{definitionKey, accountRef, strings.TrimSpace(queryValue)}, "\x00")))
 	return base64.RawURLEncoding.EncodeToString(sum[:12])
 }
 
+// encodeModelCapabilityCursor encodes a version-two model position together with filter and
+// catalog content pins as JSON/raw URL base64, preserving the ignored marshal error for this fixed
+// serializable shape.
+// encodeModelCapabilityCursor кодирует позицию модели версии два вместе с фильтром и catalog
+// content pins в JSON/raw URL base64, сохраняя игнорирование ошибки marshal для фиксированной
+// сериализуемой формы.
 func encodeModelCapabilityCursor(definitionKey, model, filterDefinitionKey, accountRef, queryValue, revision, digest string) string {
 	raw, _ := json.Marshal(modelCapabilityCursor{Version: 2, CatalogRevision: revision, CatalogDigest: digest,
 		Filter: modelCapabilityFilterDigest(filterDefinitionKey, accountRef, queryValue), ProviderDefinitionKey: definitionKey, Model: model})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
+// decodeModelCapabilityCursor accepts a blank first page or validates base64/JSON within512
+// encoded and decoded bytes, version/filter match and nonempty provider/model. Catalog pin
+// freshness and position existence are checked later against the current authorized catalog rather
+// than trusted from this token.
+// decodeModelCapabilityCursor принимает пустую первую страницу либо проверяет base64/JSON в
+// пределах512 кодированных и декодированных байт, версию/фильтр и непустые provider/model.
+// Свежесть catalog pins и существование позиции проверяются позже по текущему авторизованному
+// каталогу, не принимаются на веру из токена.
 func decodeModelCapabilityCursor(token, definitionKey, accountRef, queryValue string) (modelCapabilityCursor, error) {
 	if strings.TrimSpace(token) == "" {
 		return modelCapabilityCursor{}, nil
@@ -291,10 +348,26 @@ func decodeModelCapabilityCursor(token, definitionKey, accountRef, queryValue st
 	return cursor, nil
 }
 
+// modelCatalogActorFilter joins organization, actor, authority-project and trimmed query with NUL
+// to bind model pagination to the resolved read scope. It does not itself evaluate resource
+// access.
+// modelCatalogActorFilter объединяет organization, actor, authority-project и очищенный query
+// через NUL для связи model pagination с разрешённой областью чтения. Сам не проверяет доступ к
+// ресурсу.
 func modelCatalogActorFilter(current scope, queryValue string) string {
 	return strings.Join([]string{current.organizationID, current.actorID, current.authorityProjectID, strings.TrimSpace(queryValue)}, "\x00")
 }
 
+// ListProviderAccounts uses the provider-usage read path, resolves the requested usage context and
+// binds pagination to scope plus current usage-account digests. It pages account rows, loads
+// models only for selected refs, checks versions, computes usage and authorizes/redacts
+// actions/financial data before commit. It preserves the caller read isolation and returns no
+// partial page on failure.
+// ListProviderAccounts использует provider-usage read path, разрешает usage context и связывает
+// пагинацию с областью и текущими дайджестами usage accounts. Получает страницу аккаунтов,
+// загружает модели лишь выбранных refs, проверяет версии, вычисляет usage, авторизует действия и
+// скрывает финансовые данные до commit. Сохраняет изоляцию чтения вызывающего, при ошибке не
+// возвращает частичную страницу.
 func (repository *Repository) ListProviderAccounts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.ProviderAccount, string, []string, error) {
 	current, tx, err := repository.providerUsageRead(ctx, principal, func(current scope) entity.AccessScope {
 		return entity.AccessScope{Kind: "RESOURCE_KIND", ResourceKind: "PROVIDER_ACCOUNT"}
@@ -388,10 +461,22 @@ func (repository *Repository) ListProviderAccounts(ctx context.Context, principa
 	return items, next, collectionActions, nil
 }
 
+// GetProviderAccount delegates a single-account read with no explicit usage context to
+// GetProviderAccountWithUsage; exact resource access and all projections remain in that method.
+// GetProviderAccount делегирует чтение аккаунта без явного usage context методу
+// GetProviderAccountWithUsage; точный доступ и все проекции остаются там.
 func (repository *Repository) GetProviderAccount(ctx context.Context, principal value.Principal, ref string) (entity.ProviderAccount, error) {
 	return repository.GetProviderAccountWithUsage(ctx, principal, ref, nil)
 }
 
+// GetProviderAccountWithUsage opens the exact account provider-usage read, scans public/lifecycle
+// data and requires one matching-version usage account with models. It projects usage and current
+// authorized/redacted actions before commit; inconsistent counts/versions fail Unavailable and
+// commit failure maps to Conflict.
+// GetProviderAccountWithUsage открывает provider-usage чтение точного аккаунта, читает
+// публичные/lifecycle данные и требует один usage account с моделями и совпадающей версией. До
+// commit проецирует usage и текущие авторизованные/скрытые действия; несовпадение числа/версии
+// даёт Unavailable, отказ commit — Conflict.
 func (repository *Repository) GetProviderAccountWithUsage(ctx context.Context, principal value.Principal, ref string, usage *entity.ProviderAccountUsageContext) (entity.ProviderAccount, error) {
 	current, tx, err := repository.providerUsageRead(ctx, principal, func(scope scope) entity.AccessScope {
 		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: ref}
@@ -431,6 +516,16 @@ func (repository *Repository) GetProviderAccountWithUsage(ctx context.Context, p
 	return items[0], nil
 }
 
+// scanProviderAccount decodes account/authorization metadata and optional financial observation
+// with a required receipt time. It validates state/enabled consistency and concurrency1–256,
+// derives Ready/status and removes authorization metadata for deleting/deleted accounts. NoRows
+// becomes NotFound; corrupt projections and scan errors become Unavailable, with financial
+// visibility filtered separately.
+// scanProviderAccount декодирует account/authorization metadata и необязательное финансовое
+// наблюдение с обязательным временем получения. Проверяет согласованность state/enabled и
+// concurrency1–256, вычисляет Ready/status, убирает authorization metadata удаляемых/удалённых
+// аккаунтов. NoRows даёт NotFound, повреждение и scan errors — Unavailable; финансовая видимость
+// фильтруется отдельно.
 func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 	var item entity.ProviderAccount
 	var authorization entity.ProviderAuthorization
@@ -475,6 +570,14 @@ func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 	return item, nil
 }
 
+// providerAccountStatusReason maps the closed account lifecycle to public status reasons, allowing
+// only safe known authorization failures during reauthorization and distinguishing pending device
+// authorization from missing credential configuration. Unknown states receive
+// ACCOUNT_STATE_UNKNOWN.
+// providerAccountStatusReason сопоставляет закрытый lifecycle аккаунта публичным причинам,
+// допуская лишь известные безопасные authorization failures при reauthorization, различает
+// ожидающую device authorization и отсутствие credential configuration. Неизвестное состояние даёт
+// ACCOUNT_STATE_UNKNOWN.
 func providerAccountStatusReason(item entity.ProviderAccount) string {
 	switch item.State {
 	case "AUTHORIZED":
@@ -502,6 +605,12 @@ func providerAccountStatusReason(item entity.ProviderAccount) string {
 	}
 }
 
+// safeProviderAuthorizationFailure accepts only device authorization expiry/failure and credential
+// materialization failure codes for public status projection; arbitrary provider/driver text is
+// rejected.
+// safeProviderAuthorizationFailure принимает лишь коды истечения/отказа device authorization и
+// отказа credential materialization для публичного статуса; произвольный текст провайдера/драйвера
+// отклоняется.
 func safeProviderAuthorizationFailure(value string) bool {
 	switch value {
 	case "DEVICE_AUTHORIZATION_EXPIRED", "DEVICE_AUTHORIZATION_FAILED", "CREDENTIAL_MATERIALIZATION_FAILED":
@@ -511,6 +620,12 @@ func safeProviderAuthorizationFailure(value string) bool {
 	}
 }
 
+// validProviderAccountLifecycle requires AUTHORIZED accounts to be enabled,
+// pending/revoked/disabled/deleting/deleted accounts disabled, and permits either enabled flag
+// only for REAUTHORIZATION_REQUIRED. Unknown states fail the consistency check.
+// validProviderAccountLifecycle требует enabled у AUTHORIZED, disabled у
+// pending/revoked/disabled/deleting/deleted, допускает оба enabled лишь для
+// REAUTHORIZATION_REQUIRED. Неизвестное состояние не проходит проверку согласованности.
 func validProviderAccountLifecycle(state string, enabled bool) bool {
 	switch state {
 	case "AUTHORIZED":
@@ -524,6 +639,16 @@ func validProviderAccountLifecycle(state string, enabled bool) bool {
 	}
 }
 
+// providerAccountActions derives ordered UI hints from supplied
+// manage/authorize/revoke/concurrency permissions and hydrated lifecycle metadata.
+// Deleting/deleted accounts stop at OPEN plus eligible failed-deletion retry; credential refresh,
+// testing and enable/disable/revoke remain state-specific. It does not perform those actions or
+// establish the permissions itself.
+// providerAccountActions вычисляет упорядоченные UI подсказки по
+// manage/authorize/revoke/concurrency permissions и загруженным lifecycle metadata. У
+// deleting/deleted остаются OPEN и возможный повтор неудачного удаления; credential refresh, test
+// и enable/disable/revoke зависят от состояния. Не исполняет действия и не устанавливает
+// полномочия самостоятельно.
 func providerAccountActions(item entity.ProviderAccount, canManage, canAuthorize, canRevoke, canEditConcurrency bool) []string {
 	actions := []string{"OPEN"}
 	if item.State == "DELETING" || item.State == "DELETED" {
@@ -585,6 +710,16 @@ func providerAccountActions(item entity.ProviderAccount, canManage, canAuthorize
 	return actions
 }
 
+// authorizeProviderAccountActions hydrates lifecycle projections, resolves the current access
+// subject/bindings and financial eligibility, then evaluates collection and exact-account
+// permissions at one application timestamp. It strips ineligible financial summaries and
+// recomputes action hints; concurrency editing additionally requires owner/admin role. The passed
+// slice is mutated and callers discard partial changes on error.
+// authorizeProviderAccountActions добавляет lifecycle проекции, разрешает текущего access
+// subject/bindings и financial eligibility, затем проверяет collection и exact-account permissions
+// на одном application timestamp. Убирает недоступные financial summaries, пересчитывает действия;
+// редактирование concurrency дополнительно требует owner/admin. Меняет переданный срез, вызывающий
+// отбрасывает частичные изменения при ошибке.
 func (repository *Repository) authorizeProviderAccountActions(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -629,10 +764,20 @@ func (repository *Repository) authorizeProviderAccountActions(
 	return items, collectionActions, nil
 }
 
+// providerAccountCollectionTarget returns the provider-account RESOURCE_KIND access target for
+// collection-level management checks without embedding a caller-controlled account reference.
+// providerAccountCollectionTarget возвращает RESOURCE_KIND цель аккаунтов провайдера для проверки
+// управления коллекцией без передачи управляемой вызывающим ссылки аккаунта.
 func providerAccountCollectionTarget() entity.AccessScope {
 	return entity.AccessScope{Kind: "RESOURCE_KIND", ResourceKind: "PROVIDER_ACCOUNT"}
 }
 
+// ListRoleImageRecipeRevisions opens an authorized project-view read for the recipe and
+// additionally resolves exact PROJECT role-image scope before delegating revision paging. The
+// delegated reader owns successful commit; the wrapper retains deferred rollback on all exits.
+// ListRoleImageRecipeRevisions открывает авторизованное project-view чтение recipe, дополнительно
+// разрешает точную PROJECT область role-image до делегирования страницы ревизий. Успешный commit
+// принадлежит делегированному reader; wrapper сохраняет deferred rollback при любом выходе.
 func (repository *Repository) ListRoleImageRecipeRevisions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RoleImageRecipeRevision, string, error) {
 	current, tx, err := repository.authorizedRead(ctx, principal, "project.view", func(scope scope) entity.AccessScope {
 		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "ROLE_IMAGE", ResourceRef: filter.ResourceRef}
@@ -647,6 +792,14 @@ func (repository *Repository) ListRoleImageRecipeRevisions(ctx context.Context, 
 	return repository.listRoleImageRevisions(ctx, tx, current, filter)
 }
 
+// listRoleImageRevisions validates a version cursor/nonempty recipe ref and pages immutable
+// recipe/build/promotion metadata in the supplied transaction with one lookahead row. It trims to
+// the requested size and uses the last revision as continuation; iteration or commit failure
+// discards results as Unavailable. Exact access is owned by callers.
+// listRoleImageRevisions проверяет version cursor/непустой recipe ref, читает страницу immutable
+// recipe/build/promotion metadata в переданной транзакции с дополнительной строкой. Обрезает до
+// размера и использует последнюю revision как продолжение; отказ итерации/commit отбрасывает
+// результат с Unavailable. Точный доступ принадлежит вызывающим.
 func (repository *Repository) listRoleImageRevisions(ctx context.Context, tx pgx.Tx, current scope, filter query.Filter) ([]entity.RoleImageRecipeRevision, string, error) {
 	before, err := versionCursor(filter.Page.Token)
 	if err != nil || strings.TrimSpace(filter.ResourceRef) == "" {
@@ -683,6 +836,14 @@ func (repository *Repository) listRoleImageRevisions(ctx context.Context, tx pgx
 	return items, next, nil
 }
 
+// ListScheduleRevisions requires exact schedule.view through the authorized read helper, validates
+// revision position and scans immutable schedule policy/target/input/prompt snapshots. Malformed
+// JSON, scan/iteration or commit failure yields Unavailable without a partial page; continuation
+// is the final selected revision.
+// ListScheduleRevisions требует точное schedule.view через authorized read helper, проверяет
+// позицию ревизии и читает immutable policy/target/input/prompt снимки расписания. Неверный JSON,
+// scan/iteration либо commit дают Unavailable без частичной страницы; продолжением служит
+// последняя выбранная revision.
 func (repository *Repository) ListScheduleRevisions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.ScheduleRevision, string, error) {
 	current, tx, err := repository.authorizedRead(ctx, principal, "schedule.view", func(scope scope) entity.AccessScope {
 		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "SCHEDULE", ResourceRef: filter.ResourceRef}
@@ -729,6 +890,14 @@ func (repository *Repository) ListScheduleRevisions(ctx context.Context, princip
 	return items, next, nil
 }
 
+// ListScheduleRuns requires schedule.view and validates a bounded run-ref cursor, then scans
+// schedule revision prefixes followed by internal run projections. It pages with one lookahead and
+// commits before return; internal scanner action defaults preserve historical behavior and do not
+// prove per-run execution authority.
+// ListScheduleRuns требует schedule.view и проверяет ограниченный run-ref курсор, читает префиксы
+// schedule revision перед внутренней проекцией run. Использует дополнительную строку и commit до
+// возврата; defaults действий внутреннего scanner сохраняют историческое поведение и не доказывают
+// per-run полномочия исполнения.
 func (repository *Repository) ListScheduleRuns(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.ScheduleRunOccurrence, string, error) {
 	current, tx, err := repository.authorizedRead(ctx, principal, "schedule.view", func(scope scope) entity.AccessScope {
 		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "SCHEDULE", ResourceRef: filter.ResourceRef}
@@ -771,6 +940,13 @@ func (repository *Repository) ListScheduleRuns(ctx context.Context, principal va
 	return items, next, nil
 }
 
+// GetRuntimeEnvironmentReadiness uses the authoritative environment read path and copies its
+// projected ready/blocker/environment/published-version pins into a timestamped readiness response. It
+// commits that read before return and maps commit failure to Conflict without running an external
+// runtime probe.
+// GetRuntimeEnvironmentReadiness использует авторитетный environment read path и копирует его
+// ready/blocker/environment/published-version pins в readiness ответ с временем. Фиксирует чтение до
+// возврата, отказ commit отображает в Conflict без внешней проверки runtime.
 func (repository *Repository) GetRuntimeEnvironmentReadiness(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentReadiness, error) {
 	_, tx, item, err := repository.runtimeEnvironmentRead(ctx, principal, ref)
 	if err != nil {
@@ -788,6 +964,14 @@ func (repository *Repository) GetRuntimeEnvironmentReadiness(ctx context.Context
 	return result, nil
 }
 
+// runtimeEnvironmentReadiness derives static blockers from active state, published version/image
+// presence and exact role-runtime/default-bootstrap-image pins. Ready means this local projection
+// has no blockers; it does not test secret delivery, network, a running Pod or provider
+// capability.
+// runtimeEnvironmentReadiness вычисляет статические blockers по active state, наличию published
+// version/image и точным role-runtime/default-bootstrap-image pins. Ready означает отсутствие
+// blockers этой локальной проекции; не проверяет доставку секретов, сеть, работающий Pod и
+// возможности провайдера.
 func (repository *Repository) runtimeEnvironmentReadiness(item entity.RuntimeEnvironmentSet) entity.RuntimeEnvironmentReadiness {
 	result := entity.RuntimeEnvironmentReadiness{
 		EnvironmentRef: item.Ref, EnvironmentVersion: item.Version,
@@ -813,6 +997,14 @@ func (repository *Repository) runtimeEnvironmentReadiness(item entity.RuntimeEnv
 	return result
 }
 
+// ListRuntimeEnvironmentAgents authorizes the environment read, pages bound agent references and
+// closes that result before reading actor-scoped agent rows. It projects avatars/system/action
+// hints and cards, preserving this narrower view without attaching instructions/grants;
+// read/commit failures discard the page.
+// ListRuntimeEnvironmentAgents авторизует environment read, получает страницу привязанных agent
+// refs и закрывает результат до чтения строк агентов с областью субъекта. Проецирует
+// avatar/system/actions и карточки, сохраняя этот узкий вид без instructions/grants; отказы
+// чтения/commit отбрасывают страницу.
 func (repository *Repository) ListRuntimeEnvironmentAgents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Agent, string, error) {
 	current, tx, _, err := repository.runtimeEnvironmentRead(ctx, principal, filter.ResourceRef)
 	if err != nil {
@@ -882,6 +1074,14 @@ func (repository *Repository) ListRuntimeEnvironmentAgents(ctx context.Context, 
 	return items, next, nil
 }
 
+// authorizedRead resolves scope and starts a read-only transaction with no explicit isolation
+// override, then evaluates the supplied exact target/permission. Every access-check error is
+// historically hidden as NotFound after rollback using the request context; successful callers own
+// commit/rollback. This helper does not promise RepeatableRead or independent bounded cleanup.
+// authorizedRead разрешает область, открывает read-only транзакцию без явного изменения изоляции,
+// затем проверяет переданные точную цель/право. Любая ошибка access check исторически скрывается
+// как NotFound после rollback с request context; при успехе commit/rollback принадлежат
+// вызывающему. Helper не обещает RepeatableRead и независимый bounded cleanup.
 func (repository *Repository) authorizedRead(
 	ctx context.Context,
 	principal value.Principal,
@@ -903,11 +1103,25 @@ func (repository *Repository) authorizedRead(
 	return current, tx, nil
 }
 
+// encodeMVPCursor formats a kind namespace, UTC RFC3339Nano timestamp and reference separated by
+// newlines under a v1 raw-URL-base64 prefix. It provides positional encoding without a signature
+// or actor/filter binding.
+// encodeMVPCursor форматирует kind namespace, время UTC RFC3339Nano и ссылку, разделённые
+// переводами строки, с префиксом v1/raw-URL-base64. Кодирует позицию без подписи и связи с
+// субъектом/фильтром.
 func encodeMVPCursor(kind string, timestamp time.Time, ref string) string {
 	payload := kind + "\n" + timestamp.UTC().Format(time.RFC3339Nano) + "\n" + ref
 	return "v1." + base64.RawURLEncoding.EncodeToString([]byte(payload))
 }
 
+// decodeMVPCursor accepts an empty first page or validates v1, a384-character encoded payload
+// bound, exactly three newline-separated parts, matching kind and a nonempty reference up to96
+// bytes. It parses/normalizes time to UTC and returns Invalid for malformed positions without
+// authorizing the reference.
+// decodeMVPCursor принимает пустую первую страницу либо проверяет v1, ограничение384 символов
+// кодированного payload, ровно три части с переводами строки, совпадение kind и непустую ссылку
+// до96 байт. Разбирает/нормализует время в UTC, неверная позиция даёт Invalid без авторизации
+// ссылки.
 func decodeMVPCursor(kind, token string) (*time.Time, string, error) {
 	if token == "" {
 		return nil, "", nil
@@ -932,6 +1146,12 @@ func decodeMVPCursor(kind, token string) (*time.Time, string, error) {
 	return &parsed, parts[2], nil
 }
 
+// validStableKey requires at least two bytes, a lowercase ASCII initial letter and only lowercase
+// letters, digits, underscore or hyphen thereafter. It imposes no maximum length; callers apply
+// operation-specific limits.
+// validStableKey требует не менее двух байт, начальную lowercase ASCII букву и далее лишь строчные
+// буквы, цифры, underscore либо hyphen. Не ограничивает максимальную длину; отдельные пределы
+// применяют вызывающие.
 func validStableKey(value string) bool {
 	if len(value) < 2 || value[0] < 'a' || value[0] > 'z' {
 		return false

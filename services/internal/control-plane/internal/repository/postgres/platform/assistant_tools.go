@@ -21,8 +21,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// maximumAssistantPlanOperations caps an incoming assistant plan proposal at32 operations before
+// hydration; later exact no-op elimination can reduce that count but cannot admit a larger
+// proposal.
+// maximumAssistantPlanOperations ограничивает входящий план помощника32 операциями до hydration;
+// последующее исключение точных no-op может уменьшить число, но не допускает больший исходный
+// план.
 const maximumAssistantPlanOperations = 32
 
+// assistantPlanProposal carries a transaction-prepared proposal with conversation/project
+// identity, server-resolved actor scope, normalized operations and fenced lease metadata. It is
+// intermediate state, not a committed plan or standalone authority grant.
+// assistantPlanProposal несёт подготовленный в транзакции план с identity беседы/проекта,
+// разрешённой сервером областью субъекта, нормализованными операциями и fenced lease metadata. Это
+// промежуточное состояние, не зафиксированный план и не самостоятельный grant полномочий.
 type assistantPlanProposal struct {
 	payload                                                                                       command.ProposeAssistantPlanInput
 	conversationID, conversationRef, projectID, projectRef, assistantRef, contextKind, contextRef string
@@ -32,6 +44,18 @@ type assistantPlanProposal struct {
 	lease                                                                                         map[string]any
 }
 
+// prepareAssistantPlanProposalTx validates proposal bounds and an exact fenced lease, locks the
+// lease-run conversation context and derives the originating human actor from owner state. It
+// applies project/self/context restrictions, hydrates server snapshots, normalizes/binds
+// specialized commands and authorizes each before persistence. Capability/grant conflicts are
+// skipped; an exact runtime no-op is skipped only after authorization and fresh pin matching.
+// Stage errors retain one-based operation position; no commit occurs here.
+// prepareAssistantPlanProposalTx проверяет размер предложения и точную fenced lease, блокирует
+// контекст беседы lease-run и выводит исходного человека из состояния владельца. Применяет
+// project/self/context ограничения, загружает серверные снимки, нормализует и связывает
+// специализированные команды, авторизует каждую до сохранения. Capability/grant conflicts
+// пропускаются; точный runtime no-op пропускается лишь после authorization и свежей сверки pins.
+// Ошибка сохраняет stage и позицию операции от единицы; commit здесь нет.
 func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (assistantPlanProposal, error) {
 	payload, ok := input.Payload.(command.ProposeAssistantPlanInput)
 	if !ok || strings.TrimSpace(payload.Summary) == "" || utf8.RuneCountInString(payload.Summary) > 2000 ||
@@ -164,6 +188,14 @@ func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context
 	return assistantPlanProposal{payload: payload, conversationID: conversationID, conversationRef: conversationRef, conversationVersion: conversationVersion, projectID: projectID, projectRef: projectRef, assistantRef: assistantRef, contextKind: contextKind, contextRef: contextRef, actorScope: actorScope, operations: normalizedOperations, lease: lease}, nil
 }
 
+// proposeAssistantPlan persists the prepared normalized plan and its first immutable revision,
+// links prepared file-content ledgers and advances the conversation in the caller transaction. It
+// records originating-actor audit and platform invalidation, returning DRAFT plan/conversation
+// metadata; it neither applies planned operations nor commits the transaction.
+// proposeAssistantPlan сохраняет подготовленный нормализованный план и первую immutable revision,
+// связывает ledgers подготовленного содержимого файлов и обновляет беседу в транзакции
+// вызывающего. Записывает audit исходного субъекта и platform invalidation, возвращает DRAFT
+// план/беседу; не применяет запланированные операции и не выполняет commit.
 func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
 	prepared, err := repository.prepareAssistantPlanProposalTx(ctx, tx, machineScope, input)
 	if err != nil {
@@ -233,6 +265,12 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	return proposal, nil
 }
 
+// projectAssistantOperation recognizes the explicit operation allowlist for a project assistant,
+// including project-local files/configuration and specialized connection/grant preparation.
+// Unknown kinds are rejected; recognition alone does not authorize the target or actor.
+// projectAssistantOperation распознаёт явный список операций проектного помощника, включая
+// локальные файлы/конфигурацию и специализированную подготовку connection/grant. Неизвестные виды
+// отклоняет; распознавание само не авторизует цель и субъекта.
 func projectAssistantOperation(operationType string) bool {
 	switch operationType {
 	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
@@ -247,6 +285,15 @@ func projectAssistantOperation(operationType string) bool {
 	}
 }
 
+// assistantSelfConfigurationOperation classifies specialized self-configuration exceptions using
+// assistant scope/reference and operation parameters. Project operations require their own
+// assistant where applicable; system exceptions preserve their existing kind-specific rules. This
+// classifier is followed by snapshot and command authorization rather than granting authority
+// itself.
+// assistantSelfConfigurationOperation классифицирует специализированные исключения
+// self-configuration по области/ссылке помощника и параметрам. Проектные операции требуют своего
+// помощника там, где применимо; системные исключения сохраняют отдельные правила видов. После
+// классификации следуют проверки снимка и команды; сам классификатор полномочий не даёт.
 func assistantSelfConfigurationOperation(assistantRef, assistantScope string, operation entity.AssistantPlanOperation) bool {
 	if operation.Type == changeProjectAssistantIntegrationGrant {
 		return assistantScope == "PROJECT" && assistantRef != "" && assistantString(operation.Parameters, "projectAssistantRef") == assistantRef
@@ -269,11 +316,22 @@ func assistantSelfConfigurationOperation(assistantRef, assistantScope string, op
 		operation.Type == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" || operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 }
 
+// assistantPlanDigest hashes trimmed summary, one newline and the exact serialized operation bytes
+// into lowercase hexadecimal SHA-256. It pins this representation without canonicalizing JSON or
+// authenticating the proposer.
+// assistantPlanDigest хеширует очищенный summary, один перевод строки и точные сериализованные
+// байты операций в lowercase hexadecimal SHA-256. Фиксирует это представление без канонизации JSON
+// и удостоверения автора.
 func assistantPlanDigest(summary string, rawOperations []byte) string {
 	digest := sha256.Sum256(append(append([]byte(strings.TrimSpace(summary)), '\n'), rawOperations...))
 	return fmt.Sprintf("%x", digest[:])
 }
 
+// assistantOperationType recognizes the closed supported plan-operation registry used by
+// normalization; specialized kinds remain separate from command-time authorization and
+// persistence.
+// assistantOperationType распознаёт закрытый реестр поддерживаемых операций для нормализации;
+// специализированные виды остаются отделены от авторизации команды и сохранения.
 func assistantOperationType(value string) bool {
 	switch value {
 	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
@@ -288,6 +346,14 @@ func assistantOperationType(value string) bool {
 	}
 }
 
+// assistantOperationMatchesContext checks operation-specific context/ref compatibility, including
+// exact agent/workflow/environment/connection/schedule bindings and grant recipient selection.
+// Explicit self/global kinds and the default create path retain their existing exceptions; this
+// shape check does not replace owner-resolved authority.
+// assistantOperationMatchesContext проверяет совместимость контекста/ref для вида операции,
+// включая точные agent/workflow/environment/connection/schedule и выбор получателя grant. Явные
+// self/global виды и default create path сохраняют прежние исключения; проверка формы не заменяет
+// разрешённые владельцем полномочия.
 func assistantOperationMatchesContext(contextKind, contextRef string, operation entity.AssistantPlanOperation) bool {
 	switch operation.Type {
 	case createProjectFileRevision:
@@ -327,6 +393,16 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 	}
 }
 
+// hydrateAssistantOperation defaults Parameters from Input, bounds the field count and dispatches
+// specialized hydrators for protected file/assistant/configuration/image/grant kinds. Generic
+// creates receive server-built preview metadata; supported updates read owner snapshots and
+// preserve exact project binding. This preparation uses the caller transaction and does not
+// persist or independently complete authorization of every command.
+// hydrateAssistantOperation подставляет Input вместо отсутствующих Parameters, ограничивает число
+// полей и направляет защищённые file/assistant/configuration/image/grant виды специализированным
+// hydrators. Обычные create получают серверные preview metadata; поддерживаемые update читают
+// owner snapshots и сохраняют точную связь с проектом. Подготовка использует транзакцию
+// вызывающего, ничего не сохраняет и не завершает самостоятельно авторизацию каждой команды.
 func (repository *Repository) hydrateAssistantOperation(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -456,6 +532,14 @@ func (repository *Repository) hydrateAssistantOperation(
 	return hydrateAssistantProjectOperation(projectRef, name, purpose, language, version, operation)
 }
 
+// hydrateAssistantRoleImage requires a project-bound viewable agent, reads its role/version and
+// resolves a catalog-approved managed recipe. It preserves an explicitly proposed Dockerfile
+// across recommended-environment selection, bounds its size and builds CREATE preview metadata
+// with agent pins; provider build/admission and write authorization happen later.
+// hydrateAssistantRoleImage требует доступного для просмотра агента заданного проекта, читает его
+// роль/версию и разрешает одобренный каталогом managed recipe. Сохраняет предложенный Dockerfile
+// при выборе рекомендуемого окружения, ограничивает размер и строит CREATE preview с agent pins;
+// build/admission провайдера и write authorization выполняются позднее.
 func (repository *Repository) hydrateAssistantRoleImage(
 	ctx context.Context, tx pgx.Tx, actorScope scope, projectRef string,
 	operation entity.AssistantPlanOperation,
@@ -525,6 +609,14 @@ func (repository *Repository) hydrateAssistantRoleImage(
 	return operation, nil
 }
 
+// hydrateAssistantAgentOperation validates the closed agent-update fields and nonempty
+// project/ref, reads the current organization/project agent snapshot and delegates string-change
+// hydration. NoRows becomes NotFound and other read failures Unavailable; caller command
+// authorization remains separate.
+// hydrateAssistantAgentOperation проверяет закрытый набор agent-update полей и непустые
+// project/ref, читает текущий снимок агента организации/проекта и делегирует применение строковых
+// изменений. NoRows даёт NotFound, прочий отказ чтения — Unavailable; авторизация команды остаётся
+// отдельной.
 func (repository *Repository) hydrateAssistantAgentOperation(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -551,6 +643,14 @@ func (repository *Repository) hydrateAssistantAgentOperation(
 	return hydrateAssistantAgentFields(agentRef, name, purpose, roleDescription, avatarURL, version, operation)
 }
 
+// hydrateAssistantAgentFields builds complete agent before/after snapshots, applying only
+// name/purpose/roleDescription string changes while preserving avatar and server identity/version.
+// Invalid supplied strings fail Invalid and unchanged edits fail Conflict; the selected UPDATE
+// envelope copies After while Parameters uses the changed snapshot.
+// hydrateAssistantAgentFields строит полные before/after снимки агента, применяя лишь строковые
+// name/purpose/roleDescription с сохранением avatar и серверных identity/version. Некорректная
+// строка даёт Invalid, отсутствие изменений — Conflict; выбранный UPDATE envelope копирует After,
+// Parameters использует изменённый снимок.
 func hydrateAssistantAgentFields(
 	agentRef, name, purpose, roleDescription, avatarURL string,
 	version int64,
@@ -558,23 +658,9 @@ func hydrateAssistantAgentFields(
 ) (entity.AssistantPlanOperation, error) {
 	before := map[string]any{"agentRef": agentRef, "name": name, "purpose": purpose,
 		"roleDescription": roleDescription, "avatarUrl": avatarURL}
-	after := cloneAssistantFields(before)
-	changed := false
-	for _, field := range []string{"name", "purpose", "roleDescription"} {
-		value, exists := operation.Parameters[field]
-		if !exists {
-			continue
-		}
-		text, ok := value.(string)
-		text = strings.TrimSpace(text)
-		if !ok || text == "" {
-			return entity.AssistantPlanOperation{}, errs.ErrInvalid
-		}
-		after[field] = text
-		changed = changed || text != before[field]
-	}
-	if !changed {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	after, err := assistantChangedStringFields(before, operation.Parameters, "name", "purpose", "roleDescription")
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
 	}
 	operation.Action = "UPDATE"
 	operation.Target = entity.AssistantPlanTarget{Kind: "AGENT", Ref: agentRef, Name: name, Version: &version}
@@ -586,6 +672,14 @@ func hydrateAssistantAgentFields(
 	return operation, nil
 }
 
+// hydrateAssistantAgentCapability validates project/agent/capability and a typed enabled flag,
+// reads current version/capability existence and rejects a missing capability or unchanged toggle.
+// It delegates preview construction without updating the agent or treating the snapshot as fresh
+// execution authority.
+// hydrateAssistantAgentCapability проверяет project/agent/capability и типизированный enabled,
+// читает текущую версию/существование capability, отклоняет отсутствие либо неизменённое
+// переключение. Делегирует построение preview без изменения агента и признания снимка свежими
+// полномочиями исполнения.
 func (repository *Repository) hydrateAssistantAgentCapability(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -622,6 +716,12 @@ func (repository *Repository) hydrateAssistantAgentCapability(
 	return hydrateAssistantAgentCapabilityFields(agentRef, name, capabilityKey, currentlyEnabled, enabled, version, operation)
 }
 
+// hydrateAssistantAgentCapabilityFields requires a valid named/versioned agent and an actual
+// capability toggle, then builds UPDATE before/after metadata and minimal command parameters. It
+// pins the supplied version but performs neither database reads nor permission evaluation.
+// hydrateAssistantAgentCapabilityFields требует корректного именованного/версионного агента и
+// реального переключения capability, строит UPDATE before/after и минимальные параметры команды.
+// Фиксирует переданную версию, но не читает БД и не проверяет полномочия.
 func hydrateAssistantAgentCapabilityFields(agentRef, name, capabilityKey string, currentlyEnabled, enabled bool, version int64,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -641,6 +741,12 @@ func hydrateAssistantAgentCapabilityFields(agentRef, name, capabilityKey string,
 	return operation, nil
 }
 
+// assistantIntegrationGrantSnapshot holds connection/recipient/grant versions, current eligibility
+// reason and exact definition/approval metadata used to build a grant-change preview. Descriptive
+// names and pins do not themselves authorize changing the grant.
+// assistantIntegrationGrantSnapshot хранит версии connection/recipient/grant, текущую причину
+// eligibility и точные definition/approval metadata для preview изменения grant. Описательные
+// имена и pins сами не разрешают изменение.
 type assistantIntegrationGrantSnapshot struct {
 	connectionName, recipientName, reason              string
 	connectionVersion, recipientVersion                int64
@@ -653,6 +759,14 @@ type assistantIntegrationGrantSnapshot struct {
 	approvalScopePaths                                 []string
 }
 
+// hydrateAssistantIntegrationGrant validates exactly one agent/workflow recipient, reads an
+// actor/project-scoped grant snapshot and requires READY only when enabling. It validates the
+// pinned package approval policy and bounded scope paths, preserves existing paths for unchanged
+// enabled policy and rejects exact no-ops before building the versioned preview.
+// hydrateAssistantIntegrationGrant проверяет ровно одного agent/workflow получателя, читает grant
+// snapshot с областью субъекта/проекта и требует READY лишь при включении. Проверяет approval
+// policy pinned package и ограниченные scope paths, сохраняет прежние paths для неизменённой
+// включённой policy, отклоняет точный no-op до построения версионного preview.
 func (repository *Repository) hydrateAssistantIntegrationGrant(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -716,6 +830,16 @@ func (repository *Repository) hydrateAssistantIntegrationGrant(
 		snapshot, enabled, scopePaths, operation)
 }
 
+// readAssistantIntegrationGrantSnapshot reads the exact
+// organization/actor/authority-project/connection/recipient/capability projection, validates
+// nonempty names and positive owner versions and normalizes nil approval paths to empty. NoRows
+// becomes NotFound and other failures Unavailable; a partial internal snapshot may accompany an
+// error and must be discarded by callers.
+// readAssistantIntegrationGrantSnapshot читает точную проекцию
+// organization/actor/authority-project/connection/recipient/capability, проверяет непустые имена и
+// положительные owner versions, заменяет nil approval paths на пустые. NoRows даёт NotFound,
+// прочие ошибки — Unavailable; при ошибке может возвращаться частичный внутренний снимок, который
+// вызывающий обязан отбросить.
 func (repository *Repository) readAssistantIntegrationGrantSnapshot(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -745,6 +869,14 @@ func (repository *Repository) readAssistantIntegrationGrantSnapshot(
 	return result, nil
 }
 
+// hydrateAssistantIntegrationGrantFields validates supplied snapshot/recipient/approval shape and
+// builds UPDATE metadata pinned to the connection version. Before/After copy approval paths and
+// include recipient/grant/definition policy pins; command parameters contain only the selected
+// recipient and requested change. Package policy and current authorization belong to callers.
+// hydrateAssistantIntegrationGrantFields проверяет форму snapshot/recipient/approval и строит
+// UPDATE metadata с версией connection. Before/After копируют approval paths и содержат
+// recipient/grant/definition policy pins; параметры команды включают лишь выбранного получателя и
+// изменение. Package policy и текущая authorization принадлежат вызывающим.
 func hydrateAssistantIntegrationGrantFields(
 	connectionRef, capabilityKey, agentRef, workflowRef string,
 	snapshot assistantIntegrationGrantSnapshot,
@@ -790,6 +922,14 @@ func hydrateAssistantIntegrationGrantFields(
 	return operation, nil
 }
 
+// hydrateAssistantConnectionOperation restricts editable connection fields, resolves exact
+// assistant-context eligibility, reads connection/package/grants and builds a changed preview,
+// then validates public configuration against the pinned definition. It preserves the existing
+// full connection read path and performs no provider test or persistence.
+// hydrateAssistantConnectionOperation ограничивает изменяемые поля connection, разрешает точную
+// assistant-context eligibility, читает connection/package/grants и строит изменённый preview,
+// затем проверяет public configuration по pinned definition. Сохраняет прежний полный путь чтения
+// connection, не тестирует провайдера и не сохраняет изменения.
 func (repository *Repository) hydrateAssistantConnectionOperation(
 	ctx context.Context, tx pgx.Tx, actorScope scope, operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -818,6 +958,14 @@ func (repository *Repository) hydrateAssistantConnectionOperation(
 	return hydrated, nil
 }
 
+// validateAssistantConnectionConfiguration loads the connection exact definition package and
+// requires a typed string-valued public configuration accepted by its schema. It returns package
+// read errors unchanged and malformed/configuration rejection as Invalid without accessing
+// credential values.
+// validateAssistantConnectionConfiguration загружает точный definition package connection и
+// требует типизированную public configuration со строковыми значениями, принятую схемой.
+// Возвращает исходные ошибки package read, неверную форму/отказ конфигурации — как Invalid без
+// доступа к значениям credentials.
 func (repository *Repository) validateAssistantConnectionConfiguration(ctx context.Context, tx pgx.Tx, actorScope scope,
 	connection entity.IntegrationConnection, after map[string]any,
 ) error {
@@ -834,6 +982,14 @@ func (repository *Repository) validateAssistantConnectionConfiguration(ctx conte
 	return nil
 }
 
+// hydrateAssistantConnectionFields copies the complete public connection snapshot, validates
+// optional nonempty bounded name/string configuration changes and rejects no-op edits. It creates
+// a version-pinned UPDATE preview with preserved definition identity; nested maps remain shallow
+// references and package schema validation is separate.
+// hydrateAssistantConnectionFields копирует полный публичный снимок connection, проверяет
+// необязательные непустые ограниченные изменения имени/строковой конфигурации, отклоняет no-op.
+// Создаёт UPDATE preview с версией и сохранённым definition identity; вложенные карты остаются
+// поверхностными ссылками, package schema проверяется отдельно.
 func hydrateAssistantConnectionFields(connection entity.IntegrationConnection, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	before := map[string]any{"connectionRef": connection.Ref, "definitionKey": connection.DefinitionKey,
 		"name": connection.Name, "publicConfiguration": connection.PublicConfiguration}
@@ -873,6 +1029,14 @@ func hydrateAssistantConnectionFields(connection entity.IntegrationConnection, o
 	return operation, nil
 }
 
+// withAssistantAgentTemplateContext prepends missing organization/project/agent template lines and
+// an integration loop to instruction text using literal marker checks. It returns the original map
+// when no prefix is needed, otherwise a shallow copy; this compatibility enrichment is not
+// semantic template validation or an authority source.
+// withAssistantAgentTemplateContext добавляет недостающие строки organization/project/agent и
+// integration loop перед инструкцией по буквальным marker checks. Возвращает исходную карту без
+// нужды в префиксе, иначе поверхностную копию; это дополнение совместимости, не семантическая
+// валидация шаблона и не источник полномочий.
 func withAssistantAgentTemplateContext(parameters map[string]any) map[string]any {
 	instructions, ok := parameters["instructions"].(string)
 	if !ok {
@@ -908,29 +1072,23 @@ func withAssistantAgentTemplateContext(parameters map[string]any) map[string]any
 	return result
 }
 
+// hydrateAssistantProjectOperation builds a complete project snapshot and applies only
+// name/purpose/language string edits through the shared change helper. It preserves resolved
+// project identity/version and returns Invalid or Conflict for malformed/no-op changes; final
+// language policy remains in specialized command validation.
+// hydrateAssistantProjectOperation строит полный снимок проекта и применяет лишь строковые
+// name/purpose/language через общий helper изменений. Сохраняет разрешённые identity/version
+// проекта, возвращает Invalid либо Conflict для неверных/no-op изменений; итоговая политика языка
+// остаётся в специализированной валидации команды.
 func hydrateAssistantProjectOperation(
 	projectRef, name, purpose, language string,
 	version int64,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
 	before := map[string]any{"projectRef": projectRef, "name": name, "purpose": purpose, "language": language}
-	after := cloneAssistantFields(before)
-	changed := false
-	for _, field := range []string{"name", "purpose", "language"} {
-		value, exists := operation.Parameters[field]
-		if !exists {
-			continue
-		}
-		text, ok := value.(string)
-		text = strings.TrimSpace(text)
-		if !ok || text == "" {
-			return entity.AssistantPlanOperation{}, errs.ErrInvalid
-		}
-		after[field] = text
-		changed = changed || text != before[field]
-	}
-	if !changed {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	after, err := assistantChangedStringFields(before, operation.Parameters, "name", "purpose", "language")
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
 	}
 	operation.Action = "UPDATE"
 	operation.Target = entity.AssistantPlanTarget{Kind: "PROJECT", Ref: projectRef, Name: name, Version: &version}
@@ -942,6 +1100,12 @@ func hydrateAssistantProjectOperation(
 	return operation, nil
 }
 
+// assistantCreateTarget maps supported create-operation kinds to preview resource kinds and a
+// trimmed name, using fileName for artifacts. Unknown kinds return an unsupported result; this
+// mapping neither creates the resource nor authorizes it.
+// assistantCreateTarget сопоставляет поддерживаемые create виды с preview resource kinds и
+// очищенным именем, используя fileName для артефакта. Неизвестный вид возвращает отсутствие
+// поддержки; сопоставление не создаёт ресурс и не авторизует его.
 func assistantCreateTarget(operationType string, parameters map[string]any) (string, string, bool) {
 	var kind string
 	switch operationType {
@@ -971,6 +1135,45 @@ func assistantCreateTarget(operationType string, parameters map[string]any) (str
 	return kind, assistantString(parameters, "name"), true
 }
 
+// assistantChangedStringFields makes a shallow copy of the owner before snapshot and applies only
+// supplied fields from the caller ordered string allowlist, trimming and requiring each supplied
+// value to be nonblank. It returns nil/Invalid on malformed input or nil/Conflict when no selected
+// value changes, preserving both source maps and all unselected owner fields. Nested values remain
+// shallow references; this helper neither validates command policy nor assigns target/version
+// authority.
+// assistantChangedStringFields создаёт поверхностную копию owner before snapshot и применяет лишь
+// переданные поля упорядоченного строкового списка вызывающего, очищая значения и требуя непустую
+// строку. Возвращает nil/Invalid при неверном поле либо nil/Conflict без изменения выбранных
+// значений, сохраняя обе исходные карты и все невыбранные owner fields. Вложенные значения
+// остаются поверхностными ссылками; helper не проверяет политику команды и не назначает
+// target/version authority.
+func assistantChangedStringFields(before, parameters map[string]any, fields ...string) (map[string]any, error) {
+	after := cloneAssistantFields(before)
+	changed := false
+	for _, field := range fields {
+		value, exists := parameters[field]
+		if !exists {
+			continue
+		}
+		text, ok := value.(string)
+		text = strings.TrimSpace(text)
+		if !ok || text == "" {
+			return nil, errs.ErrInvalid
+		}
+		after[field] = text
+		changed = changed || text != before[field]
+	}
+	if !changed {
+		return nil, errs.ErrConflict
+	}
+	return after, nil
+}
+
+// cloneAssistantFields makes a nonnil shallow map copy, preserving dynamic values and nested
+// reference aliasing; nil input becomes an empty map rather than a deep JSON clone.
+// cloneAssistantFields создаёт ненулевую поверхностную копию карты с сохранением динамических
+// значений и общих вложенных ссылок; nil input превращается в пустую карту, не в глубокую JSON
+// копию.
 func cloneAssistantFields(input map[string]any) map[string]any {
 	result := make(map[string]any, len(input))
 	for key, value := range input {
@@ -979,6 +1182,14 @@ func cloneAssistantFields(input map[string]any) map[string]any {
 	return result
 }
 
+// assistantJSONEqual compares JSON-representable values after marshal/decode with UseNumber and a
+// second marshal. Object ordering is normalized but numeric spelling and unsupported values retain
+// their existing behavior; any encoding/decoding error returns false rather than equality or a
+// runtime error.
+// assistantJSONEqual сравнивает JSON-представимые значения после marshal/decode с UseNumber и
+// повторного marshal. Порядок объектов нормализуется, запись чисел и неподдерживаемые значения
+// сохраняют прежнее поведение; любая ошибка кодирования/декодирования даёт false, не равенство и
+// не runtime error.
 func assistantJSONEqual(left, right any) bool {
 	canonical := func(value any) ([]byte, error) {
 		raw, err := json.Marshal(value)
@@ -998,6 +1209,15 @@ func assistantJSONEqual(left, right any) bool {
 	return leftErr == nil && rightErr == nil && string(leftJSON) == string(rightJSON)
 }
 
+// normalizeAssistantOperation validates the closed operation kind, bounded title/summary/maps,
+// expected action and kind-specific target/version/preview consistency. It strips inline file
+// content from create previews, builds legacy Input plus expectedVersion and marks the shape
+// Permitted with empty problems. That flag is normalization metadata; actor authorization still
+// follows separately.
+// normalizeAssistantOperation проверяет закрытый вид операции, ограниченные title/summary/maps,
+// ожидаемое действие и соответствие target/version/preview виду. Удаляет inline file content из
+// create preview, строит совместимый Input с expectedVersion и помечает форму Permitted с пустыми
+// problems. Этот flag — метаданные нормализации; авторизация субъекта следует отдельно.
 func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if !assistantOperationType(operation.Type) || strings.TrimSpace(operation.Key) == "" ||
 		strings.TrimSpace(operation.Title) == "" || utf8.RuneCountInString(operation.Title) > 200 ||
@@ -1134,6 +1354,14 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	return operation, nil
 }
 
+// bindAssistantOperationProject binds selected project-scoped command Input to the conversation
+// project in a shallow copy, rejecting an explicit different project. Specialized
+// project-configuration and self-agent operations retain their separate shape rules; it does not
+// rewrite every Parameters/Before/After map or infer authority from a requested project.
+// bindAssistantOperationProject связывает Input выбранных проектных команд с проектом беседы в
+// поверхностной копии, отклоняя явно другой проект. Specialized project-configuration и self-agent
+// операции сохраняют отдельные правила формы; не переписывает все Parameters/Before/After и не
+// выводит полномочия из запрошенного проекта.
 func bindAssistantOperationProject(operation entity.AssistantPlanOperation, projectRef string) (entity.AssistantPlanOperation, error) {
 	if assistantProjectConfigurationOperation(operation) {
 		if assistantString(operation.Parameters, "scopeKind") != "PROJECT" || assistantString(operation.Parameters, "projectRef") == "" {
@@ -1174,6 +1402,16 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 	return operation, nil
 }
 
+// assistantOperationCommand maps the closed plan registry to specialized typed domain commands
+// after per-kind field/type/size/version checks. Protected file/assistant/configuration operations
+// dispatch to dedicated adapters; ordinary workflow/schedule/run construction stays specialized.
+// It preserves server-assigned launch source and does not execute, persist, assign actor authority
+// or bypass later command authorization.
+// assistantOperationCommand преобразует закрытый реестр плана в специализированные типизированные
+// доменные команды после отдельных field/type/size/version проверок. Защищённые
+// file/assistant/configuration операции направляет отдельным adapters; workflow/schedule/run
+// строит специализированно. Сохраняет назначенный сервером launch source, ничего не исполняет и не
+// сохраняет, не назначает actor authority и не обходит последующую command authorization.
 func assistantOperationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	if operation.Type == createProjectFileRevision {
 		return assistantFileRevisionCommand(operation)
@@ -1537,6 +1775,10 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 	return result, nil
 }
 
+// validAssistantPromptTemplate rejects template validation diagnostics only when severity is ERROR
+// using the prompt catalog; warnings are allowed and no template execution or publication occurs.
+// validAssistantPromptTemplate отклоняет diagnostics валидации шаблона только при severity ERROR
+// по prompt catalog; предупреждения допускаются, исполнение и публикация не выполняются.
 func validAssistantPromptTemplate(value string) bool {
 	for _, diagnostic := range promptservice.Validate(value, promptservice.Catalog()) {
 		if diagnostic.Severity == "ERROR" {
@@ -1546,6 +1788,16 @@ func validAssistantPromptTemplate(value string) bool {
 	return true
 }
 
+// assistantWorkflow decodes closed workflow/input/step shapes, assigns stable numbered keys and
+// derives dependencies from sequential/parallel frontiers. It defaults unparsed
+// concurrency/timeout, preserves existing int32 casts, then applies domain version validation and
+// returns safe field diagnostics. It builds a draft payload rather than publishing or admitting a
+// launch.
+// assistantWorkflow декодирует закрытые workflow/input/step формы, назначает стабильные
+// нумерованные keys и выводит зависимости из sequential/parallel frontier. Задаёт defaults для
+// неразобранных concurrency/timeout, сохраняет прежние int32 casts, затем применяет доменную
+// валидацию версии и безопасные field diagnostics. Строит draft payload без публикации и допуска
+// запуска.
 func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	if !onlyAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
 		!hasAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "steps") {
@@ -1639,6 +1891,12 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	return command.WorkflowInput{ProjectRef: projectRef, Name: name, Purpose: draft.Purpose, CoordinatorAgentRef: coordinator, Draft: &draft}, nil
 }
 
+// assistantSchedule decodes a closed schedule-create shape into a typed payload, validating
+// target/preset/policy sets, bounded text and run input. It requires automation text but leaves
+// authoritative cron/timezone/target execution eligibility to the command path.
+// assistantSchedule декодирует закрытую schedule-create форму в типизированный payload, проверяет
+// наборы target/preset/policy, ограниченные тексты и run input. Требует automation text, но
+// авторитетную cron/timezone/target eligibility оставляет пути команды.
 func assistantSchedule(input map[string]any) (command.ScheduleInput, error) {
 	if !onlyAssistantFields(input, "projectRef", "name", "targetType", "targetRef", "preset", "cronExpression", "timeOfDay", "dayOfWeek", "timezone", "input", "automationText", "sessionPolicy", "notificationPolicy") ||
 		!hasAssistantFields(input, "projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "automationText", "sessionPolicy", "notificationPolicy") {
@@ -1659,6 +1917,12 @@ func assistantSchedule(input map[string]any) (command.ScheduleInput, error) {
 	return payload, nil
 }
 
+// assistantRun decodes a closed launch shape with bounded input/text and an AGENT or WORKFLOW
+// target, retaining optional session/attachment references and assigning SYSTEM_ASSISTANT source.
+// It does not authorize those references or start execution.
+// assistantRun декодирует закрытую launch форму с ограниченными input/text и целью AGENT либо
+// WORKFLOW, сохраняет необязательные session/attachment ссылки, назначает source SYSTEM_ASSISTANT.
+// Не авторизует ссылки и не запускает исполнение.
 func assistantRun(input map[string]any) (command.LaunchRunInput, error) {
 	if !onlyAssistantFields(input, "projectRef", "targetType", "targetRef", "title", "task", "input", "attachmentSetRef", "sessionRef") ||
 		!hasAssistantFields(input, "projectRef", "targetType", "targetRef", "title", "task", "input") {
@@ -1675,6 +1939,12 @@ func assistantRun(input map[string]any) (command.LaunchRunInput, error) {
 	return payload, nil
 }
 
+// assistantProjectFileContentReady accepts nonfile operations immediately and considers file
+// content prepared only with a nonempty contentRef, valid digest shape and no inline Parameters
+// content. It checks shape, not ledger ownership or object existence.
+// assistantProjectFileContentReady сразу принимает нефайловую операцию, для файла считает
+// содержимое подготовленным лишь при непустом contentRef, правильной форме digest и отсутствии
+// inline content в Parameters. Проверяет форму, не владение ledger и не существование объекта.
 func assistantProjectFileContentReady(operation entity.AssistantPlanOperation) bool {
 	if !assistantFileOperation(operation.Type) {
 		return true
@@ -1682,6 +1952,10 @@ func assistantProjectFileContentReady(operation entity.AssistantPlanOperation) b
 	return assistantString(operation.Parameters, "contentRef") != "" && objectDigestValid(assistantString(operation.Parameters, "digest")) && operation.Parameters["content"] == nil
 }
 
+// onlyAssistantFields rejects map keys outside the supplied allowlist without requiring any key or
+// inspecting values; nil and empty maps pass this shape check.
+// onlyAssistantFields отклоняет ключи карты вне переданного списка без требования наличия ключей и
+// проверки значений; nil и пустая карта проходят эту проверку формы.
 func onlyAssistantFields(input map[string]any, allowed ...string) bool {
 	known := make(map[string]struct{}, len(allowed))
 	for _, key := range allowed {
@@ -1695,6 +1969,10 @@ func onlyAssistantFields(input map[string]any, allowed ...string) bool {
 	return true
 }
 
+// hasAssistantFields requires map key presence for every requested field regardless of value or
+// nil contents; it does not perform type or nonempty validation.
+// hasAssistantFields требует наличия каждого запрошенного ключа независимо от значения и nil
+// содержимого; не проверяет тип и непустоту.
 func hasAssistantFields(input map[string]any, required ...string) bool {
 	for _, key := range required {
 		if _, ok := input[key]; !ok {
@@ -1704,16 +1982,31 @@ func hasAssistantFields(input map[string]any, required ...string) bool {
 	return true
 }
 
+// assistantString returns a trimmed string value or empty for absent/nil/nonstring input; callers
+// must separately distinguish required fields and reject invalid shapes.
+// assistantString возвращает очищенное строковое значение либо пустое для
+// отсутствующего/nil/нестрокового поля; вызывающий отдельно различает обязательные поля и
+// отклоняет неверные формы.
 func assistantString(input map[string]any, key string) string {
 	value, _ := input[key].(string)
 	return strings.TrimSpace(value)
 }
 
+// assistantBoolValue extracts only a dynamic bool and reports its type assertion result without
+// coercing strings/numbers or treating false as missing.
+// assistantBoolValue извлекает лишь динамический bool и результат проверки типа без преобразования
+// строк/чисел и без признания false отсутствующим.
 func assistantBoolValue(input map[string]any, key string) (bool, bool) {
 	value, ok := input[key].(bool)
 	return value, ok
 }
 
+// assistantInt64 accepts int/int64, exactly round-trippable float64 conversion or an integral
+// json.Number; other shapes return zero/false. It preserves existing conversion semantics rather
+// than adding a separate numeric range or precision policy.
+// assistantInt64 принимает int/int64, float64 с точным обратным преобразованием либо целый
+// json.Number; прочие формы дают zero/false. Сохраняет прежнюю семантику преобразования без
+// отдельной новой политики диапазона и точности.
 func assistantInt64(input map[string]any, key string) (int64, bool) {
 	switch value := input[key].(type) {
 	case float64:
@@ -1731,6 +2024,13 @@ func assistantInt64(input map[string]any, key string) (int64, bool) {
 	}
 }
 
+// assistantParallelGroup accepts an existing numeric group unchanged or maps a bounded trimmed
+// string label to a stable positive ordinal for parallel steps. Nonparallel valid labels yield
+// zero; new labels mutate the shared map up to fifty entries, so callers supply a writable map.
+// assistantParallelGroup принимает числовую группу без изменения либо сопоставляет ограниченную
+// очищенную метку стабильному положительному номеру parallel steps. Корректная метка
+// непараллельного шага даёт ноль; новая метка меняет общую карту до пятидесяти записей, вызывающий
+// передаёт доступную для записи карту.
 func assistantParallelGroup(input map[string]any, key string, parallel bool, labels map[string]int64) (int64, bool) {
 	if value, ok := assistantInt64(input, key); ok {
 		return value, true
@@ -1754,16 +2054,32 @@ func assistantParallelGroup(input map[string]any, key string, parallel bool, lab
 	return value, true
 }
 
+// assistantObjectValue returns only a dynamic map[string]any and its assertion result without
+// copying or recursively validating the object.
+// assistantObjectValue возвращает лишь динамическую map[string]any и результат проверки типа без
+// копирования и рекурсивной валидации.
 func assistantObjectValue(input map[string]any, key string) (map[string]any, bool) {
 	value, ok := input[key].(map[string]any)
 	return value, ok
 }
 
+// assistantStrings delegates to the strict string-slice extractor and discards its validity flag,
+// returning nil on malformed/missing input; callers needing absence/error distinction use
+// assistantStringsValue.
+// assistantStrings делегирует строгому извлечению среза строк и отбрасывает validity flag,
+// возвращая nil при неверном/отсутствующем поле; для различения отсутствия/ошибки нужен
+// assistantStringsValue.
 func assistantStrings(input map[string]any, key string) []string {
 	result, _ := assistantStringsValue(input, key)
 	return result
 }
 
+// assistantStringsValue accepts []string or []any containing only nonblank strings, trims into a
+// fresh slice and rejects the entire value on a malformed item. Missing or wrong-shaped input
+// returns nil/false; an existing empty slice succeeds with a nonnil empty result.
+// assistantStringsValue принимает []string либо []any только с непустыми строками, очищает их в
+// новый срез и отклоняет всё значение при неверном элементе. Отсутствующее либо неверное поле даёт
+// nil/false; существующий пустой срез успешно даёт ненулевой пустой результат.
 func assistantStringsValue(input map[string]any, key string) ([]string, bool) {
 	value, exists := input[key]
 	if !exists {
@@ -1795,6 +2111,12 @@ func assistantStringsValue(input map[string]any, key string) ([]string, bool) {
 	return result, true
 }
 
+// leftPad formats a positive integer in decimal and left-pads with zeros to the requested minimum
+// width; zero/negative inputs retain the existing all-padding behavior and widths do not truncate
+// larger values.
+// leftPad форматирует положительное целое десятично и дополняет слева нулями до минимальной
+// ширины; ноль/отрицательные сохраняют прежнее поведение только заполнения, ширина не обрезает
+// большие значения.
 func leftPad(value, width int) string {
 	result := ""
 	for value > 0 {

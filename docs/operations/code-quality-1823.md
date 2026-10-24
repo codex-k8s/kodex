@@ -4,11 +4,74 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.387.0
+version: 1.388.0
 updated: 2026-10-24
 ---
 
 # Подготовка кода к построчному ревью
+
+## Подготовка assistant plans и provider/model каталоги — 24.10.2026
+
+На основе `15214d8f042afb98fad21fe9a7997c6cba9a3e97` полностью прочитаны
+assistant_tools.go и mvp_queries.go, описаны45+29 прежних объявлений.
+Новый helper также описан:46/46 и29/29, всего75/75. Общий inventory
+19185/21443, missing2258 — PostgreSQL adapter control-plane. Все95
+Go-файлов текущего PR имеют989/989 предметных EN→RU описаний.
+
+`assistantChangedStringFields` объединяет два одинаковых применения строковых
+изменений к owner snapshot. Agent caller явно передаёт name/purpose/
+roleDescription, project caller — name/purpose/language. Сохранены shallow
+copy, TrimSpace, Invalid для неверного типа/пустого значения, Conflict без
+изменений, исходные карты и невыбранные поля. Ошибка не выдаёт partial map.
+Разные before/target/version/Parameters/After/Selected metadata остались у
+callers; helper не разрешает authority, не читает БД и не применяет команду.
+Существующие agent/project hydration tests проверяют полный owner snapshot,
+неизменённые поля, версию, normalize→bind→typed command, invalid/no-op edits.
+Для этого glue отдельный зеркальный test не добавлялся.
+
+| Путь / lifecycle | Сохранённая граница |
+| --- | --- |
+| Proposal prepare | Bounds → exact fenced lease → locked active conversation/run/session и originating actor из owner state → project/self/context guards → hydration → normalization → project binding → specialized command authorization. Payload actor не назначает полномочия |
+| No-op / snapshots | Capability/grant Conflict пропускается по прежнему правилу; runtime no-op исключается лишь после authorization и свежей server snapshot/pin сверки. Пустой нормализованный план даёт staged Conflict; ошибки сохраняют stage и one-based index |
+| Plan persistence | First immutable revision и digest из exact operation bytes, prepared file ledger links, conversation version, actor audit и platform invalidation принадлежат caller transaction. DRAFT не исполняет operations и не делает commit |
+| Hydration | Разные protected file/assistant/configuration/image/grant hydrators, exact project binding, owner versions и pinned package approval policies остаются специализированными. Preview/Permitted shape не выдаёт command authority |
+| Normalize / bind / map | Closed operation registry, before/after/target/version consistency, inline file redaction, shallow bound Input и typed per-kind commands. Server launch source сохраняется; dispatch не запускает provider и не применяет plan |
+| Provider/model catalogs | Actor/filter/content-bound model cursor; strict bounded catalog records, conflicts закрывают eligibility модели, digest исключает observed time/expiry/current eligibility. Ready/default model отражают доступный каталог, не live provider proof |
+| Accounts / finance | Exact usage context и version/source-digest pagination, selected-ref model reads, current permission evaluation и financial redaction. Lifecycle/enabled/concurrency consistency, safe status codes, deletion/auth metadata и action guards сохраняются |
+| Revisions / environment | Recipe/schedule view guards, lookahead и разные revision scanners/cursors; internal run scanner hints не дают per-run authority. Environment readiness проверяет local published/image/runtime pins, не Pod/network/secret delivery; bound agent readback остаётся узким |
+
+Полный expected-AST compare assistant_tools.go — PASS: заменены только два
+одинаковых string-change блока, добавлен общий helper. Полный AST/directives
+compare mvp_queries.go — PASS: изменения только комментариев. Query/runtime
+API, SQL, generated output, dependencies, applied migrations и deploy inputs
+не менялись. Прочитан полный proposal-context SQL: tenant/run, active
+conversation/session/actor, canonical system либо project assistant,
+project eligibility и conversation lock; прочитан project snapshot SQL.
+
+Полный GOWORK=off control-plane build/unit `-count=1` — PASS LOCAL;
+15 external fixture/admin/template inputs исключены.17 analyzer unit,
+5 exact-ignore guards, gofmt и diff check — PASS. Real PostgreSQL/locks,
+concurrent proposal/OCC/revision/catalog/receipt paths, broker/provider/runtime/
+image/bootstrap, browser/full E2E и deploy/live — NOT RUN/SKIP. QA baseline
+f2e64eb не менялся. Через Context7 /jackc/pgx проверены TxOptions/BeginTx:
+незаданный IsoLevel не назначает RepeatableRead, отмена BEGIN context не
+делает автоматический rollback, caller владеет commit/rollback.
+
+Исторические ограничения описаны без исправления: authorizedRead задаёт
+ReadOnly без explicit isolation, скрывает все access-check errors как
+NotFound и rollback использует request context. Это не доказывает
+RepeatableRead составного снимка/independent bounded cleanup. Полные
+connection hydration reads, shallow nested maps, numeric casts/defaults,
+literal template enrichment и статическая readiness также сохранены;
+нормализация JSON не объявлена JCS/authority proof.
+
+Scan6673 own sources,222 excluded:1806 raw,899 retained occurrences и907
+unresolved. Прежний exact107-token string-change clone исчез;214-token
+revision tail/следующий метод получил новый hash из-за комментариев и
+остаётся открытым, без заявления об исправлении алгоритма. Все773 registry
+entries действительны и не менялись; новых исключений, thresholds либо
+ignore regions нет. Issue#1823 открыт, PR сохраняет Draft до завершения
+полного согласованного объёма.
 
 ## Чтение каталогов, карточек и membership candidates — 24.10.2026
 
