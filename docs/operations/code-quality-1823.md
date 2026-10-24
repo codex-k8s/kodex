@@ -4,11 +4,57 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.404.0
+version: 1.405.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Bootstrap: session affinity, environments и access fixtures — 25.10.2026
+
+На основе `1081adb14f426574a96b948c0fcda33a4547af2d` полностью прочитаны
+девять следующих функций bootstrap_component_test.go, непрерывный участок
+2444–3682(1239 строк до новых комментариев): session-provider affinity,
+missing image, runtime-environment lifecycle, privileged admission,
+enterprise access, instruction draft save, provider legacy repair,
+core prompt upgrade и interaction health routing. Все девять получили
+предметные EN→RU описания. Их внешние delegated helpers не объявляются заново
+полностью проверенными. Полный AST/directive proof файла относительно исходного
+HEAD — PASS: только комментарии, все тела/assertions/fixtures/SQL сохранены.
+
+| Сценарий | Описанные ограничения |
+| --- | --- |
+| Session provider | Current policy не меняет captured account; prompt/workspace/instruction provenance, root previews и predecessor refs проверяются отдельно. Refresh требует fresh catalog, revocation не даёт fallback, restoration без observation завершает continuation; retry сохраняет account |
+| Model pins | Изменение defaults требует явной republication, unsupported reasoning не получает effort, secondary-only model не переключает session account; итоговые catalog/policy восстанавливаются оснасткой |
+| Missing image | Invalid и nil result подтверждают ответ команды без заявления image admission или созданного environment |
+| Environment lifecycle | Promoted fixture dependency, exact version bindings, disable/enable без новой immutable version, stale OCC, bound-delete Conflict, terminal snapshot/exact replay и revoked-authority masking; tombstone без bindings и1 audit/1 точный outbox event |
+| Privileged admission | Missing/stale/future authentication; fresh owner достигает только image validation Invalid. Unsupported access не меняет published environment; project.manage без privileged permission получает NotFound до reauthentication oracle |
+| Enterprise access |8 concurrent OIDC-group resolutions→1 membership, unchanged fast path при subject lock с750 ms budget, refresh aged group; exact agent grant не становится project launch. Catalog/explain/launch/proof и actor/filter cursor boundaries; разрешённый run отменяется |
+| Draft и core | Второе сохранение заменяет единственный mutable DRAFT с новой agent version; core upgrade повторяемо даёт version2/два published prompt/1 audit и отклоняет downgrade, не запускает ассистента |
+| Legacy credential | Одинаковый digest и новая identity/resource version создают revision2 один раз; content drift отклоняется без durable changes, успешный путь явно восстанавливает config. Только synthetic descriptor metadata |
+| Interaction health | Closed Mattermost route/18 capabilities, generic claim исключает interaction test, generic completion Forbidden, exact interaction lease/fence/generation→CONNECTED. Ни health HTTP, ни реальные credentials не используются |
+
+GOWORK=off полный control-plane build и unit `-count=1` — PASS LOCAL
+(`checks405-final`),15 внешних fixture/admin/template inputs исключены.
+Все перечисленные PostgreSQL/concurrent/component scenarios — NOT RUN/SKIP;
+AST/compile/unit не подменяют их исполнение. gofmt/diff check,17 analyzer unit
+и5 exact-ignore guards — PASS. Новых тестов, helpers, SQL или library API нет.
+Browser/full E2E/deploy/live — NOT RUN.
+
+Inventory6683 own sources/222 exclusions:19949/21480 Go declarations описаны,
+missing1531 — PostgreSQL adapter control-plane. Текущий PR152 Go-файла:
+1818/1843 описаны,25 оставшихся — только bootstrap_component_test.go(52/77).
+Прочие151 Go-файл diff полностью описаны. Detector1799 raw/904 retained/
+895 unresolved, registry778 неизменен; fragment/format/kind/path-pair keyset
+совпадает с1081adb. Новых/удалённых keys нет; thresholds и exclusions не
+расширены. Production behavior,28 SQL embeds, contracts/generated, dependencies,
+migrations и deploy inputs не менялись.
+
+Прикладные секреты не читались и не переносились; необходимые bot-role
+credentials/identity используются только для нужных GitHub children без вывода
+значений. Whole-blob проверка сохраняет только4 прежних inert title-test markers
+по exact main bytes/count; неизвестных совпадений нет. Issue#1823 открыт,
+PR Draft; основной клон и QA baseline f2e64eb не менялись.
 
 ## Bootstrap: общий readback rejected provider при restart — 25.10.2026
 

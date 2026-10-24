@@ -2441,6 +2441,26 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	}
 }
 
+// testSessionProviderAffinityAfterPolicyMutation pins a launched session to its primary account,
+// changes current policy to a secondary account and requires claims/runtime revisions to retain
+// the session account. It checks server-owned effort, instruction/materialization provenance,
+// workspace policy, exact run/session previews and revision predecessors, delegating related
+// resumability/proof checks. Credential refresh requires a fresh observed catalog; revocation
+// yields no fallback claim, restoration without observation closes the continuation, and retry
+// after observation retains affinity. Changed model defaults require explicit republication,
+// non-reasoning models get no invented effort and a secondary-only model cannot switch the session
+// account. Fixture cleanup restores account eligibility and final policy/catalog; no real provider
+// execution occurs.
+// testSessionProviderAffinityAfterPolicyMutation закрепляет запущенную session за primary account,
+// меняет текущую policy на secondary account и требует сохранить session account в claims/runtime
+// revisions. Проверяет серверный effort, происхождение instructions/materialization, workspace
+// policy, точные run/session previews и предшествующие revisions, делегируя связанные проверки
+// resumability/proof. Credential refresh требует свежего observed catalog; отзыв не даёт fallback
+// claim, восстановление без observation закрывает continuation, а retry после observation
+// сохраняет привязку. Изменённые model defaults требуют явной перепубликации, non-reasoning model
+// не получает выдуманный effort, secondary-only model не может переключить session account.
+// Cleanup оснастки восстанавливает eligibility account и итоговые policy/catalog; реального
+// исполнения provider нет.
 func testSessionProviderAffinityAfterPolicyMutation(
 	t *testing.T,
 	ctx context.Context,
@@ -2783,6 +2803,14 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	seedObservedCatalogFixture(t, ctx, repository)
 }
 
+// testRuntimeEnvironmentRejectsMissingImage creates an owner project and attempts to create an
+// environment with values but no exact promoted image reference. It requires Invalid and a nil
+// RuntimeEnvironment result; the assertion checks the command response without claiming a
+// successful environment, image admission or workload launch.
+// testRuntimeEnvironmentRejectsMissingImage создаёт проект владельца и пытается создать
+// environment со значениями, но без точной ссылки на promoted image. Требует Invalid и nil
+// RuntimeEnvironment result; проверяет ответ команды без заявления успешного создания environment,
+// допуска image или запуска workload.
 func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -2809,6 +2837,22 @@ func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context
 	}
 }
 
+// testRuntimeEnvironmentLifecycle uses the earlier accepted/promoted image fixture to create two
+// ready environments and checks list/detail actions and exact version binding. Disable/enable
+// preserves the immutable current version, stale OCC is rejected and a bound environment cannot be
+// deleted. After rebinding the agent, deletion must return a stable terminal snapshot, replay
+// exactly and respect revoked-authority/inexact-version masking. Deleted resources disappear from
+// get/readiness/agent-list/catalog reads; SQL requires a DELETED tombstone with no bindings and
+// exactly one matching audit/outbox event. Ready denotes stored component eligibility, not a
+// running container.
+// testRuntimeEnvironmentLifecycle использует ранее подготовленный accepted/promoted image для двух
+// ready environments и проверяет list/detail actions и точную привязку version. Disable/enable
+// сохраняет immutable current version, устаревший OCC отклоняется, bound environment нельзя
+// удалить. После перепривязки агента удаление должно вернуть устойчивый terminal snapshot, точно
+// повторяться и сохранять masking при отзыве полномочий или неточной version. Удалённый ресурс
+// отсутствует в get/readiness/agent-list/catalog; SQL требует DELETED tombstone без bindings и
+// ровно по одному подходящему audit/outbox event. Ready означает сохранённую компонентную
+// eligibility, а не работающий контейнер.
 func testRuntimeEnvironmentLifecycle(
 	t *testing.T,
 	ctx context.Context,
@@ -3033,6 +3077,22 @@ WHERE environment.ref = $1`, first.Ref).Scan(
 	}
 }
 
+// testRuntimeEnvironmentPrivilegedAdmission checks privileged create/publication authentication
+// ordering using missing, older-than-five-minute and more-than-thirty-second-future timestamps.
+// Fresh owner authentication reaches missing-image Invalid rather than granting a usable
+// environment. Unsupported Kubernetes access is rejected without changing the published
+// environment. A project.manage-only principal reaches ordinary validation but receives NotFound
+// for privileged policy with both fresh and stale authentication, preventing a reauthentication
+// oracle before exact privileged permission. This fixture does not grant cluster access or start a
+// runtime.
+// testRuntimeEnvironmentPrivilegedAdmission проверяет порядок аутентификации privileged
+// create/publication с отсутствующим timestamp, возрастом более пяти минут и временем более чем на
+// тридцать секунд в будущем. Свежая аутентификация владельца достигает Invalid отсутствующего
+// image, не создавая пригодное environment. Неподдерживаемый Kubernetes access отклоняется без
+// изменения опубликованного environment. Principal только с project.manage достигает обычной
+// валидации, но получает NotFound для privileged policy и со свежей, и с устаревшей
+// аутентификацией, закрывая reauthentication oracle до точного privileged permission. Оснастка не
+// выдаёт cluster access и не запускает runtime.
 func testRuntimeEnvironmentPrivilegedAdmission(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	now := time.Now().UTC()
@@ -3178,6 +3238,22 @@ func testRuntimeEnvironmentPrivilegedAdmission(t *testing.T, ctx context.Context
 	}
 }
 
+// testEnterpriseAccessRestriction runs eight concurrent synthetic OIDC-group resolutions, requires
+// one membership, checks the unchanged-group fast path against a held subject lock with a 750 ms
+// budget and refreshes an aged group observation. It grants a candidate project view plus one
+// exact agent launch and checks catalog/explain/launch/proof boundaries across another
+// agent/project. Owner keyset cursors reject changed filters/actors, the membership presentation
+// remains a view and exact launch grants must not flatten into project launch authority. The one
+// allowed run is cancelled. These are database/service assertions over fixture identities, without
+// contacting an identity provider or executing a workload.
+// testEnterpriseAccessRestriction выполняет восемь параллельных разрешений синтетической OIDC
+// group, требует одну membership, проверяет fast path неизменённой группы при удерживаемом subject
+// lock с бюджетом750 ms и обновляет устаревшее наблюдение группы. Выдаёт candidate project view и
+// launch одного точного агента, проверяя catalog/explain/launch/proof boundaries относительно
+// другого агента/проекта. Owner keyset cursors отклоняют изменённые filters/actors, memberships
+// остаётся view, точный launch grant не разворачивается в project launch authority. Единственный
+// разрешённый run отменяется. Это assertions БД/сервиса над тестовыми identities без обращения к
+// identity provider и исполнения workload.
 func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
@@ -3436,6 +3512,16 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 	}
 }
 
+// testInstructionDraftSave creates a project/agent and saves instructions twice through
+// CreateInstructions using each returned agent version and distinct idempotency keys. The second
+// save must increment the agent version and replace the same mutable draft: SQL requires one DRAFT
+// row with the second content. It then delegates instruction binding lifecycle assertions; no
+// draft publication or runtime execution is implied by the saves.
+// testInstructionDraftSave создаёт project/agent и дважды сохраняет instructions через
+// CreateInstructions с каждой полученной agent version и разными idempotency keys. Второе
+// сохранение должно увеличить version агента и заменить тот же mutable draft: SQL требует одну
+// строку DRAFT со вторым content. Затем делегирует проверки instruction binding lifecycle;
+// сохранение не означает публикацию draft или исполнение runtime.
 func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -3481,6 +3567,19 @@ func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Rep
 	testInstructionBindingLifecycle(t, ctx, repository, service, owner, agent.Ref)
 }
 
+// testProviderCredentialLegacyRepair reads the initial first credential descriptor, changes only
+// configured secret identity/resource version with the same content digest and requires Bootstrap
+// to append revision two and increment account version once. Repetition must be idempotent; a
+// different content digest must fail without changing the stored descriptor, counts or account
+// version. The successful path explicitly restores the repaired configuration at the end. All
+// inputs are synthetic metadata; no secret bytes are read, copied or rotated.
+// testProviderCredentialLegacyRepair читает исходный первый credential descriptor, меняет только
+// настроенные identity/resource version секрета при том же digest и требует от Bootstrap
+// добавления второй revision с однократным увеличением account version. Повтор должен быть
+// идемпотентным; иной digest содержимого должен отклоняться без изменения сохранённого descriptor,
+// счётчиков или account version. Успешный путь явно восстанавливает исправленную конфигурацию в
+// конце. Все inputs являются синтетическими метаданными; байты секретов не читаются, не копируются
+// и не ротируются.
 func testProviderCredentialLegacyRepair(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	readback := func() (revision, accountVersion, count int64, uid, resourceVersion, digest string) {
@@ -3554,6 +3653,18 @@ func testProviderCredentialLegacyRepair(t *testing.T, ctx context.Context, repos
 	}
 }
 
+// testSystemAssistantCorePromptUpgrade advances the shipped core-prompt revision by one and runs
+// reconciliation twice in committed transactions with rollback cleanup. Readback requires the new
+// prompt/revision, RECOVERING and matching desired revision, version two, two published core
+// prompts and one upgrade audit. Attempting the previous shipped revision must fail. The component
+// checks forward-only persisted upgrade and idempotency, without executing or declaring the
+// assistant ready.
+// testSystemAssistantCorePromptUpgrade повышает shipped core-prompt revision на один и дважды
+// выполняет reconciliation в фиксируемых транзакциях с rollback cleanup. Readback требует новый
+// prompt/revision, RECOVERING и совпадающую desired revision, version two, два опубликованных core
+// prompts и один upgrade audit. Попытка прежней shipped revision должна завершиться ошибкой.
+// Компонент проверяет сохранённое forward-only обновление и идемпотентность без исполнения
+// ассистента или заявления его готовности.
 func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	upgrade := func(revision, prompt string) error {
@@ -3601,6 +3712,20 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 	}
 }
 
+// testInteractionHealthRouting checks that the optional Mattermost definition exposes
+// interaction-owned routing/readiness and eighteen capabilities, then creates a disconnected
+// connection and seeds only a synthetic credential descriptor. A queued connection test must be
+// invisible to generic integration claims and claimed once by the interaction worker. Completing
+// the exact lease/fence/generation with a generic principal is Forbidden; the interaction
+// principal produces CONNECTED. This verifies persisted routing/authority and completion metadata
+// without contacting Mattermost or testing real credentials.
+// testInteractionHealthRouting проверяет у optional Mattermost definition маршрут и readiness
+// владельца interaction с восемнадцатью capabilities, затем создаёт disconnected connection и
+// добавляет только синтетический credential descriptor. Поставленный connection test должен быть
+// недоступен generic integration claims и однократно выдан interaction worker. Completion точного
+// lease/fence/generation с generic principal запрещён Forbidden; interaction principal получает
+// CONNECTED. Проверяет сохранённые routing/authority и completion metadata без обращения к
+// Mattermost или проверки реальных credentials.
 func testInteractionHealthRouting(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
