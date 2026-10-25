@@ -14,6 +14,7 @@ updated: 2026-10-24
 - `OPS-DOC-1763` — [Совместная отладка прототипа системного помощника](../operations/assistant-prototype-debug-1763.md).
 - `RUN-DOC-1797-STORAGE` — [Перенос хранилища локальной ноды](../runbooks/local-node-storage.md).
 - `OPS-RUNTIME-MEMORY-001` — [Диагностика нехватки памяти исполнителя](../operations/runtime-memory-failure.md).
+- `OPS-OUTBOX-1855` — [Восстановление доставки событий после большой истории](../operations/outbox-claim-stabilization-1855.md).
 
 Документ задает устойчивые идентификаторы и реестр документации.
 

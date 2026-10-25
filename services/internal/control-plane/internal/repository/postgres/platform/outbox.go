@@ -10,6 +10,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// outboxClaimTimeout bounds database claiming independently of the relay lifetime; an unknown
+// result never authorizes publication and remains recoverable through the existing lease expiry.
+// outboxClaimTimeout ограничивает запрос захвата независимо от жизни relay; неизвестный результат
+// не разрешает публикацию и восстанавливается через существующее истечение lease.
+const outboxClaimTimeout = 5 * time.Second
+
 type OutboxItem struct {
 	EventID, Subject, LeaseToken string
 	Payload                      []byte
@@ -24,10 +30,16 @@ func (repository *Repository) CheckOutbox(ctx context.Context) error {
 	return nil
 }
 
+// ClaimOutbox leases only eligible ordered heads within a bounded database budget, returning no
+// partial batch on cancellation; publication still requires the returned exact lease token.
+// ClaimOutbox арендует только допустимые головы очередей в пределах бюджета БД и не возвращает
+// частичный пакет при отмене; публикация требует точного возвращённого lease token.
 func (repository *Repository) ClaimOutbox(ctx context.Context, instance string, limit int, leaseDuration time.Duration) ([]OutboxItem, error) {
 	if instance == "" || limit < 1 || limit > 128 || leaseDuration < time.Second {
 		return nil, errs.ErrInvalid
 	}
+	ctx, cancel := context.WithTimeout(ctx, outboxClaimTimeout)
+	defer cancel()
 	leaseToken, err := newRef("obl")
 	if err != nil {
 		return nil, err
