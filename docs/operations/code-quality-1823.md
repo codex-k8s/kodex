@@ -4,11 +4,64 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.441.0
+version: 1.442.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий verifier для secret-broker и STT — 25.10.2026
+
+На основе `3942618ee6ad1c76d1e2d6e41d48171dd72f8b90` одинаковые
+pod labels/security, socket-init и verifier image/command/env defaults,
+probes/resources/security и общие mounts вынесены в
+internal-rpc-authority-client-verifier-common. Target закрыт ровно на
+secret-broker и stt-tts-service; control-plane и native runtime-controller
+не включены. Два ролевых components подключают общий до своего patch.
+
+Workload/SPIFFE и PostgreSQL session-user references, пять отдельных
+PostgreSQL/readback/restore volumes, app env/mount и socket aliases остаются
+в ролевых patches. STT сохраняет authority-sockets, secret-broker —
+internal-rpc-authority-sockets. DSN volume mode288 соответствует исходному
+0440; изменение числовой записи не меняет режим. Common patch не содержит
+workload/SPIFFE или имён ролевых Secret. Order anchors сохраняют прежние
+позиции env/mounts вокруг конкретных identity bindings.
+
+Проверка обратного раскрытия common+role восстанавливает оба полных исходных
+YAML trees с сохранением порядка списков, отсутствием duplicate keys и
+закрытым target/config profile. Отдельный обход resources/bases/components
+нашёл8 потребителей именно verifier-компонент; все включены в полный
+независимый differential render. Runtime-поля не выводились из имени и
+не заменялись новым универсальным identity template.
+
+Проверки финального дерева:
+
+- Полное обратное раскрытие2 source profiles, closed targets и проверка
+  полноты8 потребителей — PASS.
+- Canonical render31 потребителя прежнего issuer-графа —30 полностью
+  одинаковых успешных сборок и1 прежний standalone staging/control-api-gateway
+  FAIL с тем же stderr (20.62s). Все8 verifier consumers входят в эти
+  успешные сборки; внутренние массивы не сортировались.
+- Публичная ABI render-проверка обоих полных web-профилей и negative fixtures —
+  PASS (21.63s).
+- 17 unit-тестов анализаторов — PASS (0.52s),0 failed/0 skipped.
+- Inventory/detector/assessment, Go completeness и5 ignore guards,
+  `git diff --check` — PASS LOCAL.
+
+Raw1653→1647: шесть прежних точных совпадений исчезли, новых нет.
+Retained873 и все756 прежних entries неизменны; unresolved780→774.
+Inventory6702 sources/222 exclusions, Go21501/21501 EN→RU,0 missing.
+Новые ignored paths, thresholds или retention decisions не добавлялись.
+
+Context7 для Kustomize ранее в этом этапе вернул Invalid API key;
+использованы официальные
+[Kustomize components](https://github.com/kubernetes-sigs/kustomize/blob/master/examples/components.md)
+и [Kubernetes kustomization](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#customizing).
+Проверки локальные/offline с очищенным child env без credential/KODEX inputs
+и KUBECONFIG. Go/frontend-код не менялся, их build/unit не перезапускались.
+Browser/E2E, PostgreSQL component execution, apply/deploy/live и полная
+продуктовая приёмка — NOT RUN. PR остаётся Draft, Issue#1823 открыт;
+774 detector-группы ещё требуют решения.
 
 ## Избыточные mount markers в ролевых issuer-патчах — 25.10.2026
 
