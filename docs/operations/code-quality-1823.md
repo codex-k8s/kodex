@@ -4,11 +4,54 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.415.0
+version: 1.416.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Runtime, continuation, workflow scope и unit fixtures — 25.10.2026
+
+На основе `56eed7e58268f8402371f3746587f73782ec91c6` полностью прочитаны
+12 файлов(2106 исходных строк):9 unit-test files и3 production prompt files.
+Все99 сохранённых объявлений описаны EN→RU. Прочитаны4 embedded SQL(97 строк)
+workflow execution/scope/variable availability и terminal conversation UPDATE,
+проверяемый runtime test. Исторические serialized fixtures не переписаны;
+их принятие existing consumer проверяется тестом, не объявляется live rejoin.
+
+Весь пакет меняет только комментарии:12 полных expected-AST/directive
+сравнений с исходными файлами — PASS. Нет новых helpers, runtime transitions,
+claim/grant/lease, event, retry, API или схем; SQL, fixtures и assertions прежние.
+Применимые GO-DOC-001/002/003/006, GUIDE-DOC-006 и GOV-DOC-003 соблюдаются.
+Context7 pgx v5.10.0 QueryRow/Scan/ErrNoRows/Commit/Rollback уже проверен в414;
+новый внешний API не использован.
+
+| Область | Что описано и что фактически проверяется |
+| --- | --- |
+| Runtime projection | Synthetic Secret descriptors без Secret bytes; exact environment/image/tools digest; closed provider adapter, workspace quotas/rule order и completion-code classifiers |
+| Runtime terminal / usage / grants | SQL-shape update не меняет titles; strict token breakdown; effective capability filtering и отсутствие system subscriptions. Никакого live terminal commit либо broker readback |
+| Workflow validation | Bounded two-step graph, completion criteria Unicode limits через draft/hydration/command, deterministic server draft refs, input fields и dependencies/gates. Shape не является published eligibility/launch authority |
+| Artifact READ retry | Exact attempts/rollback, safe fallback/SQLSTATE, jitter budget, cancel и fresh denial. Unknown outcome/cleanup failure не повторяются; caller context остаётся live. Stub не доказывает PostgreSQL rollback или реальные races |
+| Continuation | Exact full task, USER/ASSISTANT history, current-root pins, owner template byte limits, closed redacted reasons и отсутствие partial mutation при отказе. Synthetic v2/v3/v4/v5 producer/consumer compatibility не равна runtime execution |
+| Platform instructions | Historical text/digests immutable, свежие bindings для4 targets/2 locales, owner overlays и ABI/capabilities сохраняются, unknown/forged/mismatch закрыто отклоняются. Git guidance проверяется как текст; credential helper не запускается |
+| Workflow prompt | Fresh tenant/node owner SQL и current-root/result-gate state. Retry lineage/history не переносят success/authority. Existing32-byte hex check не объявлен lowercase-only; guidance advisory, owner command перепроверяет frontier |
+| Declared scope | Scope-only authorized preview, exact context digest/project и DRAFT insert. Hydration проверяет current agent access; absent row не очищает прежний pointer. Validate разрешает только обозначенные deferred runtime variables, continuation требует actual Session |
+| Variable availability | Stored snapshot SQL проверяет run.view и authority project. Отдельные agent/config reads не объявлены одной snapshot transaction. Present false/zero/empty collection считается available, availability не выдаёт полномочий |
+| Packages / events / finance | Retired exact package metadata не открывает execution, corruption не маскируется unsupported marker. Fake outbox проверяет payload/Unicode/subject/sequence, не delivery. Collector replay/order проверяется последовательно, не реальными concurrent transactions |
+
+Полный control-plane build/unit — PASS LOCAL(checks416-final), GOWORK=off,
+GOMAXPROCS=4/-p2, наследуемые KODEX inputs и18 статических test inputs исключены.
+17 analyzer unit и5 exact-ignore guards — PASS. PostgreSQL component, реальная
+storage/runner/provider/broker инфраструктура, browser/E2E/deploy/live — NOT RUN/SKIP.
+Статический анализ и fake transactions не заменяют эту приёмку.
+
+Detector1767 raw/902 retained occurrences/865 unresolved, registry776 валиден;
+новых/удалённых fragment/format/kind/path-pair keys нет. В9 выбранных unit files
+unresolved groups отсутствуют; production files только описаны, исключения не
+создавались. Inventory6684 own sources/222 exclusions и thresholds прежние.
+Go21488:20340 EN→RU,1148 missing. PR218 Go-файлов/2209 объявлений, missing0;
+221 whole changed blobs. Общий #1823 открыт, PR #1829 Draft; QA/main f2e64eb
+сохранён, прикладные секреты не читались и не переносились.
 
 ## Provider lifecycle и financial collector — 25.10.2026
 

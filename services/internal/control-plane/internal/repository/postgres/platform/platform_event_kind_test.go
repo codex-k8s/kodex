@@ -12,12 +12,23 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// platformEventOutboxFixture embeds an unimplemented transaction while providing sequence and
+// outbox capture methods for one fixed organization stream. It checks producer argument binding,
+// not durable broker publication, PostgreSQL atomicity or consumer processing.
+// platformEventOutboxFixture встраивает нереализованную transaction, предоставляя sequence и
+// outbox capture methods одного fixed organization stream. Проверяет producer argument binding, а
+// не durable broker publication, PostgreSQL atomicity либо consumer processing.
 type platformEventOutboxFixture struct {
 	pgx.Tx
 	t       *testing.T
 	payload []byte
 }
 
+// QueryRow requires the exact installation-sequence UPDATE with no arguments and returns this
+// fixture as its row. Unexpected query/arity fails the test; no real installation sequence is
+// advanced.
+// QueryRow требует exact installation-sequence UPDATE без arguments и возвращает fixture как row.
+// Unexpected query/arity завершает test; реальный installation sequence не продвигается.
 func (fixture *platformEventOutboxFixture) QueryRow(_ context.Context, query string, args ...any) pgx.Row {
 	fixture.t.Helper()
 	if query != queryCommandsEmitplatformeventUpdateInstallationPlatformSequence || len(args) != 0 {
@@ -26,6 +37,10 @@ func (fixture *platformEventOutboxFixture) QueryRow(_ context.Context, query str
 	return fixture
 }
 
+// Scan requires one destination and writes synthetic sequence eight into its expected int64
+// pointer. It assumes the destination type and models no sequence concurrency.
+// Scan требует один destination и пишет synthetic sequence восемь в ожидаемый int64 pointer.
+// Полагается на destination type и не моделирует sequence concurrency.
 func (fixture *platformEventOutboxFixture) Scan(dest ...any) error {
 	fixture.t.Helper()
 	if len(dest) != 1 {
@@ -35,6 +50,12 @@ func (fixture *platformEventOutboxFixture) Scan(dest ...any) error {
 	return nil
 }
 
+// Exec requires exact outbox SQL, five arguments and fixed subject/ordering-key/sequence pins
+// before capturing payload bytes and returning one inserted row. It stores the slice without a
+// copy and performs no database write or broker send.
+// Exec требует exact outbox SQL, пять arguments и fixed subject/ordering-key/sequence pins до
+// сохранения payload bytes и возврата одной inserted row. Хранит slice без копии, не пишет в БД и
+// не отправляет broker message.
 func (fixture *platformEventOutboxFixture) Exec(_ context.Context, query string, args ...any) (pgconn.CommandTag, error) {
 	fixture.t.Helper()
 	if query != queryCommandsEmitplatformeventInsertOutboxEventsEventIdOrderingKeyPayload || len(args) != 5 ||
@@ -45,6 +66,14 @@ func (fixture *platformEventOutboxFixture) Exec(_ context.Context, query string,
 	return pgconn.NewCommandTag("INSERT 0 1"), nil
 }
 
+// TestPlatformEventSummaryUsesContractUnicodeBound checks ASCII/Cyrillic/emoji summaries at and
+// above 1000 codepoints, requiring a preserved prefix/ellipsis, valid UTF-8, bounded payload and
+// exact aggregate/sequence metadata. The independent 2000-character RUN truncation bound must stay
+// unchanged; only a fake outbox is used.
+// TestPlatformEventSummaryUsesContractUnicodeBound проверяет ASCII/Cyrillic/emoji summaries на
+// границе и выше 1000 codepoints, требуя сохранения prefix/ellipsis, valid UTF-8, bounded payload
+// и exact aggregate/sequence metadata. Отдельный RUN truncation bound 2000 символов остаётся
+// прежним; используется только fake outbox.
 func TestPlatformEventSummaryUsesContractUnicodeBound(t *testing.T) {
 	for name, character := range map[string]string{"ASCII": "a", "Cyrillic": "я", "emoji": "😀"} {
 		for _, count := range []int{1000, 1001, 2000} {
@@ -89,6 +118,12 @@ func TestPlatformEventSummaryUsesContractUnicodeBound(t *testing.T) {
 	}
 }
 
+// TestPlatformEventKindsMatchContract checks the explicit event-name to aggregate-kind mapping,
+// including role-image variants sharing ROLE_IMAGE_RECIPE. It validates classification only, not
+// event production, schema completeness or delivery.
+// TestPlatformEventKindsMatchContract проверяет явное отображение event-name в aggregate-kind,
+// включая role-image variants с общим ROLE_IMAGE_RECIPE. Проверяет только classification, а не
+// event production, полноту schema либо delivery.
 func TestPlatformEventKindsMatchContract(t *testing.T) {
 	want := map[string]string{
 		"PROJECT_CHANGED":                "PROJECT",
@@ -118,6 +153,10 @@ func TestPlatformEventKindsMatchContract(t *testing.T) {
 	}
 }
 
+// TestPlatformEventKindRejectsUnknownEvent requires an unknown event name to produce an empty kind
+// rather than a generic guessed aggregate. It does not authorize or publish an event.
+// TestPlatformEventKindRejectsUnknownEvent требует пустой kind для неизвестного event name вместо
+// угаданного generic aggregate. Не авторизует и не публикует event.
 func TestPlatformEventKindRejectsUnknownEvent(t *testing.T) {
 	if got := platformEventKind("UNKNOWN_CHANGED"); got != "" {
 		t.Fatalf("unknown platform event projected as %s", got)

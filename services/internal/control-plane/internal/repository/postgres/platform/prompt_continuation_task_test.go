@@ -17,6 +17,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// TestContinuationLargeRussianTaskRemainsWhole builds a continuation from a long Cyrillic task and
+// requires exact task/history preservation, bounded notice materialization and the queued-task
+// interrupt warning. It uses a synthetic prior-row transaction and validates the platform
+// instruction binding without contacting a runner.
+// TestContinuationLargeRussianTaskRemainsWhole строит continuation из длинного кириллического task
+// и требует exact task/history preservation, bounded notice materialization и предупреждение о
+// queued-task interrupt. Использует synthetic prior-row transaction и проверяет platform
+// instruction binding без обращения к runner.
 func TestContinuationLargeRussianTaskRemainsWhole(t *testing.T) {
 	prompt := workflowPromptFixture()
 	prompt.Locale, prompt.TargetKind, prompt.TargetRef = "ru", promptservice.TargetAgent, "agt_current"
@@ -49,6 +57,14 @@ func TestContinuationLargeRussianTaskRemainsWhole(t *testing.T) {
 	}
 }
 
+// continuationTaskOracleFixture materializes a fresh platform-bound agent prompt and appends one
+// continuation notice to synthetic USER/ASSISTANT history, returning a fully pinned RunnerInput.
+// The exact Cyrillic/template-looking task remains data; the fixture does not create a durable
+// runtime revision or grant.
+// continuationTaskOracleFixture материализует свежий platform-bound agent prompt и добавляет один
+// continuation notice в synthetic USER/ASSISTANT history, возвращая полный pinned RunnerInput.
+// Exact Cyrillic/template-looking task остаётся данными; fixture не создаёт durable runtime
+// revision либо grant.
 func continuationTaskOracleFixture(t *testing.T) runtimecontract.RunnerInput {
 	t.Helper()
 	prompt := workflowPromptFixture()
@@ -76,6 +92,14 @@ func continuationTaskOracleFixture(t *testing.T) runtimecontract.RunnerInput {
 		PromptTargetKind: promptservice.TargetAgent, Capabilities: base.EffectiveCapabilities, SessionContext: runtimeRevisionSessionContext(current["sessionContext"])}
 }
 
+// TestContinuationTaskProducerMatchesRunnerOracle round-trips the fresh v5 producer input without
+// change and validates it plus historical v2/v3/v4 synthetic notices through the shared consumer.
+// The v4 file has a fixed byte digest; this is serialized producer/consumer compatibility, not
+// execution by a live runner.
+// TestContinuationTaskProducerMatchesRunnerOracle проверяет неизменный round-trip fresh v5
+// producer input и его совместимость с historical v2/v3/v4 synthetic notices через shared
+// consumer. V4 file имеет fixed byte digest; это serialized producer/consumer compatibility, а не
+// execution live runner.
 func TestContinuationTaskProducerMatchesRunnerOracle(t *testing.T) {
 	actual := continuationTaskOracleFixture(t)
 	if !strings.Contains(actual.Instructions, "Revision: platform-source-conformity-v5") {
@@ -116,6 +140,14 @@ func TestContinuationTaskProducerMatchesRunnerOracle(t *testing.T) {
 	}
 }
 
+// TestContinuationTaskProjectionRejectsMismatchWithoutMutation mutates task and exact
+// run/node/session/turn/revision/attempt pins, encoding, target or existing owner overlay and
+// requires Conflict with byte-equivalent snapshot before/after. No rejected projection may replace
+// owner data or partially bind a task.
+// TestContinuationTaskProjectionRejectsMismatchWithoutMutation меняет task и exact
+// run/node/session/turn/revision/attempt pins, encoding, target либо существующий owner overlay и
+// требует Conflict с byte-equivalent snapshot до/после. Отклонённая projection не должна заменять
+// owner data или частично связывать task.
 func TestContinuationTaskProjectionRejectsMismatchWithoutMutation(t *testing.T) {
 	for _, mutation := range []string{"task", "run", "node", "session", "turn", "revision", "attempt", "utf8", "nul", "empty", "target", "overlay"} {
 		t.Run(mutation, func(t *testing.T) {
@@ -161,9 +193,26 @@ func TestContinuationTaskProjectionRejectsMismatchWithoutMutation(t *testing.T) 
 	}
 }
 
+// continuationCustomTaskTx extends the synthetic previous-revision transaction with one custom
+// continuation-template row. It supports only the fixture query paths and does not model database
+// authorization, locks or commit.
+// continuationCustomTaskTx расширяет synthetic previous-revision transaction одной custom
+// continuation-template row. Поддерживает только fixture query paths и не моделирует DB
+// authorization, locks либо commit.
 type continuationCustomTaskTx struct{ continuationTransitionTx }
+
+// continuationCustomTaskRow represents the fixed owner-template response used to test the full
+// task against notice-size limits. It carries no external template state or authority.
+// continuationCustomTaskRow представляет fixed owner-template response для проверки full task
+// относительно notice-size limits. Не переносит внешнее template state либо authority.
 type continuationCustomTaskRow struct{}
 
+// QueryRow intercepts only the continuation-template SQL and returns the fixed custom row; all
+// other queries delegate to the embedded prior-revision stub. Context/arguments are forwarded only
+// on delegation, without real SQL execution.
+// QueryRow перехватывает только continuation-template SQL и возвращает fixed custom row; остальные
+// queries передаёт embedded prior-revision stub. Context/arguments передаются только при
+// delegation, реальный SQL не выполняется.
 func (tx continuationCustomTaskTx) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
 	if query == queryPromptContinuationTemplate {
 		return continuationCustomTaskRow{}
@@ -171,6 +220,11 @@ func (tx continuationCustomTaskTx) QueryRow(ctx context.Context, query string, a
 	return tx.continuationTransitionTx.QueryRow(ctx, query, args...)
 }
 
+// Scan fills the assumed ref/digest/content destinations with a fixed owner template and its exact
+// SHA-256. It relies on the expected pointer types and performs no arity/type validation or
+// database read.
+// Scan заполняет ожидаемые ref/digest/content destinations fixed owner template и его exact
+// SHA-256. Полагается на ожидаемые pointer types, не проверяет arity/types и не читает БД.
 func (continuationCustomTaskRow) Scan(dest ...any) error {
 	content := "Owner requires the whole task: {{.task}}"
 	digest := sha256.Sum256([]byte(content))
@@ -178,6 +232,12 @@ func (continuationCustomTaskRow) Scan(dest ...any) error {
 	return nil
 }
 
+// TestContinuationCustomTaskTemplateIsNotTruncated renders a custom owner template with a 64 KiB
+// task and requires notice-byte Conflict rather than truncation, with no notice or mutation of
+// current context. The task and owner template are synthetic and no provider call occurs.
+// TestContinuationCustomTaskTemplateIsNotTruncated рендерит custom owner template с task 64 KiB и
+// требует notice-byte Conflict вместо усечения, без notice либо изменения current context. Task и
+// owner template синтетические; provider call отсутствует.
 func TestContinuationCustomTaskTemplateIsNotTruncated(t *testing.T) {
 	prompt := workflowPromptFixture()
 	prompt.TargetKind, prompt.TargetRef, prompt.RunRef, prompt.SessionRef = promptservice.TargetAgent, "agt_current", "run_current", "ses_current"

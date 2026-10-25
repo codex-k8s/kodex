@@ -15,11 +15,25 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// continuationTransitionTx embeds an unimplemented transaction and supplies only a prior-runtime
+// snapshot query from stored test bytes. Other transaction operations are unsupported; it is not a
+// concurrency or owner-boundary database fixture.
+// continuationTransitionTx встраивает нереализованную transaction и поддерживает только
+// prior-runtime snapshot query по test bytes. Другие transaction operations не поддерживаются; это
+// не DB fixture конкуренции или owner boundary.
 type continuationTransitionTx struct {
 	pgx.Tx
 	previous []byte
 }
 
+// TestRuntimeEligibilityReasonClosedAndRedacted checks known continuation reasons, UNKNOWN
+// fallback, fixed public error text and wrapped-cause/class preservation. Infrastructure errors
+// and cancellation must not become terminal candidate ineligibility; private cause strings are not
+// public diagnostics.
+// TestRuntimeEligibilityReasonClosedAndRedacted проверяет known continuation reasons, UNKNOWN
+// fallback, fixed public error text и сохранение wrapped cause/class. Infrastructure errors и
+// cancellation не должны становиться terminal candidate ineligibility; private cause strings не
+// являются public diagnostics.
 func TestRuntimeEligibilityReasonClosedAndRedacted(t *testing.T) {
 	for _, reason := range []string{"RUNTIME_CONTEXT", "SESSION_RESUME", "CONTINUATION_PREVIOUS_READ", "CONTINUATION_PREVIOUS_JSON", "CONTINUATION_PREVIOUS_DEPENDENCIES", "CONTINUATION_CURRENT_DEPENDENCIES", "CONTINUATION_DIFF", "CONTINUATION_SNAPSHOT", "CONTINUATION_TEMPLATE_READ", "CONTINUATION_TEMPLATE_BYTES", "CONTINUATION_TEMPLATE_DIGEST", "CONTINUATION_DIFF_JSON", "CONTINUATION_BINDING", "CONTINUATION_WORKFLOW_CONTEXT", "CONTINUATION_TASK_PROJECTION", "CONTINUATION_MATERIALIZATION", "CONTINUATION_INCOMPLETE", "CONTINUATION_NOTICE_BYTES", "CONTINUATION_SESSION_CONTEXT", "private-data"} {
 		cause := fmt.Errorf("private-source: %w", errs.ErrConflict)
@@ -41,6 +55,14 @@ func TestRuntimeEligibilityReasonClosedAndRedacted(t *testing.T) {
 	}
 }
 
+// TestContinuationDiagnosticRejectsBeforePartialAppend injects seven prior/current dependency,
+// diff, binding, size and history failures, requiring the exact closed reason and unchanged
+// serialized current context. Unsupported locale is deliberately rejected by binding before
+// materialization; no partial notice may be appended.
+// TestContinuationDiagnosticRejectsBeforePartialAppend добавляет семь prior/current dependency,
+// diff, binding, size и history failures, требуя exact closed reason и неизменного serialized
+// current context. Unsupported locale намеренно отклоняется binding до materialization; partial
+// notice не добавляется.
 func TestContinuationDiagnosticRejectsBeforePartialAppend(t *testing.T) {
 	for _, test := range []struct{ mutation, want string }{
 		{"previous-json", "CONTINUATION_PREVIOUS_JSON"},
@@ -93,10 +115,21 @@ func TestContinuationDiagnosticRejectsBeforePartialAppend(t *testing.T) {
 	}
 }
 
+// continuationTransitionRow holds optional synthetic previous snapshot bytes; nil distinguishes no
+// row from a present snapshot. It has no independent version, tenant or authority validation.
+// continuationTransitionRow хранит optional synthetic previous snapshot bytes; nil отличает
+// отсутствие row от присутствующего snapshot. Самостоятельные version, tenant либо authority
+// validation отсутствуют.
 type continuationTransitionRow struct {
 	previous []byte
 }
 
+// QueryRow returns prior snapshot bytes only for the exact previous-continuation SQL and an empty
+// row otherwise. It intentionally ignores context/arguments and cannot prove the production query
+// owner or lease predicates.
+// QueryRow возвращает prior snapshot bytes только для exact previous-continuation SQL и empty row
+// иначе. Намеренно игнорирует context/arguments и не доказывает production query owner либо lease
+// predicates.
 func (tx continuationTransitionTx) QueryRow(_ context.Context, query string, _ ...any) pgx.Row {
 	if query == queryPromptContinuationPrevious {
 		return continuationTransitionRow{previous: tx.previous}
@@ -104,6 +137,11 @@ func (tx continuationTransitionTx) QueryRow(_ context.Context, query string, _ .
 	return continuationTransitionRow{}
 }
 
+// Scan returns ErrNoRows for nil prior bytes, otherwise writes fixed previous ID/ref and snapshot
+// bytes into expected destinations. It assumes the three destination types and performs no backend
+// I/O.
+// Scan возвращает ErrNoRows для nil prior bytes, иначе пишет fixed previous ID/ref и snapshot
+// bytes в expected destinations. Полагается на три destination types и не выполняет backend I/O.
 func (row continuationTransitionRow) Scan(dest ...any) error {
 	if row.previous == nil {
 		return pgx.ErrNoRows
@@ -112,6 +150,14 @@ func (row continuationTransitionRow) Scan(dest ...any) error {
 	return nil
 }
 
+// TestContinuationHistoricalToFreshPlatformBinding checks both locales when a historical snapshot
+// acquires a fresh platform binding: only INSTRUCTIONS may differ, prior USER/ASSISTANT history
+// remains exact, and the shared consumer accepts the appended notice. It tests local transition
+// materialization, not persisted lease renewal or live rejoin.
+// TestContinuationHistoricalToFreshPlatformBinding проверяет обе locale при добавлении fresh
+// platform binding к historical snapshot: меняется только INSTRUCTIONS, прежняя USER/ASSISTANT
+// history остаётся точной, shared consumer принимает добавленный notice. Проверяет local
+// transition materialization, а не persisted lease renewal либо live rejoin.
 func TestContinuationHistoricalToFreshPlatformBinding(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		t.Run(locale, func(t *testing.T) {

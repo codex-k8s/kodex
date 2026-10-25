@@ -10,6 +10,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestValidWorkflowVersionAcceptsBoundedExecutionGraph accepts the shared two-step synthetic
+// workflow fixture as a bounded graph. It checks draft validation only, without publication, agent
+// resolution or execution authority.
+// TestValidWorkflowVersionAcceptsBoundedExecutionGraph принимает общую двухшаговую synthetic
+// workflow fixture как bounded graph. Проверяет только draft validation, без publication, agent
+// resolution либо execution authority.
 func TestValidWorkflowVersionAcceptsBoundedExecutionGraph(t *testing.T) {
 	t.Parallel()
 
@@ -19,6 +25,12 @@ func TestValidWorkflowVersionAcceptsBoundedExecutionGraph(t *testing.T) {
 	}
 }
 
+// TestWorkflowCompletionCriteriaBounds checks empty, 2000/2001 ASCII/Cyrillic/emoji and malformed
+// UTF-8 criteria consistently across draft validation, update hydration and create/update command
+// mapping. Accepted text must survive unchanged; invalid text must be Invalid before command use.
+// TestWorkflowCompletionCriteriaBounds проверяет empty, 2000/2001 ASCII/Cyrillic/emoji и malformed
+// UTF-8 criteria одинаково в draft validation, update hydration и create/update command mapping.
+// Допустимый текст сохраняется точно; недопустимый даёт Invalid до использования command.
 func TestWorkflowCompletionCriteriaBounds(t *testing.T) {
 	t.Parallel()
 
@@ -109,6 +121,14 @@ func TestWorkflowCompletionCriteriaBounds(t *testing.T) {
 	}
 }
 
+// TestNormalizeWorkflowDraftIdentityReplacesLegacyLiteralDeterministically requires legacy literal
+// and empty draft refs for the same workflow to receive one stable server-shaped ref and initial
+// version one. It tests deterministic normalization, not persisted uniqueness or owner
+// authorization.
+// TestNormalizeWorkflowDraftIdentityReplacesLegacyLiteralDeterministically требует назначения
+// legacy literal и empty draft refs одного workflow стабильного server-shaped ref и initial
+// version один. Проверяет deterministic normalization, а не persisted uniqueness либо owner
+// authorization.
 func TestNormalizeWorkflowDraftIdentityReplacesLegacyLiteralDeterministically(t *testing.T) {
 	t.Parallel()
 
@@ -121,6 +141,11 @@ func TestNormalizeWorkflowDraftIdentityReplacesLegacyLiteralDeterministically(t 
 	}
 }
 
+// TestValidBoundedRunInputRejectsOversizedPayload accepts a small run-input map and rejects a
+// payload above the 64 KiB serialized bound. It does not validate a workflow schema or launch a
+// run.
+// TestValidBoundedRunInputRejectsOversizedPayload принимает небольшой run-input map и отклоняет
+// payload выше serialized bound 64 KiB. Не проверяет workflow schema и не запускает run.
 func TestValidBoundedRunInputRejectsOversizedPayload(t *testing.T) {
 	t.Parallel()
 
@@ -132,6 +157,12 @@ func TestValidBoundedRunInputRejectsOversizedPayload(t *testing.T) {
 	}
 }
 
+// TestValidWorkflowVersionRejectsUnknownDependency replaces a valid step dependency with a missing
+// key and requires graph validation to fail. It isolates an unresolved dependency; no scheduler or
+// published graph is involved.
+// TestValidWorkflowVersionRejectsUnknownDependency заменяет допустимую step dependency
+// отсутствующим key и требует отказа graph validation. Изолирует unresolved dependency; scheduler
+// и published graph не используются.
 func TestValidWorkflowVersionRejectsUnknownDependency(t *testing.T) {
 	t.Parallel()
 
@@ -142,6 +173,12 @@ func TestValidWorkflowVersionRejectsUnknownDependency(t *testing.T) {
 	}
 }
 
+// TestValidWorkflowVersionRejectsGateWithoutDecisions removes decisions from the fixture
+// human-gate step and requires rejection. This protects draft gate shape without creating a gate,
+// changing its lifecycle or authorizing a decision.
+// TestValidWorkflowVersionRejectsGateWithoutDecisions удаляет decisions из fixture human-gate step
+// и требует отказа. Защищает draft gate shape без создания gate, изменения его lifecycle либо
+// выдачи decision authority.
 func TestValidWorkflowVersionRejectsGateWithoutDecisions(t *testing.T) {
 	t.Parallel()
 
@@ -152,6 +189,12 @@ func TestValidWorkflowVersionRejectsGateWithoutDecisions(t *testing.T) {
 	}
 }
 
+// TestValidWorkflowVersionRejectsUnsafeCapabilityKey injects a punctuation-bearing capability key
+// into an otherwise valid step and requires rejection. Syntax validation does not itself establish
+// an available capability or permission.
+// TestValidWorkflowVersionRejectsUnsafeCapabilityKey добавляет capability key с небезопасной
+// пунктуацией в допустимый step и требует отказа. Syntax validation сама не устанавливает
+// available capability либо permission.
 func TestValidWorkflowVersionRejectsUnsafeCapabilityKey(t *testing.T) {
 	t.Parallel()
 
@@ -162,6 +205,12 @@ func TestValidWorkflowVersionRejectsUnsafeCapabilityKey(t *testing.T) {
 	}
 }
 
+// TestValidWorkflowVersionAllowsOneAgentInSeveralSteps reuses the first step agent in the second
+// step and requires the graph to remain valid. Agent references are deliberately not constrained
+// to be unique across steps; live eligibility is outside this test.
+// TestValidWorkflowVersionAllowsOneAgentInSeveralSteps повторяет agent первого step во втором и
+// требует сохранения допустимого graph. Agent refs намеренно не обязаны быть уникальными между
+// steps; live eligibility не проверяется.
 func TestValidWorkflowVersionAllowsOneAgentInSeveralSteps(t *testing.T) {
 	t.Parallel()
 
@@ -172,6 +221,12 @@ func TestValidWorkflowVersionAllowsOneAgentInSeveralSteps(t *testing.T) {
 	}
 }
 
+// TestValidWorkflowVersionRejectsInvalidInputFields rejects duplicate SELECT options, unsafe field
+// keys, an empty SELECT and options on a TEXT field in fresh workflow fixtures. It checks field
+// schema rules without modifying stored workflow versions.
+// TestValidWorkflowVersionRejectsInvalidInputFields отклоняет duplicate SELECT options, unsafe
+// field keys, empty SELECT и options для TEXT в свежих workflow fixtures. Проверяет field schema
+// rules без изменения stored workflow versions.
 func TestValidWorkflowVersionRejectsInvalidInputFields(t *testing.T) {
 	t.Parallel()
 
@@ -191,6 +246,12 @@ func TestValidWorkflowVersionRejectsInvalidInputFields(t *testing.T) {
 	}
 }
 
+// TestValidWorkflowRunInput accepts exact required text, a declared SELECT value and ISO date,
+// then rejects missing required, unknown key, undeclared option and malformed date cases. Only
+// schema validation runs; no task or run is created.
+// TestValidWorkflowRunInput принимает exact required text, объявленное SELECT value и ISO date,
+// затем отклоняет missing required, unknown key, undeclared option и malformed date. Выполняется
+// только schema validation; task или run не создаётся.
 func TestValidWorkflowRunInput(t *testing.T) {
 	t.Parallel()
 
@@ -216,6 +277,12 @@ func TestValidWorkflowRunInput(t *testing.T) {
 	}
 }
 
+// validWorkflowFixture returns a fresh two-step draft with sequential dependency, distinct agents,
+// bounded concurrency/timeouts, one artifact-read capability and an approval/change-request human
+// gate. Synthetic refs support shape tests only and do not resolve real resources.
+// validWorkflowFixture возвращает свежий двухшаговый draft с последовательной dependency, разными
+// agents, bounded concurrency/timeouts, одной artifact-read capability и approval/change-request
+// human gate. Synthetic refs нужны только для shape tests и не разрешают реальные resources.
 func validWorkflowFixture() entity.WorkflowVersion {
 	return entity.WorkflowVersion{
 		Ref:                 "wfv-fixture",
