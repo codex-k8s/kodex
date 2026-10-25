@@ -1,12 +1,20 @@
 package platform
 
 import (
+	_ "embed"
+	"fmt"
 	"testing"
 	"time"
 
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
+
+// queryRepositoryBundleSourceRetention separates legitimate active knowledge bindings from the publication retention consumer without changing business state.
+// queryRepositoryBundleSourceRetention отличает legitimate active knowledge bindings от publication retention consumer, не меняя business state.
+//
+//go:embed testdata/sql/repository_bundle_source_retention.sql
+var queryRepositoryBundleSourceRetention string
 
 // testRepositoryBundleUnknownRecovery uses two separate native graphs and one shared real30-second backoff, proving both terminal-root and still-active-root revocation retain bytes without reissuing a native invocation grant.
 // testRepositoryBundleUnknownRecovery использует два native graph и один настоящий30-second backoff, проверяя terminal-root и active-root revoke без перевыдачи native invocation grant и утраты source bytes.
@@ -18,7 +26,7 @@ func testRepositoryBundleUnknownRecovery(t *testing.T) {
 	}
 	var items []pending
 	for _, terminal := range []bool{true, false} {
-		f := newRepositoryBundleFixture(t)
+		f := newRepositoryBundleFixtureMode(t, !terminal)
 		f.prepare()
 		f.decide("APPROVE")
 		effect := f.claim()
@@ -47,6 +55,12 @@ func testRepositoryBundleUnknownRecovery(t *testing.T) {
 				t.Fatal("UNKNOWN source is purgeable", err)
 			}
 		} else {
+			f.completeOrigin()
+			repositoryBundleChildState(t, f, 0, "RUNNING")
+			root, err := f.service.GetRun(f.ctx, f.owner, f.parentRun.Ref)
+			if err != nil || root.State != "RUNNING" {
+				t.Fatal("pending publication failed to retain active root after model completion", err)
+			}
 			c, err := f.service.GetIntegrationConnection(f.ctx, f.owner, f.connection.Ref)
 			if err != nil {
 				t.Fatal(err)
@@ -83,13 +97,44 @@ func testRepositoryBundleUnknownRecovery(t *testing.T) {
 		}
 		f.complete(effect)
 		if !item.terminal {
-			f.completeOrigin()
+			repositoryBundleChildState(t, f, 0, "RUNNING")
+			owner := resolvedTestPrincipal(t, f.ctx, f.r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.repository-bundles.get"}, "control-api-gateway")
+			view, err := f.service.GetRepositoryBundle(f.ctx, owner, port.RepositoryBundleRead{GateRef: f.proposal.GateRef, Limit: 16})
+			if err != nil || view.Proposal.State != "SUCCEEDED" || view.Proposal.CandidateCommitSHA != effect.CandidateCommitSHA || view.Proposal.ContinuationState != "BLOCKED" || view.Proposal.ContinuationCode != "CONTINUATION_AUTHORITY_CHANGED" {
+				t.Fatal("confirmed past fact lost explicit closed-authority delivery outcome", err)
+			}
+			root, err := f.service.GetRun(f.ctx, f.owner, f.parentRun.Ref)
+			if err != nil || root.State != "RUNNING" {
+				t.Fatal("past fact falsely completed or reopened root", err)
+			}
+			if err = f.pool.QueryRow(f.ctx, queryRepositoryBundleFixtureState, f.proposal.Ref).Scan(&state, &invocation, &retained, &active); err != nil || invocation != "UNKNOWN_OUTCOME" || active != 0 || !retained {
+				t.Fatal("blocked result lost active root custody or reissued native authority", err)
+			}
+			f.execute(command.CancelRun, "resolve-blocked-pastfact", &root.Version, command.RunCommandInput{RunRef: root.Ref, Reason: "Resolve revoked continuation without changing confirmed Git fact"})
+			view, err = f.service.GetRepositoryBundle(f.ctx, owner, port.RepositoryBundleRead{GateRef: f.proposal.GateRef, Limit: 16})
+			if err != nil || view.Proposal.State != "SUCCEEDED" || view.Proposal.CandidateCommitSHA != effect.CandidateCommitSHA || view.Proposal.ContinuationState != "CANCELLED" || view.Proposal.ContinuationCode != "" {
+				t.Fatal("owner cancel changed Git fact or left blocked delivery", err)
+			}
+			// Knowledge bindings independently retain sources; release them through native owner commands before checking the broad retention predicate.
+			// Knowledge bindings самостоятельно удерживают sources; перед broad retention check снимаем их через native owner commands.
+			for i, ref := range []string{f.input.Archive.Ref, f.input.Manifest.Ref} {
+				var bindings int64
+				var legitimateRetention bool
+				if err := f.pool.QueryRow(f.ctx, queryRepositoryBundleSourceRetention, ref, f.proposal.Ref).Scan(&bindings, &legitimateRetention); err != nil || bindings < 1 || !legitimateRetention {
+					t.Fatal("legitimate knowledge custody disappeared before native unbind", err)
+				}
+				artifact, err := f.service.GetArtifact(f.ctx, f.owner, ref)
+				if err != nil {
+					t.Fatal("read source before native knowledge release", err)
+				}
+				f.execute(command.ChangeArtifactBinding, fmt.Sprintf("release-recovery-source-%d", i), &artifact.Version, command.ArtifactBindingInput{ArtifactRef: artifact.Ref, AgentRef: f.agent.Ref, Enabled: false})
+			}
 		}
 		fresh, err := f.service.GetRun(f.ctx, f.owner, f.run.Ref)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if item.terminal && fresh.State != "CANCELLED" {
+		if fresh.State != "CANCELLED" {
 			t.Fatal("past effect revived terminal root")
 		}
 		_, graph, err := f.service.GetRunGraph(f.ctx, f.owner, f.run.Ref)

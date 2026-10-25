@@ -165,6 +165,13 @@ root. Fresh authority deny достаточен для BLOCKED даже при �
 вложенных детях; их завершение не утверждается. Оба порядка disable/origin
 проверяются отдельно; недоставленный
 late-disable result удерживается до owner CancelRun с полным outcome readback.
+Тот же barrier сохраняется после read-only подтверждения Git past fact, если
+отзыв source authority уже закрыл native invocation в UNKNOWN. Даже при
+сохранённом `agent.launch` это не разрешает новый turn/grant: parent callback
+остаётся withheld, owner видит Git SUCCEEDED отдельно от delivery BLOCKED.
+Native CancelRun закрывает delivery и active-root input retention, не меняя
+подтверждённый commit. UNKNOWN fixture завершает model turn до реального31s
+backoff; длительность runtime lease не расширяется и heartbeat не подделывается.
 
 ## Матрица жизненного цикла
 
