@@ -4,11 +4,66 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.466.0
+version: 1.467.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие HTTP timeout/request/drain primitives локальных форм — 25.10.2026
+
+Оставшиеся две JavaScript-группы устранены через существующий owner-ui-http.mjs.
+configureInputServer задаёт прежние request/headers/keepalive timeouts и
+TLS-client-error/upgrade listeners. attachInputHandler передаёт request/response
+native handler один раз; Promise rejection сначала уничтожает socket, затем
+закрывает форму без вывода raw error/retry. Дополнительно общий
+closeInputServer снимает expiry timer и переносит прежний graceful/force drain.
+Он синхронно возвращает прежний Promise: новых await boundaries нет.
+
+Origin/Host/SNI/TLS1.3, listener127.0.0.2/ephemeral port, peer UID, profile/OCC,
+intent, body limits, credential source/keys и consume flags остаются native.
+Кэш closing Promise, Set/listeners соединений, deadline, порядок signals,
+READY payload и finally wipe TLS material не переносились. ReadSecrets и
+readPeer closures не объединялись с timeout/drain. Старые четыре общих
+HTTP-функции owner-ui-http.mjs побайтно прежние, добавлены три узких функции.
+
+| Lifecycle path | Прежний native effect |
+| --- | --- |
+| CLI/env/profile/TLS отказ | тот же catch FAILED/return1, прежние guards/source и finally wipe |
+| listen error | once error reject; тот же catch closeAll/close, без retry |
+| READY | handler/timer/signals установлены до READY; timeouts5000/5000/1000, upgrade destroy |
+| request success/deny/rejection | прежние handler admission/consume/read order; rejection destroy socket затем close |
+| expiry/SIGINT/SIGTERM | caller-owned closing cache; expiry emits EXPIRED, signals только close; native signal ordering |
+| graceful/force close | clear expiry; close затем idle; через1000ms closeAll и оставшиеся tracked sockets; callback отменяет force |
+
+Полная обратная подстановка фактических helper bodies/arguments в6 местах
+восстановила AST обоих native modules. Все старые comments, четыре shared
+функции и AST трёх прежних HTTP unit cases сохранены. Пять negative source
+mutations закрыто отклонены: timeout drift, обратный destroy/close порядок,
+force delay drift, TLS downgrade и parse diagnostics. Domain grants/claims/
+events/owner transitions не менялись; чтение credentials не переносилось.
+
+Node24.21.0: format0,52с, node --check всех4 файлов и49 unit cases0,37с —
+PASS LOCAL (0 skipped). Шесть новых случаев проверяют timeouts/upgrade,
+однократный handler, Promise reject и native sync throw, graceful timer
+cancellation и force ровно через1000ms с live socket Set/ожиданием callback.
+MockTimers подменяет только setTimeout/clearTimeout; реальное время не ждётся,
+TLS servers/ingress Secrets/Chrome/cluster не запускались. Сохранённые негативные
+сценарии обеих форм и project profile прошли на synthetic fixtures.
+
+Detector:6731 прежних sources/222 exclusions,1582 raw/1074 retained/508
+unresolved против1584/1074/510. Удалены2 exact JS raw keys, новых нет;
+registry943 entries побайтно прежний, дополнительных исключений нет. В Python
+и JavaScript не осталось неразобранных групп; остальные508 входят в scope.
+Все5 стадий отчёта прошли, Go descriptions прежние21564/21564, пропусков0.
+Go/frontend/Python/contracts/deploy/modules с предыдущих проверок неизменны.
+
+GUIDE-DOC-003 local credential helpers и GUIDE-DOC-006 lifecycle boundaries
+сверены до выноса; матрица составлена до реализации. Context7 Node v24 HTTP
+API подтвердил close/idle/all и отдельный destroy upgraded sockets; MockTimers
+документирует paired clearTimeout и точный tick. Сохранены прежние вызовы и
+версии. Реальные browser/E2E/PG component/OCI build/apply/deploy/live и
+независимая QA текущего SHA — NOT RUN.
 
 ## Общая Python-оснастка OCI и assertions cache/readback — 25.10.2026
 

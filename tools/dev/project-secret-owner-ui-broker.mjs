@@ -5,6 +5,9 @@ import { createSecureContext } from "node:tls";
 import { pathToFileURL } from "node:url";
 import { readPrivateAgentSecrets } from "./private-agent-secret-reader.mjs";
 import {
+  attachInputHandler,
+  closeInputServer,
+  configureInputServer,
   completeInputPreflight,
   readInputBody,
   setInputResponseHeaders,
@@ -265,28 +268,13 @@ export async function main(args, dependencies = {}) {
     let closing, timer;
     const close = () => {
       if (closing) return closing;
-      clearTimeout(timer);
-      closing = new Promise((resolve) => {
-        const force = setTimeout(() => {
-          server.closeAllConnections();
-          for (const socket of sockets) socket.destroy();
-        }, 1000);
-        server.close(() => {
-          clearTimeout(force);
-          resolve();
-        });
-        server.closeIdleConnections();
-      });
+      closing = closeInputServer(server, sockets, timer);
       return closing;
     };
     const output =
       dependencies.output ??
       ((value) => process.stdout.write(JSON.stringify(value) + "\n"));
-    server.requestTimeout = 5000;
-    server.headersTimeout = 5000;
-    server.keepAliveTimeout = 1000;
-    server.on("tlsClientError", () => {});
-    server.on("upgrade", (_request, socket) => socket.destroy());
+    configureInputServer(server);
     await new Promise((resolve, reject) => {
       server.once("error", reject);
       server.listen(0, "127.0.0.2", resolve);
@@ -311,12 +299,7 @@ export async function main(args, dependencies = {}) {
       close,
       output,
     });
-    server.on("request", (request, response) => {
-      void handler(request, response).catch(() => {
-        request.socket.destroy();
-        void close();
-      });
-    });
+    attachInputHandler(server, handler, close);
     timer = setTimeout(() => {
       output({ state: "EXPIRED" });
       void close();
