@@ -241,9 +241,11 @@ func TestDecodeRunUsageValidatesStoredTurnBreakdown(t *testing.T) {
 	}
 
 	for name, invalid := range map[string][]byte{
-		"unknown field": []byte(`{"total_tokens":0,"input_tokens":0,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"model_context_window":0,"unexpected":1}`),
-		"invalid total": []byte(`{"total_tokens":2,"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"model_context_window":0}`),
-		"invalid turn":  []byte(`{"total_tokens":0,"input_tokens":0,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"model_context_window":0,"turns":{"":{"total_tokens":0,"input_tokens":0,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"model_context_window":0}}}`),
+		"unknown field":   []byte(`{"total_tokens":0,"input_tokens":0,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"model_context_window":0,"unexpected":1}`),
+		"invalid quality": []byte(`{"completeness":"INVALID"}`),
+		"null quality":    []byte(`{"completeness":null}`),
+		"invalid total":   []byte(`{"total_tokens":2,"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"model_context_window":0}`),
+		"invalid turn":    []byte(`{"total_tokens":0,"input_tokens":0,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"model_context_window":0,"turns":{"":{"total_tokens":0,"input_tokens":0,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"model_context_window":0}}}`),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

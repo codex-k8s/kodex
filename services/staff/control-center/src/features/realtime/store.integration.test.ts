@@ -292,6 +292,66 @@ function fullRun(ref: string, sequence: number): Run {
 }
 
 describe("browser-session realtime multiplexer", () => {
+  it("сохраняет PARTIAL snapshot и COMPLETE0 delta, отвергая неизвестное качество", async () => {
+    const store = useRealtimeStore(),
+      platform = usePlatformStore();
+    store.openRun("run_realtime01");
+    store.openRun("run_realtime02");
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    const initial = runSnapshot(socket, "run_realtime01");
+    const run = (initial.runs as Run[]).find(
+      (value) => value.ref === "run_realtime01",
+    );
+    if (!run) throw new Error("Synthetic run snapshot is missing");
+    run.usage = {
+      ...run.usage,
+      completeness: "PARTIAL",
+      totalTokens: 100,
+      inputTokens: 100,
+    };
+    socket.message(initial);
+    await flushProcessing();
+    expect(platform.runs.run_realtime01?.usage).toMatchObject({
+      completeness: "PARTIAL",
+      totalTokens: 100,
+    });
+    socket.message(runSnapshot(socket, "run_realtime02"));
+    await flushProcessing();
+    const completed = event("run_realtime02", 2);
+    completed.run.usage.completeness = "COMPLETE";
+    socket.message(
+      runEnvelope(socket, "run_realtime02", {
+        type: "RUN_EVENT",
+        cursor: 2,
+        event: completed,
+      }),
+    );
+    await flushProcessing();
+    expect(platform.runs.run_realtime02?.usage).toMatchObject({
+      completeness: "COMPLETE",
+      totalTokens: 0,
+    });
+    const malformed = event("run_realtime02", 3);
+    Object.assign(malformed.run.usage, { completeness: "INVALID" });
+    socket.message(
+      runEnvelope(socket, "run_realtime02", {
+        type: "RUN_EVENT",
+        cursor: 3,
+        event: malformed,
+      }),
+    );
+    await flushProcessing();
+    expect(platform.runs.run_realtime02?.usage).toMatchObject({
+      completeness: "COMPLETE",
+      totalTokens: 0,
+    });
+    expect(platform.graphs.run_realtime02?.sequence).toBe(2);
+    expect(platform.events.run_realtime02?.[3]).toBeUndefined();
+    store.closeAll();
+  });
+
   it("terminal SESSION_PROBLEM останавливает reconnect", async () => {
     const store = useRealtimeStore();
     store.openPlatform();

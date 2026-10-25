@@ -8218,6 +8218,27 @@ func (e TemplateVariableFieldValueType) Valid() bool {
 	}
 }
 
+// Defines values for TokenUsageCompleteness.
+const (
+	TokenUsageCompletenessCOMPLETE TokenUsageCompleteness = "COMPLETE"
+	TokenUsageCompletenessPARTIAL  TokenUsageCompleteness = "PARTIAL"
+	TokenUsageCompletenessUNKNOWN  TokenUsageCompleteness = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the TokenUsageCompleteness enum.
+func (e TokenUsageCompleteness) Valid() bool {
+	switch e {
+	case TokenUsageCompletenessCOMPLETE:
+		return true
+	case TokenUsageCompletenessPARTIAL:
+		return true
+	case TokenUsageCompletenessUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VFSKind.
 const (
 	VFSKindAGENT       VFSKind = "AGENT"
@@ -9774,16 +9795,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
+	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	DELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case SearchVFSParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case SearchVFSParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
 	default:
 		return false
@@ -15319,12 +15340,18 @@ type Timestamp = time.Time
 type TokenUsage struct {
 	CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
 	CachedInputTokens     int64 `json:"cachedInputTokens"`
-	InputTokens           int64 `json:"inputTokens"`
-	ModelContextWindow    int64 `json:"modelContextWindow"`
-	OutputTokens          int64 `json:"outputTokens"`
-	ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
-	TotalTokens           int64 `json:"totalTokens"`
+
+	// Completeness Полнота наблюдений; отсутствие в legacy означает UNKNOWN, не измеренный ноль.
+	Completeness          *TokenUsageCompleteness `json:"completeness,omitempty"`
+	InputTokens           int64                   `json:"inputTokens"`
+	ModelContextWindow    int64                   `json:"modelContextWindow"`
+	OutputTokens          int64                   `json:"outputTokens"`
+	ReasoningOutputTokens int64                   `json:"reasoningOutputTokens"`
+	TotalTokens           int64                   `json:"totalTokens"`
 }
+
+// TokenUsageCompleteness Полнота наблюдений; отсутствие в legacy означает UNKNOWN, не измеренный ноль.
+type TokenUsageCompleteness string
 
 // TrashedProjectPage defines model for TrashedProjectPage.
 type TrashedProjectPage struct {

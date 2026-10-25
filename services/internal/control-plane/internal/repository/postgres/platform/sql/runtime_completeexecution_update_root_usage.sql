@@ -1,6 +1,12 @@
 -- name: runtime_completeexecution_update_root_usage :exec
 WITH total AS (
-    SELECT COALESCE(sum((turn.value->>'total_tokens')::bigint),0)::bigint AS total_tokens,
+    SELECT CASE
+             WHEN count(*) FILTER (WHERE (turn.value ? 'completeness' AND jsonb_typeof(turn.value->'completeness') <> 'string') OR COALESCE(turn.value->>'completeness', 'UNKNOWN') NOT IN ('UNKNOWN', 'PARTIAL', 'COMPLETE')) > 0 THEN 'INVALID'
+             WHEN count(*) FILTER (WHERE turn.value->>'completeness' IN ('PARTIAL', 'COMPLETE')) = 0 THEN 'UNKNOWN'
+             WHEN bool_and(COALESCE(turn.value->>'completeness', 'UNKNOWN') = 'COMPLETE') THEN 'COMPLETE'
+             ELSE 'PARTIAL'
+           END AS completeness,
+           COALESCE(sum((turn.value->>'total_tokens')::bigint),0)::bigint AS total_tokens,
            COALESCE(sum((turn.value->>'input_tokens')::bigint),0)::bigint AS input_tokens,
            COALESCE(sum((turn.value->>'cached_input_tokens')::bigint),0)::bigint AS cached_input_tokens,
            COALESCE(sum((turn.value->>'cache_write_input_tokens')::bigint),0)::bigint AS cache_write_input_tokens,
@@ -13,6 +19,7 @@ WITH total AS (
 )
 UPDATE control_plane.runs root
 SET usage=jsonb_build_object(
+        'completeness',total.completeness,
         'total_tokens',total.total_tokens,
         'input_tokens',total.input_tokens,
         'cached_input_tokens',total.cached_input_tokens,

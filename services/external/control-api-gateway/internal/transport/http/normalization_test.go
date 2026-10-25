@@ -684,6 +684,9 @@ func TestMessageMapMaterializesZeroTokenUsage(t *testing.T) {
 	if !ok {
 		t.Fatalf("нулевой TokenUsage не материализован: %#v", value)
 	}
+	if usage["completeness"] != "UNKNOWN" {
+		t.Fatal("legacy numeric zero was fabricated as measured zero")
+	}
 	for _, key := range []string{
 		"totalTokens",
 		"inputTokens",
@@ -696,6 +699,26 @@ func TestMessageMapMaterializesZeroTokenUsage(t *testing.T) {
 		if usage[key] != float64(0) {
 			t.Fatalf("нулевое поле %s не материализовано как JSON number: %#v", key, usage)
 		}
+	}
+}
+
+// TestMessageMapUsageCompleteness distinguishes explicit measured zero from legacy UNKNOWN and
+// partial subtotals in the actual public normalizer, rejecting unregistered protobuf enum values.
+// TestMessageMapUsageCompleteness отличает измеренный ноль от legacy UNKNOWN и частичных подытогов
+// в настоящем публичном normalizer, отвергая незарегистрированные значения protobuf enum.
+func TestMessageMapUsageCompleteness(t *testing.T) {
+	for quality, want := range map[controlplanev1.UsageCompleteness]string{
+		controlplanev1.UsageCompleteness_USAGE_COMPLETENESS_UNSPECIFIED: "UNKNOWN",
+		controlplanev1.UsageCompleteness_USAGE_COMPLETENESS_PARTIAL:     "PARTIAL",
+		controlplanev1.UsageCompleteness_USAGE_COMPLETENESS_COMPLETE:    "COMPLETE",
+	} {
+		value, err := messageMap(&controlplanev1.TokenUsage{Completeness: quality})
+		if err != nil || value["completeness"] != want || value["totalTokens"] != float64(0) {
+			t.Fatal("public token measurement lost quality or measured zero")
+		}
+	}
+	if _, err := messageMap(&controlplanev1.TokenUsage{Completeness: controlplanev1.UsageCompleteness(257)}); err == nil {
+		t.Fatal("unknown protobuf usage quality accepted")
 	}
 }
 

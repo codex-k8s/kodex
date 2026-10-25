@@ -3109,6 +3109,10 @@ export type TokenUsage = {
     outputTokens: number;
     reasoningOutputTokens: number;
     modelContextWindow: number;
+    /**
+     * Полнота наблюдений; отсутствие в legacy означает UNKNOWN, не измеренный ноль.
+     */
+    completeness?: 'UNKNOWN' | 'PARTIAL' | 'COMPLETE';
 };
 
 export type Run = ({

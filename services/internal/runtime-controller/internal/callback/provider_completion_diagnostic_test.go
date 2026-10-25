@@ -79,7 +79,7 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 			}
 			payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
 				SafeErrorCode: "PROVIDER_UNAVAILABLE", ResultSummary: "PRIVATE_SUMMARY_SENTINEL",
-				Usage: runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}, ProviderDiagnostic: completionDiagnostic(input)}
+				Usage: runtimecontract.TokenUsage{Completeness: runtimecontract.UsagePartial, TotalTokens: 3, InputTokens: 2, OutputTokens: 1}, ProviderDiagnostic: completionDiagnostic(input)}
 			wantStatus, commits := http.StatusNoContent, 1
 			switch scenario {
 			case "workspace", "workspace mismatched code":
@@ -164,7 +164,7 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 			}
 			if commits == 1 {
 				got := client.requests[0]
-				if got.GetSafeErrorCode() != payload.SafeErrorCode || got.GetResultSummary() != payload.ResultSummary || got.GetUsage().GetTotalTokens() != 3 || got.GetCodexArchiveSha256() != "" {
+				if got.GetSafeErrorCode() != payload.SafeErrorCode || got.GetResultSummary() != payload.ResultSummary || got.GetUsage().GetTotalTokens() != 3 || got.GetUsage().GetCompleteness() != cp.UsageCompleteness_USAGE_COMPLETENESS_PARTIAL || got.GetCodexArchiveSha256() != "" {
 					t.Fatal("diagnostic changed CP state payload")
 				}
 			}

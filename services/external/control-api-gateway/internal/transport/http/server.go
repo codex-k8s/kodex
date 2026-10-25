@@ -599,6 +599,9 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 // requiredProtoScalarDefault supplies zero/empty defaults only for explicit message-and-field pairs required by the public contract. Other omitted scalars retain absence; financial optional fields deliberately remain omitted rather than inventing data.
 // requiredProtoScalarDefault задаёт нулевые и пустые defaults только для явных пар message/field публичного контракта. Остальные пропущенные scalar сохраняют отсутствие; необязательные финансовые поля намеренно не заполняются выдуманными данными.
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	if descriptor.FullName() == "controlplane.v1.TokenUsage" && field.JSONName() == "completeness" {
+		return "UNKNOWN", true
+	}
 	if descriptor.FullName() == "controlplane.v1.ProviderFinancialOverview" && isProto64BitInteger(field.Kind()) {
 		return float64(0), true
 	}
@@ -784,6 +787,18 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 	switch field.Kind() {
 	case protoreflect.EnumKind:
+		if field.Enum().FullName() == "controlplane.v1.UsageCompleteness" {
+			switch value {
+			case "USAGE_COMPLETENESS_UNSPECIFIED":
+				return "UNKNOWN", nil
+			case "USAGE_COMPLETENESS_PARTIAL":
+				return "PARTIAL", nil
+			case "USAGE_COMPLETENESS_COMPLETE":
+				return "COMPLETE", nil
+			default:
+				return nil, errors.New("public usage completeness is invalid")
+			}
+		}
 		if field.Enum().FullName() == "controlplane.v1.MessageOrigin" {
 			switch value {
 			case "MESSAGE_ORIGIN_ORDINARY":

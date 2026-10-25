@@ -787,13 +787,14 @@ type RunTarget struct {
 // reasoning подмножества и заявленную ёмкость контекста модели. Значения не проверены до вызова Valid
 // и не содержат решения о цене или квоте.
 type TokenUsage struct {
-	TotalTokens           int64 `json:"total_tokens"`
-	InputTokens           int64 `json:"input_tokens"`
-	CachedInputTokens     int64 `json:"cached_input_tokens"`
-	CacheWriteInputTokens int64 `json:"cache_write_input_tokens"`
-	OutputTokens          int64 `json:"output_tokens"`
-	ReasoningOutputTokens int64 `json:"reasoning_output_tokens"`
-	ModelContextWindow    int64 `json:"model_context_window"`
+	Completeness          runtimecontract.UsageCompleteness `json:"completeness,omitempty"`
+	TotalTokens           int64                             `json:"total_tokens"`
+	InputTokens           int64                             `json:"input_tokens"`
+	CachedInputTokens     int64                             `json:"cached_input_tokens"`
+	CacheWriteInputTokens int64                             `json:"cache_write_input_tokens"`
+	OutputTokens          int64                             `json:"output_tokens"`
+	ReasoningOutputTokens int64                             `json:"reasoning_output_tokens"`
+	ModelContextWindow    int64                             `json:"model_context_window"`
 }
 
 // Valid requires every count/capacity to be nonnegative, total to equal input plus output, each
@@ -804,7 +805,7 @@ type TokenUsage struct {
 // вместе не ограничивает, использование с context window не сравнивает и доступность кредитов
 // провайдера не решает.
 func (usage TokenUsage) Valid() bool {
-	return usage.TotalTokens >= 0 && usage.InputTokens >= 0 && usage.CachedInputTokens >= 0 &&
+	return usage.Completeness.Valid() && usage.TotalTokens >= 0 && usage.InputTokens >= 0 && usage.CachedInputTokens >= 0 &&
 		usage.CacheWriteInputTokens >= 0 && usage.OutputTokens >= 0 && usage.ReasoningOutputTokens >= 0 &&
 		usage.ModelContextWindow >= 0 && usage.TotalTokens == usage.InputTokens+usage.OutputTokens &&
 		usage.CachedInputTokens <= usage.InputTokens && usage.CacheWriteInputTokens <= usage.InputTokens &&
