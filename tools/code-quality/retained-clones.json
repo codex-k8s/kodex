@@ -8360,6 +8360,86 @@
       "fragmentSHA256": "eb68d10b18a938a0bb8b9d1515d3edbffbab6912c8692e241623db63afb99cf8",
       "count": 1,
       "reason": "Новое короткое окно после выноса19 Promise constructors пересекает хвост разных State types,nominal component setup cast,два локальных cleanup arrays и трёхстрочный wrapper общей фабрики. Provider lifecycle retry и Run prompt preview имеют разные State contracts и cleanup results;типизированные wrappers сохраняют родительские settle callbacks и return fields. Сам алгоритм new Promise/capture действительно вынесен в createDeferred;нового общего алгоритма в сквозном окне нет. Общая lifecycle fixture потребовала бы смешать ownership разных компонентов ради деклараций. Сохранены только точные два пути/hash/count1,не helpers/tests/files целиком."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/app/breadcrumbs.ts",
+      "secondPath": "services/staff/control-center/src/app/breadcrumbs.ts",
+      "fragmentSHA256": "516c4b288c85cc16404b5f25cc4c6b297c1e422121d65bbe0cf4f17094654e67",
+      "count": 1,
+      "reason": "Сдвинутое окно внутри одного BreadcrumbLabels сравнивает соседние34 уникальные строковые имена локализации,а не две копии алгоритма. AST подтвердил только string PropertySignatures без initializers/methods. Замена на индексную сигнатуру убрала бы проверку полноты обязательных label keys;сокращение явного списка не является дедубликацией исполнения. Сохранено только точное self-overlap окно данного пути/hash/count1;тип,файл и другие label модели не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/api.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "92352d75624d0e061da932de8c09cf156f84fd63560c5c599bb193c2655d8202",
+      "count": 1,
+      "reason": "Окно сопоставляет named imports27 SDK operations/28 DTO access adapter и части73 SDK/52 DTO platform store. AST обеих сторон содержит только ImportDeclarations из generated SDK/types modules. Нормализация identifiers уравняла разные role/access и platform bindings;общего исполняемого тела нет. Новый barrel или универсальный dispatcher ради импортов скрыл бы nominal типы и явные module dependencies. Только точные два пути/hash/count1,не imports или generated потребители в целом."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "598d7607c33196d899f313a0fb69075bca14f5c4a3063b895b55087d0e64aa2f",
+      "count": 1,
+      "reason": "Окно сравнивает shorthand exposure49 полей assistant store и начало151 полей platform store. AST подтвердил только уникальные ShorthandPropertyAssignments без вызовов/getters/spreads. Имена относятся к разным Ref/action instances и owner lifetimes;совпадает пунктуация после нормализации,а не алгоритм. Общая позиционная фабрика возврата скрыла бы разные публичные store contracts. Только данная пара/hash/count1;реальные methods и lifecycle не исключаются."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "6e92fbc7bf2a8a5cfe03b18f7d03c110d05c11ad28da5c3cf1d89638aa9504c7",
+      "count": 1,
+      "reason": "Окно сравнивает49 assistant exposures с хвостом platform action exposure и закрывающими delimiters. Проверены все shorthand names и точная ArrowFunction→defineStore→VariableStatement граница;после return допускается только закрывающая пунктуация. Возвращаются разные session/assistant и platform actions,не одинаковые обработчики. Универсальный store return dispatcher не устраняет общий алгоритм. Сохранена только точная пара/hash/count1,не тела store."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "3cf6cd0169399f3b3e2ae5dcc5a1c04cf49cfbf7c977919c2786d0623598cb11",
+      "count": 1,
+      "reason": "Внутрефайловое окно сопоставляет value imports из73 SDK operations с52 type imports платформы. Номинальные имена и пространства value/type различны;AST содержит только import specifiers. Повтор структуры списка после identifier normalization не является копией business/runtime кода. Общий barrel скрыл бы явный SDK contract и не объединял бы разные типы безопаснее. Только exact window/path/hash/count1,не формат TypeScript или импортные списки целиком."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "dc46ceb9bcb34333611ea2e16804325fec0d00e25ba44c9ff2c5864bd0b6218e",
+      "count": 1,
+      "reason": "Окно сопоставляет список SDK imports с явным объектом151 reactive store exposures. Одна сторона создаёт module bindings,другая возвращает существующие Ref/actions;AST не содержит общего исполнения в выбранных tokens. При одинаковой нормализованной пунктуации имена,типы и ownership разные. Генератор/универсальный mapper для списков добавил бы второй contract source. Сохранено только это точное внутрефайловое окно/hash/count1."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "b3ffef8e2a90bcbd57b177db617c69d1c0a4bfba13afc952082ee52b1d3d8c30",
+      "count": 1,
+      "reason": "Сдвинутое self-overlap окно проходит по одному named SDK import73 уникальных bindings. Полный AST подтверждает отсутствие повторного import name внутри списка:детектор сопоставил одну последовательность с её сдвигом после нормализации имён. Удаление любой строки удалило бы самостоятельный используемый binding;общего алгоритма для библиотеки здесь нет. Только точный путь/hash/count1,не blanket исключение import declarations."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "b1606785350a1e646d2b9b7d58a9c72f2aedec69380958fa0d98f61dff70d38d",
+      "count": 3,
+      "reason": "Три exact occurrences одного нормализованного fragment сравнивают SDK imports с тремя смещёнными окнами platform store exposure. Проверены все шесть сторон по AST:только imports и уникальные shorthand Ref/action names;совпадают разделители,не значения или операции. Общая фабрика по позициям связала бы несвязанные module bindings и store ownership. Реестр ограничен данным путём/hash и точным count3;добавление четвёртого occurrence закрыто отклоняется,целые списки/файл не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "879e5cdcbc728d73b9911149641011da45ef5f4a189f84da50a5ed7bb4574643",
+      "count": 1,
+      "reason": "Окно SDK import prefix сопоставлено с хвостом platform store exposure,включая отдельные commands и realtime/readiness methods. AST подтверждает лишь named import specifiers и уникальные shorthand references. Сами методы и их lifecycle реализации в окно не входят;перенос имён в общий индекс или renderer не выносит дубликат алгоритма. Сохранено только exact self-path/hash/count1,остальные store methods и сценарии остаются в анализе."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "9954ef3a77b0d0347b23cb3081c50fd50e9a1b41157389bd38a4f2c4e5f062e1",
+      "count": 2,
+      "reason": "Два occurrences сопоставляют хвост SDK imports с DTO imports и с хвостом store exposure. Полностью проверены обе пары:nominal value/type bindings и существующие Ref/action references различны,вызовов/вычислений/getters/spreads нет. После identifier normalization сходны только списковые разделители;общая библиотека не заменяет эти разные контракты. Только данный путь/hash/count2 с закрытым контролем числа,не ignore импортов/типов/store в целом."
     }
   ]
 }

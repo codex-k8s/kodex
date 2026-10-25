@@ -4,11 +4,40 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.481.0
+version: 1.482.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Адресный разбор совпадений деклараций TypeScript — 26.10.2026
+
+13 raw окон в4 файлах разобраны по всем26 сторонам. Это34 уникальных string
+BreadcrumbLabels,импорты27 SDK/28 DTO access adapter и73 SDK/52 DTO platform
+store,49 shorthand exposures assistant и151 platform. Каждый token
+проверен по полному TypeScript AST:только named imports,строковые property
+signatures и уникальные shorthand references. Закрывающий хвост store —
+только punctuation точной ArrowFunction→defineStore→VariableStatement
+границы. Вызовов/getters/spreads/initializers или общего алгоритма в окнах нет.
+
+Нормализация имён сопоставила value/type imports с возвращаемыми reactive
+полями,а также один список с его сдвигом. Вынос в общий dispatcher/barrel/
+позиционный mapper скрыл бы разные nominal bindings и store contracts.
+Для каждой точной пары/hash сохранена отдельная причина;10 entries покрывают
+13 окон,поскольку два ключа имеют count3 иcount2. Никакого общего ignore
+для import/type/store/files не добавлено;detector configuration прежняя.
+Шесть actual source mutations проверяют отказ при method вместо string,
+duplicate label/store names,неверном SDK source,вызове вместо shorthand и
+исполняемом closing tail.20 count/hash mutations проверяют настоящий assessor.
+
+Исполняемые sources/configuration,production PWA,tests и generated output
+не менялись. Hashes4 исследованных sources прежние;1045 прежних entries
+сохранены. Итог:6762 sources,222 generated exclusions,1487 raw /
+1198 retained /289 unresolved (158 Go,106 TypeScript,25 Bash),registry1055.
+Все21574 Go-объявления EN→RU. Пять quality stages и quality-tool unit tests —
+PASS LOCAL. App build/unit не повторялись:исполняемые sources не менялись;
+их предыдущие результаты остаются привязаны к указанным в журнале SHA.
+Browser/full E2E,live deployment и независимая QA — NOT RUN.
 
 ## Общая фабрика управляемых Promise для unit-tests — 26.10.2026
 
