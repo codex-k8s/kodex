@@ -17,6 +17,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -84,6 +85,10 @@ func testCommitAckArtifact(t *testing.T, ctx context.Context, path, fault string
 	repository.objects = store
 	readerRepository := *repository
 	readerRepository.pool = readPool
+	readerService, err := platformservice.New(&readerRepository)
+	if err != nil {
+		t.Fatal("configure independent owner read service")
+	}
 	execute := func(kind command.Kind, key string, version *int64, payload any) command.Result {
 		t.Helper()
 		actor := owner
@@ -198,7 +203,7 @@ func testCommitAckArtifact(t *testing.T, ctx context.Context, path, fault string
 	if !selected.idle.Load() || !selected.fired.Load() || artifacts != 1 || content != 1 || receipts != 1 || audits != 1 || events != 1 || store.deletes.Load() != 0 || !preserved {
 		t.Fatal("committed artifact was lost after unknown COMMIT ACK")
 	}
-	download, err := readerRepository.DownloadArtifact(ctx, owner, ref, "DOWNLOAD")
+	download, err := readerService.DownloadArtifact(ctx, owner, ref, "DOWNLOAD")
 	if err != nil {
 		t.Fatalf("independent owner download failed: outcome=%s", completionOutcomeClass(err))
 	}
@@ -227,7 +232,7 @@ func testCommitAckArtifact(t *testing.T, ctx context.Context, path, fault string
 		t.Fatal("replay or negatives duplicated owner effects")
 	}
 	if runRef != "" {
-		read, err := readerRepository.GetRun(ctx, owner, runRef)
+		read, err := readerService.GetRun(ctx, owner, runRef)
 		if err != nil || read.State != "SUCCEEDED" || read.Usage != turnUsageFixture() {
 			t.Fatal("unknown COMMIT lost original completion or usage")
 		}
