@@ -4,11 +4,54 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.416.0
+version: 1.417.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## MCP, session catalog, authority и owner SQL — 25.10.2026
+
+На основе `e405b3550087846aed384228a7af272f9e75ef05` полностью прочитаны
+11 production Go-файлов(1212 исходных строк) и50 embedded SQL(1203 строки).
+Все103 сохранённых объявления описаны EN→RU; весь пакет comments-only.
+11 полных сравнений executable AST и Go directives с исходными файлами — PASS.
+SQL, константы, API, runtime errors и порядок операций не менялись.
+
+| Область | Описанные сохранённые границы |
+| --- | --- |
+| MCP startup / health / recovery | Effective scope intersection и exact READ/NONE pair; fresh receipt отличается от bounded pending chain и stale recovery origin. Pending не выдаёт tool authority, не возвращается как ready и не сбрасывает budget |
+| Session catalog | Locked tenant/session account, current configuration и exactly-one candidate; retained catalog допускается лишь при matching provider/model с последующей eligibility validation. Partial binding при error отбрасывается |
+| Capability authority | Fresh subject/bindings и единое evaluation time; closed class mapping не заменяет exact tool permission. Initial keys bounded/distinct, enabled lookup и current grant authority проверяются отдельно |
+| Integration package | Compatible shipped либо exact published owner revision; openapi template не исполняется. Missing executable marker не маскирует found corruption/SQL/pin failures. Bind сохраняет disable grants/tests→replace pins→event в caller transaction |
+| Interaction identity | Active exact connection-version/team/channel/digest mapping→active member USER под SHARE locks; actor выводится owner SQL, fresh interactive authentication timestamp очищается. Bind/revoke сохраняют access/OCC и outer command commit |
+| PROJECT grants | Exact purpose/profile/project/assistant/connection и три manage permissions до canonical grant admission. Plan helper сравнивает identity pins, не выполняет version OCC либо capability application |
+| Skill/memory context | Locking runtime и nonlocking preview используют прежнюю eligibility, clean review/retention/source visibility; consumer отклоняет redacted/invalid projections. Digest/ValidateFor выполняются после bounded reads; partial snapshots не выдаются |
+| Transaction retry / cleanup | Общий marker допускает40001/40P01/ErrTxCommitRollback, read-specific classifier только40001. Generic first call без precheck описан, assistant wrapper проверяет context. Rollback independent1s, cleanup failure заменяет error на Unavailable |
+| Archive create/claim/renew/expiry/retry | Global trusted materializer sweep, tenant claim selection, exact renew fence/generation, storage/content generation и bounded dead-letter/backoff сохраняются. Новых attempts/grants/worker effects не добавлено |
+| Archive complete / delete | Completion SQL полагается на already-locked owner task/fence; отдельные CTE могут менять task до пустого final SELECT, поэтому caller обязан rollback. Snapshot/restore/PVC/object descriptor, retention и active-turn branches описаны без выдачи SQL за доказательство внешней операции |
+| Avatar reserve/adopt/compensate | Exact idempotency/metadata, tenant/actor lock, versioned descriptors и отсутствие artifact adoption; global expired claim требует trusted maintenance. MATERIALIZED replay продлевает expiry, reservation replay — нет. Complete не удаляет объект сам |
+| Metadata reads | Provider/catalog/schedule/image/environment/preview SQL описаны с фактическими filters/cursors/pins; отсутствующие actor checks не объявлены частью SQL. Last successful models и stored financial observation не равны current execution admission |
+
+Новых lifecycle transitions, lease/claim/renew/grant либо событий нет;
+caller authorization/locks, receipts, audit/events и owner commit сохранены.
+Применимые GO-DOC-001/002/003/006, GUIDE-DOC-006 и GOV-DOC-003 соблюдаются.
+Context7 `/jackc/pgx/v5.10.0` QueryRow/Scan/ErrNoRows, Rows.Close/Err и
+manual Commit/deferred Rollback проверены заново. Pinned local go doc Tx
+подтвердил ErrTxClosed/ErrTxCommitRollback; нового library API/версии нет.
+
+Полный control-plane build/unit — PASS LOCAL(checks417-final), GOWORK=off,
+GOMAXPROCS=4/-p2, inherited KODEX и18 static test inputs исключены.
+17 analyzer unit и5 exact-ignore guards — PASS. Реальные PostgreSQL
+claim/races/RLS, MCP probe/pending recovery, archive/avatar storage, broker,
+browser/E2E/deploy/live — NOT RUN/SKIP. Comments и static proof не заменяют их.
+
+Detector1767 raw/902 retained occurrences/865 unresolved, registry776 валиден;
+новых/удалённых fragment/format/kind/path-pair keys нет. Inventory6684 own
+sources/222 exclusions и thresholds прежние, новых исключений нет.
+Go21488:20443 EN→RU,1045 missing. PR229 Go-файлов/2312 объявлений, missing0;
+232 whole changed blobs. #1823 открыт, PR #1829 Draft; QA/main f2e64eb сохранён,
+прикладные секреты не читались и не переносились.
 
 ## Runtime, continuation, workflow scope и unit fixtures — 25.10.2026
 
