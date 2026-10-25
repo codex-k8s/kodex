@@ -75,8 +75,10 @@ it("сохраняет отдельный срок согласования и �
     "approvalTimeoutSeconds",
   );
   const changed = structuredClone(workflow);
-  changed.draft!.steps[0]!.humanGate = true;
-  changed.draft!.steps[0]!.approvalTimeoutSeconds = 90;
+  const changedStep = changed.draft?.steps[0];
+  if (!changedStep) throw new Error("Этап оснастки отсутствует");
+  changedStep.humanGate = true;
+  changedStep.approvalTimeoutSeconds = 90;
   expect(workflowEditorInput(changed).steps[0]?.approvalTimeoutSeconds).toBe(
     90,
   );
