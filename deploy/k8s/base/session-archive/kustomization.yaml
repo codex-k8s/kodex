@@ -12,5 +12,6 @@ resources:
 components:
 - ../../components/internal-rpc-authority-session-archive-issuer
 - ../../components/internal-rpc-authority-namespaced-network-egress-common
+- ../../components/local-state-egress-common
 transformers:
 - controller-namespace-transformer.yaml

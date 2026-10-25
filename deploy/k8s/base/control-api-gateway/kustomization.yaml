@@ -12,6 +12,8 @@ resources:
   - dashboard.yaml
 components:
   - ../../components/internal-rpc-authority-control-api-gateway-issuer
+  - ../../components/local-state-egress-common
+  - ../../components/observability-egress-common
 patches:
   - path: protected-readiness-patch.yaml
 transformers:

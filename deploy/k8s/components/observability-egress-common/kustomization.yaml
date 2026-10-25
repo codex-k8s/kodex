@@ -7,4 +7,4 @@ patches:
     group: networking.k8s.io
     version: v1
     kind: NetworkPolicy
-    name: (automation-scheduler-exact-runtime-paths|integration-gateway-exact-runtime-paths|interaction-gateway-exact-runtime-paths|secret-broker-exact-runtime-paths|artifact-retention-exact-runtime-paths|role-image-builder-exact-runtime-paths|kodex-image-owner-protected-exact-paths)
+    name: (automation-scheduler-exact-runtime-paths|integration-gateway-exact-runtime-paths|interaction-gateway-exact-runtime-paths|secret-broker-exact-runtime-paths|artifact-retention-exact-runtime-paths|role-image-builder-exact-runtime-paths|kodex-image-owner-protected-exact-paths|control-api-gateway-exact-runtime-paths|internal-rpc-authority-publisher-exact-paths|internal-rpc-authority-readback-attestor-exact-paths|internal-rpc-authority-restore-controller-exact-paths|internal-rpc-authority-restore-jobs-exact-paths|internal-rpc-authority-restore-pitr-telemetry)

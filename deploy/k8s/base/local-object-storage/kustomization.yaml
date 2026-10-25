@@ -8,3 +8,5 @@ resources:
   - bucket-bootstrap-job.yaml
   - networkpolicy.yaml
 
+components:
+  - ../../components/local-state-egress-common

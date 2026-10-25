@@ -1,0 +1,10 @@
+- op: add
+  path: /spec/egress/0
+  value:
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: kodex-postgresql
+    ports:
+    - protocol: TCP
+      port: 5432

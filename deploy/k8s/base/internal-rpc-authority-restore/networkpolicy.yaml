@@ -64,30 +64,7 @@ spec:
         - podSelector:
             matchLabels: {app.kubernetes.io/name: internal-rpc-authority-publisher}
       ports: [{protocol: TCP, port: 8444}]
-    - to:
-        - podSelector:
-            matchLabels: {app.kubernetes.io/name: kodex-postgresql}
-      ports: [{protocol: TCP, port: 5432}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: kube-system}
-          podSelector:
-            matchLabels: {k8s-app: kube-dns}
-      ports:
-        - {protocol: UDP, port: 53}
-        - {protocol: TCP, port: 53}
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
-      ports: [{protocol: TCP, port: 4317}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: sentry-relay}
-      ports: [{protocol: TCP, port: 8443}]
+
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -110,30 +87,7 @@ spec:
         - podSelector:
             matchLabels: {app.kubernetes.io/name: internal-rpc-authority-restore-controller}
       ports: [{protocol: TCP, port: 8443}]
-    - to:
-        - podSelector:
-            matchLabels: {app.kubernetes.io/name: kodex-postgresql}
-      ports: [{protocol: TCP, port: 5432}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: kube-system}
-          podSelector:
-            matchLabels: {k8s-app: kube-dns}
-      ports:
-        - {protocol: UDP, port: 53}
-        - {protocol: TCP, port: 53}
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
-      ports: [{protocol: TCP, port: 4317}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: sentry-relay}
-      ports: [{protocol: TCP, port: 8443}]
+
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -148,23 +102,3 @@ spec:
     - to:
         - ipBlock: {cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__}
       ports: [{protocol: TCP, port: 443}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: kube-system}
-          podSelector:
-            matchLabels: {k8s-app: kube-dns}
-      ports:
-        - {protocol: UDP, port: 53}
-        - {protocol: TCP, port: 53}
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
-      ports: [{protocol: TCP, port: 4317}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: sentry-relay}
-      ports: [{protocol: TCP, port: 8443}]

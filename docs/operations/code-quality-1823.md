@@ -4,11 +4,55 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.475.0
+version: 1.476.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие точные правила локальной сети — 26.10.2026
+
+local-state-egress-common переиспользует прежние сетевые рёбра10 policies в7
+базах:10 DNS namespace kube-system AND pod kube-dns UDP/TCP53,5 PostgreSQL
+same-namespace kodex-postgresql TCP5432 и2 control-plane same-namespace TCP8443.
+Closed exact targets не создают новых policies,не меняют pod selectors,
+default-deny/ingress,credentials или application authorization. Kubernetes API
+CIDR,authority8444/8443 endpoints и разные S3 ports остаются native.
+
+Общий observability-egress-common расширен только6 прежними consumers:
+control-api runtime,publisher,readback-attestor,restore controller/jobs/PITR.
+Семь предыдущих targets и два OTEL/Sentry AND peer rules прежние. Component
+вызывается один раз у каждой затронутой базы после общего local-state egress.
+Отдельные issuer/network profiles сохраняют независимые scopes и wiring.
+
+PG/DNS/CP inserts и два restore moves восстанавливают исходный полный порядок
+API→publisher/restore→PG→DNS;PITR сохраняет API→DNS. Предварительные JSON tests
+проверяют native API port и exact owner peer/port перед перестановками.
+Readback с полностью общим egress хранит native пустой массив[],не null.
+
+Kustomize5.8.2:9 итоговых render побайтно равны исходнымa8bff7e,953 rendered
+objects:7 bases9/11/10/11/7/31/10 и оба profiles427/437. Все10 полных ordered
+NetworkPolicy models восстановлены без нормализации.37 изолированных запусков
+Kustomize подтвердили10 positives,5 actual restore guard failures,2 foreign
+policies без изменений и7 различимых unsafe mutations:DNS namespace/UDP,
+PG port,CP peer,broad target,restore order,telemetry AND→OR. Hashes19 source
+inputs совпали с proof/render. Public offline checks: web-only-release
+34.06с и authority ABI render21.17с — PASS LOCAL.
+Lifecycle/startup/terminal/rotation/shutdown и actor/grants не менялись.
+Это не проверка CNI или application authorization в живой среде.
+
+Detector:6759 sources/222 прежних generated exclusions,1531 raw/1178 retained/
+353 unresolved,registry1038. Исчезли6 прежних сетевых raw windows,новых окон0,
+устаревших retention entries0. Registry полностью прежний;новых исключений
+не добавлено. Thresholds/нормализация/source formats и generated boundaries
+не менялись. Go21574/21574 EN→RU,пропусков0. Остальные353 группы
+(158 Go/150 TypeScript/8 YAML/37 Bash) остаются в scope #1823.
+
+Context7 /kubernetes-sigs/kustomize: Component accumulation upstream source,
+ordered patches,JSON6902 add/move/test и exact anchored targets. Фактический
+Kustomize5.8.2 проверен до/после выноса;зависимости не обновлялись. Go/PWA/
+контракты/миграции не менялись. Deploy/browser/full E2E/live QA — NOT RUN
+этим пакетом. PR остаётся Draft до завершения всего scope.
 
 ## Общие технические defaults authority controllers — 26.10.2026
 

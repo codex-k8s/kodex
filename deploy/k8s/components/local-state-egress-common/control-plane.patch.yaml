@@ -1,0 +1,10 @@
+- op: add
+  path: /spec/egress/1
+  value:
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: control-plane
+    ports:
+    - protocol: TCP
+      port: 8443
