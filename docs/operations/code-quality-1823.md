@@ -4,11 +4,56 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.425.0
+version: 1.426.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Каталоги, context bindings и mailbox lifecycle — 25.10.2026
+
+На основе `0178f67874640439b241926dfa663b608e07ebce` полностью прочитаны
+12 Go-файлов (1447 исходных строк),23 непосредственно embedded SQL (333 строки)
+и14 дополнительных binding/authorization SQL.53 прежних объявления описаны
+EN→RU; новый catalogCardRefs также имеет полное описание. Helper внутри
+platform собирает refs и карту исходных указателей для project/workflow cards.
+Порядок, duplicate refs/last-pointer semantics и nil preconditions сохранены;
+Agent branch с предварительным сбросом CurrentRunRef остаётся отдельным.
+
+| Путь / переход | Описанные и сохранённые ограничения |
+| --- | --- |
+| Catalog access | Bounded search/cursor, один subject/binding snapshot в read-only RepeatableRead, пропуск скрытых/missing targets, page+1 и transaction-time count. Runtime environment разделяет project visibility и action authority; итоговая ошибка отбрасывает результат |
+| Card projections | Общий ref/index helper не авторизует и не копирует entities. Project/workflow требуют все distinct refs, duplicate returned ref конфликтует; agent path не отклоняет missing rows. Частичные pointer mutations при ошибке отбрасываются caller |
+| Overlay schema | Пересечение available reasoning values, отдельное уточнение default найденными моделями, strict diagnostics decode, published schema pins и mutable draft metadata. Пустой nonnil compatibility set не отключает ограничения; Exec сам не требует одну изменённую строку |
+| Context binding | Owner resource/revision/project и provenance access; agent/binding OCC, capacity128, skill bytes validation при bind. Unbind требует текущую bound revision. Agent version и outcome находятся в caller transaction, отдельного Commit нет |
+| Deleted replay | Только closed integration/schedule/runtime-environment tombstones, свежие command/read permissions и project boundary. Нулевая версия без tombstone не выдаёт права нового delete либо catalog visibility |
+| Mailbox configuration | Organization-level EMAIL_MAILBOX, immutable connection owner, lifecycle action/OCC, canonical JSON create/save и server mailbox ref. Даже disabled specification проверяет credential owner на локальной enabled копии |
+| Observation | Только закрытые typed transitions сохраняют mailbox specification/credentials. Publication lock раньше row locks, strictly consecutive observation receipt не принимает drift и не меняет document/digest/credential generation |
+| Publication bind/unbind | Глобальная сериализация, отсутствие pending work, connection/config OCC, accepted snapshot digest, preserved other mailboxes, published revision и credential checks. Persist PENDING выше durable watermark не является Secret apply/READY |
+| Binding effects | Tenant/OCC и matching mailbox metadata, exact one connection update, apply/remove local binding и nonanchor READY event с publication correlation. Ошибка требует outer rollback предыдущих effects |
+| Forward recovery | Live claimant/generation SQL lock, drift/expiry, READY→SUPERSEDED либо PENDING→FAILED, новая RECOVERY revision без изменённых tenant connections, effects/audit/event в одном Commit. Нет переиздания прежнего Secret; no cause возвращает false,nil |
+| Email report | Exact saved authorization/receipt pins и caller email-bridge; fact replay не даёт новый write. Expired source имеет locked recovery path, live source сравнивает fresh decision без продления expiry. Новый receipt использует schema default outcome, прежний unknown может продвигаться; authoritative readback формирует результат |
+
+12 expected-AST/directive сравнений и независимый card-refs-proof — PASS
+LOCAL. Для11 файлов полный AST прежний; proof проверяет точное чистое тело
+helper и полное равенство catalog_cards после обратной подстановки двух
+callers и удаления helper. Сборка и полный unit control-plane,17 analyzer
+unit,5 exact-ignore guards, gofmt/git diff --check — PASS LOCAL
+(checks426-final), credentials и KODEX inputs исключены. SQL/API/fixtures,
+диагностика, dependencies и manifests не менялись; новых внешних library API
+нет. PostgreSQL/RLS/OCC/observation races, bytes/AV, внешний mailbox
+apply/readback, полный E2E/browser/deploy/live — NOT RUN/SKIP. Прежние30
+exact renders и standalone staging/control-api-gateway FAIL не повторялись.
+
+Detector1685 raw/886 retained occurrences/799 unresolved, registry771 не
+менялся. Старое151-token catalog окно сменилось более коротким113-token;
+103-token mailbox/prompt окно лишь сменило hash из-за комментария. Это не
+снижение числа unresolved и не исключение remaining common query/scan head.
+Оба новых окна остаются в разборе. Inventory6691/222, thresholds прежние.
+Go21490:20869 EN→RU,621 missing. PR323 Go-файла/2859 объявлений, missing0;
+353 whole changed blobs. #1823 открыт, #1829 Draft; QA/main не менялись.
+Env-файлы не читались для прикладных значений и не менялись; секреты не
+переносились и не публиковались.
 
 ## Runtime storage, authority и reuse snapshot-read — 25.10.2026
 

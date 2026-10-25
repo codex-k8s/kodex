@@ -12,6 +12,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// populateContextBindings appends visible active memory/published skill binding metadata from
+// owner SQL to the supplied view, rejecting unknown kinds or more than128 rows.
+// Query/scan/iteration failures are Unavailable. It reads no file bytes and does not reset
+// existing slices; callers discard partially populated views on failure.
+// populateContextBindings добавляет из owner SQL метаданные видимых active memory и published
+// skill bindings в переданный view, отклоняя неизвестные kinds и более128 строк. Ошибки
+// query/scan/iteration дают Unavailable. Не читает байты файлов и не очищает прежние slices;
+// caller отбрасывает частично заполненный view при ошибке.
 func (repository *Repository) populateContextBindings(ctx context.Context, tx pgx.Tx, current scope, ref string, view *entity.AgentRuntimeConfigurationView) error {
 	rows, err := tx.Query(ctx, queryContextBindingsList, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "agent_ref": ref, "evaluated_at": time.Now().UTC()})
 	if err != nil {
@@ -44,10 +52,22 @@ func (repository *Repository) populateContextBindings(ctx context.Context, tx pg
 	return nil
 }
 
+// isMemoryBinding recognizes only typed memory bind/unbind command kinds; false selects the skill
+// branch in already constrained callers and does not validate an arbitrary command.
+// isMemoryBinding распознаёт только типизированные команды memory bind/unbind; false выбирает
+// skill-ветку в уже ограниченных callers и не проверяет произвольную команду.
 func isMemoryBinding(kind command.Kind) bool {
 	return kind == command.BindAgentMemoryRecord || kind == command.UnbindAgentMemoryRecord
 }
 
+// authorizeContextResource rechecks memory or skill resource access and resolves the exact
+// requested revision. Memory provenance with a source ref additionally requires run.view; each
+// skill file requires artifact.view. Missing revisions are NotFound, malformed stored JSON is
+// Unavailable; this path does not scan bytes or change bindings.
+// authorizeContextResource повторно проверяет доступ к memory либо skill ресурсу и разрешает
+// точную запрошенную ревизию. Memory provenance с source ref дополнительно требует run.view,
+// каждый skill file — artifact.view. Отсутствующая ревизия даёт NotFound, повреждённый JSON —
+// Unavailable; путь не сканирует байты и не меняет bindings.
 func (repository *Repository) authorizeContextResource(ctx context.Context, tx pgx.Tx, current scope, input command.Command, payload command.AgentContextBindingInput) error {
 	if isMemoryBinding(input.Kind) {
 		record, err := scanMemoryRecord(tx.QueryRow(ctx, queryMemoryRecordGet, current.organizationID, payload.ResourceRef))
@@ -97,6 +117,16 @@ func (repository *Repository) authorizeContextResource(ctx context.Context, tx p
 	return nil
 }
 
+// changeContextBinding locks a project agent and checks agent/binding OCC, same-project owner
+// eligibility and exact resource revision. Bind requires current eligibility, skill byte
+// validation and a maximum128 enabled bindings; unbind requires the currently bound revision. It
+// writes binding plus agent version in the caller transaction and returns AGENT_CHANGED metadata;
+// authorization and final audit/event/receipt commit stay with the command owner.
+// changeContextBinding блокирует project agent и проверяет agent/binding OCC, допустимость
+// владельца в том же проекте и точную resource revision. Bind требует текущей допустимости,
+// проверки skill bytes и максимум128 enabled bindings; unbind требует текущую связанную ревизию.
+// Записывает binding и agent version в переданной транзакции и возвращает AGENT_CHANGED metadata;
+// авторизация и окончательный audit/event/receipt commit остаются у владельца команды.
 func (repository *Repository) changeContextBinding(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AgentContextBindingInput)
 	if !ok || payload.ExpectedBindingVersion < 0 || input.Mutation.ExpectedVersion == nil {

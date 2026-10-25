@@ -16,18 +16,57 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryEmailMailboxPublicationLock embeds the global transaction advisory lock serializing mailbox
+// snapshot publication. Its lifetime belongs to the caller transaction; acquiring it does not
+// authorize a connection or apply a Secret.
+// queryEmailMailboxPublicationLock встраивает глобальную transaction advisory lock сериализации
+// mailbox snapshot publication. Срок блокировки принадлежит переданной транзакции; захват не
+// разрешает connection и не применяет Secret.
+//
 //go:embed sql/email_mailbox_publication_lock.sql
 var queryEmailMailboxPublicationLock string
 
+// queryEmailMailboxPublicationNext embeds next revision above both publication history and
+// accepted watermark plus the existence of any PENDING publication. Callers serialize with the
+// publication lock and reject forbidden concurrency.
+// queryEmailMailboxPublicationNext встраивает следующую ревизию выше publication history и
+// accepted watermark и наличие любой PENDING publication. Caller сериализует работу publication
+// lock и отклоняет запрещённую конкуренцию.
+//
 //go:embed sql/email_mailbox_publication_next.sql
 var queryEmailMailboxPublicationNext string
 
+// queryEmailMailboxPublicationInsert embeds pending publication insertion with exact
+// document/digest/revision, owner connection/version, optional managed revision and creator.
+// Persistence is an intent; actual apply/readback is owned by the publication worker.
+// queryEmailMailboxPublicationInsert встраивает вставку pending publication с точными
+// document/digest/revision, owner connection/version, optional managed revision и creator.
+// Сохранение является намерением; фактические apply/readback принадлежат publication worker.
+//
 //go:embed sql/email_mailbox_publication_insert.sql
 var queryEmailMailboxPublicationInsert string
 
+// queryEmailMailboxPublicationView embeds latest non-RECOVERY publication metadata for the
+// organization connection as anchor or bound effect, resolving its configuration revision.
+// State/readiness is stored owner evidence, not a new probe or permission check.
+// queryEmailMailboxPublicationView встраивает последние non-RECOVERY publication metadata для
+// organization connection как anchor либо bound effect с разрешением configuration revision.
+// State/readiness является сохранённым owner evidence, а не новым probe и проверкой прав.
+//
 //go:embed sql/email_mailbox_publication_view.sql
 var queryEmailMailboxPublicationView string
 
+// bindEmailMailbox serializes publication, rejects pending work and checks connection plus
+// configuration OCC and allowed BIND/UNBIND actions. It verifies the previous accepted snapshot
+// digest, preserves other mailboxes, validates a published bound revision and credentials, sorts
+// the new bounded document and advances connection version. It persists PENDING forward-only
+// intent in the caller transaction; Secret application and READY readback happen later.
+// bindEmailMailbox сериализует публикацию, отклоняет pending работу и проверяет
+// connection/configuration OCC и допустимые BIND/UNBIND. Сверяет дайджест прежнего accepted
+// snapshot, сохраняет прочие mailboxes, проверяет published bound revision и credentials,
+// сортирует новый ограниченный document и продвигает connection version. Сохраняет PENDING
+// forward-only intent в переданной транзакции; применение Secret и READY readback выполняются
+// позднее.
 func (repository *Repository) bindEmailMailbox(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.EmailMailboxInput)
 	if !ok || input.Mutation.ExpectedVersion == nil {
@@ -170,6 +209,14 @@ func (repository *Repository) bindEmailMailbox(ctx context.Context, tx pgx.Tx, c
 	return outcome, nil
 }
 
+// emailMailboxPublicationView reads latest owner publication metadata for the exact
+// organization/connection and copies nullable ready time when present. Missing rows return
+// nil,nil; backend failure is Unavailable. This internal transaction helper neither checks caller
+// access nor executes a probe.
+// emailMailboxPublicationView читает последние owner publication metadata точных
+// organization/connection и копирует nullable ready time при наличии. Отсутствие строки даёт
+// nil,nil, backend failure — Unavailable. Внутренний transaction helper сам не проверяет доступ
+// caller и не выполняет probe.
 func emailMailboxPublicationView(ctx context.Context, tx pgx.Tx, current scope, connectionRef string) (*entity.EmailMailboxPublication, error) {
 	var result entity.EmailMailboxPublication
 	var readyAt *time.Time
