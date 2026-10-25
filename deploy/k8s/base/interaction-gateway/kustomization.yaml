@@ -12,6 +12,8 @@ resources:
 - issuer-networkpolicy.yaml
 - prometheusrule.yaml
 components:
+- ../../components/go-workload-technical-defaults
+- ../../components/workload-runtime-egress-common
 - ../../components/internal-rpc-authority-interaction-gateway-issuer
 - ../../components/internal-rpc-authority-namespaced-network-egress-common
 patches: null

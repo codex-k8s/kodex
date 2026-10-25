@@ -5691,30 +5691,6 @@
     },
     {
       "format": "yaml",
-      "firstPath": "deploy/k8s/base/automation-scheduler/kustomization.yaml",
-      "secondPath": "deploy/k8s/base/integration-gateway/kustomization.yaml",
-      "fragmentSHA256": "8e335ad233352623df828fecea7267f0f68df4f8910147b850ced57fd6430aa3",
-      "count": 1,
-      "reason": "Полные короткие kustomization automation-scheduler/integration-gateway: одинаковые относительные имена файлов разрешаются внутри разных unit directories и означают разные Deployment/Service/config/observability resources. Один новый common egress component уже общий. Вынос самих resources в универсальную базу потребовал бы генерации/переименования unit-owned ресурсов и изменил бы явное deploy ownership ради схемы файла. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
-    },
-    {
-      "format": "yaml",
-      "firstPath": "deploy/k8s/base/automation-scheduler/kustomization.yaml",
-      "secondPath": "deploy/k8s/base/secret-broker/kustomization.yaml",
-      "fragmentSHA256": "e03d1db160188009f5c3211c0967b7bdc56b6a3c661fd4e25dbb87deddfa2fb4",
-      "count": 1,
-      "reason": "Префикс kustomization automation-scheduler/secret-broker заканчивается до дополнительных secret-broker verifier components. Относительные resource paths принадлежат разным unit, одинаковые filenames не означают одинаковые ресурсы. Общий egress вынесен, но самостоятельная secret-broker issuer/verifier composition и свой app source должны оставаться видимыми. Дополнительная универсальная base generator не вводится. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
-    },
-    {
-      "format": "yaml",
-      "firstPath": "deploy/k8s/base/automation-scheduler/networkpolicy.yaml",
-      "secondPath": "deploy/k8s/components/internal-rpc-authority-namespaced-network-egress-common/patch.yaml",
-      "fragmentSHA256": "549a4f0dfc86a2744ea66385d43ba36b19fa76802137eec002eb71c0faae185c",
-      "count": 1,
-      "reason": "Хвост main automation-scheduler exact-runtime-paths против общего issuer egress: одинаковые collector/Sentry destinations и ports. Полная main policy выбирает scheduler-job и разрешает owner CP RPC, работает независимо от issuer label; issuer policy имеет другой selector и PostgreSQL/readback/restore paths. Подключение целого issuer egress к main расширило бы доступ и связало бы trusted-cluster DNS/telemetry с sidecar. Partial rule generator по индексам atomic egress list ради этого окна не вводится. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
-    },
-    {
-      "format": "yaml",
       "firstPath": "deploy/k8s/base/platform-state/networkpolicy.yaml",
       "secondPath": "deploy/k8s/components/internal-rpc-authority-namespaced-network-egress-common/patch.yaml",
       "fragmentSHA256": "9304e84197288c3fbed1d8bfadf188b02a46e8f9cb2bd34aff2a4694f86c887e",
@@ -8080,6 +8056,126 @@
       "fragmentSHA256": "5eb37eabafd8e9fc1228d6fe2e257e8e0c8c96f527a08b4fd0dcf94b7c3f502d",
       "count": 1,
       "reason": "Короткое окно четырёх декларативных тонов RealtimeStatus: success/accent/warning/danger имеют разные пары theme tokens, одинаковый color-mix24% и разные смыслы состояний. Общая геометрия уже .realtime-status; neutral намеренно сохраняет surface/text-secondary базового правила. tone задаётся закрытым realtimeStatusPresentation и связан с icon/animation/data-preservation, а здесь нет повторного исполняемого алгоритма. Дополнительный слой CSS variables/mixin ради трёх declarations не нужен. Сохранено только это внутрефайловое окно/hash/count1, не компонент или state machine."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/deployment.yaml",
+      "secondPath": "deploy/k8s/base/integration-gateway/deployment.yaml",
+      "fragmentSHA256": "93e06d81db07d7174a529f21f6cac2776cec436f7fa1731479d55c12c701539b",
+      "count": 1,
+      "reason": "Окно env/metrics/memory automation-scheduler и integration-gateway после реального выноса probes/hardening/CPU. OTEL/Sentry filenames содержат разные workload-owned пути; integration требует128Mi/512Mi памяти, scheduler64Mi/256Mi. Shared technical defaults уже отдельный component, runtime egress тоже общий. Подмена named env/credential mount roots либо memory универсальным шаблоном не является выносом одного алгоритма. Сохранены только exact pair/hash/count1, без исключения deployment файлов."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/deployment.yaml",
+      "secondPath": "deploy/k8s/base/interaction-gateway/deployment.yaml",
+      "fragmentSHA256": "8715be7148abe2e72bb932f89056696aac80138961cb1fd27c8a798d287b4da0",
+      "count": 1,
+      "reason": "Окно observability env, memory и TLS/grant mounts scheduler/interaction. Имена контейнеров и mount roots назначены соответствующим workload; interaction дополнительно получает integration-credentials. Rollout/probes/security/CPU и общий runtime egress уже вынесены, остаётся явная связь env→файл→mount→Secret/ConfigMap. Универсальные substitutions сокрыли бы credential ownership ради формы YAML. Сохранено лишь это exact pair/hash/count1 окно, не transport или данные реквизитов."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/kustomization.yaml",
+      "secondPath": "deploy/k8s/base/integration-gateway/kustomization.yaml",
+      "fragmentSHA256": "2743392961bc9d5c627f05b76a6ee6370f0e63c3e60938ec36b1eabaec319075",
+      "count": 1,
+      "reason": "Два коротких kustomization имеют одинаковые относительные filenames, разрешаемые внутри разных unit directories: Deployment/Service/config/observability resources различны. Общие technical defaults и runtime egress уже components, issuer identity остаётся специализированной. Перенос самих относительных resources в общий файл изменил бы их владельца/разрешение путей либо потребовал генератора имён. Решение касается только данного pair/fragment/count1, а не всех kustomization."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/kustomization.yaml",
+      "secondPath": "deploy/k8s/base/secret-broker/kustomization.yaml",
+      "fragmentSHA256": "d47c2302af0f3501aed9a6ae40dbf0d53c09d877660b590ea2b05119c56a549c",
+      "count": 1,
+      "reason": "Префикс kustomization scheduler/secret-broker пересекает разные compositions: broker добавляет отдельный verifier и собственный issuer. Relative resource paths принадлежат независимым базам, даже если filenames одинаковы. Technical defaults и exact runtime network primitives уже переиспользуются; объединять весь unit graph через generic base нельзя без изменения явных identity/source bindings. Сохранено только это точное окно/hash/count1; verifier wiring остаётся проверяемым."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/integration-gateway/deployment.yaml",
+      "secondPath": "deploy/k8s/base/interaction-gateway/deployment.yaml",
+      "fragmentSHA256": "5eb140eca69012f6f82943aa121e081d585e48d10ffd67d0ade7272485b41465",
+      "count": 1,
+      "reason": "Deployment header integration/interaction состоит из разных metadata.name, app/component labels, selector/template bindings и ServiceAccount. Эти декларации повторяются внутри Kubernetes API намеренно: integration-worker и interaction-adapter являются отдельными identities. Прежние общие технические параметры уже component, а root identities нельзя назначать универсальным namePrefix/label transform поверх существующих Secret/ServiceAccount refs. Исключены лишь данная пара/hash/count1, не Pod spec."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/integration-gateway/deployment.yaml",
+      "secondPath": "deploy/k8s/base/interaction-gateway/deployment.yaml",
+      "fragmentSHA256": "878ddb0ad60b2019c4c9f470924111df5963cb1a2747bab158b7807bb00a790b",
+      "count": 1,
+      "reason": "Окно env/metrics/memory integration/interaction содержит разные INSTANCE_ID/CA/certificate/key/grant env names и workload-owned mount roots. Integration хранит connection credentials и требует128Mi памяти против64Mi interaction; explicit trust paths не взаимозаменяемы. Общие rollout/probes/hardening/CPU/egress уже вынесены. Дополнительный renderer ради YAML формы усложнил бы связь env с exact Secret и immutable workload identity. Оставлено только exact pair/hash/count1."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/integration-gateway/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/interaction-gateway/networkpolicy.yaml",
+      "fragmentSHA256": "035277fba9cf9a318b5de24546a63db26f538a41641c70925428619cdb976316",
+      "count": 1,
+      "reason": "Остаточное окно integration/interaction NetworkPolicy содержит отдельные pod selectors/component labels, Prometheus ingress и native egress-gateway path. DNS/owner CP/OTel/Sentry уже общий закрытый runtime component. У integration egress-gateway разрешает8080+8083, у interaction только8080; прочие email/synthetic пути также различны. Универсальная policy не должна расширять соседний listener или стирать selected workload. Сохранено только это exact pair/hash/count1 окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-ca-bundles.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-ca-bundles.yaml",
+      "fragmentSHA256": "174f65efcdd0dbc934dedd6dd1aa8d6d2f16114240a97e6254a0fe40eaad4b64",
+      "count": 1,
+      "reason": "Окно двух trust-manager Bundle client CA пересекает отдельные publisher/readback-attestor resources. У них общий installation CA source, sync wave и namespace target, но разные Bundle/ConfigMap names являются точными trust inputs клиентов. Alias не переносится через YAML document boundary; общий schema renderer ради коротких деклараций связал бы независимые CA lifecycle/consumer names. Оставлено только данное внутрефайловое окно/hash/count1, остальные CA и trust rules не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-ca-bundles.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-ca-bundles.yaml",
+      "fragmentSHA256": "27cf29a995e8deeeef8b3518f318c321fcf827f1a1f07ab4db743ff57b59cb83",
+      "count": 1,
+      "reason": "Bundle readback-attestor-client-ca и restore-controller-client-ca имеют одинаковые public CA projection fields, но разные service identities и именованные client trust ConfigMaps. Это не копия исполняемой ротации: trust-manager материализует каждый declared resource отдельно, exact consumers сохраняются. Объединение в один Bundle изменило бы bindings; cross-document YAML aliases не поддерживаются. Сохранено только это точное внутрефайловое окно/hash/count1."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-ca-bundles.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-ca-bundles.yaml",
+      "fragmentSHA256": "81c61b9cc44c3f96783dfafcbe670bd6add5f77c32e3cc4877a57ffefa9eb303",
+      "count": 1,
+      "reason": "Окно server CA Bundles publisher/readback-attestor с началом restore-controller: общий installation CA source и ca.pem являются текущей политикой, отдельные names закрепляют разные TLS consumers и последующее независимое обновление trust. Client CA projections отдельно используют client-ca.pem. Общий генератор не добавляется ради повторения required schema вокруг разных trust targets. Оставлен только данный fragment/hash/count1, не файл authority-ca-bundles целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/nats.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/postgresql.yaml",
+      "fragmentSHA256": "9e07d3ce7c7c9a09cde651abf0646947bcf93ae2516dc8e706d9d56e7c68c81d",
+      "count": 1,
+      "reason": "StatefulSet headers NATS/PostgreSQL содержат разные broker/database identities, serviceName, selector/template labels и runAs UID1000/70. Совпадают generic singleton/history/token/link/grace defaults, но полный фрагмент пересекает identity и security mapping до независимых init/container/PVC/TLS contracts. Общий Deployment component намеренно не применяется к StatefulSet. Дополнительный stateful template ради short header не вводится; сохранено только exact pair/hash/count1, не state storage или manifests целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/overlays/production/internal-rpc-authority/kustomization.yaml",
+      "secondPath": "deploy/k8s/overlays/staging/internal-rpc-authority/kustomization.yaml",
+      "fragmentSHA256": "bce26482f93d720319a40b2338aa70e48168e50bb3bc4bb3eaceed33b1fde210",
+      "count": 1,
+      "reason": "Production/staging authority overlays имеют одинаковые relative base refs и filename migration-job-patch.yaml, но каждый patch разрешается внутри своего environment directory. Разные environment labels распространяются на templates при includeSelectors:false; это разные delivery/owner gates, а не общий исполняемый алгоритм. Common authority bases уже переиспользованы. Обобщение короткой overlay schema затруднило бы review environment boundary; сохранён только exact pair/hash/count1."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "infra/arc/build-runner-values.yaml",
+      "secondPath": "infra/arc/deploy-runner-values.yaml",
+      "fragmentSHA256": "f302f21bd02a0b24e308a8d293b2af69d81d70b3150eb03845432f5b0a29cac0",
+      "count": 1,
+      "reason": "Префикс ARC build/deploy values сравнивает listener security, scale limits и GitHub URL/Secret metadata вокруг разных runnerScaleSetName и proxy namespaces. Build/deploy controllers и runtime полномочия физически разделены: build без ambient SA token, deploy с отдельным production-deployer. Helm уже общий renderer, дополнительный values include изменил бы standalone input contract installer. Оставлен только этот exact pair/hash/count1 префикс, не роли, env или полный chart values."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "infra/management-surfaces/routes.yaml",
+      "secondPath": "infra/management-surfaces/routes.yaml",
+      "fragmentSHA256": "b6f448e737978b1b5d4018149d2b447a6b7b55bca4373da51e76e700057f32d3",
+      "count": 1,
+      "reason": "OAuth2 policies control-center/grafana находятся в kodex-system/observability и выбирают разные app instances. Совпадают exact ingress peer→4180 и DNS/OIDC destinations, но namespaces/owners и дальнейшие client auth bindings независимы. routes.yaml является standalone многодокументным input bootstrap/yq; aliases между документами недопустимы, а generic namespaced policy renderer потребовал бы менять installer contract. Сохранено только данное внутрефайловое окно/hash/count1, не route policy набор."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "infra/management-surfaces/routes.yaml",
+      "secondPath": "infra/management-surfaces/routes.yaml",
+      "fragmentSHA256": "01c9373ddb489b3e063e89a58dd5a726b90af4a9ebbde09bc620a6f01d7228a7",
+      "count": 1,
+      "reason": "OAuth2 grafana/headlamp policies выбирают разные instances и namespaces observability/platform-admin; shared DNS/OIDC peer shape не выдаёт общих полномочий на эти surfaces. Installation consumer работает с явными именами и последующим SSO ingress readback, оба peer selectors остаются в одном AND элементе. Общий installer/YAML generator ради декларативного окна не вводится. Оставлен только этот exact fragment/hash/count1, остальные ports/профили/политики не исключаются."
     }
   ]
 }

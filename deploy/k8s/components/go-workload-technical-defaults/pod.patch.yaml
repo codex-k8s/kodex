@@ -1,0 +1,22 @@
+# Общие rollout и Pod settings; identity, fsGroup и volumes остаются в workload.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-workload-technical-defaults
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

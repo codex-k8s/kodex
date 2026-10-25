@@ -1,0 +1,53 @@
+# Закрытый набор четырёх баз; component подключается первым, до добавления sidecars.
+# Именной JSON test закрыто отклоняет перестановку основного контейнера.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: automation-scheduler
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: automation-scheduler
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: integration-gateway
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: integration-gateway
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: interaction-gateway
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: interaction-gateway
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: secret-broker
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: secret-broker
+- path: pod.patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: (automation-scheduler|integration-gateway|interaction-gateway|secret-broker)
+- path: container.patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: (automation-scheduler|integration-gateway|interaction-gateway|secret-broker)

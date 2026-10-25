@@ -3,27 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - runtime-namespace.yaml
-  - ../../base/platform-state
-  - ../../base/platform-endpoints
-  - ../../overlays/production/internal-rpc-authority
-  - ../../overlays/production/image-supply-chain
-  - ../../overlays/production/control-plane
-  - ../../base/clamav-db-updater
-  - ../../overlays/production/egress-gateway
-  - ../../overlays/production/role-image-builder
-  - ../../overlays/production/runtime-controller
-  - ../../base/runtime-workloads
-  - ../../base/runtime-secret-drafts
-  - ../../overlays/production/integration-gateway
-  - ../../overlays/production/automation-scheduler
-  - ../../overlays/production/secret-broker
-  - ../../overlays/production/stt-tts-service
-  - ../../overlays/production/email-bridge
-  - ../../overlays/production/artifact-retention
-  - ../../overlays/production/session-archive
-  - ../../overlays/production/backup-controller
-  - ../../overlays/production/control-api-gateway
-  - ../../overlays/production/staff-control-center
+  - ../platform-common
   - ../../overlays/production/interaction-gateway
 patches:
   - path: control-plane-patch.yaml

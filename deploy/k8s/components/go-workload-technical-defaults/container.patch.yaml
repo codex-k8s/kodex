@@ -1,0 +1,49 @@
+# Только проверенный контейнер0: прежние probes, hardening, pull policy и CPU.
+# Память, порты, env, TLS/grant mounts и команды задаёт соответствующая база.
+- op: add
+  path: /spec/template/spec/containers/0/imagePullPolicy
+  value: IfNotPresent
+- op: add
+  path: /spec/template/spec/containers/0/startupProbe
+  value:
+    httpGet:
+      path: /healthz
+      port: metrics
+    timeoutSeconds: 2
+    periodSeconds: 2
+    failureThreshold: 30
+- op: add
+  path: /spec/template/spec/containers/0/readinessProbe
+  value:
+    httpGet:
+      path: /readyz
+      port: metrics
+    timeoutSeconds: 2
+    periodSeconds: 5
+    failureThreshold: 2
+- op: add
+  path: /spec/template/spec/containers/0/livenessProbe
+  value:
+    httpGet:
+      path: /healthz
+      port: metrics
+    timeoutSeconds: 2
+    periodSeconds: 10
+    failureThreshold: 3
+- op: add
+  path: /spec/template/spec/containers/0/securityContext
+  value:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+- op: add
+  path: /spec/template/spec/containers/0/resources/requests/cpu
+  value: 50m
+- op: add
+  path: /spec/template/spec/containers/0/resources/limits/cpu
+  value: '2'

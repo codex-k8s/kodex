@@ -4,11 +4,69 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.472.0
+version: 1.473.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие технические Deployment и runtime egress — 25.10.2026
+
+Для automation-scheduler, integration-gateway, interaction-gateway и
+secret-broker общий go-workload-technical-defaults component материализует
+прежние replicas/history/rollout, token/service-links/grace, Pod hardening,
+app probes/security/pull policy и CPU. Имена ServiceAccount/контейнеров,
+fsGroup особенности, память, порты, env/TLS/grant mounts, image и команды
+остаются native. Компонент первым проверяет exact имя контейнера0 отдельным
+JSON test для каждого из четырёх workloads; sidecars добавляются после него.
+Unknown workload не получает patch, переставленный контейнер закрыто отклонён.
+
+Отдельный workload-runtime-egress-common переиспользует прежние DNS/owner CP/
+OpenTelemetry/Sentry rules четырёх runtime policies. Namespace и pod selectors
+в одном peer сохраняют AND; порты и все специальные egress paths прежние.
+У secret-broker move2→0 восстанавливает исходную позицию egress-gateway перед
+DNS. Политики выбирают только прежние exact workload names; issuer/profile
+не является зависимостью runtime DNS. Все4 полных ordered policy sets прежние.
+
+21 общая resource directory ссылка двух web-профилей вынесена в platform-common.
+Namespaced manifests namespace.yaml/runtime-namespace.yaml, labels/transformers,
+optional interaction/SSO/DB/RBAC patches и registry merge остаются у профилей.
+Раскрытие aggregate восстановило обе полные parsed kustomization модели.
+Новый aggregate не назначает namespace/labels и не создаёт собственный ресурс.
+
+Kustomize5.8.2: шесть final render побайтно совпали с исходным bf9fb0c:
+11/11/10/11 объектов отдельных баз,427/437 обоих профилей. Всего907 rendered
+objects сравнены без нормализации arrays/fields/порядка. JSON/model proof
+восстанавливает все4 Deployment и4 полных NetworkPolicy sets.23 изолированных
+Kustomize fixture случая:4 deployment/4 policy positives,2 foreign resources
+без изменений,8 реальных name-test отказов и5 negative source mutations,
+различаемых equality gate (readiness, ambient token, scope, DNS namespace/ports).
+Runtime bootstrap/claim/terminal/cancel/retry/readback и startup/shutdown
+матрица не меняются; новых grants/NetworkPolicy destinations не добавлено.
+
+Финальные публичные local checks: web-only-release33.41с,
+authority ABI render20.62с,interaction render7.55с — PASS LOCAL.
+Hashes20 source inputs совпали с proof/render. После расширения DNS на общий
+runtime egress и выноса profile resources весь final render/public checks
+повторены; более ранние DNS-only результаты не подменяют окончательный scope.
+Go/PWA/runtime sources не менялись, прежние build/unit к ним применимы.
+Это не apply/deploy/browser/full E2E либо проверка живого профиля.
+
+Detector:6746 sources/222 прежних exclusions,1546 raw/1162 retained/384 unresolved,
+registry1022. Исчезли14 прежних raw windows, появились7 коротких nominal окон.
+Три прежних retention hash теперь отсутствуют и удалены,1007 прочих entries
+не менялись. Добавлены15 точных pair/hash/count1 решений:7 новых identity/env/
+relative-resources окон и8 прочитанных Bundle/StatefulSet/environment/runner/
+OAuth2 деклараций. CA/runner/namespace trust boundaries не обобщаются.
+Thresholds/нормализация/форматы/файлы и generated exclusions не ослаблялись.
+Go21574/21574 EN→RU, пропусков0. Остальные384 группы (158 Go/150 TypeScript/
+39 YAML/37 Bash) остаются в scope #1823; generated, app code, dependencies и
+migrations этого пакета не менялись.
+
+Context7 /kubernetes-sigs/kustomize проверил Component, ordered patches,
+JSON6902 и anchored target matching. Фактический local Kustomize5.8.2
+прошёл полный before/after render и negative cases, версии не обновлялись.
+PR остаётся Draft; merge/deploy/startup/QA продолжения ещё не завершены.
 
 ## Общие scoped-стили PWA — 25.10.2026
 
