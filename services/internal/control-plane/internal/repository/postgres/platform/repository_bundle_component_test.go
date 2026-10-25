@@ -136,10 +136,10 @@ func newRepositoryBundleFixtureMode(t *testing.T, delegated bool) *repositoryBun
 		}
 	}
 
+	f.agent = *f.execute(command.ChangeAgentCapability, "writer-files", &f.agent.Version, command.AgentBindingInput{AgentRef: f.agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
 	target := f.agent
 	if delegated {
 		f.agent = *f.execute(command.ChangeAgentCapability, "writer-delegate", &f.agent.Version, command.AgentBindingInput{AgentRef: f.agent.Ref, BindingRef: "platform.run.delegate", Enabled: true}).Agent
-		f.agent = *f.execute(command.ChangeAgentCapability, "writer-files", &f.agent.Version, command.AgentBindingInput{AgentRef: f.agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
 		for i, a := range artifacts {
 			f.execute(command.ChangeArtifactBinding, fmt.Sprintf("source-binding-%d", i), &a.Version, command.ArtifactBindingInput{ArtifactRef: a.Ref, AgentRef: f.agent.Ref, Enabled: true})
 		}

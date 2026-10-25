@@ -37,7 +37,7 @@ WHERE lease.organization_id=@organization_id::uuid AND lease.ref=@lease_ref
   AND lease.fence_digest=@fence_digest AND lease.generation=@generation
   AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp()
   AND NOT EXISTS (SELECT 1 FROM control_plane.callback_receipts delivered
-    WHERE delivered.organization_id=run.organization_id AND delivered.child_run_id=run.id)
+    WHERE delivered.child_run_id=run.id)
   AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id)
   AND EXISTS (
     SELECT 1 FROM jsonb_array_elements(COALESCE(revision.safe_snapshot->'integrationGrants','[]'::jsonb)) pin

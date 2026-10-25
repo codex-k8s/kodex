@@ -107,7 +107,9 @@ WHERE parent_node.organization_id = @organization_id::uuid
   ))
   AND ((own_publication.id IS NULL AND NOT EXISTS (
       SELECT 1 FROM control_plane.run_edges callback
-      JOIN control_plane.callback_receipts receipt ON receipt.callback_edge_id=callback.id AND receipt.organization_id=parent_node.organization_id
+      JOIN control_plane.callback_receipts receipt ON receipt.callback_edge_id=callback.id
+      JOIN control_plane.runs receipt_child ON receipt_child.id=receipt.child_run_id AND receipt_child.organization_id=parent_node.organization_id
+        AND receipt_child.root_run_id=root.id AND receipt_child.project_id=parent_run.project_id
       JOIN control_plane.repository_bundle_publications received_publication ON received_publication.organization_id=parent_node.organization_id
         AND received_publication.root_run_id=root.id AND received_publication.origin_run_id=receipt.child_run_id
       WHERE callback.organization_id=parent_node.organization_id AND callback.root_run_id=root.id

@@ -11,7 +11,7 @@ WHERE publication.organization_id=@organization_id::uuid AND publication.ref=@pr
  AND NOT EXISTS (SELECT 1 FROM control_plane.run_edges continuation WHERE continuation.organization_id=node.organization_id
    AND continuation.root_run_id=node.root_run_id AND continuation.source_node_id=node.id AND continuation.type='CONTINUES')
  AND (run.id<>publication.origin_run_id OR NOT EXISTS (SELECT 1 FROM control_plane.callback_receipts delivered
-   WHERE delivered.organization_id=node.organization_id AND delivered.child_run_id=run.id))
+   WHERE delivered.child_run_id=run.id))
  AND NOT (agent.enabled AND agent.state='READY'
    AND EXISTS (SELECT 1 FROM control_plane.projects project WHERE project.id=run.project_id AND project.lifecycle='ACTIVE')
    AND EXISTS (SELECT 1 FROM control_plane.subjects actor
@@ -19,6 +19,9 @@ WHERE publication.organization_id=@organization_id::uuid AND publication.ref=@pr
      WHERE actor.id=root.initiated_by AND actor.organization_id=node.organization_id AND actor.active
        AND control_plane.catalog_resource_visible(node.organization_id,actor.id,'agent.launch','AGENT',target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false)))
  AND (publication.origin_node_id=node.id OR EXISTS (SELECT 1 FROM control_plane.run_edges callback
-   JOIN control_plane.callback_receipts receipt ON receipt.callback_edge_id=callback.id AND receipt.organization_id=node.organization_id
+   JOIN control_plane.callback_receipts receipt ON receipt.callback_edge_id=callback.id
      AND receipt.child_run_id=publication.origin_run_id
+   JOIN control_plane.runs receipt_child ON receipt_child.id=receipt.child_run_id
+     AND receipt_child.organization_id=node.organization_id AND receipt_child.root_run_id=node.root_run_id
+     AND receipt_child.project_id=publication.project_id
    WHERE callback.organization_id=node.organization_id AND callback.root_run_id=node.root_run_id AND callback.target_node_id=node.id AND callback.type='CALLBACK_TO'));
