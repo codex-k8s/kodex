@@ -4,7 +4,7 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.13
+version: 2.2.14
 updated: 2026-10-25
 ---
 
@@ -16,6 +16,7 @@ updated: 2026-10-25
 - `OPS-RUNTIME-MEMORY-001` — [Диагностика нехватки памяти исполнителя](../operations/runtime-memory-failure.md).
 - `OPS-OUTBOX-1855` — [Восстановление доставки событий после большой истории](../operations/outbox-claim-stabilization-1855.md).
 - `OPS-DOC-WORKFLOW-DRAFT-1870` — [Создание и чтение черновика процесса без этапов](../operations/workflow-metadata-draft-1870.md).
+- `OPS-DOC-TERMINAL-GATE-1873` — [Окончательный отказ закрытого Gate после deadline](../operations/terminal-gate-deadline-1873.md).
 
 Документ задает устойчивые идентификаторы и реестр документации.
 

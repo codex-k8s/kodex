@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.39
+version: 1.1.40
 updated: 2026-10-25
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Закрытый Gate проверяется после fresh authority и receipt replay, до применения
+его исторических clocks. Он не инициирует новый expiry ни terminal root, ни
+ещё активного root после завершённого дочернего этапа. Известное закрытие даёт
+окончательный AlreadyResolved, а SQL failure не превращается в skip. Closed-only
+row lock не меняет порядок блокировок OPEN expiry; перед эффектом выполняется
+повторная проверка. Матрица и адресная проверка:
+[#1873](../operations/terminal-gate-deadline-1873.md).
 
 Чтение изменяемой конфигурации для редактора отделяется от допуска к
 публикации/исполнению. Metadata-only workflow в DRAFT или ARCHIVED может

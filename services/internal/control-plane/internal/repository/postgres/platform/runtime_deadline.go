@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -25,6 +26,14 @@ var queryRuntimeDeadlineOwner string
 
 //go:embed sql/runtime_deadline__gate.sql
 var queryRuntimeDeadlineGate string
+
+// queryRuntimeDeadlineTerminalGate locks only an exact tenant-owned closed gate; OPEN rows remain
+// outside the lock so active expiry keeps its existing graph-lock order.
+// queryRuntimeDeadlineTerminalGate блокирует только точный закрытый Gate организации; OPEN-строки
+// исключены из блокировки, поэтому active expiry сохраняет прежний порядок graph locks.
+//
+//go:embed sql/runtime_deadline__terminal_gate.sql
+var queryRuntimeDeadlineTerminalGate string
 
 const runtimeTimeoutSummary = "i18n:RUNTIME_TIMEOUT"
 
@@ -96,8 +105,12 @@ func (repository *Repository) reconcileExecutionDeadlines(ctx context.Context, t
 	return failed, nil
 }
 
-// Этот путь запускается после fresh authority и replay lookup, но до effect.
-// Expiry должен быть committed, даже когда поздний effect закрыто отклонён.
+// executionDeadlineCommand runs after fresh authority and receipt replay but before any requested
+// effect. A closed gate is final before historical clocks are read; an OPEN overdue execution still
+// commits its complete expiry graph before the requested effect is rejected.
+// executionDeadlineCommand выполняется после fresh authority и receipt replay до запрошенного эффекта.
+// Закрытый Gate окончателен до чтения исторических часов; OPEN overdue execution по-прежнему
+// фиксирует полный expiry graph перед закрытым отказом запрошенного эффекта.
 func (repository *Repository) executionDeadlineCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, bool, error) {
 	var pin command.LeaseInput
 	runID := ""
@@ -122,6 +135,9 @@ func (repository *Repository) executionDeadlineCommand(ctx context.Context, tx p
 	case command.ProposeRunMetadataInput:
 		pin = command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}
 	case command.GateResolutionInput:
+		if err := terminalOwnerGateDeadlineError(ctx, tx, current, payload.GateRef); err != nil {
+			return commandOutcome{}, false, err
+		}
 		if tx.QueryRow(ctx, queryRuntimeDeadlineGate, pgx.StrictNamedArgs{"organization_id": current.organizationID, "gate_ref": payload.GateRef}).Scan(&runID) != nil {
 			return commandOutcome{}, false, errs.ErrUnavailable
 		}
@@ -156,13 +172,53 @@ func (repository *Repository) executionDeadlineCommand(ctx context.Context, tx p
 			break
 		}
 	}
-	if tx.QueryRow(ctx, queryRuntimeDeadlineOwner, pgx.StrictNamedArgs{"organization_id": current.organizationID, "run_ref": clockRef}).Scan(&candidate.nodeID, &candidate.nodeRef, &candidate.runID, &candidate.runRef, &candidate.rootRunID, &candidate.projectID, &candidate.projectRef) != nil {
+	err = tx.QueryRow(ctx, queryRuntimeDeadlineOwner, pgx.StrictNamedArgs{"organization_id": current.organizationID, "run_ref": clockRef}).Scan(&candidate.nodeID, &candidate.nodeRef, &candidate.runID, &candidate.runRef, &candidate.rootRunID, &candidate.projectID, &candidate.projectRef)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if payload, ok := input.Payload.(command.GateResolutionInput); ok {
+			if closed := terminalOwnerGateDeadlineError(ctx, tx, current, payload.GateRef); closed != nil {
+				return commandOutcome{}, false, closed
+			}
+		}
+	}
+	if err != nil {
 		return commandOutcome{}, false, errs.ErrUnavailable
+	}
+	if payload, ok := input.Payload.(command.GateResolutionInput); ok {
+		if err := terminalOwnerGateDeadlineError(ctx, tx, current, payload.GateRef); err != nil {
+			return commandOutcome{}, false, err
+		}
 	}
 	if err := repository.failRuntimeGraph(ctx, tx, current, input, candidate, "RUNTIME_TIMEOUT", runtimeTimeoutSummary); err != nil {
 		return commandOutcome{}, false, err
 	}
 	return commandOutcome{result: command.Result{ExecutionDeadlineExpired: true}, resourceKind: "RUN", resourceRef: candidate.runRef, projectID: candidate.projectID, projectRef: candidate.projectRef, summary: runtimeTimeoutSummary, runtimeGraphChanged: true}, true, nil
+}
+
+// terminalOwnerGateDeadlineError rejects an authorized closed gate before its historical clocks can
+// expire either a terminal or still-active root. Only closed rows are locked; no row means the caller
+// must continue the unchanged open-gate/expiry path, never skip it. Storage and unknown state fail closed.
+// Fresh authority/project serialization and receipt replay precede this check; active expiry keeps
+// its lock order and rechecks closure immediately before the effect or after an active-owner miss.
+// terminalOwnerGateDeadlineError отклоняет разрешённый закрытый Gate до применения его старых часов
+// к terminal либо ещё active root. Блокируются лишь закрытые строки; отсутствие строки требует продолжить
+// прежний open-gate/expiry path без пропуска. Storage failure и неизвестное состояние закрыто отклоняются.
+// Свежие authority/project serialization и receipt replay предшествуют проверке; active expiry сохраняет
+// порядок блокировок и повторяет closure check перед эффектом либо после отсутствия active owner.
+func terminalOwnerGateDeadlineError(ctx context.Context, tx pgx.Tx, current scope, gateRef string) error {
+	var gateState string
+	err := tx.QueryRow(ctx, queryRuntimeDeadlineTerminalGate, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "gate_ref": gateRef,
+	}).Scan(&gateState)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	if contains([]string{"APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED"}, gateState) {
+		return errs.ErrAlreadyResolved
+	}
+	return errs.ErrUnavailable
 }
 
 func executionDeadlineReceiptError(result command.Result) error {

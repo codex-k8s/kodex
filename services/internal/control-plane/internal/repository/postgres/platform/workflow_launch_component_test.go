@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +49,18 @@ var queryRuntimeDelegateInputMissing string
 
 //go:embed testdata/sql/runtime_delegate_frontier_proof.sql
 var queryRuntimeDelegateFrontierProof string
+
+// terminalGateDeadlineSnapshot reads exact synthetic graph/event state and owner cardinalities without writing.
+// terminalGateDeadlineSnapshot читает точное синтетическое состояние графа/событий и owner cardinalities без записи.
+//
+//go:embed testdata/sql/terminal_gate_deadline_snapshot.sql
+var terminalGateDeadlineSnapshot string
+
+// terminalGateDeadlineEvents retains aggregate/ref/state provenance to detect duplicate or missing expiry events.
+// terminalGateDeadlineEvents сохраняет aggregate/ref/state provenance для обнаружения дублированных либо пропущенных expiry events.
+//
+//go:embed testdata/sql/terminal_gate_deadline_events.sql
+var terminalGateDeadlineEvents string
 
 func TestWorkflowLaunchComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
@@ -706,6 +720,217 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		}
 		complete("input-inner-coordinator-complete", current, true)
 		assertInput(claim("input-inner-child", child.Run.Ref), innerInput)
+	})
+	t.Run("terminal-gate-deadline", func(t *testing.T) {
+		// Каждый случай использует настоящий delegated child: planned step становится исполненным,
+		// а длинные часы coordinator позволяют отличить historical child clock от active root budget.
+		short := gatedDraft
+		short.Name = "Terminal gate deadline"
+		short.TimeoutSeconds = 60
+		short.Steps = append([]entity.WorkflowStep{}, gatedDraft.Steps...)
+		short.Steps[0].TimeoutSeconds = 6
+		wf := execute(command.CreateWorkflow, owner, "terminal-gate-create", command.WorkflowInput{ProjectRef: project.Ref, Name: short.Name, CoordinatorAgentRef: coordinator.Ref, Draft: &short}, nil).Workflow
+		wf = execute(command.ValidateWorkflow, owner, "terminal-gate-validate", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		wf = execute(command.PublishWorkflow, owner, "terminal-gate-publish", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		other := execute(command.CreateProject, owner, "terminal-gate-other-project", command.ProjectInput{Name: "Foreign terminal gates", Language: "en"}, nil).Project
+		otherID := gateTestProjectID(t, ctx, r, owner, other.Ref)
+		snapshot := func(ref string) string {
+			t.Helper()
+			var raw []byte
+			if err := pool.QueryRow(ctx, terminalGateDeadlineSnapshot, ref).Scan(&raw); err != nil {
+				t.Fatal("read exact terminal-gate snapshot", err)
+			}
+			return string(raw)
+		}
+		waitClock := func(deadline time.Time) {
+			t.Helper()
+			timer := time.NewTimer(time.Until(deadline.Add(100 * time.Millisecond)))
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				t.Fatal("terminal-gate fixture budget exhausted")
+			case <-timer.C:
+			}
+		}
+		resolve := func(actor value.Principal, gate entity.OwnerGate, key, decision string, version int64) (command.Result, error) {
+			return service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: actor,
+				Mutation: value.Mutation{IdempotencyKey: "terminal-gate-" + key, ExpectedVersion: &version},
+				Payload:  command.GateResolutionInput{GateRef: gate.Ref, Decision: decision, Comment: "Exact owner decision"}})
+		}
+		for _, mode := range []string{"active-expiry", "poll-expiry", "approved-terminal", "approved-active-root", "concurrent-expiry"} {
+			t.Run(mode, func(t *testing.T) {
+				root := execute(command.LaunchRun, owner, "terminal-gate-"+mode+"-root", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "WORKFLOW", Ref: wf.Ref}, Task: "Terminal gate has no retry effect"}, nil).Run
+				origin := claim("terminal-gate-"+mode+"-origin", root.Ref)
+				child := execute(command.DelegateExecution, worker, "terminal-gate-"+mode+"-child", command.DelegateInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step", Task: "Bounded gated stage"}, nil).Run
+				stage := claim("terminal-gate-"+mode+"-stage", child.Ref)
+				deadline, err := runtimecontract.DecodeRuntimeExecutionDeadline(stage["executionDeadline"])
+				if err != nil || deadline == nil || len(deadline.Clocks) != 2 {
+					t.Fatal("missing exact root and child clocks")
+				}
+				complete("terminal-gate-"+mode+"-stage-complete", stage, true)
+				if mode != "approved-active-root" {
+					complete("terminal-gate-"+mode+"-origin-complete", origin, true)
+				}
+				current, graph, err := service.GetRunGraph(ctx, owner, root.Ref)
+				if err != nil || len(current.GateRefs) != 1 {
+					t.Fatal("read pending child gate")
+				}
+				gate, err := service.GetOwnerGate(ctx, owner, current.GateRefs[0])
+				if err != nil || gate.State != "OPEN" {
+					t.Fatal("child gate is not open")
+				}
+				// OPEN OCC и скрытый foreign/unknown resource не должны доходить до expiry.
+				before := snapshot(root.Ref)
+				if _, e := resolve(owner, gate, mode+"-stale", "APPROVE", gate.Version+1); !errors.Is(e, errs.ErrVersionMismatch) {
+					t.Fatal("open gate OCC changed", e)
+				}
+				foreign := owner
+				foreign.ProjectRef = otherID
+				if _, e := resolve(foreign, gate, mode+"-foreign", "APPROVE", gate.Version); !errors.Is(e, errs.ErrNotFound) {
+					t.Fatal("foreign gate became visible", e)
+				}
+				unknown := gate
+				unknown.Ref = "gat_unknown_terminal_fixture"
+				if _, e := resolve(owner, unknown, mode+"-unknown", "APPROVE", 1); !errors.Is(e, errs.ErrNotFound) {
+					t.Fatal("unknown gate became visible", e)
+				}
+				if snapshot(root.Ref) != before {
+					t.Fatal("negative open-gate admission changed owner state")
+				}
+				approved := strings.HasPrefix(mode, "approved-")
+				if approved {
+					result, e := resolve(owner, gate, mode+"-approve", "APPROVE", gate.Version)
+					if e != nil || result.Gate == nil || result.Gate.State != "APPROVED" {
+						t.Fatal("initial child approval failed", e)
+					}
+					current = *result.Run
+					if mode == "approved-terminal" {
+						// Root WAITING_HUMAN блокирует claim queued callback. Сначала approval,
+						// затем настоящий callback claim/complete и свежее чтение terminal графа.
+						beforeCallback, queued, e := service.GetRunGraph(ctx, owner, root.Ref)
+						if e != nil || beforeCallback.State != "RUNNING" {
+							t.Fatal("approved root is not ready for its callback", e)
+						}
+						callbackQueued := false
+						for _, node := range queued.Nodes {
+							callbackQueued = callbackQueued || node.Type == "AGENT_EXECUTION" && node.RunRef == root.Ref && node.State == "QUEUED"
+						}
+						if !callbackQueued {
+							t.Fatal("approved root lost its actual callback work")
+						}
+						callback := claim("terminal-gate-approved-terminal-callback", root.Ref)
+						complete("terminal-gate-approved-terminal-callback-complete", callback, true)
+						current, graph, e = service.GetRunGraph(ctx, owner, root.Ref)
+						if e != nil {
+							t.Fatal("read fully drained callback graph", e)
+						}
+						if current.State != "SUCCEEDED" {
+							t.Fatal("approved root did not finish normally")
+						}
+						for _, node := range graph.Nodes {
+							if contains([]string{"PLANNED", "QUEUED", "RUNNING", "WAITING"}, node.State) {
+								t.Fatal("approved terminal fixture retained planned or callback work")
+							}
+						}
+					} else if current.State != "RUNNING" {
+						t.Fatal("closed child fixture lost its still-active coordinator")
+					}
+				}
+				waitClock(deadline.EffectiveDeadlineAt)
+				if !approved {
+					// Сравниваем exact event set по неизменённому pre-expiry графу, включая все runs.
+					expected := []string{}
+					runs := map[string]bool{}
+					for _, node := range graph.Nodes {
+						runs[node.RunRef] = true
+						if contains([]string{"PLANNED", "QUEUED", "RUNNING", "WAITING"}, node.State) {
+							state := "CANCELLED"
+							if node.Type == "ROOT_PROCESS" {
+								state = "FAILED"
+							}
+							expected = append(expected, strings.Join([]string{"NODE_STATE_CHANGED", node.Ref, node.Ref, "", "FAILED", state, runtimeTimeoutSummary}, "|"))
+						}
+					}
+					for ref := range runs {
+						value, e := service.GetRun(ctx, owner, ref)
+						if e != nil {
+							t.Fatal("read pre-expiry run", e)
+						}
+						if contains([]string{"QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"}, value.State) {
+							expected = append(expected, strings.Join([]string{"RUN_STATE_CHANGED", ref, "", "", "FAILED", "", runtimeTimeoutSummary}, "|"))
+						}
+					}
+					expected = append(expected, strings.Join([]string{"OWNER_GATE_RESOLVED", gate.Ref, gate.NodeRef, gate.Ref, "FAILED", "CANCELLED", runtimeTimeoutSummary}, "|"))
+					poll := func() error {
+						_, e := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+							Mutation: value.Mutation{IdempotencyKey: "terminal-gate-" + mode + "-expiry-poll"}, Payload: command.LeaseInput{WorkloadInstance: "terminal-gate-expiry", Limit: 1}})
+						return e
+					}
+					if mode == "poll-expiry" {
+						if e := poll(); e != nil {
+							t.Fatal("canonical expiry poll failed", e)
+						}
+					} else {
+						var done chan error
+						if mode == "concurrent-expiry" {
+							done = make(chan error, 1)
+							go func() { done <- poll() }()
+						}
+						_, e := resolve(owner, gate, mode+"-first-late", "APPROVE", gate.Version)
+						if done != nil {
+							if e := <-done; e != nil {
+								t.Fatal("concurrent expiry poll failed", e)
+							}
+						}
+						if !errors.Is(e, errs.ErrForbidden) && !(mode == "concurrent-expiry" && errors.Is(e, errs.ErrAlreadyResolved)) {
+							t.Fatal("overdue gate did not close its graph", e)
+						}
+					}
+					var raw []byte
+					if e := pool.QueryRow(ctx, terminalGateDeadlineEvents, root.Ref, current.EventSequence).Scan(&raw); e != nil {
+						t.Fatal("read exact expiry events", e)
+					}
+					var tuples [][]string
+					if json.Unmarshal(raw, &tuples) != nil {
+						t.Fatal("decode exact expiry events")
+					}
+					actual := []string{}
+					for _, tuple := range tuples {
+						actual = append(actual, strings.Join(tuple, "|"))
+					}
+					sort.Strings(expected)
+					sort.Strings(actual)
+					if !reflect.DeepEqual(actual, expected) {
+						t.Fatalf("expiry event set changed: actual=%v expected=%v", actual, expected)
+					}
+				}
+				gate, err = service.GetOwnerGate(ctx, owner, gate.Ref)
+				if err != nil || !contains([]string{"APPROVED", "CANCELLED"}, gate.State) {
+					t.Fatal("terminal gate readback failed")
+				}
+				before = snapshot(root.Ref)
+				for _, decision := range []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"} {
+					if _, e := resolve(owner, gate, mode+"-closed-"+decision, decision, gate.Version); !errors.Is(e, errs.ErrAlreadyResolved) {
+						t.Fatal("closed gate became retryable or executable", e)
+					}
+				}
+				if approved {
+					if _, e := resolve(owner, gate, mode+"-approve", "APPROVE", gate.Version-1); e != nil {
+						t.Fatal("successful receipt replay lost its prior authority path", e)
+					}
+				}
+				if snapshot(root.Ref) != before {
+					t.Fatal("closed decision/replay changed graph, receipts, audit, outbox or runtime effects")
+				}
+				if mode == "approved-active-root" {
+					fresh, e := service.GetRun(ctx, owner, root.Ref)
+					if e != nil || fresh.State != "RUNNING" {
+						t.Fatal("historical child clock expired the active root")
+					}
+					execute(command.CancelRun, owner, "terminal-gate-active-cleanup", command.RunCommandInput{RunRef: root.Ref, Reason: "Synthetic fixture cleanup"}, &fresh.Version)
+				}
+			})
+		}
 	})
 	t.Run("durable-workflow-deadline", func(t *testing.T) {
 		short := draft
