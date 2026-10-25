@@ -4,7 +4,7 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.5
+version: 1.1.6
 updated: 2026-10-25
 ---
 
@@ -68,14 +68,34 @@ startup. Проверка не добавляет retry SQL, сетевые ра
 Typed PostgreSQL/TLS policy принадлежит сервису; CLI и service используют один
 его classifier, а SDK-neutral `Postgres/Network` mappings — общий `errorclass`.
 
-Для control-plane [#1862](https://github.com/codex-k8s/kodex/issues/1862) путь:
-process lifecycle → прежняя config/TLS/pool preparation → один ping не дольше
-10секунд → прежний startup. Fail/cancel закрывает только созданный pool и
+Для control-plane [#1862](https://github.com/codex-k8s/kodex/issues/1862) задаёт
+закрытую диагностику, а [#1866](https://github.com/codex-k8s/kodex/issues/1866) —
+узкую устойчивость initial connectivity: process lifecycle → прежняя
+config/TLS/pool preparation → ping не дольше10секунд → прежний startup.
+Только типизированный класс `connection_refused` допускает следующий ping
+того же pool после отменяемой паузы1секунда. Все probes и паузы используют
+исходный `StartupTimeout` context `Run`; общий deadline не перезапускается и
+не увеличивается. Иной класс, включая auth/TLS/config/DNS/reset/timeout,
+терминален; текст ошибки не разрешает retry. Fail/cancel закрывает только созданный pool и
 возвращается до storage/worker initialization; success передаёт pool владельцу
 `Run`, который закрывает его после worker join. Общий startup budget и порядок
 эффектов не меняются. Новый domain event не создаётся: авторитетный read path —
 закрытая process diagnostic и Kubernetes container terminal/Ready metadata.
 Исходная причина прошлых restart остаётся UNKNOWN без нового наблюдения.
+
+| Исход initial connectivity | Pool и продолжение | Диагностика |
+| --- | --- | --- |
+| Refused при активном budget | Тот же pool, пауза и следующий ping; SQL/bootstrap/workers не запускаются | Typed cause остаётся приватной |
+| Refused → success | Один pool передаётся `Run`; прежний startup продолжается однократно | Нет ложного terminal failure |
+| Другой отказ, в том числе после refused | Pool закрывается один раз; дальнейших probes/effects нет | Текущий terminal stage/class, без masking прежним refused |
+| Deadline/cancel до ping | Следующего probe нет; отвергнутый pool закрывается | `errors.Is` сохраняет context outcome |
+| Deadline/cancel во время probe/паузы после refused | Pool закрывается один раз; следующий ping и effects запрещены | Первичный refused отдельно от `wait_status=deadline|canceled`; оба private causes доступны `errors.Is` |
+
+Service-owned policy не импортирует migration wait-loop: email CLI допускает
+более широкий набор transient classes и владеет другим apply lifecycle.
+`serviceruntime.IdleBackoff` управляет паузами idle workers и не является
+startup barrier. Здесь используются существующие service typed classifier и
+общие `Postgres/Network`; новый универсальный retry framework не вводится.
 
 При отказе продления lease keeper, tracker и drain записывают закрытое
 наблюдение исходного RPC и request/parent context до собственного cleanup

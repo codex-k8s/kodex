@@ -7,12 +7,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/postgresdiagnostic"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// postgresStartupPingBudget caps the single startup probe inside the unchanged service startup budget.
-// postgresStartupPingBudget ограничивает единственный начальный ping внутри прежнего startup budget сервиса.
+// postgresStartupPingBudget caps each initial connectivity probe inside the unchanged service startup budget.
+// postgresStartupPingBudget ограничивает каждый начальный ping внутри прежнего startup budget сервиса.
 const postgresStartupPingBudget = 10 * time.Second
+
+// postgresStartupRetryDelay spaces only typed connection-refused probes without restarting the caller budget.
+// postgresStartupRetryDelay разделяет только типизированные connection-refused ping без перезапуска caller budget.
+const postgresStartupRetryDelay = time.Second
 
 // postgresStartupPool exposes only the initial probe and rejected-pool cleanup, never application SQL.
 // postgresStartupPool предоставляет только начальную проверку и закрытие отвергнутого pool, без прикладного SQL.
@@ -25,10 +30,10 @@ type postgresStartupPool interface {
 	Close()
 }
 
-// openPostgres loads the unchanged DSN/CA/TLS/pool configuration and admits a pool only after one bounded ping.
-// Any failed or canceled probe closes the pool and returns before Run can construct storage or workers.
-// openPostgres загружает прежние DSN/CA/TLS/pool настройки и допускает pool лишь после одного ограниченного ping.
-// Отказ либо отмена закрывает pool и возвращает управление до создания storage и workers в Run.
+// openPostgres loads the unchanged DSN/CA/TLS/pool configuration and admits a pool after bounded connectivity readiness.
+// Exhausted or terminal failure closes the pool and returns before Run can construct storage or workers.
+// openPostgres загружает прежние DSN/CA/TLS/pool настройки и допускает pool после ограниченной проверки доступности.
+// Исчерпание бюджета либо постоянный отказ закрывает pool до создания storage и workers в Run.
 func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, startupFailure(stageVerifyPostgreSQLConnection, err)
@@ -85,23 +90,57 @@ func parsePostgresStartupConfig(raw []byte) (*pgxpool.Config, error) {
 	return pgxpool.ParseConfig(strings.TrimSpace(string(raw)))
 }
 
-// verifyPostgresStartup performs one context-aware probe with a ten-second cap and no retries.
-// Failure or cancellation before/after ping closes exactly this pool; successful ownership passes to Run.
-// verifyPostgresStartup выполняет один context-aware ping с пределом десять секунд и без повторов.
-// Отказ либо отмена до/после ping закрывает именно этот pool; успешное владение передаётся Run.
+// verifyPostgresStartup waits only through typed connection-refused errors under Run's original startup deadline.
+// Each probe has a ten-second cap; cancel-aware pauses never authorize SQL/bootstrap/worker retries.
+// Terminal failure or cancellation closes exactly this pool; successful ownership passes to Run.
+// verifyPostgresStartup ожидает только типизированные connection-refused отказы под исходным startup deadline Run.
+// Каждый ping ограничен десятью секундами; отменяемые паузы не разрешают повторы SQL/bootstrap/workers.
+// Постоянный отказ либо отмена закрывает именно этот pool; успешное владение передаётся Run.
 func verifyPostgresStartup(ctx context.Context, pool postgresStartupPool) error {
-	probe, cancel := context.WithTimeout(ctx, postgresStartupPingBudget)
-	defer cancel()
-	err := probe.Err()
-	if err == nil {
-		err = pool.Ping(probe)
+	accepted := false
+	defer func() {
+		if !accepted {
+			pool.Close()
+		}
+	}()
+	var lastRefused error
+	for {
+		if err := ctx.Err(); err != nil {
+			if lastRefused == nil {
+				return startupFailure(stageVerifyPostgreSQLConnection, err)
+			}
+			return &startupError{stage: stageVerifyPostgreSQLConnection, cause: lastRefused, budget: err}
+		}
+		probe, cancel := context.WithTimeout(ctx, postgresStartupPingBudget)
+		err := pool.Ping(probe)
+		if err == nil {
+			err = probe.Err()
+		}
+		cancel()
+		if err == nil {
+			err = ctx.Err()
+		}
+		if err == nil {
+			accepted = true
+			return nil
+		}
+		class := postgresdiagnostic.Class(err)
+		if budget := ctx.Err(); budget != nil {
+			if lastRefused != nil && (class == "canceled" || class == "timeout") {
+				err = lastRefused
+			}
+			return &startupError{stage: stageVerifyPostgreSQLConnection, cause: err, budget: budget}
+		}
+		if class != "connection_refused" {
+			return startupFailure(stageVerifyPostgreSQLConnection, err)
+		}
+		lastRefused = err
+		timer := time.NewTimer(postgresStartupRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return &startupError{stage: stageVerifyPostgreSQLConnection, cause: lastRefused, budget: ctx.Err()}
+		case <-timer.C:
+		}
 	}
-	if err == nil {
-		err = probe.Err()
-	}
-	if err != nil {
-		pool.Close()
-		return startupFailure(stageVerifyPostgreSQLConnection, err)
-	}
-	return nil
 }

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -207,11 +208,14 @@ const (
 	unknownStartupStage = "unknown"
 )
 
-// startupError retains the private typed cause and a registered phase without widening retry authority.
-// startupError сохраняет приватную типизированную причину и зарегистрированный этап без расширения права повтора.
+// startupError retains a private typed cause, optional exhausted wait budget and registered phase.
+// The wait budget does not replace the primary refusal or authorize retries outside initial connectivity.
+// startupError сохраняет приватную типизированную причину, необязательное исчерпание wait budget и этап.
+// Wait budget не заменяет первичный отказ и не разрешает повторы вне initial connectivity.
 type startupError struct {
-	stage startupStage
-	cause error
+	stage  startupStage
+	cause  error
+	budget error
 }
 
 // Error returns only the normalized fixed phase, never the underlying dependency message.
@@ -220,7 +224,12 @@ func (failure *startupError) Error() string { return normalizedStartupStage(fail
 
 // Unwrap preserves private errors.Is/As inspection for classification and cancellation handling.
 // Unwrap сохраняет приватную проверку errors.Is/As для классификации и обработки отмены.
-func (failure *startupError) Unwrap() error { return failure.cause }
+func (failure *startupError) Unwrap() error {
+	if failure.budget != nil {
+		return errors.Join(failure.cause, failure.budget)
+	}
+	return failure.cause
+}
 
 // startupFailure records an explicit failed phase, including a fixed validation rejection without a cause.
 // startupFailure фиксирует явно неуспешный этап, включая фиксированный validation отказ без внешней причины.
@@ -370,9 +379,20 @@ func normalizedStartupStage(stage startupStage) string {
 func ReportFailure(output io.Writer, err error) {
 	stage := unknownStartupStage
 	class := postgresdiagnostic.Class(err)
+	waitStatus := ""
 	var failure *startupError
 	if errors.As(err, &failure) {
 		stage = normalizedStartupStage(failure.stage)
+		if failure.stage == stageVerifyPostgreSQLConnection && failure.budget != nil {
+			class = postgresdiagnostic.Class(failure.cause)
+			outcome := "unknown"
+			if errors.Is(failure.budget, context.Canceled) {
+				outcome = "canceled"
+			} else if errors.Is(failure.budget, context.DeadlineExceeded) {
+				outcome = "deadline"
+			}
+			waitStatus = " wait_status=" + outcome
+		}
 		switch failure.stage {
 		case stageParseControlPlaneEnvironment, stageControlPlaneRPCProfileIsInvalid, stageControlPlaneSkillScannerConfigurationIsInvalid, stageControlPlaneListenAddressIsInvalid, stageControlPlaneFilePathIsInvalid, stageControlPlaneInteractionGrantTrustPathIsInvalid, stageControlPlaneEmailGrantTrustPathIsInvalid, stageControlPlaneEmailConfigurationPathIsInvalid, stageControlPlaneBoundedConfigurationIsInvalid, stageControlPlaneOIDCBoundaryIsInvalid, stageControlPlaneObjectStorageBoundaryIsInvalid, stageControlPlaneAuthoritySocketDirectoryIsInvalid:
 			class = "configuration"
@@ -382,5 +402,5 @@ func ReportFailure(output io.Writer, err error) {
 			class = "filesystem"
 		}
 	}
-	_, _ = fmt.Fprintf(output, "control-plane failed stage=%q error_class=%s\n", stage, class)
+	_, _ = fmt.Fprintf(output, "control-plane failed stage=%q error_class=%s%s\n", stage, class, waitStatus)
 }

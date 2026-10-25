@@ -69,7 +69,7 @@ func TestPostgresStartupProbeLifecycle(t *testing.T) {
 					cancel()
 					return nil
 				case "failure":
-					return syscall.ECONNREFUSED
+					return syscall.ECONNRESET
 				}
 				return nil
 			}}
@@ -85,7 +85,7 @@ func TestPostgresStartupProbeLifecycle(t *testing.T) {
 				want = context.DeadlineExceeded
 			}
 			if phase == "failure" {
-				want = syscall.ECONNREFUSED
+				want = syscall.ECONNRESET
 			}
 			if phase == "before" {
 				pings = 0

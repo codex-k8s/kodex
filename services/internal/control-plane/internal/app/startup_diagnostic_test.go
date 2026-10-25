@@ -9,6 +9,7 @@ import (
 	"net"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -35,13 +36,21 @@ func TestStartupFailurePreservesTypedCauseAndRedactsOutput(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			pool := &startupPoolFixture{ping: func(context.Context) error { return scenario.cause }}
-			err := verifyPostgresStartup(t.Context(), pool)
+			ctx := t.Context()
+			waitSuffix := ""
+			if scenario.name == "refused" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 30*time.Millisecond)
+				defer cancel()
+				waitSuffix = " wait_status=deadline"
+			}
+			err := verifyPostgresStartup(ctx, pool)
 			if !errors.Is(err, scenario.cause) || pool.pings != 1 || pool.closes != 1 {
 				t.Fatal("startup lost typed cause, retried or skipped close")
 			}
 			var output bytes.Buffer
 			ReportFailure(&output, err)
-			if output.String() != "control-plane failed stage=\"verify PostgreSQL connection\" error_class="+scenario.class+"\n" || err.Error() != "verify PostgreSQL connection" {
+			if output.String() != "control-plane failed stage=\"verify PostgreSQL connection\" error_class="+scenario.class+waitSuffix+"\n" || err.Error() != "verify PostgreSQL connection" {
 				t.Fatal("private startup error escaped fixed process fields")
 			}
 		})
