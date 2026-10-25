@@ -61,11 +61,16 @@ statement_timeout30s внутри goose-транзакции; при ошибк�
 
 Перед живой миграцией завершить QA модельные ходы и проверить активные задачи,
 точные cluster/namespace/workload identities, свободные ресурсы и исходную
-версию миграций. Сначала адресно установить проверенный immutable control-plane
-с bounded claim, чтобы прежние неограниченные запросы завершились вместе со
-старыми Pod. После этого построить свежий план штатного migrator по точному
-published image/source и сохранить приватные plan/journal/readback без Secret
-values. Применение допустимо только после component-проверок и review этого SHA.
+версию миграций. Порядок задаёт
+[адресный immutable migrator](control-plane-immutable-migration-1855.md):
+сохранить приватный план с точными image/source/UID и вернуть control-plane
+после ограниченного окна недоступности. Прежние две реплики сначала адресно
+останавливаются; после подтверждения завершения Pod и claim transactions
+выполняется миграция. После terminal Job возвращаются две реплики прежнего
+образа, затем отдельным scoped-release устанавливается образ с bounded claim.
+RollingUpdate нового бинарника до индекса не гарантирует Ready и не используется.
+Plan/journal/readback не содержат Secret values. Применение допустимо только
+после component-проверок и независимого review итогового чистого SHA.
 
 При неизвестном создании Job сначала readback exact имени/UID/плана; новый Job
 или новый idempotency key не создаётся вслепую. При lock timeout исходный
