@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.6
-updated: 2026-10-25
+version: 1.2.7
+updated: 2026-10-26
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -290,6 +290,14 @@ CREATE TABLE domain_entities (
 - rollback схемы выполняется новой компенсирующей forward migration;
 - миграции не запускаются неявно при старте application server;
 - deploy явно выполняет CLI-команду `up` отдельным Kubernetes Job до rollout.
+
+Проверка фактически применённой схемы сохраняет семантику ограничений.
+Нормализация `pg_get_constraintdef`/predicate не удаляет смысловые скобки и
+не отождествляет разные AND/OR-группировки. Проверка trigger учитывает события,
+набор колонок `tgattr`, WHEN, enabled state, функцию и её authority; совпадение
+имени функции само по себе не доказывает защиту всех UPDATE. Эти отказы
+проверяются исполнением того же read-only запроса на отдельных disposable
+схемах с адресно изменёнными CHECK и trigger, а не только mock boolean.
 
 Для owner-approved web-first reset установка создаётся с нуля. Активный
 control-plane содержит одну baseline migration, которая создаёт только новую
