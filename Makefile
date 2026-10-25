@@ -410,6 +410,10 @@ test-scoped-backup-drill:
 	@bash -n tools/release/pin-backup-controller-release.sh tools/release/render-web-only.sh
 
 .PHONY: test-scoped-backup-reader
+.PHONY: test-backup-restore-startup
+test-backup-restore-startup:
+	@timeout 60s python3 -m unittest discover -s tools/dev -p 'test*backup*.py'
+
 test-scoped-backup-reader:
 	@timeout 60s python3 -m unittest discover -s tools/dev -p 'test*backup_reader*.py'
 	@bash -n deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh

@@ -330,6 +330,36 @@ def restore_role_stubs(extra_sql=""):
     return sorted(known), sorted(required - {"public"}), sql + "\n"
 
 
+def target_connectivity_barrier(image, host):
+    """До main effects проверяет только SELECT1 target PG; transient startup ограничен10 попытками/58s."""
+    require_pinned_image(image)
+    require(re.fullmatch(r"qa-postgresql\.kodex-qa-restore-[a-z0-9-]+\.svc\.cluster\.local", host),
+            "RESTORE_TARGET_HOST_INVALID")
+    script = """attempt=0
+while [ "$attempt" -lt 10 ]; do
+  if timeout -k 1 3 psql -X -w -tAc 'SELECT 1' >/dev/null 2>&1; then
+    echo 'Restore target TLS authentication ready'
+    exit 0
+  fi
+  attempt=$((attempt + 1))
+  [ "$attempt" -ge 10 ] || sleep 2
+done
+echo 'Restore target TLS authentication readiness exhausted' >&2
+exit 1
+"""
+    return {"name": "target-connectivity", "image": image, "imagePullPolicy": "IfNotPresent",
+        "command": ["/bin/sh", "-ec"], "args": [script],
+        "env": [{"name": k, "value": v} for k, v in {
+            "PGHOST": host, "PGPORT": "5432", "PGUSER": "postgres", "PGDATABASE": "postgres",
+            "PGSSLMODE": "verify-full", "PGSSLROOTCERT": "/var/run/secrets/kodex/backup-controller/tls/ca.pem",
+            "PGCONNECT_TIMEOUT": "2"}.items()] + [{"name": "PGPASSWORD", "valueFrom": {
+                "secretKeyRef": {"name": "backup-controller-restore-inputs", "key": "password"}}}],
+        "securityContext": {"runAsNonRoot": True, "runAsUser": 10001, "runAsGroup": 10001,
+            "allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True, "capabilities": {"drop": ["ALL"]}},
+        "resources": {"requests": {"cpu": "25m", "memory": "32Mi"}, "limits": {"cpu": "100m", "memory": "64Mi"}},
+        "volumeMounts": [{"name": "tls", "mountPath": "/var/run/secrets/kodex/backup-controller/tls", "readOnly": True}]}
+
+
 def restore_resources(run, image, prefix):
     """Только локальный render: новый PostgreSQL, собственный TLS, без доступа к source PostgreSQL."""
     require(NAME.fullmatch(run) and len(run) <= 32, "DRILL_ID_INVALID")
@@ -423,6 +453,8 @@ def restore_resources(run, image, prefix):
     fingerprint["spec"]["template"]["spec"]["containers"][0]["args"] = ["fingerprint-targets"]
     fingerprint["spec"]["template"]["spec"]["volumes"][0]["projected"]["sources"] = [
         {"secret": {"name": "backup-controller-restore-inputs", "items": [{"key": "targets.json", "path": "targets.json"}]}}]
+    # Fingerprint не подключается к цели; остальные варианты наследуют закрытый read-only startup barrier.
+    restore["spec"]["template"]["spec"]["initContainers"] = [target_connectivity_barrier(image, host)]
     preflight = copy.deepcopy(restore)
     preflight["metadata"]["name"] = "qa-target-preflight-" + run
     preflight["spec"]["template"]["spec"]["containers"][0]["args"] = ["preflight-restore"]

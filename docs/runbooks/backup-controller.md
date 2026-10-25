@@ -351,6 +351,18 @@ PG18 разрешает root-owned group-readable key; readonly fsGroup70 сох
    Только EMPTY_TARGETS_READY разрешает продолжить. Из `.fingerprintJob`
    создать/capture/wait Job; его JSON содержит только targetSetSha256.
    Не печатать targets/password files.
+
+   По [#1892](https://github.com/codex-k8s/kodex/issues/1892) preflight,
+   restore, target inspection и cleanup Jobs сначала выполняют init barrier:
+   только `SELECT 1` с exact target/SNI/CA и новой disposable identity.
+   Максимум10 попыток; процесс каждой ограничен3s плюс1s kill grace,
+   между попытками2s, всего не более58s ожидания и выполнения subprocess.
+   Это закрывает transient startup сетевых правил новой Pod. Main container
+   не запускается при отказе init. PostgreSQL и S3 writes в barrier отсутствуют,
+   restore/cleanup эффекты не повторяются. Fingerprint не получает ни init,
+   ни password projection. Барьер не заменяет preflight, approval и повторные
+   проверки штатного restore. `make test-backup-restore-startup` проверяет
+   настоящий shell/timeout через fixture psql и все ветви render без кластера.
 9. Root сверяет exact backup/target и выпускает local approval максимум2h:
 
 ```sh
