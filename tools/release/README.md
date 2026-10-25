@@ -329,8 +329,10 @@ publisher Deployment. Наличие прежней completed migration Job не
 ## Миграции Control Plane в hot-reload
 
 Для immutable staging `k3d-kodex` существует закрытый профиль `outbox-index`
-с отдельными `plan → stop → apply/inspect → resume`. Он сохраняет прежний CP
+с отдельными `plan → check → stop → apply/inspect → resume`. Он сохраняет прежний CP
 image на время миграции и принимает exact stable build/publication receipts.
+Перед stop требуется exact read-only connection check, а явная attempt2 связывается
+с известным failed/resumed parent; UNKNOWN не открывает новый create.
 Порядок с адресным maintenance, UNKNOWN/crash recovery и проверкой доступности
 описан в [OPS-CP-IMMUTABLE-MIGRATION-1855](../../docs/operations/control-plane-immutable-migration-1855.md).
 Остальные профили ниже сохраняют hot-reload контракт.

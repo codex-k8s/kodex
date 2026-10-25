@@ -95,26 +95,32 @@ function normalizedMigrationPodSpec(value) {
   if (pod?.serviceAccount === pod?.serviceAccountName) delete pod.serviceAccount;
   return pod;
 }
-export function migrationReadback(job, plan, logs, pods = []) {
+export function migrationReadback(job, plan, logs, pods = [], operation = 'up') {
   const { version: migrationVersion, annotation } = profileFor(plan.profile);
-  ensure(job?.metadata?.name === plan.job.metadata.name && job.metadata.namespace === namespace && job.metadata.annotations?.[annotation] === fingerprint(plan) && job.metadata.uid, 'MIGRATION_JOB_SCOPE_MISMATCH');
-  ensure(fingerprint(normalizedMigrationPodSpec(job.spec?.template?.spec)) === fingerprint(normalizedMigrationPodSpec(plan.job.spec.template.spec)), 'MIGRATION_JOB_SPEC_CHANGED');
+  ensure(['up','check'].includes(operation) && (operation === 'up' || (plan.profile === 'outbox-index' && plan.version === 2)), 'MIGRATION_OPERATION_INVALID');
+  const expectedJob = operation === 'check' ? plan.checkJob : plan.job;
+  ensure(job?.metadata?.name === expectedJob.metadata.name && job.metadata.namespace === namespace && job.metadata.annotations?.[annotation] === fingerprint(plan) && job.metadata.uid, 'MIGRATION_JOB_SCOPE_MISMATCH');
+  ensure(fingerprint(normalizedMigrationPodSpec(job.spec?.template?.spec)) === fingerprint(normalizedMigrationPodSpec(expectedJob.spec.template.spec)), 'MIGRATION_JOB_SPEC_CHANGED');
   const completed = job.status?.conditions?.some((c) => c.type === 'Complete' && c.status === 'True');
   const failed = job.status?.conditions?.some((c) => c.type === 'Failed' && c.status === 'True');
   ensure(!(completed && failed), 'MIGRATION_STATUS_INVALID');
-  const executed = plan.profile !== 'outbox-index' || immutableMigrationExecution(job, plan, pods);
-  const exact = executed && new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? '');
-  return { status: completed ? exact ? 'PASS' : 'READBACK_UNCONFIRMED' : failed ? 'FAIL' : 'RUNNING', jobName: job.metadata.name, jobUID: job.metadata.uid, sourceRevision: plan.source.revision, migrationVersion: completed && exact ? migrationVersion : undefined };
+  const executed = plan.profile !== 'outbox-index' || immutableMigrationExecution(job, plan, pods, expectedJob);
+  const exact = executed && (operation === 'check' ? (logs ?? '').trim() === 'PostgreSQL connection check completed' :
+    new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? ''));
+  return { status: completed ? exact ? 'PASS' : 'READBACK_UNCONFIRMED' : failed ? 'FAIL' : 'RUNNING', jobName: job.metadata.name, jobUID: job.metadata.uid, sourceRevision: plan.source.revision,
+    ...(operation === 'check' ? {operation} : {migrationVersion:completed && exact ? migrationVersion : undefined}) };
 }
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); ensure(/^--[a-z-]+$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
-  ensure(['plan','apply','inspect','stop','resume'].includes(phase) && Object.keys(options).every((k) => ['--context','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
+  ensure(['plan','apply','inspect','stop','resume','check'].includes(phase) && Object.keys(options).every((k) => ['--context','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
   const profile = options['--profile'] ?? 'legacy'; const { version: migrationVersion, annotation, file } = profileFor(profile);
-  ensure(!['stop','resume'].includes(phase) || profile === 'outbox-index', 'PHASE_ARGUMENT_INVALID');
+  ensure(!['stop','resume','check'].includes(phase) || profile === 'outbox-index', 'PHASE_ARGUMENT_INVALID');
   const migrationPath = `services/internal/control-plane/cmd/cli/migrations/${file}`;
   const context = options['--context']; ensure(/^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? '') && !/prod(?:uction)?/i.test(context), 'STAGING_CONTEXT_REQUIRED');
-  ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply','stop','resume'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
+  ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply','stop','resume','check'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
+  ensure(phase === 'plan' && profile === 'outbox-index' ? !!options['--predecessor-plan'] === !!options['--predecessor-evidence'] :
+    !options['--predecessor-plan'] && !options['--predecessor-evidence'], 'PHASE_ARGUMENT_INVALID');
   ensure(profile === 'outbox-index' && phase === 'plan' ? options['--publication-plan'] && options['--publication-evidence'] && options['--base-render'] : !options['--publication-plan'] && !options['--publication-evidence'], 'PHASE_ARGUMENT_INVALID');
   const kube = (argv, input) => { try { return execFileSync('kubectl', ['--context',context,'--request-timeout=30s',...argv], { input, encoding:'utf8', timeout:35000, maxBuffer:4<<20, stdio:['pipe','pipe','pipe'] }); } catch { throw new Error('KUBERNETES_OPERATION_UNKNOWN'); } };
   const get = (kind,name) => JSON.parse(kube(['-n',namespace,'get',kind,name,'-o','json']));

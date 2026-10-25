@@ -4,7 +4,7 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.0.1
+version: 1.1.0
 updated: 2026-10-25
 ---
 
@@ -61,6 +61,7 @@ API/PWA, PostgreSQL, брокер и соседние приложения эт�
 | Фаза | Полномочие и эффект | Восстановление |
 | --- | --- | --- |
 | `plan` | Только read; UID/RV/spec CP, namespace/cluster, SA/Secret/CA metadata, source/build/publication pins | Новый приватный plan, эффектов нет |
+| `check` | Один create-only read-only Job, canonical init и CLI `check`; CP остаётся2Ready | Durable CHECK_CREATE_INTENT; UNKNOWN разрешает только readback прежнего имени/UID |
 | `stop` | Durable intent, CAS exact UID/RV, replicas `2→0` и собственный marker | Polling budget120секунд для exact Deployment/ReplicaSet Pod join; UNKNOWN требует inspect |
 | `apply` | Только после stop/join; один create-only exact Job | Durable CREATE_INTENT запрещает повторный create, включая отсутствие Job после UNKNOWN |
 | `inspect` | Только Kubernetes read; безопасный статус и journal readback | Фактический Job UID, imageID и exact goose version; без повторения effects |
@@ -72,7 +73,10 @@ API/PWA, PostgreSQL, брокер и соседние приложения эт�
 API reads имеют отдельный timeout30секунд (процесс kubectl —35секунд);
 текущий read может завершиться после polling budget, поэтому это не обещание
 общей длительности команды120секунд. Все запросы и число effects ограничены.
-Оператор обязан завершить восстановление CP после terminal Job, в том числе
+До stop нужен свежий check PASS: exact Job/Pod UID, imageID, init/main exit0,
+restart0 и фиксированный success stdout CLI. Его completionTime не старше5минут;
+повторный inspect не продлевает эту свежесть. Failed, RUNNING, UNKNOWN или stale
+check оставляет CP без PATCH. Оператор обязан завершить восстановление CP после terminal Job, в том числе
 после DDL FAIL. Если CREATE_INTENT уже записан, но Job не найден, исход UNKNOWN:
 resume и новый create закрыты до отдельного разбора владельцем; отсутствие
 объекта не доказывает отсутствие ещё исполняющегося запроса create.
@@ -86,6 +90,8 @@ resume и новый create закрыты до отдельного разбо�
    context/cluster/namespace и digest. Ancestor build в этом узком профиле
    не принимается. После интеграции tool/docs образ при необходимости собирается
    заново штатным stable build/publish механизмом.
+   Этот же образ обязан включать CLI `check` с bounded10секунд Ping и без Goose;
+   версия `status` для read-only connection probe не используется.
 2. Подготовлены приватные `0700` каталог, `0600` plan/render/evidence. Передаётся
    штатный offline render `deploy/k8s/overlays/staging/control-plane`;
    используются только его `Job/control-plane-migrate` и точные existing refs.
@@ -115,7 +121,15 @@ resume и новый create закрыты до отдельного разбо�
 5. Registry DNS/CA/node trust уже настроены существующим stable delivery.
    Image имеет вид `registry.local.kodex/kodex/control-plane@sha256:...`.
    Publication PASS означает `REGISTRY_PUBLICATION_ONLY`, а не node pull PASS:
-   actual imageID впервые проверяется у exact Job-owned Pod.
+   actual imageID впервые проверяется у exact check Job-owned Pod.
+6. V2 plan закрепляет UID Pod/StatefulSet PostgreSQL и hash
+   `tools/release/control-plane-migration-precondition.sql` из принятого source.
+   Existing `Operator.sql` kubectl/psql transport используется только для
+   `BEGIN REPEATABLE READ READ ONLY` с statement5s/lock500ms. Проверяются old goose
+   `20261020000200`, отсутствие индекса и нулевые owner-счётчики runs/nodes/turns,
+   leases/builds/admissions/promotions/archive/catalog/renewal, включая ожидания
+   владельца и UNKNOWN renewal. Secret/DSN/query text/payload в результате нет.
+   После stop дополнительно требуется отсутствие всех прежних claim sessions.
 
 ## Команды оператора
 
@@ -137,7 +151,23 @@ node tools/release/control-plane-migration.mjs plan \
 ```
 
 Оператор читает plan, подтверждает exact SHA/digest, исходные UID/RV, окно
-недоступности и отсутствие моделей. Только затем выполняет отдельные фазы:
+недоступности и отсутствие моделей. Сначала выполняет check при работающем CP:
+
+```bash
+node tools/release/control-plane-migration.mjs check \
+  --context k3d-kodex --profile outbox-index \
+  --plan "$MIGRATION_DIR/plan.json" --evidence "$MIGRATION_DIR/attempt.jsonl" \
+  --confirm APPLY-STAGING-CP-MIGRATION
+```
+
+`RUNNING` требует inspect/check того же plan/journal, без повторного create.
+`PASS` подтверждает только доступность соединения с точным DSN/TLS внутри
+доверенного CLI процесса; credentials не попадают в operator output. Ожидаемый
+stdout: `PostgreSQL connection check completed`. Иной вывод не даёт PASS.
+Check Job имеет фиксированное имя версии/attempt и сохраняется без TTL: это
+server-side fence нового plan после UNKNOWN, а не новый key/name для повтора.
+Удаление Job и parent receipts этим инструментом не выполняется.
+После PASS и fresh owner-preflight разрешается отдельный stop:
 
 ```bash
 node tools/release/control-plane-migration.mjs stop \
@@ -147,14 +177,12 @@ node tools/release/control-plane-migration.mjs stop \
 ```
 
 `STOPPED` доказывает отсутствие живых процессов exact Deployment lineage,
-включая terminating старые Pod. Отдельный разрешённый PostgreSQL metadata
-readback оператора должен подтвердить отсутствие прежних claim transactions;
-при незавершённом запросе миграция не начинается. Запросы выполняются существующим
-repo-owned kubectl/psql transport в `BEGIN READ ONLY` с локальными bounded
-timeouts: без payload, query text, DSN, env или secret values в выводе.
-Перед `up` требуется exact исходная goose version `20261020000200` либо уже
-применённая `20261025000100`; другие pending migrations требуют отдельного
-разбора, поскольку embedded CLI `up` применяет все ожидающие версии.
+включая terminating старые Pod. Перед созданием up Job инструмент повторяет
+закрытый readonly owner-preflight и требует0 прежних claim sessions. Root может
+дополнительно сохранить расширенный metadata snapshot прежнего ordering key.
+Перед `up` требуется exact исходная goose version `20261020000200` и indexAbsent;
+уже применённая версия и любые другие pending migrations закрывают новый create,
+поскольку embedded CLI `up` применяет все ожидающие версии.
 
 ```bash
 node tools/release/control-plane-migration.mjs apply \
@@ -170,7 +198,14 @@ Job имеет `backoffLimit:0`, deadline300секунд, TTL86400, requests25m/
 limits250m/128Mi, `Always` pull, один container с
 `/usr/local/bin/control-plane-cli up`, uid/gid10001, read-only root, dropALL,
 seccompRuntimeDefault, `automountServiceAccountToken:false`. Только миграторский
-DSN file mount и CA mount; source/cache mounts, init, envFrom отсутствуют.
+DSN file mount и CA mount; source/cache mounts и envFrom отсутствуют.
+И check, и up сохраняют canonical `wait-for-postgresql` init: exact pinned
+postgres18.3-alpine3.23 image, фиксированные host/port5432, `pg_isready` timeout2s
+и sleep2s под общим deadline Job300s. Init не получает auth/DSN/CA mounts, envFrom
+или SQL; он проверяет accepting server, а exact TLS/auth проверяет CLI Ping.
+Allow rules NetworkPolicy могут примениться после старта Pod, поэтому первый
+неудачный Ping не доказывает постоянный конфигурационный запрет. Concrete причина
+первого failed Job остаётся UNKNOWN; отсутствие startup barrier доказано.
 Mode CA задаётся явным decimal288, DSN volume292. Schema SQL ограничивает DDL
 lock timeout8секундами и statement timeout30секундами внутри goose-транзакции.
 При lock timeout нет ручного cancel/skip/drop или бесконечного retry.
@@ -208,6 +243,41 @@ metadata: он восстанавливает exact прежний CP spec. Он
 остановить восстановленный CP.
 После CREATE_INTENT apply никогда не создаёт вторую Job. Первая наблюдённая
 Job UID закрепляется и после lost ACK; её replacement отклоняется.
+Те же правила применяются отдельно к CHECK_CREATE_INTENT/CHECK_READBACK.
+
+## Явная attempt2 после известной failed попытки
+
+V1 plan первой поставки остаётся доступен для исторического inspect/resume.
+Новый check/stop/create требует V2. Attempt2 создаётся только явным plan с
+двумя ссылками на существующие приватные **неизменяемые** parent receipts:
+
+```bash
+node tools/release/control-plane-migration.mjs plan \
+  --context k3d-kodex --profile outbox-index \
+  --source "$QA_SOURCE" --revision "$CP_SHA" --base-render "$MIGRATION_DIR/base.yaml" \
+  --publication-plan "$PUB_PLAN" --publication-evidence "$PUB_EVIDENCE" \
+  --predecessor-plan "$PREVIOUS_PLAN" --predecessor-evidence "$PREVIOUS_JOURNAL" \
+  --plan "$MIGRATION_DIR/plan.json"
+```
+
+Требуются exact parent plan hash/source/publication proof; actual failed Job UID
+совпадает с durable create/readback receipts, Job spec/marker не изменились,
+все её Pod-процессы завершились. Parent journal должен содержать FAIL readback
+и RESUME_ACK, не иметь active writer lock; current old CP — тот же UID/spec,
+image и2Ready. Readonly old-goose/indexAbsent/zero-owner gate проходит заново.
+UNKNOWN без доказанного failed terminal, отсутствующая Job, чужой UID, незавершённый
+Pod или утраченный parent receipt закрывают retry. Child закрепляет parent bytes
+hash; последующее изменение parent journal блокирует check/stop/apply.
+Для этого допускается отдельная приватная копия metadata-only parent plan/journal
+с теми же exact bytes: дальнейший readback исходного журнала не меняет snapshot.
+Копии — owned regular0600, без symlink/hardlink; credentials туда не входят.
+
+Child использует новые фиксированные имена `...-attempt2`, сохраняет исходные
+Jobs и receipts; его stop меняет marker только CAS `parentPlanHash→childPlanHash`.
+Child после этого проходит весь check/stop/apply/resume lifecycle заново на
+точном свежем source/image. Повторная attempt2 из attempt2 и automatic attempt3
+не поддерживаются. Новый child plan не является разрешением на живой запуск:
+нужны review итогового SHA и отдельное решение root на exact plan/window.
 
 При SIGKILL локальный journal lock сохраняется: inspect остаётся доступен
 read-only и возвращает `evidenceReadOnly:true`. Этот режим не пишет durable
@@ -233,8 +303,10 @@ make test-control-plane-migration
 Node tests используют canonical base и реальные subprocess CLI с изолированным
 kubectl fixture. Покрываются authority/source/publication drift, отсутствие
 secret payload reads, lifecycle, потеря ACK create/stop/resume, SIGKILL,
-UNKNOWN/CAS fences, чужие UID, timeout/join и возврат прежнего image после FAIL.
+UNKNOWN/CAS fences, чужие UID, timeout/join и возврат прежнего image после FAIL,
+check/init identity/expiry и known-failed attempt2 с неизменяемыми parent receipts.
 Живые stop/DDL/resume/node pull и browser acceptance — отдельные NOT RUN до
 явного запуска root. Context7 недоступен (`Invalid API key`); сверены официальные
 [Kubernetes Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/)
 и [object identity](https://kubernetes.io/docs/concepts/overview/working-with-objects/).
+Проверен также официальный [NetworkPolicy Pod lifecycle](https://kubernetes.io/docs/concepts/services-networking/network-policies/#pod-lifecycle).

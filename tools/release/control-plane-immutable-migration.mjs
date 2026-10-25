@@ -16,6 +16,13 @@ const annotation = 'kodex.dev/cp-outbox-index-migration-plan';
 const caBundleSpec = {sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],
   target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':namespace}},configMap:{key:'ca.pem'}}};
 const dsnPath = '/var/run/secrets/kodex/control-plane/postgres-migration/dsn';
+const waitForPostgres = {
+  name:'wait-for-postgresql',image:'docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7',
+  command:['/bin/sh','-ec'],args:['until pg_isready --host="$POSTGRES_HOST" --port=5432 --timeout=2; do sleep 2; done'],
+  env:[{name:'POSTGRES_HOST',value:'control-plane-postgresql-rw.kodex-system.svc.cluster.local'}],
+  resources:{requests:{cpu:'10m',memory:'16Mi'},limits:{memory:'64Mi'}},
+  securityContext:{runAsNonRoot:true,runAsUser:70,runAsGroup:70,allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:['ALL']}},
+};
 const volumes = [
   { name:'postgres-migration', secret:{secretName:'control-plane-postgres-migration',defaultMode:292} },
   { name:'postgres-ca', configMap:{name:'control-plane-postgresql-ca',defaultMode:288,items:[{key:'ca.pem',path:'ca.pem'}]} },
@@ -43,7 +50,8 @@ export function immutableMigrationImage(source, evidence) {
 }
 
 // Штатный render задаёт только существующую migrator boundary; executable spec строится закрыто заново.
-export function planImmutableControlPlaneMigration(before, source, inspect, id, evidence) {
+export function planImmutableControlPlaneMigration(before, source, inspect, id, evidence, attempt = 1) {
+  ensure([1,2].includes(attempt), 'MIGRATION_ATTEMPT_INVALID');
   ensure(before?.kind === 'Job' && before.apiVersion === 'batch/v1' && before.metadata?.name === 'control-plane-migrate' &&
     before.metadata.namespace === namespace && before.metadata.uid && before.metadata.resourceVersion &&
     before.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
@@ -69,40 +77,50 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
     !pod.hostNetwork && !pod.hostPID && !pod.hostIPC &&
     [...(pod.initContainers ?? []),...pod.containers].every(c => !(c.volumeMounts ?? []).some(m => !mounts.some(v => v.name === m.name))),
   'IMMUTABLE_MIGRATOR_BOUNDARY_INVALID');
+  ensure(fingerprint(pod.initContainers) === fingerprint([waitForPostgres]), 'MIGRATION_CANONICAL_INIT_INVALID');
   ensure(/^[a-f0-9]{40}$/.test(source?.revision ?? '') && source.revision !== '0'.repeat(40) &&
     inspect(source.path).revision === source.revision, 'SOURCE_REVISION_MISMATCH');
   const image = immutableMigrationImage(source, evidence);
   // Staging overlay не назначает app part-of исходному render. Новая собственная Job
   // получает фиксированную метку; actual CP/SA/Secret проверяются независимо от render.
   const labels = { ...before.metadata.labels, 'app.kubernetes.io/part-of':'kodex' };
-  const job = {apiVersion:'batch/v1',kind:'Job',metadata:{name:`control-plane-migrate-${migrationVersion}`,namespace,labels},spec:{
+  const job = {apiVersion:'batch/v1',kind:'Job',metadata:{name:`control-plane-migrate-${migrationVersion}${attempt === 2 ? '-attempt2' : ''}`,namespace,labels},spec:{
     backoffLimit:0,activeDeadlineSeconds:300,ttlSecondsAfterFinished:86400,
     template:{metadata:{labels,annotations:{'kodex.dev/source-revision':source.revision,
       'kodex.dev/image-context-sha256':evidence.publicationPlan.receipt.contextSHA256}},spec:{
       serviceAccountName:'control-plane-migrator',automountServiceAccountToken:false,restartPolicy:'Never',enableServiceLinks:false,
       securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,fsGroup:10001,fsGroupChangePolicy:'OnRootMismatch',seccompProfile:{type:'RuntimeDefault'}},
+      initContainers:[structuredClone(waitForPostgres)],
       containers:[{name:'migrate',image,imagePullPolicy:'Always',command:['/usr/local/bin/control-plane-cli'],args:['up'],
         env:[{name:'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',value:dsnPath}],
         securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,readOnlyRootFilesystem:true,allowPrivilegeEscalation:false,capabilities:{drop:['ALL']}},
         resources:{requests:{cpu:'25m',memory:'32Mi'},limits:{cpu:'250m',memory:'128Mi'}},volumeMounts:structuredClone(mounts)}],volumes:structuredClone(volumes)}}}};
-  return {version:1,kind:'CONTROL_PLANE_MIGRATION',id,source,profile:'outbox-index',migrationVersion,
+  const checkJob = structuredClone(job);
+  checkJob.metadata.name = `control-plane-migration-check-${migrationVersion}${attempt === 2 ? '-attempt2' : ''}`;
+  // Фиксированное имя без TTL сохраняет server-side fence неизвестного create между планами.
+  delete checkJob.spec.ttlSecondsAfterFinished;
+  checkJob.spec.template.spec.containers[0].args = ['check'];
+  return {version:2,kind:'CONTROL_PLANE_MIGRATION',id,source,profile:'outbox-index',migrationVersion,attempt,checkJob,
     beforeUID:before.metadata.uid,beforeResourceVersion:before.metadata.resourceVersion,beforeSpecSHA256:fingerprint(before.spec),
     imageEvidence:structuredClone(evidence),job};
 }
 
 // Terminal readback требует один exact Job-owned Pod и фактический imageID, не только logs/Complete.
-export function immutableMigrationExecution(job, plan, pods) {
+export function immutableMigrationExecution(job, plan, pods, expectedJob = plan.job) {
   ensure(job.spec.backoffLimit === 0 && job.spec.activeDeadlineSeconds === 300 &&
-    job.spec.ttlSecondsAfterFinished === 86400 && !job.spec.suspend && !job.spec.podFailurePolicy && !job.spec.successPolicy &&
+    job.spec.ttlSecondsAfterFinished === expectedJob.spec.ttlSecondsAfterFinished && !job.spec.suspend && !job.spec.podFailurePolicy && !job.spec.successPolicy &&
     (job.spec.completionMode ?? 'NonIndexed') === 'NonIndexed' &&
     (job.spec.parallelism ?? 1) === 1 && (job.spec.completions ?? 1) === 1, 'MIGRATION_JOB_LIFECYCLE_CHANGED');
   const matching = pods.filter(p => p.metadata?.namespace === namespace &&
     p.metadata?.ownerReferences?.some(o => o.controller === true && o.kind === 'Job' && o.uid === job.metadata.uid));
   ensure(matching.length <= 1 && matching.length === pods.length, 'MIGRATION_EXECUTION_SCOPE_CHANGED');
   if (matching.length !== 1) return false;
-  const pod = matching[0], state = pod.status?.containerStatuses?.[0], expected = plan.job.spec.template.spec;
+  const pod = matching[0], state = pod.status?.containerStatuses?.[0], expected = expectedJob.spec.template.spec;
   const digest = plan.imageEvidence.publicationPlan.image.digest;
-  ensure(pod.metadata.uid && !pod.spec?.initContainers?.length && !pod.spec?.ephemeralContainers?.length &&
+  const expectedInit = expected.initContainers ?? [], actualInit = pod.spec?.initContainers ?? [];
+  ensure(pod.metadata.uid && !pod.spec?.ephemeralContainers?.length && actualInit.length === expectedInit.length &&
+    actualInit.every((item,index) => Object.keys(expectedInit[index]).every(key => fingerprint(item[key]) === fingerprint(expectedInit[index][key])) &&
+      !item.envFrom && !(item.volumeMounts ?? []).length) &&
     !pod.spec?.hostNetwork && !pod.spec?.hostPID && !pod.spec?.hostIPC &&
     ['serviceAccountName','automountServiceAccountToken','restartPolicy','enableServiceLinks','securityContext','volumes']
       .every(key => fingerprint(pod.spec?.[key]) === fingerprint(expected[key])) &&
@@ -112,7 +130,10 @@ export function immutableMigrationExecution(job, plan, pods) {
   'MIGRATION_EXECUTION_CHANGED');
   if (!state) return false;
   ensure(state.name === 'migrate' && (state.restartCount ?? 0) === 0, 'MIGRATION_EXECUTION_CHANGED');
-  return pod.status.phase === 'Succeeded' && state.state?.terminated?.exitCode === 0 &&
+  const init = pod.status.initContainerStatuses ?? [];
+  const initDone = init.length === (expected.initContainers ?? []).length && init.every((item,index) =>
+    item.name === expected.initContainers[index].name && item.restartCount === 0 && item.state?.terminated?.exitCode === 0);
+  return pod.status.phase === 'Succeeded' && state.state?.terminated?.exitCode === 0 && initDone &&
     (state.imageID === digest || state.imageID === `containerd://${digest}` || state.imageID?.endsWith(`@${digest}`));
 }
 
@@ -197,29 +218,97 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(raw.endsWith('\n'), 'PUBLICATION_EVIDENCE_INVALID');
     return raw.trimEnd().split('\n').map(line => JSON.parse(line));
   };
+  const postgresIdentity = () => {
+    const raw = kube(['-n',namespace,'get','pod','kodex-postgresql-0','-o',
+      'jsonpath={.metadata.uid}{"|"}{.metadata.ownerReferences[0].kind}{"|"}{.metadata.ownerReferences[0].name}{"|"}{.metadata.ownerReferences[0].uid}{"|"}{.metadata.labels.app\\.kubernetes\\.io/name}{"|"}{.status.phase}{"|"}{.metadata.deletionTimestamp}']).trim();
+    const [uid,kind,name,ownerUID,label,phase,deleting,...extra] = raw.split('|');
+    ensure(uid && kind === 'StatefulSet' && name === 'kodex-postgresql' && ownerUID && label === 'kodex-postgresql' &&
+      phase === 'Running' && !deleting && !extra.length, 'MIGRATION_POSTGRES_IDENTITY_INVALID');
+    return {pod:'kodex-postgresql-0',uid,ownerUID};
+  };
+  const preconditionSQL = source => readFileSync(`${source.path}/tools/release/control-plane-migration-precondition.sql`);
+  const precondition = (source, expectedPostgres, expectedSQL, requireStopped = false) => {
+    ensure(fingerprint(postgresIdentity()) === fingerprint(expectedPostgres), 'MIGRATION_POSTGRES_IDENTITY_CHANGED');
+    const sql = preconditionSQL(source);
+    ensure(createHash('sha256').update(sql).digest('hex') === expectedSQL, 'MIGRATION_PRECONDITION_SOURCE_CHANGED');
+    // Тот же закрытый Operator.sql transport: local psql без env/DSN/Secret values,
+    // SQL только из accepted clean source; BEGIN READ ONLY ограничивает серверную сессию.
+    const result = JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--',
+      'psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
+    ensure(fingerprint(postgresIdentity()) === fingerprint(expectedPostgres), 'MIGRATION_POSTGRES_IDENTITY_CHANGED');
+    const fields = ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
+      'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'];
+    ensure(result.readOnly === 'on' && result.database === 'control_plane' && result.gooseVersion === 20261020000200 &&
+      result.indexAbsent === true && fields.every(key => result[key] === 0) && Number.isSafeInteger(result.oldClaimSessions) &&
+      result.oldClaimSessions >= 0 && (!requireStopped || result.oldClaimSessions === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');
+    return result;
+  };
+  const terminalJob = (actual, expected, expectedHash, expectedUID) => {
+    ensure(actual?.metadata?.uid === expectedUID && actual.metadata.name === expected.metadata.name && actual.metadata.namespace === namespace &&
+      actual.metadata.annotations?.[annotation] === expectedHash &&
+      fingerprint(io.normalizePodSpec(actual.spec?.template?.spec)) === fingerprint(io.normalizePodSpec(expected.spec.template.spec)) &&
+      !actual.status?.active && actual.status?.conditions?.filter(c => ['Complete','Failed'].includes(c.type) && c.status === 'True').length === 1,
+    'MIGRATION_PREDECESSOR_NOT_TERMINAL');
+    const pods = JSON.parse(kube(['-n',namespace,'get','pods','-l',`batch.kubernetes.io/job-name=${expected.metadata.name}`,'-o','json'])).items;
+    ensure(pods.every(p => p.metadata?.uid && p.metadata.namespace === namespace &&
+      p.metadata.ownerReferences?.some(o => o.kind === 'Job' && o.controller === true && o.uid === expectedUID) && isProvenStoppedPod(p)),
+    'MIGRATION_PREDECESSOR_NOT_JOINED');
+  };
+  const predecessor = (paths, anchor, expected, currentMarker) => {
+    ensure(!existsSync(`${paths.evidencePath}.lock`), 'MIGRATION_PREDECESSOR_WRITER_ACTIVE');
+    const parent = privateJSON(paths.planPath), hash = fingerprint(parent);
+    ensure([1,2].includes(parent.version) && parent.kind === 'CONTROL_PLANE_MIGRATION' && parent.profile === 'outbox-index' &&
+      (parent.attempt ?? 1) === 1 && !parent.predecessor && parent.migrationVersion === migrationVersion &&
+      parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
+      parent.anchor.uid === anchor.metadata.uid && [0,2].includes(anchor.spec.replicas) &&
+      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:2}) &&
+      [hash,...(currentMarker ? [currentMarker] : [])].includes(anchor.metadata.annotations?.[annotation]), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
+    immutableMigrationImage(parent.source,parent.imageEvidence);
+    const previous = privateJournal(paths.evidencePath,{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:hash},{readOnly:true});
+    let uid;
+    try {
+      const receipts = previous.events.filter(e => ['CREATE_ACK','READBACK','TERMINAL_READBACK'].includes(e.type) && e.jobUID);
+      uid = receipts[0]?.jobUID;
+      ensure(uid && receipts.every(e => e.jobUID === uid) && previous.events.filter(e => e.type === 'CREATE_INTENT').length === 1 &&
+        previous.events.some(e => e.type === 'READBACK' && e.status === 'FAIL') && previous.events.some(e => e.type === 'RESUME_ACK'),
+      'MIGRATION_PREDECESSOR_RECEIPT_INVALID');
+      if (expected) ensure(expected.planSHA256 === hash && expected.evidenceSHA256 === previous.bytesSHA256 && expected.jobUID === uid,
+        'MIGRATION_PREDECESSOR_CHANGED');
+      const actual = optionalJob(parent.job.metadata.name);
+      terminalJob(actual,parent.job,hash,uid);
+      ensure(actual.status.conditions.some(c => c.type === 'Failed' && c.status === 'True'), 'MIGRATION_PREDECESSOR_NOT_FAILED');
+      return {...paths,planSHA256:hash,evidenceSHA256:previous.bytesSHA256,jobUID:uid,jobName:parent.job.metadata.name};
+    } finally { previous.close(); }
+  };
   if (phase === 'plan') {
     const anchor = deployment(), render = renderedBase(options['--base-render']);
     const source = {path:options['--source'],revision:options['--revision']};
     const imageEvidence = {publicationPlan:privateJSON(options['--publication-plan']),publicationEvidence:readPublication(options['--publication-evidence'])};
     const nsUID = namespaceUID(); ensure(nsUID, 'MIGRATION_NAMESPACE_INVALID'); imageScope(imageEvidence,nsUID);
-    const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence);
+    const previous = options['--predecessor-plan'] ? predecessor({planPath:resolve(options['--predecessor-plan']),
+      evidencePath:resolve(options['--predecessor-evidence'])},anchor) : undefined;
+    const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1);
+    ensure(!optionalJob(plan.checkJob.metadata.name), 'MIGRATION_CHECK_ALREADY_EXISTS');
     const previousImage = anchor.spec?.template?.spec?.containers?.find(container => container.name === 'control-plane')?.image;
     ensure(anchor.spec.replicas === 2 && !anchor.spec.paused && anchor.metadata.labels['kodex.dev/local-profile'] === 'stable' &&
       anchor.status?.observedGeneration >= anchor.metadata.generation &&
       ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => anchor.status[key] === 2) &&
       /^registry\.local\.kodex\/kodex\/control-plane@sha256:[a-f0-9]{64}$/.test(previousImage ?? '') &&
       !previousImage.endsWith('0'.repeat(64)) && !anchor.spec.template.spec.volumes?.some(volume => volume.hostPath), 'MIGRATION_CP_IMMUTABLE_HEALTH_REQUIRED');
-    ensure(!anchor.metadata.annotations?.[annotation], 'MIGRATION_ANCHOR_ALREADY_RESERVED');
+    ensure(previous || !anchor.metadata.annotations?.[annotation], 'MIGRATION_ANCHOR_ALREADY_RESERVED');
     Object.assign(plan,{clusterUID,context,namespaceUID:nsUID,dependencies:dependencies(),
       anchor:{kind:'Deployment',name:'control-plane',uid:anchor.metadata.uid,resourceVersion:anchor.metadata.resourceVersion,
         specSHA256:fingerprint(anchor.spec),stoppedSpecSHA256:fingerprint({...anchor.spec,replicas:0}),previousImage},
       baseRenderPath:resolve(options['--base-render']),baseRenderSHA256:fingerprint(render),migrationFileSHA256:sourceDigest(source)});
+    if (previous) plan.predecessor = previous;
+    plan.postgres = postgresIdentity();plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
+    precondition(source,plan.postgres,plan.preconditionSQLSHA256);
     writePrivate(options['--plan'],plan);
     process.stdout.write(`${JSON.stringify({status:'PLANNED',jobName:plan.job.metadata.name,sourceRevision:source.revision,planSHA256:fingerprint(plan)})}\n`);
     return;
   }
   const plan = privateJSON(options['--plan']);
-  ensure(plan.version === 1 && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === 'outbox-index' &&
+  ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === 'outbox-index' &&
     plan.migrationVersion === migrationVersion && plan.context === context && plan.clusterUID === clusterUID &&
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
   imageScope(plan.imageEvidence,plan.namespaceUID);
@@ -231,18 +320,20 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const journal = readOnly ? {events:durable.events,append:()=>{},close:()=>durable.close()} : durable;
   try {
     const attempts = journal.events.filter(e => e.type === 'CREATE_INTENT');
-    ensure(attempts.length <= 1, 'MIGRATION_JOURNAL_INVALID');
+    const checks = journal.events.filter(e => e.type === 'CHECK_CREATE_INTENT');
+    ensure(attempts.length <= 1 && checks.length <= 1, 'MIGRATION_JOURNAL_INVALID');
     const output = result => {
       if (['FAIL','READBACK_UNCONFIRMED'].includes(result.status)) process.exitCode = 1;
       process.stdout.write(`${JSON.stringify({...result,...(readOnly ? {evidenceReadOnly:true} : {})})}\n`); return result;
     };
     const observeCP = () => {
       const actual = deployment(), marker = actual.metadata.annotations?.[annotation], hash = fingerprint(actual.spec);
-      ensure(actual.metadata.uid === plan.anchor.uid && (!marker || marker === planSHA256), 'MIGRATION_ANCHOR_CHANGED');
+      const previousMarker = plan.predecessor?.planSHA256;
+      ensure(actual.metadata.uid === plan.anchor.uid && (marker === previousMarker || marker === planSHA256), 'MIGRATION_ANCHOR_CHANGED');
       const resumed = journal.events.some(e => e.type === 'RESUME_INTENT');
       let stage;
       if (hash === plan.anchor.stoppedSpecSHA256 && marker === planSHA256) stage = 'STOPPED';
-      else if (hash === plan.anchor.specSHA256 && !marker && !resumed) stage = 'BEFORE';
+      else if (hash === plan.anchor.specSHA256 && marker === previousMarker && !resumed) stage = 'BEFORE';
       else if (hash === plan.anchor.specSHA256 && marker === planSHA256 && resumed) stage = 'RESUMED';
       ensure(stage, 'MIGRATION_CP_SPEC_CHANGED');
       const list = JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-l',
@@ -285,10 +376,31 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(jobs.every(job => job.status?.conditions?.some(c => ['Complete','Failed'].includes(c.type) && c.status === 'True')), 'MIGRATION_ALREADY_RUNNING');
     };
     const verifyInputs = anchor => {
+      ensure(plan.version === 2, 'MIGRATION_NEW_PROTOCOL_REQUIRED');
       const render = renderedBase(plan.baseRenderPath);
-      const rebuilt = planImmutableControlPlaneMigration(before(render,anchor),plan.source,inspectSource,plan.id,plan.imageEvidence);
+      const rebuilt = planImmutableControlPlaneMigration(before(render,anchor),plan.source,inspectSource,plan.id,plan.imageEvidence,plan.attempt);
       ensure(fingerprint(render) === plan.baseRenderSHA256 && fingerprint(rebuilt.job) === fingerprint(plan.job) &&
+        fingerprint(rebuilt.checkJob) === fingerprint(plan.checkJob) &&
         sourceDigest(plan.source) === plan.migrationFileSHA256 && fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_PLAN_DRIFT');
+      if (plan.predecessor) predecessor(plan.predecessor,anchor,plan.predecessor,planSHA256);
+    };
+    const readCheck = (fresh = false) => {
+      ensure(plan.version === 2 && checks.length === 1, 'MIGRATION_CHECK_INTENT_REQUIRED');
+      const actual = optionalJob(plan.checkJob.metadata.name);
+      ensure(actual, 'MIGRATION_CHECK_MISSING_AFTER_INTENT');
+      const observed = journal.events.find(e => ['CHECK_CREATE_ACK','CHECK_READBACK'].includes(e.type) && e.jobUID);
+      ensure(!observed || observed.jobUID === actual.metadata.uid, 'MIGRATION_CHECK_REPLACED');
+      ensure(fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_DEPENDENCY_CHANGED');
+      const pods = JSON.parse(kube(['-n',namespace,'get','pods','-l',`batch.kubernetes.io/job-name=${plan.checkJob.metadata.name}`,'-o','json'])).items;
+      const logs = actual.status?.succeeded === 1 ? kube(['-n',namespace,'logs',`job/${plan.checkJob.metadata.name}`,'-c','migrate','--limit-bytes=262144']) : '';
+      const result = migrationReadback(actual,plan,logs,pods,'check');
+      if (fresh) {
+        const completed = Date.parse(actual.status?.completionTime ?? '');
+        ensure(result.status === 'PASS' && Number.isFinite(completed) && completed <= Date.now() && Date.now()-completed <= 300000,
+          'MIGRATION_CHECK_PASS_REQUIRED');
+      }
+      journal.append({type:'CHECK_READBACK',...result,dependenciesSHA256:fingerprint(plan.dependencies)});
+      return result;
     };
     const transition = (step, state, replicas) => {
       const type = `${step}_INTENT`, last = journal.events.findLastIndex(e => e.type === type);
@@ -307,8 +419,25 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const state = observeCP();
       journal.append({type:'INSPECT',stage:state.stage,resourceVersion:state.actual.metadata.resourceVersion,podsGone:state.joined,ready:state.ready});
       if (!attempts.length) ensure(!optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_WITHOUT_INTENT');
-      return output({...(attempts.length ? readJob() : {status:state.stage === 'STOPPED' ? 'STOPPED_NOT_CREATED' : 'CREATE_NOT_ATTEMPTED'}),
+      return output({...(attempts.length ? readJob() : checks.length ? readCheck() : {status:state.stage === 'STOPPED' ? 'STOPPED_NOT_CREATED' : 'CREATE_NOT_ATTEMPTED'}),
         cpStage:state.stage,podsGone:state.joined,cpReady:state.ready});
+    }
+    if (phase === 'check') {
+      if (!checks.length) {
+        const state = observeCP();ensure(state.stage === 'BEFORE' && state.ready && !attempts.length, 'MIGRATION_CHECK_BEFORE_STOP_REQUIRED');
+        verifyInputs(state.actual);noActiveMigrations();
+        precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256);
+        ensure(!optionalJob(plan.checkJob.metadata.name), 'MIGRATION_CHECK_ALREADY_EXISTS');
+        const job = structuredClone(plan.checkJob);job.metadata.annotations = {[annotation]:planSHA256};
+        journal.append({type:'CHECK_CREATE_INTENT',jobName:job.metadata.name});
+        try {
+          const ack = JSON.parse(kube(['create','-f','-','-o','json'],JSON.stringify(job)));
+          ensure(ack.metadata?.uid, 'MIGRATION_CHECK_CREATE_UNCONFIRMED');
+          journal.append({type:'CHECK_CREATE_ACK',jobUID:ack.metadata.uid});
+        } catch(error) {journal.append({type:'UNKNOWN',step:'CHECK',code:error.message});throw error;}
+        checks.push(journal.events.find(e => e.type === 'CHECK_CREATE_INTENT'));
+      }
+      return output(readCheck());
     }
     if (phase === 'stop') {
       let state = observeCP();
@@ -316,6 +445,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (state.stage === 'BEFORE') {
         ensure(state.actual.metadata.resourceVersion === plan.anchor.resourceVersion, 'MIGRATION_PLAN_DRIFT');
         verifyInputs(state.actual);noActiveMigrations();ensure(!optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_ALREADY_EXISTS');
+        readCheck(true);
+        const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256);
+        journal.append({type:'OWNER_PREFLIGHT',...proof});
         transition('STOP',state,0);
       } else ensure(journal.events.some(e => e.type === 'STOP_INTENT'), 'MIGRATION_UNOWNED_STOP');
       state = await waitMigrationMaintenance(observeCP,s => s.stage === 'STOPPED' && s.joined,'MIGRATION_CP_STOP_TIMEOUT',io.clock);
@@ -345,6 +477,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(state.stage === 'STOPPED' && state.joined && journal.events.some(e => e.type === 'STOP_INTENT'), 'MIGRATION_STOP_JOIN_REQUIRED');
       ensure(journal.events.some(e => e.type === 'STOP_ACK' || (e.type === 'INSPECT' && e.stage === 'STOPPED' && e.podsGone)), 'MIGRATION_STOP_READBACK_REQUIRED');
       verifyInputs(state.actual);noActiveMigrations();
+      const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256,true);
+      journal.append({type:'OWNER_PREFLIGHT',...proof});
       ensure(!optionalJob('control-plane-migrate') && !optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_ALREADY_EXISTS');
       const quiesced = observeCP();ensure(quiesced.stage === 'STOPPED' && quiesced.joined, 'MIGRATION_STOP_JOIN_REQUIRED');
       const job = structuredClone(plan.job); job.metadata.annotations = {[annotation]:planSHA256};

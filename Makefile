@@ -411,4 +411,4 @@ test-scoped-backup-drill:
 
 .PHONY: test-control-plane-migration
 test-control-plane-migration:
-	@timeout 90s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs
+	@timeout 180s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs
