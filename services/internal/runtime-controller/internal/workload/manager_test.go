@@ -1039,6 +1039,15 @@ func TestTurnPodStateUsesColdPodForSystemAssistantFallback(t *testing.T) {
 	if err := manager.EnsureTurn(context.Background(), input, binding, testCredentialProjection(input)); err != nil {
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
+	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
+	pod, err := client.CoreV1().Pods("kodex-runtime").Get(t.Context(), podName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pod.UID = "cold-observed-uid"
+	if _, err := client.CoreV1().Pods("kodex-runtime").Update(t.Context(), pod, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	state, err := manager.TurnPodState(context.Background(), input, false)
 	if err != nil {
 		t.Fatalf("TurnPodState() error = %v", err)
@@ -1132,6 +1141,7 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 			}
 			credentials := testCredentialProjection(input)
 			pod := manager.runtimePod(input, binding, &credentials, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
+			pod.UID = "cold-observed-uid"
 			phase := test.phase
 			if phase == "" {
 				phase = corev1.PodRunning

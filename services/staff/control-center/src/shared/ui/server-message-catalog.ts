@@ -38,6 +38,14 @@ export const serverTokenTranslations = {
     "Провайдер модели временно недоступен. Повторите запрос позже.",
     "The model provider is temporarily unavailable. Try again later.",
   ],
+  RUNTIME_INTERRUPTED: [
+    "Исполнение прервано. Причина недоступности не установлена.",
+    "Execution was interrupted. The cause of unavailability is unknown.",
+  ],
+  RUNTIME_ENVIRONMENT_EVICTED: [
+    "Окружение исполнения выселено. Причину следует проверить перед повторным запуском.",
+    "The execution environment was evicted. Check the cause before retrying.",
+  ],
   RUNTIME_MEMORY_EXHAUSTED: [
     "Исполнителю не хватило памяти. Проверьте лимит памяти окружения и свободную память узла перед повторным запуском.",
     "The executor ran out of memory. Check the environment memory limit and the node's available memory before retrying.",

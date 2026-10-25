@@ -115,8 +115,12 @@ func (client *Client) PublishedMessage(ctx context.Context, input model.Input, m
 		runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Message: &message})
 }
 
-// Complete validates the terminal payload and exact revision/attempt, then retries delivery for up to sixty seconds independently of the caller's cancellation, retaining context values.
-// Complete проверяет конечный пакет и точные ревизию/попытку, затем повторяет доставку до шестидесяти секунд независимо от отмены вызывающего, сохраняя значения контекста.
+// Complete validates terminal provenance, normalizes only the exact interrupted
+// wait diagnostic, then freezes one delivery body for bounded retries independent
+// of caller cancellation. Pod state cannot change the accepted completion intent.
+// Complete проверяет provenance завершения, нормализует только exact diagnostic
+// прерванного ожидания и фиксирует одно тело для ограниченных повторов независимо
+// от отмены caller. Состояние Pod не меняет принятый intent завершения.
 func (client *Client) Complete(ctx context.Context, input model.Input, payload runtimecontract.RunnerCompletionRequest) error {
 	if err := payload.Validate(); err != nil {
 		return errors.New("validate runtime completion: " + err.Error())
@@ -124,6 +128,7 @@ func (client *Client) Complete(ctx context.Context, input model.Input, payload r
 	if payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt {
 		return errors.New("validate runtime completion: provenance does not match RuntimeRevision")
 	}
+	payload = interruptedCompletion(input, payload)
 	delivery, cancel := context.WithTimeout(context.WithoutCancel(ctx), callbackDeliveryTimeout)
 	defer cancel()
 	return client.postRetriable(delivery, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)

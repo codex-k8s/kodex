@@ -526,7 +526,8 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 				continue
 			}
 			if time.Since(terminalObservedAt) < runtime.terminalGrace {
-				if observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic {
+				if observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic ||
+					(observation.DiagnosticCode == workload.TurnPodEvictedDiagnostic && terminalDiagnostic != workload.TurnPodMemoryDiagnostic) {
 					terminalDiagnostic = observation.DiagnosticCode
 				}
 				continue
@@ -540,8 +541,13 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			if terminalDiagnostic == workload.TurnPodMemoryDiagnostic || observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic {
 				failureCode = "RUNTIME_MEMORY_EXHAUSTED"
 				terminalDiagnostic = workload.TurnPodMemoryDiagnostic
+			} else if terminalDiagnostic == workload.TurnPodEvictedDiagnostic || observation.DiagnosticCode == workload.TurnPodEvictedDiagnostic {
+				failureCode = "RUNTIME_ENVIRONMENT_EVICTED"
+				terminalDiagnostic = workload.TurnPodEvictedDiagnostic
 			}
-			runtime.logger.WarnContext(parent, "runtime terminal callback grace expired", "diagnostic_code", terminalDiagnostic)
+			runtime.logger.WarnContext(parent, "runtime terminal callback grace expired", "diagnostic_code", terminalDiagnostic,
+				"observed_pod_uid", observation.ObservedPodUID, "run_ref", input.RunRef, "node_ref", input.NodeRef,
+				"session_ref", input.SessionRef, "turn_ref", input.TurnRef, "attempt", input.Attempt, "runtime_revision_digest", input.RuntimeRevisionDigest)
 			runtime.completeFailure(context.WithoutCancel(parent), input, failureCode, terminalDiagnostic)
 			return
 		}

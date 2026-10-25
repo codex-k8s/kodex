@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -349,6 +351,37 @@ func TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
 	if request.GetSuccess() || request.GetSafeErrorCode() != "RUNTIME_UNAVAILABLE" || request.GetResultSummary() != "i18n:RUNTIME_MEMORY_EXHAUSTED" || request.GetLeaseRef() != input.LeaseRef || request.GetFence() != input.LeaseFence || request.GetGeneration() != input.LeaseGeneration {
 		t.Fatal("memory failure lost its exact owner tuple or safe summary")
 	}
+}
+
+// TestTrackEvictedFailurePreservesOwnerCompletionAndCleanup verifies typed eviction
+// keeps the existing owner safe code, lease pins, completion cardinality and cleanup.
+// TestTrackEvictedFailurePreservesOwnerCompletionAndCleanup проверяет сохранение
+// прежнего safe code, привязок аренды, числа завершений и очистки при выселении.
+func TestTrackEvictedFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
+	input := runtimeTrackingInput()
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{}
+	turns := &turnLifecycleStub{observation: workload.TurnPodObservation{State: "FAILED", DiagnosticCode: workload.TurnPodEvictedDiagnostic, ObservedPodUID: "current-observed-pod-uid"}}
+	runtime := trackingRuntime(client, turns, coordinator)
+	var logs bytes.Buffer
+	runtime.logger = slog.New(slog.NewJSONHandler(&logs, nil))
+	runtime.track(t.Context(), input, done, false, time.Time{})
+	if client.count() != 1 || turns.deletions.Load() != 1 {
+		t.Fatal("eviction changed completion cardinality or cleanup")
+	}
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	request := client.requests[0]
+	if request.GetSuccess() || request.GetSafeErrorCode() != "RUNTIME_UNAVAILABLE" || request.GetResultSummary() != "i18n:RUNTIME_ENVIRONMENT_EVICTED" || request.GetLeaseRef() != input.LeaseRef || request.GetFence() != input.LeaseFence || request.GetGeneration() != input.LeaseGeneration {
+		t.Fatal("eviction lost its exact owner tuple or safe summary")
+	}
+	for _, pin := range []string{`"observed_pod_uid":"current-observed-pod-uid"`, `"diagnostic_code":"ENVIRONMENT_EVICTED"`, `"run_ref":"` + input.RunRef + `"`, `"runtime_revision_digest":"` + input.RuntimeRevisionDigest + `"`} {
+		if !strings.Contains(logs.String(), pin) {
+			t.Fatal("tracker diagnostic lost its observed execution pins")
+		}
+	}
+
 }
 
 // TestCompleteFailureDistinguishesInvalidInputFromUnsupportedProfile checks safe-code and summary mapping for invalid input, stale profile and a synthetic unknown diagnostic.

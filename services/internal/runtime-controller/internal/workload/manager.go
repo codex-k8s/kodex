@@ -1773,14 +1773,25 @@ func (manager *Manager) deleteExecutionPolicyByHash(ctx context.Context, executi
 type TurnPodObservation struct {
 	State          string
 	DiagnosticCode string
+	ObservedPodUID string
 }
 
 // TurnPodMemoryDiagnostic identifies a current OOMKilled termination of a known runtime container, rather than inferring memory failure from exit code 137 alone.
 // TurnPodMemoryDiagnostic обозначает текущее завершение известного runtime-контейнера с OOMKilled, не выводя нехватку памяти только из кода выхода 137.
 const TurnPodMemoryDiagnostic = "CONTAINER_OOM_KILLED"
 
-// ObserveTurnPod reads the turn or warm Pod, checks revision/compatibility pins and projects phase, readiness and known container termination into closed diagnostics; observed success without callback is not owner completion.
-// ObserveTurnPod читает Pod хода либо warm, проверяет ревизию и совместимость, переводит фазу, готовность и завершение известных контейнеров в закрытую диагностику; наблюдаемый успех без callback не является завершением владельца.
+// TurnPodEvictedDiagnostic identifies the typed Pod reason without inferring storage,
+// memory, node pressure or any particular resource from the private message.
+// TurnPodEvictedDiagnostic обозначает типизированную причину Pod без вывода о диске,
+// памяти, нагрузке узла либо конкретном ресурсе из закрытого сообщения.
+const TurnPodEvictedDiagnostic = "ENVIRONMENT_EVICTED"
+
+// ObserveTurnPod checks cold execution metadata or warm compatibility from one GET.
+// Closed cold resource diagnostics carry that observed UID, never a historical UID
+// proof. Creation/adoption keeps full spec checks; observation cannot complete a run.
+// ObserveTurnPod проверяет метаданные холодного исполнения либо warm-совместимость
+// по одному GET. Закрытая диагностика несёт наблюдённый UID, не доказательство его
+// истории. Создание сохраняет полную проверку spec; наблюдение не завершает запуск.
 func (manager *Manager) ObserveTurnPod(ctx context.Context, input runtimecontract.RunnerInput, warmExecution bool) (TurnPodObservation, error) {
 	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
 	if warmExecution {
@@ -1798,17 +1809,28 @@ func (manager *Manager) ObserveTurnPod(ctx context.Context, input runtimecontrac
 		if compatibilityErr != nil || pod.Annotations[warmCompatibilityAnnotation] != compatibility {
 			return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "WARM_COMPATIBILITY_CONFLICT"}, nil
 		}
-	} else if pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
-		return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_REVISION_CONFLICT"}, nil
+	} else {
+		if pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
+			return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_REVISION_CONFLICT"}, nil
+		}
+		expected := manager.runtimePodMetadata(input, podName, "turn")
+		if pod.UID == "" || pod.Name != expected.Name || pod.Namespace != expected.Namespace ||
+			!managedMetadataMatches(pod.ObjectMeta, expected) {
+			return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_EXECUTION_CONFLICT"}, nil
+		}
+	}
+	diagnostic := "POD_FAILED"
+	if !warmExecution {
+		diagnostic = terminalContainerDiagnostic(pod)
 	}
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded:
 		return TurnPodObservation{State: "SUCCEEDED", DiagnosticCode: "POD_SUCCEEDED_WITHOUT_CALLBACK"}, nil
 	case corev1.PodFailed:
-		return TurnPodObservation{State: "FAILED", DiagnosticCode: terminalContainerDiagnostic(pod)}, nil
+		return TurnPodObservation{State: "FAILED", DiagnosticCode: diagnostic, ObservedPodUID: string(pod.UID)}, nil
 	case corev1.PodRunning:
 		if !warmExecution && runtimePodTerminal(pod, "role-runtime", "provider-runtime", "provider-credential-relay") {
-			return TurnPodObservation{State: "FAILED", DiagnosticCode: terminalContainerDiagnostic(pod)}, nil
+			return TurnPodObservation{State: "FAILED", DiagnosticCode: diagnostic, ObservedPodUID: string(pod.UID)}, nil
 		}
 		if podReady(pod) {
 			return TurnPodObservation{State: "READY"}, nil
@@ -1828,8 +1850,11 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 	return observation.State, err
 }
 
-// terminalContainerDiagnostic prioritizes current OOMKilled for known containers, then initializer/runtime/provider/relay exits; historical termination and bare exit137 are not accepted as OOM evidence.
-// terminalContainerDiagnostic отдаёт приоритет текущему OOMKilled известных контейнеров, затем выходам инициализаторов, runtime, провайдера и relay; историческое завершение и один exit137 доказательством OOM не считаются.
+// terminalContainerDiagnostic prioritizes current known-container OOMKilled, then
+// typed Pod eviction and generic exits. History, exit137 and messages prove no cause.
+// terminalContainerDiagnostic отдаёт приоритет текущему OOMKilled известного
+// контейнера, затем типизированному выселению Pod и общим выходам. История, exit137
+// и сообщения не доказывают причину.
 func terminalContainerDiagnostic(pod *corev1.Pod) string {
 	// OOM одного известного контейнера важнее обычного выхода соседа.
 	// Исторический LastTerminationState и один exit137 не доказывают OOM.
@@ -1843,6 +1868,9 @@ func terminalContainerDiagnostic(pod *corev1.Pod) string {
 				return TurnPodMemoryDiagnostic
 			}
 		}
+	}
+	if pod.Status.Reason == "Evicted" {
+		return TurnPodEvictedDiagnostic
 	}
 	for _, status := range pod.Status.InitContainerStatuses {
 		if status.State.Terminated == nil {
@@ -2428,25 +2456,14 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			LocalObjectReference: corev1.LocalObjectReference{Name: runtimeSecretName}, Key: runtimeSecretKeys[item.Name], Optional: boolPointer(false),
 		}}})
 	}
-	annotations := runtimeProjectionAnnotations(input, podName)
-	labels := map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment}
-	if mode == "turn" {
-		annotations[leaseAnnotation] = input.LeaseRef
-		labels[executionHashLabel] = shortHash(input.LeaseRef)
-		if credentials != nil {
-			annotations[credentialProjectionNameAnnotation] = credentials.SecretName
-			annotations[credentialProjectionUIDAnnotation] = credentials.SecretUID
-			annotations[credentialProjectionVersionAnnotation] = credentials.SecretResourceVersion
-			annotations[credentialProjectionDigestAnnotation] = credentials.ContentSHA256
-		}
+	metadata := manager.runtimePodMetadata(input, podName, mode)
+	if mode == "turn" && credentials != nil {
+		metadata.Annotations[credentialProjectionNameAnnotation] = credentials.SecretName
+		metadata.Annotations[credentialProjectionUIDAnnotation] = credentials.SecretUID
+		metadata.Annotations[credentialProjectionVersionAnnotation] = credentials.SecretResourceVersion
+		metadata.Annotations[credentialProjectionDigestAnnotation] = credentials.ContentSHA256
 	}
-	if mode == "warm" {
-		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
-		annotations[warmCompatibilityAnnotation] = compatibility
-	}
-	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace,
-		Labels:      labels,
-		Annotations: annotations},
+	pod := &corev1.Pod{ObjectMeta: metadata,
 		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(150),
 			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), FSGroupChangePolicy: fsGroupChangePolicyPointer(corev1.FSGroupChangeOnRootMismatch), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			InitContainers: []corev1.Container{
@@ -2455,7 +2472,6 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			},
 			Containers: []corev1.Container{role, provider, relay}, Volumes: volumes}}
 	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
-		pod.Labels["kodex.dev/security-profile"] = runtimecontract.CallbackProfileTrustedCluster
 		pod.Spec.Volumes = slices.DeleteFunc(pod.Spec.Volumes, func(volume corev1.Volume) bool {
 			return volume.Name == "callback-ca" || volume.Name == "callback-client"
 		})
@@ -2468,6 +2484,27 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		}
 	}
 	return pod
+}
+
+// runtimePodMetadata shares server-derived execution metadata between creation and
+// observation. It contains no credentials or UID history and grants no authority.
+// runtimePodMetadata объединяет серверные метаданные исполнения для создания и
+// наблюдения. Она не содержит реквизитов либо истории UID и не даёт полномочий.
+func (manager *Manager) runtimePodMetadata(input runtimecontract.RunnerInput, podName, mode string) metav1.ObjectMeta {
+	annotations := runtimeProjectionAnnotations(input, podName)
+	labels := map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment}
+	if mode == "turn" {
+		annotations[leaseAnnotation] = input.LeaseRef
+		labels[executionHashLabel] = shortHash(input.LeaseRef)
+	}
+	if mode == "warm" {
+		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
+		annotations[warmCompatibilityAnnotation] = compatibility
+	}
+	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
+		labels["kodex.dev/security-profile"] = runtimecontract.CallbackProfileTrustedCluster
+	}
+	return metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace, Labels: labels, Annotations: annotations}
 }
 
 // runtimeProxyURL signs a web-access grant bound to the lease or warm revision/session identity and policy digest, embedding it as proxy credentials; the returned URL is private and must not be logged.

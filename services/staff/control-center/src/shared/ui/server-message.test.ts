@@ -26,6 +26,31 @@ describe("Closed server message keys", () => {
       i18n.global.locale.value = "ru";
     },
   );
+  it.each([
+    ["ru", "RUNTIME_INTERRUPTED", "Исполнение прервано"],
+    ["en", "RUNTIME_INTERRUPTED", "Execution was interrupted"],
+    ["ru", "RUNTIME_ENVIRONMENT_EVICTED", "Окружение исполнения выселено"],
+    [
+      "en",
+      "RUNTIME_ENVIRONMENT_EVICTED",
+      "The execution environment was evicted",
+    ],
+  ] as const)(
+    "показывает закрытую диагностику %s/%s",
+    async (locale, token, expected) => {
+      i18n.global.locale.value = locale;
+      const app = createSSRApp({
+        render: () => h(SafeSummary, { content: `i18n:${token}` }),
+      });
+      app.use(i18n);
+      const html = await renderToString(app);
+      expect(html).toContain(expected);
+      expect(html).not.toContain(token);
+      expect(html).not.toContain("i18n:");
+      expect(html).not.toContain("provider");
+      i18n.global.locale.value = "ru";
+    },
+  );
   it("сохраняет literal intent без перевода токенов, статусов и скрытия похожих refs", async () => {
     const app = createSSRApp({
       render: () =>

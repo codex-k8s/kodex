@@ -62,7 +62,7 @@ func (client *diagnosticCompletionClient) CompleteExecution(_ context.Context, r
 // локального маршрута: nil от mock владельца допускает одно безопасное наблюдение
 // до очистки; повтор, ошибка, успех и неверные привязки не подделывают его.
 func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
-	for _, scenario := range []string{"exact", "workspace", "workspace mismatched code", "missing", "CP error", "replay", "success", "unauthorized", "input", "execution", "session", "turn", "attempt", "private enum"} {
+	for _, scenario := range []string{"exact", "interrupted", "workspace", "workspace mismatched code", "missing", "CP error", "replay", "success", "unauthorized", "input", "execution", "session", "turn", "attempt", "private enum"} {
 		t.Run(scenario, func(t *testing.T) {
 			manager, kube, input, _, ticket := providerCredentialRefreshRouteFixture(t)
 			var logs bytes.Buffer
@@ -82,6 +82,10 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 				Usage: runtimecontract.TokenUsage{Completeness: runtimecontract.UsagePartial, TotalTokens: 3, InputTokens: 2, OutputTokens: 1}, ProviderDiagnostic: completionDiagnostic(input)}
 			wantStatus, commits := http.StatusNoContent, 1
 			switch scenario {
+			case "interrupted":
+				payload.ProviderDiagnostic.Detail = "CONTEXT_CANCELLED"
+				payload.ProviderDiagnostic.Notification, payload.ProviderDiagnostic.NotificationError = "NONE", "NONE"
+				payload.SafeErrorCode, payload.ResultSummary = "RUNTIME_UNAVAILABLE", "i18n:RUNTIME_INTERRUPTED"
 			case "workspace", "workspace mismatched code":
 				payload.ProviderDiagnostic.Kind = "TERMINAL_FAILURE"
 				payload.ProviderDiagnostic.Stage = "WORKSPACE_NORMALIZATION"
@@ -141,7 +145,7 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 			if response.Code != wantStatus || len(client.requests) != commits {
 				t.Fatalf("status=%d commits=%d", response.Code, len(client.requests))
 			}
-			if scenario == "exact" || scenario == "workspace" || scenario == "missing" {
+			if scenario == "exact" || scenario == "interrupted" || scenario == "workspace" || scenario == "missing" {
 				if !deleted || strings.Count(logs.String(), providerCompletionDiagnosticLog) != 1 {
 					t.Fatal("commit did not produce one pre-cleanup observation")
 				}
@@ -164,6 +168,9 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 			}
 			if commits == 1 {
 				got := client.requests[0]
+				if got.GetMutation().GetIdempotencyKey() != stableKey(input.LeaseRef, "complete") || got.GetLeaseRef() != input.LeaseRef || got.GetFence() != input.LeaseFence || got.GetGeneration() != input.LeaseGeneration {
+					t.Fatal("completion changed the existing owner intent scope")
+				}
 				if got.GetSafeErrorCode() != payload.SafeErrorCode || got.GetResultSummary() != payload.ResultSummary || got.GetUsage().GetTotalTokens() != 3 || got.GetUsage().GetCompleteness() != cp.UsageCompleteness_USAGE_COMPLETENESS_PARTIAL || got.GetCodexArchiveSha256() != "" {
 					t.Fatal("diagnostic changed CP state payload")
 				}

@@ -4,7 +4,7 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.6
+version: 1.1.7
 updated: 2026-10-25
 ---
 
@@ -102,6 +102,16 @@ startup barrier. Здесь используются существующие se
 cancel. Точные trusted claim/execution pins различаются явно; отсутствующие
 координаты не выдумываются. Такой лог не доказывает отзыв lease или owner commit
 и не разрешает повтор, увеличение срока или продолжение исполнения.
+
+Диагноз отказа исполнения не выводится из произвольного Kubernetes message.
+Текущий typed Pod reason и известный container termination допускаются лишь
+после exact managed metadata / execution tuple проверки; наблюдённый UID одного
+GET не заменяет историческую привязку либо owner lease/fence/generation.
+Mutable Pod не меняет callback intent: mapping допускается только по уже
+проверенному immutable diagnostic до единственной serialization, сохраняя
+usage/artifacts/archive и байты retry. Late postcommit probe остаётся закрытой
+операторской диагностикой, без изменения принятого результата.
+Матрица и ограничения: [#1856](../operations/runtime-memory-failure.md).
 
 ## Общая библиотека
 
