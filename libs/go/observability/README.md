@@ -17,3 +17,8 @@ in-flight gauge; ранний отказ до первого сообщения 
 только через `errors.Is/As`, без форматирования ошибки. API использует лишь
 стандартную библиотеку; TLS, PostgreSQL, configuration precedence и решение
 о повторе остаются у вызывающего сервиса. Неизвестная причина — `unknown`.
+
+`errorclass.TLS(error)` распознаёт только typed certificate verification errors
+стандартной библиотеки; произвольный текст и неизвестные причины остаются
+`unknown`. Она не задаёт retry и не зависит от NATS/pgx SDK. Приоритет относительно
+service-specific auth/configuration/network классов определяет вызывающий.

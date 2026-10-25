@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.4
-updated: 2026-10-06
+version: 1.0.5
+updated: 2026-10-25
 ---
 
 # Общие библиотеки Go
@@ -48,6 +48,14 @@ deployable-компоненте. Структуру сервиса задают 
 
 Бизнесовые entities, permissions, event payloads, cache keys, TTL, SQL,
 provider policy и use cases остаются в сервисе.
+
+Общее извлечение typed TLS certificate failures принадлежит SDK-neutral
+`observability/errorclass.TLS`. PostgreSQL/NATS sentinels, приоритет классов,
+точные этапы и решение о retry остаются у сервиса. Ошибка SDK сохраняется
+приватно для `errors.Is/As`; process output не форматирует её cause или
+содержимое сертификата/пути/credentials. Diagnostic wrapper не меняет
+применение SDK options, startup budgets и lifecycle.
+Матрица: [#1895](../operations/nats-startup-diagnostic-1895.md).
 
 ## Границы модулей
 

@@ -207,16 +207,16 @@ func oidcRefreshWorker(verifier *oidcauth.Verifier, logger *slog.Logger, config 
 // connectNATS opens the configured TLS 1.3 NATS connection with pinned server name/CA, client certificate and user credentials, unlimited reconnects and bounded connect/flush checks. Failed initial flush closes the connection; the helper has no lifecycle context and does not create subscriptions.
 // connectNATS открывает настроенное TLS 1.3 NATS-соединение с закреплёнными server name и CA, client certificate и user credentials, неограниченными reconnects и ограниченными connect и flush checks. Отказ первого flush закрывает соединение; lifecycle context не передаётся и subscriptions не создаются.
 func connectNATS(config Config, logger *slog.Logger) (*nats.Conn, error) {
-	options := []nats.Option{nats.Name(serviceName), nats.Secure(&tls.Config{MinVersion: tls.VersionTLS13, ServerName: config.NATSTLSServerName}), nats.RootCAs(config.NATSCAFile), nats.ClientCert(config.NATSCertificateFile, config.NATSPrivateKeyFile), nats.UserCredentials(config.NATSCredentialsFile), nats.NoEcho(), nats.Timeout(3 * time.Second), nats.ReconnectWait(time.Second), nats.MaxReconnects(-1), nats.PingInterval(20 * time.Second), nats.MaxPingsOutstanding(2), nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {
+	options := []nats.Option{nats.Name(serviceName), nats.Secure(&tls.Config{MinVersion: tls.VersionTLS13, ServerName: config.NATSTLSServerName}), diagnosticNATSOption(natsStageLoadCA, nats.RootCAs(config.NATSCAFile)), diagnosticNATSOption(natsStageLoadClientCertificate, nats.ClientCert(config.NATSCertificateFile, config.NATSPrivateKeyFile)), diagnosticNATSOption(natsStageLoadCredentials, nats.UserCredentials(config.NATSCredentialsFile)), nats.NoEcho(), nats.Timeout(3 * time.Second), nats.ReconnectWait(time.Second), nats.MaxReconnects(-1), nats.PingInterval(20 * time.Second), nats.MaxPingsOutstanding(2), nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {
 		logger.Warn("realtime NATS connection interrupted", "error_class", "dependency")
 	}), nats.ReconnectHandler(func(_ *nats.Conn) { logger.Info("realtime NATS connection restored") })}
 	connection, err := nats.Connect(config.NATSURL, options...)
 	if err != nil {
-		return nil, errors.New("connect realtime NATS consumer")
+		return nil, natsStartupFailure(natsStageConnect, err)
 	}
 	if err := connection.FlushTimeout(2 * time.Second); err != nil {
 		connection.Close()
-		return nil, errors.New("verify realtime NATS consumer")
+		return nil, natsStartupFailure(natsStageVerify, err)
 	}
 	return connection, nil
 }

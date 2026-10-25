@@ -21,6 +21,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/sttapi v0.0.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/google/uuid v1.6.0
+	github.com/nats-io/jwt/v2 v2.8.1
 	github.com/nats-io/nats.go v1.52.0
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/prometheus/client_golang v1.23.2
@@ -54,7 +55,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nats-io/nkeys v0.4.15 // indirect
+	github.com/nats-io/nkeys v0.4.15
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.6.1 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect

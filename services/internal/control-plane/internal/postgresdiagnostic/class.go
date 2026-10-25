@@ -4,8 +4,6 @@ package postgresdiagnostic
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"database/sql/driver"
 	"errors"
 	"os"
@@ -23,12 +21,8 @@ func Class(err error) string {
 	if errors.As(err, &database) {
 		return errorclass.Postgres(database.Code)
 	}
-	var unknownCA x509.UnknownAuthorityError
-	var invalidCertificate x509.CertificateInvalidError
-	var hostname x509.HostnameError
-	var verification *tls.CertificateVerificationError
-	if errors.As(err, &unknownCA) || errors.As(err, &invalidCertificate) || errors.As(err, &hostname) || errors.As(err, &verification) {
-		return "tls_verification"
+	if class := errorclass.TLS(err); class != "unknown" {
+		return class
 	}
 	var configuration *pgconn.ParseConfigError
 	if errors.As(err, &configuration) {
