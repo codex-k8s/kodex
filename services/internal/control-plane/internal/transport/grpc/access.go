@@ -190,66 +190,49 @@ func (server *Server) SimulateAccess(ctx context.Context, request *controlplanev
 // CreateAccessRole maps role fields and mutation metadata into the specialized CreateAccessRole command using the exact authenticated RPC path, then casts the owner result. The request supplies role content rather than caller identity or a preassigned role reference.
 // CreateAccessRole преобразует поля роли и mutation metadata в специализированную команду CreateAccessRole через точный аутентифицированный RPC-путь, затем преобразует результат владельца. Запрос задаёт содержимое роли, а не идентичность вызывающего или заранее назначенную ссылку роли.
 func (server *Server) CreateAccessRole(ctx context.Context, request *controlplanev1.CreateAccessRoleRequest) (*controlplanev1.CreateAccessRoleResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.AccessService_CreateAccessRole_FullMethodName, command.CreateAccessRole, request.GetMutation(), accessRoleInput("", request.GetName(), request.GetDescription(), request.GetPermissionKeys(), request.GetAllowedScopes(), request.GetChangeComment()))
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateAccessRoleResponse{Role: castAccessRole(*result.AccessRole)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.AccessService_CreateAccessRole_FullMethodName, command.CreateAccessRole, request.GetMutation(), accessRoleInput("", request.GetName(), request.GetDescription(), request.GetPermissionKeys(), request.GetAllowedScopes(), request.GetChangeComment()), func(result command.Result) *controlplanev1.CreateAccessRoleResponse {
+		return &controlplanev1.CreateAccessRoleResponse{Role: castAccessRole(*result.AccessRole)}
+	})
 }
 
 // CreateAccessRoleVersion passes the existing role reference, complete proposed content and mutation metadata to the specialized version command. Shared execute keeps principal/error handling; the domain owner controls authorization, expected version and the resulting role snapshot.
 // CreateAccessRoleVersion передаёт ссылку существующей роли, полное предлагаемое содержимое и mutation metadata специализированной команде версии. Общий execute сохраняет обработку principal/ошибок; доменный владелец проверяет полномочия, ожидаемую версию и формирует снимок роли.
 func (server *Server) CreateAccessRoleVersion(ctx context.Context, request *controlplanev1.CreateAccessRoleVersionRequest) (*controlplanev1.CreateAccessRoleVersionResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.AccessService_CreateAccessRoleVersion_FullMethodName, command.CreateAccessRoleVersion, request.GetMutation(), accessRoleInput(request.GetRoleRef(), request.GetName(), request.GetDescription(), request.GetPermissionKeys(), request.GetAllowedScopes(), request.GetChangeComment()))
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateAccessRoleVersionResponse{Role: castAccessRole(*result.AccessRole)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.AccessService_CreateAccessRoleVersion_FullMethodName, command.CreateAccessRoleVersion, request.GetMutation(), accessRoleInput(request.GetRoleRef(), request.GetName(), request.GetDescription(), request.GetPermissionKeys(), request.GetAllowedScopes(), request.GetChangeComment()), func(result command.Result) *controlplanev1.CreateAccessRoleVersionResponse {
+		return &controlplanev1.CreateAccessRoleVersionResponse{Role: castAccessRole(*result.AccessRole)}
+	})
 }
 
 // ArchiveAccessRole invokes only the specialized archive command with the requested role reference and mutation metadata, returning the resulting role. This transport adapter neither performs a generic delete nor manufactures an archive state on command failure.
 // ArchiveAccessRole вызывает только специализированную команду архивирования со ссылкой роли и mutation metadata, возвращая итоговую роль. Этот transport adapter не выполняет универсальное удаление и не назначает архивное состояние при отказе команды.
 func (server *Server) ArchiveAccessRole(ctx context.Context, request *controlplanev1.ArchiveAccessRoleRequest) (*controlplanev1.ArchiveAccessRoleResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.AccessService_ArchiveAccessRole_FullMethodName, command.ArchiveAccessRole, request.GetMutation(), command.AccessRoleInput{RoleRef: request.GetRoleRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ArchiveAccessRoleResponse{Role: castAccessRole(*result.AccessRole)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.AccessService_ArchiveAccessRole_FullMethodName, command.ArchiveAccessRole, request.GetMutation(), command.AccessRoleInput{RoleRef: request.GetRoleRef()}, func(result command.Result) *controlplanev1.ArchiveAccessRoleResponse {
+		return &controlplanev1.ArchiveAccessRoleResponse{Role: castAccessRole(*result.AccessRole)}
+	})
 }
 
 // CreateAccessBinding maps the requested subject, exact role-version reference, scope and conditions into the specialized binding command. Mutation and verified RPC principal pass through execute; actual eligibility, ownership and persistence remain with the domain owner.
 // CreateAccessBinding преобразует запрошенного субъекта, точную ссылку версии роли, область и условия в специализированную команду привязки. Mutation и проверенный RPC principal проходят через execute; реальную доступность, владение и сохранение проверяет доменный владелец.
 func (server *Server) CreateAccessBinding(ctx context.Context, request *controlplanev1.CreateAccessBindingRequest) (*controlplanev1.CreateAccessBindingResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.AccessService_CreateAccessBinding_FullMethodName, command.CreateAccessBinding, request.GetMutation(), command.AccessBindingInput{
-		SubjectKind: accessSubjectKind(request.GetSubjectKind()), SubjectRef: request.GetSubjectRef(), RoleVersionRef: request.GetRoleVersionRef(),
-		Scope: domainAccessScope(request.GetScope()), Conditions: domainAccessConditions(request.GetConditions()),
+	return executeResponse(ctx, server.service, controlplanev1.AccessService_CreateAccessBinding_FullMethodName, command.CreateAccessBinding, request.GetMutation(), command.AccessBindingInput{SubjectKind: accessSubjectKind(request.GetSubjectKind()), SubjectRef: request.GetSubjectRef(), RoleVersionRef: request.GetRoleVersionRef(), Scope: domainAccessScope(request.GetScope()), Conditions: domainAccessConditions(request.GetConditions())}, func(result command.Result) *controlplanev1.CreateAccessBindingResponse {
+		return &controlplanev1.CreateAccessBindingResponse{Binding: castAccessBinding(*result.AccessBinding)}
 	})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateAccessBindingResponse{Binding: castAccessBinding(*result.AccessBinding)}, nil
 }
 
 // ChangeAccessBinding submits only the existing binding reference, replacement role version, scope and conditions with mutation metadata to the specialized change command. It does not accept a replacement subject identity and returns the owner-produced binding snapshot.
 // ChangeAccessBinding передаёт лишь ссылку существующей привязки, новую версию роли, область и условия с mutation metadata специализированной команде изменения. Не принимает замену идентичности субъекта и возвращает сформированный владельцем снимок привязки.
 func (server *Server) ChangeAccessBinding(ctx context.Context, request *controlplanev1.ChangeAccessBindingRequest) (*controlplanev1.ChangeAccessBindingResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.AccessService_ChangeAccessBinding_FullMethodName, command.ChangeAccessBinding, request.GetMutation(), command.AccessBindingInput{
-		BindingRef: request.GetBindingRef(), RoleVersionRef: request.GetRoleVersionRef(), Scope: domainAccessScope(request.GetScope()), Conditions: domainAccessConditions(request.GetConditions()),
+	return executeResponse(ctx, server.service, controlplanev1.AccessService_ChangeAccessBinding_FullMethodName, command.ChangeAccessBinding, request.GetMutation(), command.AccessBindingInput{BindingRef: request.GetBindingRef(), RoleVersionRef: request.GetRoleVersionRef(), Scope: domainAccessScope(request.GetScope()), Conditions: domainAccessConditions(request.GetConditions())}, func(result command.Result) *controlplanev1.ChangeAccessBindingResponse {
+		return &controlplanev1.ChangeAccessBindingResponse{Binding: castAccessBinding(*result.AccessBinding)}
 	})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ChangeAccessBindingResponse{Binding: castAccessBinding(*result.AccessBinding)}, nil
 }
 
 // RevokeAccessBinding routes the exact binding reference and mutation metadata through the authenticated revoke command, then casts its result. Revocation authority and lifecycle are checked by the command path, not inferred from possession of a binding reference.
 // RevokeAccessBinding направляет точную ссылку привязки и mutation metadata через аутентифицированную команду отзыва, затем преобразует результат. Полномочия отзыва и жизненный цикл проверяет командный путь, а не факт наличия ссылки привязки.
 func (server *Server) RevokeAccessBinding(ctx context.Context, request *controlplanev1.RevokeAccessBindingRequest) (*controlplanev1.RevokeAccessBindingResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.AccessService_RevokeAccessBinding_FullMethodName, command.RevokeAccessBinding, request.GetMutation(), command.AccessBindingInput{BindingRef: request.GetBindingRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RevokeAccessBindingResponse{Binding: castAccessBinding(*result.AccessBinding)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.AccessService_RevokeAccessBinding_FullMethodName, command.RevokeAccessBinding, request.GetMutation(), command.AccessBindingInput{BindingRef: request.GetBindingRef()}, func(result command.Result) *controlplanev1.RevokeAccessBindingResponse {
+		return &controlplanev1.RevokeAccessBindingResponse{Binding: castAccessBinding(*result.AccessBinding)}
+	})
 }
 
 // accessRoleInput builds domain role content from transport fields, copying permission keys and converting scope kinds while preserving name, description and change comment. Empty roleRef denotes creation; this value constructor does not authorize a role mutation.

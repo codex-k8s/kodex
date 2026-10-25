@@ -4,11 +4,129 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.417.0
+version: 1.418.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий command response gRPC — 25.10.2026
+
+На основе `4b3d35b29a97f45b177571373eae870f321cfb21` прочитан весь исполняемый
+код access.go, commands_core.go и commands_assets_integrations.go; существующие
+комментарии сохранены дословно. В52 unary handlers(6 access,32 core,14 assets/
+integrations) общий execute→error-first→typed response заменён private
+executeResponse. Новый helper в command_response.go описан EN→RU и включён
+в own-source inventory. Общий error guard больше не копируется в52 местах.
+
+Helper вызывает существующий execute ровно один раз с теми же шестью args;
+при error возвращает nil/тот же error, только success достигает typed callback.
+Полные method names, command kinds, mutation и payload остаются явными.
+Callback содержит только прежнее response expression и не выполняется раньше
+команды. Reflections, generic resource commands, nil-result fallback, retry,
+новые grants, транзакции или обработчики полномочий не добавлены.
+
+Независимый AST proof сравнивает полный helper signature/body и разворачивает
+все52 calls до прежних трёх statements, затем сравнивает полные AST трёх файлов,
+все комментарии и directives. Existing server.go, включая execute/principal/
+mutation/error boundary, byte-identical. Prelude conversions, nil/alias behavior,
+exact field casts и порядок args не меняются. Onboarding с отдельным state read,
+publish impact validation, streaming и direct credential/PurgeArtifact handlers
+не переведены на helper, поскольку их оркестрация отличается.
+
+GO-DOC-001 transport/errors, GO-DOC-003 error boundary, GO-DOC-006 критерий
+вынесения, GUIDE-DOC-003 multi-layer auth, GUIDE-DOC-006 lifecycle matrix,
+CONTRACT-DOC-002 и GOV-DOC-003 сверены в применимых разделах. Helper остаётся
+в CP transport: он зависит от частного command.Result/platform Service и
+nominal response mapping, не является общей authentication/error library.
+Context7 `/grpc/grpc-go`: unary handler/status error propagation, FullMethod и
+context/interceptor contract проверены; версия/API/Proto/generated не менялись.
+
+Источник actor — прежний authorization.Principal exact method из проверенного
+transport context. Mutation fallback idempotency, owner/tenant/OCC/receipts,
+audit/events и commit остаются у прежних service/repository commands. Payload
+refs не становятся authority. Для каждого затронутого RPC exact mapping ниже;
+ни один create/update/delete/cancel/retry/gate переход не заменён другой командой.
+Claim/renew/lease expiry/dead-letter/background task paths не изменены.
+
+| RPC | Exact method constant | Specialized command |
+| --- | --- | --- |
+| CreateAccessRole | AccessService_CreateAccessRole_FullMethodName | CreateAccessRole |
+| CreateAccessRoleVersion | AccessService_CreateAccessRoleVersion_FullMethodName | CreateAccessRoleVersion |
+| ArchiveAccessRole | AccessService_ArchiveAccessRole_FullMethodName | ArchiveAccessRole |
+| CreateAccessBinding | AccessService_CreateAccessBinding_FullMethodName | CreateAccessBinding |
+| ChangeAccessBinding | AccessService_ChangeAccessBinding_FullMethodName | ChangeAccessBinding |
+| RevokeAccessBinding | AccessService_RevokeAccessBinding_FullMethodName | RevokeAccessBinding |
+| ChangeArtifactBinding | PlatformCommandService_ChangeArtifactBinding_FullMethodName | ChangeArtifactBinding |
+| DeleteArtifact | PlatformCommandService_DeleteArtifact_FullMethodName | DeleteArtifact |
+| RestoreArtifact | PlatformCommandService_RestoreArtifact_FullMethodName | RestoreArtifact |
+| CreateSchedule | PlatformCommandService_CreateSchedule_FullMethodName | CreateSchedule |
+| UpdateSchedule | PlatformCommandService_UpdateSchedule_FullMethodName | UpdateSchedule |
+| SetScheduleEnabled | PlatformCommandService_SetScheduleEnabled_FullMethodName | SetScheduleEnabled |
+| ArchiveSchedule | PlatformCommandService_ArchiveSchedule_FullMethodName | ArchiveSchedule |
+| DeleteSchedule | PlatformCommandService_DeleteSchedule_FullMethodName | DeleteSchedule |
+| CreateIntegrationConnection | PlatformCommandService_CreateIntegrationConnection_FullMethodName | CreateConnection |
+| UpdateIntegrationConnection | PlatformCommandService_UpdateIntegrationConnection_FullMethodName | UpdateConnection |
+| DeleteIntegrationConnection | PlatformCommandService_DeleteIntegrationConnection_FullMethodName | DeleteConnection |
+| TestIntegrationConnection | PlatformCommandService_TestIntegrationConnection_FullMethodName | TestConnection |
+| SetIntegrationConnectionEnabled | PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName | SetConnectionEnabled |
+| ChangeIntegrationGrant | PlatformCommandService_ChangeIntegrationGrant_FullMethodName | ChangeIntegrationGrant |
+| CreateProject | PlatformCommandService_CreateProject_FullMethodName | CreateProject |
+| UpdateProject | PlatformCommandService_UpdateProject_FullMethodName | UpdateProject |
+| TrashProject | PlatformCommandService_TrashProject_FullMethodName | TrashProject |
+| RestoreProject | PlatformCommandService_RestoreProject_FullMethodName | RestoreProject |
+| PurgeProject | PlatformCommandService_PurgeProject_FullMethodName | PurgeProject |
+| AddPlatformMembership | PlatformCommandService_AddPlatformMembership_FullMethodName | AddPlatformMembership |
+| ChangePlatformMembership | PlatformCommandService_ChangePlatformMembership_FullMethodName | ChangePlatformMembership |
+| RemovePlatformMembership | PlatformCommandService_RemovePlatformMembership_FullMethodName | RemovePlatformMembership |
+| AddProjectMembership | PlatformCommandService_AddProjectMembership_FullMethodName | AddMembership |
+| ChangeProjectMembership | PlatformCommandService_ChangeProjectMembership_FullMethodName | ChangeMembership |
+| RemoveProjectMembership | PlatformCommandService_RemoveProjectMembership_FullMethodName | RemoveMembership |
+| CreateAgent | PlatformCommandService_CreateAgent_FullMethodName | CreateAgent |
+| UpdateAgent | PlatformCommandService_UpdateAgent_FullMethodName | UpdateAgent |
+| SetAgentEnabled | PlatformCommandService_SetAgentEnabled_FullMethodName | SetAgentEnabled |
+| ArchiveAgent | PlatformCommandService_ArchiveAgent_FullMethodName | ArchiveAgent |
+| SetAgentAvatar | PlatformCommandService_SetAgentAvatar_FullMethodName | SetAgentAvatar |
+| RemoveAgentAvatar | PlatformCommandService_RemoveAgentAvatar_FullMethodName | RemoveAgentAvatar |
+| CreateInstructionDraft | PlatformCommandService_CreateInstructionDraft_FullMethodName | CreateInstructions |
+| ValidateInstructionDraft | PlatformCommandService_ValidateInstructionDraft_FullMethodName | ValidateInstructions |
+| RollbackInstructions | PlatformCommandService_RollbackInstructions_FullMethodName | RollbackInstructions |
+| ChangeAgentCapability | PlatformCommandService_ChangeAgentCapability_FullMethodName | ChangeAgentCapability |
+| ChangeAgentIntegrationGrant | PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName | ChangeAgentGrant |
+| CreateWorkflow | PlatformCommandService_CreateWorkflow_FullMethodName | CreateWorkflow |
+| UpdateWorkflowDraft | PlatformCommandService_UpdateWorkflowDraft_FullMethodName | UpdateWorkflow |
+| ValidateWorkflowDraft | PlatformCommandService_ValidateWorkflowDraft_FullMethodName | ValidateWorkflow |
+| PublishWorkflowDraft | PlatformCommandService_PublishWorkflowDraft_FullMethodName | PublishWorkflow |
+| ArchiveWorkflow | PlatformCommandService_ArchiveWorkflow_FullMethodName | ArchiveWorkflow |
+| LaunchRun | PlatformCommandService_LaunchRun_FullMethodName | LaunchRun |
+| AddSessionTurn | PlatformCommandService_AddSessionTurn_FullMethodName | AddSessionTurn |
+| CancelRun | PlatformCommandService_CancelRun_FullMethodName | CancelRun |
+| RetryRun | PlatformCommandService_RetryRun_FullMethodName | RetryRun |
+| ResolveOwnerGate | PlatformCommandService_ResolveOwnerGate_FullMethodName | ResolveOwnerGate |
+
+Полный control-plane build/unit — PASS LOCAL(checks418-final), GOWORK=off,
+GOMAXPROCS=4/-p2, inherited KODEX и18 static test inputs исключены. Независимый
+52-caller AST/comment proof — PASS.17 analyzer unit и5 exact-ignore guards —
+PASS; после изменения registry analyzer unit повторно PASS. Тестов, зеркалящих
+этот glue helper, не добавлено. PostgreSQL/межсервисная live authority, полный
+lifecycle, streaming integration, browser/E2E/deploy/live — NOT RUN/SKIP.
+
+Detector1734 raw/887 retained occurrences/847 unresolved; registry772 валиден.
+Удалены28 устаревших решений(51 occurrences), которых в новом отчёте нет.
+Добавлены24 точных решения(36 occurrences): обе стороны каждого окна целиком
+лежат в AST-проверенных typed wrappers, общая исполняемая оркестрация уже
+executeResponse; остаются различные nominal payload/response mappings. Причины
+содержат actual method names; остальные retained entries неизменны. Никаких
+исключений слоя/файла, ослабления thresholds либо generated exclusions нет.
+
+По fragment/format/kind/path-pair keys исчезли68, появились54: detector
+переякорил overlapping windows, включая untouched files. Это не54 новых
+добавленных алгоритма;30 новых keys не признаны адресными исключениями и остаются
+в общем backlog. Итоговое raw меньше на33, unresolved меньше на18.
+Свежий scan после registry edit подтверждает тот же clone set. Inventory6685
+own sources/222 exclusions. Go21489:20444 EN→RU,1045 missing. PR233 Go-файла/
+2434 объявления, missing0;236 whole changed blobs. #1823 открыт, PR #1829 Draft;
+QA/main f2e64eb сохранён. Прикладные секреты не читались и не переносились.
 
 ## MCP, session catalog, authority и owner SQL — 25.10.2026
 

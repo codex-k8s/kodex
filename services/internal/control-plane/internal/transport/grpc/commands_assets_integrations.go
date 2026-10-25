@@ -503,11 +503,9 @@ func (server *Server) downloadArtifact(request *controlplanev1.DownloadArtifactR
 // ChangeArtifactBinding применяет связь сотрудника с артефактом через
 // версионируемую доменную команду и возвращает изменённый снимок артефакта.
 func (server *Server) ChangeArtifactBinding(ctx context.Context, request *controlplanev1.ChangeArtifactBindingRequest) (*controlplanev1.ChangeArtifactBindingResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ChangeArtifactBinding_FullMethodName, command.ChangeArtifactBinding, request.GetMutation(), command.ArtifactBindingInput{ArtifactRef: request.GetArtifactRef(), AgentRef: request.GetAgentRef(), Enabled: request.GetEnabled()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ChangeArtifactBindingResponse{Artifact: castArtifact(*result.Artifact)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ChangeArtifactBinding_FullMethodName, command.ChangeArtifactBinding, request.GetMutation(), command.ArtifactBindingInput{ArtifactRef: request.GetArtifactRef(), AgentRef: request.GetAgentRef(), Enabled: request.GetEnabled()}, func(result command.Result) *controlplanev1.ChangeArtifactBindingResponse {
+		return &controlplanev1.ChangeArtifactBindingResponse{Artifact: castArtifact(*result.Artifact)}
+	})
 }
 
 // DeleteArtifact requests a reversible lifecycle transition using the supplied
@@ -515,11 +513,9 @@ func (server *Server) ChangeArtifactBinding(ctx context.Context, request *contro
 // DeleteArtifact запрашивает обратимый переход с указанным дайджестом влияния;
 // доменный сервис проверяет владение и версию мутации.
 func (server *Server) DeleteArtifact(ctx context.Context, request *controlplanev1.DeleteArtifactRequest) (*controlplanev1.DeleteArtifactResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteArtifact_FullMethodName, command.DeleteArtifact, request.GetMutation(), command.ArtifactLifecycleInput{ArtifactRef: request.GetArtifactRef(), ImpactDigest: request.GetImpactDigest()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.DeleteArtifactResponse{Artifact: castArtifact(*result.Artifact)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_DeleteArtifact_FullMethodName, command.DeleteArtifact, request.GetMutation(), command.ArtifactLifecycleInput{ArtifactRef: request.GetArtifactRef(), ImpactDigest: request.GetImpactDigest()}, func(result command.Result) *controlplanev1.DeleteArtifactResponse {
+		return &controlplanev1.DeleteArtifactResponse{Artifact: castArtifact(*result.Artifact)}
+	})
 }
 
 // RestoreArtifact delegates restoration to the versioned domain command and
@@ -527,11 +523,9 @@ func (server *Server) DeleteArtifact(ctx context.Context, request *controlplanev
 // RestoreArtifact передаёт восстановление версионируемой доменной команде и
 // возвращает результат, не изменяя хранилище из transport-слоя.
 func (server *Server) RestoreArtifact(ctx context.Context, request *controlplanev1.RestoreArtifactRequest) (*controlplanev1.RestoreArtifactResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RestoreArtifact_FullMethodName, command.RestoreArtifact, request.GetMutation(), command.ArtifactLifecycleInput{ArtifactRef: request.GetArtifactRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RestoreArtifactResponse{Artifact: castArtifact(*result.Artifact)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_RestoreArtifact_FullMethodName, command.RestoreArtifact, request.GetMutation(), command.ArtifactLifecycleInput{ArtifactRef: request.GetArtifactRef()}, func(result command.Result) *controlplanev1.RestoreArtifactResponse {
+		return &controlplanev1.RestoreArtifactResponse{Artifact: castArtifact(*result.Artifact)}
+	})
 }
 
 // PurgeArtifact resolves the authenticated caller and delegates irreversible
@@ -556,11 +550,9 @@ func (server *Server) PurgeArtifact(ctx context.Context, request *controlplanev1
 // включённого расписания, не определяя здесь полномочия на выполнение.
 func (server *Server) CreateSchedule(ctx context.Context, request *controlplanev1.CreateScheduleRequest) (*controlplanev1.CreateScheduleResponse, error) {
 	payload := command.ScheduleInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Target: runTarget(request.GetTarget()), Preset: request.GetPreset(), CronExpression: request.GetCronExpression(), TimeOfDay: request.GetTimeOfDay(), DayOfWeek: request.GetDayOfWeek(), Timezone: request.GetTimezone(), Input: asMap(request.GetInput()), SessionPolicy: request.GetSessionPolicy(), NotificationPolicy: request.GetNotificationPolicy(), DSTGapPolicy: request.GetDstGapPolicy(), DSTFoldPolicy: request.GetDstFoldPolicy(), MisfirePolicy: request.GetMisfirePolicy(), OverlapPolicy: request.GetOverlapPolicy(), AutomationText: request.GetAutomationText(), PromptInputs: asMap(request.GetPromptInputs()), Enabled: true}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateSchedule_FullMethodName, command.CreateSchedule, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateScheduleResponse{Schedule: castSchedule(*result.Schedule)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateSchedule_FullMethodName, command.CreateSchedule, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CreateScheduleResponse {
+		return &controlplanev1.CreateScheduleResponse{Schedule: castSchedule(*result.Schedule)}
+	})
 }
 
 // UpdateSchedule maps editable timing and execution policy fields for one
@@ -569,11 +561,9 @@ func (server *Server) CreateSchedule(ctx context.Context, request *controlplanev
 // указанного расписания; доменная команда проверяет его версию.
 func (server *Server) UpdateSchedule(ctx context.Context, request *controlplanev1.UpdateScheduleRequest) (*controlplanev1.UpdateScheduleResponse, error) {
 	payload := command.ScheduleInput{Ref: request.GetScheduleRef(), Name: request.GetName(), Target: runTarget(request.GetTarget()), Preset: request.GetPreset(), CronExpression: request.GetCronExpression(), TimeOfDay: request.GetTimeOfDay(), DayOfWeek: request.GetDayOfWeek(), Timezone: request.GetTimezone(), Input: asMap(request.GetInput()), SessionPolicy: request.GetSessionPolicy(), NotificationPolicy: request.GetNotificationPolicy(), DSTGapPolicy: request.GetDstGapPolicy(), DSTFoldPolicy: request.GetDstFoldPolicy(), MisfirePolicy: request.GetMisfirePolicy(), OverlapPolicy: request.GetOverlapPolicy(), AutomationText: request.GetAutomationText(), PromptInputs: asMap(request.GetPromptInputs())}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_UpdateSchedule_FullMethodName, command.UpdateSchedule, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.UpdateScheduleResponse{Schedule: castSchedule(*result.Schedule)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_UpdateSchedule_FullMethodName, command.UpdateSchedule, request.GetMutation(), payload, func(result command.Result) *controlplanev1.UpdateScheduleResponse {
+		return &controlplanev1.UpdateScheduleResponse{Schedule: castSchedule(*result.Schedule)}
+	})
 }
 
 // SetScheduleEnabled changes only a schedule's enabled flag through its
@@ -581,11 +571,9 @@ func (server *Server) UpdateSchedule(ctx context.Context, request *controlplanev
 // SetScheduleEnabled меняет только признак включения расписания отдельной
 // версионируемой командой и возвращает итоговый снимок.
 func (server *Server) SetScheduleEnabled(ctx context.Context, request *controlplanev1.SetScheduleEnabledRequest) (*controlplanev1.SetScheduleEnabledResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SetScheduleEnabled_FullMethodName, command.SetScheduleEnabled, request.GetMutation(), command.ScheduleInput{Ref: request.GetScheduleRef(), Enabled: request.GetEnabled()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.SetScheduleEnabledResponse{Schedule: castSchedule(*result.Schedule)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_SetScheduleEnabled_FullMethodName, command.SetScheduleEnabled, request.GetMutation(), command.ScheduleInput{Ref: request.GetScheduleRef(), Enabled: request.GetEnabled()}, func(result command.Result) *controlplanev1.SetScheduleEnabledResponse {
+		return &controlplanev1.SetScheduleEnabledResponse{Schedule: castSchedule(*result.Schedule)}
+	})
 }
 
 // ArchiveSchedule delegates the schedule's archive transition to its
@@ -593,11 +581,9 @@ func (server *Server) SetScheduleEnabled(ctx context.Context, request *controlpl
 // ArchiveSchedule передаёт переход расписания в архив специализированной
 // доменной команде, не принимая lifecycle-решение в transport-слое.
 func (server *Server) ArchiveSchedule(ctx context.Context, request *controlplanev1.ArchiveScheduleRequest) (*controlplanev1.ArchiveScheduleResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ArchiveSchedule_FullMethodName, command.ArchiveSchedule, request.GetMutation(), command.ScheduleInput{Ref: request.GetScheduleRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ArchiveScheduleResponse{Schedule: castSchedule(*result.Schedule)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ArchiveSchedule_FullMethodName, command.ArchiveSchedule, request.GetMutation(), command.ScheduleInput{Ref: request.GetScheduleRef()}, func(result command.Result) *controlplanev1.ArchiveScheduleResponse {
+		return &controlplanev1.ArchiveScheduleResponse{Schedule: castSchedule(*result.Schedule)}
+	})
 }
 
 // DeleteSchedule invokes the dedicated schedule deletion command with its
@@ -605,11 +591,9 @@ func (server *Server) ArchiveSchedule(ctx context.Context, request *controlplane
 // DeleteSchedule вызывает отдельную команду удаления расписания с контекстом
 // мутации и возвращает авторитетный итоговый снимок.
 func (server *Server) DeleteSchedule(ctx context.Context, request *controlplanev1.DeleteScheduleRequest) (*controlplanev1.DeleteScheduleResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteSchedule_FullMethodName, command.DeleteSchedule, request.GetMutation(), command.ScheduleInput{Ref: request.GetScheduleRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.DeleteScheduleResponse{Schedule: castSchedule(*result.Schedule)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_DeleteSchedule_FullMethodName, command.DeleteSchedule, request.GetMutation(), command.ScheduleInput{Ref: request.GetScheduleRef()}, func(result command.Result) *controlplanev1.DeleteScheduleResponse {
+		return &controlplanev1.DeleteScheduleResponse{Schedule: castSchedule(*result.Schedule)}
+	})
 }
 
 // CreateIntegrationConnection creates an enabled connection from public
@@ -618,11 +602,9 @@ func (server *Server) DeleteSchedule(ctx context.Context, request *controlplanev
 // публичной конфигурации; реквизиты задаются отдельным защищённым RPC.
 func (server *Server) CreateIntegrationConnection(ctx context.Context, request *controlplanev1.CreateIntegrationConnectionRequest) (*controlplanev1.CreateIntegrationConnectionResponse, error) {
 	payload := command.ConnectionInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName(), PublicConfiguration: asMap(request.GetPublicConfiguration()), Enabled: true}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName, command.CreateConnection, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName, command.CreateConnection, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CreateIntegrationConnectionResponse {
+		return &controlplanev1.CreateIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}
+	})
 }
 
 // UpdateIntegrationConnection changes a referenced connection's public fields
@@ -631,11 +613,9 @@ func (server *Server) CreateIntegrationConnection(ctx context.Context, request *
 // версионируемой командой, не принимая значения реквизитов.
 func (server *Server) UpdateIntegrationConnection(ctx context.Context, request *controlplanev1.UpdateIntegrationConnectionRequest) (*controlplanev1.UpdateIntegrationConnectionResponse, error) {
 	payload := command.ConnectionInput{Ref: request.GetConnectionRef(), Name: request.GetName(), PublicConfiguration: asMap(request.GetPublicConfiguration())}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_UpdateIntegrationConnection_FullMethodName, command.UpdateConnection, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.UpdateIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_UpdateIntegrationConnection_FullMethodName, command.UpdateConnection, request.GetMutation(), payload, func(result command.Result) *controlplanev1.UpdateIntegrationConnectionResponse {
+		return &controlplanev1.UpdateIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}
+	})
 }
 
 // DeleteIntegrationConnection delegates connection removal to the domain
@@ -643,11 +623,9 @@ func (server *Server) UpdateIntegrationConnection(ctx context.Context, request *
 // DeleteIntegrationConnection передаёт удаление подключения доменной команде
 // после определения вызывающего общей границей мутаций.
 func (server *Server) DeleteIntegrationConnection(ctx context.Context, request *controlplanev1.DeleteIntegrationConnectionRequest) (*controlplanev1.DeleteIntegrationConnectionResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteIntegrationConnection_FullMethodName, command.DeleteConnection, request.GetMutation(), command.ConnectionInput{Ref: request.GetConnectionRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.DeleteIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_DeleteIntegrationConnection_FullMethodName, command.DeleteConnection, request.GetMutation(), command.ConnectionInput{Ref: request.GetConnectionRef()}, func(result command.Result) *controlplanev1.DeleteIntegrationConnectionResponse {
+		return &controlplanev1.DeleteIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}
+	})
 }
 
 // ConfigureIntegrationConnectionCredential passes a credential only to the
@@ -671,11 +649,9 @@ func (server *Server) ConfigureIntegrationConnectionCredential(ctx context.Conte
 // TestIntegrationConnection запрашивает проверку подключения доменной командой
 // и возвращает записанное ею состояние подключения.
 func (server *Server) TestIntegrationConnection(ctx context.Context, request *controlplanev1.TestIntegrationConnectionRequest) (*controlplanev1.TestIntegrationConnectionResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_TestIntegrationConnection_FullMethodName, command.TestConnection, request.GetMutation(), command.ConnectionInput{Ref: request.GetConnectionRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.TestIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_TestIntegrationConnection_FullMethodName, command.TestConnection, request.GetMutation(), command.ConnectionInput{Ref: request.GetConnectionRef()}, func(result command.Result) *controlplanev1.TestIntegrationConnectionResponse {
+		return &controlplanev1.TestIntegrationConnectionResponse{Connection: castConnection(*result.Connection)}
+	})
 }
 
 // SetIntegrationConnectionEnabled changes only a connection's enabled flag
@@ -683,11 +659,9 @@ func (server *Server) TestIntegrationConnection(ctx context.Context, request *co
 // SetIntegrationConnectionEnabled меняет только признак включения подключения
 // отдельной командой с прежними проверками мутации и версии.
 func (server *Server) SetIntegrationConnectionEnabled(ctx context.Context, request *controlplanev1.SetIntegrationConnectionEnabledRequest) (*controlplanev1.SetIntegrationConnectionEnabledResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName, command.SetConnectionEnabled, request.GetMutation(), command.ConnectionInput{Ref: request.GetConnectionRef(), Enabled: request.GetEnabled()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.SetIntegrationConnectionEnabledResponse{Connection: castConnection(*result.Connection)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName, command.SetConnectionEnabled, request.GetMutation(), command.ConnectionInput{Ref: request.GetConnectionRef(), Enabled: request.GetEnabled()}, func(result command.Result) *controlplanev1.SetIntegrationConnectionEnabledResponse {
+		return &controlplanev1.SetIntegrationConnectionEnabledResponse{Connection: castConnection(*result.Connection)}
+	})
 }
 
 // ChangeIntegrationGrant maps a connection capability grant and approval
@@ -696,9 +670,7 @@ func (server *Server) SetIntegrationConnectionEnabled(ctx context.Context, reque
 // политику согласования в отдельную версионируемую команду без самовыдачи прав.
 func (server *Server) ChangeIntegrationGrant(ctx context.Context, request *controlplanev1.ChangeIntegrationGrantRequest) (*controlplanev1.ChangeIntegrationGrantResponse, error) {
 	payload := command.IntegrationGrantInput{ConnectionRef: request.GetConnectionRef(), CapabilityKey: request.GetCapabilityKey(), AgentRef: request.GetAgentRef(), WorkflowRef: request.GetWorkflowRef(), Enabled: request.GetEnabled(), ApprovalScopePaths: request.GetApprovalScopePaths(), ApprovalPolicy: strings.TrimPrefix(request.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_")}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ChangeIntegrationGrant_FullMethodName, command.ChangeIntegrationGrant, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ChangeIntegrationGrantResponse{Connection: castConnection(*result.Connection)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ChangeIntegrationGrant_FullMethodName, command.ChangeIntegrationGrant, request.GetMutation(), payload, func(result command.Result) *controlplanev1.ChangeIntegrationGrantResponse {
+		return &controlplanev1.ChangeIntegrationGrantResponse{Connection: castConnection(*result.Connection)}
+	})
 }

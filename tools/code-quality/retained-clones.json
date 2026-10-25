@@ -603,102 +603,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "03df4e6984aa1dba56620fe67fbd2e0113712f221cb5912e8a10dbb4fd3f1cc8",
-      "count": 9,
-      "reason": "Девять сравнений приходятся на перекрывающиеся окна типизированных gRPC-команд: каждая передаёт собственные FullMethodName, command kind, mutation и payload в уже общий execute, после чего приводит отдельный результат. Универсальный dispatcher стёр бы типы запроса и ответа и явность специализированных команд. Сохранён только точный fragment с проверенным числом вхождений."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "1b6be8c5b677468f1243a703cfa7180034a533c524c524e1de4adf97f9773f4f",
-      "count": 1,
-      "reason": "Сопоставлены ChangeArtifactBinding и CompleteOnboarding в общей оболочке execute. У onboarding после команды есть дополнительное защищённое чтение bootstrap state, тогда как binding возвращает изменённый artifact. Общий execute уже вынесен; объединять разные последующие read paths нецелесообразно. Сохранено одно точное окно."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "25240d81e2c97a71cd5b72ccb9b862461645f6c0c87c35feb756f0158a84f0b8",
-      "count": 2,
-      "reason": "Оба вхождения сравнивают типизированные команды подключения со специализированными командами проекта и агента. Совпадает конструкция вызова общего execute и error branch; command kind, owner scope, payload и response caster различны. Дополнительная абстракция скрыла бы границы полномочий и типы. Сохранён точный fragment с двумя вхождениями."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "466594bfa8d096f958f5dec41bd282f6d2aead6cb84b0e224853c51316f3c72b",
-      "count": 2,
-      "reason": "Перекрываются соседние artifact lifecycle wrappers и project/agent wrappers, но каждый связывает собственный полный RPC-метод, доменную команду и типизированный результат через общий execute. Параметризация самих методов вместо уже общего примитива потеряла бы проверяемое соответствие контракту. Исключены только два точных окна."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "59da38ca5ecac09b9f2555b51de59f3c80b658e59f61cf61cfe594f5dfb72f2d",
-      "count": 2,
-      "reason": "Сравниваются typed mapping интеграционного grant с командами агента: grant содержит connection, capability, approval scope и policy, команды агента несут другую область и результат. Повторяется лишь обрамление общего execute; перенос полей в универсальную таблицу смешал бы разные authority contracts. Сохранены два точных окна."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "65c49ee87b90be212ea261c069c120fef3d7bbeb82fe1b58c877ac2360152c02",
-      "count": 5,
-      "reason": "Пять пересечений возникают от коротких соседних artifact/project/agent методов, уже вызывающих единый execute. Для каждого остаются явно типизированные mutation input, специальный command kind и response caster. Общего исполняемого тела сверх execute здесь нет; сохранён точный fragment с пятью вхождениями."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "664e14e4c90d490eb870a53b2a35471de6423756b943626dfcdb64868e44eda4",
-      "count": 2,
-      "reason": "Окна пересекают artifact lifecycle wrappers и инструкции агента. Помимо общего execute у инструкций есть отдельная проверка опубликованного impact plan, у artifact — собственный lifecycle payload. Обобщение исключило бы видимый protected postcondition; сохранены два точных совпадения."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "78078d37fa8597b6ddc8f5bb58fefe7bdbae277e6686f2e95ebc9581d5445022",
-      "count": 3,
-      "reason": "CreateSchedule сопоставлен с тремя командами управления членством и агентом. У schedule собственный календарный payload и включение при создании, у остальных — разные membership/agent поля. Общий execute уже централизует допустимый command path; остаётся только типизированный mapping. Сохранены три точных окна."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "9a3f7f457c6cc155cb3a441ef2c91622dc99d1cc49b56c37155ce281c82091ae",
-      "count": 4,
-      "reason": "UpdateSchedule перекрывается с четырьмя update/create wrappers другого домена. Поля cron, timezone, DST и политики запуска не эквивалентны полям членства или агента. Общий execute уже выделен, а универсальный mapper скрыл бы отдельные контракты ввода. Сохранён точный fragment с четырьмя вхождениями."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "9e64443d7afc1de1d72efdf96e8c4c7f92d434a8acb24087c2275ee8fc3ed572",
-      "count": 1,
-      "reason": "Короткое пересечение schedule update и run launch касается формы payload→execute→error; календарная конфигурация и root run command имеют разные владельцев состояния и результаты. Общая проверка mutation уже в execute. Сохранено одно точное окно без исключения файлов."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "cc01ed0f31a8835f57268b75947662a41497d73ffb9dd6fc41d0c8d8e4614e72",
-      "count": 1,
-      "reason": "CreateIntegrationConnection и агентская команда используют похожее построение payload перед общим execute, но connection принимает лишь публичную конфигурацию без реквизитов, а агент — собственные поля и область проекта. Один универсальный payload mapper нарушил бы границу секретов. Сохранено одно точное окно."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "f0733fee6ee792615a5208767c0289dabfe5fb7aab42ebe198ab08adf7884898",
-      "count": 1,
-      "reason": "UpdateSchedule и UpdateAgent имеют однотипное обрамление команды, но отличаются обязательным Ref и назначением полей; расписание несёт время и политики выполнения, агент — роль, runtime и описание. Общая часть уже находится в execute. Сохранено одно точное окно."
-    },
-    {
-      "format": "go",
       "firstPath": "libs/go/eventing/postgresinbox/delivery.go",
       "secondPath": "libs/go/eventing/postgresinbox/recovery.go",
       "fragmentSHA256": "e0d9f30060400bd34f638044e5f7d2462e5a23fc208537a5d8ad3568bea17fbe",
@@ -5379,30 +5283,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "fragmentSHA256": "c6503b3bc82cd91a7082e35f7609fd98da2c3b2a90516263212367fe75c47fe6",
-      "count": 1,
-      "reason": "117-token окно пересекает CreateAccessRole и CreateAccessRoleVersion: создание передаёт пустой roleRef, новая версия — существующий; specialized command и exact RPC FullMethod различны. Построение содержимого уже accessRoleInput, auth/mutation/error execution уже execute. Остаётся nominal typed role response и граница методов; ещё один callback wrapper скрывает выбор команды без общего оставшегося алгоритма. Исключено только точное внутрефайловое окно/hash/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "fragmentSHA256": "cb2ee9e403936e96430e521ac34479e8b80103ec2c121bcdf6662cc48e474ff0",
-      "count": 1,
-      "reason": "130-token окно сравнивает хвост версии роли/архивирование с хвостом изменения привязки/отзывом. Specialized commands, exact FullMethod, role/binding input и response types различны; общий execute уже владеет auth/mutation/error path. Совпадающие return guards и соседние method declarations не являются новым доменным алгоритмом. Generic result factory заменит явные команды callbacks ради короткого glue. Сохранена только exact внутрефайловая пара/hash/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "fragmentSHA256": "0d04478501c792921a11aa132354ada2bdb940feab01d773aca785bb5f98d507",
-      "count": 1,
-      "reason": "129-token окно сравнивает CreateAccessBinding и ChangeAccessBinding: create включает subject kind/ref, change сохраняет subject и принимает bindingRef; команды, full method и owner lifecycle различны. execute уже общий для principal, mutation и ошибок, а domainAccessScope/domainAccessConditions общие для значений. Остался specialized command wiring с nominal response, не независимый алгоритм. Универсальный dispatcher спрятал бы различие authority/input. Исключена только exact пара/hash/count1."
-    },
-    {
-      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/project_assistant_integration_endpoints_test.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/system_assistant_integration_endpoints_test.go",
       "fragmentSHA256": "5269ebbe6616dba4825944174de363584aca9334fdc072884f93f5e77105cd1c",
@@ -5496,94 +5376,6 @@
       "fragmentSHA256": "8293b2e9839aa06a8fc1d37001de39a534b27222186506d4e98a997b20de2a28",
       "count": 1,
       "reason": "После реального выноса JSON Marshal/SHA-256 в jsonValueDigest прежнее133-token окно исчезло. Полные PROJECT и SYSTEM candidate methods повторно прочитаны; новое112-token окно включает хвост разных commitment structs и переход к уже общим cursor/schema/page primitives. PROJECT сохраняет Project/Profile/PublicScope/ProfileVersion и executable gate, SYSTEM имеет отдельные organization owner и readiness; scope fields и порядок bytes не объединены. Общий алгоритм хеширования теперь действительно один. Generic loop dispatcher смешал бы разные public scope и package refusal policies ради склейки boundaries. Обновлено только пересмотренное точное окно этой пары с count1; соседние новые cross-file окна не включены."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "3e9b65e5f80c7175be9d03a1071bfeb6480bdd0b363596f53ff6cf79fd45327b",
-      "reason": "Окно CompleteOnboarding/CreateProject сопоставлено с RollbackInstructions/ChangeAgentCapability: bootstrap/project ответы и agent/capability payloads имеют разные generated типы, точные RPC methods и command kinds. Полные четыре метода прочитаны; principal, mutation и safe errors уже едины через execute. Общего бизнесового перехода нет.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "5ef36459651d44c2bb87ce1adb1cc3a7e25d838bec90b1641d6c2ebf49fa2493",
-      "reason": "Стык CreateProject→UpdateProject сопоставлен с RollbackInstructions→ChangeAgentCapability. ProjectInput Ref/name/purpose/language и AgentBindingInput agent/capability/enabled не являются одним mapping; generated responses и command authority различны. Execute уже объединяет principal/mutation/error путь, dispatcher поверх этих DTO не нужен.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "fragmentSHA256": "5ef36459651d44c2bb87ce1adb1cc3a7e25d838bec90b1641d6c2ebf49fa2493",
-      "reason": "UpdateProject и BindAgentRuntimeEnvironment различаются ProjectInput editable fields и RuntimeEnvironmentBindingInput agent/environment/exact version. В окне также разные предшествующие typed responses. Общее execute уже существует; объединение payloads скроет ownership/version semantics разных commands.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "af6f93874746a6d7ec35491a8b60562670515fc0aacaa55051de96b54443871a",
-      "reason": "Три точных occurrence связывают хвосты ChangePlatformMembership/RemovePlatformMembership с RemovePlatformMembership/AddProjectMembership, ChangeProjectMembership/RemoveProjectMembership и RemoveProjectMembership/CreateAgent. PLATFORM_ROLE/active и PROJECT permission arrays/project locator различны; removal и create имеют разные команды и ответы. Полные методы и все три окна прочитаны; execute и domainProjectPermissions уже общие. Count ограничен этими тремя occurrence.",
-      "count": 3
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "88e677019fa01672cc1c86ca697a37caa3921bfb4e8f7956d7c701172e31664f",
-      "reason": "Стык RemoveProjectMembership/CreateAgent сопоставлен с UpdateAgent/SetAgentEnabled. Удаление membership, создание agent с initial instructions/enabled=true и отдельное изменение enabled используют разные commands/payloads. Общий вызов execute не позволяет смешивать эти closed lifecycle операции.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "7a37e7c241e94267e9b7c5d4e887f02f178262b724f8271d4e150744719d9452",
-      "reason": "Стык RemoveProjectMembership/CreateAgent и CreateAgent/UpdateAgent содержит разные typed responses и AgentInput: create назначает project/initial instructions/enabled=true, update передаёт существующий Ref без этих полей. Lifecycle и create/update authority нельзя спрятать универсальной веткой; общий execute уже вынесен.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "fragmentSHA256": "9e4942c01296dfb725fcf8dff0ed3ecb6a65964e3da474f05945879e10a7e31b",
-      "reason": "SetAgentAvatar связывает AgentRef и ArtifactRef, SetRuntimeEnvironmentEnabled — EnvironmentRef и Enabled. Avatar eligibility и environment lifecycle принадлежат разным owner commands; совпали только execute/error skeleton и края соседних responses. Полные методы прочитаны, execute уже общий.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "fragmentSHA256": "1ba4d89a4b21d50356668b33989643ab0f90824537de73f38a1522b0505a3229",
-      "reason": "RemoveAgentAvatar и DeleteRuntimeEnvironment имеют разные method constants, command kinds, payload/response types и owner lifecycle. Окно включает края прежних SetAvatar/SetEnabled responses; единого удаления generic resource нет. Exact execute/error путь уже общий.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "0d2405eb4b1a5763c9b968706f4d2f953472a5a97c851d562e640e4fc9a8f10d",
-      "reason": "ChangeAgentCapability и ChangeAgentIntegrationGrant используют одинаковый AgentBindingInput, но BindingRef приходит из capability key либо grant ref, с разными method/command pairs и permissions. Специализированные generated entrypoints сохраняются; построение трёх полей не оправдывает новый generic authority dispatcher сверх execute.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "fragmentSHA256": "eefe697a48245e2016778e63d4262a13ce8387bc8b40d1e98b43e067cf9c3cba",
-      "reason": "ChangeAgentCapability и BindAgentRuntimeEnvironment различаются capability/enabled и exact environment/version binding. Окно начинается с разных rollback responses. Полные owner adapters прочитаны, общее execute уже объединяет plumbing без унификации resource authority.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
-      "fragmentSHA256": "542d235dad341f5dac15771595e11cc6e70f9df2d5d1fd60152c2751f34cc0d4",
-      "reason": "Соседние CancelRun и RetryRun имеют одинаковую RunCommandInput форму, но отдельные commands/methods: cancel закрывает прежний граф, retry поручает владельцу новую attempt/lineage. В окне также хвост AddSessionTurn и заголовок ResolveOwnerGate. Общее execute уже есть; общий lifecycle transition по флагу запрещён контрактом.",
-      "count": 1
     },
     {
       "format": "go",
@@ -5821,14 +5613,6 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
-      "fragmentSHA256": "f20c9cc4dc0553a87fbeb3cd8753de40f828d05ed9ca775fe7759cacb3e1fe71",
-      "count": 1,
-      "reason": "Completion/delegation и run metadata/tool-call образуют совпадение через границы commands. Payloads, mutation context и method/command pairs различны; execute уже общий и сохраняется закрытая типизированная диспетчеризация. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
       "fragmentSHA256": "9890fbe9d5999a452c37226a1d2ea4696c31a668f51a37ed3bdcf73e174c23de",
       "count": 1,
       "reason": "ProposeAssistantPlan/ProposeAssistantMetadata и due schedule/materialization совпадают только return/execute стыком. Plan validation, lease bindings и occurrence command не объединяются; service transaction и command pairing остаются владельцу. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
@@ -5960,14 +5744,6 @@
       "fragmentSHA256": "29b50df5dd759b1e3acade3d2adf8a082562d15f0412d5f5d713d1c0114abc81",
       "count": 1,
       "reason": "Стык overlay history list/get сравнивается с credential list/receipt read. Agent/revision и connection/idempotency locators имеют разные owner eligibility; общие page/principal/transportError и nominal casters уже используются. Новый generic getter не выделяет самостоятельного алгоритма. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
-      "fragmentSHA256": "b677df0f89637dd9bd50cc86d8ed9682afd4cf3738e4f61cbf0dba4ae481ac0d",
-      "count": 1,
-      "reason": "Skill bind/unbind и переход к memory bind после выноса result validation повторяют только typed command wrappers. castContextBindingResult и execute уже общие; BundleRef и RecordRef, exact RPC и command.Kind остаются явными. Полный generic binding dispatcher не добавлен. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
     },
     {
       "format": "go",
@@ -6208,6 +5984,198 @@
       "fragmentSHA256": "0a14a7765a807fc39761faa98b2c2ac58872f667fb5adad00fae02512d6e985b",
       "count": 1,
       "reason": "Окно208 tokens перекрывает соседние case разных nominal command payloads в executionDeadlineCommand: каждый явно проецирует собственные LeaseRef/Fence/Generation в command.LeaseInput. Полностью прочитаны функция и deadline SQL, сохранены fresh authority/replay-before-effect, actual lease resolution, отдельный GateResolution owner lookup и canonical graph expiry. У разных Go struct нет общего доступа к полям без изменения domain types, отражения либо нового широкого интерфейса. Constructor wrapper только заменил бы трёхпольный literal вызовом без самостоятельного алгоритма и скрыл бы проверяемый набор lifecycle payloads. Сохранена только эта точная внутрефайловая пара/hash/count1, не весь switch, command handler, другие payloads или проверки полномочий."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "f6709872c3997bc51e2e026c48bb304abe3694582dea823589c7a7873340cc2a",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: CreateAccessRoleVersion, ArchiveAccessRole, CreateAccessBinding против UpdateWorkflowDraft, ValidateWorkflowDraft, PublishWorkflowDraft. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "05213c839989036fe3d739b3cd776afb9ece676bc602e4dac0fa88d0c5e419bf",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ChangeArtifactBinding, DeleteArtifact против DeleteArtifact, RestoreArtifact. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "1c42372d78f1575eaa61b30a51b710da764561b6fb9f51bb04c3fa3621c13183",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ChangeArtifactBinding, DeleteArtifact, RestoreArtifact против TestIntegrationConnection, SetIntegrationConnectionEnabled, ChangeIntegrationGrant. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "d5e21ad672b867d19cf5c9b2ad8fb8adc96acf79bc4dd7168289c1bbac33a788",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: UpdateSchedule, SetScheduleEnabled против UpdateIntegrationConnection, DeleteIntegrationConnection. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "ef18bae094a8d1d93bd8ecc09b7ed8abd4983bd439b03b17c3672088e15a7a22",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: CreateSchedule, UpdateSchedule против CreateIntegrationConnection, UpdateIntegrationConnection. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "f710147ff7efc7be7681718b43b1b4841e179fe4c5c2c969587f3d04678a975a",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ArchiveSchedule, DeleteSchedule против TestIntegrationConnection, SetIntegrationConnectionEnabled. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "05213c839989036fe3d739b3cd776afb9ece676bc602e4dac0fa88d0c5e419bf",
+      "count": 2,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ChangeArtifactBinding, DeleteArtifact против RollbackInstructions, ChangeAgentCapability. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count2, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "3f4b95869c71c68ce8d34779bf7a0ff5b161bb901b8d643f37ccb56639ff4a42",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: UpdateSchedule, SetScheduleEnabled, ArchiveSchedule, DeleteSchedule против UpdateAgent, SetAgentEnabled, ArchiveAgent, SetAgentAvatar. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "5850fe9be722aab41a99457317763d318f9b9234936fa2f167b50f33806daf30",
+      "count": 2,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ArchiveSchedule, DeleteSchedule, CreateIntegrationConnection против PublishWorkflowDraft, ArchiveWorkflow, LaunchRun. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count2, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "629c5ec817a113cb98a599341eb3dce5f0e6132cb7a26d25737d3281e779f1bf",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: CreateSchedule, UpdateSchedule против AddProjectMembership, ChangeProjectMembership. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "65316f277a34055025b08b0bfb5ceba9f813dd002bd164efbbd63686f55c4a81",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ChangeArtifactBinding, DeleteArtifact против AddSessionTurn, CancelRun. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "70f85d9db9bab00750fdb7d202e2a639a82210adc3601ee6180a26daf87df5d7",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: DeleteSchedule, CreateIntegrationConnection против RemovePlatformMembership, AddProjectMembership. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "bb26cf5e5bfbca1f7289fc968b4c3688f6a206d54a535eea4f47c44dd4096105",
+      "count": 2,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ArchiveSchedule, DeleteSchedule, CreateIntegrationConnection против ValidateWorkflowDraft, PublishWorkflowDraft, ArchiveWorkflow. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count2, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "d5e21ad672b867d19cf5c9b2ad8fb8adc96acf79bc4dd7168289c1bbac33a788",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: UpdateSchedule, SetScheduleEnabled против CreateWorkflow, UpdateWorkflowDraft. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "ec0aea78dcac35b1ab9a83bb34986adb8c7744e19676a1ece0827f1fcf260e04",
+      "count": 2,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: TestIntegrationConnection, SetIntegrationConnectionEnabled, ChangeIntegrationGrant против RemoveAgentAvatar, CreateInstructionDraft, ValidateInstructionDraft. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count2, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "ef18bae094a8d1d93bd8ecc09b7ed8abd4983bd439b03b17c3672088e15a7a22",
+      "count": 5,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: CreateSchedule, UpdateSchedule против CreateAgent, UpdateAgent. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count5, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "f710147ff7efc7be7681718b43b1b4841e179fe4c5c2c969587f3d04678a975a",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ArchiveSchedule, DeleteSchedule против RemoveAgentAvatar, CreateInstructionDraft. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Schedule timing/session policies не подменяются project/agent/workflow полями другого command. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "fa38a81ea72228aa04e071e201889ae9ccb70ac943299ce1877ceedf589af310",
+      "count": 2,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: SetIntegrationConnectionEnabled, ChangeIntegrationGrant против ChangeAgentIntegrationGrant, CreateWorkflow. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count2, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "0d2c7634a3e779a294d6039c5c2baf14645cb525d9295ed0fbba0a2f7f93f093",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: RemoveProjectMembership, CreateAgent против UpdateAgent, SetAgentEnabled. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "17316d5dbf90186c7f8c43a0148f3a6a7b9b040fc61305220eb314e5252e78b7",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: AddSessionTurn, CancelRun, RetryRun против CancelRun, RetryRun, ResolveOwnerGate. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Cancel закрывает прежний граф, retry создаёт новую attempt: объединять их в универсальный lifecycle command нельзя. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "2566c5804c2179fe6f0839d1d5d169d6c230e3b0d4f45a0aa12f85ca112e2df9",
+      "count": 2,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: CreateProject, UpdateProject против ChangeAgentCapability, ChangeAgentIntegrationGrant. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Capability key и grant ref сохраняют разные owner admission и источники BindingRef. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count2, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "5d325e41fb7334823862e464420a9834a0fb16597ec3a1bab13a399b8dbc3712",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: RemoveProjectMembership, CreateAgent против CreateAgent, UpdateAgent. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "5e1d8cfb7fdcca17800c8b5633a0cb387a98ea4e11546a10b0ccadd65f3b8c79",
+      "count": 3,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: ChangePlatformMembership, RemovePlatformMembership против RemoveProjectMembership, CreateAgent. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count3, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "5e1f10ad2bae9b40d83749db65663c3d7c3bb2507ea9aab553217b2db073001b",
+      "count": 1,
+      "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: RollbackInstructions, ChangeAgentCapability, ChangeAgentIntegrationGrant против ChangeAgentCapability, ChangeAgentIntegrationGrant, CreateWorkflow. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Capability key и grant ref сохраняют разные owner admission и источники BindingRef. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
     }
   ]
 }
