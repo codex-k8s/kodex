@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.4
-updated: 2026-09-07
+version: 1.1.5
+updated: 2026-10-25
 ---
 
 # Наблюдаемость Go-сервисов
@@ -58,6 +58,24 @@ typed stage, нормализованного domain kind и error class; SQLSTA
 только по явному allowlist. Joined timeout/cancel фиксируется отдельно от
 первичного отказа, чтобы окончание retry budget не скрывало PostgreSQL или
 domain rejection. Sentinel tests включают вложенные ошибки и неизвестные поля.
+
+Service startup также сохраняет typed connection cause приватно и выводит
+только закрытый класс и этап из полного реестра прежних фиксированных причин.
+Неизвестные ошибки не разбираются через `Error()`. Начальный PostgreSQL ping
+имеет отдельный ограниченный бюджет внутри общего startup deadline; cancel
+до/во время/после ping закрывает отвергнутый pool и не допускает дальнейший
+startup. Проверка не добавляет retry SQL, сетевые разрешения или credentials.
+Typed PostgreSQL/TLS policy принадлежит сервису; CLI и service используют один
+его classifier, а SDK-neutral `Postgres/Network` mappings — общий `errorclass`.
+
+Для control-plane [#1862](https://github.com/codex-k8s/kodex/issues/1862) путь:
+process lifecycle → прежняя config/TLS/pool preparation → один ping не дольше
+10секунд → прежний startup. Fail/cancel закрывает только созданный pool и
+возвращается до storage/worker initialization; success передаёт pool владельцу
+`Run`, который закрывает его после worker join. Общий startup budget и порядок
+эффектов не меняются. Новый domain event не создаётся: авторитетный read path —
+закрытая process diagnostic и Kubernetes container terminal/Ready metadata.
+Исходная причина прошлых restart остаётся UNKNOWN без нового наблюдения.
 
 При отказе продления lease keeper, tracker и drain записывают закрытое
 наблюдение исходного RPC и request/parent context до собственного cleanup

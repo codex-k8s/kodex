@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -41,7 +40,6 @@ import (
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/skillscanclient"
 	platformgrpc "github.com/codex-k8s/kodex/services/internal/control-plane/internal/transport/grpc"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -73,11 +71,11 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	defer pool.Close()
 	accessKey, err := readBoundedFile(config.ObjectStorageAccessKeyFile)
 	if err != nil {
-		return fmt.Errorf("read object storage access key: %w", err)
+		return startupFailure(stageReadObjectStorageAccessKey, err)
 	}
 	secretKey, err := readBoundedFile(config.ObjectStorageSecretKeyFile)
 	if err != nil {
-		return fmt.Errorf("read object storage secret key: %w", err)
+		return startupFailure(stageReadObjectStorageSecretKey, err)
 	}
 	objects, err := s3store.New(startup, s3store.Config{
 		Endpoint: config.ObjectStorageEndpoint, Region: config.ObjectStorageRegion, Bucket: config.ObjectStorageBucket,
@@ -85,7 +83,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		UsePathStyle: config.ObjectStorageUsePathStyle,
 	})
 	if err != nil {
-		return fmt.Errorf("construct object storage: %w", err)
+		return startupFailure(stageConstructObjectStorage, err)
 	}
 	archiveObjects, err := s3store.New(startup, s3store.Config{
 		Endpoint: config.ObjectStorageEndpoint, Region: config.ObjectStorageRegion, Bucket: config.SessionArchiveStorageBucket,
@@ -93,50 +91,50 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		UsePathStyle: config.ObjectStorageUsePathStyle,
 	})
 	if err != nil {
-		return fmt.Errorf("construct session archive storage: %w", err)
+		return startupFailure(stageConstructSessionArchiveStorage, err)
 	}
 	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel, objects)
 	if err != nil {
-		return fmt.Errorf("construct platform repository: %w", err)
+		return startupFailure(stageConstructPlatformRepository, err)
 	}
 	if err := repository.ConfigureProjectPurgeStorage(config.ObjectStorageEndpoint, config.ObjectStorageRegion, config.ObjectStorageBucket, config.ObjectStorageUsePathStyle); err != nil {
-		return fmt.Errorf("configure project purge storage: %w", err)
+		return startupFailure(stageConfigureProjectPurgeStorage, err)
 	}
 	if err := repository.ConfigureRPCProfile(config.RPCProfile); err != nil {
-		return fmt.Errorf("configure repository RPC profile: %w", err)
+		return startupFailure(stageConfigureRepositoryRPCProfile, err)
 	}
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
-		return fmt.Errorf("configure runtime secrets: %w", err)
+		return startupFailure(stageConfigureRuntimeSecrets, err)
 	}
 	if err := repository.ConfigureRuntimeSecretStaging(config.RuntimeSecretStagingNamespace); err != nil {
-		return fmt.Errorf("configure runtime secret staging: %w", err)
+		return startupFailure(stageConfigureRuntimeSecretStaging, err)
 	}
 	emailProjection, err := initializeEmailProjection(startup, repository, config)
 	if err != nil {
-		return fmt.Errorf("initialize email projection: %w", err)
+		return startupFailure(stageInitializeEmailProjection, err)
 	}
 	integrationEgressProjection := &integrationEgressProjection{repository: repository,
 		baseDigest: config.EmailGatewayPolicyDigest, kubernetesTimeout: config.KubernetesAPITimeout}
 	skillScanner, err := skillscanclient.New(config.SkillScannerSocket, config.SkillScannerTimeout)
 	if err != nil {
-		return fmt.Errorf("construct skill scanner: %w", err)
+		return startupFailure(stageConstructSkillScanner, err)
 	}
 	if err := repository.ConfigureSkillScanner(skillScanner); err != nil {
-		return fmt.Errorf("configure skill scanner: %w", err)
+		return startupFailure(stageConfigureSkillScanner, err)
 	}
 	if err := repository.ConfigureArtifactScanner(skillScanner); err != nil {
-		return fmt.Errorf("configure artifact scanner: %w", err)
+		return startupFailure(stageConfigureArtifactScanner, err)
 	}
 	if err := repository.ConfigureProviderCredential(platformrepository.ProviderCredentialConfig{
 		SecretName: config.DefaultProviderSecretName, SecretUID: config.DefaultProviderSecretUID,
 		SecretResourceVersion: config.DefaultProviderSecretVersion,
 		ContentSHA256:         config.DefaultProviderCredentialSHA256,
 	}); err != nil {
-		return fmt.Errorf("configure default provider credential: %w", err)
+		return startupFailure(stageConfigureDefaultProviderCredential, err)
 	}
 	leaseSigningKey, err := readBoundedFile(config.LeaseSigningKeyFile)
 	if err != nil {
-		return fmt.Errorf("read role image lease signing key: %w", err)
+		return startupFailure(stageReadRoleImageLeaseSigningKey, err)
 	}
 	if err := repository.ConfigureRoleImages(platformrepository.RoleImageConfig{
 		PolicyRevision: config.ImagePolicyRevision, PolicySHA256: config.ImagePolicySHA256,
@@ -146,7 +144,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		StagingRepository: config.StagingImageRepository, PromotedRepository: config.PromotedImageRepository,
 		DefaultImageReference: config.DefaultRoleImageReference, LeaseSigningKey: leaseSigningKey,
 	}); err != nil {
-		return fmt.Errorf("configure role image lifecycle: %w", err)
+		return startupFailure(stageConfigureRoleImageLifecycle, err)
 	}
 	credentialMaterializer, err := credentialmaterializer.InCluster(
 		config.IntegrationCredentialNamespace,
@@ -154,7 +152,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		config.KubernetesAPITimeout,
 	)
 	if err != nil {
-		return fmt.Errorf("construct integration credential materializer: %w", err)
+		return startupFailure(stageConstructIntegrationCredentialMaterializer, err)
 	}
 	providerControl, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
 		RPCProfile: config.RPCProfile, CallerWorkload: "control-plane",
@@ -167,16 +165,16 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		Operations: controlplaneclient.ProviderCredentialMaterializerOperations(),
 	})
 	if err != nil {
-		return fmt.Errorf("construct provider credential materializer client: %w", err)
+		return startupFailure(stageConstructProviderCredentialMaterializerClient, err)
 	}
 	defer providerControl.Close()
 	providerMaterializer, err := providercredentialclient.New(providerControl)
 	if err != nil {
-		return fmt.Errorf("construct provider credential materializer adapter: %w", err)
+		return startupFailure(stageConstructProviderCredentialMaterializerAdapter, err)
 	}
 	emailCredentials, err := constructEmailCredentialMaterializer(config)
 	if err != nil {
-		return fmt.Errorf("construct email credential materializer: %w", err)
+		return startupFailure(stageConstructEmailCredentialMaterializer, err)
 	}
 	service, err := platformservice.New(repository,
 		platformservice.WithCredentialMaterializer(credentialMaterializer),
@@ -184,19 +182,19 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		platformservice.WithProviderCredentialMaterializer(providerMaterializer),
 	)
 	if err != nil {
-		return fmt.Errorf("construct platform service: %w", err)
+		return startupFailure(stageConstructPlatformService, err)
 	}
 	integrationEgressProjection.ready = service.Ready
 	if err := service.Bootstrap(startup); err != nil {
-		return fmt.Errorf("bootstrap platform: %w", err)
+		return startupFailure(stageBootstrapPlatform, err)
 	}
 	roleEnvironmentCatalog, err := loadRoleEnvironmentCatalog(config)
 	if err != nil {
-		return fmt.Errorf("load role environment catalog: %w", err)
+		return startupFailure(stageLoadRoleEnvironmentCatalog, err)
 	}
 	roleImageService, err := roleimageservice.New(repository, roleEnvironmentCatalog)
 	if err != nil {
-		return fmt.Errorf("construct role image service: %w", err)
+		return startupFailure(stageConstructRoleImageService, err)
 	}
 	repository.ConfigureRoleImageCatalog(roleEnvironmentCatalog)
 	var proofService *authorityproof.Service
@@ -208,7 +206,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		var verifier *oidcverifier.Verifier
 		verifiedUnary, verifiedStream, verifier, err = trustedClusterReader(startup, config, service)
 		if err != nil {
-			return fmt.Errorf("construct trusted cluster reader: %w", err)
+			return startupFailure(stageConstructTrustedClusterReader, err)
 		}
 		defer verifier.Close()
 		refreshOIDC = verifier.Refresh
@@ -226,12 +224,12 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("construct authority proof resolver: %w", err)
+			return startupFailure(stageConstructAuthorityProofResolver, err)
 		}
 		defer proofService.Close()
 		authority, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID, ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: 2 * time.Second})
 		if err != nil {
-			return fmt.Errorf("connect authorization verifier: %w", err)
+			return startupFailure(stageConnectAuthorizationVerifier, err)
 		}
 		defer authority.Close()
 		refreshOIDC = proofService.RefreshOIDC
@@ -239,7 +237,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		verifiedStream = authorityclient.VerifierStreamServerInterceptor(authority.Verifier(), controlplanev1.RuntimeWorkService_StreamExecutionArtifact_FullMethodName)
 		verifiedUnary, verifiedStream, err = serviceIdentityReader(service, proofService, verifiedUnary, verifiedStream)
 		if err != nil {
-			return fmt.Errorf("construct service identity reader: %w", err)
+			return startupFailure(stageConstructServiceIdentityReader, err)
 		}
 		verifiedUnary = routeResolverUnary(verifiedUnary)
 		tlsConfig, err := loadServerTLS(config)
@@ -258,22 +256,22 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		DuplicateWindow: 2 * time.Minute, ConnectTimeout: 2 * time.Second,
 	})
 	if err != nil {
-		return fmt.Errorf("construct NATS publisher: %w", err)
+		return startupFailure(stageConstructNATSPublisher, err)
 	}
 	defer publisher.Close()
 	if err := publisher.Check(startup); err != nil {
-		return fmt.Errorf("verify NATS stream: %w", err)
+		return startupFailure(stageVerifyNATSStream, err)
 	}
 	if err := repository.CheckOutbox(startup); err != nil {
-		return fmt.Errorf("verify outbox: %w", err)
+		return startupFailure(stageVerifyOutbox, err)
 	}
 	transport, err := platformgrpc.NewServer(service, roleImageService)
 	if err != nil {
-		return fmt.Errorf("construct gRPC transport: %w", err)
+		return startupFailure(stageConstructGRPCTransport, err)
 	}
 	roleImageTransport, err := platformgrpc.NewRoleImageServer(roleImageService)
 	if err != nil {
-		return fmt.Errorf("construct role image transport: %w", err)
+		return startupFailure(stageConstructRoleImageTransport, err)
 	}
 	serverOptions := append(transportOptions,
 		grpc.MaxRecvMsgSize(8<<20),
@@ -312,7 +310,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if proofService != nil {
 		proofTransport, err := platformgrpc.NewAuthorityProofServer(proofService)
 		if err != nil {
-			return fmt.Errorf("construct authority proof transport: %w", err)
+			return startupFailure(stageConstructAuthorityProofTransport, err)
 		}
 		internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
 	}
@@ -330,20 +328,20 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("construct provider credential cleanup worker: %w", err)
+		return startupFailure(stageConstructProviderCredentialCleanupWorker, err)
 	}
 	catalogHealth := serviceruntime.NewReadiness()
 	catalogWorker, catalogErr := providermodelcatalog.New(repository, providerMaterializer, service.Ready, config.InstanceID, catalogHealth, slog.Default())
 	if catalogErr != nil {
-		return fmt.Errorf("construct provider model catalog worker: %w", catalogErr)
+		return startupFailure(stageConstructProviderModelCatalogWorker, catalogErr)
 	}
 	renewalWorker, err := providermodelcatalog.NewRenewalWorker(repository, providerMaterializer, service.Ready, config.InstanceID, slog.Default())
 	if err != nil {
-		return errors.New("construct provider credential renewal worker")
+		return startupFailure(stageConstructProviderCredentialRenewalWorker, err)
 	}
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
-		return errors.New("listen control-plane gRPC")
+		return startupFailure(stageListenControlPlaneGRPC, err)
 	}
 	readiness := serviceruntime.NewReadiness()
 	technical := technicalServer(config.TechnicalListen, readiness)
@@ -376,7 +374,10 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		serviceruntime.ShutdownOperation{Name: "gRPC server", Timeout: config.ShutdownTimeout, Run: func(ctx context.Context) error { return gracefulStop(ctx, grpcServer) }},
 		serviceruntime.ShutdownOperation{Name: "workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
-	return errors.Join(workerErr, shutdownErr)
+	if err := errors.Join(workerErr, shutdownErr); err != nil {
+		return startupFailure(stageServiceLifecycle, err)
+	}
+	return nil
 }
 
 // runAgentAvatarCleanup returns a worker that immediately cleans up to fifty expired uploads and
@@ -464,55 +465,18 @@ func readBoundedFile(path string) ([]byte, error) {
 func readBoundedFileLimit(path string, maximum int64) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, errors.New("open protected file")
+		return nil, startupFailure(stageOpenProtectedFile, err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > maximum {
-		return nil, errors.New("protected file is invalid")
+		return nil, startupFailure(stageProtectedFileIsInvalid, nil)
 	}
 	value, err := io.ReadAll(io.LimitReader(file, maximum+1))
 	if err != nil || len(value) == 0 || int64(len(value)) > maximum {
-		return nil, errors.New("read protected file")
+		return nil, startupFailure(stageReadProtectedFile, err)
 	}
 	return value, nil
-}
-
-// openPostgres loads the bounded DSN/CA, wipes the raw DSN byte slice after parsing, configures
-// exact TLS13 roots/SNI and pool size, and closes a pool whose initial ping fails.
-// openPostgres загружает ограниченные DSN и CA, очищает raw DSN срез после parsing, задаёт точные
-// TLS13 roots и SNI и размер pool и закрывает pool при отказе начального ping.
-func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
-	rawDSN, err := readBoundedFile(config.PostgresDSNFile)
-	if err != nil {
-		return nil, errors.New("load PostgreSQL configuration")
-	}
-	poolConfig, err := pgxpool.ParseConfig(strings.TrimSpace(string(rawDSN)))
-	for index := range rawDSN {
-		rawDSN[index] = 0
-	}
-	if err != nil {
-		return nil, errors.New("parse PostgreSQL configuration")
-	}
-	ca, err := readBoundedFile(config.PostgresCAFile)
-	if err != nil {
-		return nil, errors.New("load PostgreSQL CA")
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(ca) {
-		return nil, errors.New("parse PostgreSQL CA")
-	}
-	poolConfig.ConnConfig.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots, ServerName: config.PostgresTLSServerName}
-	poolConfig.MaxConns = config.PostgresMaxConnections
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		return nil, errors.New("open PostgreSQL pool")
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, errors.New("verify PostgreSQL connection")
-	}
-	return pool, nil
 }
 
 // loadServerTLS loads the configured server key pair and client CA into TLS13 mutual-client
@@ -522,15 +486,15 @@ func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 func loadServerTLS(config Config) (*tls.Config, error) {
 	certificate, err := tls.LoadX509KeyPair(config.ServerCertificateFile, config.ServerPrivateKeyFile)
 	if err != nil {
-		return nil, errors.New("load control-plane server certificate")
+		return nil, startupFailure(stageLoadControlPlaneServerCertificate, nil)
 	}
 	ca, err := readBoundedFile(config.ClientCAFile)
 	if err != nil {
-		return nil, errors.New("load internal client CA")
+		return nil, startupFailure(stageLoadInternalClientCA, nil)
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(ca) {
-		return nil, errors.New("parse internal client CA")
+		return nil, startupFailure(stageParseInternalClientCA, nil)
 	}
 	return &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate}, ClientCAs: roots, ClientAuth: tls.RequireAndVerifyClientCert}, nil
 }

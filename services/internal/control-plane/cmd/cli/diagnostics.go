@@ -1,17 +1,11 @@
 package main
 
 import (
-	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"database/sql/driver"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
-	"github.com/codex-k8s/kodex/libs/go/observability/errorclass"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/postgresdiagnostic"
 )
 
 // cliStage restricts diagnostic phases to CLI-owned constants, never filenames or command input.
@@ -92,38 +86,6 @@ func reportCLIFailure(output io.Writer, err error) {
 	_, _ = fmt.Fprintf(output, "%s stage=%s error_class=%s\n", cliFailureMessage, stage, class)
 }
 
-// postgresFailureClass prioritizes typed PostgreSQL/TLS/configuration failures over network wrappers.
-// Driver cause loss stays bad_connection; cancellation/deadline and unknown causes get fixed labels.
-// postgresFailureClass даёт типизированным PostgreSQL/TLS/configuration отказам приоритет над сетевыми wrappers.
-// Потеря причины драйвером остаётся bad_connection; отмена, срок и неизвестные причины получают фиксированные метки.
-func postgresFailureClass(err error) string {
-	var database *pgconn.PgError
-	if errors.As(err, &database) {
-		return errorclass.Postgres(database.Code)
-	}
-	var unknownCA x509.UnknownAuthorityError
-	var invalidCertificate x509.CertificateInvalidError
-	var hostname x509.HostnameError
-	var verification *tls.CertificateVerificationError
-	if errors.As(err, &unknownCA) || errors.As(err, &invalidCertificate) || errors.As(err, &hostname) || errors.As(err, &verification) {
-		return "tls_verification"
-	}
-	var configuration *pgconn.ParseConfigError
-	if errors.As(err, &configuration) {
-		return "connection_configuration"
-	}
-	var path *os.PathError
-	if errors.As(err, &path) {
-		return "filesystem"
-	}
-	if errors.Is(err, context.Canceled) {
-		return "canceled"
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return "timeout"
-	}
-	if errors.Is(err, driver.ErrBadConn) {
-		return "bad_connection"
-	}
-	return errorclass.Network(err)
-}
+// postgresFailureClass delegates to the service-owned classifier, preserving CLI output and precedence.
+// postgresFailureClass передаёт проверку классификатору сервиса, сохраняя вывод CLI и приоритет причин.
+func postgresFailureClass(err error) string { return postgresdiagnostic.Class(err) }
