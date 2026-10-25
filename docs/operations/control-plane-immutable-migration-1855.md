@@ -4,7 +4,7 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-25
 ---
 
@@ -16,6 +16,39 @@ updated: 2026-10-25
 `kodex-system`, migration version `20261025000100`. Остальные migration profiles
 сохраняют свой прежний hot-reload контракт. Новые ключи, роли, NetworkPolicy,
 host mounts, доступ моделей и универсальный deploy framework не создаются.
+
+## Диагностика подключения CLI
+
+`/usr/local/bin/control-plane-cli check` использует тот же явно выбранный
+`CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE`, что и `up/status`, но выполняет только
+разбор pgx config, открытие database/sql handle и один `PingContext`. Goose,
+`StatusContext`, чтение/создание таблицы версий и migration SQL не вызываются.
+Успешный stdout: `PostgreSQL connection check completed` и перевод строки.
+Это проверка выбранного соединения, а не schema readiness, runtime grants,
+права на DDL или разрешение миграции. Штатный migration tool не запускает её
+автоматически; отдельный live diagnostic Job требует своего разрешения.
+
+Начальный ping всех трёх команд ограничен десятью секундами и меньшим caller
+deadline; отмена до/во время/сразу после ping запрещает успешный исход.
+`up/status` затем используют исходный caller context, без нового migration
+deadline и без повторов SQL. `status` Goose способен инициализировать таблицу
+версий и потому не является read-only заменой `check`.
+
+| Исход | Goose / состояние / событие | Авторитетный результат |
+| --- | --- | --- |
+| `check` PASS | Никаких Goose/migration SQL и domain events | Только fixed stdout после успешного ping; handle закрывается |
+| Config/file/parse FAIL | Goose не вызывается | Exit1; закрытые `stage/error_class`, без DSN/path/error text |
+| Ping FAIL/deadline/cancel | Goose не вызывается, повторов нет | Exit1; typed cause остаётся приватной, stdout успеха отсутствует |
+| `up/status` после ping | Единственный прежний Goose path; новый event не создаётся | Goose version state/readback прежнего migration lifecycle |
+| Goose FAIL/partial | Migration SQL не повторяется | Exit1; закрытая диагностика; прежний authoritative migration readback |
+
+Классификация сначала проверяет типизированные PostgreSQL/TLS/config ошибки,
+затем cancellation/deadline и общий stdlib-only network classifier.
+SQLSTATE нормализует `errorclass.Postgres`; неизвестная причина остаётся
+`unknown`. Если pgx database/sql adapter уже заменил ошибку на
+`driver.ErrBadConn`, исход — `bad_connection`: исходные TLS/DNS причины не
+угадываются. Raw upstream errors, hostname, user, database, query и DSN не
+печатаются. На CLI process boundary та же защита действует для broker path.
 
 ## Порядок и граница доступности
 

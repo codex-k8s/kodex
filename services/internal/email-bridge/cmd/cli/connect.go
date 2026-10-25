@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"errors"
-	"net"
-	"syscall"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/observability/errorclass"
 )
 
 // databaseRetryDelay spaces only transient connection probes; migration SQL is never retried by this wait loop.
@@ -77,34 +77,5 @@ func retryableConnection(err error) bool {
 // networkFailureClass maps typed DNS conditions and known syscall errors to fixed labels; arbitrary network error text is never emitted.
 // networkFailureClass переводит типизированные состояния DNS и известные syscall-ошибки в фиксированные метки; произвольный текст сетевой ошибки не выводится.
 func networkFailureClass(err error) string {
-	var dns *net.DNSError
-	if errors.As(err, &dns) {
-		if dns.IsNotFound {
-			return "dns_not_found"
-		}
-		if dns.IsTimeout {
-			return "dns_timeout"
-		}
-		if dns.IsTemporary {
-			return "dns_temporary"
-		}
-		return "dns"
-	}
-	switch {
-	case errors.Is(err, syscall.ECONNREFUSED):
-		return "connection_refused"
-	case errors.Is(err, syscall.ECONNRESET):
-		return "connection_reset"
-	case errors.Is(err, syscall.EHOSTUNREACH):
-		return "host_unreachable"
-	case errors.Is(err, syscall.ENETUNREACH):
-		return "network_unreachable"
-	case errors.Is(err, syscall.ETIMEDOUT):
-		return "network_timeout"
-	}
-	var network net.Error
-	if errors.As(err, &network) {
-		return "network"
-	}
-	return "unknown"
+	return errorclass.Network(err)
 }

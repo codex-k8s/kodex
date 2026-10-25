@@ -65,6 +65,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.40.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.47.1 // indirect
 	github.com/aws/smithy-go v1.28.1 // indirect
+	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcidentity v0.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/sttapi v0.0.0

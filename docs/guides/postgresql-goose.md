@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.4
-updated: 2026-10-12
+version: 1.2.5
+updated: 2026-10-25
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -311,6 +311,13 @@ history без обратного изменения схемы создает �
 
 - `up` — применить все миграции deployable в forward-only порядке;
 - `status` — показать безопасный статус без DSN.
+
+`goose.StatusContext` может инициализировать таблицу версий; его нельзя
+использовать как read-only проверку подключения. Если deployable предоставляет
+команду `check`, она разбирает конфигурацию и выполняет только ограниченный
+`PingContext`, не вызывает Goose и не подтверждает состояние миграций или
+полномочия runtime. Начальный ping `check/up/status` учитывает отмену и меньший
+deadline вызывающего; его timeout не превращается в retry SQL миграций.
 
 Дополнительные команды, например bootstrap broker state, не маскируются под
 миграции PostgreSQL и документируются контрактом соответствующего deployable.

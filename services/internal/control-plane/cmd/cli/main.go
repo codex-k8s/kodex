@@ -14,9 +14,6 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/kodex/libs/go/eventing/sessionrevocation"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 )
 
 // migrations embeds the canonical SQL migration registry used by CLI up/status and gated upgrade fixtures.
@@ -32,51 +29,25 @@ var migrations embed.FS
 func main() {
 	ctx := context.Background()
 	if err := run(ctx, os.Args[1:]); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "control-plane CLI failed: %v\n", err)
+		reportCLIFailure(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-// run dispatches broker bootstrap or embedded PostgreSQL up/status, reading the explicitly named
-// admin DSN file and using the caller context without adding its own migration deadline.
-// run выбирает broker bootstrap либо embedded PostgreSQL up и status, читая явно названный admin
-// DSN file и используя caller context без собственного migration deadline.
+// run dispatches broker bootstrap or PostgreSQL check/up/status with a bounded initial connection probe.
+// The migration itself retains the caller context and is never retried by connection diagnostics.
+// run выбирает broker bootstrap либо PostgreSQL check/up/status с ограниченным начальным ping.
+// Сама миграция сохраняет caller context и никогда не повторяется диагностикой соединения.
 func run(ctx context.Context, args []string) error {
 	if len(args) == 2 && args[0] == "broker" && args[1] == "bootstrap" {
 		return bootstrapBroker(ctx)
 	}
-	if len(args) != 1 || (args[0] != "up" && args[0] != "status") {
-		return errors.New("usage: cli <up|status|broker bootstrap>")
+	if len(args) != 1 || (args[0] != "up" && args[0] != "status" && args[0] != "check") {
+		return cliFailure(stageArguments, nil)
 	}
-	dsnFile := strings.TrimSpace(os.Getenv("CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE"))
-	if dsnFile == "" {
-		return errors.New("CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE is required")
-	}
-	raw, err := os.ReadFile(dsnFile)
-	if err != nil {
-		return errors.New("read PostgreSQL DSN file")
-	}
-	dsn := strings.TrimSpace(string(raw))
-	if dsn == "" {
-		return errors.New("PostgreSQL DSN file is empty")
-	}
-	config, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		return errors.New("parse PostgreSQL DSN")
-	}
-	database := stdlib.OpenDB(*config)
-	defer database.Close()
-	goose.SetBaseFS(migrations)
-	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("configure goose: %w", err)
-	}
-	if err := database.PingContext(ctx); err != nil {
-		return errors.New("connect PostgreSQL")
-	}
-	if args[0] == "status" {
-		return goose.StatusContext(ctx, database, "migrations")
-	}
-	return goose.UpContext(ctx, database, "migrations")
+	return runPostgres(ctx, args[0], os.Stdout, postgresCLIDependencies{
+		open: openPostgresDatabase, migrate: applyPostgresMigrations,
+	})
 }
 
 // bootstrapBroker ensures control-plane, session-revocation and browser-state streams in sequence
