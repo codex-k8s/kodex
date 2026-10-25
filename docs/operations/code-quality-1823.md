@@ -4,11 +4,74 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.440.0
+version: 1.441.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Избыточные mount markers в ролевых issuer-патчах — 25.10.2026
+
+На основе `d2744e3398323716c19d6fc795c22f13c05b00d5` из девяти обычных
+issuer-патчей удалены169 key-only маркеров: по18 inherited issuer mounts
+в каждом профиле и по одному signer mount в семи профилях с grant-agent.
+Ролевые YAML сократились1134→965 строк; общие поля уже принадлежат трём
+Kustomize components. Значения workload/SPIFFE, peer UID/GID, Secret references,
+application-grant paths, readiness и lifecycle не менялись.
+
+Исходные полные YAML trees девяти профилей сравнены с каноническим
+профилем и явной матрицей отличий: builder peer1000 вместо10001; email
+имеет два дополнительных readonly app mounts; API сохраняет exec readiness,
+preStop sleep40 и не имеет grant-agent; STT имеет отдельный socket alias
+и также не имеет grant-agent. Targets трёх common components закрыты
+наборами10/9/7. Финальная source-проверка отдельно доказывает, что изменены
+только комментарии и удалены key-only элементы разрешённых списков;
+значимые поля и относительный порядок остальных элементов сохранены.
+
+У strategic merge порядок немонотонный: удаление отдельного промежуточного
+маркера может менять render, тогда как удаление всей inherited mount-группы
+сохраняет его. Поэтому частные эксперименты использовались для выбора
+кандидата, а итог проверен на всех31 фактических потребителях components.
+30 успешных сборок полностью совпали с сохранённым исходным render, включая
+все массивы и их порядок. Единственный standalone staging/control-api-gateway
+по-прежнему FAIL с тем же stderr, что до рефакторинга; исправление либо
+успех этого overlay не заявляются. Оба полных web-профиля собираются.
+
+Проверки финального дерева:
+
+- source deletion proof всех9 патчей — PASS (0.42s);
+- полный canonical render всех потребителей —30 PASS,1 прежний FAIL (20.61s);
+- публичная ABI render-проверка обоих профилей и её negative fixtures —
+  PASS (21.93s);
+- 17 unit-тестов анализаторов — PASS (0.57s),0 failed/0 skipped;
+- 12 новых точных retention decisions/12 occurrences — PASS;
+  24 отрицательные count/hash мутации отклонены;
+- inventory/detector/assessment, Go completeness и5 ignore guards,
+  `git diff --check` — PASS LOCAL.
+
+Raw-группы1656→1653. Это три detector-группы после реального удаления
+маркеров; отдельные identity bindings не объявлены устранёнными.
+Ещё12 точных окон обычных issuer-профилей сохранены как явная workload,
+SPIFFE, PostgreSQL/trust/signing/readback/restore и grant mapping либо
+оставшиеся env/volume order anchors. Их дальнейшее удаление в проверенных
+кандидатах меняет конечный порядок. Общие runtime-настройки уже components;
+второй универсальный шаблон имён скрыл бы точные role bindings.
+Решения ограничены двумя путями, fragment SHA-256 и count1; прежние744
+entries не менялись. Runtime-controller, verifier, control-plane и
+NetworkPolicy windows этим решением не покрываются.
+
+Registry744→756, retained861→873, unresolved795→780.
+Inventory6700 sources/222 exclusions; Go21501/21501 EN→RU,0 missing.
+Пороги, ignored paths и detector normalization не менялись.
+Go/application/frontend-код не затрагивался; их build/unit не перезапускались.
+
+Context7 resolve вернул Invalid API key; использованы официальные
+[Kustomize components](https://github.com/kubernetes-sigs/kustomize/blob/master/examples/components.md)
+и [Kubernetes kustomization](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#customizing).
+Проверки выполнялись локально без credential/KODEX inputs и KUBECONFIG,
+без apply и обращения к кластеру. Browser/E2E, deploy/live и полная
+приёмка — NOT RUN. PR остаётся Draft, Issue#1823 открыт:780 групп
+ещё требуют решения.
 
 ## Exact-account command projection и typed transport glue — 25.10.2026
 

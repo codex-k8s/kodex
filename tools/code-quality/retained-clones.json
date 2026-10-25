@@ -5952,6 +5952,102 @@
       "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
       "count": 2,
       "reason": "Два точных окна114/117 tokens: хвост TrashProject и RestoreProject против границ ValidateRuntimeEnvironmentDraft и DiscardRuntimeEnvironmentDraft. Оба draft wrappers прочитаны целиком. Общие mutation guards, RPC problem mapper и writeEnvironmentDraft/writeEnvironmentDraftResult уже вынесены; draft projection проверяет точный ref и свой публичный shape, а restore возвращает project. Сохранены разные nominal requests/RPC для validation, discard и project restore, без универсального lifecycle dispatch. Полный gateway build/unit выполнен; эти файлы не менялись. Retention ограничен exact двумя путями, fragmentSHA и ровно2 occurrences; drift вызывает отказ assessor."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-email-bridge-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "6f7a1bc6d82c8baca33ce762e6bdd4cb25686fd1b00358c86ab213f9a876eaf6",
+      "count": 1,
+      "reason": "Начало двух issuer-профилей до email-specific observability/application-grant mounts. Сам pod/socket-init runtime уже общий component; остаются nominal Deployment/app-container names и явное подключение issuer socket/readOnly mount. Email имеет дополнительные app mounts, поэтому совпавший префикс не становится новым универсальным app-container patch. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-integration-gateway-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "bb6007c994990f26e75ea1aff4cdf7d72206a93851f2844b189e85de41ddd46e",
+      "count": 1,
+      "reason": "Полный остаточный профиль automation-scheduler/integration-gateway после выноса трёх common components и удаления18 issuer mount markers и signer mount marker в каждом. Совпадает YAML-форма, но workload/SPIFFE, PostgreSQL session-user secret, trust/TLS/signing/readback/restore secret names и application-grant paths связаны с разными service identities. Name-only env/volume anchors сохраняют исходный порядок strategic merge; проверенное удаление этих оставшихся групп меняет итоговый порядок. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-interaction-gateway-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "bb6007c994990f26e75ea1aff4cdf7d72206a93851f2844b189e85de41ddd46e",
+      "count": 1,
+      "reason": "Полный остаточный профиль automation-scheduler/interaction-gateway. Исполняемые pod/issuer/grant defaults уже общие,169 лишних markers девяти профилей удалены; здесь остаются разные workload/SPIFFE и secret identity bindings, grant output paths и необходимые name-only env/volume anchors. Generic name substitution скрыла бы соответствие transport identity и точных secret names; удаление оставшихся anchors меняет порядок strategic merge. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-secret-broker-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "6d82acd10504788e92459ea9154d74fda5de038269fb9d165f35f151d2180164",
+      "count": 1,
+      "reason": "Префикс automation-scheduler/secret-broker заканчивается на application-grant binding после общего issuer env. Полные ordered YAML trees этих профилей проверены: различаются только явные workload/SPIFFE, nominal container и PostgreSQL/secret/grant имена. Runtime-поля уже в common components, лишние mount masks удалены; оставшиеся env anchors нужны для неизменного merge order. Новый общий dispatcher идентичностей не вводится. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-session-archive-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "bb6007c994990f26e75ea1aff4cdf7d72206a93851f2844b189e85de41ddd46e",
+      "count": 1,
+      "reason": "Полный остаточный профиль automation-scheduler/session-archive содержит разные workload/SPIFFE, PostgreSQL secret, grant output/mount и точные trust/signing/TLS/readback/restore bindings. Общие runtime поля уже подключаются components, из обоих патчей удалено по19 лишних mount markers. Оставшиеся env/volume markers удерживают прежний порядок; перенос role-specific strings в общий name template скрыл бы видимые identity boundaries. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-role-image-builder-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "9459086230f42fd54657bdc2494d52f8e5253f4d564296a1bf491c487d8760ce",
+      "count": 1,
+      "reason": "Короткое окно app socket/readOnly mount и первых env anchors automation-scheduler/role-image-builder. Оно пересекает границу app-container/issuer, где имена nominal, а следующий peer UID/GID у builder1000 вместо10001. Общие socket-init и issuer defaults уже components; вынос окна как универсального app patch смешал бы container target и отдельный peer profile. Остаточные env anchors сохраняют порядок списка. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-email-bridge-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "3ce26f14c254711f0e03d77539e82d5cd45f0c687a2e72f194a472e88cf6a541",
+      "count": 1,
+      "reason": "Хвост automation-scheduler/email-bridge после отдельных email app mounts: issuer env, grant binding и volumes. Полный source proof допускает только workload name replacement и два email-specific readonly app mounts; имена SPIFFE/PostgreSQL/trust/readback/restore/signing и grant paths остаются разными. Общий runtime уже components, лишние mount markers удалены, оставшиеся env/volume anchors нужны для прежнего порядка merge. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-control-api-gateway-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-stt-tts-service-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "ddbe9ce4d02d4c49f0d3daeec26a6b1948e2c78281bdd19b996725d666760066",
+      "count": 1,
+      "reason": "Issuer env control-api-gateway/stt-tts-service: разные WORKLOAD_ID/SPIFFE и PostgreSQL session-user secret при общих env anchors. API отдельно сохраняет preStop sleep40 и app exec readiness; STT использует authority-sockets. У обоих нет grant-agent/signer. Defaults уже issuer common component, поэтому сохраняются только явные role identity fields и необходимые order anchors, а не общий шаблон, скрывающий отличие профилей. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-control-api-gateway-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-stt-tts-service-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "70557e9587700e71ba9c4f752e332864c43b77e0b7f24adc36cfb34d244f80e6",
+      "count": 1,
+      "reason": "Volume-хвост control-api-gateway/stt-tts-service после удаления лишних mount markers. emptyDir.medium и sizeLimit одинаковы, но socket alias API internal-rpc-authority-sockets против STT authority-sockets и точные trust/TLS/key/PostgreSQL/readback/restore secret names различны. Общий pod component уже задаёт runtime, volume anchors удерживают порядок стратегического merge. Полная сборка обоих профилей сравнена без сортировки внутренних списков. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-control-api-gateway-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-role-image-builder-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "b616f6dc0741ef3e2b1b29c1eea34fc3994f0d72b89f77cdf4cb3c180ccd874c",
+      "count": 1,
+      "reason": "Середина volume bindings control-api-gateway/role-image-builder. Здесь разные workload-specific manifest/proof trust, issuer key, workload TLS и PostgreSQL secrets, окружённые name-only CA/restore anchors. Источники общих volume fields уже pod-common; оставшийся профиль API отличается medium/preStop/readiness и отсутствием grant signer, builder имеет peer1000 и grant agent. Слияние role identities в общий patch не требуется для удаления уже вынесенного runtime. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-control-api-gateway-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-role-image-builder-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "923d7e0982128cd1cb418f04d8bdc0f76e57374e8b72a07830dfd1bf8fb232e1",
+      "count": 1,
+      "reason": "Конец volume bindings control-api-gateway/role-image-builder: observability/CA anchors и четыре разные issuer readback/restore credential/possession/ack Secret references. Общие volume implementations уже pod-common, ссылки назначены точным workload; порядок anchors проверенно нужен для прежнего конечного YAML. Сохраняется явная identity mapping вместо генератора secret names. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-role-image-builder-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-stt-tts-service-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "cd3d907f1f12f04fb62f07f039dee80c55ddbfcbd5f8ae738e476a1d5e3e2ce3",
+      "count": 1,
+      "reason": "Перекрывающееся окно app mount→issuer env role-image-builder/stt-tts-service. App socket alias различается, WORKLOAD_ID/SPIFFE разные, сразу после окна builder peer1000 против STT10001; у STT отсутствует grant agent. Общие socket-init и issuer defaults уже components, удалены лишние mount masks. Окно пересекает независимые container/identity boundaries и не образует отдельного общего runtime алгоритма. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
     }
   ]
 }

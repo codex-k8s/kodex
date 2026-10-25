@@ -1,4 +1,4 @@
-# Идентичность и отличия workload; общие поля подключаются Kustomize components.
+# Идентичность workload и опорные элементы порядка; общие поля подключаются Kustomize components.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -53,24 +53,6 @@ spec:
         volumeMounts:
         - name: internal-rpc-authority-sockets
           mountPath: /run/kodex
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/snapshot
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
-        - mountPath: /var/run/secrets/kodex/internal-rpc-authority/issuer
-        - mountPath: /var/run/secrets/kodex/internal-rpc-authority/workload-tls
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/readback
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/restore
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/restore/controller-trust
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/restore/role-trust
-        - mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql
-        - mountPath: /var/run/config/kodex/internal-rpc-authority/observability
-        - mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability
-        - mountPath: /usr/local/share/internal-rpc-authority/manifest-root
-        - mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
-        - mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
-        - mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
-        - mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
       - name: platform-worker-grant-agent
         env:
         - name: PLATFORM_WORKER_GRANT_WORKLOAD_ID
@@ -80,7 +62,6 @@ spec:
         volumeMounts:
         - name: application-grant
           mountPath: /var/run/secrets/kodex/integration-gateway/application-grant
-        - mountPath: /var/run/secrets/kodex/platform-worker-grant-signer
       volumes:
       - name: authority-bootstrap-roots
       - name: platform-worker-grant-signer
