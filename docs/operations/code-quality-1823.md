@@ -4,11 +4,81 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.439.0
+version: 1.440.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Exact-account command projection и typed transport glue — 25.10.2026
+
+На основе `f8210cd62e6fd56ff85ec96c06ff63ded4c7ce29` общая проверка точного
+аккаунта и его публичная проекция вынесены из VerifyProviderAccountDeviceAuthorization,
+ReauthorizeProviderAccountDeviceCode и DeleteProviderAccount в
+writeProviderAccountCommandResponse. Type constraint закрыт ровно на три
+существующих reply types и proto.Message/GetAccount; остальные provider
+commands в него не включены.
+
+RPC, mutation pins, request context, error mapping и HTTP status остались
+в endpoint. Verify/Delete сохраняют writeRPCProblem+HTTP200,
+Reauthorize — writeProviderDeviceProblem+HTTP202. Helper не добавляет
+проверок version/state, authority, retry или нового owner transition.
+Typed-nil/missing/foreign account даёт прежний502 без чужой metadata;
+HTTP202 не означает завершённую внешнюю авторизацию или очистку.
+
+Обратное раскрытие трёх вызовов сравнивает полный AST mvp_endpoints.go,
+его directives и точные helper signature/type-set/body с исходным деревом.
+Все остальные методы файла сохранены. Generated code только прочитан;
+его три GetAccount подтверждают безопасный nil receiver и не менялись.
+Context7 resolve вернул Invalid API key; использованы официальные
+[Go generated message getters](https://protobuf.dev/reference/go/go-generated/#singular-message-fields)
+и [proto.Message](https://pkg.go.dev/google.golang.org/protobuf/proto#Message).
+Новые зависимости и изменения контрактов не потребовались.
+
+Проверки локального дерева:
+
+- Полный endpoint AST и закрытый профиль — PASS (0.37s).
+- 5 focused Test-функций — PASS (18.92s). Новые проверки покрывают15
+  проекций трёх типов (exact/typed-nil/missing/foreign/zero-version),
+  48 generated-route ошибок (все16 non-OK codes×3) и9 missing headers
+  до RPC. Сверяются полные status/headers/JSON с независимым expected
+  binding outcome и прежним projector; только fresh correlation UUID
+  проверяется отдельно. Protobuf input не меняется.
+- Весь gateway `go build -p 2 ./...` — PASS (7.04s).
+- Весь gateway `go test -p 2 -count=1 ./...` — PASS (17.42s).
+- 17 tests анализаторов — PASS (0.57s),0 failed/0 skipped.
+- 4 новых exact decisions/10 occurrences — PASS,8 negative count/hash
+  мутаций — закрытый отказ (0.27s).
+- Inventory/detector/assessment, Go completeness и5 exact-ignore guards,
+  gofmt/git diff --check — PASS.
+
+После фактического выноса raw1657→1656: прежние три detector-окна
+переформировались в два, крупное provider self-window397→307 tokens.
+Это одна устранённая группа, не одиннадцать.
+
+Разобраны четыре точных retention keys, всего10 occurrences:
+
+| Ключ и число | Прочитанная область и причина сохранения |
+| --- | --- |
+| command→mvp,623e9f37…,6 | RestoreProject против RemoveAgentAvatar, device start/reauthorize, DeleteRuntimeEnvironment, DeleteSchedule и DeleteIntegrationConnection. Guards/error mappers/projectors общие; сохранены nominal refs/requests/RPC и разные public fields/status/device profile |
+| mvp→mvp,aea53832…,1 | Перекрывающееся sliding-window через verify/reauthorize/delete после выноса общей exact-account проверки. Разные typed owner commands и их error/status profile не превращаются в universal lifecycle dispatch |
+| command→command,623e9f37…,1 | RestoreProject против RestoreArtifact: самостоятельные owner resources, RPC и project/artifact projection при общих guards/writers |
+| command→environment draft,623e9f37…,2 | Project restore против draft validation/discard. Draft использует отдельный exact-ref/scope/state/version/shape writer; назначение команд и reply contract различны |
+
+Каждое решение ограничено точными двумя путями, полным fragmentSHA256 и
+числом вхождений; старые740 entries не менялись. Stale hash/count вызывает
+ошибку assessor, а не тихое расширение. Пороги, ignore markers и файловые
+exclusions не расширялись. Registry740→744, retained851→861,
+unresolved806→795;10 сохранённых совпадений не объявлены удалёнными.
+Inventory6700 sources/222 exclusions, Go21501/21501 EN→RU,0 missing.
+В PR569 Go-файлов/3567 объявлений,0 пропусков.
+
+Build/unit используют очищенный child env без credentials и inherited KODEX
+inputs, GOWORK=off/GOMAXPROCS=4. Это локальная синтетическая проверка HTTP/RPC
+mapping, без живой авторизации провайдера, device flow или реального удаления.
+Control-plane и frontend этим этапом не менялись; их прежние результаты
+не объявлены повторно выполненными. Browser/E2E, deploy/live и полная приёмка —
+NOT RUN. PR остаётся Draft, Issue#1823 открыт;795 групп ещё требуют решения.
 
 ## Общая настройка runtime component repositories — 25.10.2026
 

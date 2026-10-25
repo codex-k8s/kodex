@@ -319,11 +319,7 @@ func (server *Server) VerifyProviderAccountDeviceAuthorization(w http.ResponseWr
 		writeRPCProblem(w, err)
 		return
 	}
-	if response.GetAccount() == nil || response.GetAccount().GetRef() != ref {
-		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "account", "")
+	writeProviderAccountCommandResponse(w, http.StatusOK, response, ref)
 }
 
 // ReauthorizeProviderAccountDeviceCode preserves the device-specific error profile and exact-account response check around the owner reauthorization command, returning HTTP202 without locally changing authorization state.
@@ -338,11 +334,7 @@ func (server *Server) ReauthorizeProviderAccountDeviceCode(w http.ResponseWriter
 		writeProviderDeviceProblem(w, err)
 		return
 	}
-	if response.GetAccount() == nil || response.GetAccount().GetRef() != ref {
-		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	writeMessage(w, http.StatusAccepted, response, "account", "")
+	writeProviderAccountCommandResponse(w, http.StatusAccepted, response, ref)
 }
 
 // DeleteProviderAccount delegates deletion to the owner with mutation pins, requires a nonnil matching account reply and projects its state; this handler does not itself erase credentials or claim cleanup is complete.
@@ -357,11 +349,7 @@ func (server *Server) DeleteProviderAccount(w http.ResponseWriter, r *http.Reque
 		writeRPCProblem(w, err)
 		return
 	}
-	if response.GetAccount() == nil || response.GetAccount().GetRef() != ref {
-		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "account", "")
+	writeProviderAccountCommandResponse(w, http.StatusOK, response, ref)
 }
 
 // RevokeProviderAccount forwards exact account and mutation context to owner revocation and projects the response without retrying or directly editing credential storage.

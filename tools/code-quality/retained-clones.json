@@ -5920,6 +5920,38 @@
       "fragmentSHA256": "f43635d4fac26c158bdedaf81d8ae40c59ed045fd3b4f2d34ed790525b4c0aef",
       "count": 1,
       "reason": "После реального выноса errors.As/40001 и mutex-счётчика в recordReadSerializationConflict прежнее140-token окно сократилось до109. Остаток пересекает хвост разных TraceQueryStart (close struct-channel против отправки backend PID), private typed context-key guards, вызов общего helper и разные сигнатуры component fixtures. SQL matching Contains/HasPrefix, start signals, owner arguments и page/metadata/preview outcomes намеренно различаются. Более общая trace factory или key-any dispatcher скроет эти связи ради короткого glue; сам подсчёт уже единственный. Оба файла прочитаны полностью; full-AST expansion proof сохраняет initialized tracer callers, markers/SQL/timings/directives, production retry bytes прежние. Сохранены лишь точные два пути/fragment/count1; остальные тесты и фрагменты не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
+      "count": 6,
+      "reason": "Шесть окон112–114 tokens пересекают хвост предыдущей проекции и короткий typed command относительно RestoreProject: RemoveAgentAvatar, StartProviderAccountDeviceAuthorization, ReauthorizeProviderAccountDeviceCode, DeleteRuntimeEnvironment, DeleteSchedule, DeleteIntegrationConnection. Полностью прочитаны эти wrappers и RestoreProject. Общие requireMutation, RPC problem mapping и writeMessage уже вынесены; точная account-проверка отдельно вынесена в закрытый providerAccountCommandResponse для verify/reauthorize/delete с полным AST-доказательством. Сохранённый код связывает nominal request/ref с отдельным RPC и своим полем ответа; device start/reauthorize используют другой error mapper и HTTP202. Общий command dispatcher скрыл бы разные owner lifecycle и public projections. Оставлены только эти два пути, данный fragmentSHA и ровно6 вхождений; полный gateway build/unit и negative device/error/header checks выполнены, live-переходы не заявлены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "aea53832d876c0636df11084cb6d63e144ca9f58d23b75b362507b08ae94aa9b",
+      "count": 1,
+      "reason": "Одно перекрывающееся окно307 tokens: VerifyProviderAccountDeviceAuthorization→ReauthorizeProviderAccountDeviceCode против ReauthorizeProviderAccountDeviceCode→DeleteProviderAccount. Это sliding window через отдельные typed endpoints, не копия одного provider lifecycle. Настоящая общая exact-account проверка и account projection уже вынесены в закрытый helper на три reply types; после раскрытия весь прежний mvp AST совпадает. Остались mutation guard, nominal request/RPC и явный error/status profile: Verify/Delete writeRPCProblem+HTTP200, Reauthorize writeProviderDeviceProblem+HTTP202. Нельзя унифицировать их как один универсальный owner command; разные transient hints проверены через generated routes для всех16 non-OK gRPC codes и missing headers до RPC. Retention ограничен этим файлом, exact fragmentSHA и count1; пороги/исключения файлов не меняются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
+      "count": 1,
+      "reason": "Одно точное окно114 tokens пересекает хвост TrashProject и RestoreProject против хвоста TrashArtifact и RestoreArtifact. Полностью прочитаны оба коротких restore wrappers и границы окна. requireMutation, writeRPCProblem и writeMessage уже общие; остались nominal ProjectRef/ArtifactRef, отдельные RestoreProject/RestoreArtifact RPC и разные public fields project/artifact. Универсальное восстановление смешало бы owner scopes и самостоятельные lifecycle команды. Код этих endpoints не менялся, полный gateway build/unit на текущем дереве прошёл. Решение ограничено self-pair command_endpoints.go, exact fragmentSHA и count1; файл или класс команд не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
+      "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
+      "count": 2,
+      "reason": "Два точных окна114/117 tokens: хвост TrashProject и RestoreProject против границ ValidateRuntimeEnvironmentDraft и DiscardRuntimeEnvironmentDraft. Оба draft wrappers прочитаны целиком. Общие mutation guards, RPC problem mapper и writeEnvironmentDraft/writeEnvironmentDraftResult уже вынесены; draft projection проверяет точный ref и свой публичный shape, а restore возвращает project. Сохранены разные nominal requests/RPC для validation, discard и project restore, без универсального lifecycle dispatch. Полный gateway build/unit выполнен; эти файлы не менялись. Retention ограничен exact двумя путями, fragmentSHA и ровно2 occurrences; drift вызывает отказ assessor."
     }
   ]
 }
