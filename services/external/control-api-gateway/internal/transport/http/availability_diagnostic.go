@@ -1,8 +1,11 @@
 package httptransport
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"sync"
 
@@ -16,15 +19,45 @@ const unavailableRequestMessage = "control API request unavailable"
 // requestDiagnostic owns one request's closed failure metadata and the existing traced logger context.
 // requestDiagnostic владеет закрытыми метаданными одного запроса и существующим контекстом логгера с трассировкой.
 type requestDiagnostic struct {
-	mu     sync.Mutex
-	once   sync.Once
-	ctx    context.Context
-	logger *slog.Logger
-	route  string
-	method string
-	stage  string
-	class  string
-	status int
+	mu             sync.Mutex
+	once           sync.Once
+	ctx            context.Context
+	logger         *slog.Logger
+	route          string
+	method         string
+	stage          string
+	class          string
+	status         int
+	detached       bool
+	flushUncertain bool
+}
+
+// FlushError preserves controller capability discovery and tracks an implicit response only after the underlying flush.
+// FlushError сохраняет определение возможностей контроллера и учитывает неявный ответ только после исходного flush.
+func (writer *localizedResponseWriter) FlushError() error {
+	err := http.NewResponseController(writer.ResponseWriter).Flush()
+	writer.diagnostic.mu.Lock()
+	defer writer.diagnostic.mu.Unlock()
+	if err == nil && writer.diagnostic.status == 0 {
+		writer.diagnostic.status = http.StatusOK
+	} else if err != nil && !errors.Is(err, http.ErrNotSupported) {
+		// A failed flush may already have committed headers; do not infer a later wire status.
+		// Неудачный flush мог уже отправить заголовки; последующий сетевой статус нельзя предполагать.
+		writer.diagnostic.flushUncertain = true
+	}
+	return err
+}
+
+// Hijack transfers connection ownership unchanged and suppresses later HTTP diagnostics only after successful transfer.
+// Hijack передаёт владение соединением без изменений и подавляет дальнейшую HTTP-диагностику только после успешной передачи.
+func (writer *localizedResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, buffer, err := http.NewResponseController(writer.ResponseWriter).Hijack()
+	if err == nil {
+		writer.diagnostic.mu.Lock()
+		writer.diagnostic.detached = true
+		writer.diagnostic.mu.Unlock()
+	}
+	return conn, buffer, err
 }
 
 // ObserveFailure keeps the first precise failure and normalizes even direct untrusted interface inputs.
@@ -72,8 +105,9 @@ func (writer *localizedResponseWriter) ObserveProblem(status int, code, correlat
 	diagnostic := &writer.diagnostic
 	diagnostic.mu.Lock()
 	actual, stage, class := diagnostic.status, availability.Stage(diagnostic.stage), availability.Class(diagnostic.class)
+	unobservable := diagnostic.detached || diagnostic.flushUncertain
 	diagnostic.mu.Unlock()
-	if status != http.StatusServiceUnavailable || actual != status || diagnostic.logger == nil {
+	if unobservable || status != http.StatusServiceUnavailable || actual != status || diagnostic.logger == nil {
 		return
 	}
 	if code != "UNAVAILABLE" && code != "STOPPING" {

@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -246,5 +248,87 @@ func TestAvailabilityUsesExistingTraceAndNormalizesMetadata(t *testing.T) {
 	}
 	if entry["trace_id"] != traceID.String() || entry["span_id"] != spanID.String() || entry["error_stage"] != "unknown" || entry["error_class"] != "unknown" || entry["method"] != "OTHER" || entry["route"] != "unknown" || strings.Contains(logs.String(), "private-credential") {
 		t.Fatal("trace or normalized metadata boundary failed")
+	}
+}
+
+// TestAvailabilityStreamingWireStatus exercises real TCP flush and hijack, proving that a later problem cannot relabel an already successful or detached response.
+// TestAvailabilityStreamingWireStatus проверяет flush и hijack через настоящий TCP: поздняя проблема не меняет диагностику успешного либо переданного ответа.
+func TestAvailabilityStreamingWireStatus(t *testing.T) {
+	for _, mode := range []string{"flush", "hijack"} {
+		t.Run(mode, func(t *testing.T) {
+			var logs bytes.Buffer
+			done := make(chan error, 1)
+			server := &Server{logger: slog.New(slog.NewJSONHandler(&logs, nil))}
+			h := server.localizationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				controller := http.NewResponseController(w)
+				if mode == "flush" {
+					if err := controller.Flush(); err != nil {
+						done <- err
+						return
+					}
+				} else {
+					conn, buffer, err := controller.Hijack()
+					if err != nil {
+						done <- err
+						return
+					}
+					defer conn.Close()
+					if _, err = buffer.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); err == nil {
+						err = buffer.Flush()
+					}
+					if err != nil {
+						done <- err
+						return
+					}
+				}
+				writeLocalProblem(w, http.StatusServiceUnavailable, "UNAVAILABLE", true)
+				done <- nil
+			}))
+			network := httptest.NewUnstartedServer(h)
+			network.Config.ErrorLog = log.New(io.Discard, "", 0)
+			network.Start()
+			defer network.Close()
+			client := network.Client()
+			client.Timeout = 5 * time.Second
+			response, err := client.Get(network.URL + "/api/v1/runs")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if _, err := io.Copy(io.Discard, response.Body); err != nil {
+				t.Fatal(err)
+			}
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != http.StatusOK || logs.Len() != 0 {
+				t.Fatal("streamed or hijacked successful response was logged as unavailable")
+			}
+		})
+	}
+}
+
+// diagnosticPlainWriter deliberately exposes no streaming capabilities while retaining an observable response recorder.
+// diagnosticPlainWriter намеренно не предоставляет потоковые возможности, сохраняя наблюдаемый recorder ответа.
+type diagnosticPlainWriter struct{ http.ResponseWriter }
+
+// TestAvailabilityUnsupportedStreamingLeavesHeadersUncommitted preserves unsupported controller calls and the subsequent real HTTP503 diagnostic.
+// TestAvailabilityUnsupportedStreamingLeavesHeadersUncommitted сохраняет отказ неподдержанных вызовов и диагностику последующего настоящего HTTP503.
+func TestAvailabilityUnsupportedStreamingLeavesHeadersUncommitted(t *testing.T) {
+	var logs bytes.Buffer
+	recorder := httptest.NewRecorder()
+	w := &localizedResponseWriter{ResponseWriter: diagnosticPlainWriter{recorder}, diagnostic: requestDiagnostic{ctx: t.Context(), logger: slog.New(slog.NewJSONHandler(&logs, nil))}}
+	if err := http.NewResponseController(w).Flush(); !errors.Is(err, http.ErrNotSupported) {
+		t.Fatal("unsupported flush changed")
+	}
+	if _, _, err := http.NewResponseController(w).Hijack(); !errors.Is(err, http.ErrNotSupported) {
+		t.Fatal("unsupported hijack changed")
+	}
+	if w.diagnostic.status != 0 || w.diagnostic.detached || w.diagnostic.flushUncertain {
+		t.Fatal("unsupported capability committed response")
+	}
+	writeLocalProblem(w, http.StatusServiceUnavailable, "UNAVAILABLE", true)
+	if recorder.Code != http.StatusServiceUnavailable || strings.Count(logs.String(), unavailableRequestMessage) != 1 {
+		t.Fatal("real unavailable response lost after unsupported capability")
 	}
 }
