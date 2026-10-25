@@ -35,23 +35,7 @@ func TestProjectPurgeRecoveryComponent(t *testing.T) {
 	}
 	defer pool.Close()
 	objects := &preparedObjectsFixture{Store: objectstoragetest.New(), fail: true}
-	r, err := New(pool, "openai-codex", "gpt-5", objects)
-	if err != nil {
-		t.Fatal(err)
-	}
-	configureComponentArtifactScanner(t, r)
-	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureProjectPurgeStorage("https://storage.invalid", "fixture", "artifacts", true); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
 	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.query.projects.purge-recovery.get"}, "control-api-gateway")
 	service, err := platformservice.New(r)
 	if err != nil {
@@ -353,23 +337,7 @@ func TestProjectPurgeRecoveryAdoptedComponent(t *testing.T) {
 	}
 	defer pool.Close()
 	objects := &preparedObjectsFixture{Store: objectstoragetest.New()}
-	r, err := New(pool, "openai-codex", "gpt-5", objects)
-	if err != nil {
-		t.Fatal(err)
-	}
-	configureComponentArtifactScanner(t, r)
-	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureProjectPurgeStorage("https://storage.invalid", "fixture", "artifacts", true); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
 	prepareObservedWarmFixture(t, ctx, r)
 	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.conversations.create"}, "control-api-gateway")
 	service, err := platformservice.New(r)
@@ -514,23 +482,7 @@ func TestProjectPurgeRecoveryFairnessComponent(t *testing.T) {
 	}
 	defer pool.Close()
 	objects := &preparedObjectsFixture{Store: objectstoragetest.New(), fail: true}
-	r, err := New(pool, "openai-codex", "gpt-5", objects)
-	if err != nil {
-		t.Fatal(err)
-	}
-	configureComponentArtifactScanner(t, r)
-	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureProjectPurgeStorage("https://storage.invalid", "fixture", "artifacts", true); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
 	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.query.projects.purge-recovery.get"}, "control-api-gateway")
 	service, err := platformservice.New(r)
 	if err != nil {
@@ -638,4 +590,32 @@ func TestProjectPurgeRecoveryFairnessComponent(t *testing.T) {
 	if newCount != 1 {
 		t.Fatal("older observing project starved newer overdue cleanup")
 	}
+}
+
+// newPurgeRecoveryComponentRepository creates the fixed purge-recovery repository with the
+// caller-owned counting object store, then configures the synthetic scanner, provider descriptor,
+// role-image policy and purge-storage descriptor before Bootstrap in their original order. The
+// caller retains its deadline, pool cleanup, failing or successful storage mode, warm observations
+// and principals; this helper reads no credentials and performs no remote storage operation.
+// newPurgeRecoveryComponentRepository создаёт фиксированный репозиторий восстановления очистки с
+// принадлежащим вызывающему счётчиком хранилища, затем настраивает синтетический сканер,
+// дескриптор провайдера, политику образов ролей и дескриптор хранилища очистки перед Bootstrap в
+// исходном порядке. Вызывающий сохраняет свой срок, закрытие пула, режим ошибки или успеха
+// хранилища, наблюдения готовности и участников; helper не читает учётные данные и не обращается к
+// удалённому хранилищу.
+func newPurgeRecoveryComponentRepository(t *testing.T, ctx context.Context, pool *pgxpool.Pool, objects *preparedObjectsFixture) *Repository {
+	t.Helper()
+	r, err := New(pool, "openai-codex", "gpt-5", objects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configureComponentArtifactScanner(t, r)
+	configureSyntheticRuntimeComponentRepository(t, r)
+	if err := r.ConfigureProjectPurgeStorage("https://storage.invalid", "fixture", "artifacts", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	return r
 }

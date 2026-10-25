@@ -33,12 +33,7 @@ func newSyntheticRuntimeComponentRepository(t *testing.T, ctx context.Context, p
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
+	configureSyntheticRuntimeComponentRepository(t, r)
 	if err = r.Bootstrap(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -83,4 +78,23 @@ func newProjectAssistantComponentFixture(t *testing.T, ctx context.Context, pool
 		t.Fatal(err)
 	}
 	return r, service, owner, worker
+}
+
+// configureSyntheticRuntimeComponentRepository applies the fixed synthetic provider descriptor and
+// role-image policy to an existing test repository in that order, allocating a fresh signing-key
+// slice each time. Both original guarded errors remain fatal. It does not create storage, read
+// credentials, bootstrap PostgreSQL, resolve principals or own the caller lifecycle.
+// configureSyntheticRuntimeComponentRepository применяет фиксированный синтетический дескриптор
+// провайдера и политику образов ролей к существующему тестовому репозиторию в этом порядке, каждый
+// раз выделяя новый массив ключа подписи. Обе исходные ошибки приводят к Fatal. Не создаёт
+// хранилище, не читает учётные данные, не инициализирует PostgreSQL, не разрешает участников и не
+// управляет жизненным циклом вызывающего.
+func configureSyntheticRuntimeComponentRepository(t *testing.T, r *Repository) {
+	t.Helper()
+	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
+		t.Fatal(err)
+	}
 }

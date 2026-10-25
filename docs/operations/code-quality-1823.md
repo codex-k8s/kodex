@@ -4,11 +4,67 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.438.0
+version: 1.439.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая настройка runtime component repositories — 25.10.2026
+
+На основе `b75abc59b589db2f00dd8b9cd67ba7c9cbac75a3` девять повторяющихся
+setup-блоков заменены в семи тестовых файлах. Шесть используют прежний
+newSyntheticRuntimeComponentRepository; три purge recovery сценария используют
+отдельный newPurgeRecoveryComponentRepository с исходным counting/failing
+object store. Вынесены также четыре оставшиеся точные пары provider/image
+configuration в configureSyntheticRuntimeComponentRepository. Итоговая область:
+десять test-файлов и два новых EN→RU описанных helper.
+
+Configuration-only helper не создаёт storage, не делает Bootstrap и не
+разрешает principals. Purge helper сохраняет порядок New→scanner→provider/image
+config→purge storage config→Bootstrap и получает прежний objects pointer.
+Fresh signing-key allocation, literal descriptors/digests, исходные Fatal
+ошибки и nil outer err после успешного конструктора сохранены.
+Контекст60/90s, pool/Close/cancel, observed warm/catalog seed, owner/workload
+операции и все сценарии/assertions остаются у вызывающего. Другой descriptor,
+хранилище и порядок инициализации не подставляются ради общей функции.
+
+Проверка состояла из двух связанных раскрытий. Первое сравнивает все AST
+семи исходных файлов с промежуточными файлами после девяти замен, включая
+точный helper body и только удаление неиспользуемых imports. Второе сравнивает
+все десять финальных AST с этим сохранённым деревом после раскрытия четырёх
+config calls. Проверяются helper signatures, call args, точные выражения,
+порядок ошибок, неизменность go:embed/build directives и доминирующий
+constructor/Fatal до каждой замены; прежние defer не наблюдают outer err.
+Parser diagnostics отклоняются до использования AST. Весь остальной код
+каждого файла сохранён; это не выполнение PostgreSQL-сценариев.
+
+Локальные проверки окончательного дерева:
+
+- Первое раскрытие7 файлов — PASS (0.37s).
+- Финальное раскрытие10 файлов — PASS (0.57s).
+- Весь control-plane `go build -p 2 ./...` — PASS (5.88s).
+- Весь control-plane `go test -p 2 -count=1 ./...` — PASS (37.57s).
+- Inventory/detector/assessment, Go docs и5 exact-ignore guards — PASS.
+- gofmt и git diff --check — PASS.
+
+Child env исключает credentials и все inherited KODEX inputs; GOWORK=off,
+GOMAXPROCS=4. PostgreSQL opt-ins отсутствуют, поэтому component execution,
+реальные recovery/fairness/race и внешние эффекты — NOT RUN/SKIP.
+Новые тесты, повторяющие тело helper, не добавлялись; используемые сценарии
+сохранены полным AST, а package/module unit действительно выполнены.
+
+Raw1666→1657, retained851 прежний, unresolved815→806.19 старых unresolved
+окон исчезли/переформировались,10 новых остаются unresolved; они не объявлены
+исправленными. Registry740, thresholds и exclusions не расширялись.
+Inventory6698/222. Go21495/21495 EN→RU,0 пропусков; в PR566 Go-файлов,
+3528 объявлений и0 пропусков.
+
+Production Go, frontend, contracts, migrations и manifests этим этапом не
+менялись. Новых внешних API нет, используются прежние Repo configuration
+методы и прежний pgx pool caller. Browser/E2E, deploy/live и независимая
+приёмка — NOT RUN. PR остаётся Draft, Issue#1823 открыт:806 групп ещё требуют
+решения; свежие локальные результаты не являются GitHub CI.
 
 ## Общие поля SYSTEM/PROJECT integration grant plan — 25.10.2026
 
