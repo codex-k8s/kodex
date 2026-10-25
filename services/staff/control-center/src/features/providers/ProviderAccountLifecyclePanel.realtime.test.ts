@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -90,12 +91,8 @@ const source = ProviderAccountLifecyclePanel as unknown as {
 const disposers: (() => void)[] = [];
 const settleRequests: (() => void)[] = [];
 function deferred() {
-  let resolve!: (value: ProviderAccountBlockerPage) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<ProviderAccountBlockerPage>((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
+  const { promise, resolve, reject } =
+    createDeferred<ProviderAccountBlockerPage>();
   settleRequests.push(() => resolve(page()));
   return { promise, resolve, reject };
 }

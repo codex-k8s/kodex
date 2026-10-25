@@ -1,11 +1,9 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { describe, expect, it, vi } from "vitest";
 import { createAssistantTranscriptSubscriptions } from "./transcript-subscriptions";
 
 function deferred() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
+  const { promise, resolve } = createDeferred();
   return { promise, resolve };
 }
 

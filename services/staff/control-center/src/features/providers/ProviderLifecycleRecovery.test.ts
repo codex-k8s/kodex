@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -59,12 +60,8 @@ const source = ProviderLifecycleRecovery as unknown as {
 const disposers: (() => void)[] = [];
 const settleRequests: (() => void)[] = [];
 function deferred() {
-  let resolve!: (value: ProviderLifecycleResult) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<ProviderLifecycleResult>((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
+  const { promise, resolve, reject } =
+    createDeferred<ProviderLifecycleResult>();
   settleRequests.push(() => resolve(result));
   return { promise, resolve, reject };
 }

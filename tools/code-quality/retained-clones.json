@@ -8352,6 +8352,14 @@
       "fragmentSHA256": "6b9d90a8bbfd7f3c169478d1a626623dd6b13132d3e0cea85866d4c2fc145b6f",
       "count": 1,
       "reason": "Окно трёх EnvVar полей относится к отдельным role и relay validations одной Pod policy. Role дополнительно требует пустой workspace-init.env; сообщения отказа и разрешённые наборы контейнеров различаются. CEL all допустим для реально общего mount-предиката и уже применён там, но объединение этих validations утратило бы отдельную диагностику. Shared variable потребовала бы параметризованной функции, недоступной в CEL; перенос трёх явных полей в позиционные списки ухудшил бы typed связь. Только exact fragment/hash/count1, без исключения env либо файлов."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/providers/ProviderLifecycleRecovery.test.ts",
+      "secondPath": "services/staff/control-center/src/features/runs/RunPromptPreview.test.ts",
+      "fragmentSHA256": "eb68d10b18a938a0bb8b9d1515d3edbffbab6912c8692e241623db63afb99cf8",
+      "count": 1,
+      "reason": "Новое короткое окно после выноса19 Promise constructors пересекает хвост разных State types,nominal component setup cast,два локальных cleanup arrays и трёхстрочный wrapper общей фабрики. Provider lifecycle retry и Run prompt preview имеют разные State contracts и cleanup results;типизированные wrappers сохраняют родительские settle callbacks и return fields. Сам алгоритм new Promise/capture действительно вынесен в createDeferred;нового общего алгоритма в сквозном окне нет. Общая lifecycle fixture потребовала бы смешать ownership разных компонентов ради деклараций. Сохранены только точные два пути/hash/count1,не helpers/tests/files целиком."
     }
   ]
 }

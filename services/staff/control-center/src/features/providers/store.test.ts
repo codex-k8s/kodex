@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -44,10 +45,7 @@ function account(overrides: Partial<ProviderAccount> = {}): ProviderAccount {
 }
 
 function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((ready) => {
-    resolve = ready;
-  });
+  const { promise, resolve } = createDeferred<T>();
   return { promise, resolve };
 }
 

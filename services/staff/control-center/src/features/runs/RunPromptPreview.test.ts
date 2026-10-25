@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { renderToString } from "@vue/server-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -67,12 +68,7 @@ const source = RunPromptPreview as unknown as {
 const disposers: (() => void)[] = [];
 const settleRequests: (() => void)[] = [];
 function deferred() {
-  let resolve!: (value: PromptTemplatePreview) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<PromptTemplatePreview>((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
+  const { promise, resolve, reject } = createDeferred<PromptTemplatePreview>();
   settleRequests.push(() => resolve(preview));
   return { promise, resolve, reject };
 }

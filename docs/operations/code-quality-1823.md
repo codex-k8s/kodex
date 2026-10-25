@@ -4,11 +4,46 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.480.0
+version: 1.481.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая фабрика управляемых Promise для unit-tests — 26.10.2026
+
+19 собственных deferred helpers используют test-utils/create-deferred.ts:
+один свежий pending Promise<T> с синхронно захваченными native resolve/reject
+на вызов. Нет timers,global handlers,автоматического завершения или общего
+состояния. Локальные wrappers сохраняют headers/generics/явные return types,
+двух- либо трёхполевую форму и порядок return. Четыре индивидуальных cleanup
+регистрации остаются на прежних местах после создания Promise и до return.
+Void выбран default type фабрики,поскольку установленный ESLint запрещает
+явный void у function call generic;пять void callers вызывают её без type
+argument. Правила линтера не менялись.
+
+19 полных исходников восстановлены побайтово до форматирования и по AST
+после него. Закрытая проверка исходных executors допускает только присваивание
+native callbacks без условий/побочных эффектов.152 парных сценария реального
+Promise (304 выполнения) сохранили pending/microtask,первое завершение,
+rejection identity,thenable/throwing thenable,cleanup и порядок полей;
+отдельные вызовы не делят Promise/callbacks. Семь source mutations helper/
+wrapper/cleanup отвергнуты фактическими guards. App sources,generated code,
+parent assertions и request/owner lifetimes не менялись.
+
+Те же361 unit tests19 файлов прошли до6.34с/после6.86с,0 FAIL/SKIP.
+Prettier check20 файлов1.89с,ESLint14.54с и полный PWA typecheck49.23с —
+PASS LOCAL. Initial void lint finding исправлен default type и проверен
+заново на конечных sources. Предыдущий renderer helper не менялся.
+
+Две raw группы устранены;новое113-token окно сопоставляет разные State
+хвосты,nominal component setup cast,локальные cleanup arrays и короткий
+wrapper уже общей фабрики. Оно разобрано полностью и сохранено по точным
+paths/hash/count1 с причиной;1044 прежних entries сохранены,новых entries1.
+Итог:6762 sources,222 generated exclusions,1487 raw /1185 retained /
+302 unresolved (158 Go,119 TypeScript,25 Bash),registry1045. Все21574 Go
+объявления по-прежнему EN→RU. Пять quality stages — PASS LOCAL.
+Полный browser E2E,живой кластер/deploy и независимая QA — NOT RUN.
 
 ## Одна фабрика тестового Vue renderer — 26.10.2026
 

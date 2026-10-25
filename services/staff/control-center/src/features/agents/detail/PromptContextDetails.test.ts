@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { renderToString } from "@vue/server-renderer";
 import {
@@ -75,12 +76,7 @@ const writeText = vi.fn<(value: string) => Promise<void>>();
 const disposers: (() => void)[] = [];
 const completions: (() => void)[] = [];
 function deferred() {
-  let resolve!: () => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<void>((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
+  const { promise, resolve, reject } = createDeferred();
   completions.push(resolve);
   return { promise, resolve, reject };
 }
