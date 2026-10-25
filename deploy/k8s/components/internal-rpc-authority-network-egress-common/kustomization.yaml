@@ -1,0 +1,10 @@
+# Закрытый набор пяти существующих политик; новые NetworkPolicy не создаются.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+- path: patch.yaml
+  target:
+    group: networking.k8s.io
+    version: v1
+    kind: NetworkPolicy
+    name: (control-api-gateway-internal-rpc-authority-exact-paths|control-plane-internal-rpc-authority-exact-paths|runtime-controller-internal-rpc-authority-exact-paths|stt-tts-service-internal-rpc-authority-exact-paths|control-plane-internal-rpc-authority-issuer-exact-paths)

@@ -1,12 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 resources:
-  - podmonitor.yaml
-  - networkpolicy.yaml
+- podmonitor.yaml
+- networkpolicy.yaml
 patches:
-  - path: verifier-patch.yaml
-    target:
-      group: apps
-      version: v1
-      kind: Deployment
-      name: control-plane
+- path: verifier-patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: control-plane
+components:
+- ../internal-rpc-authority-client-verifier-common
+- ../internal-rpc-authority-network-egress-common

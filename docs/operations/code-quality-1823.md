@@ -4,11 +4,98 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.442.0
+version: 1.443.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие verifier defaults и exact egress — 25.10.2026
+
+На основе `7f6b6aee125f895b1d543ee5b851f49764f9e5ba` control-plane
+подключён к той же client-verifier component, что secret-broker и STT.
+Полное чтение показало совпадение pod labels/fsGroup/socket-init и
+verifier image/command/env defaults/resources/security. Target теперь
+закрыт ровно на три Deployment. Control-plane сохраняет точные
+workload/SPIFFE/PostgreSQL bindings, resolver key/trust/readback mounts,
+все volumes, auth-metrics port и свои probe port names. Два остальных
+ролевых verifier-патча и runtime-поля общего patch не менялись.
+
+Одинаковые шесть egress rules вынесены из пяти NetworkPolicy в
+internal-rpc-authority-network-egress-common. Target перечисляет ровно
+существующие политики API gateway, STT, runtime-controller, control-plane
+verifier и control-plane issuer. Component только дополняет существующие
+ресурсы: не создаёт новую policy, не задаёт selectors и не меняет ingress.
+Сохраняются точные пары DNS UDP/TCP53, PostgreSQL5432, readback8443,
+restore8443, collector4317 и Sentry8443 с прежними namespace/pod selectors.
+Ingress control-plane issuer сохраняет оба порта9091/9093; verifier —9092.
+
+Обратное раскрытие восстанавливает все три полных verifier profiles и
+пять полных NetworkPolicy с точными значениями и порядком списков.
+Duplicate keys отклоняются; component configs/targets и порядок включения
+проверены отдельно. Обход всех resources/bases/components обнаружил17
+фактических потребителей. Он выявил ещё три standalone control-plane
+пути вне прежнего issuer-графа; они добавлены в проверку. Исходный
+опубликованный SHA собран в отдельном управляемом detached worktree,
+без переноса env-файлов. Все16 успешных потребителей совпали с ним целиком;
+единственный staging/control-api-gateway сохраняет прежний FAIL с точно
+тем же stderr. Объединение с прежним графом —34 renders:33 одинаковых
+успешных и один прежний FAIL, включая неизменный порядок всех массивов.
+
+Проверки финального дерева:
+
+- Полное source expansion3 verifier и5 policies, closed targets и полнота
+  consumer-графа — PASS.
+- Прежний canonical render-граф —30 одинаковых успешных сборок и1 прежний
+  FAIL (20.32s); дополнительный обход доказывает весь набор34 вариантов.
+- Публичная ABI render-проверка обоих web-профилей и negative fixtures —
+  PASS (21.28s).
+- 17 unit-тестов анализаторов — PASS (0.62s),0 failed/0 skipped.
+- 8 новых exact decisions/8 occurrences и16 negative count/hash мутаций — PASS.
+- Inventory/detector/assessment, Go completeness и5 ignore guards,
+  `git diff --check` — PASS LOCAL.
+
+Расширенная `make test-web-only-release` сначала выявила прежний FAIL в
+PWA asset assertion: rootCAsSecrets ожидался вместо уже используемого
+rootCAs с Secret reference. На опубликованном исходном SHA ошибка
+воспроизведена; stack совпал после замены только корневого пути worktree,
+а полный ServersTransport render не менялся. Проверены fixture image
+Traefik3.6.6 и официальная миграция3.4: rootCAs поддерживает Secret refs.
+Исправлено только строгое ожидание теста; runtime manifest, CA, SNI,
+client certificate и insecureSkipVerify:false не менялись. Точный
+четырёхполевой профиль по-прежнему обязателен, fallback на старый формат
+не добавлен. Шесть отдельных мутаций TLS-профиля закрыто отклонены.
+После исправления полная `make test-web-only-release` — PASS (35.47s).
+Первоначальный FAIL сохранён в evidence, не переписан задним числом.
+HTTP/Docker fixture и живой TLS этой командой не запускались.
+
+Raw1647→1637:15 прежних точных совпадений исчезли,5 появились после
+переформирования окон; чистое уменьшение10. Ещё8 residual windows
+сохранены: два nominal volume bindings обычного/native issuer, два
+NetworkPolicy role-selector prefixes после реального выноса egress,
+три ordinary/native issuer fragments и один grant-agent fragment.
+Native initContainers с restartPolicy:Always и startup /readyz сохраняют
+отдельный порядок socket-init→issuer→grant-agent→artifact-spool;
+ordinary containers используют иной startup path. Повторное подключение
+ordinary component создало бы второй исполняемый контейнер.
+Решения ограничены точными путями, fragment SHA-256 и count1; прежние756
+entries не менялись. Это8 сохранённых совпадений, а не удалённых.
+Все оставшиеся component-to-component YAML groups разобраны; остальные
+области репозитория этим утверждением не покрываются.
+
+Registry756→764, retained873→881, unresolved774→756.
+Inventory6704 sources/222 exclusions, Go21501/21501 EN→RU,0 missing.
+Пороги, normalization и ignored paths не менялись. Go/frontend-код
+не затрагивался; их прежние build/unit не объявляются повторно запущенными.
+
+Context7 resolve для Kustomize и Traefik вернул Invalid API key; использованы
+официальные [Kustomize components](https://github.com/kubernetes-sigs/kustomize/blob/master/examples/components.md),
+[Kubernetes kustomization](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#customizing)
+и [Traefik ServersTransport migration](https://doc.traefik.io/traefik/v3.5/migrate/v3/#serverstransport-ca-certificate-configuration).
+Проверки выполнялись локально с очищенным child env без credentials,
+KODEX inputs и KUBECONFIG. Browser/E2E, PostgreSQL component execution,
+apply/deploy/live и полная продуктовая приёмка — NOT RUN.
+PR остаётся Draft, Issue#1823 открыт;756 групп ещё требуют решения.
 
 ## Общий verifier для secret-broker и STT — 25.10.2026
 

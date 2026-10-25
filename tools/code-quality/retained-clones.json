@@ -6048,6 +6048,70 @@
       "fragmentSHA256": "cd3d907f1f12f04fb62f07f039dee80c55ddbfcbd5f8ae738e476a1d5e3e2ce3",
       "count": 1,
       "reason": "Перекрывающееся окно app mount→issuer env role-image-builder/stt-tts-service. App socket alias различается, WORKLOAD_ID/SPIFFE разные, сразу после окна builder peer1000 против STT10001; у STT отсутствует grant agent. Общие socket-init и issuer defaults уже components, удалены лишние mount masks. Окно пересекает независимые container/identity boundaries и не образует отдельного общего runtime алгоритма. Решение ограничено этими двумя путями, точным fragment SHA-256 и count1; изменение hash/count требует нового разбора. Остальные профили, YAML-файлы и проверки не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "d2b57568f34adec25c4c63ab5248b1cee5d64baf3969ddcb82bc4c2f6a2c5633",
+      "count": 1,
+      "reason": "Участок volume bindings automation-scheduler/runtime-controller после общего pod component. Manifest/proof trust, issuer key и workload TLS Secret references назначены разным workload. Runtime-controller использует native issuer в initContainers и свой socket medium; общий pod volume runtime уже вынесен, а здесь остаются конкретные имена credentials и необходимые anchors, не новый общий алгоритм. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-automation-scheduler-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "e3924ecf86dae442168c4b94962d507a475b5f2f35aefe4c9bce48dea514e303",
+      "count": 1,
+      "reason": "Конец volume bindings automation-scheduler/runtime-controller: PostgreSQL, observability/CA anchors и четыре readback/restore Secret references. Shared pod fields уже в issuer-pod-common; эти два явных identity profiles сохраняют разные точные Secret names. Full render и публичные native-order negative tests подтверждают прежний результат; генератор Secret имён ради остаточной формы скрывал бы role binding. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-control-api-gateway-issuer/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-stt-tts-service-issuer/networkpolicy.yaml",
+      "fragmentSHA256": "9817ae633fb1263d52d185c40fbc61af7644121d69dc3260e14eb6465bd7c5e9",
+      "count": 1,
+      "reason": "Ролевой префикс NetworkPolicy control-api-gateway/STT после реального выноса всех шести общих egress rules в component с закрытым набором пяти policies. Остаются resource name, exact app/issuer selector, policyTypes и ingress от observability/prometheus. Это отдельные ресурсы для разных workload; перенос selector в общий генерируемый шаблон сделал бы security scope косвенным. Общий сетевой алгоритм здесь уже удалён. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-control-plane-verifier/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/networkpolicy.yaml",
+      "fragmentSHA256": "25c908823ea9e170590a1d036a383933753a5f48d8b843e0f940b20811a2a58e",
+      "count": 1,
+      "reason": "Ролевой префикс NetworkPolicy control-plane verifier/runtime-controller issuer. Шесть общих exact egress rules уже одна component; отдельные resource name, app selector и verifier/issuer labels задают разные границы, а полные политики сохраняют metrics ingress9092 против9091. Уплотнение через общий selector либо дополнительный генератор изменило бы читаемость security boundary, а не удалило новый runtime. Оба конечных ресурса сверены целиком. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-issuer-sidecar-common/patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "4c0a61e056ca7234b963a9a9f3f8d551693ab00660cc257ff4730f2177c0f5ad",
+      "count": 1,
+      "reason": "Начало обычного issuer component против native issuer runtime-controller: одинаковые image/command и observability env defaults расположены в containers против initContainers. Native sidecar отдельно имеет restartPolicy Always, startup /readyz и принадлежит закрытой последовательности socket-init→issuer→grant-agent→artifact-spool. Общая обычная component не может адресовать native path, не создав второй исполняемый issuer; общий pod runtime уже вынесен. Между разными pod-list contracts генератор не вводится. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-issuer-sidecar-common/patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "cd7e6b39e1a7c2afa48f7a13b6345c8fe652f240f307d041d90ef372f973e85c",
+      "count": 1,
+      "reason": "Средний env-фрагмент обычного issuer component/native runtime-controller: exact readback/restore endpoints и технические настройки одинаковы, но находятся в разных containers/initContainers profiles. Workload/SPIFFE/PostgreSQL refs и native /readyz startup остаются явными. Общий pod уже component; повторное использование обычного issuer patch создало бы обычный контейнер рядом с native sidecar и нарушило startup/termination contract. Сохраняется только данный остаточный fragment. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-issuer-sidecar-common/patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/issuer-patch.yaml",
+      "fragmentSHA256": "1af93f7ef6853a963d6957572cb9fded115aad278f0cd0b4d26f81a28aa65fe0",
+      "count": 1,
+      "reason": "Хвост resources/security/readonly mounts обычного issuer component против native issuer runtime-controller. Совпавшие безопасные defaults нужны в разных containers и initContainers списках. Native профиль отдельно задаёт restartPolicy Always и startup readiness barrier перед grant-agent/artifact-spool, обычный профиль имеет /healthz startup. Подключение обычной component создаёт неверный второй container, а универсальный cross-path patch generator ради этого окна скрывает lifecycle. Shared pod volumes уже вынесены; полные renders и negative native-order fixtures сохранены. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/issuer-patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-worker-grant-sidecar-common/patch.yaml",
+      "fragmentSHA256": "5a3bc0ff74d3532908d7058e6ea070847fabc369592f166240602eaf952ddc65",
+      "count": 1,
+      "reason": "Grant-agent resources/security/mounts обычного component против native runtime-controller. Одинаковые defaults служат разным containers/initContainers profiles; native имеет restartPolicy Always и startup /readyz вместо /healthz, принадлежит порядку до artifact-spool и основного controller. Workload/output/signer refs назначены отдельно. Общий ordinary patch на controller добавил бы контейнер, нарушив native contract; второй cross-path генератор ради этих остаточных полей не вводится. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
     }
   ]
 }

@@ -12,3 +12,4 @@ patches:
     name: runtime-controller
 components:
 - ../internal-rpc-authority-issuer-pod-common
+- ../internal-rpc-authority-network-egress-common

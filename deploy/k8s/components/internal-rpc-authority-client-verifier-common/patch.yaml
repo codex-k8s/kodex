@@ -1,4 +1,4 @@
-# Общий verifier secret-broker и STT; workload и Secret bindings остаются в ролевых патчах.
+# Общий runtime трёх verifier; workload, Secret bindings и отличия остаются в ролевых патчах.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
