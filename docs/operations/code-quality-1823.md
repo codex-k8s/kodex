@@ -4,11 +4,81 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.458.0
+version: 1.459.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий сбор строк и страницы immutable revisions — 25.10.2026
+
+В PostgreSQL adapter два revision reader используют readRevisionRowsPage,
+а существующий scanRuntimeVersionRows разделяет с ними collectTypedRows.
+Collector сохраняет make capacity limit+1, порядок Next/typed scan/append
+и Unavailable без partial items при любом decoder error. Он намеренно не
+проверяет rows.Err: Runtime wrapper делает это сразу после collection,
+revision page — после lookahead trim и вычисления cursor, как прежде.
+Итерационная ошибка short-circuit исключает commit; commit вызывается один
+раз с исходным context, ошибка отбрасывает items/cursor. Пустой успех сохраняет
+nonnil slice. Rows.Close и rollback остаются у исходных callers.
+
+RoleImageRecipeRevision сохраняет14 positional Scan destinations и uint64
+FormatUint cursor; ScheduleRevision —21 destination, порядок двух JSON
+Unmarshal и int64 FormatInt cursor. Два typed callbacks остаются явными,
+не объединяют column layouts либо entity types. Native project.view/
+PROJECT role-image eligibility, schedule.view, versionCursor/ref validation,
+SQL names/StrictNamedArgs, limit+1 и outer transaction ownership не менялись.
+Новых запросов, grants, lifecycle transitions, retries, logs или events нет:
+это прежний read-only путь с тем же commit. Common helpers остаются в
+service adapter, не становятся универсальной protected command.
+
+Обратная проверка actual helper signatures/bodies, callback types/35 scan
+bindings, JSON order и signed/unsigned formatters восстанавливает два полных
+исходных AST, включая все остальные методы, comments/directives. Старый
+Runtime loop совпадает с collector; его wrapper сохраняет прежний Err boundary.
+Revision helper сохраняет tail cursor/Err/commit порядок. Parser diagnostics
+отклоняются до semantic use; остальные методы всех receivers сверяются
+при сравнении полных файлов.
+
+Две новые unit-функции содержат15 subcases: empty/one/full/lookahead,
+partial Scan на первой/второй строке, iteration/commit failures с lookahead
+и без, отмена commit и прежние untrimmed Runtime rows. Фиксированные trace
+expectations проверяют cursor до Err, отсутствие commit при iteration failure,
+ровно один commit с тем же context, отсутствие helper Close/rollback/SQL,
+empty presence/capacity и отбрасывание partial values. Fixture разрешает только
+Next/Scan/Err/Close и Commit; прочие pgx методы не реализованы. Это unit-контур,
+а не исполнение запроса или проверка authorizations в живом PostgreSQL.
+
+Весь control-plane: build mod=readonly — PASS LOCAL (15,86с), unit count1
+mod=readonly — PASS LOCAL (38,82с), при GOWORK off/GOMAXPROCS4 и очищенном
+child env. SHA256 четырёх Go sources до/после совпадают. Новые13 именованных
+Go declarations имеют EN→RU descriptions;21552/21552 собственных объявлений
+документированы. SQL/контракты/PWA/shared libraries/deploy не менялись.
+
+Отдельно перечитаны два уже общих transport окна.255-token Artifact/Schedule
+command wrappers сохраняют native full methods, command.Kind, различающиеся
+payload types и castArtifact/castSchedule; общий алгоритм уже executeResponse.
+226-token HTTP Create/UpdateSchedule сохраняет route ProjectRef против
+ScheduleRef/IfMatch и201/200; target/Struct conversions уже scheduleInput,
+nullable scalar conversion — stringValue. Бизнесовую command dispatch либо
+номинальные request fields ради счётчика не объединяем. Эти два exact окна
+и новый152-token остаток native revision projections получили path/hash/count1
+решения с конкретными различиями.
+
+Detector:6721 sources/222 прежних exclusions,1606 raw/1028 retained/578
+unresolved против1608/1026/582. Исчезли3 прежних raw keys, возникло одно
+typed revision окно. Удалено одно stale решение mvp_queries/runtime_secrets;
+894 прежних entries сохранены, добавлены3, итог897 entries.6 count/hash
+mutations и3 возврата отсутствующих keys отклонены actual assessor.
+Все5 стадий отчёта — PASS LOCAL. Порог, нормализация и generated exclusions
+не расширялись; transport/rowScanner/secret-recovery sources побайтно прежние.
+
+Context7 resolve pgx вернул Invalid API key; ключи не менялись. Проверены
+официальные pgx Rows/Tx docs и закреплённые интерфейсы v5.10.0 сборкой.
+Новая kubernetesadmission library не менялась после67807ef; её отдельные
+build/unit имеют тот SHA. Browser/full E2E, PostgreSQL component, OCI build,
+apply/deploy/live и независимая QA — NOT RUN. PWA не менялась после dbb3837.
+Остальные578 групп входят в scope #1823; продолжение PR остаётся Draft.
 
 ## Общий admission gate двух Kubernetes publisher adapters — 25.10.2026
 

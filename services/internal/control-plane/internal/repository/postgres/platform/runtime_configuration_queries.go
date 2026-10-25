@@ -637,13 +637,9 @@ func scanRuntimeEnvironmentVersion(scanner rowScanner) (entity.RuntimeEnvironmen
 // scanRuntimeVersionRows collects the supplied bounded-query rows using the exact typed version decoder, preserving row order and mapping scan/iteration failures to Unavailable without returning partial success. It allocates limit+1 capacity for caller pagination; query bounds, row Close and transaction commit remain caller-owned.
 // scanRuntimeVersionRows собирает строки переданного ограниченного запроса точным типизированным декодером версий, сохраняя порядок и заменяя ошибки чтения/итерации на Unavailable без частичного успеха. Выделяет capacity limit+1 для пагинации; границы запроса, Close rows и commit транзакции остаются у вызывающего.
 func scanRuntimeVersionRows[T any](rows pgx.Rows, limit int32, scan func(rowScanner) (T, error)) ([]T, error) {
-	items := make([]T, 0, limit+1)
-	for rows.Next() {
-		item, err := scan(rows)
-		if err != nil {
-			return nil, errs.ErrUnavailable
-		}
-		items = append(items, item)
+	items, err := collectTypedRows(rows, limit, scan)
+	if err != nil {
+		return nil, err
 	}
 	if rows.Err() != nil {
 		return nil, errs.ErrUnavailable

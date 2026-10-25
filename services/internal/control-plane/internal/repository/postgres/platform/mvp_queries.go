@@ -814,26 +814,16 @@ func (repository *Repository) listRoleImageRevisions(ctx context.Context, tx pgx
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	items := make([]entity.RoleImageRecipeRevision, 0, limit+1)
-	for rows.Next() {
+	return readRevisionRowsPage(ctx, tx, rows, limit, func(rows rowScanner) (entity.RoleImageRecipeRevision, error) {
 		var item entity.RoleImageRecipeRevision
 		if err := rows.Scan(&item.Ref, &item.RecipeRef, &item.Revision, &item.RecipeVersion,
 			&item.RecipeGeneration, &item.SpecSHA256, &item.ImageArtifactRef, &item.ProvenanceSHA256,
 			&item.SourceSHA256, &item.ImmutableBuildSHA256, &item.ManifestDigest,
 			&item.PromotedReference, &item.PromotionReceiptSHA256, &item.CreatedAt); err != nil {
-			return nil, "", errs.ErrUnavailable
+			return item, errs.ErrUnavailable
 		}
-		items = append(items, item)
-	}
-	next := ""
-	if len(items) > int(limit) {
-		items = items[:limit]
-		next = strconv.FormatUint(items[len(items)-1].Revision, 10)
-	}
-	if rows.Err() != nil || tx.Commit(ctx) != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	return items, next, nil
+		return item, nil
+	}, func(item entity.RoleImageRecipeRevision) string { return strconv.FormatUint(item.Revision, 10) })
 }
 
 // ListScheduleRevisions requires exact schedule.view through the authorized read helper, validates
@@ -865,8 +855,7 @@ func (repository *Repository) ListScheduleRevisions(ctx context.Context, princip
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	items := make([]entity.ScheduleRevision, 0, limit+1)
-	for rows.Next() {
+	return readRevisionRowsPage(ctx, tx, rows, limit, func(rows rowScanner) (entity.ScheduleRevision, error) {
 		var item entity.ScheduleRevision
 		var input, promptInputs []byte
 		if err := rows.Scan(&item.Ref, &item.Revision, &item.Digest, &item.Name, &item.Target.Type,
@@ -875,19 +864,10 @@ func (repository *Repository) ListScheduleRevisions(ctx context.Context, princip
 			&item.MisfirePolicy, &item.OverlapPolicy, &item.TargetVersion, &item.TargetDigest,
 			&item.AutomationText, &promptInputs, &item.CreatedAt); err != nil ||
 			json.Unmarshal(input, &item.Input) != nil || json.Unmarshal(promptInputs, &item.PromptInputs) != nil {
-			return nil, "", errs.ErrUnavailable
+			return item, errs.ErrUnavailable
 		}
-		items = append(items, item)
-	}
-	next := ""
-	if len(items) > int(limit) {
-		items = items[:limit]
-		next = strconv.FormatInt(items[len(items)-1].Revision, 10)
-	}
-	if rows.Err() != nil || tx.Commit(ctx) != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	return items, next, nil
+		return item, nil
+	}, func(item entity.ScheduleRevision) string { return strconv.FormatInt(item.Revision, 10) })
 }
 
 // ListScheduleRuns requires schedule.view and validates a bounded run-ref cursor, then scans
