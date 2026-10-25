@@ -1,6 +1,6 @@
 -- name: repository_bundle__artifact_eligibility :one
 SELECT history.ref
-FROM control_plane.artifacts artifact
+FROM control_plane.artifact_heads artifact
 JOIN control_plane.artifact_history history
   ON history.id=artifact.id AND history.organization_id=artifact.organization_id
 JOIN control_plane.catalog_access_targets target

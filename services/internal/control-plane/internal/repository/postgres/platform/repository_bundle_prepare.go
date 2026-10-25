@@ -67,24 +67,24 @@ func (repository *Repository) PrepareRepositoryBundle(ctx context.Context, princ
 	}
 	archive, err := repository.readRepositoryBundleArtifact(ctx, principal, input, input.Archive)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("ARCHIVE_READ", err, err)
 	}
 	defer clear(archive)
 	manifestBytes, err := repository.readRepositoryBundleArtifact(ctx, principal, input, input.Manifest)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("MANIFEST_READ", err, err)
 	}
 	defer clear(manifestBytes)
 	manifest, files, err := repositorybundle.Open(archive, manifestBytes)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, errs.ErrInvalid
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("DECODE", err, errs.ErrInvalid)
 	}
 	for _, file := range files {
 		defer clear(file.Bytes)
 	}
 	receipts, err := repository.inspectRepositoryBundleFiles(ctx, files)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("DECODED_SCAN", err, err)
 	}
 	return retrySerializableTransaction(ctx, func() (entity.RepositoryBundlePublication, error) {
 		return repository.prepareRepositoryBundleTx(ctx, principal, input, manifest, receipts)
@@ -96,11 +96,11 @@ func (repository *Repository) PrepareRepositoryBundle(ctx context.Context, princ
 func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, principal value.Principal, input port.RepositoryBundlePrepare, manifest repositorybundle.Manifest, receipts []repositoryBundleFileReceipt) (entity.RepositoryBundlePublication, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("SCOPE", err, err)
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, errs.ErrUnavailable
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("BEGIN", err, errs.ErrUnavailable)
 	}
 	defer rollbackRepositoryBundle(ctx, tx)
 	var origin repositoryBundleOrigin
@@ -111,10 +111,10 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 		&origin.grantVersion, &origin.resourceDigest, &origin.resourceScope,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("ORIGIN", err, errs.ErrForbidden)
 	}
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, serializableTransactionError(err, errs.ErrUnavailable)
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("ORIGIN", err, serializableTransactionError(err, errs.ErrUnavailable))
 	}
 	inputDigest := repositorybundle.Digest(asJSON(input))
 	var existing, oldDigest string
@@ -125,15 +125,15 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 		}
 		row, err := lockRepositoryBundle(ctx, tx, current, existing)
 		if err != nil {
-			return entity.RepositoryBundlePublication{}, err
+			return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("REPLAY", err, err)
 		}
-		if tx.Commit(ctx) != nil {
-			return entity.RepositoryBundlePublication{}, errs.ErrUnavailable
+		if err := tx.Commit(ctx); err != nil {
+			return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("COMMIT", err, errs.ErrUnavailable)
 		}
 		return row.proposal, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return entity.RepositoryBundlePublication{}, serializableTransactionError(err, errs.ErrUnavailable)
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("REPLAY", err, serializableTransactionError(err, errs.ErrUnavailable))
 	}
 	initiator := current
 	initiator.actorID, initiator.actorRef = origin.actorID, origin.actorRef
@@ -146,29 +146,35 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 			"artifact_ref": pin.Ref, "revision": pin.Revision, "digest": pin.SHA256, "size_bytes": pin.Size}).Scan(&ref); errors.Is(err, pgx.ErrNoRows) {
 			return entity.RepositoryBundlePublication{}, errs.ErrNotFound
 		} else if err != nil {
-			return entity.RepositoryBundlePublication{}, serializableTransactionError(err, errs.ErrUnavailable)
+			return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("ARTIFACT_ELIGIBILITY", err, serializableTransactionError(err, errs.ErrUnavailable))
 		}
 	}
 	connection, err := readConnection(ctx, tx, initiator, origin.connectionRef)
-	if err != nil || connection.CredentialRevision == nil || !connection.Enabled || connection.State != "CONNECTED" {
+	if err != nil {
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("CONNECTION", err, errs.ErrForbidden)
+	}
+	if connection.CredentialRevision == nil || !connection.Enabled || connection.State != "CONNECTED" {
 		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
 	}
 	definition, err := repository.integrationPackage(ctx, tx, current.organizationID, connection.Ref, connection.DefinitionKey, connection.DefinitionVersion, connection.DefinitionDigest)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("DEFINITION", err, err)
 	}
 	configuration, valid := integrationStringConfiguration(connection.PublicConfiguration)
 	if !valid || definition.ValidateConfiguration(configuration) != nil || connection.DefinitionKey != "github" {
 		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
 	}
 	var connectionID, credentialID string
-	if err := tx.QueryRow(ctx, queryConfigurationSourceCredential, current.organizationID, connection.Ref, connection.CredentialRevision.Ref).Scan(&connectionID, &credentialID); err != nil || connectionID != origin.connectionID {
+	if err := tx.QueryRow(ctx, queryConfigurationSourceCredential, current.organizationID, connection.Ref, connection.CredentialRevision.Ref).Scan(&connectionID, &credentialID); err != nil {
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("CREDENTIAL", err, errs.ErrForbidden)
+	}
+	if connectionID != origin.connectionID {
 		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
 	}
 	bounded := repositorybundle.InvocationInput(input.Archive, input.Manifest, input.BaseCommitSHA)
 	resolved, err := repository.resolveIntegrationInvocationTx(ctx, tx, current, map[string]string{"run_ref": origin.runRef, "node_ref": origin.nodeRef, "connection_ref": origin.connectionRef, "capability_key": repositoryBundleOperation, "idempotency_key": input.IdempotencyKey}, bounded, true)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("NATIVE_INTENT", err, err)
 	}
 	ref, err := newRef("rbp")
 	if err != nil {
@@ -176,11 +182,11 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 	}
 	var invocationID, gateID, nativeDigest, effectKey string
 	if err := tx.QueryRow(ctx, queryRepositoryBundleIdentity, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_ref": stringMap(resolved, "invocationRef"), "node_id": origin.nodeID, "grant_id": origin.grantID, "root_run_id": origin.rootRunID, "project_id": origin.projectID}).Scan(&invocationID, &gateID, &nativeDigest, &effectKey); err != nil {
-		return entity.RepositoryBundlePublication{}, serializableTransactionError(err, errs.ErrUnavailable)
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("IDENTITY", err, serializableTransactionError(err, errs.ErrUnavailable))
 	}
 	var now time.Time
-	if tx.QueryRow(ctx, queryCatalogSnapshotTime).Scan(&now) != nil {
-		return entity.RepositoryBundlePublication{}, errs.ErrUnavailable
+	if err := tx.QueryRow(ctx, queryCatalogSnapshotTime).Scan(&now); err != nil {
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("CLOCK", err, errs.ErrUnavailable)
 	}
 	proposal := entity.RepositoryBundlePublication{Ref: ref, Version: 1, ProjectRef: origin.projectRef, OriginRunRef: origin.runRef, OriginRuntimeRevisionRef: origin.revisionRef,
 		InvocationRef: stringMap(resolved, "invocationRef"), GateRef: stringMap(resolved, "gateRef"), ConnectionRef: connection.Ref, ConnectionVersion: connection.Version, GrantRef: input.GrantRef, GrantVersion: origin.grantVersion,
@@ -194,15 +200,15 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 	}
 	var resourceScope map[string]string
 	if json.Unmarshal(origin.resourceScope, &resourceScope) != nil || resourceScope == nil || repositorybundle.Digest(asJSON(resourceScope)) != origin.resourceDigest {
-		return entity.RepositoryBundlePublication{}, errs.ErrUnavailable
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("RESOURCE_SCOPE", errs.ErrUnavailable, errs.ErrUnavailable)
 	}
 	archiveSource, err := resolveRepositoryBundleSource(ctx, tx, current, origin.projectID, input.Archive)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("SOURCE_PIN", err, err)
 	}
 	manifestSource, err := resolveRepositoryBundleSource(ctx, tx, current, origin.projectID, input.Manifest)
 	if err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("SOURCE_PIN", err, err)
 	}
 	snapshot := repositoryBundleSnapshot{SourcePolicy: repositoryBundleContentPolicy, FileReceipts: receipts, ArchiveSource: archiveSource, ManifestSource: manifestSource, ResourceScope: resourceScope, ResourceScopeDigest: origin.resourceDigest, Proposal: proposal, DefinitionKey: definition.Metadata.Key, DefinitionVersion: definition.Metadata.Version, DefinitionDigest: definition.Digest,
 		DefinitionPackage: asJSON(definition), PublicConfiguration: connection.PublicConfiguration, Credential: *connection.CredentialRevision, InputDigest: nativeDigest, EffectKey: effectKey}
@@ -210,13 +216,13 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 		"runtime_revision_id": origin.revisionID, "lease_ref": input.LeaseRef, "generation": input.Generation, "connection_id": origin.connectionID, "grant_id": origin.grantID, "credential_id": credentialID, "gate_id": gateID, "invocation_id": invocationID,
 		"idempotency_key": input.IdempotencyKey, "input_sha256": inputDigest, "snapshot_sha256": repositorybundle.Digest(asJSON(snapshot)), "approval_digest": proposal.ApprovalDigest, "snapshot": asJSON(snapshot), "manifest_metadata": asJSON(manifest), "manifest_sha256": input.Manifest.SHA256,
 		"archive_revision_ref": archiveSource.RevisionRef, "manifest_revision_ref": manifestSource.RevisionRef, "archive_sha256": input.Archive.SHA256, "base_commit_sha": input.BaseCommitSHA, "repository_ref": proposal.RepositoryRef, "proposal_branch": proposal.ProposalBranch, "created_at": proposal.CreatedAt, "expires_at": proposal.ExpiresAt}); err != nil {
-		return entity.RepositoryBundlePublication{}, serializableTransactionError(err, mapWriteError(err))
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("INSERT", err, serializableTransactionError(err, mapWriteError(err)))
 	}
 	if err := repositoryBundleAudit(ctx, tx, current, origin.projectID, origin.actorID, proposal.Ref, proposal.State); err != nil {
-		return entity.RepositoryBundlePublication{}, err
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("AUDIT", err, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return entity.RepositoryBundlePublication{}, serializableTransactionError(err, errs.ErrUnavailable)
+		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("COMMIT", err, serializableTransactionError(err, errs.ErrUnavailable))
 	}
 	return proposal, nil
 }

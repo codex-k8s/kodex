@@ -57,6 +57,7 @@ func testRepositoryBundleLateDisable(t *testing.T) {
 func testRepositoryBundleOversizeCallback(t *testing.T) {
 	f := newRepositoryBundleFixtureMode(t, true)
 	f.prepare()
+	f.decide("APPROVE")
 	nestedAgent := createLifecycleAgent(t, f.ctx, f.service, f.owner, f.project, "oversize-helper", "Oversize helper")
 	var children []string
 	summary := strings.Repeat("x", 4000)
@@ -72,7 +73,6 @@ func testRepositoryBundleOversizeCallback(t *testing.T) {
 	}
 	f.completeOrigin()
 	f.graph(0)
-	f.decide("APPROVE")
 	effect := f.claim()
 	f.begin(effect)
 	f.complete(effect)

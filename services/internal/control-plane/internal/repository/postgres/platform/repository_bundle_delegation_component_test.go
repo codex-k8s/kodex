@@ -43,6 +43,7 @@ func testRepositoryBundleNestedOrder(t *testing.T, order string) {
 	f := newRepositoryBundleFixtureMode(t, true)
 	nestedAgent := f.execute(command.CreateAgent, "nested-reader", nil, command.AgentInput{ProjectRef: f.project, Name: "Nested reader", Purpose: "Return independent child evidence", RoleDescription: "Read-only helper", Instructions: "Return one receipt", InitialCapabilities: []string{runtimecontract.ArtifactCapability}}).Agent
 	f.prepare()
+	f.decide("APPROVE")
 	nested, err := f.service.Execute(f.ctx, command.Command{Kind: command.DelegateExecution, Principal: f.worker, Mutation: value.Mutation{IdempotencyKey: "bundle-nested-delegate"}, Payload: command.DelegateInput{LeaseRef: f.input.LeaseRef, Fence: f.input.Fence, Generation: f.input.Generation, TargetAgentRef: nestedAgent.Ref, Task: "Return a nested receipt without Git effects"}})
 	if err != nil || nested.Run == nil {
 		t.Fatal("native nested delegation", err)
@@ -52,7 +53,6 @@ func testRepositoryBundleNestedOrder(t *testing.T, order string) {
 	repositoryBundleChildState(t, f, 0, "RUNNING")
 	nestedLease := claimBundleFixtureExecution(t, f, "bundle-nested-claim", nested.Run.Ref)
 	settle := func() {
-		f.decide("APPROVE")
 		effect := f.claim()
 		f.begin(effect)
 		before := f.initialPuts

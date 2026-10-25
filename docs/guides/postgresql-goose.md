@@ -4,7 +4,7 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.5
+version: 1.2.6
 updated: 2026-10-25
 ---
 
@@ -109,6 +109,16 @@ SQL не собирается конкатенацией пользовател�
 - Частичный результат при ошибке не возвращается как успешный.
 - Retry serialization/deadlock выполняется ограниченно и только для доказанно
   идемпотентной операции.
+
+Row lock адресует реальный owner aggregate, а не compatibility view: `FOR SHARE`
+на view разворачивается на все её underlying relations, включая nullable side
+внешнего JOIN. Сначала сверяются итоговая schema и фактические UPDATE privileges
+runtime-роли: PostgreSQL требует UPDATE privilege даже для `FOR SHARE`.
+Не выдавать UPDATE на immutable revisions ради чтения. Если canonical writers,
+retention и purge защищены HEAD lock, reader удерживает тот же HEAD; exact
+revision/content и effective scan остаются immutable reads с прежними ACL.
+SQLSTATE классифицируется до безопасного mapping, а diagnostic содержит только
+закрытые stage/class, без SQL, параметров, сообщений БД и provider payload.
 
 Чтение, которое удерживает lease через `FOR SHARE` в `REPEATABLE READ`, может
 получить `40001` при конкурентном renew между snapshot и захватом блокировки.

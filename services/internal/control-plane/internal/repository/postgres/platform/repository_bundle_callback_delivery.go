@@ -88,6 +88,10 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 			if err := repository.blockRepositoryBundleContinuationAuthority(ctx, tx, current, ref, nodeID); err != nil {
 				return false, err
 			}
+		} else {
+			if _, err := tx.Exec(ctx, queryRuntimeIntegrationResumeRootRun, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": row.rootRunID}); err != nil {
+				return false, errs.ErrUnavailable
+			}
 		}
 		return continued, nil
 	}
