@@ -40,13 +40,9 @@ func (server *Server) CreateRuntimeEnvironmentDraft(ctx context.Context, request
 	if err != nil {
 		return nil, transportError(errs.ErrInvalid)
 	}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
-		command.CreateRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{ScopeKind: "PROJECT", ProjectRef: request.GetProjectRef(),
-			EnvironmentRef: request.GetEnvironmentRef(), ExpectedEnvironmentVersion: request.GetExpectedEnvironmentVersion(), Specification: spec})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName, command.CreateRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{ScopeKind: "PROJECT", ProjectRef: request.GetProjectRef(), EnvironmentRef: request.GetEnvironmentRef(), ExpectedEnvironmentVersion: request.GetExpectedEnvironmentVersion(), Specification: spec}, func(result command.Result) *controlplanev1.CreateRuntimeEnvironmentDraftResponse {
+		return &controlplanev1.CreateRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}
+	})
 }
 
 // CreateOrganizationRuntimeEnvironmentDraft requires a convertible specification and assigns
@@ -58,13 +54,9 @@ func (server *Server) CreateOrganizationRuntimeEnvironmentDraft(ctx context.Cont
 	if err != nil {
 		return nil, transportError(errs.ErrInvalid)
 	}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName,
-		command.CreateOrganizationRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{ScopeKind: "ORGANIZATION",
-			EnvironmentRef: request.GetEnvironmentRef(), ExpectedEnvironmentVersion: request.GetExpectedEnvironmentVersion(), Specification: spec})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateOrganizationRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName, command.CreateOrganizationRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{ScopeKind: "ORGANIZATION", EnvironmentRef: request.GetEnvironmentRef(), ExpectedEnvironmentVersion: request.GetExpectedEnvironmentVersion(), Specification: spec}, func(result command.Result) *controlplanev1.CreateOrganizationRuntimeEnvironmentDraftResponse {
+		return &controlplanev1.CreateOrganizationRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}
+	})
 }
 
 // SaveRuntimeEnvironmentDraft converts the specification before sending the draft locator and
@@ -76,12 +68,9 @@ func (server *Server) SaveRuntimeEnvironmentDraft(ctx context.Context, request *
 	if err != nil {
 		return nil, transportError(errs.ErrInvalid)
 	}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName,
-		command.SaveRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef(), Specification: spec})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.SaveRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName, command.SaveRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef(), Specification: spec}, func(result command.Result) *controlplanev1.SaveRuntimeEnvironmentDraftResponse {
+		return &controlplanev1.SaveRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}
+	})
 }
 
 // ValidateRuntimeEnvironmentDraft executes the dedicated validation command for the draft locator
@@ -89,12 +78,9 @@ func (server *Server) SaveRuntimeEnvironmentDraft(ctx context.Context, request *
 // ValidateRuntimeEnvironmentDraft выполняет отдельную команду проверки по ссылке черновика и
 // преобразует полученный черновик.
 func (server *Server) ValidateRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.ValidateRuntimeEnvironmentDraftRequest) (*controlplanev1.ValidateRuntimeEnvironmentDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName,
-		command.ValidateRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ValidateRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName, command.ValidateRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()}, func(result command.Result) *controlplanev1.ValidateRuntimeEnvironmentDraftResponse {
+		return &controlplanev1.ValidateRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}
+	})
 }
 
 // PublishRuntimeEnvironmentDraft copies selected impact items into the dedicated publication
@@ -133,12 +119,9 @@ func castPublishedEnvironmentDraft(result command.Result) (*controlplanev1.Publi
 // DiscardRuntimeEnvironmentDraft передаёт ссылку черновика отдельной команде отбрасывания и
 // возвращает полученное представление черновика.
 func (server *Server) DiscardRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.DiscardRuntimeEnvironmentDraftRequest) (*controlplanev1.DiscardRuntimeEnvironmentDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName,
-		command.DiscardRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.DiscardRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName, command.DiscardRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()}, func(result command.Result) *controlplanev1.DiscardRuntimeEnvironmentDraftResponse {
+		return &controlplanev1.DiscardRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}
+	})
 }
 
 // domainEnvironmentDraftSpecification requires input, copies values, secret references and tools,

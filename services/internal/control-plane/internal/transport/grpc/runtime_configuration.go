@@ -140,13 +140,9 @@ func (server *Server) PublishAgentRuntimeConfiguration(ctx context.Context, requ
 			CatalogRevision: item.GetCatalogRevision(), CatalogDigest: item.GetCatalogDigest(),
 			ProviderDefinitionKey: item.GetProviderDefinitionKey(), DefaultReasoningEffort: item.GetDefaultReasoningEffort()})
 	}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName,
-		command.PublishAgentRuntimeConfig, request.GetMutation(), command.AgentRuntimeConfigurationInput{AgentRef: request.GetAgentRef(),
-			RuntimeProfileRef: request.GetRuntimeProfileRef(), Model: request.GetModel(), ProviderPolicyMode: request.GetProviderPolicyMode(), ProviderAccounts: accounts})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.PublishAgentRuntimeConfigurationResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName, command.PublishAgentRuntimeConfig, request.GetMutation(), command.AgentRuntimeConfigurationInput{AgentRef: request.GetAgentRef(), RuntimeProfileRef: request.GetRuntimeProfileRef(), Model: request.GetModel(), ProviderPolicyMode: request.GetProviderPolicyMode(), ProviderAccounts: accounts}, func(result command.Result) *controlplanev1.PublishAgentRuntimeConfigurationResponse {
+		return &controlplanev1.PublishAgentRuntimeConfigurationResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}
+	})
 }
 
 // CreateConfigOverlayDraft passes complete overlay content and agent locator to the owner draft
@@ -154,12 +150,9 @@ func (server *Server) PublishAgentRuntimeConfiguration(ctx context.Context, requ
 // CreateConfigOverlayDraft передаёт полный overlay content и agent locator owner draft command без
 // прямого применения runtime configuration.
 func (server *Server) CreateConfigOverlayDraft(ctx context.Context, request *controlplanev1.CreateConfigOverlayDraftRequest) (*controlplanev1.CreateConfigOverlayDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateConfigOverlayDraft_FullMethodName,
-		command.CreateConfigOverlayDraft, request.GetMutation(), command.ConfigOverlayInput{AgentRef: request.GetAgentRef(), Content: request.GetContent()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateConfigOverlayDraftResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateConfigOverlayDraft_FullMethodName, command.CreateConfigOverlayDraft, request.GetMutation(), command.ConfigOverlayInput{AgentRef: request.GetAgentRef(), Content: request.GetContent()}, func(result command.Result) *controlplanev1.CreateConfigOverlayDraftResponse {
+		return &controlplanev1.CreateConfigOverlayDraftResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}
+	})
 }
 
 // ValidateConfigOverlayDraft delegates overlay validation for the agent through the exact
@@ -167,12 +160,9 @@ func (server *Server) CreateConfigOverlayDraft(ctx context.Context, request *con
 // ValidateConfigOverlayDraft передаёт overlay validation агента точной специализированной owner
 // command.
 func (server *Server) ValidateConfigOverlayDraft(ctx context.Context, request *controlplanev1.ValidateConfigOverlayDraftRequest) (*controlplanev1.ValidateConfigOverlayDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ValidateConfigOverlayDraft_FullMethodName,
-		command.ValidateConfigOverlayDraft, request.GetMutation(), command.ConfigOverlayInput{AgentRef: request.GetAgentRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ValidateConfigOverlayDraftResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ValidateConfigOverlayDraft_FullMethodName, command.ValidateConfigOverlayDraft, request.GetMutation(), command.ConfigOverlayInput{AgentRef: request.GetAgentRef()}, func(result command.Result) *controlplanev1.ValidateConfigOverlayDraftResponse {
+		return &controlplanev1.ValidateConfigOverlayDraftResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}
+	})
 }
 
 // PublishConfigOverlayDraft delegates overlay publication to the owner and returns its resulting
@@ -180,12 +170,9 @@ func (server *Server) ValidateConfigOverlayDraft(ctx context.Context, request *c
 // PublishConfigOverlayDraft передаёт overlay publication владельцу и возвращает итоговое runtime
 // configuration view.
 func (server *Server) PublishConfigOverlayDraft(ctx context.Context, request *controlplanev1.PublishConfigOverlayDraftRequest) (*controlplanev1.PublishConfigOverlayDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishConfigOverlayDraft_FullMethodName,
-		command.PublishConfigOverlayDraft, request.GetMutation(), command.ConfigOverlayInput{AgentRef: request.GetAgentRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.PublishConfigOverlayDraftResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_PublishConfigOverlayDraft_FullMethodName, command.PublishConfigOverlayDraft, request.GetMutation(), command.ConfigOverlayInput{AgentRef: request.GetAgentRef()}, func(result command.Result) *controlplanev1.PublishConfigOverlayDraftResponse {
+		return &controlplanev1.PublishConfigOverlayDraftResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}
+	})
 }
 
 // RollbackConfigOverlay passes the published overlay locator to the dedicated owner rollback
@@ -193,12 +180,9 @@ func (server *Server) PublishConfigOverlayDraft(ctx context.Context, request *co
 // RollbackConfigOverlay передаёт published overlay locator отдельной owner rollback command вместо
 // приёма replacement runtime content.
 func (server *Server) RollbackConfigOverlay(ctx context.Context, request *controlplanev1.RollbackConfigOverlayRequest) (*controlplanev1.RollbackConfigOverlayResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RollbackConfigOverlay_FullMethodName,
-		command.RollbackConfigOverlay, request.GetMutation(), command.ConfigOverlayInput{AgentRef: request.GetAgentRef(), PublishedOverlayRef: request.GetPublishedOverlayRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RollbackConfigOverlayResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_RollbackConfigOverlay_FullMethodName, command.RollbackConfigOverlay, request.GetMutation(), command.ConfigOverlayInput{AgentRef: request.GetAgentRef(), PublishedOverlayRef: request.GetPublishedOverlayRef()}, func(result command.Result) *controlplanev1.RollbackConfigOverlayResponse {
+		return &controlplanev1.RollbackConfigOverlayResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}
+	})
 }
 
 // domainEnvironment copies public environment values, logical Secret revision bindings and tool
@@ -231,12 +215,9 @@ func (server *Server) CreateRuntimeEnvironmentSet(ctx context.Context, request *
 	if err != nil {
 		return nil, transportError(errs.ErrInvalid)
 	}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName,
-		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ScopeKind: "PROJECT", ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools, Policy: policy})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateRuntimeEnvironmentSetResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName, command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ScopeKind: "PROJECT", ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools, Policy: policy}, func(result command.Result) *controlplanev1.CreateRuntimeEnvironmentSetResponse {
+		return &controlplanev1.CreateRuntimeEnvironmentSetResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}
+	})
 }
 
 // PublishRuntimeEnvironmentVersion converts the requested full environment state and validated
@@ -249,12 +230,9 @@ func (server *Server) PublishRuntimeEnvironmentVersion(ctx context.Context, requ
 	if err != nil {
 		return nil, transportError(errs.ErrInvalid)
 	}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName,
-		command.PublishRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools, Policy: policy})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.PublishRuntimeEnvironmentVersionResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName, command.PublishRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools, Policy: policy}, func(result command.Result) *controlplanev1.PublishRuntimeEnvironmentVersionResponse {
+		return &controlplanev1.PublishRuntimeEnvironmentVersionResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}
+	})
 }
 
 // domainRuntimeEnvironmentPolicy requires resources, preserves optional workspace limits and
@@ -365,12 +343,9 @@ func domainRuntimeKubernetesAccessKind(value controlplanev1.RuntimeKubernetesAcc
 // RollbackRuntimeEnvironment передаёт environment и published-version locators специализированной
 // owner rollback command.
 func (server *Server) RollbackRuntimeEnvironment(ctx context.Context, request *controlplanev1.RollbackRuntimeEnvironmentRequest) (*controlplanev1.RollbackRuntimeEnvironmentResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName,
-		command.RollbackRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), PublishedVersionRef: request.GetPublishedVersionRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RollbackRuntimeEnvironmentResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName, command.RollbackRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{Ref: request.GetEnvironmentRef(), PublishedVersionRef: request.GetPublishedVersionRef()}, func(result command.Result) *controlplanev1.RollbackRuntimeEnvironmentResponse {
+		return &controlplanev1.RollbackRuntimeEnvironmentResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}
+	})
 }
 
 // BindAgentRuntimeEnvironment passes agent/environment/version locators to owner binding with
@@ -378,12 +353,9 @@ func (server *Server) RollbackRuntimeEnvironment(ctx context.Context, request *c
 // BindAgentRuntimeEnvironment передаёт agent, environment и version locators owner binding с
 // mutation и version context без выдачи полномочий одной ссылкой version.
 func (server *Server) BindAgentRuntimeEnvironment(ctx context.Context, request *controlplanev1.BindAgentRuntimeEnvironmentRequest) (*controlplanev1.BindAgentRuntimeEnvironmentResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName,
-		command.BindAgentRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentBindingInput{AgentRef: request.GetAgentRef(), EnvironmentRef: request.GetEnvironmentRef(), VersionRef: request.GetVersionRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.BindAgentRuntimeEnvironmentResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName, command.BindAgentRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentBindingInput{AgentRef: request.GetAgentRef(), EnvironmentRef: request.GetEnvironmentRef(), VersionRef: request.GetVersionRef()}, func(result command.Result) *controlplanev1.BindAgentRuntimeEnvironmentResponse {
+		return &controlplanev1.BindAgentRuntimeEnvironmentResponse{RuntimeConfiguration: castRuntimeConfigurationView(*result.RuntimeConfiguration)}
+	})
 }
 
 // SetRuntimeEnvironmentEnabled passes the explicit enabled flag through the owner environment
@@ -391,14 +363,9 @@ func (server *Server) BindAgentRuntimeEnvironment(ctx context.Context, request *
 // SetRuntimeEnvironmentEnabled передаёт явный enabled flag owner environment lifecycle command под
 // principal точного RPC.
 func (server *Server) SetRuntimeEnvironmentEnabled(ctx context.Context, request *controlplanev1.SetRuntimeEnvironmentEnabledRequest) (*controlplanev1.SetRuntimeEnvironmentEnabledResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SetRuntimeEnvironmentEnabled_FullMethodName,
-		command.SetRuntimeEnvironmentEnabled, request.GetMutation(), command.RuntimeEnvironmentLifecycleInput{
-			EnvironmentRef: request.GetEnvironmentRef(), Enabled: request.GetEnabled(),
-		})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.SetRuntimeEnvironmentEnabledResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_SetRuntimeEnvironmentEnabled_FullMethodName, command.SetRuntimeEnvironmentEnabled, request.GetMutation(), command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: request.GetEnvironmentRef(), Enabled: request.GetEnabled()}, func(result command.Result) *controlplanev1.SetRuntimeEnvironmentEnabledResponse {
+		return &controlplanev1.SetRuntimeEnvironmentEnabledResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}
+	})
 }
 
 // DeleteRuntimeEnvironment passes the environment locator through the dedicated owner deletion
@@ -406,10 +373,7 @@ func (server *Server) SetRuntimeEnvironmentEnabled(ctx context.Context, request 
 // DeleteRuntimeEnvironment передаёт environment locator отдельной owner deletion command вместо
 // удаления configuration resources в transport.
 func (server *Server) DeleteRuntimeEnvironment(ctx context.Context, request *controlplanev1.DeleteRuntimeEnvironmentRequest) (*controlplanev1.DeleteRuntimeEnvironmentResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteRuntimeEnvironment_FullMethodName,
-		command.DeleteRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: request.GetEnvironmentRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.DeleteRuntimeEnvironmentResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_DeleteRuntimeEnvironment_FullMethodName, command.DeleteRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentLifecycleInput{EnvironmentRef: request.GetEnvironmentRef()}, func(result command.Result) *controlplanev1.DeleteRuntimeEnvironmentResponse {
+		return &controlplanev1.DeleteRuntimeEnvironmentResponse{Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}
+	})
 }

@@ -15,14 +15,9 @@ func (server *Server) CreateProviderAccount(
 	ctx context.Context,
 	request *controlplanev1.CreateProviderAccountRequest,
 ) (*controlplanev1.CreateProviderAccountResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateProviderAccount_FullMethodName,
-		command.CreateProviderAccount, request.GetMutation(), command.ProviderAccountInput{
-			DefinitionKey: request.GetDefinitionKey(), Name: request.GetName(),
-		})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateProviderAccount_FullMethodName, command.CreateProviderAccount, request.GetMutation(), command.ProviderAccountInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName()}, func(result command.Result) *controlplanev1.CreateProviderAccountResponse {
+		return &controlplanev1.CreateProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}
+	})
 }
 
 // StartProviderAccountDeviceAuthorization uses the exact method principal and supplied mutation to
@@ -92,12 +87,9 @@ func (server *Server) VerifyProviderAccountDeviceAuthorization(
 	ctx context.Context,
 	request *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest,
 ) (*controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName,
-		command.VerifyProviderAuthorization, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName, command.VerifyProviderAuthorization, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()}, func(result command.Result) *controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse {
+		return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: castProviderAccount(*result.ProviderAccount)}
+	})
 }
 
 // ReauthorizeProviderAccountDeviceCode uses its distinct RPC principal to call the owner's
@@ -127,12 +119,9 @@ func (server *Server) RevokeProviderAccount(
 	ctx context.Context,
 	request *controlplanev1.RevokeProviderAccountRequest,
 ) (*controlplanev1.RevokeProviderAccountResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RevokeProviderAccount_FullMethodName,
-		command.RevokeProviderAccount, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RevokeProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_RevokeProviderAccount_FullMethodName, command.RevokeProviderAccount, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()}, func(result command.Result) *controlplanev1.RevokeProviderAccountResponse {
+		return &controlplanev1.RevokeProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}
+	})
 }
 
 // DeleteProviderAccount passes the account locator through the dedicated delete command and
@@ -143,12 +132,9 @@ func (server *Server) DeleteProviderAccount(
 	ctx context.Context,
 	request *controlplanev1.DeleteProviderAccountRequest,
 ) (*controlplanev1.DeleteProviderAccountResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteProviderAccount_FullMethodName,
-		command.DeleteProviderAccount, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.DeleteProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_DeleteProviderAccount_FullMethodName, command.DeleteProviderAccount, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()}, func(result command.Result) *controlplanev1.DeleteProviderAccountResponse {
+		return &controlplanev1.DeleteProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}
+	})
 }
 
 // SetProviderAccountEnabled passes the requested enabled flag and account locator through the
@@ -159,14 +145,9 @@ func (server *Server) SetProviderAccountEnabled(
 	ctx context.Context,
 	request *controlplanev1.SetProviderAccountEnabledRequest,
 ) (*controlplanev1.SetProviderAccountEnabledResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SetProviderAccountEnabled_FullMethodName,
-		command.SetProviderAccountEnabled, request.GetMutation(), command.ProviderAccountInput{
-			AccountRef: request.GetAccountRef(), Enabled: request.GetEnabled(),
-		})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.SetProviderAccountEnabledResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_SetProviderAccountEnabled_FullMethodName, command.SetProviderAccountEnabled, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef(), Enabled: request.GetEnabled()}, func(result command.Result) *controlplanev1.SetProviderAccountEnabledResponse {
+		return &controlplanev1.SetProviderAccountEnabledResponse{Account: castProviderAccount(*result.ProviderAccount)}
+	})
 }
 
 // SetProviderAccountConcurrency passes the proposed concurrency limit and account locator through
@@ -177,12 +158,7 @@ func (server *Server) SetProviderAccountConcurrency(
 	ctx context.Context,
 	request *controlplanev1.SetProviderAccountConcurrencyRequest,
 ) (*controlplanev1.SetProviderAccountConcurrencyResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SetProviderAccountConcurrency_FullMethodName,
-		command.SetProviderAccountConcurrency, request.GetMutation(), command.ProviderAccountInput{
-			AccountRef: request.GetAccountRef(), MaximumConcurrentExecutions: request.GetMaximumConcurrentExecutions(),
-		})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.SetProviderAccountConcurrencyResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_SetProviderAccountConcurrency_FullMethodName, command.SetProviderAccountConcurrency, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef(), MaximumConcurrentExecutions: request.GetMaximumConcurrentExecutions()}, func(result command.Result) *controlplanev1.SetProviderAccountConcurrencyResponse {
+		return &controlplanev1.SetProviderAccountConcurrencyResponse{Account: castProviderAccount(*result.ProviderAccount)}
+	})
 }

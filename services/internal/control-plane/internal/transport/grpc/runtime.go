@@ -547,11 +547,9 @@ func assistantPlanTransportError(err error) error {
 // преобразует полученную lease.
 func (server *Server) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest) (*controlplanev1.RenewExecutionResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration()}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName, command.RenewExecution, nil, payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RenewExecutionResponse{Lease: castLease(result.Runtime)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName, command.RenewExecution, nil, payload, func(result command.Result) *controlplanev1.RenewExecutionResponse {
+		return &controlplanev1.RenewExecutionResponse{Lease: castLease(result.Runtime)}
+	})
 }
 
 // ReportExecutionProgress converts optional financial and ordinary-message observations and
@@ -586,12 +584,9 @@ func (server *Server) ReportExecutionProgress(ctx context.Context, request *cont
 // команде изменения и преобразует возвращённую привязку.
 func (server *Server) CommitProviderCredentialRefresh(ctx context.Context, request *controlplanev1.CommitProviderCredentialRefreshRequest) (*controlplanev1.CommitProviderCredentialRefreshResponse, error) {
 	payload := providerCredentialRefreshInput(request)
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName,
-		command.CommitProviderCredentialRefresh, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CommitProviderCredentialRefreshResponse{ProviderCredential: castProviderCredential(result.Runtime)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName, command.CommitProviderCredentialRefresh, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CommitProviderCredentialRefreshResponse {
+		return &controlplanev1.CommitProviderCredentialRefreshResponse{ProviderCredential: castProviderCredential(result.Runtime)}
+	})
 }
 
 // providerCredentialRefreshInput copies lease, previous revision and exact Secret identity,
@@ -632,11 +627,9 @@ func (server *Server) CompleteExecution(ctx context.Context, request *controlpla
 	for _, item := range request.GetArtifacts() {
 		payload.Artifacts = append(payload.Artifacts, command.CompletedArtifact{FileName: item.GetFileName(), MediaType: item.GetMediaType(), SizeBytes: item.GetSizeBytes(), Content: item.GetContent(), SHA256: item.GetSha256()})
 	}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName, command.CompleteExecution, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CompleteExecutionResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName, command.CompleteExecution, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CompleteExecutionResponse {
+		return &controlplanev1.CompleteExecutionResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}
+	})
 }
 
 // DelegateExecution passes the parent lease and requested target to the dedicated delegation
@@ -645,11 +638,9 @@ func (server *Server) CompleteExecution(ctx context.Context, request *controlpla
 // и возвращает потомка, корневой граф и ребро ответа.
 func (server *Server) DelegateExecution(ctx context.Context, request *controlplanev1.DelegateExecutionRequest) (*controlplanev1.DelegateExecutionResponse, error) {
 	payload := command.DelegateInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), TargetAgentRef: request.GetTargetAgentRef(), WorkflowStepKey: request.GetWorkflowStepKey(), Task: request.GetTask(), Input: asMap(request.GetInput())}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName, command.DelegateExecution, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.DelegateExecutionResponse{ChildRun: castRun(*result.Run), RootGraph: castGraph(*result.Graph), CallbackEdgeRef: mapString(result.Runtime, "callbackEdgeRef")}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName, command.DelegateExecution, request.GetMutation(), payload, func(result command.Result) *controlplanev1.DelegateExecutionResponse {
+		return &controlplanev1.DelegateExecutionResponse{ChildRun: castRun(*result.Run), RootGraph: castGraph(*result.Graph), CallbackEdgeRef: mapString(result.Runtime, "callbackEdgeRef")}
+	})
 }
 
 // ProposeAssistantPlan rejects nil or unspecified operations before passing the proposal and lease
@@ -665,11 +656,9 @@ func (server *Server) ProposeAssistantPlan(ctx context.Context, request *control
 		operations = append(operations, assistantOperation(item))
 	}
 	payload := command.ProposeAssistantPlanInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Summary: request.GetSummary(), Operations: operations}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeAssistantPlan_FullMethodName, command.ProposeAssistantPlan, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ProposeAssistantPlanResponse{Plan: castPlan(result.Plan), Conversation: castConversation(*result.Conversation)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeAssistantPlan_FullMethodName, command.ProposeAssistantPlan, request.GetMutation(), payload, func(result command.Result) *controlplanev1.ProposeAssistantPlanResponse {
+		return &controlplanev1.ProposeAssistantPlanResponse{Plan: castPlan(result.Plan), Conversation: castConversation(*result.Conversation)}
+	})
 }
 
 // ProposeAssistantMetadata passes a proposed conversation title with exact lease bindings through
@@ -678,11 +667,9 @@ func (server *Server) ProposeAssistantPlan(ctx context.Context, request *control
 // отдельной команде метаданных ассистента.
 func (server *Server) ProposeAssistantMetadata(ctx context.Context, request *controlplanev1.ProposeAssistantMetadataRequest) (*controlplanev1.ProposeAssistantMetadataResponse, error) {
 	payload := command.ProposeAssistantMetadataInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Title: request.GetTitle()}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeAssistantMetadata_FullMethodName, command.ProposeAssistantMetadata, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ProposeAssistantMetadataResponse{Conversation: castConversation(*result.Conversation)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeAssistantMetadata_FullMethodName, command.ProposeAssistantMetadata, request.GetMutation(), payload, func(result command.Result) *controlplanev1.ProposeAssistantMetadataResponse {
+		return &controlplanev1.ProposeAssistantMetadataResponse{Conversation: castConversation(*result.Conversation)}
+	})
 }
 
 // ProposeRunMetadata passes a proposed run title with exact lease bindings through the dedicated
@@ -691,11 +678,9 @@ func (server *Server) ProposeAssistantMetadata(ctx context.Context, request *con
 // команде метаданных запуска.
 func (server *Server) ProposeRunMetadata(ctx context.Context, request *controlplanev1.ProposeRunMetadataRequest) (*controlplanev1.ProposeRunMetadataResponse, error) {
 	payload := command.ProposeRunMetadataInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Title: request.GetTitle(), ActivitySummary: request.GetActivitySummary()}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeRunMetadata_FullMethodName, command.ProposeRunMetadata, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ProposeRunMetadataResponse{Run: castRun(*result.Run), Event: castEvent(*result.Event)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeRunMetadata_FullMethodName, command.ProposeRunMetadata, request.GetMutation(), payload, func(result command.Result) *controlplanev1.ProposeRunMetadataResponse {
+		return &controlplanev1.ProposeRunMetadataResponse{Run: castRun(*result.Run), Event: castEvent(*result.Event)}
+	})
 }
 
 // RecordRunToolCall converts tool-call locators, state, revision and safe result fields before
@@ -707,11 +692,9 @@ func (server *Server) RecordRunToolCall(ctx context.Context, request *controlpla
 		CallRef: request.GetCallRef(), Tool: request.GetTool(), SafeParameters: asMap(request.GetSafeParameters()),
 		CapabilityRef: request.GetCapabilityRef(), GrantRef: request.GetGrantRef(), State: enumSuffix(request.GetState(), "RUN_TOOL_CALL_STATE_"),
 		DurationMS: request.GetDurationMs(), SafeResult: request.GetSafeResult(), Revision: request.GetRevision()}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RecordRunToolCall_FullMethodName, command.RecordRunToolCall, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RecordRunToolCallResponse{Event: castEvent(*result.Event)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_RecordRunToolCall_FullMethodName, command.RecordRunToolCall, request.GetMutation(), payload, func(result command.Result) *controlplanev1.RecordRunToolCallResponse {
+		return &controlplanev1.RecordRunToolCallResponse{Event: castEvent(*result.Event)}
+	})
 }
 
 // assistantOperations preserves operation order while omitting nil entries and converting the
@@ -813,11 +796,9 @@ func (server *Server) ClaimDueSchedules(ctx context.Context, request *controlpla
 // материализации и преобразует запуск и расписание.
 func (server *Server) MaterializeScheduleOccurrence(ctx context.Context, request *controlplanev1.MaterializeScheduleOccurrenceRequest) (*controlplanev1.MaterializeScheduleOccurrenceResponse, error) {
 	payload := command.OccurrenceInput{OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration()}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName, command.MaterializeOccurrence, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.MaterializeScheduleOccurrenceResponse{Run: castRun(*result.Run), Schedule: castSchedule(*result.Schedule)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName, command.MaterializeOccurrence, request.GetMutation(), payload, func(result command.Result) *controlplanev1.MaterializeScheduleOccurrenceResponse {
+		return &controlplanev1.MaterializeScheduleOccurrenceResponse{Run: castRun(*result.Run), Schedule: castSchedule(*result.Schedule)}
+	})
 }
 
 // RenewScheduleOccurrence renews the occurrence lease through the verified domain method and
@@ -847,12 +828,9 @@ func (server *Server) FailScheduleOccurrence(ctx context.Context, request *contr
 		OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(),
 		Generation: request.GetGeneration(), SafeErrorCode: request.GetSafeErrorCode(), Retryable: request.GetRetryable(),
 	}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_FailScheduleOccurrence_FullMethodName,
-		command.FailScheduleOccurrence, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.FailScheduleOccurrenceResponse{State: mapString(result.Runtime, "state"), Attempt: int32(mapInt64(result.Runtime, "attempt"))}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_FailScheduleOccurrence_FullMethodName, command.FailScheduleOccurrence, request.GetMutation(), payload, func(result command.Result) *controlplanev1.FailScheduleOccurrenceResponse {
+		return &controlplanev1.FailScheduleOccurrenceResponse{State: mapString(result.Runtime, "state"), Attempt: int32(mapInt64(result.Runtime, "attempt"))}
+	})
 }
 
 // ClaimIntegrationConnectionTests reads authorized connection-test claims for the workload and
@@ -881,11 +859,9 @@ func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, reque
 // команде завершения и возвращает полученное подключение.
 func (server *Server) CompleteIntegrationConnectionTest(ctx context.Context, request *controlplanev1.CompleteIntegrationConnectionTestRequest) (*controlplanev1.CompleteIntegrationConnectionTestResponse, error) {
 	payload := command.IntegrationConnectionTestInput{TestRef: request.GetTestRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName, command.CompleteConnectionTest, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CompleteIntegrationConnectionTestResponse{Connection: castConnection(*result.Connection)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName, command.CompleteConnectionTest, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CompleteIntegrationConnectionTestResponse {
+		return &controlplanev1.CompleteIntegrationConnectionTestResponse{Connection: castConnection(*result.Connection)}
+	})
 }
 
 // ResolveIntegrationInvocation passes invocation locators and bounded input to the authorized
@@ -965,11 +941,9 @@ func (server *Server) CompleteIntegrationInvocation(ctx context.Context, request
 		payload.ProviderEffectRef = receipt.GetProviderEffectRef()
 		payload.ResponseDigest = receipt.GetResponseDigest()
 	}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName, command.CompleteIntegrationInvocation, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CompleteIntegrationInvocationResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName, command.CompleteIntegrationInvocation, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CompleteIntegrationInvocationResponse {
+		return &controlplanev1.CompleteIntegrationInvocationResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}
+	})
 }
 
 // CastIntegrationConnectionTestClaim projects exact definition and lease pins, package bytes and

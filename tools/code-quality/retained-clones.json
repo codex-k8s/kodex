@@ -4158,8 +4158,8 @@
       "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
       "fragmentSHA256": "6be1ec1b60affe01acd5e5fa73c0b5c43a9ebace7afcd9cb0216f68b35b756e4",
-      "count": 1,
-      "reason": "Окно106 tokens пересекает ValidatePromptTemplateDraft и объявление PublishPromptTemplateDraft против terminal return публикации промпта и входа RebindPromptTemplateConsumers. Публикация дополнительно проверяет applied impact plan, чего не делают validate/rebind wrappers. Общая мутация и преобразование входов уже вынесены; повторены лишь короткие typed вызовы/ответы на границах разных методов. Generic handler ради этого окна скрыл бы разные lifecycle contracts, не удаляя содержательного алгоритма. Сохранён exact путь/hash/count1."
+      "count": 2,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: managed_configuration.go: CreatePromptTemplateDraft, PublishPromptTemplateDraft, ValidatePromptTemplateDraft; managed_configuration.go: CreateIntegrationDefinitionDraft, CreateRoleImageRevisionDraft, PublishPromptTemplateDraft, RebindPromptTemplateConsumers, RebindRoleImageConsumers, ValidateIntegrationDefinitionDraft. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. PromptScope добавляется к managedDraftInput, managedMutation возвращает прежние configuration/revision/error. Publication сохраняет отдельный validatePublishedImpactResult после execute; его нельзя заменять безошибочным projector. managedMutation сохраняет отдельный rebind input и result/error contract. Только указанная пара paths/raw fragment SHA-256/count2; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
     },
     {
       "format": "go",
@@ -4168,14 +4168,6 @@
       "fragmentSHA256": "27fc545e275e1e6da5879fb3df7667cba4765d5c12c6503898e898508fec0298",
       "count": 1,
       "reason": "Окно101 tokens сравнивает ValidatePromptTemplateDraft и первые поля PublishPromptTemplateDraft с PublishRoleImageRevisionDraft и началом RebindRoleImageConsumers. Сходная форма маскирует разные transitions: prompt publication использует selected plan items и отдельную проверку итогового applied plan, image rebind — consumers и image impact plan. Общие managed input/execute/casters уже существуют; дальнейшая универсальная command/response фабрика ради двух typed строк нецелесообразна. Только точный fragment/count1, без исключения полных методов."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
-      "fragmentSHA256": "26e81dfcaaa844716083ce8b998d0bfb01a727f482df89fe8f086003efe482a4",
-      "count": 1,
-      "reason": "Окно219 tokens пересекает результат image rebind и Create/Validate/начало Publish IntegrationDefinition; второе — конец integration publish, RebindIntegrationDefinition и Create/начало ValidateSystemSTT. Общего связного алгоритма через эти границы нет: команды/FullMethod/nominal envelopes разные, а execute и managed converters уже общие. Generic sequence/handler factory перенесёт явные bindings в callbacks и не заменит обязательные generated method signatures. Сохранены лишь точный файл/fragment/count1, не configuration family."
     },
     {
       "format": "go",
@@ -5050,14 +5042,6 @@
       "reason": "Внутрифайловое окно114 tokens пересекает разные prepare CREATE/ROTATE DTO и их response wrappers. Общий principal/domain/error/receipt алгоритм уже prepareRuntimeSecret; остаются разные full method, ProjectRef/SecretRef, Name/Description и nominal generated responses. Второй generic helper для двух полей wrapper скроет concrete command mapping без самостоятельного алгоритма. Сохранено лишь это точное окно/hash/count1, не prepare commands или проверки grant."
     },
     {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
-      "fragmentSHA256": "0d477efaadce011950b3ca3ff07223cde62aa0afa66be7a5d2cd6da560c94105",
-      "count": 1,
-      "reason": "Окно129 tokens сравнивает завершение и отказ secret operation: общие principal/transportError уже helpers, совпадает краткий exact operation/claim/generation DTO scaffold. Complete передаёт материализацию и возвращает Secret; Fail — закрытую причину и state receipt. Единый command dispatcher смешал бы разные transitions/response authority ради glue без общего предметного алгоритма. Сохранены только эта внутрефайловая пара/hash/count1, не broker commands целиком."
-    },
-    {
       "format": "sql",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getrun_select_runs_organization_id_ref_project_id.sql",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_listruns_select_runs_organization_id_ref_project_id.sql",
@@ -5251,27 +5235,11 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "fragmentSHA256": "0e664b1b77e8120abeebb1daa6f68dbfd36128894f08bc94d4a833e5570c8db6",
-      "reason": "CreateRuntimeEnvironmentSet и PublishRuntimeEnvironmentVersion уже используют общие domainEnvironment и domainRuntimeEnvironmentPolicy. Create задаёт ScopeKind=PROJECT и ProjectRef, publication — существующий Ref. Specialized mutation ownership/version и generated responses различны; оставшийся typed glue не объединён ради семи getter interface полей.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
-      "fragmentSHA256": "9890fbe9d5999a452c37226a1d2ea4696c31a668f51a37ed3bdcf73e174c23de",
-      "count": 1,
-      "reason": "ProposeAssistantPlan/ProposeAssistantMetadata и due schedule/materialization совпадают только return/execute стыком. Plan validation, lease bindings и occurrence command не объединяются; service transaction и command pairing остаются владельцу. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
       "fragmentSHA256": "9bb9533a385d94e01c1112b53aecb4b4862495cdef8a4fdbcd8da49da4687b7b",
-      "count": 2,
-      "reason": "ReportWarmRuntime/ClaimDueSchedules и FailScheduleOccurrence/ClaimIntegrationConnectionTests образуют соседние wrapper окна. Warm state reporting, retryable occurrence failure и test claim различают owner lifecycle; principal/execute/error уже общие. ReportWarmRuntime/ClaimDueSchedules и ResolveIntegrationInvocation/ClaimIntegrationInvocations имеют разные read/write semantics. Workload claims, resource scope resolution и runtime reporting сохраняют точные RPC/service methods; совпал лишь transport каркас. Решение ограничено прочитанными точными paths/fragment/count2; общих исключений на слой или handler нет."
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: runtime.go: ClaimDueSchedules, ReportWarmRuntime; runtime.go: ClaimIntegrationInvocations, ResolveIntegrationInvocation. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Schedule claim — отдельная owner операция с immutable occurrence/lease/input/revision/attempt pins. Invocation claim сохраняет свой owner eligibility и typed claim projection. Warm reporting — отдельная owner write operation, не query callback. Invocation/resourceScope/grant resolution сохраняет отдельную owner operation, не универсальный command dispatcher. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
     },
     {
       "format": "go",
@@ -5283,35 +5251,11 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
-      "fragmentSHA256": "7ea41acb5a05608f8d5d2871c6761b0c90859540aff4e1a07987648a5b414650",
-      "count": 1,
-      "reason": "UpdateAssistantPlanDraft/ValidateAssistantPlan и ValidateAssistantPlan/RejectAssistantPlan совпадают стыком execute/typed response. Draft operations, plan revision и rejection receipt различны; общий execute уже обрабатывает principal/mutation/errors без универсального transition. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_commands.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_commands.go",
       "fragmentSHA256": "3a23a4a6b0af4b02a1dcb308adc6b34ca0e7f3a397aa2ceb3eea62099e0bb609",
       "count": 1,
       "reason": "Повтор проходит через Save/Validate/Publish/Discard/BindEmailMailboxDraft. Общая часть уже в mailboxCommand и mailboxContent; configuration/revision inputs, FullMethod и command.Kind различают save, validation, publication и binding. Dispatch по generic transition изменил бы видимость контрактов, а замена mailboxCommand на execute дополнительно назначила бы отсутствующий idempotency key. Typed wrappers сохранены. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
-      "fragmentSHA256": "0b425517fdca44a4d973ced5c8cf73c2a56ef94cce4a2cc7648c91e723432537",
-      "count": 1,
-      "reason": "Project и organization CreateRuntimeEnvironmentDraft используют разные server-owned ScopeKind, FullMethod и command.Kind; save адресует уже существующий DraftRef. domainEnvironmentDraftSpecification и execute уже общие. Нельзя назначать scope из payload ради объединения двух wrappers; совпадение захватывает границы typed методов. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
-      "fragmentSHA256": "e626a8d593ab42c61a1cc5dd69cf5012845073dff1d8d4b728b7d601d6c1c266",
-      "count": 1,
-      "reason": "Save/ValidateRuntimeEnvironmentDraft и конец publication-result validation/Discard совпадают transport return/execute стыком. Save несёт новую specification, validate/discard разные closed commands; consistency checks published environment/draft/impact plan не перемещены в generic setter. Общие caster и execute уже единые. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
     },
     {
       "format": "go",
@@ -5328,62 +5272,6 @@
       "fragmentSHA256": "97705ada43900e7b9247639fd9d8c66b8a86b7e6686773bbf9e80c2a967d20e8",
       "count": 2,
       "reason": "Стыки Connection→Project и Project→Recipient списков сохраняют разные exact RPC/service reads и типы Items. Common input/context/pins/reason/page casters уже есть; connection purpose допускает явный выбор, остальные GRANT. Новый callback dispatcher скрыл бы эту разницу ради response boilerplate. Connection/Project и Recipient/Capability стыки совпадают общей сборкой page/context/pins и проверкой reason. Recipient kind/name и capability/grant version требуют разных nominal DTO; reason уже закрыто проверяется одним helper. Полностью общий list function потребовал бы передачи всей операции в callbacks. Решение ограничено прочитанными точными paths/fragment/count2; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "fragmentSHA256": "637090ab8b5df342fb303844cbd09f21db31fa540388768fa78f0efe4ce0c47d",
-      "count": 1,
-      "reason": "CreateProviderAccount/StartDeviceAuthorization и SetEnabled/SetConcurrency образуют окно через boundaries. Definition+name, enabled и concurrency имеют разные command inputs и owner eligibility. execute/castProviderAccount уже общие; generic setter не вводится ради коротких wrappers. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "fragmentSHA256": "03e86cb0f2fc4e47fe594c461a283b58cec943a2106a595262568a3d959c3186",
-      "count": 1,
-      "reason": "Create/StartDevice/APIKey и VerifyDevice/Reauthorize/Revoke сравниваются через границы методов. Start и reauthorize используют один domain start method с разными exact RPC principals; verify/revoke имеют closed command pairs. Общая projection/error boundary не делает permission или lifecycle одинаковыми. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "fragmentSHA256": "5475e8d3b80925bf24ec15456b3bb0ee362a04ab9cc8e2bb778cb0557eab51d7",
-      "count": 1,
-      "reason": "Create/Start/APIKey и конец APIKey/Refresh/Verify совпадают principal/error/result стыком. APIKey создаёт и очищает временную копию secret bytes, refresh не должен наследовать этот путь. execute и transportError уже общие; новый generic authorization callback затруднил бы проверку clear ownership. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "fragmentSHA256": "a8d0f3fa935e44e790d33b467596b571784bedb15aebaa5f004821fbc6f63d6b",
-      "count": 1,
-      "reason": "Refresh/Verify/Reauthorize и Reauthorize/Revoke/Delete состоят из разных authorization lifecycle commands. Exact RPC principal, mutation и account locator остаются явными; общий start service method и account caster уже используются. Не вводится универсальный transition над authority-bearing account. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "fragmentSHA256": "0f6dfaa18f616983742620b13757a5ccd4d9f6bd4435a8de12677f93f027ad17",
-      "count": 1,
-      "reason": "Refresh/Verify/Reauthorize и Revoke/Delete/SetEnabled совпадают standard wrapper границами. Разные owner operations и input schemas имеют самостоятельные eligibility rules; общий execute/error/account caster достаточен без generic callback dispatch. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "fragmentSHA256": "59aa9d12b7f573959e4bee81176f418eb99dcbbb574f2d6af99d81bc69f11eb4",
-      "count": 1,
-      "reason": "Revoke/Delete и Delete/SetEnabled пересекаются через closed command adapters. Отзыв и удаление не заменяют переключение enabled и не делят owner transaction семантику. Повторяется только execute/error/account projection, которые уже вынесены в helpers. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
-      "fragmentSHA256": "3d8df24d820687e2a728a0f7aac72a35a811bd4c99998c428de7cd4fb0b39ef3",
-      "count": 1,
-      "reason": "Delete/SetEnabled и SetEnabled/SetConcurrency различают account delete, boolean flag и numeric concurrency input. Общая command execution и castProviderAccount уже единые; искусственный generic update input размывает специализированные command.Kind/FullMethod bindings. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
     },
     {
       "format": "go",
@@ -5411,14 +5299,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
-      "fragmentSHA256": "6f4f967ddfcdbe45e5d334d472f17bfcb3bf5bcede1d565a7cf9ee98f2a958bd",
-      "count": 1,
-      "reason": "Mailbox configuration get/list и environment impact prepare/plan get совпадают короткими handler boundaries. Configuration/connection/revision и DraftRef/PlanRef имеют разные domains и authority scopes; execute/principal/cast helpers уже единые. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_impact.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/secret_impact.go",
       "fragmentSHA256": "df0ba0c9754d59861460bcc8630322ccd94bf07048bfcc38d74594c5b60bb5e2",
@@ -5432,14 +5312,6 @@
       "fragmentSHA256": "22eb5d95363f4568f6422a328ae9fb6d6b96f76f91b82124ccf67811ba911374",
       "count": 1,
       "reason": "Provider renewal authorize и validate observation используют общий renewalTask с unknown/size/time/deterministic digest checks. Owner authorization и observation eligibility разные service methods и nominal replies; short request/error wrapper оставлен явным без общего callback. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant_integration_grants.go",
-      "fragmentSHA256": "5980a5ddd8c0f729e1187d06bee5e7554b945a0107bb634fbd8843c0a581403f",
-      "count": 1,
-      "reason": "Environment draft impact/plan query и system-assistant grant change/candidate query совпадают return/principal стыком. PlanRef и connection/capability approvals различают authority scopes; execute и transport errors уже общие, commands не сливаются. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
     },
     {
       "format": "go",
@@ -6515,11 +6387,315 @@
     },
     {
       "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "876aa2ba1917043f1740ae9829d318f8adf62036fd6e2efc6d096bd4f6a675af",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: access.go: ArchiveAccessRole, CreateAccessBinding, CreateAccessRoleVersion; system_assistant.go: RecoverSystemAssistant, UpdateAssistantOwnerInstructions, assistantContext. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "65f6fc992ea64b0bcf1ae9f498b8fb63cc9473a2b67fb83a2e8f966a2ec15a93",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: ChangeArtifactBinding, DeleteArtifact, PurgeArtifact, RestoreArtifact; runtime_configuration.go: CreateConfigOverlayDraft, PublishAgentRuntimeConfiguration, PublishConfigOverlayDraft, ValidateConfigOverlayDraft. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Отдельная owner purge operation с impact digest не заменяется обычным Execute. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "05213c839989036fe3d739b3cd776afb9ece676bc602e4dac0fa88d0c5e419bf",
+      "count": 2,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: ChangeArtifactBinding, DeleteArtifact; runtime_configuration.go: BindAgentRuntimeEnvironment, RollbackRuntimeEnvironment, SetRuntimeEnvironmentEnabled. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count2; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "65316f277a34055025b08b0bfb5ceba9f813dd002bd164efbbd63686f55c4a81",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: ChangeArtifactBinding, DeleteArtifact; system_assistant.go: UpdateAssistantPlanDraft, ValidateAssistantPlan. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "4b5abc4c2a748ce9bc19f6b7c657100a7cd1b41af688611ef6aba4c56a5fa827",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: ChangeArtifactBinding, DeleteArtifact, RestoreArtifact; runtime_configuration.go: BindAgentRuntimeEnvironment, RollbackRuntimeEnvironment, domainRuntimeKubernetesAccessKind. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "481d7b45e85c09ee3f27a2097aa6991cd2475562c17fe9566cdb197cc9b74a14",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: DeleteArtifact, RestoreArtifact; provider_accounts.go: CreateProviderAccount, StartProviderAccountDeviceAuthorization. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Device authorization остаётся отдельной прямой provider-operation с exact principal/mutation. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "c454dd35666f09e3919bbff2dbe5e4053fb3b5da8dd46f876ca484c940b6b74f",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: DeleteArtifact, RestoreArtifact; runtime_configuration.go: DeleteRuntimeEnvironment, SetRuntimeEnvironmentEnabled. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "bb26cf5e5bfbca1f7289fc968b4c3688f6a206d54a535eea4f47c44dd4096105",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: ArchiveSchedule, CreateIntegrationConnection, DeleteSchedule; runtime_configuration.go: PublishConfigOverlayDraft, RollbackConfigOverlay, ValidateConfigOverlayDraft. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "f710147ff7efc7be7681718b43b1b4841e179fe4c5c2c969587f3d04678a975a",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: ArchiveSchedule, DeleteSchedule; runtime_configuration.go: PublishConfigOverlayDraft, RollbackConfigOverlay. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "96d492e14b2420e40fd3fc08dc234a7e36c0e8165ca0eba4e53f2b29dd5bc3c5",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: CreateIntegrationConnection, UpdateIntegrationConnection; system_assistant.go: ApplyAssistantPlan, UpdateAssistantPlanDraft. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "ec0aea78dcac35b1ab9a83bb34986adb8c7744e19676a1ece0827f1fcf260e04",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_assets_integrations.go: ChangeIntegrationGrant, SetIntegrationConnectionEnabled, TestIntegrationConnection; runtime_configuration.go: PublishConfigOverlayDraft, RollbackConfigOverlay, domainEnvironment. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "2566c5804c2179fe6f0839d1d5d169d6c230e3b0d4f45a0aa12f85ca112e2df9",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_core.go: CreateProject, UpdateProject; runtime_configuration.go: BindAgentRuntimeEnvironment, RollbackRuntimeEnvironment. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "2f7fda7a08f8a39838e2a5fda3fda300837a4b2ee28c0131ad674488c42b2932",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_core.go: ChangeProjectMembership, CreateAgent, RemoveProjectMembership; system_assistant.go: AddAssistantTurn, CreateAssistantConversation, UpdateAssistantConversationTitle. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Delivery mode QUEUE fallback, optional context и отдельный castAssistantTurnResult не менялись. Scope validation остаётся перед execute. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "08acab45b9b82f81d3551ba3d7dd15393bd2e9725272d06d2abff844fd0c8c21",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_core.go: CreateAgent, RemoveProjectMembership; runtime.go: ProposeAssistantMetadata, ProposeRunMetadata. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "faf313a3591809f167d813fadc0c13d0c42d317c60dad6b7837ac1976c1e44be",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_core.go: CreateAgent, SetAgentEnabled, UpdateAgent; runtime.go: ClaimIntegrationConnectionTests, CompleteIntegrationConnectionTest, ResolveIntegrationInvocation. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Test claim не заменяется schedule claim или read helper. Invocation/resourceScope/grant resolution сохраняет отдельную owner operation, не универсальный command dispatcher. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "35e278ab346fbe8ff02ec71c2379ce17cdf4d159c791bcec8772867748576163",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_core.go: SetAgentEnabled, UpdateAgent; runtime.go: ProposeAssistantMetadata, ProposeRunMetadata. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "6cadfccba2f3fca691cbd1f7252219d729ec3725f845f01785aa81d2b852ce02",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_core.go: ChangeAgentCapability, RollbackInstructions; runtime_configuration.go: BindAgentRuntimeEnvironment, RollbackRuntimeEnvironment. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "d4cdc98e93f1aa3d34edd0aa767c8578c6bf4d60f237dcb7e130eb70506ff6ff",
+      "count": 2,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: commands_core.go: AddSessionTurn, CancelRun; runtime.go: MaterializeScheduleOccurrence, ProposeRunMetadata, RecordRunToolCall, RenewScheduleOccurrence. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count2; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/configuration_source.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "877f548dacc13682a983f23702ca989c962b69788114de24160cce9c454885ff",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: configuration_source.go: ClaimManagedConfigurationSourceWork, sourceLease; runtime.go: ClaimIntegrationConnectionTests, FailScheduleOccurrence. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Test claim не заменяется schedule claim или read helper. Source claim сохраняет свой generation/attempt/fence и fallible PublicConfiguration mapping. Retryable/failure и lease pins не объединяются с claim или report. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
+      "fragmentSHA256": "138bcd74661ec746ba6fbf3d07d4b12cb761b4d144af5bfa7ffa8ddaba80c003",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: environment_draft.go: CreateOrganizationRuntimeEnvironmentDraft, CreateRuntimeEnvironmentDraft; environment_draft.go: CreateOrganizationRuntimeEnvironmentDraft, SaveRuntimeEnvironmentDraft. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Specification validation остаётся до execute с прежним Invalid error priority. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_draft.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
+      "fragmentSHA256": "7548aad9afcf8388e44f3366c570290b943bbc0d480231f22ba37aaa951de04c",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: environment_draft.go: PublishRuntimeEnvironmentDraft, SaveRuntimeEnvironmentDraft, ValidateRuntimeEnvironmentDraft; interaction_identity.go: BindInteractionIdentity, ListInteractionIdentities, RevokeInteractionIdentity. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Address-based castInteractionIdentity(&item) сохраняется отдельно. Fallible publication projection сохраняет собственный статус и consistency guards, не переводится в executeResponse. Specification validation остаётся до execute с прежним Invalid error priority. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "fragmentSHA256": "f60f1e29e84774cc04db0193fea4c2a119812bdc04ddb48218e005231ba048c2",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: interaction_identity.go: BindInteractionIdentity, ListInteractionIdentities, RevokeInteractionIdentity; revision_impact.go: PrepareEnvironmentDraftImpact, PrepareInstructionsImpact, PreparePromptTemplateImpact. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Address-based castInteractionIdentity(&item) сохраняется отдельно. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "fragmentSHA256": "d085ad0fcd25c2f10aa1c23a2a3d62584a6268a731b0c579553089a466724b18",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: interaction_identity.go: BindInteractionIdentity, ListInteractionIdentities, RevokeInteractionIdentity; revision_impact.go: GetRevisionImpactPlan, PrepareEnvironmentDraftImpact, PrepareInstructionsImpact. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Address-based castInteractionIdentity(&item) сохраняется отдельно. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "6be34fdec2e427c589b769da7ed334fb92b32929541f0b77d99ff786f89b966d",
+      "fragmentSHA256": "bf0e98133960fe5ae3c5ed2cbc685e88630371b745e280ed518ee2a31340af88",
       "count": 1,
-      "reason": "Остаточное окно ListInteractionIdentities и agent/instruction reads после переноса identity read в существующий queryResponse. Полные тела и матрица прочитаны: [['RevokeInteractionIdentity', 'ListInteractionIdentities'], ['GetAgent', 'ListAgentInstructionVersions']]. Principal/error уже общие; connection-scoped identity query и agent/instruction refs остаются отдельными owner reads. Identity projection использует castInteractionIdentity(&item), instruction projection сохраняет адрес исходного элемента; менять адресные соглашения ради generic value mapper не требуется. Typed response/page/field bindings и соседние объявления остаются явными, command identity bind/revoke не объединяются с query. Только данная пара paths/fragment SHA-256/count1; изменение count/hash требует нового разбора."
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: interaction_identity.go: ListInteractionIdentities, RevokeInteractionIdentity; queries.go: GetAgent, ListAgentInstructionVersions. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Instruction projection сохраняет исходное адресное соглашение. Address-based castInteractionIdentity(&item) сохраняется отдельно. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "676978c0787b7bfb0b890322c9212054fd45e1de8c2f1417644bf40528e74424",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: managed_configuration.go: CreateRoleImageRevisionDraft, RebindPromptTemplateConsumers, ValidateRoleImageRevisionDraft; managed_configuration.go: CreateIntegrationDefinitionDraft, PublishIntegrationDefinitionDraft, ValidateIntegrationDefinitionDraft. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. managedMutation сохраняет отдельный typed revision command и прежний response/error contract. managedMutation сохраняет отдельный rebind input и result/error contract. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "eecf5fa79cb6c469b3c9afa777ded2ff8c693456e6ddb240548b37b3a0758561",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: provider_accounts.go: CreateProviderAccount, StartProviderAccountDeviceAuthorization; provider_accounts.go: SetProviderAccountConcurrency, SetProviderAccountEnabled. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Device authorization остаётся отдельной прямой provider-operation с exact principal/mutation. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "ca2bae595698f16ee0940e21621f05dceeae506b9eafe81e9d5e30f0d6d916e6",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: provider_accounts.go: CreateProviderAccount, StartProviderAccountDeviceAuthorization; provider_accounts.go: ReauthorizeProviderAccountDeviceCode, VerifyProviderAccountDeviceAuthorization. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Reauthorization не подменяется обычным command.Execute и сохраняет прямую owner-operation. Device authorization остаётся отдельной прямой provider-operation с exact principal/mutation. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "55130de3dccaa90c8896cd225a0090d0d41b3a48268bfcd57515c472421cbbbc",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: provider_accounts.go: AuthorizeProviderAccountAPIKey, CreateProviderAccount, StartProviderAccountDeviceAuthorization; provider_accounts.go: AuthorizeProviderAccountAPIKey, RefreshProviderAccountAuthorization, VerifyProviderAccountDeviceAuthorization. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Копирование apiKey и defer clear остаются в отдельной прямой owner-operation; secret lifetime не переносится в callback. Provider refresh сохраняет прямой owner path и прежний transportError. Device authorization остаётся отдельной прямой provider-operation с exact principal/mutation. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "daf94502a6a9f7e2137ddc6d1818ff3590d5958dcc5fbce47c03a8f2a66878ca",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: provider_accounts.go: ReauthorizeProviderAccountDeviceCode, RefreshProviderAccountAuthorization, VerifyProviderAccountDeviceAuthorization; provider_accounts.go: DeleteProviderAccount, ReauthorizeProviderAccountDeviceCode, RevokeProviderAccount. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Reauthorization не подменяется обычным command.Execute и сохраняет прямую owner-operation. Provider refresh сохраняет прямой owner path и прежний transportError. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "b4902dd979c98ca46c066cfb091b76bac10bb62f912d6b4c16f8fbe301645dc5",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: provider_accounts.go: ReauthorizeProviderAccountDeviceCode, RefreshProviderAccountAuthorization, VerifyProviderAccountDeviceAuthorization; provider_accounts.go: DeleteProviderAccount, RevokeProviderAccount, SetProviderAccountEnabled. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Reauthorization не подменяется обычным command.Execute и сохраняет прямую owner-operation. Provider refresh сохраняет прямой owner path и прежний transportError. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "78318f1ee7aa080b512da7c6157f3261e67564277c71fa61bb76ca6e35c97e08",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: provider_accounts.go: DeleteProviderAccount, RevokeProviderAccount; provider_accounts.go: DeleteProviderAccount, SetProviderAccountEnabled. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_accounts.go",
+      "fragmentSHA256": "4e4d6c071be6397dcc4e78d9b764250408e67b3b290f2258132da255c0126e14",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: provider_accounts.go: DeleteProviderAccount, SetProviderAccountEnabled; provider_accounts.go: SetProviderAccountConcurrency, SetProviderAccountEnabled. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_image_impact.go",
+      "fragmentSHA256": "03455324efad282992487d5da955821026f33e4a70b24c95e1ac705035c9b63b",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: revision_impact.go: PrepareInstructionsImpact, PreparePromptTemplateImpact; role_image_impact.go: GetRoleImageImpactPlan, PrepareRoleImageImpactPlan. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "7556eb8ec54d14a082f5f32dfb2043c765a3330ea075d611e5c528bdc601e234",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: revision_impact.go: PrepareInstructionsImpact, PreparePromptTemplateImpact; system_assistant.go: RejectAssistantPlan, ValidateAssistantPlan. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "77380dfa98c6a01f0e0f11a4b45e80776ae245f04513a9222b941c7f84165f46",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: runtime.go: CompleteExecution, DelegateExecution; runtime.go: ProposeRunMetadata, RecordRunToolCall. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Artifact/usage/archive и lease/fence/generation pins сохраняются в прежнем payload. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "eac002ceee82e2b1153c2648a774a90b9ff3bb5aefadee18b2cf32712880b348",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: runtime.go: ClaimDueSchedules; runtime.go: ClaimIntegrationConnectionTests. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Schedule claim — отдельная owner операция с immutable occurrence/lease/input/revision/attempt pins. Test claim не заменяется schedule claim или read helper. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "4f0da22d1ab882a997b750371e658e6948e7a31dfbced502c2b109e2aa1d9383",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: runtime_configuration.go: CreateRuntimeEnvironmentSet, domainEnvironment; runtime_configuration.go: CreateRuntimeEnvironmentSet, PublishRuntimeEnvironmentVersion. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "f3473bfb4fe48d4da6140cc1283323caadad74b6d931a6bb38afa9766d4fdc4c",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: runtime_secrets.go: CompleteRuntimeSecretOperation, ConsumeRuntimeSecretOperation; runtime_secrets.go: CompleteRuntimeSecretOperation, FailRuntimeSecretOperation. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Completion связывает exact operation/claim generation/materialization metadata на owner. Operation grant consumption/claim возвращает только прежние typed metadata/lease/descriptors. Failure сохраняет exact operation/claim generation и closed failure-code mapping. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "22d7a5d962c074174b474e135a920f39145b984c3f0f65c9717c039b749a1338",
+      "count": 1,
+      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: system_assistant.go: UpdateAssistantPlanDraft, ValidateAssistantPlan; system_assistant.go: RejectAssistantPlan, ValidateAssistantPlan. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
     }
   ]
 }

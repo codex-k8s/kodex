@@ -14,11 +14,9 @@ import (
 // одобрения отдельной команде grant системного ассистента, оставляя eligibility владельцу.
 func (server *Server) ChangeSystemAssistantIntegrationGrant(ctx context.Context, request *controlplanev1.ChangeSystemAssistantIntegrationGrantRequest) (*controlplanev1.ChangeSystemAssistantIntegrationGrantResponse, error) {
 	payload := command.SystemAssistantIntegrationGrantInput{ConnectionRef: request.GetConnectionRef(), CapabilityKey: request.GetCapabilityKey(), Enabled: request.GetEnabled(), ApprovalPolicy: strings.TrimPrefix(request.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_"), ApprovalScopePaths: request.GetApprovalScopePaths()}
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ChangeSystemAssistantIntegrationGrant_FullMethodName, command.ChangeSystemAssistantIntegrationGrant, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ChangeSystemAssistantIntegrationGrantResponse{Connection: castConnection(*result.Connection)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ChangeSystemAssistantIntegrationGrant_FullMethodName, command.ChangeSystemAssistantIntegrationGrant, request.GetMutation(), payload, func(result command.Result) *controlplanev1.ChangeSystemAssistantIntegrationGrantResponse {
+		return &controlplanev1.ChangeSystemAssistantIntegrationGrantResponse{Connection: castConnection(*result.Connection)}
+	})
 }
 
 // GetSystemAssistantIntegrationGrantCandidates reads system-assistant candidates, requires closed

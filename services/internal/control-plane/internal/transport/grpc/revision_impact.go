@@ -16,11 +16,9 @@ import (
 // PreparePromptTemplateImpact передаёт ссылки конфигурации и ревизии отдельной команде подготовки
 // влияния и преобразует полученный план.
 func (s *Server) PreparePromptTemplateImpact(ctx context.Context, request *cp.PreparePromptTemplateImpactRequest) (*cp.PreparePromptTemplateImpactResponse, error) {
-	result, err := execute(ctx, s.service, cp.PlatformCommandService_PreparePromptTemplateImpact_FullMethodName, command.PreparePromptTemplateImpact, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RevisionRef: request.GetRevisionRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &cp.PreparePromptTemplateImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
+	return executeResponse(ctx, s.service, cp.PlatformCommandService_PreparePromptTemplateImpact_FullMethodName, command.PreparePromptTemplateImpact, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RevisionRef: request.GetRevisionRef()}, func(result command.Result) *cp.PreparePromptTemplateImpactResponse {
+		return &cp.PreparePromptTemplateImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}
+	})
 }
 
 // PrepareInstructionsImpact passes the agent locator to the dedicated instruction-impact command
@@ -28,11 +26,9 @@ func (s *Server) PreparePromptTemplateImpact(ctx context.Context, request *cp.Pr
 // PrepareInstructionsImpact передаёт ссылку агента отдельной команде влияния инструкции с
 // principal точного RPC и mutation.
 func (s *Server) PrepareInstructionsImpact(ctx context.Context, request *cp.PrepareInstructionsImpactRequest) (*cp.PrepareInstructionsImpactResponse, error) {
-	result, err := execute(ctx, s.service, cp.PlatformCommandService_PrepareInstructionsImpact_FullMethodName, command.PrepareInstructionsImpact, request.GetMutation(), command.AgentInput{Ref: request.GetAgentRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &cp.PrepareInstructionsImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
+	return executeResponse(ctx, s.service, cp.PlatformCommandService_PrepareInstructionsImpact_FullMethodName, command.PrepareInstructionsImpact, request.GetMutation(), command.AgentInput{Ref: request.GetAgentRef()}, func(result command.Result) *cp.PrepareInstructionsImpactResponse {
+		return &cp.PrepareInstructionsImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}
+	})
 }
 
 // PrepareEnvironmentDraftImpact passes the draft locator through the dedicated environment-impact
@@ -40,11 +36,9 @@ func (s *Server) PrepareInstructionsImpact(ctx context.Context, request *cp.Prep
 // PrepareEnvironmentDraftImpact передаёт ссылку черновика отдельной команде влияния среды и
 // возвращает представление её плана.
 func (s *Server) PrepareEnvironmentDraftImpact(ctx context.Context, request *cp.PrepareEnvironmentDraftImpactRequest) (*cp.PrepareEnvironmentDraftImpactResponse, error) {
-	result, err := execute(ctx, s.service, cp.PlatformCommandService_PrepareEnvironmentDraftImpact_FullMethodName, command.PrepareEnvironmentDraftImpact, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &cp.PrepareEnvironmentDraftImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
+	return executeResponse(ctx, s.service, cp.PlatformCommandService_PrepareEnvironmentDraftImpact_FullMethodName, command.PrepareEnvironmentDraftImpact, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()}, func(result command.Result) *cp.PrepareEnvironmentDraftImpactResponse {
+		return &cp.PrepareEnvironmentDraftImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}
+	})
 }
 
 // GetRevisionImpactPlan reads the authorized plan page and projects consumer outcomes and

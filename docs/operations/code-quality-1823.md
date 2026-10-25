@@ -4,11 +4,98 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.448.0
+version: 1.449.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проекция ответов специализированных команд — 25.10.2026
+
+На основе `5e3a2d4fabb16eb2aabe617457a7123d79e44742` существующий
+executeResponse использован ещё в52 command adapters11 transport-файлов
+control-plane.27 методов содержали только execute/error/typed reply;
+25 имели подготовку входа перед тем же завершающим блоком. Все52 полных
+тела прочитаны. Никаких новых helpers, imports, именованных объявлений,
+command kinds, RPC либо универсального диспетчера по строкам не добавлено.
+
+Явными остаются exact method, command.Kind, mutation, payload и typed response:
+environment drafts, interaction identity/delivery, provider accounts,
+revision/role-image impact, runtime configuration/environment, assistant plans,
+conversation/instructions/grants и runtime worker commands. Для каждого
+проверены все6 исходных аргументов —312 bindings — и прежний response literal.
+Предварительная specification/policy/scope/operations validation, копирование
+provider candidates, artifact/usage/archive fields, lease/fence/generation,
+receipt/effect/input/response pins и подготовка delegation input остаются
+в вызывающем методе в прежнем порядке. Их ошибки сохраняют прежний приоритет.
+
+executeResponse и server.go побайтно неизменны: execute разрешает principal
+по проверенному transport context точного метода, обрабатывает mutation и
+передаёт прежний command владельцу. Owner state, transactions, grants, claims,
+leases, delegation, events и retry semantics не реализуются заново. Включая
+ProposeAssistantPlan: его специальный assistantPlanTransportError остаётся
+внутри execute. Helper возвращает уже отображённую ошибку без повторного
+transportError и вызывает projector только на success. RenewExecution
+по-прежнему передаёт nil mutation. Nil-result fallback не добавлен.
+
+Отбор требует unnamed pointer response/error, exact execute→error guard→
+response literal suffix, отсутствия nested closures/defer/go/labels/branches
+и наблюдения адресов err/result. Для25 методов prefix сохраняется целиком.
+Секретные provider-операции с defer clear, прямые native claim/report paths,
+managedMutation, fallible publication и дополнительные post-execute guards
+не заменяются этим шаблоном. В частности, PublishPromptTemplateDraft,
+PublishInstructionDraft и PublishRuntimeEnvironmentDraft сохраняют свои
+дополнительные consistency checks и прежние статусы.
+
+Обратная проверка закрепляет actual signature/body executeResponse,
+подставляет312 прежних аргументов в execute, возвращает его прежний error
+guard и раскрывает52 projectors. С учётом25 неизменённых prefixes
+восстанавливаются полные AST11 файлов, включая комментарии/directives и
+каждый другой command/query/caster. Исходные архивы совпадают с базовым Git
+SHA; текущие байты закреплены extraction digests. Parser diagnostics закрыто
+отклоняются до работы с AST. Матрица каждого RPC связывает method/command,
+mutation/payload/prefix/response с неизменённым источником actor и owner path.
+
+Первый build/unit был успешен для27 простых методов; после расширения на25
+prefix cases проверки повторены на окончательном Go-коде. Итоговые команды
+всего control-plane: `go build -p 2 ./...` — PASS LOCAL,9,19с;
+`go test -p 2 -count=1 ./...` — PASS LOCAL,37,12с. GOWORK=off,
+GOMAXPROCS=4, credentials/inherited KODEX/VITE inputs/KUBECONFIG удалены
+из child env. После итогового прогона Go-код не менялся. Зеркальные тесты
+literal field copies не добавлялись; существующий unit-контур выполнен целиком.
+
+Detector:6709 sources/222 exclusions,1625 raw-групп против1628.
+43 прежних raw keys/49 occurrences исчезли;43 новых keys/45 occurrences
+появились и ещё1 occurrence добавилось у существующего key. Это перестроение
+окон и представителей; raw counts не равны числу общих алгоритмов.
+
+17 прежних registry entries получили count0 и сняты. Ещё два точных ключа
+пересмотрены по всем текущим вхождениям: managed-configuration self-window
+count1→2 и runtime self-window count2→1. Сохранены различия managedMutation/
+publication consistency и native claim/report/resource-scope paths; причины
+переписаны под фактические owners.796 других entries сохранены без изменения.
+После полного чтения52 методов и63 дополнительных peer functions добавлены
+39 bounded keys/41 occurrences для nominal DTO/owner mappings/пограничных
+объявлений после общих primitives. Реестр:837 entries,966 retained occurrences,
+659 unresolved против686 на предыдущем SHA. Whole-file/family ignores,
+threshold, normalization и generated exclusions не расширялись.
+
+Все82 count/hash mutations новых/пересмотренных решений, возврат обоих
+прежних counts и17 retired entries закрыто отклоняются настоящим assessor.
+Три ранее открытых command windows отсутствуют после выноса их envelope.
+Четыре mailbox/impact/grant-candidate read windows оставлены unresolved для
+следующей проверки existing queryResponse, вместо нового исключения.
+Unit17 анализаторов, полный5-stage report,21505/21505 Go EN→RU descriptions
+без пропусков,5 ignore boundaries, gofmt и `git diff --check` — PASS LOCAL.
+Полный scope#1823 ещё не завершён, PR#1829 остаётся Draft.
+
+Context7 resolve Go снова вернул Invalid API key. Использована официальная
+[спецификация function calls](https://go.dev/ref/spec#Calls): исходные аргументы
+сохраняют порядок вычисления, новое замыкание — только typed success projector.
+Секреты/MCP credentials не переносились и не менялись. Go.mod, contracts,
+frontend/gateway/deploy/scripts на этой волне не менялись. Их прежние проверки
+остаются историческими. PostgreSQL component, browser/full E2E, HTTP Docker
+fixture, apply/deploy и live acceptance текущего этапа — NOT RUN.
 
 ## Общие проекции переменных и ревизий образа — 25.10.2026
 

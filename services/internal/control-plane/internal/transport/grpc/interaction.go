@@ -93,14 +93,9 @@ func (server *Server) CompleteInteractionDelivery(ctx context.Context, request *
 		UnknownOutcome: request.GetUnknownOutcome(), ConfirmedNoEffect: request.GetConfirmedNoEffect(),
 		ExternalTeamRef: request.GetExternalTeamRef(), ExternalChannelRef: request.GetExternalChannelRef(),
 	}
-	result, err := execute(ctx, server.service, controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName, command.CompleteInteractionDelivery, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CompleteInteractionDeliveryResponse{
-		DeliveryRef: mapString(result.Runtime, "deliveryRef"), State: mapString(result.Runtime, "state"),
-		CoreRunAffected: false,
-	}, nil
+	return executeResponse(ctx, server.service, controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName, command.CompleteInteractionDelivery, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CompleteInteractionDeliveryResponse {
+		return &controlplanev1.CompleteInteractionDeliveryResponse{DeliveryRef: mapString(result.Runtime, "deliveryRef"), State: mapString(result.Runtime, "state"), CoreRunAffected: false}
+	})
 }
 
 // AcceptInteractionMessage converts the optional gate decision and passes external message
@@ -119,15 +114,9 @@ func (server *Server) AcceptInteractionMessage(ctx context.Context, request *con
 		Message: request.GetMessage(), Decision: decision,
 		ExternalTeamRef: request.GetExternalTeamRef(), GateRef: request.GetGateRef(), RunRef: request.GetRunRef(), ExpectedGateVersion: request.GetExpectedGateVersion(),
 	}
-	result, err := execute(ctx, server.service, controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName, command.AcceptInteractionMessage, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.AcceptInteractionMessageResponse{
-		Outcome:             interactionOutcome(mapString(result.Runtime, "outcome")),
-		MessageKey:          strings.TrimPrefix(mapString(result.Runtime, "messageKey"), "i18n:"),
-		AcceptedResourceRef: mapString(result.Runtime, "acceptedResourceRef"),
-	}, nil
+	return executeResponse(ctx, server.service, controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName, command.AcceptInteractionMessage, request.GetMutation(), payload, func(result command.Result) *controlplanev1.AcceptInteractionMessageResponse {
+		return &controlplanev1.AcceptInteractionMessageResponse{Outcome: interactionOutcome(mapString(result.Runtime, "outcome")), MessageKey: strings.TrimPrefix(mapString(result.Runtime, "messageKey"), "i18n:"), AcceptedResourceRef: mapString(result.Runtime, "acceptedResourceRef")}
+	})
 }
 
 // interactionPackageBytes copies the definition package byte slice so the returned payload does

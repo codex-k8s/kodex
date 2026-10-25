@@ -16,11 +16,9 @@ import (
 // execute-границу с точными конфигурацией, ревизией и вводом изменения; переносит полученный
 // необязательный план, не применяя его.
 func (server *Server) PrepareRoleImageImpactPlan(ctx context.Context, request *cp.PrepareRoleImageImpactPlanRequest) (*cp.PrepareRoleImageImpactPlanResponse, error) {
-	result, err := execute(ctx, server.service, cp.PlatformCommandService_PrepareRoleImageImpactPlan_FullMethodName, command.PrepareRoleImageImpactPlan, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RevisionRef: request.GetRevisionRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &cp.PrepareRoleImageImpactPlanResponse{Plan: castRoleImageImpactPlan(result.RoleImageImpactPlan)}, nil
+	return executeResponse(ctx, server.service, cp.PlatformCommandService_PrepareRoleImageImpactPlan_FullMethodName, command.PrepareRoleImageImpactPlan, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RevisionRef: request.GetRevisionRef()}, func(result command.Result) *cp.PrepareRoleImageImpactPlanResponse {
+		return &cp.PrepareRoleImageImpactPlanResponse{Plan: castRoleImageImpactPlan(result.RoleImageImpactPlan)}
+	})
 }
 
 // GetRoleImageImpactPlan resolves the exact query principal, requests a plan page from the domain and

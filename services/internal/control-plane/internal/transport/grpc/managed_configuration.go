@@ -267,11 +267,9 @@ func (server *Server) PublishRoleImageRevisionDraft(ctx context.Context, request
 func (server *Server) RebindRoleImageConsumers(ctx context.Context, request *controlplanev1.RebindRoleImageConsumersRequest) (*controlplanev1.RebindRoleImageConsumersResponse, error) {
 	input := managedRebindInput(request)
 	input.PlanRef, input.SelectedItemRefs = request.GetPlanRef(), append([]string{}, request.GetSelectedItemRefs()...)
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RebindRoleImageConsumers_FullMethodName, command.RebindRoleImage, request.GetMutation(), input)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RebindRoleImageConsumersResponse{Configuration: castManagedConfiguration(result.ManagedConfiguration), Revision: castManagedRevision(result.ManagedRevision), Plan: castRoleImageImpactPlan(result.RoleImageImpactPlan)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_RebindRoleImageConsumers_FullMethodName, command.RebindRoleImage, request.GetMutation(), input, func(result command.Result) *controlplanev1.RebindRoleImageConsumersResponse {
+		return &controlplanev1.RebindRoleImageConsumersResponse{Configuration: castManagedConfiguration(result.ManagedConfiguration), Revision: castManagedRevision(result.ManagedRevision), Plan: castRoleImageImpactPlan(result.RoleImageImpactPlan)}
+	})
 }
 
 // CreateIntegrationDefinitionDraft maps common editable draft fields into the specialized

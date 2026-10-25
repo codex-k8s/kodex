@@ -13,12 +13,9 @@ import (
 // BindInteractionIdentity передаёт подключение, внешние team/channel/user digest и ссылку subject
 // отдельной команде привязки identity.
 func (server *Server) BindInteractionIdentity(ctx context.Context, request *controlplanev1.BindInteractionIdentityRequest) (*controlplanev1.BindInteractionIdentityResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_BindInteractionIdentity_FullMethodName, command.BindInteractionIdentity, request.GetMutation(),
-		command.InteractionIdentityInput{ConnectionRef: request.GetConnectionRef(), ExternalTeamRef: request.GetExternalTeamRef(), ExternalChannelRef: request.GetExternalChannelRef(), ExternalUserDigest: request.GetExternalUserDigest(), SubjectRef: request.GetSubjectRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.BindInteractionIdentityResponse{Identity: castInteractionIdentity(result.InteractionIdentity)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_BindInteractionIdentity_FullMethodName, command.BindInteractionIdentity, request.GetMutation(), command.InteractionIdentityInput{ConnectionRef: request.GetConnectionRef(), ExternalTeamRef: request.GetExternalTeamRef(), ExternalChannelRef: request.GetExternalChannelRef(), ExternalUserDigest: request.GetExternalUserDigest(), SubjectRef: request.GetSubjectRef()}, func(result command.Result) *controlplanev1.BindInteractionIdentityResponse {
+		return &controlplanev1.BindInteractionIdentityResponse{Identity: castInteractionIdentity(result.InteractionIdentity)}
+	})
 }
 
 // RevokeInteractionIdentity passes the identity locator through the dedicated revoke command and
@@ -26,11 +23,9 @@ func (server *Server) BindInteractionIdentity(ctx context.Context, request *cont
 // RevokeInteractionIdentity передаёт ссылку identity отдельной команде отзыва и сохраняет наличие
 // необязательного результата identity.
 func (server *Server) RevokeInteractionIdentity(ctx context.Context, request *controlplanev1.RevokeInteractionIdentityRequest) (*controlplanev1.RevokeInteractionIdentityResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RevokeInteractionIdentity_FullMethodName, command.RevokeInteractionIdentity, request.GetMutation(), command.InteractionIdentityInput{IdentityRef: request.GetIdentityRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RevokeInteractionIdentityResponse{Identity: castInteractionIdentity(result.InteractionIdentity)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_RevokeInteractionIdentity_FullMethodName, command.RevokeInteractionIdentity, request.GetMutation(), command.InteractionIdentityInput{IdentityRef: request.GetIdentityRef()}, func(result command.Result) *controlplanev1.RevokeInteractionIdentityResponse {
+		return &controlplanev1.RevokeInteractionIdentityResponse{Identity: castInteractionIdentity(result.InteractionIdentity)}
+	})
 }
 
 // ListInteractionIdentities reads the authorized connection identity page and projects each
