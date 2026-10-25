@@ -68,16 +68,19 @@ type WorkflowPublicationInput struct {
 // RU: WorkflowPublicationStep связывает упорядоченный этап сотрудника,
 // зависимости, лимиты времени и решения человека с версией процесса.
 type WorkflowPublicationStep struct {
-	Key                    string   `json:"key"`
-	Name                   string   `json:"name"`
-	AgentRef               string   `json:"agent_ref"`
-	Instructions           string   `json:"instructions"`
-	ExpectedResult         string   `json:"expected_result"`
-	Position               int32    `json:"position"`
-	ParallelGroup          int32    `json:"parallel_group"`
-	TimeoutSeconds         int32    `json:"timeout_seconds"`
-	Parallel               bool     `json:"parallel"`
-	HumanGateAfter         bool     `json:"human_gate_after"`
+	Key            string `json:"key"`
+	Name           string `json:"name"`
+	AgentRef       string `json:"agent_ref"`
+	Instructions   string `json:"instructions"`
+	ExpectedResult string `json:"expected_result"`
+	Position       int32  `json:"position"`
+	ParallelGroup  int32  `json:"parallel_group"`
+	TimeoutSeconds int32  `json:"timeout_seconds"`
+	Parallel       bool   `json:"parallel"`
+	HumanGateAfter bool   `json:"human_gate_after"`
+	// ApprovalTimeoutSeconds is the pinned optional gate wait policy, not an execution deadline.
+	// ApprovalTimeoutSeconds — закреплённый необязательный срок согласования, не срок исполнения.
+	ApprovalTimeoutSeconds *int32   `json:"approval_timeout_seconds,omitempty"`
 	DependsOn              []string `json:"depends_on"`
 	GateDecisions          []string `json:"gate_decisions"`
 	RequiredCapabilityKeys []string `json:"required_capability_keys"`
@@ -218,6 +221,9 @@ func validWorkflowPublication(v WorkflowPublication) bool {
 	}
 	seen := map[string]bool{}
 	for i, step := range v.Steps {
+		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGateAfter || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 604800) {
+			return false
+		}
 		if step.Key == "" || len(step.Key) > 96 || seen[step.Key] || step.Position != int32(i+1) || !taskSessionRef.MatchString(step.AgentRef) || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 86400 || len(step.DependsOn) > 200 || len(step.RequiredCapabilityKeys) > 50 || !workflowDecisions(step.GateDecisions) {
 			return false
 		}

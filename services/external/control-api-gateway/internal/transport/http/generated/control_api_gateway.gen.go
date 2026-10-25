@@ -15769,7 +15769,10 @@ type WorkflowPage struct {
 
 // WorkflowStep defines model for WorkflowStep.
 type WorkflowStep struct {
-	AgentRef               *OpaqueRef                  `json:"agentRef,omitempty"`
+	AgentRef *OpaqueRef `json:"agentRef,omitempty"`
+
+	// ApprovalTimeoutSeconds Срок ожидания решения после завершения этапа. При отсутствии отдельного срока согласования нет; общий срок процесса действует независимо.
+	ApprovalTimeoutSeconds *int                        `json:"approvalTimeoutSeconds,omitempty"`
 	ExpectedResult         string                      `json:"expectedResult"`
 	GateDecisions          []WorkflowStepGateDecisions `json:"gateDecisions"`
 	HumanGate              bool                        `json:"humanGate"`
@@ -15788,7 +15791,10 @@ type WorkflowStepGateDecisions string
 
 // WorkflowStepInput defines model for WorkflowStepInput.
 type WorkflowStepInput struct {
-	AgentRef               OpaqueRef                        `json:"agentRef"`
+	AgentRef OpaqueRef `json:"agentRef"`
+
+	// ApprovalTimeoutSeconds Необязательный срок согласования в секундах, допустимый только при humanGate=true. Отсчёт начинается при открытии согласования сервером.
+	ApprovalTimeoutSeconds *int                             `json:"approvalTimeoutSeconds,omitempty"`
 	ExpectedResult         string                           `json:"expectedResult"`
 	GateDecisions          []WorkflowStepInputGateDecisions `json:"gateDecisions"`
 	HumanGate              bool                             `json:"humanGate"`

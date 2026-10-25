@@ -229,6 +229,7 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 			Instructions: item.GetPurpose(), Parallel: item.GetParallel(), ParallelGroup: item.GetParallelGroup(),
 			TimeoutSeconds: item.GetTimeoutSeconds(), ExpectedResult: item.GetExpectedResult(), HumanGateAfter: item.GetHumanGate(),
 			DependsOn: dependencies, RequiredCapabilityKeys: append([]string(nil), item.GetRequiredCapabilityKeys()...),
+			ApprovalTimeoutSeconds: item.ApprovalTimeoutSeconds,
 		}
 		for _, decision := range item.GetGateDecisions() {
 			step.GateDecisions = append(step.GateDecisions, enumSuffix(decision, "OWNER_GATE_DECISION_"))

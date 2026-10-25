@@ -37,11 +37,15 @@ func assistantWorkflowGraphFields(draft entity.WorkflowVersion) ([]any, []any) {
 		for _, capability := range step.RequiredCapabilityKeys {
 			capabilities = append(capabilities, capability)
 		}
-		steps = append(steps, map[string]any{"key": step.Key, "name": step.Name,
+		item := map[string]any{"key": step.Key, "name": step.Name,
 			"purpose": step.Instructions, "agentRef": step.AgentRef, "parallel": step.Parallel,
 			"parallelGroup": float64(step.ParallelGroup), "timeoutSeconds": float64(step.TimeoutSeconds),
 			"expectedResult": step.ExpectedResult, "humanGate": step.HumanGateAfter,
-			"gateDecisions": decisions, "requiredCapabilityKeys": capabilities})
+			"gateDecisions": decisions, "requiredCapabilityKeys": capabilities}
+		if step.ApprovalTimeoutSeconds != nil {
+			item["approvalTimeoutSeconds"] = float64(*step.ApprovalTimeoutSeconds)
+		}
+		steps = append(steps, item)
 	}
 	return fields, steps
 }
@@ -300,7 +304,7 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 	}
 	for index, raw := range steps {
 		step, ok := raw.(map[string]any)
-		if !ok || !onlyAssistantFields(step, "key", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") {
+		if !ok || !onlyAssistantFields(step, "key", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys", "approvalTimeoutSeconds") {
 			return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
 		}
 		key := assistantString(step, "key")

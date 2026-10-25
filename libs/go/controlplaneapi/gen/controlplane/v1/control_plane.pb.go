@@ -9654,6 +9654,7 @@ type WorkflowStep struct {
 	HumanGate              bool                   `protobuf:"varint,10,opt,name=human_gate,json=humanGate,proto3" json:"human_gate,omitempty"`
 	GateDecisions          []OwnerGateDecision    `protobuf:"varint,11,rep,packed,name=gate_decisions,json=gateDecisions,proto3,enum=controlplane.v1.OwnerGateDecision" json:"gate_decisions,omitempty"`
 	RequiredCapabilityKeys []string               `protobuf:"bytes,12,rep,name=required_capability_keys,json=requiredCapabilityKeys,proto3" json:"required_capability_keys,omitempty"`
+	ApprovalTimeoutSeconds *int32                 `protobuf:"varint,13,opt,name=approval_timeout_seconds,json=approvalTimeoutSeconds,proto3,oneof" json:"approval_timeout_seconds,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -9770,6 +9771,13 @@ func (x *WorkflowStep) GetRequiredCapabilityKeys() []string {
 		return x.RequiredCapabilityKeys
 	}
 	return nil
+}
+
+func (x *WorkflowStep) GetApprovalTimeoutSeconds() int32 {
+	if x != nil && x.ApprovalTimeoutSeconds != nil {
+		return *x.ApprovalTimeoutSeconds
+	}
+	return 0
 }
 
 type WorkflowVersion struct {
@@ -83329,7 +83337,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"value_type\x18\x04 \x01(\tR\tvalueType\x12\x1a\n" +
 	"\brequired\x18\x05 \x01(\bR\brequired\x12\x18\n" +
-	"\aoptions\x18\x06 \x03(\tR\aoptions\"\xc0\x03\n" +
+	"\aoptions\x18\x06 \x03(\tR\aoptions\"\x9c\x04\n" +
 	"\fWorkflowStep\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x1a\n" +
 	"\bposition\x18\x02 \x01(\x05R\bposition\x12\x12\n" +
@@ -83344,7 +83352,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"human_gate\x18\n" +
 	" \x01(\bR\thumanGate\x12I\n" +
 	"\x0egate_decisions\x18\v \x03(\x0e2\".controlplane.v1.OwnerGateDecisionR\rgateDecisions\x128\n" +
-	"\x18required_capability_keys\x18\f \x03(\tR\x16requiredCapabilityKeys\"\x9c\x05\n" +
+	"\x18required_capability_keys\x18\f \x03(\tR\x16requiredCapabilityKeys\x12=\n" +
+	"\x18approval_timeout_seconds\x18\r \x01(\x05H\x00R\x16approvalTimeoutSeconds\x88\x01\x01B\x1b\n" +
+	"\x19_approval_timeout_seconds\"\x9c\x05\n" +
 	"\x0fWorkflowVersion\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1a\n" +
@@ -94785,6 +94795,7 @@ func file_controlplane_v1_control_plane_proto_init() {
 		return
 	}
 	file_controlplane_v1_control_plane_proto_msgTypes[0].OneofWrappers = []any{}
+	file_controlplane_v1_control_plane_proto_msgTypes[13].OneofWrappers = []any{}
 	file_controlplane_v1_control_plane_proto_msgTypes[18].OneofWrappers = []any{
 		(*RunTarget_AgentRef)(nil),
 		(*RunTarget_WorkflowRef)(nil),

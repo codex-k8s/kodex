@@ -70,6 +70,18 @@ const workflow: Workflow = {
     validationMessages: [],
   },
 };
+it("сохраняет отдельный срок согласования и не добавляет срок прежнему этапу", () => {
+  expect(workflowEditorInput(workflow).steps[0]).not.toHaveProperty(
+    "approvalTimeoutSeconds",
+  );
+  const changed = structuredClone(workflow);
+  changed.draft!.steps[0]!.humanGate = true;
+  changed.draft!.steps[0]!.approvalTimeoutSeconds = 90;
+  expect(workflowEditorInput(changed).steps[0]?.approvalTimeoutSeconds).toBe(
+    90,
+  );
+  expect(workflowEditorInput(changed).steps[0]?.timeoutSeconds).toBe(600);
+});
 it("после save и нового GET сохраняет Draft body и exact stage/ref, не подменяет опубликованным", () => {
   const saved = workflowEditorInput(workflow);
   expect(saved.steps[0]?.purpose).toBe("Сохранённое новое назначение");

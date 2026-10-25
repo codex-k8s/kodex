@@ -410,6 +410,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	gateExpiries, err := repository.reconcileOwnerGateExpiries(ctx, tx, scope, input, payload.Limit)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	terminalStorage = append(terminalStorage, gateExpiries...)
 	deadlineFailures, err := repository.reconcileExecutionDeadlines(ctx, tx, scope, input, payload.Limit)
 	if err != nil {
 		return commandOutcome{}, err
@@ -1698,9 +1703,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateProgressSummarySafeErrorCode, lease["nodeID"], nodeState, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100), "").Scan(&humanGateAfter, &turnID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	var gateDecisions []string
+	var gatePolicy entity.WorkflowStep
 	if payload.Success && humanGateAfter {
-		gateDecisions, err = repository.executionStepGateDecisions(ctx, tx, scope, lease)
+		gatePolicy, err = repository.executionStepGatePolicy(ctx, tx, scope, lease)
 		if err != nil {
 			return commandOutcome{}, err
 		}
@@ -1866,13 +1871,14 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		gateRef, _ := newRef("gat")
 		var gateID string
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertOwnerGatesRefProjectIdNodeId, pgx.StrictNamedArgs{
-			"gate_ref":          gateRef,
-			"organization_id":   scope.organizationID,
-			"project_id":        lease["projectID"],
-			"root_run_id":       lease["rootRunID"],
-			"node_id":           gateNodeID,
-			"context_summary":   truncate(payload.ResultSummary, 1000),
-			"allowed_decisions": gateDecisions,
+			"gate_ref":                 gateRef,
+			"organization_id":          scope.organizationID,
+			"project_id":               lease["projectID"],
+			"root_run_id":              lease["rootRunID"],
+			"node_id":                  gateNodeID,
+			"context_summary":          truncate(payload.ResultSummary, 1000),
+			"allowed_decisions":        gatePolicy.GateDecisions,
+			"approval_timeout_seconds": gatePolicy.ApprovalTimeoutSeconds,
 		}).Scan(&gateID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}

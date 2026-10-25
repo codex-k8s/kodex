@@ -481,7 +481,8 @@ const ru = {
       ARTIFACT_NOT_ACTIVE: "Файл не активен",
       ARTIFACT_NOT_DELETED: "Файл не находится в корзине",
       ARTIFACT_HAS_BINDINGS: "У файла есть привязки",
-      ARTIFACT_HAS_RETAINED_REVISIONS: "Ревизии файла удерживаются действующими потребителями",
+      ARTIFACT_HAS_RETAINED_REVISIONS:
+        "Ревизии файла удерживаются действующими потребителями",
       ACTIVE_RUN_USES_ARTIFACT: "Файл используется активным запуском",
     },
     refresh: "Обновить",
@@ -2123,6 +2124,9 @@ const ru = {
     parallelGroup: "Номер параллельной группы",
     stepTimeout: "Тайм-аут этапа, секунд",
     expectedResult: "Ожидаемый результат",
+    approvalTimeout: "Срок согласования, секунд",
+    approvalTimeoutHelp:
+      "Пустое поле — без отдельного срока. После истечения процесс завершится ошибкой; общий срок процесса действует независимо.",
     gateDecisions: "Допустимые решения человека",
     gateDecision: {
       APPROVE: "Утвердить",
@@ -4914,7 +4918,8 @@ const en = {
       ARTIFACT_NOT_ACTIVE: "File is not active",
       ARTIFACT_NOT_DELETED: "File is not in the trash",
       ARTIFACT_HAS_BINDINGS: "File has bindings",
-      ARTIFACT_HAS_RETAINED_REVISIONS: "File revisions are retained by current consumers",
+      ARTIFACT_HAS_RETAINED_REVISIONS:
+        "File revisions are retained by current consumers",
       ACTIVE_RUN_USES_ARTIFACT: "File is used by an active run",
     },
     refresh: "Refresh",
@@ -6836,6 +6841,9 @@ const en = {
     parallelGroup: "Parallel group number",
     stepTimeout: "Step timeout, seconds",
     expectedResult: "Expected result",
+    approvalTimeout: "Approval waiting time, seconds",
+    approvalTimeoutHelp:
+      "Leave empty for no separate limit. Expiry fails the process; its execution deadline still applies independently.",
     gateDecisions: "Allowed human decisions",
     gateDecision: {
       APPROVE: "Approve",

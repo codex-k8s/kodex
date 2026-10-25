@@ -1605,7 +1605,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	parallelGroupLabels := map[string]int64{}
 	for index, raw := range rawSteps {
 		stepInput, ok := raw.(map[string]any)
-		if !ok || !onlyAssistantFields(stepInput, "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") ||
+		if !ok || !onlyAssistantFields(stepInput, "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys", "approvalTimeoutSeconds") ||
 			!hasAssistantFields(stepInput, "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") {
 			return command.WorkflowInput{}, errs.ErrInvalid
 		}
@@ -1617,6 +1617,15 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 		requiredCapabilities, requiredCapabilitiesOK := assistantStringsValue(stepInput, "requiredCapabilityKeys")
 		if !parallelOK || !humanGateOK || !parallelGroupOK || !timeoutOK || !gateDecisionsOK || !requiredCapabilitiesOK {
 			return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
+		}
+		var approvalTimeout *int32
+		if _, exists := stepInput["approvalTimeoutSeconds"]; exists {
+			ttl, valid := assistantInt64(stepInput, "approvalTimeoutSeconds")
+			if !valid || ttl < 1 || ttl > 604800 || !humanGate {
+				return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
+			}
+			seconds := int32(ttl)
+			approvalTimeout = &seconds
 		}
 		key := "step-" + leftPad(index+1, 3)
 		dependencies := append([]string(nil), frontier...)
@@ -1636,7 +1645,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 		draft.Steps = append(draft.Steps, entity.WorkflowStep{Key: key, Position: int32(index + 1), Name: assistantString(stepInput, "name"),
 			AgentRef: assistantString(stepInput, "agentRef"), Instructions: assistantString(stepInput, "purpose"), Parallel: parallel,
 			ParallelGroup: int32(parallelGroup), TimeoutSeconds: int32(stepTimeout), ExpectedResult: assistantString(stepInput, "expectedResult"),
-			HumanGateAfter: humanGate, DependsOn: dependencies,
+			HumanGateAfter: humanGate, DependsOn: dependencies, ApprovalTimeoutSeconds: approvalTimeout,
 			GateDecisions: gateDecisions, RequiredCapabilityKeys: requiredCapabilities})
 	}
 	if projectRef == "" || !validWorkflowVersion(draft) {

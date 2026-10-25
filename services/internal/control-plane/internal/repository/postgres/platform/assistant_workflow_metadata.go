@@ -50,9 +50,13 @@ func assistantWorkflowMetadataJSON(workflow entity.Workflow) ([]byte, error) {
 		coordinator, publishedRef = p.CoordinatorAgentRef, p.Ref
 		concurrency, timeout, revision = int64(p.Concurrency), p.TimeoutSeconds, int64(p.VersionNumber)
 		for _, step := range p.Steps {
-			steps = append(steps, map[string]any{"key": step.Key, "position": step.Position, "name": step.Name, "agent_ref": step.AgentRef,
+			item := map[string]any{"key": step.Key, "position": step.Position, "name": step.Name, "agent_ref": step.AgentRef,
 				"timeout_seconds": step.TimeoutSeconds, "parallel": step.Parallel, "parallel_group": step.ParallelGroup,
-				"human_gate": step.HumanGateAfter, "gate_decisions": append([]string{}, step.GateDecisions...), "depends_on": append([]string{}, step.DependsOn...)})
+				"human_gate": step.HumanGateAfter, "gate_decisions": append([]string{}, step.GateDecisions...), "depends_on": append([]string{}, step.DependsOn...)}
+			if step.ApprovalTimeoutSeconds != nil {
+				item["approval_timeout_seconds"] = *step.ApprovalTimeoutSeconds
+			}
+			steps = append(steps, item)
 		}
 	}
 	raw, err := json.Marshal(map[string]any{"workflow_ref": workflow.Ref, "project_ref": workflow.ProjectRef, "version": workflow.Version,

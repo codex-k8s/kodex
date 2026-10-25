@@ -2980,6 +2980,10 @@ export type WorkflowStep = {
     timeoutSeconds: number;
     expectedResult: string;
     humanGate: boolean;
+    /**
+     * Срок ожидания решения после завершения этапа. При отсутствии отдельного срока согласования нет; общий срок процесса действует независимо.
+     */
+    approvalTimeoutSeconds?: number;
     gateDecisions: Array<'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL'>;
     requiredCapabilityKeys: Array<string>;
 };
@@ -2994,6 +2998,10 @@ export type WorkflowStepInput = {
     timeoutSeconds: number;
     expectedResult: string;
     humanGate: boolean;
+    /**
+     * Необязательный срок согласования в секундах, допустимый только при humanGate=true. Отсчёт начинается при открытии согласования сервером.
+     */
+    approvalTimeoutSeconds?: number;
     gateDecisions: Array<'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL'>;
     requiredCapabilityKeys: Array<string>;
 };

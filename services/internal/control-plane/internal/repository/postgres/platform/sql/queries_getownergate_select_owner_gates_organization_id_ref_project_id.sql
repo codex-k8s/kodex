@@ -1,5 +1,5 @@
 -- name: queries_getownergate_select_owner_gates_organization_id_ref_project_id :one
-SELECT g.ref,COALESCE(p.ref,''),root.ref,n.ref,g.title,g.prompt,g.context_summary,COALESCE(requester_agent.ref,initiator.ref),COALESCE(requester_agent.name,initiator.display_name),g.allowed_decisions,g.state,COALESCE(g.decision,''),g.decision_comment,COALESCE(s.display_name,''),g.version,g.created_at,g.resolved_at,COALESCE(attachment_set.ref,''),g.scope_kind,organization.ref,
+SELECT g.ref,COALESCE(p.ref,''),root.ref,n.ref,g.title,g.prompt,g.context_summary,COALESCE(requester_agent.ref,initiator.ref),COALESCE(requester_agent.name,initiator.display_name),g.allowed_decisions,g.state,COALESCE(g.decision,''),g.decision_comment,COALESCE(s.display_name,''),g.version,g.created_at,g.resolved_at,COALESCE(attachment_set.ref,''),g.scope_kind,organization.ref,g.expires_at,
        ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
          SELECT 1 FROM control_plane.memberships resolve_membership
          WHERE resolve_membership.project_id=g.project_id AND resolve_membership.subject_id=$4::uuid AND resolve_membership.active AND 'RESOLVE_GATES'=ANY(resolve_membership.permissions)

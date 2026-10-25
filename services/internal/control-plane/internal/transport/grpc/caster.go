@@ -603,7 +603,8 @@ func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentR
 			Ref: step.Key, Position: position, Name: step.Name, Purpose: step.Instructions, AgentRef: step.AgentRef,
 			Parallel: step.Parallel, ParallelGroup: step.ParallelGroup, TimeoutSeconds: timeoutSeconds,
 			ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGateAfter,
-			GateDecisions: gateDecisions(step.GateDecisions), RequiredCapabilityKeys: append([]string(nil), step.RequiredCapabilityKeys...),
+			ApprovalTimeoutSeconds: step.ApprovalTimeoutSeconds,
+			GateDecisions:          gateDecisions(step.GateDecisions), RequiredCapabilityKeys: append([]string(nil), step.RequiredCapabilityKeys...),
 		})
 	}
 	return &controlplanev1.WorkflowVersion{Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
@@ -752,7 +753,7 @@ func castGraph(value entity.RunGraph) *controlplanev1.RunGraph {
 // castGate projects exact gate scope, actors, decision/consequence metadata, attachments and optional JSON-normalized integration intent; this read does not resolve a gate or execute its previewed effect.
 // castGate отображает точную область шлюза, авторов, метаданные решения и последствий, вложения и необязательное намерение интеграции с JSON-нормализованным предпросмотром; это чтение шлюз не закрывает и показанное действие не исполняет.
 func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
-	gate := &controlplanev1.OwnerGate{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, RequestedBy: &controlplanev1.UserSummary{Ref: value.RequestedByRef, DisplayName: value.RequestedByName}, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), ResolutionAttachmentSetRef: value.ResolutionAttachmentSetRef, NextActions: nextActions(value.NextActions)}
+	gate := &controlplanev1.OwnerGate{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, RequestedBy: &controlplanev1.UserSummary{Ref: value.RequestedByRef, DisplayName: value.RequestedByName}, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), ExpiresAt: optionalTimestamp(value.ExpiresAt), ResolutionAttachmentSetRef: value.ResolutionAttachmentSetRef, NextActions: nextActions(value.NextActions)}
 	if value.ResolvedByName != "" {
 		gate.DecidedBy = &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}
 	}

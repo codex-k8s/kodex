@@ -975,6 +975,7 @@ message WorkflowStep {
   bool human_gate = 10;
   repeated OwnerGateDecision gate_decisions = 11;
   repeated string required_capability_keys = 12;
+  optional int32 approval_timeout_seconds = 13;
 }
 
 message WorkflowVersion {

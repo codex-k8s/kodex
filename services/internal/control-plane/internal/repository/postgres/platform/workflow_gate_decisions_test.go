@@ -100,7 +100,7 @@ func TestExecutionStepGateDecisionsOwnerReadBoundary(t *testing.T) {
 // TestWorkflowResultGateInsertUsesExactDecisions требует привязки разрешённого владельцем списка
 // решений в настоящем INSERT вместо молчаливой подстановки более широкой фиксированной политики.
 func TestWorkflowResultGateInsertUsesExactDecisions(t *testing.T) {
-	args := pgx.StrictNamedArgs{"gate_ref": "gate", "organization_id": "tenant", "project_id": "project", "root_run_id": "root", "node_id": "node", "context_summary": "safe", "allowed_decisions": []string{"APPROVE", "REJECT", "CANCEL"}}
+	args := pgx.StrictNamedArgs{"gate_ref": "gate", "organization_id": "tenant", "project_id": "project", "root_run_id": "root", "node_id": "node", "context_summary": "safe", "allowed_decisions": []string{"APPROVE", "REJECT", "CANCEL"}, "approval_timeout_seconds": nil}
 	_, values, err := args.RewriteQuery(t.Context(), nil, queryRuntimeCompleteexecutionInsertOwnerGatesRefProjectIdNodeId, nil)
 	if err != nil {
 		t.Fatal("result gate INSERT does not bind exact owner decisions")

@@ -410,6 +410,10 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 	if body.Steps != nil {
 		for _, step := range *body.Steps {
 			current := &controlplanev1.WorkflowStep{Position: int32(step.Position), Name: step.Name, Purpose: step.Purpose, AgentRef: step.AgentRef, Parallel: step.Parallel, ParallelGroup: int32(step.ParallelGroup), TimeoutSeconds: int32(step.TimeoutSeconds), ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGate, RequiredCapabilityKeys: step.RequiredCapabilityKeys}
+			if step.ApprovalTimeoutSeconds != nil {
+				ttl := int32(*step.ApprovalTimeoutSeconds)
+				current.ApprovalTimeoutSeconds = &ttl
+			}
 			for _, decision := range step.GateDecisions {
 				current.GateDecisions = append(current.GateDecisions, gateDecision(string(decision)))
 			}

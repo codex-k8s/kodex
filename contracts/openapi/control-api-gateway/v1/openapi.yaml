@@ -14982,6 +14982,11 @@ components:
         timeoutSeconds: { type: integer, minimum: 1, maximum: 86400 }
         expectedResult: { type: string, maxLength: 1000 }
         humanGate: { type: boolean }
+        approvalTimeoutSeconds:
+          type: integer
+          minimum: 1
+          maximum: 604800
+          description: Срок ожидания решения после завершения этапа. При отсутствии отдельного срока согласования нет; общий срок процесса действует независимо.
         gateDecisions:
           {
             type: array,
@@ -15021,6 +15026,11 @@ components:
         timeoutSeconds: { type: integer, minimum: 1, maximum: 86400 }
         expectedResult: { type: string, maxLength: 1000 }
         humanGate: { type: boolean }
+        approvalTimeoutSeconds:
+          type: integer
+          minimum: 1
+          maximum: 604800
+          description: Необязательный срок согласования в секундах, допустимый только при humanGate=true. Отсчёт начинается при открытии согласования сервером.
         gateDecisions:
           {
             type: array,

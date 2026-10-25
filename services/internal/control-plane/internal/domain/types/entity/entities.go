@@ -712,6 +712,11 @@ type WorkflowStep struct {
 	Position, ParallelGroup, TimeoutSeconds           int32
 	Parallel, HumanGateAfter                          bool
 	DependsOn, GateDecisions, RequiredCapabilityKeys  []string
+	// ApprovalTimeoutSeconds optionally bounds owner waiting after this step completes; absence
+	// preserves indefinite gate waiting subject to the independent workflow deadline.
+	// ApprovalTimeoutSeconds ограничивает ожидание решения после завершения этапа; отсутствие
+	// сохраняет прежнее ожидание с независимым ограничением общего срока процесса.
+	ApprovalTimeoutSeconds *int32 `json:",omitempty"`
 }
 
 // WorkflowVersion is a numbered executable-definition snapshot containing coordinator/task text,
@@ -998,6 +1003,7 @@ type OwnerGate struct {
 	Version                                                         int64
 	CreatedAt                                                       time.Time
 	ResolvedAt                                                      *time.Time
+	ExpiresAt                                                       *time.Time `json:",omitempty"`
 	SourceAttachmentSetRef                                          string
 	DecisionConsequences                                            []OwnerGateDecisionConsequence
 	IntegrationIntent                                               *IntegrationIntent

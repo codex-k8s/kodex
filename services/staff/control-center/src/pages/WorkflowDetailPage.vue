@@ -265,6 +265,12 @@ function toggleCapability(
   if (index >= 0 && !enabled) step.requiredCapabilityKeys.splice(index, 1);
   else if (index < 0 && enabled) step.requiredCapabilityKeys.push(key);
 }
+function setApprovalTimeout(step: WorkflowStepInput, event: Event) {
+  const value = (event.target as HTMLInputElement).value;
+  if (value === "") delete step.approvalTimeoutSeconds;
+  else step.approvalTimeoutSeconds = Number(value);
+}
+
 function toggleDecision(
   step: WorkflowStepInput,
   decision: WorkflowStepInput["gateDecisions"][number],
@@ -648,6 +654,9 @@ onBeforeUnmount(() => {
                   ><label class="check-field"
                     ><input
                       v-model="step.humanGate"
+                      @change="
+                        !step.humanGate && delete step.approvalTimeoutSeconds
+                      "
                       :id="stepControlName(index, 'human-gate')"
                       :name="stepControlName(index, 'human-gate')"
                       type="checkbox"
@@ -692,6 +701,23 @@ onBeforeUnmount(() => {
                           >{{ step.expectedResult.length }} / 1000</span
                         >
                       </div>
+                      <label v-if="step.humanGate" class="field">
+                        <span>{{ $t("workflows.approvalTimeout") }}</span>
+                        <input
+                          :id="
+                            stepControlName(index, 'approval-timeout-seconds')
+                          "
+                          :name="
+                            stepControlName(index, 'approval-timeout-seconds')
+                          "
+                          type="number"
+                          min="1"
+                          max="604800"
+                          :value="step.approvalTimeoutSeconds ?? ''"
+                          @input="setApprovalTimeout(step, $event)"
+                        />
+                        <span>{{ $t("workflows.approvalTimeoutHelp") }}</span>
+                      </label>
                       <fieldset
                         v-if="step.humanGate"
                         class="choice-field field--wide"

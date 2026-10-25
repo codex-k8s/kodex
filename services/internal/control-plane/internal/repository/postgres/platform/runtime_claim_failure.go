@@ -255,13 +255,26 @@ func (repository *Repository) failRuntimeCandidateGraph(ctx context.Context, tx 
 // failRuntimeGraph accepts only the fixed input-invalid/timeout code-summary pairs, applies the root-scoped SQL closure and emits exact run/node/gate events plus run audits in the caller transaction. System-assistant failures also append a terminal turn before queuing terminal interaction deliveries; the outer owner commits the whole result.
 // failRuntimeGraph принимает лишь фиксированные пары code/summary для input-invalid и timeout, применяет SQL-закрытие по корню и пишет точные run/node/gate события и аудит запусков в транзакции вызывающего. Отказ системного помощника также добавляет итоговый ход до постановки terminal deliveries; внешний владелец фиксирует общий результат.
 func (repository *Repository) failRuntimeGraph(ctx context.Context, tx pgx.Tx, current scope, input command.Command, candidate claimableExecution, code, summary string) error {
-	if (code != "RUNTIME_INPUT_INVALID" || summary != runtimeClaimEligibilityChanged) && (code != "RUNTIME_TIMEOUT" || summary != runtimeTimeoutSummary) {
+	return repository.failRuntimeGraphWithGateExpiry(ctx, tx, current, input, candidate, code, summary, "")
+}
+
+// failRuntimeGraphWithGateExpiry closes one owner graph with an optional exact server-expired gate.
+// Its gate, delivery, lease and invocation effects share the original terminal transaction; an expired
+// gate has no human decision or resolver, and all other open gates retain cancellation semantics.
+// failRuntimeGraphWithGateExpiry закрывает owner-граф с необязательным точным Gate серверного истечения.
+// Gate, deliveries, leases и invocations меняются в прежней terminal-транзакции; истёкший Gate не
+// получает решения или личности человека, остальные открытые Gate отменяются по прежним правилам.
+func (repository *Repository) failRuntimeGraphWithGateExpiry(ctx context.Context, tx pgx.Tx, current scope, input command.Command, candidate claimableExecution, code, summary, expiredGateID string) error {
+	ordinary := expiredGateID == "" && ((code == "RUNTIME_INPUT_INVALID" && summary == runtimeClaimEligibilityChanged) || (code == "RUNTIME_TIMEOUT" && summary == runtimeTimeoutSummary))
+	expiry := expiredGateID != "" && code == "OWNER_GATE_EXPIRED" && summary == ownerGateExpiredSummary
+	if !ordinary && !expiry {
 		return errs.ErrInvalid
 	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimFailGraph, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "root_run_id": candidate.rootRunID,
 		"failed_node_id": candidate.nodeID, "actor_id": current.actorID,
 		"summary": summary, "safe_error_code": code,
+		"expired_gate_id": expiredGateID,
 	})
 	if err != nil {
 		return errs.ErrUnavailable
@@ -295,6 +308,9 @@ func (repository *Repository) failRuntimeGraph(ctx context.Context, tx pgx.Tx, c
 			eventKind, nodeState = "NODE_STATE_CHANGED", item.state
 		case "GATE":
 			eventKind, gateRef, nodeState = "OWNER_GATE_RESOLVED", item.ref, "CANCELLED"
+			if item.state == "EXPIRED" {
+				nodeState = "FAILED"
+			}
 		}
 		if _, err := repository.emitRunEvent(ctx, tx, current, candidate.projectID, candidate.rootRunID,
 			item.ref, eventKind, item.nodeRef, "", gateRef, "", summary, "FAILED", nodeState); err != nil {

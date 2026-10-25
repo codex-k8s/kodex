@@ -32,6 +32,9 @@ export function workflowEditorInput(
       parallelGroup: step.parallelGroup,
       humanGate: step.humanGate,
       timeoutSeconds: step.timeoutSeconds,
+      ...(step.approvalTimeoutSeconds === undefined
+        ? {}
+        : { approvalTimeoutSeconds: step.approvalTimeoutSeconds }),
       expectedResult: step.expectedResult,
       gateDecisions: [...step.gateDecisions],
       requiredCapabilityKeys: [...step.requiredCapabilityKeys],

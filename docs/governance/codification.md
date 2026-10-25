@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.20
-updated: 2026-10-25
+version: 2.2.21
+updated: 2026-10-26
 ---
 
 # Кодификация документов и задач
@@ -130,6 +130,7 @@ updated: 2026-07-28
 | `DOM-MC-001`       | `docs/domains/README.md`                                    |
 | `OPS-MC-001`       | `docs/operations/README.md`                                 |
 | `OPS-AUTHORITY-DATABASE-1093` | `docs/operations/authority-database-boundary-1093.md` |
+| `OPS-DOC-OWNER-GATE-EXPIRY-1869` | `docs/operations/owner-gate-expiry-1869.md` |
 | `OPS-DOC-1198` | `docs/operations/mvp-1198-runtime-proof.md` |
 | `OPS-DOC-1229` | `docs/operations/api-release-drain-1229.md` |
 | `OPS-DOC-1242` | `docs/operations/mvp-1242-integrations-proof.md` |

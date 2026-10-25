@@ -45,11 +45,14 @@ WITH graph AS MATERIALIZED (
         version = version + 1, updated_at = clock_timestamp()
     WHERE run_id IN (SELECT id FROM graph) AND state IN ('WAITING_APPROVAL', 'READY', 'RUNNING')
 ), closed_gates AS (
-    UPDATE control_plane.owner_gates gate SET state = 'CANCELLED', decision = 'CANCEL',
-        decision_comment = @summary::text, resolved_by = @actor_id::uuid,
+    UPDATE control_plane.owner_gates gate
+    SET state = CASE WHEN gate.id=NULLIF(@expired_gate_id,'')::uuid THEN 'EXPIRED' ELSE 'CANCELLED' END,
+        decision = CASE WHEN gate.id=NULLIF(@expired_gate_id,'')::uuid THEN NULL ELSE 'CANCEL' END,
+        decision_comment = @summary::text,
+        resolved_by = CASE WHEN gate.id=NULLIF(@expired_gate_id,'')::uuid THEN NULL ELSE @actor_id::uuid END,
         resolved_at = clock_timestamp(), version = version + 1
     WHERE organization_id = @organization_id::uuid AND root_run_id = @root_run_id::uuid AND state = 'OPEN'
-    RETURNING gate.id, gate.ref, gate.node_id
+    RETURNING gate.id, gate.ref, gate.node_id, gate.state
 ), closed_gate_deliveries AS (
     UPDATE control_plane.interaction_deliveries
     SET state = CASE WHEN state = 'CLAIMED' THEN 'UNKNOWN_OUTCOME' ELSE 'CANCELLED' END,
@@ -62,6 +65,6 @@ SELECT 'RUN'::text AS kind, ref, ''::text AS node_ref, 'FAILED'::text AS state F
 UNION ALL
 SELECT 'NODE', ref, ref, state FROM closed_nodes
 UNION ALL
-SELECT 'GATE', gate.ref, node.ref, 'CANCELLED' FROM closed_gates gate
+SELECT 'GATE', gate.ref, node.ref, gate.state FROM closed_gates gate
 JOIN control_plane.run_nodes node ON node.id = gate.node_id
 ORDER BY kind, ref

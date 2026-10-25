@@ -1866,7 +1866,10 @@ type Result struct {
 	ProjectPurgeRecovery *entity.ProjectPurgeRecovery
 	// ExecutionDeadlineExpired reports that the owner committed expiry; late effects remain forbidden.
 	// ExecutionDeadlineExpired сообщает о зафиксированном владельцем истечении; поздние эффекты запрещены.
-	ExecutionDeadlineExpired  bool `json:"executionDeadlineExpired,omitempty"`
+	ExecutionDeadlineExpired bool `json:"executionDeadlineExpired,omitempty"`
+	// OwnerGateExpired records a committed server expiry so exact receipt replay still rejects a late effect.
+	// OwnerGateExpired сохраняет серверное истечение, чтобы повтор квитанции также отклонял поздний эффект.
+	OwnerGateExpired          bool `json:"ownerGateExpired,omitempty"`
 	ProviderQueuedWorkResults []entity.ProviderQueuedWorkCancellationResult
 	EmailMailbox              *entity.EmailMailboxConfigurationView
 	EmailPublication          *entity.EmailMailboxPublication

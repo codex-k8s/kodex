@@ -1455,6 +1455,9 @@ func workflowDraftStructureInvalidField(version entity.WorkflowVersion) string {
 		if step.HumanGateAfter && len(step.GateDecisions) == 0 {
 			return workflowInvalidInvariants
 		}
+		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGateAfter || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 7*24*60*60) {
+			return workflowInvalidInvariants
+		}
 		for _, capability := range step.RequiredCapabilityKeys {
 			if !validCapabilityKey(capability) {
 				return workflowInvalidInvariants

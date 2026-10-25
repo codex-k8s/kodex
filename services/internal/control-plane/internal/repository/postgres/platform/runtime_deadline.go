@@ -138,6 +138,14 @@ func (repository *Repository) executionDeadlineCommand(ctx context.Context, tx p
 		if err := terminalOwnerGateDeadlineError(ctx, tx, current, payload.GateRef); err != nil {
 			return commandOutcome{}, false, err
 		}
+		candidate, summary, expired, err := repository.expireWorkflowOwnerGate(ctx, tx, current, input, payload.GateRef)
+		if err != nil {
+			return commandOutcome{}, false, err
+		}
+		if expired {
+			return commandOutcome{result: command.Result{OwnerGateExpired: summary == ownerGateExpiredSummary, ExecutionDeadlineExpired: summary == runtimeTimeoutSummary}, resourceKind: "RUN", resourceRef: candidate.runRef,
+				projectID: candidate.projectID, projectRef: candidate.projectRef, summary: summary, runtimeGraphChanged: true}, true, nil
+		}
 		if tx.QueryRow(ctx, queryRuntimeDeadlineGate, pgx.StrictNamedArgs{"organization_id": current.organizationID, "gate_ref": payload.GateRef}).Scan(&runID) != nil {
 			return commandOutcome{}, false, errs.ErrUnavailable
 		}
@@ -215,13 +223,16 @@ func terminalOwnerGateDeadlineError(ctx context.Context, tx pgx.Tx, current scop
 	if err != nil {
 		return errs.ErrUnavailable
 	}
-	if contains([]string{"APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED"}, gateState) {
+	if contains([]string{"APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED"}, gateState) {
 		return errs.ErrAlreadyResolved
 	}
 	return errs.ErrUnavailable
 }
 
 func executionDeadlineReceiptError(result command.Result) error {
+	if result.OwnerGateExpired {
+		return errs.ErrAlreadyResolved
+	}
 	if result.ExecutionDeadlineExpired {
 		return errs.ErrForbidden
 	}

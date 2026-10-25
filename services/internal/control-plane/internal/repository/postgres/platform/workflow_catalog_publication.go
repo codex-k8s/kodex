@@ -103,7 +103,7 @@ func executionWorkflowPublication(item entity.Workflow, digest string) ([]byte, 
 		value.InputFields = append(value.InputFields, controlplaneapi.WorkflowPublicationInput{Key: f.Key, Label: f.Label, ValueType: f.Type, Description: f.Help, DefaultValue: f.DefaultValue, Required: f.Required, Options: f.Options})
 	}
 	for _, s := range source.Steps {
-		value.Steps = append(value.Steps, controlplaneapi.WorkflowPublicationStep{Key: s.Key, Name: s.Name, AgentRef: s.AgentRef, Instructions: s.Instructions, ExpectedResult: s.ExpectedResult, Position: s.Position, ParallelGroup: s.ParallelGroup, TimeoutSeconds: s.TimeoutSeconds, Parallel: s.Parallel, HumanGateAfter: s.HumanGateAfter, DependsOn: s.DependsOn, GateDecisions: s.GateDecisions, RequiredCapabilityKeys: s.RequiredCapabilityKeys})
+		value.Steps = append(value.Steps, controlplaneapi.WorkflowPublicationStep{Key: s.Key, Name: s.Name, AgentRef: s.AgentRef, Instructions: s.Instructions, ExpectedResult: s.ExpectedResult, Position: s.Position, ParallelGroup: s.ParallelGroup, TimeoutSeconds: s.TimeoutSeconds, Parallel: s.Parallel, HumanGateAfter: s.HumanGateAfter, ApprovalTimeoutSeconds: s.ApprovalTimeoutSeconds, DependsOn: s.DependsOn, GateDecisions: s.GateDecisions, RequiredCapabilityKeys: s.RequiredCapabilityKeys})
 	}
 	raw, sha, err := controlplaneapi.EncodeWorkflowPublication(value)
 	if err != nil {
