@@ -41,7 +41,7 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal("parse isolated connection PostgreSQL")
 	}
-	projectionCounter := &projectGrantProjectionCounter{}
+	projectionCounter := &grantProjectionCounter{}
 	poolConfig.ConnConfig.Tracer = projectionCounter
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

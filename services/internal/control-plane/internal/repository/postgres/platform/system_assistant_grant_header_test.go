@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,37 +16,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// systemGrantProjectionCounter counts exact full-connection/grant query projections atomically
-// through the pgx tracer. It stores no query text, arguments or results and does not count
-// unrelated SQL or prove all read costs.
-// systemGrantProjectionCounter атомарно считает точные full-connection/grant query projections
-// через pgx tracer. Не сохраняет query text, arguments или results и не считает прочие SQL либо
-// полную стоимость чтения.
-type systemGrantProjectionCounter struct{ fullReads atomic.Int64 }
-
-// TraceQueryStart increments the counter only for the two exact full projection query strings and
-// returns the original context. It records no request data and does not modify query execution or
-// authorization.
-// TraceQueryStart увеличивает counter только для двух точных строк full projection queries и
-// возвращает исходный context. Не сохраняет request data и не меняет query execution или
-// authorization.
-func (counter *systemGrantProjectionCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	if data.SQL == queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef || data.SQL == queryQueriesGetintegrationconnectionSelectIntegrationConnectionsOrganizationIdRef {
-		counter.fullReads.Add(1)
-	}
-	return ctx
-}
-
-// TraceQueryEnd implements the required tracer completion callback without retaining rows, errors,
-// arguments or timing. Full-read counting occurs only at TraceQueryStart.
-// TraceQueryEnd реализует обязательный tracer completion callback без хранения rows, errors,
-// arguments или timing. Full-read counting выполняется только в TraceQueryStart.
-func (*systemGrantProjectionCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {
-}
 
 // TestSystemAssistantGrantHeaderClosed checks the exact synthetic header and rejects mismatched
 // ref, missing name/version/definition key/revision, malformed digest and an unbound requested
@@ -108,7 +78,7 @@ func TestSystemAssistantGrantHeaderBatchComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal("parse isolated SYSTEM header fixture")
 	}
-	counter := &systemGrantProjectionCounter{}
+	counter := &grantProjectionCounter{}
 	config.ConnConfig.Tracer = counter
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {

@@ -4,11 +4,71 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.432.0
+version: 1.433.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий test tracer полных grant projections — 25.10.2026
+
+На основе `58e34254ec6a7a07a3a0cec936a5982eab11e7d3` полностью прочитаны
+project_assistant_grant_header_test.go, system_assistant_grant_header_test.go
+и project_assistant_integration_grants_component_test.go, включая все тела
+обоих component callers. Два одинаковых типа, их atomic counter и callbacks
+заменены одним test-only grantProjectionCounter в отдельном файле. Оба caller
+создают собственный нулевой экземпляр; общих mutable counters между ними нет.
+Production Go, SQL, authority и lease/lifecycle paths не менялись.
+
+| Граница | Сохранённое поведение |
+| --- | --- |
+| Query selection | Ровно два прежних exact SQL constants, без normalization, substring matching или добавления иных запросов |
+| Count | Один atomic Add на TraceQueryStart; failed query тоже учитывается. TraceQueryEnd пустой, повторный callback завершения не увеличивает count |
+| Context/data | Возвращается тот же context, SQL/args/results/errors не сохраняются; tracer не доказывает полную стоимость чтения либо performance |
+| Callers | В каждом fixture отдельный initialized zero-value counter, Store(0) перед21-operation proposal и прежние Load/assertions. Все owner tuples, callbacks, time budgets, receipts/replay и checks сохранены |
+| Component scope | PROJECT purpose/catalog/version/grant lifecycle и SYSTEM scope/revoked-owner cases не объединены. Замена затрагивает только наблюдение двух совпадающих запросов |
+
+Независимый proof проверяет равенство трёх новых shared declarations каждой
+из двух прежних реализаций после единственного переименования типа. Затем
+удаляет только эти declarations и ставшие ненужными imports из прежних AST,
+переименовывает тип у двух callers и сравнивает полные AST трёх файлов.
+Результат — PASS LOCAL; любые изменения прочих выражений отвергаются.
+
+Новый TestGrantProjectionCounterCountsExactQueries проверяет точное включение
+двух запросов, отклонение посторонних/пустых/изменённых пробелами строк,
+идентичность отменённого контекста, независимость от args/outcome и повторного
+TraceQueryEnd, изоляцию второго экземпляра, reset и64 concurrent callbacks
+с итогом128. Никакой PostgreSQL не нужен; это тест фактических callbacks,
+а не фиктивное выполнение component сценариев. Все4 новых объявления EN→RU.
+
+Detector1668→1667 raw,851 retained occurrences прежние, unresolved817→816.
+Удалилось ровно109-token окно project/system grant tracer, новых окон нет.
+Registry740, thresholds и exclusions не менялись. Inventory6695 sources/222
+exclusions. Go21493:21166 EN→RU,327 missing только в173 test-файлах,
+production missing0. Прежних6 tracer declarations стало3, плюс1 regression
+Test; сокращение total не выдается за заполнение отсутствующих комментариев.
+
+Context7 resolve-library-id для pgx повторно вернул Invalid API key; env
+не менялись. Проверены официальный интерфейс
+[pgx QueryTracer](https://pkg.go.dev/github.com/jackc/pgx/v5#QueryTracer)
+и [tracer.go точной v5.10.0](https://github.com/jackc/pgx/blob/v5.10.0/tracer.go)
+из текущего go.mod: start возвращает context для дальнейшего вызова и end.
+Новая зависимость или внешний API не добавлены.
+
+Trace-proof — PASS LOCAL (0.37s); полный unit platform package — PASS
+LOCAL (23.82s); отдельный go test -race нового tracer regression — PASS
+LOCAL (45.05s), checks433-final. Test child env исключает credentials и все
+inherited KODEX inputs.5 exact-ignore guards, inventory/detector/assessment,
+gofmt/git diff --check — PASS LOCAL. PR392 Go/3194 объявления, missing0;
+422 whole changed blobs проверены перед публикацией.17 analyzer unit не
+повторялись, implementation прежний. Последний полный control-plane
+build/unit —38ea7e4/checks429-final; production Go с тех пор не менялся.
+
+PG component entrypoints — SKIP/NOT RUN, callbacks unit не доказывают реальный
+21-grant apply. PG/RLS/OCC/races, remote effects, browser/полный E2E/deploy/live
+не выполнялись. Manifests неизменны, прежние30 renders и исходный standalone
+staging/control-api-gateway FAIL не повторялись. #1823 открыт, #1829 Draft,
+main/QA сохранены. Env не менялись, секреты не раскрывались и не переносились.
 
 ## Тестовые fixtures: provider usage, продолжение Session и owner gates — 25.10.2026
 
