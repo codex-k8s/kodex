@@ -489,11 +489,7 @@ func (server *Server) DetachGitManagedConfiguration(w http.ResponseWriter, r *ht
 // точную команду копирования выбранной конфигурации. Общий ответ201 проверяет конфигурацию и ревизию,
 // а не меняет локально владение исходником.
 func (server *Server) CopyGitManagedConfiguration(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, p generated.CopyGitManagedConfigurationParams) {
-	body, ok := decodeJSON[generated.ManagedConfigurationCopyInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.ManagedConfigurationCopyInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}

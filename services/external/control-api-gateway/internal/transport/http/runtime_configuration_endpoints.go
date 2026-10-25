@@ -17,11 +17,7 @@ func (server *Server) GetAgentRuntimeConfiguration(writer http.ResponseWriter, r
 		return
 	}
 	response, err := server.control.Query.GetAgentRuntimeConfiguration(request.Context(), &controlplanev1.GetAgentRuntimeConfigurationRequest{AgentRef: agentRef})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
+	writeAgentRuntimeRPCResult(writer, http.StatusOK, response, err, agentRef)
 }
 
 // ListAgentRuntimeConfigurationVersions forwards agent and page selectors to the owner and projects historical configuration metadata without activating any version.
@@ -36,11 +32,7 @@ func (server *Server) ListAgentRuntimeConfigurationVersions(writer http.Response
 // PublishAgentRuntimeConfiguration decodes the body and mutation pins, validates distinct weighted provider candidates with exact catalog pins, then invokes the dedicated owner command and validates the returned agent view. Candidate display data is not an execution grant.
 // PublishAgentRuntimeConfiguration разбирает тело и mutation pins, проверяет различные взвешенные аккаунты с точными pins каталога, вызывает отдельную команду владельца и проверяет представление сотрудника. Данные кандидатов не являются grant выполнения.
 func (server *Server) PublishAgentRuntimeConfiguration(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.PublishAgentRuntimeConfigurationParams) {
-	body, ok := decodeJSON[generated.AgentRuntimeConfigurationInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.AgentRuntimeConfigurationInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}
@@ -53,30 +45,18 @@ func (server *Server) PublishAgentRuntimeConfiguration(writer http.ResponseWrite
 		Mutation: mutation, AgentRef: agentRef, RuntimeProfileRef: body.RuntimeProfileRef, Model: body.Model,
 		ProviderPolicyMode: string(body.ProviderPolicyMode), ProviderAccounts: candidates,
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
+	writeAgentRuntimeRPCResult(writer, http.StatusOK, response, err, agentRef)
 }
 
 // CreateConfigOverlayDraft decodes content and mutation context, delegates draft creation to the owner and returns a validated exact-agent view with HTTP201; it does not publish the overlay.
 // CreateConfigOverlayDraft разбирает content и mutation context, поручает создание черновика владельцу и возвращает проверенное представление сотрудника с HTTP201; overlay не публикуется.
 func (server *Server) CreateConfigOverlayDraft(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.CreateConfigOverlayDraftParams) {
-	body, ok := decodeJSON[generated.ConfigOverlayDraftInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.ConfigOverlayDraftInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.CreateConfigOverlayDraft(request.Context(), &controlplanev1.CreateConfigOverlayDraftRequest{Mutation: mutation, AgentRef: agentRef, Content: body.Content})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeAgentRuntimeConfiguration(writer, http.StatusCreated, response.GetRuntimeConfiguration(), agentRef)
+	writeAgentRuntimeRPCResult(writer, http.StatusCreated, response, err, agentRef)
 }
 
 // ValidateConfigOverlayDraft forwards mutation pins to the dedicated owner validation command and checks the returned agent configuration; local parsing is not a substitute for owner validation.
@@ -87,11 +67,7 @@ func (server *Server) ValidateConfigOverlayDraft(writer http.ResponseWriter, req
 		return
 	}
 	response, err := server.control.Command.ValidateConfigOverlayDraft(request.Context(), &controlplanev1.ValidateConfigOverlayDraftRequest{Mutation: mutation, AgentRef: agentRef})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
+	writeAgentRuntimeRPCResult(writer, http.StatusOK, response, err, agentRef)
 }
 
 // PublishConfigOverlayDraft invokes the dedicated owner publish command with mutation/version context, then projects the exact-agent view; this handler does not itself materialize runtime files.
@@ -102,49 +78,47 @@ func (server *Server) PublishConfigOverlayDraft(writer http.ResponseWriter, requ
 		return
 	}
 	response, err := server.control.Command.PublishConfigOverlayDraft(request.Context(), &controlplanev1.PublishConfigOverlayDraftRequest{Mutation: mutation, AgentRef: agentRef})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
+	writeAgentRuntimeRPCResult(writer, http.StatusOK, response, err, agentRef)
 }
 
 // RollbackConfigOverlay decodes a selected published overlay and mutation context for the specialized owner rollback, preserving owner-side history/version policy and validated response identity.
 // RollbackConfigOverlay разбирает выбранный опубликованный overlay и mutation context для специального rollback владельца, сохраняя его политику истории и версий и проверяемую identity ответа.
 func (server *Server) RollbackConfigOverlay(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.RollbackConfigOverlayParams) {
-	body, ok := decodeJSON[generated.ConfigOverlayRollbackInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.ConfigOverlayRollbackInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.RollbackConfigOverlay(request.Context(), &controlplanev1.RollbackConfigOverlayRequest{Mutation: mutation, AgentRef: agentRef, PublishedOverlayRef: body.PublishedOverlayRef})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
+	writeAgentRuntimeRPCResult(writer, http.StatusOK, response, err, agentRef)
 }
 
 // BindAgentRuntimeEnvironment sends the selected environment and mutation pins to the dedicated owner binding command, returning an exact-agent validated configuration without inferring authority from the environment reference.
 // BindAgentRuntimeEnvironment передаёт выбранное окружение и mutation pins отдельной команде привязки владельца и выдаёт проверенную конфигурацию точного сотрудника без вывода полномочий из ссылки окружения.
 func (server *Server) BindAgentRuntimeEnvironment(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.BindAgentRuntimeEnvironmentParams) {
-	body, ok := decodeJSON[generated.RuntimeEnvironmentBindingInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.RuntimeEnvironmentBindingInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.BindAgentRuntimeEnvironment(request.Context(), &controlplanev1.BindAgentRuntimeEnvironmentRequest{Mutation: mutation, AgentRef: agentRef, EnvironmentRef: body.EnvironmentRef})
+	writeAgentRuntimeRPCResult(writer, http.StatusOK, response, err, agentRef)
+}
+
+// agentRuntimeConfigurationReply exposes only the typed view of an already completed owner RPC; reading it does not select an operation or establish agent authority.
+// agentRuntimeConfigurationReply предоставляет только типизированное представление уже завершённого RPC владельца; его чтение не выбирает операцию и не назначает полномочия сотрудника.
+type agentRuntimeConfigurationReply interface {
+	// GetRuntimeConfiguration returns the owner view; the accompanying RPC error must be checked before invoking this getter.
+	// GetRuntimeConfiguration возвращает представление владельца; до вызова getter необходимо проверить сопровождающую RPC-ошибку.
+	GetRuntimeConfiguration() *controlplanev1.AgentRuntimeConfigurationView
+}
+
+// writeAgentRuntimeRPCResult maps an error before reading any view, otherwise delegates the exact success status/agent to the existing version/binding validator and public projector. It neither invokes an owner command nor accepts a partial errored reply as success.
+// writeAgentRuntimeRPCResult отображает ошибку до чтения представления, иначе передаёт точные статус успеха и сотрудника прежнему validator версии/привязок и публичному projector. Команду владельца не вызывает и частичный ответ с ошибкой за успех не принимает.
+func writeAgentRuntimeRPCResult(writer http.ResponseWriter, statusCode int, reply agentRuntimeConfigurationReply, err error, agentRef string) {
 	if err != nil {
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
+	writeAgentRuntimeConfiguration(writer, statusCode, reply.GetRuntimeConfiguration(), agentRef)
 }
 
 // writeAgentRuntimeConfiguration requires a view with a valid agent version, exact configuration agent, at most128 combined context bindings and unique valid binding/resource references before common projection. Validation of returned metadata does not itself issue binding grants.
@@ -269,11 +243,7 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 // RollbackRuntimeEnvironment forwards the selected published-version reference and mutation context to the owner rollback and projects the environment without rewriting version history locally.
 // RollbackRuntimeEnvironment передаёт выбранную опубликованную версию и mutation context rollback владельца и проецирует окружение без локального переписывания истории.
 func (server *Server) RollbackRuntimeEnvironment(writer http.ResponseWriter, request *http.Request, environmentRef generated.RuntimeEnvironmentRef, parameters generated.RollbackRuntimeEnvironmentParams) {
-	body, ok := decodeJSON[generated.RuntimeEnvironmentRollbackInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.RuntimeEnvironmentRollbackInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}

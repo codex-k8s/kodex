@@ -93,11 +93,7 @@ func validProviderBlockerPage(p *cp.ListProviderAccountBlockersResponse, kind cp
 // заголовками mutation/version, затем поручает отмену владельцу. Ответ должен совпасть по аккаунту
 // и порядку выбранных запусков с известными исходами до публичной выдачи.
 func (server *Server) CancelProviderAccountQueuedWork(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.CancelProviderAccountQueuedWorkParams) {
-	body, ok := decodeJSON[generated.ProviderAccountQueuedWorkCancellationInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.ProviderAccountQueuedWorkCancellationInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}

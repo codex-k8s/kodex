@@ -44,11 +44,7 @@ func (s *Server) ListSystemRuntimeSecrets(w http.ResponseWriter, r *http.Request
 // секрета.
 func (s *Server) CreateSystemRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, p generated.CreateSystemRuntimeSecretDraftParams) {
 	setRuntimeSecretHeaders(w)
-	body, ok := decodeJSON[generated.RuntimeSecretCreateInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, "")
+	body, mutation, ok := decodeMutationBody[generated.RuntimeSecretCreateInput](w, r, p.IdempotencyKey, "")
 	if !ok {
 		return
 	}

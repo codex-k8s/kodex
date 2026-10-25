@@ -7688,6 +7688,54 @@
       "fragmentSHA256": "4c425eba9093c45e094212a79aadcf35578a74f7eec26fc0f857eb1e797b0c56",
       "count": 1,
       "reason": "Окно 301 tokens. Длинное окно перекрывает сразу verify/reauthorize/delete/revoke. Verify/delete используют writeRPCProblem, reauthorize — writeProviderDeviceProblem; success имеет exact-account projection и200/202, revoke — стандартный result. Единого цельного protocol/lifecycle algorithm на всём окне нет; shared RequireMutation/result/projectors уже выделены, generic credential transition скрыл бы security distinctions. Слева: VerifyProviderAccountDeviceAuthorization/ReauthorizeProviderAccountDeviceCode/DeleteProviderAccount; справа: ReauthorizeProviderAccountDeviceCode/DeleteProviderAccount/RevokeProviderAccount. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/organization_role_image_endpoints.go",
+      "fragmentSHA256": "d46d479cb1dff6dfe3a37a412c988293924cff128381e8a0b8c7be4830bbdcb9",
+      "count": 1,
+      "reason": "Окно 108 tokens. Окно пересекает хвост предыдущего метода и новый typed command. Role-version PermissionKeys/AllowedScopes/ChangeComment, organization image artifact/provenance promotion и agent overlay/runtime rollback имеют разные refs, RPC и validation. Decode/mutation уже decodeMutationBody; projection/error kernels также общие там, где совпадают. Nominal bindings не заменяются generic owner/action dispatcher. Слева: CreateAccessRole/CreateAccessRoleVersion; справа: ListSystemRoleImageRecipeRevisions/PromoteSystemRoleImage. Сохранено только exact pair/hash/count1, не методы, файлы либо формат целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "fragmentSHA256": "d46d479cb1dff6dfe3a37a412c988293924cff128381e8a0b8c7be4830bbdcb9",
+      "count": 2,
+      "reason": "Окно 101/103 tokens. Окно пересекает хвост предыдущего метода и новый typed command. Role-version PermissionKeys/AllowedScopes/ChangeComment, organization image artifact/provenance promotion и agent overlay/runtime rollback имеют разные refs, RPC и validation. Decode/mutation уже decodeMutationBody; projection/error kernels также общие там, где совпадают. Nominal bindings не заменяются generic owner/action dispatcher. Слева: CreateAccessRole/CreateAccessRoleVersion; справа: PublishAgentRuntimeConfiguration/CreateConfigOverlayDraft/PublishRuntimeEnvironmentVersion/RollbackRuntimeEnvironment. Сохранено только exact pair/hash/count2, не методы, файлы либо формат целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "199dc63eb0f379626b1ddf08d2487db2e7621548d439eaa8c14fa51be01f6464",
+      "count": 1,
+      "reason": "Окно 103 tokens. Сравниваются хвост создания беседы/обновление title и хвост Git detach/явная Git-managed copy. ConversationRef/Title не являются ConfigurationRef/Name и не дают одинакового owner lifecycle. Decode/mutation уже общий; отдельный CopyGitManagedConfiguration и его result validator сохраняют source/ownership boundary вместо generic UI update. Слева: CreateAssistantConversation/UpdateAssistantConversationTitle; справа: DetachGitManagedConfiguration/CopyGitManagedConfiguration. Сохранено только exact pair/hash/count1, не методы, файлы либо формат целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "fragmentSHA256": "d9b49dd733e20a17bd0d8c990a678c9cd8ba98d82f1f6c4950e3d171c908ba1e",
+      "count": 1,
+      "reason": "Окно 100 tokens. Перекрываются Change/RemovePlatformMembership и Create/ValidateConfigOverlayDraft. Mutation и error-first output уже общие; membership removal и runtime overlay validation имеют разные nominal RPC/refs, статус и result schema. Остались явные transport bindings и короткий caller guard, а не самостоятельный повторный business algorithm. Слева: ChangePlatformMembership/RemovePlatformMembership; справа: CreateConfigOverlayDraft/ValidateConfigOverlayDraft. Сохранено только exact pair/hash/count1, не методы, файлы либо формат целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "fragmentSHA256": "0269f5dd251974efdb9a668d7a03c63d5494967700be9fe0c2f546ac88c1fa6b",
+      "count": 2,
+      "reason": "Окно 124 tokens. Окно соединяет завершение publish/create overlay и начало rollback/bind. DecodeMutationBody и writeAgentRuntimeRPCResult уже общие, включая error-before-getter/agent-version-binding validation. Content, PublishedOverlayRef и EnvironmentRef выбирают отдельные typed RPC; одинаковый result view не делает эти owner transitions одной generic командой. Слева: PublishAgentRuntimeConfiguration/CreateConfigOverlayDraft; справа: PublishConfigOverlayDraft/RollbackConfigOverlay/BindAgentRuntimeEnvironment. Сохранено только exact pair/hash/count2, не методы, файлы либо формат целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "fragmentSHA256": "120040549ad70f51abaa0b37e333e11828f19d40acac97f5c0a38b5b7142bc4f",
+      "count": 1,
+      "reason": "Окно 109 tokens. Окна пересекают Create/Validate/PublishConfigOverlayDraft.201 create,200 validation/publication и их nominal owner RPC сохраняются отдельно; mutation и typed error/getter/validator уже общие. Абстрагировать оставшийся caller glue через универсальный action executor означало бы скрыть разные lifecycle intentions, не удалить новый algorithm. Слева: CreateConfigOverlayDraft/ValidateConfigOverlayDraft; справа: ValidateConfigOverlayDraft/PublishConfigOverlayDraft. Сохранено только exact pair/hash/count1, не методы, файлы либо формат целиком."
     }
   ]
 }

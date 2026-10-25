@@ -4,11 +4,85 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.468.0
+version: 1.469.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Переиспользование decoder и обработка runtime-ответа — 25.10.2026
+
+В девяти gateway-файлах17 adjacent checked decodeJSON→requireMutation prefixes
+переведены на существующий неизменённый decodeMutationBody. Preview по всему
+собственному HTTP package нашёл именно17 подходящих связок:9 файлов,0
+ineligible среди распознанных adjacent шаблонов. Optional/unchecked paths,
+иные decoders и промежуточная business validation в шаблон не входят.
+
+Проверены конкретные семейства: email credential, organization/project image
+risk, Git-managed copy, organization role recipe/promotion, organization/project
+runtime secret draft/rotate, queued provider cancellation и runtime/overlay
+publish/rollback/bind. Все headers читаются из direct value fields generated
+params либо empty literal. Их адрес не передавался и они не захватывались
+closure до decode; copied header reads не добавляют наблюдаемых эффектов.
+
+Native pre-guards/no-store/project context остаются до helper. После него
+сохранены exact risk/evidence/receipt/version/provenance pins, отдельные owner
+RPC, kind/length/UTF8 checks, body.Value=nil, clear/erase, secret value/hash/
+prepare/grant/terminal/broker order, bounded unique selected refs/blockers digest,
+ordered outcomes и specialized output validation. Секреты живой среды при
+рефакторинге и проверках не читались; value-переменные в коде не исполнялись.
+
+Семь runtime reply tails используют новый узкий writeAgentRuntimeRPCResult и
+локальный getter interface. Error проверяется до GetRuntimeConfiguration;
+после него вызывается прежний writeAgentRuntimeConfiguration с exact agentRef
+и200/201. Сам validator версии/сотрудника/unique bounded bindings/public view
+не менялся. Новый helper не выбирает RPC, не выдаёт grants и не превращает
+частичный ответ с ошибкой в успешное чтение. Typed-nil generated reply на
+успехе сохраняет прежний nil-view отказ. Новых owner transitions нет.
+
+Матрица syntax/mutation/risk/promotion/secret/credential/queue/runtime paths
+сверена с native methods. Обратная подстановка17 actual decoder bodies и7
+runtime error/getter/projector bodies восстановила полные AST девяти файлов,
+comments/directives/signatures и все untouched prefixes/suffixes. Server helper
+и прежние decoder/runtime integration tests побайтно прежние.12 negative source
+mutations отклонены, включая header permutation, pointer params, неверный RPC,
+удаление clear, eager getter, status collapse, foreign agent и parse recovery.
+
+Добавлены44 подслучая typed runtime boundary:200/201, valid/nil/foreign-agent/
+invalid-version views, typed-nil generated success, все16 non-OK gRPC codes и
+обычная ошибка. Error-only getter падает при чтении, success getter считается
+ровно один раз. Сверяются прежние status/headers/ETag/JSON/correlation UUID и
+неизменность protobuf. Existing runtimeContextFixture переиспользован, новой
+копии owner snapshot нет. Старые7 integration routes runtime bindings,78 common
+RPC result cases и6 decoder cases также прошли.
+
+Финальный gateway на Go1.26.6: pinned gofmt0,02с, весь build6,48с и весь
+unit16,44с — PASS LOCAL; mod=readonly/-p2/count1, GOENV/GOWORK off,
+GOMAXPROCS4.11 packages/0 failed/skipped. После добавления typed result весь
+build/unit повторён; более ранний decoder-only прогон не подменяет финальный.
+Hashes всех10 Go inputs совпали с proof. Новые тесты не являются live owner/
+provider, PostgreSQL component или browser acceptance.
+
+Detector:6733 sources/222 прежних exclusions,1568 raw/1104 retained/464
+unresolved против1568/1096/472. Исчезли6 keys/8 occurrences, появились6
+keys/8 shorter nominal windows. Все961 прежних entries неизменны; добавлены6
+exact pair/hash/count решений после чтения фактических fragments/контекстов.
+Общие decode/error/getter/validator kernels уже вынесены; оставшиеся окна
+пересекают соседние typed requests/RPC и не являются общим business executor.
+12 count/hash mutations отвергнуты actual assessor. Три decoder windows,
+намеренно оставленные unresolved в предыдущем пакете, теперь исчезли благодаря
+reuse; дополнительными исключениями они не скрывались.
+
+Все5 стадий отчёта — PASS LOCAL. Go descriptions21574/21574, пропусков0;
+шесть новых объявлений, включая interface method, содержательно описаны.
+Остальные464 группы входят в scope #1823. Generated output, contracts/modules,
+прочие deployable, thresholds/нормализация/exclusions не менялись.
+
+Context7 /golang/go сверил DisallowUnknownFields и второй Decode с io.EOF:
+прежний decoder сохраняет свой nominal body limit, unknown-field/trailing-value
+contract. Проверка duplicate keys отдельно не добавлялась, parser semantics
+не расширялись. Versions и credential sources не менялись. Реальные browser/
+full E2E/PG component/OCI/apply/deploy/live и независимая QA текущего SHA — NOT RUN.
 
 ## Общий error-first результат HTTP RPC и reuse mutation decoder — 25.10.2026
 

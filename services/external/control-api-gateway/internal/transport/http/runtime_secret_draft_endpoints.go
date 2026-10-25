@@ -36,11 +36,7 @@ func (s *Server) CreateRuntimeSecretDraft(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	body, ok := decodeJSON[generated.RuntimeSecretCreateInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, "")
+	body, mutation, ok := decodeMutationBody[generated.RuntimeSecretCreateInput](w, r, p.IdempotencyKey, "")
 	if !ok {
 		return
 	}
@@ -51,11 +47,7 @@ func (s *Server) CreateRuntimeSecretDraft(w http.ResponseWriter, r *http.Request
 // SaveRuntimeSecretDraft декодирует замену и требует versioned mutation указанного секрета до подготовки нового черновика. Замену не публикует и owner conflict checks не обходит.
 func (s *Server) SaveRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, ref generated.SecretRef, p generated.SaveRuntimeSecretDraftParams) {
 	setRuntimeSecretHeaders(w)
-	body, ok := decodeJSON[generated.RuntimeSecretRotateInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.RuntimeSecretRotateInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
