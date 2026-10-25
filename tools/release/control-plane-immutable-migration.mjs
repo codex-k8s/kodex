@@ -450,7 +450,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
           journal.events.some(e=>e.type==='RESUME_ACK') && journal.events.some(e=>e.type==='TERMINAL_READBACK' && e.jobUID),
         'MIGRATION_REVALIDATION_RESUMED_REQUIRED');
         ensure(inspectSource(plan.source.path).revision===revalidationRevision &&
-          sourceDigest(plan.source)===plan.migrationFileSHA256,'MIGRATION_REVALIDATION_SOURCE_INVALID');
+          sourceDigest({...plan.source,revision:revalidationRevision})===plan.migrationFileSHA256,'MIGRATION_REVALIDATION_SOURCE_INVALID');
         const path=`tools/release/${configuration.postconditionFile}`;
         let previousSQL;
         try {
