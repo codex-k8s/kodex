@@ -14,9 +14,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryProviderQueuedWorkLock embeds a tenant-bound run lock returning current version/state,
+// exact account QUEUED_TURN linkage and canonical cancellability. Permissions and terminal outcome
+// classification remain separate caller checks.
+// queryProviderQueuedWorkLock встраивает tenant-bound run lock с current version/state, exact
+// account QUEUED_TURN linkage и canonical cancellability. Permissions и terminal outcome
+// classification остаются отдельными caller checks.
+//
 //go:embed sql/provider_queued_work_lock.sql
 var queryProviderQueuedWorkLock string
 
+// cancelProviderAccountQueuedWork validates a bounded unique run selection and current
+// account-blocker digest before processing each run in order. It returns per-run closed outcomes
+// plus refreshed account data; the first error discards the result while earlier mutations await
+// caller rollback. Access, account OCC and commit belong to the enclosing command.
+// cancelProviderAccountQueuedWork проверяет ограниченный уникальный run selection и current
+// account-blocker digest до последовательной обработки каждого run. Возвращает per-run closed
+// outcomes и обновлённый account; первая ошибка отбрасывает result, а прежние mutations ожидают
+// caller rollback. Access, account OCC и commit принадлежат enclosing command.
 func (repository *Repository) cancelProviderAccountQueuedWork(ctx context.Context, tx pgx.Tx, current scope, input command.Command, payload command.ProviderAccountInput, accountID string, version int64) (commandOutcome, error) {
 	if len(payload.SelectedRunRefs) < 1 || len(payload.SelectedRunRefs) > 64 || len(payload.BlockersDigest) != 64 {
 		return commandOutcome{}, errs.ErrInvalid
@@ -51,6 +66,14 @@ func (repository *Repository) cancelProviderAccountQueuedWork(ctx context.Contex
 		summary: "i18n:PROVIDER_ACCOUNT_QUEUED_WORK_PROCESSED", platformAggregateVersion: account.Version, platformState: account.State}, nil
 }
 
+// cancelSelectedProviderRun checks run.view then run.cancel before locking exact tenant run state
+// and account linkage. Hidden, unauthorized, terminal, blocked and stale cases return distinct
+// safe outcomes; only an eligible linked run reaches canonical changeRun cancellation, preserving
+// its full graph closure and events in the caller transaction.
+// cancelSelectedProviderRun проверяет run.view, затем run.cancel до lock exact tenant run state и
+// account linkage. Hidden, unauthorized, terminal, blocked и stale случаи возвращают разные safe
+// outcomes; только допустимый linked run достигает canonical changeRun cancellation с полным graph
+// closure/events в caller transaction.
 func (repository *Repository) cancelSelectedProviderRun(ctx context.Context, tx pgx.Tx, current scope, accountID, ref string) (string, error) {
 	target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUN", ResourceRef: ref}
 	if err := repository.requireAccess(ctx, tx, current, "run.view", target); err != nil {

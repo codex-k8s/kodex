@@ -3,19 +3,30 @@ package platform
 import (
 	"context"
 	_ "embed"
-	"errors"
-	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/jackc/pgx/v5"
 )
 
+// queryProviderFinancialReceipt embeds a locked idempotency receipt lookup by exact
+// tenant/actor/operation/key. Fresh execution, credential and deadline guards must run first; a
+// stored receipt cannot restore old authority.
+// queryProviderFinancialReceipt встраивает locked idempotency receipt lookup по exact
+// tenant/actor/operation/key. Fresh execution, credential и deadline guards выполняются заранее;
+// stored receipt не восстанавливает прежние полномочия.
+//
 //go:embed sql/provider_financial_receipt.sql
 var queryProviderFinancialReceipt string
 
-// Semantic callback не зависит от transport correlation. Все текущие owner
-// guards выполняются до чтения receipt, поэтому replay не сохраняет старое право.
+// bindFinancialCallbackReceipt ignores commands without a financial progress callback, otherwise
+// requires a standalone valid observation and fresh lease/root/deadline/current-credential guards.
+// It rewrites mutation key/digest from semantic observation and locks that idempotency scope; it
+// neither reads the receipt nor publishes the observation here, and does not commit.
+// bindFinancialCallbackReceipt пропускает commands без financial progress callback, иначе требует
+// отдельную допустимую observation и fresh lease/root/deadline/current-credential guards.
+// Переписывает mutation key/digest по semantic observation и блокирует idempotency scope; здесь не
+// читает receipt, не публикует observation и не выполняет commit.
 func (repository *Repository) bindFinancialCallbackReceipt(ctx context.Context, tx pgx.Tx, current scope, input *command.Command) error {
 	if input.Kind != command.ReportExecutionProgress {
 		return nil
@@ -44,19 +55,8 @@ func (repository *Repository) bindFinancialCallbackReceipt(ctx context.Context, 
 	} else if expired {
 		return errs.ErrForbidden
 	}
-	var created time.Time
-	var previousCreated *time.Time
-	var previousLease string
-	var previousSequence int64
-	var previous []byte
-	if err := tx.QueryRow(ctx, queryProviderFinancialGuard, pgx.StrictNamedArgs{
-		"runtime_revision_id": lease["runtimeRevisionID"], "organization_id": current.organizationID,
-		"lease_id": lease["leaseID"], "root_run_id": lease["rootRunID"],
-	}).Scan(&created, &previousCreated, &previousLease, &previousSequence, &previous); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return errs.ErrForbidden
-		}
-		return errs.ErrUnavailable
+	if _, err := readProviderFinancialCollector(ctx, tx, current, lease); err != nil {
+		return err
 	}
 	input.Mutation.IdempotencyKey = financialCallbackKey(stringMap(lease, "leaseID"), payload.Generation, observation.Sequence)
 	input.Mutation.IntentDigest = digestBytes(asJSON(observation))
@@ -67,6 +67,12 @@ func (repository *Repository) bindFinancialCallbackReceipt(ctx context.Context, 
 	return nil
 }
 
+// financialCallbackKey hashes a versioned JSON tuple of lease, generation and observation sequence
+// into the callback idempotency key. Transport correlation and observation content are excluded;
+// content is bound separately by IntentDigest after fresh authority checks.
+// financialCallbackKey хеширует versioned JSON tuple из lease, generation и observation sequence в
+// callback idempotency key. Transport correlation и observation content исключены; content
+// связывается отдельно через IntentDigest после fresh authority checks.
 func financialCallbackKey(lease string, generation, sequence int64) string {
 	return digestBytes(asJSON([]any{"provider-financial-callback-v1", lease, generation, sequence}))
 }

@@ -12,24 +12,74 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryProviderAuthorizationReservationRead embeds replay lookup by
+// organization/account/actor/method/request key with original/reserved versions and deadline
+// freshness. It returns metadata only; access and semantic digest equality are checked by the
+// caller.
+// queryProviderAuthorizationReservationRead встраивает replay lookup по
+// organization/account/actor/method/request key с original/reserved versions и deadline freshness.
+// Возвращает только metadata; access и semantic digest equality проверяет caller.
+//
 //go:embed sql/provider_authorization_reservation_read.sql
 var queryProviderAuthorizationReservationRead string
 
+// queryProviderAuthorizationReservationInsert embeds a RESERVED authorization attempt with a
+// fifteen-minute deadline, pinned versions and request digest. Initial FAILED authorization state
+// does not mean preparation failed; external materialization has not happened here.
+// queryProviderAuthorizationReservationInsert встраивает RESERVED authorization attempt с
+// пятнадцатиминутным deadline, pinned versions и request digest. Начальное FAILED authorization
+// state не означает отказ preparation; внешняя materialization здесь ещё не выполнена.
+//
 //go:embed sql/provider_authorization_reservation_insert.sql
 var queryProviderAuthorizationReservationInsert string
 
+// queryProviderAuthorizationReservationAbandon embeds supersession of reserved or pending attempts
+// for the locked account, clearing interactive codes and incrementing versions. Tenant ownership
+// and account locking must already be established by the caller.
+// queryProviderAuthorizationReservationAbandon встраивает supersession reserved либо pending
+// attempts заблокированного account, очищая interactive codes и увеличивая versions. Tenant
+// ownership и account lock должны быть установлены caller заранее.
+//
 //go:embed sql/provider_authorization_reservation_abandon.sql
 var queryProviderAuthorizationReservationAbandon string
 
+// queryProviderAuthorizationAbandonedCleanup embeds deduplicated metadata cleanup tasks for
+// abandoned attempts using deterministic materializer refs. It does not itself revoke external
+// credentials or confirm cleanup completion.
+// queryProviderAuthorizationAbandonedCleanup встраивает deduplicated metadata cleanup tasks для
+// abandoned attempts с детерминированными materializer refs. Сам не отзывает внешние credentials и
+// не подтверждает завершение cleanup.
+//
 //go:embed sql/provider_authorization_abandoned_cleanup.sql
 var queryProviderAuthorizationAbandonedCleanup string
 
+// queryProviderAuthorizationExpiredAccounts embeds a bounded account-ordered SKIP LOCKED selection
+// with overdue reserved attempts. Selection holds account locks for the caller transaction; expiry
+// is applied by a separate statement.
+// queryProviderAuthorizationExpiredAccounts встраивает ограниченную account-ordered SKIP LOCKED
+// выборку с просроченными reserved attempts. Выборка держит account locks caller transaction;
+// expiry применяется отдельным statement.
+//
 //go:embed sql/provider_authorization_expired_accounts.sql
 var queryProviderAuthorizationExpiredAccounts string
 
+// queryProviderAuthorizationExpire embeds abandonment of overdue reservations and
+// disables/transitions the account only when its current pending version matches an expired
+// reserved version. It preserves later account changes and leaves cleanup scheduling to the
+// caller.
+// queryProviderAuthorizationExpire встраивает abandonment просроченных reservations и
+// отключает/переводит account только при совпадении current pending version с expired reserved
+// version. Сохраняет более поздние account changes; cleanup назначает caller.
+//
 //go:embed sql/provider_authorization_expire.sql
 var queryProviderAuthorizationExpire string
 
+// expireProviderAuthorizationReservations collects and closes a bounded locked account batch
+// before expiring reservations and scheduling abandoned metadata cleanup for each. It stops at the
+// first error without commit; all earlier writes remain the caller transaction responsibility.
+// expireProviderAuthorizationReservations собирает и закрывает ограниченный locked account batch
+// до expiry reservations и назначения abandoned metadata cleanup каждому account. Останавливается
+// на первой ошибке без commit; прежние writes остаются ответственностью caller transaction.
 func (repository *Repository) expireProviderAuthorizationReservations(ctx context.Context, tx pgx.Tx, limit int32) error {
 	rows, err := tx.Query(ctx, queryProviderAuthorizationExpiredAccounts, pgx.StrictNamedArgs{"limit": limit})
 	if err != nil {
@@ -59,7 +109,18 @@ func (repository *Repository) expireProviderAuthorizationReservations(ctx contex
 	return nil
 }
 
-// ReserveProviderAuthorization фиксирует попытку до внешнего эффекта; повтор не создаёт новую identity.
+// ReserveProviderAuthorization checks shape, resolves scope and requires both account
+// view/authorize before locking the account. Exact digest/original-version replay returns the old
+// identity without commit; fresh unapplied replay also requires deadline/version/state pins. A new
+// reservation checks OCC and active/warm guards, abandons older attempts, schedules cleanup,
+// inserts metadata and disables the account atomically. Digest validation here checks length only;
+// no external authorization or secret transfer occurs.
+// ReserveProviderAuthorization проверяет shape, разрешает scope и требует account view/authorize
+// до account lock. Exact digest/original-version replay возвращает прежнюю identity без commit;
+// свежий unapplied replay также требует deadline/version/state pins. Новое reservation проверяет
+// OCC и active/warm guards, закрывает старые attempts, назначает cleanup, добавляет metadata и
+// атомарно отключает account. Digest здесь проверяется только по длине; внешней authorization и
+// переноса секретов нет.
 func (repository *Repository) ReserveProviderAuthorization(ctx context.Context, principal value.Principal, mutation value.Mutation, accountRef, method, digest string) (entity.ProviderAuthorizationReservation, error) {
 	var result entity.ProviderAuthorizationReservation
 	if mutation.ExpectedVersion == nil || *mutation.ExpectedVersion < 1 || len(mutation.IdempotencyKey) < 8 || len(mutation.IdempotencyKey) > 128 ||

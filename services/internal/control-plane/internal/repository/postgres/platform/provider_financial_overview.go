@@ -13,9 +13,26 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryProviderFinancialOverview embeds organization-scoped nondeleted openai-codex account
+// display rows. Financial data is projected only for enabled AUTHORIZED accounts with matching
+// current credential; actor eligibility/view filtering remains with the reader.
+// queryProviderFinancialOverview встраивает organization-scoped display rows неудалённых
+// openai-codex accounts. Financial data проецируется только для enabled AUTHORIZED accounts с
+// matching current credential; actor eligibility/view filtering остаётся у reader.
+//
 //go:embed sql/provider_financial_overview.sql
 var queryProviderFinancialOverview string
 
+// GetProviderFinancialOverview uses a read-only RepeatableRead snapshot to load the current access
+// subject/bindings and eligible accounts, then filters account view permission before
+// parsing/aggregating financial data. The display expires five minutes after observation time.
+// Commit/rollback failures clear partial output; this is a stored observation view, not a live
+// provider balance or authorization grant.
+// GetProviderFinancialOverview использует read-only RepeatableRead snapshot для current access
+// subject/bindings и eligible accounts, затем фильтрует account view permission до
+// parsing/aggregation financial data. Display истекает через пять минут после observation time.
+// Commit/rollback failures очищают partial output; это stored observation view, а не live provider
+// balance или authorization grant.
 func (repository *Repository) GetProviderFinancialOverview(ctx context.Context, p value.Principal) (result entity.ProviderFinancialOverview, resultError error) {
 	current, err := repository.resolveScope(ctx, p)
 	if err != nil {

@@ -4,11 +4,62 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.414.0
+version: 1.415.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Provider lifecycle и financial collector — 25.10.2026
+
+На основе `aa8113c93789749657b265dd3e59e71767e5ffde` полностью прочитаны
+13 provider Go-файлов(1533 исходные строки) и36 embedded SQL(564 строки).
+73 прежних объявления и2 новых private financial declarations описаны EN→RU.
+Применимые GO-DOC-001/002/003/006, GUIDE-DOC-006 и GOV-DOC-003 сохраняются;
+Context7 pgx v5.10.0 QueryRow/Scan/ErrNoRows и Commit/Rollback проверены в
+предыдущем пакете, нового внешнего API/зависимости нет.
+
+Две одинаковые queryProviderFinancialGuard/Scan/error-mapping последовательности
+из publishFinancial и bindFinancialCallbackReceipt вынесены в узкий
+readProviderFinancialCollector с private typed result. Query/StrictNamedArgs,
+Scan field order, exact context/transaction и ErrNoRows→Forbidden/прочие→Unavailable
+сохранены. Root guards остаются разными у callers; receipt сохраняет deadline
+и lease guards, mutation key/digest и idempotency lock. Публикация по-прежнему
+отдельно проверяет ordering, записывает observation/event и не фиксирует
+caller transaction. При ошибке partial collector не выдаётся; оба caller
+раньше тоже прекращали работу до использования частичных Scan values.
+
+| Путь / переход | Сохранённое поведение и границы |
+| --- | --- |
+| Blockers/list | Account access до read; visibility/cancellability до limit, hidden counts и digest полного source; cursor связан с actor/project/account/deletion versions/filter |
+| Delete/start | Access/OCC принадлежат command. Disable→fail pending authorization→schedule cleanup в owner transaction; DELETED повтор отклоняется, DELETING retry требует допустимых recovery successors |
+| Delete/advance | Blockers приоритетнее cleanup failure/claimed/pending; credential очищается после отсутствия blockers, DELETED лишь после всего cleanup. Changed SQL row определяет optional realtime event |
+| Cleanup/retry | Successor сохраняет predecessor/generation/budget. Superseded receipt не объявляется deletion proof; claimed metadata observation только подготавливает fenced follow-up |
+| Cleanup/complete | Exact task/attempt/descriptor pins; current credential, owner mismatch и self-cleanup отклоняются. COMPLETED принимается только с unsuperseded exact receipt/descriptor; внешнее удаление здесь не выполняется |
+| Verification | Current account/credential и DEVICE_CODE фиксируются до catalog work. Source change→STALE, deadline/cancel→FAILED. VERIFIED ограничен fresh remote catalog observation; это не полный runtime acceptance |
+| Reservation/create/replay/expiry | View+authorize до account lock; точный replay сохраняет identity и не продлевает deadline. New OCC/active/warm guards предшествуют abandon/cleanup/insert/disable. Expiry не переписывает более позднюю account version |
+| Financial callback/publish | Exact live lease/revision/node/turn/session/current credential и nonterminal root до replay. Sequence mismatch→IdempotencyReuse; stale/exact replay без effect. Transport correlation не задаёт semantic key |
+| Financial view | RepeatableRead subject/bindings и eligible agent accounts; account.view до parse/aggregation. Stored display с5-minute expiry не объявляется live balance |
+| Renewal/proof | Closed workload/operation profile, exact task digest/current account/version/credential и active system OWNER. Read observe/validate допускает unknown; execute/authorize требует live claimed/authorized |
+| Renewal/unknown/recovery/complete | UNKNOWN не запускает новый external effect. Success требует exact binding, eligibility и новый digest; unknown требует Recovered. Task success до account activation, затем retained cleanup/audit/event и единый commit. Mutable receipt RV исключён только из semantic replay digest |
+| Claim/renew/cancel/delete/terminal | Новых transitions не добавлено. Selected queued cancellation идёт через canonical changeRun с полным graph closure/events; per-run safe outcomes не подменяют run.view/run.cancel. Остальные leases/grants/commits принадлежат прежним owner paths |
+
+13 полных expected-AST/directive сравнений и независимый proof всего financial
+query/args/Scan/error mapping с восстановлением обоих полных caller AST — PASS.
+Для остальных11 файлов доказаны только comments changes; SQL unchanged.
+Полный control-plane build/unit — PASS LOCAL(checks415-final), GOWORK=off,
+GOMAXPROCS=4/-p2. Наследуемые KODEX inputs удалены из child env,18 статически
+названных test inputs также исключены; никакой .env не исполнялся.17 analyzer
+unit и5 exact-ignore guards — PASS. Existing collector replay/concurrency pure
+regression включена. PostgreSQL/renewal/cleanup/external provider, browser/E2E,
+deploy/live — NOT RUN/SKIP; static proof не заменяет их исполнение.
+
+Detector1767 raw/902 retained occurrences/865 unresolved: единственная прежняя
+financial guard fragment group исчезла, новых keys нет. Registry776 неизменен;
+6684 own sources/222 exclusions, thresholds/generated exclusions прежние.
+Go21488:20241 EN→RU,1247 missing. PR206 Go-файлов/2110 объявлений, missing0;
+209 whole changed blobs. #1823 открыт, PR #1829 Draft, QA/main f2e64eb сохранён.
+Прикладные секреты не читались и не переносились.
 
 ## Principals и PROJECT fixture; email adapter — 25.10.2026
 
