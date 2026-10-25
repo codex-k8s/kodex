@@ -29,7 +29,7 @@ type bundlePrepareClient struct {
 
 // PrepareRepositoryBundlePublication returns only a typed pending proposal tied to the exact received origin, grant and source pins.
 // PrepareRepositoryBundlePublication выдаёт лишь typed pending proposal, привязанную к exact origin/grant/source pins request.
-func (c *bundlePrepareClient) PrepareRepositoryBundlePublication(_ context.Context, r *cp.PrepareRepositoryBundlePublicationRequest, _ ...grpc.CallOption) (*cp.RepositoryBundlePublicationResponse, error) {
+func (c *bundlePrepareClient) PrepareRepositoryBundlePublication(_ context.Context, r *cp.PrepareRepositoryBundlePublicationRequest, _ ...grpc.CallOption) (*cp.PrepareRepositoryBundlePublicationResponse, error) {
 	c.calls = append(c.calls, proto.Clone(r).(*cp.PrepareRepositoryBundlePublicationRequest))
 	if c.err != nil {
 		return nil, c.err
@@ -38,7 +38,7 @@ func (c *bundlePrepareClient) PrepareRepositoryBundlePublication(_ context.Conte
 	if c.mutate != nil {
 		c.mutate(p)
 	}
-	return &cp.RepositoryBundlePublicationResponse{Proposal: p}, nil
+	return &cp.PrepareRepositoryBundlePublicationResponse{Proposal: p}, nil
 }
 
 // TestRepositoryBundleNativeProducerBoundary proves exact immutable grant/lease mapping, compact result and one-shot lost-ACK behavior; it does not authenticate a real transport or publish Git.

@@ -85,7 +85,7 @@ func processBundle(ctx context.Context, control cp.RepositoryBundlePublicationSe
 	var archive []byte
 	if mode == cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_EXECUTE {
 		request, cancel := context.WithTimeout(operation, config.RequestTimeout)
-		content, err := control.ReadRepositoryBundlePublication(request, &cp.RepositoryBundleLeaseRequest{Lease: proto.Clone(work.GetLease()).(*cp.RepositoryBundleLease)})
+		content, err := control.ReadRepositoryBundlePublication(request, &cp.ReadRepositoryBundlePublicationRequest{Lease: proto.Clone(work.GetLease()).(*cp.RepositoryBundleLease)})
 		cancel()
 		if err != nil {
 			return failBundle(ctx, control, work, config, "UNAVAILABLE")
@@ -108,7 +108,7 @@ func processBundle(ctx context.Context, control cp.RepositoryBundlePublicationSe
 			return failBundle(ctx, control, work, config, "BASE_INVALID")
 		}
 		request, cancel = context.WithTimeout(ctx, config.RequestTimeout)
-		begun, err := control.BeginRepositoryBundlePublication(request, bundleEffectRequest(work, candidate))
+		begun, err := control.BeginRepositoryBundlePublication(request, bundleBeginRequest(work, candidate))
 		cancel()
 		if err != nil {
 			return 0, err
@@ -131,7 +131,7 @@ func processBundle(ctx context.Context, control cp.RepositoryBundlePublicationSe
 		return failBundle(ctx, control, work, config, "OUTCOME_UNCONFIRMED")
 	}
 	request, cancel = context.WithTimeout(ctx, config.RequestTimeout)
-	completed, err := control.CompleteRepositoryBundlePublication(request, bundleEffectRequest(work, candidate))
+	completed, err := control.CompleteRepositoryBundlePublication(request, bundleCompleteRequest(work, candidate))
 	cancel()
 	if err != nil {
 		return 0, err
@@ -142,11 +142,18 @@ func processBundle(ctx context.Context, control cp.RepositoryBundlePublicationSe
 	return 1, nil
 }
 
-// bundleEffectRequest binds every Begin/Complete report to the same full work epoch and immutable source/base pins, without arbitrary remote URLs or result text.
-// bundleEffectRequest связывает Begin/Complete с полным work epoch и immutable source/base pins, без arbitrary remote URL либо result text.
-func bundleEffectRequest(work *cp.RepositoryBundlePublicationWork, candidate integration.RepositoryBundleCandidate) *cp.RepositoryBundleEffectRequest {
+// bundleBeginRequest binds every Begin/Complete report to the same full work epoch and immutable source/base pins, without arbitrary remote URLs or result text.
+// bundleBeginRequest связывает Begin/Complete с полным work epoch и immutable source/base pins, без arbitrary remote URL либо result text.
+func bundleBeginRequest(work *cp.RepositoryBundlePublicationWork, candidate integration.RepositoryBundleCandidate) *cp.BeginRepositoryBundlePublicationRequest {
 	p := work.GetProposal()
-	return &cp.RepositoryBundleEffectRequest{Lease: proto.Clone(work.GetLease()).(*cp.RepositoryBundleLease), CandidateCommitSha: candidate.CommitSHA, CandidateTreeSha: candidate.TreeSHA, BaseCommitSha: p.GetBaseCommitSha(), ManifestSha256: p.GetManifest().GetSha256(), ArchiveSha256: p.GetArchive().GetSha256()}
+	return &cp.BeginRepositoryBundlePublicationRequest{Lease: proto.Clone(work.GetLease()).(*cp.RepositoryBundleLease), CandidateCommitSha: candidate.CommitSHA, CandidateTreeSha: candidate.TreeSHA, BaseCommitSha: p.GetBaseCommitSha(), ManifestSha256: p.GetManifest().GetSha256(), ArchiveSha256: p.GetArchive().GetSha256()}
+}
+
+// bundleCompleteRequest preserves exactly the Begin source/candidate fields in the method-owned completion message; changing the envelope grants no new write authority.
+// bundleCompleteRequest сохраняет exact Begin source/candidate fields в отдельном completion message; новый envelope не выдаёт WRITE authority.
+func bundleCompleteRequest(work *cp.RepositoryBundlePublicationWork, candidate integration.RepositoryBundleCandidate) *cp.CompleteRepositoryBundlePublicationRequest {
+	input := bundleBeginRequest(work, candidate)
+	return &cp.CompleteRepositoryBundlePublicationRequest{Lease: input.Lease, CandidateCommitSha: input.CandidateCommitSha, CandidateTreeSha: input.CandidateTreeSha, BaseCommitSha: input.BaseCommitSha, ManifestSha256: input.ManifestSha256, ArchiveSha256: input.ArchiveSha256}
 }
 
 // validBundleReceipt requires every immutable proposal field to remain byte-for-byte identical and a strictly newer owner version; callers separately require the exact allowed transition and evidence.

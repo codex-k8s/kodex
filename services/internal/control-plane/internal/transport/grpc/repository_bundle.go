@@ -54,13 +54,20 @@ func castBundleLease(l entity.RepositoryBundleLease) *cp.RepositoryBundleLease {
 
 // bundleEffect maps only the closed candidate/source pin set; the request carries no URL, arbitrary Git command or caller-defined result text.
 // bundleEffect преобразует лишь closed candidate/source pin set; URL, arbitrary Git command и caller-defined result text в request нет.
-func bundleEffect(r *cp.RepositoryBundleEffectRequest) port.RepositoryBundleEffect {
+func bundleEffect(r interface {
+	GetLease() *cp.RepositoryBundleLease
+	GetCandidateCommitSha() string
+	GetCandidateTreeSha() string
+	GetBaseCommitSha() string
+	GetManifestSha256() string
+	GetArchiveSha256() string
+}) port.RepositoryBundleEffect {
 	return port.RepositoryBundleEffect{Lease: bundleLease(r.GetLease()), CandidateCommitSHA: r.GetCandidateCommitSha(), CandidateTreeSHA: r.GetCandidateTreeSha(), BaseCommitSHA: r.GetBaseCommitSha(), ManifestSHA256: r.GetManifestSha256(), ArchiveSHA256: r.GetArchiveSha256()}
 }
 
 // PrepareRepositoryBundlePublication delegates compact exact origin/artifact pins to the owner, where full source eligibility and native gate creation share one transaction.
 // PrepareRepositoryBundlePublication передаёт compact exact origin/artifact pins owner, где full source eligibility и native Gate creation объединены одной транзакцией.
-func (server *Server) PrepareRepositoryBundlePublication(ctx context.Context, r *cp.PrepareRepositoryBundlePublicationRequest) (*cp.RepositoryBundlePublicationResponse, error) {
+func (server *Server) PrepareRepositoryBundlePublication(ctx context.Context, r *cp.PrepareRepositoryBundlePublicationRequest) (*cp.PrepareRepositoryBundlePublicationResponse, error) {
 	p, err := principal(ctx, cp.RepositoryBundlePublicationService_PrepareRepositoryBundlePublication_FullMethodName)
 	if err != nil {
 		return nil, err
@@ -69,7 +76,7 @@ func (server *Server) PrepareRepositoryBundlePublication(ctx context.Context, r 
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &cp.RepositoryBundlePublicationResponse{Proposal: castRepositoryBundle(result)}, nil
+	return &cp.PrepareRepositoryBundlePublicationResponse{Proposal: castRepositoryBundle(result)}, nil
 }
 
 // GetRepositoryBundlePublication returns one bounded version/digest-pinned manifest page and explicit completeness; it never truncates a full listing silently.
@@ -131,7 +138,7 @@ func (server *Server) ClaimRepositoryBundlePublications(ctx context.Context, r *
 
 // RenewRepositoryBundlePublication renews only the same exact owner-issued work tuple and cannot convert read-only recovery into execution.
 // RenewRepositoryBundlePublication продлевает лишь прежний exact owner-issued work tuple, не превращая read-only recovery в execution.
-func (server *Server) RenewRepositoryBundlePublication(ctx context.Context, r *cp.RepositoryBundleLeaseRequest) (*cp.RepositoryBundleLeaseResponse, error) {
+func (server *Server) RenewRepositoryBundlePublication(ctx context.Context, r *cp.RenewRepositoryBundlePublicationRequest) (*cp.RenewRepositoryBundlePublicationResponse, error) {
 	p, err := principal(ctx, cp.RepositoryBundlePublicationService_RenewRepositoryBundlePublication_FullMethodName)
 	if err != nil {
 		return nil, err
@@ -140,12 +147,12 @@ func (server *Server) RenewRepositoryBundlePublication(ctx context.Context, r *c
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &cp.RepositoryBundleLeaseResponse{Lease: castBundleLease(lease)}, nil
+	return &cp.RenewRepositoryBundlePublicationResponse{Lease: castBundleLease(lease)}, nil
 }
 
 // BeginRepositoryBundlePublication preserves the distinction between a new durable intent ACK and an already-started receipt, so replay is never push permission.
 // BeginRepositoryBundlePublication различает новый durable intent ACK и already-started receipt, поэтому replay не разрешает push.
-func (server *Server) BeginRepositoryBundlePublication(ctx context.Context, r *cp.RepositoryBundleEffectRequest) (*cp.BeginRepositoryBundlePublicationResponse, error) {
+func (server *Server) BeginRepositoryBundlePublication(ctx context.Context, r *cp.BeginRepositoryBundlePublicationRequest) (*cp.BeginRepositoryBundlePublicationResponse, error) {
 	p, err := principal(ctx, cp.RepositoryBundlePublicationService_BeginRepositoryBundlePublication_FullMethodName)
 	if err != nil {
 		return nil, err
@@ -159,7 +166,7 @@ func (server *Server) BeginRepositoryBundlePublication(ctx context.Context, r *c
 
 // CompleteRepositoryBundlePublication reports exact provider readback without accepting caller-authored summaries or issuing another external write.
 // CompleteRepositoryBundlePublication сообщает exact provider readback без caller-authored summary и нового external write.
-func (server *Server) CompleteRepositoryBundlePublication(ctx context.Context, r *cp.RepositoryBundleEffectRequest) (*cp.RepositoryBundlePublicationResponse, error) {
+func (server *Server) CompleteRepositoryBundlePublication(ctx context.Context, r *cp.CompleteRepositoryBundlePublicationRequest) (*cp.CompleteRepositoryBundlePublicationResponse, error) {
 	p, err := principal(ctx, cp.RepositoryBundlePublicationService_CompleteRepositoryBundlePublication_FullMethodName)
 	if err != nil {
 		return nil, err
@@ -168,12 +175,12 @@ func (server *Server) CompleteRepositoryBundlePublication(ctx context.Context, r
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &cp.RepositoryBundlePublicationResponse{Proposal: castRepositoryBundle(proposal)}, nil
+	return &cp.CompleteRepositoryBundlePublicationResponse{Proposal: castRepositoryBundle(proposal)}, nil
 }
 
 // FailRepositoryBundlePublication forwards a closed error class; the owner decides known no-effect terminal versus begun UNKNOWN atomically.
 // FailRepositoryBundlePublication передаёт закрытый error class; owner атомарно выбирает terminal без эффекта либо begun UNKNOWN.
-func (server *Server) FailRepositoryBundlePublication(ctx context.Context, r *cp.FailRepositoryBundlePublicationRequest) (*cp.RepositoryBundlePublicationResponse, error) {
+func (server *Server) FailRepositoryBundlePublication(ctx context.Context, r *cp.FailRepositoryBundlePublicationRequest) (*cp.FailRepositoryBundlePublicationResponse, error) {
 	p, err := principal(ctx, cp.RepositoryBundlePublicationService_FailRepositoryBundlePublication_FullMethodName)
 	if err != nil {
 		return nil, err
@@ -182,12 +189,12 @@ func (server *Server) FailRepositoryBundlePublication(ctx context.Context, r *cp
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &cp.RepositoryBundlePublicationResponse{Proposal: castRepositoryBundle(proposal)}, nil
+	return &cp.FailRepositoryBundlePublicationResponse{Proposal: castRepositoryBundle(proposal)}, nil
 }
 
 // ReadRepositoryBundlePublication transfers at most the fixed 1MiB frozen archive to an exact IG work epoch. Partial reads or digest mismatches fail before any response is returned.
 // ReadRepositoryBundlePublication передаёт не более fixed1MiB frozen archive exact IG work epoch. Partial read либо digest mismatch отклоняются до выдачи ответа.
-func (server *Server) ReadRepositoryBundlePublication(ctx context.Context, r *cp.RepositoryBundleLeaseRequest) (*cp.RepositoryBundleContent, error) {
+func (server *Server) ReadRepositoryBundlePublication(ctx context.Context, r *cp.ReadRepositoryBundlePublicationRequest) (*cp.ReadRepositoryBundlePublicationResponse, error) {
 	p, err := principal(ctx, cp.RepositoryBundlePublicationService_ReadRepositoryBundlePublication_FullMethodName)
 	if err != nil {
 		return nil, err
@@ -212,5 +219,5 @@ func (server *Server) ReadRepositoryBundlePublication(ctx context.Context, r *cp
 		clear(raw)
 		return nil, transportError(errs.ErrUnavailable)
 	}
-	return &cp.RepositoryBundleContent{Metadata: &cp.RepositoryBundleArtifactPin{Ref: download.Artifact.Ref, Revision: download.Artifact.Revision, Version: download.Artifact.Version, Sha256: repositorybundle.Digest(raw), SizeBytes: int64(len(raw))}, Archive: raw}, nil
+	return &cp.ReadRepositoryBundlePublicationResponse{Metadata: &cp.RepositoryBundleArtifactPin{Ref: download.Artifact.Ref, Revision: download.Artifact.Revision, Version: download.Artifact.Version, Sha256: repositorybundle.Digest(raw), SizeBytes: int64(len(raw))}, Archive: raw}, nil
 }

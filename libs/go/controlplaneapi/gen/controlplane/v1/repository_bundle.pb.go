@@ -542,27 +542,27 @@ func (x *RepositoryBundlePublication) GetContinuationNodeRef() string {
 	return ""
 }
 
-type RepositoryBundlePublicationResponse struct {
+type PrepareRepositoryBundlePublicationResponse struct {
 	state         protoimpl.MessageState       `protogen:"open.v1"`
 	Proposal      *RepositoryBundlePublication `protobuf:"bytes,1,opt,name=proposal,proto3" json:"proposal,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RepositoryBundlePublicationResponse) Reset() {
-	*x = RepositoryBundlePublicationResponse{}
+func (x *PrepareRepositoryBundlePublicationResponse) Reset() {
+	*x = PrepareRepositoryBundlePublicationResponse{}
 	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RepositoryBundlePublicationResponse) String() string {
+func (x *PrepareRepositoryBundlePublicationResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RepositoryBundlePublicationResponse) ProtoMessage() {}
+func (*PrepareRepositoryBundlePublicationResponse) ProtoMessage() {}
 
-func (x *RepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Message {
+func (x *PrepareRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -574,12 +574,100 @@ func (x *RepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Messag
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RepositoryBundlePublicationResponse.ProtoReflect.Descriptor instead.
-func (*RepositoryBundlePublicationResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use PrepareRepositoryBundlePublicationResponse.ProtoReflect.Descriptor instead.
+func (*PrepareRepositoryBundlePublicationResponse) Descriptor() ([]byte, []int) {
 	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *RepositoryBundlePublicationResponse) GetProposal() *RepositoryBundlePublication {
+func (x *PrepareRepositoryBundlePublicationResponse) GetProposal() *RepositoryBundlePublication {
+	if x != nil {
+		return x.Proposal
+	}
+	return nil
+}
+
+type CompleteRepositoryBundlePublicationResponse struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	Proposal      *RepositoryBundlePublication `protobuf:"bytes,1,opt,name=proposal,proto3" json:"proposal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompleteRepositoryBundlePublicationResponse) Reset() {
+	*x = CompleteRepositoryBundlePublicationResponse{}
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompleteRepositoryBundlePublicationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompleteRepositoryBundlePublicationResponse) ProtoMessage() {}
+
+func (x *CompleteRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompleteRepositoryBundlePublicationResponse.ProtoReflect.Descriptor instead.
+func (*CompleteRepositoryBundlePublicationResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CompleteRepositoryBundlePublicationResponse) GetProposal() *RepositoryBundlePublication {
+	if x != nil {
+		return x.Proposal
+	}
+	return nil
+}
+
+type FailRepositoryBundlePublicationResponse struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	Proposal      *RepositoryBundlePublication `protobuf:"bytes,1,opt,name=proposal,proto3" json:"proposal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FailRepositoryBundlePublicationResponse) Reset() {
+	*x = FailRepositoryBundlePublicationResponse{}
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailRepositoryBundlePublicationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailRepositoryBundlePublicationResponse) ProtoMessage() {}
+
+func (x *FailRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailRepositoryBundlePublicationResponse.ProtoReflect.Descriptor instead.
+func (*FailRepositoryBundlePublicationResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *FailRepositoryBundlePublicationResponse) GetProposal() *RepositoryBundlePublication {
 	if x != nil {
 		return x.Proposal
 	}
@@ -601,7 +689,7 @@ type GetRepositoryBundlePublicationRequest struct {
 
 func (x *GetRepositoryBundlePublicationRequest) Reset() {
 	*x = GetRepositoryBundlePublicationRequest{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[4]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -613,7 +701,7 @@ func (x *GetRepositoryBundlePublicationRequest) String() string {
 func (*GetRepositoryBundlePublicationRequest) ProtoMessage() {}
 
 func (x *GetRepositoryBundlePublicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[4]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -626,7 +714,7 @@ func (x *GetRepositoryBundlePublicationRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use GetRepositoryBundlePublicationRequest.ProtoReflect.Descriptor instead.
 func (*GetRepositoryBundlePublicationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{4}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetRepositoryBundlePublicationRequest) GetProposalRef() string {
@@ -683,7 +771,7 @@ type RepositoryBundleFile struct {
 
 func (x *RepositoryBundleFile) Reset() {
 	*x = RepositoryBundleFile{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[5]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -695,7 +783,7 @@ func (x *RepositoryBundleFile) String() string {
 func (*RepositoryBundleFile) ProtoMessage() {}
 
 func (x *RepositoryBundleFile) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[5]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -708,7 +796,7 @@ func (x *RepositoryBundleFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryBundleFile.ProtoReflect.Descriptor instead.
 func (*RepositoryBundleFile) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{5}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RepositoryBundleFile) GetPath() string {
@@ -752,7 +840,7 @@ type GetRepositoryBundlePublicationResponse struct {
 
 func (x *GetRepositoryBundlePublicationResponse) Reset() {
 	*x = GetRepositoryBundlePublicationResponse{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[6]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -764,7 +852,7 @@ func (x *GetRepositoryBundlePublicationResponse) String() string {
 func (*GetRepositoryBundlePublicationResponse) ProtoMessage() {}
 
 func (x *GetRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[6]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -777,7 +865,7 @@ func (x *GetRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use GetRepositoryBundlePublicationResponse.ProtoReflect.Descriptor instead.
 func (*GetRepositoryBundlePublicationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{6}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetRepositoryBundlePublicationResponse) GetProposal() *RepositoryBundlePublication {
@@ -829,7 +917,7 @@ type RepositoryBundleLease struct {
 
 func (x *RepositoryBundleLease) Reset() {
 	*x = RepositoryBundleLease{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[7]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -841,7 +929,7 @@ func (x *RepositoryBundleLease) String() string {
 func (*RepositoryBundleLease) ProtoMessage() {}
 
 func (x *RepositoryBundleLease) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[7]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +942,7 @@ func (x *RepositoryBundleLease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryBundleLease.ProtoReflect.Descriptor instead.
 func (*RepositoryBundleLease) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{7}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RepositoryBundleLease) GetProposalRef() string {
@@ -899,28 +987,28 @@ func (x *RepositoryBundleLease) GetExpiresAt() *timestamppb.Timestamp {
 	return nil
 }
 
-type RepositoryBundleLeaseRequest struct {
+type RenewRepositoryBundlePublicationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Lease         *RepositoryBundleLease `protobuf:"bytes,1,opt,name=lease,proto3" json:"lease,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RepositoryBundleLeaseRequest) Reset() {
-	*x = RepositoryBundleLeaseRequest{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[8]
+func (x *RenewRepositoryBundlePublicationRequest) Reset() {
+	*x = RenewRepositoryBundlePublicationRequest{}
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RepositoryBundleLeaseRequest) String() string {
+func (x *RenewRepositoryBundlePublicationRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RepositoryBundleLeaseRequest) ProtoMessage() {}
+func (*RenewRepositoryBundlePublicationRequest) ProtoMessage() {}
 
-func (x *RepositoryBundleLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[8]
+func (x *RenewRepositoryBundlePublicationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -931,40 +1019,40 @@ func (x *RepositoryBundleLeaseRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RepositoryBundleLeaseRequest.ProtoReflect.Descriptor instead.
-func (*RepositoryBundleLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{8}
+// Deprecated: Use RenewRepositoryBundlePublicationRequest.ProtoReflect.Descriptor instead.
+func (*RenewRepositoryBundlePublicationRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *RepositoryBundleLeaseRequest) GetLease() *RepositoryBundleLease {
+func (x *RenewRepositoryBundlePublicationRequest) GetLease() *RepositoryBundleLease {
 	if x != nil {
 		return x.Lease
 	}
 	return nil
 }
 
-type RepositoryBundleLeaseResponse struct {
+type ReadRepositoryBundlePublicationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Lease         *RepositoryBundleLease `protobuf:"bytes,1,opt,name=lease,proto3" json:"lease,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RepositoryBundleLeaseResponse) Reset() {
-	*x = RepositoryBundleLeaseResponse{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[9]
+func (x *ReadRepositoryBundlePublicationRequest) Reset() {
+	*x = ReadRepositoryBundlePublicationRequest{}
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RepositoryBundleLeaseResponse) String() string {
+func (x *ReadRepositoryBundlePublicationRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RepositoryBundleLeaseResponse) ProtoMessage() {}
+func (*ReadRepositoryBundlePublicationRequest) ProtoMessage() {}
 
-func (x *RepositoryBundleLeaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[9]
+func (x *ReadRepositoryBundlePublicationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -975,12 +1063,56 @@ func (x *RepositoryBundleLeaseResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RepositoryBundleLeaseResponse.ProtoReflect.Descriptor instead.
-func (*RepositoryBundleLeaseResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{9}
+// Deprecated: Use ReadRepositoryBundlePublicationRequest.ProtoReflect.Descriptor instead.
+func (*ReadRepositoryBundlePublicationRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *RepositoryBundleLeaseResponse) GetLease() *RepositoryBundleLease {
+func (x *ReadRepositoryBundlePublicationRequest) GetLease() *RepositoryBundleLease {
+	if x != nil {
+		return x.Lease
+	}
+	return nil
+}
+
+type RenewRepositoryBundlePublicationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Lease         *RepositoryBundleLease `protobuf:"bytes,1,opt,name=lease,proto3" json:"lease,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenewRepositoryBundlePublicationResponse) Reset() {
+	*x = RenewRepositoryBundlePublicationResponse{}
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenewRepositoryBundlePublicationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenewRepositoryBundlePublicationResponse) ProtoMessage() {}
+
+func (x *RenewRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenewRepositoryBundlePublicationResponse.ProtoReflect.Descriptor instead.
+func (*RenewRepositoryBundlePublicationResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *RenewRepositoryBundlePublicationResponse) GetLease() *RepositoryBundleLease {
 	if x != nil {
 		return x.Lease
 	}
@@ -1003,7 +1135,7 @@ type RepositoryBundlePublicationWork struct {
 
 func (x *RepositoryBundlePublicationWork) Reset() {
 	*x = RepositoryBundlePublicationWork{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[10]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1015,7 +1147,7 @@ func (x *RepositoryBundlePublicationWork) String() string {
 func (*RepositoryBundlePublicationWork) ProtoMessage() {}
 
 func (x *RepositoryBundlePublicationWork) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[10]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1028,7 +1160,7 @@ func (x *RepositoryBundlePublicationWork) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryBundlePublicationWork.ProtoReflect.Descriptor instead.
 func (*RepositoryBundlePublicationWork) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{10}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RepositoryBundlePublicationWork) GetLease() *RepositoryBundleLease {
@@ -1097,7 +1229,7 @@ type ClaimRepositoryBundlePublicationsRequest struct {
 
 func (x *ClaimRepositoryBundlePublicationsRequest) Reset() {
 	*x = ClaimRepositoryBundlePublicationsRequest{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[11]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1109,7 +1241,7 @@ func (x *ClaimRepositoryBundlePublicationsRequest) String() string {
 func (*ClaimRepositoryBundlePublicationsRequest) ProtoMessage() {}
 
 func (x *ClaimRepositoryBundlePublicationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[11]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1122,7 +1254,7 @@ func (x *ClaimRepositoryBundlePublicationsRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use ClaimRepositoryBundlePublicationsRequest.ProtoReflect.Descriptor instead.
 func (*ClaimRepositoryBundlePublicationsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{11}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ClaimRepositoryBundlePublicationsRequest) GetClaimant() string {
@@ -1148,7 +1280,7 @@ type ClaimRepositoryBundlePublicationsResponse struct {
 
 func (x *ClaimRepositoryBundlePublicationsResponse) Reset() {
 	*x = ClaimRepositoryBundlePublicationsResponse{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[12]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1160,7 +1292,7 @@ func (x *ClaimRepositoryBundlePublicationsResponse) String() string {
 func (*ClaimRepositoryBundlePublicationsResponse) ProtoMessage() {}
 
 func (x *ClaimRepositoryBundlePublicationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[12]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1173,7 +1305,7 @@ func (x *ClaimRepositoryBundlePublicationsResponse) ProtoReflect() protoreflect.
 
 // Deprecated: Use ClaimRepositoryBundlePublicationsResponse.ProtoReflect.Descriptor instead.
 func (*ClaimRepositoryBundlePublicationsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{12}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ClaimRepositoryBundlePublicationsResponse) GetWork() []*RepositoryBundlePublicationWork {
@@ -1185,7 +1317,7 @@ func (x *ClaimRepositoryBundlePublicationsResponse) GetWork() []*RepositoryBundl
 
 // Candidate фиксируется Begin до push. Последующий complete — exact readback,
 // а не разрешение на второй effect. Source branch не входит в refspec.
-type RepositoryBundleEffectRequest struct {
+type BeginRepositoryBundlePublicationRequest struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	Lease              *RepositoryBundleLease `protobuf:"bytes,1,opt,name=lease,proto3" json:"lease,omitempty"`
 	CandidateCommitSha string                 `protobuf:"bytes,2,opt,name=candidate_commit_sha,json=candidateCommitSha,proto3" json:"candidate_commit_sha,omitempty"`
@@ -1197,21 +1329,21 @@ type RepositoryBundleEffectRequest struct {
 	sizeCache          protoimpl.SizeCache
 }
 
-func (x *RepositoryBundleEffectRequest) Reset() {
-	*x = RepositoryBundleEffectRequest{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[13]
+func (x *BeginRepositoryBundlePublicationRequest) Reset() {
+	*x = BeginRepositoryBundlePublicationRequest{}
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RepositoryBundleEffectRequest) String() string {
+func (x *BeginRepositoryBundlePublicationRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RepositoryBundleEffectRequest) ProtoMessage() {}
+func (*BeginRepositoryBundlePublicationRequest) ProtoMessage() {}
 
-func (x *RepositoryBundleEffectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[13]
+func (x *BeginRepositoryBundlePublicationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1222,47 +1354,131 @@ func (x *RepositoryBundleEffectRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RepositoryBundleEffectRequest.ProtoReflect.Descriptor instead.
-func (*RepositoryBundleEffectRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{13}
+// Deprecated: Use BeginRepositoryBundlePublicationRequest.ProtoReflect.Descriptor instead.
+func (*BeginRepositoryBundlePublicationRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *RepositoryBundleEffectRequest) GetLease() *RepositoryBundleLease {
+func (x *BeginRepositoryBundlePublicationRequest) GetLease() *RepositoryBundleLease {
 	if x != nil {
 		return x.Lease
 	}
 	return nil
 }
 
-func (x *RepositoryBundleEffectRequest) GetCandidateCommitSha() string {
+func (x *BeginRepositoryBundlePublicationRequest) GetCandidateCommitSha() string {
 	if x != nil {
 		return x.CandidateCommitSha
 	}
 	return ""
 }
 
-func (x *RepositoryBundleEffectRequest) GetCandidateTreeSha() string {
+func (x *BeginRepositoryBundlePublicationRequest) GetCandidateTreeSha() string {
 	if x != nil {
 		return x.CandidateTreeSha
 	}
 	return ""
 }
 
-func (x *RepositoryBundleEffectRequest) GetBaseCommitSha() string {
+func (x *BeginRepositoryBundlePublicationRequest) GetBaseCommitSha() string {
 	if x != nil {
 		return x.BaseCommitSha
 	}
 	return ""
 }
 
-func (x *RepositoryBundleEffectRequest) GetManifestSha256() string {
+func (x *BeginRepositoryBundlePublicationRequest) GetManifestSha256() string {
 	if x != nil {
 		return x.ManifestSha256
 	}
 	return ""
 }
 
-func (x *RepositoryBundleEffectRequest) GetArchiveSha256() string {
+func (x *BeginRepositoryBundlePublicationRequest) GetArchiveSha256() string {
+	if x != nil {
+		return x.ArchiveSha256
+	}
+	return ""
+}
+
+type CompleteRepositoryBundlePublicationRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Lease              *RepositoryBundleLease `protobuf:"bytes,1,opt,name=lease,proto3" json:"lease,omitempty"`
+	CandidateCommitSha string                 `protobuf:"bytes,2,opt,name=candidate_commit_sha,json=candidateCommitSha,proto3" json:"candidate_commit_sha,omitempty"`
+	CandidateTreeSha   string                 `protobuf:"bytes,3,opt,name=candidate_tree_sha,json=candidateTreeSha,proto3" json:"candidate_tree_sha,omitempty"`
+	BaseCommitSha      string                 `protobuf:"bytes,4,opt,name=base_commit_sha,json=baseCommitSha,proto3" json:"base_commit_sha,omitempty"`
+	ManifestSha256     string                 `protobuf:"bytes,5,opt,name=manifest_sha256,json=manifestSha256,proto3" json:"manifest_sha256,omitempty"`
+	ArchiveSha256      string                 `protobuf:"bytes,6,opt,name=archive_sha256,json=archiveSha256,proto3" json:"archive_sha256,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *CompleteRepositoryBundlePublicationRequest) Reset() {
+	*x = CompleteRepositoryBundlePublicationRequest{}
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompleteRepositoryBundlePublicationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompleteRepositoryBundlePublicationRequest) ProtoMessage() {}
+
+func (x *CompleteRepositoryBundlePublicationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompleteRepositoryBundlePublicationRequest.ProtoReflect.Descriptor instead.
+func (*CompleteRepositoryBundlePublicationRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *CompleteRepositoryBundlePublicationRequest) GetLease() *RepositoryBundleLease {
+	if x != nil {
+		return x.Lease
+	}
+	return nil
+}
+
+func (x *CompleteRepositoryBundlePublicationRequest) GetCandidateCommitSha() string {
+	if x != nil {
+		return x.CandidateCommitSha
+	}
+	return ""
+}
+
+func (x *CompleteRepositoryBundlePublicationRequest) GetCandidateTreeSha() string {
+	if x != nil {
+		return x.CandidateTreeSha
+	}
+	return ""
+}
+
+func (x *CompleteRepositoryBundlePublicationRequest) GetBaseCommitSha() string {
+	if x != nil {
+		return x.BaseCommitSha
+	}
+	return ""
+}
+
+func (x *CompleteRepositoryBundlePublicationRequest) GetManifestSha256() string {
+	if x != nil {
+		return x.ManifestSha256
+	}
+	return ""
+}
+
+func (x *CompleteRepositoryBundlePublicationRequest) GetArchiveSha256() string {
 	if x != nil {
 		return x.ArchiveSha256
 	}
@@ -1279,7 +1495,7 @@ type BeginRepositoryBundlePublicationResponse struct {
 
 func (x *BeginRepositoryBundlePublicationResponse) Reset() {
 	*x = BeginRepositoryBundlePublicationResponse{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[14]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1291,7 +1507,7 @@ func (x *BeginRepositoryBundlePublicationResponse) String() string {
 func (*BeginRepositoryBundlePublicationResponse) ProtoMessage() {}
 
 func (x *BeginRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[14]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1304,7 +1520,7 @@ func (x *BeginRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use BeginRepositoryBundlePublicationResponse.ProtoReflect.Descriptor instead.
 func (*BeginRepositoryBundlePublicationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{14}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *BeginRepositoryBundlePublicationResponse) GetProposal() *RepositoryBundlePublication {
@@ -1331,7 +1547,7 @@ type FailRepositoryBundlePublicationRequest struct {
 
 func (x *FailRepositoryBundlePublicationRequest) Reset() {
 	*x = FailRepositoryBundlePublicationRequest{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[15]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1343,7 +1559,7 @@ func (x *FailRepositoryBundlePublicationRequest) String() string {
 func (*FailRepositoryBundlePublicationRequest) ProtoMessage() {}
 
 func (x *FailRepositoryBundlePublicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[15]
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1356,7 +1572,7 @@ func (x *FailRepositoryBundlePublicationRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use FailRepositoryBundlePublicationRequest.ProtoReflect.Descriptor instead.
 func (*FailRepositoryBundlePublicationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{15}
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *FailRepositoryBundlePublicationRequest) GetLease() *RepositoryBundleLease {
@@ -1373,7 +1589,7 @@ func (x *FailRepositoryBundlePublicationRequest) GetFailureCode() string {
 	return ""
 }
 
-type RepositoryBundleContent struct {
+type ReadRepositoryBundlePublicationResponse struct {
 	state         protoimpl.MessageState       `protogen:"open.v1"`
 	Metadata      *RepositoryBundleArtifactPin `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	Archive       []byte                       `protobuf:"bytes,2,opt,name=archive,proto3" json:"archive,omitempty"`
@@ -1381,21 +1597,21 @@ type RepositoryBundleContent struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RepositoryBundleContent) Reset() {
-	*x = RepositoryBundleContent{}
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[16]
+func (x *ReadRepositoryBundlePublicationResponse) Reset() {
+	*x = ReadRepositoryBundlePublicationResponse{}
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RepositoryBundleContent) String() string {
+func (x *ReadRepositoryBundlePublicationResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RepositoryBundleContent) ProtoMessage() {}
+func (*ReadRepositoryBundlePublicationResponse) ProtoMessage() {}
 
-func (x *RepositoryBundleContent) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[16]
+func (x *ReadRepositoryBundlePublicationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_repository_bundle_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1406,19 +1622,19 @@ func (x *RepositoryBundleContent) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RepositoryBundleContent.ProtoReflect.Descriptor instead.
-func (*RepositoryBundleContent) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{16}
+// Deprecated: Use ReadRepositoryBundlePublicationResponse.ProtoReflect.Descriptor instead.
+func (*ReadRepositoryBundlePublicationResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_repository_bundle_proto_rawDescGZIP(), []int{20}
 }
 
-func (x *RepositoryBundleContent) GetMetadata() *RepositoryBundleArtifactPin {
+func (x *ReadRepositoryBundlePublicationResponse) GetMetadata() *RepositoryBundleArtifactPin {
 	if x != nil {
 		return x.Metadata
 	}
 	return nil
 }
 
-func (x *RepositoryBundleContent) GetArchive() []byte {
+func (x *ReadRepositoryBundlePublicationResponse) GetArchive() []byte {
 	if x != nil {
 		return x.Archive
 	}
@@ -1484,8 +1700,12 @@ const file_controlplane_v1_repository_bundle_proto_rawDesc = "" +
 	"\ffailure_code\x18\x1a \x01(\tR\vfailureCode\x12-\n" +
 	"\x12continuation_state\x18\x1b \x01(\tR\x11continuationState\x12+\n" +
 	"\x11continuation_code\x18\x1c \x01(\tR\x10continuationCode\x122\n" +
-	"\x15continuation_node_ref\x18\x1d \x01(\tR\x13continuationNodeRef\"o\n" +
-	"#RepositoryBundlePublicationResponse\x12H\n" +
+	"\x15continuation_node_ref\x18\x1d \x01(\tR\x13continuationNodeRef\"v\n" +
+	"*PrepareRepositoryBundlePublicationResponse\x12H\n" +
+	"\bproposal\x18\x01 \x01(\v2,.controlplane.v1.RepositoryBundlePublicationR\bproposal\"w\n" +
+	"+CompleteRepositoryBundlePublicationResponse\x12H\n" +
+	"\bproposal\x18\x01 \x01(\v2,.controlplane.v1.RepositoryBundlePublicationR\bproposal\"s\n" +
+	"'FailRepositoryBundlePublicationResponse\x12H\n" +
 	"\bproposal\x18\x01 \x01(\v2,.controlplane.v1.RepositoryBundlePublicationR\bproposal\"\xf8\x01\n" +
 	"%GetRepositoryBundlePublicationRequest\x12!\n" +
 	"\fproposal_ref\x18\x01 \x01(\tR\vproposalRef\x12\x19\n" +
@@ -1515,10 +1735,12 @@ const file_controlplane_v1_repository_bundle_proto_rawDesc = "" +
 	"\bclaimant\x18\x04 \x01(\tR\bclaimant\x12\x14\n" +
 	"\x05fence\x18\x05 \x01(\tR\x05fence\x129\n" +
 	"\n" +
-	"expires_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\\\n" +
-	"\x1cRepositoryBundleLeaseRequest\x12<\n" +
-	"\x05lease\x18\x01 \x01(\v2&.controlplane.v1.RepositoryBundleLeaseR\x05lease\"]\n" +
-	"\x1dRepositoryBundleLeaseResponse\x12<\n" +
+	"expires_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"g\n" +
+	"'RenewRepositoryBundlePublicationRequest\x12<\n" +
+	"\x05lease\x18\x01 \x01(\v2&.controlplane.v1.RepositoryBundleLeaseR\x05lease\"f\n" +
+	"&ReadRepositoryBundlePublicationRequest\x12<\n" +
+	"\x05lease\x18\x01 \x01(\v2&.controlplane.v1.RepositoryBundleLeaseR\x05lease\"h\n" +
+	"(RenewRepositoryBundlePublicationResponse\x12<\n" +
 	"\x05lease\x18\x01 \x01(\v2&.controlplane.v1.RepositoryBundleLeaseR\x05lease\"\x93\x04\n" +
 	"\x1fRepositoryBundlePublicationWork\x12<\n" +
 	"\x05lease\x18\x01 \x01(\v2&.controlplane.v1.RepositoryBundleLeaseR\x05lease\x12H\n" +
@@ -1536,8 +1758,15 @@ const file_controlplane_v1_repository_bundle_proto_rawDesc = "" +
 	"\bclaimant\x18\x01 \x01(\tR\bclaimant\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"q\n" +
 	")ClaimRepositoryBundlePublicationsResponse\x12D\n" +
-	"\x04work\x18\x01 \x03(\v20.controlplane.v1.RepositoryBundlePublicationWorkR\x04work\"\xb5\x02\n" +
-	"\x1dRepositoryBundleEffectRequest\x12<\n" +
+	"\x04work\x18\x01 \x03(\v20.controlplane.v1.RepositoryBundlePublicationWorkR\x04work\"\xbf\x02\n" +
+	"'BeginRepositoryBundlePublicationRequest\x12<\n" +
+	"\x05lease\x18\x01 \x01(\v2&.controlplane.v1.RepositoryBundleLeaseR\x05lease\x120\n" +
+	"\x14candidate_commit_sha\x18\x02 \x01(\tR\x12candidateCommitSha\x12,\n" +
+	"\x12candidate_tree_sha\x18\x03 \x01(\tR\x10candidateTreeSha\x12&\n" +
+	"\x0fbase_commit_sha\x18\x04 \x01(\tR\rbaseCommitSha\x12'\n" +
+	"\x0fmanifest_sha256\x18\x05 \x01(\tR\x0emanifestSha256\x12%\n" +
+	"\x0earchive_sha256\x18\x06 \x01(\tR\rarchiveSha256\"\xc2\x02\n" +
+	"*CompleteRepositoryBundlePublicationRequest\x12<\n" +
 	"\x05lease\x18\x01 \x01(\v2&.controlplane.v1.RepositoryBundleLeaseR\x05lease\x120\n" +
 	"\x14candidate_commit_sha\x18\x02 \x01(\tR\x12candidateCommitSha\x12,\n" +
 	"\x12candidate_tree_sha\x18\x03 \x01(\tR\x10candidateTreeSha\x12&\n" +
@@ -1549,8 +1778,8 @@ const file_controlplane_v1_repository_bundle_proto_rawDesc = "" +
 	"\x0falready_started\x18\x02 \x01(\bR\x0ealreadyStarted\"\x89\x01\n" +
 	"&FailRepositoryBundlePublicationRequest\x12<\n" +
 	"\x05lease\x18\x01 \x01(\v2&.controlplane.v1.RepositoryBundleLeaseR\x05lease\x12!\n" +
-	"\ffailure_code\x18\x02 \x01(\tR\vfailureCode\"}\n" +
-	"\x17RepositoryBundleContent\x12H\n" +
+	"\ffailure_code\x18\x02 \x01(\tR\vfailureCode\"\x8d\x01\n" +
+	"'ReadRepositoryBundlePublicationResponse\x12H\n" +
 	"\bmetadata\x18\x01 \x01(\v2,.controlplane.v1.RepositoryBundleArtifactPinR\bmetadata\x12\x18\n" +
 	"\aarchive\x18\x02 \x01(\fR\aarchive*\xdc\x04\n" +
 	" RepositoryBundlePublicationState\x123\n" +
@@ -1565,16 +1794,16 @@ const file_controlplane_v1_repository_bundle_proto_rawDesc = "" +
 	"-REPOSITORY_BUNDLE_PUBLICATION_STATE_CANCELLED\x10\b\x12/\n" +
 	"+REPOSITORY_BUNDLE_PUBLICATION_STATE_EXPIRED\x10\t\x12.\n" +
 	"*REPOSITORY_BUNDLE_PUBLICATION_STATE_FAILED\x10\n" +
-	"2\x9f\t\n" +
-	"\"RepositoryBundlePublicationService\x12\x96\x01\n" +
-	"\"PrepareRepositoryBundlePublication\x12:.controlplane.v1.PrepareRepositoryBundlePublicationRequest\x1a4.controlplane.v1.RepositoryBundlePublicationResponse\x12\x91\x01\n" +
+	"2\xfa\t\n" +
+	"\"RepositoryBundlePublicationService\x12\x9d\x01\n" +
+	"\"PrepareRepositoryBundlePublication\x12:.controlplane.v1.PrepareRepositoryBundlePublicationRequest\x1a;.controlplane.v1.PrepareRepositoryBundlePublicationResponse\x12\x91\x01\n" +
 	"\x1eGetRepositoryBundlePublication\x126.controlplane.v1.GetRepositoryBundlePublicationRequest\x1a7.controlplane.v1.GetRepositoryBundlePublicationResponse\x12\x9a\x01\n" +
-	"!ClaimRepositoryBundlePublications\x129.controlplane.v1.ClaimRepositoryBundlePublicationsRequest\x1a:.controlplane.v1.ClaimRepositoryBundlePublicationsResponse\x12\x81\x01\n" +
-	" RenewRepositoryBundlePublication\x12-.controlplane.v1.RepositoryBundleLeaseRequest\x1a..controlplane.v1.RepositoryBundleLeaseResponse\x12\x8d\x01\n" +
-	" BeginRepositoryBundlePublication\x12..controlplane.v1.RepositoryBundleEffectRequest\x1a9.controlplane.v1.BeginRepositoryBundlePublicationResponse\x12\x8b\x01\n" +
-	"#CompleteRepositoryBundlePublication\x12..controlplane.v1.RepositoryBundleEffectRequest\x1a4.controlplane.v1.RepositoryBundlePublicationResponse\x12\x90\x01\n" +
-	"\x1fFailRepositoryBundlePublication\x127.controlplane.v1.FailRepositoryBundlePublicationRequest\x1a4.controlplane.v1.RepositoryBundlePublicationResponse\x12z\n" +
-	"\x1fReadRepositoryBundlePublication\x12-.controlplane.v1.RepositoryBundleLeaseRequest\x1a(.controlplane.v1.RepositoryBundleContentBWZUgithub.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1b\x06proto3"
+	"!ClaimRepositoryBundlePublications\x129.controlplane.v1.ClaimRepositoryBundlePublicationsRequest\x1a:.controlplane.v1.ClaimRepositoryBundlePublicationsResponse\x12\x97\x01\n" +
+	" RenewRepositoryBundlePublication\x128.controlplane.v1.RenewRepositoryBundlePublicationRequest\x1a9.controlplane.v1.RenewRepositoryBundlePublicationResponse\x12\x97\x01\n" +
+	" BeginRepositoryBundlePublication\x128.controlplane.v1.BeginRepositoryBundlePublicationRequest\x1a9.controlplane.v1.BeginRepositoryBundlePublicationResponse\x12\xa0\x01\n" +
+	"#CompleteRepositoryBundlePublication\x12;.controlplane.v1.CompleteRepositoryBundlePublicationRequest\x1a<.controlplane.v1.CompleteRepositoryBundlePublicationResponse\x12\x94\x01\n" +
+	"\x1fFailRepositoryBundlePublication\x127.controlplane.v1.FailRepositoryBundlePublicationRequest\x1a8.controlplane.v1.FailRepositoryBundlePublicationResponse\x12\x94\x01\n" +
+	"\x1fReadRepositoryBundlePublication\x127.controlplane.v1.ReadRepositoryBundlePublicationRequest\x1a8.controlplane.v1.ReadRepositoryBundlePublicationResponseBWZUgithub.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1b\x06proto3"
 
 var (
 	file_controlplane_v1_repository_bundle_proto_rawDescOnce sync.Once
@@ -1589,29 +1818,33 @@ func file_controlplane_v1_repository_bundle_proto_rawDescGZIP() []byte {
 }
 
 var file_controlplane_v1_repository_bundle_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_controlplane_v1_repository_bundle_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_controlplane_v1_repository_bundle_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_controlplane_v1_repository_bundle_proto_goTypes = []any{
-	(RepositoryBundlePublicationState)(0),             // 0: controlplane.v1.RepositoryBundlePublicationState
-	(*RepositoryBundleArtifactPin)(nil),               // 1: controlplane.v1.RepositoryBundleArtifactPin
-	(*PrepareRepositoryBundlePublicationRequest)(nil), // 2: controlplane.v1.PrepareRepositoryBundlePublicationRequest
-	(*RepositoryBundlePublication)(nil),               // 3: controlplane.v1.RepositoryBundlePublication
-	(*RepositoryBundlePublicationResponse)(nil),       // 4: controlplane.v1.RepositoryBundlePublicationResponse
-	(*GetRepositoryBundlePublicationRequest)(nil),     // 5: controlplane.v1.GetRepositoryBundlePublicationRequest
-	(*RepositoryBundleFile)(nil),                      // 6: controlplane.v1.RepositoryBundleFile
-	(*GetRepositoryBundlePublicationResponse)(nil),    // 7: controlplane.v1.GetRepositoryBundlePublicationResponse
-	(*RepositoryBundleLease)(nil),                     // 8: controlplane.v1.RepositoryBundleLease
-	(*RepositoryBundleLeaseRequest)(nil),              // 9: controlplane.v1.RepositoryBundleLeaseRequest
-	(*RepositoryBundleLeaseResponse)(nil),             // 10: controlplane.v1.RepositoryBundleLeaseResponse
-	(*RepositoryBundlePublicationWork)(nil),           // 11: controlplane.v1.RepositoryBundlePublicationWork
-	(*ClaimRepositoryBundlePublicationsRequest)(nil),  // 12: controlplane.v1.ClaimRepositoryBundlePublicationsRequest
-	(*ClaimRepositoryBundlePublicationsResponse)(nil), // 13: controlplane.v1.ClaimRepositoryBundlePublicationsResponse
-	(*RepositoryBundleEffectRequest)(nil),             // 14: controlplane.v1.RepositoryBundleEffectRequest
-	(*BeginRepositoryBundlePublicationResponse)(nil),  // 15: controlplane.v1.BeginRepositoryBundlePublicationResponse
-	(*FailRepositoryBundlePublicationRequest)(nil),    // 16: controlplane.v1.FailRepositoryBundlePublicationRequest
-	(*RepositoryBundleContent)(nil),                   // 17: controlplane.v1.RepositoryBundleContent
-	(*timestamppb.Timestamp)(nil),                     // 18: google.protobuf.Timestamp
-	(*IntegrationInvocationClaim)(nil),                // 19: controlplane.v1.IntegrationInvocationClaim
-	(IntegrationInvocationWorkMode)(0),                // 20: controlplane.v1.IntegrationInvocationWorkMode
+	(RepositoryBundlePublicationState)(0),               // 0: controlplane.v1.RepositoryBundlePublicationState
+	(*RepositoryBundleArtifactPin)(nil),                 // 1: controlplane.v1.RepositoryBundleArtifactPin
+	(*PrepareRepositoryBundlePublicationRequest)(nil),   // 2: controlplane.v1.PrepareRepositoryBundlePublicationRequest
+	(*RepositoryBundlePublication)(nil),                 // 3: controlplane.v1.RepositoryBundlePublication
+	(*PrepareRepositoryBundlePublicationResponse)(nil),  // 4: controlplane.v1.PrepareRepositoryBundlePublicationResponse
+	(*CompleteRepositoryBundlePublicationResponse)(nil), // 5: controlplane.v1.CompleteRepositoryBundlePublicationResponse
+	(*FailRepositoryBundlePublicationResponse)(nil),     // 6: controlplane.v1.FailRepositoryBundlePublicationResponse
+	(*GetRepositoryBundlePublicationRequest)(nil),       // 7: controlplane.v1.GetRepositoryBundlePublicationRequest
+	(*RepositoryBundleFile)(nil),                        // 8: controlplane.v1.RepositoryBundleFile
+	(*GetRepositoryBundlePublicationResponse)(nil),      // 9: controlplane.v1.GetRepositoryBundlePublicationResponse
+	(*RepositoryBundleLease)(nil),                       // 10: controlplane.v1.RepositoryBundleLease
+	(*RenewRepositoryBundlePublicationRequest)(nil),     // 11: controlplane.v1.RenewRepositoryBundlePublicationRequest
+	(*ReadRepositoryBundlePublicationRequest)(nil),      // 12: controlplane.v1.ReadRepositoryBundlePublicationRequest
+	(*RenewRepositoryBundlePublicationResponse)(nil),    // 13: controlplane.v1.RenewRepositoryBundlePublicationResponse
+	(*RepositoryBundlePublicationWork)(nil),             // 14: controlplane.v1.RepositoryBundlePublicationWork
+	(*ClaimRepositoryBundlePublicationsRequest)(nil),    // 15: controlplane.v1.ClaimRepositoryBundlePublicationsRequest
+	(*ClaimRepositoryBundlePublicationsResponse)(nil),   // 16: controlplane.v1.ClaimRepositoryBundlePublicationsResponse
+	(*BeginRepositoryBundlePublicationRequest)(nil),     // 17: controlplane.v1.BeginRepositoryBundlePublicationRequest
+	(*CompleteRepositoryBundlePublicationRequest)(nil),  // 18: controlplane.v1.CompleteRepositoryBundlePublicationRequest
+	(*BeginRepositoryBundlePublicationResponse)(nil),    // 19: controlplane.v1.BeginRepositoryBundlePublicationResponse
+	(*FailRepositoryBundlePublicationRequest)(nil),      // 20: controlplane.v1.FailRepositoryBundlePublicationRequest
+	(*ReadRepositoryBundlePublicationResponse)(nil),     // 21: controlplane.v1.ReadRepositoryBundlePublicationResponse
+	(*timestamppb.Timestamp)(nil),                       // 22: google.protobuf.Timestamp
+	(*IntegrationInvocationClaim)(nil),                  // 23: controlplane.v1.IntegrationInvocationClaim
+	(IntegrationInvocationWorkMode)(0),                  // 24: controlplane.v1.IntegrationInvocationWorkMode
 }
 var file_controlplane_v1_repository_bundle_proto_depIdxs = []int32{
 	1,  // 0: controlplane.v1.PrepareRepositoryBundlePublicationRequest.archive:type_name -> controlplane.v1.RepositoryBundleArtifactPin
@@ -1619,48 +1852,52 @@ var file_controlplane_v1_repository_bundle_proto_depIdxs = []int32{
 	1,  // 2: controlplane.v1.RepositoryBundlePublication.archive:type_name -> controlplane.v1.RepositoryBundleArtifactPin
 	1,  // 3: controlplane.v1.RepositoryBundlePublication.manifest:type_name -> controlplane.v1.RepositoryBundleArtifactPin
 	0,  // 4: controlplane.v1.RepositoryBundlePublication.state:type_name -> controlplane.v1.RepositoryBundlePublicationState
-	18, // 5: controlplane.v1.RepositoryBundlePublication.created_at:type_name -> google.protobuf.Timestamp
-	18, // 6: controlplane.v1.RepositoryBundlePublication.expires_at:type_name -> google.protobuf.Timestamp
-	18, // 7: controlplane.v1.RepositoryBundlePublication.confirmed_at:type_name -> google.protobuf.Timestamp
-	3,  // 8: controlplane.v1.RepositoryBundlePublicationResponse.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
-	3,  // 9: controlplane.v1.GetRepositoryBundlePublicationResponse.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
-	6,  // 10: controlplane.v1.GetRepositoryBundlePublicationResponse.files:type_name -> controlplane.v1.RepositoryBundleFile
-	18, // 11: controlplane.v1.RepositoryBundleLease.expires_at:type_name -> google.protobuf.Timestamp
-	8,  // 12: controlplane.v1.RepositoryBundleLeaseRequest.lease:type_name -> controlplane.v1.RepositoryBundleLease
-	8,  // 13: controlplane.v1.RepositoryBundleLeaseResponse.lease:type_name -> controlplane.v1.RepositoryBundleLease
-	8,  // 14: controlplane.v1.RepositoryBundlePublicationWork.lease:type_name -> controlplane.v1.RepositoryBundleLease
-	3,  // 15: controlplane.v1.RepositoryBundlePublicationWork.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
-	19, // 16: controlplane.v1.RepositoryBundlePublicationWork.invocation:type_name -> controlplane.v1.IntegrationInvocationClaim
-	20, // 17: controlplane.v1.RepositoryBundlePublicationWork.mode:type_name -> controlplane.v1.IntegrationInvocationWorkMode
-	18, // 18: controlplane.v1.RepositoryBundlePublicationWork.commit_time:type_name -> google.protobuf.Timestamp
-	18, // 19: controlplane.v1.RepositoryBundlePublicationWork.deadline:type_name -> google.protobuf.Timestamp
-	18, // 20: controlplane.v1.RepositoryBundlePublicationWork.effect_started_at:type_name -> google.protobuf.Timestamp
-	11, // 21: controlplane.v1.ClaimRepositoryBundlePublicationsResponse.work:type_name -> controlplane.v1.RepositoryBundlePublicationWork
-	8,  // 22: controlplane.v1.RepositoryBundleEffectRequest.lease:type_name -> controlplane.v1.RepositoryBundleLease
-	3,  // 23: controlplane.v1.BeginRepositoryBundlePublicationResponse.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
-	8,  // 24: controlplane.v1.FailRepositoryBundlePublicationRequest.lease:type_name -> controlplane.v1.RepositoryBundleLease
-	1,  // 25: controlplane.v1.RepositoryBundleContent.metadata:type_name -> controlplane.v1.RepositoryBundleArtifactPin
-	2,  // 26: controlplane.v1.RepositoryBundlePublicationService.PrepareRepositoryBundlePublication:input_type -> controlplane.v1.PrepareRepositoryBundlePublicationRequest
-	5,  // 27: controlplane.v1.RepositoryBundlePublicationService.GetRepositoryBundlePublication:input_type -> controlplane.v1.GetRepositoryBundlePublicationRequest
-	12, // 28: controlplane.v1.RepositoryBundlePublicationService.ClaimRepositoryBundlePublications:input_type -> controlplane.v1.ClaimRepositoryBundlePublicationsRequest
-	9,  // 29: controlplane.v1.RepositoryBundlePublicationService.RenewRepositoryBundlePublication:input_type -> controlplane.v1.RepositoryBundleLeaseRequest
-	14, // 30: controlplane.v1.RepositoryBundlePublicationService.BeginRepositoryBundlePublication:input_type -> controlplane.v1.RepositoryBundleEffectRequest
-	14, // 31: controlplane.v1.RepositoryBundlePublicationService.CompleteRepositoryBundlePublication:input_type -> controlplane.v1.RepositoryBundleEffectRequest
-	16, // 32: controlplane.v1.RepositoryBundlePublicationService.FailRepositoryBundlePublication:input_type -> controlplane.v1.FailRepositoryBundlePublicationRequest
-	9,  // 33: controlplane.v1.RepositoryBundlePublicationService.ReadRepositoryBundlePublication:input_type -> controlplane.v1.RepositoryBundleLeaseRequest
-	4,  // 34: controlplane.v1.RepositoryBundlePublicationService.PrepareRepositoryBundlePublication:output_type -> controlplane.v1.RepositoryBundlePublicationResponse
-	7,  // 35: controlplane.v1.RepositoryBundlePublicationService.GetRepositoryBundlePublication:output_type -> controlplane.v1.GetRepositoryBundlePublicationResponse
-	13, // 36: controlplane.v1.RepositoryBundlePublicationService.ClaimRepositoryBundlePublications:output_type -> controlplane.v1.ClaimRepositoryBundlePublicationsResponse
-	10, // 37: controlplane.v1.RepositoryBundlePublicationService.RenewRepositoryBundlePublication:output_type -> controlplane.v1.RepositoryBundleLeaseResponse
-	15, // 38: controlplane.v1.RepositoryBundlePublicationService.BeginRepositoryBundlePublication:output_type -> controlplane.v1.BeginRepositoryBundlePublicationResponse
-	4,  // 39: controlplane.v1.RepositoryBundlePublicationService.CompleteRepositoryBundlePublication:output_type -> controlplane.v1.RepositoryBundlePublicationResponse
-	4,  // 40: controlplane.v1.RepositoryBundlePublicationService.FailRepositoryBundlePublication:output_type -> controlplane.v1.RepositoryBundlePublicationResponse
-	17, // 41: controlplane.v1.RepositoryBundlePublicationService.ReadRepositoryBundlePublication:output_type -> controlplane.v1.RepositoryBundleContent
-	34, // [34:42] is the sub-list for method output_type
-	26, // [26:34] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	22, // 5: controlplane.v1.RepositoryBundlePublication.created_at:type_name -> google.protobuf.Timestamp
+	22, // 6: controlplane.v1.RepositoryBundlePublication.expires_at:type_name -> google.protobuf.Timestamp
+	22, // 7: controlplane.v1.RepositoryBundlePublication.confirmed_at:type_name -> google.protobuf.Timestamp
+	3,  // 8: controlplane.v1.PrepareRepositoryBundlePublicationResponse.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
+	3,  // 9: controlplane.v1.CompleteRepositoryBundlePublicationResponse.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
+	3,  // 10: controlplane.v1.FailRepositoryBundlePublicationResponse.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
+	3,  // 11: controlplane.v1.GetRepositoryBundlePublicationResponse.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
+	8,  // 12: controlplane.v1.GetRepositoryBundlePublicationResponse.files:type_name -> controlplane.v1.RepositoryBundleFile
+	22, // 13: controlplane.v1.RepositoryBundleLease.expires_at:type_name -> google.protobuf.Timestamp
+	10, // 14: controlplane.v1.RenewRepositoryBundlePublicationRequest.lease:type_name -> controlplane.v1.RepositoryBundleLease
+	10, // 15: controlplane.v1.ReadRepositoryBundlePublicationRequest.lease:type_name -> controlplane.v1.RepositoryBundleLease
+	10, // 16: controlplane.v1.RenewRepositoryBundlePublicationResponse.lease:type_name -> controlplane.v1.RepositoryBundleLease
+	10, // 17: controlplane.v1.RepositoryBundlePublicationWork.lease:type_name -> controlplane.v1.RepositoryBundleLease
+	3,  // 18: controlplane.v1.RepositoryBundlePublicationWork.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
+	23, // 19: controlplane.v1.RepositoryBundlePublicationWork.invocation:type_name -> controlplane.v1.IntegrationInvocationClaim
+	24, // 20: controlplane.v1.RepositoryBundlePublicationWork.mode:type_name -> controlplane.v1.IntegrationInvocationWorkMode
+	22, // 21: controlplane.v1.RepositoryBundlePublicationWork.commit_time:type_name -> google.protobuf.Timestamp
+	22, // 22: controlplane.v1.RepositoryBundlePublicationWork.deadline:type_name -> google.protobuf.Timestamp
+	22, // 23: controlplane.v1.RepositoryBundlePublicationWork.effect_started_at:type_name -> google.protobuf.Timestamp
+	14, // 24: controlplane.v1.ClaimRepositoryBundlePublicationsResponse.work:type_name -> controlplane.v1.RepositoryBundlePublicationWork
+	10, // 25: controlplane.v1.BeginRepositoryBundlePublicationRequest.lease:type_name -> controlplane.v1.RepositoryBundleLease
+	10, // 26: controlplane.v1.CompleteRepositoryBundlePublicationRequest.lease:type_name -> controlplane.v1.RepositoryBundleLease
+	3,  // 27: controlplane.v1.BeginRepositoryBundlePublicationResponse.proposal:type_name -> controlplane.v1.RepositoryBundlePublication
+	10, // 28: controlplane.v1.FailRepositoryBundlePublicationRequest.lease:type_name -> controlplane.v1.RepositoryBundleLease
+	1,  // 29: controlplane.v1.ReadRepositoryBundlePublicationResponse.metadata:type_name -> controlplane.v1.RepositoryBundleArtifactPin
+	2,  // 30: controlplane.v1.RepositoryBundlePublicationService.PrepareRepositoryBundlePublication:input_type -> controlplane.v1.PrepareRepositoryBundlePublicationRequest
+	7,  // 31: controlplane.v1.RepositoryBundlePublicationService.GetRepositoryBundlePublication:input_type -> controlplane.v1.GetRepositoryBundlePublicationRequest
+	15, // 32: controlplane.v1.RepositoryBundlePublicationService.ClaimRepositoryBundlePublications:input_type -> controlplane.v1.ClaimRepositoryBundlePublicationsRequest
+	11, // 33: controlplane.v1.RepositoryBundlePublicationService.RenewRepositoryBundlePublication:input_type -> controlplane.v1.RenewRepositoryBundlePublicationRequest
+	17, // 34: controlplane.v1.RepositoryBundlePublicationService.BeginRepositoryBundlePublication:input_type -> controlplane.v1.BeginRepositoryBundlePublicationRequest
+	18, // 35: controlplane.v1.RepositoryBundlePublicationService.CompleteRepositoryBundlePublication:input_type -> controlplane.v1.CompleteRepositoryBundlePublicationRequest
+	20, // 36: controlplane.v1.RepositoryBundlePublicationService.FailRepositoryBundlePublication:input_type -> controlplane.v1.FailRepositoryBundlePublicationRequest
+	12, // 37: controlplane.v1.RepositoryBundlePublicationService.ReadRepositoryBundlePublication:input_type -> controlplane.v1.ReadRepositoryBundlePublicationRequest
+	4,  // 38: controlplane.v1.RepositoryBundlePublicationService.PrepareRepositoryBundlePublication:output_type -> controlplane.v1.PrepareRepositoryBundlePublicationResponse
+	9,  // 39: controlplane.v1.RepositoryBundlePublicationService.GetRepositoryBundlePublication:output_type -> controlplane.v1.GetRepositoryBundlePublicationResponse
+	16, // 40: controlplane.v1.RepositoryBundlePublicationService.ClaimRepositoryBundlePublications:output_type -> controlplane.v1.ClaimRepositoryBundlePublicationsResponse
+	13, // 41: controlplane.v1.RepositoryBundlePublicationService.RenewRepositoryBundlePublication:output_type -> controlplane.v1.RenewRepositoryBundlePublicationResponse
+	19, // 42: controlplane.v1.RepositoryBundlePublicationService.BeginRepositoryBundlePublication:output_type -> controlplane.v1.BeginRepositoryBundlePublicationResponse
+	5,  // 43: controlplane.v1.RepositoryBundlePublicationService.CompleteRepositoryBundlePublication:output_type -> controlplane.v1.CompleteRepositoryBundlePublicationResponse
+	6,  // 44: controlplane.v1.RepositoryBundlePublicationService.FailRepositoryBundlePublication:output_type -> controlplane.v1.FailRepositoryBundlePublicationResponse
+	21, // 45: controlplane.v1.RepositoryBundlePublicationService.ReadRepositoryBundlePublication:output_type -> controlplane.v1.ReadRepositoryBundlePublicationResponse
+	38, // [38:46] is the sub-list for method output_type
+	30, // [30:38] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_repository_bundle_proto_init() }
@@ -1675,7 +1912,7 @@ func file_controlplane_v1_repository_bundle_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlplane_v1_repository_bundle_proto_rawDesc), len(file_controlplane_v1_repository_bundle_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

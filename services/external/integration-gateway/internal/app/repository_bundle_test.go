@@ -33,14 +33,14 @@ func (owner *bundleOwnerFixture) ClaimRepositoryBundlePublications(context.Conte
 
 // ReadRepositoryBundlePublication records the sole bounded source read and returns an independent exact source copy.
 // ReadRepositoryBundlePublication учитывает sole bounded source read и возвращает independent exact source copy.
-func (owner *bundleOwnerFixture) ReadRepositoryBundlePublication(context.Context, *cp.RepositoryBundleLeaseRequest, ...grpc.CallOption) (*cp.RepositoryBundleContent, error) {
+func (owner *bundleOwnerFixture) ReadRepositoryBundlePublication(context.Context, *cp.ReadRepositoryBundlePublicationRequest, ...grpc.CallOption) (*cp.ReadRepositoryBundlePublicationResponse, error) {
 	owner.reads++
-	return &cp.RepositoryBundleContent{Metadata: proto.Clone(owner.work.Proposal.Archive).(*cp.RepositoryBundleArtifactPin), Archive: append([]byte(nil), owner.body...)}, nil
+	return &cp.ReadRepositoryBundlePublicationResponse{Metadata: proto.Clone(owner.work.Proposal.Archive).(*cp.RepositoryBundleArtifactPin), Archive: append([]byte(nil), owner.body...)}, nil
 }
 
 // BeginRepositoryBundlePublication can lose its ACK or substitute identity; the application must issue no push in either case.
 // BeginRepositoryBundlePublication моделирует lost ACK либо substituted identity; приложение не должно делать push в обоих случаях.
-func (owner *bundleOwnerFixture) BeginRepositoryBundlePublication(_ context.Context, r *cp.RepositoryBundleEffectRequest, _ ...grpc.CallOption) (*cp.BeginRepositoryBundlePublicationResponse, error) {
+func (owner *bundleOwnerFixture) BeginRepositoryBundlePublication(_ context.Context, r *cp.BeginRepositoryBundlePublicationRequest, _ ...grpc.CallOption) (*cp.BeginRepositoryBundlePublicationResponse, error) {
 	owner.begins++
 	if owner.beginErr != nil {
 		return nil, owner.beginErr
@@ -61,7 +61,7 @@ func (owner *bundleOwnerFixture) BeginRepositoryBundlePublication(_ context.Cont
 
 // CompleteRepositoryBundlePublication can lose its ACK after a successful proof, preserving exactly one report without application retry or failure cleanup.
 // CompleteRepositoryBundlePublication моделирует lost ACK после successful proof, сохраняя один report без application retry либо failure cleanup.
-func (owner *bundleOwnerFixture) CompleteRepositoryBundlePublication(_ context.Context, r *cp.RepositoryBundleEffectRequest, _ ...grpc.CallOption) (*cp.RepositoryBundlePublicationResponse, error) {
+func (owner *bundleOwnerFixture) CompleteRepositoryBundlePublication(_ context.Context, r *cp.CompleteRepositoryBundlePublicationRequest, _ ...grpc.CallOption) (*cp.CompleteRepositoryBundlePublicationResponse, error) {
 	owner.completes++
 	if owner.completeErr != nil {
 		return nil, owner.completeErr
@@ -72,18 +72,18 @@ func (owner *bundleOwnerFixture) CompleteRepositoryBundlePublication(_ context.C
 	p.CandidateCommitSha = r.CandidateCommitSha
 	p.CandidateTreeSha = r.CandidateTreeSha
 	p.ConfirmedAt = timestamppb.Now()
-	return &cp.RepositoryBundlePublicationResponse{Proposal: p}, nil
+	return &cp.CompleteRepositoryBundlePublicationResponse{Proposal: p}, nil
 }
 
 // FailRepositoryBundlePublication records known pre-effect failure or begun uncertainty without issuing another effect lease.
 // FailRepositoryBundlePublication учитывает known pre-effect failure либо begun uncertainty без новой effect lease.
-func (owner *bundleOwnerFixture) FailRepositoryBundlePublication(_ context.Context, r *cp.FailRepositoryBundlePublicationRequest, _ ...grpc.CallOption) (*cp.RepositoryBundlePublicationResponse, error) {
+func (owner *bundleOwnerFixture) FailRepositoryBundlePublication(_ context.Context, r *cp.FailRepositoryBundlePublicationRequest, _ ...grpc.CallOption) (*cp.FailRepositoryBundlePublicationResponse, error) {
 	owner.failures++
 	p := proto.Clone(owner.work.Proposal).(*cp.RepositoryBundlePublication)
 	p.Version++
 	p.State = cp.RepositoryBundlePublicationState_REPOSITORY_BUNDLE_PUBLICATION_STATE_UNKNOWN_OUTCOME
 	p.FailureCode = r.FailureCode
-	return &cp.RepositoryBundlePublicationResponse{Proposal: p}, nil
+	return &cp.FailRepositoryBundlePublicationResponse{Proposal: p}, nil
 }
 
 // bundleProviderFixture observes local preparation, exactly one push attempt and independent proof; provider ACK loss is configurable and carries no raw credentials.

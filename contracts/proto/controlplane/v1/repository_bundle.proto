@@ -2,22 +2,22 @@ syntax = "proto3";
 
 package controlplane.v1;
 
-option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
-
 import "controlplane/v1/control_plane.proto";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
 
 // Отдельный typed путь #1859; решение принимает штатный ResolveOwnerGate.
 // Runtime создаёт proposal, browser читает manifest, только IG получает work.
 service RepositoryBundlePublicationService {
-  rpc PrepareRepositoryBundlePublication(PrepareRepositoryBundlePublicationRequest) returns (RepositoryBundlePublicationResponse);
+  rpc PrepareRepositoryBundlePublication(PrepareRepositoryBundlePublicationRequest) returns (PrepareRepositoryBundlePublicationResponse);
   rpc GetRepositoryBundlePublication(GetRepositoryBundlePublicationRequest) returns (GetRepositoryBundlePublicationResponse);
   rpc ClaimRepositoryBundlePublications(ClaimRepositoryBundlePublicationsRequest) returns (ClaimRepositoryBundlePublicationsResponse);
-  rpc RenewRepositoryBundlePublication(RepositoryBundleLeaseRequest) returns (RepositoryBundleLeaseResponse);
-  rpc BeginRepositoryBundlePublication(RepositoryBundleEffectRequest) returns (BeginRepositoryBundlePublicationResponse);
-  rpc CompleteRepositoryBundlePublication(RepositoryBundleEffectRequest) returns (RepositoryBundlePublicationResponse);
-  rpc FailRepositoryBundlePublication(FailRepositoryBundlePublicationRequest) returns (RepositoryBundlePublicationResponse);
-  rpc ReadRepositoryBundlePublication(RepositoryBundleLeaseRequest) returns (RepositoryBundleContent);
+  rpc RenewRepositoryBundlePublication(RenewRepositoryBundlePublicationRequest) returns (RenewRepositoryBundlePublicationResponse);
+  rpc BeginRepositoryBundlePublication(BeginRepositoryBundlePublicationRequest) returns (BeginRepositoryBundlePublicationResponse);
+  rpc CompleteRepositoryBundlePublication(CompleteRepositoryBundlePublicationRequest) returns (CompleteRepositoryBundlePublicationResponse);
+  rpc FailRepositoryBundlePublication(FailRepositoryBundlePublicationRequest) returns (FailRepositoryBundlePublicationResponse);
+  rpc ReadRepositoryBundlePublication(ReadRepositoryBundlePublicationRequest) returns (ReadRepositoryBundlePublicationResponse);
 }
 
 // Locator не является authority. CP сверяет весь immutable pin и доступ
@@ -88,7 +88,15 @@ message RepositoryBundlePublication {
   string continuation_node_ref = 29;
 }
 
-message RepositoryBundlePublicationResponse {
+message PrepareRepositoryBundlePublicationResponse {
+  RepositoryBundlePublication proposal = 1;
+}
+
+message CompleteRepositoryBundlePublicationResponse {
+  RepositoryBundlePublication proposal = 1;
+}
+
+message FailRepositoryBundlePublicationResponse {
   RepositoryBundlePublication proposal = 1;
 }
 
@@ -126,11 +134,15 @@ message RepositoryBundleLease {
   google.protobuf.Timestamp expires_at = 6;
 }
 
-message RepositoryBundleLeaseRequest {
+message RenewRepositoryBundlePublicationRequest {
   RepositoryBundleLease lease = 1;
 }
 
-message RepositoryBundleLeaseResponse {
+message ReadRepositoryBundlePublicationRequest {
+  RepositoryBundleLease lease = 1;
+}
+
+message RenewRepositoryBundlePublicationResponse {
   RepositoryBundleLease lease = 1;
 }
 
@@ -156,7 +168,16 @@ message ClaimRepositoryBundlePublicationsResponse {
 
 // Candidate фиксируется Begin до push. Последующий complete — exact readback,
 // а не разрешение на второй effect. Source branch не входит в refspec.
-message RepositoryBundleEffectRequest {
+message BeginRepositoryBundlePublicationRequest {
+  RepositoryBundleLease lease = 1;
+  string candidate_commit_sha = 2;
+  string candidate_tree_sha = 3;
+  string base_commit_sha = 4;
+  string manifest_sha256 = 5;
+  string archive_sha256 = 6;
+}
+
+message CompleteRepositoryBundlePublicationRequest {
   RepositoryBundleLease lease = 1;
   string candidate_commit_sha = 2;
   string candidate_tree_sha = 3;
@@ -175,7 +196,7 @@ message FailRepositoryBundlePublicationRequest {
   string failure_code = 2;
 }
 
-message RepositoryBundleContent {
+message ReadRepositoryBundlePublicationResponse {
   RepositoryBundleArtifactPin metadata = 1;
   bytes archive = 2;
 }

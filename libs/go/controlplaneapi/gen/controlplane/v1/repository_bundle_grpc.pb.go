@@ -36,14 +36,14 @@ const (
 // Отдельный typed путь #1859; решение принимает штатный ResolveOwnerGate.
 // Runtime создаёт proposal, browser читает manifest, только IG получает work.
 type RepositoryBundlePublicationServiceClient interface {
-	PrepareRepositoryBundlePublication(ctx context.Context, in *PrepareRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*RepositoryBundlePublicationResponse, error)
+	PrepareRepositoryBundlePublication(ctx context.Context, in *PrepareRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*PrepareRepositoryBundlePublicationResponse, error)
 	GetRepositoryBundlePublication(ctx context.Context, in *GetRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*GetRepositoryBundlePublicationResponse, error)
 	ClaimRepositoryBundlePublications(ctx context.Context, in *ClaimRepositoryBundlePublicationsRequest, opts ...grpc.CallOption) (*ClaimRepositoryBundlePublicationsResponse, error)
-	RenewRepositoryBundlePublication(ctx context.Context, in *RepositoryBundleLeaseRequest, opts ...grpc.CallOption) (*RepositoryBundleLeaseResponse, error)
-	BeginRepositoryBundlePublication(ctx context.Context, in *RepositoryBundleEffectRequest, opts ...grpc.CallOption) (*BeginRepositoryBundlePublicationResponse, error)
-	CompleteRepositoryBundlePublication(ctx context.Context, in *RepositoryBundleEffectRequest, opts ...grpc.CallOption) (*RepositoryBundlePublicationResponse, error)
-	FailRepositoryBundlePublication(ctx context.Context, in *FailRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*RepositoryBundlePublicationResponse, error)
-	ReadRepositoryBundlePublication(ctx context.Context, in *RepositoryBundleLeaseRequest, opts ...grpc.CallOption) (*RepositoryBundleContent, error)
+	RenewRepositoryBundlePublication(ctx context.Context, in *RenewRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*RenewRepositoryBundlePublicationResponse, error)
+	BeginRepositoryBundlePublication(ctx context.Context, in *BeginRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*BeginRepositoryBundlePublicationResponse, error)
+	CompleteRepositoryBundlePublication(ctx context.Context, in *CompleteRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*CompleteRepositoryBundlePublicationResponse, error)
+	FailRepositoryBundlePublication(ctx context.Context, in *FailRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*FailRepositoryBundlePublicationResponse, error)
+	ReadRepositoryBundlePublication(ctx context.Context, in *ReadRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*ReadRepositoryBundlePublicationResponse, error)
 }
 
 type repositoryBundlePublicationServiceClient struct {
@@ -54,9 +54,9 @@ func NewRepositoryBundlePublicationServiceClient(cc grpc.ClientConnInterface) Re
 	return &repositoryBundlePublicationServiceClient{cc}
 }
 
-func (c *repositoryBundlePublicationServiceClient) PrepareRepositoryBundlePublication(ctx context.Context, in *PrepareRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*RepositoryBundlePublicationResponse, error) {
+func (c *repositoryBundlePublicationServiceClient) PrepareRepositoryBundlePublication(ctx context.Context, in *PrepareRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*PrepareRepositoryBundlePublicationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RepositoryBundlePublicationResponse)
+	out := new(PrepareRepositoryBundlePublicationResponse)
 	err := c.cc.Invoke(ctx, RepositoryBundlePublicationService_PrepareRepositoryBundlePublication_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -84,9 +84,9 @@ func (c *repositoryBundlePublicationServiceClient) ClaimRepositoryBundlePublicat
 	return out, nil
 }
 
-func (c *repositoryBundlePublicationServiceClient) RenewRepositoryBundlePublication(ctx context.Context, in *RepositoryBundleLeaseRequest, opts ...grpc.CallOption) (*RepositoryBundleLeaseResponse, error) {
+func (c *repositoryBundlePublicationServiceClient) RenewRepositoryBundlePublication(ctx context.Context, in *RenewRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*RenewRepositoryBundlePublicationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RepositoryBundleLeaseResponse)
+	out := new(RenewRepositoryBundlePublicationResponse)
 	err := c.cc.Invoke(ctx, RepositoryBundlePublicationService_RenewRepositoryBundlePublication_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func (c *repositoryBundlePublicationServiceClient) RenewRepositoryBundlePublicat
 	return out, nil
 }
 
-func (c *repositoryBundlePublicationServiceClient) BeginRepositoryBundlePublication(ctx context.Context, in *RepositoryBundleEffectRequest, opts ...grpc.CallOption) (*BeginRepositoryBundlePublicationResponse, error) {
+func (c *repositoryBundlePublicationServiceClient) BeginRepositoryBundlePublication(ctx context.Context, in *BeginRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*BeginRepositoryBundlePublicationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BeginRepositoryBundlePublicationResponse)
 	err := c.cc.Invoke(ctx, RepositoryBundlePublicationService_BeginRepositoryBundlePublication_FullMethodName, in, out, cOpts...)
@@ -104,9 +104,9 @@ func (c *repositoryBundlePublicationServiceClient) BeginRepositoryBundlePublicat
 	return out, nil
 }
 
-func (c *repositoryBundlePublicationServiceClient) CompleteRepositoryBundlePublication(ctx context.Context, in *RepositoryBundleEffectRequest, opts ...grpc.CallOption) (*RepositoryBundlePublicationResponse, error) {
+func (c *repositoryBundlePublicationServiceClient) CompleteRepositoryBundlePublication(ctx context.Context, in *CompleteRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*CompleteRepositoryBundlePublicationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RepositoryBundlePublicationResponse)
+	out := new(CompleteRepositoryBundlePublicationResponse)
 	err := c.cc.Invoke(ctx, RepositoryBundlePublicationService_CompleteRepositoryBundlePublication_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -114,9 +114,9 @@ func (c *repositoryBundlePublicationServiceClient) CompleteRepositoryBundlePubli
 	return out, nil
 }
 
-func (c *repositoryBundlePublicationServiceClient) FailRepositoryBundlePublication(ctx context.Context, in *FailRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*RepositoryBundlePublicationResponse, error) {
+func (c *repositoryBundlePublicationServiceClient) FailRepositoryBundlePublication(ctx context.Context, in *FailRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*FailRepositoryBundlePublicationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RepositoryBundlePublicationResponse)
+	out := new(FailRepositoryBundlePublicationResponse)
 	err := c.cc.Invoke(ctx, RepositoryBundlePublicationService_FailRepositoryBundlePublication_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -124,9 +124,9 @@ func (c *repositoryBundlePublicationServiceClient) FailRepositoryBundlePublicati
 	return out, nil
 }
 
-func (c *repositoryBundlePublicationServiceClient) ReadRepositoryBundlePublication(ctx context.Context, in *RepositoryBundleLeaseRequest, opts ...grpc.CallOption) (*RepositoryBundleContent, error) {
+func (c *repositoryBundlePublicationServiceClient) ReadRepositoryBundlePublication(ctx context.Context, in *ReadRepositoryBundlePublicationRequest, opts ...grpc.CallOption) (*ReadRepositoryBundlePublicationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RepositoryBundleContent)
+	out := new(ReadRepositoryBundlePublicationResponse)
 	err := c.cc.Invoke(ctx, RepositoryBundlePublicationService_ReadRepositoryBundlePublication_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -141,14 +141,14 @@ func (c *repositoryBundlePublicationServiceClient) ReadRepositoryBundlePublicati
 // Отдельный typed путь #1859; решение принимает штатный ResolveOwnerGate.
 // Runtime создаёт proposal, browser читает manifest, только IG получает work.
 type RepositoryBundlePublicationServiceServer interface {
-	PrepareRepositoryBundlePublication(context.Context, *PrepareRepositoryBundlePublicationRequest) (*RepositoryBundlePublicationResponse, error)
+	PrepareRepositoryBundlePublication(context.Context, *PrepareRepositoryBundlePublicationRequest) (*PrepareRepositoryBundlePublicationResponse, error)
 	GetRepositoryBundlePublication(context.Context, *GetRepositoryBundlePublicationRequest) (*GetRepositoryBundlePublicationResponse, error)
 	ClaimRepositoryBundlePublications(context.Context, *ClaimRepositoryBundlePublicationsRequest) (*ClaimRepositoryBundlePublicationsResponse, error)
-	RenewRepositoryBundlePublication(context.Context, *RepositoryBundleLeaseRequest) (*RepositoryBundleLeaseResponse, error)
-	BeginRepositoryBundlePublication(context.Context, *RepositoryBundleEffectRequest) (*BeginRepositoryBundlePublicationResponse, error)
-	CompleteRepositoryBundlePublication(context.Context, *RepositoryBundleEffectRequest) (*RepositoryBundlePublicationResponse, error)
-	FailRepositoryBundlePublication(context.Context, *FailRepositoryBundlePublicationRequest) (*RepositoryBundlePublicationResponse, error)
-	ReadRepositoryBundlePublication(context.Context, *RepositoryBundleLeaseRequest) (*RepositoryBundleContent, error)
+	RenewRepositoryBundlePublication(context.Context, *RenewRepositoryBundlePublicationRequest) (*RenewRepositoryBundlePublicationResponse, error)
+	BeginRepositoryBundlePublication(context.Context, *BeginRepositoryBundlePublicationRequest) (*BeginRepositoryBundlePublicationResponse, error)
+	CompleteRepositoryBundlePublication(context.Context, *CompleteRepositoryBundlePublicationRequest) (*CompleteRepositoryBundlePublicationResponse, error)
+	FailRepositoryBundlePublication(context.Context, *FailRepositoryBundlePublicationRequest) (*FailRepositoryBundlePublicationResponse, error)
+	ReadRepositoryBundlePublication(context.Context, *ReadRepositoryBundlePublicationRequest) (*ReadRepositoryBundlePublicationResponse, error)
 	mustEmbedUnimplementedRepositoryBundlePublicationServiceServer()
 }
 
@@ -159,7 +159,7 @@ type RepositoryBundlePublicationServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRepositoryBundlePublicationServiceServer struct{}
 
-func (UnimplementedRepositoryBundlePublicationServiceServer) PrepareRepositoryBundlePublication(context.Context, *PrepareRepositoryBundlePublicationRequest) (*RepositoryBundlePublicationResponse, error) {
+func (UnimplementedRepositoryBundlePublicationServiceServer) PrepareRepositoryBundlePublication(context.Context, *PrepareRepositoryBundlePublicationRequest) (*PrepareRepositoryBundlePublicationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareRepositoryBundlePublication not implemented")
 }
 func (UnimplementedRepositoryBundlePublicationServiceServer) GetRepositoryBundlePublication(context.Context, *GetRepositoryBundlePublicationRequest) (*GetRepositoryBundlePublicationResponse, error) {
@@ -168,19 +168,19 @@ func (UnimplementedRepositoryBundlePublicationServiceServer) GetRepositoryBundle
 func (UnimplementedRepositoryBundlePublicationServiceServer) ClaimRepositoryBundlePublications(context.Context, *ClaimRepositoryBundlePublicationsRequest) (*ClaimRepositoryBundlePublicationsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimRepositoryBundlePublications not implemented")
 }
-func (UnimplementedRepositoryBundlePublicationServiceServer) RenewRepositoryBundlePublication(context.Context, *RepositoryBundleLeaseRequest) (*RepositoryBundleLeaseResponse, error) {
+func (UnimplementedRepositoryBundlePublicationServiceServer) RenewRepositoryBundlePublication(context.Context, *RenewRepositoryBundlePublicationRequest) (*RenewRepositoryBundlePublicationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenewRepositoryBundlePublication not implemented")
 }
-func (UnimplementedRepositoryBundlePublicationServiceServer) BeginRepositoryBundlePublication(context.Context, *RepositoryBundleEffectRequest) (*BeginRepositoryBundlePublicationResponse, error) {
+func (UnimplementedRepositoryBundlePublicationServiceServer) BeginRepositoryBundlePublication(context.Context, *BeginRepositoryBundlePublicationRequest) (*BeginRepositoryBundlePublicationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BeginRepositoryBundlePublication not implemented")
 }
-func (UnimplementedRepositoryBundlePublicationServiceServer) CompleteRepositoryBundlePublication(context.Context, *RepositoryBundleEffectRequest) (*RepositoryBundlePublicationResponse, error) {
+func (UnimplementedRepositoryBundlePublicationServiceServer) CompleteRepositoryBundlePublication(context.Context, *CompleteRepositoryBundlePublicationRequest) (*CompleteRepositoryBundlePublicationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteRepositoryBundlePublication not implemented")
 }
-func (UnimplementedRepositoryBundlePublicationServiceServer) FailRepositoryBundlePublication(context.Context, *FailRepositoryBundlePublicationRequest) (*RepositoryBundlePublicationResponse, error) {
+func (UnimplementedRepositoryBundlePublicationServiceServer) FailRepositoryBundlePublication(context.Context, *FailRepositoryBundlePublicationRequest) (*FailRepositoryBundlePublicationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FailRepositoryBundlePublication not implemented")
 }
-func (UnimplementedRepositoryBundlePublicationServiceServer) ReadRepositoryBundlePublication(context.Context, *RepositoryBundleLeaseRequest) (*RepositoryBundleContent, error) {
+func (UnimplementedRepositoryBundlePublicationServiceServer) ReadRepositoryBundlePublication(context.Context, *ReadRepositoryBundlePublicationRequest) (*ReadRepositoryBundlePublicationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReadRepositoryBundlePublication not implemented")
 }
 func (UnimplementedRepositoryBundlePublicationServiceServer) mustEmbedUnimplementedRepositoryBundlePublicationServiceServer() {
@@ -260,7 +260,7 @@ func _RepositoryBundlePublicationService_ClaimRepositoryBundlePublications_Handl
 }
 
 func _RepositoryBundlePublicationService_RenewRepositoryBundlePublication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RepositoryBundleLeaseRequest)
+	in := new(RenewRepositoryBundlePublicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -272,13 +272,13 @@ func _RepositoryBundlePublicationService_RenewRepositoryBundlePublication_Handle
 		FullMethod: RepositoryBundlePublicationService_RenewRepositoryBundlePublication_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RepositoryBundlePublicationServiceServer).RenewRepositoryBundlePublication(ctx, req.(*RepositoryBundleLeaseRequest))
+		return srv.(RepositoryBundlePublicationServiceServer).RenewRepositoryBundlePublication(ctx, req.(*RenewRepositoryBundlePublicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _RepositoryBundlePublicationService_BeginRepositoryBundlePublication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RepositoryBundleEffectRequest)
+	in := new(BeginRepositoryBundlePublicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -290,13 +290,13 @@ func _RepositoryBundlePublicationService_BeginRepositoryBundlePublication_Handle
 		FullMethod: RepositoryBundlePublicationService_BeginRepositoryBundlePublication_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RepositoryBundlePublicationServiceServer).BeginRepositoryBundlePublication(ctx, req.(*RepositoryBundleEffectRequest))
+		return srv.(RepositoryBundlePublicationServiceServer).BeginRepositoryBundlePublication(ctx, req.(*BeginRepositoryBundlePublicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _RepositoryBundlePublicationService_CompleteRepositoryBundlePublication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RepositoryBundleEffectRequest)
+	in := new(CompleteRepositoryBundlePublicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func _RepositoryBundlePublicationService_CompleteRepositoryBundlePublication_Han
 		FullMethod: RepositoryBundlePublicationService_CompleteRepositoryBundlePublication_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RepositoryBundlePublicationServiceServer).CompleteRepositoryBundlePublication(ctx, req.(*RepositoryBundleEffectRequest))
+		return srv.(RepositoryBundlePublicationServiceServer).CompleteRepositoryBundlePublication(ctx, req.(*CompleteRepositoryBundlePublicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -332,7 +332,7 @@ func _RepositoryBundlePublicationService_FailRepositoryBundlePublication_Handler
 }
 
 func _RepositoryBundlePublicationService_ReadRepositoryBundlePublication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RepositoryBundleLeaseRequest)
+	in := new(ReadRepositoryBundlePublicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -344,7 +344,7 @@ func _RepositoryBundlePublicationService_ReadRepositoryBundlePublication_Handler
 		FullMethod: RepositoryBundlePublicationService_ReadRepositoryBundlePublication_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RepositoryBundlePublicationServiceServer).ReadRepositoryBundlePublication(ctx, req.(*RepositoryBundleLeaseRequest))
+		return srv.(RepositoryBundlePublicationServiceServer).ReadRepositoryBundlePublication(ctx, req.(*ReadRepositoryBundlePublicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
