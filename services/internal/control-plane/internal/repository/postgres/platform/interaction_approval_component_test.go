@@ -17,18 +17,43 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// interactionApprovalFixture seeds a succeeded Run, root node and notification grant for optional
+// delivery approval without executing the external effect.
+// interactionApprovalFixture подготавливает успешный Run, корневой узел и разрешение уведомления
+// для подтверждения необязательной доставки без исполнения внешнего эффекта.
+//
 //go:embed testdata/sql/interaction_approval_fixture.sql
 var interactionApprovalFixture string
 
+// interactionApprovalRoot binds the fixture Run to itself as its authoritative execution root.
+// interactionApprovalRoot связывает тестовый Run с самим собой как с авторитетным корнем
+// исполнения.
+//
 //go:embed testdata/sql/interaction_approval_root.sql
 var interactionApprovalRoot string
 
+// interactionApprovalReadback reads approval, delivery and core Run state/version plus the exact
+// notification count from durable owner tables.
+// interactionApprovalReadback читает состояние подтверждения, доставки и основного Run, его версию
+// и точное количество уведомлений из устойчивых таблиц владельца.
+//
 //go:embed testdata/sql/interaction_approval_readback.sql
 var interactionApprovalReadback string
 
+// interactionApprovalTamper advances the fixture delivery connection version to make the approved
+// intent stale.
+// interactionApprovalTamper увеличивает версию соединения тестовой доставки, чтобы намерение
+// подтверждения стало устаревшим.
+//
 //go:embed testdata/sql/interaction_approval_tamper.sql
 var interactionApprovalTamper string
 
+// testInteractionDeliveryApproval checks approval/rejection/cancellation, stale pins, revoked
+// grants and idempotent optional-delivery receipts without changing the succeeded core Run;
+// external completion is synthetic.
+// testInteractionDeliveryApproval проверяет подтверждение, отказ, отмену, устаревшие привязки,
+// отзыв разрешений и идемпотентные квитанции необязательной доставки без изменения успешного
+// основного Run; внешнее завершение искусственное.
 func testInteractionDeliveryApproval(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, owner value.Principal, connectionRef, originalRunRef string) {
 	t.Helper()
 	service, err := platformservice.New(repository)

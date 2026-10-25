@@ -19,8 +19,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
-// Real SDK HTTP signing доказывает то, что in-memory Store не проверяет:
-// bounded reader обязан сохранить возможность вычисления signed payload hash.
+// TestPreparedContentSignedS3Reader uses the real S3 SDK against a local HTTP server to verify
+// exact signed payload hash, rewindable bounded body and version-pinned Put/Head receipts.
+// TestPreparedContentSignedS3Reader использует настоящий S3 SDK с локальным HTTP-сервером для
+// проверки точного хеша подписанного тела, перематываемого ограниченного reader и квитанций
+// Put/Head с привязкой к версии.
 func TestPreparedContentSignedS3Reader(t *testing.T) {
 	const body = "new immutable note"
 	sum := sha256.Sum256([]byte(body))
@@ -81,12 +84,23 @@ func TestPreparedContentSignedS3Reader(t *testing.T) {
 	}
 }
 
+// preparedBodyReadFailure provides a deterministic failing reader to check unavailable-error
+// mapping without exposing reader diagnostics.
+// preparedBodyReadFailure предоставляет предсказуемо ошибочный reader для проверки преобразования
+// в ошибку недоступности без раскрытия его диагностики.
 type preparedBodyReadFailure struct{}
 
+// Read returns a synthetic private error without yielding body bytes.
+// Read возвращает искусственную закрытую ошибку, не выдавая байты тела.
 func (preparedBodyReadFailure) Read([]byte) (int, error) {
 	return 0, errors.New("PRIVATE_READER_ERROR")
 }
 
+// TestPreparedContentSeekableBodyRejectsInvalidEnvelope rejects mismatched size/digest, nil,
+// negative or excessive envelopes and maps reader failure to unavailable without returning a body.
+// TestPreparedContentSeekableBodyRejectsInvalidEnvelope отклоняет несовпадение размера и
+// дайджеста, nil, отрицательные и чрезмерные параметры и преобразует сбой reader в недоступность
+// без возврата тела.
 func TestPreparedContentSeekableBodyRejectsInvalidEnvelope(t *testing.T) {
 	sum := sha256.Sum256([]byte("abc"))
 	digest := fmt.Sprintf("sha256:%x", sum[:])
@@ -114,6 +128,10 @@ func TestPreparedContentSeekableBodyRejectsInvalidEnvelope(t *testing.T) {
 	}
 }
 
+// TestPreparedContentSeekableBodyBoundedAndReplayable checks empty and maximum-sized valid bodies
+// remain byte-exact across repeated seek/read cycles.
+// TestPreparedContentSeekableBodyBoundedAndReplayable проверяет точность пустого тела и тела
+// предельного размера при повторных циклах перемотки и чтения.
 func TestPreparedContentSeekableBodyBoundedAndReplayable(t *testing.T) {
 	for _, size := range []int{0, 1 << 20} {
 		body := strings.Repeat("a", size)

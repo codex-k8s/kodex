@@ -4,11 +4,58 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.431.0
+version: 1.432.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Тестовые fixtures: provider usage, продолжение Session и owner gates — 25.10.2026
+
+На основе `73f287e61719af044a9bcf84d3216bd69e6793c2` полностью прочитаны
+16 test Go-файлов (2709 исходных строк) и15 embedded SQL (81 строка), включая
+четыре provider-usage fixture вне подкаталога sql. Добавлены содержательные
+EN→RU описания81 объявления. Исполняемые выражения, fixture bytes, SQL,
+assertions, диагностика, параметры времени и concurrency не менялись.
+
+| Область | Описанные гарантии и границы доказательства |
+| --- | --- |
+| Provider cleanup | Durable owner deletion, exhaustion/retry, stale claim, exact produced credential, оба порядка completion и terminal idempotent readback. Broker receipts synthetic, фактическое удаление Secret не выполняется. Metadata completion отдельно от absence/fencing |
+| Provider usage component | Single/list agreement, actor-bound cursor, configure/launch permissions и revocation. Конкурирующий selector ждёт exact backend lock pair, затем видит disabled account; reader завершается до освобождения connection. SQL авторизации изолированного аккаунта создаёт только synthetic descriptor |
+| Provider usage unit | Selection/submission отдельно от capacity/health; exact model pins, fresh credential binding, candidate revision и stale observation. Test с Expiry в имени не двигает время: описаны только реально проверенные source mismatch и malformed cursor |
+| Resumable Sessions | Latest Run каждой Session, target affinity и actor/filter/version cursor. run.view не даёт target launch; eligibility согласована между catalog/single/graph/attachments/events. Disable fixture восстанавливается даже после cancellation |
+| Delivery approval | APPROVE/REJECT/CANCEL, stale intent, grant withdrawal и receipt replay сохраняют terminal core Run/version. Проверяется durable delivery state, внешняя отправка и worker completion synthetic |
+| Gate intent | Exact predecessor turn и finalized attachment set, historical consequences после materialized node activation, tenant/project/membership read boundary. Preview ограничивает UTF-8, opaque values и decision permission; GitHub вызовов нет |
+| Prepared content S3 | Реальный SDK подписывает PUT к локальному httptest server, сохраняет exact payload hash, bounded seekable body и version-pinned HEAD receipt. Это не acceptance удалённого S3. Negative envelope и максимальный размер проверены отдельно |
+| Run graph и delegation | Narrow owner/child/root cursor, closed invalid/error paths и immutable child projection. Fake Tx останавливает delegation до downstream работы при stale/expired/fence/authority/frontier denial; не исполняет реального child |
+| Runtime tools и capabilities | Closed native/managed aliases, exact capability/grant, own-execution selector boundary; group scope/expiry/revocation и connection/risk intersection; actor/tenant/project/snapshot cursor |
+| Session archive | Durable snapshot/PVC/restore/object commands с synthetic receipts и exact claim pins. DEAD_LETTER/ERROR не создают replacement snapshot. Физические PVC/S3 операции не выполняются |
+| Managed MCP и materialization | Immutable старое health proof сохраняется, startup TTL не обходится, fresh observation не принимает dependency drift. Pending grant pair не назначает health authority. Protobuf digest совпадает с deterministic wire envelope и меняется при каждом execution pin |
+| Project grant tracer | Atomic identity counter не сохраняет SQL args/results; exact header validator закрывает отсутствующие и чужие данные |
+
+16 полных expected-AST/directive сравнений — PASS LOCAL.31 затронутая
+unit Test-функция — PASS LOCAL (24.28s, checks432-final), включая настоящий
+S3 SDK на локальном HTTP. Test child env исключает credentials и все
+inherited KODEX inputs. PostgreSQL component entrypoints — NOT RUN/SKIP.
+Полный build/unit control-plane для comments-only tree не повторялся:
+production Go с38ea7e4 не менялся, последний полный PASS — checks429-final.
+17 analyzer unit также не повторялись: implementation неизменен.5 exact
+ignore guards, gofmt/git diff --check, inventory/detector/assessment — PASS
+LOCAL. Новых внешних library API нет, новых Context7 запросов не было.
+
+Inventory6694 sources/222 exclusions. Go21495:21168 EN→RU,327 missing в173
+тестовых файлах, production missing0. PR391 Go/3196 объявлений, missing0;
+421 whole changed blobs. Detector1668 raw/851 retained occurrences/817
+unresolved, registry740 неизменен. Два прежних окна (project/system grant
+tracer109 tokens и provider usage134 tokens) сменили fragment hash из-за
+комментариев; исполняемые tokens прежние, реальной дедубликацией это не
+является. Оба совпадения остаются открытыми. Thresholds/exclusions не менялись.
+
+PG/RLS/OCC/renew races, remote providers/storage/broker/Secrets, runner tools,
+browser/полный E2E/deploy/live — NOT RUN/SKIP. Manifests неизменны; прежние
+30 exact renders и standalone staging/control-api-gateway FAIL не повторялись.
+#1823 открыт, #1829 Draft; основной клон и QA worktree не менялись. Env
+не менялись, секреты не раскрывались и не переносились.
 
 ## Общий счётчик40001 в test tracers — 25.10.2026
 

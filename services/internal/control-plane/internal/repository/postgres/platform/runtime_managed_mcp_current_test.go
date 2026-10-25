@@ -11,6 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// managedMCPOwnerSnapshotFixture derives a synthetic system-assistant MCP profile from exact
+// grants and an intentionally old health proof for immutable snapshot tests.
+// managedMCPOwnerSnapshotFixture выводит искусственный профиль MCP системного ассистента из точных
+// разрешений и намеренно старого подтверждения здоровья для тестов неизменного снимка.
 func managedMCPOwnerSnapshotFixture(t *testing.T) (map[string]any, runtimecontract.ManagedMCPProfile) {
 	t.Helper()
 	grants := []map[string]string{}
@@ -35,6 +39,12 @@ func managedMCPOwnerSnapshotFixture(t *testing.T) (map[string]any, runtimecontra
 		"integrationGrants": grants, "managedMCPProfiles": []runtimecontract.ManagedMCPProfile{profile}}, profile
 }
 
+// TestManagedMCPOwnerSnapshotKeepsImmutableOldProofAndClosedStructure preserves old proof during
+// structural decoding but requires fresh startup readiness, rejecting malformed, foreign or
+// unknown fields without leaking private markers.
+// TestManagedMCPOwnerSnapshotKeepsImmutableOldProofAndClosedStructure сохраняет старое
+// подтверждение при структурном декодировании, но требует свежей готовности запуска, отклоняя
+// неверные, чужие и неизвестные поля без раскрытия закрытых маркеров.
 func TestManagedMCPOwnerSnapshotKeepsImmutableOldProofAndClosedStructure(t *testing.T) {
 	snapshot, profile := managedMCPOwnerSnapshotFixture(t)
 	raw, _ := json.Marshal(snapshot)
@@ -70,6 +80,10 @@ func TestManagedMCPOwnerSnapshotKeepsImmutableOldProofAndClosedStructure(t *test
 	}
 }
 
+// TestManagedMCPFreshObservationDoesNotAdoptDependencyDrift allows observation identity/time to
+// change only when connection, configuration, credential and definition dependencies remain exact.
+// TestManagedMCPFreshObservationDoesNotAdoptDependencyDrift допускает смену идентичности и времени
+// наблюдения лишь при неизменных зависимостях соединения, конфигурации, credential и определения.
 func TestManagedMCPFreshObservationDoesNotAdoptDependencyDrift(t *testing.T) {
 	_, profile := managedMCPOwnerSnapshotFixture(t)
 	a := profile.Health
@@ -95,6 +109,12 @@ func TestManagedMCPFreshObservationDoesNotAdoptDependencyDrift(t *testing.T) {
 	}
 }
 
+// TestManagedMCPPendingPairDoesNotCreateHealthAuthority recognizes only the exact read-only
+// unapproved Context7 grant pair and keeps pending health distinct from terminal candidate
+// rejection.
+// TestManagedMCPPendingPairDoesNotCreateHealthAuthority распознаёт только точную пару разрешений
+// чтения Context7 без подтверждения и отделяет ожидающее здоровье от окончательного отклонения
+// кандидата.
 func TestManagedMCPPendingPairDoesNotCreateHealthAuthority(t *testing.T) {
 	snapshot, _ := managedMCPOwnerSnapshotFixture(t)
 	grants := runtimeRevisionGrants(snapshot["integrationGrants"].([]map[string]string))

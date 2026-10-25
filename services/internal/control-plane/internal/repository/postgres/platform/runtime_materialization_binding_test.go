@@ -11,6 +11,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// runtimeMaterializationFixture returns explicit synthetic execution pins for deterministic
+// materialization-envelope digest tests.
+// runtimeMaterializationFixture возвращает явные искусственные привязки исполнения для тестов
+// детерминированного дайджеста конверта материализации.
 func runtimeMaterializationFixture() runtimeMaterializationInput {
 	return runtimeMaterializationInput{
 		WorkloadInstance: "fixture-workload", LeaseRef: "lea_fixture", Fence: "fnc_fixture",
@@ -19,6 +23,11 @@ func runtimeMaterializationFixture() runtimeMaterializationInput {
 	}
 }
 
+// TestRuntimeMaterializationDigestMatchesWireEnvelope compares materialization operation and
+// digest against deterministic protobuf bytes for ordinary and system-assistant request envelopes.
+// TestRuntimeMaterializationDigestMatchesWireEnvelope сравнивает операцию и дайджест
+// материализации с детерминированными байтами protobuf обычного конверта и конверта системного
+// ассистента.
 func TestRuntimeMaterializationDigestMatchesWireEnvelope(t *testing.T) {
 	for _, assistant := range []bool{false, true} {
 		input := runtimeMaterializationFixture()
@@ -47,6 +56,10 @@ func TestRuntimeMaterializationDigestMatchesWireEnvelope(t *testing.T) {
 	}
 }
 
+// TestRuntimeMaterializationDigestBindsEveryExecutionField mutates each execution pin and the
+// assistant envelope separately to prove each changes the materialization digest.
+// TestRuntimeMaterializationDigestBindsEveryExecutionField по отдельности изменяет каждую привязку
+// исполнения и конверт ассистента, доказывая изменение дайджеста материализации каждым полем.
 func TestRuntimeMaterializationDigestBindsEveryExecutionField(t *testing.T) {
 	_, original, err := runtimeMaterializationDigest(runtimeMaterializationFixture())
 	if err != nil {
@@ -77,6 +90,10 @@ func TestRuntimeMaterializationDigestBindsEveryExecutionField(t *testing.T) {
 	}
 }
 
+// TestRuntimeMaterializationDigestRejectsInvalidAttempt rejects nonpositive and overflowing
+// attempts before encoding an int32 protobuf attempt.
+// TestRuntimeMaterializationDigestRejectsInvalidAttempt отклоняет неположительные и переполняющие
+// значения попытки до кодирования попытки в int32 protobuf.
 func TestRuntimeMaterializationDigestRejectsInvalidAttempt(t *testing.T) {
 	for _, attempt := range []int64{-1, 0, int64(math.MaxInt32) + 1} {
 		input := runtimeMaterializationFixture()

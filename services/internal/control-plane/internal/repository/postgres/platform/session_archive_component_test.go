@@ -17,6 +17,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testSessionArchiveLifecycle drives durable snapshot, PVC deletion, restore and object deletion
+// commands with synthetic worker receipts, checking stale fence rejection and final
+// archive/storage state without real storage operations.
+// testSessionArchiveLifecycle проходит устойчивые команды снимка, удаления PVC, восстановления и
+// удаления объекта с искусственными квитанциями worker, проверяя отклонение устаревшего fence и
+// итоговое состояние архива и хранилища без реальных операций хранения.
 func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
@@ -164,6 +170,11 @@ func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *
 	testFailedSessionSnapshotTerminatesLifecycle(t, ctx, service, pool, claimPrincipal, failPrincipal, launched.Run.SessionRef, "SESSION_ARCHIVE_WORKER_FAILED")
 }
 
+// testFailedSessionSnapshotTerminatesLifecycle exhausts retries on the same snapshot task and
+// checks DEAD_LETTER plus ERROR storage cannot rematerialize replacement snapshot work.
+// testFailedSessionSnapshotTerminatesLifecycle исчерпывает повторы одной задачи снимка и
+// проверяет, что DEAD_LETTER и ERROR хранилища не допускают повторной материализации заменяющей
+// задачи.
 func testFailedSessionSnapshotTerminatesLifecycle(t *testing.T, ctx context.Context, service *platformservice.Service,
 	pool *pgxpool.Pool, claimPrincipal, failPrincipal value.Principal, sessionRef, failureCode string,
 ) {
@@ -241,6 +252,10 @@ func testFailedSessionSnapshotTerminatesLifecycle(t *testing.T, ctx context.Cont
 	}
 }
 
+// sessionArchivePrincipal resolves the session-archive workload principal for the exact requested
+// archive operation.
+// sessionArchivePrincipal разрешает principal workload session-archive для точной запрошенной
+// операции архива.
 func sessionArchivePrincipal(t *testing.T, ctx context.Context, repository *Repository, operation string) value.Principal {
 	t.Helper()
 	return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -249,6 +264,10 @@ func sessionArchivePrincipal(t *testing.T, ctx context.Context, repository *Repo
 	}, "session-archive")
 }
 
+// claimSingleSessionArchiveTask claims exactly one task and verifies its expected kind before
+// exposing the worker payload.
+// claimSingleSessionArchiveTask захватывает ровно одну задачу и проверяет ожидаемый вид перед
+// возвратом данных worker.
 func claimSingleSessionArchiveTask(t *testing.T, ctx context.Context, service *platformservice.Service, principal value.Principal, kind string) map[string]any {
 	t.Helper()
 	claimed, err := service.ClaimSessionArchiveTasks(ctx, principal, "session-archive-component", 1)
@@ -258,6 +277,10 @@ func claimSingleSessionArchiveTask(t *testing.T, ctx context.Context, service *p
 	return claimed[0]
 }
 
+// claimedSessionArchivePayload copies exact task, lease, fence and generation pins from a claim
+// into a completion/failure command payload.
+// claimedSessionArchivePayload копирует точные привязки задачи, lease, fence и поколения из claim
+// в данные команды завершения либо ошибки.
 func claimedSessionArchivePayload(task map[string]any) command.SessionArchiveTaskInput {
 	return command.SessionArchiveTaskInput{TaskRef: stringMap(task, "taskRef"), LeaseRef: stringMap(task, "leaseRef"),
 		Fence: stringMap(task, "fence"), Generation: task["generation"].(int64)}

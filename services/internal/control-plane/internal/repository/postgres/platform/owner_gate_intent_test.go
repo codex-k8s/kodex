@@ -11,6 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// TestTerminalOwnerGateHistoryIsClosed accepts only the explicit terminal gate states and rejects
+// open, unknown, differently cased or unrelated states.
+// TestTerminalOwnerGateHistoryIsClosed принимает только явные завершённые состояния подтверждения
+// и отклоняет открытые, неизвестные, иначе записанные и посторонние состояния.
 func TestTerminalOwnerGateHistoryIsClosed(t *testing.T) {
 	for _, state := range []string{"APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED"} {
 		if !terminalOwnerGateHistory(state) {
@@ -24,6 +28,11 @@ func TestTerminalOwnerGateHistoryIsClosed(t *testing.T) {
 	}
 }
 
+// TestIntegrationGatePreviewBoundsAndOpaqueFields checks bounded valid UTF-8 previews,
+// opaque-field suppression, exact input digest and closed unknown-operation previews.
+// TestIntegrationGatePreviewBoundsAndOpaqueFields проверяет ограниченный корректный UTF-8
+// предпросмотра, скрытие непрозрачных полей, точный дайджест входа и закрытый предпросмотр
+// неизвестной операции.
 func TestIntegrationGatePreviewBoundsAndOpaqueFields(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -72,6 +81,10 @@ func TestIntegrationGatePreviewBoundsAndOpaqueFields(t *testing.T) {
 	}
 }
 
+// TestScopedGatePreviewRedactsValuesWithoutDecisionPermission preserves selected-field type and
+// scope digest while exposing values only with decision permission.
+// TestScopedGatePreviewRedactsValuesWithoutDecisionPermission сохраняет тип выбранного поля и
+// дайджест области, раскрывая значения только при наличии права принятия решения.
 func TestScopedGatePreviewRedactsValuesWithoutDecisionPermission(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -107,6 +120,10 @@ func TestScopedGatePreviewRedactsValuesWithoutDecisionPermission(t *testing.T) {
 	}
 }
 
+// TestGitHubIssueCommentGatePreviewUsesShippedBounds checks shipped comment fields, exact issue
+// binding and bounded UTF-8 body completeness without making a GitHub request.
+// TestGitHubIssueCommentGatePreviewUsesShippedBounds проверяет поставляемые поля комментария,
+// точную привязку Issue и полноту ограниченного UTF-8 текста без запроса в GitHub.
 func TestGitHubIssueCommentGatePreviewUsesShippedBounds(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -152,6 +169,10 @@ func TestGitHubIssueCommentGatePreviewUsesShippedBounds(t *testing.T) {
 	}
 }
 
+// TestGateConsequencesDistinguishExecutionAndDelivery checks decision consequences separately for
+// ordinary execution, integration effects and optional delivery.
+// TestGateConsequencesDistinguishExecutionAndDelivery проверяет последствия решений отдельно для
+// обычного исполнения, эффектов интеграции и необязательной доставки.
 func TestGateConsequencesDistinguishExecutionAndDelivery(t *testing.T) {
 	decisions := []string{"APPROVE", "REJECT", "CANCEL", "REQUEST_CHANGES"}
 	for _, kind := range []string{"ordinary", "integration", "delivery"} {

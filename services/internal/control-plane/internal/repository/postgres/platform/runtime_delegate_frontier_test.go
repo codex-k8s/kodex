@@ -13,10 +13,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// delegationFrontierRow adapts a configured scan callback to pgx.Row for delegation preflight
+// tests.
+// delegationFrontierRow адаптирует настроенный callback сканирования к pgx.Row для тестов
+// предварительной проверки делегирования.
 type delegationFrontierRow func(...any) error
 
+// Scan forwards destinations and the configured error to the row callback.
+// Scan передаёт назначения и настроенный результат ошибки callback строки.
 func (row delegationFrontierRow) Scan(dest ...any) error { return row(dest...) }
 
+// delegationFrontierTx models only lease and authority/frontier reads, failing if a denied
+// delegation reaches downstream work.
+// delegationFrontierTx моделирует только чтение lease и полномочий с границей зависимостей,
+// завершая тест при достижении дальнейшей работы запрещённым делегированием.
 type delegationFrontierTx struct {
 	pgx.Tx
 	t                          *testing.T
@@ -26,6 +36,10 @@ type delegationFrontierTx struct {
 	stale, expired, wrongFence bool
 }
 
+// QueryRow supplies exact fence/generation/expiry and capability/relationship fixtures while
+// rejecting every downstream query.
+// QueryRow предоставляет тестовые fence, поколение, срок действия, capability и relationship,
+// отклоняя каждый дальнейший запрос.
 func (tx *delegationFrontierTx) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
 	tx.calls++
 	if sql == queryRuntimeLeaseForUpdateSelectRuntimeLeasesOrganizationIdRef {
@@ -66,6 +80,12 @@ func (tx *delegationFrontierTx) QueryRow(_ context.Context, sql string, _ ...any
 	return delegationFrontierRow(func(...any) error { return errs.ErrUnavailable })
 }
 
+// TestDelegateExecutionFrontierPreflight checks stale/expired/fenced leases and missing authority
+// fail before downstream work, while a valid blocked dependency returns conflict after the exact
+// two reads.
+// TestDelegateExecutionFrontierPreflight проверяет отказ при устаревшей или просроченной lease,
+// неверном fence и недостаточных полномочиях до дальнейшей работы; допустимая заблокированная
+// зависимость даёт конфликт после ровно двух чтений.
 func TestDelegateExecutionFrontierPreflight(t *testing.T) {
 	for _, test := range []struct {
 		name                                                 string

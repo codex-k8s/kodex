@@ -11,6 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// providerUsageFixture returns a fresh authorized account, observed model catalog and candidate
+// profile with explicit actor authority for pure usage tests.
+// providerUsageFixture возвращает свежий авторизованный аккаунт, наблюдаемый каталог моделей и
+// профиль-кандидат с явными полномочиями actor для чистых тестов использования.
 func providerUsageFixture() (providerUsageAccount, providerUsageContext) {
 	now := time.Now().UTC()
 	expires := now.Add(time.Minute)
@@ -21,6 +25,12 @@ func providerUsageFixture() (providerUsageAccount, providerUsageContext) {
 		providerUsageContext{Input: &entity.ProviderAccountUsageContext{Purpose: "CONFIGURE", AgentRef: "agt_usage00001", ProviderDefinitionKey: "openai-codex", Model: "model-one", RuntimeProfileRef: "profile-one"}, Profile: providerUsageProfile{Ref: "profile-one", Provider: "openai-codex", Model: "model-one", RuntimeRevision: "revision-one", Enabled: true}, ActorAllowed: true, AuthorityDigest: "authority-one"}
 }
 
+// TestProviderUsageSeparatesSubmissionAndOperationalEvidence checks independent selection,
+// submission, capacity and scoped health dimensions across missing context, permissions,
+// credentials and invalid model observations.
+// TestProviderUsageSeparatesSubmissionAndOperationalEvidence проверяет независимые измерения
+// выбора, отправки, ёмкости и ограниченного состояния здоровья при отсутствии контекста, прав,
+// credential и при недопустимых наблюдениях модели.
 func TestProviderUsageSeparatesSubmissionAndOperationalEvidence(t *testing.T) {
 	for _, name := range []string{"verified reachability", "capacity exhausted", "no context", "model not selected", "empty verified catalog", "permission denied", "credential missing", "provider mismatch", "unsupported effort", "expired catalog", "authorization rejected"} {
 		t.Run(name, func(t *testing.T) {
@@ -93,6 +103,12 @@ func TestProviderUsageSeparatesSubmissionAndOperationalEvidence(t *testing.T) {
 	}
 }
 
+// TestProviderUsageLaunchPinsAndFreshCredentialBinding accepts exact saved launch pins, binds
+// context identity to credential changes and rejects pending observation or duplicate selected
+// pins.
+// TestProviderUsageLaunchPinsAndFreshCredentialBinding принимает точные сохранённые привязки
+// запуска, связывает идентичность контекста со сменой credential и отклоняет ожидающее наблюдение
+// либо дубли выбранных привязок.
 func TestProviderUsageLaunchPinsAndFreshCredentialBinding(t *testing.T) {
 	account, context := providerUsageFixture()
 	first, err := providerAccountUsage(account, context)
@@ -123,6 +139,12 @@ func TestProviderUsageLaunchPinsAndFreshCredentialBinding(t *testing.T) {
 	}
 }
 
+// TestProviderUsageLaunchSelectedModelPinSurvivesOtherCatalogChanges keeps an unchanged
+// selected-model capability usable across unrelated catalog changes while rejecting changed
+// capability or revoked account authority.
+// TestProviderUsageLaunchSelectedModelPinSurvivesOtherCatalogChanges сохраняет доступность
+// неизменной capability выбранной модели при посторонних изменениях каталога, но отклоняет
+// изменение этой capability либо отзыв аккаунта.
 func TestProviderUsageLaunchSelectedModelPinSurvivesOtherCatalogChanges(t *testing.T) {
 	account, context := providerUsageFixture()
 	first, err := providerAccountUsage(account, context)
@@ -150,6 +172,12 @@ func TestProviderUsageLaunchSelectedModelPinSurvivesOtherCatalogChanges(t *testi
 	}
 }
 
+// TestProviderUsageFreshHealthAndCandidateProfile keeps source identity stable across observation
+// time changes, binds candidate runtime revision and suppresses health evidence for pending,
+// failed or expired catalogs.
+// TestProviderUsageFreshHealthAndCandidateProfile сохраняет идентичность источника при изменении
+// времени наблюдения, привязывает ревизию runtime кандидата и скрывает подтверждение здоровья для
+// ожидающих, ошибочных и просроченных каталогов.
 func TestProviderUsageFreshHealthAndCandidateProfile(t *testing.T) {
 	account, context := providerUsageFixture()
 	first, err := providerAccountUsage(account, context)
@@ -180,6 +208,12 @@ func TestProviderUsageFreshHealthAndCandidateProfile(t *testing.T) {
 	}
 }
 
+// TestProviderUsageCursorRejectsChangedSourceAndExpiry accepts an unchanged source cursor and
+// rejects altered source identity or malformed tokens; this test does not advance time to exercise
+// expiry.
+// TestProviderUsageCursorRejectsChangedSourceAndExpiry принимает курсор неизменного источника и
+// отклоняет изменение его идентичности либо некорректный токен; этот тест не сдвигает время для
+// проверки срока действия.
 func TestProviderUsageCursorRejectsChangedSourceAndExpiry(t *testing.T) {
 	token := encodeProviderUsageCursor("source-one", time.Now().UTC(), "pacc_usage0001")
 	if _, _, err := decodeProviderUsageCursor("source-one", token); err != nil {

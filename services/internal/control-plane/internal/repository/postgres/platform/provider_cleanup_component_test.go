@@ -14,17 +14,34 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryProviderCleanupFixtureHasTerminalLease checks whether the fixture account already has a
+// completed runtime lease before creating one.
+// queryProviderCleanupFixtureHasTerminalLease проверяет наличие завершённой runtime lease у
+// тестового аккаунта перед созданием такой lease.
+//
 //go:embed testdata/sql/provider_cleanup_has_terminal_lease.sql
 var queryProviderCleanupFixtureHasTerminalLease string
 
+// queryProviderCleanupFixtureExhaustAttempts exhausts attempts of the claimed cleanup task to
+// exercise durable failure and explicit retry.
+// queryProviderCleanupFixtureExhaustAttempts исчерпывает попытки захваченной задачи очистки для
+// проверки устойчивой ошибки и явного повтора.
+//
 //go:embed testdata/sql/provider_cleanup_exhaust_attempts.sql
 var queryProviderCleanupFixtureExhaustAttempts string
 
+// queryProviderCleanupReplaceCompletionDescriptor attempts to overwrite a terminal cleanup
+// descriptor to verify database immutability.
+// queryProviderCleanupReplaceCompletionDescriptor пытается перезаписать дескриптор завершённой
+// задачи очистки для проверки неизменяемости в БД.
+//
 //go:embed testdata/sql/provider_cleanup_replace_completion_descriptor.sql
 var queryProviderCleanupReplaceCompletionDescriptor string
 
-// Отдельный запуск cleanup сценария создаёт собственный terminal lease через
-// настоящий lifecycle, не полагаясь на порядок других Bootstrap subtests.
+// ensureProviderCleanupTerminalLease creates and completes a real owner-side execution only when
+// the account lacks a terminal lease, avoiding subtest ordering dependencies.
+// ensureProviderCleanupTerminalLease создаёт и завершает исполнение через владельца состояния лишь
+// при отсутствии завершённой lease аккаунта, устраняя зависимость от порядка подтестов.
 func ensureProviderCleanupTerminalLease(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, accountID string) {
 	t.Helper()
 	var exists bool
@@ -54,8 +71,12 @@ func ensureProviderCleanupTerminalLease(t *testing.T, ctx context.Context, repos
 	claimAndCompleteRun(t, ctx, service, worker, launched.Run.Ref, "provider-cleanup-terminal", false)
 }
 
-// Credential leases остаются заняты первичным сценарием; отдельно доказываем,
-// что metadata receipt создаёт новую fenced cleanup attempt и не завершает её.
+// completeProviderAuthorizationCleanupFixture drives metadata and absence cleanup generations
+// using synthetic receipts; retries preserve the authorization attempt while metadata alone cannot
+// finish fencing.
+// completeProviderAuthorizationCleanupFixture проходит поколения очистки метаданных и отсутствия с
+// искусственными квитанциями; повторы сохраняют попытку авторизации, а одних метаданных
+// недостаточно для завершения fencing.
 func completeProviderAuthorizationCleanupFixture(t *testing.T, ctx context.Context, repository *Repository, accountRef string) {
 	t.Helper()
 	const owner = "provider-cleanup-component"
@@ -103,6 +124,12 @@ func completeProviderAuthorizationCleanupFixture(t *testing.T, ctx context.Conte
 	}
 }
 
+// testProviderDeletionTerminalReadback checks durable deletion, exhausted-attempt recovery,
+// late-claim rejection, produced-credential cleanup and fresh idempotent readback using synthetic
+// broker receipts, without external Secret deletion.
+// testProviderDeletionTerminalReadback проверяет устойчивое удаление, восстановление после
+// исчерпания попыток, отклонение устаревшего claim, очистку созданного credential и свежий
+// идемпотентный результат с искусственными квитанциями брокера, без внешнего удаления Secret.
 func testProviderDeletionTerminalReadback(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, actor value.Principal) {
 	t.Helper()
 	for _, credentialFirst := range []bool{true, false} {
@@ -244,6 +271,12 @@ WHERE convert_from(event.payload, 'UTF8')::jsonb->>'eventName' = 'PROVIDER_ACCOU
 	}
 }
 
+// testProviderProducedCompletionOrder checks both credential/authorization completion orders,
+// exact receipt replay and rejection of foreign, cyclic or mutable completion descriptors before
+// terminal deletion.
+// testProviderProducedCompletionOrder проверяет оба порядка завершения очистки credential и
+// авторизации, точный повтор квитанции и отклонение чужих, циклических либо изменяемых
+// дескрипторов перед окончательным удалением.
 func testProviderProducedCompletionOrder(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, actor value.Principal, credentialFirst bool) {
 	t.Helper()
 	key, uid := "authorization-first", "61000000-0000-4000-8000-000000000021"

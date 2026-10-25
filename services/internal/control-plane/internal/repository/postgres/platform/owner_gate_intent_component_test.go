@@ -16,12 +16,26 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// gateIntentSourceTurnQuery resolves the gate predecessor turn within the exact organization to
+// verify source attachment lineage.
+// gateIntentSourceTurnQuery разрешает turn предшественника подтверждения в точной организации для
+// проверки происхождения исходного набора вложений.
+//
 //go:embed testdata/sql/gate_intent_source_turn.sql
 var gateIntentSourceTurnQuery string
 
+// gateIntentActiveNodeQuery activates materialized agent nodes of the gate root to test stability
+// of historical terminal consequences.
+// gateIntentActiveNodeQuery активирует материализованные узлы агента корня подтверждения для
+// проверки устойчивости исторических последствий завершения.
+//
 //go:embed testdata/sql/gate_intent_active_node.sql
 var gateIntentActiveNodeQuery string
 
+// gateTestProjectID resolves the fixture project through principal scope and project.view
+// authorization inside a rolled-back transaction.
+// gateTestProjectID разрешает тестовый проект через область principal и проверку project.view в
+// откатываемой транзакции.
 func gateTestProjectID(t *testing.T, ctx context.Context, repository *Repository, owner value.Principal, ref string) string {
 	t.Helper()
 	principal, err := repository.ResolvePrincipal(ctx, owner)
@@ -44,6 +58,12 @@ func gateTestProjectID(t *testing.T, ctx context.Context, repository *Repository
 	return target.projectID
 }
 
+// testGateSourceAndHistoricalConsequences binds a finalized source attachment set to the exact
+// predecessor turn and checks ordinary historical terminal consequences remain stable after node
+// activation.
+// testGateSourceAndHistoricalConsequences связывает финализированный исходный набор вложений с
+// точным turn предшественника и проверяет неизменность исторических последствий обычного
+// подтверждения после активации узлов.
 func testGateSourceAndHistoricalConsequences(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, gate entity.OwnerGate) {
 	t.Helper()
 	artifact, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "gate-source-artifact"}, platformrepo.ArtifactUpload{ProjectRef: gate.ProjectRef, FileName: "gate-source.txt", MediaType: "text/plain", SizeBytes: 6, Reader: strings.NewReader("source")})
@@ -96,6 +116,11 @@ func testGateSourceAndHistoricalConsequences(t *testing.T, ctx context.Context, 
 	}
 }
 
+// testGateIntentReadBoundary rejects gate and receipt projections for revoked membership, foreign
+// tenant or signed-project mismatch while preserving authorized historical intent.
+// testGateIntentReadBoundary отклоняет проекции подтверждения и квитанции при отозванном участии,
+// чужом tenant либо несовпадении подписанного проекта, сохраняя разрешённое историческое
+// намерение.
 func testGateIntentReadBoundary(t *testing.T, ctx context.Context, repository *Repository, principal value.Principal, original entity.OwnerGate) {
 	t.Helper()
 	resolved, err := repository.ResolvePrincipal(ctx, principal)

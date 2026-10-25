@@ -18,6 +18,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testProviderUsageProjection checks PostgreSQL-backed single/list usage agreement, actor-bound
+// cursors, separate configure/launch permissions, revocation and hidden assistant boundaries using
+// seeded catalog observations.
+// testProviderUsageProjection проверяет согласованность единичной и списочной проекций
+// использования в PostgreSQL, курсоры с привязкой к actor, раздельные права настройки и запуска,
+// отзыв и границы скрытого ассистента на подготовленных наблюдениях каталога.
 func testProviderUsageProjection(t *testing.T, ctx context.Context, repository *Repository) {
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
 	service, err := platformservice.New(repository)
@@ -155,18 +161,43 @@ func testProviderUsageProjection(t *testing.T, ctx context.Context, repository *
 	}
 }
 
+// providerUsageLockAccountSQL locks an enabled authorized fixture account and returns its
+// organization to coordinate selection contention.
+// providerUsageLockAccountSQL блокирует включённый авторизованный тестовый аккаунт и возвращает
+// организацию для согласования конкурирующего выбора.
+//
 //go:embed testdata/provider_usage_lock_account.sql
 var providerUsageLockAccountSQL string
 
+// providerUsageDisableAccountSQL disables the locked fixture account and advances its version
+// before the waiting selector resumes.
+// providerUsageDisableAccountSQL отключает заблокированный тестовый аккаунт и увеличивает версию
+// до возобновления ожидающего выбора.
+//
 //go:embed testdata/provider_usage_disable_account.sql
 var providerUsageDisableAccountSQL string
 
+// providerUsageWaitingAccountSQL checks the exact reader/writer backend pair with pg_blocking_pids
+// instead of assuming a lock wait from elapsed time.
+// providerUsageWaitingAccountSQL проверяет точную пару backend читателя и писателя через
+// pg_blocking_pids, не выводя ожидание блокировки из прошедшего времени.
+//
 //go:embed testdata/provider_usage_waiting_account.sql
 var providerUsageWaitingAccountSQL string
 
+// providerUsageAuthorizeIsolatedAccountSQL binds a synthetic credential revision to the isolated
+// pending account without creating an external Secret.
+// providerUsageAuthorizeIsolatedAccountSQL связывает искусственную ревизию credential с
+// изолированным ожидающим аккаунтом без создания внешнего Secret.
+//
 //go:embed testdata/provider_usage_authorize_isolated_account.sql
 var providerUsageAuthorizeIsolatedAccountSQL string
 
+// testProviderSelectionAfterLockWait proves the selector actually waits for the fixture row lock,
+// then rejects the concurrently disabled account after commit and joins the reader before
+// connection release.
+// testProviderSelectionAfterLockWait доказывает ожидание блокировки строки, затем отклонение
+// одновременно отключённого аккаунта после commit; завершает читателя до освобождения соединения.
 func testProviderSelectionAfterLockWait(t *testing.T, parent context.Context, repository *Repository) {
 	owner := resolvedTestPrincipal(t, parent, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
 	service, err := platformservice.New(repository)
