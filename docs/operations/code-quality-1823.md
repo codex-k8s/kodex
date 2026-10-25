@@ -4,11 +4,71 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.409.0
+version: 1.410.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Контекст preview и история overlay: начало snapshot read — 25.10.2026
+
+На основе `f397b0c54cd324e513df69835ef0bb345f381f79` полностью прочитаны
+assistant_instructions.go(102 строки), prompt_preview_context.go(345) и
+config_overlay_history.go(172):24 прежних объявления. Все24 и новый
+beginScopedSnapshotRead получили предметные EN→RU комментарии. Прочитаны шесть
+относящихся SQL: agent hydration, preview agent/attachment items и три history
+queries. У effective_capabilities.go полностью прочитан затронутый
+GetAgentEffectiveCapabilities, у access.go — accessReadTransaction; это не новый
+полный аудит обоих файлов. У runtime_secrets.go прочитан GetRuntimeSecret для
+проверки двух исчезнувших сохранённых совпадений; сам файл не менялся.
+Повторно сверены применимые разделы GO-DOC-001/002/003/006, GUIDE-DOC-006 и
+GOV-DOC-003. Через Context7 resolve/query проверена /jackc/pgx/v5.10.0:
+Pool.BeginTx, TxOptions и обязательное завершение транзакции caller. Версия
+зависимости сохранена; новый внешний API не добавлен.
+
+Новый private helper объединяет resolveScope→ReadOnly RepeatableRead BeginTx
+в четырёх вызовах: history list, history get, prompt context и effective
+capabilities. Он сохраняет scope error и BeginTx→Unavailable, возвращает scope/tx
+и не принимает callback. Существующий accessReadTransaction не переиспользован:
+его access.view и default isolation отличаются. Helper остаётся внутри
+PostgreSQL adapter, поскольку возвращает private scope этого домена; новую общую
+runtime-библиотеку с service-specific authority не создаёт.
+
+| Путь / исход | Сохранённая граница |
+| --- | --- |
+| Вход каждого из четырёх readers | Прежний пятисекундный context и отдельные validation guards до resolveScope. Caller-specific zero results и scope errors сохранены |
+| Begin failure | Прежние ctx и точные TxOptions; Unavailable без открытого tx у caller. Helper не делает retry или альтернативное подключение |
+| Успешный begin | Непосредственный прежний deferred Rollback(ctx) принадлежит reader; helper не выдаёт permission, grant, lease или worker |
+| Overlay list/get | overlayHistoryScope→agent.view/project boundary; точные SQL/cursor/count/scan guards и commit остаются на месте. Чтение исторической revision не активирует её |
+| Effective capabilities | Прежние overlayHistoryScope, actor/runtime/workflow/catalog read и paging; прежний partial result вместе с error. Readiness/Grantable не превращаются в command authority |
+| Prompt context | Prospective назначается сервером; раздельные trusted viewer/execution scopes, workflow/agent pins, attachment eligibility и actor+snapshot digest остаются специализированными. Preview не создаёт Run/Turn |
+| Instructions draft | Только комментарии: bounds текста, original agent/name/version, отдельный pure hydrator/Selected и project-configuration delegation. Подготовка draft не публикует instructions |
+| Commit failure / cancel | Прежний caller commit/error mapping и deferred rollback с прежним context. Независимый cleanup context и новый retry не добавлены; успешный result до commit не выдаётся |
+| Mutation/terminal/retry/expiry | Эти readers не реализуют переходы графа. Create/claim/renew/complete/cancel/delete и owner gates не менялись, нового события нет; результат — прежний авторитетный read path |
+
+Четыре полных expected-AST/directive сравнения подтверждают только вынос и
+комментарии. Независимая AST-проверка относительно исходного SHA сопоставляет
+каждый прежний resolveScope/BeginTx блок с helper и проверяет ошибки, guards,
+полные хвосты query/access/defer/commit и exact caller bindings — PASS.
+Production SQL, contracts, зависимости, migrations и deploy inputs неизменны.
+Existing instruction/preview/workflow pure regressions входят в полный unit;
+реальный PostgreSQL, RLS/OCC, attachment content и browser E2E — NOT RUN/SKIP.
+
+Полный control-plane build и unit — PASS LOCAL (`checks410-final`),
+GOWORK=off/GOMAXPROCS=4/-p2;13 external fixture и2 admin/template keys исключены.
+17 analyzer unit и5 exact-ignore guards — PASS. После обновления registry17
+analyzer повторены — PASS; новые Go-тесты для простого forwarding не добавлялись.
+Первый assessment закрыто отклонил два устаревших retained decisions после
+исчезновения их exact windows; удалены только эти две записи, новых исключений
+нет. Итоговый assessment валиден:1788 raw,902 retained occurrences,886 unresolved,
+registry776. По сравнению с основанием исчезли четыре fragment/format/kind/path-pair
+keys, новых нет: две unresolved overlay/prompt/effective группы и две прежние
+retained overlay/runtime-secrets и prompt/runtime-secrets. Пороги и inventory
+исключения сохранены:6683 собственных source files,222 generated exclusions.
+
+Во всём Go21484 объявления:20035 EN→RU,1449 без описаний. В текущем PR159
+Go-файлов/1904 объявления, все1904 описаны. Общий объём #1823 остаётся открытым;
+PR — Draft. Секретные payload не читались, QA/main snapshot f2e64eb не менялся.
 
 ## Assistant edit: общая реконструкция workflow/schedule/environment — 25.10.2026
 

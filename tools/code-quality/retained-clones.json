@@ -5203,27 +5203,11 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/config_overlay_history.go",
-      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
-      "fragmentSHA256": "0972a78e5ad572f0a581bef615fcea02fb1cc32040601cd2db01e69786ca8a63",
-      "count": 1,
-      "reason": "Конец разных предметных guards и начало readonly repeatable-read metadata calls overlay revision и runtime secret совпадают лишь коротким resolveScope/BeginTx/error/defer. Далее следуют разные resource authorization, typed query/scan и commit error semantics. Callback transaction wrapper ради scaffold затруднит чтение точного scope и ошибок без удаления общего предметного алгоритма. Сохранена лишь эта точная пара путей/hash/count1 с runtime_secrets, не другое совпадение того же hash и не handlers целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/mvp_queries.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
       "fragmentSHA256": "f86daa7af8a254c16019e4f6faee33d3c3776546a2b6c0dcbfd9835855c449fe",
       "count": 1,
       "reason": "Окно соединяет query args tail и начало typed paginated scanners image recipe revisions и secret recovery work. Pagination различна (revision против deadline/ref), SQL/column order и entities разные; общая лишь rows Close/Next/append форма. Callback collector либо reflection не выражает общий предметный алгоритм и скроет проверяемые столбцы/continuation. Сохранена точная пара/hash/count1, не SQL/scanners или recovery authorization целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/prompt_preview_context.go",
-      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
-      "fragmentSHA256": "1898f4f1b65694ef36a2f3e0185e9348c7355977add1114a59b8c1b63cf675b6",
-      "count": 1,
-      "reason": "Хвост validation и открытие repeatable-read readonly транзакции prompt preview и secret metadata содержат одинаковый короткий resolveScope/BeginTx/error/defer. Permission/resource proof и последующие typed данные различны; полный запрос нельзя объединить без generic dispatcher. Новый helper секретных операций намеренно SERIALIZABLE и не используется для этих чтений. Сохраняется только точное окно путей/hash/count1, не read paths или security guards."
     },
     {
       "format": "go",

@@ -11,8 +11,17 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Черновик не публикуется планом помощника: публикация остается отдельным
-// переходом штатного жизненного цикла инструкций сотрудника.
+// hydrateAssistantInstructionDraft requires a project and only agentRef/instructions, bounding
+// trimmed instruction length to at least 20 and raw length to 65536 bytes. It reads the
+// non-system, nonarchived agent in an active tenant/project in the caller transaction and
+// delegates pure draft hydration. No rows is NotFound, other SQL failure is Unavailable. It
+// prepares a draft operation; publication remains a separate instruction lifecycle command.
+// hydrateAssistantInstructionDraft требует project и только agentRef/instructions, ограничивая
+// длину instructions минимумом 20 после обрезки пробелов и максимумом 65536 исходных байтов.
+// Читает несистемного неархивного агента активного tenant/project в транзакции вызывающего и
+// делегирует чистую подготовку draft. Отсутствие строки даёт NotFound, прочий SQL-отказ —
+// Unavailable. Готовит операцию черновика; публикация остаётся отдельной командой жизненного цикла
+// инструкций.
 func (repository *Repository) hydrateAssistantInstructionDraft(
 	ctx context.Context, tx pgx.Tx, actorScope scope, projectRef string,
 	operation entity.AssistantPlanOperation,
@@ -38,6 +47,16 @@ func (repository *Repository) hydrateAssistantInstructionDraft(
 	return hydrateAssistantInstructionDraftFields(ref, name, version, operation)
 }
 
+// hydrateAssistantInstructionDraftFields validates instruction text and a positive captured agent
+// version, then replaces action, target, parameters, Before, After and version pins and selects
+// the operation. Before contains only agent ref/name, After contains ref/text and is
+// shallow-copied from parameters. Input and unrelated operation fields are retained; this
+// transformation neither persists nor publishes instructions.
+// hydrateAssistantInstructionDraftFields проверяет текст инструкций и положительную captured agent
+// version, затем заменяет action, target, parameters, Before, After и version pins и выбирает
+// operation. Before содержит только ref/name агента, After — ref/text с поверхностной копией
+// parameters. Input и остальные поля operation сохраняются; преобразование не сохраняет и не
+// публикует инструкции.
 func hydrateAssistantInstructionDraftFields(ref, name string, version int64,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -57,6 +76,18 @@ func hydrateAssistantInstructionDraftFields(ref, name string, version int64,
 	return operation, nil
 }
 
+// rehydrateEditedAssistantInstructionDraft requires the original draft type/key, agent target/ref
+// and positive version plus the closed edited parameters with the same agent ref. It hydrates from
+// original target/name/version, rejects changed Before as Conflict and restores edited selection.
+// It retains the specialized instruction hydrator signature rather than adapting it to
+// workflow/schedule/environment editable-field reconstruction. This pure path creates no
+// authorization or publication.
+// rehydrateEditedAssistantInstructionDraft требует исходные draft type/key, agent target/ref и
+// положительную version, а также закрытые edited parameters с прежним agent ref. Выполняет
+// hydration из исходных target/name/version, отклоняет изменённый Before как Conflict и
+// восстанавливает edited selection. Сохраняет специализированную сигнатуру instruction hydrator,
+// не подгоняя её под реконструкцию editable fields workflow/schedule/environment. Чистый путь не
+// создаёт полномочий или публикации.
 func rehydrateEditedAssistantInstructionDraft(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if original.Type != "CREATE_INSTRUCTION_DRAFT" || original.Key != edited.Key ||
 		original.Target.Kind != "AGENT" || original.Target.Ref == "" ||
@@ -78,6 +109,17 @@ func rehydrateEditedAssistantInstructionDraft(original, edited entity.AssistantP
 	return hydrated, nil
 }
 
+// assistantInstructionDraftSnapshotMatches delegates project-managed configuration operations to
+// their specialized snapshot check. Otherwise it rereads the same tenant/project agent projection
+// and requires both version pins, name, exact ref/name Before, Parameters/After deep equality and
+// matching agent ref. SQL errors propagate unchanged here; equality is an optimistic snapshot
+// check, not authorization, instruction publication or a content-length validator.
+// assistantInstructionDraftSnapshotMatches передаёт project-managed configuration operations
+// специализированной проверке snapshot. Иначе повторно читает ту же tenant/project agent
+// projection и требует обе version pins, name, точный ref/name Before, глубокое равенство
+// Parameters/After и совпадающий agent ref. SQL-ошибки здесь передаются без изменения; равенство
+// является optimistic snapshot check, а не авторизацией, публикацией инструкций или проверкой
+// длины текста.
 func (repository *Repository) assistantInstructionDraftSnapshotMatches(
 	ctx context.Context, tx pgx.Tx, actorScope scope, projectRef string,
 	operation entity.AssistantPlanOperation,

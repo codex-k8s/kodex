@@ -18,15 +18,66 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryConfigOverlayHistoryList embeds the bounded descending revision/ref history query for one
+// organization/agent, limited to published or superseded rows with publication time. Text and
+// before-position predicates are SQL parameters; actor eligibility is checked by the surrounding
+// transaction.
+// queryConfigOverlayHistoryList встраивает запрос ограниченной истории одного organization/agent в
+// порядке убывания revision/ref только для опубликованных или замещённых строк со временем
+// публикации. Текст и позиция before передаются SQL-параметрами; доступ субъекта проверяется
+// окружающей транзакцией.
+//
 //go:embed sql/config_overlay_history_list.sql
 var queryConfigOverlayHistoryList string
 
+// queryConfigOverlayHistoryCount embeds the count under the same organization/agent,
+// published-history and text predicates as the list, without its page-position predicate. The
+// caller bounds the count to the exact JavaScript integer range.
+// queryConfigOverlayHistoryCount встраивает count с теми же organization/agent, published-history
+// и текстовыми условиями, что список, без условия позиции страницы. Вызывающий ограничивает count
+// точным целочисленным диапазоном JavaScript.
+//
 //go:embed sql/config_overlay_history_count.sql
 var queryConfigOverlayHistoryCount string
 
+// queryConfigOverlayHistoryGet embeds exact organization/agent/revision lookup of published or
+// superseded overlay content and diagnostics. It supplies both direct reads and cursor-position
+// resolution; it does not itself establish actor permission.
+// queryConfigOverlayHistoryGet встраивает поиск точных organization/agent/revision для
+// опубликованного либо замещённого overlay content и diagnostics. Обслуживает адресное чтение и
+// разрешение позиции cursor; сам не устанавливает право субъекта.
+//
 //go:embed sql/config_overlay_history_get.sql
 var queryConfigOverlayHistoryGet string
 
+// beginScopedSnapshotRead resolves the principal before opening a ReadOnly RepeatableRead
+// transaction, preserving scope errors and mapping BeginTx failure to Unavailable. Success
+// transfers the transaction to the caller, which must install rollback and perform resource
+// authorization, reads and commit. It neither requires access.view nor retries, commits, spawns
+// work or grants mutation authority; the caller context and deadline remain unchanged.
+// beginScopedSnapshotRead разрешает principal до открытия ReadOnly RepeatableRead транзакции,
+// сохраняя scope errors и отображая отказ BeginTx в Unavailable. При успехе передаёт транзакцию
+// вызывающему, который обязан установить rollback и выполнить resource authorization, чтение и
+// commit. Не требует access.view, не повторяет, не фиксирует, не запускает работу и не выдаёт
+// mutation authority; context и deadline вызывающего сохраняются.
+func (repository *Repository) beginScopedSnapshotRead(ctx context.Context, principal value.Principal) (scope, pgx.Tx, error) {
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return scope{}, nil, err
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return scope{}, nil, errs.ErrUnavailable
+	}
+	return current, tx, nil
+}
+
+// validOverlayHistoryRef accepts a nonempty ref of at most 96 bytes containing only ASCII letters,
+// digits, underscore or hyphen. It checks locator syntax only and does not resolve identity,
+// ownership or a revision prefix.
+// validOverlayHistoryRef принимает непустой ref длиной до 96 байтов только из ASCII-букв, цифр,
+// подчёркивания или дефиса. Проверяет лишь синтаксис locator, не разрешая identity, ownership или
+// префикс revision.
 func validOverlayHistoryRef(ref string) bool {
 	if ref == "" || len(ref) > 96 {
 		return false
@@ -39,6 +90,14 @@ func validOverlayHistoryRef(ref string) bool {
 	return true
 }
 
+// overlayHistoryScope resolves the agent runtime-configuration target for agent.view, rejects an
+// authority-project mismatch as Forbidden and delegates exact resource access in the supplied
+// transaction. Resolution and access errors retain their existing mapping; the helper does not
+// open or finish a transaction.
+// overlayHistoryScope разрешает agent runtime-configuration target для agent.view, отклоняет
+// несовпадение authority-project как Forbidden и делегирует проверку точного resource access в
+// переданной транзакции. Ошибки разрешения и доступа сохраняют прежнее отображение; helper не
+// открывает и не завершает транзакцию.
 func (repository *Repository) overlayHistoryScope(ctx context.Context, tx pgx.Tx, current scope, agentRef string) error {
 	permission, target, err := repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.view", agentRef)
 	if err != nil {
@@ -50,6 +109,17 @@ func (repository *Repository) overlayHistoryScope(ctx context.Context, tx pgx.Tx
 	return repository.requireAccess(ctx, tx, current, permission, target)
 }
 
+// ListConfigOverlayRevisions validates the agent ref and bounded UTF-8 search, then reads
+// authorized history/count in one five-second ReadOnly RepeatableRead snapshot. It binds the
+// cursor to scope/filter, resolves its exact revision position, validates each stored overlay and
+// returns at most 20 rows plus a next cursor. Unknown cursor is Invalid, backend/commit failure is
+// Unavailable; rollback remains deferred and no partial page is successful.
+// ListConfigOverlayRevisions проверяет agent ref и ограниченный UTF-8 search, затем читает
+// разрешённые history/count в одном ReadOnly RepeatableRead snapshot с бюджетом пять секунд.
+// Связывает cursor со scope/filter, разрешает точную revision position, проверяет каждый
+// сохранённый overlay и возвращает до 20 строк с next cursor. Неизвестный cursor даёт Invalid,
+// backend/commit failure — Unavailable; rollback остаётся отложенным, частичная страница не
+// становится успешной.
 func (repository *Repository) ListConfigOverlayRevisions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.ConfigOverlayVersion, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -57,13 +127,9 @@ func (repository *Repository) ListConfigOverlayRevisions(ctx context.Context, pr
 	if !validOverlayHistoryRef(filter.ResourceRef) || !utf8.ValidString(filter.Query) || strings.ContainsRune(filter.Query, '\x00') || len([]rune(filter.Query)) > 200 {
 		return nil, 0, "", errs.ErrInvalid
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return nil, 0, "", err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := repository.overlayHistoryScope(ctx, tx, current, filter.ResourceRef); err != nil {
@@ -121,19 +187,25 @@ func (repository *Repository) ListConfigOverlayRevisions(ctx context.Context, pr
 	return items, total, next, nil
 }
 
+// GetConfigOverlayRevision requires syntactically bounded agent/revision refs and the cov_
+// revision prefix, resolves current scope and agent.view, then scans one published history row in
+// a five-second ReadOnly RepeatableRead transaction. Success requires commit; errors return an
+// empty overlay and preserve the existing resource/backend distinctions. It does not activate or
+// restore the historical configuration.
+// GetConfigOverlayRevision требует синтаксически ограниченные agent/revision refs и префикс
+// revision cov_, разрешает текущий scope и agent.view, затем читает одну опубликованную history
+// row в ReadOnly RepeatableRead транзакции с бюджетом пять секунд. Успех требует commit; ошибки
+// возвращают пустой overlay с прежним различением resource/backend failures. Историческую
+// конфигурацию не активирует и не восстанавливает.
 func (repository *Repository) GetConfigOverlayRevision(ctx context.Context, principal value.Principal, agentRef, revisionRef string) (entity.ConfigOverlayVersion, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if !validOverlayHistoryRef(agentRef) || !validOverlayHistoryRef(revisionRef) || !strings.HasPrefix(revisionRef, "cov_") {
 		return entity.ConfigOverlayVersion{}, errs.ErrInvalid
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.ConfigOverlayVersion{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.ConfigOverlayVersion{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := repository.overlayHistoryScope(ctx, tx, current, agentRef); err != nil {
@@ -149,6 +221,17 @@ func (repository *Repository) GetConfigOverlayRevision(ctx context.Context, prin
 	return item, nil
 }
 
+// scanConfigOverlayHistory scans the stored overlay and metadata, maps no rows to NotFound and
+// other scan failures to Unavailable, sets Version from Revision, then validates content parsing,
+// exact SHA-256, safe positive revision, size, published state/time and strict diagnostic
+// decoding. Corrupt content returns an empty value with Unavailable; early scan errors may retain
+// partially scanned fields alongside the error, which callers must discard.
+// scanConfigOverlayHistory читает сохранённый overlay и metadata, отображает отсутствие строки в
+// NotFound, прочий отказ scan — в Unavailable, назначает Version из Revision, затем проверяет
+// parse content, точный SHA-256, безопасную положительную revision, размер, published state/time и
+// строгий decode diagnostics. Повреждённый content возвращает пустое значение с Unavailable;
+// ранние scan errors могут содержать частично прочитанные поля вместе с ошибкой, которые
+// вызывающий обязан отбросить.
 func scanConfigOverlayHistory(row rowScanner) (entity.ConfigOverlayVersion, error) {
 	var item entity.ConfigOverlayVersion
 	var messages, diagnostics []byte

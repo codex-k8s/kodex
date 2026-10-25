@@ -108,13 +108,9 @@ func (repository *Repository) GetAgentEffectiveCapabilities(ctx context.Context,
 	if !validOverlayHistoryRef(agentRef) || (workflowRef == "") != (stepKey == "") || workflowRef != "" && (!validOverlayHistoryRef(workflowRef) || len(stepKey) > 96 || !utf8.ValidString(stepKey) || strings.IndexFunc(stepKey, unicode.IsControl) >= 0) || !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, '\x00') || len(filter.Page.Token) > 2048 {
 		return entity.AgentEffectiveCapabilities{}, errs.ErrInvalid
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.AgentEffectiveCapabilities{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.AgentEffectiveCapabilities{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := repository.overlayHistoryScope(ctx, tx, current, agentRef); err != nil {
