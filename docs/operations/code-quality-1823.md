@@ -4,11 +4,63 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.454.0
+version: 1.455.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий gRPC principal и ответ RoleImageService — 25.10.2026
+
+Все20 RoleImageServer RPC используют roleImageResponse и общий с
+queryResponse principalResponse: сначала principal точного full method,
+затем один typed callback и прежний transportError. RoleImagePrincipal
+сохранён отдельным hook; его текущая реализация напрямую вызывает principal.
+Ошибка resolver возвращается без повторного mapping, callback не выполняется.
+Ошибка callback отбрасывает partial response; успешный nil сохраняется.
+Два Manage response используют чистый castRoleImageManagement, сохраняя
+порядок и nil presence необязательных build/artifact.
+
+Project и organization по-прежнему вызывают разные List/Get/Manage methods;
+project/role pins не добавляются в organization input. Claim, renew, progress,
+complete/fail build, admission record/fail/expiry и promotion claim/authorize/
+complete сохраняют точные request bindings, leases/claims, версии, attempt,
+fence/authority, evidence/manifest/policy digests и native domain calls.
+Транспорт не назначает authority и не выполняет переходы самостоятельно.
+Обратная AST-проверка восстанавливает два полных исходных файла относительно
+e575df121dd1ce8444fe509be789d50bd4a8d0e7:20 auth guards и20 error sites,
+оба Manage projections, все остальные функции, comments/directives.
+Проверяются actual body/signature общего механизма, fixed resolver bindings,
+layout management view; parser errors закрыто отклоняются. Principal и
+transportError в server.go побайтно прежние. Это source equivalence,
+не живая проверка worker lease/evidence lifecycle.
+
+Новые unit-сценарии проверяют9 resolver/callback outcomes и отсутствие
+доменного вызова для20 настоящих RPC без principal. Nil receiver выявляет
+преждевременный доступ к service; точный порядок inputs дополнительно доказан
+обратной source-проверкой. Весь control-plane: build — PASS LOCAL (5,83с),
+unit с count1 — PASS LOCAL (19,92с), при отключённом workspace и GOMAXPROCS4;
+SHA256 четырёх изменённых Go files до/после совпадают. Анализатор:17 unit
+проверок — PASS LOCAL. Новые7 declarations имеют предметные EN→RU comments.
+
+После выноса raw groups1616→1619: исчезли11 ключей/12 окон, возникли14
+ключей/15 окон. Счётчик raw не выдаётся за сокращение. Общий алгоритм
+реально вынесен, а новые окна содержат разные typed RPC/domain bindings и
+пересечения соседних деклараций. Полные peer functions и новые окна
+прочитаны. Удалены10 устаревших registry entries (11 occurrences);878 прежних
+entries сохранены неизменными. Добавлены14 адресных entries (одно count2),
+итого892 entries/1023 retained occurrences/596 unresolved против597.
+28 count/hash подмен и10 возвратов устаревших решений отклоняются actual
+assessor. Порог, нормализация и222 generated exclusions не расширялись;
+6715 sources включают оба новых файла. Все5 стадий отчёта — PASS LOCAL;
+21526/21526 собственных Go declarations имеют EN→RU descriptions.
+
+Context7 resolve Go снова вернул Invalid API key; ключи не менялись.
+Проверены официальные Go Spec Calls/Function literals и существующие
+principal/transportError/domain input sources. PWA не менялась после
+полных проверок dbb3837. Browser/full E2E, PostgreSQL component, live worker,
+deploy/apply и независимая QA текущего дерева — NOT RUN. Остальные596 групп
+остаются в scope #1823; продолжение PR остаётся Draft.
 
 ## Общие примитивы подготовки grant без объединения владельцев — 25.10.2026
 

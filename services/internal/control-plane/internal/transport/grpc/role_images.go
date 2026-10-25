@@ -342,17 +342,15 @@ func roleImageAction(action controlplanev1.RoleImageRecipeAction) string {
 // ListRoleEnvironments разрешает principal точного RPC, запрашивает доменное представление каталога и
 // сохраняет порядок окружений в protobuf.
 func (server *RoleImageServer) ListRoleEnvironments(ctx context.Context, _ *controlplanev1.ListRoleEnvironmentsRequest) (*controlplanev1.ListRoleEnvironmentsResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ListRoleEnvironments_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, err := server.service.ListEnvironments(ctx, p)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListRoleEnvironmentsResponse{}
-	response.Environments = castResponseItems(items, castRoleEnvironment)
-	return response, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ListRoleEnvironments_FullMethodName, func(p value.Principal) (*controlplanev1.ListRoleEnvironmentsResponse, error) {
+		items, err := server.service.ListEnvironments(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListRoleEnvironmentsResponse{}
+		response.Environments = castResponseItems(items, castRoleEnvironment)
+		return response, nil
+	})
 }
 
 // ListRoleImageRecipes resolves the exact project-list principal and forwards
@@ -360,19 +358,17 @@ func (server *RoleImageServer) ListRoleEnvironments(ctx context.Context, _ *cont
 // ListRoleImageRecipes разрешает principal точного проектного списка и передаёт домену фильтры
 // проекта, роли, запроса, состояния и страницы до преобразования рецептов, курсора и количества.
 func (server *RoleImageServer) ListRoleImageRecipes(ctx context.Context, request *controlplanev1.ListRoleImageRecipesRequest) (*controlplanev1.ListRoleImageRecipesResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ListRoleImageRecipes_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, nextPage, total, err := server.service.List(ctx, p, roleimagerepository.Filter{
-		ProjectRef: request.GetProjectRef(), RoleDefinitionRef: request.GetRoleDefinitionRef(), Page: page(request.GetPage()), Query: request.GetQuery(), State: request.GetState(),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ListRoleImageRecipes_FullMethodName, func(p value.Principal) (*controlplanev1.ListRoleImageRecipesResponse, error) {
+		items, nextPage, total, err := server.service.List(ctx, p, roleimagerepository.Filter{
+			ProjectRef: request.GetProjectRef(), RoleDefinitionRef: request.GetRoleDefinitionRef(), Page: page(request.GetPage()), Query: request.GetQuery(), State: request.GetState(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}, Total: total}
+		response.Recipes = castResponseItems(items, castRoleImageRecipe)
+		return response, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}, Total: total}
-	response.Recipes = castResponseItems(items, castRoleImageRecipe)
-	return response, nil
 }
 
 // GetRoleImageRecipe keeps the exact project-read principal and domain Get call, then maps the already
@@ -380,19 +376,17 @@ func (server *RoleImageServer) ListRoleImageRecipes(ctx context.Context, request
 // GetRoleImageRecipe сохраняет principal точного проектного чтения и доменный Get, затем преобразует
 // уже разрешённые данные в проектный protobuf-ответ.
 func (server *RoleImageServer) GetRoleImageRecipe(ctx context.Context, request *controlplanev1.GetRoleImageRecipeRequest) (*controlplanev1.GetRoleImageRecipeResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_GetRoleImageRecipe_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	detail, err := server.service.Get(ctx, p, request.GetRecipeRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := castRoleImageRecipeDetail(detail)
-	return &controlplanev1.GetRoleImageRecipeResponse{
-		Recipe: response.Recipe, AdmissionFailure: response.AdmissionFailure,
-		Builds: response.Builds, ActiveArtifact: response.ActiveArtifact, PromotionCandidate: response.PromotionCandidate,
-	}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_GetRoleImageRecipe_FullMethodName, func(p value.Principal) (*controlplanev1.GetRoleImageRecipeResponse, error) {
+		detail, err := server.service.Get(ctx, p, request.GetRecipeRef())
+		if err != nil {
+			return nil, err
+		}
+		response := castRoleImageRecipeDetail(detail)
+		return &controlplanev1.GetRoleImageRecipeResponse{
+			Recipe: response.Recipe, AdmissionFailure: response.AdmissionFailure,
+			Builds: response.Builds, ActiveArtifact: response.ActiveArtifact, PromotionCandidate: response.PromotionCandidate,
+		}, nil
+	})
 }
 
 // ManageRoleImageRecipe passes the exact project-management principal and typed
@@ -402,27 +396,19 @@ func (server *RoleImageServer) GetRoleImageRecipe(ctx context.Context, request *
 // изменение, действие и выбор, возвращая необязательные сборку, артефакт и признак повтора без
 // универсальных изменений состояния силами транспорта.
 func (server *RoleImageServer) ManageRoleImageRecipe(ctx context.Context, request *controlplanev1.ManageRoleImageRecipeRequest) (*controlplanev1.ManageRoleImageRecipeResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ManageRoleImageRecipe_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.Manage(ctx, roleimagerepository.ManageInput{
-		Principal: p, Mutation: mutation(request.GetMutation()), Action: roleImageAction(request.GetAction()),
-		RecipeRef: request.GetRecipeRef(), ProjectRef: request.GetProjectRef(), BuildRef: request.GetBuildRef(),
-		RoleDefinitionRef: request.GetRoleDefinitionRef(), Name: request.GetName(),
-		Environment: domainRoleEnvironmentSelection(request.GetEnvironment()),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ManageRoleImageRecipe_FullMethodName, func(p value.Principal) (*controlplanev1.ManageRoleImageRecipeResponse, error) {
+		result, err := server.service.Manage(ctx, roleimagerepository.ManageInput{
+			Principal: p, Mutation: mutation(request.GetMutation()), Action: roleImageAction(request.GetAction()),
+			RecipeRef: request.GetRecipeRef(), ProjectRef: request.GetProjectRef(), BuildRef: request.GetBuildRef(),
+			RoleDefinitionRef: request.GetRoleDefinitionRef(), Name: request.GetName(),
+			Environment: domainRoleEnvironmentSelection(request.GetEnvironment()),
+		})
+		if err != nil {
+			return nil, err
+		}
+		response := castRoleImageManagement(result)
+		return &controlplanev1.ManageRoleImageRecipeResponse{Recipe: response.Recipe, Reused: response.Reused, ImageBuild: response.ImageBuild, ImageArtifact: response.ImageArtifact}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ManageRoleImageRecipeResponse{Recipe: castRoleImageRecipe(result.Recipe), Reused: result.Reused}
-	if result.Build != nil {
-		response.ImageBuild = castImageBuild(*result.Build)
-	}
-	if result.Artifact != nil {
-		response.ImageArtifact = castImageArtifact(*result.Artifact)
-	}
-	return response, nil
 }
 
 // ClaimImageBuild uses the exact worker operation principal and idempotency key, returning only the
@@ -430,19 +416,17 @@ func (server *RoleImageServer) ManageRoleImageRecipe(ctx context.Context, reques
 // ClaimImageBuild использует principal точной операции worker и ключ идемпотентности, возвращая лишь
 // захваченные доменом сборку, ввод, токен, fence, поколение полномочий и срок.
 func (server *RoleImageServer) ClaimImageBuild(ctx context.Context, request *controlplanev1.ClaimImageBuildRequest) (*controlplanev1.ClaimImageBuildResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ClaimImageBuild_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	claim, err := server.service.ClaimBuild(ctx, p, request.GetIdempotencyKey())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.ClaimImageBuildResponse{
-		ImageBuild: castImageBuild(claim.Build), Input: castRoleImageBuildInput(claim.Input),
-		LeaseToken: claim.LeaseToken, Fence: claim.Fence, AuthorityGeneration: claim.AuthorityGeneration,
-		LeaseExpiresAt: timestamp(claim.LeaseExpiresAt),
-	}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ClaimImageBuild_FullMethodName, func(p value.Principal) (*controlplanev1.ClaimImageBuildResponse, error) {
+		claim, err := server.service.ClaimBuild(ctx, p, request.GetIdempotencyKey())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.ClaimImageBuildResponse{
+			ImageBuild: castImageBuild(claim.Build), Input: castRoleImageBuildInput(claim.Input),
+			LeaseToken: claim.LeaseToken, Fence: claim.Fence, AuthorityGeneration: claim.AuthorityGeneration,
+			LeaseExpiresAt: timestamp(claim.LeaseExpiresAt),
+		}, nil
+	})
 }
 
 // RenewImageBuild submits the exact resolved-principal/build/version/attempt/fence/token tuple to the
@@ -450,19 +434,17 @@ func (server *RoleImageServer) ClaimImageBuild(ctx context.Context, request *con
 // RenewImageBuild передаёт домену точный набор разрешённого principal, сборки, версии, попытки, fence
 // и токена и переносит результат продления; поля запроса не выпускают lease в транспорте.
 func (server *RoleImageServer) RenewImageBuild(ctx context.Context, request *controlplanev1.RenewImageBuildRequest) (*controlplanev1.RenewImageBuildResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_RenewImageBuild_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	claim, err := server.service.RenewBuild(ctx, roleImageLeaseInput(p, request.GetIdempotencyKey(),
-		request.GetImageBuildRef(), request.GetLeaseToken(), request.GetExpectedVersion(), request.GetExpectedFence(), request.GetExpectedAttempt()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.RenewImageBuildResponse{
-		ImageBuild: castImageBuild(claim.Build), LeaseToken: claim.LeaseToken,
-		LeaseExpiresAt: timestamp(claim.LeaseExpiresAt),
-	}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_RenewImageBuild_FullMethodName, func(p value.Principal) (*controlplanev1.RenewImageBuildResponse, error) {
+		claim, err := server.service.RenewBuild(ctx, roleImageLeaseInput(p, request.GetIdempotencyKey(),
+			request.GetImageBuildRef(), request.GetLeaseToken(), request.GetExpectedVersion(), request.GetExpectedFence(), request.GetExpectedAttempt()))
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.RenewImageBuildResponse{
+			ImageBuild: castImageBuild(claim.Build), LeaseToken: claim.LeaseToken,
+			LeaseExpiresAt: timestamp(claim.LeaseExpiresAt),
+		}, nil
+	})
 }
 
 // ReportImageBuildProgress combines the verified RPC principal and exact lease tuple with
@@ -470,21 +452,19 @@ func (server *RoleImageServer) RenewImageBuild(ctx context.Context, request *con
 // ReportImageBuildProgress соединяет проверенный principal RPC и точный набор lease с этапом и
 // прогрессом, оставляя допустимость этапа, конкуренцию и сохранение домену.
 func (server *RoleImageServer) ReportImageBuildProgress(ctx context.Context, request *controlplanev1.ReportImageBuildProgressRequest) (*controlplanev1.ReportImageBuildProgressResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ReportImageBuildProgress_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	input := roleimagerepository.BuildProgressInput{
-		BuildLeaseInput: roleImageLeaseInput(p, request.GetIdempotencyKey(), request.GetImageBuildRef(),
-			request.GetLeaseToken(), request.GetExpectedVersion(), request.GetExpectedFence(), request.GetExpectedAttempt()),
-		Stage:           strings.TrimPrefix(request.GetStage().String(), "IMAGE_BUILD_STAGE_"),
-		ProgressPercent: request.GetProgressPercent(),
-	}
-	build, err := server.service.ReportBuildProgress(ctx, input)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.ReportImageBuildProgressResponse{ImageBuild: castImageBuild(build)}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ReportImageBuildProgress_FullMethodName, func(p value.Principal) (*controlplanev1.ReportImageBuildProgressResponse, error) {
+		input := roleimagerepository.BuildProgressInput{
+			BuildLeaseInput: roleImageLeaseInput(p, request.GetIdempotencyKey(), request.GetImageBuildRef(),
+				request.GetLeaseToken(), request.GetExpectedVersion(), request.GetExpectedFence(), request.GetExpectedAttempt()),
+			Stage:           strings.TrimPrefix(request.GetStage().String(), "IMAGE_BUILD_STAGE_"),
+			ProgressPercent: request.GetProgressPercent(),
+		}
+		build, err := server.service.ReportBuildProgress(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.ReportImageBuildProgressResponse{ImageBuild: castImageBuild(build)}, nil
+	})
 }
 
 // CompleteImageBuild forwards exact lease and staging/manifest/provenance/immutable-build pins to the
@@ -494,20 +474,18 @@ func (server *RoleImageServer) ReportImageBuildProgress(ctx context.Context, req
 // сборки команде завершения и переносит сборку с артефактом; завершение сборки само по себе не допуск
 // и не продвижение.
 func (server *RoleImageServer) CompleteImageBuild(ctx context.Context, request *controlplanev1.CompleteImageBuildRequest) (*controlplanev1.CompleteImageBuildResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_CompleteImageBuild_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	build, artifact, err := server.service.CompleteBuild(ctx, roleimagerepository.BuildCompletionInput{
-		BuildLeaseInput: roleImageLeaseInput(p, request.GetIdempotencyKey(), request.GetImageBuildRef(),
-			request.GetLeaseToken(), request.GetExpectedVersion(), request.GetExpectedFence(), request.GetExpectedAttempt()),
-		StagingReference: request.GetStagingReference(), ManifestDigest: request.GetManifestDigest(),
-		ProvenanceSHA256: request.GetProvenanceSha256(), ImmutableBuildSHA256: request.GetImmutableBuildSha256(),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_CompleteImageBuild_FullMethodName, func(p value.Principal) (*controlplanev1.CompleteImageBuildResponse, error) {
+		build, artifact, err := server.service.CompleteBuild(ctx, roleimagerepository.BuildCompletionInput{
+			BuildLeaseInput: roleImageLeaseInput(p, request.GetIdempotencyKey(), request.GetImageBuildRef(),
+				request.GetLeaseToken(), request.GetExpectedVersion(), request.GetExpectedFence(), request.GetExpectedAttempt()),
+			StagingReference: request.GetStagingReference(), ManifestDigest: request.GetManifestDigest(),
+			ProvenanceSHA256: request.GetProvenanceSha256(), ImmutableBuildSHA256: request.GetImmutableBuildSha256(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.CompleteImageBuildResponse{ImageBuild: castImageBuild(build), ImageArtifact: castImageArtifact(artifact)}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.CompleteImageBuildResponse{ImageBuild: castImageBuild(build), ImageArtifact: castImageArtifact(artifact)}, nil
 }
 
 // FailImageBuild binds the failure request to the resolved principal and exact build lease before
@@ -515,19 +493,17 @@ func (server *RoleImageServer) CompleteImageBuild(ctx context.Context, request *
 // FailImageBuild связывает запрос ошибки с разрешённым principal и точным lease сборки до передачи
 // безопасных кодов и диагностики доменной команде отказа.
 func (server *RoleImageServer) FailImageBuild(ctx context.Context, request *controlplanev1.FailImageBuildRequest) (*controlplanev1.FailImageBuildResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_FailImageBuild_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	build, err := server.service.FailBuild(ctx, roleimagerepository.BuildFailureInput{
-		BuildLeaseInput: roleImageLeaseInput(p, request.GetIdempotencyKey(), request.GetImageBuildRef(),
-			request.GetLeaseToken(), request.GetExpectedVersion(), request.GetExpectedFence(), request.GetExpectedAttempt()),
-		ErrorCode: request.GetErrorCode(), DiagnosticCode: request.GetDiagnosticCode(), DiagnosticSummary: request.GetDiagnosticSummary(),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_FailImageBuild_FullMethodName, func(p value.Principal) (*controlplanev1.FailImageBuildResponse, error) {
+		build, err := server.service.FailBuild(ctx, roleimagerepository.BuildFailureInput{
+			BuildLeaseInput: roleImageLeaseInput(p, request.GetIdempotencyKey(), request.GetImageBuildRef(),
+				request.GetLeaseToken(), request.GetExpectedVersion(), request.GetExpectedFence(), request.GetExpectedAttempt()),
+			ErrorCode: request.GetErrorCode(), DiagnosticCode: request.GetDiagnosticCode(), DiagnosticSummary: request.GetDiagnosticSummary(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.FailImageBuildResponse{ImageBuild: castImageBuild(build)}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.FailImageBuildResponse{ImageBuild: castImageBuild(build)}, nil
 }
 
 // ClaimImageAdmission maps the domain-issued artifact claim, exact attempt, fence/authority
@@ -535,23 +511,21 @@ func (server *RoleImageServer) FailImageBuild(ctx context.Context, request *cont
 // ClaimImageAdmission переносит выданные доменом захват артефакта, точную попытку, fence, поколение
 // полномочий, привязки риска и исходных свидетельств и срок без принятия владения из запроса.
 func (server *RoleImageServer) ClaimImageAdmission(ctx context.Context, request *controlplanev1.ClaimImageAdmissionRequest) (*controlplanev1.ClaimImageAdmissionResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ClaimImageAdmission_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	claim, err := server.service.ClaimAdmission(ctx, p, request.GetIdempotencyKey())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.ClaimImageAdmissionResponse{
-		ImageArtifact: castImageArtifact(claim.Artifact), ClaimToken: claim.ClaimToken,
-		Fence: claim.Fence, AuthorityGeneration: claim.AuthorityGeneration,
-		ClaimExpiresAt:      timestamp(claim.ClaimExpiresAt),
-		AdmissionAttemptRef: claim.AdmissionAttemptRef, AdmissionAttempt: claim.AdmissionAttempt,
-		RiskAcceptanceJson: claim.RiskAcceptanceJSON, RiskAcceptanceSha256: claim.RiskAcceptanceSHA256,
-		SourceAdmissionReceiptSha256: claim.SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest: claim.SourceEvidenceManifestDigest,
-		SourceAdmissionRevision: claim.SourceAdmissionRevision,
-	}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ClaimImageAdmission_FullMethodName, func(p value.Principal) (*controlplanev1.ClaimImageAdmissionResponse, error) {
+		claim, err := server.service.ClaimAdmission(ctx, p, request.GetIdempotencyKey())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.ClaimImageAdmissionResponse{
+			ImageArtifact: castImageArtifact(claim.Artifact), ClaimToken: claim.ClaimToken,
+			Fence: claim.Fence, AuthorityGeneration: claim.AuthorityGeneration,
+			ClaimExpiresAt:      timestamp(claim.ClaimExpiresAt),
+			AdmissionAttemptRef: claim.AdmissionAttemptRef, AdmissionAttempt: claim.AdmissionAttempt,
+			RiskAcceptanceJson: claim.RiskAcceptanceJSON, RiskAcceptanceSha256: claim.RiskAcceptanceSHA256,
+			SourceAdmissionReceiptSha256: claim.SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest: claim.SourceEvidenceManifestDigest,
+			SourceAdmissionRevision: claim.SourceAdmissionRevision,
+		}, nil
+	})
 }
 
 // GetImageSupplyWorkAvailability resolves its exact operation principal and projects the domain's
@@ -559,18 +533,16 @@ func (server *RoleImageServer) ClaimImageAdmission(ctx context.Context, request 
 // GetImageSupplyWorkAvailability разрешает principal точной операции и переносит доменные признаки
 // доступности допуска и продвижения; транспортный метод не выдаёт claim token.
 func (server *RoleImageServer) GetImageSupplyWorkAvailability(ctx context.Context, _ *controlplanev1.GetImageSupplyWorkAvailabilityRequest) (*controlplanev1.GetImageSupplyWorkAvailabilityResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	availability, err := server.service.GetSupplyWorkAvailability(ctx, p)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetImageSupplyWorkAvailabilityResponse{
-		AdmissionAvailable: availability.AdmissionAvailable,
-		PromotionAvailable: availability.PromotionAvailable,
-	}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName, func(p value.Principal) (*controlplanev1.GetImageSupplyWorkAvailabilityResponse, error) {
+		availability, err := server.service.GetSupplyWorkAvailability(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetImageSupplyWorkAvailabilityResponse{
+			AdmissionAvailable: availability.AdmissionAvailable,
+			PromotionAvailable: availability.PromotionAvailable,
+		}, nil
+	})
 }
 
 // RecordImageAdmission forwards the exact principal/claim/version/fence/attempt and immutable
@@ -580,29 +552,27 @@ func (server *RoleImageServer) GetImageSupplyWorkAvailability(ctx context.Contex
 // привязки свидетельств, политики, инструментов, уязвимостей, риска и подписи специализированной
 // доменной команде; транспортное преобразование само свидетельства не принимает.
 func (server *RoleImageServer) RecordImageAdmission(ctx context.Context, request *controlplanev1.RecordImageAdmissionRequest) (*controlplanev1.RecordImageAdmissionResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_RecordImageAdmission_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	artifact, err := server.service.RecordAdmission(ctx, roleimagerepository.AdmissionRecordInput{
-		ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(),
-		VulnerabilityReportJSON: request.GetVulnerabilityReportJson(), VulnerabilityReportProjectionSHA256: request.GetVulnerabilityReportProjectionSha256(), RiskAcceptanceSHA256: request.GetRiskAcceptanceSha256(),
-		Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
-		ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
-		ClaimToken: request.GetClaimToken(), ManifestDigest: request.GetManifestDigest(),
-		ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(),
-		SBOMSHA256: request.GetSbomSha256(), VulnerabilityEvidenceSHA256: request.GetVulnerabilityEvidenceSha256(),
-		PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(),
-		Verdict:           strings.TrimPrefix(request.GetVerdict().String(), "IMAGE_ADMISSION_VERDICT_"),
-		SignatureIdentity: request.GetSignatureIdentity(), SignatureSHA256: request.GetSignatureSha256(),
-		AdmissionReceiptSHA256:            request.GetAdmissionReceiptSha256(),
-		AdmissionReceiptOCIManifestDigest: request.GetAdmissionReceiptOciManifestDigest(),
-		ToolInventoryJSON:                 request.GetToolInventoryJson(), ToolInventorySHA256: request.GetToolInventorySha256(),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_RecordImageAdmission_FullMethodName, func(p value.Principal) (*controlplanev1.RecordImageAdmissionResponse, error) {
+		artifact, err := server.service.RecordAdmission(ctx, roleimagerepository.AdmissionRecordInput{
+			ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(),
+			VulnerabilityReportJSON: request.GetVulnerabilityReportJson(), VulnerabilityReportProjectionSHA256: request.GetVulnerabilityReportProjectionSha256(), RiskAcceptanceSHA256: request.GetRiskAcceptanceSha256(),
+			Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
+			ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
+			ClaimToken: request.GetClaimToken(), ManifestDigest: request.GetManifestDigest(),
+			ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(),
+			SBOMSHA256: request.GetSbomSha256(), VulnerabilityEvidenceSHA256: request.GetVulnerabilityEvidenceSha256(),
+			PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(),
+			Verdict:           strings.TrimPrefix(request.GetVerdict().String(), "IMAGE_ADMISSION_VERDICT_"),
+			SignatureIdentity: request.GetSignatureIdentity(), SignatureSHA256: request.GetSignatureSha256(),
+			AdmissionReceiptSHA256:            request.GetAdmissionReceiptSha256(),
+			AdmissionReceiptOCIManifestDigest: request.GetAdmissionReceiptOciManifestDigest(),
+			ToolInventoryJSON:                 request.GetToolInventoryJson(), ToolInventorySHA256: request.GetToolInventorySha256(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.RecordImageAdmissionResponse{ImageArtifact: castImageArtifact(artifact)}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.RecordImageAdmissionResponse{ImageArtifact: castImageArtifact(artifact)}, nil
 }
 
 // FailImageAdmission carries exact attempt/claim/fence/authority and artifact/build/recipe/policy pins
@@ -610,24 +580,22 @@ func (server *RoleImageServer) RecordImageAdmission(ctx context.Context, request
 // FailImageAdmission несёт точные привязки попытки, claim, fence, полномочий, артефакта, сборки,
 // рецепта и политики с кодом ошибки домену, затем переносит результат ошибки допуска.
 func (server *RoleImageServer) FailImageAdmission(ctx context.Context, request *controlplanev1.FailImageAdmissionRequest) (*controlplanev1.FailImageAdmissionResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_FailImageAdmission_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	failure, err := server.service.FailAdmission(ctx, roleimagerepository.AdmissionFailureInput{
-		ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(),
-		Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
-		ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ClaimToken: request.GetClaimToken(),
-		ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(),
-		ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(),
-		PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(), BuildRef: request.GetBuildRef(),
-		ExpectedBuildAttempt: request.GetExpectedBuildAttempt(), RecipeGeneration: request.GetRecipeGeneration(),
-		SpecSHA256: request.GetSpecSha256(), ErrorCode: request.GetErrorCode(),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_FailImageAdmission_FullMethodName, func(p value.Principal) (*controlplanev1.FailImageAdmissionResponse, error) {
+		failure, err := server.service.FailAdmission(ctx, roleimagerepository.AdmissionFailureInput{
+			ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(),
+			Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
+			ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ClaimToken: request.GetClaimToken(),
+			ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(),
+			ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(),
+			PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(), BuildRef: request.GetBuildRef(),
+			ExpectedBuildAttempt: request.GetExpectedBuildAttempt(), RecipeGeneration: request.GetRecipeGeneration(),
+			SpecSHA256: request.GetSpecSha256(), ErrorCode: request.GetErrorCode(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.FailImageAdmissionResponse{AdmissionFailure: castRoleImageAdmissionFailure(&failure)}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.FailImageAdmissionResponse{AdmissionFailure: castRoleImageAdmissionFailure(&failure)}, nil
 }
 
 // ExpireImageAdmissionClaim submits the exact expected attempt, authority/fence/version and immutable
@@ -637,15 +605,13 @@ func (server *RoleImageServer) FailImageAdmission(ctx context.Context, request *
 // неизменяемый набор claim, артефакта, сборки и политики команде истечения домена; транспорт сам
 // истечение lease не определяет.
 func (server *RoleImageServer) ExpireImageAdmissionClaim(ctx context.Context, request *controlplanev1.ExpireImageAdmissionClaimRequest) (*controlplanev1.ExpireImageAdmissionClaimResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ExpireImageAdmissionClaim_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	failure, err := server.service.ExpireAdmission(ctx, roleimagerepository.AdmissionExpiryInput{ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(), Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(), ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(), ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(), PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(), BuildRef: request.GetBuildRef(), ExpectedBuildAttempt: request.GetExpectedBuildAttempt(), RecipeGeneration: request.GetRecipeGeneration(), SpecSHA256: request.GetSpecSha256()})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.ExpireImageAdmissionClaimResponse{AdmissionFailure: castRoleImageAdmissionFailure(&failure)}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ExpireImageAdmissionClaim_FullMethodName, func(p value.Principal) (*controlplanev1.ExpireImageAdmissionClaimResponse, error) {
+		failure, err := server.service.ExpireAdmission(ctx, roleimagerepository.AdmissionExpiryInput{ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(), Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(), ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(), ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(), PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(), BuildRef: request.GetBuildRef(), ExpectedBuildAttempt: request.GetExpectedBuildAttempt(), RecipeGeneration: request.GetRecipeGeneration(), SpecSHA256: request.GetSpecSha256()})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.ExpireImageAdmissionClaimResponse{AdmissionFailure: castRoleImageAdmissionFailure(&failure)}, nil
+	})
 }
 
 // ClaimImagePromotion uses the resolved exact-operation principal to request a domain-owned promotion
@@ -653,19 +619,17 @@ func (server *RoleImageServer) ExpireImageAdmissionClaim(ctx context.Context, re
 // ClaimImagePromotion использует разрешённый principal точной операции для запроса доменного claim
 // продвижения и переносит артефакт, токен, fence, поколение полномочий и срок.
 func (server *RoleImageServer) ClaimImagePromotion(ctx context.Context, request *controlplanev1.ClaimImagePromotionRequest) (*controlplanev1.ClaimImagePromotionResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ClaimImagePromotion_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	claim, err := server.service.ClaimPromotion(ctx, p, request.GetIdempotencyKey())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.ClaimImagePromotionResponse{
-		ImageArtifact: castImageArtifact(claim.Artifact), PromotionClaim: claim.PromotionClaim,
-		Fence: claim.Fence, AuthorityGeneration: claim.AuthorityGeneration,
-		ClaimExpiresAt: timestamp(claim.ClaimExpiresAt),
-	}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ClaimImagePromotion_FullMethodName, func(p value.Principal) (*controlplanev1.ClaimImagePromotionResponse, error) {
+		claim, err := server.service.ClaimPromotion(ctx, p, request.GetIdempotencyKey())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.ClaimImagePromotionResponse{
+			ImageArtifact: castImageArtifact(claim.Artifact), PromotionClaim: claim.PromotionClaim,
+			Fence: claim.Fence, AuthorityGeneration: claim.AuthorityGeneration,
+			ClaimExpiresAt: timestamp(claim.ClaimExpiresAt),
+		}, nil
+	})
 }
 
 // AuthorizeImagePromotion submits the exact artifact version/claim/manifest and resolved principal to
@@ -673,23 +637,21 @@ func (server *RoleImageServer) ClaimImagePromotion(ctx context.Context, request 
 // AuthorizeImagePromotion передаёт домену точные версию артефакта, claim, manifest и разрешённый
 // principal для авторизации; для продвижения выдаются лишь возвращённые доменом токен и срок.
 func (server *RoleImageServer) AuthorizeImagePromotion(ctx context.Context, request *controlplanev1.AuthorizeImagePromotionRequest) (*controlplanev1.AuthorizeImagePromotionResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_AuthorizeImagePromotion_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	authorization, err := server.service.AuthorizePromotion(ctx, roleimagerepository.PromotionAuthorizeInput{
-		Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
-		ExpectedVersion: request.GetExpectedVersion(), PromotionClaim: request.GetPromotionClaim(),
-		ManifestDigest: request.GetManifestDigest(),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_AuthorizeImagePromotion_FullMethodName, func(p value.Principal) (*controlplanev1.AuthorizeImagePromotionResponse, error) {
+		authorization, err := server.service.AuthorizePromotion(ctx, roleimagerepository.PromotionAuthorizeInput{
+			Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
+			ExpectedVersion: request.GetExpectedVersion(), PromotionClaim: request.GetPromotionClaim(),
+			ManifestDigest: request.GetManifestDigest(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.AuthorizeImagePromotionResponse{
+			ImageArtifact:          castImageArtifact(authorization.Artifact),
+			AuthorizationToken:     authorization.AuthorizationToken,
+			AuthorizationExpiresAt: timestamp(authorization.AuthorizationExpiresAt),
+		}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.AuthorizeImagePromotionResponse{
-		ImageArtifact:          castImageArtifact(authorization.Artifact),
-		AuthorizationToken:     authorization.AuthorizationToken,
-		AuthorizationExpiresAt: timestamp(authorization.AuthorizationExpiresAt),
-	}, nil
 }
 
 // CompleteImagePromotion binds the authorized token to exact artifact/version, promoted reference,
@@ -699,20 +661,18 @@ func (server *RoleImageServer) AuthorizeImagePromotion(ctx context.Context, requ
 // reference, manifest и хешем readback в доменной команде завершения; доставку registry независимо не
 // проверяет.
 func (server *RoleImageServer) CompleteImagePromotion(ctx context.Context, request *controlplanev1.CompleteImagePromotionRequest) (*controlplanev1.CompleteImagePromotionResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_CompleteImagePromotion_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	artifact, err := server.service.CompletePromotion(ctx, roleimagerepository.PromotionCompleteInput{
-		Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
-		ExpectedVersion: request.GetExpectedVersion(), AuthorizationToken: request.GetAuthorizationToken(),
-		PromotedReference: request.GetPromotedReference(), ManifestDigest: request.GetManifestDigest(),
-		PromotionReadbackSHA256: request.GetPromotionReadbackSha256(),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_CompleteImagePromotion_FullMethodName, func(p value.Principal) (*controlplanev1.CompleteImagePromotionResponse, error) {
+		artifact, err := server.service.CompletePromotion(ctx, roleimagerepository.PromotionCompleteInput{
+			Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
+			ExpectedVersion: request.GetExpectedVersion(), AuthorizationToken: request.GetAuthorizationToken(),
+			PromotedReference: request.GetPromotedReference(), ManifestDigest: request.GetManifestDigest(),
+			PromotionReadbackSHA256: request.GetPromotionReadbackSha256(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.CompleteImagePromotionResponse{ImageArtifact: castImageArtifact(artifact)}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.CompleteImagePromotionResponse{ImageArtifact: castImageArtifact(artifact)}, nil
 }
 
 // roleImageScopeKind maps only ORGANIZATION and PROJECT to known scope enums, preserving unknown scope
@@ -735,19 +695,17 @@ func roleImageScopeKind(kind string) controlplanev1.RuntimeResourceScopeKind {
 // ListOrganizationRoleImageRecipes сохраняет отдельный principal организационного списка и доменную
 // операцию, передавая лишь страницу, запрос и состояние и перенося список, курсор и количество.
 func (server *RoleImageServer) ListOrganizationRoleImageRecipes(ctx context.Context, request *controlplanev1.ListOrganizationRoleImageRecipesRequest) (*controlplanev1.ListOrganizationRoleImageRecipesResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ListOrganizationRoleImageRecipes_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, nextPage, total, err := server.service.ListOrganization(ctx, p, roleimagerepository.Filter{
-		Page: page(request.GetPage()), Query: request.GetQuery(), State: request.GetState(),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ListOrganizationRoleImageRecipes_FullMethodName, func(p value.Principal) (*controlplanev1.ListOrganizationRoleImageRecipesResponse, error) {
+		items, nextPage, total, err := server.service.ListOrganization(ctx, p, roleimagerepository.Filter{
+			Page: page(request.GetPage()), Query: request.GetQuery(), State: request.GetState(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListOrganizationRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}, Total: total}
+		response.Recipes = castResponseItems(items, castRoleImageRecipe)
+		return response, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListOrganizationRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}, Total: total}
-	response.Recipes = castResponseItems(items, castRoleImageRecipe)
-	return response, nil
 }
 
 // GetOrganizationRoleImageRecipe retains the distinct organization-read principal and domain
@@ -755,19 +713,17 @@ func (server *RoleImageServer) ListOrganizationRoleImageRecipes(ctx context.Cont
 // GetOrganizationRoleImageRecipe сохраняет отдельный principal организационного чтения и доменный
 // GetOrganization, разделяя с проектным чтением лишь чистую проекцию уже разрешённых данных.
 func (server *RoleImageServer) GetOrganizationRoleImageRecipe(ctx context.Context, request *controlplanev1.GetOrganizationRoleImageRecipeRequest) (*controlplanev1.GetOrganizationRoleImageRecipeResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_GetOrganizationRoleImageRecipe_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	detail, err := server.service.GetOrganization(ctx, p, request.GetRecipeRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := castRoleImageRecipeDetail(detail)
-	return &controlplanev1.GetOrganizationRoleImageRecipeResponse{
-		Recipe: response.Recipe, AdmissionFailure: response.AdmissionFailure,
-		Builds: response.Builds, ActiveArtifact: response.ActiveArtifact, PromotionCandidate: response.PromotionCandidate,
-	}, nil
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_GetOrganizationRoleImageRecipe_FullMethodName, func(p value.Principal) (*controlplanev1.GetOrganizationRoleImageRecipeResponse, error) {
+		detail, err := server.service.GetOrganization(ctx, p, request.GetRecipeRef())
+		if err != nil {
+			return nil, err
+		}
+		response := castRoleImageRecipeDetail(detail)
+		return &controlplanev1.GetOrganizationRoleImageRecipeResponse{
+			Recipe: response.Recipe, AdmissionFailure: response.AdmissionFailure,
+			Builds: response.Builds, ActiveArtifact: response.ActiveArtifact, PromotionCandidate: response.PromotionCandidate,
+		}, nil
+	})
 }
 
 // ManageOrganizationRoleImageRecipe calls the distinct organization-management operation with resolved
@@ -777,25 +733,17 @@ func (server *RoleImageServer) GetOrganizationRoleImageRecipe(ctx context.Contex
 // разрешённым principal, изменением и полями рецепта, сборки и выбора, не передавая владение проектом
 // или ролью от вызывающего.
 func (server *RoleImageServer) ManageOrganizationRoleImageRecipe(ctx context.Context, request *controlplanev1.ManageOrganizationRoleImageRecipeRequest) (*controlplanev1.ManageOrganizationRoleImageRecipeResponse, error) {
-	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ManageOrganizationRoleImageRecipe_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.ManageOrganization(ctx, roleimagerepository.ManageInput{
-		Principal: p, Mutation: mutation(request.GetMutation()), Action: roleImageAction(request.GetAction()),
-		RecipeRef: request.GetRecipeRef(), BuildRef: request.GetBuildRef(),
-		Name:        request.GetName(),
-		Environment: domainRoleEnvironmentSelection(request.GetEnvironment()),
+	return roleImageResponse(ctx, controlplanev1.RoleImageService_ManageOrganizationRoleImageRecipe_FullMethodName, func(p value.Principal) (*controlplanev1.ManageOrganizationRoleImageRecipeResponse, error) {
+		result, err := server.service.ManageOrganization(ctx, roleimagerepository.ManageInput{
+			Principal: p, Mutation: mutation(request.GetMutation()), Action: roleImageAction(request.GetAction()),
+			RecipeRef: request.GetRecipeRef(), BuildRef: request.GetBuildRef(),
+			Name:        request.GetName(),
+			Environment: domainRoleEnvironmentSelection(request.GetEnvironment()),
+		})
+		if err != nil {
+			return nil, err
+		}
+		response := castRoleImageManagement(result)
+		return &controlplanev1.ManageOrganizationRoleImageRecipeResponse{Recipe: response.Recipe, Reused: response.Reused, ImageBuild: response.ImageBuild, ImageArtifact: response.ImageArtifact}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ManageOrganizationRoleImageRecipeResponse{Recipe: castRoleImageRecipe(result.Recipe), Reused: result.Reused}
-	if result.Build != nil {
-		response.ImageBuild = castImageBuild(*result.Build)
-	}
-	if result.Artifact != nil {
-		response.ImageArtifact = castImageArtifact(*result.Artifact)
-	}
-	return response, nil
 }
