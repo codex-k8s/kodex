@@ -4,7 +4,7 @@ title: Offline-план отдельной static S3 identity для backup dril
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
+version: 1.3.0
 updated: 2026-10-25
 ---
 
@@ -276,10 +276,19 @@ Versioning всех четырёх buckets должен быть Enabled; helper
 | Не закрытый QA effect при возврате | Restore baseline/revocation могут завершиться, но own Secrets удерживаются и результат остаётся UNKNOWN до owner recovery |
 | Lost ACK Secret delete | Readback absence; чужая replacement запрещает cleanup PASS |
 
-Известный собственный QA object закрывается exact-version cleanup до возврата,
-когда desired Pod доступен. Если S3 effect остаётся unknown либо Pod недоступен,
-доступность baseline имеет приоритет перед cleanup: после возврата helper не
-выдаёт final PASS, не удаляет recovery inputs и не делает Admin fallback.
+`return` является аварийным путём: он не начинает QA GET/DELETE или optional
+cleanup перед guarded baseline CAS. Для здорового desired Pod незавершённый QA
+lifecycle можно сначала продолжить через существующие `apply`/`readback` того же
+origin, без нового PUT/pair. Если выбран return при незакрытом QA effect, baseline
+имеет приоритет даже при NotReady/отсутствующем Pod или S3 outage. Отсутствующий
+Pod даёт previousPodUID=null; присутствующий foreign owner/image/PVC/auth ref
+закрыто отклоняется, как и approval/Secret/spec mismatch. После CAS может
+потребоваться отдельно разрешённый recover-pod. Return intent/receipt сохраняются
+при lost ACK; последующий return требует readback и не повторяет cleanup/CAS.
+Незакрытый QA origin сохраняет UNKNOWN, receipts и оба recovery Secret: helper
+не выдаёт final PASS, не удаляет inputs и не делает Admin fallback. После
+возврата root должен отдельно расследовать такой origin; отзыв ключа не является
+доказательством удаления QA version.
 
 ## Возврат и неизвестные исходы
 

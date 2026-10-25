@@ -344,8 +344,13 @@ class Operator:
             else:
                 custody.require(current == self.value["snapshot"]["statefulSet"], "REVIEWED_BASELINE_SNAPSHOT_STALE")
                 patch = self.value["applyPatch"]
-            pod = transport.pod_pin(self.kube.get("pod", "seaweedfs-0"), self.value["image"])
-            previous_uid = pod["uid"] if not returning or pod["authSecretName"] == self.value["authSecret"]["name"] else None
+            actual = self.kube.optional("pod", "seaweedfs-0") if returning else self.kube.get("pod", "seaweedfs-0")
+            previous_uid = None
+            if actual is not None:
+                pod = transport.pod_pin(actual, self.value["image"])
+                custody.require(pod["pvcName"] == "data-seaweedfs-0" and
+                                pod["authSecretName"] in (contract.SOURCE_NAME, self.value["authSecret"]["name"]), "SWITCH_POD_SCOPE_CHANGED")
+                previous_uid = pod["uid"] if not returning or pod["authSecretName"] == self.value["authSecret"]["name"] else None
             descriptor = {"patchSHA256": custody.digest(patch), "specSHA256": custody.digest(current["spec"]), "previousPodUID": previous_uid,
                           "targetTemplateSHA256": self.value["oldTemplateSHA256" if returning else "newTemplateSHA256"]}
         else:
@@ -582,11 +587,8 @@ class Operator:
         else:
             custody.require(self.kube.optional("secret", self.value["authSecret"]["name"]) is None, "OWN_SECRET_NAME_REAPPEARED")
         access, secret = self.keypair()
-        # Закрываем известный own QA object до отзыва ключа; unresolved outcome не повторяется.
-        for suffix, bucket in (("repository", "kodex-backups"), ("target", "kodex-restore-fixture")):
-            if self.journal.exists("probe-put-" + suffix, "done") and not self.journal.exists("probe-delete-" + suffix, "intent"):
-                remote = self.loopback(self.kube, self.pin(True), self.value)
-                self.fixture(remote, bucket, self.value["qaPrefixes"][suffix] + "/", access, secret)
+        # Аварийный return не начинает QA cleanup: недоступность desired Pod/S3 не блокирует baseline CAS.
+        # Незакрытый QA origin ниже запрещает final PASS и удаление recovery Secrets.
         self.switch(returning=True)
         pin = self.wait(False, self.journal.read("return", "intent")["previousPodUID"])
         _config, old_access, old_secret = read_baseline(self.kube, self.value)

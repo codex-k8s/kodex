@@ -49,6 +49,7 @@ class FakeKubernetes:
         self.lose_ack, self.keep_key, self.policy_present, self.fail_probe, self.block_consumers = None, False, False, False, False
         self.bad_rollout, self.bad_pod = False, False
         self.versioning = "Enabled"
+        self.s3_outage = False
         self.inventory_overrides, self.inventory_entries = {}, []
         self.clock = 0
         self.sync_pod(value["snapshot"]["pod"]["uid"])
@@ -183,6 +184,8 @@ class FakeLoopback:
 
     def request(self, method, path, query=(), access=None, secret=None, body=b"", extra=None, filer=False):
         self.kube.trace.append(("PROBE", method, path, tuple(query)))
+        if self.kube.s3_outage:
+            raise custody.Rejected("SIMULATED_S3_OUTAGE")
         if filer:
             return 404, {}, b""
         current = transport.pod_pin(self.kube.pod, self.kube.value["image"])
@@ -272,6 +275,31 @@ class OperatorTests(unittest.TestCase):
     def apply(self):
         with patch.object(operator.secrets, "token_hex", side_effect=[NEW_ACCESS, NEW_SECRET]):
             return self.operation.apply()
+
+    def pause_after_committed_put(self, not_ready=False, outage=False, missing=False):
+        original = FakeLoopback.request
+        def pause(remote, method, path, query=(), access=None, secret=None, body=b"", extra=None, filer=False):
+            if method == "GET" and "/_static-auth-probe/" in path and self.journal.exists("probe-put-repository", "done"):
+                if not_ready:
+                    self.kube.pod["status"]["conditions"][0]["status"] = "False"
+                    self.kube.sts["status"]["readyReplicas"] = 0
+                    self.kube.bad_pod = True
+                if missing:
+                    self.kube.pod = None
+                self.kube.s3_outage = outage
+                raise custody.Rejected("SIMULATED_CRASH_AFTER_COMMITTED_PUT")
+            return original(remote, method, path, query, access, secret, body, extra, filer)
+        with patch.object(FakeLoopback, "request", pause), self.assertRaisesRegex(custody.Rejected, "SIMULATED_CRASH_AFTER_COMMITTED_PUT"):
+            self.apply()
+        self.assertTrue(self.journal.exists("probe-put-repository", "done"))
+        self.assertFalse(self.journal.exists("probe-delete-repository", "intent"))
+        return copy.deepcopy(self.journal.read("probe-put-repository"))
+
+    def assert_unresolved_inputs_retained(self):
+        self.assertIn(self.value["authSecret"]["name"], self.kube.secrets)
+        self.assertIn(self.value["scopedSecret"]["name"], self.kube.secrets)
+        self.assertFalse(self.journal.exists("delete-auth", "intent"))
+        self.assertFalse(self.journal.exists("delete-scoped", "intent"))
 
     def test_full_apply_custody_restore_source_and_return_without_source_effects(self):
         receipt = self.apply()
@@ -565,6 +593,114 @@ class OperatorTests(unittest.TestCase):
         self.operation.return_baseline()
         self.operation.return_baseline()
         self.assertEqual([item for item in self.kube.effects if item[0] == "PATCH"], [("PATCH", "apply"), ("PATCH", "return")])
+
+    def test_known_put_notready_cannot_block_baseline_cas_or_separately_guarded_pod_recovery(self):
+        receipt = self.pause_after_committed_put(not_ready=True)
+        before = [item for item in self.kube.effects if item[0].startswith("S3_")]
+        with self.assertRaisesRegex(custody.Rejected, "ROLLOUT_TIMEOUT"):
+            self.operation.return_baseline()
+        self.assertTrue(self.journal.exists("return", "done"))
+        self.assertEqual(self.kube.sts["spec"], self.value["snapshot"]["statefulSet"]["spec"])
+        self.assertEqual([item for item in self.kube.effects if item == ("PATCH", "return")], [("PATCH", "return")])
+        self.operation.recover_pod()
+        with self.assertRaisesRegex(custody.Rejected, "QA_EFFECT_UNRESOLVED_OWN_SECRETS_RETAINED"):
+            self.operation.return_baseline()
+        self.assertTrue(self.journal.exists("revocation", "done"))
+        self.assertEqual(before, [item for item in self.kube.effects if item[0].startswith("S3_")])
+        self.assertEqual(receipt, self.journal.read("probe-put-repository"))
+        self.assertFalse(self.journal.exists("probe-delete-repository", "intent"))
+        self.assert_unresolved_inputs_retained()
+
+    def test_known_put_s3_outage_cannot_block_baseline_and_recovery_keeps_unknown(self):
+        receipt = self.pause_after_committed_put(outage=True)
+        before = [item for item in self.kube.effects if item[0].startswith("S3_")]
+        with self.assertRaisesRegex(custody.Rejected, "SIMULATED_S3_OUTAGE"):
+            self.operation.return_baseline()
+        self.assertTrue(self.journal.exists("return", "done"))
+        self.assertEqual(self.kube.sts["spec"], self.value["snapshot"]["statefulSet"]["spec"])
+        self.assert_unresolved_inputs_retained()
+        self.kube.s3_outage = False
+        with self.assertRaisesRegex(custody.Rejected, "QA_EFFECT_UNRESOLVED_OWN_SECRETS_RETAINED"):
+            self.operation.return_baseline()
+        self.assertEqual([item for item in self.kube.effects if item == ("PATCH", "return")], [("PATCH", "return")])
+        self.assertEqual(before, [item for item in self.kube.effects if item[0].startswith("S3_")])
+        self.assertEqual(receipt, self.journal.read("probe-put-repository"))
+        self.assert_unresolved_inputs_retained()
+
+    def test_missing_pod_known_put_returns_with_no_pod_uid_instead_of_requiring_desired_readiness(self):
+        self.pause_after_committed_put(missing=True)
+        with self.assertRaisesRegex(custody.Rejected, "QA_EFFECT_UNRESOLVED_OWN_SECRETS_RETAINED"):
+            self.operation.return_baseline()
+        self.assertIsNone(self.journal.read("return", "intent")["previousPodUID"])
+        self.assertTrue(self.journal.exists("return", "done"))
+        self.assertTrue(self.journal.exists("revocation", "done"))
+        self.assertEqual(self.kube.sts["spec"], self.value["snapshot"]["statefulSet"]["spec"])
+        self.assert_unresolved_inputs_retained()
+
+    def test_return_unknown_patch_with_pending_qa_never_reenters_cleanup_or_repeats_cas(self):
+        self.pause_after_committed_put()
+        self.kube.lose_ack = "return"
+        with self.assertRaises(custody.Rejected):
+            self.operation.return_baseline()
+        effects = list(self.kube.effects)
+        with self.assertRaisesRegex(custody.Rejected, "UNKNOWN_OUTCOME_READBACK_REQUIRED"):
+            self.operation.return_baseline()
+        self.assertEqual(effects, self.kube.effects)
+        self.operation.readback()
+        with self.assertRaisesRegex(custody.Rejected, "QA_EFFECT_UNRESOLVED_OWN_SECRETS_RETAINED"):
+            self.operation.return_baseline()
+        self.assertEqual(effects, self.kube.effects)
+        self.assert_unresolved_inputs_retained()
+
+    def test_unknown_put_and_delete_remain_unknown_after_return_without_repeat_effect(self):
+        for stage in ("probe-put", "probe-delete"):
+            state = self.directory / stage
+            state.mkdir(mode=0o700)
+            journal = operator.Journal(state)
+            self.addCleanup(journal.close)
+            kube = FakeKubernetes(self.value)
+            operation = operator.Operator(kube, self.value, self.approval, REVISION, journal, loopback=FakeLoopback)
+            kube.lose_ack = stage
+            with patch.object(operator.secrets, "token_hex", side_effect=[NEW_ACCESS, NEW_SECRET]), self.assertRaises(custody.Rejected):
+                operation.apply()
+            effects = [item for item in kube.effects if item[0].startswith("S3_")]
+            with self.subTest(stage=stage), self.assertRaisesRegex(custody.Rejected, "QA_EFFECT_UNRESOLVED_OWN_SECRETS_RETAINED"):
+                operation.return_baseline()
+            self.assertTrue(journal.exists("return", "done"))
+            self.assertEqual(effects, [item for item in kube.effects if item[0].startswith("S3_")])
+            self.assertFalse(journal.exists("probe-put-repository" if stage == "probe-put" else "probe-delete-repository", "done"))
+            self.assertIn(self.value["authSecret"]["name"], kube.secrets)
+            self.assertIn(self.value["scopedSecret"]["name"], kube.secrets)
+
+    def test_pending_qa_return_retains_expiry_foreign_spec_and_foreign_pod_guards(self):
+        self.pause_after_committed_put()
+        for mismatch in ("expiry", "spec", "pod-owner", "pod-auth"):
+            kube = copy.deepcopy(self.kube)
+            approval = copy.deepcopy(self.approval)
+            if mismatch == "expiry":
+                approval["expiresAt"] = 1
+            elif mismatch == "spec":
+                kube.sts["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["cpu"] = "2"
+            elif mismatch == "pod-owner":
+                kube.pod["metadata"]["ownerReferences"][0]["uid"] = "66666666-6666-4666-8666-666666666666"
+            else:
+                next(item for item in kube.pod["spec"]["volumes"] if item["name"] == "s3-config")["secret"]["secretName"] = "foreign"
+            operation = operator.Operator(kube, self.value, approval, REVISION, self.journal, loopback=FakeLoopback)
+            effects = list(kube.effects)
+            with self.subTest(mismatch=mismatch), self.assertRaises(custody.Rejected):
+                operation.return_baseline()
+            self.assertEqual(effects, kube.effects)
+            self.assertFalse(self.journal.exists("return", "intent"))
+
+    def test_healthy_resume_closes_qa_before_explicit_return_without_new_put_or_pair(self):
+        self.pause_after_committed_put()
+        self.operation.readback()
+        with patch.object(operator.secrets, "token_hex", side_effect=AssertionError("pair regeneration forbidden")):
+            self.operation.apply()
+        result = self.operation.return_baseline()
+        self.assertEqual(result["state"], "BASELINE_RETURNED_SCOPED_KEY_REVOKED_OWN_SECRETS_ABSENT")
+        self.assertEqual(len([item for item in self.kube.effects if item[0] == "S3_PUT"]), 2)
+        self.assertEqual(len([item for item in self.kube.effects if item[0] == "S3_DELETE_VERSION"]), 2)
 
     def test_delete_lost_ack_readback_continues_without_deleting_replacement(self):
         self.apply()
