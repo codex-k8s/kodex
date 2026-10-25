@@ -16,7 +16,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -101,12 +100,7 @@ func (trace *runtimeFilesReadTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Co
 	if matched, _ := ctx.Value(runtimeFilesReadTraceKey{}).(bool); !matched {
 		return
 	}
-	var cause *pgconn.PgError
-	if errors.As(data.Err, &cause) && cause.Code == "40001" {
-		trace.mu.Lock()
-		trace.conflicts++
-		trace.mu.Unlock()
-	}
+	recordReadSerializationConflict(&trace.mu, &trace.conflicts, data.Err)
 }
 
 // testRuntimeFilesConcurrentLeaseRenew for search/manifest/metadata/preview/expiry coordinates a

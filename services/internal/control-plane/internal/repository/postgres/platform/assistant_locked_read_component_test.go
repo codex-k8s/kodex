@@ -14,7 +14,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -86,12 +85,7 @@ func (trace *assistantLeaseReadTrace) TraceQueryEnd(ctx context.Context, _ *pgx.
 	if matched, _ := ctx.Value(assistantLeaseReadTraceKey{}).(bool); !matched {
 		return
 	}
-	var pgError *pgconn.PgError
-	if errors.As(data.Err, &pgError) && pgError.Code == "40001" {
-		trace.mu.Lock()
-		trace.conflicts++
-		trace.mu.Unlock()
-	}
+	recordReadSerializationConflict(&trace.mu, &trace.conflicts, data.Err)
 }
 
 // testAssistantLockedReadConcurrentLeaseRenew coordinates two real fixture connections within5s: a

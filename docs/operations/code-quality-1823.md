@@ -4,11 +4,67 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.430.0
+version: 1.431.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий счётчик40001 в test tracers — 25.10.2026
+
+На основе `9fc91aca16dbc1f69c77d070b0471eb0cebf15c3` повторно проверены два
+полностью прочитанных component-файла assistant_locked_read и
+runtime_files_locked_read. Одинаковые errors.As/SQLSTATE40001 и mutex-counter
+в их TraceQueryEnd вынесены в test-only recordReadSerializationConflict.
+Новый read_retry_trace_test.go содержит helper и один содержательный
+regression Test; оба объявления описаны EN→RU. Production Go не менялся,
+включая точные bytes transaction_retry.go и прежний read-retry classifier.
+
+| Граница | Сохранённое поведение |
+| --- | --- |
+| Query selection | Каждый tracer сохраняет собственный private typed context key и проверяет marker до helper. Start matching остаётся Contains для assistant и HasPrefix для files |
+| Start signal | Assistant закрывает struct channel, files отправляет exact backend PID в buffered channel; эти разные synchronization protocols не объединялись |
+| Error class | Только errors.As к pgconn.PgError с40001 увеличивает счётчик; nil,40P01,08006,cancellation и неизвестная error не считаются. Helper не выполняет retry и не меняет error |
+| Mutable state | Caller передаёт matching nonnil mutex/counter initialized tracer. Increment остаётся под тем же lock, attempt counter и контексты не меняются |
+| Component graph | SQL, actors, lease pins, waiter queries, budgets, cleanup и outcomes page/metadata/preview сохраняются. Physical PG races в этом пакете не выполнялись |
+
+Независимый trace-proof — PASS LOCAL: проверяет точное тело нового helper,
+точные аргументы двух callers и после обратной подстановки counter tail и
+pgconn import полные AST обоих прежних файлов. Все embed directives
+сохраняются; production retry source сравнивается побайтово. Proof относится
+к initialized tracer callers, для которых документирован nonnil contract.
+
+Полный unit PostgreSQL platform package — PASS LOCAL (24.58s), включая
+новый TestLockedReadTracersCountOnlyTaggedSerializationConflicts. Отдельный
+focused go test -race для него и прежнего explicit40001 retry test — PASS
+LOCAL (206.84s с первой компиляцией race dependencies). Семь error cases
+проверяют untagged/cross-tagged/false contexts,32 concurrent callbacks,
+точный counter и неизменный attempts, согласие с production classifier.
+Это реальные вызовы двух tracer callbacks в unit, а не live PostgreSQL.
+
+17 analyzer unit,5 exact-ignore guards, gofmt/git diff --check и итоговый
+inventory/detector/assessment — PASS LOCAL (checks431-final). Test child env
+исключает credentials и inherited KODEX inputs. Полный production build/unit
+control-plane не повторялся: production Go с38ea7e4 не менялся, последний
+полный evidence остаётся checks429-final. PG component fixtures, RLS/OCC,
+actual renew races, remote providers/storage/AV/broker/Secrets, browser/
+полный E2E/deploy/live — NOT RUN/SKIP. Manifests неизменны; прежние30 exact
+renders и standalone staging/control-api-gateway FAIL не повторялись.
+Внешних library API не добавлено, новых Context7 запросов не было.
+
+После реального выноса detector показывает109-token остаток вместо140.
+Он пересекает разные TraceQueryStart signals, private marker guard, общий
+helper call и разные fixture signatures. Для ровно этой пары paths/hash/count1
+после чтения обоих файлов и полного proof добавлено адресное объяснение
+сохранения typed glue; новые broad exclusions и изменения thresholds нет.
+Registry740/851 retained occurrences, raw1668 прежний, unresolved817 против
+818. Повторный scan после registry edit подтверждает тот же clone-set hash;
+снижение raw не заявляется. Остальные совпадения остаются открытыми.
+
+Inventory6694 sources/222 exclusions. Go21495:21087 EN→RU,408 missing только
+в test-файлах, production missing0. PR375 Go/3115 объявлений, missing0;
+405 whole changed blobs. #1823 открыт, #1829 Draft; main/QA сохранены.
+Env не менялись, secret values не извлекались и не переносились.
 
 ## Тестовые fixtures: immutable pins, claim/retry и Unicode — 25.10.2026
 

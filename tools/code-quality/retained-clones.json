@@ -5912,6 +5912,14 @@
       "fragmentSHA256": "5e1f10ad2bae9b40d83749db65663c3d7c3bb2507ea9aab553217b2db073001b",
       "count": 1,
       "reason": "После выноса повторяющихся execute/error-first/response orchestration в executeResponse осталось окно typed glue: RollbackInstructions, ChangeAgentCapability, ChangeAgentIntegrationGrant против ChangeAgentCapability, ChangeAgentIntegrationGrant, CreateWorkflow. Полные RPC methods, command.Kind, payload getters и nominal response types остаются явными; преобразование ответа происходит только после successful execute. Capability key и grant ref сохраняют разные owner admission и источники BindingRef. Раскрытие helper во всех52 handlers сохраняет точный прежний AST; общий исполняемый error guard больше не дублируется. Дальнейшая унификация потребовала бы таблицы generic resources либо reflection вместо типизированных контрактов. Сохранены только эти два пути, fragment hash и count1, без исключения handlers, validation или слоя целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_locked_read_component_test.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_files_locked_read_component_test.go",
+      "fragmentSHA256": "f43635d4fac26c158bdedaf81d8ae40c59ed045fd3b4f2d34ed790525b4c0aef",
+      "count": 1,
+      "reason": "После реального выноса errors.As/40001 и mutex-счётчика в recordReadSerializationConflict прежнее140-token окно сократилось до109. Остаток пересекает хвост разных TraceQueryStart (close struct-channel против отправки backend PID), private typed context-key guards, вызов общего helper и разные сигнатуры component fixtures. SQL matching Contains/HasPrefix, start signals, owner arguments и page/metadata/preview outcomes намеренно различаются. Более общая trace factory или key-any dispatcher скроет эти связи ради короткого glue; сам подсчёт уже единственный. Оба файла прочитаны полностью; full-AST expansion proof сохраняет initialized tracer callers, markers/SQL/timings/directives, production retry bytes прежние. Сохранены лишь точные два пути/fragment/count1; остальные тесты и фрагменты не исключены."
     }
   ]
 }
