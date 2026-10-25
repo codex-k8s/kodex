@@ -12,8 +12,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// queryRepositoryBundleCancelledDelivery observes only exact terminal graph/lease/delivery metadata after native owner cancellation; it writes no fixture business state.
-// queryRepositoryBundleCancelledDelivery читает лишь exact terminal graph/lease/delivery metadata после native owner cancellation; business state оснасткой не записывается.
+// queryRepositoryBundleCancelledDelivery separates the running root coordinator from active model nodes before cancellation and verifies every node/lease/delivery is closed afterwards; it writes no fixture business state.
+// queryRepositoryBundleCancelledDelivery отличает работающий root coordinator от active model nodes до отмены и проверяет закрытие всех nodes/leases/deliveries после неё; business state оснасткой не записывается.
 //
 //go:embed testdata/sql/repository_bundle_cancelled_delivery.sql
 var queryRepositoryBundleCancelledDelivery string
@@ -95,8 +95,8 @@ func testRepositoryBundleOversizeCallback(t *testing.T) {
 		t.Fatal("blocked presentation reissued Git work", err)
 	}
 	var state, rootID string
-	var leases, deliveries, nodes int
-	if err := f.pool.QueryRow(f.ctx, queryRepositoryBundleCancelledDelivery, f.parentRun.Ref).Scan(&state, &rootID, &leases, &deliveries, &nodes); err != nil || state == "SUCCEEDED" || leases != 0 || deliveries != 1 || nodes != 0 {
+	var leases, deliveries, nodes, agentNodes, rootProcesses int
+	if err := f.pool.QueryRow(f.ctx, queryRepositoryBundleCancelledDelivery, f.parentRun.Ref).Scan(&state, &rootID, &leases, &deliveries, &nodes, &agentNodes, &rootProcesses); err != nil || state != "RUNNING" || leases != 0 || deliveries != 1 || nodes != 1 || agentNodes != 0 || rootProcesses != 1 {
 		t.Fatal("blocked graph metadata is incomplete", err)
 	}
 	var active, planned, gateActive int
@@ -115,7 +115,7 @@ func testRepositoryBundleOversizeCallback(t *testing.T) {
 	if err != nil || view.Proposal.State != "SUCCEEDED" || view.Proposal.CandidateCommitSHA != effect.CandidateCommitSHA || view.Proposal.ContinuationState != "CANCELLED" || view.Proposal.ContinuationCode != "" {
 		t.Fatal("cancel changed Git fact or left blocked delivery", err)
 	}
-	if err := f.pool.QueryRow(f.ctx, queryRepositoryBundleCancelledDelivery, f.parentRun.Ref).Scan(&state, &rootID, &leases, &deliveries, &nodes); err != nil || state != "CANCELLED" || leases != 0 || deliveries != 0 || nodes != 0 {
+	if err := f.pool.QueryRow(f.ctx, queryRepositoryBundleCancelledDelivery, f.parentRun.Ref).Scan(&state, &rootID, &leases, &deliveries, &nodes, &agentNodes, &rootProcesses); err != nil || state != "CANCELLED" || leases != 0 || deliveries != 0 || nodes != 0 || agentNodes != 0 || rootProcesses != 0 {
 		t.Fatal("cancel did not close blocked graph/leases/delivery", err)
 	}
 	f.noObjectEffects()

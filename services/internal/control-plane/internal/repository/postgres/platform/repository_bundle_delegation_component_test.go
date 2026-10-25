@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
@@ -190,7 +191,7 @@ func testRepositoryBundleDelegatedOrder(t *testing.T, order string) {
 		f.decide("APPROVE")
 		effect := f.claim()
 		failed, err := f.service.FailRepositoryBundle(f.ctx, f.principal("integration-gateway", "platform.repository-bundles.work.fail"), effect.Lease, "CONTENT_INVALID")
-		if err != nil || failed.State != "FAILED" {
+		if err != nil || failed.State != "FAILED" || failed.FailureCode != "CONTENT_INVALID" {
 			t.Fatal("known worker failure did not settle", err)
 		}
 		expectedState = "FAILED"
@@ -205,8 +206,18 @@ func testRepositoryBundleDelegatedOrder(t *testing.T, order string) {
 		if stringMap(final, "sessionRef") != stringMap(f.origin, "sessionRef") || stringMap(final, "turnRef") == stringMap(f.origin, "turnRef") || runtimeRevisionMapInt64(final, "attempt") != runtimeRevisionMapInt64(f.origin, "attempt")+1 {
 			t.Fatal("child continuation crossed session/turn/attempt")
 		}
-		if expectedState == "FAILED" && !strings.Contains(stringMap(final, "task"), "CONTENT_INVALID") {
-			t.Fatal("child continuation lost native failure")
+		if expectedState == "FAILED" {
+			task := stringMap(final, "task")
+			separator := strings.Index(task, "\n\n")
+			var feedback integrationContinuationSnapshot
+			if separator < 0 || json.Unmarshal([]byte(task[separator+2:]), &feedback) != nil || feedback.InvocationRef != f.proposal.InvocationRef || feedback.State != "FAILED" || feedback.SafeErrorCode != "INTEGRATION_REQUEST_REJECTED" {
+				t.Fatal("child continuation lost exact native failure contract")
+			}
+			owner := resolvedTestPrincipal(t, f.ctx, f.r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.repository-bundles.get"}, "control-api-gateway")
+			view, err := f.service.GetRepositoryBundle(f.ctx, owner, port.RepositoryBundleRead{GateRef: f.proposal.GateRef, Limit: 16})
+			if err != nil || view.Proposal.Ref != f.proposal.Ref || view.Proposal.InvocationRef != feedback.InvocationRef || view.Proposal.State != "FAILED" || view.Proposal.FailureCode != "CONTENT_INVALID" {
+				t.Fatal("owner read lost specialized publication failure", err)
+			}
 		}
 		completeBundleChildContinuation(t, f, final, "bundle-final-child-complete", true)
 		completeBundleChildContinuation(t, f, final, "bundle-final-child-complete", true)
@@ -225,7 +236,7 @@ func testRepositoryBundleDelegatedOrder(t *testing.T, order string) {
 				Kind                                    string
 				Total, Succeeded, Unsuccessful, Pending int
 				AllSucceeded                            bool
-				Latest                                  struct{ Ref, State, CommitSha, ManifestSha256 string }
+				Latest                                  struct{ Ref, State, CommitSha, ManifestSha256, FailureCode string }
 			}
 		}
 	}
@@ -243,6 +254,9 @@ func testRepositoryBundleDelegatedOrder(t *testing.T, order string) {
 		}
 	} else if outcome.AllSucceeded || outcome.Succeeded != 0 || outcome.Unsuccessful != 1 || outcome.Latest.CommitSha != "" {
 		t.Fatal("model success became a false Git publication")
+	}
+	if expectedState == "FAILED" && outcome.Latest.FailureCode != "CONTENT_INVALID" {
+		t.Fatal("parent lost specialized publication failure code")
 	}
 	var files []struct{ Ref, RuntimeRevisionRef string }
 	if json.Unmarshal(pins, &files) != nil {
