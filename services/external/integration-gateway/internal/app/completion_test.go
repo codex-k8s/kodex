@@ -52,7 +52,7 @@ func TestEmailCompletionPreservesFenceAndUnknown(t *testing.T) {
 				t.Fatal("completion error hidden or retried")
 			}
 			r := fixture.requests[0]
-			if r.InvocationRef != claim.InvocationRef || r.LeaseRef != claim.Lease.Ref || r.Fence != claim.Lease.Fence || r.Generation != 7 || r.Mutation.IdempotencyKey != stableKey(claim.InvocationRef, "complete") {
+			if r.InvocationRef != claim.InvocationRef || r.LeaseRef != claim.Lease.Ref || r.Fence != claim.Lease.Fence || r.Generation != 7 || r.Mutation.IdempotencyKey != stableKey(claim.InvocationRef, "complete:7") {
 				t.Fatal("completion changed claim identity")
 			}
 			if r.UnknownOutcome != (outcome == "unknown") || r.Success != (operationErr == nil) || (r.EffectReceipt != nil) != r.Success {

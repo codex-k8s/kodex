@@ -231,6 +231,8 @@ func completeTest(ctx context.Context, control *controlplaneclient.Client, claim
 // RU: completeInvocation передаёт владельцу точные привязки claim, безопасный классифицированный результат и признак неопределённости без повтора completion.
 // Only success includes the adapter's effect receipt; failed or uncertain work never receives a fabricated successful receipt.
 // RU: Только успех включает квитанцию эффекта адаптера; ошибка и неопределённость не получают выдуманную успешную квитанцию.
+// Owner completion idempotency is partitioned by lease generation; exact reports in the same generation replay the same receipt, while provider effect identity remains unchanged.
+// RU: Идемпотентность завершения у владельца разделяется по поколению аренды; точный отчёт того же поколения повторяет прежнюю квитанцию, а идентичность внешнего эффекта сохраняется.
 func completeInvocation(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.IntegrationInvocationClaim, result integration.Result, operationErr error) error {
 	lease := claim.GetLease()
 	if lease == nil {
@@ -238,7 +240,7 @@ func completeInvocation(ctx context.Context, control *controlplaneclient.Client,
 	}
 	success, code := integration.Outcome(operationErr)
 	request := &controlplanev1.CompleteIntegrationInvocationRequest{
-		Mutation:      &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetInvocationRef(), "complete")},
+		Mutation:      &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetInvocationRef(), fmt.Sprintf("complete:%d", lease.GetGeneration()))},
 		InvocationRef: claim.GetInvocationRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(),
 		Generation: lease.GetGeneration(), Success: success, UnknownOutcome: integration.IsUnknownOutcome(operationErr), ResultSummary: result.Summary, SafeErrorCode: code,
 	}

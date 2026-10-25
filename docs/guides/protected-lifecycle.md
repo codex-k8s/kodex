@@ -103,6 +103,13 @@ cleanup не меняет semantic intent повторного completion по �
 результат принадлежит прежней owner-транзакции, usage/archive не теряются.
 Матрица локального OOM-пути — [OPS-RUNTIME-MEMORY-001](../operations/runtime-memory-failure.md).
 
+Completion фоновой работы связывает ключ идемпотентности с назначенным владельцем
+поколением attempt/lease. Неизменный отчёт того же поколения повторяет прежнюю
+квитанцию; новый recovery claim с другим lease/fence/generation не переиспользует
+ключ старого отчёта. Ключ внешнего эффекта при этом сохраняется и не разрешает
+новую запись. Изменённый payload того же поколения закрыто отклоняется.
+Матрица интеграций — [OPS-DOC-INTEGRATION-COMPLETION-1899](../operations/integration-completion-generation-1899.md).
+
 `childRunRefs` принадлежит точному узлу, а не всем узлам родительского run.
 Ordinary child подтверждается серверными `DELEGATED_TO`/`CALLBACK_TO` и
 materialized target внутри одного organization/root. Required Workflow

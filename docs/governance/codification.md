@@ -21,6 +21,7 @@ updated: 2026-10-25
 - `OPS-DOC-WORKFLOW-GATE-1872` — [Точные решения Gate опубликованного этапа](../operations/workflow-gate-decisions-1872.md).
 - `OPS-DOC-COMPLETION-RECEIPT-1881` — [Согласованное чтение receipt при завершении с артефактами](../operations/completion-receipt-preflight-1881.md).
 - `OPS-DOC-NATS-STARTUP-1895` — [Закрытая диагностика подключения API к NATS](../operations/nats-startup-diagnostic-1895.md).
+- `OPS-DOC-INTEGRATION-COMPLETION-1899` — [Идемпотентность completion при восстановлении интеграции](../operations/integration-completion-generation-1899.md).
 - `OPS-DOC-USAGE-COMPLETENESS-1840` — [Полнота измеренного расхода токенов](../operations/usage-completeness-1840.md).
 - `OPS-DOC-BACKUP-READER-1887` — [Адресное восстановление назначенной backup reader identity](../operations/backup-reader-reconcile-1887.md).
 

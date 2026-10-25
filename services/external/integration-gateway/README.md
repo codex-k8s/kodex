@@ -91,6 +91,13 @@ worker проверяет durable `UNKNOWN_OUTCOME`, сохранённый inte
 эффекта. Контракт bridge находится в `contracts/openapi/email-bridge/v1`;
 его POP/SMTP реализация принадлежит #1037.
 
+Ключ `CompleteIntegrationInvocation` связывает invocation с назначенным владельцем
+поколением lease. Повтор неизменного отчёта в том же поколении сохраняет ключ,
+а recovery с новым lease/fence/generation получает отдельную квитанцию completion.
+Это не меняет provider effect key, input digest или разрешение на внешнюю запись:
+recovery остаётся только чтением. Матрица, границы доставки и ручная проверка —
+[OPS-DOC-INTEGRATION-COMPLETION-1899](../../../docs/operations/integration-completion-generation-1899.md).
+
 Полный закрытый набор MVP-UI-42 находится в [OPERATION_MATRIX.md](OPERATION_MATRIX.md).
 `EFFECT_KEY` новых vendor-команд означает durable дедупликацию invocation у
 control-plane, а не вымышленную поддержку idempotency header провайдером.
