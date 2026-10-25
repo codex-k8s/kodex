@@ -24,7 +24,6 @@ WITH current AS (
 )
 UPDATE control_plane.runs run
 SET usage=jsonb_build_object(
-        'completeness',total.completeness,
         'total_tokens',total.total_tokens,
         'input_tokens',total.input_tokens,
         'cached_input_tokens',total.cached_input_tokens,
@@ -33,6 +32,7 @@ SET usage=jsonb_build_object(
         'reasoning_output_tokens',total.reasoning_output_tokens,
         'model_context_window',total.model_context_window,
         'turns',total.turns
-    )
+    ) || CASE WHEN total.completeness = 'UNKNOWN' THEN '{}'::jsonb
+              ELSE jsonb_build_object('completeness', total.completeness) END
 FROM total
 WHERE run.id=$1::uuid

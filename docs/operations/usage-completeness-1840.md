@@ -4,7 +4,7 @@ title: Полнота измеренного расхода токенов
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-25
 ---
 
@@ -48,10 +48,19 @@ Root агрегирует сохранённые turn receipts, а не буду
 Применённые миграции не меняются: качество хранится в существующем usage JSON.
 Новый Proto tag additive; optional JSON-поле принимает legacy snapshots,
 UNKNOWN материализуется при чтении API. Неизвестный enum отклоняется, а не
-маскируется под UNKNOWN. Поскольку старые JSON consumers могут отвергать новые
-поля, consumers/runtime-controller/CP/gateway и PWA обновляются согласованно до
-публикации нового runner; старую PWA следует обновить. Один новый runner при
-старом strict callback не считается поддерживаемым rollout.
+маскируется под UNKNOWN. UNKNOWN не записывается новым ключом в сохранённые turn/run/root usage JSON:
+отсутствие поля сохраняет прежнее значение и положительные legacy counters.
+Поэтому новый CP со старым runner продолжает писать JSON, доступный старому
+строгому CP reader; INVALID не опускается и по-прежнему закрыто отклоняется.
+
+Сначала обновляются consumers/runtime-controller/CP/gateway и PWA; до запуска
+нового runner требуется авторитетный readback всех CP replicas на новой exact
+ревизии. Старую PWA следует обновить. Новый runner при старом strict callback
+или при оставшихся старых CP replicas не считается поддерживаемым rollout.
+После первой записи PARTIAL/COMPLETE старый строгий CP reader уже несовместим:
+восстановление допускает только совместимую новую ревизию CP либо rollforward,
+а не откат к reader без этого поля. Качество из receipts/history не удаляется
+ради rollback; counters и turnRef dedup сохраняются.
 
 Обязательны parser/broker→настоящий TLS callback сценарии UNKNOWN0/COMPLETE0/
 PARTIAL100 на success/failure, lost ACK/replay, native disposable CP claim/
