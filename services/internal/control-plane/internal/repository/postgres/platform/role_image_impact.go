@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	revisionservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/revision"
@@ -377,84 +376,73 @@ func (r *Repository) roleImageImpactAccess(ctx context.Context, tx pgx.Tx, s sco
 // и неизменяемого commitment, фильтрует текущую environment/consumer eligibility до поиска и
 // cursor paging и выполняет commit до выдачи видимых элементов.
 func (r *Repository) GetRoleImageImpactPlan(ctx context.Context, p value.Principal, ref, search string, page query.Page) (entity.RoleImageImpactPage, error) {
-	var result entity.RoleImageImpactPage
-	search = strings.TrimSpace(search)
-	if !utf8.ValidString(search) || utf8.RuneCountInString(search) > 200 || strings.ContainsRune(search, 0) {
-		return result, errs.ErrInvalid
-	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	s, err := r.resolveScope(ctx, p)
-	if err != nil {
-		return result, err
-	}
-	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
-	if err != nil {
-		return result, errs.ErrUnavailable
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	row, err := r.roleImageImpact(ctx, tx, s, ref)
-	if err != nil {
-		return result, err
-	}
-	if _, _, err = r.roleImageImpactAccess(ctx, tx, s, row); err != nil {
-		return result, err
-	}
-	items, err := r.roleImageImpactItems(ctx, tx, row.id)
-	if err != nil {
-		return result, err
-	}
-	if int64(len(items)) != row.public.Total {
-		return result, errs.ErrUnavailable
-	}
-	digest, digestErr := roleImageImpactDigest(row.public, s.actorID, items)
-	if digestErr != nil || digest != row.public.Digest {
-		return result, errs.ErrUnavailable
-	}
-	filter := query.Filter{ResourceRef: ref, Category: strconv.FormatInt(row.public.Version, 10) + ":" + row.public.State, Query: search, Page: page}
-	cursor, err := decodeCatalogCursor(s, "ROLE_IMAGE_IMPACT", filter)
-	if err != nil {
-		return result, err
-	}
-	limit := boundedPage(page)
-	result.Plan = row.public
-	matching, err := impactSearchRefs(ctx, tx, queryRoleImageImpactSearchItems, row.id, search)
-	if err != nil {
-		return result, err
-	}
-	for _, item := range items {
-		if _, _, err = r.environmentImpactTarget(ctx, tx, s, item.EnvironmentRef, item.SourceVersionRef); err != nil {
-			if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) {
-				continue
-			}
+	return readImpactSnapshot(ctx, p, search, r.beginImpactSnapshot, func(ctx context.Context, tx pgx.Tx, s scope, search string) (entity.RoleImageImpactPage, error) {
+
+		var result entity.RoleImageImpactPage
+
+		row, err := r.roleImageImpact(ctx, tx, s, ref)
+		if err != nil {
 			return result, err
 		}
-		if item.Consumer.AgentRef != "" {
-			environment, ownerErr := r.getRuntimeEnvironmentTx(ctx, tx, s, item.EnvironmentRef)
-			if ownerErr != nil {
-				return result, ownerErr
-			}
-			if err = r.authorizeRuntimeEnvironmentConsumers(ctx, tx, s, environment, []entity.RuntimeEnvironmentConsumer{item.Consumer}); err != nil {
+		if _, _, err = r.roleImageImpactAccess(ctx, tx, s, row); err != nil {
+			return result, err
+		}
+		items, err := r.roleImageImpactItems(ctx, tx, row.id)
+		if err != nil {
+			return result, err
+		}
+		if int64(len(items)) != row.public.Total {
+			return result, errs.ErrUnavailable
+		}
+		digest, digestErr := roleImageImpactDigest(row.public, s.actorID, items)
+		if digestErr != nil || digest != row.public.Digest {
+			return result, errs.ErrUnavailable
+		}
+		filter := query.Filter{ResourceRef: ref, Category: strconv.FormatInt(row.public.Version, 10) + ":" + row.public.State, Query: search, Page: page}
+		cursor, err := decodeCatalogCursor(s, "ROLE_IMAGE_IMPACT", filter)
+		if err != nil {
+			return result, err
+		}
+		limit := boundedPage(page)
+		result.Plan = row.public
+		matching, err := impactSearchRefs(ctx, tx, queryRoleImageImpactSearchItems, row.id, search)
+		if err != nil {
+			return result, err
+		}
+		for _, item := range items {
+			if _, _, err = r.environmentImpactTarget(ctx, tx, s, item.EnvironmentRef, item.SourceVersionRef); err != nil {
 				if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) {
 					continue
 				}
 				return result, err
 			}
+			if item.Consumer.AgentRef != "" {
+				environment, ownerErr := r.getRuntimeEnvironmentTx(ctx, tx, s, item.EnvironmentRef)
+				if ownerErr != nil {
+					return result, ownerErr
+				}
+				if err = r.authorizeRuntimeEnvironmentConsumers(ctx, tx, s, environment, []entity.RuntimeEnvironmentConsumer{item.Consumer}); err != nil {
+					if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) {
+						continue
+					}
+					return result, err
+				}
+			}
+			if matching != nil && !matching[item.Ref] {
+				continue
+			}
+			result.Total++
+			if item.Ref > cursor && len(result.Items) <= int(limit) {
+				result.Items = append(result.Items, item)
+			}
 		}
-		if matching != nil && !matching[item.Ref] {
-			continue
+		if len(result.Items) > int(limit) {
+			result.Items = result.Items[:limit]
+			result.NextPageToken = encodeCatalogCursor(s, "ROLE_IMAGE_IMPACT", filter, result.Items[len(result.Items)-1].Ref)
 		}
-		result.Total++
-		if item.Ref > cursor && len(result.Items) <= int(limit) {
-			result.Items = append(result.Items, item)
+		if tx.Commit(ctx) != nil {
+			return result, errs.ErrUnavailable
 		}
-	}
-	if len(result.Items) > int(limit) {
-		result.Items = result.Items[:limit]
-		result.NextPageToken = encodeCatalogCursor(s, "ROLE_IMAGE_IMPACT", filter, result.Items[len(result.Items)-1].Ref)
-	}
-	if tx.Commit(ctx) != nil {
-		return result, errs.ErrUnavailable
-	}
-	return result, nil
+		return result, nil
+	})
 }

@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -265,67 +264,56 @@ func (r *Repository) revisionImpactAccess(ctx context.Context, tx pgx.Tx, s scop
 // version/state/query и применяет текущий item access до count/page, пропуская только
 // NotFound/Forbidden, затем делает commit; прочие ошибки передаются.
 func (r *Repository) GetRevisionImpactPlan(ctx context.Context, p value.Principal, ref, search string, page query.Page) (entity.RevisionImpactPage, error) {
-	var result entity.RevisionImpactPage
-	search = strings.TrimSpace(search)
-	if !utf8.ValidString(search) || utf8.RuneCountInString(search) > 200 || strings.ContainsRune(search, 0) {
-		return result, errs.ErrInvalid
-	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	s, err := r.resolveScope(ctx, p)
-	if err != nil {
-		return result, err
-	}
-	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
-	if err != nil {
-		return result, errs.ErrUnavailable
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	row, err := r.revisionImpact(ctx, tx, s, ref)
-	if err != nil {
-		return result, err
-	}
-	if err = r.revisionImpactAccess(ctx, tx, s, row); err != nil {
-		return result, err
-	}
-	items, err := r.revisionImpactItems(ctx, tx, row, s.actorID)
-	if err != nil {
-		return result, err
-	}
-	filter := query.Filter{ResourceRef: ref, Category: strconv.FormatInt(row.plan.Version, 10) + ":" + row.plan.State, Query: search, Page: page}
-	cursor, err := decodeCatalogCursor(s, "REVISION_IMPACT", filter)
-	if err != nil {
-		return result, err
-	}
-	result.Plan, result.Items = row.plan, []entity.RevisionImpactItem{}
-	matching, err := impactSearchRefs(ctx, tx, queryRevisionImpactSearchItems, row.id, search)
-	if err != nil {
-		return result, err
-	}
-	limit := int(boundedPage(page))
-	for _, item := range items {
-		if err = r.revisionImpactItemAccess(ctx, tx, s, item); err != nil {
-			if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) {
-				continue
-			}
+	return readImpactSnapshot(ctx, p, search, r.beginImpactSnapshot, func(ctx context.Context, tx pgx.Tx, s scope, search string) (entity.RevisionImpactPage, error) {
+
+		var result entity.RevisionImpactPage
+
+		row, err := r.revisionImpact(ctx, tx, s, ref)
+		if err != nil {
 			return result, err
 		}
-		if matching != nil && !matching[item.Ref] {
-			continue
+		if err = r.revisionImpactAccess(ctx, tx, s, row); err != nil {
+			return result, err
 		}
-		result.Total++
-		if item.Ref > cursor && len(result.Items) <= limit {
-			result.Items = append(result.Items, item)
+		items, err := r.revisionImpactItems(ctx, tx, row, s.actorID)
+		if err != nil {
+			return result, err
 		}
-	}
-	if len(result.Items) > limit {
-		result.Items = result.Items[:limit]
-		result.NextPageToken = encodeCatalogCursor(s, "REVISION_IMPACT", filter, result.Items[limit-1].Ref)
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return entity.RevisionImpactPage{}, errs.ErrUnavailable
-	}
-	return result, nil
+		filter := query.Filter{ResourceRef: ref, Category: strconv.FormatInt(row.plan.Version, 10) + ":" + row.plan.State, Query: search, Page: page}
+		cursor, err := decodeCatalogCursor(s, "REVISION_IMPACT", filter)
+		if err != nil {
+			return result, err
+		}
+		result.Plan, result.Items = row.plan, []entity.RevisionImpactItem{}
+		matching, err := impactSearchRefs(ctx, tx, queryRevisionImpactSearchItems, row.id, search)
+		if err != nil {
+			return result, err
+		}
+		limit := int(boundedPage(page))
+		for _, item := range items {
+			if err = r.revisionImpactItemAccess(ctx, tx, s, item); err != nil {
+				if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) {
+					continue
+				}
+				return result, err
+			}
+			if matching != nil && !matching[item.Ref] {
+				continue
+			}
+			result.Total++
+			if item.Ref > cursor && len(result.Items) <= limit {
+				result.Items = append(result.Items, item)
+			}
+		}
+		if len(result.Items) > limit {
+			result.Items = result.Items[:limit]
+			result.NextPageToken = encodeCatalogCursor(s, "REVISION_IMPACT", filter, result.Items[limit-1].Ref)
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return entity.RevisionImpactPage{}, errs.ErrUnavailable
+		}
+		return result, nil
+	})
 }
 
 // revisionImpactItemAccess resolves the authoritative consumer owner and matches its immutable

@@ -61,15 +61,7 @@ var queryConfigOverlayHistoryGet string
 // commit. Не требует access.view, не повторяет, не фиксирует, не запускает работу и не выдаёт
 // mutation authority; context и deadline вызывающего сохраняются.
 func (repository *Repository) beginScopedSnapshotRead(ctx context.Context, principal value.Principal) (scope, pgx.Tx, error) {
-	current, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return scope{}, nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return scope{}, nil, errs.ErrUnavailable
-	}
-	return current, tx, nil
+	return repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 }
 
 // validOverlayHistoryRef accepts a nonempty ref of at most 96 bytes containing only ASCII letters,

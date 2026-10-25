@@ -381,13 +381,5 @@ func (repository *Repository) RenewConfigurationSourceWork(ctx context.Context, 
 // failure в Unavailable. Не проверяет worker/root eligibility, не блокирует work, не меняет context
 // budget и не владеет rollback/commit; успешный caller сохраняет прежние defer и порядок действий.
 func (repository *Repository) beginSourceWorkTransaction(ctx context.Context, p value.Principal) (scope, pgx.Tx, error) {
-	current, err := repository.resolveScope(ctx, p)
-	if err != nil {
-		return scope{}, nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return scope{}, nil, errs.ErrUnavailable
-	}
-	return current, tx, nil
+	return repository.beginScopedTransaction(ctx, p, pgx.TxOptions{IsoLevel: pgx.Serializable})
 }

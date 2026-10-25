@@ -4899,14 +4899,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/access.go",
-      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
-      "fragmentSHA256": "2504851033c0139074f0dbaa54e6b6ebfc20f33a755d6677846cf3e2158e5fdb",
-      "count": 1,
-      "reason": "После выноса пяти одинаковых secret operation startup остаётся короткое окно с accessReadTransaction. Последний открывает READ ONLY и сам проверяет access.view/organization с rollback при отказе; secret helper открывает SERIALIZABLE, предметные permissions/locks остаются у команды. Общая transaction factory ради resolveScope/BeginTx скроет разные isolation и владельца authority без выноса общего доменного алгоритма. Исключены только точные пути/hash/count1, не transaction/authorization paths."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
       "fragmentSHA256": "6cc71055c8b5b2ce659df00936e2e2d7b80dfa73017592ffb45300223496d9e3",
@@ -7176,6 +7168,14 @@
       "fragmentSHA256": "1cc2b7f198a90236d667883fb0ce71f3bc04dbce496578caf4f262af9f08df8c",
       "count": 1,
       "reason": "152-token остаток двух revision readers охватывает typed Scan callbacks, их форматтеры и соседнюю Schedule authority/query setup. Алгоритмы collection/pagination/cursor/Err/Commit теперь общие collectTypedRows/readRevisionRowsPage. RoleImageRecipeRevision сохраняет14 positional destinations и uint64 cursor; ScheduleRevision —21 destination, два JSON decode и int64 cursor. Native project/role eligibility и schedule.view, StrictNamedArgs и query names остаются снаружи. Объединять разные column layouts/entity types в reflection либо общий owner query нельзя; остаётся лишь nominal typed projection. Сохранён exact self path/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/revision_impact.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_image_impact.go",
+      "fragmentSHA256": "8df3d70e2b1f43b356009c74f188a58e935f5e2196585ef1adebde3639c1a1cc",
+      "count": 1,
+      "reason": "110-token остаток двух impact readers начинается с typed callback после общего readImpactSnapshot. Search/deadline/scope/transaction/cleanup уже общие; остаются разные RevisionImpactPage/RoleImageImpactPage, native revisionImpact/roleImageImpact row lookup и разные revisionImpactAccess/roleImageImpactAccess signatures. Последующие commitments, source/target/item eligibility и cursor kinds различны; commit failure также сохраняет zero против partial page. Generic plan-kind dispatcher либо общий owner lookup скрыл бы эти protected boundaries. Сохранено только exact self/pair path/hash/count1 окно, не authority methods либо plan handlers."
     }
   ]
 }
