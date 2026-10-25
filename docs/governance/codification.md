@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.12
-updated: 2026-10-24
+version: 2.2.13
+updated: 2026-10-25
 ---
 
 # Кодификация документов и задач
@@ -15,6 +15,7 @@ updated: 2026-10-24
 - `RUN-DOC-1797-STORAGE` — [Перенос хранилища локальной ноды](../runbooks/local-node-storage.md).
 - `OPS-RUNTIME-MEMORY-001` — [Диагностика нехватки памяти исполнителя](../operations/runtime-memory-failure.md).
 - `OPS-OUTBOX-1855` — [Восстановление доставки событий после большой истории](../operations/outbox-claim-stabilization-1855.md).
+- `OPS-DOC-WORKFLOW-DRAFT-1870` — [Создание и чтение черновика процесса без этапов](../operations/workflow-metadata-draft-1870.md).
 
 Документ задает устойчивые идентификаторы и реестр документации.
 

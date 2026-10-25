@@ -4,11 +4,21 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.38
+version: 1.1.39
 updated: 2026-10-25
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Чтение изменяемой конфигурации для редактора отделяется от допуска к
+публикации/исполнению. Metadata-only workflow в DRAFT или ARCHIVED может
+не иметь этапов; все bounds полей и eligibility сохраняются. VALID/PUBLISHED
+draft и immutable published snapshot остаются непустыми. Postmutation
+actor-action readback проверяется тем же reader, включая archive и доступные
+replay. Terminal eligibility не расширяется: прежний command resolver может
+скрывать архивный ресурс до receipt, сохраняя query read. Ошибка до commit откатывает
+receipt/audit/outbox вместе с ресурсом.
+Матрица: [#1870](../operations/workflow-metadata-draft-1870.md).
 
 Продолжение после решения владельца переносит авторитетные Gate ref/version,
 решение и точное сохранённое замечание в новый immutable task в транзакции

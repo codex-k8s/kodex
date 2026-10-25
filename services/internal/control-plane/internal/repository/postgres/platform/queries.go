@@ -883,6 +883,10 @@ type queryRunner interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+// scanWorkflow permits bounded empty DRAFT/ARCHIVED readback while keeping validated/published
+// drafts and immutable published snapshots nonempty; malformed stored data fails closed.
+// scanWorkflow допускает bounded чтение пустого DRAFT/ARCHIVED, сохраняя непустоту validated/published
+// draft и immutable published snapshot; повреждённые сохранённые данные закрыто отклоняются.
 func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 	var item entity.Workflow
 	var draft, published []byte
@@ -902,7 +906,11 @@ func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 		return entity.Workflow{}, errs.ErrUnavailable
 	}
 	item.Draft = &entity.WorkflowVersion{}
-	if err := json.Unmarshal(draft, item.Draft); err != nil || workflowVersionStructureInvalidField(*item.Draft) != "" {
+	draftInvalidField := workflowVersionStructureInvalidField
+	if item.State == "DRAFT" || item.State == "ARCHIVED" {
+		draftInvalidField = workflowDraftStructureInvalidField
+	}
+	if err := json.Unmarshal(draft, item.Draft); err != nil || draftInvalidField(*item.Draft) != "" {
 		return entity.Workflow{}, errs.ErrUnavailable
 	}
 	normalizeWorkflowDraftIdentity(item.Ref, item.Draft)

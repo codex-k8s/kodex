@@ -1394,14 +1394,27 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 	return ""
 }
 
-// Структурно корректный, но неисполнимый профиль остаётся доступным для
-// исправления. Это не даёт ему права на публикацию или запуск.
+// workflowVersionStructureInvalidField keeps published/execution definitions nonempty and bounded;
+// allowing a mutable draft to be inspected does not grant publication or launch eligibility.
+// workflowVersionStructureInvalidField сохраняет непустую bounded структуру published/execution;
+// доступность mutable draft для чтения не даёт права публикации либо запуска.
 func workflowVersionStructureInvalidField(version entity.WorkflowVersion) string {
+	if len(version.Steps) < 1 {
+		return workflowInvalidInvariants
+	}
+	return workflowDraftStructureInvalidField(version)
+}
+
+// workflowDraftStructureInvalidField checks all existing field/step bounds while permitting no steps.
+// Only DRAFT/ARCHIVED readers may omit the strict wrapper's nonempty guard; execution retains it.
+// workflowDraftStructureInvalidField проверяет все прежние bounds полей/этапов, допуская их отсутствие.
+// Только DRAFT/ARCHIVED reader может не применять guard непустоты strict wrapper; execution сохраняет его.
+func workflowDraftStructureInvalidField(version entity.WorkflowVersion) string {
 	// maxLength считается в Unicode-символах, общий бюджет ниже остаётся байтовым.
 	if !validWorkflowText(version.Name, 160) || !validWorkflowText(version.Purpose, 2000) || !validWorkflowText(version.CompletionCriteria, 2000) || !utf8.ValidString(version.Instructions) {
 		return workflowInvalidInvariants
 	}
-	if strings.TrimSpace(version.Name) == "" || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Inputs) > 100 || len(version.Steps) < 1 || len(version.Steps) > 200 || !validWorkflowInputFields(version.Inputs) {
+	if strings.TrimSpace(version.Name) == "" || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Inputs) > 100 || len(version.Steps) > 200 || !validWorkflowInputFields(version.Inputs) {
 		return workflowInvalidInvariants
 	}
 	knownSteps := make(map[string]struct{}, len(version.Steps))
