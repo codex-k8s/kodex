@@ -7176,6 +7176,86 @@
       "fragmentSHA256": "8df3d70e2b1f43b356009c74f188a58e935f5e2196585ef1adebde3639c1a1cc",
       "count": 1,
       "reason": "110-token остаток двух impact readers начинается с typed callback после общего readImpactSnapshot. Search/deadline/scope/transaction/cleanup уже общие; остаются разные RevisionImpactPage/RoleImageImpactPage, native revisionImpact/roleImageImpact row lookup и разные revisionImpactAccess/roleImageImpactAccess signatures. Последующие commitments, source/target/item eligibility и cursor kinds различны; commit failure также сохраняет zero против partial page. Generic plan-kind dispatcher либо общий owner lookup скрыл бы эти protected boundaries. Сохранено только exact self/pair path/hash/count1 окно, не authority methods либо plan handlers."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "fragmentSHA256": "1f41144fd42f588145b364a07996ec1d09b1c031a014bdb9b5ef6dd1aad6d1c3",
+      "count": 1,
+      "reason": "Именованные RUN_READY/RUN_RESYNC_REQUIRED и RUN_UNSUBSCRIBED/PLATFORM_SNAPSHOT описывают разные закрытые envelopes: различаются discriminator, required fields, streamKind/ref и snapshot/cursor semantics. OpaqueRef и остальные повторяемые values уже вынесены в refs. Сохраняем отдельные generated Go/TypeScript types без общего allOf/object, который скрыл бы обязательные поля конкретного сообщения."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "fragmentSHA256": "d24cf4363f18707b7a0c03f02860c37a3adbcfab61fd174e2936daa3440cc922",
+      "count": 1,
+      "reason": "Окно trashedProjects/trashPage/agents/workflows/runs/gates сопоставлено с gatesPage/artifacts/schedules/definitions/connections/memberships. Это разные именованные wire properties и Go/TypeScript item bindings. Общие три import metadata уже вынесены в http_projection_imports, Project items и page cursor переиспользуются через alias/ref. Не заменяем разные entities одним типом и не переносим field names в универсальный runtime dispatcher."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "fragmentSHA256": "42ebdd7ca0e4cc455c1ffd74d6c8fc90b54c37d7149da231ecb131ee7e5727af",
+      "count": 1,
+      "reason": "Окно Agent/Workflow/Run/OwnerGate и gatesPage сопоставлено с Schedule/IntegrationDefinition/IntegrationConnection/Membership/PermissionDefinition. После общего http_projection_imports остаются собственные имена массивов и точные x-go-type/x-typescript-type. Их явное объявление сохраняет закрытый PlatformCatalogSnapshot и typed generated fields; параметризованный schema generator ради этого совпадения не нужен."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "fragmentSHA256": "8b437bdcf4a5ec6972c10ef4b46a6aa2291916e18907ed861040a40816030f06",
+      "count": 1,
+      "reason": "Последовательность Workflow/Run/OwnerGate/Artifact отличается от IntegrationConnection/Membership/PermissionDefinition/AccessSubject/OidcGroup и их page fields. Три общих import metadata уже определены один раз; оставляем явную таблицу property→external type, не объединяя security entities, run data и артефакты в один тип либо произвольный map."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "fragmentSHA256": "a4a8bbcf6724d728b7721169e4ae13c66803b85ac7e19c62d209dfc038959841",
+      "count": 1,
+      "reason": "Окно Workflow/Run/OwnerGate/Artifact сопоставлено с RoleEnvironment/RuntimeEnvironmentSet/ProviderAccount/ProviderDefinition и RuntimeSecret alias. Это разные проектные и provider projections с отдельными field/type bindings; общие import metadata, RuntimeSecret item и page cursor уже переиспользуются. Унификация оставшихся declarations скрыла бы точный wire/type contract вместо удаления технического алгоритма."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "fragmentSHA256": "94d2b0e7485210eb2d992e741e3b2bbc97f84b1a42cbdcc9ab6e92c795658183",
+      "count": 1,
+      "reason": "Перекрывающиеся окна Artifact/Schedule/IntegrationDefinition/IntegrationConnection/Membership/PermissionDefinition/AccessSubject не являются повторным исполняемым алгоритмом: detector переименовывает ключи разных полей и типов. Общие imports уже вынесены в один mapping. Сохраняем явные массивы и page fields закрытого каталога, чтобы generated models продолжали ссылаться на свои external types без дополнительных обёрток."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "fragmentSHA256": "e77d56d6377417c3f89cc58b4bf64bcc6c44122e8adef9c5499cf4a0dbd44839",
+      "count": 1,
+      "reason": "Окно Artifact/Schedule/IntegrationDefinition/IntegrationConnection/Membership/PermissionDefinition сопоставлено с recipe alias/RoleEnvironment/RuntimeEnvironmentSet/ProviderAccount/ProviderDefinition и page ref. Общие imports и повторяемые RoleImageRecipe/RuntimeSecret items уже вынесены; оставшиеся names и typed bindings разнятся. Адресно сохраняем декларации разных проекций без замены их общей нетипизированной схемой."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "2c977b784a7efbcc4789500107f902f7c5d58f850348bad9013aa8e1610bbfa2",
+      "count": 1,
+      "reason": "Окна AsyncAPI RunEdgeType/TokenUsage и OpenAPI RunTarget/TokenUsage содержат одинаковые семь неотрицательных int64 usage counters, но окружающие schema и transport contracts различны. Оба документа сохраняют собственные закрытые validation schemas и named models. AsyncAPI generator принимает только local component refs; замена external schema чистым generated type import убрала бы schema constraints, а общий универсальный generator расширил бы эту задачу без изменения алгоритма."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "103cca51f9c92a0168a7557fca0654b9b29a03987c23a6d1d4395c9ef008da4b",
+      "count": 1,
+      "reason": "Совпадает header закрытого OwnerGate и обязательные ref/version/scope/organization/run/node/title/context поля в AsyncAPI и OpenAPI. Дальнейшие определения различаются: AsyncAPI использует named OwnerGateState/OwnerGateDecision refs и bounded nextActions, OpenAPI содержит собственные enum/HTTP command contracts. Сохраняем отдельную wire validation каждого транспорта; shared external model import не заменяет required/eligibility schema и не должен ослаблять закрытый контракт Human Gate."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "de4141b1163333fba4efdc0d1ae4e643a62b3e2987b10d3d6d13673e5f5bf057",
+      "count": 1,
+      "reason": "IntegrationIntent в HTTP и browser stream сохраняет обязательные connectionRef/name, definition/capability/operation, resourceScope, effectPreview и effectKey; соседний decision consequence имеет named enum ref в AsyncAPI и inline enum в OpenAPI. Это явные схемы двух transport contracts, не повтор операции применения effect. External refs не поддерживаются текущим AsyncAPI generator; импорт generated type без локальной схемы потерял бы validation. Оставляем exact property/type/limits без смены публичных моделей."
     }
   ]
 }

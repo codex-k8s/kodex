@@ -4,11 +4,64 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.461.0
+version: 1.462.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие AsyncAPI imports и неизменные wire projections — 25.10.2026
+
+В browser-session AsyncAPI три поля импорта HTTP models определены один раз
+в http_projection_imports;30 собственных mapping definitions сохраняют явные
+x-go-type/x-typescript-type и используют общий metadata mapping. Точные
+RoleImageRecipe и RuntimeSecret items повторно используются через два aliases;
+организационные и проектные поля каталогов, их pages и eligibility не объединены.
+Прежний Project alias сохранён. Генераторы и generated output вручную не менялись.
+
+Весь документ после strict js-yaml4.3.1 load совпадает с исходным по значениям
+и canonical serialization, включая operations/channels/messages/schemas, required,
+additionalProperties, enum/pattern/limits и все Go/TS bindings. Дубли ключей
+отклоняются проверочным parser. Metadata anchor содержит только три import keys,
+не наследует бизнесовый type. Prettier исправил и прежние отклонения оформления
+в том же контракте; decoded values от этого не меняются.
+
+Неизменный путь двух scoped каталогов:
+
+| Проекция | Авторитетный read path | Результат/consumer |
+| --- | --- | --- |
+| ROLE_IMAGE_RECIPE | verified owner session → /api/v1/session/stream → projectPlatformSnapshot; ListRoleImageRecipes для project scope и ListOrganizationRoleImageRecipes для organization scope | отдельные recipes/organizationRecipes и pages → typed PlatformCatalogSnapshot → browser projection |
+| RUNTIME_SECRET | тот же session boundary → ListRuntimeSecrets и ListOrganizationRuntimeSecrets; только metadata, без reveal/value | отдельные secrets/organizationSecrets и pages → тот же typed boundary/browser projection |
+
+Owner scope/permission и state принадлежат control-plane. Native denied/notfound
+organization handling, mismatch rejection, strict projection, cursor/dedup/reconnect
+и bounded empty/absent serialization неизменны. Это read projection без новой
+команды, idempotency receipt, state transition, domain event или grant. Остальные
+28 mapping definitions меняют только три одинаковых import values, что покрыто
+сравнением всего документа и всех generated files, без нового runtime route.
+
+Toolchain/AsyncAPI validation/codegen/boundary — PASS LOCAL (5,28с); все70 Go
+и70 TypeScript generated files побайтно совпали до/после. Build всего
+control-api-gateway mod=readonly — PASS LOCAL (2,62с), unit count1 — PASS LOCAL
+(15,11с). Child env без credentials/KODEX/VITE/KUBECONFIG, GOWORK off/GOMAXPROCS4.
+YAML format и git diff --check — PASS LOCAL. Сохраняется диагностическая
+рекомендация parser использовать AsyncAPI3.1 вместо закреплённой3.0; schema
+version не повышалась. Context7 app проверил js-yaml aliases/merge/duplicate
+keys; реальное поведение подтверждено закреплённым4.3.1 и текущим AsyncAPI parser,
+без изменения dependencies. Полные PWA/browser/E2E/PG component/OCI/deploy/live —
+NOT RUN; прежние UI checks не заменяются codegen.
+
+После выноса:6725 sources/222 прежних exclusions,1589 raw/1038 retained/551
+unresolved против1598/1028/570. Исчезли15 keys/16 occurrences, появились7 окон;
+все новые окна разобраны.897 прежних registry entries неизменны, добавлены10
+точных path/hash/count1 решений:7 для явных различающихся typed declarations
+после удаления общих metadata и3 для независимых AsyncAPI/OpenAPI validation
+schemas TokenUsage/OwnerGate/IntegrationIntent. External refs не поддерживаются
+прежним AsyncAPI generator; простой generated type import не заменяет schema
+validation. Все собственные совпадения этого gateway AsyncAPI разобраны;
+остальные551 группы остаются в scope #1823. Go descriptions неизменны:
+21564/21564, пропусков0. Порог/нормализация/generated exclusions не менялись.
+
 
 ## Общая оснастка prepared-content component tests — 25.10.2026
 
