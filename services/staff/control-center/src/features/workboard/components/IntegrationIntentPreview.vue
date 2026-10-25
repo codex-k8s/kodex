@@ -104,7 +104,13 @@ function effectFieldLabel(key: string): string {
     <section v-if="effect.fields.length" class="decision-effect-fields">
       <h4>{{ $t("decisions.integrationParameters") }}</h4>
       <dl>
-        <div v-for="field in effect.fields" :key="field.key">
+        <div
+          v-for="field in effect.fields"
+          :key="field.key"
+          :class="{
+            'decision-effect-field--text': typeof field.value === 'string',
+          }"
+        >
           <dt>{{ effectFieldLabel(field.key) }}</dt>
           <dd>
             <span v-if="field.hidden">{{
@@ -206,12 +212,17 @@ function effectFieldLabel(key: string): string {
 }
 .decision-effect-fields > dl {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 .decision-effect-fields > dl > div {
   display: grid;
   grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
   gap: 10px;
+}
+.decision-effect-fields > dl > .decision-effect-field--text {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
 }
 .decision-effect-fields dt,
 .decision-effect-fields dd {
@@ -241,10 +252,10 @@ small.decision-preview-warning {
   background: var(--panel);
 }
 .decision-integration-intent h3,
-.decision-integration-intent dl {
+.decision-integration-intent > dl {
   margin: 0;
 }
-.decision-integration-intent dl {
+.decision-integration-intent > dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -280,7 +291,8 @@ small.decision-preview-warning {
   margin: 0 0 8px;
 }
 @media (max-width: 720px) {
-  .decision-integration-intent dl {
+  .decision-integration-intent > dl,
+  .decision-effect-fields > dl > div {
     grid-template-columns: minmax(0, 1fr);
   }
 }

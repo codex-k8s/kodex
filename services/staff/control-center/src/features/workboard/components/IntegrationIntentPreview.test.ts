@@ -181,3 +181,34 @@ it("HUMAN_SCOPED сохраняет selected и mutable paths; строки ос
   expect(html).toContain(">0</span>");
   expect(html).toContain(">false</span>");
 });
+
+it("body1841байт целиком находится в отдельной текстовой строке рядом с Issue number", async () => {
+  const value = intent();
+  const prefix = "Строка комментария. ".repeat(40);
+  const body =
+    prefix + "x".repeat(1841 - new TextEncoder().encode(prefix).length);
+  expect(new TextEncoder().encode(body)).toHaveLength(1841);
+  value.effectPreview.fields = [
+    {
+      key: "issue_number",
+      type: "INTEGER",
+      value: 17,
+      opaque: false,
+      truncated: false,
+    },
+    {
+      key: "body",
+      type: "STRING",
+      value: body,
+      opaque: false,
+      truncated: false,
+    },
+  ];
+  const html = await render(value);
+  // Проверяем настоящий рендер: wide-строка назначается тексту, а не Issue number.
+  const row =
+    /<div class="decision-effect-field--text"[^]*?<\/div>/.exec(html)?.[0] ??
+    "";
+  expect(row).toContain(body);
+  expect(row).not.toContain("issue_number");
+});
