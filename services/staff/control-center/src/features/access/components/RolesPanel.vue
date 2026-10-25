@@ -444,28 +444,11 @@ watch(
   margin: 0 0 14px;
   color: var(--muted);
 }
-.role-detail__body dl {
-  margin: 0;
-}
-.role-detail__body dl > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-}
-.role-detail__body dt {
-  color: var(--muted);
-}
-.role-detail__body dd {
-  margin: 0;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-.role-detail__body h4 {
-  margin: 18px 0 8px;
-  font-size: 0.85rem;
-}
+</style>
+
+<style scoped src="./access-detail-body.css"></style>
+
+<style scoped>
 .permission-list {
   padding: 0;
   margin: 0;

@@ -2337,43 +2337,11 @@ onBeforeUnmount(() => {
 .volume-mount span {
   color: var(--text-secondary);
 }
-.volume-row {
-  display: grid;
-  grid-template-columns:
-    minmax(160px, 1fr) minmax(150px, 0.72fr) minmax(120px, 0.5fr)
-    minmax(210px, 1fr) 36px;
-  gap: 10px;
-  align-items: end;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-.volume-mount {
-  display: grid;
-  min-width: 0;
-  gap: 7px;
-  align-self: center;
-}
-.volume-mount code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.destination-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-.destination-row p {
-  margin: 4px 0 0;
-  color: var(--text-secondary);
-}
+</style>
+
+<style scoped src="../features/runtime/runtime-policy-rows.css"></style>
+
+<style scoped>
 .access-toggle {
   display: flex;
   align-items: flex-start;

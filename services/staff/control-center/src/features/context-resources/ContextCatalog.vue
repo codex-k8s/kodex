@@ -342,36 +342,11 @@ useCursorInfiniteScroll({
   font-size: 0.78rem;
   white-space: nowrap;
 }
-.context-search {
-  display: flex;
-  min-width: 210px;
-  flex: 1 1 320px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-}
-.context-search input {
-  width: 100%;
-  min-width: 0;
-  min-height: var(--control-height);
-  padding: 0;
-  border: 0;
-  outline: 0;
-}
-.context-search button {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
+</style>
+
+<style scoped src="../../shared/ui/catalog-search.css"></style>
+
+<style scoped>
 .context-catalog__scroll {
   max-height: 576px;
   overflow: auto;

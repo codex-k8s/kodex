@@ -537,28 +537,11 @@ onBeforeUnmount(() => {
 .participant-detail__header small {
   color: var(--muted);
 }
-.participant-detail__body dl {
-  margin: 0;
-}
-.participant-detail__body dl > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-}
-.participant-detail__body dt {
-  color: var(--muted);
-}
-.participant-detail__body dd {
-  margin: 0;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-.participant-detail__body h4 {
-  margin: 18px 0 8px;
-  font-size: 0.85rem;
-}
+</style>
+
+<style scoped src="./access-detail-body.css"></style>
+
+<style scoped>
 .participant-bindings {
   padding: 0;
   margin: 0;

@@ -1926,36 +1926,11 @@ onBeforeUnmount(() => {
 .files-workspace__toolbar > label:not(.files-workspace__search) {
   flex: 0 0 auto;
 }
-.files-workspace__search {
-  display: flex;
-  min-width: 210px;
-  flex: 1 1 320px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-}
-.files-workspace__search input {
-  width: 100%;
-  min-width: 0;
-  min-height: var(--control-height);
-  padding: 0;
-  border: 0;
-  outline: 0;
-}
-.files-workspace__search button {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
+</style>
+
+<style scoped src="../../shared/ui/catalog-search.css"></style>
+
+<style scoped>
 .files-workspace__count {
   margin-left: auto;
   color: var(--muted);

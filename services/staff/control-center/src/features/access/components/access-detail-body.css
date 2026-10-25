@@ -1,0 +1,23 @@
+/* Описание участника и роли: scoped-граница принадлежит каждому SFC. */
+:is(.participant-detail__body, .role-detail__body) dl {
+  margin: 0;
+}
+:is(.participant-detail__body, .role-detail__body) dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+:is(.participant-detail__body, .role-detail__body) dt {
+  color: var(--muted);
+}
+:is(.participant-detail__body, .role-detail__body) dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+:is(.participant-detail__body, .role-detail__body) h4 {
+  margin: 18px 0 8px;
+  font-size: 0.85rem;
+}

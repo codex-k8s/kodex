@@ -127,28 +127,9 @@ watch(
   </section>
 </template>
 
+<style scoped src="./assistant-result-card.css"></style>
+
 <style scoped>
-.assistant-connection-card {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.assistant-connection-card header,
-.assistant-connection-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.assistant-connection-card p {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 .assistant-connection-card__problem {
   color: var(--danger);
 }

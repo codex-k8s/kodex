@@ -8024,6 +8024,62 @@
       "fragmentSHA256": "09f3b3cf5200b0ff544a32514e85de992d76becfca2958411721d46317e3cb5a",
       "count": 1,
       "reason": "mattermost.reaction.add/remove имеют post_id26/emoji_name64, status applied и EFFECT_KEY30s/1attempt после Human Gate. Это разные закрытые effects: добавить реакцию от бота либо удалить только собственную. Общая декларация не должна стирать operation key, иначе меняется grant/receipt binding конкретного эффекта. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "markup",
+      "firstPath": "services/staff/control-center/e2e/fixtures/assistant-concurrency.html",
+      "secondPath": "services/staff/control-center/e2e/fixtures/assistant-environment.html",
+      "fragmentSHA256": "f1daa506a38859be5db41efdaec9d7d8314732080a23eb99837a9264f6af7681",
+      "count": 1,
+      "reason": "HTML-заголовки двух независимо открываемых synthetic fixtures: AssistantConcurrencyFixture и AssistantEnvironmentFixture имеют разные titles, компоненты и route graph. Concurrency начинает prj_concurrency_a и проверяет переключение проектов/диалогов; environment задаёт именованные agent/runtime-environment/new routes и организационный старт. В окне только doctype/meta/mount target и nominal imports, а общие runtime config/API уже loadRuntimeConfig/configureApiClient. Новый HTML generator или generic fixture dispatcher ради этой оболочки не удалил бы нового прикладного алгоритма. Сохранены только точные pair/hash/count1, не E2E-файлы целиком."
+    },
+    {
+      "format": "markup",
+      "firstPath": "services/staff/control-center/e2e/fixtures/stt-activation.html",
+      "secondPath": "services/staff/control-center/e2e/fixtures/stt-catalog.html",
+      "fragmentSHA256": "cdf06e0cb1cc73027aa4342ad1aa2d915bcc2d6b125c5cb13e99c13fd441da4e",
+      "count": 1,
+      "reason": "HTML-оболочки отдельных STT activation/catalog fixtures содержат doctype/meta, mount target, Vue/i18n/config imports и разные panel imports. Activation управляет visible/version и published revision с consumer-binding сценарием; catalog редактирует сохранённый JSON либо пустой новый документ с modelValue/output. Исполняемые config/API primitives уже общие. Объединение через template generator или универсальный app factory связало бы разные fixture contracts ради стандартного заголовка, а не удалило общий алгоритм. Исключено только данное окно двух путей/hash/count1."
+    },
+    {
+      "format": "css",
+      "firstPath": "services/staff/control-center/src/app/styles/base.css",
+      "secondPath": "services/staff/control-center/src/app/styles/base.css",
+      "fragmentSHA256": "173b1a2ed0cf14bd122bdaa1438ec98acca3946175d54965b8f1b9c91d365f14",
+      "count": 1,
+      "reason": "Одинаковая dark palette объявляется под разными независимыми условиями: prefers-color-scheme:dark с :root:not([data-theme]) и явный :root[data-theme=\"dark\"] вне media. Первое не должно переопределять выбор пользователя, второе работает при любой системной теме. Общие light/default tokens уже :root. Простое объединение selectors/media изменило бы cascade; отдельный preprocessor/mixin либо новый light-dark contract ради этой декларации не вводится. Оставлена только точная внутрефайловая пара/hash/count1; остальные темы и base.css не исключаются."
+    },
+    {
+      "format": "html",
+      "firstPath": "services/staff/control-center/src/features/managed-configurations/RoleImageImpactSelection.vue",
+      "secondPath": "services/staff/control-center/src/features/runtime/PublicationImpactSelection.vue",
+      "fragmentSHA256": "f06b2bb325c106627f4c2ee7f6658c61e0ab205d657b021fcff224292f8b9c57",
+      "count": 1,
+      "reason": "Окно RoleImageImpactSelection и PublicationImpactSelection пересекает конец собственного списка, DOM sentinel, статус истечения PREPARED и начало разных actions. Алгоритмы pagination/scroll уже appendImpactPage/useCursorInfiniteScroll/useAdaptiveCursorPageSize. Role image использует roleImagePlanIdentity, пустой ручной выбор и emit apply; publication — publicationPlanIdentity, default selection/deselected и publicationSelection перед emit publish. Типы plans и владельцы refs/timer/expiry остаются самостоятельны. Общий action/status shell не удалил бы нового алгоритма и потребовал бы переносить native sentinel/ref и разные DOM/actions. Сохранено только это exact pair/hash/count1 окно."
+    },
+    {
+      "format": "html",
+      "firstPath": "services/staff/control-center/src/features/runtime/EnvironmentImpactDialog.vue",
+      "secondPath": "services/staff/control-center/src/features/runtime/SecretImpactDialog.vue",
+      "fragmentSHA256": "66751ad56350c92c10561f607b8ceed4d4a8d731975742f3389dc4f384dc317e",
+      "count": 1,
+      "reason": "Похожие search/loading/ProblemNotice и начало impact projection относятся к EnvironmentImpactDialog и SecretImpactDialog. Первый закрепляет environmentRef/versionRef, environmentVersion/targetDigest и плоский выбор до100 agents; второй secretRef/revision, secretVersion и32 environment groups/100 уникальных agents с server scope identity. ModalDialog, ProblemNotice и cursor/adaptive hooks уже общие, но load/apply/OCC/receipt contracts различны. Единый controller либо slot shell для этого пересекающего projection окна скрыл бы эти различия. Оставлено только exact pair/hash/count1, не dialogs или их validation."
+    },
+    {
+      "format": "html",
+      "firstPath": "services/staff/control-center/src/features/runtime/EnvironmentImpactDialog.vue",
+      "secondPath": "services/staff/control-center/src/features/runtime/SecretImpactDialog.vue",
+      "fragmentSHA256": "e35fec2f40c40fcf7c2304b9bc22131cb2879ff6d1fe7b8f8a4fa4625baca66e",
+      "count": 1,
+      "reason": "Окно конца списков/receipt/actions environment и secret dialogs включает sentinel, успешный receipt и закрытие/применение. Environment выдаёт receipt.bindings и selection.length; secret дополнительно receipt.environments и selections.length для групповых переходов. Корни списка impactList/impactGroups и выбранные версии, abort/generation/readback принадлежат своим сценариям; общие ModalDialog/cursor primitives переиспользованы. Нельзя объединить полное окно одной операцией, а компонент ради единственной строки binding summary добавил бы связь разных receipts. Сохранено лишь это точное pair/hash/count1, без исключения остальных HTML или business paths."
+    },
+    {
+      "format": "css",
+      "firstPath": "services/staff/control-center/src/shared/ui/RealtimeStatus.vue",
+      "secondPath": "services/staff/control-center/src/shared/ui/RealtimeStatus.vue",
+      "fragmentSHA256": "5eb37eabafd8e9fc1228d6fe2e257e8e0c8c96f527a08b4fd0dcf94b7c3f502d",
+      "count": 1,
+      "reason": "Короткое окно четырёх декларативных тонов RealtimeStatus: success/accent/warning/danger имеют разные пары theme tokens, одинаковый color-mix24% и разные смыслы состояний. Общая геометрия уже .realtime-status; neutral намеренно сохраняет surface/text-secondary базового правила. tone задаётся закрытым realtimeStatusPresentation и связан с icon/animation/data-preservation, а здесь нет повторного исполняемого алгоритма. Дополнительный слой CSS variables/mixin ради трёх declarations не нужен. Сохранено только это внутрефайловое окно/hash/count1, не компонент или state machine."
     }
   ]
 }

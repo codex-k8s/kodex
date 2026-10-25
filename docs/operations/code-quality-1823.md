@@ -4,11 +4,62 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.471.0
+version: 1.472.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие scoped-стили PWA — 25.10.2026
+
+Шесть CSS-файлов переиспользуются17 SFC: карточки результатов помощника,
+описания участника/роли, состояния вкладок, поиск каталога/файлов, runtime
+volume/destination rows и overlays двух pickers. Shared visual primitives
+между features размещены в shared/ui; остальные стили остаются в своей feature.
+Разные padding вкладок, desktop размеры pickers, локальные overrides и
+специальные состояния сохраняются в SFC. Scripts/templates не менялись.
+
+Общие блоки подключаются через style scoped src в прежней позиции каскада;
+при необходимости исходный inline style разделён вокруг подключения. Закрытые
+:is списки сохраняют исходные имена классов и специфичность, без нового DOM,
+динамического dispatcher и глобального расширения CSS. Layout, palette,
+selectors, declarations, media и порядок правил проверены фактическим
+Vue compiler3.5.41 для каждого consumer:429 compiled rules эквивалентны.
+Для tab-count нормализован только независимый порядок color/background,
+остальные декларации сравниваются в исходном порядке. Все17 scripts/templates,
+block attrs и CSS v-bind metadata совпали с прежними исходниками.
+
+Проверка обнаружила потерю integration-tab--active при первоначальном переносе
+селекторов. Исправлены общий stylesheet и private extractor до финальных
+проверок; весь compiled CSS proof повторён. Семь negative source mutations
+отклонены: геометрия карточки/описания/поиска, breakpoint, снятие scoped,
+подмена header и увеличение специфичности чужой ветви :is.
+
+Финальный PWA: prettier2,67с, весь lint139,71с, typecheck/production build57,68с,
+412 unit-файлов/4096 тестов30,37с — PASS LOCAL. Source hashes всех23 inputs
+совпали с proof. В production CSS отдельно проверены17 независимых scoped
+identities для шести семейств;102 production maps не содержат test/E2E helpers.
+Прежнее предупреждение размера chunks сохраняется. Это build/unit/compiled CSS,
+не реальная browser/full E2E/визуальная приёмка.
+
+Detector удалил14 CSS-окон, новых raw keys нет. Все1003 прежних registry entries
+сохранены, stale решений нет. Семь оставшихся visual windows разобраны точно:
+два HTML fixture headers с разными app/routes, два декларативных theme/status
+skin окна и три пересекающих sentinel/expiry/receipt/actions окна независимых
+impact views. Scroll/pagination/ModalDialog/ProblemNotice уже общие; native
+selection, scope, OCC, version и receipt differences сохраняются.
+
+Текущий отчёт:6740 sources/222 прежних exclusions,1553 raw/1150 retained/
+403 unresolved, registry1010. В unresolved нет CSS/HTML/markup: остаются
+158 Go,150 TypeScript,58 YAML и37 Bash. Комментарии Go21574/21574, пропусков0.
+Thresholds/нормализация/исключения generated не менялись, целые файлы/форматы
+не скрывались. Generated output, contracts, dependencies, migration, E2E и
+другие deployable этого пакета не менялись. Все403 группы сохраняются в scope.
+
+Context7 /websites/vuejs подтвердил external src, scoped styles и несколько
+style blocks одного SFC. Scope/src pipeline дополнительно проверен фактической
+production сборкой, версии не обновлялись. Deploy/live/QA текущего PR ещё
+не выполнены.
 
 ## Общая разметка схемы полей интеграции — 25.10.2026
 
