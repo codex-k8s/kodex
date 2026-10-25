@@ -35,13 +35,18 @@ var queryRepositoryBundleFixtureState string
 type bundleFixtureObjects struct {
 	objectstorage.Store
 	puts, deletes int
+	receipts      []objectstorage.Receipt
 }
 
 // Put forwards the native upload and records its external-effect count without retaining request bodies.
 // Put передаёт native upload и учитывает external effects, не сохраняя request bodies.
 func (s *bundleFixtureObjects) Put(ctx context.Context, in objectstorage.PutInput) (objectstorage.Receipt, error) {
 	s.puts++
-	return s.Store.Put(ctx, in)
+	receipt, err := s.Store.Put(ctx, in)
+	if err == nil {
+		s.receipts = append(s.receipts, receipt)
+	}
+	return receipt, err
 }
 
 // Delete records deletion attempts so unknown or replayed owner transactions cannot silently discard source material.
@@ -71,6 +76,7 @@ type repositoryBundleFixture struct {
 	input               port.RepositoryBundlePrepare
 	proposal            entity.RepositoryBundlePublication
 	archive             []byte
+	manifest            []byte
 	store               *bundleFixtureObjects
 	initialPuts         int
 }
@@ -127,7 +133,7 @@ func newRepositoryBundleFixtureMode(t *testing.T, delegated bool) *repositoryBun
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.archive = archive
+	f.archive, f.manifest = archive, manifest
 	artifacts := make([]entity.Artifact, 2)
 	for i, raw := range [][]byte{archive, manifest} {
 		artifacts[i], err = service.UploadArtifact(ctx, f.owner, value.Mutation{IdempotencyKey: fmt.Sprintf("bundle-source-%d", i)}, port.ArtifactUpload{ProjectRef: f.project, FileName: fmt.Sprintf("bundle-source-%d.json", i), MediaType: "application/json", SizeBytes: int64(len(raw)), Reader: bytes.NewReader(raw)})

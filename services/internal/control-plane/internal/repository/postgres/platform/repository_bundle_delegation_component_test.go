@@ -161,7 +161,7 @@ func testRepositoryBundleDelegatedOrder(t *testing.T, order string) {
 	f := newRepositoryBundleFixtureMode(t, true)
 	f.originResultSummary = "published successfully"
 	f.prepare()
-	repositoryBundleChildState(t, f, 0, "RUNNING")
+	repositoryBundleChildState(t, f, 0, "WAITING_HUMAN")
 	expectedState := "SUCCEEDED"
 	switch order {
 	case "origin-first":
@@ -176,7 +176,7 @@ func testRepositoryBundleDelegatedOrder(t *testing.T, order string) {
 		effect := f.claim()
 		f.begin(effect)
 		f.complete(effect)
-		repositoryBundleChildState(t, f, 0, "RUNNING")
+		repositoryBundleChildState(t, f, 0, "WAITING_HUMAN")
 		f.completeOrigin()
 	case "settled-cancelled-agent-disabled":
 		agent, err := f.service.GetAgent(f.ctx, f.owner, f.agent.Ref)

@@ -4,7 +4,7 @@ title: Публикация CLEAN bundle исходников одним commit
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-25
 ---
 
@@ -102,6 +102,10 @@ Put либо prepared-object cleanup в этом пути нет. UNKNOWN DB com
 
 Publication является retention consumer обоих source revisions до terminal;
 UNKNOWN продолжает удерживать pins после cancel/deadline/root terminal.
+Owner PURGE impact использует тот же `artifact_has_retained_revisions`, что
+physical purge guard: retained boolean входит в impact digest, а причина
+`ARTIFACT_HAS_RETAINED_REVISIONS` запрещает PURGE в preview и VFS. Она не
+превращает завершённый run в активный и не запрещает штатный soft DELETE.
 Admission удерживает ACTIVE artifact HEAD до commit. Canonical owner purge
 и retention worker сохраняют HEAD lock и fresh owner trigger recheck перед
 physical Delete. Pin не является permission: pre-Begin private source read

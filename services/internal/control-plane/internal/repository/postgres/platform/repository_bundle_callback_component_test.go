@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -58,7 +59,7 @@ func testRepositoryBundleOversizeCallback(t *testing.T) {
 	f := newRepositoryBundleFixtureMode(t, true)
 	f.prepare()
 	f.decide("APPROVE")
-	nestedAgent := createLifecycleAgent(t, f.ctx, f.service, f.owner, f.project, "oversize-helper", "Oversize helper")
+	nestedAgent := f.execute(command.CreateAgent, "oversize-helper", nil, command.AgentInput{ProjectRef: f.project, Name: "Oversize helper", Purpose: "Return a complete independent result", RoleDescription: "Read-only helper", Instructions: "Return the complete synthetic result", InitialCapabilities: []string{runtimecontract.ArtifactCapability}}).Agent
 	var children []string
 	summary := strings.Repeat("x", 4000)
 	for i := 0; i < 9; i++ {

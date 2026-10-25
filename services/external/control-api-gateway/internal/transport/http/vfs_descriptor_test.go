@@ -45,6 +45,11 @@ func TestVFSDescriptorRejectsUnknownAndContradictoryAuthority(t *testing.T) {
 	if !vfsDescriptor(fixture(), &output) || output.Version != 4 || output.Revision != 2 || !output.Selectable || len(output.NextActions) != 2 {
 		t.Fatal("owner descriptor lost")
 	}
+	retained := fixture()
+	retained.Selectable, retained.SelectionReason, retained.NextActions = false, "ARTIFACT_HAS_RETAINED_REVISIONS", []string{"RESTORE"}
+	if !vfsDescriptor(retained, &output) || string(output.SelectionReason) != retained.SelectionReason || output.Selectable || len(output.NextActions) != 1 || string(output.NextActions[0]) != "RESTORE" {
+		t.Fatal("owner retention blocker or safe actions lost")
+	}
 	for name, mutate := range map[string]func(*cp.VFSNode){
 		"unknown lifecycle":       func(v *cp.VFSNode) { v.LifecycleState = "UNKNOWN" },
 		"unknown scan":            func(v *cp.VFSNode) { v.ScanState = "UNKNOWN" },

@@ -8502,16 +8502,17 @@ func (e VFSNodeScanState) Valid() bool {
 
 // Defines values for VFSNodeSelectionReason.
 const (
-	VFSNodeSelectionReasonACTIVERUNUSESARTIFACT VFSNodeSelectionReason = "ACTIVE_RUN_USES_ARTIFACT"
-	VFSNodeSelectionReasonARTIFACTHASBINDINGS   VFSNodeSelectionReason = "ARTIFACT_HAS_BINDINGS"
-	VFSNodeSelectionReasonARTIFACTNOTACTIVE     VFSNodeSelectionReason = "ARTIFACT_NOT_ACTIVE"
-	VFSNodeSelectionReasonARTIFACTNOTDELETED    VFSNodeSelectionReason = "ARTIFACT_NOT_DELETED"
-	VFSNodeSelectionReasonARTIFACTUSEDBYSKILL   VFSNodeSelectionReason = "ARTIFACT_USED_BY_SKILL"
-	VFSNodeSelectionReasonAVAILABLE             VFSNodeSelectionReason = "AVAILABLE"
-	VFSNodeSelectionReasonDIRECTORY             VFSNodeSelectionReason = "DIRECTORY"
-	VFSNodeSelectionReasonIMMUTABLECONTEXT      VFSNodeSelectionReason = "IMMUTABLE_CONTEXT"
-	VFSNodeSelectionReasonLIFECYCLEBLOCKED      VFSNodeSelectionReason = "LIFECYCLE_BLOCKED"
-	VFSNodeSelectionReasonPERMISSIONREQUIRED    VFSNodeSelectionReason = "PERMISSION_REQUIRED"
+	VFSNodeSelectionReasonACTIVERUNUSESARTIFACT        VFSNodeSelectionReason = "ACTIVE_RUN_USES_ARTIFACT"
+	VFSNodeSelectionReasonARTIFACTHASBINDINGS          VFSNodeSelectionReason = "ARTIFACT_HAS_BINDINGS"
+	VFSNodeSelectionReasonARTIFACTHASRETAINEDREVISIONS VFSNodeSelectionReason = "ARTIFACT_HAS_RETAINED_REVISIONS"
+	VFSNodeSelectionReasonARTIFACTNOTACTIVE            VFSNodeSelectionReason = "ARTIFACT_NOT_ACTIVE"
+	VFSNodeSelectionReasonARTIFACTNOTDELETED           VFSNodeSelectionReason = "ARTIFACT_NOT_DELETED"
+	VFSNodeSelectionReasonARTIFACTUSEDBYSKILL          VFSNodeSelectionReason = "ARTIFACT_USED_BY_SKILL"
+	VFSNodeSelectionReasonAVAILABLE                    VFSNodeSelectionReason = "AVAILABLE"
+	VFSNodeSelectionReasonDIRECTORY                    VFSNodeSelectionReason = "DIRECTORY"
+	VFSNodeSelectionReasonIMMUTABLECONTEXT             VFSNodeSelectionReason = "IMMUTABLE_CONTEXT"
+	VFSNodeSelectionReasonLIFECYCLEBLOCKED             VFSNodeSelectionReason = "LIFECYCLE_BLOCKED"
+	VFSNodeSelectionReasonPERMISSIONREQUIRED           VFSNodeSelectionReason = "PERMISSION_REQUIRED"
 )
 
 // Valid indicates whether the value is a known member of the VFSNodeSelectionReason enum.
@@ -8520,6 +8521,8 @@ func (e VFSNodeSelectionReason) Valid() bool {
 	case VFSNodeSelectionReasonACTIVERUNUSESARTIFACT:
 		return true
 	case VFSNodeSelectionReasonARTIFACTHASBINDINGS:
+		return true
+	case VFSNodeSelectionReasonARTIFACTHASRETAINEDREVISIONS:
 		return true
 	case VFSNodeSelectionReasonARTIFACTNOTACTIVE:
 		return true
