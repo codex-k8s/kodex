@@ -124,6 +124,56 @@ class ScopedBackupDrill(unittest.TestCase):
         with patch.object(kube, "run", return_value=base64.b64encode(value)):
             self.assertEqual(kube.key(drill.SOURCE_NAMESPACE, STORAGE, "secret-key").encode(), value)
 
+    def test_native_custody_uses_real_key_for_every_source_name(self):
+        """Проверяет настоящий decoder и selectors всех шести штатных source keys, включая reader с `_`."""
+        import base64
+        kube = drill.Kubernetes()
+        expected = [
+            (STORAGE, "jsonpath={.data.endpoint}", drill.S3_ENDPOINT),
+            (STORAGE, "jsonpath={.data.region}", "us-east-1"),
+            (STORAGE, "jsonpath={.data.bucket}", "kodex-artifacts"),
+            (STORAGE, "jsonpath={.data.access-key}", "PRIVATE_ACCESS_SENTINEL"),
+            (STORAGE, "jsonpath={.data.secret-key}", "PRIVATE_SECRET_SENTINEL"),
+            ("kodex-postgresql-runtime-credentials", "jsonpath={.data.kodex_backup_reader}", "PRIVATE_READER_SENTINEL"),
+        ]
+        responses = {(name, selector): value for name, selector, value in expected}
+
+        def named_read(args, payload=None):
+            """Возвращает лишь синтетические значения exact named-key requests; целый Secret не обслуживается."""
+            self.assertEqual(args[:4], ["-n", drill.SOURCE_NAMESPACE, "get", "secret"])
+            self.assertEqual(len(args), 7)
+            self.assertEqual(args[5], "-o")
+            self.assertIsNone(payload)
+            return base64.b64encode(responses[(args[4], args[6])].encode())
+
+        with patch.object(kube, "run", side_effect=named_read) as transport:
+            credentials = drill.credentials(kube, self.plan)
+        self.assertEqual([(call.args[0][4], call.args[0][6]) for call in transport.call_args_list],
+                         [(name, selector) for name, selector, _ in expected])
+        self.assertEqual([item["password"] for item in credentials["databases"]],
+                         ["PRIVATE_READER_SENTINEL", "PRIVATE_READER_SENTINEL"])
+
+    def test_dotted_keys_use_literal_jsonpath_selector(self):
+        """Проверяет экранирование точки реальным adapter для всех штатных JSON input keys."""
+        import base64
+        kube = drill.Kubernetes()
+        for key, selector in (("credentials.json", r"jsonpath={.data.credentials\.json}"),
+                              ("repository.json", r"jsonpath={.data.repository\.json}"),
+                              ("targets.json", r"jsonpath={.data.targets\.json}")):
+            with self.subTest(key=key), patch.object(kube, "run", return_value=base64.b64encode(b"{}")) as transport:
+                self.assertEqual(kube.key(drill.SOURCE_NAMESPACE, "backup-controller-credentials", key), "{}")
+                transport.assert_called_once_with(["-n", drill.SOURCE_NAMESPACE, "get", "secret",
+                                                   "backup-controller-credentials", "-o", selector])
+
+    def test_key_injection_fails_before_transport(self):
+        """Неверный алфавит и selector injection отклоняются до любого дочернего процесса."""
+        kube = drill.Kubernetes()
+        for key in ("", "key/name", "key name", "key\\name", "key[0]", "key}{.metadata.name}", "key\nsuffix"):
+            with self.subTest(key=key), patch.object(kube, "run") as transport:
+                with self.assertRaisesRegex(drill.Rejected, "^SECRET_KEY_INVALID$"):
+                    kube.key(drill.SOURCE_NAMESPACE, STORAGE, key)
+                transport.assert_not_called()
+
     def test_create_response_uid_is_not_replaced_by_later_lookalike_uid(self):
         kube = drill.Kubernetes()
         with patch.object(kube, "run", return_value=UID.encode()), patch.object(kube, "identity", return_value={"uid": "22222222-2222-4222-8222-222222222222", "resourceVersion": "2"}):

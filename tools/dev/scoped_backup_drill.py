@@ -98,7 +98,8 @@ class Kubernetes:
         return {"uid": values[0], "resourceVersion": values[1]}
 
     def key(self, namespace, name, key):
-        require(re.fullmatch(r"[a-z0-9.-]+", key), "SECRET_KEY_INVALID")
+        """Читает один штатный key; закрытый алфавит и экранирование точки защищают selector."""
+        require(re.fullmatch(r"[a-z0-9_.-]+", key), "SECRET_KEY_INVALID")
         selector = key.replace(".", r"\.")
         raw = self.run(["-n", namespace, "get", "secret", name, "-o", "jsonpath={.data." + selector + "}"])
         try:
