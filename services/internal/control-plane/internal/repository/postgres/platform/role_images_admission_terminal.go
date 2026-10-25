@@ -82,13 +82,9 @@ func (repository *Repository) GetAdmissionRecoveryTerminal(ctx context.Context, 
 // Forbidden при отсутствии либо неверном proof и Unavailable при инфраструктурном отказе, делает
 // commit до ответа; recovery пропускает только необязательную проверку expected input.
 func (repository *Repository) getAdmissionTerminal(ctx context.Context, principal value.Principal, claimKey string, expected *repositoryport.AdmissionTerminalInput) (repositoryport.AdmissionTerminalProof, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return repositoryport.AdmissionTerminalProof{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return repositoryport.AdmissionTerminalProof{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var receipt admissionClaimReceipt

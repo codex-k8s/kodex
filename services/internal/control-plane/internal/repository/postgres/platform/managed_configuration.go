@@ -1021,13 +1021,9 @@ func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context,
 // Отсутствие binding и инфраструктурные ошибки различаются; текущая read authorization не
 // выводится из binding metadata, отказ commit даёт нулевой результат с Conflict.
 func (repository *Repository) GetEffectiveManagedConfiguration(ctx context.Context, principal value.Principal, kind, consumerKind, consumerRef string) (entity.ManagedConfigurationBindingSnapshot, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.ManagedConfigurationBindingSnapshot{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.ManagedConfigurationBindingSnapshot{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if kind == revisionservice.KindRoleImage {

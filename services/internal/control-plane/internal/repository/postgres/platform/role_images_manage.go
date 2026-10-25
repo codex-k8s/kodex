@@ -143,13 +143,9 @@ func (repository *Repository) Get(ctx context.Context, principal value.Principal
 // getScopedRoleImage разрешает точную область и текущие permissions в read-only repeatable-read
 // транзакции, читает recipe detail и скрывает source независимо от build/promote hints до commit.
 func (repository *Repository) getScopedRoleImage(ctx context.Context, principal value.Principal, ref, scopeKind string) (roleimagerepo.Detail, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return roleimagerepo.Detail{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return roleimagerepo.Detail{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if scopeKind == "ORGANIZATION" {

@@ -4,11 +4,63 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.419.0
+version: 1.420.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее открытие снимка чтения — 25.10.2026
+
+На основе `63e075d6f3f3f07000b6e6963dfe08064e20eca6` проверены все
+19 совместимых начал чтения в12 файлах platform repository. Вместо копий
+resolveScope→ReadOnly RepeatableRead BeginTx вызывается существующий
+beginScopedSnapshotRead. Его файл и тело не менялись. Исходный порядок
+определения области и открытия транзакции, преобразование BeginTx error в
+Unavailable и типизированные нулевые результаты сохранены.
+
+| Группа callers | Сохранённая граница |
+| --- | --- |
+| Environment draft/impact, memory, skill bundle, secret impact | Поиск проверяется до открытия снимка, прежние5s deadlines остаются у callers; owner/project/resource access, pagination и partial-result behavior не меняются |
+| Effective managed configuration, organization revisions, project assistant | Точные consumer/binding/role-image/project проверки выполняются после открытия снимка в прежнем порядке; дополнительного Commit нет |
+| Project, agent, workflow, run, run graph, owner gate, artifact, integration connection | Точные SQL и assistant context, projection, action/readiness hints, исторические ссылки и все исходные ошибки сохранены |
+| Admission terminal, scoped role image, agent runtime configuration | Exact receipt/attempt/fence/authority generation, owner scope и runtime permission остаются в специализированных методах |
+| Cleanup/commit | Caller владеет прежним defer rollback и Commit, включая independent rollback context у project assistant и raw commit error у environment draft |
+
+Независимый AST proof разворачивает19 новых вызовов и сравнивает целиком
+12 файлов с предыдущим SHA. Отдельно проверяет неизменность helper и его
+точное тело/signature. Все directives в12 файлах и прежние комментарии в7
+файлах без новых описаний сохранены. Проверки допуска между resolveScope
+и BeginTx не переносились; такие пути не включались в замену.
+
+Пять полностью прочитанных файлов(memory_record, environment_impact,
+environment_draft, secret_impact, skill_bundle;1133 исходные строки) получили
+35 предметных EN→RU описаний. Проверены SQL, на которые опираются комментарии.
+Описаны shallow-copy receipt metadata и fresh access, memory archive/restore/
+purge, bounded skill-file resolution без подмены antivirus admission,
+draft validation/publication и trusted publication rebind. Переходы и события
+не менялись; запись остаётся в исходной транзакции команды. Комментарии
+не предоставляют полномочия и не доказывают выполнение внешних действий.
+
+Полный control-plane build/unit — PASS LOCAL(checks420-final), GOWORK=off,
+GOMAXPROCS=4/-p2, все inherited KODEX inputs исключены. Independent full-file
+snapshot proof, comments/directives,17 analyzer unit,5 exact-ignore guards,
+gofmt и git diff --check — PASS. PostgreSQL/RLS/OCC/claims, secret bytes,
+реальное storage/AV/runtime, browser/E2E/deploy/live — NOT RUN/SKIP.
+Context7 MCP в этом пакете отклонил запрос из-за ошибки ключа; использована
+официальная документация [pgx BeginTx и TxOptions](https://pkg.go.dev/github.com/jackc/pgx/v5#Conn.BeginTx).
+Она подтверждает, что отмена begin-context не выполняет автоматический
+rollback; поэтому caller-owned cleanup сохранён.
+
+Detector1708 raw/886 retained occurrences/822 unresolved; registry771.
+Удалено одно точечное решение для исчезнувшего environment-draft окна.
+Два новых пересекающихся окна остаются в общем разборе, без новых exclusions.
+По сравнению с предыдущим пакетом raw меньше на24, unresolved — на23;
+это изменение detector inventory, а не число самостоятельных алгоритмов.
+Thresholds/generated exclusions прежние:6685 own sources/222 exclusions.
+Go21489:20553 EN→RU,936 missing. PR253 Go-файла/2543 объявления, missing0;
+256 whole changed blobs. QA/main f2e64eb сохранён, #1823 открыт и #1829 Draft.
+Прикладные секреты не читались, env-файлы не менялись, переносов нет.
 
 ## Artifact/VFS/avatar/archive projections — 25.10.2026
 

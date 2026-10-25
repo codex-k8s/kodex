@@ -17,15 +17,43 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryEnvironmentImpactTarget embeds the active environment and selected or current published
+// revision lookup inside the organization, including owner scope and project identifiers for
+// subsequent authorization. It reads metadata only.
+// queryEnvironmentImpactTarget встраивает поиск активного окружения и выбранной либо текущей
+// опубликованной ревизии внутри организации, включая область владельца и проект для последующей
+// авторизации. Читает только метаданные.
+//
 //go:embed sql/environment_impact_target.sql
 var queryEnvironmentImpactTarget string
 
+// queryEnvironmentImpactConsumers embeds a bounded, actor-filtered consumer page and total count
+// for bindings using another environment revision. It includes the initial system-assistant
+// binding rule; the result does not authorize a later rebind.
+// queryEnvironmentImpactConsumers встраивает ограниченную страницу потребителей и их количество с
+// фильтрацией по субъекту доступа для привязок к другой ревизии окружения. Учитывает начальную
+// привязку системного ассистента; результат не разрешает последующую перепривязку.
+//
 //go:embed sql/environment_impact_consumers.sql
 var queryEnvironmentImpactConsumers string
 
+// queryEnvironmentImpactInitialSystemBinding embeds the exact initial organization
+// system-assistant binding check, pinning agent and binding versions and the current revision
+// parent edge. Only the trusted publication path uses this narrow transition proof.
+// queryEnvironmentImpactInitialSystemBinding встраивает точную проверку начальной привязки
+// системного ассистента организации по версиям агента и привязки и связи текущей ревизии с
+// родителем. Это узкое доказательство перехода использует только доверенный путь публикации.
+//
 //go:embed sql/environment_impact_initial_system_binding.sql
 var queryEnvironmentImpactInitialSystemBinding string
 
+// environmentImpactTarget loads an active tenant-scoped environment revision, enforces the
+// authority-project boundary and environment-owner access, and returns impact metadata with its
+// private project ID. Missing targets map to NotFound; no binding or runtime grant is changed.
+// environmentImpactTarget загружает ревизию активного окружения организации, проверяет границу
+// проекта полномочий и доступ владельца окружения, возвращает метаданные влияния с внутренним
+// идентификатором проекта. Отсутствующая цель даёт NotFound; привязки и полномочия исполнения не
+// меняются.
 func (repository *Repository) environmentImpactTarget(ctx context.Context, tx pgx.Tx, current scope, ref, version string) (entity.RuntimeEnvironmentImpact, string, error) {
 	var result entity.RuntimeEnvironmentImpact
 	var projectRef, projectID, scopeKind string
@@ -46,6 +74,15 @@ func (repository *Repository) environmentImpactTarget(ctx context.Context, tx pg
 	return result, projectRef, nil
 }
 
+// GetRuntimeEnvironmentImpact validates the search before opening a five-second repeatable-read,
+// read-only transaction. It authorizes the target, binds pagination to its revision, reads one
+// extra eligible consumer for the next cursor and commits. Some failures return partial metadata,
+// which must not be treated as a completed page or rebind permission.
+// GetRuntimeEnvironmentImpact проверяет поиск до открытия read-only транзакции RepeatableRead с
+// бюджетом пять секунд. Проверяет доступ к цели, связывает пагинацию с её ревизией, читает одного
+// дополнительного допустимого потребителя для следующего курсора и завершает транзакцию. Некоторые
+// ошибки возвращают частичные метаданные, которые нельзя считать полной страницей или разрешением
+// перепривязки.
 func (repository *Repository) GetRuntimeEnvironmentImpact(ctx context.Context, principal value.Principal, ref, version, search string, page query.Page) (entity.RuntimeEnvironmentImpact, error) {
 	search = strings.TrimSpace(search)
 	if !utf8.ValidString(search) || utf8.RuneCountInString(search) > 200 || strings.ContainsRune(search, 0) {
@@ -53,13 +90,9 @@ func (repository *Repository) GetRuntimeEnvironmentImpact(ctx context.Context, p
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.RuntimeEnvironmentImpact{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.RuntimeEnvironmentImpact{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	result, _, err := repository.environmentImpactTarget(ctx, tx, current, ref, version)
@@ -103,11 +136,27 @@ func (repository *Repository) GetRuntimeEnvironmentImpact(ctx context.Context, p
 	return result, nil
 }
 
+// rebindRuntimeEnvironment delegates a normal typed rebind without a trusted publication source
+// revision. Each selected consumer must therefore satisfy the ordinary exact version checks in the
+// shared implementation.
+// rebindRuntimeEnvironment передаёт обычную типизированную перепривязку без доверенной исходной
+// ревизии публикации. Поэтому каждый выбранный потребитель должен пройти обычные точные проверки
+// версий в общей реализации.
 func (repository *Repository) rebindRuntimeEnvironment(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	return repository.rebindRuntimeEnvironmentFromPublication(ctx, tx, current, input, "")
 }
 
-// Только owner publication передаёт exact предшественника из своего immutable impact plan.
+// rebindRuntimeEnvironmentFromPublication locks and authorizes the environment, validates the
+// expected environment version and a sorted, unique selection of at most 100 consumers, then
+// executes their typed binding commands in the caller transaction. It checks current agent,
+// binding and source revision pins; only a nonempty trusted publication source permits the exact
+// initial-system-binding exception. Nested events are accumulated without committing.
+// rebindRuntimeEnvironmentFromPublication блокирует окружение и проверяет доступ, ожидаемую версию
+// окружения и отсортированный уникальный набор максимум из 100 потребителей, затем выполняет
+// типизированные команды привязки в транзакции вызывающего кода. Проверяет текущие версии агента,
+// привязки и исходной ревизии; исключение для начальной системной привязки требует непустой
+// доверенной исходной ревизии публикации. События вложенных команд накапливаются без завершения
+// транзакции.
 func (repository *Repository) rebindRuntimeEnvironmentFromPublication(ctx context.Context, tx pgx.Tx, current scope, input command.Command, publicationSourceRevision string) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.RuntimeEnvironmentRebindInput)
 	if !ok || payload.VersionRef == "" || input.Mutation.ExpectedVersion == nil || len(payload.Consumers) == 0 || len(payload.Consumers) > 100 {

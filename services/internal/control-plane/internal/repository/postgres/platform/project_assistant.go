@@ -383,13 +383,9 @@ func scanProjectAssistant(row pgx.Row) (entity.ProjectAssistantProfile, error) {
 // предшествует выдаче. Независимый ограниченный rollback выполняется при выходе, его ошибка
 // игнорируется.
 func (repository *Repository) GetProjectAssistant(ctx context.Context, principal value.Principal, projectRef string) (entity.ProjectAssistantProfile, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.ProjectAssistantProfile{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.ProjectAssistantProfile{}, errs.ErrUnavailable
 	}
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)

@@ -18,21 +18,64 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// querySecretImpactTarget embeds the active secret metadata lookup for a requested revision or the
+// current revision when zero is supplied. It returns owner scope and project identifiers within
+// one organization, never the secret value.
+// querySecretImpactTarget встраивает поиск метаданных активного секрета для запрошенной ревизии
+// либо текущей при нулевом номере. Возвращает область владельца и идентификаторы проекта внутри
+// одной организации, но не значение секрета.
+//
 //go:embed sql/secret_impact_target.sql
 var querySecretImpactTarget string
 
+// querySecretImpactConsumers embeds actor- and authority-project-filtered environment revision
+// consumers that reference another secret revision. It returns a cursor page plus total, including
+// eligible unbound current revisions, without reading secret bytes or granting update permission.
+// querySecretImpactConsumers встраивает поиск потребителей ревизий окружения со ссылкой на другую
+// ревизию секрета, с фильтрацией по субъекту и проекту полномочий. Возвращает страницу с курсором
+// и общее количество, включая допустимые текущие ревизии без привязок, без чтения содержимого
+// секрета и выдачи разрешения на изменение.
+//
 //go:embed sql/secret_impact_consumers.sql
 var querySecretImpactConsumers string
 
+// querySecretRebindSourceVersion embeds the exact organization/environment/revision lookup of a
+// published environment version number. The caller separately checks owner access and the loaded
+// history revision identity.
+// querySecretRebindSourceVersion встраивает поиск номера опубликованной версии окружения по точным
+// организации, окружению и ревизии. Вызывающий код отдельно проверяет доступ владельца и
+// идентичность ревизии, загруженной из истории.
+//
 //go:embed sql/secret_rebind_source_version.sql
 var querySecretRebindSourceVersion string
 
+// queryRuntimeSecretRevisionRetained embeds the retention predicate for an active secret revision:
+// the current secret revision or one referenced by a current environment, explicit agent binding
+// or active run runtime revision remains retained. This predicate reads metadata only.
+// queryRuntimeSecretRevisionRetained встраивает условие удержания активной ревизии секрета:
+// сохраняется текущая ревизия либо ревизия, используемая текущим окружением, явной привязкой
+// агента или runtime-ревизией активного запуска. Условие читает только метаданные.
+//
 //go:embed sql/runtime_secret_revision_retained.sql
 var queryRuntimeSecretRevisionRetained string
 
+// queryRuntimeSecretRetireRevision embeds the update that marks a selected secret ID and revision
+// RETIRED. The caller must supply a trusted secret ID and enforce retention, authorization and
+// transaction boundaries; this statement does not erase secret bytes.
+// queryRuntimeSecretRetireRevision встраивает перевод выбранных идентификатора секрета и ревизии в
+// RETIRED. Вызывающий код обязан получить доверенный идентификатор и обеспечить удержание,
+// авторизацию и границы транзакции; запрос не стирает содержимое секрета.
+//
 //go:embed sql/runtime_secret_retire_revision.sql
 var queryRuntimeSecretRetireRevision string
 
+// secretImpactTarget rejects negative revisions, loads active secret revision metadata within the
+// organization and enforces authority-project and owner-scope checks plus secret.rotate access. It
+// returns impact metadata and the private project ID without retrieving secret values.
+// secretImpactTarget отклоняет отрицательный номер ревизии, загружает метаданные активной ревизии
+// секрета внутри организации и проверяет проект полномочий, область владельца и доступ
+// secret.rotate. Возвращает метаданные влияния и внутренний идентификатор проекта без извлечения
+// значений секрета.
 func (repository *Repository) secretImpactTarget(ctx context.Context, tx pgx.Tx, current scope, ref string, revision int64) (entity.RuntimeSecretImpact, string, error) {
 	var result entity.RuntimeSecretImpact
 	if revision < 0 {
@@ -64,6 +107,15 @@ func (repository *Repository) secretImpactTarget(ctx context.Context, tx pgx.Tx,
 	return result, projectRef, nil
 }
 
+// GetRuntimeSecretImpact validates bounded UTF-8 search before opening a five-second
+// repeatable-read, read-only transaction, then authorizes the secret target and reads a
+// cursor-bound consumer page. It uses an extra row for the next cursor and commits; partial
+// metadata on failure is not a successful page or permission to mutate consumers.
+// GetRuntimeSecretImpact проверяет ограничения UTF-8 поиска до открытия read-only транзакции
+// RepeatableRead с бюджетом пять секунд, затем проверяет доступ к секрету и читает связанную с
+// курсором страницу потребителей. Использует дополнительную строку для следующего курсора и
+// завершает транзакцию; частичные метаданные при ошибке не означают успешную страницу или
+// разрешение менять потребителей.
 func (repository *Repository) GetRuntimeSecretImpact(ctx context.Context, principal value.Principal, ref string, revision int64, search string, page query.Page) (entity.RuntimeSecretImpact, error) {
 	search = strings.TrimSpace(search)
 	if !utf8.ValidString(search) || utf8.RuneCountInString(search) > 200 || strings.ContainsRune(search, 0) {
@@ -71,13 +123,9 @@ func (repository *Repository) GetRuntimeSecretImpact(ctx context.Context, princi
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.RuntimeSecretImpact{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.RuntimeSecretImpact{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	result, _, err := repository.secretImpactTarget(ctx, tx, current, ref, revision)
@@ -125,6 +173,17 @@ func (repository *Repository) GetRuntimeSecretImpact(ctx context.Context, princi
 	return result, nil
 }
 
+// rebindRuntimeSecret authorizes a typed secret rebind with a positive target revision, expected
+// secret version and up to 32 unique environment selections and 100 consumers. It validates owner
+// snapshots and exact source revisions, publishes new environment descriptors and optionally
+// rebinds selected agents in the same caller transaction. The internal OWNER lookup is used only
+// after selection authorization; no secret bytes are materialized and no separate commit occurs.
+// rebindRuntimeSecret проверяет полномочия типизированной перепривязки секрета с положительной
+// целевой ревизией, ожидаемой версией секрета и максимум 32 уникальными окружениями и 100
+// потребителями. Проверяет снимки владельца и точные исходные ревизии, публикует новые дескрипторы
+// окружений и при необходимости перепривязывает выбранных агентов в той же транзакции. Внутреннее
+// чтение с OWNER применяется только после авторизации выбора; содержимое секретов не извлекается,
+// отдельного завершения транзакции нет.
 func (repository *Repository) rebindRuntimeSecret(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.RuntimeSecretRebindInput)
 	if !ok || payload.Revision < 1 || input.Mutation.ExpectedVersion == nil || len(payload.Selections) < 1 || len(payload.Selections) > 32 {

@@ -13,6 +13,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// scanEnvironmentDraft scans draft metadata and decodes specification and diagnostics JSON. A
+// missing row returns NotFound; storage or JSON failures return Unavailable. The scan does not
+// authorize access or validate the draft specification.
+// scanEnvironmentDraft читает метаданные черновика и декодирует JSON спецификации и диагностики.
+// Отсутствие строки даёт NotFound; ошибки хранилища или JSON — Unavailable. Чтение не подтверждает
+// доступ и не проверяет допустимость спецификации.
 func scanEnvironmentDraft(row rowScanner) (entity.RuntimeEnvironmentDraft, error) {
 	var draft entity.RuntimeEnvironmentDraft
 	var specification, diagnostics []byte
@@ -28,14 +34,16 @@ func scanEnvironmentDraft(row rowScanner) (entity.RuntimeEnvironmentDraft, error
 	return draft, nil
 }
 
+// GetRuntimeEnvironmentDraft reads the tenant-scoped draft and checks environment-owner access in
+// a repeatable-read, read-only transaction using the supplied context. It returns the draft with
+// the raw commit error and retains deferred rollback; it adds no local deadline.
+// GetRuntimeEnvironmentDraft читает черновик организации и проверяет доступ владельца окружения в
+// read-only транзакции RepeatableRead с переданным контекстом. Возвращает черновик с исходной
+// ошибкой Commit и сохраняет отложенный rollback; собственного deadline не добавляет.
 func (repository *Repository) GetRuntimeEnvironmentDraft(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentDraft, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.RuntimeEnvironmentDraft{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.RuntimeEnvironmentDraft{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	draft, err := scanEnvironmentDraft(tx.QueryRow(ctx, queryEnvironmentDraftGet, current.organizationID, ref))
@@ -48,6 +56,18 @@ func (repository *Repository) GetRuntimeEnvironmentDraft(ctx context.Context, pr
 	return draft, tx.Commit(ctx)
 }
 
+// changeRuntimeEnvironmentDraft handles typed draft creation, saving, validation, discard and
+// publication in the supplied transaction. It checks owner scope, bounded specification size,
+// existing-draft locks and expected versions; terminal drafts cannot change. Validation stores a
+// digest and diagnostics, and publication rechecks the validated digest before publishing and
+// optionally rebinding selected consumers. It returns an outcome without committing, so all writes
+// share the outer command transaction.
+// changeRuntimeEnvironmentDraft обрабатывает типизированные создание, сохранение, проверку,
+// отбрасывание и публикацию черновика в переданной транзакции. Проверяет область владельца, размер
+// спецификации, блокировку существующего черновика и ожидаемые версии; конечные состояния
+// неизменяемы. Проверка сохраняет дайджест и диагностику, публикация повторно сверяет проверенный
+// дайджест перед публикацией и возможной перепривязкой выбранных потребителей. Возвращает
+// результат без завершения транзакции, сохраняя все записи в общей транзакции команды.
 func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.RuntimeEnvironmentDraftInput)
 	if !ok {
@@ -190,12 +210,26 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 	return environmentDraftOutcome(current, draft, nil, mustProjectID(ctx, tx, current.organizationID, draft.ProjectRef)), nil
 }
 
+// environmentDraftPayload projects draft specification fields and its environment reference into a
+// runtime-environment command input. Slices and maps remain shared; the projection neither
+// authorizes nor publishes anything.
+// environmentDraftPayload переносит поля спецификации черновика и ссылку на окружение во вход
+// команды окружения. Срезы и отображения остаются общими; преобразование само не проверяет
+// полномочия и ничего не публикует.
 func environmentDraftPayload(draft entity.RuntimeEnvironmentDraft) command.RuntimeEnvironmentInput {
 	spec := draft.Specification
 	return command.RuntimeEnvironmentInput{ScopeKind: draft.ScopeKind, Ref: draft.EnvironmentRef, ProjectRef: draft.ProjectRef, Name: spec.Name, Description: spec.Description,
 		Values: spec.Values, SecretBindings: spec.SecretBindings, Tools: spec.Tools, Policy: spec.Policy, ImageArtifactRef: spec.ImageArtifactRef}
 }
 
+// validateEnvironmentDraft checks owner access and bounded name/description, admits policy,
+// resolves scoped secret descriptors and image/tool metadata, then computes the configuration
+// digest. It returns the first failure and does not materialize secret values, publish a version
+// or commit.
+// validateEnvironmentDraft проверяет доступ владельца и ограничения имени и описания, допустимость
+// политики, дескрипторы секретов и метаданные образа и инструментов в нужной области, затем
+// вычисляет дайджест конфигурации. Возвращает первую ошибку; не извлекает значения секретов, не
+// публикует версию и не завершает транзакцию.
 func (repository *Repository) validateEnvironmentDraft(ctx context.Context, tx pgx.Tx, current scope, draft entity.RuntimeEnvironmentDraft) (string, error) {
 	spec := draft.Specification
 	if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, draft.ScopeKind, draft.ProjectRef); err != nil {
@@ -221,6 +255,14 @@ func (repository *Repository) validateEnvironmentDraft(ctx context.Context, tx p
 	return digest, err
 }
 
+// environmentDraftOutcome builds the draft result and summary without database I/O. When
+// publication returned an environment, it changes the resource reference and aggregate version and
+// includes the existing AGENT_CHANGED event; event persistence and commit belong to the outer
+// command processor.
+// environmentDraftOutcome собирает результат черновика и краткое описание без обращения к БД. Если
+// публикация вернула окружение, меняет ссылку ресурса и версию агрегата и включает существующее
+// событие AGENT_CHANGED; сохранение события и завершение транзакции выполняет внешний обработчик
+// команды.
 func environmentDraftOutcome(_ scope, draft entity.RuntimeEnvironmentDraft, environment *entity.RuntimeEnvironmentSet, projectID string) commandOutcome {
 	outcome := commandOutcome{result: command.Result{RuntimeEnvironmentDraft: &draft, RuntimeEnvironment: environment},
 		projectID: projectID, projectRef: draft.ProjectRef, resourceKind: "RUNTIME_ENVIRONMENT_DRAFT", resourceRef: draft.Ref,

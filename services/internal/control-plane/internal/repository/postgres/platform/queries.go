@@ -527,13 +527,9 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 // presentation permissions membership для обычного субъекта и проецирует текущую карточку.
 // Отсутствие строки даёт NotFound; ошибки запроса/commit дают Unavailable.
 func (repository *Repository) GetProject(ctx context.Context, principal value.Principal, ref string) (entity.Project, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.Project{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.Project{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var item entity.Project
@@ -860,13 +856,9 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 // integration grants и карточки; отсутствие строки даёт NotFound, отказ добавления данных/commit
 // даёт Unavailable.
 func (repository *Repository) GetAgent(ctx context.Context, principal value.Principal, ref string) (entity.Agent, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.Agent{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.Agent{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var item entity.Agent
@@ -1204,13 +1196,9 @@ func workflowActions(item entity.Workflow, canManage, canLaunch bool) []string {
 // снимке, декодирует версии с областью субъекта, проецирует launch readiness/карточки и фиксирует
 // транзакцию. Отказ чтения/проекции исключает workflow в ответе; отказ commit даёт Unavailable.
 func (repository *Repository) GetWorkflow(ctx context.Context, principal value.Principal, ref string) (entity.Workflow, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.Workflow{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.Workflow{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "WORKFLOW", EntityRef: ref}, ""); err != nil {
@@ -1719,13 +1707,9 @@ func applyEventActionPermissions(event *entity.RunEvent, permissions actorAction
 // транзакции, читает incidents/continuation/artifact проекции, добавляет session readiness и
 // фиксирует транзакцию. Любая ошибка отбрасывает запуск; отказ commit даёт Unavailable.
 func (repository *Repository) GetRun(ctx context.Context, principal value.Principal, ref string) (entity.Run, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.Run{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.Run{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "RUN", EntityRef: ref}, ""); err != nil {
@@ -1818,13 +1802,9 @@ func (repository *Repository) GetRunGraphSnapshot(ctx context.Context, principal
 // retry/артефакты. Режим snapshot требует выбранный root и добавляет его семейство; строки
 // закрываются до зависимых чтений и commit. Ошибки исключают частичный запуск и граф.
 func (repository *Repository) getRunGraph(ctx context.Context, principal value.Principal, ref string, includeRuns bool) (entity.Run, entity.RunGraph, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	run, err := repository.readRunWithIncidents(ctx, tx, scope, ref)
@@ -2097,13 +2077,9 @@ func gateActions(state string, canResolve bool) []string {
 // дополнительно проверяет organization role-image access для шлюза организации и проецирует
 // текущий intent до commit. Не принимает решение и не изменяет шлюз.
 func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.Principal, ref string) (entity.OwnerGate, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.OwnerGate{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.OwnerGate{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	gate, err := scanGate(tx.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID), true)
@@ -2338,13 +2314,9 @@ func artifactActions(scanState, lifecycleState string, canManage bool) []string 
 func (repository *Repository) GetArtifact(ctx context.Context, principal value.Principal, ref string) (entity.Artifact, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.Artifact{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "FILE", EntityRef: ref}, ""); err != nil {
@@ -2823,13 +2795,9 @@ func readConnection(ctx context.Context, querier connectionQuerier, scope scope,
 // Любая ошибка возвращает пустой connection; провайдера не тестирует, содержимое секретов не
 // читает.
 func (repository *Repository) GetIntegrationConnection(ctx context.Context, principal value.Principal, ref string) (entity.IntegrationConnection, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.IntegrationConnection{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "INTEGRATION_CONNECTION", EntityRef: ref}, ""); err != nil {

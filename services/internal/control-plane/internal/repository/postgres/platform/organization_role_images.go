@@ -106,13 +106,9 @@ func (repository *Repository) GetOrganization(ctx context.Context, principal val
 // immutable revisions. Делегированный reader делает успешный commit; deferred rollback покрывает
 // ошибки и не выдаёт полномочий записи.
 func (repository *Repository) ListOrganizationRevisions(ctx context.Context, principal value.Principal, ref string, page query.Page) ([]entity.RoleImageRecipeRevision, string, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return nil, "", err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := repository.requireOrganizationRoleImageAccess(ctx, tx, current); err != nil {
