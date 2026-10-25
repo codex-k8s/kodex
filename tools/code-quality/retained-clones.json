@@ -3493,22 +3493,6 @@
       "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "fragmentSHA256": "8217addb3fa9b193c048896e839512bf7c64fd4f6a8d6bfb2be5e5028e64616a",
-      "count": 1,
-      "reason": "Большое окно сопоставляет отдельные API SkillBundle и MemoryRecord. Каждый handler вызывает собственный типизированный owner RPC и проверяет номинальную форму ресурса; memory view дополнительно сохраняет redaction, а bundle view — свой revision. Общие проверки reference, mutation, binding и page уже вынесены в узкие helpers; универсальный CRUD-dispatch смешал бы разные owner commands и eligibility. Сохраняется только это точное окно."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "fragmentSHA256": "110e578d3eda48a16d9c1b52f78ab68e40af57f2b1921e231b18df0490963ca3",
-      "count": 1,
-      "reason": "Соседние Archive/Restore/Purge SkillBundle имеют одинаковую transport-оболочку, но три отдельные lifecycle-команды владельца и разные terminal эффекты. Входная проверка уже общая через requireContextResourceMutation; объединение command selection в универсальный handler скрыло бы специализированный RPC и изменило бы проверяемую границу перехода. Исключено только точное пересечение этих строк."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
       "fragmentSHA256": "7a7f706cc680e219fcedb90ab25a2db1dda82069507a4441edacc22452649df1",
       "count": 1,
       "reason": "BindAgentSkillBundle и UnbindAgentSkillBundle используют одну уже вынесенную проверку binding tuple, но вызывают разные owner-команды с самостоятельными условиями создания и снятия привязки. Совпадение transport-каркаса не разрешает общий write-метод; ответ каждого RPC проверяется на точный agent/resource/revision. Оставлено только данное окно."
@@ -4616,30 +4600,6 @@
       "fragmentSHA256": "ca36b877f957f46c8cdeb6c787595318053b10d87520929a3196f07a6292d6e0",
       "count": 1,
       "reason": "Сопоставлены перекрывающиеся со сдвигом на один элемент окна ОДНОГО выбранного RPC-method oracle. Повторяются форма selector и разделители, но каждый method constant задаёт отдельный ожидаемый защищённый RPC. Второго исполняемого блока нет; сокращение до общего production registry сделало бы authority projection test самоподтверждающимся. Оставлен exact window с digest и count, а не весь тест или каталог."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
-      "fragmentSHA256": "b46f92d2da9b68be3b08c5d0924de1c707cd070d144b679d1229923c5a450257",
-      "count": 1,
-      "reason": "После вынесения общего exact conversation/ref/version/target-state результата archive/restore осталось261-token перекрывающееся окно конца archive, полного restore и начала purge. Совпадают opaque-ref guard, requireVersionedMutation и writeRPCProblem, уже общие primitives. Три команды имеют разные generated requests/owner methods, ARCHIVED/ACTIVE против bodyless purge204 и отдельного exact purge receipt. Универсальный callback dispatcher скрыл бы явные lifecycle команды без нового общего алгоритма. Исключён только exact fragment двух координат этого файла, count1; общий validator и остальные handlers не скрыты."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
-      "fragmentSHA256": "c6f3269d0a2f3aacfef48c3cd12b332c6c7be11257c01ec78f3e844fde8d96dd",
-      "count": 1,
-      "reason": "Окно125tokens сравнивает archive preconditions/RPC/error и начало общего state-result helper с cancel-turn preconditions/RPC/error до собственной проверки cancelled/run-ref. Opaque-ref, mandatory versioned mutation и error mapping уже общие; archive state-result вынесен отдельно. Отмена turn закрывает другой owner graph и проверяет другой response shape. Общий command wrapper связал бы разные полномочия и postconditions ради нескольких typed строк. Сохранён только exact path/fragment/count1, не cancellation или lifecycle методы целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/interaction_identity_endpoints.go",
-      "fragmentSHA256": "3ead855b5df07e3ce276ce0cb0b8863f65f7950415a0cfaf31761e0edbb1aa47",
-      "count": 1,
-      "reason": "Окно126tokens сопоставляет restore-conversation preconditions и typed Assistant RPC с revoke-interaction-identity preconditions и typed Command RPC до проверки identityView. Versioned mutation и RPC problem уже общие; exact conversation state-result вынесен в helper. Восстановление диалога и отзыв внешней identity имеют разные owner boundaries, refs, postconditions и public projections. Generic mutation dispatcher здесь спрятал бы маршрутизацию без общего связного алгоритма. Только эти два пути, fragment SHA-256 и count1."
     },
     {
       "format": "go",
@@ -8472,6 +8432,78 @@
       "fragmentSHA256": "14031993c46bae0eb255cf7c39ce5a16ca8fc4de0d1e30c1547bd72524fba7aa",
       "count": 1,
       "reason": "Окно CreateRuntimeEnvironmentSet/PublishRuntimeEnvironmentVersion содержит вызовы общих mutation/policy/value/tool/binding casters и заполнение двух сгенерированных запросов. Create использует ProjectRef, отсутствие IfMatch и HTTP201; publish — EnvironmentRef, IfMatch и HTTP200. Политику уже проверяет runtimeEnvironmentPolicyInput; остаются типизированные поля и короткие проверки результата. Универсальный setter скрыл бы разные контракты. Только точное окно одного пути/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "fragmentSHA256": "19e7fae2b4f8365c0d3a3396df02a11e4705118bb97876d8f2faba6cc485585d",
+      "count": 1,
+      "reason": "После подключения общего ref/version validator окно пересекает окончание списка диалогов и отдельные Archive/Restore handlers. Входы уже requireVersionedReferenceMutation, результат — writeAssistantConversationState; остаются разные сгенерированные RPC и ожидаемые ARCHIVED/ACTIVE состояния. Команды имеют разные переходы владельца и terminal effects. Универсальный dispatcher ради этих типизированных вызовов скрыл бы границу переходов. Только точное окно одного пути/hash/count1, не lifecycle целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "fragmentSHA256": "21110fb97b7dc7c0a0070c4b2530f295b05a7e73087f6e0ea09ae32f214981b6",
+      "count": 1,
+      "reason": "Короткое окно ArchiveAssistantConversation сопоставлено с CancelAssistantTurn после выноса reference/header checks. Общие validator и error mapper уже функции; archive проверяет exact conversation/version/state, cancel — другой response contract с cancelled/run-ref и другим графом выполнения. Создание общего callback command wrapper скрыло бы эти полномочия и postconditions без нового алгоритма. Сохранено только точное окно одного пути/hash/count1, не cancel или archive в целом."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "fragmentSHA256": "6d3b031e8da6f28a6dd459f3ae7b521b7117212f2095159b4d312b2610b6f3f3",
+      "count": 1,
+      "reason": "Окно PurgeAssistantConversation/CancelAssistantTurn заканчивается на проверке conversationRef ответа. Входной validator и RPC problem уже общие; purge выдаёт bodyless204 после exact receipt, cancel дополнительно проверяет согласованность cancelled/run-ref и выдаёт200. Эти подтверждения разных owner transitions остаются явными. Обёртка ради нескольких вызовов не выносит новый общий алгоритм. Только exact self-path/hash/count1, не обработчики и response guards целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "eb8cd044d0a2d371ad6b03c8b40c12ed43f1c2674c38f9c0b0d6d3cacd692ea7",
+      "count": 1,
+      "reason": "Большое окно отдельных SkillBundle и MemoryRecord API изменилось только именем общего reference validator: обратная замена имени полностью восстанавливает прежний fragment8217addb3fa9. Каждый handler сохраняет свой типизированный owner RPC и проекцию; память отдельно проверяет redaction, bundle — revision. Общие reference/mutation/binding/page primitives уже вынесены. Универсальный CRUD-dispatch смешал бы разные eligibility и lifecycle. Только точный путь/hash/count1, не целые API или файл."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "1f54bfb3f421a5459c0a5bdc25bb4ac85507557a326d12f499f360ec6315082c",
+      "count": 1,
+      "reason": "Окно соседних Archive/Restore/Purge SkillBundle отличается от прежнего110e578d3eda только именем общего validator; raw fragment восстановлен точной обратной заменой. Три отдельные команды владельца имеют разные terminal effects, а вход уже requireVersionedReferenceMutation. Универсальный handler скрыл бы явный RPC перехода без нового общего алгоритма. Сохранено только точное пересечение одного пути/hash/count1; другие обработчики и validator не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/configuration_writeback_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/configuration_writeback_endpoints.go",
+      "fragmentSHA256": "a57f28317e6dea2c4c88459b091738246a739b6203caf68158b124486f1123cf",
+      "count": 1,
+      "reason": "PrepareRoleImageGitWriteBack и PrepareIntegrationDefinitionGitWriteBack используют уже общие writeBackPrepareInput и writePreparedWriteBack. В окне остаются два разных сгенерированных owner RPC и обязательные ROLE_IMAGE/INTEGRATION_DEFINITION bindings ответа. Источник, source/version/content digest и право записи проверяются отдельно от совпадения структуры запросов. Общий command dispatcher скрыл бы kind binding. Только точное окно одного пути/hash/count1, не подготовка Git write-back целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/configuration_writeback_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/configuration_writeback_endpoints.go",
+      "fragmentSHA256": "1757dbf0adcbc41eb739d29589f481a47d471f6037d60b1d062656acfbbdc191",
+      "count": 1,
+      "reason": "Approve/RejectManagedConfigurationGitWriteBack уже используют writeBackDecisionInput и writeWriteBackDecision. Между ними разные специализированные RPC и ожидаемые QUEUED/REJECTED состояния; общий result checker требует более новую версию и тот же approval digest. Эти полномочия и lifecycle переходы не должны заменяться универсальной transition-командой. Повторяется типизированный код вызовов общих primitives, не новая реализация. Только точный путь/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_specification.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_specification.go",
+      "fragmentSHA256": "e8e7229ff498b0038a9f8232e33aa0eebd88645266c8639aec2460e95c2e4776",
+      "count": 1,
+      "reason": "Окно трёх endpoint/limits преобразований относится к разным направлениям EmailMailboxSpecification: generated input→protobuf и protobuf→public view. Реальные проверки уже mailboxEnumInput/View, mailboxEndpointInput/View и mailboxLimitsInput/View. Input сохраняет часть slices, view копирует списки и выставляет scalar pointers; nil/default и типы различны. Универсальный callback mapper ради присваиваний скрыл бы эти правила. Только точное окно одного пути/hash/count1, не спецификация или двунаправленные casters целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_views.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_views.go",
+      "fragmentSHA256": "e2b0b8f93c57cc0525dab9f5ee685c1ae502f609e266084b38fa7f6a920a078d",
+      "count": 1,
+      "reason": "writeSkillBundle/writeMemoryRecord используют разные типизированные converters с отдельными revision/redaction/eligibility правилами, затем проверяют ref и пишут ETag/JSON через общие primitives. Повторяется короткое связывание номинальных DTO с одинаковой HTTP-формой, не ещё одна реализация converter. Универсальный writer с отдельными valid/ref/version metadata ослабил бы связь данных с типом ради трёх вызовов. Сохранено только точное окно одного пути/hash/count1, не view validation или файл целиком."
     }
   ]
 }

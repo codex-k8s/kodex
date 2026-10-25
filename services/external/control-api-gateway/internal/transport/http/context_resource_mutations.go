@@ -7,20 +7,6 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
-// requireContextResourceMutation checks a skill/memory resource reference before
-// parsing versioned mutation headers. It preserves the handlers' validation order
-// and safe HTTP400 response; resource ownership remains with the called owner RPC.
-// requireContextResourceMutation проверяет ссылку навыка/памяти до заголовков
-// versioned mutation. Порядок и безопасный HTTP400 сохранены; владение ресурсом
-// по-прежнему проверяет вызванный RPC владельца состояния.
-func requireContextResourceMutation(w http.ResponseWriter, ref, key, etag string) (*controlplanev1.MutationContext, bool) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return nil, false
-	}
-	return requireVersionedMutation(w, key, etag)
-}
-
 // requireContextBindingMutation decodes a binding body, checks its three exact
 // references and safe binding-version range, then validates mutation headers.
 // No RPC or authority decision occurs here; all four bind/unbind handlers retain

@@ -26,7 +26,7 @@ func TestContextResourceMutationPreservesReferenceAndHeaderGuards(t *testing.T) 
 		} {
 			t.Run(ref+"/"+test.name, func(t *testing.T) {
 				writer := httptest.NewRecorder()
-				mutation, ok := requireContextResourceMutation(writer, test.reference, test.key, test.etag)
+				mutation, ok := requireVersionedReferenceMutation(writer, test.reference, test.key, test.etag)
 				if ok != test.valid || !ok && (mutation != nil || writer.Code != http.StatusBadRequest) {
 					t.Fatal("resource mutation guard changed")
 				}

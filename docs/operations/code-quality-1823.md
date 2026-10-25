@@ -4,11 +4,56 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.484.0
+version: 1.485.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проверка reference/version и завершение detail образа — 26.10.2026
+
+Существующий requireContextResourceMutation переименован в
+requireVersionedReferenceMutation и перенесён к общим typed contract checks.
+Тело алгоритма не менялось: opaque reference, затем канонические положительная
+версия и ключ идемпотентности. Шесть skill/memory callers и их test call
+обновлены, четыре assistant archive/restore/purge/cancel prefix подключены к
+тому же helper. Владение, отдельные owner RPC и проверки reply остаются у
+обработчиков; ссылка сама не подтверждает полномочия. Порядок ref→body→headers
+у перемещения диалога полностью сохранён.
+
+Общий writeRoleImageDetail завершает два уже проверенных project/organization
+представления. Проверки eligibility/lineage/build/artifact/risk остаются
+разными и прежними; caller устанавливает ETag до вызова, затем в прежнем
+порядке передаются failure/recipe/builds. Общий tail проверяет metadata ошибки
+допуска, записывает публичный failure и JSON200 либо прежний HTTP502. Он не
+продвигает образ, не выполняет admission и не меняет подготовленные коллекции.
+Новая функция и обновлённый helper описаны EN→RU.
+
+Семь полных sources восстановлены побайтово; существующий reference-helper
+body восстановлен обратным переименованием. Десять unsafe source mutations
+версии, ссылки, заголовков, mutation, eligibility и публичного ответа отвергнуты
+точным AST-checker. Go1.26.6: весь gateway build6.23с, unit23.58с, vet1.87с —
+PASS LOCAL;11 packages с тестами,3098 PASS events с подтестами,0 FAIL/SKIP.
+Три package без test files прошли общую сборку. Gofmt семи файлов прошёл;
+hashes sources связаны с проверками. Новые зеркальные тесты не добавлялись.
+
+Detector:7 старых окон исчезли,5 новых разобраны как типизированные адаптеры
+уже общих primitives. Два больших SkillBundle/MemoryRecord fragment полностью
+восстановлены только обратной заменой имени helper. Удалены5 действительно
+отсутствующих entries,1054 остальных сохранены; добавлены9 exact решений:
+5 обновлённых окон и4 ранее неразобранных. Дополнительные случаи относятся к
+разным Git write-back kind/approve/reject contracts, направленным mailbox
+casts с разными copy/pointer правилами и типизированным skill/memory views.
+В каждом случае сохранены конкретные paths/hash/count1 и отдельная причина;
+универсальные команды, reflection или слабые metadata adapters не вводились.
+18 count/hash mutations отвергнуты настоящим assessor.
+
+Итог:6764 sources,222 generated exclusions,1484 raw /1206 retained /
+278 unresolved (147 Go,106 TypeScript,25 Bash),registry1063. Все21580 Go
+объявления EN→RU; пять quality stages — PASS LOCAL. Начальный отказ на stale
+entries устранён точным обновлением. Generated output,contracts/dependencies,
+policy thresholds/ignores и production config не менялись. Browser/full E2E,
+live deploy и независимая QA — NOT RUN. Задача1823 ещё продолжается.
 
 ## Подключение общего RPC result и вход архивирования — 26.10.2026
 

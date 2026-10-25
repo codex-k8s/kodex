@@ -148,11 +148,7 @@ func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.
 // ArchiveAssistantConversation requires a syntactic reference and mandatory versioned mutation, then checks the owner's exact conversation/version and ARCHIVED outcome before public output.
 // ArchiveAssistantConversation требует формат ссылки и обязательную versioned mutation, затем сверяет точный диалог, версию и ARCHIVED владельца до выдачи.
 func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.ArchiveAssistantConversationParams) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -167,11 +163,7 @@ func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *htt
 // RestoreAssistantConversation requires exact reference/versioned mutation and validates the returned conversation identity, version and ACTIVE state rather than optimistically restoring client data.
 // RestoreAssistantConversation требует точную ссылку и versioned mutation и проверяет identity, версию и ACTIVE ответа вместо оптимистического восстановления клиентских данных.
 func (server *Server) RestoreAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.RestoreAssistantConversationParams) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -186,11 +178,7 @@ func (server *Server) RestoreAssistantConversation(w http.ResponseWriter, r *htt
 // PurgeAssistantConversation invokes the dedicated owner purge with versioned mutation and requires its exact conversation reference before HTTP204; it does not directly erase history or claim unrelated resources are removed.
 // PurgeAssistantConversation вызывает отдельный purge владельца с versioned mutation и требует точную ссылку ответа до HTTP204; историю напрямую не стирает и удаление посторонних ресурсов не утверждает.
 func (server *Server) PurgeAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.PurgeAssistantConversationParams) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -295,11 +283,7 @@ func (server *Server) AddAssistantTurn(w http.ResponseWriter, r *http.Request, r
 // CancelAssistantTurn requires valid conversation syntax/versioned mutation and checks exact returned conversation plus cancelled/run-ref consistency. Cancellation graph, claims and provider interruption belong to the owner, not this transport.
 // CancelAssistantTurn требует формат диалога и versioned mutation и сверяет диалог и согласованность cancelled/run-ref ответа. Граф отмены, claims и прерывание провайдера принадлежат владельцу, а не transport.
 func (server *Server) CancelAssistantTurn(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.CancelAssistantTurnParams) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	m, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	m, ok := requireVersionedReferenceMutation(w, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}

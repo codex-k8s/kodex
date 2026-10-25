@@ -30,7 +30,7 @@ func (server *Server) GetSkillBundle(w http.ResponseWriter, r *http.Request, bun
 // ArchiveSkillBundle проверяет ссылку и versioned-заголовки до отдельного archive
 // RPC; полномочия lifecycle и идемпотентные эффекты остаются у владельца.
 func (server *Server) ArchiveSkillBundle(w http.ResponseWriter, r *http.Request, bundleRef generated.SkillBundleRef, p generated.ArchiveSkillBundleParams) {
-	mutation, ok := requireContextResourceMutation(w, bundleRef, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, bundleRef, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -47,7 +47,7 @@ func (server *Server) ArchiveSkillBundle(w http.ResponseWriter, r *http.Request,
 // RestoreSkillBundle передаёт точную проверенную mutation в команду restore
 // и проверяет ответ bundle, не переписывая lifecycle локально.
 func (server *Server) RestoreSkillBundle(w http.ResponseWriter, r *http.Request, bundleRef generated.SkillBundleRef, p generated.RestoreSkillBundleParams) {
-	mutation, ok := requireContextResourceMutation(w, bundleRef, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, bundleRef, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -64,7 +64,7 @@ func (server *Server) RestoreSkillBundle(w http.ResponseWriter, r *http.Request,
 // PurgeSkillBundle передаёт точный versioned purge владельцу и проверяет metadata
 // ответа; самостоятельной файловой очистки этот handler не выполняет.
 func (server *Server) PurgeSkillBundle(w http.ResponseWriter, r *http.Request, bundleRef generated.SkillBundleRef, p generated.PurgeSkillBundleParams) {
-	mutation, ok := requireContextResourceMutation(w, bundleRef, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, bundleRef, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -201,7 +201,7 @@ func (server *Server) GetMemoryRecord(w http.ResponseWriter, r *http.Request, re
 // ArchiveMemoryRecord проверяет точный ресурс и versioned-заголовки mutation,
 // затем передаёт lifecycle владельцу и проверяет представление памяти в ответе.
 func (server *Server) ArchiveMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef generated.MemoryRecordRef, p generated.ArchiveMemoryRecordParams) {
-	mutation, ok := requireContextResourceMutation(w, recordRef, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, recordRef, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -218,7 +218,7 @@ func (server *Server) ArchiveMemoryRecord(w http.ResponseWriter, r *http.Request
 // RestoreMemoryRecord вызывает отдельную restore-команду только после общих
 // проверок ссылки/заголовков; содержимое не восстанавливается из локального кеша.
 func (server *Server) RestoreMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef generated.MemoryRecordRef, p generated.RestoreMemoryRecordParams) {
-	mutation, ok := requireContextResourceMutation(w, recordRef, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, recordRef, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -235,7 +235,7 @@ func (server *Server) RestoreMemoryRecord(w http.ResponseWriter, r *http.Request
 // PurgeMemoryRecord передаёт точную versioned purge-команду и проверяет ответ
 // памяти; удалением управляет владелец, а не transport helper.
 func (server *Server) PurgeMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef generated.MemoryRecordRef, p generated.PurgeMemoryRecordParams) {
-	mutation, ok := requireContextResourceMutation(w, recordRef, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, recordRef, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}

@@ -43,3 +43,17 @@ func requireVersionedMutation(w http.ResponseWriter, key, etag string) (*control
 	}
 	return result, true
 }
+
+// requireVersionedReferenceMutation checks an opaque resource locator before canonical positive
+// version and idempotency headers. It preserves local HTTP400 failures without resolving resource
+// kind, ownership or authority; each caller retains its specialized owner RPC and response checks.
+// requireVersionedReferenceMutation проверяет непрозрачную ссылку ресурса перед каноническими
+// положительной версией и ключом идемпотентности. Сохраняет локальные отказы HTTP400, не определяя
+// вид ресурса, владение или полномочия; отдельный RPC владельца и проверки ответа остаются у caller.
+func requireVersionedReferenceMutation(w http.ResponseWriter, ref, key, etag string) (*controlplanev1.MutationContext, bool) {
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return nil, false
+	}
+	return requireVersionedMutation(w, key, etag)
+}
