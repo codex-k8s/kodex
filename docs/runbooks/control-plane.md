@@ -4,8 +4,8 @@ title: Диагностика control-plane
 type: runbook
 status: approved
 owner: sre
-version: 2.2.1
-updated: 2026-09-04
+version: 2.2.2
+updated: 2026-10-25
 ---
 
 # Диагностика control-plane
@@ -261,6 +261,53 @@ nodes. После materialization тот же node ref получает `QUEUED`
 capability/grant ref, state, duration, safe result и audit ref. Отсутствующий
 audit ref, неизвестный capability/grant или raw payload требует закрытого
 отказа и расследования; вручную дописывать event/outbox запрещено.
+
+## Адресный restart на том же immutable SHA
+
+Для [#1885](https://github.com/codex-k8s/kodex/issues/1885) оператор
+`tools/release/application-restart.mjs` обслуживает ровно один stable staging
+Deployment из существующего application registry. Новый build, source mount,
+release revision, Secret, масштабирование и общий deploy для этого не нужны.
+Общие identity/rolling/instance-grant проверки переиспользуются из scoped-release;
+его отказ `APPLICATION_IMAGE_UNCHANGED` для обычной поставки сохраняется.
+
+Root выполняет команды только из чистой принятой operator revision. Каталог
+состояния принадлежит оператору и имеет0700, plan/evidence/receipts —0600.
+`PLAN_SHA` — canonical SHA, напечатанный `plan`; это не raw file SHA с whitespace.
+Operator revision может отличаться от source SHA уже работающего приложения:
+оба значения закрепляются независимо, приложение при restart не обновляется.
+
+```sh
+node tools/release/application-restart.mjs plan --context k3d-kodex \
+  --target control-plane --output "$QA_STATE/restart-plan.json"
+node tools/release/application-restart.mjs apply --context k3d-kodex \
+  --plan "$QA_STATE/restart-plan.json" --approved-plan-sha "$PLAN_SHA" \
+  --evidence "$QA_STATE/restart-journal.jsonl" --output "$QA_STATE/restart-apply.json" \
+  --timeout-seconds 300 --confirm RESTART-STAGING-APPLICATION
+node tools/release/application-restart.mjs readback --context k3d-kodex \
+  --plan "$QA_STATE/restart-plan.json" --approved-plan-sha "$PLAN_SHA" \
+  --evidence "$QA_STATE/restart-journal.jsonl" --output "$QA_STATE/restart-readback.json"
+```
+
+| Фаза | Допуск и результат |
+| --- | --- |
+| Plan | Только GET/list; exact context/cluster/namespace/Deployment UID/RV, полный spec/template hash, immutable image/source/provenance/release и исходные RS/Pod UID. Hotreload, чужой owner, unsafe rolling и незавершённый rollout закрыто отклоняются. Spec/env/Secret references в файлы не копируются. |
+| Apply | Canonical plan hash и чистая operator revision; fresh pins/lineage до effects. Новый exclusive journal, fsync INTENT до единственного UID/RV JSONPatch собственной `kodex.dev/application-restart` annotation. Image/source/provenance/application-release и остальные поля spec не меняются. |
+| Rollout | Ограниченное ожидание30–600s плюс transport budget120s. PASS требует нового exact RS, только новых Ready Pod UID, того же node imageID digest/source/provenance/release и полного desired spec. Старые Pods скрываются лишь после доказанного termination всех containers. |
+| Lost ACK / timeout / cancel | Повтор apply того же journal запрещён. Journal/intent сохраняются; только readback того же plan/origin, без второго patch, rollback или удаления Pod. Readback использует GET/list, не изменяет journal и сохраняет новый private receipt. |
+| Unknown / чужая замена | Нет PASS либо автоматической recovery. Прежний spec даёт `NOT_CURRENT`, что не доказывает отсутствие исторического эффекта. Отсутствие INTENT даёт `NOT_STARTED`; новые effects требуют отдельного свежего подготовленного плана. |
+
+Открытый Human Gate, история и CLEAN files принадлежат control-plane, оператор
+их не закрывает и не изменяет ради restart. В QA root сохраняет exact Gate
+ref/version/state, Run/Event и file/download hashes до и после, затем продолжает
+Gate через штатный UI. Готовые Pods не заменяют эту бизнес-проверку. Нет новых
+domain events, leases/grants либо authority по restart annotation.
+
+Rollback бинаря не требуется — он тот же. При неудаче старые serving replicas
+сохраняются безопасной `maxUnavailable:0` policy; дальнейшая recovery готовится
+адресно по фактическому readback, без broad hotreload или фиктивной поставки.
+`make test-application-restart` проверяет offline lifecycle и прежний release
+контракт; он не является staging/live PASS и не обращается к кластеру.
 
 ## Запрещено
 

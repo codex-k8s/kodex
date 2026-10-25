@@ -19,6 +19,9 @@ const applicationNames = new Set([
 const digestImage = /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
+// Закрытый registry общий для release и restart; новый сценарий не получает произвольный Deployment locator.
+export function isApplicationTargetName(name) { return applicationNames.has(name); }
+
 function requireValue(condition, code) {
   if (!condition) throw new Error(code);
 }
@@ -87,10 +90,10 @@ export function validateManifest(value) {
   return value;
 }
 
-// Только приложение. Полный pod template, Secrets и общие ConfigMaps не применяются.
-export function planTarget(deployment, target, releaseID, sourceInspector, mode = "release") {
-  validateManifest({ version: 1, targets: [target] });
-  requireValue(uuid.test(releaseID), "INVALID_RELEASE_ID");
+// Общая граница одного staging-приложения: identity, готовый rolling Deployment и exact current image.
+// Функция ничего не меняет; release и restart применяют собственные закрытые переходы после этих проверок.
+export function applicationDeploymentBoundary(deployment, target, mode = "release") {
+  requireValue(applicationNames.has(target?.name), "INVALID_TARGET");
   requireValue(mode === "release" || mode === "recovery", "INVALID_RELEASE_MODE");
   const metadata = deployment?.metadata;
   const spec = deployment?.spec;
@@ -124,19 +127,32 @@ export function planTarget(deployment, target, releaseID, sourceInspector, mode 
   requireValue(index >= 0 && containers.filter((item) => item.name === application).length === 1,
     "APPLICATION_CONTAINER_MISSING");
   const beforeImage = containers[index].image;
-  const image = target.image ?? beforeImage;
   requireValue(digestImage.test(beforeImage) && !beforeImage.endsWith("0".repeat(64)), "EXACT_CURRENT_IMAGE_REQUIRED");
-  const afterSpec = structuredClone(spec);
-  const source = target.source ? planSourceChange(deployment, afterSpec, index, target.source, sourceInspector) : null;
-  requireValue(beforeImage !== image || source?.changed, "APPLICATION_IMAGE_UNCHANGED");
-  if (target.expectedSource)
-    requireValue(source?.before.path === target.expectedSource.path && source.before.revision === target.expectedSource.revision, "ROLLBACK_SOURCE_MISMATCH");
+  return { metadata, spec, pod, status, containers, index, application, beforeImage };
+}
+
+// Сохраняет действующую привязку native/обычных writer sidecars к Pod UID; restart не создаёт иной grant profile.
+export function requireInstanceGrants(pod) {
   for (const container of workerGrantAgents(pod.spec)) {
     const instance = (container.env ?? []).filter((item) => item.name === "PLATFORM_WORKER_GRANT_INSTANCE_ID");
     requireValue(pod.metadata?.annotations?.["kodex.dev/worker-grant-format"] === "2" &&
       instance.length === 1 && instance[0].value === undefined &&
       instance[0].valueFrom?.fieldRef?.fieldPath === "metadata.uid", "INSTANCE_GRANTS_REQUIRED");
   }
+}
+
+// Только приложение. Полный pod template, Secrets и общие ConfigMaps не применяются.
+export function planTarget(deployment, target, releaseID, sourceInspector, mode = "release") {
+  validateManifest({ version: 1, targets: [target] });
+  requireValue(uuid.test(releaseID), "INVALID_RELEASE_ID");
+  const { metadata, spec, pod, containers, index, application, beforeImage } = applicationDeploymentBoundary(deployment, target, mode);
+  const image = target.image ?? beforeImage;
+  const afterSpec = structuredClone(spec);
+  const source = target.source ? planSourceChange(deployment, afterSpec, index, target.source, sourceInspector) : null;
+  requireValue(beforeImage !== image || source?.changed, "APPLICATION_IMAGE_UNCHANGED");
+  if (target.expectedSource)
+    requireValue(source?.before.path === target.expectedSource.path && source.before.revision === target.expectedSource.revision, "ROLLBACK_SOURCE_MISMATCH");
+  requireInstanceGrants(pod);
   if (target.rollbackOf)
     requireValue(pod.metadata?.annotations?.[releaseAnnotation] === target.rollbackOf &&
       beforeImage === target.expectedImage, "ROLLBACK_RELEASE_MISMATCH");
