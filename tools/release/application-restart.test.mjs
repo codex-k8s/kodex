@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { chmodSync, linkSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -242,7 +243,7 @@ test("production context, unknown target and overlapping paths are refused befor
     "--approved-plan-sha", "a".repeat(64), "--confirm", "RESTART-STAGING-APPLICATION", "--output", path], forbidden), /PATHS_OVERLAP/);
 });
 
-test("real operator adapter emits only exact GET/list, stdin annotation PATCH and bounded rollout", t => {
+test("real operator adapter emits only exact GET/list, bounded annotation PATCH and rollout without stdin", t => {
   const deployment = fixture(), plan = makePlan(), calls = [];
   const previous = process.env.UNRELATED_SECRET;
   process.env.UNRELATED_SECRET = "PRIVATE_ENV_SENTINEL";
@@ -264,9 +265,11 @@ test("real operator adapter emits only exact GET/list, stdin annotation PATCH an
       return JSON.stringify(resources(deployment));
     }
     if (action[2] === "patch") {
-      assert.deepEqual(action, ["-n", "kodex-system", "patch", "deployment", "control-plane", "--type=json", "--patch-file=/dev/stdin", "-o", "name"]);
-      assert.deepEqual(JSON.parse(options.input), prepareApplicationRestart(plan, deployment, resources(deployment)));
-      assert.equal(options.input.includes("PRIVATE_"), false);
+      const patch = prepareApplicationRestart(plan, deployment, resources(deployment));
+      assert.deepEqual(action, ["-n", "kodex-system", "patch", "deployment", "control-plane", "--type=json", "--patch", JSON.stringify(patch), "-o", "name"]);
+      assert.equal(options.input, undefined);
+      assert.equal(action.includes("--patch-file=/dev/stdin"), false);
+      assert.equal(action.join(" ").includes("PRIVATE_"), false);
       return "deployment.apps/control-plane";
     }
     assert.deepEqual(action, ["-n", "kodex-system", "rollout", "status", "deployment/control-plane", "--timeout=30s"]);
@@ -280,4 +283,29 @@ test("real operator adapter emits only exact GET/list, stdin annotation PATCH an
   assert.equal(calls.length, 6);
   assert.equal(calls.filter(call => call.args.includes("patch")).length, 1);
   assert.equal(calls.some(call => call.args.includes("secret") || call.args.includes("exec") || call.args.includes("delete")), false);
+});
+
+test("real kubectl local patch accepts the operator transport without reopening child stdin", t => {
+  const directory = privateDirectory(t), deployment = fixture(), plan = makePlan();
+  const path = join(directory, "deployment.json");
+  writeFileSync(path, JSON.stringify(deployment), { mode: 0o600 });
+  let result, calls = 0;
+  // Настоящий kubectl обрабатывает только синтетический файл: --local и пустой kubeconfig исключают кластер.
+  const execute = (file, args, options) => {
+    calls++;
+    assert.equal(options.input, undefined);
+    assert.deepEqual(JSON.parse(args[args.indexOf("--patch") + 1]),
+      prepareApplicationRestart(plan, deployment, resources(deployment)));
+    const patchArgs = args.slice(args.indexOf("--type=json"), args.lastIndexOf("-o"));
+    const output = execFileSync(file, ["patch", "--local=true", "-f", path, ...patchArgs, "-o", "json"],
+      { ...options, env: { PATH: process.env.PATH, HOME: directory, KUBECONFIG: "/dev/null" } });
+    result = JSON.parse(output);
+    return "deployment.apps/control-plane";
+  };
+  const rt = applicationRestartRuntime(context, accessProfile, executorSHA, 30, execute);
+  rt.patch("control-plane", prepareApplicationRestart(plan, deployment, resources(deployment)));
+  assert.equal(calls, 1);
+  const expected = structuredClone(deployment);
+  expected.spec.template.metadata.annotations[restartAnnotation] = plan.restartID;
+  assert.deepEqual(result, expected);
 });

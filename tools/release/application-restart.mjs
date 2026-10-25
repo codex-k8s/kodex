@@ -58,7 +58,8 @@ export function applicationRestartRuntime(context, accessProfile, executorSHA, b
         `app.kubernetes.io/name=${name},app.kubernetes.io/component=${component}`, "-o", "json"]));
       return { deployment, resources };
     },
-    patch(name, patch) { kube(["-n", "kodex-system", "patch", "deployment", name, "--type=json", "--patch-file=/dev/stdin", "-o", "name"], JSON.stringify(patch)); },
+    // Три публичных CAS/annotation операции передаются как patch; /dev/stdin нельзя переоткрыть у socket child pipe.
+    patch(name, patch) { kube(["-n", "kodex-system", "patch", "deployment", name, "--type=json", "--patch", JSON.stringify(patch), "-o", "name"]); },
     wait(name, seconds) { kube(["-n", "kodex-system", "rollout", "status", `deployment/${name}`, `--timeout=${seconds}s`], undefined, (seconds + 5) * 1000); },
   };
 }
