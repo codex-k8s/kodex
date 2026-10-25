@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/eventing/availability"
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -154,9 +155,12 @@ func (store *Store) Read(ctx context.Context, id string) (Record, error) {
 	if errors.Is(err, jetstream.ErrMsgNotFound) {
 		return Record{}, ErrNotFound
 	}
-	if err != nil || message == nil || message.Subject != subjectPrefix+id || message.Sequence == 0 ||
+	if err != nil {
+		return Record{}, availability.Wrap(ErrUnavailable, err)
+	}
+	if message == nil || message.Subject != subjectPrefix+id || message.Sequence == 0 ||
 		len(message.Data) == 0 || len(message.Data) > MaximumValueBytes {
-		return Record{}, ErrUnavailable
+		return Record{}, availability.Invalid(ErrUnavailable)
 	}
 	return Record{Sequence: message.Sequence, Ciphertext: bytes.Clone(message.Data)}, nil
 }
@@ -188,7 +192,10 @@ func (store *Store) CompareAndSwap(ctx context.Context, id string, expected uint
 	if errors.Is(readErr, ErrNotFound) && expected != 0 {
 		return Record{}, ErrConflict
 	}
-	return Record{}, ErrUnavailable
+	if readErr != nil && !errors.Is(readErr, ErrNotFound) {
+		return Record{}, availability.Wrap(ErrUnavailable, readErr)
+	}
+	return Record{}, availability.Wrap(ErrUnavailable, err)
 }
 
 // compatible rejects stream drift that could evict, overwrite, or expose browser state.

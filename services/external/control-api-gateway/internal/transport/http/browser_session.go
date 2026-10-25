@@ -9,6 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/problemresponse"
 	"github.com/google/uuid"
 )
 
@@ -162,6 +163,7 @@ func sessionMetadataMap(source boundary.SessionMetadata) (generated.OwnerSession
 // rate limit в 429 с Retry-After одна секунда; прочие ошибки становятся неповторяемым 401 без
 // внутренних подробностей.
 func writeSessionProblem(w http.ResponseWriter, err error) {
+	problemresponse.MarkFailure(w, err)
 	if errors.Is(err, boundary.ErrSessionValidationUnavailable) || errors.Is(err, browserstate.ErrUnavailable) ||
 		errors.Is(err, browserstate.ErrConflict) || errors.Is(err, session.ErrRenewalPending) {
 		w.Header().Set("Retry-After", "1")

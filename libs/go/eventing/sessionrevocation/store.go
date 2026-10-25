@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/eventing/availability"
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -191,10 +192,10 @@ func (store *Store) Revoked(ctx context.Context, sessionID string) (bool, error)
 		return false, nil
 	}
 	if err != nil {
-		return false, errors.New("read session revocation")
+		return false, availability.Wrap(errors.New("read session revocation"), err)
 	}
 	if message == nil || message.Subject != subject(sessionID) || message.Sequence == 0 || string(message.Data) != revokedValue {
-		return false, errors.New("session revocation record is invalid")
+		return false, availability.Invalid(errors.New("session revocation record is invalid"))
 	}
 	return true, nil
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	"github.com/codex-k8s/kodex/libs/go/sttapi/errorprofile"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/availability"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/problemresponse"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-// controlPlaneErrorDomain identifies the trusted control-plane ErrorInfo namespace; a matching reason from another domain must not select a specialized public problem code.
+	// controlPlaneErrorDomain identifies the trusted control-plane ErrorInfo namespace; a matching reason from another domain must not select a specialized public problem code.
 	// controlPlaneErrorDomain задаёт доверенное пространство ErrorInfo control-plane; совпадающая причина другого домена не выбирает специальный код ошибки.
 	controlPlaneErrorDomain = "kodex.control-plane"
 	// freshAuthenticationRequiredReason preserves the trusted fresh-login requirement only for PermissionDenied responses with the exact control-plane domain.
@@ -63,6 +64,9 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		statusCode, name, retryable = http.StatusServiceUnavailable, "UNAVAILABLE", true
 	case codes.DeadlineExceeded:
 		statusCode, name, retryable = http.StatusGatewayTimeout, "DEADLINE_EXCEEDED", true
+	}
+	if statusCode == http.StatusServiceUnavailable {
+		problemresponse.MarkFailure(writer, availability.Fixed("upstream_rpc", "unavailable", err))
 	}
 	writeLocalProblem(writer, statusCode, name, retryable)
 }

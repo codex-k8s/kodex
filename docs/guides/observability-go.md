@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.6
-updated: 2026-10-25
+version: 1.1.7
+updated: 2026-10-26
 ---
 
 # Наблюдаемость Go-сервисов
@@ -50,6 +50,15 @@ security/quota обхода или безусловным игнорирован
 Логи и error reporting не содержат request/response body, gRPC metadata, SQL,
 Redis command arguments, DSN, token, cookie, телефон, email, внешний subject и
 иные персональные данные.
+
+Если публичный mapping сворачивает несколько причин в один HTTP503, native
+owner до свёртки сохраняет закрытый класс, а transport — точный этап. Диагностика
+не меняет исходный sentinel, retry или authority. Один фактический ответ получает
+одну запись с тем же назначенным сервером correlation и существующим trace;
+исходный SDK error не сериализуется. Успешное восстановление неизвестного ACK
+по exact readback не переименовывается в отказ. Непокрытая причина остаётся
+unknown; наличие лога не доказывает исправление доступности.
+Пример и карта: [#1905](../operations/api-availability-diagnostic-1905.md).
 
 CLI boundary не сериализует цепочку ошибок через `%v`/`Error()`, даже если
 наружный domain error обычно имеет безопасный текст: иной startup path может

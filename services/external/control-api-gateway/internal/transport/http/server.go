@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
+	internalobservability "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/observability"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -94,8 +95,9 @@ func (server *Server) Handler() http.Handler {
 // localizedResponseWriter хранит выбранный язык и общий localizer поверх ResponseWriter; Unwrap сохраняет доступ response controllers к исходному writer.
 type localizedResponseWriter struct {
 	http.ResponseWriter
-	texts  *texti18n.Localizer
-	locale string
+	texts      *texti18n.Localizer
+	locale     string
+	diagnostic requestDiagnostic
 }
 
 // Localize resolves a message identifier with the request-selected locale and no template data; it does not expose upstream diagnostic text.
@@ -119,7 +121,9 @@ func (writer *localizedResponseWriter) Unwrap() http.ResponseWriter { return wri
 func (server *Server) localizationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		locale := texti18n.ResolveAcceptLanguage(request.Header.Get("Accept-Language"))
-		next.ServeHTTP(&localizedResponseWriter{ResponseWriter: writer, texts: server.texts, locale: locale}, request)
+		next.ServeHTTP(&localizedResponseWriter{ResponseWriter: writer, texts: server.texts, locale: locale,
+			diagnostic: requestDiagnostic{ctx: request.Context(), logger: server.logger,
+				route: internalobservability.Route(request.URL.Path), method: diagnosticMethod(request.Method)}}, request)
 	})
 }
 
