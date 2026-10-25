@@ -59,7 +59,7 @@ test('immutable builder uses canonical least-privilege boundary and exact publis
   assert.equal(JSON.stringify(plan.job).includes('/workspace'),false);
 });
 test('builder rejects altered credentials, authority, command, source and unconfirmed image publication',()=>{
-  for (const mutate of [j=>j.metadata.namespace='foreign',j=>j.spec.template.spec.serviceAccountName='default',
+  for (const mutate of [j=>j.metadata.namespace='foreign',j=>j.metadata.labels['app.kubernetes.io/part-of']='foreign',j=>j.spec.template.spec.serviceAccountName='default',
     j=>j.spec.template.spec.automountServiceAccountToken=true,j=>j.spec.template.spec.volumes[0].secret.secretName='foreign',
     j=>j.spec.template.spec.volumes.push({name:'source',hostPath:{path:'/tmp'}}),
     j=>j.spec.template.spec.containers[0].envFrom=[{secretRef:{name:'foreign'}}],
@@ -73,6 +73,16 @@ test('builder rejects altered credentials, authority, command, source and unconf
     const evidence=publication(); mutate(evidence); assert.throws(()=>makePlan(evidence));
   }
   assert.throws(()=>planControlPlaneMigration(base(),source,()=>({revision:'e'.repeat(40)}),'fixture','outbox-index',publication()),/SOURCE_REVISION_MISMATCH/);
+});
+test('native repo-owned staging kustomize render is accepted without invented application labels',()=>{
+  const rendered=execFileSync('kubectl',['kustomize',new URL('../../deploy/k8s/overlays/staging/control-plane',import.meta.url).pathname],
+    {encoding:'utf8',timeout:15000,maxBuffer:4<<20,env:{...process.env,KUBECONFIG:'/dev/null'},stdio:['ignore','pipe','pipe']});
+  const native=JSON.parse(execFileSync('yq',['-o=json','select(.kind == "Job" and .metadata.name == "control-plane-migrate")','-'],
+    {input:rendered,encoding:'utf8',timeout:5000,maxBuffer:4<<20,stdio:['pipe','pipe','pipe']}));
+  assert.equal(native.metadata.labels['app.kubernetes.io/part-of'],undefined);
+  Object.assign(native.metadata,{uid:'anchor',resourceVersion:'7'});
+  const plan=makePlan(publication(),native);assert.equal(plan.job.metadata.labels['app.kubernetes.io/part-of'],'kodex');
+  assert.equal(plan.job.metadata.namespace,'kodex-system');assert.equal(plan.job.metadata.labels['kodex.dev/environment'],'staging');
 });
 test('PASS needs exact goose version and one exact Job-owned non-restarted execution with real imageID',()=>{
   const plan=makePlan(),{job,pod}=execution(plan), logs=`goose: successfully migrated database to version: ${version}\n`;
@@ -96,6 +106,8 @@ function cli(t) {
   const repo=join(dir,'source'), migrations=join(repo,'services/internal/control-plane/cmd/cli/migrations');
   mkdirSync(migrations,{recursive:true,mode:0o755});chmodSync(repo,0o755);
   writeFileSync(join(migrations,sqlFile),'-- Синтетический source-only migration fixture\n',{mode:0o644});
+  const bundleDirectory=join(repo,'deploy/k8s/base/platform-state');mkdirSync(bundleDirectory,{recursive:true,mode:0o755});
+  writeFileSync(join(bundleDirectory,'ca-bundles.yaml'),readFileSync(new URL('../../deploy/k8s/base/platform-state/ca-bundles.yaml',import.meta.url)),{mode:0o644});
   const git=(...args)=>execFileSync('git',['-C',repo,...args],{stdio:['ignore','pipe','pipe']}).toString().trim();
   git('init','-q');git('remote','add','origin','https://github.com/codex-k8s/kodex.git');git('add','.');
   git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Оснастка');
@@ -129,7 +141,9 @@ if(a.includes('patch')){
  if(s.mode==='lost-ack')fail();out(s.job);
 }else if(a.includes('namespace')){
  save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:'cluster'}}));else process.stdout.write(s.namespaceUID);
-}else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|kodex');
+}else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
+}else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
+}else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
 }else if(a.includes('deployment'))out(s.deployment);
 else if(a.includes('replicasets,pods')){
  const items=[{kind:'ReplicaSet',metadata:{uid:'rs',ownerReferences:[{kind:'Deployment',uid:'anchor',controller:true}]}}];
@@ -203,6 +217,16 @@ for(const mutate of [s=>s.deployment.metadata.uid='replacement',s=>s.deployment.
 test('publication wrong scope rejects planning before reservation',t=>{
   const f=cli(t), p=read(f.publicationPlan);p.namespaceUID='foreign';write(f.publicationPlan,p);
   assert.notEqual(f.run('plan').status,0);assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+});
+test('CA accepts actual trust-manager ownership without an application label and pins the Bundle source',t=>{
+  const f=cli(t);pass(f,'plan','PLANNED');
+  const ca=read(f.plan).dependencies.find(item=>item.kind==='configmap');assert.equal(ca.bundle.uid,'bundle-uid');
+  for(const mutate of [s=>s.caOwner='foreign',s=>s.caLabel='foreign',s=>s.applicationOwner='foreign',
+    s=>s.bundleSpec={sources:[{secret:{name:'foreign',key:'tls.crt'}}],target:{configMap:{key:'ca.pem'}}}]) {
+    f.edit(mutate);assert.notEqual(f.run('stop').status,0);
+    f.edit(s=>{delete s.caOwner;delete s.caLabel;delete s.applicationOwner;delete s.bundleSpec;});
+  }
+  assert.equal(f.read().calls.filter(a=>a.includes('patch')||a.includes('create')).length,0);
 });
 test('migration plan refuses an incomplete or non-stable CP rollout before any write',t=>{
   const f=cli(t);f.edit(s=>s.deployment.status.updatedReplicas=1);assert.notEqual(f.run('plan').status,0);

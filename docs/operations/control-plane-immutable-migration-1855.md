@@ -54,14 +54,25 @@ resume и новый create закрыты до отдельного разбо�
    не принимается. После интеграции tool/docs образ при необходимости собирается
    заново штатным stable build/publish механизмом.
 2. Подготовлены приватные `0700` каталог, `0600` plan/render/evidence. Передаётся
-   stable render текущего контура из `tools/release/render-web-only.sh`;
+   штатный offline render `deploy/k8s/overlays/staging/control-plane`;
    используются только его `Job/control-plane-migrate` и точные existing refs.
+   Отсутствие `app.kubernetes.io/part-of` разрешено только на исходном render;
+   если метка присутствует, допускается только `kodex`. Namespace, staging,
+   component, CLI, env и mounts проверяются строго; новая Job всегда получает
+   `part-of=kodex`. Full release lock и ручная правка labels не нужны.
    Отсутствие живого базового Job после TTL допустимо. Нельзя передавать старый
    host-source render вместо immutable base.
 3. Existing SA `control-plane-migrator`, Secret
    `control-plane-postgres-migration` и CA ConfigMap
-   `control-plane-postgresql-ca` должны принадлежать `kodex`. Tool запрашивает
-   только их metadata UID/RV/owner label, без data/stringData и без чтения DSN.
+   `control-plane-postgresql-ca` должны иметь существующую authority. Для SA и
+   Secret требуется `app.kubernetes.io/part-of=kodex`; для CA — exact
+   `trust.cert-manager.io/bundle` и единственный controller ownerRef на
+   `Bundle/control-plane-postgresql-ca`, совпадающий с actual Bundle UID/RV.
+   Bundle source — только `kodex-installation-ca/tls.crt`, target — `ca.pem`
+   только в `kodex-system`; actual spec должен совпасть с canonical
+   `deploy/k8s/base/platform-state/ca-bundles.yaml` принятого source.
+   Tool запрашивает metadata и публичные source/target refs Bundle,
+   без data/stringData, содержимого сертификата и без чтения DSN.
    UID/RV закреплены и проверяются до остановки/создания и при migration readback.
    Existing Secret mutable: на всё окно исключаются сторонние writers/rotation.
    Эти rechecks не являются атомарной блокировкой Kubernetes credential rotation.
@@ -75,7 +86,7 @@ resume и новый create закрыты до отдельного разбо�
 
 ## Команды оператора
 
-`QA_SOURCE`, `CP_SHA`, `CP_RENDER`, `PUB_PLAN`, `PUB_EVIDENCE`, `MIGRATION_DIR`
+`QA_SOURCE`, `CP_SHA`, `PUB_PLAN`, `PUB_EVIDENCE`, `MIGRATION_DIR`
 ниже содержат только пути/публичный SHA, не значения credentials. `PUB_EVIDENCE`
 — свежий двухстрочный `apply.jsonl` либо подтверждённый `readback.jsonl` штатной
 publication: INTENT exact plan hash → PASS. Failed/UNKNOWN receipt не подходит.
@@ -83,9 +94,11 @@ publication: INTENT exact plan hash → PASS. Failed/UNKNOWN receipt не под
 ```bash
 umask 077
 mkdir -m 700 "$MIGRATION_DIR"
+kubectl --context k3d-kodex kustomize \
+  "$QA_SOURCE/deploy/k8s/overlays/staging/control-plane" > "$MIGRATION_DIR/base.yaml"
 node tools/release/control-plane-migration.mjs plan \
   --context k3d-kodex --profile outbox-index \
-  --source "$QA_SOURCE" --revision "$CP_SHA" --base-render "$CP_RENDER" \
+  --source "$QA_SOURCE" --revision "$CP_SHA" --base-render "$MIGRATION_DIR/base.yaml" \
   --publication-plan "$PUB_PLAN" --publication-evidence "$PUB_EVIDENCE" \
   --plan "$MIGRATION_DIR/plan.json"
 ```

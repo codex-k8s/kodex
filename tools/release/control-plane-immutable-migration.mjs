@@ -1,6 +1,7 @@
 import { validateStableReceipt } from './stable-image-publication.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { createHash, randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { inspectSource } from './application-source.mjs';
@@ -12,6 +13,8 @@ const namespace = 'kodex-system';
 const migrationVersion = '20261025000100';
 const migrationFile = `${migrationVersion}_outbox_unpublished_predecessor_index.sql`;
 const annotation = 'kodex.dev/cp-outbox-index-migration-plan';
+const caBundleSpec = {sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],
+  target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':namespace}},configMap:{key:'ca.pem'}}};
 const dsnPath = '/var/run/secrets/kodex/control-plane/postgres-migration/dsn';
 const volumes = [
   { name:'postgres-migration', secret:{secretName:'control-plane-postgres-migration',defaultMode:292} },
@@ -45,7 +48,7 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
     before.metadata.namespace === namespace && before.metadata.uid && before.metadata.resourceVersion &&
     before.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
     before.metadata.labels?.['app.kubernetes.io/component'] === 'migration' &&
-    before.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' &&
+    [undefined,'kodex'].includes(before.metadata.labels?.['app.kubernetes.io/part-of']) &&
     before.metadata.labels?.['kodex.dev/environment'] === 'staging', 'MIGRATOR_IDENTITY_INVALID');
   const pod = before.spec?.template?.spec, container = pod?.containers?.[0];
   // YAML 1.1 Kubernetes и YAML 1.2 yq по-разному переводят 0440 в JSON. Права из render
@@ -69,7 +72,9 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
   ensure(/^[a-f0-9]{40}$/.test(source?.revision ?? '') && source.revision !== '0'.repeat(40) &&
     inspect(source.path).revision === source.revision, 'SOURCE_REVISION_MISMATCH');
   const image = immutableMigrationImage(source, evidence);
-  const labels = { ...before.metadata.labels };
+  // Staging overlay не назначает app part-of исходному render. Новая собственная Job
+  // получает фиксированную метку; actual CP/SA/Secret проверяются независимо от render.
+  const labels = { ...before.metadata.labels, 'app.kubernetes.io/part-of':'kodex' };
   const job = {apiVersion:'batch/v1',kind:'Job',metadata:{name:`control-plane-migrate-${migrationVersion}`,namespace,labels},spec:{
     backoffLimit:0,activeDeadlineSeconds:300,ttlSecondsAfterFinished:86400,
     template:{metadata:{labels,annotations:{'kodex.dev/source-revision':source.revision,
@@ -134,6 +139,21 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   };
   // Даже Secret запрашивается только узкой metadata projection: data/stringData не передаются процессу.
   const metadata = (kind, name) => {
+    if (kind === 'configmap' && name === 'control-plane-postgresql-ca') {
+      const raw = kube(['-n',namespace,'get',kind,name,'-o',
+        'jsonpath={.metadata.uid}{"|"}{.metadata.resourceVersion}{"|"}{.metadata.labels.trust\\.cert-manager\\.io/bundle}{"|"}{.metadata.ownerReferences}']);
+      const [uid,resourceVersion,bundleName,ownersJSON,...extra] = raw.trim().split('|');
+      const owners = JSON.parse(ownersJSON);
+      ensure(uid && /^\d+$/.test(resourceVersion ?? '') && !extra.length && bundleName === name &&
+        Array.isArray(owners) && owners.length === 1 && owners[0].apiVersion === 'trust.cert-manager.io/v1alpha1' &&
+        owners[0].kind === 'Bundle' && owners[0].name === name && owners[0].controller === true && owners[0].uid,
+      'MIGRATOR_CA_OWNERSHIP_INVALID');
+      const [bundleUID,bundleVersion,bundleSpecJSON,...rest] = kube(['get','bundles.trust.cert-manager.io',name,'-o',
+        'jsonpath={.metadata.uid}{"|"}{.metadata.resourceVersion}{"|"}{.spec}']).trim().split('|');
+      ensure(bundleUID === owners[0].uid && /^\d+$/.test(bundleVersion ?? '') && !rest.length &&
+        fingerprint(JSON.parse(bundleSpecJSON)) === fingerprint(caBundleSpec), 'MIGRATOR_CA_BUNDLE_SOURCE_INVALID');
+      return {kind,name,uid,resourceVersion,bundle:{uid:bundleUID,resourceVersion:bundleVersion,specSHA256:fingerprint(caBundleSpec)}};
+    }
     const raw = kube(['-n',namespace,'get',kind,name,'-o',
       'jsonpath={.metadata.uid}{"|"}{.metadata.resourceVersion}{"|"}{.metadata.labels.app\\.kubernetes\\.io/part-of}']);
     const [uid, resourceVersion, owner, ...extra] = raw.trim().split('|');
@@ -154,6 +174,11 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const before = (render, anchor) => ({...render, metadata:{...render.metadata,uid:anchor.metadata.uid,resourceVersion:anchor.metadata.resourceVersion}});
   const sourceDigest = source => {
     ensure(inspectSource(source.path).revision === source.revision, 'SOURCE_REVISION_MISMATCH');
+    const bundle = JSON.parse(execFileSync('yq',['-o=json',
+      'select(.kind == "Bundle" and .metadata.name == "control-plane-postgresql-ca") | .spec',
+      `${source.path}/deploy/k8s/base/platform-state/ca-bundles.yaml`],
+    {encoding:'utf8',timeout:5000,maxBuffer:262144,stdio:['ignore','pipe','pipe']}));
+    ensure(fingerprint(bundle) === fingerprint(caBundleSpec), 'MIGRATOR_CA_CANONICAL_SOURCE_INVALID');
     const directory = `${source.path}/services/internal/control-plane/cmd/cli/migrations`;
     const names = readdirSync(directory).filter(name => /^\d{14}_.+\.sql$/.test(name)).sort();
     ensure(names.at(-1) === migrationFile, 'MIGRATION_NOT_SOURCE_HEAD');
