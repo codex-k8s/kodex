@@ -4,11 +4,69 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.456.0
+version: 1.457.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая подготовка двух assistant component fixtures и SQL access projections — 25.10.2026
+
+Два теста SYSTEM run scope и turn input bounds используют один
+newWarmTurnComponentFixture вместо13 одинаковых шагов. Helper сохраняет
+fixed openai-codex/gpt-5 New, synthetic provider descriptor, image config,
+Bootstrap, prepareObservedWarmFixture, точный turns.add owner, создание
+service, отдельный warm.report principal, GetSystemAssistant и READY report.
+Отличающиеся namespaced/synthetic image factories остаются explicit у caller
+и вызываются внутри helper на прежнем шаге ConfigureRoleImages, а не до New.
+Context30/45 секунд, isolated pool/Close и все команды/assertions остаются
+в исходных тестах. Helper не разрешает execution.claim и не создаёт реальные
+provider, Pod либо credential. Имеющийся newReadyAssistantComponentService
+не подставляется: у него другой provider descriptor и порядок claim/warm
+principals. Return values передают те же repository/service/owner/assistant;
+второй caller игнорирует assistant. Success оставляет его исходный pool err
+nil, как после прежних успешных New/GetSystemAssistant.
+
+Обратная проверка actual helper body/signature,13 исходных statements,
+двух factory bindings, return tuple и только неиспользуемых imports
+восстанавливает оба полных исходных AST, включая comments/directives,
+SYSTEM pins/PROJECT denial до OCC/replay/no-effects и Unicode USER task/
+turn/event/outbox roundtrip/invalid/replay assertions. Helper добавляет
+только t.Helper и return; каждый прежний Fatal guard сохранён. Parser errors
+отклоняются до semantic use. Одно новое именованное Go declaration описано
+EN→RU;21529/21529 собственных declarations имеют descriptions.
+
+Отдельно прочитаны4 SQL access queries и их Go callers/scanner. Три exact
+SQL groups сохраняются адресно: subject bindings :many отбирает ACTIVE по
+subject/group/membership; get :one читает точный tenant/ref, включая REVOKED;
+admin list :many после access.view применяет include_revoked/search aliases/
+filters/cursor/limit+1. Один scanAccessBinding уже обслуживает общую projection;
+requireAccess/access.Evaluate отдельно проверяет owner/permissions/time.
+Чтение descriptor само по себе permission не выдаёт. Общая SQL-view/function
+ввела бы новый storage contract ради columns, runtime string builder скрыл
+бы явные named queries и cardinality. UNION ALL RUN/SESSION branches имеют
+разные owner initiated_by/created_by и projectless eligibility; их closed
+kind predicates не объединяются. Четыре SQL, access.go/queries_access.go и
+image config factory побайтно прежние. Новых SQL, grants или mutations нет.
+
+Весь control-plane: build — PASS LOCAL (6,13с), unit с count1 — PASS LOCAL
+(36,82с), при GOWORK off/GOMAXPROCS4 и очищенном child env. SHA256 всех3
+изменённых Go sources до/после совпадают. Component scenarios без disposable
+inputs пропущены; PostgreSQL lifecycle, browser/full E2E/provider/deploy/apply
+и независимая QA — NOT RUN. Production Go/PWA/SQL/контракты не менялись.
+
+Detector:6717 sources/222 прежних exclusions,1609 raw/1026 retained/583
+unresolved против1613/1023/590. Из raw исчезли6 keys и появились2 окна,
+оба остаются unresolved.892 прежних registry entries сохранены; добавлены3
+SQL entries с exact path/hash/count1. Итого895 entries.6 count/hash mutations
+и6 возвратов отсутствующих keys отклонены actual assessor. Все5 стадий
+отчёта — PASS LOCAL. Порог, нормализация и exclusions не расширялись.
+
+Context7 resolve Go/PostgreSQL вернул Invalid API key; ключи не менялись.
+Проверены официальные Go Spec Calls/Short variable declarations, PostgreSQL18
+SELECT/UNION ALL/LIMIT и собственные factory/resolver/scanner sources.
+Предыдущая PWA baseline остаётся dbb3837, новые сквозные проверки не заявляются.
+Остальные583 группы остаются в scope #1823, продолжение PR остаётся Draft.
 
 ## Общая синтетическая конфигурация role-image component fixtures — 25.10.2026
 

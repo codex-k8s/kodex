@@ -7136,6 +7136,30 @@
       "fragmentSHA256": "07f03a78482f2290239fdb9592ebb8c7f17465cb4943a1b6e3e0418ae1d0e1f3",
       "count": 1,
       "reason": "ClaimImagePromotion/AuthorizeImagePromotion сопоставлены с концом AuthorizeImagePromotion/CompleteImagePromotion. Claim выдаёт token/fence/authority/expiry, authorize — отдельный authorization token, complete связывает token с promoted reference и readback digest. Общая рамка вынесена; native command/result contracts сохранены. Решение ограничено этой парой путей, fragment SHA256 и count1."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/access_bindings_for_subject.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/access_get_binding.sql",
+      "fragmentSHA256": "93dbf1088570de44aa51c083ff478b3d15bfa04624e521a25dbb1ff5982f0c04",
+      "count": 1,
+      "reason": "502-token проекция binding/subject-or-group/immutable role version/scope/resource refs обслуживает один scanAccessBinding. Однако access_bindings_for_subject :many отбирает только ACTIVE для exact subject/group либо tenant-bound group membership, сортируя по ref; access_get_binding :one читает конкретный tenant/ref, в том числе REVOKED, под authority внешней операции. Eligibility/time/owner проверяет прежний requireAccess/access.Evaluate, не эта проекция. SQL-view/function потребовала бы новый storage contract ради SELECT columns; runtime concatenation нарушила бы явные named/cardinality queries. Сохранён общий scanner и независимые SQL entrypoints. Адресное решение ограничено этой парой путей, fragment SHA256 и count1."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/access_bindings_for_subject.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/access_list_bindings.sql",
+      "fragmentSHA256": "93dbf1088570de44aa51c083ff478b3d15bfa04624e521a25dbb1ff5982f0c04",
+      "count": 1,
+      "reason": "500-token binding projection и joins имеют общий scanAccessBinding, но subject lookup :many ACTIVE/member-filtered и административный list :many используют разные inputs и result boundary. ListAccessBindings сначала требует access.view, затем include_revoked/subject/role/project/search aliases/cursor и bounded limit+1; loadAccessBindings передаёт точные organization/subject/group и не является paged admin search. Объединение запроса смешало бы eligibility input и catalogue pagination. Новая SQL function/view либо dynamic SELECT builder ради columns не вводится; каждый named SQL хранит собственную cardinality и predicates. Адресное решение ограничено этой парой путей, fragment SHA256 и count1."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/access_resolve_target.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/access_resolve_target.sql",
+      "fragmentSHA256": "a046c7cf16afbd2638b670542ff4ef5b67b6f934947a7a83f009f40bed296536",
+      "count": 1,
+      "reason": "112-token окно внутри UNION ALL сопоставляет RUN и SESSION branches. RUN owner берётся из initiated_by и projectless разрешён лишь при target_type SYSTEM_ASSISTANT; SESSION owner — created_by, projectless допускается отдельным условием. Оба возвращают server-derived project/AGENT/WORKFLOW related refs, но таблицы, discriminator, refs и lifecycle predicates различны. resolveAccessTarget читает exact tenant/kind/ref, отклоняет противоречивый requested project и не выдаёт permission; последующий requireAccess/access.Evaluate остаётся отдельно. Универсальный SQL owner resolver стёр бы явные kind-specific eligibility clauses. Адресное решение ограничено этой парой путей, fragment SHA256 и count1."
     }
   ]
 }

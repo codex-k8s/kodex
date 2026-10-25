@@ -4,14 +4,11 @@ import (
 	"context"
 	_ "embed"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -41,36 +38,7 @@ func TestAssistantSystemRunProjectScopeComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1",
-		SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("e", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(namespacedRoleImageComponentConfig()); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
-	prepareObservedWarmFixture(t, ctx, r)
-	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001",
-		ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.turns.add"}, "control-api-gateway")
-	service, err := platformservice.New(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report"}, "runtime-controller")
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	r, service, owner, assistant := newWarmTurnComponentFixture(t, ctx, pool, namespacedRoleImageComponentConfig)
 	execute := func(kind command.Kind, key string, payload any) command.Result {
 		t.Helper()
 		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "system-run-scope-" + key}, Payload: payload})
