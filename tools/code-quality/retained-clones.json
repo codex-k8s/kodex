@@ -4051,67 +4051,11 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "ed5209550cdb36087a7aaba61d06e729175e79dbbaf6b827b182d689ec34706c",
-      "count": 1,
-      "reason": "138-token окно сравнивает ListPermissionRegistry с ListRoleEnvironments: разные exact FullMethod, domain methods, entities и typed response/caster. Разрешение principal и transportError уже общие; оставшийся ordered append — стандартная сборка разных protobuf lists, не копия доменного алгоритма. Generic list dispatcher потребовал бы callbacks/type parameters ради сохранения явно проверяемых прав и схем. Сохранено только точное окно двух путей с count1. После добавления предметных EN→RU комментариев окно пересмотрено по обоим исходникам: Go AST access.go не изменился, второй файл неизменен; обновлён только content hash точного того же scaffold."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/configuration_writeback.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "4756190d4bab9b433b1e793c30e85812729c1de249b34a5cf6cf74361efbf94c",
-      "count": 1,
-      "reason": "105-token окно соединяет GetManagedConfigurationGitWriteBack и ClaimImageBuild. Одинакова форма principal→typed domain call→transportError, но первое читает proposal/base/proposed source, второе выдаёт lease/token/fence/input через специализированный claim. Общей операции или результата здесь нет; principal/error helpers уже едины. Объединение через универсальный callback скрыло бы read-versus-claim boundary. Исключена только точная пара fragment/count1, не команды writeback/build. После EN→RU комментариев точное окно повторно прочитано вместе с обоими полными затронутыми методами; прежняя semantic граница и count1 сохранены, обновлён только reviewed fragment hash."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_receipts.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "6b398bd17c5116cc164ed3ff8826a1b783ca2286733075e052333785a9a797ea",
-      "count": 2,
-      "reason": "Два110-token совпадения одной пары paths сравнивают конец GetEmailEffectReceipt и начала ClaimImageAdmission/ClaimImagePromotion. Receipt/decision read и выдача двух разных image claims имеют разные FullMethod, principal permission, domain input/output и lifecycle. Повторяется только каркас специализированного RPC с уже общими principal/transportError; общий claim dispatcher или function registry не создаётся. Проверены оба occurrence, exact fragment/count2, не все email/image handlers. После комментариев перечитаны оба exact occurrence и полные ClaimImageAdmission/ClaimImagePromotion/GetEmailEffectReceipt; pair/count2 сохранены."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/organization_role_images.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
       "fragmentSHA256": "291e642167bc5884c9bbd4ccc6b4bed0d84100f96a34dc63699f4c72877d82ba",
       "count": 2,
       "reason": "Два перекрывающихся окна117/112 tokens одной пары paths проходят через завершение RequestOrganizationRoleImagePromotion и начала ListOrganizationRoleImageRecipeRevisions, ClaimImageAdmission и FailImageAdmission. Mutation receipt, scoped revision query и exact attempt claim/failure — разные специализированные доменные операции. Общие principal/error casters уже используются; перенос этих typed bindings в generic mutation dispatcher скрыл бы обязательные method/attempt pins. Сохранены только exact paths/fragment/count2."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "8370acfb6290600fda921c84858e9882d7db6fafdc5675bf79d41773ab64ddb0",
-      "count": 1,
-      "reason": "134-token окно сравнивает ListPlatformCapabilities с ListRoleEnvironments, включая границы соседних query методов. Domain lists и protobuf entities/casters различны, общая часть — typed principal/error wrapper и ordered append. Стандартный list loop не требует нового runtime primitive с projection callbacks; общие проверки principal/ошибок уже вынесены. Исключение привязано к данной точной паре путей/fragment/count1, не query layer целиком. После предметных комментариев повторно прочитаны точное окно и полные методы обеих сторон; обновлён только hash при прежних pair/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "551ca36de52a11df98057ab0581e8231a438e8597c33d3cead5592df4f23af36",
-      "count": 1,
-      "reason": "139-token окно сравнивает конец ListRuntimeSelections/начало SearchPlatform с переходом от environment catalog к project recipe list. Runtime catalog, search и image list имеют разные typed фильтры, FullMethod и eligibility владельца; одинаковые append/return/principal/error строки не являются общей бизнесовой операцией. Generic dispatcher нарушил бы видимость этих привязок, а базовые helpers уже используются. Только точные paths/fragment/count1. После предметных комментариев повторно прочитаны точное окно и полные методы обеих сторон; обновлён только hash при прежних pair/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "2ba4dfa229e84f004af1b0362f843402612a8d50fd9fe75e0762093f35311f6d",
-      "count": 1,
-      "reason": "105-token окно сравнивает GetProject и начало ListPlatformMemberships с ClaimImageBuild. Идентичный syntactic principal/domain/error template не объединяет project eligibility, membership list и выдачу build lease/token/fence. Конкретные RPC, domain method, typed inputs и outputs обязаны оставаться явными; общие principal/transportError уже едины. Сохранена только exact path/fragment/count1 пара, не доступ к проектам или claim policy. После предметных комментариев повторно прочитаны точное окно и полные методы обеих сторон; обновлён только hash при прежних pair/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "c244491280b93b98f2e8d7790a6464d4ffb9c05e3c103ca5d0322dcd6a12f745",
-      "count": 1,
-      "reason": "122-token окно сравнивает конец ListOwnerGates/начало GetOwnerGate с project ListRoleImageRecipes. Общая страничная сборка response не означает общий gate/image домен: разные filters, exact FullMethods, entities и principal permissions. Standard append и общие principal/error helpers достаточны; generic list callback ради этого остатка сделал бы binding менее явным. Только точные paths/fragment/count1, без исключения реальных gate transitions. После предметных комментариев повторно прочитаны точное окно и полные методы обеих сторон; обновлён только hash при прежних pair/count1."
     },
     {
       "format": "go",
@@ -4264,14 +4208,6 @@
       "fragmentSHA256": "142fb3a3cde2c350a7f4a980a9b9fddbcbc2abb3eb80e6d40697ff6f3641f6e8",
       "count": 1,
       "reason": "Окно104 tokens начинается с вызова ValidateRoleImageRevisionDraft и доходит до объявления PublishRoleImageRevisionDraft; вторая сторона начинается с вызова PublishIntegrationDefinitionDraft и доходит до RebindIntegrationDefinitionConsumers. Это соседние специализированные commands, а не одинаковая validation/publication/rebind операция. Конвертеры и общий mutation/error путь уже разделяются. Дополнительный generic wrapper переносит единственные две typed строки в фабрику и ухудшает видимость точного метода. Только этот файл/hash/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "924fb98ab5b72f4a175c4e089465c5b7995c1114c5096f30cd7041f2976036dc",
-      "count": 1,
-      "reason": "Окно118 tokens пересекает конец RuntimeWork GetIntegrationConnectionDefinitionConfiguration и начало query GetSystemSTTConfiguration против GetOverview и начала ListPlatformCapabilities. Различаются fixed runtime binding kinds, owner query, method authority и typed ответ; общий principal/transportError/casters уже существует. Единого связного алгоритма чтения нет; generic callback reader усложнит короткие guards и скроет RuntimeWork/query границу. Сохранены только точные два пути/fragment/count1, не query/read handlers целиком."
     },
     {
       "format": "go",
@@ -5155,22 +5091,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
-      "fragmentSHA256": "a76f443466f6948b348f690e89c6b8113fe4f283d87f74c198e75f4f5c052aab",
-      "count": 1,
-      "reason": "Окно175 tokens проходит через конец paged catalog и разные GetProject/GetRuntimeSecret. Principal, page и transportError уже общие; читаются разные доменные ресурсы через точные service methods и nominal wrappers. Generic RPC getter ради short glue потребовал бы callbacks для обоих request/response casters и скрыл owner resource mapping. Сохранены только эти пути/hash/count1, без исключения доступа или полных getters. После предметных комментариев повторно прочитаны точное окно и полные методы обеих сторон; обновлён только hash при прежних pair/count1."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
-      "fragmentSHA256": "ac60f47aeabd0652b8c4b44f593ced603a723f7059990108bc2e9c1d0e0c9d44",
-      "count": 1,
-      "reason": "Окно217 tokens сравнивает явные typed adapters ListProjectMemberships и ListRuntimeSecrets. Нормализация principal/page/error уже вынесена, но exact RPC и service methods, entity casters и protobuf collections различны. Общий generic dispatcher должен принять весь query/caster/response набор callbacks ради короткого transport glue, ухудшив чтение authoritative boundary без общего бизнесового алгоритма. Исключены только точные пути/hash/count1, не List handlers или проверка eligibility. После предметных комментариев повторно прочитаны точное окно и полные методы обеих сторон; обновлён только hash при прежних pair/count1."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
       "fragmentSHA256": "6644bc27894b5175eb135c8bc635b91cde2a168bb2b914d8281423823e4d1c30",
@@ -5421,33 +5341,9 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "fragmentSHA256": "4ae2f847d0052f1d198814c4400ce18e4f3d90de3721874dc8a46affd6ba1280",
-      "reason": "ListAgentRuntimeConfigurationVersions и ListRuntimeEnvironmentVersions используют разные owner queries, AgentRef либо EnvironmentRef, slices AgentRuntimeConfiguration либо RuntimeEnvironmentVersion и разные casters. В окне также стык ListRuntimeEnvironmentSets/ListTemplateVariables. Principal/page/error уже общие; generic query dispatcher смешал бы authority/filter/output types.",
-      "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
       "fragmentSHA256": "0e664b1b77e8120abeebb1daa6f68dbfd36128894f08bc94d4a833e5570c8db6",
       "reason": "CreateRuntimeEnvironmentSet и PublishRuntimeEnvironmentVersion уже используют общие domainEnvironment и domainRuntimeEnvironmentPolicy. Create задаёт ScopeKind=PROJECT и ProjectRef, publication — существующий Ref. Specialized mutation ownership/version и generated responses различны; оставшийся typed glue не объединён ради семи getter interface полей.",
       "count": 1
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/mvp_queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "d5775a075b1912eb6b4333e2942db9da03615a9cadb854e1d0cd2b78c9744e4f",
-      "count": 1,
-      "reason": "Стык GetRuntimeEnvironmentReadiness/ListRuntimeEnvironmentAgents сравнивается с GetAttachmentSet/ListSchedules. Snapshot readiness с published version и attachment set с page имеют разные schemas; общий только переход к следующему principal/error wrapper. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/mvp_queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "57a8d9daa59abe3918f401d76277647b55f8167eac7cde48fa466174279f8282",
-      "count": 1,
-      "reason": "ListRuntimeEnvironmentAgents/ListScheduleRevisions сравниваются с ListIntegrationConnections/GetIntegrationConnection. Environment ResourceRef и integration Category/definition key имеют разные значения; typed service calls, entities и response collections сохраняются явно. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
     },
     {
       "format": "go",
@@ -5456,158 +5352,6 @@
       "fragmentSHA256": "12fef2437d524a78319e4535697df42a5025eb53899368c98a96e3f839e209bf",
       "count": 1,
       "reason": "Списки ScheduleRunOccurrence и RoleImageRecipeRevision имеют разные поля и источники: run/revision против provenance/build/promotion. Совпадает каркас principal/error/page/ordered append, но не projection schemas и не owner query. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "9c6ad9609fdeb8d01d3252581dc84b241b60ff08985110bfd4ad3119e5c424e2",
-      "count": 1,
-      "reason": "GetBootstrapState/GetPlatformEventCursor и GetAdministration/ListAuditEvents читают разные owner views с разными FullMethodName. Совпадают короткие principal/domain/error стыки, не политика доступа или операция изменения. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "8e5ab9fdb0599e61b9571621de97d2bca897f385943fca959ddd119520fdafce",
-      "count": 1,
-      "reason": "Курсор событий/overview и impact/artifact/revision образуют совпадение через границы методов. Organization sequence, project overview и artifact impact не являются одной командой; extraction скрыл бы разные typed DTO и аргументы. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "7e8047cf22be2d4427ccdfe30dad05876cffcd5f8b1f5cd11c137fb4439c9fbf",
-      "count": 1,
-      "reason": "GetOverview/ListPlatformCapabilities и GetIntegrationConnection/GetAdministration совпадают лишь каркасом чтения. ProjectRef и ConnectionRef адресуют разные ресурсы, а точные RPC и domain methods различают authority и ответы. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "8af5fd2e0e86d086d0fef63924dce09d5e2156deca4fc279fdc760f654fbd428",
-      "count": 1,
-      "reason": "GetOverview/ListPlatformCapabilities/ListRuntimeSelections пересекаются с соседними capability/runtime/search adapters. Ordered append и общий principal/error не превращают capability, runtime и search results в одну доменную сущность. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "70c9e611c58b63eea8290b03763c544d0a371a35edb35f21953acd6cf57a03f5",
-      "count": 1,
-      "reason": "Хвост ListRuntimeSelections и начало SearchPlatform совпадают с хвостом GetRunGraph и началом ListRunEvents. Плоский каталог и graph snapshots/events имеют различные контракты; общее окно проходит через границы отдельных методов. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "f2e6ffa37869ecc0f88b39a3dbae50c3eed9582eca3137056b84fa2b166ebf4d",
-      "count": 2,
-      "reason": "Переход ListTrashedProjects/GetProject/ListPlatformMemberships сравнивается с ListAgents/GetAgent/ListAgentInstructionVersions. Project и agent locators, casters и методы владельца различаются; пагинация и transport ошибки уже общие. Project trash/get/membership и schedule list/get/integration definitions используют разные сервисные чтения и фильтры. Общая страничная сборка уже пользуется page и transportError; generic callback dispatcher скрыл бы FullMethod bindings. Решение ограничено прочитанными точными paths/fragment/count2; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "eded463acba57a3ac038c22e473f3b77c5e813f0421165f814ddda38f8d8726a",
-      "count": 1,
-      "reason": "Стык trash project/get/membership сравнивается с owner gate list/get и началом artifact filters. Gate total/states и project queries не унифицируются; совпадает typed чтение с уже общими principal и transportError. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "8e4b5d70b3f6a41444ea5ff1576fde21f937531a0084376db1f4ac98fa1e936d",
-      "count": 1,
-      "reason": "Хвост trash project list/GetProject и artifact revision list/GetArtifactRevision имеют разные locator cardinality: project против artifact+revision. Общие response/page и error строки не являются самостоятельным runtime алгоритмом. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "a76f443466f6948b348f690e89c6b8113fe4f283d87f74c198e75f4f5c052aab",
-      "count": 1,
-      "reason": "Project trash/get/membership и integration connection list/get/admin совпадают через границы typed methods. Category definition filter и project query не эквивалентны; разные nominal results и resource references остаются явными. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "5c38a6a22a5a9fedcaf8be553f2ff51536eeb650a2d13f04af263a923d027aa9",
-      "count": 1,
-      "reason": "Project trash/get/membership сравнивается с run list/get/graph. Run list имеет total, states и session/target filters, project list другой контракт; одинаковые wrapper строки не переносят eligibility между методами. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
-      "fragmentSHA256": "2ba4dfa229e84f004af1b0362f843402612a8d50fd9fe75e0762093f35311f6d",
-      "count": 1,
-      "reason": "GetProject и хвост trash list совпадают с invocation claim/get. Выдача работы workload и чтение invocation state не заменяются project read; exact methods и owner lease semantics различны при общем principal/error. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "d1db1ba68a9fc41f6da83e396b022096d8cca66ceba9827a514b805905540689",
-      "count": 1,
-      "reason": "GetProject/ListPlatformMemberships сравниваются с GetArtifact/ListArtifactRevisions. Project membership и revision total/page используют разные authority scopes и output types; короткие getter/list стыки не требуют общего dispatcher. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "ac60f47aeabd0652b8c4b44f593ced603a723f7059990108bc2e9c1d0e0c9d44",
-      "count": 2,
-      "reason": "Project membership и candidate user lists имеют разные service methods и collections. Project/query/page общий типизированный Filter, principal/page/error уже вынесены; append Membership и User остаются отдельными nominal projections. Project membership/candidate и schedule list/get совпадают paginated wrapper каркасом. Membership/User и Schedule schemas, RPC permissions и owner methods различны; общий dispatcher потребовал бы callbacks для всего оставшегося glue. Решение ограничено прочитанными точными paths/fragment/count2; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "76465a3b5b29d42793463852d30d8426d0e501fca2b2c6cfbc95e81e14b69aa9",
-      "count": 1,
-      "reason": "Хвост candidate user list/ListAgents сравнивается с run events/ListOwnerGates. CurrentSequence/Complete и ordinary page имеют разные семантики; совпадение захватывает return/principal стык, а не алгоритм событий или gate. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "a997d619f070959a73feb06938f43da148137e4d9d6497f1c7f595ba3d1dd04d",
-      "count": 1,
-      "reason": "ListAgents/GetAgent/инструкции и ListWorkflows/GetWorkflow/ListRuns имеют разные enums состояния, locators, versions и collections. Нормализация enumSuffix/page/ошибок общая; типизированные вызовы владельца сохраняют явные границы. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "f5f8fc9f8907ce5c969a16444a504837f61de27fa6ad29a8a8cbcf3a5bdec652",
-      "count": 2,
-      "reason": "GetWorkflow/ListRuns и GetRun/GetRunGraph совпадают короткими getter/error стыками. Workflow и run принадлежат разным domain reads; graph snapshot selection не общий getter и не скрыт новым callback. GetWorkflow/ListRuns и GetOwnerGate/ListArtifacts имеют разные resource locators, enum states и filters. Principal и transportError уже единые; объединение стыка не выделяет повторяемый бизнесовый алгоритм. Решение ограничено прочитанными точными paths/fragment/count2; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "1b37c43ea15cd6ff8cbd93012560e0eda0d2e80f2e722f01376bf08eaeeaa432",
-      "count": 1,
-      "reason": "Хвост artifact list/начало impact сравнивается с revision list/get. Impact action и artifact+revision locators не одинаковы; total/page/append и новый principal стык составляют только typed transport glue. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "99e94104a93cb74ca8dbdaa305e720e490e1a690f709056b9659991750c9a740",
-      "count": 1,
-      "reason": "GetArtifact/ListArtifactRevisions сравниваются с GetSchedule/ListIntegrationDefinitions. Разные owner reads и protobuf responses используют общие principal/transportError; извлечение callback обобщило бы весь остаток adapter без общего алгоритма. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
-      "fragmentSHA256": "e61dfacb82710aaa5f97cdc5c08fcef63f41fa221cd516cdb78fbd5b79638524",
-      "count": 1,
-      "reason": "Connection/admin/audit query стык сравнивается с move-conversation/GetSystemAssistant/CreateProjectAssistant. Move/create используют отдельные execute commands и missing-result checks, read использует principal; общий return/error стык не одна операция. Решение ограничено прочитанными точными paths/fragment/count1; общих исключений на слой или handler нет."
     },
     {
       "format": "go",

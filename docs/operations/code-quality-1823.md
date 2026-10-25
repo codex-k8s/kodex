@@ -4,11 +4,121 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.428.0
+version: 1.429.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий authenticated query response для37 RPC — 25.10.2026
+
+На основе `b63dd48701d8b176ab2c4c79e9493cd18c0655aa` полностью прочитан
+queries.go (765 исходных строк), server.go (326), command_response.go (25),
+authorization/principal.go и связанные transport unit fixtures. Новый local
+queryResponse разрешает principal точного RPC до callback, оставляет principal
+error без повторного mapping и переводит raw callback errors прежним
+transportError. Каждый caller явно сохраняет typed request/filter, domain
+method и typed response projection; command helper не менялся.
+
+Ранее37 copies principal/error orchestration были внутри handlers. Теперь
+production query source692 строки и helper30, всего722 вместо765. Два
+новых regression tests67 строк отдельно проверяют missing-context guard и
+приоритет authentication перед malformed filters/nil service. В helper и
+обоих Test-функциях есть EN→RU описания. Новых Proto/API contracts,
+dependencies, SQL, owner commands, grant issuance, retries, deadlines и
+transaction ownership нет.
+
+| Граница / исход | Сохранённое поведение |
+| --- | --- |
+| Источник authority | Прежний authorization.Principal проверяет exact method и verified/resolved context. Query/filter payload не назначает identity, tenant, project authority либо permissions |
+| Missing/invalid context | Callback не вызывается, прежний Unauthenticated возвращается напрямую, без transportError remap в Internal. Nil service и ошибочные run/artifact filters не опережают authentication |
+| Domain read / eligibility | Вызывается тот же domain method с прежними ctx/principal/arguments. Backend owner eligibility и все прежние эффекты остаются там, не заменяются generic dispatcher либо callback return |
+| Callback error | Исходная domain/context error проходит прежний mapper ровно один раз; partial response отбрасывается. Callback не должен передавать уже mapped status errors |
+| Success | Порядок filters, fetch, casting, list append, total/cursor/actions и typed response сохранён. Helper не добавляет nil fallback, cache, probe, claim либо lifecycle transition |
+| Run/artifact validation | Две дополнительные Invalid ветки теперь возвращают raw error из callback и используют тот же общий mapper; authentication-first порядок прежний |
+| Command / signed context | server.go, authorization/principal.go и command_response.go побайтово совпадают с исходным SHA; executeResponse52 command callers не менялись |
+
+Точный scope сопоставлен для каждого RPC; full AST proof сохраняет весь
+файл, а не только совпадение имён из таблицы. Для всех строк source —
+queries.go на b63dd48, actor — прежний verified exact-method principal,
+owner domain call/response — прежний callback body; новых idempotency,
+version/state/event/consumer переходов этим выносом не добавлено.
+
+| RPC | Точный источник method binding | Typed response |
+| --- | --- | --- |
+| GetBootstrapState | `PlatformQueryService_GetBootstrapState_FullMethodName` | `GetBootstrapStateResponse` |
+| GetPlatformEventCursor | `PlatformQueryService_GetPlatformEventCursor_FullMethodName` | `GetPlatformEventCursorResponse` |
+| GetOverview | `PlatformQueryService_GetOverview_FullMethodName` | `GetOverviewResponse` |
+| ListPlatformCapabilities | `PlatformQueryService_ListPlatformCapabilities_FullMethodName` | `ListPlatformCapabilitiesResponse` |
+| ListRuntimeSelections | `PlatformQueryService_ListRuntimeSelections_FullMethodName` | `ListRuntimeSelectionsResponse` |
+| SearchPlatform | `PlatformQueryService_SearchPlatform_FullMethodName` | `SearchPlatformResponse` |
+| ListProjects | `PlatformQueryService_ListProjects_FullMethodName` | `ListProjectsResponse` |
+| ListTrashedProjects | `PlatformQueryService_ListTrashedProjects_FullMethodName` | `ListTrashedProjectsResponse` |
+| GetProject | `PlatformQueryService_GetProject_FullMethodName` | `GetProjectResponse` |
+| ListPlatformMemberships | `PlatformQueryService_ListPlatformMemberships_FullMethodName` | `ListPlatformMembershipsResponse` |
+| ListPlatformMembershipCandidates | `PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName` | `ListPlatformMembershipCandidatesResponse` |
+| ListProjectMemberships | `PlatformQueryService_ListProjectMemberships_FullMethodName` | `ListProjectMembershipsResponse` |
+| ListProjectMembershipCandidates | `PlatformQueryService_ListProjectMembershipCandidates_FullMethodName` | `ListProjectMembershipCandidatesResponse` |
+| ListAgents | `PlatformQueryService_ListAgents_FullMethodName` | `ListAgentsResponse` |
+| GetAgent | `PlatformQueryService_GetAgent_FullMethodName` | `GetAgentResponse` |
+| ListAgentInstructionVersions | `PlatformQueryService_ListAgentInstructionVersions_FullMethodName` | `ListAgentInstructionVersionsResponse` |
+| ListWorkflows | `PlatformQueryService_ListWorkflows_FullMethodName` | `ListWorkflowsResponse` |
+| GetWorkflow | `PlatformQueryService_GetWorkflow_FullMethodName` | `GetWorkflowResponse` |
+| ListRuns | `PlatformQueryService_ListRuns_FullMethodName` | `ListRunsResponse` |
+| GetRun | `PlatformQueryService_GetRun_FullMethodName` | `GetRunResponse` |
+| GetRunGraph | `PlatformQueryService_GetRunGraph_FullMethodName` | `GetRunGraphResponse` |
+| ListRunEvents | `PlatformQueryService_ListRunEvents_FullMethodName` | `ListRunEventsResponse` |
+| ListOwnerGates | `PlatformQueryService_ListOwnerGates_FullMethodName` | `ListOwnerGatesResponse` |
+| GetOwnerGate | `PlatformQueryService_GetOwnerGate_FullMethodName` | `GetOwnerGateResponse` |
+| ListArtifacts | `PlatformQueryService_ListArtifacts_FullMethodName` | `ListArtifactsResponse` |
+| GetArtifactImpact | `PlatformQueryService_GetArtifactImpact_FullMethodName` | `GetArtifactImpactResponse` |
+| GetArtifact | `PlatformQueryService_GetArtifact_FullMethodName` | `GetArtifactResponse` |
+| ListArtifactRevisions | `PlatformQueryService_ListArtifactRevisions_FullMethodName` | `ListArtifactRevisionsResponse` |
+| GetArtifactRevision | `PlatformQueryService_GetArtifactRevision_FullMethodName` | `GetArtifactRevisionResponse` |
+| GetAttachmentSet | `PlatformQueryService_GetAttachmentSet_FullMethodName` | `GetAttachmentSetResponse` |
+| ListSchedules | `PlatformQueryService_ListSchedules_FullMethodName` | `ListSchedulesResponse` |
+| GetSchedule | `PlatformQueryService_GetSchedule_FullMethodName` | `GetScheduleResponse` |
+| ListIntegrationDefinitions | `PlatformQueryService_ListIntegrationDefinitions_FullMethodName` | `ListIntegrationDefinitionsResponse` |
+| ListIntegrationConnections | `PlatformQueryService_ListIntegrationConnections_FullMethodName` | `ListIntegrationConnectionsResponse` |
+| GetIntegrationConnection | `PlatformQueryService_GetIntegrationConnection_FullMethodName` | `GetIntegrationConnectionResponse` |
+| GetAdministration | `PlatformQueryService_GetAdministration_FullMethodName` | `GetAdministrationResponse` |
+| ListAuditEvents | `PlatformQueryService_ListAuditEvents_FullMethodName` | `ListAuditEventsResponse` |
+
+Независимый query-response-proof — PASS LOCAL: проверено точное тело нового
+helper,37 method constants и callback types,39 raw error sites. После
+обратной подстановки principal head/error mapper, удаления callback wrapper
+и единственного added import полный queries AST совпадает с b63dd48.
+server/security/command sources сравниваются побайтово. Guards и filters
+остаются на прежнем месте относительно principal и domain read.
+
+Полный control-plane build/unit с двумя новыми regression tests,17 analyzer
+unit,5 exact-ignore guards, gofmt/git diff --check — PASS LOCAL
+(checks429-final). Child env исключает credentials и inherited KODEX inputs.
+Отрицательные unit проверяют локальную authentication boundary, не успешный
+mTLS/SSO либо live domain path. PostgreSQL/RLS/OCC, реальное end-to-end
+RPC/provider/storage/broker/Secret выполнение, browser/E2E/deploy/live —
+NOT RUN/SKIP. Manifests прежние,30 exact renders и standalone staging
+control-api-gateway FAIL не повторялись. Внешних library API не добавлено;
+прежние официальные fallback документы применимы, нового Context7 lookup
+для локального helper не выполнялось.
+
+Detector после повторного scan итогового tree:1668 raw против1685 прежде
+(минус17);58 прежних fragment keys исчезли,42 новых появились. Большинство
+перестроенных окон пересекают nominal typed handlers; они не объявлены
+автоматически устранёнными либо новыми runtime algorithms.31 прежнее точное
+решение отсутствует в raw report, ещё одно email_receipts/role_images окно
+сменило count2→3 при неизменных source files из-за перестройки сопоставлений.
+Все32 старых решения удалены из реестра: расширять прежнее исключение на
+новую occurrence без review нельзя. Registry739/850 retained occurrences;
+818 unresolved против799. Удалено36 occurrences прежнего покрытия; рост
+открытого разбора на19 честно сохранён,42 новых окна не скрыты. Повторный
+scan после registry edit подтверждает тот же clone-set hash. Exclusions и
+thresholds не расширялись.
+
+Inventory6693 own sources/222 exclusions. Go21493:20993 EN→RU,500 missing
+только в test-файлах, production missing0. PR362 Go/3021 объявление,
+missing0;392 whole changed blobs. #1823 открыт, #1829 Draft, QA/main
+сохранены. Секреты не извлекались и не переносились, env не менялись.
 
 ## Тестовые описания: assistant plans, retry и projections — 25.10.2026
 
