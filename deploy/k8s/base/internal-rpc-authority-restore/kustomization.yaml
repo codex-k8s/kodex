@@ -7,3 +7,5 @@ resources:
   - networkpolicy.yaml
   - evidence-admission.yaml
 patches: null
+components:
+  - ../../components/authority-controller-technical-defaults

@@ -64,12 +64,7 @@ data:
   INTERNAL_RPC_AUTHORITY_PUBLISHER_TLS_SERVER_NAME: internal-rpc-authority-publisher.kodex-system.svc
   INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS: https://kubernetes.default.svc:443
   INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME: kubernetes.default.svc
-  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317
-  OTEL_EXPORTER_OTLP_TLS_SERVER_NAME: otel-collector.observability.svc.cluster.local
-  OTEL_EXPORTER_OTLP_CA_FILE: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem
-  OTEL_TRACES_SAMPLER_ARG: "0.1"
-  SENTRY_DSN_FILE: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn
-  SENTRY_EXPECTED_HOST: sentry-relay.observability.svc:8443
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -79,13 +74,6 @@ metadata:
     app.kubernetes.io/name: internal-rpc-authority-restore-controller
     app.kubernetes.io/component: restore-controller
 spec:
-  replicas: 2
-  minReadySeconds: 10
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: internal-rpc-authority-restore-controller
@@ -96,20 +84,12 @@ spec:
         app.kubernetes.io/component: restore-controller
     spec:
       serviceAccountName: internal-rpc-authority-restore-controller
-      automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 30
       securityContext:
-        runAsNonRoot: true
         runAsUser: 29005
         runAsGroup: 29005
         fsGroup: 29005
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: restore-controller
-          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          imagePullPolicy: IfNotPresent
           command: [/usr/local/bin/internal-rpc-authority-restore-controller]
           envFrom:
             - configMapRef:
@@ -144,23 +124,6 @@ spec:
               containerPort: 8443
             - name: technical
               containerPort: 9090
-          readinessProbe:
-            httpGet: {path: /readyz, port: technical}
-            timeoutSeconds: 3
-            periodSeconds: 5
-            failureThreshold: 3
-          livenessProbe:
-            httpGet: {path: /healthz, port: technical}
-            timeoutSeconds: 2
-            periodSeconds: 10
-            failureThreshold: 3
-          resources:
-            requests: {cpu: 50m, memory: 64Mi}
-            limits: {cpu: 500m, memory: 256Mi}
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: database-credentials, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore-controller/database, readOnly: true}
             - {name: postgresql-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql, readOnly: true}

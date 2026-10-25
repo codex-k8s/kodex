@@ -1,0 +1,42 @@
+# Технические defaults трёх authority controllers; UID/SA/команды/ключи остаются в native ресурсах.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: internal-rpc-authority-publisher
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: publisher
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: internal-rpc-authority-readback-attestor
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: readback-attestor
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: internal-rpc-authority-restore-controller
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: restore-controller
+- path: deployment.patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: (internal-rpc-authority-publisher|internal-rpc-authority-readback-attestor|internal-rpc-authority-restore-controller)
+- path: config.patch.yaml
+  target:
+    version: v1
+    kind: ConfigMap
+    name: (internal-rpc-authority-publisher|internal-rpc-authority-readback-attestor|internal-rpc-authority-restore-controller)

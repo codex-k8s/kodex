@@ -4,11 +4,52 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.474.0
-updated: 2026-10-25
+version: 1.475.0
+updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие технические defaults authority controllers — 26.10.2026
+
+В authority-controller-technical-defaults вынесены совпадающие настройки трёх
+Deployment: publisher,readback-attestor,restore-controller. Общими стали
+replicas/minReady/rollout, token/grace, non-root/fsGroupChange/seccomp,
+container image/pull policy/probes/resources/hardening. Три точных JSON tests
+проверяют имя container0 до общих позиционных patches. Разные UID/GID/fsGroup
+29003/29004/29005, ServiceAccount, labels/selectors, команды, gRPC ports,
+secret/trust/signer/grant mounts остаются нативными.
+
+Тот же Component переиспользует6 одинаковых полей OTEL/Sentry ConfigMap.
+Индивидуальные DB/TLS/trust/generation inputs не меняются. Общая telemetry
+конфигурация не выдаёт полномочия и не меняет bootstrap/ready/claim/renew/
+complete/cancel/retry/terminal/rotation/shutdown матрицу. Новых endpoints,
+command/event consumers, credentials или NetworkPolicy направлений нет.
+
+Kustomize5.8.2:3 полных Deployment и3 ConfigMap модели восстановлены;
+5 итоговых render побайтно совпали с исходнымf1a0fe0 — bases11/7/31 и
+profiles427/437,всего913 rendered objects.14 изолированных Kustomize запусков:
+3 positives с двумя ресурсами,3 actual name-test failures,2 foreign resources
+без изменений и3 различимых unsafe mutations (ambient token,wrong readiness,
+общий UID). Exact targets и сохранение трёх разных UID проверены.
+Final public local checks: web-only-release32.87с и authority ABI
+render20.94с — PASS LOCAL. Hashes9 исходников совпали с proof/render.
+Это локальная проверка сборки manifests,без deploy/browser/full E2E/live QA.
+
+Detector:6755 sources/222 прежних generated exclusions,1537 raw/1178 retained/
+359 unresolved,registry1038. Исчезли3 прежних raw windows,появилось1 nominal
+окно identities/UID. Все1035 старых entries сохранены;3 новых exact pair/hash/
+count1 решения фиксируют новый header,раздельные admit/claim evidence policies
+и admin/promotion TLS filenames внутри разных Secret projections.6 негативных
+изменений registry проверены настоящим assessor. Остальные359 групп
+(158 Go/150 TypeScript/14 YAML/37 Bash) остаются в scope #1823. Source exclusions,
+thresholds/нормализация не менялись. Go21574/21574 EN→RU,пропусков0.
+
+Context7 /kubernetes-sigs/kustomize: Component,ordered patches,JSON6902 и
+exact anchored targets; фактические APIs проверены локальной сборкой Kustomize5.8.2.
+Версии не обновлялись;Go/PWA/контракты/миграции не менялись. Прежние проверки
+app sources относятся к указанным ранее SHA,не объявляются новым запуском.
+PR остаётся Draft до завершения всего scope;merge/deploy/startup ещё предстоят.
 
 ## Общие технические настройки registry и телеметрия — 25.10.2026
 

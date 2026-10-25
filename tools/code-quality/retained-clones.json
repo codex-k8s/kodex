@@ -8280,6 +8280,30 @@
       "fragmentSHA256": "b9031e146eea2ef329316da4e19ffc64849fa5cf11d35ff38aaeec8f2cde4308",
       "count": 1,
       "reason": "RoleBinding declarations связывают разные roleRef и закрытые наборы ServiceAccount: evidence-readers controller/recovery против backup-reader operator/PITR. Перед ними get разрешён на разные exact resourceNames/types. Общий шаблон не должен смешивать Secret evidence с PostgreSQL backup permissions; повторение обязательной RBAC schema вокруг разных identities не является общим алгоритмом. Только этот внутрефайловый exact fragment/hash/count1."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-readback-attestor/runtime.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-restore/runtime.yaml",
+      "fragmentSHA256": "fb41103de6db9a1b232798fd09bfa4ba5b0ca501bff921f236657f6db4f952dd",
+      "count": 1,
+      "reason": "Окно readback-attestor/restore-controller после выноса technical defaults и общей telemetry config содержит разные metadata/selector/template labels, ServiceAccount и UID29004/29005. Перед ним разные trust/JWS либо Kubernetes address fields. Probes/rollout/resources/hardening уже общие; остаются обязательные nominal bindings независимых authority identities. Только exact pair/hash/count1 fragment, не весь runtime файл и не общий источник полномочий."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/image-supply-chain/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/image-supply-chain/networkpolicy.yaml",
+      "fragmentSHA256": "ef9ab02d8654fc331bb58027fd26b3a00842efa768a8d2b5c8b4775e88727757",
+      "count": 1,
+      "reason": "Два коротких NetworkPolicy объявляют доступ к evidence registry5007 для разных server-owned phases admit/claim. Разные metadata.name и exact phase label сохраняют независимые bindings/revocation; другие phase permissions находятся в отдельных политиках. Это полные декларации конкретного ребра, без скопированного вычисления полномочий. Alias не переходит document boundary, универсальный renderer ради одного peer не вводится. Только exact внутрефайловый fragment/hash/count1."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/image-supply-chain/registry.yaml",
+      "secondPath": "deploy/k8s/base/image-supply-chain/registry.yaml",
+      "fragmentSHA256": "a83275b0a0f519872c0a990cf5a9fe79d61f831af82b6f10d3f6c2f3cfaadfb5",
+      "count": 1,
+      "reason": "Окно TLS/htpasswd env registry admin/promotion задаёт одинаковые относительные filenames внутри разных Secret volume projections. Разные ServiceAccount/Secret/PVC и auth realm/ports/delete permissions остаются за пределами этого короткого EnvVar фрагмента. Общие Pod/registry/probes/resources/mounts/certificate guard уже вынесены; общий TLS credential source нарушил бы разделение ролей. Сохранено только данное exact внутрефайловое window/hash/count1, не env/file-wide исключение."
     }
   ]
 }

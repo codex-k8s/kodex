@@ -5,3 +5,5 @@ resources:
   - runtime.yaml
   - networkpolicy.yaml
 patches: null
+components:
+  - ../../components/authority-controller-technical-defaults

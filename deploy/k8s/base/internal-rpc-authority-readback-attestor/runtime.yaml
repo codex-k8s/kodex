@@ -14,12 +14,6 @@ data:
   INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
   INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER: ira_readback_attestor_g4
   INTERNAL_RPC_AUTHORITY_READBACK_VERIFIER_GENERATION: "1"
-  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317
-  OTEL_EXPORTER_OTLP_TLS_SERVER_NAME: otel-collector.observability.svc.cluster.local
-  OTEL_EXPORTER_OTLP_CA_FILE: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem
-  OTEL_TRACES_SAMPLER_ARG: "0.1"
-  SENTRY_DSN_FILE: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn
-  SENTRY_EXPECTED_HOST: sentry-relay.observability.svc:8443
   INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_BUNDLE_JWS_FILE: /var/run/config/kodex/internal-rpc-authority/readback/manifest-root.jws
   INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_TRUST_JWS_FILE: /var/run/config/kodex/internal-rpc-authority/readback/credential-trust.jws
 ---
@@ -31,13 +25,6 @@ metadata:
     app.kubernetes.io/name: internal-rpc-authority-readback-attestor
     app.kubernetes.io/component: readback-attestor
 spec:
-  replicas: 2
-  minReadySeconds: 10
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: internal-rpc-authority-readback-attestor
@@ -48,20 +35,12 @@ spec:
         app.kubernetes.io/component: readback-attestor
     spec:
       serviceAccountName: internal-rpc-authority-readback-attestor
-      automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 30
       securityContext:
-        runAsNonRoot: true
         runAsUser: 29004
         runAsGroup: 29004
         fsGroup: 29004
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: readback-attestor
-          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          imagePullPolicy: IfNotPresent
           command:
             - /usr/local/bin/internal-rpc-authority-readback-attestor
           envFrom:
@@ -85,33 +64,6 @@ spec:
               containerPort: 8443
             - name: technical
               containerPort: 9090
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: technical
-            timeoutSeconds: 3
-            periodSeconds: 5
-            failureThreshold: 3
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: technical
-            timeoutSeconds: 2
-            periodSeconds: 10
-            failureThreshold: 3
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
           volumeMounts:
             - name: database
               mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database
