@@ -112,6 +112,22 @@ run_migration() {
   retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c "SELECT control_plane.skill_artifact_reference_count('00000000-0000-4000-8000-000000000001'::uuid,'art_component',1,'sha256:' || repeat('0',64))")
   [[ "$retention_reference_count" == "0" ]] || fail 'artifact retention trigger dependency is unavailable'
+  # Проверяем настоящий release SQL на мигрированной одноразовой БД.
+  # Mock boolean не обнаруживает ошибку границы project purge graph.
+  if [[ "$test_pattern" == *TestRepositoryBundlePublicationComponent* ]]; then
+    psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
+      --no-password -X -qAt -v ON_ERROR_STOP=1 \
+      --file "$repository_root/tools/release/repository-bundle-migration-postcondition.sql" | \
+      node --input-type=module -e '
+        const {pathToFileURL} = await import("node:url");
+        const {validRepositoryBundleMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
+        let input = "";
+        for await (const chunk of process.stdin) input += chunk;
+        if (!validRepositoryBundleMigrationPostcondition(JSON.parse(input)))
+          throw new Error("Repository bundle schema postcondition failed");
+        process.stdout.write("Repository bundle schema read-only query passed\n");
+      ' "$repository_root/tools/release/control-plane-immutable-migration.mjs"
+  fi
   # Новые самостоятельные suites получают отдельную копию ещё пустой схемы,
   # чтобы terminal fixtures одного сценария не загрязняли bootstrap другого.
   # Эти координаты существуют только внутри disposable контейнера этой оснастки.

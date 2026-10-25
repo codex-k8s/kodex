@@ -166,7 +166,7 @@ if(a.includes('patch')){
  save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:'cluster'}}));else process.stdout.write(s.namespaceUID);
 }else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
 }else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
-}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
+}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
 }else if(a.includes('kodex-postgresql-0')){save();process.stdout.write((s.pgUID??'pg-uid')+'|StatefulSet|kodex-postgresql|sts-uid|kodex-postgresql|Running|');
 }else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
 }else if(a.includes('deployment'))out(s.deployment);
@@ -382,10 +382,10 @@ test('repository bundle closed profile uses the same canonical immutable transpo
  assert.equal(migrationReadback(job,plan,'goose: current version: 20261025000100',[pod]).status,'READBACK_UNCONFIRMED');
 });
 test('repository bundle schema proof is closed on missing/foreign ownership, bytes, retention and purge guards',()=>{
- const proof={readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true};
+ const proof={readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09'};
  assert.equal(validRepositoryBundleMigrationPostcondition(proof),true);
  for(const key of Object.keys(proof)){const missing={...proof};delete missing[key];assert.equal(validRepositoryBundleMigrationPostcondition(missing),false,key);}
- for(const [key,value] of Object.entries({gooseVersion:20261025000100,tableOwner:'postgres',noBodyColumns:false,foreignKeys:12,deferredForeignKeys:12,guardEnabled:false,retentionConsumer:false,purgeGraphGuard:false}))assert.equal(validRepositoryBundleMigrationPostcondition({...proof,[key]:value}),false,key);
+ for(const [key,value] of Object.entries({gooseVersion:20261025000100,tableOwner:'postgres',noBodyColumns:false,foreignKeys:12,deferredForeignKeys:12,guardEnabled:false,retentionConsumer:false,purgeGraphGuard:false,purgeNodes:104,purgeEdges:289,purgeNodeFingerprint:'0'.repeat(32),purgeEdgeFingerprint:'0'.repeat(32)}))assert.equal(validRepositoryBundleMigrationPostcondition({...proof,[key]:value}),false,key);
 });
 test('repository bundle actual CLI requires schema proof and resumes old CP after known terminal failed proof',t=>{
  const f=cli(t,'repository-bundle');pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
@@ -394,4 +394,41 @@ test('repository bundle actual CLI requires schema proof and resumes old CP afte
  f.edit(s=>delete s.postcondition);const good=pass(f,'inspect');assert.equal(JSON.parse(good.stdout).schemaPostcondition,'PASS');
  pass(f,'resume','RESUMED');assert.equal(f.read().deployment.spec.replicas,2);
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+});
+
+test('corrected postcondition revalidation is read-only and binds resumed execution, source and historical journal',t=>{
+ const f=cli(t,'repository-bundle');pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={purgeGraphGuard:false});assert.notEqual(f.run('apply').status,0);
+ const git=(...args)=>execFileSync('git',['-C',f.repo,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+ const oldRevision=git('rev-parse','HEAD');
+ assert.notEqual(f.run('inspect',['--revalidate-postcondition-revision',oldRevision]).status,0);
+ pass(f,'resume','RESUMED');
+ const sql=join(f.repo,'tools/release/repository-bundle-migration-postcondition.sql');
+ writeFileSync(sql,readFileSync(sql,'utf8')+'\n-- Исправленная проверка в отдельной ревизии.\n',{mode:0o644});
+ git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Исправить checker');
+ const revision=git('rev-parse','HEAD'),args=['--revalidate-postcondition-revision',revision];
+ const original=f.run('inspect');assert.notEqual(original.status,0);assert.match(original.stderr,/POSTCONDITION_SOURCE_CHANGED/);
+ const journal=readFileSync(f.evidence),planBytes=readFileSync(f.plan);
+ assert.notEqual(f.run('inspect',['--revalidate-postcondition-revision',oldRevision]).status,0);
+ assert.notEqual(f.run('apply',args).status,0);
+ assert.notEqual(f.run('inspect',args).status,0); // Исправленный текст не отменяет FAIL фактического proof.
+ f.edit(s=>delete s.postcondition);
+ const result=f.run('inspect',args);assert.equal(result.status,0,result.stderr);const proof=JSON.parse(result.stdout);
+ assert.equal(proof.status,'PASS');assert.equal(proof.evidenceReadOnly,true);assert.equal(proof.schemaPostcondition,'PASS');
+ assert.equal(proof.revalidation.sourceRevision,revision);assert.equal(proof.revalidation.originalPlanSHA256,fingerprint(read(f.plan)));
+ assert.equal(proof.revalidation.originalSQLSHA256,read(f.plan).postconditionSQLSHA256);
+ assert.notEqual(proof.revalidation.sqlSHA256,proof.revalidation.originalSQLSHA256);
+ assert.equal(proof.revalidation.proof.purgeEdges,283);assert.equal(proof.revalidation.execution[0].podUID,'pod-created');
+ f.edit(s=>s.deployment.status.readyReplicas=1);assert.notEqual(f.run('inspect',args).status,0);
+ f.edit(s=>s.deployment.status.readyReplicas=2);
+ f.edit(s=>s.pod.status.containerStatuses[0].imageID=`sha256:${'f'.repeat(64)}`);assert.notEqual(f.run('inspect',args).status,0);
+ assert.deepEqual(readFileSync(f.evidence),journal);assert.deepEqual(readFileSync(f.plan),planBytes);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ assert.equal(f.read().calls.filter(a=>a.includes('patch')).length,2);
+ const migration=join(f.repo,'services/internal/control-plane/cmd/cli/migrations/20261025000200_repository_bundle_publications.sql');
+ writeFileSync(migration,'-- Изменённый applied SQL запрещён.\n',{mode:0o644});git('add','.');
+ git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Недопустимый applied SQL');
+ const changed=f.run('inspect',['--revalidate-postcondition-revision',git('rev-parse','HEAD')]);
+ assert.notEqual(changed.status,0);assert.match(changed.stderr,/REVALIDATION_SOURCE_INVALID/);
+ assert.deepEqual(readFileSync(f.evidence),journal);
 });

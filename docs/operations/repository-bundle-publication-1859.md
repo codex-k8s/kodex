@@ -4,7 +4,7 @@ title: Публикация CLEAN bundle исходников одним commit
 type: operations
 status: approved
 owner: developer
-version: 1.0.2
+version: 1.0.3
 updated: 2026-10-25
 ---
 
@@ -280,7 +280,11 @@ node "$QA_SOURCE/tools/release/control-plane-migration.mjs" check \
    [OPS-CP-IMMUTABLE-MIGRATION-1855](control-plane-immutable-migration-1855.md).
 4. Schema PASS дополнительно требует profile-specific READ ONLY postcondition:
    exact Goose, table owner,13deferrableFK, отсутствие body columns, immutable
-   guard, publication retention consumer и105node/289edge purge graph guard.
+   guard, publication retention consumer и105node/283edge purge graph guard.
+   Из13FK новой таблицы семь входят в project graph; шесть ведут к общим
+   organization/subject/integration ресурсам. Проверяются также оба точных
+   fingerprint фактического каталога и единственные соответствующие guards
+   функции. Штатный disposable PostgreSQL harness исполняет этот же SQL.
    Прямой psql/DDL и изменение Goose вручную не являются delivery path.
 5. Дождаться authoritative migration Job terminal и прекращения его процессов;
    **в любом исходе** `resume` возвращает exact прежний CP image/replicas2.
@@ -294,6 +298,31 @@ node "$QA_SOURCE/tools/release/control-plane-migration.mjs" check \
    grant разрешена лишь после готовности всех пяти новых компонентов и
    authoritative RPC policy. Rollback — прежние exact images и compatibility
    package без удаления additive schema; UNKNOWN receipts/source pins сохранять.
+
+### Read-only повторная проверка исправленного postcondition
+
+Если Job завершился успешно, а ошибка найдена в checker, сначала выполнить
+штатный `resume`. Применённую миграцию, исходные plan и journal не менять;
+новый `apply` либо повтор Goose запрещён. После локальных проверок и review
+исправленного clean SHA разрешена только отдельная повторная диагностика:
+
+```sh
+node "$QA_SOURCE/tools/release/control-plane-migration.mjs" inspect \
+  --context k3d-kodex --profile repository-bundle \
+  --plan "$PRIVATE/repository-bundle-migration.json" \
+  --evidence "$PRIVATE/repository-bundle-migration.jsonl" \
+  --revalidate-postcondition-revision "$QA_SHA"
+```
+
+Режим не принимает произвольный SQL, `--confirm` или mutation phase. Он требует
+`RESUME_ACK`, прежний CP в двух ready-репликах, тот же terminal Job/Pod/imageID,
+PostgreSQL UID до и после чтения и неизменный migration SQL. Исторические bytes
+checker из Git сверяются с hash исходного плана; новый checker берётся только
+из точного чистого descendant SHA по каноническому пути. Исходный journal
+читается без записи и закрепляется hash до/после. Отдельный результат содержит
+original plan/journal hashes, новый revision/SQL hash, execution pins и schema
+proof. Его сохраняют отдельно от прежнего FAIL; он не переписывает историю
+и не означает повторную миграцию. Обычный `inspect` сохраняет прежний hash fence.
 
 ## Перепривязка существующего QA GitHub без доступа модели к PAT
 

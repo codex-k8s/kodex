@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { inspectSource } from './application-source.mjs';
+import { inspectSource, sourceGitArguments } from './application-source.mjs';
 import { privateJournal } from '../dev/role-image-acceptance.mjs';
 import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-transition.mjs';
 
@@ -324,11 +324,15 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
   imageScope(plan.imageEvidence,plan.namespaceUID);
   const planSHA256 = fingerprint(plan);
+  const revalidationRevision = options['--revalidate-postcondition-revision'];
+  ensure(!revalidationRevision || (phase==='inspect' && profile==='repository-bundle' && /^[a-f0-9]{40}$/.test(revalidationRevision)),
+    'MIGRATION_REVALIDATION_PHASE_INVALID');
   // После SIGKILL lock сохраняется. Inspect всё равно доступен без записи/снятия lock;
   // mutations закрыты до ручной проверки завершения прежнего процесса владельцем.
-  const readOnly = phase === 'inspect' && existsSync(`${resolve(options['--evidence'])}.lock`);
+  const readOnly = !!revalidationRevision || (phase === 'inspect' && existsSync(`${resolve(options['--evidence'])}.lock`));
   const durable = privateJournal(options['--evidence'], {version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256}, {readOnly});
   const journal = readOnly ? {events:durable.events,append:()=>{},close:()=>durable.close()} : durable;
+  let revalidation;
   try {
     const attempts = journal.events.filter(e => e.type === 'CREATE_INTENT');
     const checks = journal.events.filter(e => e.type === 'CHECK_CREATE_INTENT');
@@ -382,12 +386,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const result = migrationReadback(actual,plan,logs,pods);
       if(result.status==='PASS' && configuration.postconditionFile) {
         const sql=readFileSync(`${plan.source.path}/tools/release/${configuration.postconditionFile}`);
-        ensure(createHash('sha256').update(sql).digest('hex')===plan.postconditionSQLSHA256,'MIGRATION_POSTCONDITION_SOURCE_CHANGED');
+        ensure(createHash('sha256').update(sql).digest('hex')===(revalidation?.sqlSHA256 ?? plan.postconditionSQLSHA256),'MIGRATION_POSTCONDITION_SOURCE_CHANGED');
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
         const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
         ensure(validRepositoryBundleMigrationPostcondition(proof),'MIGRATION_POSTCONDITION_FAILED');
         result.schemaPostcondition='PASS';
+        if(revalidation) result.revalidation={...revalidation,proof,postgres:plan.postgres,
+          execution:pods.map(p=>({podUID:p.metadata.uid,imageID:p.status.containerStatuses.find(c=>c.name==='migrate').imageID}))};
       }
       journal.append({type:'READBACK',...result}); return result;
     };
@@ -437,9 +443,45 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     };
     if (phase === 'inspect') {
       const state = observeCP();
+      if(revalidationRevision) {
+        // Проверка уже завершённого schema effect не даёт нового права на DDL.
+        // Прежние plan/journal и applied migration остаются неизменными.
+        ensure(plan.version===2 && state.stage==='RESUMED' && state.ready && attempts.length===1 &&
+          journal.events.some(e=>e.type==='RESUME_ACK') && journal.events.some(e=>e.type==='TERMINAL_READBACK' && e.jobUID),
+        'MIGRATION_REVALIDATION_RESUMED_REQUIRED');
+        ensure(inspectSource(plan.source.path).revision===revalidationRevision &&
+          sourceDigest(plan.source)===plan.migrationFileSHA256,'MIGRATION_REVALIDATION_SOURCE_INVALID');
+        const path=`tools/release/${configuration.postconditionFile}`;
+        let previousSQL;
+        try {
+          execFileSync('git',sourceGitArguments(plan.source.path,'merge-base','--is-ancestor',plan.source.revision,revalidationRevision),
+            {timeout:10000,stdio:['ignore','pipe','pipe']});
+          previousSQL=execFileSync('git',sourceGitArguments(plan.source.path,'show',`${plan.source.revision}:${path}`),
+            {timeout:10000,maxBuffer:4<<20,stdio:['ignore','pipe','pipe']});
+        } catch {throw new Error('MIGRATION_REVALIDATION_SOURCE_INVALID');}
+        ensure(createHash('sha256').update(previousSQL).digest('hex')===plan.postconditionSQLSHA256,
+          'MIGRATION_REVALIDATION_ORIGINAL_SQL_CHANGED');
+        revalidation={sourceRevision:revalidationRevision,sqlSHA256:createHash('sha256').update(readFileSync(`${plan.source.path}/${path}`)).digest('hex'),
+          originalSQLSHA256:plan.postconditionSQLSHA256,originalPlanSHA256:planSHA256,originalJournalSHA256:durable.bytesSHA256};
+        ensure(revalidation.sqlSHA256!==revalidation.originalSQLSHA256,'MIGRATION_REVALIDATION_SQL_UNCHANGED');
+      }
       journal.append({type:'INSPECT',stage:state.stage,resourceVersion:state.actual.metadata.resourceVersion,podsGone:state.joined,ready:state.ready});
       if (!attempts.length) ensure(!optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_WITHOUT_INTENT');
-      return output({...(attempts.length ? readJob() : checks.length ? readCheck() : {status:state.stage === 'STOPPED' ? 'STOPPED_NOT_CREATED' : 'CREATE_NOT_ATTEMPTED'}),
+      const result=attempts.length ? readJob() : checks.length ? readCheck() : {status:state.stage === 'STOPPED' ? 'STOPPED_NOT_CREATED' : 'CREATE_NOT_ATTEMPTED'};
+      if(revalidation) {
+        const current=observeCP();
+        ensure(result.status==='PASS' && current.stage==='RESUMED' && current.ready &&
+          inspectSource(plan.source.path).revision===revalidationRevision,'MIGRATION_REVALIDATION_CHANGED');
+        const finalJob=optionalJob(plan.job.metadata.name), finalPods=migrationPods();
+        ensure(finalJob?.metadata.uid===result.jobUID && finalJob.metadata.annotations?.[annotation]===planSHA256 &&
+          finalJob.status?.succeeded===1 && !finalJob.status.active && immutableMigrationExecution(finalJob,plan,finalPods) &&
+          fingerprint(finalPods.map(p=>({podUID:p.metadata.uid,imageID:p.status.containerStatuses.find(c=>c.name==='migrate').imageID})))===
+            fingerprint(result.revalidation.execution),'MIGRATION_REVALIDATION_EXECUTION_CHANGED');
+        const currentJournal=privateJournal(options['--evidence'],{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256},{readOnly:true});
+        try {ensure(currentJournal.bytesSHA256===revalidation.originalJournalSHA256,'MIGRATION_REVALIDATION_JOURNAL_CHANGED');}
+        finally {currentJournal.close();}
+      }
+      return output({...result,
         cpStage:state.stage,podsGone:state.joined,cpReady:state.ready});
     }
     if (phase === 'check') {
@@ -518,5 +560,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
 export function validRepositoryBundleMigrationPostcondition(proof) {
   return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261025000200 &&
     proof.tableOwner==='control_plane_owner' && proof.noBodyColumns===true && proof.foreignKeys===13 &&
-    proof.deferredForeignKeys===13 && proof.guardEnabled===true && proof.retentionConsumer===true && proof.purgeGraphGuard===true;
+    proof.deferredForeignKeys===13 && proof.guardEnabled===true && proof.retentionConsumer===true && proof.purgeGraphGuard===true &&
+    proof.purgeNodes===105 && proof.purgeEdges===283 && proof.purgeNodeFingerprint==='f51a0de25bd942a250997775617eeaee' &&
+    proof.purgeEdgeFingerprint==='be6e23d9e894687a69a19e9b5777ab09';
 }
